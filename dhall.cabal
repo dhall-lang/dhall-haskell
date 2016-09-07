@@ -1,0 +1,69 @@
+Name: dhall
+Version: 1.0.0
+Cabal-Version: >=1.8.0.2
+Build-Type: Simple
+Tested-With: GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.2, GHC == 8.0.1
+License: BSD3
+License-File: LICENSE
+Copyright: 2016 Gabriel Gonzalez
+Author: Gabriel Gonzalez
+Maintainer: Gabriel439@gmail.com
+Bug-Reports: https://github.com/Gabriel439/Haskell-Dhall-Library/issues
+Synopsis: A configuration language guaranteed to terminate
+Description:
+    Dhall is an explicitly typed configuration language that is not Turing
+    complete.  Despite being Turing incomplete, Dhall is a real programming
+    language with a type-checker and evaluator.
+    .
+    Use this library to parse, type-check, evaluate, and pretty-print the Dhall
+    configuration language.  This package also includes an executable which
+    type-checks a Dhall file and reduces the file to a fully evaluated normal
+    form.
+    .
+    "Dhall .Core" contains the type checker and evaluator
+    .
+    "Dhall.Lexer" contains the @alex@-generated lexer for Dhall
+    .
+    "Morte.Parser" contains the parser for Dhall
+    .
+    Read "Dhall.Tutorial" to learn how to use this library
+Category: Compiler
+Source-Repository head
+    Type: git
+    Location: https://github.com/Gabriel439/Haskell-Dhall-Library
+
+Library
+    Hs-Source-Dirs: src
+    Build-Depends:
+        base                 >= 4        && < 5   ,
+        array                >= 0.4.0.0  && < 0.6 ,
+        containers           >= 0.5.0.0  && < 0.6 ,
+        Earley               >= 0.10.1.0 && < 0.12,
+        http-client          >= 0.4.0    && < 0.5 ,
+        http-client-tls      >= 0.2.0    && < 0.3 ,
+        microlens            >= 0.2.0.0  && < 0.5 ,
+        microlens-mtl        >= 0.1.3.1  && < 0.2 ,
+        pipes                >= 4.0.0    && < 4.2 ,
+        system-filepath      >= 0.3.1    && < 0.5 ,
+        system-fileio        >= 0.2.1    && < 0.4 ,
+        text                 >= 0.11.1.0 && < 1.3 ,
+        text-format                         < 0.4 ,
+        transformers         >= 0.2.0.0  && < 0.6 ,
+        vector
+    Exposed-Modules:
+        Dhall.Config,
+        Dhall.Context,
+        Dhall.Core,
+        Dhall.Import,
+        Dhall.Lexer,
+        Dhall.Parser
+    Build-Tools: alex
+
+Executable dhall
+    Hs-Source-Dirs: exec
+    Main-Is: Main.hs
+    Build-Depends:
+        base                 >= 4        && < 5    ,
+        dhall                                      ,
+        optparse-applicative                < 0.13 ,
+        text                 >= 0.11.1.0 && < 1.3
