@@ -155,7 +155,7 @@ data Expr a
     | Pi  Text (Expr a) (Expr a)
     -- | > App f a                         ~  f a
     | App (Expr a) (Expr a)
-    -- | > Lets [l1, l2] e                 ~ l1 l2 in e
+    -- | > Lets [l1, l2] e                 ~  l1 l2 in e
     | Lets [Let a] (Expr a)
     -- | > Annot x t                       ~  x : t
     | Annot (Expr a) (Expr a)
@@ -163,11 +163,11 @@ data Expr a
     | Bool
     -- | > BoolLit b                       ~  b
     | BoolLit Bool
-    -- | > BoolAnd x y                     ~ x && y
+    -- | > BoolAnd x y                     ~  x && y
     | BoolAnd (Expr a) (Expr a)
-    -- | > BoolOr  x y                     ~ x || y
+    -- | > BoolOr  x y                     ~  x || y
     | BoolOr  (Expr a) (Expr a)
-    -- | > BoolIf                          ~ if
+    -- | > BoolIf                          ~  if
     | BoolIf
     -- | > Natural                         ~  Natural
     | Natural
