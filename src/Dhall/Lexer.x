@@ -70,6 +70,7 @@ tokens :-
     "->" | "→"                          { \_ -> yield Arrow                  }
     "\/" | "|~|" | "forall" | "∀" | "Π" { \_ -> yield Pi                     }
     "\" | "λ"                           { \_ -> yield Lambda                 }
+    "Bool"                              { \_ -> yield Bool                   }
     "Natural"                           { \_ -> yield Natural                }
     "Natural/fold"                      { \_ -> yield NaturalFold            }
     "Integer"                           { \_ -> yield Integer                }
@@ -219,6 +220,7 @@ data Token
     | Arrow
     | Lambda
     | Pi
+    | Bool
     | Natural
     | NaturalLit Natural
     | NaturalFold

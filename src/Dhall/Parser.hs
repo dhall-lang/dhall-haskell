@@ -166,6 +166,7 @@ expr = mdo
         (   (Var <$> label)
         <|> (match Lexer.Type *> pure (Const Star))
         <|> (match Lexer.Box  *> pure (Const Box))
+        <|> (match Lexer.Bool *> pure Bool)
         <|> (match Lexer.Natural *> pure Natural)
         <|> (match Lexer.NaturalFold *> pure NaturalFold)
         <|> (match Lexer.Integer *> pure Integer)

@@ -159,6 +159,8 @@ data Expr a
     | Lets [Let a] (Expr a)
     -- | > Annot x t                       ~  x : t
     | Annot (Expr a) (Expr a)
+    -- | > Bool                            ~  Bool
+    | Bool
     -- | > Natural                         ~  Natural
     | Natural
     -- | > NaturalLit n                    ~  +n
@@ -223,6 +225,7 @@ instance Monad Expr where
                     return (x, t >>= k)
             return (Let f as' (r >>= k))
     Annot x t        >>= k = Annot (x >>= k) (t >>= k)
+    Bool             >>= _ = Bool
     Natural          >>= _ = Natural
     NaturalLit n     >>= _ = NaturalLit n
     NaturalFold      >>= _ = NaturalFold
@@ -291,6 +294,7 @@ instance Eq a => Eq (Expr a) where
         go (App fL aL) (App fR aR) = do
             b1 <- go fL fR
             if b1 then go aL aR else return False
+        go Bool Bool = return True
         go Natural Natural = return True
         go (NaturalLit x) (NaturalLit y) = return (x == y)
         go Integer Integer = return True
@@ -387,6 +391,7 @@ instance Buildable a => Buildable (Expr a)
                     go True False x
                 <>  " : "
                 <>  go False False t
+            Bool             -> "Bool"
             Natural          -> "Natural"
             NaturalLit n     -> "+" <> build (show n)
             NaturalFold      -> "Natural/fold"
@@ -686,6 +691,8 @@ typeWith ctx e@(Annot x t       ) = do
             let nf_t  = normalize t
             let nf_t' = normalize t'
             Left (TypeError ctx e (AnnotMismatch nf_t nf_t'))
+typeWith _      Bool              = do
+    return (Const Star)
 typeWith _      Natural           = do
     return (Const Star)
 typeWith _     (NaturalLit _    ) = do
