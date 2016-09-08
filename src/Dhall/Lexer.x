@@ -75,6 +75,7 @@ tokens :-
     "Bool"                              { \_ -> yield Bool                   }
     "True"                              { \_ -> yield (BoolLit True)         }
     "False"                             { \_ -> yield (BoolLit False)        }
+    "if"                                { \_ -> yield BoolIf                 }
     "Natural"                           { \_ -> yield Natural                }
     "Natural/fold"                      { \_ -> yield NaturalFold            }
     "Integer"                           { \_ -> yield Integer                }
@@ -228,6 +229,7 @@ data Token
     | Pi
     | Bool
     | BoolLit Bool
+    | BoolIf
     | Natural
     | NaturalLit Natural
     | NaturalFold

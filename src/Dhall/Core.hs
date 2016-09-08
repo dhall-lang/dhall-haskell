@@ -167,6 +167,8 @@ data Expr a
     | BoolAnd (Expr a) (Expr a)
     -- | > BoolOr  x y                     ~ x || y
     | BoolOr  (Expr a) (Expr a)
+    -- | > BoolIf                          ~ if
+    | BoolIf
     -- | > Natural                         ~  Natural
     | Natural
     -- | > NaturalLit n                    ~  +n
@@ -235,6 +237,7 @@ instance Monad Expr where
     BoolLit b        >>= _ = BoolLit b
     BoolAnd l r      >>= k = BoolAnd (l >>= k) (r >>= k)
     BoolOr  l r      >>= k = BoolOr  (l >>= k) (r >>= k)
+    BoolIf           >>= _ = BoolIf
     Natural          >>= _ = Natural
     NaturalLit n     >>= _ = NaturalLit n
     NaturalFold      >>= _ = NaturalFold
@@ -311,6 +314,7 @@ instance Eq a => Eq (Expr a) where
         go (BoolOr xL yL) (BoolOr xR yR) = do
             b <- go xL xR
             if b then go yL yR else return False
+        go BoolIf BoolIf = return True
         go Natural Natural = return True
         go (NaturalLit x) (NaturalLit y) = return (x == y)
         go Integer Integer = return True
@@ -411,6 +415,7 @@ instance Buildable a => Buildable (Expr a)
             BoolLit b        -> build (show b)
             BoolAnd x y      -> build x <> " && " <> build y
             BoolOr  x y      -> build x <> " || " <> build y
+            BoolIf           -> "if"
             Natural          -> "Natural"
             NaturalLit n     -> "+" <> build (show n)
             NaturalFold      -> "Natural/fold"
@@ -752,6 +757,11 @@ typeWith ctx e@(BoolOr  l r     ) = do
         _    -> Left (TypeError ctx e (CantOr r tr))
 
     return Bool
+typeWith _      BoolIf            = do
+    return
+        (Pi "_" Bool
+            (Pi "bool" (Const Star)
+                (Pi "true" "bool" (Pi "false" "bool" "bool")) ) )
 typeWith _      Natural           = do
     return (Const Star)
 typeWith _     (NaturalLit _    ) = do
@@ -759,9 +769,9 @@ typeWith _     (NaturalLit _    ) = do
 typeWith _      NaturalFold       = do
     return
         (Pi "_" Natural
-            (Pi "Natural" (Const Star)
-                (Pi "Succ" (Pi "pred" "Natural" "Natural")
-                    (Pi "Zero" "Natural" "Natural") ) ) )
+            (Pi "natural" (Const Star)
+                (Pi "succ" (Pi "pred" "natural" "natural")
+                    (Pi "zero" "natural" "natural") ) ) )
 typeWith ctx e@(NaturalPlus  l r) = do
     tl <- fmap normalize (typeWith ctx l)
     case tl of
@@ -831,17 +841,17 @@ typeWith _      ListBuild         = do
     return
         (Pi "a" (Const Star)
             (Pi "_"
-                (Pi "List" (Const Star)
-                    (Pi "Cons" (Pi "head" "a" (Pi "tail" "List" "List"))
-                        (Pi "Nil" "List" "List") ) )
+                (Pi "list" (Const Star)
+                    (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
+                        (Pi "nil" "list" "list") ) )
                 (List "a") ) )
 typeWith _      ListFold          = do
     return
         (Pi "a" (Const Star)
             (Pi "_" (List "a")
-                (Pi "List" (Const Star)
-                    (Pi "Cons" (Pi "head" "a" (Pi "tail" "List" "List"))
-                        (Pi "Nil" "List" "List")) ) ) )
+                (Pi "list" (Const Star)
+                    (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
+                        (Pi "nil" "list" "list")) ) ) )
 typeWith ctx e@(Record    kts   ) = do
     let process (_, t) = do
             s <- fmap normalize (typeWith ctx t)
@@ -888,6 +898,10 @@ normalize e = case e of
     App f a -> case normalize f of
         Lam x _A b -> normalize (subst x (normalize a) b)  -- Beta reduce
         f' -> case App f' a' of
+            App (App (App (App BoolIf (BoolLit True)) _) true) _ ->
+                normalize true
+            App (App (App (App BoolIf (BoolLit False)) _) _) false ->
+                normalize false
             App (App (App (App NaturalFold (NaturalLit n0)) _) succ') zero ->
                 normalize (go n0)
               where

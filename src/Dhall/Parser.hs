@@ -183,6 +183,7 @@ expr = mdo
         <|> (match Lexer.Type *> pure (Const Star))
         <|> (match Lexer.Box  *> pure (Const Box))
         <|> (match Lexer.Bool *> pure Bool)
+        <|> (match Lexer.BoolIf *> pure BoolIf)
         <|> (match Lexer.Natural *> pure Natural)
         <|> (match Lexer.NaturalFold *> pure NaturalFold)
         <|> (match Lexer.Integer *> pure Integer)
