@@ -161,6 +161,8 @@ data Expr a
     | Annot (Expr a) (Expr a)
     -- | > Bool                            ~  Bool
     | Bool
+    -- | > BoolLit b                       ~  b
+    | BoolLit Bool
     -- | > Natural                         ~  Natural
     | Natural
     -- | > NaturalLit n                    ~  +n
@@ -226,6 +228,7 @@ instance Monad Expr where
             return (Let f as' (r >>= k))
     Annot x t        >>= k = Annot (x >>= k) (t >>= k)
     Bool             >>= _ = Bool
+    BoolLit b        >>= _ = BoolLit b
     Natural          >>= _ = Natural
     NaturalLit n     >>= _ = NaturalLit n
     NaturalFold      >>= _ = NaturalFold
@@ -295,6 +298,7 @@ instance Eq a => Eq (Expr a) where
             b1 <- go fL fR
             if b1 then go aL aR else return False
         go Bool Bool = return True
+        go (BoolLit x) (BoolLit y) = return (x == y)
         go Natural Natural = return True
         go (NaturalLit x) (NaturalLit y) = return (x == y)
         go Integer Integer = return True
@@ -392,6 +396,7 @@ instance Buildable a => Buildable (Expr a)
                 <>  " : "
                 <>  go False False t
             Bool             -> "Bool"
+            BoolLit b        -> build (show b)
             Natural          -> "Natural"
             NaturalLit n     -> "+" <> build (show n)
             NaturalFold      -> "Natural/fold"
@@ -693,6 +698,8 @@ typeWith ctx e@(Annot x t       ) = do
             Left (TypeError ctx e (AnnotMismatch nf_t nf_t'))
 typeWith _      Bool              = do
     return (Const Star)
+typeWith _     (BoolLit _       ) = do
+    return Bool
 typeWith _      Natural           = do
     return (Const Star)
 typeWith _     (NaturalLit _    ) = do

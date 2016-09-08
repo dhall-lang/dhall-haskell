@@ -49,6 +49,14 @@ label = fmap unsafeFromLabel (satisfy isLabel)
 
     unsafeFromLabel (LocatedToken (Lexer.Label l) _) = l
 
+bool :: Prod r e LocatedToken Bool
+bool = fmap unsafeFromBool (satisfy isBool)
+  where
+    isBool (LocatedToken (Lexer.BoolLit _) _) = True
+    isBool  _                                 = False
+
+    unsafeFromBool (LocatedToken (Lexer.BoolLit b) _) = b
+
 number :: Prod r e LocatedToken Natural
 number = fmap unsafeFromNumber (satisfy isNumber)
   where
@@ -174,6 +182,7 @@ expr = mdo
         <|> (match Lexer.Text *> pure Text)
         <|> (match Lexer.ListBuild *> pure ListBuild)
         <|> (match Lexer.ListFold *> pure ListFold)
+        <|> (BoolLit <$> bool)
         <|> (IntegerLit . fromIntegral <$> number)
         <|> (NaturalLit <$> natural)
         <|> (DoubleLit <$> double)

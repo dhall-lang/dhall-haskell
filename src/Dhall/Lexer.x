@@ -71,6 +71,8 @@ tokens :-
     "\/" | "|~|" | "forall" | "∀" | "Π" { \_ -> yield Pi                     }
     "\" | "λ"                           { \_ -> yield Lambda                 }
     "Bool"                              { \_ -> yield Bool                   }
+    "True"                              { \_ -> yield (BoolLit True)         }
+    "False"                             { \_ -> yield (BoolLit False)        }
     "Natural"                           { \_ -> yield Natural                }
     "Natural/fold"                      { \_ -> yield NaturalFold            }
     "Integer"                           { \_ -> yield Integer                }
@@ -221,6 +223,7 @@ data Token
     | Lambda
     | Pi
     | Bool
+    | BoolLit Bool
     | Natural
     | NaturalLit Natural
     | NaturalFold
