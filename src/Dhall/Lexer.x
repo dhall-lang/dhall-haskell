@@ -59,6 +59,8 @@ tokens :-
     ","                                 { \_ -> yield Comma                  }
     "."                                 { \_ -> yield Dot                    }
     "="                                 { \_ -> yield Equals                 }
+    "&&"                                { \_ -> yield And                    }
+    "||"                                { \_ -> yield Or                     }
     "+"                                 { \_ -> yield Plus                   }
     "++"                                { \_ -> yield DoublePlus             }
     "-"                                 { \_ -> yield Dash                   }
@@ -210,6 +212,8 @@ data Token
     | Comma
     | Dot
     | Equals
+    | And
+    | Or
     | Plus
     | DoublePlus
     | Dash

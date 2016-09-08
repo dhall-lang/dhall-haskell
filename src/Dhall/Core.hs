@@ -163,6 +163,10 @@ data Expr a
     | Bool
     -- | > BoolLit b                       ~  b
     | BoolLit Bool
+    -- | > BoolAnd x y                     ~ x && y
+    | BoolAnd (Expr a) (Expr a)
+    -- | > BoolOr  x y                     ~ x || y
+    | BoolOr  (Expr a) (Expr a)
     -- | > Natural                         ~  Natural
     | Natural
     -- | > NaturalLit n                    ~  +n
@@ -229,6 +233,8 @@ instance Monad Expr where
     Annot x t        >>= k = Annot (x >>= k) (t >>= k)
     Bool             >>= _ = Bool
     BoolLit b        >>= _ = BoolLit b
+    BoolAnd l r      >>= k = BoolAnd (l >>= k) (r >>= k)
+    BoolOr  l r      >>= k = BoolOr  (l >>= k) (r >>= k)
     Natural          >>= _ = Natural
     NaturalLit n     >>= _ = NaturalLit n
     NaturalFold      >>= _ = NaturalFold
@@ -299,6 +305,12 @@ instance Eq a => Eq (Expr a) where
             if b1 then go aL aR else return False
         go Bool Bool = return True
         go (BoolLit x) (BoolLit y) = return (x == y)
+        go (BoolAnd xL yL) (BoolAnd xR yR) = do
+            b <- go xL xR
+            if b then go yL yR else return False
+        go (BoolOr xL yL) (BoolOr xR yR) = do
+            b <- go xL xR
+            if b then go yL yR else return False
         go Natural Natural = return True
         go (NaturalLit x) (NaturalLit y) = return (x == y)
         go Integer Integer = return True
@@ -397,6 +409,8 @@ instance Buildable a => Buildable (Expr a)
                 <>  go False False t
             Bool             -> "Bool"
             BoolLit b        -> build (show b)
+            BoolAnd x y      -> build x <> " && " <> build y
+            BoolOr  x y      -> build x <> " || " <> build y
             Natural          -> "Natural"
             NaturalLit n     -> "+" <> build (show n)
             NaturalFold      -> "Natural/fold"
@@ -459,6 +473,8 @@ data TypeMessage
     | InvalidFieldType (Expr X)
     | NotARecord (Expr X)
     | MissingField Text
+    | CantAnd (Expr X) (Expr X)
+    | CantOr (Expr X) (Expr X)
     | CantAppend (Expr X) (Expr X)
     | CantAdd (Expr X) (Expr X)
     | CantMultiply (Expr X) (Expr X)
@@ -515,6 +531,16 @@ instance Buildable TypeMessage where
             "Error: Missing field\n"
         <>  "\n"
         <>  "Field: " <> build t <> "\n"
+    build (CantAnd e t             ) =
+            "Error: Can't use `(&&)` on a value that's not a `Bool`\n"
+        <>  "\n"
+        <>  "Value: " <> build e <> "\n"
+        <>  "Type : " <> build t <> "\n"
+    build (CantOr  e t             ) =
+            "Error: Can't use `(||)` on a value that's not a `Bool`\n"
+        <>  "\n"
+        <>  "Value: " <> build e <> "\n"
+        <>  "Type : " <> build t <> "\n"
     build (CantAppend e t          ) =
             "Error: Can't append a value that's not `Text`\n"
         <>  "\n"
@@ -615,6 +641,8 @@ subst x e (Lets ls0 s0     ) = Lets ls0' s0''
                 t' = if b' then subst x e t else t
 subst x e (Annot x' t      ) = Annot (subst x e x') (subst x e t)
 subst x e (Var x'          ) = if x == x' then e else Var x'
+subst x e (BoolAnd      l r) = BoolAnd      (subst x e l) (subst x e r)
+subst x e (BoolOr       l r) = BoolOr       (subst x e l) (subst x e r)
 subst x e (NaturalPlus  l r) = NaturalPlus  (subst x e l) (subst x e r)
 subst x e (NaturalTimes l r) = NaturalTimes (subst x e l) (subst x e r)
 subst x e (TextAppend   l r) = TextAppend   (subst x e l) (subst x e r)
@@ -699,6 +727,30 @@ typeWith ctx e@(Annot x t       ) = do
 typeWith _      Bool              = do
     return (Const Star)
 typeWith _     (BoolLit _       ) = do
+    return Bool
+typeWith ctx e@(BoolAnd l r     ) = do
+    tl <- fmap normalize (typeWith ctx l)
+    case tl of
+        Bool -> return ()
+        _    -> Left (TypeError ctx e (CantAnd l tl))
+
+    tr <- fmap normalize (typeWith ctx r)
+    case tr of
+        Bool -> return ()
+        _    -> Left (TypeError ctx e (CantAnd r tr))
+
+    return Bool
+typeWith ctx e@(BoolOr  l r     ) = do
+    tl <- fmap normalize (typeWith ctx l)
+    case tl of
+        Bool -> return ()
+        _    -> Left (TypeError ctx e (CantOr l tl))
+
+    tr <- fmap normalize (typeWith ctx r)
+    case tr of
+        Bool -> return ()
+        _    -> Left (TypeError ctx e (CantOr r tr))
+
     return Bool
 typeWith _      Natural           = do
     return (Const Star)
@@ -872,6 +924,26 @@ normalize e = case e of
           where
             r' = foldr (\(x, _A) b -> Lam x _A b) r as
     Annot x _ -> normalize x
+    BoolAnd x y ->
+        case x' of
+            BoolLit xn ->
+                case y' of
+                    BoolLit yn -> BoolLit (xn && yn)
+                    _ -> BoolAnd x' y'
+            _ -> BoolAnd x' y'
+      where
+        x' = normalize x
+        y' = normalize y
+    BoolOr x y ->
+        case x' of
+            BoolLit xn ->
+                case y' of
+                    BoolLit yn -> BoolLit (xn || yn)
+                    _ -> BoolOr x' y'
+            _ -> BoolOr x' y'
+      where
+        x' = normalize x
+        y' = normalize y
     NaturalPlus  x y ->
         case x' of
             NaturalLit xn ->

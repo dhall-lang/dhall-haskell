@@ -156,6 +156,14 @@ expr = mdo
         <|> (   List
             <$> (match Lexer.OpenBracket *> bexpr <* match Lexer.CloseBracket)
             )
+        <|> (   BoolAnd
+            <$> bexpr
+            <*> (match Lexer.And *> bexpr)
+            )
+        <|> (   BoolOr
+            <$> bexpr
+            <*> (match Lexer.Or *> bexpr)
+            )
         <|> (   NaturalPlus
             <$> bexpr
             <*> (match Lexer.Plus *> bexpr)
