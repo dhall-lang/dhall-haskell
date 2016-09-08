@@ -153,9 +153,6 @@ expr = mdo
 
     bexpr <- rule
         (   (App <$> bexpr <*> aexpr)
-        <|> (   List
-            <$> (match Lexer.OpenBracket *> bexpr <* match Lexer.CloseBracket)
-            )
         <|> (   BoolAnd
             <$> bexpr
             <*> (match Lexer.And *> bexpr)
@@ -191,6 +188,9 @@ expr = mdo
         <|> (match Lexer.Text *> pure Text)
         <|> (match Lexer.ListBuild *> pure ListBuild)
         <|> (match Lexer.ListFold *> pure ListFold)
+        <|> (   List
+            <$> (match Lexer.OpenBracket *> expr <* match Lexer.CloseBracket)
+            )
         <|> (BoolLit <$> bool)
         <|> (IntegerLit . fromIntegral <$> number)
         <|> (NaturalLit <$> natural)
