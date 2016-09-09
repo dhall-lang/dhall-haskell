@@ -462,14 +462,14 @@ instance Buildable a => Buildable (Expr a)
             ListFold         -> "List/fold"
             Record kts       ->
                 if Data.Map.null kts
-                then    "{ }"
-                else    "{ "
+                then    "{{ }}"
+                else    "{{ "
                     <>  mconcat
                             (Data.List.intersperse ", "
                                 [ build k <> " : " <> go False False t
                                 | (k, t) <- Data.Map.toList kts
                                 ] )
-                    <>  " }"
+                    <>  " }}"
             RecordLit kvs    ->
                 if Data.Map.null kvs
                 then    "{ }"

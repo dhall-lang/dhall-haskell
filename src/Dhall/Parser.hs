@@ -239,10 +239,12 @@ expr = mdo
 
     record <- rule
         (   match Lexer.OpenBrace
+        *>  match Lexer.OpenBrace
         *>  (   toRecord
             <$> many (fieldType <* match Lexer.Comma)
             <*> (fmap pure fieldType <|> pure empty)
             )
+        <*  match Lexer.CloseBrace
         <*  match Lexer.CloseBrace
         )
 
