@@ -59,10 +59,10 @@ import qualified Data.List
 import qualified Data.Map
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
-import qualified Filesystem.Path.CurrentOS        as Filesystem
-import qualified Dhall.Context                    as Context
 import qualified Data.Vector
 import qualified Data.Vector.Mutable
+import qualified Dhall.Context                    as Context
+import qualified Filesystem.Path.CurrentOS        as Filesystem
 
 {-| Constants for the calculus of constructions
 
@@ -193,6 +193,12 @@ data Expr a
     | TextLit Text
     -- | > TextAppend x y                  ~  x ++ y
     | TextAppend (Expr a) (Expr a)
+    -- | > Maybe a                         ~  Maybe a
+    | Maybe (Expr a)
+    -- | > Nothing                         ~  Nothing
+    | Nothing_
+    -- | > Just_                           ~  Just
+    | Just_
     -- | > List t                          ~  [ t ]
     | List (Expr a)
     -- | > ListLit t [x, y, z]             ~  [ x, y, z : t ]
@@ -250,6 +256,9 @@ instance Monad Expr where
     Text             >>= _ = Text
     TextLit t        >>= _ = TextLit t
     TextAppend l r   >>= k = TextAppend (l >>= k) (r >>= k)
+    Maybe t          >>= k = Maybe (t >>= k)
+    Nothing_         >>= _ = Nothing_
+    Just_            >>= _ = Just_
     List t           >>= k = List (t >>= k)
     ListLit t es     >>= k = ListLit (t >>= k) es'
       where
@@ -326,6 +335,9 @@ instance Eq a => Eq (Expr a) where
         go (TextAppend xL yL) (TextAppend xR yR) = do
             b1 <- go xL xR
             if b1 then go yL yR else return False
+        go (Maybe tL) (Maybe tR) = go tL tR
+        go Nothing_ Nothing_ = return True
+        go Just_ Just_ = return True
         go (List tL) (List tR) = go tL tR
         go (ListLit tL esL) (ListLit tR esR) = do
             b1 <- go tL tR
@@ -428,6 +440,13 @@ instance Buildable a => Buildable (Expr a)
             Text             -> "Text"
             TextLit t        -> build (show t)
             TextAppend x y   -> go True False x <> " ++ " <> go True False y
+            Maybe t          ->
+                    (if parenApp then "(" else "")
+                <>  "Maybe "
+                <>  go True True t
+                <>  (if parenApp then ")" else "")
+            Nothing_         -> "Nothing"
+            Just_            -> "Just"
             List t           -> "[ " <> go False False t <> " ]"
             ListLit t es     ->
                 if null es
@@ -474,6 +493,8 @@ data TypeMessage
     | AnnotMismatch (Expr X) (Expr X)
     | Untyped Const
     | InvalidElement Int (Expr X) (Expr X) (Expr X)
+    | InvalidMaybeTypeParam (Expr X) (Expr X)
+    | InvalidListTypeParam (Expr X) (Expr X)
     | InvalidListType (Expr X) (Expr X)
     | InvalidFieldType (Expr X)
     | NotARecord (Expr X)
@@ -510,10 +531,26 @@ instance Buildable TypeMessage where
         <>  "Inferred  type: " <> build expr2 <> "\n"
     build (Untyped c               ) =
             "Error: " <> build c <> " has no type\n"
+    build (InvalidMaybeTypeParam t k     ) =
+            "Error: Invalid optional type\n"
+        <>  "\n"
+            -- TODO: Wrap in parentheses if necessary
+        <>  "Invalid type: Maybe " <> build t <> "\n"
+        <>  "                    ^\n"
+        <>  "Expected kind: *\n"
+        <>  "Actual   kind: " <> build k <> "\n"
+    build (InvalidListTypeParam t k     ) =
+            "Error: Invalid list type\n"
+        <>  "\n"
+        <>  "Invalid type: [ " <> build t <> " ]\n"
+        <>  "                ^\n"
+        <>  "Expected kind: *\n"
+        <>  "Actual   kind: " <> build k <> "\n"
     build (InvalidListType t k     ) =
             "Error: Type of the wrong kind for list elements\n"
-        <>  "\n"            <>  "Invalid type: [nil " <> build t <> " ...\n"
-        <>  "                   ^\n"
+        <>  "\n"
+        <>  "Invalid type: [ ... : " <> build t <> " ]\n"
+        <>  "                      ^\n"
         <>  "Expected kind: *\n"
         <>  "Actual   kind: " <> build k <> "\n"
     build (InvalidElement n x t t' ) =
@@ -651,6 +688,7 @@ subst x e (BoolOr       l r) = BoolOr       (subst x e l) (subst x e r)
 subst x e (NaturalPlus  l r) = NaturalPlus  (subst x e l) (subst x e r)
 subst x e (NaturalTimes l r) = NaturalTimes (subst x e l) (subst x e r)
 subst x e (TextAppend   l r) = TextAppend   (subst x e l) (subst x e r)
+subst x e (Maybe   t       ) = Maybe (subst x e t)
 subst x e (List    t       ) = List (subst x e t)
 subst x e (ListLit t es    ) = ListLit (subst x e t) es'
   where
@@ -817,11 +855,21 @@ typeWith ctx e@(TextAppend l r  ) = do
         Text -> return ()
         _    -> Left (TypeError ctx e (CantAppend r tr))
     return Text
+typeWith ctx e@(Maybe t         ) = do
+    s <- fmap normalize (typeWith ctx t)
+    case s of
+        Const Star -> return ()
+        _          -> Left (TypeError ctx e (InvalidMaybeTypeParam t s))
+    return (Const Star)
+typeWith _      Nothing_          = do
+    return (Pi "a" (Const Star) (Maybe "a"))
+typeWith _      Just_             = do
+    return (Pi "a" (Const Star) (Pi "_" "a" (Maybe "a")))
 typeWith ctx e@(List t          ) = do
     s <- fmap normalize (typeWith ctx t)
-    case normalize s of
+    case s of
         Const Star -> return ()
-        _          -> Left (TypeError ctx e (InvalidListType t s))
+        _          -> Left (TypeError ctx e (InvalidListTypeParam t s))
     return (Const Star)
 typeWith ctx e@(ListLit t xs    ) = do
     s <- fmap normalize (typeWith ctx t)
@@ -988,6 +1036,7 @@ normalize e = case e of
       where
         x' = normalize x
         y' = normalize y
+    Maybe t          -> Maybe (normalize t)
     List t           -> List (normalize t)
     ListLit t es     -> ListLit (normalize t) (fmap normalize es)
     RecordLit kvs    -> RecordLit (fmap normalize kvs)

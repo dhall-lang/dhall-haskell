@@ -27,7 +27,7 @@ import Filesystem.Path.CurrentOS (FilePath)
 import Dhall.Core (Const(..), Path(..), Let(..), Expr(..))
 import Dhall.Lexer (LocatedToken(..), Position(..), Token)
 import Numeric.Natural (Natural)
-import Prelude hiding (FilePath)
+import Prelude hiding (FilePath, Maybe(..))
 import Text.Earley
 
 import qualified Data.Map
@@ -35,6 +35,7 @@ import qualified Data.Vector
 import qualified Pipes.Prelude  as Pipes
 import qualified Data.Text.Lazy as Text
 import qualified Dhall.Lexer    as Lexer
+import qualified Prelude
 
 match :: Token -> Prod r Token LocatedToken Token
 match t = fmap Lexer.token (satisfy predicate) <?> t
@@ -153,6 +154,9 @@ expr = mdo
 
     bexpr <- rule
         (   (App <$> bexpr <*> aexpr)
+        <|> (   Maybe
+            <$> (match Lexer.Maybe *> bexpr)
+            )
         <|> (   BoolAnd
             <$> bexpr
             <*> (match Lexer.And *> bexpr)
@@ -186,6 +190,8 @@ expr = mdo
         <|> (match Lexer.Integer *> pure Integer)
         <|> (match Lexer.Double *> pure Double)
         <|> (match Lexer.Text *> pure Text)
+        <|> (match Lexer.Nothing_ *> pure Nothing_)
+        <|> (match Lexer.Just_ *> pure Just_)
         <|> (match Lexer.ListBuild *> pure ListBuild)
         <|> (match Lexer.ListFold *> pure ListFold)
         <|> (   List
@@ -295,8 +301,8 @@ exprFromText text = evalState (runExceptT m) (Lexer.P 1 0)
     m = do
         (locatedTokens, mtxt) <- lift (Pipes.toListM' (Lexer.lexExpr text))
         case mtxt of
-            Nothing  -> return ()
-            Just txt -> do
+            Prelude.Nothing  -> return ()
+            Prelude.Just txt -> do
                 pos <- lift get
                 throwE (ParseError pos (Lexing txt))
         let (parses, Report _ needed found) =

@@ -26,6 +26,7 @@ import Prelude hiding (FilePath)
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text.Lazy                   as Text
+import qualified Dhall.Core
 import qualified Filesystem.Path.CurrentOS        as Filesystem
 
 }
@@ -81,6 +82,9 @@ tokens :-
     "Integer"                           { \_ -> yield Integer                }
     "Double"                            { \_ -> yield Double                 }
     "Text"                              { \_ -> yield Text                   }
+    "Maybe"                             { \_ -> yield Maybe                  }
+    "Nothing"                           { \_ -> yield Nothing_               }
+    "Just"                              { \_ -> yield Just_                  }
     "List/build"                        { \_ -> yield ListBuild              }
     "List/fold"                         { \_ -> yield ListFold               }
     $fst $labelchar* | "(" $opchar+ ")" { \t -> yield (Label t)              }
@@ -163,11 +167,11 @@ data AlexInput = AlexInput
 
 alexGetByte :: AlexInput -> Maybe (Word8,AlexInput)
 alexGetByte (AlexInput c bytes text) = case bytes of
-    b:ytes -> Just (b, AlexInput c ytes text)
+    b:ytes -> Prelude.Just (b, AlexInput c ytes text)
     []     -> case Text.uncons text of
-        Nothing       -> Nothing
-        Just (t, ext) -> case encode t of
-            (b, ytes) -> Just (b, AlexInput t ytes ext)
+        Prelude.Nothing       -> Prelude.Nothing
+        Prelude.Just (t, ext) -> case encode t of
+            (b, ytes) -> Prelude.Just (b, AlexInput t ytes ext)
 
 alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar = prevChar
@@ -185,8 +189,8 @@ lexExpr text = for (go (AlexInput '\n' [] text)) tag
         yield (LocatedToken token pos)
 
     go input = case alexScan input 0 of
-        AlexEOF                        -> return Nothing
-        AlexError (AlexInput _ _ text) -> return (Just text)
+        AlexEOF                        -> return Prelude.Nothing
+        AlexError (AlexInput _ _ text) -> return (Prelude.Just text)
         AlexSkip  input' len           -> do
             lift (column += len)
             go input'
@@ -237,6 +241,9 @@ data Token
     | Text
     | Double
     | DoubleLit Double
+    | Maybe
+    | Nothing_
+    | Just_
     | ListBuild
     | ListFold
     | TextLit Text
