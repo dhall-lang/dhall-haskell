@@ -49,8 +49,7 @@
 --
 -- This then throws an exception when we try to load the configuration file:
 --
--- > Original   expression: 1 : {{ bar : [ Double ], foo : Integer }}
--- > Normalized expression: 1
+-- > Expression: 1 : {{ bar : [ Double ], foo : Integer }}
 -- > 
 -- > Error: Expression's inferred type does not match annotated type
 -- > 
@@ -147,17 +146,18 @@
 -- > 
 -- > +100
 --
--- Dhall only support addition and subtraction on `Natural` numbers (i.e.
--- non-negative numbers), which are not the same as `Integer`s (which can be
--- negative).  A `Natural` number is a number prefixed with the @+@ symbol.  If
--- you try to add or multiply two `Integer`s you will get a type error:
+-- Dhall is a very restricted programming language that only supports very
+-- simple operations.  For example, Dhall only support addition and subtraction
+-- on `Natural` numbers (i.e. non-negative numbers), which are not the same type
+-- of number as `Integer`s (which can be negative).  A `Natural` number is a
+-- number prefixed with the @+@ symbol.  If you try to add or multiply two
+-- `Integer`s (without the @+@ prefix) you will get a type error:
 --
 -- > $ dhall
 -- > 2 + 2
 -- > <Ctrl-D>
 -- > dhall: 
--- > Original   expression: 2 + 2
--- > Normalized expression: 2 + 2
+-- > Expression: 2 + 2
 -- > 
 -- > Error: Can't add a value that's not a `Natural` number
 -- > Hint : You're not allowed to add `Integer`s
@@ -165,6 +165,83 @@
 -- > 
 -- > Value: 2
 -- > Type : Integer
+--
+-- The Dhall language doesn't just type-check the final schema; the language
+-- also ensures that every expression is internally consistent.  For example,
+-- suppose that we call @./makeBools@ on a non-`Bool` argument:
+--
+--
+-- > $ dhall
+-- > ./makeBools "ABC"
+-- > dhall: 
+-- > Expression: (λ(n : Bool) → [ n && True, n && False, n || True, n || False : Bool ]) "ABC"
+-- > 
+-- > Error: Function applied to argument of the wrong type
+-- > 
+-- > Expected type: Bool
+-- > Argument type: Text
+--
+-- We get a type error saying that our function expects a `Bool` argument, but
+-- we supplied an argument of type `Text` instead.
+--
+-- We also don't have to use files at all.  Our `input` function accepts any
+-- Dhall expression:
+--
+-- >>> input auto "True && False" :: IO Bool
+-- False
+--
+-- Reading from an external configuration file is just a special case of Dhall's
+-- support for embedding files as expressions.  There's no limit to how many
+-- files as expressions that you can nest this way.  For example, we can define
+-- one file that is a Dhall expression that in turn depends on another file
+-- which is also a Dhall expression:
+--
+-- > $ echo './bool1 && ./bool2' > both
+-- > $ echo 'True'  > bool1
+-- > $ echo 'False' > bool2
+-- > $ dhall
+-- > [ ./bool1 , ./bool2 , ./both : Bool ]
+-- > <Ctrl-D>
+-- > [ Bool ]
+-- > 
+-- > [ True, False, False : Bool ]
+--
+-- The only restriction is that the Dhall language will forbid cycles in these
+-- file references:
+--
+-- > $ echo './bar' > foo
+-- > $ echo './foo' > bar
+-- > $ dhall < ./foo
+-- > dhall: 
+-- > ⤷ ./bar 
+-- > ⤷ ./foo 
+-- > Cyclic import: ./bar 
+--
+-- Dhall is a total programming language, which means that Dhall is not
+-- Turing-complete.  Evaluation of every Dhall program is guaranteed to
+-- eventually halt  There is no upper bound on how long the program might take
+-- to evaluate, but the program is guaranteed to terminate in a finite amount of
+-- time and not hang forever.
+--
+-- This guarantee means that all Dhall programs can be safely reduced to
+-- normal form.  In fact, Dhall programs can be evaluated even if all function
+-- arguments haven't been fully applied.  For example, the following program is
+-- an anonymous function:
+--
+-- > $ dhall
+-- > \(n : Bool) -> +10 * +10
+-- > <Ctrl-D>
+-- > ∀(n : Bool) → Natural
+-- > 
+-- > λ(n : Bool) → +100
+--
+-- ... and even though the function is still missing the first argument named
+-- @n@ the compiler is smart enough to evaluate the body of the anonymous
+-- function ahead of time before the function has even been invoked.
+--
+-- Similarly, you can use this normalization process to remove indirection
+-- introduced by well-meaning software engineers over-architecting the
+-- configuration file.
 
 module Dhall
     (
@@ -173,6 +250,7 @@ module Dhall
 
     -- * Types
     , Type
+    , bool
     , natural
     , integer
     , double
