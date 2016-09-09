@@ -137,6 +137,10 @@ expr = mdo
             <$> some letExpr
             <*> (match Lexer.In *> expr)
             )
+        <|> (   Annot
+            <$> bexpr
+            <*> (match Lexer.Colon *> expr)
+            )
         )
 
     letExpr <- rule
