@@ -51,7 +51,7 @@ Library
         transformers         >= 0.2.0.0  && < 0.6 ,
         vector
     Exposed-Modules:
-        Dhall.Config,
+        Dhall,
         Dhall.Context,
         Dhall.Core,
         Dhall.Import,
