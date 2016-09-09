@@ -634,8 +634,7 @@ instance Buildable TypeError where
                  then ""
                  else "Context:\n" <> buildContext ctx <> "\n"
             )
-        <>  "Original   expression: " <> build expr <> "\n"
-        <>  "Normalized expression: " <> build (normalize expr) <> "\n"
+        <>  "Expression: " <> build expr <> "\n"
         <>  "\n"
         <>  build msg
       where
