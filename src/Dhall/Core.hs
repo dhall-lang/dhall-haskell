@@ -503,7 +503,7 @@ data TypeMessage
     | Untyped Const
     | InvalidElement Int (Expr X) (Expr X) (Expr X)
     | InvalidMaybeTypeParam (Expr X)
-    | InvalidListTypeParam (Expr X) (Expr X)
+    | InvalidListTypeParam (Expr X)
     | InvalidListType (Expr X) (Expr X)
     | InvalidPredicate (Expr X)
     | IfBranchMismatch (Expr X) (Expr X)
@@ -712,13 +712,29 @@ You incorrectly wrapped this expression that is not a type inside of a `Maybe`:
 |]
       where
         txt = Text.toStrict (pretty expr)
-    build (InvalidListTypeParam t k     ) =
-            "Error: Invalid list type\n"
-        <>  "\n"
-        <>  "Invalid type: [ " <> build t <> " ]\n"
-        <>  "                ^\n"
-        <>  "Expected kind: *\n"
-        <>  "Actual   kind: " <> build k <> "\n"
+    build (InvalidListTypeParam expr) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Invalid type of list
+
+Explanation: You can wrap any type `a` in brackets to generate the type of a
+list of `a`s: `[ a ]`.  For example, `[ Bool ]` denotes a list of `Bool`s.
+
+Only types can be wrapped in brackets to generated an optional type.  You
+*cannot* wrap terms or kinds in brackets:
+
+    [ True ]  -- This is not a valid type of list because `True` is not a type
+    [ Type ]  -- This is not a valid type of list because `Type` is not a type
+
+If you meant to create a 1-element list, then include the element type at the
+end of the list to indicate that you meant a list term and not a list type:
+
+    [ True : Bool ] -- This is a valid 1-element list term
+
+The following expression you provided is not a valid element type for a list:
+↳ $txt
+|]
+      where
+        txt = Text.toStrict (pretty expr)
     build (InvalidPredicate t      ) =
             "Error: Invalid predicate for `if`\n"
         <>  "\n"
@@ -1058,7 +1074,7 @@ typeWith ctx e@(List t          ) = do
     s <- fmap normalize (typeWith ctx t)
     case s of
         Const Star -> return ()
-        _          -> Left (TypeError ctx e (InvalidListTypeParam t s))
+        _          -> Left (TypeError ctx e (InvalidListTypeParam t))
     return (Const Star)
 typeWith ctx e@(ListLit t xs    ) = do
     s <- fmap normalize (typeWith ctx t)
