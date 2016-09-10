@@ -497,7 +497,7 @@ data TypeMessage
     = UnboundVariable
     | InvalidInputType (Expr X)
     | InvalidOutputType (Expr X)
-    | NotAFunction
+    | NotAFunction (Expr X)
     | TypeMismatch (Expr X) (Expr X)
     | AnnotMismatch (Expr X) (Expr X)
     | Untyped Const
@@ -560,12 +560,13 @@ Other input annotations are *not* valid, like this:
 
     ∀(x : 1) → x        -- `1` is a value and not a "type" nor a "kind"
 
-This input annotation you gave is neither a type nor a kind: $txt
+This input annotation you gave is neither a type nor a kind:
+↳ $txt
 |]
       where
         txt = Text.toStrict (pretty expr)
     build (InvalidOutputType expr  ) =
-            Builder.fromText [NeatInterpolation.text|
+        Builder.fromText [NeatInterpolation.text|
 Error: Invalid output annotation for a function
 
 Explanation: A function can emit an output value of a given "type", like this:
@@ -582,12 +583,34 @@ Other outputs are *not* valid, like this:
 
     ∀(x : Text) → 1     -- `1` is a value and not a "type" nor a "kind"
 
-This function output you specified is neither a type nor a kind: $txt
+This function output you specified is neither a type nor a kind:
+↳ $txt
 |]
       where
         txt = Text.toStrict (pretty expr)
-    build  NotAFunction              =
-            "Error: Only functions may be applied to values\n"
+    build (NotAFunction expr       ) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Only functions may be applied to arguments
+
+Explanation: Expressions separated by whitespace denote function application.
+For example:
+
+    f x  -- This denotes the function `f` applied to an argument `x`
+
+However, not everything is a valid function.  For example:
+
+    1                         -- Primitive values are not functions
+    Text                      -- Primitive types are not functions
+    Type                      -- Primitive kinds are not functions
+    { foo = 1, bar = "ABC" }  -- Records are not functions
+
+You tried to apply an expression that was not a function to an argument
+
+This is the expression that you incorrectly treated as a function:
+↳ $txt
+|]
+      where
+        txt = Text.toStrict (pretty expr)
     build (TypeMismatch expr1 expr2) =
             "Error: Function applied to argument of the wrong type\n"
         <>  "\n"
@@ -821,7 +844,7 @@ typeWith ctx e@(App f a         ) = do
     tf <- fmap normalize (typeWith ctx f)
     (x, _A, _B) <- case tf of
         Pi x _A _B -> return (x, _A, _B)
-        _          -> Left (TypeError ctx e NotAFunction)
+        _          -> Left (TypeError ctx e (NotAFunction f))
     _A' <- typeWith ctx a
     if _A == _A'
         then do
