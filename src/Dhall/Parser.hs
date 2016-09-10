@@ -114,32 +114,36 @@ sepBy p sep = sepBy1 p sep <|> pure []
 
 expr :: Grammar r (Prod r Token LocatedToken (Expr Path))
 expr = mdo
-    expr <- rule
-        (   bexpr
+    expr0 <- rule
+        (   (   Annot
+            <$> expr2
+            <*> (match Lexer.Colon *> expr1)
+            )
+        <|> expr1
+        )
+
+    expr1 <- rule
+        (   expr2
         <|> (   Lam
             <$> (match Lexer.Lambda *> match Lexer.OpenParen *> label)
-            <*> (match Lexer.Colon *> expr)
-            <*> (match Lexer.CloseParen *> match Lexer.Arrow *> expr)
+            <*> (match Lexer.Colon *> expr1)
+            <*> (match Lexer.CloseParen *> match Lexer.Arrow *> expr0)
             )
         <|> (   Pi
             <$> (match Lexer.Pi *> match Lexer.OpenParen *> label)
-            <*> (match Lexer.Colon *> expr)
-            <*> (match Lexer.CloseParen *> match Lexer.Arrow *> expr)
+            <*> (match Lexer.Colon *> expr1)
+            <*> (match Lexer.CloseParen *> match Lexer.Arrow *> expr0)
             )
         <|> (   Pi "_"
-            <$> bexpr
-            <*> (match Lexer.Arrow *> expr)
+            <$> expr2
+            <*> (match Lexer.Arrow *> expr0)
             )
         <|> (    IntegerLit . negate . fromIntegral
             <$> (match Lexer.Dash *> number)
             )
         <|> (   Lets
             <$> some letExpr
-            <*> (match Lexer.In *> expr)
-            )
-        <|> (   Annot
-            <$> bexpr
-            <*> (match Lexer.Colon *> expr)
+            <*> (match Lexer.In *> expr0)
             )
         )
 
@@ -147,43 +151,44 @@ expr = mdo
         (   Let
         <$> (match Lexer.Let *> label)
         <*> many argExpr
-        <*> (match Lexer.Equals *> expr)
+        <*> (match Lexer.Equals *> expr0)
         )
 
     argExpr <- rule
         (   (,)
         <$> (match Lexer.OpenParen *> label)
-        <*> (match Lexer.Colon *> expr <* match Lexer.CloseParen)
+        <*> (match Lexer.Colon *> expr1 <* match Lexer.CloseParen)
         )
 
-    bexpr <- rule
-        (   (App <$> bexpr <*> aexpr)
+    expr2 <- rule
+        (   (App <$> expr2 <*> expr3)
         <|> (   Maybe
-            <$> (match Lexer.Maybe *> bexpr)
+            <$> (match Lexer.Maybe *> expr2)
             )
         <|> (   BoolAnd
-            <$> bexpr
-            <*> (match Lexer.And *> bexpr)
+            <$> expr2
+            <*> (match Lexer.And *> expr2)
             )
         <|> (   BoolOr
-            <$> bexpr
-            <*> (match Lexer.Or *> bexpr)
+            <$> expr2
+            <*> (match Lexer.Or *> expr2)
             )
         <|> (   NaturalPlus
-            <$> bexpr
-            <*> (match Lexer.Plus *> bexpr)
+            <$> expr2
+            <*> (match Lexer.Plus *> expr2)
             )
         <|> (   NaturalTimes
-            <$> bexpr
-            <*> (match Lexer.Star *> bexpr)
+            <$> expr2
+            <*> (match Lexer.Star *> expr2)
             )
         <|> (   TextAppend
-            <$> bexpr
-            <*> (match Lexer.DoublePlus *> bexpr)
+            <$> expr2
+            <*> (match Lexer.DoublePlus *> expr2)
             )
-        <|> aexpr
+        <|> expr3
         )
-    aexpr <- rule
+
+    expr3 <- rule
         (   (Var <$> label)
         <|> (match Lexer.Type *> pure (Const Star))
         <|> (match Lexer.Box  *> pure (Const Box))
@@ -198,7 +203,7 @@ expr = mdo
         <|> (match Lexer.ListBuild *> pure ListBuild)
         <|> (match Lexer.ListFold *> pure ListFold)
         <|> (   List
-            <$> (match Lexer.OpenBracket *> expr <* match Lexer.CloseBracket)
+            <$> (match Lexer.OpenBracket *> expr1 <* match Lexer.CloseBracket)
             )
         <|> (BoolLit <$> bool)
         <|> (IntegerLit . fromIntegral <$> number)
@@ -207,19 +212,19 @@ expr = mdo
         <|> (TextLit <$> text)
         <|> (   flip ListLit
             <$> fmap Data.Vector.fromList
-                (match Lexer.OpenBracket *> sepBy expr (match Lexer.Comma))
-            <*> (match Lexer.Colon *> expr <* match Lexer.CloseBracket)
+                (match Lexer.OpenBracket *> sepBy expr1 (match Lexer.Comma))
+            <*> (match Lexer.Colon *> expr1 <* match Lexer.CloseBracket)
             )
         <|> recordLit
         <|> record
         <|> (   BoolIf
-            <$> (match Lexer.If *> expr)
-            <*> (match Lexer.Then *> expr)
-            <*> (match Lexer.Else *> expr)
+            <$> (match Lexer.If *> expr0)
+            <*> (match Lexer.Then *> expr0)
+            <*> (match Lexer.Else *> expr0)
             )
         <|> (Embed <$> import_)
-        <|> (Field <$> aexpr <*> (match Lexer.Dot *> label))
-        <|> (match Lexer.OpenParen *> expr <* match Lexer.CloseParen)
+        <|> (Field <$> expr3 <*> (match Lexer.Dot *> label))
+        <|> (match Lexer.OpenParen *> expr0 <* match Lexer.CloseParen)
         )
 
     let toRecordLit xs ys = RecordLit (Data.Map.fromList (xs ++ ys))
@@ -236,7 +241,7 @@ expr = mdo
     fieldValue <- rule
         (   (,)
         <$> label
-        <*> (match Lexer.Equals *> expr)
+        <*> (match Lexer.Equals *> expr0)
         )
 
     let toRecord xs ys = Record (Data.Map.fromList (xs ++ ys))
@@ -255,7 +260,7 @@ expr = mdo
     fieldType <- rule
         (   (,)
         <$> label
-        <*> (match Lexer.Colon *> expr)
+        <*> (match Lexer.Colon *> expr1)
         )
 
     import_ <- rule
@@ -263,7 +268,7 @@ expr = mdo
         <|> (URL <$> url)
         )
 
-    return expr
+    return expr0
 
 -- | The specific parsing error
 data ParseMessage
