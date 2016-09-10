@@ -541,9 +541,30 @@ variables that are still "in scope".  For example, these are valid expressions:
     let x = x in x      -- The definition for `x` cannot reference itself
 |]
     build (InvalidInputType expr   ) =
-            "Error: Invalid input type for a function\n"
-        <>  "\n"
-        <>  "Type: " <> build expr <> "\n"
+        Builder.fromText [NeatInterpolation.text|
+Error: Invalid input annotation for a function
+
+Explanation: A function can accept an input value of a given "type", like this:
+
+    ∀(x : Text) → x    -- This function accepts any value of type `Text`.
+                       -- `x` is the value's name and `Text` is the value's type
+
+    Bool → Int         -- This function accepts any value of type `Bool`.
+                       -- The input value's name is omitted
+
+... or accept an input "type" of a given "kind", like this:
+
+    ∀(a : Type) → [a]  -- This accepts any type `a` of kind `Type`
+
+Other input annotations are not valid, like this:
+
+    "ABC" -> Int            -- "ABC"  is a value and not a "type" nor a "kind"
+    forall (x : True) -> x  -- `True` is a value and not a "type" nor a "kind"
+
+This input annotation you gave is neither a type nor a kind: $txt
+|]
+      where
+        txt = Text.toStrict (pretty expr)
     build (InvalidOutputType expr  ) =
             "Error: Invalid output type\n"
         <>  "\n"
