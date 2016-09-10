@@ -525,7 +525,7 @@ Error: Unbound variable
 Explanation: Expressions can only reference previously introduced (i.e. "bound")
 variables that are still "in scope".  For example, these are valid expressions:
 
-    \(x : Bool) -> x      -- Anonymous functions introduce "bound" variables
+    λ(x : Bool) → x       -- Anonymous functions introduce "bound" variables
 
     let x = 1 in x        -- `let` definitions introduce "bound" variables
 
@@ -534,7 +534,7 @@ variables that are still "in scope".  For example, these are valid expressions:
 
 ... but these are not valid expressions:
 
-    \(x : Bool) -> y    -- The variable `y` hasn't been introduced yet
+    λ(x : Bool) → y     -- The variable `y` hasn't been introduced yet
 
     (let x = 1 in x) x  -- `x` is undefined outside the parentheses
 
@@ -546,29 +546,46 @@ Error: Invalid input annotation for a function
 
 Explanation: A function can accept an input value of a given "type", like this:
 
-    ∀(x : Text) → x    -- This function accepts any value of type `Text`.
+    ∀(x : Text) → Bool -- This function accepts any value of type `Text`.
                        -- `x` is the value's name and `Text` is the value's type
 
-    Bool → Int         -- This function accepts any value of type `Bool`.
+    Bool → Integer     -- This function accepts any value of type `Bool`.
                        -- The input value's name is omitted
 
 ... or accept an input "type" of a given "kind", like this:
 
-    ∀(a : Type) → [a]  -- This accepts any type `a` of kind `Type`
+    ∀(a : Type) → Type  -- This accepts any type `a` of kind `Type`
 
-Other input annotations are not valid, like this:
+Other input annotations are *not* valid, like this:
 
-    "ABC" -> Int            -- "ABC"  is a value and not a "type" nor a "kind"
-    forall (x : True) -> x  -- `True` is a value and not a "type" nor a "kind"
+    ∀(x : 1) → x        -- `1` is a value and not a "type" nor a "kind"
 
 This input annotation you gave is neither a type nor a kind: $txt
 |]
       where
         txt = Text.toStrict (pretty expr)
     build (InvalidOutputType expr  ) =
-            "Error: Invalid output type\n"
-        <>  "\n"
-        <>  "Type: " <> build expr <> "\n"
+            Builder.fromText [NeatInterpolation.text|
+Error: Invalid output annotation for a function
+
+Explanation: A function can emit an output value of a given "type", like this:
+
+    ∀(x : Text) → Bool  -- This function emits a value of type `Text`.
+
+    Bool → Int          -- This function emits a value of type `Int`.
+
+... or emit an output "type" of a given "kind", like this:
+
+    ∀(a : Type) → Type  -- This emits a type of kind `Type`
+
+Other outputs are *not* valid, like this:
+
+    ∀(x : Text) → 1     -- `1` is a value and not a "type" nor a "kind"
+
+This function output you specified is neither a type nor a kind: $txt
+|]
+      where
+        txt = Text.toStrict (pretty expr)
     build  NotAFunction              =
             "Error: Only functions may be applied to values\n"
     build (TypeMismatch expr1 expr2) =
@@ -797,7 +814,7 @@ typeWith ctx e@(Pi  x _A _B     ) = do
     tB <- fmap normalize (typeWith ctx' _B)
     kB <- case tB of
         Const k -> return k
-        _       -> Left (TypeError ctx' e (InvalidOutputType tB))
+        _       -> Left (TypeError ctx' e (InvalidOutputType _B))
 
     fmap Const (rule kA kB)
 typeWith ctx e@(App f a         ) = do
