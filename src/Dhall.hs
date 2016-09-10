@@ -17,9 +17,10 @@
 -- > { foo = 1
 -- > , bar = [ 3.0, 4.0, 5.0 : Double ]
 -- > }
--- > <CTRL-D>
+-- > <Ctrl-D>
 -- 
--- You can read in the entire file using the following Haskell code:
+-- You can read the above configuration file into Haskell using the following
+-- code:
 -- 
 -- > {-# LANGUAGE DeriveGeneric     #-}
 -- > {-# LANGUAGE OverloadedStrings #-}
@@ -41,9 +42,9 @@
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
 --
--- In the above example, the `Example` Haskell type represents the schema for
--- our configuration file.  Suppose that we modify our configuration file to
--- no longer match the schema, like this:
+-- In the above code, the `Example` Haskell type represents the schema for our
+-- configuration file.  Suppose that we modify our configuration file to no
+-- longer match the schema, like this:
 --
 -- > $ echo "1" > example.dhall
 --
@@ -64,9 +65,9 @@
 -- two fields: a field named @bar@ that is a `Vector` of `Double`s, and a
 -- field named @foo@ that is an `Integer`.  This is the \"Annotated type\".
 -- However, the type-checker found an expression whose inferred type was an
--- `Integer`.  Since an `Integer` is not the same thing as a record the
--- type-checking step fails and Dhall does not bother to marshal the
--- configuration into Haskell.
+-- `Integer`.  This is the \"Expected type\".  Since an `Integer` is not the
+-- same thing as a record the type-checking step fails and Dhall does not bother
+-- to marshal the configuration into Haskell.
 --
 -- Dhall is also a heavily restricted programming language.  For example, we can
 -- define a configuration file that is an anonymous function:
@@ -110,7 +111,8 @@
 --
 -- Notice how we can decode into some types \"out-of-the-box\" without declaring
 -- a Haskell record to store the output.  In the above example we marshalled
--- the result directly into a `Vector` of `Bool`s.
+-- the result directly into a `Vector` of `Bool`s.  The instances for the
+-- `Interpret` class list all types that are automatically supported.
 --
 -- We can also test functions directly on the command line using the @dhall@
 -- compiler.  For example:
@@ -130,8 +132,8 @@
 -- In the above example the type of the result is a `Vector` of `Bool`s and the
 -- normal form of the expression just evaluates all functions.
 --
--- You can use the Dhall compiler as a (very basic) expression evaluator.  For
--- example:
+-- You can also use the Dhall compiler to evaluate expressions which have no
+-- file references.  For example:
 --
 -- > $ dhall
 -- > "Hello, " ++ "world!"
@@ -146,12 +148,12 @@
 -- > 
 -- > +100
 --
--- Dhall is a very restricted programming language that only supports very
--- simple operations.  For example, Dhall only support addition and subtraction
--- on `Natural` numbers (i.e. non-negative numbers), which are not the same type
--- of number as `Integer`s (which can be negative).  A `Natural` number is a
--- number prefixed with the @+@ symbol.  If you try to add or multiply two
--- `Integer`s (without the @+@ prefix) you will get a type error:
+-- Dhall is a very restricted programming language that only supports simple
+-- operations.  For example, Dhall only support addition and subtraction on
+-- `Natural` numbers (i.e. non-negative numbers), which are not the same type of
+-- number as `Integer`s (which can be negative).  A `Natural` number is a number
+-- prefixed with the @+@ symbol.  If you try to add or multiply two `Integer`s
+-- (without the @+@ prefix) you will get a type error:
 --
 -- > $ dhall
 -- > 2 + 2
@@ -184,15 +186,14 @@
 -- We get a type error saying that our function expects a `Bool` argument, but
 -- we supplied an argument of type `Text` instead.
 --
--- We also don't have to use files at all.  Our `input` function accepts any
--- Dhall expression:
+-- Our `input` function also doesn't need to reference any files at all:
 --
 -- >>> input auto "True && False" :: IO Bool
 -- False
 --
 -- Reading from an external configuration file is just a special case of Dhall's
 -- support for embedding files as expressions.  There's no limit to how many
--- files as expressions that you can nest this way.  For example, we can define
+-- files-as-expressions that you can nest this way.  For example, we can define
 -- one file that is a Dhall expression that in turn depends on another file
 -- which is also a Dhall expression:
 --
@@ -218,15 +219,15 @@
 -- > Cyclic import: ./bar 
 --
 -- Dhall is a total programming language, which means that Dhall is not
--- Turing-complete.  Evaluation of every Dhall program is guaranteed to
--- eventually halt  There is no upper bound on how long the program might take
+-- Turing-complete and evaluation of every Dhall program is guaranteed to
+-- eventually halt.  There is no upper bound on how long the program might take
 -- to evaluate, but the program is guaranteed to terminate in a finite amount of
 -- time and not hang forever.
 --
--- This guarantee means that all Dhall programs can be safely reduced to
--- normal form.  In fact, Dhall programs can be evaluated even if all function
--- arguments haven't been fully applied.  For example, the following program is
--- an anonymous function:
+-- This guarantees that all Dhall programs can be safely reduced to a normal
+-- form where all functions have been evaluated.  In fact, Dhall expressions can
+-- be evaluated even if all function arguments haven't been fully applied.  For
+-- example, the following program is an anonymous function:
 --
 -- > $ dhall
 -- > \(n : Bool) -> +10 * +10
@@ -289,16 +290,16 @@ throws (Right r) = return r
 
     The first argument determines the type of value that you decode:
 
-> input integer "2" :: IO Integer
-> input (vector double) "[ 1.0, 2.0 : Double ]" : IO (Vector Double)
+>>> input integer "2"
+2
+>>> input (vector double) "[ 1.0, 2.0 : Double ]"
+[1.0,2.0]
 
     Use `auto` to automatically select which type to decode based on the
     inferred return type:
 
-> example :: IO ()
-> example = do
->     x <- input auto "True"
->     putStrLn (if x then "Hello!" else "Goodbye!")
+>>> input auto "True" :: IO Bool
+True
 -}
 input
     :: Type a
@@ -315,7 +316,7 @@ input (Type {..}) t = do
         Just x  -> return x
         Nothing -> fail "input: malformed `Type`"
 
-{-| A @(Type a)@ represents a way to marshal a value of type @a@ from Dhall
+{-| A @(Type a)@ represents a way to marshal a value of type @\'a\'@ from Dhall
     into Haskell
 
     You can produce `Type`s either explicitly:
@@ -474,6 +475,10 @@ pair3
 
 >>> input auto "[1, 2, 3 : Integer]" :: IO (Vector Integer)
 [1,2,3]
+
+    This class auto-generates a default implementation for records that
+    implement `Generic`.  This does auto-generate an instance for sum types or
+    recursive types.
 -}
 class Interpret a where
     auto :: Type a
