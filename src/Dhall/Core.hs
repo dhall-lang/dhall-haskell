@@ -6,6 +6,7 @@
 {-# LANGUAGE DeriveTraversable          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE QuasiQuotes                #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -63,6 +64,7 @@ import qualified Data.Vector
 import qualified Data.Vector.Mutable
 import qualified Dhall.Context                    as Context
 import qualified Filesystem.Path.CurrentOS        as Filesystem
+import qualified NeatInterpolation
 
 {-| Constants for the calculus of constructions
 
@@ -517,9 +519,29 @@ data TypeMessage
 
 instance Buildable TypeMessage where
     build  UnboundVariable           =
-            "Error: Unbound variable\n"
+        Builder.fromText [NeatInterpolation.text|
+Error: Unbound variable
+
+Explanation: Expressions can only reference previously introduced (i.e. "bound")
+variables that are still "in scope".  For example, these are valid expressions:
+
+    \(x : Bool) -> x      -- Anonymous functions introduce "bound" variables
+
+    let x = 1 in x        -- `let` definitions introduce "bound" variables
+
+    let f (x : Bool) = x  -- Function arguments are "bound" variables
+    in  f True
+
+... but these are not valid expressions:
+
+    \(x : Bool) -> y    -- The variable `y` hasn't been introduced yet
+
+    (let x = 1 in x) x  -- `x` is undefined outside the parentheses
+
+    let x = x in x      -- The definition for `x` cannot reference itself
+|]
     build (InvalidInputType expr   ) =
-            "Error: Invalid input type\n"
+            "Error: Invalid input type for a function\n"
         <>  "\n"
         <>  "Type: " <> build expr <> "\n"
     build (InvalidOutputType expr  ) =
