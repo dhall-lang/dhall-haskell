@@ -502,7 +502,7 @@ data TypeMessage
     | AnnotMismatch (Expr X) (Expr X) (Expr X)
     | Untyped Const
     | InvalidElement Int (Expr X) (Expr X) (Expr X)
-    | InvalidMaybeTypeParam (Expr X) (Expr X)
+    | InvalidMaybeTypeParam (Expr X)
     | InvalidListTypeParam (Expr X) (Expr X)
     | InvalidListType (Expr X) (Expr X)
     | InvalidPredicate (Expr X)
@@ -689,14 +689,29 @@ the compiler cannot infer what `Kind` belongs to.
 |]
       where
         txt = Text.toStrict (pretty c)
-    build (InvalidMaybeTypeParam t k     ) =
-            "Error: Invalid optional type\n"
-        <>  "\n"
-            -- TODO: Wrap in parentheses if necessary
-        <>  "Invalid type: Maybe " <> build t <> "\n"
-        <>  "                    ^\n"
-        <>  "Expected kind: *\n"
-        <>  "Actual   kind: " <> build k <> "\n"
+    build (InvalidMaybeTypeParam expr) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Invalid type argument for `Maybe`
+
+Explanation: You can wrap any type `a` in a `Maybe` to generate the type of an
+optional term: `Maybe a`.  For example, `Maybe Bool` denotes an optional `Bool`.
+
+Only types can be wrapped in `Maybe` to generated an optional type.  You
+*cannot* wrap terms or kinds in `Maybe`:
+
+    Maybe True  -- This is not valid because `True` is not a type
+    Maybe Type  -- This is not valid because `Type` is not a type
+
+... but you can wrap terms in `Just` and `Nothing`:
+
+    Just Bool True -- This is valid and has type `Maybe Bool`
+    Nothing Bool   -- This is valid and also has type `Maybe Bool`
+
+You incorrectly wrapped this expression that is not a type inside of a `Maybe`:
+↳ $txt
+|]
+      where
+        txt = Text.toStrict (pretty expr)
     build (InvalidListTypeParam t k     ) =
             "Error: Invalid list type\n"
         <>  "\n"
@@ -1033,7 +1048,7 @@ typeWith ctx e@(Maybe t         ) = do
     s <- fmap normalize (typeWith ctx t)
     case s of
         Const Star -> return ()
-        _          -> Left (TypeError ctx e (InvalidMaybeTypeParam t s))
+        _          -> Left (TypeError ctx e (InvalidMaybeTypeParam t))
     return (Const Star)
 typeWith _      Nothing_          = do
     return (Pi "a" (Const Star) (Maybe "a"))
