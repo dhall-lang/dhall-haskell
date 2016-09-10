@@ -168,7 +168,7 @@ data Expr a
     -- | > BoolOr  x y                     ~  x || y
     | BoolOr  (Expr a) (Expr a)
     -- | > BoolIf                          ~  if
-    | BoolIf
+    | BoolIf (Expr a) (Expr a) (Expr a)
     -- | > Natural                         ~  Natural
     | Natural
     -- | > NaturalLit n                    ~  +n
@@ -243,7 +243,7 @@ instance Monad Expr where
     BoolLit b        >>= _ = BoolLit b
     BoolAnd l r      >>= k = BoolAnd (l >>= k) (r >>= k)
     BoolOr  l r      >>= k = BoolOr  (l >>= k) (r >>= k)
-    BoolIf           >>= _ = BoolIf
+    BoolIf x y z     >>= k = BoolIf (x >>= k) (y >>= k) (z >>= k)
     Natural          >>= _ = Natural
     NaturalLit n     >>= _ = NaturalLit n
     NaturalFold      >>= _ = NaturalFold
@@ -323,7 +323,6 @@ instance Eq a => Eq (Expr a) where
         go (BoolOr xL yL) (BoolOr xR yR) = do
             b <- go xL xR
             if b then go yL yR else return False
-        go BoolIf BoolIf = return True
         go Natural Natural = return True
         go (NaturalLit x) (NaturalLit y) = return (x == y)
         go Integer Integer = return True
@@ -427,7 +426,15 @@ instance Buildable a => Buildable (Expr a)
             BoolLit b        -> build (show b)
             BoolAnd x y      -> build x <> " && " <> build y
             BoolOr  x y      -> build x <> " || " <> build y
-            BoolIf           -> "if"
+            BoolIf x y z     ->
+                    (if parenApp then "(" else "")
+                <>  "if "
+                <>  go False False x
+                <>  " then "
+                <>  go False False y
+                <>  " else "
+                <>  go False False z
+                <>  (if parenApp then ")" else "")
             Natural          -> "Natural"
             NaturalLit n     -> "+" <> build (show n)
             NaturalFold      -> "Natural/fold"
@@ -496,6 +503,8 @@ data TypeMessage
     | InvalidMaybeTypeParam (Expr X) (Expr X)
     | InvalidListTypeParam (Expr X) (Expr X)
     | InvalidListType (Expr X) (Expr X)
+    | InvalidPredicate (Expr X)
+    | IfBranchMismatch (Expr X) (Expr X)
     | InvalidFieldType (Expr X)
     | NotARecord (Expr X)
     | MissingField Text
@@ -546,6 +555,16 @@ instance Buildable TypeMessage where
         <>  "                ^\n"
         <>  "Expected kind: *\n"
         <>  "Actual   kind: " <> build k <> "\n"
+    build (InvalidPredicate t      ) =
+            "Error: Invalid predicate for `if`\n"
+        <>  "\n"
+        <>  "Expected predicate type: Bool\n"
+        <>  "Inferred predicate type: " <> build t <> "\n"
+    build (IfBranchMismatch l r    ) =
+            "Error: The `then` and `else` branches have different types\n"
+        <>  "\n"
+        <>  "Type of `then` branch: " <> build l <> "\n"
+        <>  "Type of `else` branch: " <> build r <> "\n"
     build (InvalidListType t k     ) =
             "Error: Type of the wrong kind for list elements\n"
         <>  "\n"
@@ -684,6 +703,7 @@ subst x e (Annot x' t      ) = Annot (subst x e x') (subst x e t)
 subst x e (Var x'          ) = if x == x' then e else Var x'
 subst x e (BoolAnd      l r) = BoolAnd      (subst x e l) (subst x e r)
 subst x e (BoolOr       l r) = BoolOr       (subst x e l) (subst x e r)
+subst x e (BoolIf x' y z   ) = BoolIf (subst x e x') (subst x e y) (subst x e z)
 subst x e (NaturalPlus  l r) = NaturalPlus  (subst x e l) (subst x e r)
 subst x e (NaturalTimes l r) = NaturalTimes (subst x e l) (subst x e r)
 subst x e (TextAppend   l r) = TextAppend   (subst x e l) (subst x e r)
@@ -794,11 +814,17 @@ typeWith ctx e@(BoolOr  l r     ) = do
         _    -> Left (TypeError ctx e (CantOr r tr))
 
     return Bool
-typeWith _      BoolIf            = do
-    return
-        (Pi "_" Bool
-            (Pi "bool" (Const Star)
-                (Pi "true" "bool" (Pi "false" "bool" "bool")) ) )
+typeWith ctx e@(BoolIf x y z    ) = do
+    tx <- fmap normalize (typeWith ctx x)
+    case tx of
+        Bool -> return ()
+        _    -> Left (TypeError ctx e (InvalidPredicate tx))
+    ty <- fmap normalize (typeWith ctx y)
+    tz <- fmap normalize (typeWith ctx z)
+    if ty == tz
+        then return ()
+        else Left (TypeError ctx e (IfBranchMismatch ty tz))
+    return ty
 typeWith _      Natural           = do
     return (Const Star)
 typeWith _     (NaturalLit _    ) = do
@@ -945,10 +971,6 @@ normalize e = case e of
     App f a -> case normalize f of
         Lam x _A b -> normalize (subst x (normalize a) b)  -- Beta reduce
         f' -> case App f' a' of
-            App (App (App (App BoolIf (BoolLit True)) _) true) _ ->
-                normalize true
-            App (App (App (App BoolIf (BoolLit False)) _) _) false ->
-                normalize false
             App (App (App (App NaturalFold (NaturalLit n0)) _) succ') zero ->
                 normalize (go n0)
               where
@@ -1005,6 +1027,10 @@ normalize e = case e of
       where
         x' = normalize x
         y' = normalize y
+    BoolIf (BoolLit True) true _ ->
+        normalize true
+    BoolIf (BoolLit False) _ false ->
+        normalize false
     NaturalPlus  x y ->
         case x' of
             NaturalLit xn ->
