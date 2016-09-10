@@ -611,11 +611,31 @@ This is the expression that you incorrectly treated as a function:
 |]
       where
         txt = Text.toStrict (pretty expr)
-    build (TypeMismatch expr1 expr2) =
-            "Error: Function applied to argument of the wrong type\n"
-        <>  "\n"
-        <>  "Expected type: " <> build expr1 <> "\n"
-        <>  "Argument type: " <> build expr2 <> "\n"
+    build (TypeMismatch expr0 expr1) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Function applied to the wrong type or kind of argument
+
+Explanation: Every function declares what type or kind of argument to accept
+
+    λ(x : Bool) → x   -- Anonymous function which only accepts `Bool` arguments
+
+    let f (x : Bool) = x  -- Named function which only accepts `Bool` arguments
+    in f True
+
+    λ(a : Type) → a   -- Anonymous function which only accepts `Type` arguments
+
+You *cannot* apply a function to the wrong type or kind of argument:
+
+    (λ(x : Bool) → x) "AB"  -- "AB" is `Text`, but the function expects a `Bool`
+
+You tried to invoke a function which expects an argument of type or kind:
+↳ $txt0
+... on an argument of type or kind:
+↳ $txt1
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (pretty expr1)
     build (AnnotMismatch expr1 expr2) =
             "Error: Expression's inferred type does not match annotated type\n"
         <>  "\n"
