@@ -499,7 +499,7 @@ data TypeMessage
     | InvalidOutputType (Expr X)
     | NotAFunction (Expr X)
     | TypeMismatch (Expr X) (Expr X)
-    | AnnotMismatch (Expr X) (Expr X)
+    | AnnotMismatch (Expr X) (Expr X) (Expr X)
     | Untyped Const
     | InvalidElement Int (Expr X) (Expr X) (Expr X)
     | InvalidMaybeTypeParam (Expr X) (Expr X)
@@ -518,7 +518,7 @@ data TypeMessage
     deriving (Show)
 
 instance Buildable TypeMessage where
-    build  UnboundVariable           =
+    build UnboundVariable =
         Builder.fromText [NeatInterpolation.text|
 Error: Unbound variable
 
@@ -540,17 +540,17 @@ variables that are still "in scope".  For example, these are valid expressions:
 
     let x = x in x      -- The definition for `x` cannot reference itself
 |]
-    build (InvalidInputType expr   ) =
+    build (InvalidInputType expr) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid input annotation for a function
 
-Explanation: A function can accept an input value of a given "type", like this:
+Explanation: A function can accept an input term of a given "type", like this:
 
-    ∀(x : Text) → Bool -- This function accepts any value of type `Text`.
-                       -- `x` is the value's name and `Text` is the value's type
+    ∀(x : Text) → Bool -- This function accepts any term of type `Text`.
+                       -- `x` is the term's name and `Text` is the term's type
 
-    Bool → Integer     -- This function accepts any value of type `Bool`.
-                       -- The input value's name is omitted
+    Bool → Integer     -- This function accepts any term of type `Bool`.
+                       -- The input term's name is omitted
 
 ... or accept an input "type" of a given "kind", like this:
 
@@ -558,22 +558,22 @@ Explanation: A function can accept an input value of a given "type", like this:
 
 Other input annotations are *not* valid, like this:
 
-    ∀(x : 1) → x        -- `1` is a value and not a "type" nor a "kind"
+    ∀(x : 1) → x        -- `1` is a term and not a "type" nor a "kind"
 
 This input annotation you gave is neither a type nor a kind:
 ↳ $txt
 |]
       where
         txt = Text.toStrict (pretty expr)
-    build (InvalidOutputType expr  ) =
+    build (InvalidOutputType expr) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid output annotation for a function
 
-Explanation: A function can emit an output value of a given "type", like this:
+Explanation: A function can emit an output term of a given "type", like this:
 
-    ∀(x : Text) → Bool  -- This function emits a value of type `Text`.
+    ∀(x : Text) → Bool  -- This function emits a term of type `Text`.
 
-    Bool → Int          -- This function emits a value of type `Int`.
+    Bool → Int          -- This function emits a term of type `Int`.
 
 ... or emit an output "type" of a given "kind", like this:
 
@@ -581,14 +581,14 @@ Explanation: A function can emit an output value of a given "type", like this:
 
 Other outputs are *not* valid, like this:
 
-    ∀(x : Text) → 1     -- `1` is a value and not a "type" nor a "kind"
+    ∀(x : Text) → 1     -- `1` is a term and not a "type" nor a "kind"
 
 This function output you specified is neither a type nor a kind:
 ↳ $txt
 |]
       where
         txt = Text.toStrict (pretty expr)
-    build (NotAFunction expr       ) =
+    build (NotAFunction expr) =
         Builder.fromText [NeatInterpolation.text|
 Error: Only functions may be applied to arguments
 
@@ -599,7 +599,7 @@ For example:
 
 However, not everything is a valid function.  For example:
 
-    1                         -- Primitive values are not functions
+    1                         -- Primitive terms are not functions
     Text                      -- Primitive types are not functions
     Type                      -- Primitive kinds are not functions
     { foo = 1, bar = "ABC" }  -- Records are not functions
@@ -636,13 +636,59 @@ You tried to invoke a function which expects an argument of type or kind:
       where
         txt0 = Text.toStrict (pretty expr0)
         txt1 = Text.toStrict (pretty expr1)
-    build (AnnotMismatch expr1 expr2) =
-            "Error: Expression's inferred type does not match annotated type\n"
-        <>  "\n"
-        <>  "Annotated type: " <> build expr1 <> "\n"
-        <>  "Inferred  type: " <> build expr2 <> "\n"
-    build (Untyped c               ) =
-            "Error: " <> build c <> " has no type\n"
+    build (AnnotMismatch expr0 expr1 expr2) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Expression's inferred type does not match annotated type
+
+Explanation: You can annotate the type or kind of an expression like this:
+
+    x : t  -- `x` is the expression and `t` is the annotated type of `x`
+
+Annotations are introduced in one of two ways:
+
+* You can manually annotate expressions to declare the type or kind you expect
+* The interpreter also implicitly inserts a top-level type annotation
+
+Annotations are optional because the compiler can infer the type of all
+expressions.  However, if you or the interpreter inserts an annotation and the
+inferred type or kind does not match the annotation then type-checking fails.
+
+You or the interpreter annotated this expression:
+↳ $txt0
+... with this type or kind:
+↳ $txt1
+... but the inferred type of the expression is actually this type or kind:
+↳ $txt2
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (pretty expr1)
+        txt2 = Text.toStrict (pretty expr2)
+    build (Untyped c) =
+        Builder.fromText [NeatInterpolation.text|
+Error: `$txt` has no type, kind, or sort
+
+Explanation: There are four levels of expressions that form a heirarchy:
+
+* terms
+* types
+* kinds
+* sorts
+
+The following annotations illustrate this heirarchy:
+
+    "ABC" : (Text : (Type : Kind))
+
+Every term has a type.  For example, the term `"ABC"` has type `Text`
+Every type has a kind.  For example, the type `Text` has kind `Type`
+Every kind has a sort.  For example, the kind `Type` has sort `Kind`
+
+However, there is nothing above sorts in this the hierarchy.  So if you ever
+type-check an expression which includes `Kind` then you get this error because
+the compiler cannot infer what `Kind` belongs to.
+|]
+      where
+        txt = Text.toStrict (pretty c)
     build (InvalidMaybeTypeParam t k     ) =
             "Error: Invalid optional type\n"
         <>  "\n"
@@ -888,7 +934,7 @@ typeWith ctx e@(Annot x t       ) = do
         else do
             let nf_t  = normalize t
             let nf_t' = normalize t'
-            Left (TypeError ctx e (AnnotMismatch nf_t nf_t'))
+            Left (TypeError ctx e (AnnotMismatch x nf_t nf_t'))
 typeWith _      Bool              = do
     return (Const Star)
 typeWith _     (BoolLit _       ) = do
