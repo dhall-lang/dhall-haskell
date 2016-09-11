@@ -509,7 +509,7 @@ data TypeMessage
     | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
     | InvalidFieldType Text (Expr X)
     | NotARecord Text (Expr X) (Expr X)
-    | MissingField Text
+    | MissingField Text (Expr X)
     | CantAnd (Expr X) (Expr X)
     | CantOr (Expr X) (Expr X)
     | CantAppend (Expr X) (Expr X)
@@ -867,10 +867,28 @@ You tried to access a field named:
         txt0 = Text.toStrict (pretty k    )
         txt1 = Text.toStrict (pretty expr0)
         txt2 = Text.toStrict (pretty expr1)
-    build (MissingField t          ) =
-            "Error: Missing field\n"
-        <>  "\n"
-        <>  "Field: " <> build t <> "\n"
+    build (MissingField k expr0) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Missing record field
+
+Explanation: You can only retrieve record fields if they are present
+
+    { foo = True, bar = "ABC" }.foo              -- This is valid ...
+
+    λ(r : {{ foo : Bool, bar : Text }}) → r.foo  -- ... and so is this
+
+... but you *cannot* access fields missing from a record:
+
+    { foo = True, bar = "ABC" }.qux              -- The field `qux` is missing
+
+You tried to access a field named:
+↳ $txt0
+... but the field is missing because the record only has these fields defined:
+↳ $txt1
+|]
+      where
+        txt0 = Text.toStrict (pretty k    )
+        txt1 = Text.toStrict (pretty expr0)
     build (CantAnd e t             ) =
             "Error: Can't use `(&&)` on a value that's not a `Bool`\n"
         <>  "\n"
@@ -1224,7 +1242,7 @@ typeWith ctx e@(Field r x       ) = do
         Record kts ->
             case Data.Map.lookup x kts of
                 Just t' -> return t'
-                Nothing -> Left (TypeError ctx e (MissingField x))
+                Nothing -> Left (TypeError ctx e (MissingField x t))
         _          -> Left (TypeError ctx e (NotARecord x r t))
 typeWith _     (Embed p         ) = do
     absurd p
