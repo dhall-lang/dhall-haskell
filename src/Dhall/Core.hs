@@ -59,6 +59,7 @@ import qualified Control.Monad
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.List
 import qualified Data.Map
+import qualified Data.Text
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Vector
@@ -502,10 +503,10 @@ data TypeMessage
     | TypeMismatch (Expr X) (Expr X)
     | AnnotMismatch (Expr X) (Expr X) (Expr X)
     | Untyped Const
-    | InvalidElement Int (Expr X) (Expr X) (Expr X)
+    | InvalidElement Int Int (Expr X) (Expr X) (Expr X)
     | InvalidMaybeTypeParam (Expr X)
     | InvalidListTypeParam (Expr X)
-    | InvalidListType (Expr X)
+    | InvalidListType Bool (Expr X)
     | InvalidPredicate (Expr X) (Expr X)
     | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
     | InvalidFieldType Text (Expr X)
@@ -783,7 +784,7 @@ Fix the two branches to have matching types
         txt2 = Text.toStrict (pretty expr2)
         txt3 = Text.toStrict (pretty expr3)
 
-    build (InvalidListType expr0) =
+    build (InvalidListType isEmpty expr0) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid type for list elements
 
@@ -791,15 +792,24 @@ Explanation: Every list ends with a type annotation for the elements of the list
 
 This annotation must be a type, but the annotation you gave is not a type:
 
-    [ ... : $txt0 ]
-    --      ^ This needs to be a type
+$insert
 
 You can fix the problem by changing the annotation to a type
 |]
       where
         txt0 = Text.toStrict (pretty expr0)
+        insert = indent $
+            if isEmpty
+            then [NeatInterpolation.text|
+    [ : $txt0 ]
+        ^ This needs to be a type
+|]
+            else [NeatInterpolation.text|
+    [ ... : $txt0 ]
+            ^ This needs to be a type
+|]
 
-    build (InvalidElement n expr0 expr1 expr2) =
+    build (InvalidElement i n expr0 expr1 expr2) =
         Builder.fromText [NeatInterpolation.text|
 Error: List with an element of the wrong type
 
@@ -808,11 +818,7 @@ annotation at the end of the list
 
 However, your list has an element of the wrong type:
 
-    [ ...
-    , $txt0  -- This value at index #$txt3 ...
-    , ...
-    : $txt1  -- ... needs to match this type
-    ]
+$insert
 
 The element you provided actually has this type:
 ↳ $txt2
@@ -824,7 +830,35 @@ declared element type
         txt0 = Text.toStrict (pretty expr0)
         txt1 = Text.toStrict (pretty expr1)
         txt2 = Text.toStrict (pretty expr2)
-        txt3 = Text.toStrict (pretty n    )
+        txt3 = Text.toStrict (pretty i    )
+        insert = indent $
+            if n == 1
+            then [NeatInterpolation.text|
+    [ $txt0  -- This value ...
+    : $txt1  -- ... needs to match this type
+    ]
+|]
+            else if i == 0
+            then [NeatInterpolation.text|
+    [ $txt0  -- This value ...
+    , ...
+    : $txt1  -- ... needs to match this type
+    ]
+|]
+            else if i + 1 == n
+            then [NeatInterpolation.text|
+    [ ...
+    , $txt0  -- This value ...
+    : $txt1  -- ... needs to match this type
+    ]
+|]
+            else [NeatInterpolation.text|
+    [ ...
+    , $txt0  -- This value at index #$txt3 ...
+    , ...
+    : $txt1  -- ... needs to match this type
+    ]
+|]
 
     build (InvalidFieldType k expr0) =
         Builder.fromText [NeatInterpolation.text|
@@ -930,6 +964,9 @@ You provided this argument:
 
     build (CantMultiply b expr0 expr1) =
         buildNaturalOperator "*" b expr0 expr1
+
+indent :: Data.Text.Text -> Data.Text.Text
+indent = Data.Text.unlines . fmap ("    " <>) . Data.Text.lines
 
 buildBooleanOperator :: Text -> Bool -> Expr X -> Expr X -> Builder
 buildBooleanOperator operator b expr0 expr1 =
@@ -1263,15 +1300,16 @@ typeWith ctx e@(ListLit t xs    ) = do
     s <- fmap normalize (typeWith ctx t)
     if s == Const Star
         then return ()
-        else Left (TypeError ctx e (InvalidListType t))
-    flip Data.Vector.imapM_ xs (\n x -> do
+        else Left (TypeError ctx e (InvalidListType (Data.Vector.null xs) t))
+    let n = Data.Vector.length xs
+    flip Data.Vector.imapM_ xs (\i x -> do
         t' <- typeWith ctx x
         if t == t'
             then return ()
             else do
                 let nf_t  = normalize t
                 let nf_t' = normalize t'
-                Left (TypeError ctx e (InvalidElement n x nf_t nf_t')) )
+                Left (TypeError ctx e (InvalidElement i n x nf_t nf_t')) )
     return (List t)
 typeWith _      ListBuild         = do
     return
