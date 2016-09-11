@@ -536,11 +536,11 @@ variables that are still "in scope".  For example, these are valid expressions:
 
 ... but these are not valid expressions:
 
-    λ(x : Bool) → y     -- The variable `y` hasn't been introduced yet
+    λ(x : Bool) → y           -- The variable `y` hasn't been introduced yet
 
-    (let x = 1 in x) x  -- `x` is undefined outside the parentheses
+    (let x = True in x) && x  -- `x` is undefined outside the parentheses
 
-    let x = x in x      -- The definition for `x` cannot reference itself
+    let x = x in x            -- The definition for `x` cannot reference itself
 |]
 
     build (InvalidInputType expr) =
