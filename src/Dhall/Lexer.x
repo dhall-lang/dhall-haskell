@@ -91,7 +91,7 @@ tokens :-
     "List/fold"                         { \_ -> yield ListFold               }
     $fst $labelchar* | "(" $opchar+ ")" { \t -> yield (Label t)              }
     $digit+                             { \t -> yield (Number (toInt t))     }
-    (([1-9][0-9]*\.[0-9]*)|(0?\.[0-9]+))([Ee][\+\-]?[0-9]+)? { \t -> yield (DoubleLit (toDouble t)) }
+    (([1-9][0-9]*\.[0-9]+)|(0\.[0-9]+))([Ee][\+\-]?[0-9]+)? { \t -> yield (DoubleLit (toDouble t)) }
     "+" $digit+                         { \t -> yield (NaturalLit (toNat t)) }
     "https://" $nonwhite+               { \t -> yield (URL (toUrl 0 t))      }
     "http://" $nonwhite+                { \t -> yield (URL (toUrl 0 t))      }
