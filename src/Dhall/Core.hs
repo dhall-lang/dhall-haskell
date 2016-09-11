@@ -507,7 +507,7 @@ data TypeMessage
     | InvalidListType (Expr X)
     | InvalidPredicate (Expr X) (Expr X)
     | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
-    | InvalidFieldType (Expr X)
+    | InvalidFieldType Text (Expr X)
     | NotARecord (Expr X)
     | MissingField Text
     | CantAnd (Expr X) (Expr X)
@@ -532,7 +532,7 @@ variables that are still "in scope".  For example, these are valid expressions:
     let f (x : Bool) = x  -- Function arguments are "bound" variables
     in  f True
 
-… but these are not valid expressions:
+... but these are not valid expressions:
 
     λ(x : Bool) → y     -- The variable `y` hasn't been introduced yet
 
@@ -552,7 +552,7 @@ Explanation: A function can accept an input term of a given "type", like this:
     Bool → Integer     -- This function accepts any term of type `Bool`.
                        -- The input term's name is omitted
 
-… or accept an input "type" of a given "kind", like this:
+... or accept an input "type" of a given "kind", like this:
 
     ∀(a : Type) → Type  -- This accepts any type `a` of kind `Type`
 
@@ -575,7 +575,7 @@ Explanation: A function can emit an output term of a given "type", like this:
 
     Bool → Int          -- This function emits a term of type `Int`.
 
-… or emit an output "type" of a given "kind", like this:
+... or emit an output "type" of a given "kind", like this:
 
     ∀(a : Type) → Type  -- This emits a type of kind `Type`
 
@@ -630,7 +630,7 @@ You *cannot* apply a function to the wrong type or kind of argument:
 
 You tried to invoke a function which expects an argument of type or kind:
 ↳ $txt0
-… on an argument of type or kind:
+... on an argument of type or kind:
 ↳ $txt1
 |]
       where
@@ -655,9 +655,9 @@ inferred type or kind does not match the annotation then type-checking fails.
 
 You or the interpreter annotated this expression:
 ↳ $txt0
-… with this type or kind:
+... with this type or kind:
 ↳ $txt1
-… but the inferred type of the expression is actually this type or kind:
+... but the inferred type of the expression is actually this type or kind:
 ↳ $txt2
 |]
       where
@@ -702,7 +702,7 @@ Only types can be wrapped in `Maybe` to generated an optional type.  You
     Maybe True  -- This is not valid because `True` is not a type
     Maybe Type  -- This is not valid because `Type` is not a type
 
-… but you can wrap terms in `Just` and `Nothing`:
+... but you can wrap terms in `Just` and `Nothing`:
 
     Just Bool True -- This is valid and has type `Maybe Bool`
     Nothing Bool   -- This is valid and also has type `Maybe Bool`
@@ -739,14 +739,14 @@ The following expression you provided is not a valid element type for a list:
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid predicate for `if`
 
-    if $txt0 then …
+    if $txt0 then ...
     -- ▲
     -- ┃
     -- ┗━ Your `if` expression's predicate has the wrong type
 
 Your `if` expression begins with a predicate that has type:
 ↳ $txt1
-… but the predicate must have type `Bool`
+... but the predicate must have type `Bool`
 |]
       where
         txt0 = Text.toStrict (pretty expr0)
@@ -755,11 +755,11 @@ Your `if` expression begins with a predicate that has type:
         Builder.fromText [NeatInterpolation.text|
 Error: The `then` and `else` branches must have matching types
 
-    if … then $txt0
-         else $txt1
-    --        ▲
-    --        ┃
-    --        ┗━━ The above two expressions need to have the same type
+    if ... then $txt0
+           else $txt1
+    --          ▲
+    --          ┃
+    --          ┗━━ The above two expressions need to have the same type
 
 Your `if` expression has two branches with different types
 
@@ -767,6 +767,7 @@ The type of the `then` branch is:
 ↳ $txt2
 The type of the `else` branch is:
 ↳ $txt3
+
 Fix the two branches to have matching types
 |]
       where
@@ -778,14 +779,16 @@ Fix the two branches to have matching types
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid type for list elements
 
-    [ … : $txt0 ]
-    --    ▲
-    --    ┃
-    --    ┗━━ This needs to be a type
+Explanation: Every list ends with a type annotation for the elements of the list
 
-Every list ends with a type annotation for the elements of the list
+This annotation must be a type, but the annotation you gave is not a type:
 
-This annotation must be a type, but the annotation you gave is not a type
+    [ ... : $txt0 ]
+    --      ▲
+    --      ┃
+    --      ┗━━ This needs to be a type
+
+Change the annotation to a type
 |]
       where
         txt0 = Text.toStrict (pretty expr0)
@@ -793,26 +796,50 @@ This annotation must be a type, but the annotation you gave is not a type
         Builder.fromText [NeatInterpolation.text|
 Error: List with an element of the wrong type
 
-    [ …
-    , $txt0  -- This value at index #$txt3 …
-    , …
-    : $txt1  -- … needs to match this type
+Explanation: Every element in the list must have a type matching the type
+annotation at the end of the list
+
+However, your list has an element of the wrong type:
+
+    [ ...
+    , $txt0  ◀━━ This value at index #$txt3 ...
+    , ...
+    : $txt1  ◀━━ ... needs to match this type
     ]
 
-Every element in the list must have a type matching the type annotation at the
-end of the list.  However, your list has an element of the wrong type:
+The element you provided actually has this type:
 ↳ $txt2
-Either fix the list element or fix the declared element type
+
+You can fix the problem by either changing the list element or changing the
+declared element type
 |]
       where
         txt0 = Text.toStrict (pretty expr0)
         txt1 = Text.toStrict (pretty expr1)
         txt2 = Text.toStrict (pretty expr2)
         txt3 = Text.toStrict (pretty n    )
-    build (InvalidFieldType  expr  ) =
-            "Error: Invalid field type\n"
-        <>  "\n"
-        <>  "Type: " <> build expr <> "\n"
+    build (InvalidFieldType k expr0) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Invalid type of field
+
+Explanation: Every record type has an annotated type for each field
+
+However, fields *cannot* be annotated with expressions other than types
+
+You provided a record type with a key named:
+↳ $txt0
+... annotated with the following expression which is not a type:
+
+    {{ ... : $txt1, ... }}
+    --       ▲
+    --       ┃
+    --       ┗━━ This needs to be a type
+
+Change the annotation to a type
+|]
+      where
+        txt0 = Text.toStrict (pretty k    )
+        txt1 = Text.toStrict (pretty expr0)
     build (NotARecord expr         ) =
             "Error: Not a record\n"
         <>  "\n"
@@ -1155,11 +1182,11 @@ typeWith _      ListFold          = do
                     (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
                         (Pi "nil" "list" "list")) ) ) )
 typeWith ctx e@(Record    kts   ) = do
-    let process (_, t) = do
+    let process (k, t) = do
             s <- fmap normalize (typeWith ctx t)
             case normalize s of
                 Const Star -> return ()
-                _          -> Left (TypeError ctx e (InvalidFieldType t))
+                _          -> Left (TypeError ctx e (InvalidFieldType k t))
     mapM_ process (Data.Map.toList kts)
     return (Const Star)
 typeWith ctx   (RecordLit kvs   ) = do
