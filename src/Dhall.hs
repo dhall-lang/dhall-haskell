@@ -46,16 +46,35 @@
 -- configuration file.  Suppose that we modify our configuration file to no
 -- longer match the schema, like this:
 --
--- > $ echo "1" > example.dhall
+-- > $ echo "1" > config
 --
 -- This then throws an exception when we try to load the configuration file:
 --
+-- > $ ./example
+-- > example: 
 -- > Expression: 1 : {{ bar : [ Double ], foo : Integer }}
 -- > 
 -- > Error: Expression's inferred type does not match annotated type
 -- > 
--- > Annotated type: {{ bar : [ Double ], foo : Integer }}
--- > Inferred  type: Integer
+-- > Explanation: You can annotate the type or kind of an expression like this:
+-- > 
+-- >     x : t  -- `x` is the expression and `t` is the annotated type or kind of `x`
+-- > 
+-- > Annotations are introduced in one of two ways:
+-- > 
+-- > * You can manually annotate expressions to declare the type or kind you expect
+-- > * The interpreter also implicitly inserts a top-level type annotation
+-- > 
+-- > Annotations are optional because the compiler can infer the type of all
+-- > expressions.  However, if you or the interpreter inserts an annotation and the
+-- > inferred type or kind does not match the annotation then type-checking fails.
+-- > 
+-- > You or the interpreter annotated this expression:
+-- > ↳ 1
+-- > ... with this type or kind:
+-- > ↳ {{ bar : [ Double ], foo : Integer }}
+-- > ... but the inferred type of the expression is actually this type or kind:
+-- > ↳ Integer
 --
 -- The Dhall programming language is a statically typed language and the
 -- above error message is the output of the language's type-checker.  Every
@@ -63,11 +82,10 @@
 --
 -- The above error message says that the type-checker expected a record with
 -- two fields: a field named @bar@ that is a `Vector` of `Double`s, and a
--- field named @foo@ that is an `Integer`.  This is the \"Annotated type\".
--- However, the type-checker found an expression whose inferred type was an
--- `Integer`.  This is the \"Expected type\".  Since an `Integer` is not the
--- same thing as a record the type-checking step fails and Dhall does not bother
--- to marshal the configuration into Haskell.
+-- field named @foo@ that is an `Integer`.  However, the type-checker found an
+-- expression whose inferred type was an `Integer`.  Since an `Integer` is not
+-- the same thing as a record the type-checking step fails and Dhall does not
+-- bother to marshal the configuration into Haskell.
 --
 -- Dhall is also a heavily restricted programming language.  For example, we can
 -- define a configuration file that is an anonymous function:
@@ -161,12 +179,25 @@
 -- > dhall: 
 -- > Expression: 2 + 2
 -- > 
--- > Error: Can't add a value that's not a `Natural` number
--- > Hint : You're not allowed to add `Integer`s
--- > Hint : Replace `2` with `+2` to provide a `Natural` number
+-- > Error: Cannot use `(+)` on a value that's not a `Natural`
 -- > 
--- > Value: 2
--- > Type : Integer
+-- > Explanation: The `(+)` operator expects two arguments of type `Natural`
+-- > 
+-- > You provided this argument:
+-- > 
+-- >     2 + ...
+-- > 
+-- > ... whose type is not `Natural`.  The type is actually:
+-- > ↳ Integer
+-- > 
+-- > An `Integer` is not the same thing as a `Natural` number.  They are distinct
+-- > types: `Integer`s can be negative, but `Natural` numbers must be non-negative
+-- > 
+-- > You can prefix an `Integer` literal with a `+` to create a `Natural` literal
+-- > 
+-- > Example:
+-- > 
+-- >     +2 + ...
 --
 -- The Dhall language doesn't just type-check the final schema; the language
 -- also ensures that every expression is internally consistent.  For example,
@@ -176,12 +207,28 @@
 -- > $ dhall
 -- > ./makeBools "ABC"
 -- > dhall: 
+-- > dhall: 
 -- > Expression: (λ(n : Bool) → [ n && True, n && False, n || True, n || False : Bool ]) "ABC"
 -- > 
--- > Error: Function applied to argument of the wrong type
+-- > Error: Function applied to the wrong type or kind of argument
 -- > 
--- > Expected type: Bool
--- > Argument type: Text
+-- > Explanation: Every function declares what type or kind of argument to accept
+-- > 
+-- >     λ(x : Bool) → x   -- Anonymous function which only accepts `Bool` arguments
+-- > 
+-- >     let f (x : Bool) = x  -- Named function which only accepts `Bool` arguments
+-- >     in  f True
+-- > 
+-- >     λ(a : Type) → a   -- Anonymous function which only accepts `Type` arguments
+-- > 
+-- > You *cannot* apply a function to the wrong type or kind of argument:
+-- > 
+-- >     (λ(x : Bool) → x) "AB"  -- "AB" is `Text`, but the function expects a `Bool`
+-- > 
+-- > You tried to invoke a function which expects an argument of type or kind:
+-- > ↳ Bool
+-- > ... on an argument of type or kind:
+-- > ↳ Text
 --
 -- We get a type error saying that our function expects a `Bool` argument, but
 -- we supplied an argument of type `Text` instead.
