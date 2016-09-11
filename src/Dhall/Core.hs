@@ -504,7 +504,7 @@ data TypeMessage
     | InvalidElement Int (Expr X) (Expr X) (Expr X)
     | InvalidMaybeTypeParam (Expr X)
     | InvalidListTypeParam (Expr X)
-    | InvalidListType (Expr X) (Expr X)
+    | InvalidListType (Expr X)
     | InvalidPredicate (Expr X) (Expr X)
     | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
     | InvalidFieldType (Expr X)
@@ -759,7 +759,7 @@ Error: The `then` and `else` branches must have matching types
            else $txt1
     --          ▲
     --          ┃
-    --          ┗━━ The above two expressions must have the same type
+    --          ┗━━ The above two expressions need to have the same type
 
 Your `if` expression has two branches with different types
 
@@ -774,13 +774,21 @@ Fix the two branches to have matching types
         txt1 = Text.toStrict (pretty expr1)
         txt2 = Text.toStrict (pretty expr2)
         txt3 = Text.toStrict (pretty expr3)
-    build (InvalidListType t k     ) =
-            "Error: Type of the wrong kind for list elements\n"
-        <>  "\n"
-        <>  "Invalid type: [ ... : " <> build t <> " ]\n"
-        <>  "                      ^\n"
-        <>  "Expected kind: *\n"
-        <>  "Actual   kind: " <> build k <> "\n"
+    build (InvalidListType expr0) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Invalid type for list elements
+
+    [ ... : $txt0 ]
+    --      ▲
+    --      ┃
+    --      ┗━━ This needs to be a type
+
+Every list ends with a type annotation for the elements of the list
+
+This annotation must be a type, but the annotation you gave is not a type
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
     build (InvalidElement n x t t' ) =
             "Error: List with an element of the wrong type\n"
         <>  "\n"
@@ -1109,7 +1117,7 @@ typeWith ctx e@(ListLit t xs    ) = do
     s <- fmap normalize (typeWith ctx t)
     if s == Const Star
         then return ()
-        else Left (TypeError ctx e (InvalidListType t s))
+        else Left (TypeError ctx e (InvalidListType t))
     flip Data.Vector.imapM_ xs (\n x -> do
         t' <- typeWith ctx x
         if t == t'
