@@ -510,7 +510,7 @@ data TypeMessage
     | InvalidFieldType Text (Expr X)
     | NotARecord Text (Expr X) (Expr X)
     | MissingField Text (Expr X)
-    | CantAnd (Expr X) (Expr X)
+    | CantAnd Bool (Expr X) (Expr X)
     | CantOr (Expr X) (Expr X)
     | CantAppend (Expr X) (Expr X)
     | CantAdd (Expr X) (Expr X)
@@ -854,13 +854,13 @@ Explanation: You can only access fields on records, like this:
 
     1.foo                  -- `1` is not a valid record
 
-    (λ(x : Bool) → x).foo  -- A function is not a record
+    (λ(x : Bool) → x).foo  -- A function is not a valid record
 
 You tried to access a field named:
 ↳ $txt0
 ... on the following expression which is not a record:
 ↳ $txt1
-... but actually an expression of type:
+... but is actually an expression of type:
 ↳ $txt2
 |]
       where
@@ -883,17 +883,32 @@ Explanation: You can only retrieve record fields if they are present
 
 You tried to access a field named:
 ↳ $txt0
-... but the field is missing because the record only has these fields defined:
+... but the field is missing because the record only defines these fields:
 ↳ $txt1
 |]
       where
         txt0 = Text.toStrict (pretty k    )
         txt1 = Text.toStrict (pretty expr0)
-    build (CantAnd e t             ) =
-            "Error: Can't use `(&&)` on a value that's not a `Bool`\n"
-        <>  "\n"
-        <>  "Value: " <> build e <> "\n"
-        <>  "Type : " <> build t <> "\n"
+    build (CantAnd b expr0 expr1) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Cannot use `(&&)` on a value that's not a `Bool`
+
+Explanation: The `(&&)` operator expects two arguments of type `Bool`
+
+You provided this argument:
+
+    $insert
+
+... whose type is not `Bool`.  The type is actually:
+↳ $txt1
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (pretty expr1)
+        insert =
+            if b
+            then [NeatInterpolation.text|$txt0 && ...|]
+            else [NeatInterpolation.text|... && $txt0|]
     build (CantOr  e t             ) =
             "Error: Can't use `(||)` on a value that's not a `Bool`\n"
         <>  "\n"
@@ -1091,12 +1106,12 @@ typeWith ctx e@(BoolAnd l r     ) = do
     tl <- fmap normalize (typeWith ctx l)
     case tl of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (CantAnd l tl))
+        _    -> Left (TypeError ctx e (CantAnd True l tl))
 
     tr <- fmap normalize (typeWith ctx r)
     case tr of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (CantAnd r tr))
+        _    -> Left (TypeError ctx e (CantAnd False r tr))
 
     return Bool
 typeWith ctx e@(BoolOr  l r     ) = do
