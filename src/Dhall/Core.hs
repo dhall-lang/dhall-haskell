@@ -508,7 +508,7 @@ data TypeMessage
     | InvalidPredicate (Expr X) (Expr X)
     | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
     | InvalidFieldType Text (Expr X)
-    | NotARecord (Expr X)
+    | NotARecord Text (Expr X) (Expr X)
     | MissingField Text
     | CantAnd (Expr X) (Expr X)
     | CantOr (Expr X) (Expr X)
@@ -840,10 +840,33 @@ Change the annotation to a type
       where
         txt0 = Text.toStrict (pretty k    )
         txt1 = Text.toStrict (pretty expr0)
-    build (NotARecord expr         ) =
-            "Error: Not a record\n"
-        <>  "\n"
-        <>  "Value: " <> build expr <> "\n"
+    build (NotARecord k expr0 expr1) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Not a record
+
+Explanation: You can only access fields on records, like this:
+
+    { foo = True, bar = "ABC" }.foo              -- This is valid ...
+
+    λ(r : {{ foo : Bool, bar : Text }}) → r.foo  -- ... and so is this
+
+... but you *cannot* access fields on non-record expressions, like this:
+
+    1.foo                  -- `1` is not a valid record
+
+    (λ(x : Bool) → x).foo  -- A function is not a record
+
+You tried to access a field named:
+↳ $txt0
+... on the following expression which is not a record:
+↳ $txt1
+... but actually an expression of type:
+↳ $txt2
+|]
+      where
+        txt0 = Text.toStrict (pretty k    )
+        txt1 = Text.toStrict (pretty expr0)
+        txt2 = Text.toStrict (pretty expr1)
     build (MissingField t          ) =
             "Error: Missing field\n"
         <>  "\n"
@@ -1202,7 +1225,7 @@ typeWith ctx e@(Field r x       ) = do
             case Data.Map.lookup x kts of
                 Just t' -> return t'
                 Nothing -> Left (TypeError ctx e (MissingField x))
-        _          -> Left (TypeError ctx e (NotARecord r))
+        _          -> Left (TypeError ctx e (NotARecord x r t))
 typeWith _     (Embed p         ) = do
     absurd p
 
