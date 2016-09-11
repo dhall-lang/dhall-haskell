@@ -842,7 +842,7 @@ Change the annotation to a type
         txt1 = Text.toStrict (pretty expr0)
     build (NotARecord k expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
-Error: Not a record
+Error: Invalid record access
 
 Explanation: You can only access fields on records, like this:
 
