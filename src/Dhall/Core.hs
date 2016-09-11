@@ -572,7 +572,7 @@ Error: Invalid output annotation for a function
 
 Explanation: A function can emit an output term of a given "type", like this:
 
-    ∀(x : Text) → Bool  -- This function emits a term of type `Text`.
+    ∀(x : Text) → Bool  -- This function emits a term of type `Bool`.
 
     Bool → Int          -- This function emits a term of type `Int`.
 
