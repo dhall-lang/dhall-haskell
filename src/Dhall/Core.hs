@@ -541,6 +541,7 @@ variables that are still "in scope".  For example, these are valid expressions:
 
     let x = x in x      -- The definition for `x` cannot reference itself
 |]
+
     build (InvalidInputType expr) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid input annotation for a function
@@ -566,6 +567,7 @@ This input annotation you gave is neither a type nor a kind:
 |]
       where
         txt = Text.toStrict (pretty expr)
+
     build (InvalidOutputType expr) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid output annotation for a function
@@ -589,6 +591,7 @@ This function output you specified is neither a type nor a kind:
 |]
       where
         txt = Text.toStrict (pretty expr)
+
     build (NotAFunction expr) =
         Builder.fromText [NeatInterpolation.text|
 Error: Only functions may be applied to arguments
@@ -607,11 +610,12 @@ However, not everything is a valid function.  For example:
 
 You tried to apply an expression that was not a function to an argument
 
-This is the expression that you incorrectly treated as a function:
+This is the expression that you incorrectly invoked as a function:
 ↳ $txt
 |]
       where
         txt = Text.toStrict (pretty expr)
+
     build (TypeMismatch expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
 Error: Function applied to the wrong type or kind of argument
@@ -621,7 +625,7 @@ Explanation: Every function declares what type or kind of argument to accept
     λ(x : Bool) → x   -- Anonymous function which only accepts `Bool` arguments
 
     let f (x : Bool) = x  -- Named function which only accepts `Bool` arguments
-    in f True
+    in  f True
 
     λ(a : Type) → a   -- Anonymous function which only accepts `Type` arguments
 
@@ -637,13 +641,14 @@ You tried to invoke a function which expects an argument of type or kind:
       where
         txt0 = Text.toStrict (pretty expr0)
         txt1 = Text.toStrict (pretty expr1)
+
     build (AnnotMismatch expr0 expr1 expr2) =
         Builder.fromText [NeatInterpolation.text|
 Error: Expression's inferred type does not match annotated type
 
 Explanation: You can annotate the type or kind of an expression like this:
 
-    x : t  -- `x` is the expression and `t` is the annotated type of `x`
+    x : t  -- `x` is the expression and `t` is the annotated type or kind of `x`
 
 Annotations are introduced in one of two ways:
 
@@ -665,6 +670,7 @@ You or the interpreter annotated this expression:
         txt0 = Text.toStrict (pretty expr0)
         txt1 = Text.toStrict (pretty expr1)
         txt2 = Text.toStrict (pretty expr2)
+
     build (Untyped c) =
         Builder.fromText [NeatInterpolation.text|
 Error: `$txt` has no type, kind, or sort
@@ -690,6 +696,7 @@ the compiler cannot infer what `Kind` belongs to
 |]
       where
         txt = Text.toStrict (pretty c)
+
     build (InvalidMaybeTypeParam expr) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid type argument for `Maybe`
@@ -700,8 +707,8 @@ optional term: `Maybe a`.  For example, `Maybe Bool` denotes an optional `Bool`
 Only types can be wrapped in `Maybe` to generated an optional type.  You
 *cannot* wrap terms or kinds in `Maybe`:
 
-    Maybe True  -- This is not valid because `True` is not a type
-    Maybe Type  -- This is not valid because `Type` is not a type
+    Maybe True  -- This is not a valid optional type because `True` not a type
+    Maybe Type  -- This is not a valid optional type because `Type` not a type
 
 ... but you can wrap terms in `Just` and `Nothing`:
 
@@ -713,6 +720,7 @@ You incorrectly wrapped this expression that is not a type inside of a `Maybe`:
 |]
       where
         txt = Text.toStrict (pretty expr)
+
     build (InvalidListTypeParam expr) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid type of list
@@ -736,14 +744,13 @@ The following expression you provided is not a valid element type for a list:
 |]
       where
         txt = Text.toStrict (pretty expr)
+
     build (InvalidPredicate expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid predicate for `if`
 
     if $txt0 then ...
-    -- ▲
-    -- ┃
-    -- ┗━ Your `if` expression's predicate has the wrong type
+    -- ^ Your `if` expression's predicate has the wrong type
 
 Your `if` expression begins with a predicate that has type:
 ↳ $txt1
@@ -752,15 +759,14 @@ Your `if` expression begins with a predicate that has type:
       where
         txt0 = Text.toStrict (pretty expr0)
         txt1 = Text.toStrict (pretty expr1)
+
     build (IfBranchMismatch expr0 expr1 expr2 expr3) =
         Builder.fromText [NeatInterpolation.text|
 Error: The `then` and `else` branches must have matching types
 
     if ... then $txt0
            else $txt1
-    --          ▲
-    --          ┃
-    --          ┗━━ The above two expressions need to have the same type
+    --          ^ The above two expressions need to have the same type
 
 Your `if` expression has two branches with different types
 
@@ -776,6 +782,7 @@ Fix the two branches to have matching types
         txt1 = Text.toStrict (pretty expr1)
         txt2 = Text.toStrict (pretty expr2)
         txt3 = Text.toStrict (pretty expr3)
+
     build (InvalidListType expr0) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid type for list elements
@@ -785,14 +792,13 @@ Explanation: Every list ends with a type annotation for the elements of the list
 This annotation must be a type, but the annotation you gave is not a type:
 
     [ ... : $txt0 ]
-    --      ▲
-    --      ┃
-    --      ┗━━ This needs to be a type
+    --      ^ This needs to be a type
 
-Change the annotation to a type
+You can fix the problem by changing the annotation to a type
 |]
       where
         txt0 = Text.toStrict (pretty expr0)
+
     build (InvalidElement n expr0 expr1 expr2) =
         Builder.fromText [NeatInterpolation.text|
 Error: List with an element of the wrong type
@@ -803,9 +809,9 @@ annotation at the end of the list
 However, your list has an element of the wrong type:
 
     [ ...
-    , $txt0  ◀━━ This value at index #$txt3 ...
+    , $txt0  -- This value at index #$txt3 ...
     , ...
-    : $txt1  ◀━━ ... needs to match this type
+    : $txt1  -- ... needs to match this type
     ]
 
 The element you provided actually has this type:
@@ -819,6 +825,7 @@ declared element type
         txt1 = Text.toStrict (pretty expr1)
         txt2 = Text.toStrict (pretty expr2)
         txt3 = Text.toStrict (pretty n    )
+
     build (InvalidFieldType k expr0) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid type of field
@@ -832,15 +839,14 @@ You provided a record type with a key named:
 ... annotated with the following expression which is not a type:
 
     {{ ... : $txt1, ... }}
-    --       ▲
-    --       ┃
-    --       ┗━━ This needs to be a type
+    --       ^ This needs to be a type
 
-Change the annotation to a type
+You can fix the problem by changing the annotation to a type
 |]
       where
         txt0 = Text.toStrict (pretty k    )
         txt1 = Text.toStrict (pretty expr0)
+
     build (NotARecord k expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid record access
@@ -868,6 +874,7 @@ You tried to access a field named:
         txt0 = Text.toStrict (pretty k    )
         txt1 = Text.toStrict (pretty expr0)
         txt2 = Text.toStrict (pretty expr1)
+
     build (MissingField k expr0) =
         Builder.fromText [NeatInterpolation.text|
 Error: Missing record field
@@ -880,7 +887,7 @@ Explanation: You can only retrieve record fields if they are present
 
 ... but you *cannot* access fields missing from a record:
 
-    { foo = True, bar = "ABC" }.qux              -- The field `qux` is missing
+    { foo = True, bar = "ABC" }.qux  -- Not valid: the field `qux` is missing
 
 You tried to access a field named:
 ↳ $txt0
@@ -890,10 +897,13 @@ You tried to access a field named:
       where
         txt0 = Text.toStrict (pretty k    )
         txt1 = Text.toStrict (pretty expr0)
+
     build (CantAnd b expr0 expr1) =
         buildBooleanOperator "&&" b expr0 expr1
+
     build (CantOr b expr0 expr1) =
         buildBooleanOperator "||" b expr0 expr1
+
     build (CantAppend b expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
 Error: Cannot use `(++)` on a value that's not a `Text`
@@ -914,8 +924,10 @@ You provided this argument:
             if b
             then [NeatInterpolation.text|$txt0 ++ ...|]
             else [NeatInterpolation.text|... ++ $txt0|]
+
     build (CantAdd b expr0 expr1) =
         buildNaturalOperator "+" b expr0 expr1
+
     build (CantMultiply b expr0 expr1) =
         buildNaturalOperator "*" b expr0 expr1
 
