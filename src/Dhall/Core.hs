@@ -514,8 +514,8 @@ data TypeMessage
     | CantAnd Bool (Expr X) (Expr X)
     | CantOr Bool (Expr X) (Expr X)
     | CantAppend Bool (Expr X) (Expr X)
-    | CantAdd (Expr X) (Expr X)
-    | CantMultiply (Expr X) (Expr X)
+    | CantAdd Bool (Expr X) (Expr X)
+    | CantMultiply Bool (Expr X) (Expr X)
     deriving (Show)
 
 instance Buildable TypeMessage where
@@ -914,32 +914,10 @@ You provided this argument:
             if b
             then [NeatInterpolation.text|$txt0 ++ ...|]
             else [NeatInterpolation.text|... ++ $txt0|]
-    build (CantAdd e t             ) =
-            "Error: Can't add a value that's not a `Natural` number\n"
-        <>  (case t of
-                Integer -> "Hint : You're not allowed to add `Integer`s\n"
-                _       -> mempty )
-        <>  (case e of
-                IntegerLit n ->
-                    "Hint : Replace `" <> build n <> "` with `+" <> build n <> "` to provide a `Natural` number\n"
-                _            ->
-                    mempty )
-        <>  "\n"
-        <>  "Value: " <> build e <> "\n"
-        <>  "Type : " <> build t <> "\n"
-    build (CantMultiply e t        ) =
-            "Error: Can't multiply a value that's not a `Natural` number\n"
-        <>  (case t of
-                Integer -> "Hint : You're not allowed to multiply `Integer`s\n"
-                _       -> mempty )
-        <>  (case e of
-                IntegerLit n ->
-                    "Hint : Replace `" <> build n <> "` with `+" <> build n <> "` to provide a `Natural` number\n"
-                _            ->
-                    mempty )
-        <>  "\n"
-        <>  "Value: " <> build e <> "\n"
-        <>  "Type : " <> build t <> "\n"
+    build (CantAdd b expr0 expr1) =
+        buildNaturalOperator "+" b expr0 expr1
+    build (CantMultiply b expr0 expr1) =
+        buildNaturalOperator "*" b expr0 expr1
 
 buildBooleanOperator :: Text -> Bool -> Expr X -> Expr X -> Builder
 buildBooleanOperator operator b expr0 expr1 =
@@ -964,6 +942,48 @@ You provided this argument:
         then [NeatInterpolation.text|$txt0 $txt2 ...|]
         else [NeatInterpolation.text|... $txt2 $txt0|]
 
+buildNaturalOperator :: Text -> Bool -> Expr X -> Expr X -> Builder
+buildNaturalOperator operator b expr0 expr1 =
+    Builder.fromText [NeatInterpolation.text|
+Error: Cannot use `($txt2)` on a value that's not a `Natural`
+
+Explanation: The `($txt2)` operator expects two arguments of type `Natural`
+
+You provided this argument:
+
+    $insert0
+
+... whose type is not `Natural`.  The type is actually:
+↳ $txt1$hint0$hint1|]
+  where
+    txt0 = Text.toStrict (pretty expr0)
+    txt1 = Text.toStrict (pretty expr1)
+    txt2 = Text.toStrict operator
+    insert0 =
+        if b
+        then [NeatInterpolation.text|$txt0 $txt2 ...|]
+        else [NeatInterpolation.text|... $txt2 $txt0|]
+    insert1 =
+        if b
+        then [NeatInterpolation.text|+$txt0 $txt2 ...|]
+        else [NeatInterpolation.text|... $txt2 +$txt0|]
+    hint0 =
+        case expr1 of
+            Integer -> "\n\n" <> [NeatInterpolation.text|
+An `Integer` is not the same thing as a `Natural` number.  They are distinct
+types: `Integer`s can be negative, but `Natural` numbers must be non-negative
+|]
+            _ -> mempty
+    hint1 =
+        case expr0 of
+            IntegerLit _ -> "\n\n" <> [NeatInterpolation.text|
+You can prefix an `Integer` literal with a `+` to create a `Natural` literal
+
+Example:
+
+    $insert1
+|]
+            _ -> mempty
 
 -- | A structured type error that includes context
 data TypeError = TypeError
@@ -1170,23 +1190,23 @@ typeWith ctx e@(NaturalPlus  l r) = do
     tl <- fmap normalize (typeWith ctx l)
     case tl of
         Natural -> return ()
-        _       -> Left (TypeError ctx e (CantAdd l tl))
+        _       -> Left (TypeError ctx e (CantAdd True l tl))
 
     tr <- fmap normalize (typeWith ctx r)
     case tr of
         Natural -> return ()
-        _       -> Left (TypeError ctx e (CantAdd r tr))
+        _       -> Left (TypeError ctx e (CantAdd False r tr))
     return Natural
 typeWith ctx e@(NaturalTimes l r) = do
     tl <- fmap normalize (typeWith ctx l)
     case tl of
         Natural -> return ()
-        _       -> Left (TypeError ctx e (CantMultiply l tl))
+        _       -> Left (TypeError ctx e (CantMultiply True l tl))
 
     tr <- fmap normalize (typeWith ctx r)
     case tr of
         Natural -> return ()
-        _       -> Left (TypeError ctx e (CantMultiply r tr))
+        _       -> Left (TypeError ctx e (CantMultiply False r tr))
     return Natural
 typeWith _      Integer           = do
     return (Const Star)
