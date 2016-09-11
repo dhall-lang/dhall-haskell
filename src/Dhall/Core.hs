@@ -46,6 +46,7 @@ import Data.Monoid ((<>))
 import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
+import Data.Text.Lazy.Builder (Builder)
 import Data.Traversable
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
@@ -511,7 +512,7 @@ data TypeMessage
     | NotARecord Text (Expr X) (Expr X)
     | MissingField Text (Expr X)
     | CantAnd Bool (Expr X) (Expr X)
-    | CantOr (Expr X) (Expr X)
+    | CantOr Bool (Expr X) (Expr X)
     | CantAppend (Expr X) (Expr X)
     | CantAdd (Expr X) (Expr X)
     | CantMultiply (Expr X) (Expr X)
@@ -890,30 +891,9 @@ You tried to access a field named:
         txt0 = Text.toStrict (pretty k    )
         txt1 = Text.toStrict (pretty expr0)
     build (CantAnd b expr0 expr1) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Cannot use `(&&)` on a value that's not a `Bool`
-
-Explanation: The `(&&)` operator expects two arguments of type `Bool`
-
-You provided this argument:
-
-    $insert
-
-... whose type is not `Bool`.  The type is actually:
-↳ $txt1
-|]
-      where
-        txt0 = Text.toStrict (pretty expr0)
-        txt1 = Text.toStrict (pretty expr1)
-        insert =
-            if b
-            then [NeatInterpolation.text|$txt0 && ...|]
-            else [NeatInterpolation.text|... && $txt0|]
-    build (CantOr  e t             ) =
-            "Error: Can't use `(||)` on a value that's not a `Bool`\n"
-        <>  "\n"
-        <>  "Value: " <> build e <> "\n"
-        <>  "Type : " <> build t <> "\n"
+        buildBooleanOperator "&&" b expr0 expr1
+    build (CantOr b expr0 expr1) =
+        buildBooleanOperator "||" b expr0 expr1
     build (CantAppend e t          ) =
             "Error: Can't append a value that's not `Text`\n"
         <>  "\n"
@@ -945,6 +925,30 @@ You provided this argument:
         <>  "\n"
         <>  "Value: " <> build e <> "\n"
         <>  "Type : " <> build t <> "\n"
+
+buildBooleanOperator :: Text -> Bool -> Expr X -> Expr X -> Builder
+buildBooleanOperator operator b expr0 expr1 =
+    Builder.fromText [NeatInterpolation.text|
+Error: Cannot use `($txt2)` on a value that's not a `Bool`
+
+Explanation: The `($txt2)` operator expects two arguments of type `Bool`
+
+You provided this argument:
+
+    $insert
+
+... whose type is not `Bool`.  The type is actually:
+↳ $txt1
+|]
+  where
+    txt0 = Text.toStrict (pretty expr0)
+    txt1 = Text.toStrict (pretty expr1)
+    txt2 = Text.toStrict operator
+    insert =
+        if b
+        then [NeatInterpolation.text|$txt0 $txt2 ...|]
+        else [NeatInterpolation.text|... $txt2 $txt0|]
+
 
 -- | A structured type error that includes context
 data TypeError = TypeError
@@ -1118,12 +1122,12 @@ typeWith ctx e@(BoolOr  l r     ) = do
     tl <- fmap normalize (typeWith ctx l)
     case tl of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (CantOr l tl))
+        _    -> Left (TypeError ctx e (CantOr True l tl))
 
     tr <- fmap normalize (typeWith ctx r)
     case tr of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (CantOr r tr))
+        _    -> Left (TypeError ctx e (CantOr False r tr))
 
     return Bool
 typeWith ctx e@(BoolIf x y z    ) = do
