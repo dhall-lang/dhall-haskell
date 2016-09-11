@@ -506,7 +506,7 @@ data TypeMessage
     | InvalidListTypeParam (Expr X)
     | InvalidListType (Expr X) (Expr X)
     | InvalidPredicate (Expr X) (Expr X)
-    | IfBranchMismatch (Expr X) (Expr X)
+    | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
     | InvalidFieldType (Expr X)
     | NotARecord (Expr X)
     | MissingField Text
@@ -742,20 +742,38 @@ Error: Invalid predicate for `if`
     if $txt0 then ...
     -- ▲
     -- ┃
-    -- ┗━ Your `if` statement's predicate has the wrong type
+    -- ┗━ Your `if` expression's predicate has the wrong type
 
-Your `if` statement begins with a predicate that has type:
+Your `if` expression begins with a predicate that has type:
 ↳ $txt1
 ... but the predicate must have type `Bool`
 |]
       where
         txt0 = Text.toStrict (pretty expr0)
         txt1 = Text.toStrict (pretty expr1)
-    build (IfBranchMismatch l r    ) =
-            "Error: The `then` and `else` branches have different types\n"
-        <>  "\n"
-        <>  "Type of `then` branch: " <> build l <> "\n"
-        <>  "Type of `else` branch: " <> build r <> "\n"
+    build (IfBranchMismatch expr0 expr1 expr2 expr3) =
+        Builder.fromText [NeatInterpolation.text|
+Error: The `then` and `else` branches must have matching types
+
+    if ... then $txt0
+           else $txt1
+    --          ▲
+    --          ┃
+    --          ┗━━ The above two expressions must have the same type
+
+Your `if` expression has two branches with different types
+
+The type of the `then` branch is:
+↳ $txt2
+The type of the `else` branch is:
+↳ $txt3
+Fix the two branches to have matching types
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (pretty expr1)
+        txt2 = Text.toStrict (pretty expr2)
+        txt3 = Text.toStrict (pretty expr3)
     build (InvalidListType t k     ) =
             "Error: Type of the wrong kind for list elements\n"
         <>  "\n"
@@ -1014,7 +1032,7 @@ typeWith ctx e@(BoolIf x y z    ) = do
     tz <- fmap normalize (typeWith ctx z)
     if ty == tz
         then return ()
-        else Left (TypeError ctx e (IfBranchMismatch ty tz))
+        else Left (TypeError ctx e (IfBranchMismatch y z ty tz))
     return ty
 typeWith _      Natural           = do
     return (Const Star)
