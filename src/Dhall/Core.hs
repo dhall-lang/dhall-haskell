@@ -505,7 +505,7 @@ data TypeMessage
     | InvalidMaybeTypeParam (Expr X)
     | InvalidListTypeParam (Expr X)
     | InvalidListType (Expr X) (Expr X)
-    | InvalidPredicate (Expr X)
+    | InvalidPredicate (Expr X) (Expr X)
     | IfBranchMismatch (Expr X) (Expr X)
     | InvalidFieldType (Expr X)
     | NotARecord (Expr X)
@@ -735,11 +735,22 @@ The following expression you provided is not a valid element type for a list:
 |]
       where
         txt = Text.toStrict (pretty expr)
-    build (InvalidPredicate t      ) =
-            "Error: Invalid predicate for `if`\n"
-        <>  "\n"
-        <>  "Expected predicate type: Bool\n"
-        <>  "Inferred predicate type: " <> build t <> "\n"
+    build (InvalidPredicate expr0 expr1) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Invalid predicate for `if`
+
+    if $txt0 then ...
+    -- ▲
+    -- ┃
+    -- ┗━ Your `if` statement's predicate has the wrong type
+
+Your `if` statement begins with a predicate that has type:
+↳ $txt1
+... but the predicate must have type `Bool`
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (pretty expr1)
     build (IfBranchMismatch l r    ) =
             "Error: The `then` and `else` branches have different types\n"
         <>  "\n"
@@ -998,7 +1009,7 @@ typeWith ctx e@(BoolIf x y z    ) = do
     tx <- fmap normalize (typeWith ctx x)
     case tx of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (InvalidPredicate tx))
+        _    -> Left (TypeError ctx e (InvalidPredicate x tx))
     ty <- fmap normalize (typeWith ctx y)
     tz <- fmap normalize (typeWith ctx z)
     if ty == tz
