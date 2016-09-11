@@ -513,7 +513,7 @@ data TypeMessage
     | MissingField Text (Expr X)
     | CantAnd Bool (Expr X) (Expr X)
     | CantOr Bool (Expr X) (Expr X)
-    | CantAppend (Expr X) (Expr X)
+    | CantAppend Bool (Expr X) (Expr X)
     | CantAdd (Expr X) (Expr X)
     | CantMultiply (Expr X) (Expr X)
     deriving (Show)
@@ -894,11 +894,26 @@ You tried to access a field named:
         buildBooleanOperator "&&" b expr0 expr1
     build (CantOr b expr0 expr1) =
         buildBooleanOperator "||" b expr0 expr1
-    build (CantAppend e t          ) =
-            "Error: Can't append a value that's not `Text`\n"
-        <>  "\n"
-        <>  "Value: " <> build e <> "\n"
-        <>  "Type : " <> build t <> "\n"
+    build (CantAppend b expr0 expr1) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Cannot use `(++)` on a value that's not a `Text`
+
+Explanation: The `(++)` operator expects two arguments of type `Text`
+
+You provided this argument:
+
+    $insert
+
+... whose type is not `Text`.  The type is actually:
+↳ $txt1
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (pretty expr1)
+        insert =
+            if b
+            then [NeatInterpolation.text|$txt0 ++ ...|]
+            else [NeatInterpolation.text|... ++ $txt0|]
     build (CantAdd e t             ) =
             "Error: Can't add a value that's not a `Natural` number\n"
         <>  (case t of
@@ -1189,12 +1204,12 @@ typeWith ctx e@(TextAppend l r  ) = do
     tl <- fmap normalize (typeWith ctx l)
     case tl of
         Text -> return ()
-        _    -> Left (TypeError ctx e (CantAppend l tl))
+        _    -> Left (TypeError ctx e (CantAppend True l tl))
 
     tr <- fmap normalize (typeWith ctx r)
     case tr of
         Text -> return ()
-        _    -> Left (TypeError ctx e (CantAppend r tr))
+        _    -> Left (TypeError ctx e (CantAppend False r tr))
     return Text
 typeWith ctx e@(Maybe t         ) = do
     s <- fmap normalize (typeWith ctx t)
