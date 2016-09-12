@@ -302,6 +302,7 @@ The parsing step failed to generate a syntax tree due to this unexpected token:
         txt2 = Data.Text.pack (show column)
         txt3 = Data.Text.take 76 (Data.Text.pack (show bytes))
 
+-- | A parsing error
 newtype ParseError = ParseError Text
     deriving (Typeable)
 
