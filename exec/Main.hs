@@ -5,12 +5,13 @@ import Data.Monoid (mempty)
 import Data.Traversable
 import Dhall.Core (typeOf, pretty, normalize)
 import Dhall.Import (load)
-import Dhall.Parser (exprFromText)
+import Dhall.Parser (exprFromBytes)
 import Options.Applicative hiding (Const)
 import System.IO (stderr)
 import System.Exit (exitFailure)
 
-import qualified Data.Text.Lazy.IO as Text
+import qualified Data.ByteString.Lazy
+import qualified Data.Text.Lazy.IO
 
 throws :: Exception e => Either e a -> IO a
 throws (Left  e) = throwIO e
@@ -70,21 +71,21 @@ main = do
         )
     case mode of
         Default -> do
-            inText   <- Text.getContents
-            expr     <- throws (exprFromText inText)
+            inBytes  <- Data.ByteString.Lazy.getContents
+            expr     <- throws (exprFromBytes inBytes)
             expr'    <- load Nothing expr
             typeExpr <- throws (typeOf expr')
-            Text.hPutStrLn stderr (pretty (normalize typeExpr))
-            Text.hPutStrLn stderr mempty
-            Text.putStrLn (pretty (normalize expr'))
+            Data.Text.Lazy.IO.hPutStrLn stderr (pretty (normalize typeExpr))
+            Data.Text.Lazy.IO.hPutStrLn stderr mempty
+            Data.Text.Lazy.IO.putStrLn (pretty (normalize expr'))
         Resolve   -> do
-            inText <- Text.getContents
-            expr   <- throws (exprFromText inText)
-            expr'  <- load Nothing expr
-            Text.putStrLn (pretty expr')
+            inBytes <- Data.ByteString.Lazy.getContents
+            expr    <- throws (exprFromBytes inBytes)
+            expr'   <- load Nothing expr
+            Data.Text.Lazy.IO.putStrLn (pretty expr')
         TypeCheck -> do
-            inText <- Text.getContents
-            expr   <- throws (exprFromText inText)
+            inBytes <- Data.ByteString.Lazy.getContents
+            expr   <- throws (exprFromBytes inBytes)
             case traverse (\_ -> Nothing) expr of
                 Nothing    -> throwIO (userError
                     "`dhall typecheck` cannot type-check a program containing \
@@ -93,8 +94,8 @@ main = do
                     \resolution, type-checking, and normalization." )
                 Just expr' -> do
                     typeExpr <- throws (typeOf expr')
-                    Text.putStrLn (pretty typeExpr)
+                    Data.Text.Lazy.IO.putStrLn (pretty typeExpr)
         Normalize -> do
-            inText <- Text.getContents
-            expr   <- throws (exprFromText inText)
-            Text.putStrLn (pretty (normalize expr))
+            inBytes <- Data.ByteString.Lazy.getContents
+            expr   <- throws (exprFromBytes inBytes)
+            Data.Text.Lazy.IO.putStrLn (pretty (normalize expr))

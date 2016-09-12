@@ -37,6 +37,8 @@ Library
     Build-Depends:
         base                 >= 4        && < 5   ,
         array                >= 0.4.0.0  && < 0.6 ,
+        bytestring                          < 0.11,
+        bytestring-lexing    >= 0.5.0.2  && < 0.6 ,
         containers           >= 0.5.0.0  && < 0.6 ,
         Earley               >= 0.10.1.0 && < 0.12,
         http-client          >= 0.4.0    && < 0.5 ,
@@ -58,13 +60,14 @@ Library
         Dhall.Import,
         Dhall.Lexer,
         Dhall.Parser
-    Build-Tools: alex
+    Build-Tools: alex, happy
 
 Executable dhall
     Hs-Source-Dirs: exec
     Main-Is: Main.hs
     Build-Depends:
-        base                 >= 4        && < 5    ,
-        dhall                                      ,
-        optparse-applicative                < 0.13 ,
+        base                 >= 4        && < 5   ,
+        bytestring                          < 0.11,
+        dhall                                     ,
+        optparse-applicative                < 0.13,
         text                 >= 0.11.1.0 && < 1.3

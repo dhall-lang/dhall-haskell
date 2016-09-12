@@ -100,6 +100,7 @@ import Network.HTTP.Client (Manager)
 import Prelude hiding (FilePath)
 
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.ByteString.Lazy             as ByteString
 import qualified Data.Foldable                    as Foldable
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
@@ -316,13 +317,11 @@ loadDynamic p = do
                                 `onException` throwIO (Imported paths e)
                         _ -> throwIO (Imported paths e) )
             response <- liftIO httpLbs'
-            case Text.decodeUtf8' (HTTP.responseBody response) of
-                Left  err -> liftIO (throwIO (Imported paths err))
-                Right txt -> return txt
+            return (HTTP.responseBody response)
 
     let readFile' file = liftIO (do
-            (do txt <- Filesystem.readTextFile file
-                return (Text.fromStrict txt) ) `catch` (\e -> do
+            (do bytes <- Filesystem.readFile file
+                return (ByteString.fromStrict bytes) ) `catch` (\e -> do
                 -- Unfortunately, GHC throws an `InappropriateType`
                 -- exception when trying to read a directory, but does not
                 -- export the exception, so I must resort to a more
@@ -331,16 +330,16 @@ loadDynamic p = do
                 -- If the fallback fails, reuse the original exception to
                 -- avoid user confusion
                 let file' = file </> "@"
-                txt <- Filesystem.readTextFile file'
+                bytes <- Filesystem.readFile file'
                     `onException` throwIO (Imported paths e)
-                return (Text.fromStrict txt) ) )
+                return (ByteString.fromStrict bytes) ) )
 
-    txt <- case canonicalize (p:paths) of
+    bytes <- case canonicalize (p:paths) of
         File file -> readFile' file
         URL  url  -> readURL   url
     
     let abort err = liftIO (throwIO (Imported (p:paths) err))
-    case Dhall.exprFromText txt of
+    case Dhall.exprFromBytes bytes of
         Left  err  -> case canonicalize (p:paths) of
             URL url -> do
                 -- Also try the fallback in case of a parse error, since the
@@ -351,11 +350,9 @@ loadDynamic p = do
                 m        <- needManager
                 response <- liftIO
                     (HTTP.httpLbs request' m `onException` abort err)
-                case Text.decodeUtf8' (HTTP.responseBody response) of
+                case Dhall.exprFromBytes (HTTP.responseBody response) of
                     Left  _    -> liftIO (abort err)
-                    Right txt' -> case Dhall.exprFromText txt' of
-                        Left  _    -> liftIO (abort err)
-                        Right expr -> return expr
+                    Right expr -> return expr
             _       -> liftIO (abort err)
         Right expr -> return expr
 

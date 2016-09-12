@@ -397,19 +397,19 @@ instance Buildable a => Buildable (Expr a)
             Var x            -> build x
             Lam x _A b       ->
                     (if parenBind then "(" else "")
-                <>  "λ("
+                <>  "\\("
                 <>  build x
                 <>  " : "
                 <>  go False False _A
-                <>  ") → "
+                <>  ") -> "
                 <>  go False False b
                 <>  (if parenBind then ")" else "")
             Pi  x _A b       ->
                     (if parenBind then "(" else "")
                 <>  (if x /= "_"
-                     then "∀(" <> build x <> " : " <> go False False _A <> ")"
+                     then "forall (" <> build x <> " : " <> go False False _A <> ")"
                      else go True False _A )
-                <>  " → "
+                <>  " -> "
                 <>  go False False b
                 <>  (if parenBind then ")" else "")
             App f a          ->

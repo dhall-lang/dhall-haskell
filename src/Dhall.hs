@@ -315,6 +315,7 @@ module Dhall
 
 import Control.Applicative (empty, liftA2)
 import Control.Exception (Exception)
+import Data.ByteString.Lazy (ByteString)
 import Data.Text.Lazy (Text)
 import Data.Vector (Vector)
 import Dhall.Core (Expr(..), X)
@@ -351,12 +352,12 @@ True
 input
     :: Type a
     -- ^ The type of value to decode from Dhall to Haskell
-    -> Text
+    -> ByteString
     -- ^ The Dhall program
     -> IO a
     -- ^ The decoded value in Haskell
-input (Type {..}) t = do
-    expr     <- throws (Dhall.Parser.exprFromText t)
+input (Type {..}) bytes = do
+    expr     <- throws (Dhall.Parser.exprFromBytes bytes)
     expr'    <- Dhall.Import.load Nothing expr
     typeExpr <- throws (Dhall.Core.typeOf (Annot expr' expected))
     case extract (Dhall.Core.normalize expr') of

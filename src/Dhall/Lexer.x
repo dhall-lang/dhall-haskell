@@ -1,35 +1,33 @@
 {
-{-# LANGUAGE OverloadedStrings #-}
-
 -- | Lexing logic for the Dhall language
 module Dhall.Lexer (
     -- * Lexer
-    lexExpr,
+      lexer
 
     -- * Types
-    Token(..),
-    Position(..),
-    LocatedToken(..)
+    , Token(..)
+
+    -- * Re-exports
+    , Alex
+    , alexError
+    , runAlex
     ) where
 
-import Control.Monad.Trans.State.Strict (State)
-import Data.Bits (shiftR, (.&.))
-import Data.Char (digitToInt, ord)
-import Data.Int (Int64)
+import Data.ByteString.Lazy (ByteString)
 import Data.Text.Lazy (Text)
-import Data.Word (Word8)
-import Filesystem.Path.CurrentOS (FilePath)
-import Lens.Micro.Mtl ((.=), (+=))
+import Filesystem.Path (FilePath)
 import Numeric.Natural (Natural)
-import Pipes (Producer, for, lift, yield)
 import Prelude hiding (FilePath)
 
-import qualified Control.Monad.Trans.State.Strict as State
-import qualified Data.Text.Lazy                   as Text
-import qualified Dhall.Core
-import qualified Filesystem.Path.CurrentOS        as Filesystem
-
+import qualified Data.ByteString.Lazy
+import qualified Data.ByteString.Lex.Fractional
+import qualified Data.ByteString.Lex.Integral
+import qualified Data.Text.Lazy
+import qualified Data.Text.Lazy.Encoding
+import qualified Filesystem.Path.CurrentOS
 }
+
+%wrapper "monad-bytestring"
 
 $digit = 0-9
 
@@ -39,173 +37,108 @@ $opchar = [\!\#\$\%\&\*\+\.\/\<\=\>\?\@\\\^\|\-\~]
 $fst       = [A-Za-z\_]
 $labelchar = [A-Za-z0-9\_]
 
-$nonwhite       = ~$white
-$whiteNoNewline = $white # \n
+$nonwhite = ~$white
 
 tokens :-
 
-    $whiteNoNewline+                    ;
-    \n                                  { \_    -> lift (do
-                                            line   += 1
-                                            column .= 0 )                    }
+    $white+                             ;
     "--".*                              ;
-    \" ([^\"] | \\.)* \"                { \t -> yield (TextLit (str t))      }
-    "("                                 { \_ -> yield OpenParen              }
-    ")"                                 { \_ -> yield CloseParen             }
-    "{"                                 { \_ -> yield OpenBrace              }
-    "}"                                 { \_ -> yield CloseBrace             }
-    "["                                 { \_ -> yield OpenBracket            }
-    "]"                                 { \_ -> yield CloseBracket           }
-    ":"                                 { \_ -> yield Colon                  }
-    ","                                 { \_ -> yield Comma                  }
-    "."                                 { \_ -> yield Dot                    }
-    "="                                 { \_ -> yield Equals                 }
-    "&&"                                { \_ -> yield And                    }
-    "||"                                { \_ -> yield Or                     }
-    "+"                                 { \_ -> yield Plus                   }
-    "++"                                { \_ -> yield DoublePlus             }
-    "-"                                 { \_ -> yield Dash                   }
-    "*"                                 { \_ -> yield Star                   }
-    "let"                               { \_ -> yield Let                    }
-    "in"                                { \_ -> yield In                     }
-    "Type"                              { \_ -> yield Type                   }
-    "Kind"                              { \_ -> yield Box                    }
-    "->" | "→"                          { \_ -> yield Arrow                  }
-    "\/" | "|~|" | "forall" | "∀" | "Π" { \_ -> yield Pi                     }
-    "\" | "λ"                           { \_ -> yield Lambda                 }
-    "Bool"                              { \_ -> yield Bool                   }
-    "True"                              { \_ -> yield (BoolLit True)         }
-    "False"                             { \_ -> yield (BoolLit False)        }
-    "if"                                { \_ -> yield If                     }
-    "then"                              { \_ -> yield Then                   }
-    "else"                              { \_ -> yield Else                   }
-    "Natural"                           { \_ -> yield Natural                }
-    "Natural/fold"                      { \_ -> yield NaturalFold            }
-    "Integer"                           { \_ -> yield Integer                }
-    "Double"                            { \_ -> yield Double                 }
-    "Text"                              { \_ -> yield Text                   }
-    "Maybe"                             { \_ -> yield Maybe                  }
-    "Nothing"                           { \_ -> yield Nothing_               }
-    "Just"                              { \_ -> yield Just_                  }
-    "List/build"                        { \_ -> yield ListBuild              }
-    "List/fold"                         { \_ -> yield ListFold               }
-    $fst $labelchar* | "(" $opchar+ ")" { \t -> yield (Label t)              }
-    $digit+                             { \t -> yield (Number (toInt t))     }
-    (([1-9][0-9]*\.[0-9]+)|(0\.[0-9]+))([Ee][\+\-]?[0-9]+)? { \t -> yield (DoubleLit (toDouble t)) }
-    "+" $digit+                         { \t -> yield (NaturalLit (toNat t)) }
-    "https://" $nonwhite+               { \t -> yield (URL (toUrl 0 t))      }
-    "http://" $nonwhite+                { \t -> yield (URL (toUrl 0 t))      }
-    "/" $nonwhite+                      { \t -> yield (File (toFile 0 t))    }
-    "./" $nonwhite+                     { \t -> yield (File (toFile 2 t))    }
-    "../" $nonwhite+                    { \t -> yield (File (toFile 0 t))    }
+    "("                                 { emit OpenParen        }
+    ")"                                 { emit CloseParen       }
+    "{"                                 { emit OpenBrace        }
+    "}"                                 { emit CloseBrace       }
+    "{{"                                { emit DoubleOpenBrace  }
+    "}}"                                { emit DoubleCloseBrace }
+    "["                                 { emit OpenBracket      }
+    "]"                                 { emit CloseBracket     }
+    ":"                                 { emit Colon            }
+    ","                                 { emit Comma            }
+    "."                                 { emit Dot              }
+    "="                                 { emit Equals           }
+    "&&"                                { emit And              }
+    "||"                                { emit Or               }
+    "+"                                 { emit Plus             }
+    "++"                                { emit DoublePlus       }
+    "-"                                 { emit Dash             }
+    "*"                                 { emit Star             }
+    "let"                               { emit Let              }
+    "in"                                { emit In               }
+    "Type"                              { emit Type             }
+    "Kind"                              { emit Kind             }
+    "->"                                { emit Arrow            }
+    "forall"                            { emit Forall           }
+    "\"                                 { emit Lambda           }
+    "Bool"                              { emit Bool             }
+    "True"                              { emit True_            }
+    "False"                             { emit False_           }
+    "if"                                { emit If               }
+    "then"                              { emit Then             }
+    "else"                              { emit Else             }
+    "Natural"                           { emit Natural          }
+    "Natural/fold"                      { emit NaturalFold      }
+    "Integer"                           { emit Integer          }
+    "Double"                            { emit Double           }
+    "Text"                              { emit Text             }
+    "Maybe"                             { emit Maybe            }
+    "Nothing"                           { emit Nothing_         }
+    "Just"                              { emit Just_            }
+    "List/build"                        { emit ListBuild        }
+    "List/fold"                         { emit ListFold         }
+    \" ([^\"] | \\.)* \"                { capture (TextLit . str)        }
+    $fst $labelchar* | "(" $opchar+ ")" { capture (Label . toText)       }
+    $digit+                             { capture (Number . toInt)       }
+    $digit+ (\. $digit+)? ([eE][\+\-]? $digit+)?
+                                        { capture (DoubleLit . toDouble) }
+    "+" $digit+                         { capture (NaturalLit . toNat)   }
+    "https://" $nonwhite+               { capture (URL . toText)         }
+    "http://" $nonwhite+                { capture (URL . toText)         }
+    "/" $nonwhite+                      { capture (File . toFile 0   )   }
+    "./" $nonwhite+                     { capture (File . toFile 2   )   }
+    "../" $nonwhite+                    { capture (File . toFile 0   )   }
 {
+emit :: Token -> AlexAction Token
+emit x = \_ _ -> return x
 
-toInt :: Text -> Natural
-toInt = Text.foldl' (\x c -> 10 * x + fromIntegral (digitToInt c)) 0
+alexEOF :: Alex Token
+alexEOF = return EOF
 
-toDouble :: Text -> Double
-toDouble = read . Text.unpack
-
-toNat :: Text -> Natural
-toNat = toInt . Text.drop 1
-
-toUrl :: Int64 -> Text -> Text
-toUrl = Text.drop
-
-toFile :: Int64 -> Text -> FilePath
-toFile n = Filesystem.fromText . Text.toStrict . Text.drop n
-
-str :: Text -> Text
-str = read . Text.unpack
-
--- This was lifted almost intact from the @alex@ source code
-encode :: Char -> (Word8, [Word8])
-encode c = (fromIntegral h, map fromIntegral t)
+capture :: (ByteString -> Token) -> AlexAction Token
+capture k (_, _, rest, _) len = return (k bytes)
   where
-    (h, t) = go (ord c)
+    bytes = Data.ByteString.Lazy.take len rest
 
-    go n
-        | n <= 0x7f   = (n, [])
-        | n <= 0x7ff  = (0xc0 + (n `shiftR` 6), [0x80 + n .&. 0x3f])
-        | n <= 0xffff =
-            (   0xe0 + (n `shiftR` 12)
-            ,   [   0x80 + ((n `shiftR` 6) .&. 0x3f)
-                ,   0x80 + n .&. 0x3f
-                ]
-            )
-        | otherwise   =
-            (   0xf0 + (n `shiftR` 18)
-            ,   [   0x80 + ((n `shiftR` 12) .&. 0x3f)
-                ,   0x80 + ((n `shiftR` 6) .&. 0x3f)
-                ,   0x80 + n .&. 0x3f
-                ]
-            )
+toInt :: ByteString -> Natural
+toInt =
+    Data.ByteString.Lex.Integral.readDecimal_ . Data.ByteString.Lazy.toStrict
 
--- | The cursor's location while lexing the text
-data Position = P
-    { lineNo    :: {-# UNPACK #-} !Int
-    , columnNo  :: {-# UNPACK #-} !Int
-    } deriving (Show)
-
--- line :: Lens' Position Int
-line :: Functor f => (Int -> f Int) -> Position -> f Position
-line k (P l c) = fmap (\l' -> P l' c) (k l)
-
--- column :: Lens' Position Int
-column :: Functor f => (Int -> f Int) -> Position -> f Position
-column k (P l c) = fmap (\c' -> P l c') (k c)
-
-{- @alex@ does not provide a `Text` wrapper, so the following code just modifies
-   the code from their @basic@ wrapper to work with `Text`
-
-   I could not get the @basic-bytestring@ wrapper to work; it does not correctly
-   recognize Unicode regular expressions.
--}
-data AlexInput = AlexInput
-    { prevChar  :: Char
-    , currBytes :: [Word8]
-    , currInput :: Text
-    }
-
-alexGetByte :: AlexInput -> Maybe (Word8,AlexInput)
-alexGetByte (AlexInput c bytes text) = case bytes of
-    b:ytes -> Prelude.Just (b, AlexInput c ytes text)
-    []     -> case Text.uncons text of
-        Prelude.Nothing       -> Prelude.Nothing
-        Prelude.Just (t, ext) -> case encode t of
-            (b, ytes) -> Prelude.Just (b, AlexInput t ytes ext)
-
-alexInputPrevChar :: AlexInput -> Char
-alexInputPrevChar = prevChar
-
-{-| Convert a text representation of an expression into a stream of tokens
-
-    `lexExpr` keeps track of position and returns the remainder of the input if
-    lexing fails.
--}
-lexExpr :: Text -> Producer LocatedToken (State Position) (Maybe Text)
-lexExpr text = for (go (AlexInput '\n' [] text)) tag
+toDouble :: ByteString -> Double
+toDouble bytes =
+    case Data.ByteString.Lex.Fractional.readExponential bytes' of
+        Just (n, _) -> n
+        _           -> error "toDouble: internal error"
   where
-    tag token = do
-        pos <- lift State.get
-        yield (LocatedToken token pos)
+    bytes' = Data.ByteString.Lazy.toStrict bytes
 
-    go input = case alexScan input 0 of
-        AlexEOF                        -> return Prelude.Nothing
-        AlexError (AlexInput _ _ text) -> return (Prelude.Just text)
-        AlexSkip  input' len           -> do
-            lift (column += len)
-            go input'
-        AlexToken input' len act       -> do
-            act (Text.take (fromIntegral len) (currInput input))
-            lift (column += len)
-            go input'
+toNat :: ByteString -> Natural
+toNat = toInt . Data.ByteString.Lazy.drop 1
 
--- | A `Token` augmented with `Position` information
-data LocatedToken = LocatedToken
-    { token    ::                !Token
-    , position :: {-# UNPACK #-} !Position
-    } deriving (Show)
+toFile :: Int64 -> ByteString -> FilePath
+toFile n =
+      Filesystem.Path.CurrentOS.fromText
+    . Data.Text.Lazy.toStrict
+    . Data.Text.Lazy.Encoding.decodeUtf8
+    . Data.ByteString.Lazy.drop n
+
+toText :: ByteString -> Text
+toText = Data.Text.Lazy.Encoding.decodeUtf8
+
+-- TODO: Properly handle errors here
+str :: ByteString -> Text
+str = read . Data.Text.Lazy.unpack . Data.Text.Lazy.Encoding.decodeUtf8
+
+-- | Convert a text representation of an expression into a stream of tokens
+lexer :: (Token -> Alex a) -> Alex a
+lexer k = alexMonadScan >>= k
 
 -- | Token type, used to communicate between the lexer and parser
 data Token
@@ -213,6 +146,8 @@ data Token
     | CloseParen
     | OpenBrace
     | CloseBrace
+    | DoubleOpenBrace
+    | DoubleCloseBrace
     | OpenBracket
     | CloseBracket
     | Colon
@@ -229,12 +164,13 @@ data Token
     | Let
     | In
     | Type
-    | Box
+    | Kind
     | Arrow
     | Lambda
-    | Pi
+    | Forall
     | Bool
-    | BoolLit Bool
+    | True_
+    | False_
     | If
     | Then
     | Else
