@@ -88,6 +88,12 @@ import qualified NeatInterpolation
     url            { Dhall.Lexer.URL        $$    }
     file           { Dhall.Lexer.File       $$    }
 
+%right '||'
+%right '&&'
+%right '+'
+%right '*'
+%right '++'
+
 %%
 
 Expr0
