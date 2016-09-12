@@ -294,11 +294,7 @@ The parsing step failed to generate a syntax tree due to this unexpected token:
                      (Data.Text.Buildable.build token) )
         txt1 = Data.Text.pack (show line)
         txt2 = Data.Text.pack (show column)
-        txt3 =
-            if Data.Text.Lazy.length txt + 5 < 80
-            then Data.Text.Lazy.toStrict  txt
-            else Data.Text.Lazy.toStrict (txt <> "...")
-        txt = Data.Text.Lazy.Encoding.decodeUtf8 bytes
+        txt3 = Data.Text.take 76 (Data.Text.pack (show bytes))
 
 newtype ParseError = ParseError Text
     deriving (Typeable)
