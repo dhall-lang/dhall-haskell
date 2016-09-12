@@ -1,4 +1,6 @@
 {
+{-# LANGUAGE OverloadedStrings #-}
+
 -- | Lexing logic for the Dhall language
 module Dhall.Lexer (
     -- * Lexer
@@ -9,11 +11,15 @@ module Dhall.Lexer (
 
     -- * Re-exports
     , Alex
+    , AlexPosn(..)
     , alexError
+    , alexGetInput
     , runAlex
     ) where
 
 import Data.ByteString.Lazy (ByteString)
+import Data.Monoid ((<>))
+import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Filesystem.Path (FilePath)
 import Numeric.Natural (Natural)
@@ -22,6 +28,7 @@ import Prelude hiding (FilePath)
 import qualified Data.ByteString.Lazy
 import qualified Data.ByteString.Lex.Fractional
 import qualified Data.ByteString.Lex.Integral
+import qualified Data.Text.Buildable
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Encoding
 import qualified Filesystem.Path.CurrentOS
@@ -193,4 +200,106 @@ data Token
     | URL Text
     | EOF
     deriving (Eq, Show)
+
+instance Buildable Token where
+    build  OpenParen
+        = "("
+    build  CloseParen
+        = ")"
+    build  OpenBrace
+        = "{"
+    build  CloseBrace
+        = "}"
+    build  DoubleOpenBrace
+        = "{{"
+    build  DoubleCloseBrace
+        = "}}"
+    build  OpenBracket
+        = "["
+    build  CloseBracket
+        = "]"
+    build  Colon
+        = ":"
+    build  Comma
+        = ","
+    build  Dot
+        = "."
+    build  Equals
+        = "="
+    build  And
+        = "&&"
+    build  Or
+        = "||"
+    build  Plus
+        = "+"
+    build  DoublePlus
+        = "++"
+    build  Dash
+        = "-"
+    build  At
+        = "@"
+    build  Star
+        = "*"
+    build  Let
+        = "let"
+    build  In
+        = "in"
+    build  Type
+        = "Type"
+    build  Kind
+        = "Kind"
+    build  Arrow
+        = "->"
+    build  Lambda
+        = "\\"
+    build  Forall
+        = "forall"
+    build  Bool
+        = "Bool"
+    build  True_
+        = "True"
+    build  False_
+        = "False"
+    build  If
+        = "if"
+    build  Then
+        = "then"
+    build  Else
+        = "else"
+    build  Natural
+        = "Natural"
+    build (NaturalLit n)
+        = "+" <> Data.Text.Buildable.build (fromIntegral n :: Integer)
+    build  NaturalFold
+        = "Natural/fold"
+    build  Integer
+        = "Integer"
+    build  Text
+        = "Text"
+    build  Double
+        = "Double"
+    build (DoubleLit n)
+        = Data.Text.Buildable.build n
+    build  Maybe
+        = "Maybe"
+    build  Nothing_
+        = "Nothing"
+    build  Just_
+        = "Just"
+    build  ListBuild
+        = "List/build"
+    build  ListFold
+        = "List/fold"
+    build (TextLit t)
+        = Data.Text.Buildable.build (show t)
+    build (Label t)
+        = Data.Text.Buildable.build t
+    build (Number n)
+        = Data.Text.Buildable.build (fromIntegral n :: Integer)
+    build (File f)
+        = Data.Text.Buildable.build (Filesystem.Path.CurrentOS.encodeString f)
+    build (URL t)
+        = Data.Text.Buildable.build t
+    build  EOF
+        = "EOF"
 }

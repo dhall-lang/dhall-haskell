@@ -3,23 +3,33 @@
 
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE QuasiQuotes        #-}
 
 module Dhall.Parser (
     -- * Parser
       exprFromBytes
+
+    -- * Types
+    , ParseError(..)
     ) where
 
 import Control.Exception (Exception)
 import Data.ByteString.Lazy (ByteString)
+import Data.Monoid ((<>))
 import Data.Text.Lazy (Text)
 import Data.Typeable (Typeable)
 import Dhall.Core
-import Dhall.Lexer (Alex, Token)
+import Dhall.Lexer (Alex, AlexPosn(..), Token)
 
 import qualified Data.Map
 import qualified Data.Vector
+import qualified Data.Text
+import qualified Data.Text.Buildable
 import qualified Data.Text.Lazy
+import qualified Data.Text.Lazy.Builder
+import qualified Data.Text.Lazy.Encoding
 import qualified Dhall.Lexer
+import qualified NeatInterpolation
 }
 
 %name expr
@@ -260,16 +270,45 @@ Import
 
 {
 parseError :: Token -> Alex a
-parseError token = Dhall.Lexer.alexError (show token)
+parseError token = do
+    (AlexPn _ line column, _, bytes, _) <- Dhall.Lexer.alexGetInput
+    Dhall.Lexer.alexError (Data.Text.unpack (msg line column bytes))
+  where
+    msg line column bytes = [NeatInterpolation.text|
+Error: Parsing failed
+
+Explanation: The source code is decomposed into a sequence of tokens and these
+tokens are then parsed to generate a syntax tree
+
+The parsing step failed to generate a syntax tree due to this unexpected token:
+↳ $txt0
+... located at:
+↳ Line $txt1, Column $txt2
+... with the following unconsumed input:
+↳ $txt3
+|]
+      where
+        txt0 =
+             Data.Text.Lazy.toStrict
+                 (Data.Text.Lazy.Builder.toLazyText
+                     (Data.Text.Buildable.build token) )
+        txt1 = Data.Text.pack (show line)
+        txt2 = Data.Text.pack (show column)
+        txt3 =
+            if Data.Text.Lazy.length txt + 5 < 80
+            then Data.Text.Lazy.toStrict  txt
+            else Data.Text.Lazy.toStrict (txt <> "...")
+        txt = Data.Text.Lazy.Encoding.decodeUtf8 bytes
 
 newtype ParseError = ParseError Text
     deriving (Typeable)
 
 instance Show ParseError where
-    show (ParseError txt) = show txt
+    show (ParseError txt) = Data.Text.Lazy.unpack txt
 
 instance Exception ParseError
 
+-- | Parse an expression from a `ByteString`
 exprFromBytes :: ByteString -> Either ParseError (Expr Path)
 exprFromBytes bytes = case Dhall.Lexer.runAlex bytes expr of
     Left  str -> Left (ParseError (Data.Text.Lazy.pack str))
