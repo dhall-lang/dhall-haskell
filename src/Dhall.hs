@@ -298,6 +298,7 @@ module Dhall
 
     -- * Types
     , Type
+    , Interpret(..)
     , bool
     , natural
     , integer
@@ -306,7 +307,6 @@ module Dhall
     , vector
     , pair2
     , pair3
-    , Interpret(..)
 
     -- * Re-exports
     , Vector
@@ -525,8 +525,8 @@ pair3
 [1,2,3]
 
     This class auto-generates a default implementation for records that
-    implement `Generic`.  This does auto-generate an instance for sum types or
-    recursive types.
+    implement `Generic`.  This does not auto-generate an instance for sum types
+    nor recursive types.
 -}
 class Interpret a where
     auto :: Type a
