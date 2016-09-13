@@ -223,7 +223,9 @@ Elems
         { reverse $1 }
 
 ElemsRev
-    : Expr1
+    : {- empty -}
+        { [] }
+    | Expr1
         { [$1] }
     | ElemsRev ',' Expr1
         { $3 : $1 }
