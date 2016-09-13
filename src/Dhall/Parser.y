@@ -98,17 +98,17 @@ import qualified NeatInterpolation
 %%
 
 Expr0
-    : Expr2 ':' Expr1
+    : Expr2 ':' Expr0
         { Annot $1 $3 }
     | Expr1
         { $1 }
 
 Expr1
-    : '\\' '(' label ':' Expr1 ')' '->' Expr1
+    : '\\' '(' label ':' Expr0 ')' '->' Expr1
         { Lam $3 $5 $8 }
     | 'if' Expr1 'then' Expr1 'else' Expr1
         { BoolIf $2 $4 $6 }
-    | 'forall' '(' label ':' Expr1 ')' '->' Expr1
+    | 'forall' '(' label ':' Expr0 ')' '->' Expr1
         { Pi $3 $5 $8 }
     | Expr2 '->' Expr1
         { Pi "_" $1 $3 }
@@ -182,7 +182,7 @@ Expr4
         { DoubleLit $1 }
     | text
         { TextLit $1 }
-    | '[' Elems ':' Expr1 ']'
+    | '[' Elems ':' Expr0 ']'
         { ListLit $4 (Data.Vector.fromList $2) }
     | RecordLit
         { $1 }
@@ -220,7 +220,7 @@ ArgsRev
         { $2 : $1 }
 
 Arg
-    : '(' label ':' Expr1 ')'
+    : '(' label ':' Expr0 ')'
         { ($2, $4) }
 
 Elems
@@ -272,7 +272,7 @@ FieldTypesRev
         { $3 : $1 }
 
 FieldType
-    : label ':' Expr1
+    : label ':' Expr0
         { ($1, $3) } 
 
 Import
