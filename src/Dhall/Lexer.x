@@ -65,6 +65,7 @@ tokens :-
     "&&"                                { emit And              }
     "||"                                { emit Or               }
     "+"                                 { emit Plus             }
+    "<>"                                { emit Diamond          }
     "++"                                { emit DoublePlus       }
     "-"                                 { emit Dash             }
     "*"                                 { emit Star             }
@@ -164,6 +165,7 @@ data Token
     | And
     | Or
     | Plus
+    | Diamond
     | DoublePlus
     | Dash
     | At
@@ -232,6 +234,8 @@ instance Buildable Token where
         = "||"
     build  Plus
         = "+"
+    build  Diamond
+        = "<>"
     build  DoublePlus
         = "++"
     build  Dash

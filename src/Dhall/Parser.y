@@ -54,6 +54,7 @@ import qualified NeatInterpolation
     '&&'           { Dhall.Lexer.And              }
     '||'           { Dhall.Lexer.Or               }
     '+'            { Dhall.Lexer.Plus             }
+    '<>'           { Dhall.Lexer.Diamond          }
     '++'           { Dhall.Lexer.DoublePlus       }
     '-'            { Dhall.Lexer.Dash             }
     '*'            { Dhall.Lexer.Star             }
@@ -93,6 +94,7 @@ import qualified NeatInterpolation
 %right '+'
 %right '*'
 %right '++'
+%right '<>'
 
 %%
 
@@ -129,8 +131,10 @@ Expr2
         { NaturalPlus $1 $3 }
     | Expr2 '*' Expr2
         { NaturalTimes $1 $3 }
-    | Expr2 '++' Expr2
+    | Expr2 '<>' Expr2
         { TextAppend $1 $3 }
+    | Expr2 '++' Expr2
+        { ListConcat $1 $3 }
     | Expr3
         { $1 }
 

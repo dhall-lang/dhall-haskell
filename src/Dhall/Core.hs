@@ -195,7 +195,7 @@ data Expr a
     | Text
     -- | > TextLit t                       ~  t
     | TextLit Text
-    -- | > TextAppend x y                  ~  x ++ y
+    -- | > TextAppend x y                  ~  x <> y
     | TextAppend (Expr a) (Expr a)
     -- | > Maybe a                         ~  Maybe a
     | Maybe (Expr a)
@@ -211,6 +211,8 @@ data Expr a
     | ListBuild
     -- | > ListFold                        ~  List/fold
     | ListFold
+    -- | > ListConcat x y                  ~  x ++ y
+    | ListConcat (Expr a) (Expr a)
     -- | > Record    [(k1, t1), (k2, t2)]  ~  { k1 : t1, k2 : t1 }
     | Record    (Map Text (Expr a))
     -- | > RecordLit [(k1, v1), (k2, v2)]  ~  { k1 = v1, k2 = v2 }
@@ -271,6 +273,7 @@ instance Monad Expr where
             return (e >>= k)
     ListBuild       >>= _ = ListBuild
     ListFold        >>= _ = ListFold
+    ListConcat l r  >>= k = ListConcat (l >>= k) (r >>= k)
     Record    kts   >>= k = Record (Data.Map.fromAscList kts')
       where
         kts' = [ (k', t >>= k) | (k', t) <- Data.Map.toAscList kts ]
@@ -350,6 +353,9 @@ instance Eq a => Eq (Expr a) where
         go ListBuild ListBuild = return True
         go ListFold ListFold = return True
         go NaturalFold NaturalFold = return True
+        go (ListConcat xL yL) (ListConcat xR yR) = do
+            b1 <- go xL xR
+            if b1 then go yL yR else return False
         go (NaturalPlus xL yL) (NaturalPlus xR yR) = do
             b <- go xL xR
             if b then go yL yR else return False
@@ -450,7 +456,7 @@ instance Buildable a => Buildable (Expr a)
             DoubleLit n      -> build (show n)
             Text             -> "Text"
             TextLit t        -> build (show t)
-            TextAppend x y   -> go True False x <> " ++ " <> go True False y
+            TextAppend x y   -> go True False x <> " <> " <> go True False y
             Maybe t          ->
                     (if parenApp then "(" else "")
                 <>  "Maybe "
@@ -471,6 +477,7 @@ instance Buildable a => Buildable (Expr a)
                     <>  " ]"
             ListBuild        -> "List/build"
             ListFold         -> "List/fold"
+            ListConcat x y   -> go True False x <> " ++ " <> go True False y
             Record kts       ->
                 if Data.Map.null kts
                 then    "{{ }}"
@@ -515,6 +522,8 @@ data TypeMessage
     | CantAnd Bool (Expr X) (Expr X)
     | CantOr Bool (Expr X) (Expr X)
     | CantAppend Bool (Expr X) (Expr X)
+    | CantConcat Bool (Expr X) (Expr X)
+    | ElementMismatch (Expr X) (Expr X)
     | CantAdd Bool (Expr X) (Expr X)
     | CantMultiply Bool (Expr X) (Expr X)
     deriving (Show)
@@ -940,9 +949,9 @@ You tried to access a field named:
 
     build (CantAppend b expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
-Error: Cannot use `(++)` on a value that's not a `Text`
+Error: Cannot use `(<>)` on a value that's not a `Text`
 
-Explanation: The `(++)` operator expects two arguments of type `Text`
+Explanation: The `(<>)` operator expects two arguments of type `Text`
 
 You provided this argument:
 
@@ -956,8 +965,53 @@ You provided this argument:
         txt1 = Text.toStrict (pretty expr1)
         insert =
             if b
+            then [NeatInterpolation.text|$txt0 <> ...|]
+            else [NeatInterpolation.text|... <> $txt0|]
+
+    build (CantConcat b expr0 expr1) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Cannot use `(++)` on a value that's not a list
+
+Explanation: The `(++)` operator expects two list arguments of type `[ a ]` for
+some element type `a`
+
+You provided this argument:
+
+    $insert
+
+... whose type is not a list at all.  The type is actually:
+↳ $txt1
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (pretty expr1)
+        insert =
+            if b
             then [NeatInterpolation.text|$txt0 ++ ...|]
             else [NeatInterpolation.text|... ++ $txt0|]
+
+    build (ElementMismatch expr0 expr1) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Can't concatenate lists of different element types
+
+Explanation: You can only combine two lists if they have matching element types.
+For example, this is legal:
+
+    [ 1, 2 : Integer] ++ [ 3, 4 : Integer ]  -- The element types match
+
+... but this is *not* legal:
+
+    [ 1, 2 : Integer ] ++ [ True : Bool ] -- The element types do not match
+
+The left list has elements of type:
+↳ $txt0
+... while the right list has elements of type:
+↳ $txt1
+... and those two types do not match
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (pretty expr1)
 
     build (CantAdd b expr0 expr1) =
         buildNaturalOperator "+" b expr0 expr1
@@ -1114,6 +1168,7 @@ subst x e (ListLit t es    ) = ListLit (subst x e t) es'
     es' = do
         e' <- es
         return (subst x e e')
+subst x e (ListConcat   l r) = ListConcat (subst x e l) (subst x e r)
 subst x e (Record    kts   ) = Record (Data.Map.fromAscList kts')
   where
     kts' = [ (k, subst x e t) | (k, t) <- Data.Map.toList kts ]
@@ -1326,6 +1381,20 @@ typeWith _      ListFold          = do
                 (Pi "list" (Const Star)
                     (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
                         (Pi "nil" "list" "list")) ) ) )
+typeWith ctx e@(ListConcat l r  ) = do
+    tl <- fmap normalize (typeWith ctx l)
+    el <- case tl of
+        List el -> return el
+        _       -> Left (TypeError ctx e (CantConcat True l tl))
+
+    tr <- fmap normalize (typeWith ctx r)
+    er <- case tr of
+        List er -> return er
+        _       -> Left (TypeError ctx e (CantConcat False r tr))
+    if el == er
+        then return ()
+        else Left (TypeError ctx e (ElementMismatch el er))
+    return (List el)
 typeWith ctx e@(Record    kts   ) = do
     let process (k, t) = do
             s <- fmap normalize (typeWith ctx t)
@@ -1465,6 +1534,16 @@ normalize e = case e of
     Maybe t          -> Maybe (normalize t)
     List t           -> List (normalize t)
     ListLit t es     -> ListLit (normalize t) (fmap normalize es)
+    ListConcat x y   ->
+        case x' of
+            ListLit t xt ->
+                case y' of
+                    ListLit _ yt -> ListLit t (xt Data.Vector.++ yt)
+                    _ -> ListConcat x' y'
+            _ -> ListConcat x' y'
+      where
+        x' = normalize x
+        y' = normalize y
     RecordLit kvs    -> RecordLit (fmap normalize kvs)
     Record    kts    -> Record    (fmap normalize kts)
     Field r x        ->
