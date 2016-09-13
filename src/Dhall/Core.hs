@@ -694,7 +694,7 @@ Explanation: There are four levels of expressions that form a heirarchy:
 
 The following annotations illustrate this heirarchy:
 
-    "ABC" : (Text : (Type : Kind))
+    "ABC" : Text : Type : Kind
 
 Every term has a type.  For example, the term `"ABC"` has type `Text`
 Every type has a kind.  For example, the type `Text` has kind `Type`
