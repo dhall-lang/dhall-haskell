@@ -152,10 +152,10 @@ data Expr a
     = Const Const
     -- | > Var x                           ~  x
     | Var Text
-    -- | > Lam x     A b                   ~  λ(x : A) → b
+    -- | > Lam x     A b                   ~  \(x : A) → b
     | Lam Text (Expr a) (Expr a)
-    -- | > Pi x      A B                   ~  ∀(x : A) → B
-    --   > Pi unused A B                   ~        A  → B
+    -- | > Pi x      A B                   ~  forall (x : A) → B
+    --   > Pi unused A B                   ~              A  → B
     | Pi  Text (Expr a) (Expr a)
     -- | > App f a                         ~  f a
     | App (Expr a) (Expr a)
@@ -527,7 +527,7 @@ Error: Unbound variable
 Explanation: Expressions can only reference previously introduced (i.e. "bound")
 variables that are still "in scope".  For example, these are valid expressions:
 
-    λ(x : Bool) → x       -- Anonymous functions introduce "bound" variables
+    \(x : Bool) → x       -- Anonymous functions introduce "bound" variables
 
     let x = 1 in x        -- `let` definitions introduce "bound" variables
 
@@ -536,7 +536,7 @@ variables that are still "in scope".  For example, these are valid expressions:
 
 ... but these are not valid expressions:
 
-    λ(x : Bool) → y           -- The variable `y` hasn't been introduced yet
+    \(x : Bool) → y           -- The variable `y` hasn't been introduced yet
 
     (let x = True in x) && x  -- `x` is undefined outside the parentheses
 
@@ -549,19 +549,19 @@ Error: Invalid input annotation for a function
 
 Explanation: A function can accept an input term of a given "type", like this:
 
-    ∀(x : Text) → Bool -- This function accepts any term of type `Text`.
-                       -- `x` is the term's name and `Text` is the term's type
+    forall (x : Text) → Bool  -- This function accepts any term of type `Text`.
+                              -- `x` is the term's name and `Text` is the type
 
-    Bool → Integer     -- This function accepts any term of type `Bool`.
-                       -- The input term's name is omitted
+    Bool → Integer  -- This function accepts any term of type `Bool`.
+                    -- The input term's name is omitted
 
 ... or accept an input "type" of a given "kind", like this:
 
-    ∀(a : Type) → Type  -- This accepts any type `a` of kind `Type`
+    forall (a : Type) → Type  -- This accepts any type `a` of kind `Type`
 
 Other input annotations are *not* valid, like this:
 
-    ∀(x : 1) → x        -- `1` is a term and not a "type" nor a "kind"
+    forall (x : 1) → x  -- `1` is a term and not a "type" nor a "kind"
 
 This input annotation you gave is neither a type nor a kind:
 ↳ $txt
@@ -575,17 +575,17 @@ Error: Invalid output annotation for a function
 
 Explanation: A function can emit an output term of a given "type", like this:
 
-    ∀(x : Text) → Bool  -- This function emits a term of type `Bool`.
+    forall (x : Text) → Bool  -- This function emits a term of type `Bool`.
 
-    Bool → Int          -- This function emits a term of type `Int`.
+    Bool → Int                -- This function emits a term of type `Int`.
 
 ... or emit an output "type" of a given "kind", like this:
 
-    ∀(a : Type) → Type  -- This emits a type of kind `Type`
+    forall (a : Type) → Type  -- This emits a type of kind `Type`
 
 Other outputs are *not* valid, like this:
 
-    ∀(x : Text) → 1     -- `1` is a term and not a "type" nor a "kind"
+    forall (x : Text) → 1     -- `1` is a term and not a "type" nor a "kind"
 
 This function output you specified is neither a type nor a kind:
 ↳ $txt
@@ -623,16 +623,16 @@ Error: Function applied to the wrong type or kind of argument
 
 Explanation: Every function declares what type or kind of argument to accept
 
-    λ(x : Bool) → x   -- Anonymous function which only accepts `Bool` arguments
+    \(x : Bool) → x   -- Anonymous function which only accepts `Bool` arguments
 
     let f (x : Bool) = x  -- Named function which only accepts `Bool` arguments
     in  f True
 
-    λ(a : Type) → a   -- Anonymous function which only accepts `Type` arguments
+    \(a : Type) → a   -- Anonymous function which only accepts `Type` arguments
 
 You *cannot* apply a function to the wrong type or kind of argument:
 
-    (λ(x : Bool) → x) "AB"  -- "AB" is `Text`, but the function expects a `Bool`
+    (\(x : Bool) → x) "AB"  -- "AB" is `Text`, but the function expects a `Bool`
 
 You tried to invoke a function which expects an argument of type or kind:
 ↳ $txt0
@@ -889,13 +889,13 @@ Explanation: You can only access fields on records, like this:
 
     { foo = True, bar = "ABC" }.foo              -- This is valid ...
 
-    λ(r : {{ foo : Bool, bar : Text }}) → r.foo  -- ... and so is this
+    \(r : {{ foo : Bool, bar : Text }}) → r.foo  -- ... and so is this
 
 ... but you *cannot* access fields on non-record expressions, like this:
 
     1.foo                  -- `1` is not a valid record
 
-    (λ(x : Bool) → x).foo  -- A function is not a valid record
+    (\(x : Bool) → x).foo  -- A function is not a valid record
 
 You tried to access a field named:
 ↳ $txt0
@@ -917,7 +917,7 @@ Explanation: You can only retrieve record fields if they are present
 
     { foo = True, bar = "ABC" }.foo              -- This is valid ...
 
-    λ(r : {{ foo : Bool, bar : Text }}) → r.foo  -- ... and so is this
+    \(r : {{ foo : Bool, bar : Text }}) → r.foo  -- ... and so is this
 
 ... but you *cannot* access fields missing from a record:
 

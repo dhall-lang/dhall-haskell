@@ -143,7 +143,7 @@ toText = Data.Text.Lazy.Encoding.decodeUtf8
 str :: ByteString -> Text
 str = read . Data.Text.Lazy.unpack . Data.Text.Lazy.Encoding.decodeUtf8
 
--- | Convert a text representation of an expression into a stream of tokens
+-- | `Alex` action for reading the next token
 lexer :: (Token -> Alex a) -> Alex a
 lexer k = alexMonadScan >>= k
 

@@ -105,7 +105,7 @@
 -- is:
 --
 -- > $ dhall typecheck < makeBools
--- > ∀(n : Bool) → [ Bool ]
+-- > forall (n : Bool) → [ Bool ]
 --
 -- This says that @makeBools@ is a function of one argument named @n@ of type
 -- `Bool` that returns a `Vector` of `Bool`s.
@@ -208,22 +208,22 @@
 -- > ./makeBools "ABC"
 -- > dhall: 
 -- > dhall: 
--- > Expression: (λ(n : Bool) → [ n && True, n && False, n || True, n || False : Bool ]) "ABC"
+-- > Expression: (\(n : Bool) → [ n && True, n && False, n || True, n || False : Bool ]) "ABC"
 -- > 
 -- > Error: Function applied to the wrong type or kind of argument
 -- > 
 -- > Explanation: Every function declares what type or kind of argument to accept
 -- > 
--- >     λ(x : Bool) → x   -- Anonymous function which only accepts `Bool` arguments
+-- >     \(x : Bool) → x   -- Anonymous function which only accepts `Bool` arguments
 -- > 
 -- >     let f (x : Bool) = x  -- Named function which only accepts `Bool` arguments
 -- >     in  f True
 -- > 
--- >     λ(a : Type) → a   -- Anonymous function which only accepts `Type` arguments
+-- >     \(a : Type) → a   -- Anonymous function which only accepts `Type` arguments
 -- > 
 -- > You *cannot* apply a function to the wrong type or kind of argument:
 -- > 
--- >     (λ(x : Bool) → x) "AB"  -- "AB" is `Text`, but the function expects a `Bool`
+-- >     (\(x : Bool) → x) "AB"  -- "AB" is `Text`, but the function expects a `Bool`
 -- > 
 -- > You tried to invoke a function which expects an argument of type or kind:
 -- > ↳ Bool
@@ -279,9 +279,9 @@
 -- > $ dhall
 -- > \(n : Bool) -> +10 * +10
 -- > <Ctrl-D>
--- > ∀(n : Bool) → Natural
+-- > forall (n : Bool) → Natural
 -- > 
--- > λ(n : Bool) → +100
+-- > \(n : Bool) → +100
 --
 -- ... and even though the function is still missing the first argument named
 -- @n@ the compiler is smart enough to evaluate the body of the anonymous
