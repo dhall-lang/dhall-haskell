@@ -67,7 +67,6 @@ tokens :-
     "+"                                 { emit Plus             }
     "<>"                                { emit Diamond          }
     "++"                                { emit DoublePlus       }
-    "-"                                 { emit Dash             }
     "*"                                 { emit Star             }
     "let"                               { emit Let              }
     "in"                                { emit In               }
@@ -94,7 +93,7 @@ tokens :-
     "List/fold"                         { emit ListFold         }
     \" ([^\"] | \\.)* \"                { capture (TextLit . str)        }
     $fst $labelchar* | "(" $opchar+ ")" { capture (Label . toText)       }
-    $digit+                             { capture (Number . toInt)       }
+    \-? $digit+                         { capture (Number . toInt)       }
     $digit+ (\. $digit+)? ([eE][\+\-]? $digit+)?
                                         { capture (DoubleLit . toDouble) }
     "+" $digit+                         { capture (NaturalLit . toNat)   }
@@ -115,9 +114,15 @@ capture k (_, _, rest, _) len = return (k bytes)
   where
     bytes = Data.ByteString.Lazy.take len rest
 
-toInt :: ByteString -> Natural
-toInt =
-    Data.ByteString.Lex.Integral.readDecimal_ . Data.ByteString.Lazy.toStrict
+toInt :: ByteString -> Integer
+toInt bytes =
+    case m of
+        Just (n, _) -> n
+        Nothing     -> error "toInt: internal error"
+  where
+    m = Data.ByteString.Lex.Integral.readSigned
+            Data.ByteString.Lex.Integral.readDecimal
+            (Data.ByteString.Lazy.toStrict bytes)
 
 toDouble :: ByteString -> Double
 toDouble bytes =
@@ -128,7 +133,7 @@ toDouble bytes =
     bytes' = Data.ByteString.Lazy.toStrict bytes
 
 toNat :: ByteString -> Natural
-toNat = toInt . Data.ByteString.Lazy.drop 1
+toNat = fromIntegral . toInt . Data.ByteString.Lazy.drop 1
 
 toFile :: Int64 -> ByteString -> FilePath
 toFile n =
@@ -167,7 +172,6 @@ data Token
     | Plus
     | Diamond
     | DoublePlus
-    | Dash
     | At
     | Star
     | Let
@@ -197,7 +201,7 @@ data Token
     | ListFold
     | TextLit Text
     | Label Text
-    | Number Natural
+    | Number Integer
     | File FilePath
     | URL Text
     | EOF
@@ -238,8 +242,6 @@ instance Buildable Token where
         = "<>"
     build  DoublePlus
         = "++"
-    build  Dash
-        = "-"
     build  At
         = "@"
     build  Star

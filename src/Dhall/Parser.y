@@ -56,7 +56,6 @@ import qualified NeatInterpolation
     '+'            { Dhall.Lexer.Plus             }
     '<>'           { Dhall.Lexer.Diamond          }
     '++'           { Dhall.Lexer.DoublePlus       }
-    '-'            { Dhall.Lexer.Dash             }
     '*'            { Dhall.Lexer.Star             }
     'let'          { Dhall.Lexer.Let              }
     'in'           { Dhall.Lexer.In               }
@@ -107,12 +106,12 @@ Expr0
 Expr1
     : '\\' '(' label ':' Expr1 ')' '->' Expr1
         { Lam $3 $5 $8 }
+    | 'if' Expr1 'then' Expr1 'else' Expr1
+        { BoolIf $2 $4 $6 }
     | 'forall' '(' label ':' Expr1 ')' '->' Expr1
         { Pi $3 $5 $8 }
     | Expr2 '->' Expr1
         { Pi "_" $1 $3 }
-    | '-' number
-        { IntegerLit (negate (fromIntegral $2)) }
     | Lets 'in' Expr1
         { Lets $1 $3 }
     | Expr2
@@ -189,8 +188,6 @@ Expr4
         { $1 }
     | Record
         { $1 }
-    | 'if' Expr0 'then' Expr1 'else' Expr1
-        { BoolIf $2 $4 $6 }
     | Import
         { Embed $1 }
     | Expr4 '.' label
