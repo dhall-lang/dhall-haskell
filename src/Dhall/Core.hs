@@ -57,7 +57,6 @@ import Prelude hiding (FilePath)
 
 import qualified Control.Monad
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Data.List
 import qualified Data.Map
 import qualified Data.Text
 import qualified Data.Text.Lazy                   as Text
@@ -393,114 +392,167 @@ instance IsString (Expr a)
   where
     fromString str = Var (fromString str)
 
+buildExpr0 :: Buildable a => Expr a -> Builder
+buildExpr0 (Annot a b) = buildExpr1 a <> " : " <> buildExpr0 b
+buildExpr0  a          = buildExpr1 a
+
+buildExpr1 :: Buildable a => Expr a -> Builder
+buildExpr1 (Lam a b c) =
+        "\\("
+    <>  build a
+    <> " : "
+    <> buildExpr0 b
+    <> ") -> "
+    <> buildExpr1 c
+buildExpr1 (BoolIf a b c) =
+        "if "
+    <>  buildExpr0 a
+    <>  " then "
+    <>  buildExpr1 b
+    <>  " else "
+    <> buildExpr1 c
+buildExpr1 (Pi "_" b c) =
+        buildExpr2 b
+    <>  " -> "
+    <>  buildExpr2 c
+buildExpr1 (Pi a b c) =
+        "forall ("
+    <>  build a
+    <>  " : "
+    <>  buildExpr0 b
+    <>  ") -> "
+    <>  buildExpr1 c
+buildExpr1 (Lets a b) =
+        buildLets a
+    <>  " in "
+    <>  buildExpr1 b
+buildExpr1 a =
+    buildExpr2 a
+
+buildExpr2 :: Buildable a => Expr a -> Builder
+buildExpr2 (BoolOr      a b) = buildExpr2 a <> " || " <> buildExpr2 b
+buildExpr2 (NaturalPlus a b) = buildExpr2 a <> " + "  <> buildExpr2 b
+buildExpr2 (TextAppend  a b) = buildExpr2 a <> " <> " <> buildExpr2 b
+buildExpr2 (ListConcat  a b) = buildExpr2 a <> " ++ " <> buildExpr2 b
+buildExpr2  a                = buildExpr3 a
+
+buildExpr3 :: Buildable a => Expr a -> Builder
+buildExpr3 (BoolAnd      a b) = buildExpr3 a <> " && " <> buildExpr3 b
+buildExpr3 (NaturalTimes a b) = buildExpr3 a <> " * "  <> buildExpr3 b
+buildExpr3  a                 = buildExpr4 a
+
+buildExpr4 :: Buildable a => Expr a -> Builder
+buildExpr4 (App a b) = buildExpr4 a <> " " <> buildExpr5 b
+buildExpr4 (Maybe a) = "Maybe " <> buildExpr5 a
+buildExpr4  a        = buildExpr5 a
+
+buildExpr5 :: Buildable a => Expr a -> Builder
+buildExpr5 (Var a) =
+    build a
+buildExpr5 (Const Star) =
+    "Type"
+buildExpr5 (Const Box) =
+    "Kind"
+buildExpr5 Bool =
+    "Bool"
+buildExpr5 Natural =
+    "Natural"
+buildExpr5 NaturalFold =
+    "Natural/fold"
+buildExpr5 Integer =
+    "Integer"
+buildExpr5 Double =
+    "Double"
+buildExpr5 Text =
+    "Text"
+buildExpr5 Nothing_ =
+    "Nothing"
+buildExpr5 Just_ =
+    "Just"
+buildExpr5 ListBuild =
+    "List/build"
+buildExpr5 ListFold =
+    "List/fold"
+buildExpr5 (List a) =
+    "[ " <> buildExpr1 a <> " ]"
+buildExpr5 (BoolLit True) =
+    "True"
+buildExpr5 (BoolLit False) =
+    "False"
+buildExpr5 (IntegerLit a) =
+    build a
+buildExpr5 (NaturalLit a) =
+    build (show a)
+buildExpr5 (DoubleLit a) =
+    build a
+buildExpr5 (TextLit a) =
+    build (show a)
+buildExpr5 (ListLit a b) =
+    "[ " <> buildElems (Data.Vector.toList b) <> " : " <> buildExpr0 a <> " ]"
+buildExpr5 (RecordLit a) =
+    buildRecordLit a
+buildExpr5 (Record a) =
+    buildRecord a
+buildExpr5 (Embed a) =
+    build a
+buildExpr5 (Field a b) =
+    buildExpr5 a <> "." <> build b
+buildExpr5 a =
+    "(" <> buildExpr0 a <> ")"
+
+buildLets :: Buildable a => [Let a] -> Builder
+buildLets (a:bs) = buildLet a <> buildLets bs
+buildLets    []  = ""
+
+buildLet :: Buildable a => Let a -> Builder
+buildLet (Let a b c) =
+        "let "
+    <>  build a
+    <>  " "
+    <>  buildArgs b
+    <>  "= "
+    <>  buildExpr0 c
+    <>  " "
+
+buildArgs :: Buildable a => [(Text, Expr a)] -> Builder
+buildArgs (a:bs) = buildArg a <> buildArgs bs
+buildArgs    []  = ""
+
+buildArg :: Buildable a => (Text, Expr a) -> Builder
+buildArg (a, b) = "(" <> build a <> " : " <> buildExpr0 b <> ")"
+
+buildElems :: Buildable a => [Expr a] -> Builder
+buildElems   []   = ""
+buildElems   [a]  = buildExpr1 a
+buildElems (a:bs) = buildExpr1 a <> ", " <> buildElems bs
+
+buildRecordLit :: Buildable a => Map Text (Expr a) -> Builder
+buildRecordLit a = "{ " <> buildFieldValues (Data.Map.toList a) <> " }"
+
+buildFieldValues :: Buildable a => [(Text, Expr a)] -> Builder
+buildFieldValues    []  = ""
+buildFieldValues   [a]  = buildFieldValue a
+buildFieldValues (a:bs) = buildFieldValue a <> ", " <> buildFieldValues bs
+
+buildFieldValue :: Buildable a => (Text, Expr a) -> Builder
+buildFieldValue (a, b) = build a <> " = " <> buildExpr0 b
+
+buildRecord :: Buildable a => Map Text (Expr a) -> Builder
+buildRecord a = "{{ " <> buildFieldTypes (Data.Map.toList a) <> " }}"
+
+buildFieldTypes :: Buildable a => [(Text, Expr a)] -> Builder
+buildFieldTypes    []  = ""
+buildFieldTypes   [a]  = buildFieldType a
+buildFieldTypes (a:bs) = buildFieldType a <> ", " <> buildFieldTypes bs
+
+buildFieldType :: Buildable a => (Text, Expr a) -> Builder
+buildFieldType (a, b) = build a <> " : " <> build b
+
 -- | Generates a syntactically valid Dhall program
 instance Buildable a => Buildable (Expr a)
   where
-    build = go False False
-      where
-        go parenBind parenApp e = case e of
-            Const c          -> build c
-            Var x            -> build x
-            Lam x _A b       ->
-                    (if parenBind then "(" else "")
-                <>  "\\("
-                <>  build x
-                <>  " : "
-                <>  go False False _A
-                <>  ") -> "
-                <>  go False False b
-                <>  (if parenBind then ")" else "")
-            Pi  x _A b       ->
-                    (if parenBind then "(" else "")
-                <>  (if x /= "_"
-                     then "forall (" <> build x <> " : " <> go False False _A <> ")"
-                     else go True False _A )
-                <>  " -> "
-                <>  go False False b
-                <>  (if parenBind then ")" else "")
-            App f a          ->
-                    (if parenApp then "(" else "")
-                <>  go True False f <> " " <> go True True a
-                <>  (if parenApp then ")" else "")
-            Lets ls e'       ->
-                    (if parenBind then "(" else "")
-                <>  foldMap (\l -> build l <> " ") ls
-                <>  "in "
-                <>  go False False e'
-                <>  (if parenBind then ")" else "")
-            Annot x t        ->
-                    go True False x
-                <>  " : "
-                <>  go False False t
-            Bool             -> "Bool"
-            BoolLit b        -> build (show b)
-            BoolAnd x y      -> build x <> " && " <> build y
-            BoolOr  x y      -> build x <> " || " <> build y
-            BoolIf x y z     ->
-                    (if parenApp then "(" else "")
-                <>  "if "
-                <>  go False False x
-                <>  " then "
-                <>  go False False y
-                <>  " else "
-                <>  go False False z
-                <>  (if parenApp then ")" else "")
-            Natural          -> "Natural"
-            NaturalLit n     -> "+" <> build (show n)
-            NaturalFold      -> "Natural/fold"
-            NaturalPlus  x y -> go True False x <> " + " <> go True False y
-            NaturalTimes x y -> go True False x <> " * " <> go True False y
-            Integer          -> "Integer"
-            IntegerLit n     -> build (show n)
-            Double           -> "Double"
-            DoubleLit n      -> build (show n)
-            Text             -> "Text"
-            TextLit t        -> build (show t)
-            TextAppend x y   -> go True False x <> " <> " <> go True False y
-            Maybe t          ->
-                    (if parenApp then "(" else "")
-                <>  "Maybe "
-                <>  go True True t
-                <>  (if parenApp then ")" else "")
-            Nothing_         -> "Nothing"
-            Just_            -> "Just"
-            List t           -> "[ " <> go False False t <> " ]"
-            ListLit t es     ->
-                if null es
-                then    "[ : " <> go False False t <> " ]"
-                else    "[ "
-                    <>  mconcat
-                            (Data.List.intersperse ", "
-                                (fmap (go False False) (toList es)) )
-                    <>  " : "
-                    <>  go False False t
-                    <>  " ]"
-            ListBuild        -> "List/build"
-            ListFold         -> "List/fold"
-            ListConcat x y   -> go True False x <> " ++ " <> go True False y
-            Record kts       ->
-                if Data.Map.null kts
-                then    "{{ }}"
-                else    "{{ "
-                    <>  mconcat
-                            (Data.List.intersperse ", "
-                                [ build k <> " : " <> go False False t
-                                | (k, t) <- Data.Map.toList kts
-                                ] )
-                    <>  " }}"
-            RecordLit kvs    ->
-                if Data.Map.null kvs
-                then    "{ }"
-                else    "{ "
-                    <>  mconcat
-                            (Data.List.intersperse ", "
-                                [ build k <> " = " <> go False False v
-                                | (k, v) <- Data.Map.toList kvs
-                                ] )
-                    <>  " }"
-            Field r x        -> go True True r <> "." <> build x
-            Embed p          -> build p
- 
+    build = buildExpr0
+
 -- | The specific type error
 data TypeMessage
     = UnboundVariable

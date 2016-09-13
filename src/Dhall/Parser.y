@@ -98,7 +98,7 @@ import qualified NeatInterpolation
 %%
 
 Expr0
-    : Expr2 ':' Expr0
+    : Expr1 ':' Expr0
         { Annot $1 $3 }
     | Expr1
         { $1 }
@@ -106,7 +106,7 @@ Expr0
 Expr1
     : '\\' '(' label ':' Expr0 ')' '->' Expr1
         { Lam $3 $5 $8 }
-    | 'if' Expr1 'then' Expr1 'else' Expr1
+    | 'if' Expr0 'then' Expr1 'else' Expr1
         { BoolIf $2 $4 $6 }
     | 'forall' '(' label ':' Expr0 ')' '->' Expr1
         { Pi $3 $5 $8 }
@@ -118,14 +118,10 @@ Expr1
         { $1 }
 
 Expr2
-    : Expr2 '&&' Expr2
-        { BoolAnd $1 $3 }
-    | Expr2 '||' Expr2
+    : Expr2 '||' Expr2
         { BoolOr $1 $3 }
     | Expr2 '+' Expr2
         { NaturalPlus $1 $3 }
-    | Expr2 '*' Expr2
-        { NaturalTimes $1 $3 }
     | Expr2 '<>' Expr2
         { TextAppend $1 $3 }
     | Expr2 '++' Expr2
@@ -134,14 +130,22 @@ Expr2
         { $1 }
 
 Expr3
-    : Expr3 Expr4
-        { App $1 $2 }
-    | 'Maybe' Expr4
-        { Maybe $2 }
+    : Expr3 '&&' Expr3
+        { BoolAnd $1 $3 }
+    | Expr3 '*' Expr3
+        { NaturalTimes $1 $3 }
     | Expr4
         { $1 }
 
 Expr4
+    : Expr4 Expr5
+        { App $1 $2 }
+    | 'Maybe' Expr5
+        { Maybe $2 }
+    | Expr5
+        { $1 }
+
+Expr5
     : label
         { Var $1 }
     | 'Type'
@@ -190,7 +194,7 @@ Expr4
         { $1 }
     | Import
         { Embed $1 }
-    | Expr4 '.' label
+    | Expr5 '.' label
         { Field $1 $3 }
     | '(' Expr0 ')'
         { $2 }
