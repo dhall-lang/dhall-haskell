@@ -105,9 +105,7 @@ Expr0
         { $1 }
 
 Expr1
-    : Expr2
-        { $1 }
-    | '\\' '(' label ':' Expr1 ')' '->' Expr1
+    : '\\' '(' label ':' Expr1 ')' '->' Expr1
         { Lam $3 $5 $8 }
     | 'forall' '(' label ':' Expr1 ')' '->' Expr1
         { Pi $3 $5 $8 }
@@ -117,13 +115,11 @@ Expr1
         { IntegerLit (negate (fromIntegral $2)) }
     | Lets 'in' Expr1
         { Lets $1 $3 }
+    | Expr2
+        { $1 }
 
 Expr2
-    : Expr2 Expr3
-        { App $1 $2 }
-    | 'Maybe' Expr2
-        { Maybe $2 }
-    | Expr2 '&&' Expr2
+    : Expr2 '&&' Expr2
         { BoolAnd $1 $3 }
     | Expr2 '||' Expr2
         { BoolOr $1 $3 }
@@ -139,6 +135,14 @@ Expr2
         { $1 }
 
 Expr3
+    : Expr3 Expr4
+        { App $1 $2 }
+    | 'Maybe' Expr4
+        { Maybe $2 }
+    | Expr4
+        { $1 }
+
+Expr4
     : label
         { Var $1 }
     | 'Type'
@@ -189,7 +193,7 @@ Expr3
         { BoolIf $2 $4 $6 }
     | Import
         { Embed $1 }
-    | Expr3 '.' label
+    | Expr4 '.' label
         { Field $1 $3 }
     | '(' Expr0 ')'
         { $2 }
