@@ -107,15 +107,15 @@ Expr0
 Expr1
     : Expr2
         { $1 }
-    | '\\' '(' label ':' Expr1 ')' '->' Expr0
+    | '\\' '(' label ':' Expr1 ')' '->' Expr1
         { Lam $3 $5 $8 }
-    | 'forall' '(' label ':' Expr1 ')' '->' Expr0
+    | 'forall' '(' label ':' Expr1 ')' '->' Expr1
         { Pi $3 $5 $8 }
-    | Expr2 '->' Expr0
+    | Expr2 '->' Expr1
         { Pi "_" $1 $3 }
     | '-' number
         { IntegerLit (negate (fromIntegral $2)) }
-    | Lets 'in' Expr0
+    | Lets 'in' Expr1
         { Lets $1 $3 }
 
 Expr2
@@ -185,7 +185,7 @@ Expr3
         { $1 }
     | Record
         { $1 }
-    | 'if' Expr0 'then' Expr0 'else' Expr0
+    | 'if' Expr0 'then' Expr1 'else' Expr1
         { BoolIf $2 $4 $6 }
     | Import
         { Embed $1 }
