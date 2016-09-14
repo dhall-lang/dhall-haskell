@@ -106,7 +106,6 @@ import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
-import qualified Data.Text.Lazy.Encoding          as Text
 import qualified Dhall.Core                       as Dhall
 import qualified Dhall.Parser                     as Dhall
 import qualified Network.HTTP.Client              as HTTP
@@ -304,7 +303,7 @@ loadDynamic p = do
     paths <- zoom stack State.get
 
     let readURL url = do
-            request <- liftIO (HTTP.parseUrl (Text.unpack url))
+            request <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
             m       <- needManager
             let httpLbs' = do
                     HTTP.httpLbs request m `catch` (\e -> case e of
@@ -345,7 +344,7 @@ loadDynamic p = do
                 -- Also try the fallback in case of a parse error, since the
                 -- parse error might signify that this URL points to a directory
                 -- list
-                request  <- liftIO (HTTP.parseUrl (Text.unpack url))
+                request  <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
                 let request' = request { HTTP.path = HTTP.path request <> "/@" }
                 m        <- needManager
                 response <- liftIO
@@ -361,7 +360,7 @@ loadStatic :: Path -> StateT Status IO (Expr X)
 loadStatic path = do
     paths <- zoom stack State.get
 
-    let local (URL url) = case HTTP.parseUrl (Text.unpack url) of
+    let local (URL url) = case HTTP.parseUrlThrow (Text.unpack url) of
             Nothing      -> False
             Just request -> case HTTP.host request of
                 "127.0.0.1" -> True
