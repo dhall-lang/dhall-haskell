@@ -40,6 +40,7 @@ module Dhall.Core (
 import Control.Applicative (Applicative(..), (<$>))
 #endif
 import Control.Exception (Exception)
+import Control.Monad.Trans.State.Strict (State)
 import Data.Foldable
 import Data.Map (Map)
 import Data.Monoid ((<>))
@@ -281,7 +282,7 @@ match xL xR ((xL', xR'):xs)
 propEqual :: Expr X -> Expr X -> Bool
 propEqual eL0 eR0 = State.evalState (go (normalize eL0) (normalize eR0)) []
   where
---  go :: Expr a -> Expr a -> State [(Text, Text)] Bool
+    go :: Expr X -> Expr X -> State [(Text, Text)] Bool
     go (Const Star) (Const Star) = return True
     go (Const Box) (Const Box) = return True
     go (Var xL) (Var xR) = do
