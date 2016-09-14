@@ -196,12 +196,6 @@ data Expr a
     | TextLit Text
     -- | > TextAppend x y                  ~  x <> y
     | TextAppend (Expr a) (Expr a)
-    -- | > Maybe a                         ~  Maybe a
-    | Maybe (Expr a)
-    -- | > Nothing                         ~  Nothing
-    | Nothing_
-    -- | > Just_                           ~  Just
-    | Just_
     -- | > List t                          ~  [ t ]
     | List (Expr a)
     -- | > ListLit t [x, y, z]             ~  [ x, y, z : t ]
@@ -261,9 +255,6 @@ instance Monad Expr where
     Text             >>= _ = Text
     TextLit t        >>= _ = TextLit t
     TextAppend l r   >>= k = TextAppend (l >>= k) (r >>= k)
-    Maybe t          >>= k = Maybe (t >>= k)
-    Nothing_         >>= _ = Nothing_
-    Just_            >>= _ = Just_
     List t           >>= k = List (t >>= k)
     ListLit t es     >>= k = ListLit (t >>= k) es'
       where
@@ -340,9 +331,6 @@ instance Eq a => Eq (Expr a) where
         go (TextAppend xL yL) (TextAppend xR yR) = do
             b1 <- go xL xR
             if b1 then go yL yR else return False
-        go (Maybe tL) (Maybe tR) = go tL tR
-        go Nothing_ Nothing_ = return True
-        go Just_ Just_ = return True
         go (List tL) (List tR) = go tL tR
         go (ListLit tL esL) (ListLit tR esR) = do
             b1 <- go tL tR
@@ -443,7 +431,6 @@ buildExpr3  a                 = buildExpr4 a
 
 buildExpr4 :: Buildable a => Expr a -> Builder
 buildExpr4 (App a b) = buildExpr4 a <> " " <> buildExpr5 b
-buildExpr4 (Maybe a) = "Maybe " <> buildExpr5 a
 buildExpr4  a        = buildExpr5 a
 
 buildExpr5 :: Buildable a => Expr a -> Builder
@@ -465,10 +452,6 @@ buildExpr5 Double =
     "Double"
 buildExpr5 Text =
     "Text"
-buildExpr5 Nothing_ =
-    "Nothing"
-buildExpr5 Just_ =
-    "Just"
 buildExpr5 ListBuild =
     "List/build"
 buildExpr5 ListFold =
@@ -563,7 +546,6 @@ data TypeMessage
     | AnnotMismatch (Expr X) (Expr X) (Expr X)
     | Untyped Const
     | InvalidElement Int Int (Expr X) (Expr X) (Expr X)
-    | InvalidMaybeTypeParam (Expr X)
     | InvalidListTypeParam (Expr X)
     | InvalidListType Bool (Expr X)
     | InvalidPredicate (Expr X) (Expr X)
@@ -758,30 +740,6 @@ the compiler cannot infer what `Kind` belongs to
 |]
       where
         txt = Text.toStrict (pretty c)
-
-    build (InvalidMaybeTypeParam expr) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Invalid type argument for `Maybe`
-
-Explanation: You can wrap any type `a` in a `Maybe` to generate the type of an
-optional term: `Maybe a`.  For example, `Maybe Bool` denotes an optional `Bool`
-
-Only types can be wrapped in `Maybe` to generated an optional type.  You
-*cannot* wrap terms or kinds in `Maybe`:
-
-    Maybe True  -- This is not a valid optional type because `True` not a type
-    Maybe Type  -- This is not a valid optional type because `Type` not a type
-
-... but you can wrap terms in `Just` and `Nothing`:
-
-    Just Bool True -- This is valid and has type `Maybe Bool`
-    Nothing Bool   -- This is valid and also has type `Maybe Bool`
-
-You incorrectly wrapped this expression that is not a type inside of a `Maybe`:
-↳ $txt
-|]
-      where
-        txt = Text.toStrict (pretty expr)
 
     build (InvalidListTypeParam expr) =
         Builder.fromText [NeatInterpolation.text|
@@ -1213,7 +1171,6 @@ subst x e (BoolIf x' y z   ) = BoolIf (subst x e x') (subst x e y) (subst x e z)
 subst x e (NaturalPlus  l r) = NaturalPlus  (subst x e l) (subst x e r)
 subst x e (NaturalTimes l r) = NaturalTimes (subst x e l) (subst x e r)
 subst x e (TextAppend   l r) = TextAppend   (subst x e l) (subst x e r)
-subst x e (Maybe   t       ) = Maybe (subst x e t)
 subst x e (List    t       ) = List (subst x e t)
 subst x e (ListLit t es    ) = ListLit (subst x e t) es'
   where
@@ -1387,16 +1344,6 @@ typeWith ctx e@(TextAppend l r  ) = do
         Text -> return ()
         _    -> Left (TypeError ctx e (CantAppend False r tr))
     return Text
-typeWith ctx e@(Maybe t         ) = do
-    s <- fmap normalize (typeWith ctx t)
-    case s of
-        Const Star -> return ()
-        _          -> Left (TypeError ctx e (InvalidMaybeTypeParam t))
-    return (Const Star)
-typeWith _      Nothing_          = do
-    return (Pi "a" (Const Star) (Maybe "a"))
-typeWith _      Just_             = do
-    return (Pi "a" (Const Star) (Pi "_" "a" (Maybe "a")))
 typeWith ctx e@(List t          ) = do
     s <- fmap normalize (typeWith ctx t)
     case s of
@@ -1583,7 +1530,6 @@ normalize e = case e of
       where
         x' = normalize x
         y' = normalize y
-    Maybe t          -> Maybe (normalize t)
     List t           -> List (normalize t)
     ListLit t es     -> ListLit (normalize t) (fmap normalize es)
     ListConcat x y   ->

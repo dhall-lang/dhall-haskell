@@ -75,9 +75,6 @@ import qualified NeatInterpolation
     'Integer'      { Dhall.Lexer.Integer          }
     'Double'       { Dhall.Lexer.Double           }
     'Text'         { Dhall.Lexer.Text             }
-    'Maybe'        { Dhall.Lexer.Maybe            }
-    'Nothing'      { Dhall.Lexer.Nothing_         }
-    'Just'         { Dhall.Lexer.Just_            }
     'List/build'   { Dhall.Lexer.ListBuild        }
     'List/fold'    { Dhall.Lexer.ListFold         }
     text           { Dhall.Lexer.TextLit    $$    }
@@ -140,8 +137,6 @@ Expr3
 Expr4
     : Expr4 Expr5
         { App $1 $2 }
-    | 'Maybe' Expr5
-        { Maybe $2 }
     | Expr5
         { $1 }
 
@@ -164,10 +159,6 @@ Expr5
         { Double }
     | 'Text'
         { Text }
-    | 'Nothing'
-        { Nothing_ }
-    | 'Just'
-        { Just_ }
     | 'List/build'
         { ListBuild }
     | 'List/fold'

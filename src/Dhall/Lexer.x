@@ -86,9 +86,6 @@ tokens :-
     "Integer"                           { emit Integer          }
     "Double"                            { emit Double           }
     "Text"                              { emit Text             }
-    "Maybe"                             { emit Maybe            }
-    "Nothing"                           { emit Nothing_         }
-    "Just"                              { emit Just_            }
     "List/build"                        { emit ListBuild        }
     "List/fold"                         { emit ListFold         }
     \" ([^\"] | \\.)* \"                { capture (TextLit . str)        }
@@ -194,9 +191,6 @@ data Token
     | Text
     | Double
     | DoubleLit Double
-    | Maybe
-    | Nothing_
-    | Just_
     | ListBuild
     | ListFold
     | TextLit Text
@@ -286,12 +280,6 @@ instance Buildable Token where
         = "Double"
     build (DoubleLit n)
         = Data.Text.Buildable.build n
-    build  Maybe
-        = "Maybe"
-    build  Nothing_
-        = "Nothing"
-    build  Just_
-        = "Just"
     build  ListBuild
         = "List/build"
     build  ListFold
