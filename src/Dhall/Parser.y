@@ -144,9 +144,9 @@ Expr5
     : label
         { Var $1 }
     | 'Type'
-        { Const Star }
+        { Const Type }
     | 'Kind'
-        { Const Box }
+        { Const Kind }
     | 'Bool'
         { Bool }
     | 'Natural'

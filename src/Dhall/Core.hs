@@ -82,21 +82,21 @@ import qualified NeatInterpolation
 > ⊦ □ ↝ □ : □
 
 -}
-data Const = Star | Box deriving (Show, Bounded, Enum)
+data Const = Type | Kind deriving (Show, Bounded, Enum)
 
 instance Buildable Const where
-    build Star = "Type"
-    build Box  = "Kind"
+    build Type = "Type"
+    build Kind = "Kind"
 
 axiom :: Const -> Either TypeError Const
-axiom Star = return Box
-axiom Box  = Left (TypeError Context.empty (Const Box) (Untyped Box))
+axiom Type = return Kind
+axiom Kind = Left (TypeError Context.empty (Const Kind) (Untyped Kind))
 
 rule :: Const -> Const -> Either () Const
-rule Star Box  = Left ()
-rule Star Star = return Star
-rule Box  Box  = return Box
-rule Box  Star = return Star
+rule Type Kind = Left ()
+rule Type Type = return Type
+rule Kind Kind = return Kind
+rule Kind Type = return Type
 
 -- | Path to an external resource
 data Path
@@ -283,8 +283,8 @@ propEqual :: Expr X -> Expr X -> Bool
 propEqual eL0 eR0 = State.evalState (go (normalize eL0) (normalize eR0)) []
   where
     go :: Expr X -> Expr X -> State [(Text, Text)] Bool
-    go (Const Star) (Const Star) = return True
-    go (Const Box) (Const Box) = return True
+    go (Const Type) (Const Type) = return True
+    go (Const Kind) (Const Kind) = return True
     go (Var xL) (Var xR) = do
         ctx <- State.get
         return (match xL xR ctx)
@@ -379,9 +379,9 @@ buildExpr4  a        = buildExpr5 a
 buildExpr5 :: Buildable a => Expr a -> Builder
 buildExpr5 (Var a) =
     build a
-buildExpr5 (Const Star) =
+buildExpr5 (Const Type) =
     "Type"
-buildExpr5 (Const Box) =
+buildExpr5 (Const Kind) =
     "Kind"
 buildExpr5 Bool =
     "Bool"
@@ -1215,7 +1215,7 @@ typeWith ctx e@(Annot x t       ) = do
             let nf_t' = normalize t'
             Left (TypeError ctx e (AnnotMismatch x nf_t nf_t'))
 typeWith _      Bool              = do
-    return (Const Star)
+    return (Const Type)
 typeWith _     (BoolLit _       ) = do
     return Bool
 typeWith ctx e@(BoolAnd l r     ) = do
@@ -1254,13 +1254,13 @@ typeWith ctx e@(BoolIf x y z    ) = do
         else Left (TypeError ctx e (IfBranchMismatch y z ty tz))
     return ty
 typeWith _      Natural           = do
-    return (Const Star)
+    return (Const Type)
 typeWith _     (NaturalLit _    ) = do
     return Natural
 typeWith _      NaturalFold       = do
     return
         (Pi "_" Natural
-            (Pi "natural" (Const Star)
+            (Pi "natural" (Const Type)
                 (Pi "succ" (Pi "pred" "natural" "natural")
                     (Pi "zero" "natural" "natural") ) ) )
 typeWith ctx e@(NaturalPlus  l r) = do
@@ -1286,15 +1286,15 @@ typeWith ctx e@(NaturalTimes l r) = do
         _       -> Left (TypeError ctx e (CantMultiply False r tr))
     return Natural
 typeWith _      Integer           = do
-    return (Const Star)
+    return (Const Type)
 typeWith _     (IntegerLit _    ) = do
     return Integer
 typeWith _      Double            = do
-    return (Const Star)
+    return (Const Type)
 typeWith _     (DoubleLit _     ) = do
     return Double
 typeWith _      Text              = do
-    return (Const Star)
+    return (Const Type)
 typeWith _     (TextLit _       ) = do
     return Text
 typeWith ctx e@(TextAppend l r  ) = do
@@ -1311,13 +1311,13 @@ typeWith ctx e@(TextAppend l r  ) = do
 typeWith ctx e@(List t          ) = do
     s <- fmap normalize (typeWith ctx t)
     case s of
-        Const Star -> return ()
+        Const Type -> return ()
         _          -> Left (TypeError ctx e (InvalidListTypeParam t))
-    return (Const Star)
+    return (Const Type)
 typeWith ctx e@(ListLit t xs    ) = do
     s <- fmap normalize (typeWith ctx t)
     case s of
-        Const Star -> return ()
+        Const Type -> return ()
         _ -> Left (TypeError ctx e (InvalidListType (Data.Vector.null xs) t))
     let n = Data.Vector.length xs
     flip Data.Vector.imapM_ xs (\i x -> do
@@ -1331,17 +1331,17 @@ typeWith ctx e@(ListLit t xs    ) = do
     return (List t)
 typeWith _      ListBuild         = do
     return
-        (Pi "a" (Const Star)
+        (Pi "a" (Const Type)
             (Pi "_"
-                (Pi "list" (Const Star)
+                (Pi "list" (Const Type)
                     (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
                         (Pi "nil" "list" "list") ) )
                 (List "a") ) )
 typeWith _      ListFold          = do
     return
-        (Pi "a" (Const Star)
+        (Pi "a" (Const Type)
             (Pi "_" (List "a")
-                (Pi "list" (Const Star)
+                (Pi "list" (Const Type)
                     (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
                         (Pi "nil" "list" "list")) ) ) )
 typeWith ctx e@(ListConcat l r  ) = do
@@ -1362,10 +1362,10 @@ typeWith ctx e@(Record    kts   ) = do
     let process (k, t) = do
             s <- fmap normalize (typeWith ctx t)
             case normalize s of
-                Const Star -> return ()
+                Const Type -> return ()
                 _          -> Left (TypeError ctx e (InvalidFieldType k t))
     mapM_ process (Data.Map.toList kts)
-    return (Const Star)
+    return (Const Type)
 typeWith ctx   (RecordLit kvs   ) = do
     let process (k, v) = do
             t <- typeWith ctx v
