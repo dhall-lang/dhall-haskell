@@ -81,7 +81,7 @@ import qualified NeatInterpolation
 > ⊦ □ ↝ □ : □
 
 -}
-data Const = Star | Box deriving (Eq, Show, Bounded, Enum)
+data Const = Star | Box deriving (Show, Bounded, Enum)
 
 instance Buildable Const where
     build Star = "Type"
@@ -91,8 +91,8 @@ axiom :: Const -> Either TypeError Const
 axiom Star = return Box
 axiom Box  = Left (TypeError Context.empty (Const Box) (Untyped Box))
 
-rule :: Const -> Const -> Either TypeError Const
-rule Star Box  = return Box
+rule :: Const -> Const -> Either () Const
+rule Star Box  = Left ()
 rule Star Star = return Star
 rule Box  Box  = return Box
 rule Box  Star = return Star
@@ -117,9 +117,6 @@ instance Buildable Path where
 
 -- | Like `Data.Void.Void`, except with a shorter inferred type
 newtype X = X { absurd :: forall a . a }
-
-instance Eq X where
-    _ == _ = True
 
 instance Show X where
     show = absurd
@@ -281,100 +278,45 @@ match xL xR ((xL', xR'):xs)
     |              xR == xR' = False
     | otherwise              = match xL xR xs
 
-instance Eq a => Eq (Expr a) where
-    eL0 == eR0 = State.evalState (go (normalize eL0) (normalize eR0)) []
-      where
---      go :: Expr a -> Expr a -> State [(Text, Text)] Bool
-        go (Const cL) (Const cR) = return (cL == cR)
-        go (Var xL) (Var xR) = do
-            ctx <- State.get
-            return (match xL xR ctx)
-        go (Lam xL tL bL) (Lam xR tR bR) = do
-            ctx <- State.get
-            eq1 <- go tL tR
-            if eq1
-                then do
-                    State.put ((xL, xR):ctx)
-                    eq2 <- go bL bR
-                    State.put ctx
-                    return eq2
-                else return False
-        go (Pi xL tL bL) (Pi xR tR bR) = do
-            ctx <- State.get
-            eq1 <- go tL tR
-            if eq1
-                then do
-                    State.put ((xL, xR):ctx)
-                    eq2 <- go bL bR
-                    State.put ctx
-                    return eq2
-                else return False
-        go (App fL aL) (App fR aR) = do
-            b1 <- go fL fR
-            if b1 then go aL aR else return False
-        go Bool Bool = return True
-        go (BoolLit x) (BoolLit y) = return (x == y)
-        go (BoolAnd xL yL) (BoolAnd xR yR) = do
-            b <- go xL xR
-            if b then go yL yR else return False
-        go (BoolOr xL yL) (BoolOr xR yR) = do
-            b <- go xL xR
-            if b then go yL yR else return False
-        go Natural Natural = return True
-        go (NaturalLit x) (NaturalLit y) = return (x == y)
-        go Integer Integer = return True
-        go (IntegerLit x) (IntegerLit y) = return (x == y)
-        go Double Double = return True
-        go (DoubleLit x) (DoubleLit y) = return (x == y)
-        go Text Text = return True
-        go (TextLit x) (TextLit y) = return (x == y)
-        go (TextAppend xL yL) (TextAppend xR yR) = do
-            b1 <- go xL xR
-            if b1 then go yL yR else return False
-        go (List tL) (List tR) = go tL tR
-        go (ListLit tL esL) (ListLit tR esR) = do
-            b1 <- go tL tR
-            if b1
-                then fmap and (Data.Vector.zipWithM go esL esR)
-                else return False
-        go ListBuild ListBuild = return True
-        go ListFold ListFold = return True
-        go NaturalFold NaturalFold = return True
-        go (ListConcat xL yL) (ListConcat xR yR) = do
-            b1 <- go xL xR
-            if b1 then go yL yR else return False
-        go (NaturalPlus xL yL) (NaturalPlus xR yR) = do
-            b <- go xL xR
-            if b then go yL yR else return False
-        go (NaturalTimes xL yL) (NaturalTimes xR yR) = do
-            b <- go xL xR
-            if b then go yL yR else return False
-        go (Record    ktsL0) (Record    ktsR0) = do
-            let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
-                    | kL == kR = do
-                        b <- go tL tR
-                        if b
-                            then loop ktsL ktsR
-                            else return False
-                loop [] [] = return True
-                loop _  _  = return False
-            loop (Data.Map.toList ktsL0) (Data.Map.toList ktsR0)
-        go (RecordLit kvsL0) (RecordLit kvsR0) = do
-            let loop ((kL, vL):kvsL) ((kR, vR):kvsR)
-                    | kL == kR = do
-                        b <- go vL vR
-                        if b
-                            then loop kvsL kvsR
-                            else return False
-                    | otherwise = return False
-                loop [] [] = return True
-                loop _  _  = return False
-            loop (Data.Map.toList kvsL0) (Data.Map.toList kvsR0)
-        go (Embed pL) (Embed pR) = return (pL == pR)
-        go (Field rL xL) (Field rR xR)
-            | xL == xR  = go rL rR
-            | otherwise = return False
-        go _ _ = return False
+propEqual :: Expr X -> Expr X -> Bool
+propEqual eL0 eR0 = State.evalState (go (normalize eL0) (normalize eR0)) []
+  where
+--  go :: Expr a -> Expr a -> State [(Text, Text)] Bool
+    go (Const Star) (Const Star) = return True
+    go (Const Box) (Const Box) = return True
+    go (Var xL) (Var xR) = do
+        ctx <- State.get
+        return (match xL xR ctx)
+    go (Pi xL tL bL) (Pi xR tR bR) = do
+        ctx <- State.get
+        eq1 <- go tL tR
+        if eq1
+            then do
+                State.put ((xL, xR):ctx)
+                eq2 <- go bL bR
+                State.put ctx
+                return eq2
+            else return False
+    go (App fL aL) (App fR aR) = do
+        b1 <- go fL fR
+        if b1 then go aL aR else return False
+    go Bool Bool = return True
+    go Natural Natural = return True
+    go Integer Integer = return True
+    go Double Double = return True
+    go Text Text = return True
+    go (List tL) (List tR) = go tL tR
+    go (Record    ktsL0) (Record    ktsR0) = do
+        let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
+                | kL == kR = do
+                    b <- go tL tR
+                    if b
+                        then loop ktsL ktsR
+                        else return False
+            loop [] [] = return True
+            loop _  _  = return False
+        loop (Data.Map.toList ktsL0) (Data.Map.toList ktsR0)
+    go _ _ = return False
 
 instance IsString (Expr a)
   where
@@ -560,6 +502,7 @@ data TypeMessage
     | ElementMismatch (Expr X) (Expr X)
     | CantAdd Bool (Expr X) (Expr X)
     | CantMultiply Bool (Expr X) (Expr X)
+    | NoDependentTypes (Expr X) (Expr X)
     deriving (Show)
 
 instance Buildable TypeMessage where
@@ -1029,6 +972,24 @@ The left list has elements of type:
     build (CantMultiply b expr0 expr1) =
         buildNaturalOperator "*" b expr0 expr1
 
+    build (NoDependentTypes expr0 expr1) =
+        Builder.fromText [NeatInterpolation.text|
+Error: No dependent types
+
+Explanation: This programming language does not allow functions from terms to
+types.  For example, this is *not* a legal function type:
+
+    Bool -> Type
+
+Your function type is invalid because the input is a term of type:
+↳ $txt0
+... and the output is a type of kind:
+↳ $txt1
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (pretty expr1)
+
 indent :: Data.Text.Text -> Data.Text.Text
 indent = Data.Text.unlines . fmap ("    " <>) . Data.Text.lines
 
@@ -1220,14 +1181,16 @@ typeWith ctx e@(Pi  x _A _B     ) = do
         Const k -> return k
         _       -> Left (TypeError ctx' e (InvalidOutputType _B))
 
-    fmap Const (rule kA kB)
+    case rule kA kB of
+        Left () -> Left (TypeError ctx e (NoDependentTypes _A _B))
+        Right k -> Right (Const k)
 typeWith ctx e@(App f a         ) = do
     tf <- fmap normalize (typeWith ctx f)
     (x, _A, _B) <- case tf of
         Pi x _A _B -> return (x, _A, _B)
         _          -> Left (TypeError ctx e (NotAFunction f))
     _A' <- typeWith ctx a
-    if _A == _A'
+    if propEqual _A _A'
         then do
             return (subst x a _B)
         else do
@@ -1243,7 +1206,7 @@ typeWith ctx   (Lets ls0 e'     ) = do
     go ctx ls0
 typeWith ctx e@(Annot x t       ) = do
     t' <- typeWith ctx x
-    if t == t'
+    if propEqual t t'
         then do
             return t
         else do
@@ -1285,7 +1248,7 @@ typeWith ctx e@(BoolIf x y z    ) = do
         _    -> Left (TypeError ctx e (InvalidPredicate x tx))
     ty <- fmap normalize (typeWith ctx y)
     tz <- fmap normalize (typeWith ctx z)
-    if ty == tz
+    if propEqual ty tz
         then return ()
         else Left (TypeError ctx e (IfBranchMismatch y z ty tz))
     return ty
@@ -1352,13 +1315,13 @@ typeWith ctx e@(List t          ) = do
     return (Const Star)
 typeWith ctx e@(ListLit t xs    ) = do
     s <- fmap normalize (typeWith ctx t)
-    if s == Const Star
-        then return ()
-        else Left (TypeError ctx e (InvalidListType (Data.Vector.null xs) t))
+    case s of
+        Const Star -> return ()
+        _ -> Left (TypeError ctx e (InvalidListType (Data.Vector.null xs) t))
     let n = Data.Vector.length xs
     flip Data.Vector.imapM_ xs (\i x -> do
         t' <- typeWith ctx x
-        if t == t'
+        if propEqual t t'
             then return ()
             else do
                 let nf_t  = normalize t
@@ -1390,7 +1353,7 @@ typeWith ctx e@(ListConcat l r  ) = do
     er <- case tr of
         List er -> return er
         _       -> Left (TypeError ctx e (CantConcat False r tr))
-    if el == er
+    if propEqual el er
         then return ()
         else Left (TypeError ctx e (ElementMismatch el er))
     return (List el)
