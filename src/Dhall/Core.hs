@@ -1460,10 +1460,13 @@ normalize e = case e of
       where
         x' = normalize x
         y' = normalize y
-    BoolIf (BoolLit True) true _ ->
-        normalize true
-    BoolIf (BoolLit False) _ false ->
-        normalize false
+    BoolIf b true false -> case normalize b of
+        BoolLit True  -> true'
+        BoolLit False -> false'
+        b'            -> BoolIf b' true' false'
+      where
+        true'  = normalize true
+        false' = normalize false
     NaturalPlus  x y ->
         case x' of
             NaturalLit xn ->
