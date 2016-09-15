@@ -27,7 +27,6 @@ module Dhall.Core (
     normalize,
 
     -- * Utilities
-    subst,
     pretty,
 
     -- * Errors
@@ -74,11 +73,10 @@ import qualified NeatInterpolation
 
 > ⊦ * : □
 
-    ... and all four rule pairs are valid:
+    ... and the valid rule pairs are:
 
 > ⊦ * ↝ * : *
 > ⊦ □ ↝ * : *
-> ⊦ * ↝ □ : □
 > ⊦ □ ↝ □ : □
 
 -}
