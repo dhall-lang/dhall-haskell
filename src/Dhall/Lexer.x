@@ -282,6 +282,8 @@ instance Buildable Token where
         = "Double"
     build (DoubleLit n)
         = Data.Text.Buildable.build n
+    build  List
+        = "List"
     build  ListBuild
         = "List/build"
     build  ListFold

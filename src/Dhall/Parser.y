@@ -112,6 +112,8 @@ Expr1
         { Pi "_" $1 $3 }
     | Lets 'in' Expr1
         { Lets $1 $3 }
+    | '[' Elems ']' ':' 'List' Expr5
+        { ListLit $6 (Data.Vector.fromList $2) }
     | Expr2
         { $1 }
 
@@ -178,8 +180,6 @@ Expr5
         { DoubleLit $1 }
     | text
         { TextLit $1 }
-    | '[' Elems ':' Expr0 ']'
-        { ListLit $4 (Data.Vector.fromList $2) }
     | RecordLit
         { $1 }
     | Record

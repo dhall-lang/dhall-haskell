@@ -15,7 +15,7 @@
 -- 
 -- > $ cat > config
 -- > { foo = 1
--- > , bar = [ 3.0, 4.0, 5.0 : Double ]
+-- > , bar = [3.0, 4.0, 5.0] : List Double
 -- > }
 -- > <Ctrl-D>
 -- 
@@ -92,7 +92,7 @@
 --
 -- > $ cat > makeBools
 -- > \(n : Bool) ->
--- >         [ n && True, n && False, n || True, n || False : Bool ]
+-- >         [ n && True, n && False, n || True, n || False ] : List Bool
 -- > <Ctrl-D>
 --
 -- You can read this as a function of one argument named @n@ of type `Bool`
@@ -105,7 +105,7 @@
 -- is:
 --
 -- > $ dhall typecheck < makeBools
--- > forall (n : Bool) → List Bool
+-- > forall (n : Bool) -> List Bool
 --
 -- This says that @makeBools@ is a function of one argument named @n@ of type
 -- `Bool` that returns a `Vector` of `Bool`s.
@@ -140,7 +140,7 @@
 -- > <Ctrl-D>
 -- > List Bool
 -- > 
--- > [ False, False, True, False : Bool ]
+-- > [ False, False, True, False ] : List Bool
 --
 -- The @dhall@ compiler with no arguments produces two output lines:
 --
@@ -154,7 +154,7 @@
 -- file references.  For example:
 --
 -- > $ dhall
--- > "Hello, " ++ "world!"
+-- > "Hello, " <> "world!"
 -- > <Ctrl-D>
 -- > Text
 -- > 
@@ -208,22 +208,22 @@
 -- > ./makeBools "ABC"
 -- > dhall: 
 -- > dhall: 
--- > Expression: (\(n : Bool) → [ n && True, n && False, n || True, n || False : Bool ]) "ABC"
+-- > Expression: (\(n : Bool) -> [ n && True, n && False, n || True, n || False ] : List Bool) "ABC"
 -- > 
 -- > Error: Function applied to the wrong type or kind of argument
 -- > 
 -- > Explanation: Every function declares what type or kind of argument to accept
 -- > 
--- >     \(x : Bool) → x   -- Anonymous function which only accepts `Bool` arguments
+-- >     \(x : Bool) -> x   -- Anonymous function which only accepts `Bool` arguments
 -- > 
--- >     let f (x : Bool) = x  -- Named function which only accepts `Bool` arguments
+-- >     let f (x : Bool) = x   -- Named function which only accepts `Bool` arguments
 -- >     in  f True
 -- > 
--- >     \(a : Type) → a   -- Anonymous function which only accepts `Type` arguments
+-- >     \(a : Type) -> a   -- Anonymous function which only accepts `Type` arguments
 -- > 
 -- > You *cannot* apply a function to the wrong type or kind of argument:
 -- > 
--- >     (\(x : Bool) → x) "AB"  -- "AB" is `Text`, but the function expects a `Bool`
+-- >     (\(x : Bool) -> x) "A"  -- "A" is `Text`, but the function expects a `Bool`
 -- > 
 -- > You tried to invoke a function which expects an argument of type or kind:
 -- > ↳ Bool
@@ -248,11 +248,11 @@
 -- > $ echo 'True'  > bool1
 -- > $ echo 'False' > bool2
 -- > $ dhall
--- > [ ./bool1 , ./bool2 , ./both : Bool ]
+-- > [ ./bool1 , ./bool2 , ./both ] : List Bool
 -- > <Ctrl-D>
 -- > List Bool
 -- > 
--- > [ True, False, False : Bool ]
+-- > [ True, False, False ] : List Bool
 --
 -- The only restriction is that the Dhall language will forbid cycles in these
 -- file references:
@@ -279,9 +279,9 @@
 -- > $ dhall
 -- > \(n : Bool) -> +10 * +10
 -- > <Ctrl-D>
--- > forall (n : Bool) → Natural
+-- > forall (n : Bool) -> Natural
 -- > 
--- > \(n : Bool) → +100
+-- > \(n : Bool) -> +100
 --
 -- ... and even though the function is still missing the first argument named
 -- @n@ the compiler is smart enough to evaluate the body of the anonymous
@@ -338,7 +338,7 @@ throws (Right r) = return r
 
 >>> input integer "2"
 2
->>> input (vector double) "[ 1.0, 2.0 : Double ]"
+>>> input (vector double) "[ 1.0, 2.0 ] : List Bool"
 [1.0,2.0]
 
     Use `auto` to automatically select which type to decode based on the
@@ -452,7 +452,7 @@ text = Type {..}
 
 {-| Decode a `Vector`
 
->>> input (vector integer) "[ 1, 2, 3 : Integer ]"
+>>> input (vector integer) "[ 1, 2, 3 ] : List Integer"
 [1,2,3]
 -}
 vector :: Type a -> Type (Vector a)
@@ -465,7 +465,7 @@ vector (Type extractIn expectedIn) = Type extractOut expectedOut
 {-| Any value that implements `Interpret` can be automatically decoded based on
     the inferred return type of `input`
 
->>> input auto "[1, 2, 3 : Integer]" :: IO (Vector Integer)
+>>> input auto "[1, 2, 3 ] : List Integer" :: IO (Vector Integer)
 [1,2,3]
 
     This class auto-generates a default implementation for records that
