@@ -52,7 +52,7 @@
 --
 -- > $ ./example
 -- > example: 
--- > Expression: 1 : {{ bar : [ Double ], foo : Integer }}
+-- > Expression: 1 : {{ bar : List Double, foo : Integer }}
 -- > 
 -- > Error: Expression's inferred type does not match annotated type
 -- > 
@@ -72,7 +72,7 @@
 -- > You or the interpreter annotated this expression:
 -- > ↳ 1
 -- > ... with this type or kind:
--- > ↳ {{ bar : [ Double ], foo : Integer }}
+-- > ↳ {{ bar : List Double, foo : Integer }}
 -- > ... but the inferred type of the expression is actually this type or kind:
 -- > ↳ Integer
 --
@@ -105,7 +105,7 @@
 -- is:
 --
 -- > $ dhall typecheck < makeBools
--- > forall (n : Bool) → [ Bool ]
+-- > forall (n : Bool) → List Bool
 --
 -- This says that @makeBools@ is a function of one argument named @n@ of type
 -- `Bool` that returns a `Vector` of `Bool`s.
@@ -138,7 +138,7 @@
 -- > $ dhall
 -- > ./makeBools False
 -- > <Ctrl-D>
--- > [ Bool ]
+-- > List Bool
 -- > 
 -- > [ False, False, True, False : Bool ]
 --
@@ -250,7 +250,7 @@
 -- > $ dhall
 -- > [ ./bool1 , ./bool2 , ./both : Bool ]
 -- > <Ctrl-D>
--- > [ Bool ]
+-- > List Bool
 -- > 
 -- > [ True, False, False : Bool ]
 --
@@ -305,8 +305,6 @@ module Dhall
     , double
     , text
     , vector
-    , pair2
-    , pair3
 
     -- * Re-exports
     , Vector
@@ -369,12 +367,12 @@ input (Type {..}) bytes = do
 
     You can produce `Type`s either explicitly:
 
-> example :: Type (Double, Text)
-> example = pair2 double text
+> example :: Type (Vector Text)
+> example = vector text
 
     ... or implicitly using `auto`:
 
-> example :: Type (Double, Text)
+> example :: Type (Vector Text)
 > example = auto
 
     You can consume `Type`s using the `input` function:
@@ -462,61 +460,7 @@ vector (Type extractIn expectedIn) = Type extractOut expectedOut
   where
     extractOut (ListLit _ es) = traverse extractIn es
 
-    expectedOut = List expectedIn
-
-{-| Decode a 2-tuple
-
->>> input (pair2 integer integer) "{ _1 = 1, _2 = 2 }"
-(1,2)
--}
-pair2 :: Type a -> Type b -> Type (a, b)
-pair2
-    (Type extractA expectedA)
-    (Type extractB expectedB) = Type {..}
-  where
-    extract (RecordLit m) = do
-        eA <- Data.Map.lookup "_1" m
-        vA <- extractA eA
-        eB <- Data.Map.lookup "_2" m
-        vB <- extractB eB
-        return (vA, vB)
-    extract  _            = empty
-
-    expected = Record (Data.Map.fromList kts)
-      where
-        kts =
-            [ ("_1", expectedA)
-            , ("_2", expectedB)
-            ]
-
-{-| Decode a 3-tuple
-
->>> input (pair3 integer integer integer) "{ _1 = 1, _2 = 2, _3 = 3 }"
-(1,2,3)
--}
-pair3 :: Type a -> Type b -> Type c -> Type (a, b, c)
-pair3
-    (Type extractA expectedA)
-    (Type extractB expectedB)
-    (Type extractC expectedC) = Type {..}
-  where
-    extract (RecordLit m) = do
-        eA <- Data.Map.lookup "_1" m
-        vA <- extractA eA
-        eB <- Data.Map.lookup "_2" m
-        vB <- extractB eB
-        eC <- Data.Map.lookup "_3" m
-        vC <- extractC eC
-        return (vA, vB, vC)
-    extract  _            = empty
-
-    expected = Record (Data.Map.fromList kts)
-      where
-        kts =
-            [ ("_1", expectedA)
-            , ("_2", expectedB)
-            , ("_3", expectedC)
-            ]
+    expectedOut = App List expectedIn
 
 {-| Any value that implements `Interpret` can be automatically decoded based on
     the inferred return type of `input`
@@ -550,12 +494,6 @@ instance Interpret Text where
 
 instance Interpret a => Interpret (Vector a) where
     auto = vector auto
-
-instance (Interpret a, Interpret b) => Interpret (a, b) where
-    auto = pair2 auto auto
-
-instance (Interpret a, Interpret b, Interpret c) => Interpret (a, b, c) where
-    auto = pair3 auto auto auto
 
 class GenericInterpret f where
     genericAuto :: Type (f a)

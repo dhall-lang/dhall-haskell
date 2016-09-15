@@ -86,6 +86,7 @@ tokens :-
     "Integer"                           { emit Integer          }
     "Double"                            { emit Double           }
     "Text"                              { emit Text             }
+    "List"                              { emit List             }
     "List/build"                        { emit ListBuild        }
     "List/fold"                         { emit ListFold         }
     \" ([^\"] | \\.)* \"                { capture (TextLit . str)        }
@@ -191,6 +192,7 @@ data Token
     | Text
     | Double
     | DoubleLit Double
+    | List
     | ListBuild
     | ListFold
     | TextLit Text

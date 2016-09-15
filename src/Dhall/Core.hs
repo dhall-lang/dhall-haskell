@@ -192,8 +192,8 @@ data Expr a
     | TextLit Text
     -- | > TextAppend x y                  ~  x <> y
     | TextAppend (Expr a) (Expr a)
-    -- | > List t                          ~  [ t ]
-    | List (Expr a)
+    -- | > List                            ~  List
+    | List
     -- | > ListLit t [x, y, z]             ~  [ x, y, z : t ]
     | ListLit (Expr a) (Vector (Expr a))
     -- | > ListBuild                       ~  List/build
@@ -251,7 +251,7 @@ instance Monad Expr where
     Text             >>= _ = Text
     TextLit t        >>= _ = TextLit t
     TextAppend l r   >>= k = TextAppend (l >>= k) (r >>= k)
-    List t           >>= k = List (t >>= k)
+    List             >>= _ = List
     ListLit t es     >>= k = ListLit (t >>= k) es'
       where
         es' = do
@@ -304,7 +304,7 @@ propEqual eL0 eR0 = State.evalState (go (normalize eL0) (normalize eR0)) []
     go Integer Integer = return True
     go Double Double = return True
     go Text Text = return True
-    go (List tL) (List tR) = go tL tR
+    go List List = return True
     go (Record    ktsL0) (Record    ktsR0) = do
         let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
                 | kL == kR = do
@@ -397,8 +397,8 @@ buildExpr5 ListBuild =
     "List/build"
 buildExpr5 ListFold =
     "List/fold"
-buildExpr5 (List a) =
-    "[ " <> buildExpr1 a <> " ]"
+buildExpr5 List =
+    "List"
 buildExpr5 (BoolLit True) =
     "True"
 buildExpr5 (BoolLit False) =
@@ -487,7 +487,6 @@ data TypeMessage
     | AnnotMismatch (Expr X) (Expr X) (Expr X)
     | Untyped Const
     | InvalidElement Int Int (Expr X) (Expr X) (Expr X)
-    | InvalidListTypeParam (Expr X)
     | InvalidListType Bool (Expr X)
     | InvalidPredicate (Expr X) (Expr X)
     | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
@@ -682,30 +681,6 @@ the compiler cannot infer what `Kind` belongs to
 |]
       where
         txt = Text.toStrict (pretty c)
-
-    build (InvalidListTypeParam expr) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Invalid type of list
-
-Explanation: You can wrap any type `a` in brackets to generate the type of a
-list of `a`s: `[ a ]`.  For example, `[ Bool ]` denotes a list of `Bool`s.
-
-Only types can be wrapped in brackets to generated an optional type.  You
-*cannot* wrap terms or kinds in brackets:
-
-    [ True ]  -- This is not a valid type of list because `True` is not a type
-    [ Type ]  -- This is not a valid type of list because `Type` is not a type
-
-If you meant to create a 1-element list, then include the element type at the
-end of the list to indicate that you meant a list term and not a list type:
-
-    [ True : Bool ] -- This is a valid 1-element list term
-
-The following expression you provided is not a valid element type for a list:
-↳ $txt
-|]
-      where
-        txt = Text.toStrict (pretty expr)
 
     build (InvalidPredicate expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
@@ -1131,7 +1106,6 @@ subst x e (BoolIf x' y z   ) = BoolIf (subst x e x') (subst x e y) (subst x e z)
 subst x e (NaturalPlus  l r) = NaturalPlus  (subst x e l) (subst x e r)
 subst x e (NaturalTimes l r) = NaturalTimes (subst x e l) (subst x e r)
 subst x e (TextAppend   l r) = TextAppend   (subst x e l) (subst x e r)
-subst x e (List    t       ) = List (subst x e t)
 subst x e (ListLit t es    ) = ListLit (subst x e t) es'
   where
     es' = do
@@ -1306,12 +1280,8 @@ typeWith ctx e@(TextAppend l r  ) = do
         Text -> return ()
         _    -> Left (TypeError ctx e (CantAppend False r tr))
     return Text
-typeWith ctx e@(List t          ) = do
-    s <- fmap normalize (typeWith ctx t)
-    case s of
-        Const Type -> return ()
-        _          -> Left (TypeError ctx e (InvalidListTypeParam t))
-    return (Const Type)
+typeWith _      List              = do
+    return (Pi "_" (Const Type) (Const Type))
 typeWith ctx e@(ListLit t xs    ) = do
     s <- fmap normalize (typeWith ctx t)
     case s of
@@ -1326,7 +1296,7 @@ typeWith ctx e@(ListLit t xs    ) = do
                 let nf_t  = normalize t
                 let nf_t' = normalize t'
                 Left (TypeError ctx e (InvalidElement i n x nf_t nf_t')) )
-    return (List t)
+    return (App List t)
 typeWith _      ListBuild         = do
     return
         (Pi "a" (Const Type)
@@ -1334,28 +1304,28 @@ typeWith _      ListBuild         = do
                 (Pi "list" (Const Type)
                     (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
                         (Pi "nil" "list" "list") ) )
-                (List "a") ) )
+                (App List "a") ) )
 typeWith _      ListFold          = do
     return
         (Pi "a" (Const Type)
-            (Pi "_" (List "a")
+            (Pi "_" (App List "a")
                 (Pi "list" (Const Type)
                     (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
                         (Pi "nil" "list" "list")) ) ) )
 typeWith ctx e@(ListConcat l r  ) = do
     tl <- fmap normalize (typeWith ctx l)
     el <- case tl of
-        List el -> return el
-        _       -> Left (TypeError ctx e (CantConcat True l tl))
+        App List el -> return el
+        _           -> Left (TypeError ctx e (CantConcat True l tl))
 
     tr <- fmap normalize (typeWith ctx r)
     er <- case tr of
-        List er -> return er
-        _       -> Left (TypeError ctx e (CantConcat False r tr))
+        App List er -> return er
+        _           -> Left (TypeError ctx e (CantConcat False r tr))
     if propEqual el er
         then return ()
         else Left (TypeError ctx e (ElementMismatch el er))
-    return (List el)
+    return (App List el)
 typeWith ctx e@(Record    kts   ) = do
     let process (k, t) = do
             s <- fmap normalize (typeWith ctx t)
@@ -1411,7 +1381,8 @@ normalize e = case e of
                 | check     -> ListLit t (buildVector k')
                 | otherwise -> App f' a'
               where
-                labeled = normalize (App (App (App k (List t)) "Cons") "Nil")
+                labeled =
+                    normalize (App (App (App k (App List t)) "Cons") "Nil")
 
                 k' cons nil = go labeled
                   where
@@ -1495,7 +1466,6 @@ normalize e = case e of
       where
         x' = normalize x
         y' = normalize y
-    List t           -> List (normalize t)
     ListLit t es     -> ListLit (normalize t) (fmap normalize es)
     ListConcat x y   ->
         case x' of

@@ -75,6 +75,7 @@ import qualified NeatInterpolation
     'Integer'      { Dhall.Lexer.Integer          }
     'Double'       { Dhall.Lexer.Double           }
     'Text'         { Dhall.Lexer.Text             }
+    'List'         { Dhall.Lexer.List             }
     'List/build'   { Dhall.Lexer.ListBuild        }
     'List/fold'    { Dhall.Lexer.ListFold         }
     text           { Dhall.Lexer.TextLit    $$    }
@@ -159,12 +160,12 @@ Expr5
         { Double }
     | 'Text'
         { Text }
+    | 'List'
+        { List }
     | 'List/build'
         { ListBuild }
     | 'List/fold'
         { ListFold }
-    | '[' Expr1 ']'
-        { List $2 }
     | 'True'
         { BoolLit True }
     | 'False'
