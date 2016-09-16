@@ -89,6 +89,7 @@ tokens :-
     "List"                              { emit List             }
     "List/build"                        { emit ListBuild        }
     "List/fold"                         { emit ListFold         }
+    "List/indexed"                      { emit ListIndexed      }
     "Maybe"                             { emit Maybe            }
     "Maybe/fold"                        { emit MaybeFold        }
     \" ([^\"] | \\.)* \"                { capture (TextLit . str)        }
@@ -197,6 +198,7 @@ data Token
     | List
     | ListBuild
     | ListFold
+    | ListIndexed
     | Maybe
     | MaybeFold
     | TextLit Text

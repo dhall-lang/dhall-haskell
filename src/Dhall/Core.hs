@@ -201,6 +201,8 @@ data Expr a
     | ListBuild
     -- | > ListFold                        ~  List/fold
     | ListFold
+    -- | > ListIndexed                     ~  List/indexed
+    | ListIndexed
     -- | > ListConcat x y                  ~  x ++ y
     | ListConcat (Expr a) (Expr a)
     -- | > Maybe                           ~  Maybe
@@ -261,20 +263,21 @@ instance Monad Expr where
     TextAppend l r   >>= k = TextAppend (l >>= k) (r >>= k)
     List             >>= _ = List
     ListLit t es     >>= k = ListLit (t >>= k) (fmap (>>= k) es)
-    ListBuild       >>= _ = ListBuild
-    ListFold        >>= _ = ListFold
-    ListConcat l r  >>= k = ListConcat (l >>= k) (r >>= k)
-    Maybe           >>= _ = Maybe
-    MaybeLit t es   >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
-    MaybeFold       >>= _ = MaybeFold
-    Record    kts   >>= k = Record (Data.Map.fromAscList kts')
+    ListBuild        >>= _ = ListBuild
+    ListFold         >>= _ = ListFold
+    ListIndexed      >>= _ = ListIndexed
+    ListConcat l r   >>= k = ListConcat (l >>= k) (r >>= k)
+    Maybe            >>= _ = Maybe
+    MaybeLit t es    >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
+    MaybeFold        >>= _ = MaybeFold
+    Record    kts    >>= k = Record (Data.Map.fromAscList kts')
       where
         kts' = [ (k', t >>= k) | (k', t) <- Data.Map.toAscList kts ]
     RecordLit kvs   >>= k = RecordLit (Data.Map.fromAscList kvs')
       where
         kvs' = [ (k', v >>= k) | (k', v) <- Data.Map.toAscList kvs ]
-    Field r x       >>= k = Field (r >>= k) x
-    Embed r         >>= k = k r
+    Field r x        >>= k = Field (r >>= k) x
+    Embed r          >>= k = k r
 
 match :: Text -> Text -> [(Text, Text)] -> Bool
 match xL xR  []              = xL == xR
@@ -411,6 +414,8 @@ buildExpr5 ListBuild =
     "List/build"
 buildExpr5 ListFold =
     "List/fold"
+buildExpr5 ListIndexed =
+    "List/indexed"
 buildExpr5 List =
     "List"
 buildExpr5 Maybe =
@@ -1419,6 +1424,12 @@ typeWith _      ListFold          = do
                 (Pi "list" (Const Type)
                     (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
                         (Pi "nil" "list" "list")) ) ) )
+typeWith _      ListIndexed       = do
+    let kts = [("_1", Natural), ("_2", "a")]
+    return
+        (Pi "a" (Const Type)
+            (Pi "_" (App List "a")
+                (App List (Record (Data.Map.fromList kts))) ) )
 typeWith ctx e@(ListConcat l r  ) = do
     tl <- fmap normalize (typeWith ctx l)
     el <- case tl of
@@ -1534,6 +1545,17 @@ normalize e = case e of
                 normalize (Data.Vector.foldr cons' nil xs)
               where
                 cons' y ys = App (App cons y) ys
+            App (App ListIndexed _) (ListLit t xs) ->
+                normalize (ListLit t' (fmap adapt (Data.Vector.indexed xs)))
+              where
+                t' = Record (Data.Map.fromList kts)
+                  where
+                    kts = [("_1", Natural), ("_2", t)]
+                adapt (n, x) = RecordLit (Data.Map.fromList kvs)
+                  where
+                    kvs = [ ("_1", NaturalLit (fromIntegral n))
+                          , ("_2", x)
+                          ]
             App (App (App (App (App MaybeFold _) (MaybeLit _ xs)) _) just) nothing ->
                 normalize (maybe nothing just' (toMaybe xs))
               where
