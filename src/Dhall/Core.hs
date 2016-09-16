@@ -464,7 +464,7 @@ buildArgs (a:bs) = buildArg a <> buildArgs bs
 buildArgs    []  = ""
 
 buildArg :: Buildable a => (Text, Expr a) -> Builder
-buildArg (a, b) = "(" <> build a <> " : " <> buildExpr0 b <> ")"
+buildArg (a, b) = "(" <> build a <> " : " <> buildExpr0 b <> ") "
 
 buildElems :: Buildable a => [Expr a] -> Builder
 buildElems   []   = ""
