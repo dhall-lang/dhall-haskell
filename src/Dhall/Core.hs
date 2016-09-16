@@ -201,6 +201,8 @@ data Expr a
     | ListBuild
     -- | > ListFold                        ~  List/fold
     | ListFold
+    -- | > ListFirst                       ~  List/first
+    | ListFirst
     -- | > ListIndexed                     ~  List/indexed
     | ListIndexed
     -- | > ListConcat x y                  ~  x ++ y
@@ -265,6 +267,7 @@ instance Monad Expr where
     ListLit t es     >>= k = ListLit (t >>= k) (fmap (>>= k) es)
     ListBuild        >>= _ = ListBuild
     ListFold         >>= _ = ListFold
+    ListFirst        >>= _ = ListFirst
     ListIndexed      >>= _ = ListIndexed
     ListConcat l r   >>= k = ListConcat (l >>= k) (r >>= k)
     Maybe            >>= _ = Maybe
@@ -414,6 +417,8 @@ buildExpr5 ListBuild =
     "List/build"
 buildExpr5 ListFold =
     "List/fold"
+buildExpr5 ListFirst =
+    "List/first"
 buildExpr5 ListIndexed =
     "List/indexed"
 buildExpr5 List =
@@ -1427,6 +1432,8 @@ typeWith _      ListFold          = do
                 (Pi "list" (Const Type)
                     (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
                         (Pi "nil" "list" "list")) ) ) )
+typeWith _      ListFirst         = do
+    return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a")))
 typeWith _      ListIndexed       = do
     let kts = [("_1", Natural), ("_2", "a")]
     return
@@ -1548,6 +1555,8 @@ normalize e = case e of
                 normalize (Data.Vector.foldr cons' nil xs)
               where
                 cons' y ys = App (App cons y) ys
+            App (App ListFirst _) (ListLit t ys) ->
+                normalize (MaybeLit t (Data.Vector.take 1 ys))
             App (App ListIndexed _) (ListLit t xs) ->
                 normalize (ListLit t' (fmap adapt (Data.Vector.indexed xs)))
               where

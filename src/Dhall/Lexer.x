@@ -88,6 +88,7 @@ tokens :-
     "List"                              { emit List             }
     "List/build"                        { emit ListBuild        }
     "List/fold"                         { emit ListFold         }
+    "List/first"                        { emit ListFirst        }
     "List/indexed"                      { emit ListIndexed      }
     "Maybe"                             { emit Maybe            }
     "Maybe/fold"                        { emit MaybeFold        }
@@ -196,6 +197,7 @@ data Token
     | List
     | ListBuild
     | ListFold
+    | ListFirst
     | ListIndexed
     | Maybe
     | MaybeFold
@@ -288,6 +290,10 @@ instance Buildable Token where
         = "List"
     build  ListBuild
         = "List/build"
+    build  ListFirst
+        = "List/first"
+    build  ListIndexed
+        = "List/indexed"
     build  ListFold
         = "List/fold"
     build  Maybe
