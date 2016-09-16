@@ -207,6 +207,8 @@ data Expr a
     | ListFirst
     -- | > ListLast                        ~  List/last
     | ListLast
+    -- | ListIndex                         ~  List/index
+    | ListIndex
     -- | > ListIndexed                     ~  List/indexed
     | ListIndexed
     -- | > ListConcat x y                  ~  x ++ y
@@ -274,6 +276,7 @@ instance Monad Expr where
     ListLength       >>= _ = ListLength
     ListFirst        >>= _ = ListFirst
     ListLast         >>= _ = ListLast
+    ListIndex        >>= _ = ListIndex
     ListIndexed      >>= _ = ListIndexed
     ListConcat l r   >>= k = ListConcat (l >>= k) (r >>= k)
     Maybe            >>= _ = Maybe
@@ -429,6 +432,8 @@ buildExpr5 ListFirst =
     "List/first"
 buildExpr5 ListLast =
     "List/last"
+buildExpr5 ListIndex =
+    "List/index"
 buildExpr5 ListIndexed =
     "List/indexed"
 buildExpr5 List =
@@ -1451,6 +1456,10 @@ typeWith _      ListFirst         = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a")))
 typeWith _      ListLast          = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a")))
+typeWith _      ListIndex         = do
+    return
+        (Pi "_" Natural
+            (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a"))) )
 typeWith _      ListIndexed       = do
     let kts = [("_1", Natural), ("_2", "a")]
     return
@@ -1579,10 +1588,16 @@ normalize e = case e of
             App (App ListLast _) (ListLit t ys) ->
                 normalize (MaybeLit t y)
               where
-                y =
-                    if Data.Vector.null ys
+                y = if Data.Vector.null ys
                     then Data.Vector.empty
                     else Data.Vector.singleton (Data.Vector.last ys)
+            App (App (App ListIndex (NaturalLit n)) _) (ListLit t ys) ->
+                normalize (MaybeLit t y)
+              where
+                y = case ys Data.Vector.!? n' of
+                    Nothing -> Data.Vector.empty
+                    Just z  -> Data.Vector.singleton z
+                n' = fromIntegral n
             App (App ListIndexed _) (ListLit t xs) ->
                 normalize (ListLit t' (fmap adapt (Data.Vector.indexed xs)))
               where
