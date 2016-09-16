@@ -54,8 +54,7 @@ tokens :-
     ")"                                 { emit CloseParen       }
     "{"                                 { emit OpenBrace        }
     "}"                                 { emit CloseBrace       }
-    "{{"                                { emit DoubleOpenBrace  }
-    "}}"                                { emit DoubleCloseBrace }
+    "{1}"                               { emit EmptyRecord      }
     "["                                 { emit OpenBracket      }
     "]"                                 { emit CloseBracket     }
     ":"                                 { emit Colon            }
@@ -160,8 +159,7 @@ data Token
     | CloseParen
     | OpenBrace
     | CloseBrace
-    | DoubleOpenBrace
-    | DoubleCloseBrace
+    | EmptyRecord
     | OpenBracket
     | CloseBracket
     | Colon
@@ -218,10 +216,8 @@ instance Buildable Token where
         = "{"
     build  CloseBrace
         = "}"
-    build  DoubleOpenBrace
-        = "{{"
-    build  DoubleCloseBrace
-        = "}}"
+    build  EmptyRecord
+        = "{1}"
     build  OpenBracket
         = "["
     build  CloseBracket

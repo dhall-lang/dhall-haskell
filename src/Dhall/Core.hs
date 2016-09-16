@@ -483,7 +483,10 @@ buildFieldValue :: Buildable a => (Text, Expr a) -> Builder
 buildFieldValue (a, b) = build a <> " = " <> buildExpr0 b
 
 buildRecord :: Buildable a => Map Text (Expr a) -> Builder
-buildRecord a = "{{ " <> buildFieldTypes (Data.Map.toList a) <> " }}"
+buildRecord a | Data.Map.null a =
+    "{1}"
+buildRecord a =
+    "{ " <> buildFieldTypes (Data.Map.toList a) <> " }"
 
 buildFieldTypes :: Buildable a => [(Text, Expr a)] -> Builder
 buildFieldTypes    []  = ""
