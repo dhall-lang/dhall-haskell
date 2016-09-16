@@ -93,8 +93,8 @@ tokens :-
     "List/length"                       { emit ListLength       }
     "List/first"                        { emit ListFirst        }
     "List/last"                         { emit ListLast         }
+    "List/drop"                         { emit ListDrop         }
     "List/indexed"                      { emit ListIndexed      }
-    "List/index"                        { emit ListIndex        }
     "Maybe"                             { emit Maybe            }
     "Maybe/fold"                        { emit MaybeFold        }
     \" ([^\"] | \\.)* \"                { capture (TextLit . str)        }
@@ -207,7 +207,7 @@ data Token
     | ListLength
     | ListFirst
     | ListLast
-    | ListIndex
+    | ListDrop
     | ListIndexed
     | Maybe
     | MaybeFold
@@ -310,8 +310,8 @@ instance Buildable Token where
         = "List/first"
     build  ListLast
         = "List/last"
-    build  ListIndex
-        = "List/index"
+    build  ListDrop
+        = "List/drop"
     build  ListIndexed
         = "List/indexed"
     build  ListFold
