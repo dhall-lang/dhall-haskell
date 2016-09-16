@@ -201,6 +201,8 @@ data Expr a
     | ListBuild
     -- | > ListFold                        ~  List/fold
     | ListFold
+    -- | > ListLength                      ~  List/length
+    | ListLength
     -- | > ListFirst                       ~  List/first
     | ListFirst
     -- | > ListLast                        ~  List/last
@@ -269,6 +271,7 @@ instance Monad Expr where
     ListLit t es     >>= k = ListLit (t >>= k) (fmap (>>= k) es)
     ListBuild        >>= _ = ListBuild
     ListFold         >>= _ = ListFold
+    ListLength       >>= _ = ListLength
     ListFirst        >>= _ = ListFirst
     ListLast         >>= _ = ListLast
     ListIndexed      >>= _ = ListIndexed
@@ -420,6 +423,8 @@ buildExpr5 ListBuild =
     "List/build"
 buildExpr5 ListFold =
     "List/fold"
+buildExpr5 ListLength =
+    "List/length"
 buildExpr5 ListFirst =
     "List/first"
 buildExpr5 ListLast =
@@ -1437,6 +1442,8 @@ typeWith _      ListFold          = do
                 (Pi "list" (Const Type)
                     (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
                         (Pi "nil" "list" "list")) ) ) )
+typeWith _      ListLength        = do
+    return (Pi "a" (Const Type) (Pi "_" (App List "a") Natural))
 typeWith _      ListFirst         = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a")))
 typeWith _      ListLast          = do
@@ -1562,6 +1569,8 @@ normalize e = case e of
                 normalize (Data.Vector.foldr cons' nil xs)
               where
                 cons' y ys = App (App cons y) ys
+            App (App ListLength _) (ListLit _ ys) ->
+                NaturalLit (fromIntegral (Data.Vector.length ys))
             App (App ListFirst _) (ListLit t ys) ->
                 normalize (MaybeLit t (Data.Vector.take 1 ys))
             App (App ListLast _) (ListLit t ys) ->

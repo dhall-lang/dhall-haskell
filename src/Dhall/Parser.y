@@ -78,6 +78,7 @@ import qualified NeatInterpolation
     'List'         { Dhall.Lexer.List             }
     'List/build'   { Dhall.Lexer.ListBuild        }
     'List/fold'    { Dhall.Lexer.ListFold         }
+    'List/length'  { Dhall.Lexer.ListLength       }
     'List/first'   { Dhall.Lexer.ListFirst        }
     'List/last'    { Dhall.Lexer.ListLast         }
     'List/indexed' { Dhall.Lexer.ListIndexed      }
@@ -179,6 +180,8 @@ Expr5
         { ListBuild }
     | 'List/fold'
         { ListFold }
+    | 'List/length'
+        { ListLength }
     | 'List/first'
         { ListFirst }
     | 'List/last'
