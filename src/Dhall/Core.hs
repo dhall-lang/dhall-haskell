@@ -175,6 +175,8 @@ data Expr a
     | NaturalLit Natural
     -- | > NaturalFold                     ~  Natural/fold
     | NaturalFold
+    -- | > NaturalIsZero                   ~  Natural/isZero
+    | NaturalIsZero
     -- | > NaturalPlus x y                 ~  x + y
     | NaturalPlus (Expr a) (Expr a)
     -- | > NaturalTimes x y                ~  x * y
@@ -260,6 +262,7 @@ instance Monad Expr where
     Natural          >>= _ = Natural
     NaturalLit n     >>= _ = NaturalLit n
     NaturalFold      >>= _ = NaturalFold
+    NaturalIsZero    >>= _ = NaturalIsZero
     NaturalPlus  l r >>= k = NaturalPlus  (l >>= k) (r >>= k)
     NaturalTimes l r >>= k = NaturalTimes (l >>= k) (r >>= k)
     Integer          >>= _ = Integer
@@ -416,6 +419,8 @@ buildExpr5 Natural =
     "Natural"
 buildExpr5 NaturalFold =
     "Natural/fold"
+buildExpr5 NaturalIsZero =
+    "Natural/isZero"
 buildExpr5 Integer =
     "Integer"
 buildExpr5 Double =
@@ -1373,6 +1378,8 @@ typeWith _      NaturalFold       = do
             (Pi "natural" (Const Type)
                 (Pi "succ" (Pi "pred" "natural" "natural")
                     (Pi "zero" "natural" "natural") ) ) )
+typeWith _      NaturalIsZero     = do
+    return (Pi "_" Natural Bool)
 typeWith ctx e@(NaturalPlus  l r) = do
     tl <- fmap normalize (typeWith ctx l)
     case tl of
@@ -1558,6 +1565,7 @@ normalize e = case e of
               where
                 go !0 = zero
                 go !n = App succ' (go (n - 1))
+            App NaturalIsZero (NaturalLit n) -> BoolLit (n == 0)
             App (App ListBuild t) k
                 | check     -> ListLit t (buildVector k')
                 | otherwise -> App f' a'
