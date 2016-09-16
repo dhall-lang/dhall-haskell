@@ -90,6 +90,7 @@ tokens :-
     "List/build"                        { emit ListBuild        }
     "List/fold"                         { emit ListFold         }
     "Maybe"                             { emit Maybe            }
+    "Maybe/fold"                        { emit MaybeFold        }
     \" ([^\"] | \\.)* \"                { capture (TextLit . str)        }
     $fst $labelchar* | "(" $opchar+ ")" { capture (Label . toText)       }
     \-? $digit+                         { capture (Number . toInt)       }
@@ -197,6 +198,7 @@ data Token
     | ListBuild
     | ListFold
     | Maybe
+    | MaybeFold
     | TextLit Text
     | Label Text
     | Number Integer
@@ -292,6 +294,8 @@ instance Buildable Token where
         = "List/fold"
     build  Maybe
         = "Maybe"
+    build  MaybeFold
+        = "Maybe/fold"
     build (TextLit t)
         = Data.Text.Buildable.build (show t)
     build (Label t)

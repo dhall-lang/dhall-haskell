@@ -58,6 +58,7 @@ import Prelude hiding (FilePath)
 import qualified Control.Monad
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Map
+import qualified Data.Maybe
 import qualified Data.Text
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
@@ -207,6 +208,8 @@ data Expr a
     -- | > MaybeLit t [e]                  ~  [e] : Maybe t
     -- | > MaybeLit t []                   ~  []  : Maybe t
     | MaybeLit (Expr a) (Vector (Expr a))
+    -- | > MaybeFold                       ~  Maybe/fold
+    | MaybeFold
     -- | > Record    [(k1, t1), (k2, t2)]  ~  { k1 : t1, k2 : t1 }
     | Record    (Map Text (Expr a))
     -- | > RecordLit [(k1, v1), (k2, v2)]  ~  { k1 = v1, k2 = v2 }
@@ -263,6 +266,7 @@ instance Monad Expr where
     ListConcat l r  >>= k = ListConcat (l >>= k) (r >>= k)
     Maybe           >>= _ = Maybe
     MaybeLit t es   >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
+    MaybeFold       >>= _ = MaybeFold
     Record    kts   >>= k = Record (Data.Map.fromAscList kts')
       where
         kts' = [ (k', t >>= k) | (k', t) <- Data.Map.toAscList kts ]
@@ -349,7 +353,7 @@ buildExpr1 (BoolIf a b c) =
 buildExpr1 (Pi "_" b c) =
         buildExpr2 b
     <>  " -> "
-    <>  buildExpr2 c
+    <>  buildExpr1 c
 buildExpr1 (Pi a b c) =
         "forall ("
     <>  build a
@@ -411,6 +415,8 @@ buildExpr5 List =
     "List"
 buildExpr5 Maybe =
     "Maybe"
+buildExpr5 MaybeFold =
+    "Maybe/fold"
 buildExpr5 (BoolLit True) =
     "True"
 buildExpr5 (BoolLit False) =
@@ -1447,6 +1453,13 @@ typeWith ctx e@(MaybeLit t xs   ) = do
                 let nf_t' = normalize t'
                 Left (TypeError ctx e (InvalidMaybeElement x nf_t nf_t')) )
     return (App Maybe t)
+typeWith _      MaybeFold         = do
+    return
+        (Pi "a" (Const Type)
+            (Pi "_" (App Maybe "a")
+                (Pi "maybe" (Const Type)
+                    (Pi "just" (Pi "_" "a" "maybe")
+                        (Pi "nothing" "maybe" "maybe") ) ) ) )
 typeWith ctx e@(Record    kts   ) = do
     let process (k, t) = do
             s <- fmap normalize (typeWith ctx t)
@@ -1521,6 +1534,11 @@ normalize e = case e of
                 normalize (Data.Vector.foldr cons' nil xs)
               where
                 cons' y ys = App (App cons y) ys
+            App (App (App (App (App MaybeFold _) (MaybeLit _ xs)) _) just) nothing ->
+                normalize (maybe nothing just' (toMaybe xs))
+              where
+                just' y = App just y
+                toMaybe = Data.Maybe.listToMaybe . Data.Vector.toList
             _ -> App f' a'
           where
             a' = normalize a

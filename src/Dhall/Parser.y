@@ -80,6 +80,7 @@ import qualified NeatInterpolation
     'List/build'   { Dhall.Lexer.ListBuild        }
     'List/fold'    { Dhall.Lexer.ListFold         }
     'Maybe'        { Dhall.Lexer.Maybe            }
+    'Maybe/fold'   { Dhall.Lexer.MaybeFold        }
     text           { Dhall.Lexer.TextLit    $$    }
     label          { Dhall.Lexer.Label      $$    }
     number         { Dhall.Lexer.Number     $$    }
@@ -178,6 +179,8 @@ Expr5
         { ListFold }
     | 'Maybe'
         { Maybe }
+    | 'Maybe/fold'
+        { MaybeFold }
     | 'True'
         { BoolLit True }
     | 'False'
