@@ -194,7 +194,7 @@ data Expr a
     | TextAppend (Expr a) (Expr a)
     -- | > List                            ~  List
     | List
-    -- | > ListLit t [x, y, z]             ~  [ x, y, z ] : List t
+    -- | > ListLit t [x, y, z]             ~  [x, y, z] : List t
     | ListLit (Expr a) (Vector (Expr a))
     -- | > ListBuild                       ~  List/build
     | ListBuild
@@ -202,6 +202,11 @@ data Expr a
     | ListFold
     -- | > ListConcat x y                  ~  x ++ y
     | ListConcat (Expr a) (Expr a)
+    -- | > Maybe                           ~  Maybe
+    | Maybe
+    -- | > MaybeLit t [e]                  ~  [e] : Maybe t
+    -- | > MaybeLit t []                   ~  []  : Maybe t
+    | MaybeLit (Expr a) (Vector (Expr a))
     -- | > Record    [(k1, t1), (k2, t2)]  ~  { k1 : t1, k2 : t1 }
     | Record    (Map Text (Expr a))
     -- | > RecordLit [(k1, v1), (k2, v2)]  ~  { k1 = v1, k2 = v2 }
@@ -252,14 +257,12 @@ instance Monad Expr where
     TextLit t        >>= _ = TextLit t
     TextAppend l r   >>= k = TextAppend (l >>= k) (r >>= k)
     List             >>= _ = List
-    ListLit t es     >>= k = ListLit (t >>= k) es'
-      where
-        es' = do
-            e <- es
-            return (e >>= k)
+    ListLit t es     >>= k = ListLit (t >>= k) (fmap (>>= k) es)
     ListBuild       >>= _ = ListBuild
     ListFold        >>= _ = ListFold
     ListConcat l r  >>= k = ListConcat (l >>= k) (r >>= k)
+    Maybe           >>= _ = Maybe
+    MaybeLit t es   >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
     Record    kts   >>= k = Record (Data.Map.fromAscList kts')
       where
         kts' = [ (k', t >>= k) | (k', t) <- Data.Map.toAscList kts ]
@@ -305,6 +308,7 @@ propEqual eL0 eR0 = State.evalState (go (normalize eL0) (normalize eR0)) []
     go Double Double = return True
     go Text Text = return True
     go List List = return True
+    go Maybe Maybe = return True
     go (Record    ktsL0) (Record    ktsR0) = do
         let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
                 | kL == kR = do
@@ -358,7 +362,9 @@ buildExpr1 (Lets a b) =
     <>  " in "
     <>  buildExpr1 b
 buildExpr1 (ListLit a b) =
-    "[" <> buildElems (Data.Vector.toList b) <> "] : List " <> buildExpr5 a
+    "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExpr5 a
+buildExpr1 (MaybeLit a b) =
+    "[" <> buildElems (Data.Vector.toList b) <> "] : Maybe "  <> buildExpr5 a
 buildExpr1 a =
     buildExpr2 a
 
@@ -403,6 +409,8 @@ buildExpr5 ListFold =
     "List/fold"
 buildExpr5 List =
     "List"
+buildExpr5 Maybe =
+    "Maybe"
 buildExpr5 (BoolLit True) =
     "True"
 buildExpr5 (BoolLit False) =
@@ -449,8 +457,8 @@ buildArg (a, b) = "(" <> build a <> " : " <> buildExpr0 b <> ")"
 
 buildElems :: Buildable a => [Expr a] -> Builder
 buildElems   []   = ""
-buildElems   [a]  = buildExpr1 a
-buildElems (a:bs) = buildExpr1 a <> ", " <> buildElems bs
+buildElems   [a]  = buildExpr0 a
+buildElems (a:bs) = buildExpr0 a <> ", " <> buildElems bs
 
 buildRecordLit :: Buildable a => Map Text (Expr a) -> Builder
 buildRecordLit a = "{ " <> buildFieldValues (Data.Map.toList a) <> " }"
@@ -488,8 +496,11 @@ data TypeMessage
     | TypeMismatch (Expr X) (Expr X)
     | AnnotMismatch (Expr X) (Expr X) (Expr X)
     | Untyped Const
-    | InvalidElement Int Int (Expr X) (Expr X) (Expr X)
+    | InvalidListElement Int Int (Expr X) (Expr X) (Expr X)
     | InvalidListType Bool (Expr X)
+    | InvalidMaybeElement (Expr X) (Expr X) (Expr X)
+    | InvalidMaybeLiteral Int
+    | InvalidMaybeType (Expr X)
     | InvalidPredicate (Expr X) (Expr X)
     | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
     | InvalidFieldType Text (Expr X)
@@ -735,19 +746,19 @@ $insert
 You can fix the problem by changing the annotation to a type
 |]
       where
-        txt0 = Text.toStrict (pretty expr0)
+        txt0 = Text.toStrict (Builder.toLazyText (buildExpr5 expr0))
         insert = indent $
             if isEmpty
             then [NeatInterpolation.text|
-    [ : $txt0 ]
-        ^ This needs to be a type
+    [ ] : List $txt0
+    --         ^ This needs to be a type
 |]
             else [NeatInterpolation.text|
-    [ ... : $txt0 ]
-            ^ This needs to be a type
+    [ ... ] : List $txt0
+    --             ^ This needs to be a type
 |]
 
-    build (InvalidElement i n expr0 expr1 expr2) =
+    build (InvalidListElement i n expr0 expr1 expr2) =
         Builder.fromText [NeatInterpolation.text|
 Error: List with an element of the wrong type
 
@@ -766,37 +777,128 @@ declared element type
 |]
       where
         txt0 = Text.toStrict (pretty expr0)
-        txt1 = Text.toStrict (pretty expr1)
+        txt1 = Text.toStrict (Builder.toLazyText (buildExpr5 expr1))
         txt2 = Text.toStrict (pretty expr2)
         txt3 = Text.toStrict (pretty i    )
         insert = indent $
             if n == 1
             then [NeatInterpolation.text|
-    [ $txt0  -- This value ...
-    : $txt1  -- ... needs to match this type
-    ]
+    [  $txt0
+    -- ^ This value ...
+    ] : List $txt1
+    --       ^ ... needs to match this type
 |]
             else if i == 0
             then [NeatInterpolation.text|
-    [ $txt0  -- This value ...
-    , ...
-    : $txt1  -- ... needs to match this type
+    [  $txt0
+    -- ^ This value ...
+    ,  ...
+    ] : List $txt1
+    --       ^ ... needs to match this type
     ]
 |]
             else if i + 1 == n
             then [NeatInterpolation.text|
-    [ ...
-    , $txt0  -- This value ...
-    : $txt1  -- ... needs to match this type
-    ]
+    [  ...
+    ,  $txt0
+    -- ^ This value ...
+    ] : List $txt1
+    --       ^ ... needs to match this type
 |]
             else [NeatInterpolation.text|
     [ ...
-    , $txt0  -- This value at index #$txt3 ...
-    , ...
-    : $txt1  -- ... needs to match this type
-    ]
+    ,  $txt0
+    -- ^ This value at index #$txt3 ...
+    ,  ...
+    ] : List $txt1
+    --       ^ ... needs to match this type
 |]
+
+    build (InvalidMaybeType expr0) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Invalid type for `Maybe`
+
+Explanation: Every optional value ends with a type annotation for the element
+that might be stored inside.  For example, these are valid expressions:
+
+    [1] : Maybe Integer  -- An optional value that's present
+    []  : Maybe Integer  -- An optional value that's absent
+
+The type following the `Maybe` is the "type parameter", and must be a type:
+
+    Maybe Integer -- This is valid, because `Integer` is a type
+    Maybe Text    -- This is also valid, because `Text` is a type
+
+... but the type parameter must *not* be a term or kind:
+
+    Maybe 1       -- This is invalid, because `1` is a term
+    Maybe Type    -- This is invalid, because `Type` is a kind
+
+You provided a type parameter for the `Maybe` that is not a valid type:
+
+$insert
+|]
+      where
+        txt0 = Text.toStrict (Builder.toLazyText (buildExpr5 expr0))
+        insert = indent [NeatInterpolation.text|
+    [ ... ] : Maybe $txt0
+    --              ^ This needs to be a type
+|]
+
+    build (InvalidMaybeElement expr0 expr1 expr2) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Optional expression with an element of the wrong type
+
+Explanation: An optional value that is present must have a type matching the
+corresponding type annotation.  For example, this is a valid optional value:
+
+    [1] : Maybe Integer  -- The type of `1` is `Integer`, which matches
+
+... but this is *not* a valid optional value:
+
+    [1] : Maybe Text     -- Invalid, because the type of `1` is not `Text`
+
+Your optional value has a type which does not match the type annotation:
+
+$insert
+
+The element you provided actually has this type:
+↳ $txt2
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (Builder.toLazyText (buildExpr5 expr1))
+        txt2 = Text.toStrict (pretty expr2)
+        insert = indent [NeatInterpolation.text|
+    [  $txt0
+    -- ^ This value ...
+    ] : Maybe $txt1
+    --        ^ ... needs to have a type matching this type parameter
+|]
+
+    build (InvalidMaybeLiteral n) =
+        Builder.fromText [NeatInterpolation.text|
+Error: More than one element for an optional value
+
+Explanation: The syntax for an optional value resembles the syntax for `List`
+literals:
+
+    []  : Maybe Integer  -- A valid literal for an absent optional value
+    [1] : Maybe Integer  -- A valid literal for a present optional value
+    []  : List  Integer  -- A valid literal for an empty     (0-element) `List`
+    [1] : List  Integer  -- A valid literal for a  singleton (1-element) `List`
+
+However, an optional value can *not* have more than one element, whereas a
+`List` can have multiple elements:
+
+    [1, 2] : Maybe Integer  -- Invalid: multiple elements not allowed
+    [1, 2] : List  Integer  -- Valid  : multiple elements allowed
+
+Your optional value had $txt0 elements, which is not allowed.  Optional values
+can only have at most one element
+|]
+      where
+        txt0 = Text.toStrict (pretty n)
 
     build (InvalidFieldType k expr0) =
         Builder.fromText [NeatInterpolation.text|
@@ -1108,12 +1210,9 @@ subst x e (BoolIf x' y z   ) = BoolIf (subst x e x') (subst x e y) (subst x e z)
 subst x e (NaturalPlus  l r) = NaturalPlus  (subst x e l) (subst x e r)
 subst x e (NaturalTimes l r) = NaturalTimes (subst x e l) (subst x e r)
 subst x e (TextAppend   l r) = TextAppend   (subst x e l) (subst x e r)
-subst x e (ListLit t es    ) = ListLit (subst x e t) es'
-  where
-    es' = do
-        e' <- es
-        return (subst x e e')
+subst x e (ListLit t es    ) = ListLit (subst x e t) (fmap (subst x e) es)
 subst x e (ListConcat   l r) = ListConcat (subst x e l) (subst x e r)
+subst x e (MaybeLit t es   ) = MaybeLit (subst x e t) (fmap (subst x e) es)
 subst x e (Record    kts   ) = Record (Data.Map.fromAscList kts')
   where
     kts' = [ (k, subst x e t) | (k, t) <- Data.Map.toList kts ]
@@ -1297,7 +1396,7 @@ typeWith ctx e@(ListLit t xs    ) = do
             else do
                 let nf_t  = normalize t
                 let nf_t' = normalize t'
-                Left (TypeError ctx e (InvalidElement i n x nf_t nf_t')) )
+                Left (TypeError ctx e (InvalidListElement i n x nf_t nf_t')) )
     return (App List t)
 typeWith _      ListBuild         = do
     return
@@ -1328,6 +1427,26 @@ typeWith ctx e@(ListConcat l r  ) = do
         then return ()
         else Left (TypeError ctx e (ElementMismatch el er))
     return (App List el)
+typeWith _      Maybe             = do
+    return (Pi "_" (Const Type) (Const Type))
+typeWith ctx e@(MaybeLit t xs   ) = do
+    s <- fmap normalize (typeWith ctx t)
+    case s of
+        Const Type -> return ()
+        _ -> Left (TypeError ctx e (InvalidMaybeType t))
+    let n = Data.Vector.length xs
+    if 2 <= n
+        then Left (TypeError ctx e (InvalidMaybeLiteral n))
+        else return ()
+    forM_ xs (\x -> do
+        t' <- typeWith ctx x
+        if propEqual t t'
+            then return ()
+            else do
+                let nf_t  = normalize t
+                let nf_t' = normalize t'
+                Left (TypeError ctx e (InvalidMaybeElement x nf_t nf_t')) )
+    return (App Maybe t)
 typeWith ctx e@(Record    kts   ) = do
     let process (k, t) = do
             s <- fmap normalize (typeWith ctx t)
@@ -1479,6 +1598,7 @@ normalize e = case e of
       where
         x' = normalize x
         y' = normalize y
+    MaybeLit t es    -> MaybeLit (normalize t) (fmap normalize es)
     RecordLit kvs    -> RecordLit (fmap normalize kvs)
     Record    kts    -> Record    (fmap normalize kts)
     Field r x        ->

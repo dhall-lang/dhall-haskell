@@ -22,6 +22,7 @@ import Dhall.Core
 import Dhall.Lexer (Alex, AlexPosn(..), Token)
 
 import qualified Data.Map
+import qualified Data.Maybe
 import qualified Data.Vector
 import qualified Data.Text
 import qualified Data.Text.Buildable
@@ -78,6 +79,7 @@ import qualified NeatInterpolation
     'List'         { Dhall.Lexer.List             }
     'List/build'   { Dhall.Lexer.ListBuild        }
     'List/fold'    { Dhall.Lexer.ListFold         }
+    'Maybe'        { Dhall.Lexer.Maybe            }
     text           { Dhall.Lexer.TextLit    $$    }
     label          { Dhall.Lexer.Label      $$    }
     number         { Dhall.Lexer.Number     $$    }
@@ -112,10 +114,16 @@ Expr1
         { Pi "_" $1 $3 }
     | Lets 'in' Expr1
         { Lets $1 $3 }
-    | '[' Elems ']' ':' 'List' Expr5
-        { ListLit $6 (Data.Vector.fromList $2) }
+    | '[' Elems ']' ':' ListLike Expr5
+        { $5 $6 (Data.Vector.fromList $2) }
     | Expr2
         { $1 }
+
+ListLike
+    : 'List'
+        { ListLit }
+    | 'Maybe'
+        { MaybeLit }
 
 Expr2
     : Expr2 '||' Expr2
@@ -168,6 +176,8 @@ Expr5
         { ListBuild }
     | 'List/fold'
         { ListFold }
+    | 'Maybe'
+        { Maybe }
     | 'True'
         { BoolLit True }
     | 'False'
@@ -226,9 +236,9 @@ Elems
 ElemsRev
     : {- empty -}
         { [] }
-    | Expr1
+    | Expr0
         { [$1] }
-    | ElemsRev ',' Expr1
+    | ElemsRev ',' Expr0
         { $3 : $1 }
 
 RecordLit
@@ -291,7 +301,7 @@ tokens are then parsed to generate a syntax tree
 
 The parsing step failed to generate a syntax tree due to this unexpected token:
 ↳ $txt0
-... located at:
+... ending at:
 ↳ Line $txt1, Column $txt2
 ... with the following unconsumed input:
 ↳ $txt3
