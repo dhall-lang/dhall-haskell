@@ -95,6 +95,7 @@ tokens :-
     "List/last"                         { emit ListLast         }
     "List/drop"                         { emit ListDrop         }
     "List/indexed"                      { emit ListIndexed      }
+    "List/reverse"                      { emit ListReverse      }
     "Maybe"                             { emit Maybe            }
     "Maybe/fold"                        { emit MaybeFold        }
     \" ([^\"] | \\.)* \"                { capture (TextLit . str)        }
@@ -209,6 +210,7 @@ data Token
     | ListLast
     | ListDrop
     | ListIndexed
+    | ListReverse
     | Maybe
     | MaybeFold
     | TextLit Text
@@ -314,6 +316,8 @@ instance Buildable Token where
         = "List/drop"
     build  ListIndexed
         = "List/indexed"
+    build  ListReverse
+        = "List/reverse"
     build  ListFold
         = "List/fold"
     build  Maybe

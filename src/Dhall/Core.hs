@@ -213,6 +213,8 @@ data Expr a
     | ListDrop  
     -- | > ListIndexed                     ~  List/indexed
     | ListIndexed
+    -- | > ListReverse                     ~  List/reverse
+    | ListReverse
     -- | > ListConcat x y                  ~  x ++ y
     | ListConcat (Expr a) (Expr a)
     -- | > Maybe                           ~  Maybe
@@ -281,6 +283,7 @@ instance Monad Expr where
     ListLast         >>= _ = ListLast
     ListDrop         >>= _ = ListDrop
     ListIndexed      >>= _ = ListIndexed
+    ListReverse      >>= _ = ListReverse
     ListConcat l r   >>= k = ListConcat (l >>= k) (r >>= k)
     Maybe            >>= _ = Maybe
     MaybeLit t es    >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
@@ -441,6 +444,8 @@ buildExpr5 ListDrop =
     "List/drop"
 buildExpr5 ListIndexed =
     "List/indexed"
+buildExpr5 ListReverse =
+    "List/reverse"
 buildExpr5 List =
     "List"
 buildExpr5 Maybe =
@@ -1473,6 +1478,8 @@ typeWith _      ListIndexed       = do
         (Pi "a" (Const Type)
             (Pi "_" (App List "a")
                 (App List (Record (Data.Map.fromList kts))) ) )
+typeWith _      ListReverse       = do
+    return (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a")))
 typeWith ctx e@(ListConcat l r  ) = do
     tl <- fmap normalize (typeWith ctx l)
     el <- case tl of
@@ -1612,6 +1619,8 @@ normalize e = case e of
                     kvs = [ ("_1", NaturalLit (fromIntegral n))
                           , ("_2", x)
                           ]
+            App (App ListReverse _) (ListLit t xs) ->
+                normalize (ListLit t (Data.Vector.reverse xs))
             App (App (App (App (App MaybeFold _) (MaybeLit _ xs)) _) just) nothing ->
                 normalize (maybe nothing just' (toMaybe xs))
               where
