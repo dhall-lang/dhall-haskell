@@ -94,6 +94,7 @@ tokens :-
     "List/first"                        { emit ListFirst        }
     "List/last"                         { emit ListLast         }
     "List/drop"                         { emit ListDrop         }
+    "List/dropEnd"                      { emit ListDropEnd      }
     "List/indexed"                      { emit ListIndexed      }
     "List/reverse"                      { emit ListReverse      }
     "Maybe"                             { emit Maybe            }
@@ -209,6 +210,7 @@ data Token
     | ListFirst
     | ListLast
     | ListDrop
+    | ListDropEnd
     | ListIndexed
     | ListReverse
     | Maybe
@@ -314,6 +316,8 @@ instance Buildable Token where
         = "List/last"
     build  ListDrop
         = "List/drop"
+    build  ListDropEnd
+        = "List/dropEnd"
     build  ListIndexed
         = "List/indexed"
     build  ListReverse

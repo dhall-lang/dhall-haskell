@@ -211,6 +211,8 @@ data Expr a
     | ListLast
     -- | ListDrop                          ~  List/drop
     | ListDrop  
+    -- | ListDropEnd                       ~  List/dropEnd
+    | ListDropEnd
     -- | > ListIndexed                     ~  List/indexed
     | ListIndexed
     -- | > ListReverse                     ~  List/reverse
@@ -282,6 +284,7 @@ instance Monad Expr where
     ListFirst        >>= _ = ListFirst
     ListLast         >>= _ = ListLast
     ListDrop         >>= _ = ListDrop
+    ListDropEnd      >>= _ = ListDropEnd
     ListIndexed      >>= _ = ListIndexed
     ListReverse      >>= _ = ListReverse
     ListConcat l r   >>= k = ListConcat (l >>= k) (r >>= k)
@@ -442,6 +445,8 @@ buildExpr5 ListLast =
     "List/last"
 buildExpr5 ListDrop =
     "List/drop"
+buildExpr5 ListDropEnd =
+    "List/dropEnd"
 buildExpr5 ListIndexed =
     "List/indexed"
 buildExpr5 ListReverse =
@@ -1472,6 +1477,10 @@ typeWith _      ListDrop          = do
     return
         (Pi "_" Natural
             (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a"))) )
+typeWith _      ListDropEnd       = do
+    return
+        (Pi "_" Natural
+            (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a"))) )
 typeWith _      ListIndexed       = do
     let kts = [("_1", Natural), ("_2", "a")]
     return
@@ -1608,6 +1617,10 @@ normalize e = case e of
                     else Data.Vector.singleton (Data.Vector.last ys)
             App (App (App ListDrop (NaturalLit n)) _) (ListLit t ys) ->
                 normalize (ListLit t (Data.Vector.drop (fromIntegral n) ys))
+            App (App (App ListDropEnd (NaturalLit n)) _) (ListLit t ys) ->
+                normalize (ListLit t (Data.Vector.slice 0 end ys))
+              where
+                end = max 0 (Data.Vector.length ys - fromIntegral n)
             App (App ListIndexed _) (ListLit t xs) ->
                 normalize (ListLit t' (fmap adapt (Data.Vector.indexed xs)))
               where
