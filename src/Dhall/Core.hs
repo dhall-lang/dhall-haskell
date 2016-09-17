@@ -130,6 +130,7 @@ instance Buildable X where
 data Let a = Let
     { letName :: Text
     , letArgs :: [(Text, Expr a)]
+    , letType :: Maybe (Expr a)
     , letRhs  :: Expr a
     } deriving (Functor, Foldable, Traversable, Show)
 
@@ -246,11 +247,11 @@ instance Monad Expr where
     Lets ls e        >>= k = Lets ls' (e >>= k)
       where
         ls' = do
-            Let f as r  <- ls
+            Let f as mt r  <- ls
             let as' = do
                     (x, t) <- as
                     return (x, t >>= k)
-            return (Let f as' (r >>= k))
+            return (Let f as' (fmap (>>= k) mt) (r >>= k))
     Annot x t        >>= k = Annot (x >>= k) (t >>= k)
     Bool             >>= _ = Bool
     BoolLit b        >>= _ = BoolLit b
@@ -479,13 +480,23 @@ buildLets (a:bs) = buildLet a <> buildLets bs
 buildLets    []  = ""
 
 buildLet :: Buildable a => Let a -> Builder
-buildLet (Let a b c) =
+buildLet (Let a b Nothing d) =
         "let "
     <>  build a
     <>  " "
     <>  buildArgs b
     <>  "= "
+    <>  buildExpr0 d
+    <>  " "
+buildLet (Let a b (Just c) d) =
+        "let "
+    <>  build a
+    <>  " "
+    <>  buildArgs b
+    <>  ": "
     <>  buildExpr0 c
+    <>  "= "
+    <>  buildExpr0 d
     <>  " "
 
 buildArgs :: Buildable a => [(Text, Expr a)] -> Builder
@@ -1234,18 +1245,19 @@ subst x e (Lets ls0 s0     ) = Lets ls0' s0''
     go0 !b              []  = (              [] , s0')
       where
         s0' = if b then subst x e s0 else s0
-    go0 !b (Let f as0 r:ls) = (Let f as0' r'':ls', s0')
+    go0 !b (Let f as0 mt r:ls) = (Let f as0' mt'' r'':ls', s0')
       where
         ~(ls', s0') = go0 (b && x /= f) ls
 
-        ~(as0', r'') = go1 True as0
+        ~(as0', mt'', r'') = go1 True as0
           where
-            go1 !b'         []  = (        [] , r')
+            go1 !b'         []  = (        [] , mt', r')
               where
-                r' = if b' then subst x e r else r
-            go1 !b' ((y, t):as) = ((y, t'):as', r')
+                r'  = if b' then       subst x e  r  else r
+                mt' = if b' then fmap (subst x e) mt else mt
+            go1 !b' ((y, t):as) = ((y, t'):as', mt', r')
               where
-                ~(as', r') = go1 (b' && x /= y) as
+                ~(as', mt', r') = go1 (b' && x /= y) as
 
                 t' = if b' then subst x e t else t
 subst x e (Annot x' t      ) = Annot (subst x e x') (subst x e t)
@@ -1317,12 +1329,20 @@ typeWith ctx e@(App f a         ) = do
             let nf_A  = normalize _A
             let nf_A' = normalize _A'
             Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
-typeWith ctx   (Lets ls0 e'     ) = do
-    let go c             []  = typeWith c e'
-        go c (Let f as r:ls) = do
-            let r' = foldr (\(x, _A) b -> Lam x _A b) r as
-            tr <- typeWith c r'
-            go (Context.insert f tr c) ls
+typeWith ctx e@(Lets ls0 e'     ) = do
+    let go c                []  = typeWith c e'
+        go c (Let f as mt r:ls) = do
+            let r'  = foldr (\(x, _A)  b -> Lam x _A  b) r as
+            tr' <- typeWith c r'
+            case mt of
+                Nothing -> return ()
+                Just t  -> do
+                    let c' = foldr (\(x, _A) -> Context.insert x _A) c as
+                    tr <- typeWith c' r
+                    if propEqual tr t
+                        then return ()
+                        else Left (TypeError ctx e (AnnotMismatch r t tr))
+            go (Context.insert f tr' c) ls
     go ctx ls0
 typeWith ctx e@(Annot x t       ) = do
     t' <- typeWith ctx x
@@ -1638,7 +1658,7 @@ normalize e = case e of
             a' = normalize a
     Lets ls i0 -> normalize (foldr cons i0 ls)
       where
-        cons (Let f as r) i = subst f r' i
+        cons (Let f as _ r) i = subst f r' i
           where
             r' = foldr (\(x, _A) b -> Lam x _A b) r as
     Annot x _ -> normalize x

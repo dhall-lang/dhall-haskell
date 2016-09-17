@@ -240,7 +240,9 @@ LetsRev
 
 Let
     : 'let' label Args '=' Expr0
-        { Let $2 $3 $5 }
+        { Let $2 $3 Nothing $5 }
+    | 'let' label Args ':' Expr0 '=' Expr0
+        { Let $2 $3 (Just $5)$7 }
 
 Args
     : ArgsRev
