@@ -134,13 +134,7 @@ data Let a = Let
     } deriving (Functor, Foldable, Traversable, Show)
 
 instance Buildable a => Buildable (Let a) where
-    build (Let f as r) =
-            "let "
-        <>  build f
-        <>  " "
-        <>  foldMap (\(x, t) -> "(" <> build x <> " : " <> build t <> ")") as
-        <>  "= "
-        <>  build r
+    build = buildLet
 
 -- | Syntax tree for expressions
 data Expr a
