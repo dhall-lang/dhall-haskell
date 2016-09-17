@@ -71,9 +71,9 @@ tokens :-
     "in"                                { emit In               }
     "Type"                              { emit Type             }
     "Kind"                              { emit Kind             }
-    "->"                                { emit Arrow            }
-    "forall"                            { emit Forall           }
-    "\"                                 { emit Lambda           }
+    "->" | "→"                          { emit Arrow            }
+    "forall" | "∀"                      { emit Forall           }
+    "\" | "λ"                           { emit Lambda           }
     "Bool"                              { emit Bool             }
     "True"                              { emit True_            }
     "False"                             { emit False_           }

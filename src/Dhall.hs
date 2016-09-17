@@ -52,7 +52,7 @@
 --
 -- > $ ./example
 -- > example: 
--- > Expression: 1 : {{ bar : List Double, foo : Integer }}
+-- > Expression: 1 : { bar : List Double, foo : Integer }
 -- > 
 -- > Error: Expression's inferred type does not match annotated type
 -- > 
@@ -72,7 +72,7 @@
 -- > You or the interpreter annotated this expression:
 -- > ↳ 1
 -- > ... with this type or kind:
--- > ↳ {{ bar : List Double, foo : Integer }}
+-- > ↳ { bar : List Double, foo : Integer }
 -- > ... but the inferred type of the expression is actually this type or kind:
 -- > ↳ Integer
 --
@@ -105,7 +105,7 @@
 -- is:
 --
 -- > $ dhall typecheck < makeBools
--- > forall (n : Bool) -> List Bool
+-- > ∀(n : Bool) -> List Bool
 --
 -- This says that @makeBools@ is a function of one argument named @n@ of type
 -- `Bool` that returns a `Vector` of `Bool`s.
@@ -140,7 +140,7 @@
 -- > <Ctrl-D>
 -- > List Bool
 -- > 
--- > [ False, False, True, False ] : List Bool
+-- > [False, False, True, False] : List Bool
 --
 -- The @dhall@ compiler with no arguments produces two output lines:
 --
@@ -207,23 +207,22 @@
 -- > $ dhall
 -- > ./makeBools "ABC"
 -- > dhall: 
--- > dhall: 
--- > Expression: (\(n : Bool) -> [ n && True, n && False, n || True, n || False ] : List Bool) "ABC"
+-- > Expression: (λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool) "ABC"
 -- > 
 -- > Error: Function applied to the wrong type or kind of argument
 -- > 
 -- > Explanation: Every function declares what type or kind of argument to accept
 -- > 
--- >     \(x : Bool) -> x   -- Anonymous function which only accepts `Bool` arguments
+-- >     λ(x : Bool) -> x   -- Anonymous function which only accepts `Bool` arguments
 -- > 
 -- >     let f (x : Bool) = x   -- Named function which only accepts `Bool` arguments
 -- >     in  f True
 -- > 
--- >     \(a : Type) -> a   -- Anonymous function which only accepts `Type` arguments
+-- >     λ(a : Type) -> a   -- Anonymous function which only accepts `Type` arguments
 -- > 
 -- > You *cannot* apply a function to the wrong type or kind of argument:
 -- > 
--- >     (\(x : Bool) -> x) "A"  -- "A" is `Text`, but the function expects a `Bool`
+-- >     (λ(x : Bool) -> x) "A"  -- "A" is `Text`, but the function expects a `Bool`
 -- > 
 -- > You tried to invoke a function which expects an argument of type or kind:
 -- > ↳ Bool
@@ -279,9 +278,9 @@
 -- > $ dhall
 -- > \(n : Bool) -> +10 * +10
 -- > <Ctrl-D>
--- > forall (n : Bool) -> Natural
+-- > ∀(n : Bool) → Natural
 -- > 
--- > \(n : Bool) -> +100
+-- > λ(n : Bool) → +100
 --
 -- ... and even though the function is still missing the first argument named
 -- @n@ the compiler is smart enough to evaluate the body of the anonymous

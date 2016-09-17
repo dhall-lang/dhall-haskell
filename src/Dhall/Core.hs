@@ -143,10 +143,10 @@ data Expr a
     = Const Const
     -- | > Var x                           ~  x
     | Var Text
-    -- | > Lam x     A b                   ~  \(x : A) -> b
+    -- | > Lam x     A b                   ~  λ(x : A) -> b
     | Lam Text (Expr a) (Expr a)
-    -- | > Pi x      A B                   ~  forall (x : A) -> B
-    --   > Pi unused A B                   ~              A  -> B
+    -- | > Pi x      A B                   ~  ∀(x : A) -> B
+    --   > Pi unused A B                   ~        A  -> B
     | Pi  Text (Expr a) (Expr a)
     -- | > App f a                         ~  f a
     | App (Expr a) (Expr a)
@@ -356,11 +356,11 @@ buildExpr0 a =
 
 buildExpr1 :: Buildable a => Expr a -> Builder
 buildExpr1 (Lam a b c) =
-        "\\("
+        "λ("
     <>  build a
     <> " : "
     <> buildExpr0 b
-    <> ") -> "
+    <> ") → "
     <> buildExpr1 c
 buildExpr1 (BoolIf a b c) =
         "if "
@@ -371,14 +371,14 @@ buildExpr1 (BoolIf a b c) =
     <> buildExpr1 c
 buildExpr1 (Pi "_" b c) =
         buildExpr2 b
-    <>  " -> "
+    <>  " → "
     <>  buildExpr1 c
 buildExpr1 (Pi a b c) =
-        "forall ("
+        "∀("
     <>  build a
     <>  " : "
     <>  buildExpr0 b
-    <>  ") -> "
+    <>  ") → "
     <>  buildExpr1 c
 buildExpr1 (Lets a b) =
         buildLets a
@@ -581,7 +581,7 @@ Error: Unbound variable
 Explanation: Expressions can only reference previously introduced (i.e. "bound")
 variables that are still "in scope".  For example, these are valid expressions:
 
-    \(x : Bool) -> x      -- Anonymous functions introduce "bound" variables
+    λ(x : Bool) -> x      -- Anonymous functions introduce "bound" variables
 
     let x = 1 in x        -- `let` definitions introduce "bound" variables
 
@@ -590,7 +590,7 @@ variables that are still "in scope".  For example, these are valid expressions:
 
 ... but these are not valid expressions:
 
-    \(x : Bool) -> y          -- The variable `y` hasn't been introduced yet
+    λ(x : Bool) -> y          -- The variable `y` hasn't been introduced yet
 
     (let x = True in x) && x  -- `x` is undefined outside the parentheses
 
@@ -603,19 +603,19 @@ Error: Invalid input annotation for a function
 
 Explanation: A function can accept an input term of a given "type", like this:
 
-    forall (x : Text) -> Bool  -- This function accepts any term of type `Text`.
-                               -- `x` is the term's name and `Text` is the type
+    ∀(x : Text) -> Bool  -- This function accepts any term of type `Text`.
+                         -- `x` is the term's name and `Text` is the type
 
     Bool -> Integer  -- This function accepts any term of type `Bool`.
                      -- The input term's name is omitted
 
 ... or accept an input "type" of a given "kind", like this:
 
-    forall (a : Type) -> Type  -- This accepts any type `a` of kind `Type`
+    ∀(a : Type) -> Type  -- This accepts any type `a` of kind `Type`
 
 Other input annotations are *not* valid, like this:
 
-    forall (x : 1) -> x  -- `1` is a term and not a "type" nor a "kind"
+    ∀(x : 1) -> x  -- `1` is a term and not a "type" nor a "kind"
 
 This input annotation you gave is neither a type nor a kind:
 ↳ $txt
@@ -629,17 +629,17 @@ Error: Invalid output annotation for a function
 
 Explanation: A function can emit an output term of a given "type", like this:
 
-    forall (x : Text) -> Bool  -- This function emits a term of type `Bool`.
+    ∀(x : Text) -> Bool  -- This function emits a term of type `Bool`.
 
-    Bool -> Int                -- This function emits a term of type `Int`.
+    Bool -> Int          -- This function emits a term of type `Int`.
 
 ... or emit an output "type" of a given "kind", like this:
 
-    forall (a : Type) -> Type  -- This emits a type of kind `Type`
+    ∀(a : Type) -> Type  -- This emits a type of kind `Type`
 
 Other outputs are *not* valid, like this:
 
-    forall (x : Text) -> 1     -- `1` is a term and not a "type" nor a "kind"
+    ∀(x : Text) -> 1     -- `1` is a term and not a "type" nor a "kind"
 
 This function output you specified is neither a type nor a kind:
 ↳ $txt
@@ -677,16 +677,16 @@ Error: Function applied to the wrong type or kind of argument
 
 Explanation: Every function declares what type or kind of argument to accept
 
-    \(x : Bool) -> x   -- Anonymous function which only accepts `Bool` arguments
+    λ(x : Bool) -> x   -- Anonymous function which only accepts `Bool` arguments
 
     let f (x : Bool) = x   -- Named function which only accepts `Bool` arguments
     in  f True
 
-    \(a : Type) -> a   -- Anonymous function which only accepts `Type` arguments
+    λ(a : Type) -> a   -- Anonymous function which only accepts `Type` arguments
 
 You *cannot* apply a function to the wrong type or kind of argument:
 
-    (\(x : Bool) -> x) "A"  -- "A" is `Text`, but the function expects a `Bool`
+    (λ(x : Bool) -> x) "A"  -- "A" is `Text`, but the function expects a `Bool`
 
 You tried to invoke a function which expects an argument of type or kind:
 ↳ $txt0
@@ -986,13 +986,13 @@ Explanation: You can only access fields on records, like this:
 
     { foo = True, bar = "ABC" }.foo               -- This is valid ...
 
-    \(r : {{ foo : Bool, bar : Text }}) -> r.foo  -- ... and so is this
+    λ(r : {{ foo : Bool, bar : Text }}) -> r.foo  -- ... and so is this
 
 ... but you *cannot* access fields on non-record expressions, like this:
 
     1.foo                   -- `1` is not a valid record
 
-    (\(x : Bool) -> x).foo  -- A function is not a valid record
+    (λ(x : Bool) -> x).foo  -- A function is not a valid record
 
 You tried to access a field named:
 ↳ $txt0
@@ -1014,7 +1014,7 @@ Explanation: You can only retrieve record fields if they are present
 
     { foo = True, bar = "ABC" }.foo               -- This is valid ...
 
-    \(r : {{ foo : Bool, bar : Text }}) -> r.foo  -- ... and so is this
+    λ(r : {{ foo : Bool, bar : Text }}) -> r.foo  -- ... and so is this
 
 ... but you *cannot* access fields missing from a record:
 
@@ -1471,7 +1471,7 @@ typeWith _      ListBuild         = do
         (Pi "a" (Const Type)
             (Pi "_"
                 (Pi "list" (Const Type)
-                    (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
+                    (Pi "cons" (Pi "_" "a" (Pi "_" "list" "list"))
                         (Pi "nil" "list" "list") ) )
                 (App List "a") ) )
 typeWith _      ListFold          = do
@@ -1479,7 +1479,7 @@ typeWith _      ListFold          = do
         (Pi "a" (Const Type)
             (Pi "_" (App List "a")
                 (Pi "list" (Const Type)
-                    (Pi "cons" (Pi "head" "a" (Pi "tail" "list" "list"))
+                    (Pi "cons" (Pi "_" "a" (Pi "_" "list" "list"))
                         (Pi "nil" "list" "list")) ) ) )
 typeWith _      ListLength        = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") Natural))
