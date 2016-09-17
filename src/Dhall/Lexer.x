@@ -55,7 +55,6 @@ tokens :-
     "{"                                 { emit OpenBrace        }
     "}"                                 { emit CloseBrace       }
     "{:}"                               { emit EmptyRecord      }
-    "{=}"                               { emit EmptyRecordLit   }
     "["                                 { emit OpenBracket      }
     "]"                                 { emit CloseBracket     }
     ":"                                 { emit Colon            }
@@ -168,7 +167,6 @@ data Token
     | OpenBrace
     | CloseBrace
     | EmptyRecord
-    | EmptyRecordLit
     | OpenBracket
     | CloseBracket
     | Colon
@@ -234,8 +232,6 @@ instance Buildable Token where
         = "}"
     build  EmptyRecord
         = "{:}"
-    build  EmptyRecordLit
-        = "{=}"
     build  OpenBracket
         = "["
     build  CloseBracket

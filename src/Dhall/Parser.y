@@ -45,7 +45,6 @@ import qualified NeatInterpolation
     '{'              { Dhall.Lexer.OpenBrace      }
     '}'              { Dhall.Lexer.CloseBrace     }
     '{:}'            { Dhall.Lexer.EmptyRecord    }
-    '{=}'            { Dhall.Lexer.EmptyRecordLit }
     '['              { Dhall.Lexer.OpenBracket    }
     ']'              { Dhall.Lexer.CloseBracket   }
     ':'              { Dhall.Lexer.Colon          }
@@ -273,15 +272,15 @@ ElemsRev
 RecordLit
     : '{' FieldValues '}'
         { RecordLit (Data.Map.fromList $2) }
-    | '{=}'
-        { RecordLit (Data.Map.fromList []) }
 
 FieldValues
     : FieldValuesRev
         { reverse $1 }
 
 FieldValuesRev
-    : FieldValue
+    : {- empty -}
+        { [] }
+    | FieldValue
         { [$1] }
     | FieldValuesRev ',' FieldValue
         { $3 : $1 }
