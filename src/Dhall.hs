@@ -105,7 +105,7 @@
 -- is:
 --
 -- > $ dhall typecheck < makeBools
--- > ∀(n : Bool) -> List Bool
+-- > ∀(n : Bool) → List Bool
 --
 -- This says that @makeBools@ is a function of one argument named @n@ of type
 -- `Bool` that returns a `Vector` of `Bool`s.
@@ -213,16 +213,16 @@
 -- > 
 -- > Explanation: Every function declares what type or kind of argument to accept
 -- > 
--- >     λ(x : Bool) -> x   -- Anonymous function which only accepts `Bool` arguments
+-- >     λ(x : Bool) → x    -- Anonymous function which only accepts `Bool` arguments
 -- > 
 -- >     let f (x : Bool) = x   -- Named function which only accepts `Bool` arguments
 -- >     in  f True
 -- > 
--- >     λ(a : Type) -> a   -- Anonymous function which only accepts `Type` arguments
+-- >     λ(a : Type) → a    -- Anonymous function which only accepts `Type` arguments
 -- > 
 -- > You *cannot* apply a function to the wrong type or kind of argument:
 -- > 
--- >     (λ(x : Bool) -> x) "A"  -- "A" is `Text`, but the function expects a `Bool`
+-- >     (λ(x : Bool) → x) "A"  -- "A" is `Text`, but the function expects a `Bool`
 -- > 
 -- > You tried to invoke a function which expects an argument of type or kind:
 -- > ↳ Bool
