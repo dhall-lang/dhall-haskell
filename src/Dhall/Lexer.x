@@ -67,6 +67,7 @@ tokens :-
     "<>"                                { emit Diamond          }
     "++"                                { emit DoublePlus       }
     "*"                                 { emit Star             }
+    "@"                                 { emit At               }
     "let"                               { emit Let              }
     "in"                                { emit In               }
     "Type"                              { emit Type             }

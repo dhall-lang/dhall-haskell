@@ -17,7 +17,7 @@ module Dhall.Core (
     Const(..),
     Path(..),
     X(..),
-    Let(..),
+    Var(..),
     Expr(..),
     Context,
 
@@ -124,25 +124,19 @@ instance Show X where
 instance Buildable X where
     build = absurd
 
-{-|
-> Let f [(x1, t1), (x2, t2)] r  ~ let f (x1 : t1) (x2 : t2) = r
--}
-data Let a = Let
-    { letName :: Text
-    , letArgs :: [(Text, Expr a)]
-    , letType :: Maybe (Expr a)
-    , letRhs  :: Expr a
-    } deriving (Functor, Foldable, Traversable, Show)
+data Var = V Text !Integer
+    deriving (Eq, Show)
 
-instance Buildable a => Buildable (Let a) where
-    build = buildLet
+instance IsString Var where
+    fromString str = V (fromString str) 0
 
 -- | Syntax tree for expressions
 data Expr a
     -- | > Const c                         ~  c
     = Const Const
-    -- | > Var x                           ~  x
-    | Var Text
+    -- | > Var (V x 0)                     ~  x
+    -- | > Var (V x n)                     ~  x@n
+    | Var Var             
     -- | > Lam x     A b                   ~  λ(x : A) -> b
     | Lam Text (Expr a) (Expr a)
     -- | > Pi x      A B                   ~  ∀(x : A) -> B
@@ -150,8 +144,9 @@ data Expr a
     | Pi  Text (Expr a) (Expr a)
     -- | > App f a                         ~  f a
     | App (Expr a) (Expr a)
-    -- | > Lets [l1, l2] e                 ~  l1 l2 in e
-    | Lets [Let a] (Expr a)
+    -- | > Let f [(x1, t1), (x2, t2)] Nothing r e  ~  let f (x1 : t1) (x2 : t2) = r in e
+    -- | > Let f [(x1, t1), (x2, t2)] (Just t) r e  ~  let f (x1 : t1) (x2 : t2) : t = r in e
+    | Let Text [(Text, Expr a)] (Maybe (Expr a)) (Expr a) (Expr a)
     -- | > Annot x t                       ~  x : t
     | Annot (Expr a) (Expr a)
     -- | > Bool                            ~  Bool
@@ -240,18 +235,15 @@ instance Monad Expr where
     return = pure
 
     Const c          >>= _ = Const c
-    Var x            >>= _ = Var x
+    Var v            >>= _ = Var v
     Lam x _A  b      >>= k = Lam x (_A >>= k) ( b >>= k)
     Pi  x _A _B      >>= k = Pi  x (_A >>= k) (_B >>= k)
     App f a          >>= k = App (f >>= k) (a >>= k)
-    Lets ls e        >>= k = Lets ls' (e >>= k)
+    Let f as mt r e  >>= k = Let f as' (fmap (>>= k) mt) (r >>= k) (e >>= k)
       where
-        ls' = do
-            Let f as mt r  <- ls
-            let as' = do
-                    (x, t) <- as
-                    return (x, t >>= k)
-            return (Let f as' (fmap (>>= k) mt) (r >>= k))
+        as' = do
+            (x, t) <- as
+            return (x, t >>= k)
     Annot x t        >>= k = Annot (x >>= k) (t >>= k)
     Bool             >>= _ = Bool
     BoolLit b        >>= _ = BoolLit b
@@ -295,13 +287,16 @@ instance Monad Expr where
     Field r x        >>= k = Field (r >>= k) x
     Embed r          >>= k = k r
 
-match :: Text -> Text -> [(Text, Text)] -> Bool
-match xL xR  []              = xL == xR
-match xL xR ((xL', xR'):xs)
+match :: Var -> Var -> [(Text, Text)] -> Bool
+match (V xL nL) (V xR nR)             []  =
+    xL == xR  && nL == nR
+match (V xL 0 ) (V xR 0 ) ((xL', xR'):_ )
     | xL == xL' && xR == xR' = True
-    | xL == xL'              = False
-    |              xR == xR' = False
-    | otherwise              = match xL xR xs
+match (V xL nL) (V xR nR) ((xL', xR'):xs) =
+    match (V xL nL') (V xR nR') xs
+  where
+    nL' = if xL == xL' then nL - 1 else nL
+    nR' = if xR == xR' then nR - 1 else nR
 
 propEqual :: Expr X -> Expr X -> Bool
 propEqual eL0 eR0 = State.evalState (go (normalize eL0) (normalize eR0)) []
@@ -309,9 +304,9 @@ propEqual eL0 eR0 = State.evalState (go (normalize eL0) (normalize eR0)) []
     go :: Expr X -> Expr X -> State [(Text, Text)] Bool
     go (Const Type) (Const Type) = return True
     go (Const Kind) (Const Kind) = return True
-    go (Var xL) (Var xR) = do
+    go (Var vL) (Var vR) = do
         ctx <- State.get
-        return (match xL xR ctx)
+        return (match vL vR ctx)
     go (Pi xL tL bL) (Pi xR tR bR) = do
         ctx <- State.get
         eq1 <- go tL tR
@@ -380,10 +375,26 @@ buildExpr1 (Pi a b c) =
     <>  buildExpr0 b
     <>  ") → "
     <>  buildExpr1 c
-buildExpr1 (Lets a b) =
-        buildLets a
+buildExpr1 (Let a b Nothing d e) =
+        "let "
+    <>  build a
+    <>  " "
+    <>  buildArgs b
+    <>  "= "
+    <>  buildExpr0 d
     <>  " in "
-    <>  buildExpr1 b
+    <>  buildExpr1 e
+buildExpr1 (Let a b (Just c) d e) =
+        "let "
+    <>  build a
+    <>  " "
+    <>  buildArgs b
+    <>  ": "
+    <>  buildExpr0 c
+    <>  "= "
+    <>  buildExpr0 d
+    <>  " in "
+    <>  buildExpr1 e
 buildExpr1 (ListLit a b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExpr5 a
 buildExpr1 (MaybeLit a b) =
@@ -409,7 +420,7 @@ buildExpr4  a        = buildExpr5 a
 
 buildExpr5 :: Buildable a => Expr a -> Builder
 buildExpr5 (Var a) =
-    build a
+    buildVar a
 buildExpr5 (Const Type) =
     "Type"
 buildExpr5 (Const Kind) =
@@ -475,29 +486,9 @@ buildExpr5 (Field a b) =
 buildExpr5 a =
     "(" <> buildExpr0 a <> ")"
 
-buildLets :: Buildable a => [Let a] -> Builder
-buildLets (a:bs) = buildLet a <> buildLets bs
-buildLets    []  = ""
-
-buildLet :: Buildable a => Let a -> Builder
-buildLet (Let a b Nothing d) =
-        "let "
-    <>  build a
-    <>  " "
-    <>  buildArgs b
-    <>  "= "
-    <>  buildExpr0 d
-    <>  " "
-buildLet (Let a b (Just c) d) =
-        "let "
-    <>  build a
-    <>  " "
-    <>  buildArgs b
-    <>  ": "
-    <>  buildExpr0 c
-    <>  "= "
-    <>  buildExpr0 d
-    <>  " "
+buildVar :: Var -> Builder
+buildVar (V x 0) = build x
+buildVar (V x n) = build x <> "@" <> build (show n)
 
 buildArgs :: Buildable a => [(Text, Expr a)] -> Builder
 buildArgs (a:bs) = buildArg a <> buildArgs bs
@@ -1226,61 +1217,197 @@ instance Buildable TypeError where
             .   reverse
             .   Context.toList
 
+shift :: Integer -> Var -> Expr a -> Expr a
+shift _ _ (Const k) = Const k
+shift d (V x n) (Var (V x' n')) = Var (V x' n'')
+  where
+    n'' = if x == x' && n <= n' then n' + d else n'
+shift d (V x n) (Lam x' _A b) = Lam x' _A' b'
+  where
+    _A' = shift d (V x n ) _A
+    b'  = shift d (V x n') b
+      where
+        n' = if x == x' then n + 1 else n
+shift d (V x n) (Pi x' _A _B) = Pi x' _A' _B'
+  where
+    _A' = shift d (V x n ) _A
+    _B' = shift d (V x n') _B
+      where
+        n' = if x == x' then n + 1 else n
+shift d v (App f a) = App f' a'
+  where
+    f' = shift d v f
+    a' = shift d v a
+shift d (V x n) (Let f as mt r e) = Let f as' mt' r' e'
+  where
+    e' = shift d (V x n') e
+      where
+        n' = if x == f then n + 1 else n
+
+    ~(as', mt', r') = shiftArgs d (V x n) (as, mt, r)
+shift d v (Annot a b) = Annot a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
+shift d v (BoolAnd a b) = BoolAnd a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
+shift d v (BoolOr a b) = BoolOr a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
+shift d v (NaturalPlus a b) = NaturalPlus a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
+shift d v (NaturalTimes a b) = NaturalTimes a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
+shift d v (TextAppend a b) = TextAppend a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
+shift d v (ListLit a b) = ListLit a' b'
+  where
+    a' =       shift d v  a
+    b' = fmap (shift d v) b
+shift d v (ListConcat a b) = ListConcat a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
+shift d v (MaybeLit a b) = MaybeLit a' b'
+  where
+    a' =       shift d v  a
+    b' = fmap (shift d v) b
+shift d v (Record kts) = Record (Data.Map.fromAscList kts')
+  where
+    kts' = [ (k, shift d v t) | (k, t) <- Data.Map.toList kts ]
+shift d v (RecordLit kvs) = RecordLit (Data.Map.fromAscList kvs')
+  where
+    kvs' = [ (k, shift d v v') | (k, v') <- Data.Map.toList kvs ]
+shift d v (Field a b) = Field a' b
+  where
+    a' = shift d v a
+-- The Dhall compiler enforces that all embedded values are closed expressions
+shift _ _ (Embed p) = Embed p
+shift _ _ e = e
+
+shiftArgs
+    :: Integer
+    -> Var
+    -> ([(Text, Expr a)], Maybe (Expr a), Expr a)
+    -> ([(Text, Expr a)], Maybe (Expr a), Expr a)
+shiftArgs d      v  (       [], mt, r) = (         [], mt', r')
+  where
+    mt' = fmap (shift d v) mt
+    r'  =       shift d v   r
+shiftArgs d (V x n) ((y, t):as, mt, r) = ((y, t'):as', mt', r')
+  where
+    ~(as', mt', r') = shiftArgs d (V x n') (as, mt, r)
+      where
+        n' = if x == y then n + 1 else n
+
+    t' = shift d (V x n) t
+
 {-| Substitute all occurrences of a variable with an expression
 
 > subst x C B  ~  B[x := C]
 -}
-subst :: Text -> Expr a -> Expr a -> Expr a
-subst x e (Lam x' _A  b    ) = Lam x' (subst x e _A)  b'
+subst :: Var -> Expr a -> Expr a -> Expr a
+subst (V x n) e (Lam y _A b) = Lam y _A' b'
   where
-    b'  = if x == x' then  b else subst x e  b
-subst x e (Pi  x' _A _B    ) = Pi  x' (subst x e _A) _B'
+    _A' = subst (V x n )                  e  _A
+    b'  = subst (V x n') (shift 1 (V y 0) e)  b
+    n'  = if x == y then n + 1 else n
+subst (V x n) e (Pi y _A _B) = Pi y _A' _B'
   where
-    _B' = if x == x' then _B else subst x e _B
-subst x e (App f a         ) = App (subst x e f) (subst x e a)
-subst x e (Lets ls0 s0     ) = Lets ls0' s0''
+    _A' = subst (V x n )                  e  _A
+    _B' = subst (V x n') (shift 1 (V y 0) e) _B
+    n'  = if x == y then n + 1 else n
+subst v e (App f a) = App f' a'
   where
-    ~(ls0', s0'') = go0 True ls0
-
-    go0 !b              []  = (              [] , s0')
+    f' = subst v e f
+    a' = subst v e a
+subst v e (Var v') = if v == v' then e else Var v'
+subst (V x n) e (Let f as mt r b) = Let f as' mt' r' b'
+  where
+    b' = subst (V x n') (shift 1 (V f 0) e) b
       where
-        s0' = if b then subst x e s0 else s0
-    go0 !b (Let f as0 mt r:ls) = (Let f as0' mt'' r'':ls', s0')
-      where
-        ~(ls', s0') = go0 (b && x /= f) ls
+        n' = if x == f then n + 1 else n
 
-        ~(as0', mt'', r'') = go1 True as0
-          where
-            go1 !b'         []  = (        [] , mt', r')
-              where
-                r'  = if b' then       subst x e  r  else r
-                mt' = if b' then fmap (subst x e) mt else mt
-            go1 !b' ((y, t):as) = ((y, t'):as', mt', r')
-              where
-                ~(as', mt', r') = go1 (b' && x /= y) as
-
-                t' = if b' then subst x e t else t
-subst x e (Annot x' t      ) = Annot (subst x e x') (subst x e t)
-subst x e (Var x'          ) = if x == x' then e else Var x'
-subst x e (BoolAnd      l r) = BoolAnd      (subst x e l) (subst x e r)
-subst x e (BoolOr       l r) = BoolOr       (subst x e l) (subst x e r)
-subst x e (BoolIf x' y z   ) = BoolIf (subst x e x') (subst x e y) (subst x e z)
-subst x e (NaturalPlus  l r) = NaturalPlus  (subst x e l) (subst x e r)
-subst x e (NaturalTimes l r) = NaturalTimes (subst x e l) (subst x e r)
-subst x e (TextAppend   l r) = TextAppend   (subst x e l) (subst x e r)
-subst x e (ListLit t es    ) = ListLit (subst x e t) (fmap (subst x e) es)
-subst x e (ListConcat   l r) = ListConcat (subst x e l) (subst x e r)
-subst x e (MaybeLit t es   ) = MaybeLit (subst x e t) (fmap (subst x e) es)
-subst x e (Record    kts   ) = Record (Data.Map.fromAscList kts')
+    ~(as', mt', r') = substArgs (V x n) e (as, mt, r)
+subst x e (Annot y t) = Annot y' t'
+  where
+    y' = subst x e y
+    t' = subst x e t
+subst x e (BoolAnd a b) = BoolAnd a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
+subst x e (BoolOr a b) = BoolOr a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
+subst x e (BoolIf a b c) = BoolIf a' b' c'
+  where
+    a' = subst x e a
+    b' = subst x e b
+    c' = subst x e c
+subst x e (NaturalPlus a b) = NaturalPlus a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
+subst x e (NaturalTimes a b) = NaturalTimes a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
+subst x e (TextAppend a b) = TextAppend a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
+subst x e (ListLit a b) = ListLit a' b'
+  where
+    a' =       subst x e  a
+    b' = fmap (subst x e) b
+subst x e (ListConcat a b) = ListConcat a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
+subst x e (MaybeLit a b) = MaybeLit a' b'
+  where
+    a' =       subst x e  a
+    b' = fmap (subst x e) b
+subst x e (Record kts) = Record (Data.Map.fromAscList kts')
   where
     kts' = [ (k, subst x e t) | (k, t) <- Data.Map.toList kts ]
-subst x e (RecordLit kvs   ) = RecordLit (Data.Map.fromAscList kvs')
+subst x e (RecordLit kvs) = RecordLit (Data.Map.fromAscList kvs')
   where
     kvs' = [ (k, subst x e v) | (k, v) <- Data.Map.toList kvs ]
-subst x e (Field r x'      ) = Field (subst x e r) x'
+subst x e (Field a b) = Field a' b
+  where
+    a' = subst x e a
 -- The Dhall compiler enforces that all embedded values are closed expressions
-subst _ _ (Embed p         ) = Embed p
-subst _ _  e                 = e
+subst _ _ (Embed p) = Embed p
+subst _ _  e        = e
+
+substArgs
+    :: Var
+    -> Expr a
+    -> ([(Text, Expr a)], Maybe (Expr a), Expr a)
+    -> ([(Text, Expr a)], Maybe (Expr a), Expr a)
+substArgs      v  e (       [], mt, r) = (         [], mt', r')
+  where
+    mt' = fmap (subst v e) mt
+    r'  =       subst v e   r
+substArgs (V x n) e ((y, t):as, mt, r) = ((y, t'):as', mt', r')
+  where
+    ~(as', mt', r') = substArgs (V x n') (shift 1 (V y 0) e) (as, mt, r)
+      where
+        n' = if x == y then n + 1 else n
+
+    t' = subst (V x n) e t
 
 {-| Type-check an expression and return the expression's type if type-checking
     suceeds or an error if type-checking fails
@@ -1292,12 +1419,13 @@ subst _ _  e                 = e
 typeWith :: Context (Expr X) -> Expr X -> Either TypeError (Expr X)
 typeWith _     (Const c         ) = do
     fmap Const (axiom c)
-typeWith ctx e@(Var x           ) = do
-    case Context.lookup x ctx of
+typeWith ctx e@(Var (V x n)     ) = do
+    case Context.lookup x n ctx of
         Nothing -> Left (TypeError ctx e UnboundVariable)
         Just a  -> return a
 typeWith ctx   (Lam x _A  b     ) = do
-    _B <- typeWith (Context.insert x _A ctx) b
+    let ctx' = fmap (shift 1 (V x 0)) (Context.insert x _A ctx)
+    _B <- typeWith ctx' b
     let p = Pi x _A _B
     _t <- typeWith ctx p
     return p
@@ -1307,7 +1435,7 @@ typeWith ctx e@(Pi  x _A _B     ) = do
         Const k -> return k
         _       -> Left (TypeError ctx e (InvalidInputType _A))
 
-    let ctx' = Context.insert x _A ctx
+    let ctx' = fmap (shift 1 (V x 0)) (Context.insert x _A ctx)
     tB <- fmap normalize (typeWith ctx' _B)
     kB <- case tB of
         Const k -> return k
@@ -1324,26 +1452,27 @@ typeWith ctx e@(App f a         ) = do
     _A' <- typeWith ctx a
     if propEqual _A _A'
         then do
-            return (subst x a _B)
+            let a'   = shift   1  (V x 0) a
+            let _B'  = subst (V x 0) a' _B
+            let _B'' = shift (-1) (V x 0) _B'
+            return _B''
         else do
             let nf_A  = normalize _A
             let nf_A' = normalize _A'
             Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
-typeWith ctx e@(Lets ls0 e'     ) = do
-    let go c                []  = typeWith c e'
-        go c (Let f as mt r:ls) = do
-            let r'  = foldr (\(x, _A)  b -> Lam x _A  b) r as
-            tr' <- typeWith c r'
-            case mt of
-                Nothing -> return ()
-                Just t  -> do
-                    let c' = foldr (\(x, _A) -> Context.insert x _A) c as
-                    tr <- typeWith c' r
-                    if propEqual tr t
-                        then return ()
-                        else Left (TypeError ctx e (AnnotMismatch r t tr))
-            go (Context.insert f tr' c) ls
-    go ctx ls0
+typeWith ctx e@(Let f as mt r b ) = do
+    let r' = foldr (\(x, _A) -> Lam x _A) r as
+    tr' <- typeWith ctx r'
+    case mt of
+        Nothing -> return ()
+        Just t  -> do
+            let ctx' = foldr (\(x, _A) -> Context.insert x _A) ctx as
+            tr <- typeWith ctx' r
+            if propEqual tr t
+                then return ()
+                else Left (TypeError ctx e (AnnotMismatch r t tr))
+    let ctx' = Context.insert f tr' ctx
+    typeWith ctx' b
 typeWith ctx e@(Annot x t       ) = do
     t' <- typeWith ctx x
     if propEqual t t'
@@ -1588,7 +1717,11 @@ normalize e = case e of
     Lam x _A  b -> Lam x (normalize _A) (normalize  b)
     Pi  x _A _B -> Pi  x (normalize _A) (normalize _B)
     App f a -> case normalize f of
-        Lam x _A b -> normalize (subst x (normalize a) b)  -- Beta reduce
+        Lam x _A b -> normalize b''  -- Beta reduce
+          where
+            a'  = shift   1  (V x 0) a
+            b'  = subst (V x 0) a' b
+            b'' = shift (-1) (V x 0) b'
         f' -> case App f' a' of
             App (App (App (App NaturalFold (NaturalLit n0)) _) succ') zero ->
                 normalize (go n0)
@@ -1656,11 +1789,12 @@ normalize e = case e of
             _ -> App f' a'
           where
             a' = normalize a
-    Lets ls i0 -> normalize (foldr cons i0 ls)
+    Let f as _ r b -> normalize b''
       where
-        cons (Let f as _ r) i = subst f r' i
-          where
-            r' = foldr (\(x, _A) b -> Lam x _A b) r as
+        r'  = foldr (\(x, _A) -> Lam x _A) r as
+        r'' = shift 1 (V f 0) r'
+        b'  = subst (V f 0) r'' b
+        b'' = shift (-1) (V f 0) b'
     Annot x _ -> normalize x
     BoolAnd x y ->
         case x' of

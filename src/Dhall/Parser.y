@@ -57,6 +57,7 @@ import qualified NeatInterpolation
     '<>'             { Dhall.Lexer.Diamond        }
     '++'             { Dhall.Lexer.DoublePlus     }
     '*'              { Dhall.Lexer.Star           }
+    '@'              { Dhall.Lexer.At             }
     'let'            { Dhall.Lexer.Let            }
     'in'             { Dhall.Lexer.In             }
     'Type'           { Dhall.Lexer.Type           }
@@ -120,8 +121,10 @@ Expr1
         { Pi $3 $5 $8 }
     | Expr2 '->' Expr1
         { Pi "_" $1 $3 }
-    | Lets 'in' Expr1
-        { Lets $1 $3 }
+    | 'let' label Args '=' Expr0 'in' Expr1
+        { Let $2 $3 Nothing $5 $7 }
+    | 'let' label Args ':' Expr0 '=' Expr0 'in' Expr1
+        { Let $2 $3 (Just $5) $7 $9 }
     | '[' Elems ']' ':' ListLike Expr5
         { $5 $6 (Data.Vector.fromList $2) }
     | Expr2
@@ -161,7 +164,9 @@ Expr4
 
 Expr5
     : label
-        { Var $1 }
+        { Var (V $1 0) }
+    | label '@' number
+        { Var (V $1 $3) }
     | 'Type'
         { Const Type }
     | 'Kind'
@@ -227,22 +232,6 @@ Expr5
     | '(' Expr0 ')'
         { $2 }
     
-Lets
-    : LetsRev
-        { reverse $1 }
-
-LetsRev
-    : Let
-        { [$1] }
-    | LetsRev Let
-        { $2 : $1 }
-
-Let
-    : 'let' label Args '=' Expr0
-        { Let $2 $3 Nothing $5 }
-    | 'let' label Args ':' Expr0 '=' Expr0
-        { Let $2 $3 (Just $5)$7 }
-
 Args
     : ArgsRev
         { reverse $1 }

@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveFunctor              #-}
 
@@ -28,18 +29,16 @@ insert :: Text -> a -> Context a -> Context a
 insert k v (Context kvs) = Context ((k, v) : kvs)
 {-# INLINABLE insert #-}
 
-{-| Lookup a key by name and index
-
-> lookup k  empty            = Nothing
-> lookup k (insert k' v ctx) = if k == k' then Just v else lookup k ctx
--}
-lookup :: Text -> Context a -> Maybe a
-lookup k (Context kvs0) = loop kvs0
-  where
-    loop ((k', v):kvs)
-        | k == k'   = Just v
-        | otherwise = loop kvs
-    loop  []        = Nothing
+-- | Lookup a key by name and index
+lookup :: Text -> Integer -> Context a -> Maybe a
+lookup _ !_ (Context         []  ) =
+    Nothing
+lookup x !n (Context ((k, v):kvs)) =
+    if x == k
+    then if n == 0
+         then Just v
+         else lookup x (n - 1) (Context kvs)
+    else lookup x n (Context kvs)
 {-# INLINABLE lookup #-}
 
 {-| Return all key-value associations as a list
