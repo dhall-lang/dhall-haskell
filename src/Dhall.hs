@@ -303,6 +303,7 @@ module Dhall
     , integer
     , double
     , text
+    , maybe
     , vector
 
     -- * Re-exports
@@ -319,10 +320,12 @@ import Data.Vector (Vector)
 import Dhall.Core (Expr(..), X)
 import GHC.Generics
 import Numeric.Natural (Natural)
+import Prelude hiding (maybe)
 
 import qualified Control.Exception
 import qualified Data.Map
 import qualified Data.Text.Lazy
+import qualified Data.Vector
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
@@ -450,6 +453,20 @@ text = Type {..}
 
     expected = Text
 
+{-| Decode a `Maybe`
+
+>>> input (maybe integer) "[] : Maybe Integer"
+Nothing
+-}
+maybe :: Type a -> Type (Maybe a)
+maybe (Type extractIn expectedIn) = Type extractOut expectedOut
+  where
+    extractOut (MaybeLit _ es) = traverse extractIn es'
+      where
+        es' = if Data.Vector.null es then Nothing else Just (Data.Vector.head es)
+
+    expectedOut = App Maybe expectedIn
+
 {-| Decode a `Vector`
 
 >>> input (vector integer) "[ 1, 2, 3 ] : List Integer"
@@ -491,6 +508,9 @@ instance Interpret Double where
 
 instance Interpret Text where
     auto = text
+
+instance Interpret a => Interpret (Maybe a) where
+    auto = maybe auto
 
 instance Interpret a => Interpret (Vector a) where
     auto = vector auto
