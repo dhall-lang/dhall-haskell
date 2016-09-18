@@ -68,24 +68,24 @@ import qualified Dhall.Context                    as Context
 import qualified Filesystem.Path.CurrentOS        as Filesystem
 import qualified NeatInterpolation
 
-{-| Constants for the calculus of constructions
+{-| Constants for a pure type system
 
     The only axiom is:
 
-> ⊦ * : □
+> ⊦ Type : Kind
 
     ... and the valid rule pairs are:
 
-> ⊦ * ↝ * : *
-> ⊦ □ ↝ * : *
-> ⊦ □ ↝ □ : □
+> ⊦ Type ↝ Type : Type  -- Functions from terms to terms (ordinary functions)
+> ⊦ Kind ↝ Type : Type  -- Functions from types to terms (polymorphic functions)
+> ⊦ Kind ↝ Kind : Kind  -- Functions from types to types (type constructors)
 
+    These are the same rule pairs as System Fω
+
+    Note that Dhall does not support functions from terms to types and therefore
+    Dhall is not a dependently typed languaged
 -}
 data Const = Type | Kind deriving (Show, Bounded, Enum)
-
-instance Buildable Const where
-    build Type = "Type"
-    build Kind = "Kind"
 
 axiom :: Const -> Either TypeError Const
 axiom Type = return Kind
@@ -132,97 +132,97 @@ instance IsString Var where
 
 -- | Syntax tree for expressions
 data Expr a
-    -- | > Const c                         ~  c
+    -- | > Const c                                  ~  c
     = Const Const
-    -- | > Var (V x 0)                     ~  x
-    -- | > Var (V x n)                     ~  x@n
+    -- | > Var (V x 0)                              ~  x
+    -- | > Var (V x n)                              ~  x@n
     | Var Var             
-    -- | > Lam x     A b                   ~  λ(x : A) -> b
+    -- | > Lam x     A b                            ~  λ(x : A) -> b
     | Lam Text (Expr a) (Expr a)
-    -- | > Pi x      A B                   ~  ∀(x : A) -> B
-    --   > Pi unused A B                   ~        A  -> B
+    -- | > Pi x      A B                            ~  ∀(x : A) -> B
+    --   > Pi unused A B                            ~        A  -> B
     | Pi  Text (Expr a) (Expr a)
-    -- | > App f a                         ~  f a
+    -- | > App f a                                  ~  f a
     | App (Expr a) (Expr a)
-    -- | > Let f [(x1, t1), (x2, t2)] Nothing r e  ~  let f (x1 : t1) (x2 : t2) = r in e
+    -- | > Let f [(x1, t1), (x2, t2)] Nothing  r e  ~  let f (x1 : t1) (x2 : t2)     = r in e
     -- | > Let f [(x1, t1), (x2, t2)] (Just t) r e  ~  let f (x1 : t1) (x2 : t2) : t = r in e
     | Let Text [(Text, Expr a)] (Maybe (Expr a)) (Expr a) (Expr a)
-    -- | > Annot x t                       ~  x : t
+    -- | > Annot x t                                ~  x : t
     | Annot (Expr a) (Expr a)
-    -- | > Bool                            ~  Bool
+    -- | > Bool                                     ~  Bool
     | Bool
-    -- | > BoolLit b                       ~  b
+    -- | > BoolLit b                                ~  b
     | BoolLit Bool
-    -- | > BoolAnd x y                     ~  x && y
+    -- | > BoolAnd x y                              ~  x && y
     | BoolAnd (Expr a) (Expr a)
-    -- | > BoolOr  x y                     ~  x || y
+    -- | > BoolOr  x y                              ~  x || y
     | BoolOr  (Expr a) (Expr a)
-    -- | > BoolIf                          ~  if
+    -- | > BoolIf                                   ~  if
     | BoolIf (Expr a) (Expr a) (Expr a)
-    -- | > Natural                         ~  Natural
+    -- | > Natural                                  ~  Natural
     | Natural
-    -- | > NaturalLit n                    ~  +n
+    -- | > NaturalLit n                             ~  +n
     | NaturalLit Natural
-    -- | > NaturalFold                     ~  Natural/fold
+    -- | > NaturalFold                              ~  Natural/fold
     | NaturalFold
-    -- | > NaturalIsZero                   ~  Natural/isZero
+    -- | > NaturalIsZero                            ~  Natural/isZero
     | NaturalIsZero
-    -- | > NaturalPlus x y                 ~  x + y
+    -- | > NaturalPlus x y                          ~  x + y
     | NaturalPlus (Expr a) (Expr a)
-    -- | > NaturalTimes x y                ~  x * y
+    -- | > NaturalTimes x y                         ~  x * y
     | NaturalTimes (Expr a) (Expr a)
-    -- | > Integer                         ~  Integer
+    -- | > Integer                                  ~  Integer
     | Integer
-    -- | > IntegerLit n                    ~  n
+    -- | > IntegerLit n                             ~  n
     | IntegerLit Integer
-    -- | > Double                          ~  Double
+    -- | > Double                                   ~  Double
     | Double
-    -- | > DoubleLit n                     ~  n
+    -- | > DoubleLit n                              ~  n
     | DoubleLit Double
-    -- | > Text                            ~  Text
+    -- | > Text                                     ~  Text
     | Text
-    -- | > TextLit t                       ~  t
+    -- | > TextLit t                                ~  t
     | TextLit Text
-    -- | > TextAppend x y                  ~  x <> y
+    -- | > TextAppend x y                           ~  x <> y
     | TextAppend (Expr a) (Expr a)
-    -- | > List                            ~  List
+    -- | > List                                     ~  List
     | List
-    -- | > ListLit t [x, y, z]             ~  [x, y, z] : List t
+    -- | > ListLit t [x, y, z]                      ~  [x, y, z] : List t
     | ListLit (Expr a) (Vector (Expr a))
-    -- | > ListBuild                       ~  List/build
+    -- | > ListBuild                                ~  List/build
     | ListBuild
-    -- | > ListFold                        ~  List/fold
+    -- | > ListFold                                 ~  List/fold
     | ListFold
-    -- | > ListLength                      ~  List/length
+    -- | > ListLength                               ~  List/length
     | ListLength
-    -- | > ListFirst                       ~  List/first
+    -- | > ListFirst                                ~  List/first
     | ListFirst
-    -- | > ListLast                        ~  List/last
+    -- | > ListLast                                 ~  List/last
     | ListLast
-    -- | ListDrop                          ~  List/drop
+    -- | ListDrop                                   ~  List/drop
     | ListDrop  
-    -- | ListDropEnd                       ~  List/dropEnd
+    -- | ListDropEnd                                ~  List/dropEnd
     | ListDropEnd
-    -- | > ListIndexed                     ~  List/indexed
+    -- | > ListIndexed                              ~  List/indexed
     | ListIndexed
-    -- | > ListReverse                     ~  List/reverse
+    -- | > ListReverse                              ~  List/reverse
     | ListReverse
-    -- | > ListConcat x y                  ~  x ++ y
+    -- | > ListConcat x y                           ~  x ++ y
     | ListConcat (Expr a) (Expr a)
-    -- | > Maybe                           ~  Maybe
+    -- | > Maybe                                    ~  Maybe
     | Maybe
-    -- | > MaybeLit t [e]                  ~  [e] : Maybe t
-    -- | > MaybeLit t []                   ~  []  : Maybe t
+    -- | > MaybeLit t [e]                           ~  [e] : Maybe t
+    -- | > MaybeLit t []                            ~  []  : Maybe t
     | MaybeLit (Expr a) (Vector (Expr a))
-    -- | > MaybeFold                       ~  Maybe/fold
+    -- | > MaybeFold                                ~  Maybe/fold
     | MaybeFold
-    -- | > Record    [(k1, t1), (k2, t2)]  ~  { k1 : t1, k2 : t1 }
+    -- | > Record    [(k1, t1), (k2, t2)]           ~  { k1 : t1, k2 : t1 }
     | Record    (Map Text (Expr a))
-    -- | > RecordLit [(k1, v1), (k2, v2)]  ~  { k1 = v1, k2 = v2 }
+    -- | > RecordLit [(k1, v1), (k2, v2)]           ~  { k1 = v1, k2 = v2 }
     | RecordLit (Map Text (Expr a))
-    -- | > Field e x                       ~  e.x
+    -- | > Field e x                                ~  e.x
     | Field (Expr a) Text
-    -- | > Embed path                      ~  #path
+    -- | > Embed path                               ~  #path
     | Embed a
     deriving (Functor, Foldable, Traversable, Show)
 
@@ -421,10 +421,8 @@ buildExpr4  a        = buildExpr5 a
 buildExpr5 :: Buildable a => Expr a -> Builder
 buildExpr5 (Var a) =
     buildVar a
-buildExpr5 (Const Type) =
-    "Type"
-buildExpr5 (Const Kind) =
-    "Kind"
+buildExpr5 (Const k) =
+    buildConst k
 buildExpr5 Bool =
     "Bool"
 buildExpr5 Natural =
@@ -485,6 +483,10 @@ buildExpr5 (Field a b) =
     buildExpr5 a <> "." <> build b
 buildExpr5 a =
     "(" <> buildExpr0 a <> ")"
+
+buildConst :: Const -> Builder
+buildConst Type = "Type"
+buildConst Kind = "Kind"
 
 buildVar :: Var -> Builder
 buildVar (V x 0) = build x
@@ -741,7 +743,7 @@ type-check an expression which includes `Kind` then you get this error because
 the compiler cannot infer what `Kind` belongs to
 |]
       where
-        txt = Text.toStrict (pretty c)
+        txt = Text.toStrict (Builder.toLazyText (buildConst c))
 
     build (InvalidPredicate expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
