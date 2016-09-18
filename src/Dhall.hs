@@ -306,6 +306,7 @@ module Dhall
     , vector
 
     -- * Re-exports
+    , Text
     , Vector
     , Generic
     ) where
