@@ -63,6 +63,8 @@ tokens :-
     "="                                 { emit Equals           }
     "&&"                                { emit And              }
     "||"                                { emit Or               }
+    "=="                                { emit DoubleEquals     }
+    "/="                                { emit SlashEquals      }
     "+"                                 { emit Plus             }
     "<>"                                { emit Diamond          }
     "++"                                { emit DoublePlus       }
@@ -176,6 +178,8 @@ data Token
     | Equals
     | And
     | Or
+    | DoubleEquals
+    | SlashEquals
     | Plus
     | Diamond
     | DoublePlus
@@ -249,6 +253,10 @@ instance Buildable Token where
         = "&&"
     build  Or
         = "||"
+    build  DoubleEquals
+        = "=="
+    build  SlashEquals
+        = "/="
     build  Plus
         = "+"
     build  Diamond

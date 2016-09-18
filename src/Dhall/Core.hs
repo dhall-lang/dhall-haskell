@@ -157,6 +157,10 @@ data Expr a
     | BoolAnd (Expr a) (Expr a)
     -- | > BoolOr  x y                              ~  x || y
     | BoolOr  (Expr a) (Expr a)
+    -- | > BoolEQ  x y                              ~  x == y
+    | BoolEQ  (Expr a) (Expr a)
+    -- | > BoolNE  x y                              ~  x /= y
+    | BoolNE  (Expr a) (Expr a)
     -- | > BoolIf                                   ~  if
     | BoolIf (Expr a) (Expr a) (Expr a)
     -- | > Natural                                  ~  Natural
@@ -249,6 +253,8 @@ instance Monad Expr where
     BoolLit b        >>= _ = BoolLit b
     BoolAnd l r      >>= k = BoolAnd (l >>= k) (r >>= k)
     BoolOr  l r      >>= k = BoolOr  (l >>= k) (r >>= k)
+    BoolEQ  l r      >>= k = BoolEQ  (l >>= k) (r >>= k)
+    BoolNE  l r      >>= k = BoolNE  (l >>= k) (r >>= k)
     BoolIf x y z     >>= k = BoolIf (x >>= k) (y >>= k) (z >>= k)
     Natural          >>= _ = Natural
     NaturalLit n     >>= _ = NaturalLit n
@@ -404,6 +410,8 @@ buildExpr1 a =
 
 buildExpr2 :: Buildable a => Expr a -> Builder
 buildExpr2 (BoolOr      a b) = buildExpr2 a <> " || " <> buildExpr2 b
+buildExpr2 (BoolEQ      a b) = buildExpr2 a <> " == " <> buildExpr2 b
+buildExpr2 (BoolNE      a b) = buildExpr2 a <> " /= " <> buildExpr2 b
 buildExpr2 (NaturalPlus a b) = buildExpr2 a <> " + "  <> buildExpr2 b
 buildExpr2 (TextAppend  a b) = buildExpr2 a <> " <> " <> buildExpr2 b
 buildExpr2 (ListConcat  a b) = buildExpr2 a <> " ++ " <> buildExpr2 b
@@ -558,6 +566,8 @@ data TypeMessage
     | MissingField Text (Expr X)
     | CantAnd Bool (Expr X) (Expr X)
     | CantOr Bool (Expr X) (Expr X)
+    | CantEQ Bool (Expr X) (Expr X)
+    | CantNE Bool (Expr X) (Expr X)
     | CantAppend Bool (Expr X) (Expr X)
     | CantConcat Bool (Expr X) (Expr X)
     | ElementMismatch (Expr X) (Expr X)
@@ -1028,6 +1038,12 @@ You tried to access a field named:
     build (CantOr b expr0 expr1) =
         buildBooleanOperator "||" b expr0 expr1
 
+    build (CantEQ b expr0 expr1) =
+        buildBooleanOperator "==" b expr0 expr1
+
+    build (CantNE b expr0 expr1) =
+        buildBooleanOperator "/=" b expr0 expr1
+
     build (CantAppend b expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
 Error: Cannot use `(<>)` on a value that's not a `Text`
@@ -1259,6 +1275,14 @@ shift d v (BoolOr a b) = BoolOr a' b'
   where
     a' = shift d v a
     b' = shift d v b
+shift d v (BoolEQ a b) = BoolEQ a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
+shift d v (BoolNE a b) = BoolNE a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
 shift d v (NaturalPlus a b) = NaturalPlus a' b'
   where
     a' = shift d v a
@@ -1349,6 +1373,14 @@ subst x e (BoolAnd a b) = BoolAnd a' b'
     a' = subst x e a
     b' = subst x e b
 subst x e (BoolOr a b) = BoolOr a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
+subst x e (BoolEQ a b) = BoolEQ a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
+subst x e (BoolNE a b) = BoolNE a' b'
   where
     a' = subst x e a
     b' = subst x e b
@@ -1510,6 +1542,30 @@ typeWith ctx e@(BoolOr  l r     ) = do
     case tr of
         Bool -> return ()
         _    -> Left (TypeError ctx e (CantOr False r tr))
+
+    return Bool
+typeWith ctx e@(BoolEQ  l r     ) = do
+    tl <- fmap normalize (typeWith ctx l)
+    case tl of
+        Bool -> return ()
+        _    -> Left (TypeError ctx e (CantEQ True l tl))
+
+    tr <- fmap normalize (typeWith ctx r)
+    case tr of
+        Bool -> return ()
+        _    -> Left (TypeError ctx e (CantEQ False r tr))
+
+    return Bool
+typeWith ctx e@(BoolNE  l r     ) = do
+    tl <- fmap normalize (typeWith ctx l)
+    case tl of
+        Bool -> return ()
+        _    -> Left (TypeError ctx e (CantNE True l tl))
+
+    tr <- fmap normalize (typeWith ctx r)
+    case tr of
+        Bool -> return ()
+        _    -> Left (TypeError ctx e (CantNE False r tr))
 
     return Bool
 typeWith ctx e@(BoolIf x y z    ) = do
@@ -1815,6 +1871,26 @@ normalize e = case e of
                     BoolLit yn -> BoolLit (xn || yn)
                     _ -> BoolOr x' y'
             _ -> BoolOr x' y'
+      where
+        x' = normalize x
+        y' = normalize y
+    BoolEQ x y ->
+        case x' of
+            BoolLit xn ->
+                case y' of
+                    BoolLit yn -> BoolLit (xn == yn)
+                    _ -> BoolEQ x' y'
+            _ -> BoolEQ x' y'
+      where
+        x' = normalize x
+        y' = normalize y
+    BoolNE x y ->
+        case x' of
+            BoolLit xn ->
+                case y' of
+                    BoolLit yn -> BoolLit (xn /= yn)
+                    _ -> BoolNE x' y'
+            _ -> BoolNE x' y'
       where
         x' = normalize x
         y' = normalize y

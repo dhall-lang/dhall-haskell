@@ -53,6 +53,8 @@ import qualified NeatInterpolation
     '='              { Dhall.Lexer.Equals         }
     '&&'             { Dhall.Lexer.And            }
     '||'             { Dhall.Lexer.Or             }
+    '=='             { Dhall.Lexer.DoubleEquals   }
+    '/='             { Dhall.Lexer.SlashEquals    }
     '+'              { Dhall.Lexer.Plus           }
     '<>'             { Dhall.Lexer.Diamond        }
     '++'             { Dhall.Lexer.DoublePlus     }
@@ -97,6 +99,8 @@ import qualified NeatInterpolation
     url              { Dhall.Lexer.URL        $$  }
     file             { Dhall.Lexer.File       $$  }
 
+%right '=='
+%right '/='
 %right '||'
 %right '&&'
 %right '+'
@@ -125,7 +129,7 @@ Expr1
         { Let $2 $3 Nothing $5 $7 }
     | 'let' label Args ':' Expr0 '=' Expr0 'in' Expr1
         { Let $2 $3 (Just $5) $7 $9 }
-    | '[' Elems ']' ':' ListLike Expr5
+    | '[' Elems ']' ':' ListLike Expr6
         { $5 $6 (Data.Vector.fromList $2) }
     | Expr2
         { $1 }
@@ -137,32 +141,40 @@ ListLike
         { MaybeLit }
 
 Expr2
-    : Expr2 '||' Expr2
-        { BoolOr $1 $3 }
-    | Expr2 '+' Expr2
-        { NaturalPlus $1 $3 }
-    | Expr2 '<>' Expr2
-        { TextAppend $1 $3 }
-    | Expr2 '++' Expr2
-        { ListConcat $1 $3 }
+    : Expr2 '==' Expr2
+        { BoolEQ $1 $3 }
+    | Expr2 '/=' Expr2
+        { BoolNE $1 $3 }
     | Expr3
         { $1 }
 
 Expr3
-    : Expr3 '&&' Expr3
-        { BoolAnd $1 $3 }
-    | Expr3 '*' Expr3
-        { NaturalTimes $1 $3 }
+    : Expr3 '||' Expr3
+        { BoolOr $1 $3 }
+    | Expr3 '+' Expr3
+        { NaturalPlus $1 $3 }
+    | Expr3 '<>' Expr3
+        { TextAppend $1 $3 }
+    | Expr3 '++' Expr3
+        { ListConcat $1 $3 }
     | Expr4
         { $1 }
 
 Expr4
-    : Expr4 Expr5
-        { App $1 $2 }
+    : Expr4 '&&' Expr4
+        { BoolAnd $1 $3 }
+    | Expr4 '*' Expr4
+        { NaturalTimes $1 $3 }
     | Expr5
         { $1 }
 
 Expr5
+    : Expr5 Expr6
+        { App $1 $2 }
+    | Expr6
+        { $1 }
+
+Expr6
     : label
         { Var (V $1 0) }
     | label '@' number
@@ -227,7 +239,7 @@ Expr5
         { $1 }
     | Import
         { Embed $1 }
-    | Expr5 '.' label
+    | Expr6 '.' label
         { Field $1 $3 }
     | '(' Expr0 ')'
         { $2 }
