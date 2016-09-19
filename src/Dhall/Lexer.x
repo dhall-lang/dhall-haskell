@@ -89,6 +89,7 @@ tokens :-
     "Integer"                           { emit Integer          }
     "Double"                            { emit Double           }
     "Text"                              { emit Text             }
+    "Text/concat"                       { emit TextConcat       }
     "List"                              { emit List             }
     "List/build"                        { emit ListBuild        }
     "List/fold"                         { emit ListFold         }
@@ -221,6 +222,7 @@ data Token
     | Maybe
     | MaybeFold
     | TextLit Text
+    | TextConcat
     | Label Text
     | Number Integer
     | File FilePath
@@ -307,6 +309,8 @@ instance Buildable Token where
         = "Integer"
     build  Text
         = "Text"
+    build  TextConcat
+        = "Text/concat"
     build  Double
         = "Double"
     build (DoubleLit n)
