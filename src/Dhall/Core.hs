@@ -124,6 +124,38 @@ instance Show X where
 instance Buildable X where
     build = absurd
 
+{-| Label for a bound variable
+
+    The `Text` field is the variable's name (i.e. \"@x@\").
+
+    The `Int` field disambiguates variables with the same name if there are
+    multiple bound variables of the same name in scope.  Zero refers to the
+    nearest bound variable and the index increases by one for each bound
+    variable of the same name going outward.  The following diagram may help:
+
+>                           +-refers to-+
+>                           |           |
+>                           v           |
+> \(x : *) -> \(y : *) -> \(x : *) -> x@0
+>
+>   +-------------refers to-------------+
+>   |                                   |
+>   v                                   |
+> \(x : *) -> \(y : *) -> \(x : *) -> x@1
+
+    This `Int` behaves like a De Bruijn index in the special case where all
+    variables have the same name.
+
+    You can optionally omit the index if it is @0@:
+
+>                           +refers to+
+>                           |         |
+>                           v         |
+> \(x : *) -> \(y : *) -> \(x : *) -> x
+
+    Zero indices are omitted when pretty-printing `Var`s and non-zero indices
+    appear as a numeric suffix.
+-}
 data Var = V Text !Integer
     deriving (Eq, Show)
 
