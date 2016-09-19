@@ -203,10 +203,10 @@ data Expr a
     | ListFirst
     -- | > ListLast                                 ~  List/last
     | ListLast
-    -- | ListDrop                                   ~  List/drop
-    | ListDrop  
-    -- | ListDropEnd                                ~  List/dropEnd
-    | ListDropEnd
+    -- | ListSplitAt                                ~  List/splitAt
+    | ListSplitAt
+    -- | ListSplitAtEnd                             ~  List/splitAtEnd
+    | ListSplitAtEnd
     -- | > ListIndexed                              ~  List/indexed
     | ListIndexed
     -- | > ListReverse                              ~  List/reverse
@@ -276,8 +276,8 @@ instance Monad Expr where
     ListLength       >>= _ = ListLength
     ListFirst        >>= _ = ListFirst
     ListLast         >>= _ = ListLast
-    ListDrop         >>= _ = ListDrop
-    ListDropEnd      >>= _ = ListDropEnd
+    ListSplitAt      >>= _ = ListSplitAt
+    ListSplitAtEnd   >>= _ = ListSplitAtEnd
     ListIndexed      >>= _ = ListIndexed
     ListReverse      >>= _ = ListReverse
     ListConcat l r   >>= k = ListConcat (l >>= k) (r >>= k)
@@ -458,10 +458,10 @@ buildExpr6 ListFirst =
     "List/first"
 buildExpr6 ListLast =
     "List/last"
-buildExpr6 ListDrop =
-    "List/drop"
-buildExpr6 ListDropEnd =
-    "List/dropEnd"
+buildExpr6 ListSplitAt =
+    "List/splitAt"
+buildExpr6 ListSplitAtEnd =
+    "List/splitAtEnd"
 buildExpr6 ListIndexed =
     "List/indexed"
 buildExpr6 ListReverse =
@@ -1677,14 +1677,26 @@ typeWith _      ListFirst         = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a")))
 typeWith _      ListLast          = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a")))
-typeWith _      ListDrop          = do
+typeWith _      ListSplitAt       = do
+    let kts = Data.Map.fromList
+            [ ("prefix", App List "a")
+            , ("suffix", App List "a")
+            ]
     return
         (Pi "_" Natural
-            (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a"))) )
-typeWith _      ListDropEnd       = do
+            (Pi "a" (Const Type)
+                (Pi "_" (App List "a")
+                    (Record kts) ) ) )
+typeWith _      ListSplitAtEnd    = do
+    let kts = Data.Map.fromList
+            [ ("prefix", App List "a")
+            , ("suffix", App List "a")
+            ]
     return
         (Pi "_" Natural
-            (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a"))) )
+            (Pi "a" (Const Type)
+                (Pi "_" (App List "a")
+                    (Record kts) ) ) )
 typeWith _      ListIndexed       = do
     let kts = [("_1", Natural), ("_2", "a")]
     return
@@ -1823,12 +1835,23 @@ normalize e = case e of
                 y = if Data.Vector.null ys
                     then Data.Vector.empty
                     else Data.Vector.singleton (Data.Vector.last ys)
-            App (App (App ListDrop (NaturalLit n)) _) (ListLit t ys) ->
-                normalize (ListLit t (Data.Vector.drop (fromIntegral n) ys))
-            App (App (App ListDropEnd (NaturalLit n)) _) (ListLit t ys) ->
-                normalize (ListLit t (Data.Vector.slice 0 end ys))
+            App (App (App ListSplitAt (NaturalLit n)) _) (ListLit t ys) ->
+                normalize (RecordLit kvs)
               where
-                end = max 0 (Data.Vector.length ys - fromIntegral n)
+                (prefix, suffix) = Data.Vector.splitAt (fromIntegral n) ys
+                kvs = Data.Map.fromList
+                    [ ("prefix", ListLit t prefix)
+                    , ("suffix", ListLit t suffix)
+                    ]
+            App (App (App ListSplitAtEnd (NaturalLit n)) _) (ListLit t ys) ->
+                normalize (RecordLit kvs)
+              where
+                n' = max 0 (Data.Vector.length ys - fromIntegral n)
+                (prefix, suffix) = Data.Vector.splitAt n' ys
+                kvs = Data.Map.fromList
+                    [ ("prefix", ListLit t prefix)
+                    , ("suffix", ListLit t suffix)
+                    ]
             App (App ListIndexed _) (ListLit t xs) ->
                 normalize (ListLit t' (fmap adapt (Data.Vector.indexed xs)))
               where

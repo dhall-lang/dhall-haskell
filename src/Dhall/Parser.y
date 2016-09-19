@@ -40,64 +40,64 @@ import qualified NeatInterpolation
 %monad { Alex }
 
 %token
-    '('              { Dhall.Lexer.OpenParen      }
-    ')'              { Dhall.Lexer.CloseParen     }
-    '{'              { Dhall.Lexer.OpenBrace      }
-    '}'              { Dhall.Lexer.CloseBrace     }
-    '{:}'            { Dhall.Lexer.EmptyRecord    }
-    '['              { Dhall.Lexer.OpenBracket    }
-    ']'              { Dhall.Lexer.CloseBracket   }
-    ':'              { Dhall.Lexer.Colon          }
-    ','              { Dhall.Lexer.Comma          }
-    '.'              { Dhall.Lexer.Dot            }
-    '='              { Dhall.Lexer.Equals         }
-    '&&'             { Dhall.Lexer.And            }
-    '||'             { Dhall.Lexer.Or             }
-    '=='             { Dhall.Lexer.DoubleEquals   }
-    '/='             { Dhall.Lexer.SlashEquals    }
-    '+'              { Dhall.Lexer.Plus           }
-    '<>'             { Dhall.Lexer.Diamond        }
-    '++'             { Dhall.Lexer.DoublePlus     }
-    '*'              { Dhall.Lexer.Star           }
-    '@'              { Dhall.Lexer.At             }
-    'let'            { Dhall.Lexer.Let            }
-    'in'             { Dhall.Lexer.In             }
-    'Type'           { Dhall.Lexer.Type           }
-    'Kind'           { Dhall.Lexer.Kind           }
-    '->'             { Dhall.Lexer.Arrow          }
-    'forall'         { Dhall.Lexer.Forall         }
-    '\\'             { Dhall.Lexer.Lambda         }
-    'Bool'           { Dhall.Lexer.Bool           }
-    'True'           { Dhall.Lexer.True_          }
-    'False'          { Dhall.Lexer.False_         }
-    'if'             { Dhall.Lexer.If             }
-    'then'           { Dhall.Lexer.Then           }
-    'else'           { Dhall.Lexer.Else           }
-    'Natural'        { Dhall.Lexer.Natural        }
-    'Natural/fold'   { Dhall.Lexer.NaturalFold    }
-    'Natural/isZero' { Dhall.Lexer.NaturalIsZero  }
-    'Integer'        { Dhall.Lexer.Integer        }
-    'Double'         { Dhall.Lexer.Double         }
-    'Text'           { Dhall.Lexer.Text           }
-    'List'           { Dhall.Lexer.List           }
-    'List/build'     { Dhall.Lexer.ListBuild      }
-    'List/fold'      { Dhall.Lexer.ListFold       }
-    'List/length'    { Dhall.Lexer.ListLength     }
-    'List/first'     { Dhall.Lexer.ListFirst      }
-    'List/last'      { Dhall.Lexer.ListLast       }
-    'List/drop'      { Dhall.Lexer.ListDrop       }
-    'List/dropEnd'   { Dhall.Lexer.ListDropEnd    }
-    'List/indexed'   { Dhall.Lexer.ListIndexed    }
-    'List/reverse'   { Dhall.Lexer.ListReverse    }
-    'Maybe'          { Dhall.Lexer.Maybe          }
-    'Maybe/fold'     { Dhall.Lexer.MaybeFold      }
-    text             { Dhall.Lexer.TextLit    $$  }
-    label            { Dhall.Lexer.Label      $$  }
-    number           { Dhall.Lexer.Number     $$  }
-    double           { Dhall.Lexer.DoubleLit  $$  }
-    natural          { Dhall.Lexer.NaturalLit $$  }
-    url              { Dhall.Lexer.URL        $$  }
-    file             { Dhall.Lexer.File       $$  }
+    '('               { Dhall.Lexer.OpenParen      }
+    ')'               { Dhall.Lexer.CloseParen     }
+    '{'               { Dhall.Lexer.OpenBrace      }
+    '}'               { Dhall.Lexer.CloseBrace     }
+    '{:}'             { Dhall.Lexer.EmptyRecord    }
+    '['               { Dhall.Lexer.OpenBracket    }
+    ']'               { Dhall.Lexer.CloseBracket   }
+    ':'               { Dhall.Lexer.Colon          }
+    ','               { Dhall.Lexer.Comma          }
+    '.'               { Dhall.Lexer.Dot            }
+    '='               { Dhall.Lexer.Equals         }
+    '&&'              { Dhall.Lexer.And            }
+    '||'              { Dhall.Lexer.Or             }
+    '=='              { Dhall.Lexer.DoubleEquals   }
+    '/='              { Dhall.Lexer.SlashEquals    }
+    '+'               { Dhall.Lexer.Plus           }
+    '<>'              { Dhall.Lexer.Diamond        }
+    '++'              { Dhall.Lexer.DoublePlus     }
+    '*'               { Dhall.Lexer.Star           }
+    '@'               { Dhall.Lexer.At             }
+    'let'             { Dhall.Lexer.Let            }
+    'in'              { Dhall.Lexer.In             }
+    'Type'            { Dhall.Lexer.Type           }
+    'Kind'            { Dhall.Lexer.Kind           }
+    '->'              { Dhall.Lexer.Arrow          }
+    'forall'          { Dhall.Lexer.Forall         }
+    '\\'              { Dhall.Lexer.Lambda         }
+    'Bool'            { Dhall.Lexer.Bool           }
+    'True'            { Dhall.Lexer.True_          }
+    'False'           { Dhall.Lexer.False_         }
+    'if'              { Dhall.Lexer.If             }
+    'then'            { Dhall.Lexer.Then           }
+    'else'            { Dhall.Lexer.Else           }
+    'Natural'         { Dhall.Lexer.Natural        }
+    'Natural/fold'    { Dhall.Lexer.NaturalFold    }
+    'Natural/isZero'  { Dhall.Lexer.NaturalIsZero  }
+    'Integer'         { Dhall.Lexer.Integer        }
+    'Double'          { Dhall.Lexer.Double         }
+    'Text'            { Dhall.Lexer.Text           }
+    'List'            { Dhall.Lexer.List           }
+    'List/build'      { Dhall.Lexer.ListBuild      }
+    'List/fold'       { Dhall.Lexer.ListFold       }
+    'List/length'     { Dhall.Lexer.ListLength     }
+    'List/first'      { Dhall.Lexer.ListFirst      }
+    'List/last'       { Dhall.Lexer.ListLast       }
+    'List/splitAt'    { Dhall.Lexer.ListSplitAt    }
+    'List/splitAtEnd' { Dhall.Lexer.ListSplitAtEnd }
+    'List/indexed'    { Dhall.Lexer.ListIndexed    }
+    'List/reverse'    { Dhall.Lexer.ListReverse    }
+    'Maybe'           { Dhall.Lexer.Maybe          }
+    'Maybe/fold'      { Dhall.Lexer.MaybeFold      }
+    text              { Dhall.Lexer.TextLit    $$  }
+    label             { Dhall.Lexer.Label      $$  }
+    number            { Dhall.Lexer.Number     $$  }
+    double            { Dhall.Lexer.DoubleLit  $$  }
+    natural           { Dhall.Lexer.NaturalLit $$  }
+    url               { Dhall.Lexer.URL        $$  }
+    file              { Dhall.Lexer.File       $$  }
 
 %right '=='
 %right '/='
@@ -209,10 +209,10 @@ Expr6
         { ListFirst }
     | 'List/last'
         { ListLast }
-    | 'List/drop'
-        { ListDrop }
-    | 'List/dropEnd'
-        { ListDropEnd }
+    | 'List/splitAt'
+        { ListSplitAt }
+    | 'List/splitAtEnd'
+        { ListSplitAtEnd }
     | 'List/indexed'
         { ListIndexed }
     | 'List/reverse'
