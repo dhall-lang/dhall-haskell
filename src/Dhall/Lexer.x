@@ -1,5 +1,6 @@
 {
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes       #-}
 
 -- | Lexing logic for the Dhall language
 module Dhall.Lexer (
@@ -28,10 +29,12 @@ import Prelude hiding (FilePath)
 import qualified Data.ByteString.Lazy
 import qualified Data.ByteString.Lex.Fractional
 import qualified Data.ByteString.Lex.Integral
+import qualified Data.Text
 import qualified Data.Text.Buildable
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Encoding
 import qualified Filesystem.Path.CurrentOS
+import qualified NeatInterpolation
 }
 
 %wrapper "monad-bytestring"
@@ -165,7 +168,51 @@ str = read . Data.Text.Lazy.unpack . Data.Text.Lazy.Encoding.decodeUtf8
 
 -- | `Alex` action for reading the next token
 lexer :: (Token -> Alex a) -> Alex a
-lexer k = alexMonadScan >>= k
+lexer k = alexMonadScan' >>= k
+
+alexMonadScan' :: Alex Token
+alexMonadScan' = do
+  inp@(_,_,str,n) <- alexGetInput
+  sc <- alexGetStartCode
+  case alexScan inp sc of
+    AlexEOF -> alexEOF
+    AlexError ((AlexPn _ line column),w8,bytes,_) ->
+        alexError (Data.Text.unpack [NeatInterpolation.text|
+Error: Lexing failed
+
+Explanation: The source code is normally decomposed into a sequence of tokens.
+For example, this input:
+
+    λ(a : Type) → a
+
+... is split into these tokens:
+
+    [ "λ", "(", "a", ":", "Type", ")", "→", "a" ]
+
+However, some characters in your program could not be assigned to a recognized
+token
+
+Unrecognized input:
+↳ $txt0
+... beginning at:
+↳ Line $txt1, Column $txt2
+|])
+      where
+        txt0 = Data.Text.pack (show input)
+        input =
+            Data.Text.Lazy.take 76
+                (Data.Text.Lazy.cons w8
+                    (Data.Text.Lazy.Encoding.decodeUtf8 bytes) )
+        txt1 = Data.Text.pack (show line)
+        txt2 = Data.Text.pack (show column)
+    AlexSkip  inp' len -> do
+        alexSetInput inp'
+        alexMonadScan'
+    AlexToken inp'@(_,_,_,n') _ action -> do
+        alexSetInput inp'
+        action (ignorePendingBytes inp) len
+      where
+        len = n'-n
 
 -- | Token type, used to communicate between the lexer and parser
 data Token
