@@ -135,7 +135,7 @@ data Expr a
     -- | > Const c                                  ~  c
     = Const Const
     -- | > Var (V x 0)                              ~  x
-    -- | > Var (V x n)                              ~  x@n
+    --   > Var (V x n)                              ~  x@n
     | Var Var             
     -- | > Lam x     A b                            ~  λ(x : A) -> b
     | Lam Text (Expr a) (Expr a)
@@ -145,7 +145,7 @@ data Expr a
     -- | > App f a                                  ~  f a
     | App (Expr a) (Expr a)
     -- | > Let f [(x1, t1), (x2, t2)] Nothing  r e  ~  let f (x1 : t1) (x2 : t2)     = r in e
-    -- | > Let f [(x1, t1), (x2, t2)] (Just t) r e  ~  let f (x1 : t1) (x2 : t2) : t = r in e
+    --   > Let f [(x1, t1), (x2, t2)] (Just t) r e  ~  let f (x1 : t1) (x2 : t2) : t = r in e
     | Let Text [(Text, Expr a)] (Maybe (Expr a)) (Expr a) (Expr a)
     -- | > Annot x t                                ~  x : t
     | Annot (Expr a) (Expr a)
@@ -161,7 +161,7 @@ data Expr a
     | BoolEQ  (Expr a) (Expr a)
     -- | > BoolNE  x y                              ~  x /= y
     | BoolNE  (Expr a) (Expr a)
-    -- | > BoolIf                                   ~  if
+    -- | > BoolIf x y z                             ~  if x then y else z
     | BoolIf (Expr a) (Expr a) (Expr a)
     -- | > Natural                                  ~  Natural
     | Natural
@@ -209,9 +209,9 @@ data Expr a
     | ListHead 
     -- | > ListLast                                 ~  List/last
     | ListLast
-    -- | ListSplitAt                                ~  List/splitAt
+    -- | > ListSplitAt                                ~  List/splitAt
     | ListSplitAt
-    -- | ListSplitAtEnd                             ~  List/splitAtEnd
+    -- | > ListSplitAtEnd                             ~  List/splitAtEnd
     | ListSplitAtEnd
     -- | > ListIndexed                              ~  List/indexed
     | ListIndexed
@@ -224,7 +224,7 @@ data Expr a
     -- | > Maybe                                    ~  Maybe
     | Maybe
     -- | > MaybeLit t [e]                           ~  [e] : Maybe t
-    -- | > MaybeLit t []                            ~  []  : Maybe t
+    --   > MaybeLit t []                            ~  []  : Maybe t
     | MaybeLit (Expr a) (Vector (Expr a))
     -- | > MaybeFold                                ~  Maybe/fold
     | MaybeFold
