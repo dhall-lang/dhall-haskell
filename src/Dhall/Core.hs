@@ -87,6 +87,9 @@ import qualified NeatInterpolation
 -}
 data Const = Type | Kind deriving (Show, Bounded, Enum)
 
+instance Buildable Const where
+    build = buildConst
+
 axiom :: Const -> Either TypeError Const
 axiom Type = return Kind
 axiom Kind = Left (TypeError Context.empty (Const Kind) (Untyped Kind))
