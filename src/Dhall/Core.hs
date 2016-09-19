@@ -1698,7 +1698,7 @@ typeWith _      ListSplitAtEnd    = do
                 (Pi "_" (App List "a")
                     (Record kts) ) ) )
 typeWith _      ListIndexed       = do
-    let kts = [("_1", Natural), ("_2", "a")]
+    let kts = [("index", Natural), ("value", "a")]
     return
         (Pi "a" (Const Type)
             (Pi "_" (App List "a")
@@ -1857,11 +1857,11 @@ normalize e = case e of
               where
                 t' = Record (Data.Map.fromList kts)
                   where
-                    kts = [("_1", Natural), ("_2", t)]
+                    kts = [("index", Natural), ("value", t)]
                 adapt (n, x) = RecordLit (Data.Map.fromList kvs)
                   where
-                    kvs = [ ("_1", NaturalLit (fromIntegral n))
-                          , ("_2", x)
+                    kvs = [ ("index", NaturalLit (fromIntegral n))
+                          , ("value", x)
                           ]
             App (App ListReverse _) (ListLit t xs) ->
                 normalize (ListLit t (Data.Vector.reverse xs))
