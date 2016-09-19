@@ -156,7 +156,7 @@ Expr3
     | Expr3 '<>' Expr3
         { TextAppend $1 $3 }
     | Expr3 '++' Expr3
-        { ListConcat $1 $3 }
+        { ListAppend $1 $3 }
     | Expr4
         { $1 }
 

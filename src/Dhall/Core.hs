@@ -211,8 +211,8 @@ data Expr a
     | ListIndexed
     -- | > ListReverse                              ~  List/reverse
     | ListReverse
-    -- | > ListConcat x y                           ~  x ++ y
-    | ListConcat (Expr a) (Expr a)
+    -- | > ListAppend x y                           ~  x ++ y
+    | ListAppend (Expr a) (Expr a)
     -- | > Maybe                                    ~  Maybe
     | Maybe
     -- | > MaybeLit t [e]                           ~  [e] : Maybe t
@@ -280,7 +280,7 @@ instance Monad Expr where
     ListSplitAtEnd   >>= _ = ListSplitAtEnd
     ListIndexed      >>= _ = ListIndexed
     ListReverse      >>= _ = ListReverse
-    ListConcat l r   >>= k = ListConcat (l >>= k) (r >>= k)
+    ListAppend l r   >>= k = ListAppend (l >>= k) (r >>= k)
     Maybe            >>= _ = Maybe
     MaybeLit t es    >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
     MaybeFold        >>= _ = MaybeFold
@@ -417,7 +417,7 @@ buildExpr3 :: Buildable a => Expr a -> Builder
 buildExpr3 (BoolOr      a b) = buildExpr3 a <> " || " <> buildExpr3 b
 buildExpr3 (NaturalPlus a b) = buildExpr3 a <> " + "  <> buildExpr3 b
 buildExpr3 (TextAppend  a b) = buildExpr3 a <> " <> " <> buildExpr3 b
-buildExpr3 (ListConcat  a b) = buildExpr3 a <> " ++ " <> buildExpr3 b
+buildExpr3 (ListAppend  a b) = buildExpr3 a <> " ++ " <> buildExpr3 b
 buildExpr3  a                = buildExpr4 a
 
 buildExpr4 :: Buildable a => Expr a -> Builder
@@ -571,8 +571,8 @@ data TypeMessage
     | CantOr Bool (Expr X) (Expr X)
     | CantEQ Bool (Expr X) (Expr X)
     | CantNE Bool (Expr X) (Expr X)
-    | CantAppend Bool (Expr X) (Expr X)
-    | CantConcat Bool (Expr X) (Expr X)
+    | CantTextAppend Bool (Expr X) (Expr X)
+    | CantListAppend Bool (Expr X) (Expr X)
     | ElementMismatch (Expr X) (Expr X)
     | CantAdd Bool (Expr X) (Expr X)
     | CantMultiply Bool (Expr X) (Expr X)
@@ -1047,7 +1047,7 @@ You tried to access a field named:
     build (CantNE b expr0 expr1) =
         buildBooleanOperator "/=" b expr0 expr1
 
-    build (CantAppend b expr0 expr1) =
+    build (CantTextAppend b expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
 Error: Cannot use `(<>)` on a value that's not a `Text`
 
@@ -1068,7 +1068,7 @@ You provided this argument:
             then [NeatInterpolation.text|$txt0 <> ...|]
             else [NeatInterpolation.text|... <> $txt0|]
 
-    build (CantConcat b expr0 expr1) =
+    build (CantListAppend b expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
 Error: Cannot use `(++)` on a value that's not a list
 
@@ -1302,7 +1302,7 @@ shift d v (ListLit a b) = ListLit a' b'
   where
     a' =       shift d v  a
     b' = fmap (shift d v) b
-shift d v (ListConcat a b) = ListConcat a' b'
+shift d v (ListAppend a b) = ListAppend a' b'
   where
     a' = shift d v a
     b' = shift d v b
@@ -1408,7 +1408,7 @@ subst x e (ListLit a b) = ListLit a' b'
   where
     a' =       subst x e  a
     b' = fmap (subst x e) b
-subst x e (ListConcat a b) = ListConcat a' b'
+subst x e (ListAppend a b) = ListAppend a' b'
   where
     a' = subst x e a
     b' = subst x e b
@@ -1632,12 +1632,12 @@ typeWith ctx e@(TextAppend l r  ) = do
     tl <- fmap normalize (typeWith ctx l)
     case tl of
         Text -> return ()
-        _    -> Left (TypeError ctx e (CantAppend True l tl))
+        _    -> Left (TypeError ctx e (CantTextAppend True l tl))
 
     tr <- fmap normalize (typeWith ctx r)
     case tr of
         Text -> return ()
-        _    -> Left (TypeError ctx e (CantAppend False r tr))
+        _    -> Left (TypeError ctx e (CantTextAppend False r tr))
     return Text
 typeWith _      List              = do
     return (Pi "_" (Const Type) (Const Type))
@@ -1705,16 +1705,16 @@ typeWith _      ListIndexed       = do
                 (App List (Record (Data.Map.fromList kts))) ) )
 typeWith _      ListReverse       = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a")))
-typeWith ctx e@(ListConcat l r  ) = do
+typeWith ctx e@(ListAppend l r  ) = do
     tl <- fmap normalize (typeWith ctx l)
     el <- case tl of
         App List el -> return el
-        _           -> Left (TypeError ctx e (CantConcat True l tl))
+        _           -> Left (TypeError ctx e (CantListAppend True l tl))
 
     tr <- fmap normalize (typeWith ctx r)
     er <- case tr of
         App List er -> return er
-        _           -> Left (TypeError ctx e (CantConcat False r tr))
+        _           -> Left (TypeError ctx e (CantListAppend False r tr))
     if propEqual el er
         then return ()
         else Left (TypeError ctx e (ElementMismatch el er))
@@ -1958,13 +1958,13 @@ normalize e = case e of
         x' = normalize x
         y' = normalize y
     ListLit t es     -> ListLit (normalize t) (fmap normalize es)
-    ListConcat x y   ->
+    ListAppend x y   ->
         case x' of
             ListLit t xt ->
                 case y' of
                     ListLit _ yt -> ListLit t (xt Data.Vector.++ yt)
-                    _ -> ListConcat x' y'
-            _ -> ListConcat x' y'
+                    _ -> ListAppend x' y'
+            _ -> ListAppend x' y'
       where
         x' = normalize x
         y' = normalize y
