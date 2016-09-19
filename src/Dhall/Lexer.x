@@ -86,6 +86,8 @@ tokens :-
     "Natural"                           { emit Natural          }
     "Natural/fold"                      { emit NaturalFold      }
     "Natural/isZero"                    { emit NaturalIsZero    }
+    "Natural/even"                      { emit NaturalEven      }
+    "Natural/odd"                       { emit NaturalOdd       }
     "Integer"                           { emit Integer          }
     "Double"                            { emit Double           }
     "Text"                              { emit Text             }
@@ -204,6 +206,8 @@ data Token
     | NaturalLit Natural
     | NaturalFold
     | NaturalIsZero
+    | NaturalEven
+    | NaturalOdd
     | Integer
     | Text
     | Double
@@ -305,6 +309,10 @@ instance Buildable Token where
         = "Natural/fold"
     build  NaturalIsZero
         = "Natural/isZero"
+    build  NaturalEven
+        = "Natural/even"
+    build  NaturalOdd
+        = "Natural/odd"
     build  Integer
         = "Integer"
     build  Text

@@ -171,6 +171,10 @@ data Expr a
     | NaturalFold
     -- | > NaturalIsZero                            ~  Natural/isZero
     | NaturalIsZero
+    -- | > NaturalEven                              ~  Natural/even
+    | NaturalEven
+    -- | > NaturalOdd                               ~  Natural/odd
+    | NaturalOdd
     -- | > NaturalPlus x y                          ~  x + y
     | NaturalPlus (Expr a) (Expr a)
     -- | > NaturalTimes x y                         ~  x * y
@@ -264,6 +268,8 @@ instance Monad Expr where
     NaturalLit n     >>= _ = NaturalLit n
     NaturalFold      >>= _ = NaturalFold
     NaturalIsZero    >>= _ = NaturalIsZero
+    NaturalEven      >>= _ = NaturalEven
+    NaturalOdd       >>= _ = NaturalOdd
     NaturalPlus  l r >>= k = NaturalPlus  (l >>= k) (r >>= k)
     NaturalTimes l r >>= k = NaturalTimes (l >>= k) (r >>= k)
     Integer          >>= _ = Integer
@@ -448,6 +454,10 @@ buildExpr6 NaturalFold =
     "Natural/fold"
 buildExpr6 NaturalIsZero =
     "Natural/isZero"
+buildExpr6 NaturalEven =
+    "Natural/even"
+buildExpr6 NaturalOdd =
+    "Natural/odd"
 buildExpr6 Integer =
     "Integer"
 buildExpr6 Double =
@@ -1604,6 +1614,10 @@ typeWith _      NaturalFold       = do
                     (Pi "zero" "natural" "natural") ) ) )
 typeWith _      NaturalIsZero     = do
     return (Pi "_" Natural Bool)
+typeWith _      NaturalEven       = do
+    return (Pi "_" Natural Bool)
+typeWith _      NaturalOdd        = do
+    return (Pi "_" Natural Bool)
 typeWith ctx e@(NaturalPlus  l r) = do
     tl <- fmap normalize (typeWith ctx l)
     case tl of
@@ -1817,6 +1831,8 @@ normalize e = case e of
                 go !0 = zero
                 go !n = App succ' (go (n - 1))
             App NaturalIsZero (NaturalLit n) -> BoolLit (n == 0)
+            App NaturalEven (NaturalLit n) -> BoolLit (even n)
+            App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
             App (App ListBuild t) k
                 | check     -> ListLit t (buildVector k')
                 | otherwise -> App f' a'
