@@ -199,8 +199,8 @@ data Expr a
     | ListFold
     -- | > ListLength                               ~  List/length
     | ListLength
-    -- | > ListFirst                                ~  List/first
-    | ListFirst
+    -- | > ListHead                                 ~  List/head
+    | ListHead 
     -- | > ListLast                                 ~  List/last
     | ListLast
     -- | ListSplitAt                                ~  List/splitAt
@@ -274,7 +274,7 @@ instance Monad Expr where
     ListBuild        >>= _ = ListBuild
     ListFold         >>= _ = ListFold
     ListLength       >>= _ = ListLength
-    ListFirst        >>= _ = ListFirst
+    ListHead         >>= _ = ListHead
     ListLast         >>= _ = ListLast
     ListSplitAt      >>= _ = ListSplitAt
     ListSplitAtEnd   >>= _ = ListSplitAtEnd
@@ -454,8 +454,8 @@ buildExpr6 ListFold =
     "List/fold"
 buildExpr6 ListLength =
     "List/length"
-buildExpr6 ListFirst =
-    "List/first"
+buildExpr6 ListHead =
+    "List/head"
 buildExpr6 ListLast =
     "List/last"
 buildExpr6 ListSplitAt =
@@ -1673,7 +1673,7 @@ typeWith _      ListFold          = do
                         (Pi "nil" "list" "list")) ) ) )
 typeWith _      ListLength        = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") Natural))
-typeWith _      ListFirst         = do
+typeWith _      ListHead          = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a")))
 typeWith _      ListLast          = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a")))
@@ -1827,7 +1827,7 @@ normalize e = case e of
                 cons' y ys = App (App cons y) ys
             App (App ListLength _) (ListLit _ ys) ->
                 NaturalLit (fromIntegral (Data.Vector.length ys))
-            App (App ListFirst _) (ListLit t ys) ->
+            App (App ListHead _) (ListLit t ys) ->
                 normalize (MaybeLit t (Data.Vector.take 1 ys))
             App (App ListLast _) (ListLit t ys) ->
                 normalize (MaybeLit t y)

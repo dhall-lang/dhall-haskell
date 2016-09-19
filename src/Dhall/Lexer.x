@@ -93,7 +93,7 @@ tokens :-
     "List/build"                        { emit ListBuild        }
     "List/fold"                         { emit ListFold         }
     "List/length"                       { emit ListLength       }
-    "List/first"                        { emit ListFirst        }
+    "List/head"                         { emit ListHead         }
     "List/last"                         { emit ListLast         }
     "List/splitAt"                      { emit ListSplitAt      }
     "List/splitAtEnd"                   { emit ListSplitAtEnd   }
@@ -210,7 +210,7 @@ data Token
     | ListBuild
     | ListFold
     | ListLength
-    | ListFirst
+    | ListHead
     | ListLast
     | ListSplitAt
     | ListSplitAtEnd
@@ -315,8 +315,8 @@ instance Buildable Token where
         = "List/build"
     build  ListLength
         = "List/length"
-    build  ListFirst
-        = "List/first"
+    build  ListHead
+        = "List/head"
     build  ListLast
         = "List/last"
     build  ListSplitAt
