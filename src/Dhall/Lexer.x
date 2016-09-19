@@ -99,6 +99,7 @@ tokens :-
     "List/splitAtEnd"                   { emit ListSplitAtEnd   }
     "List/indexed"                      { emit ListIndexed      }
     "List/reverse"                      { emit ListReverse      }
+    "List/concat"                       { emit ListConcat       }
     "Maybe"                             { emit Maybe            }
     "Maybe/fold"                        { emit MaybeFold        }
     \" ([^\"] | \\.)* \"                { capture (TextLit . str)        }
@@ -216,6 +217,7 @@ data Token
     | ListSplitAtEnd
     | ListIndexed
     | ListReverse
+    | ListConcat
     | Maybe
     | MaybeFold
     | TextLit Text
@@ -327,6 +329,8 @@ instance Buildable Token where
         = "List/indexed"
     build  ListReverse
         = "List/reverse"
+    build  ListConcat
+        = "List/concat"
     build  ListFold
         = "List/fold"
     build  Maybe

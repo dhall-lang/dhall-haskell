@@ -213,6 +213,8 @@ data Expr a
     | ListReverse
     -- | > ListAppend x y                           ~  x ++ y
     | ListAppend (Expr a) (Expr a)
+    -- | > ListConcat                               ~  List/concat
+    | ListConcat
     -- | > Maybe                                    ~  Maybe
     | Maybe
     -- | > MaybeLit t [e]                           ~  [e] : Maybe t
@@ -281,6 +283,7 @@ instance Monad Expr where
     ListIndexed      >>= _ = ListIndexed
     ListReverse      >>= _ = ListReverse
     ListAppend l r   >>= k = ListAppend (l >>= k) (r >>= k)
+    ListConcat       >>= _ = ListConcat
     Maybe            >>= _ = Maybe
     MaybeLit t es    >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
     MaybeFold        >>= _ = MaybeFold
@@ -466,6 +469,8 @@ buildExpr6 ListIndexed =
     "List/indexed"
 buildExpr6 ListReverse =
     "List/reverse"
+buildExpr6 ListConcat =
+    "List/concat"
 buildExpr6 List =
     "List"
 buildExpr6 Maybe =
@@ -1719,6 +1724,9 @@ typeWith ctx e@(ListAppend l r  ) = do
         then return ()
         else Left (TypeError ctx e (ElementMismatch el er))
     return (App List el)
+typeWith _      ListConcat        = do
+    return
+        (Pi "a" (Const Type) (Pi "_" (App List (App List "a")) (App List "a")))
 typeWith _      Maybe             = do
     return (Pi "_" (Const Type) (Const Type))
 typeWith ctx e@(MaybeLit t xs   ) = do
@@ -1865,6 +1873,17 @@ normalize e = case e of
                           ]
             App (App ListReverse _) (ListLit t xs) ->
                 normalize (ListLit t (Data.Vector.reverse xs))
+            App (App ListConcat _) (ListLit (App List t) xs)
+                | Data.Vector.all isList xs ->
+                    case traverse extract xs of
+                        Just ys -> normalize (ListLit t (Control.Monad.join ys))
+                        _       -> error "normalize: Malformed `List/concat`"
+              where
+                isList (ListLit _ _) = True
+                isList  _            = False
+
+                extract (ListLit _ y) = Just y
+                extract  _            = Nothing
             App (App (App (App (App MaybeFold _) (MaybeLit _ xs)) _) just) nothing ->
                 normalize (maybe nothing just' (toMaybe xs))
               where
