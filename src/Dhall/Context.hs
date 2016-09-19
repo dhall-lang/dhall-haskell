@@ -29,7 +29,13 @@ insert :: Text -> a -> Context a -> Context a
 insert k v (Context kvs) = Context ((k, v) : kvs)
 {-# INLINABLE insert #-}
 
--- | Lookup a key by name and index
+{-| Lookup a key by name and index
+
+> lookup _ _         empty  = Nothing
+> lookup k 0 (insert k v c) = Just v
+> lookup k n (insert k v c) = lookup k (n - 1) c  -- 1 <= n
+> lookup k n (insert j v c) = lookup k  n      c  -- k /= j
+-}
 lookup :: Text -> Integer -> Context a -> Maybe a
 lookup _ !_ (Context         []  ) =
     Nothing
