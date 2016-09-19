@@ -402,94 +402,97 @@ buildExpr1 (Let a b (Just c) d e) =
     <>  " in "
     <>  buildExpr1 e
 buildExpr1 (ListLit a b) =
-    "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExpr5 a
+    "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExpr6 a
 buildExpr1 (MaybeLit a b) =
-    "[" <> buildElems (Data.Vector.toList b) <> "] : Maybe "  <> buildExpr5 a
+    "[" <> buildElems (Data.Vector.toList b) <> "] : Maybe "  <> buildExpr6 a
 buildExpr1 a =
     buildExpr2 a
 
 buildExpr2 :: Buildable a => Expr a -> Builder
-buildExpr2 (BoolOr      a b) = buildExpr2 a <> " || " <> buildExpr2 b
 buildExpr2 (BoolEQ      a b) = buildExpr2 a <> " == " <> buildExpr2 b
 buildExpr2 (BoolNE      a b) = buildExpr2 a <> " /= " <> buildExpr2 b
-buildExpr2 (NaturalPlus a b) = buildExpr2 a <> " + "  <> buildExpr2 b
-buildExpr2 (TextAppend  a b) = buildExpr2 a <> " <> " <> buildExpr2 b
-buildExpr2 (ListConcat  a b) = buildExpr2 a <> " ++ " <> buildExpr2 b
 buildExpr2  a                = buildExpr3 a
 
 buildExpr3 :: Buildable a => Expr a -> Builder
-buildExpr3 (BoolAnd      a b) = buildExpr3 a <> " && " <> buildExpr3 b
-buildExpr3 (NaturalTimes a b) = buildExpr3 a <> " * "  <> buildExpr3 b
-buildExpr3  a                 = buildExpr4 a
+buildExpr3 (BoolOr      a b) = buildExpr3 a <> " || " <> buildExpr3 b
+buildExpr3 (NaturalPlus a b) = buildExpr3 a <> " + "  <> buildExpr3 b
+buildExpr3 (TextAppend  a b) = buildExpr3 a <> " <> " <> buildExpr3 b
+buildExpr3 (ListConcat  a b) = buildExpr3 a <> " ++ " <> buildExpr3 b
+buildExpr3  a                = buildExpr4 a
 
 buildExpr4 :: Buildable a => Expr a -> Builder
-buildExpr4 (App a b) = buildExpr4 a <> " " <> buildExpr5 b
-buildExpr4  a        = buildExpr5 a
+buildExpr4 (BoolAnd      a b) = buildExpr4 a <> " && " <> buildExpr4 b
+buildExpr4 (NaturalTimes a b) = buildExpr4 a <> " * "  <> buildExpr4 b
+buildExpr4  a                 = buildExpr5 a
 
 buildExpr5 :: Buildable a => Expr a -> Builder
-buildExpr5 (Var a) =
+buildExpr5 (App a b) = buildExpr5 a <> " " <> buildExpr6 b
+buildExpr5  a        = buildExpr6 a
+
+buildExpr6 :: Buildable a => Expr a -> Builder
+buildExpr6 (Var a) =
     buildVar a
-buildExpr5 (Const k) =
+buildExpr6 (Const k) =
     buildConst k
-buildExpr5 Bool =
+buildExpr6 Bool =
     "Bool"
-buildExpr5 Natural =
+buildExpr6 Natural =
     "Natural"
-buildExpr5 NaturalFold =
+buildExpr6 NaturalFold =
     "Natural/fold"
-buildExpr5 NaturalIsZero =
+buildExpr6 NaturalIsZero =
     "Natural/isZero"
-buildExpr5 Integer =
+buildExpr6 Integer =
     "Integer"
-buildExpr5 Double =
+buildExpr6 Double =
     "Double"
-buildExpr5 Text =
+buildExpr6 Text =
     "Text"
-buildExpr5 ListBuild =
+buildExpr6 ListBuild =
     "List/build"
-buildExpr5 ListFold =
+buildExpr6 ListFold =
     "List/fold"
-buildExpr5 ListLength =
+buildExpr6 ListLength =
     "List/length"
-buildExpr5 ListFirst =
+buildExpr6 ListFirst =
     "List/first"
-buildExpr5 ListLast =
+buildExpr6 ListLast =
     "List/last"
-buildExpr5 ListDrop =
+buildExpr6 ListDrop =
     "List/drop"
-buildExpr5 ListDropEnd =
+buildExpr6 ListDropEnd =
     "List/dropEnd"
-buildExpr5 ListIndexed =
+buildExpr6 ListIndexed =
     "List/indexed"
-buildExpr5 ListReverse =
+buildExpr6 ListReverse =
     "List/reverse"
-buildExpr5 List =
+buildExpr6 List =
     "List"
-buildExpr5 Maybe =
+buildExpr6 Maybe =
     "Maybe"
-buildExpr5 MaybeFold =
+buildExpr6 MaybeFold =
     "Maybe/fold"
-buildExpr5 (BoolLit True) =
+buildExpr6 (BoolLit True) =
     "True"
-buildExpr5 (BoolLit False) =
+buildExpr6 (BoolLit False) =
     "False"
-buildExpr5 (IntegerLit a) =
+buildExpr6 (IntegerLit a) =
     build (show a)
-buildExpr5 (NaturalLit a) =
+buildExpr6 (NaturalLit a) =
     "+" <> build (show a)
-buildExpr5 (DoubleLit a) =
+buildExpr6 (DoubleLit a) =
     build (show a)
-buildExpr5 (TextLit a) =
+buildExpr6 (TextLit a) =
     build (show a)
-buildExpr5 (RecordLit a) =
+buildExpr6 (RecordLit a) =
     buildRecordLit a
-buildExpr5 (Record a) =
+buildExpr6 (Record a) =
     buildRecord a
-buildExpr5 (Embed a) =
+buildExpr6 (Embed a) =
     build a
-buildExpr5 (Field a b) =
-    buildExpr5 a <> "." <> build b
-buildExpr5 a =
+buildExpr6 (Field a b) =
+    buildExpr6 a <> "." <> build b
+buildExpr6 a =
     "(" <> buildExpr0 a <> ")"
 
 buildConst :: Const -> Builder
@@ -806,7 +809,7 @@ $insert
 You can fix the problem by changing the annotation to a type
 |]
       where
-        txt0 = Text.toStrict (Builder.toLazyText (buildExpr5 expr0))
+        txt0 = Text.toStrict (Builder.toLazyText (buildExpr6 expr0))
         insert = indent $
             if isEmpty
             then [NeatInterpolation.text|
@@ -837,7 +840,7 @@ declared element type
 |]
       where
         txt0 = Text.toStrict (pretty expr0)
-        txt1 = Text.toStrict (Builder.toLazyText (buildExpr5 expr1))
+        txt1 = Text.toStrict (Builder.toLazyText (buildExpr6 expr1))
         txt2 = Text.toStrict (pretty expr2)
         txt3 = Text.toStrict (pretty i    )
         insert = indent $
@@ -899,7 +902,7 @@ You provided a type parameter for the `Maybe` that is not a valid type:
 $insert
 |]
       where
-        txt0 = Text.toStrict (Builder.toLazyText (buildExpr5 expr0))
+        txt0 = Text.toStrict (Builder.toLazyText (buildExpr6 expr0))
         insert = indent [NeatInterpolation.text|
     [ ... ] : Maybe $txt0
     --              ^ This needs to be a type
@@ -927,7 +930,7 @@ The element you provided actually has this type:
 |]
       where
         txt0 = Text.toStrict (pretty expr0)
-        txt1 = Text.toStrict (Builder.toLazyText (buildExpr5 expr1))
+        txt1 = Text.toStrict (Builder.toLazyText (buildExpr6 expr1))
         txt2 = Text.toStrict (pretty expr2)
         insert = indent [NeatInterpolation.text|
     [  $txt0
