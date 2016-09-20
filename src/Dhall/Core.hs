@@ -244,10 +244,6 @@ data Expr a
     | ListHead 
     -- | > ListLast                                 ~  List/last
     | ListLast
-    -- | > ListSplitAt                                ~  List/splitAt
-    | ListSplitAt
-    -- | > ListSplitAtEnd                             ~  List/splitAtEnd
-    | ListSplitAtEnd
     -- | > ListIndexed                              ~  List/indexed
     | ListIndexed
     -- | > ListReverse                              ~  List/reverse
@@ -322,8 +318,6 @@ instance Monad Expr where
     ListLength       >>= _ = ListLength
     ListHead         >>= _ = ListHead
     ListLast         >>= _ = ListLast
-    ListSplitAt      >>= _ = ListSplitAt
-    ListSplitAtEnd   >>= _ = ListSplitAtEnd
     ListIndexed      >>= _ = ListIndexed
     ListReverse      >>= _ = ListReverse
     ListAppend l r   >>= k = ListAppend (l >>= k) (r >>= k)
@@ -511,10 +505,6 @@ buildExpr6 ListHead =
     "List/head"
 buildExpr6 ListLast =
     "List/last"
-buildExpr6 ListSplitAt =
-    "List/splitAt"
-buildExpr6 ListSplitAtEnd =
-    "List/splitAtEnd"
 buildExpr6 ListIndexed =
     "List/indexed"
 buildExpr6 ListReverse =
@@ -1738,26 +1728,6 @@ typeWith _      ListHead          = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a")))
 typeWith _      ListLast          = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a")))
-typeWith _      ListSplitAt       = do
-    let kts = Data.Map.fromList
-            [ ("prefix", App List "a")
-            , ("suffix", App List "a")
-            ]
-    return
-        (Pi "_" Natural
-            (Pi "a" (Const Type)
-                (Pi "_" (App List "a")
-                    (Record kts) ) ) )
-typeWith _      ListSplitAtEnd    = do
-    let kts = Data.Map.fromList
-            [ ("prefix", App List "a")
-            , ("suffix", App List "a")
-            ]
-    return
-        (Pi "_" Natural
-            (Pi "a" (Const Type)
-                (Pi "_" (App List "a")
-                    (Record kts) ) ) )
 typeWith _      ListIndexed       = do
     let kts = [("index", Natural), ("value", "a")]
     return
@@ -1901,23 +1871,6 @@ normalize e = case e of
                 y = if Data.Vector.null ys
                     then Data.Vector.empty
                     else Data.Vector.singleton (Data.Vector.last ys)
-            App (App (App ListSplitAt (NaturalLit n)) _) (ListLit t ys) ->
-                normalize (RecordLit kvs)
-              where
-                (prefix, suffix) = Data.Vector.splitAt (fromIntegral n) ys
-                kvs = Data.Map.fromList
-                    [ ("prefix", ListLit t prefix)
-                    , ("suffix", ListLit t suffix)
-                    ]
-            App (App (App ListSplitAtEnd (NaturalLit n)) _) (ListLit t ys) ->
-                normalize (RecordLit kvs)
-              where
-                n' = max 0 (Data.Vector.length ys - fromIntegral n)
-                (prefix, suffix) = Data.Vector.splitAt n' ys
-                kvs = Data.Map.fromList
-                    [ ("prefix", ListLit t prefix)
-                    , ("suffix", ListLit t suffix)
-                    ]
             App (App ListIndexed _) (ListLit t xs) ->
                 normalize (ListLit t' (fmap adapt (Data.Vector.indexed xs)))
               where

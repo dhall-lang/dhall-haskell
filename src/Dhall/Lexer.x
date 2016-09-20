@@ -101,8 +101,6 @@ tokens :-
     "List/length"                       { emit ListLength       }
     "List/head"                         { emit ListHead         }
     "List/last"                         { emit ListLast         }
-    "List/splitAt"                      { emit ListSplitAt      }
-    "List/splitAtEnd"                   { emit ListSplitAtEnd   }
     "List/indexed"                      { emit ListIndexed      }
     "List/reverse"                      { emit ListReverse      }
     "List/concat"                       { emit ListConcat       }
@@ -265,8 +263,6 @@ data Token
     | ListLength
     | ListHead
     | ListLast
-    | ListSplitAt
-    | ListSplitAtEnd
     | ListIndexed
     | ListReverse
     | ListConcat
@@ -380,10 +376,6 @@ instance Buildable Token where
         = "List/head"
     build  ListLast
         = "List/last"
-    build  ListSplitAt
-        = "List/splitAt"
-    build  ListSplitAtEnd
-        = "List/splitAtEnd"
     build  ListIndexed
         = "List/indexed"
     build  ListReverse

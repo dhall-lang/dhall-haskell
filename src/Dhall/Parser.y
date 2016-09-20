@@ -88,8 +88,6 @@ import qualified NeatInterpolation
     'List/length'     { Dhall.Lexer.ListLength     }
     'List/head'       { Dhall.Lexer.ListHead       }
     'List/last'       { Dhall.Lexer.ListLast       }
-    'List/splitAt'    { Dhall.Lexer.ListSplitAt    }
-    'List/splitAtEnd' { Dhall.Lexer.ListSplitAtEnd }
     'List/indexed'    { Dhall.Lexer.ListIndexed    }
     'List/reverse'    { Dhall.Lexer.ListReverse    }
     'List/concat'     { Dhall.Lexer.ListConcat     }
@@ -219,10 +217,6 @@ Expr6
         { ListHead }
     | 'List/last'
         { ListLast }
-    | 'List/splitAt'
-        { ListSplitAt }
-    | 'List/splitAtEnd'
-        { ListSplitAtEnd }
     | 'List/indexed'
         { ListIndexed }
     | 'List/reverse'
