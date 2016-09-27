@@ -45,9 +45,6 @@ import qualified NeatInterpolation
     '{'               { Dhall.Lexer.OpenBrace      }
     '}'               { Dhall.Lexer.CloseBrace     }
     '{:}'             { Dhall.Lexer.EmptyRecord    }
-    '<'               { Dhall.Lexer.OpenAngle      }
-    '>'               { Dhall.Lexer.CloseAngle     }
-    '<:>'             { Dhall.Lexer.EmptyPattern   }
     '['               { Dhall.Lexer.OpenBracket    }
     ']'               { Dhall.Lexer.CloseBracket   }
     ':'               { Dhall.Lexer.Colon          }
@@ -246,10 +243,6 @@ Expr6
         { $1 }
     | Record
         { $1 }
-    | Pattern
-        { $1 }
-    | PatternLit
-        { $1 }
     | Import
         { Embed $1 }
     | Expr6 '.' label
@@ -308,16 +301,6 @@ Record
         { Record (Data.Map.fromList $2) }
     | '{:}'
         { Record (Data.Map.fromList []) }
-
-Pattern
-    : '<' FieldTypes '>'
-        { Pattern (Data.Map.fromList $2) }
-    | '<:>'
-        { Pattern (Data.Map.fromList []) }
-
-PatternLit
-    : '<' label '=' Expr0 ',' FieldTypes '>'
-        { PatternLit $2 $4 (Data.Map.fromList $6) }
 
 FieldTypes
     : FieldTypesRev

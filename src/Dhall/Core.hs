@@ -259,14 +259,10 @@ data Expr a
     | MaybeLit (Expr a) (Vector (Expr a))
     -- | > MaybeFold                                ~  Maybe/fold
     | MaybeFold
-    -- | > Record    [(k1, t1), (k2, t2)]           ~  { k1 : t1, k2 : t2 }
+    -- | > Record    [(k1, t1), (k2, t2)]           ~  { k1 : t1, k2 : t1 }
     | Record    (Map Text (Expr a))
     -- | > RecordLit [(k1, v1), (k2, v2)]           ~  { k1 = v1, k2 = v2 }
     | RecordLit (Map Text (Expr a))
-    -- | > Pattern   [(k1, t1), (k2, t2)]           ~  < k1 : t1, k2 : t2 >
-    | Pattern (Map Text (Expr a))
-    -- | > PatternLit k1 v1 [(k2, v2)]              ~  < k1 = v1, k2 : t2 >
-    | PatternLit Text (Expr a) (Map Text (Expr a))
     -- | > Field e x                                ~  e.x
     | Field (Expr a) Text
     -- | > Embed path                               ~  #path
@@ -281,69 +277,62 @@ instance Applicative Expr where
 instance Monad Expr where
     return = pure
 
-    Const c              >>= _ = Const c
-    Var v                >>= _ = Var v
-    Lam x _A  b          >>= k = Lam x (_A >>= k) ( b >>= k)
-    Pi  x _A _B          >>= k = Pi  x (_A >>= k) (_B >>= k)
-    App f a              >>= k = App (f >>= k) (a >>= k)
-    Let f as mt r e      >>= k = Let f as' (fmap (>>= k) mt) (r >>= k) (e >>= k)
+    Const c          >>= _ = Const c
+    Var v            >>= _ = Var v
+    Lam x _A  b      >>= k = Lam x (_A >>= k) ( b >>= k)
+    Pi  x _A _B      >>= k = Pi  x (_A >>= k) (_B >>= k)
+    App f a          >>= k = App (f >>= k) (a >>= k)
+    Let f as mt r e  >>= k = Let f as' (fmap (>>= k) mt) (r >>= k) (e >>= k)
       where
         as' = do
             (x, t) <- as
             return (x, t >>= k)
-    Annot x t            >>= k = Annot (x >>= k) (t >>= k)
-    Bool                 >>= _ = Bool
-    BoolLit b            >>= _ = BoolLit b
-    BoolAnd l r          >>= k = BoolAnd (l >>= k) (r >>= k)
-    BoolOr  l r          >>= k = BoolOr  (l >>= k) (r >>= k)
-    BoolEQ  l r          >>= k = BoolEQ  (l >>= k) (r >>= k)
-    BoolNE  l r          >>= k = BoolNE  (l >>= k) (r >>= k)
-    BoolIf x y z         >>= k = BoolIf (x >>= k) (y >>= k) (z >>= k)
-    Natural              >>= _ = Natural
-    NaturalLit n         >>= _ = NaturalLit n
-    NaturalFold          >>= _ = NaturalFold
-    NaturalIsZero        >>= _ = NaturalIsZero
-    NaturalEven          >>= _ = NaturalEven
-    NaturalOdd           >>= _ = NaturalOdd
-    NaturalPlus  l r     >>= k = NaturalPlus  (l >>= k) (r >>= k)
-    NaturalTimes l r     >>= k = NaturalTimes (l >>= k) (r >>= k)
-    Integer              >>= _ = Integer
-    IntegerLit n         >>= _ = IntegerLit n
-    Double               >>= _ = Double
-    DoubleLit n          >>= _ = DoubleLit n
-    Text                 >>= _ = Text
-    TextLit t            >>= _ = TextLit t
-    TextAppend l r       >>= k = TextAppend (l >>= k) (r >>= k)
-    TextConcat           >>= _ = TextConcat
-    List                 >>= _ = List
-    ListLit t es         >>= k = ListLit (t >>= k) (fmap (>>= k) es)
-    ListBuild            >>= _ = ListBuild
-    ListFold             >>= _ = ListFold
-    ListLength           >>= _ = ListLength
-    ListHead             >>= _ = ListHead
-    ListLast             >>= _ = ListLast
-    ListIndexed          >>= _ = ListIndexed
-    ListReverse          >>= _ = ListReverse
-    ListAppend l r       >>= k = ListAppend (l >>= k) (r >>= k)
-    ListConcat           >>= _ = ListConcat
-    Maybe                >>= _ = Maybe
-    MaybeLit t es        >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
-    MaybeFold            >>= _ = MaybeFold
-    Record    kts        >>= k = Record (Data.Map.fromAscList kts')
+    Annot x t        >>= k = Annot (x >>= k) (t >>= k)
+    Bool             >>= _ = Bool
+    BoolLit b        >>= _ = BoolLit b
+    BoolAnd l r      >>= k = BoolAnd (l >>= k) (r >>= k)
+    BoolOr  l r      >>= k = BoolOr  (l >>= k) (r >>= k)
+    BoolEQ  l r      >>= k = BoolEQ  (l >>= k) (r >>= k)
+    BoolNE  l r      >>= k = BoolNE  (l >>= k) (r >>= k)
+    BoolIf x y z     >>= k = BoolIf (x >>= k) (y >>= k) (z >>= k)
+    Natural          >>= _ = Natural
+    NaturalLit n     >>= _ = NaturalLit n
+    NaturalFold      >>= _ = NaturalFold
+    NaturalIsZero    >>= _ = NaturalIsZero
+    NaturalEven      >>= _ = NaturalEven
+    NaturalOdd       >>= _ = NaturalOdd
+    NaturalPlus  l r >>= k = NaturalPlus  (l >>= k) (r >>= k)
+    NaturalTimes l r >>= k = NaturalTimes (l >>= k) (r >>= k)
+    Integer          >>= _ = Integer
+    IntegerLit n     >>= _ = IntegerLit n
+    Double           >>= _ = Double
+    DoubleLit n      >>= _ = DoubleLit n
+    Text             >>= _ = Text
+    TextLit t        >>= _ = TextLit t
+    TextAppend l r   >>= k = TextAppend (l >>= k) (r >>= k)
+    TextConcat       >>= _ = TextConcat
+    List             >>= _ = List
+    ListLit t es     >>= k = ListLit (t >>= k) (fmap (>>= k) es)
+    ListBuild        >>= _ = ListBuild
+    ListFold         >>= _ = ListFold
+    ListLength       >>= _ = ListLength
+    ListHead         >>= _ = ListHead
+    ListLast         >>= _ = ListLast
+    ListIndexed      >>= _ = ListIndexed
+    ListReverse      >>= _ = ListReverse
+    ListAppend l r   >>= k = ListAppend (l >>= k) (r >>= k)
+    ListConcat       >>= _ = ListConcat
+    Maybe            >>= _ = Maybe
+    MaybeLit t es    >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
+    MaybeFold        >>= _ = MaybeFold
+    Record    kts    >>= k = Record (Data.Map.fromAscList kts')
       where
         kts' = [ (k', t >>= k) | (k', t) <- Data.Map.toAscList kts ]
-    RecordLit kvs        >>= k = RecordLit (Data.Map.fromAscList kvs')
+    RecordLit kvs   >>= k = RecordLit (Data.Map.fromAscList kvs')
       where
         kvs' = [ (k', v >>= k) | (k', v) <- Data.Map.toAscList kvs ]
-    Pattern   kts        >>= k = Pattern (Data.Map.fromAscList kts')
-      where
-        kts' = [ (k', t >>= k) | (k', t) <- Data.Map.toAscList kts ]
-    PatternLit k' v kvs >>= k =
-        PatternLit k' (v >>= k) (Data.Map.fromAscList kvs')
-      where
-        kvs' = [ (k'', v' >>= k) | (k'', v') <- Data.Map.toAscList kvs ]
-    Field r x            >>= k = Field (r >>= k) x
-    Embed r              >>= k = k r
+    Field r x        >>= k = Field (r >>= k) x
+    Embed r          >>= k = k r
 
 match :: Var -> Var -> [(Text, Text)] -> Bool
 match (V xL nL) (V xR nR)             []  =
@@ -385,17 +374,7 @@ propEqual eL0 eR0 = State.evalState (go (normalize eL0) (normalize eR0)) []
     go Text Text = return True
     go List List = return True
     go Maybe Maybe = return True
-    go (Record ktsL0) (Record ktsR0) = do
-        let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
-                | kL == kR = do
-                    b <- go tL tR
-                    if b
-                        then loop ktsL ktsR
-                        else return False
-            loop [] [] = return True
-            loop _  _  = return False
-        loop (Data.Map.toList ktsL0) (Data.Map.toList ktsR0)
-    go (Pattern ktsL0) (Pattern ktsR0) = do
+    go (Record    ktsL0) (Record    ktsR0) = do
         let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
                 | kL == kR = do
                     b <- go tL tR
@@ -554,10 +533,6 @@ buildExpr6 (RecordLit a) =
     buildRecordLit a
 buildExpr6 (Record a) =
     buildRecord a
-buildExpr6 (Pattern a) =
-    buildPattern a
-buildExpr6 (PatternLit a b c) =
-    buildPatternLit a b c
 buildExpr6 (Embed a) =
     build a
 buildExpr6 (Field a b) =
@@ -605,22 +580,6 @@ buildRecord a | Data.Map.null a =
 buildRecord a =
     "{ " <> buildFieldTypes (Data.Map.toList a) <> " }"
 
-buildPattern :: Buildable a => Map Text (Expr a) -> Builder
-buildPattern a | Data.Map.null a =
-    "<:>"
-buildPattern a =
-    "< " <> buildFieldTypes (Data.Map.toList a) <> " >"
-
-buildPatternLit :: Buildable a => Text -> Expr a -> Map Text (Expr a) -> Builder
-buildPatternLit a b c =
-        "< "
-    <>  build a
-    <>  " = "
-    <>  buildExpr0 b
-    <>  ", "
-    <>  buildFieldTypes (Data.Map.toList c)
-    <>  " >"
-
 buildFieldTypes :: Buildable a => [(Text, Expr a)] -> Builder
 buildFieldTypes    []  = ""
 buildFieldTypes   [a]  = buildFieldType a
@@ -651,7 +610,6 @@ data TypeMessage
     | InvalidPredicate (Expr X) (Expr X)
     | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
     | InvalidFieldType Text (Expr X)
-    | InvalidVariantType Text (Expr X)
     | NotARecord Text (Expr X) (Expr X)
     | MissingField Text (Expr X)
     | CantAnd Bool (Expr X) (Expr X)
@@ -1062,28 +1020,7 @@ You provided a record type with a key named:
 ↳ $txt0
 ... annotated with the following expression which is not a type:
 
-    { ... : $txt1, ... }
-    --      ^ This needs to be a type
-
-You can fix the problem by changing the annotation to a type
-|]
-      where
-        txt0 = Text.toStrict (pretty k    )
-        txt1 = Text.toStrict (pretty expr0)
-
-    build (InvalidVariantType k expr0) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Invalid type of variant
-
-Explanation: Every pattern type has an annotated type for each variant
-
-However, variants *cannot* be annotated with expressions other than types
-
-You provided a variant type with a variant named:
-↳ $txt0
-... annotated with the following expression which is not a type:
-
-    < ... : $txt1, ... >
+    {{ ... : $txt1, ... }}
     --       ^ This needs to be a type
 
 You can fix the problem by changing the annotation to a type
@@ -1098,9 +1035,9 @@ Error: Invalid record access
 
 Explanation: You can only access fields on records, like this:
 
-    { foo = True, bar = "ABC" }.foo            -- This is valid ...
+    { foo = True, bar = "ABC" }.foo              -- This is valid ...
 
-    λ(r : { foo : Bool, bar : Text }) → r.foo  -- ... and so is this
+    λ(r : {{ foo : Bool, bar : Text }}) → r.foo  -- ... and so is this
 
 ... but you *cannot* access fields on non-record expressions, like this:
 
@@ -1126,9 +1063,9 @@ Error: Missing record field
 
 Explanation: You can only retrieve record fields if they are present
 
-    { foo = True, bar = "ABC" }.foo            -- This is valid ...
+    { foo = True, bar = "ABC" }.foo              -- This is valid ...
 
-    λ(r : { foo : Bool, bar : Text }) → r.foo  -- ... and so is this
+    λ(r : {{ foo : Bool, bar : Text }}) → r.foo  -- ... and so is this
 
 ... but you *cannot* access fields missing from a record:
 
@@ -1424,13 +1361,6 @@ shift d v (Record kts) = Record (Data.Map.fromAscList kts')
 shift d v (RecordLit kvs) = RecordLit (Data.Map.fromAscList kvs')
   where
     kvs' = [ (k, shift d v v') | (k, v') <- Data.Map.toList kvs ]
-shift d v (Pattern kts) = Pattern (Data.Map.fromAscList kts')
-  where
-    kts' = [ (k, shift d v t) | (k, t) <- Data.Map.toList kts ]
-shift d v (PatternLit k u kvs) = PatternLit k u' (Data.Map.fromAscList kvs')
-  where
-    u' = shift d v u
-    kvs' = [ (k, shift d v u'') | (k, u'') <- Data.Map.toList kvs ]
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
@@ -1537,13 +1467,6 @@ subst x e (Record kts) = Record (Data.Map.fromAscList kts')
 subst x e (RecordLit kvs) = RecordLit (Data.Map.fromAscList kvs')
   where
     kvs' = [ (k, subst x e v) | (k, v) <- Data.Map.toList kvs ]
-subst x e (Pattern kts) = Pattern (Data.Map.fromAscList kts')
-  where
-    kts' = [ (k, subst x e t) | (k, t) <- Data.Map.toList kts ]
-subst x e (PatternLit k v kvs) = PatternLit k v' (Data.Map.fromAscList kvs')
-  where
-    v' = subst x e v
-    kvs' = [ (k', subst x e v'') | (k', v'') <- Data.Map.toList kvs ]
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
@@ -1857,7 +1780,7 @@ typeWith _      MaybeFold         = do
                 (Pi "maybe" (Const Type)
                     (Pi "just" (Pi "_" "a" "maybe")
                         (Pi "nothing" "maybe" "maybe") ) ) ) )
-typeWith ctx e@(Record     kts  ) = do
+typeWith ctx e@(Record    kts   ) = do
     let process (k, t) = do
             s <- fmap normalize (typeWith ctx t)
             case normalize s of
@@ -1865,23 +1788,12 @@ typeWith ctx e@(Record     kts  ) = do
                 _          -> Left (TypeError ctx e (InvalidFieldType k t))
     mapM_ process (Data.Map.toList kts)
     return (Const Type)
-typeWith ctx   (RecordLit  kvs  ) = do
+typeWith ctx   (RecordLit kvs   ) = do
     let process (k, v) = do
             t <- typeWith ctx v
             return (k, t)
     kts <- mapM process (Data.Map.toAscList kvs)
     return (Record (Data.Map.fromAscList kts))
-typeWith ctx e@(Pattern    kts  ) = do
-    let process (k, t) = do
-            s <- fmap normalize (typeWith ctx t)
-            case normalize s of
-                Const Type -> return ()
-                _          -> Left (TypeError ctx e (InvalidVariantType k t))
-    mapM_ process (Data.Map.toList kts)
-    return (Const Type)
-typeWith ctx   (PatternLit k v kts  ) = do
-    t <- typeWith ctx v
-    return (Pattern (Data.Map.insert k t kts))
 typeWith ctx e@(Field r x       ) = do
     t <- fmap normalize (typeWith ctx r)
     case t of
