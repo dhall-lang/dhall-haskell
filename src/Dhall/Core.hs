@@ -325,12 +325,8 @@ instance Monad Expr where
     Maybe            >>= _ = Maybe
     MaybeLit t es    >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
     MaybeFold        >>= _ = MaybeFold
-    Record    kts    >>= k = Record (Data.Map.fromAscList kts')
-      where
-        kts' = [ (k', t >>= k) | (k', t) <- Data.Map.toAscList kts ]
-    RecordLit kvs   >>= k = RecordLit (Data.Map.fromAscList kvs')
-      where
-        kvs' = [ (k', v >>= k) | (k', v) <- Data.Map.toAscList kvs ]
+    Record    kts    >>= k = Record    (fmap (>>= k) kts)
+    RecordLit kvs    >>= k = RecordLit (fmap (>>= k) kvs)
     Field r x        >>= k = Field (r >>= k) x
     Embed r          >>= k = k r
 
@@ -1355,12 +1351,8 @@ shift d v (MaybeLit a b) = MaybeLit a' b'
   where
     a' =       shift d v  a
     b' = fmap (shift d v) b
-shift d v (Record kts) = Record (Data.Map.fromAscList kts')
-  where
-    kts' = [ (k, shift d v t) | (k, t) <- Data.Map.toList kts ]
-shift d v (RecordLit kvs) = RecordLit (Data.Map.fromAscList kvs')
-  where
-    kvs' = [ (k, shift d v v') | (k, v') <- Data.Map.toList kvs ]
+shift d v (Record    kts) = Record    (fmap (shift d v) kts)
+shift d v (RecordLit kvs) = RecordLit (fmap (shift d v) kvs)
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
@@ -1461,12 +1453,8 @@ subst x e (MaybeLit a b) = MaybeLit a' b'
   where
     a' =       subst x e  a
     b' = fmap (subst x e) b
-subst x e (Record kts) = Record (Data.Map.fromAscList kts')
-  where
-    kts' = [ (k, subst x e t) | (k, t) <- Data.Map.toList kts ]
-subst x e (RecordLit kvs) = RecordLit (Data.Map.fromAscList kvs')
-  where
-    kvs' = [ (k, subst x e v) | (k, v) <- Data.Map.toList kvs ]
+subst x e (Record    kts) = Record    (fmap (subst x e) kts)
+subst x e (RecordLit kvs) = RecordLit (fmap (subst x e) kvs)
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
