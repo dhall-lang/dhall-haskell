@@ -44,11 +44,14 @@ import qualified NeatInterpolation
     ')'               { Dhall.Lexer.CloseParen     }
     '{'               { Dhall.Lexer.OpenBrace      }
     '}'               { Dhall.Lexer.CloseBrace     }
+    '<'               { Dhall.Lexer.OpenAngle      }
+    '>'               { Dhall.Lexer.CloseAngle     }
     '{=}'             { Dhall.Lexer.EmptyRecordLit }
     '['               { Dhall.Lexer.OpenBracket    }
     ']'               { Dhall.Lexer.CloseBracket   }
     ':'               { Dhall.Lexer.Colon          }
     ','               { Dhall.Lexer.Comma          }
+    '|'               { Dhall.Lexer.Bar            }
     '.'               { Dhall.Lexer.Dot            }
     '='               { Dhall.Lexer.Equals         }
     '&&'              { Dhall.Lexer.And            }
@@ -239,9 +242,11 @@ Expr6
         { DoubleLit $1 }
     | text
         { TextLit $1 }
+    | Record
+        { $1 }
     | RecordLit
         { $1 }
-    | Record
+    | Union
         { $1 }
     | Import
         { Embed $1 }
@@ -315,6 +320,26 @@ FieldTypesRev
 FieldType
     : label ':' Expr0
         { ($1, $3) } 
+
+Union
+    : '<' TagTypes '>'
+        { Union (Data.Map.fromList $2) }
+
+TagTypes
+    : TagTypesRev
+        { reverse $1 }
+
+TagTypesRev
+    : {- empty -}
+        { [] }
+    | TagType
+        { [$1] }
+    | TagTypesRev '|' TagType
+        { $3 : $1 }
+
+TagType
+    : label Expr0
+        { ($1, $2) } 
 
 Import
     : file

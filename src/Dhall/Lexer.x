@@ -57,11 +57,14 @@ tokens :-
     ")"                                 { emit CloseParen       }
     "{"                                 { emit OpenBrace        }
     "}"                                 { emit CloseBrace       }
+    "<"                                 { emit OpenAngle        }
+    ">"                                 { emit CloseAngle       }
     "{=}"                               { emit EmptyRecordLit   }
     "["                                 { emit OpenBracket      }
     "]"                                 { emit CloseBracket     }
     ":"                                 { emit Colon            }
     ","                                 { emit Comma            }
+    "|"                                 { emit Bar              }
     "."                                 { emit Dot              }
     "="                                 { emit Equals           }
     "&&"                                { emit And              }
@@ -218,11 +221,14 @@ data Token
     | CloseParen
     | OpenBrace
     | CloseBrace
+    | OpenAngle
+    | CloseAngle
     | EmptyRecordLit
     | OpenBracket
     | CloseBracket
     | Colon
     | Comma
+    | Bar
     | Dot
     | Equals
     | And
@@ -286,6 +292,10 @@ instance Buildable Token where
         = "{"
     build  CloseBrace
         = "}"
+    build  OpenAngle
+        = "<"
+    build  CloseAngle
+        = ">"
     build  EmptyRecordLit
         = "{=}"
     build  OpenBracket
@@ -296,6 +306,8 @@ instance Buildable Token where
         = ":"
     build  Comma
         = ","
+    build  Bar
+        = "|"
     build  Dot
         = "."
     build  Equals

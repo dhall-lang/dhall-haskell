@@ -263,6 +263,8 @@ data Expr a
     | Record    (Map Text (Expr a))
     -- | > RecordLit [(k1, v1), (k2, v2)]           ~  { k1 = v1, k2 = v2 }
     | RecordLit (Map Text (Expr a))
+    -- | > Union     [(k1, t1), (k2, t2)]           ~  < k1 t1 | k2 t2 >
+    | Union     (Map Text (Expr a))
     -- | > Field e x                                ~  e.x
     | Field (Expr a) Text
     -- | > Embed path                               ~  #path
@@ -327,6 +329,7 @@ instance Monad Expr where
     MaybeFold        >>= _ = MaybeFold
     Record    kts    >>= k = Record    (fmap (>>= k) kts)
     RecordLit kvs    >>= k = RecordLit (fmap (>>= k) kvs)
+    Union     kts    >>= k = Union     (fmap (>>= k) kts)
     Field r x        >>= k = Field (r >>= k) x
     Embed r          >>= k = k r
 
@@ -370,7 +373,17 @@ propEqual eL0 eR0 = State.evalState (go (normalize eL0) (normalize eR0)) []
     go Text Text = return True
     go List List = return True
     go Maybe Maybe = return True
-    go (Record    ktsL0) (Record    ktsR0) = do
+    go (Record ktsL0) (Record ktsR0) = do
+        let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
+                | kL == kR = do
+                    b <- go tL tR
+                    if b
+                        then loop ktsL ktsR
+                        else return False
+            loop [] [] = return True
+            loop _  _  = return False
+        loop (Data.Map.toList ktsL0) (Data.Map.toList ktsR0)
+    go (Union ktsL0) (Union ktsR0) = do
         let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
                 | kL == kR = do
                     b <- go tL tR
@@ -529,6 +542,8 @@ buildExpr6 (RecordLit a) =
     buildRecordLit a
 buildExpr6 (Record a) =
     buildRecord a
+buildExpr6 (Union a) =
+    buildUnion a
 buildExpr6 (Embed a) =
     build a
 buildExpr6 (Field a b) =
@@ -582,7 +597,21 @@ buildFieldTypes   [a]  = buildFieldType a
 buildFieldTypes (a:bs) = buildFieldType a <> ", " <> buildFieldTypes bs
 
 buildFieldType :: Buildable a => (Text, Expr a) -> Builder
-buildFieldType (a, b) = build a <> " : " <> build b
+buildFieldType (a, b) = build a <> " : " <> buildExpr0 b
+
+buildUnion :: Buildable a => Map Text (Expr a) -> Builder
+buildUnion a | Data.Map.null a =
+    "<>"
+buildUnion a =
+    "< " <> buildTagTypes (Data.Map.toList a) <> " >"
+
+buildTagTypes :: Buildable a => [(Text, Expr a)] -> Builder
+buildTagTypes    []  = ""
+buildTagTypes   [a]  = buildTagType a
+buildTagTypes (a:bs) = buildTagType a <> " | " <> buildTagTypes bs
+
+buildTagType :: Buildable a => (Text, Expr a) -> Builder
+buildTagType (a, b) = build a <> " " <> buildExpr0 b
 
 -- | Generates a syntactically valid Dhall program
 instance Buildable a => Buildable (Expr a)
@@ -606,6 +635,7 @@ data TypeMessage
     | InvalidPredicate (Expr X) (Expr X)
     | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
     | InvalidFieldType Text (Expr X)
+    | InvalidTagType Text (Expr X)
     | NotARecord Text (Expr X) (Expr X)
     | MissingField Text (Expr X)
     | CantAnd Bool (Expr X) (Expr X)
@@ -1025,6 +1055,27 @@ You can fix the problem by changing the annotation to a type
         txt0 = Text.toStrict (pretty k    )
         txt1 = Text.toStrict (pretty expr0)
 
+    build (InvalidTagType k expr0) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Invalid type of tag
+
+Explanation: Every union type has an annotated type for each tag
+
+However, tags *cannot* be annotated with expressions other than types
+
+You provided a union type with a tag named:
+↳ $txt0
+... annotated with the following expression which is not a type:
+
+    < ... $txt1 | ... >
+    --    ^ This needs to be a type
+
+You can fix the problem by changing the annotation to a type
+|]
+      where
+        txt0 = Text.toStrict (pretty k    )
+        txt1 = Text.toStrict (pretty expr0)
+
     build (NotARecord k expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid record access
@@ -1353,6 +1404,7 @@ shift d v (MaybeLit a b) = MaybeLit a' b'
     b' = fmap (shift d v) b
 shift d v (Record    kts) = Record    (fmap (shift d v) kts)
 shift d v (RecordLit kvs) = RecordLit (fmap (shift d v) kvs)
+shift d v (Union     kts) = Union     (fmap (shift d v) kts)
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
@@ -1455,6 +1507,7 @@ subst x e (MaybeLit a b) = MaybeLit a' b'
     b' = fmap (subst x e) b
 subst x e (Record    kts) = Record    (fmap (subst x e) kts)
 subst x e (RecordLit kvs) = RecordLit (fmap (subst x e) kvs)
+subst x e (Union     kts) = Union     (fmap (subst x e) kts)
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
@@ -1771,7 +1824,7 @@ typeWith _      MaybeFold         = do
 typeWith ctx e@(Record    kts   ) = do
     let process (k, t) = do
             s <- fmap normalize (typeWith ctx t)
-            case normalize s of
+            case s of
                 Const Type -> return ()
                 _          -> Left (TypeError ctx e (InvalidFieldType k t))
     mapM_ process (Data.Map.toList kts)
@@ -1782,6 +1835,14 @@ typeWith ctx   (RecordLit kvs   ) = do
             return (k, t)
     kts <- mapM process (Data.Map.toAscList kvs)
     return (Record (Data.Map.fromAscList kts))
+typeWith ctx e@(Union     kts   ) = do
+    let process (k, t) = do
+            s <- fmap normalize (typeWith ctx t)
+            case s of
+                Const Type -> return ()
+                _          -> Left (TypeError ctx e (InvalidTagType k t))
+    mapM_ process (Data.Map.toList kts)
+    return (Const Type)
 typeWith ctx e@(Field r x       ) = do
     t <- fmap normalize (typeWith ctx r)
     case t of
@@ -1998,8 +2059,9 @@ normalize e = case e of
         x' = normalize x
         y' = normalize y
     MaybeLit t es    -> MaybeLit (normalize t) (fmap normalize es)
-    RecordLit kvs    -> RecordLit (fmap normalize kvs)
     Record    kts    -> Record    (fmap normalize kts)
+    RecordLit kvs    -> RecordLit (fmap normalize kvs)
+    Union     kts    -> Union     (fmap normalize kts)
     Field r x        ->
         case normalize r of
             RecordLit kvs ->
