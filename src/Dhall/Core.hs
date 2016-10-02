@@ -562,7 +562,7 @@ buildElems (a:bs) = buildExpr0 a <> ", " <> buildElems bs
 
 buildRecordLit :: Buildable a => Map Text (Expr a) -> Builder
 buildRecordLit a | Data.Map.null a =
-    "{}"
+    "{=}"
 buildRecordLit a =
     "{ " <> buildFieldValues (Data.Map.toList a) <> " }"
 
@@ -576,7 +576,7 @@ buildFieldValue (a, b) = build a <> " = " <> buildExpr0 b
 
 buildRecord :: Buildable a => Map Text (Expr a) -> Builder
 buildRecord a | Data.Map.null a =
-    "{:}"
+    "{}"
 buildRecord a =
     "{ " <> buildFieldTypes (Data.Map.toList a) <> " }"
 
