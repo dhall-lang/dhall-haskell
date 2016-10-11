@@ -325,6 +325,7 @@ import Prelude hiding (maybe)
 import qualified Control.Exception
 import qualified Data.Map
 import qualified Data.Text.Lazy
+import qualified Data.Text.Lazy.Builder
 import qualified Data.Vector
 import qualified Dhall.Core
 import qualified Dhall.Import
@@ -448,7 +449,7 @@ double = Type {..}
 text :: Type Text
 text = Type {..}
   where
-    extract (TextLit t) = pure t
+    extract (TextLit t) = pure (Data.Text.Lazy.Builder.toLazyText t)
     extract  _          = empty
 
     expected = Text

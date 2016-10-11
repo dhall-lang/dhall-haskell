@@ -225,7 +225,7 @@ data Expr a
     -- | > Text                                     ~  Text
     | Text
     -- | > TextLit t                                ~  t
-    | TextLit Text
+    | TextLit Builder
     -- | > TextAppend x y                           ~  x <> y
     | TextAppend (Expr a) (Expr a)
     -- | > TextConcat                               ~  Text/concat
@@ -1954,7 +1954,7 @@ normalize e = case e of
             App TextConcat (ListLit _ xs)
                 | Data.Vector.all isText xs ->
                     case traverse extract xs of
-                        Just ys -> normalize (TextLit (Text.concat (toList ys)))
+                        Just ys -> normalize (TextLit (mconcat (toList ys)))
                         _       -> error "normalize: Malformed `Text/concat`"
               where
                 isText (TextLit _) = True

@@ -22,6 +22,7 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Monoid ((<>))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
+import Data.Text.Lazy.Builder (Builder)
 import Filesystem.Path (FilePath)
 import Numeric.Natural (Natural)
 import Prelude hiding (FilePath)
@@ -33,6 +34,7 @@ import qualified Data.Text
 import qualified Data.Text.Buildable
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Encoding
+import qualified Data.Text.Lazy.Builder
 import qualified Filesystem.Path.CurrentOS
 import qualified NeatInterpolation
 }
@@ -165,8 +167,11 @@ toText :: ByteString -> Text
 toText = Data.Text.Lazy.Encoding.decodeUtf8
 
 -- TODO: Properly handle errors here
-str :: ByteString -> Text
-str = read . Data.Text.Lazy.unpack . Data.Text.Lazy.Encoding.decodeUtf8
+str :: ByteString -> Builder
+str = Data.Text.Lazy.Builder.fromLazyText
+    . read
+    . Data.Text.Lazy.unpack
+    . Data.Text.Lazy.Encoding.decodeUtf8
 
 -- | `Alex` action for reading the next token
 lexer :: (Token -> Alex a) -> Alex a
@@ -275,7 +280,7 @@ data Token
     | ListConcat
     | Maybe
     | MaybeFold
-    | TextLit Text
+    | TextLit Builder
     | TextConcat
     | Absurd
     | Label Text
