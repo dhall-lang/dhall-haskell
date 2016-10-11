@@ -246,8 +246,6 @@ data Expr a
     | ListIndexed
     -- | > ListReverse                              ~  List/reverse
     | ListReverse
-    -- | > ListAppend x y                           ~  x ++ y
-    | ListAppend (Expr a) (Expr a)
     -- | > ListConcat                               ~  List/concat
     | ListConcat
     -- | > Maybe                                    ~  Maybe
@@ -321,7 +319,6 @@ instance Monad Expr where
     ListLast         >>= _ = ListLast
     ListIndexed      >>= _ = ListIndexed
     ListReverse      >>= _ = ListReverse
-    ListAppend l r   >>= k = ListAppend (l >>= k) (r >>= k)
     ListConcat       >>= _ = ListConcat
     Maybe            >>= _ = Maybe
     MaybeLit t es    >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
@@ -467,7 +464,6 @@ buildExpr3 :: Buildable a => Expr a -> Builder
 buildExpr3 (BoolOr      a b) = buildExpr3 a <> " || " <> buildExpr3 b
 buildExpr3 (NaturalPlus a b) = buildExpr3 a <> " + "  <> buildExpr3 b
 buildExpr3 (TextAppend  a b) = buildExpr3 a <> " <> " <> buildExpr3 b
-buildExpr3 (ListAppend  a b) = buildExpr3 a <> " ++ " <> buildExpr3 b
 buildExpr3  a                = buildExpr4 a
 
 buildExpr4 :: Buildable a => Expr a -> Builder
@@ -643,8 +639,6 @@ data TypeMessage
     | CantEQ Bool (Expr X) (Expr X)
     | CantNE Bool (Expr X) (Expr X)
     | CantTextAppend Bool (Expr X) (Expr X)
-    | CantListAppend Bool (Expr X) (Expr X)
-    | ElementMismatch (Expr X) (Expr X)
     | CantAdd Bool (Expr X) (Expr X)
     | CantMultiply Bool (Expr X) (Expr X)
     | NoDependentTypes (Expr X) (Expr X)
@@ -1160,51 +1154,6 @@ You provided this argument:
             then [NeatInterpolation.text|$txt0 <> ...|]
             else [NeatInterpolation.text|... <> $txt0|]
 
-    build (CantListAppend b expr0 expr1) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Cannot use `(++)` on a value that's not a list
-
-Explanation: The `(++)` operator expects two list arguments of type `[ a ]` for
-some element type `a`
-
-You provided this argument:
-
-    $insert
-
-... whose type is not a list at all.  The type is actually:
-↳ $txt1
-|]
-      where
-        txt0 = Text.toStrict (pretty expr0)
-        txt1 = Text.toStrict (pretty expr1)
-        insert =
-            if b
-            then [NeatInterpolation.text|$txt0 ++ ...|]
-            else [NeatInterpolation.text|... ++ $txt0|]
-
-    build (ElementMismatch expr0 expr1) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Can't concatenate lists of different element types
-
-Explanation: You can only combine two lists if they have matching element types.
-For example, this is legal:
-
-    [ 1, 2 : Integer] ++ [ 3, 4 : Integer ]  -- The element types match
-
-... but this is *not* legal:
-
-    [ 1, 2 : Integer ] ++ [ True : Bool ] -- The element types do not match
-
-The left list has elements of type:
-↳ $txt0
-... while the right list has elements of type:
-↳ $txt1
-... and those two types do not match
-|]
-      where
-        txt0 = Text.toStrict (pretty expr0)
-        txt1 = Text.toStrict (pretty expr1)
-
     build (CantAdd b expr0 expr1) =
         buildNaturalOperator "+" b expr0 expr1
 
@@ -1394,10 +1343,6 @@ shift d v (ListLit a b) = ListLit a' b'
   where
     a' =       shift d v  a
     b' = fmap (shift d v) b
-shift d v (ListAppend a b) = ListAppend a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
 shift d v (MaybeLit a b) = MaybeLit a' b'
   where
     a' =       shift d v  a
@@ -1497,10 +1442,6 @@ subst x e (ListLit a b) = ListLit a' b'
   where
     a' =       subst x e  a
     b' = fmap (subst x e) b
-subst x e (ListAppend a b) = ListAppend a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
 subst x e (MaybeLit a b) = MaybeLit a' b'
   where
     a' =       subst x e  a
@@ -1775,20 +1716,6 @@ typeWith _      ListIndexed       = do
                 (App List (Record (Data.Map.fromList kts))) ) )
 typeWith _      ListReverse       = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a")))
-typeWith ctx e@(ListAppend l r  ) = do
-    tl <- fmap normalize (typeWith ctx l)
-    el <- case tl of
-        App List el -> return el
-        _           -> Left (TypeError ctx e (CantListAppend True l tl))
-
-    tr <- fmap normalize (typeWith ctx r)
-    er <- case tr of
-        App List er -> return er
-        _           -> Left (TypeError ctx e (CantListAppend False r tr))
-    if propEqual el er
-        then return ()
-        else Left (TypeError ctx e (ElementMismatch el er))
-    return (App List el)
 typeWith _      ListConcat        = do
     return
         (Pi "a" (Const Type) (Pi "_" (App List (App List "a")) (App List "a")))
@@ -2037,16 +1964,6 @@ normalize e = case e of
         x' = normalize x
         y' = normalize y
     ListLit t es     -> ListLit (normalize t) (fmap normalize es)
-    ListAppend x y   ->
-        case x' of
-            ListLit t xt ->
-                case y' of
-                    ListLit _ yt -> ListLit t (xt Data.Vector.++ yt)
-                    _ -> ListAppend x' y'
-            _ -> ListAppend x' y'
-      where
-        x' = normalize x
-        y' = normalize y
     MaybeLit t es    -> MaybeLit (normalize t) (fmap normalize es)
     Record    kts    -> Record    (fmap normalize kts)
     RecordLit kvs    -> RecordLit (fmap normalize kvs)

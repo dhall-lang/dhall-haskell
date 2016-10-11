@@ -160,8 +160,6 @@ Expr3
         { NaturalPlus $1 $3 }
     | Expr3 '<>' Expr3
         { TextAppend $1 $3 }
-    | Expr3 '++' Expr3
-        { ListAppend $1 $3 }
     | Expr4
         { $1 }
 
