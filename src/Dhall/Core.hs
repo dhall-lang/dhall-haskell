@@ -228,8 +228,6 @@ data Expr a
     | TextLit Builder
     -- | > TextAppend x y                           ~  x <> y
     | TextAppend (Expr a) (Expr a)
-    -- | > TextConcat                               ~  Text/concat
-    | TextConcat
     -- | > List                                     ~  List
     | List
     -- | > ListLit t [x, y, z]                      ~  [x, y, z] : List t
@@ -314,7 +312,6 @@ instance Monad Expr where
     Text             >>= _ = Text
     TextLit t        >>= _ = TextLit t
     TextAppend l r   >>= k = TextAppend (l >>= k) (r >>= k)
-    TextConcat       >>= _ = TextConcat
     List             >>= _ = List
     ListLit t es     >>= k = ListLit (t >>= k) (fmap (>>= k) es)
     ListBuild        >>= _ = ListBuild
@@ -505,8 +502,6 @@ buildExpr6 Double =
     "Double"
 buildExpr6 Text =
     "Text"
-buildExpr6 TextConcat =
-    "Text/concat"
 buildExpr6 ListBuild =
     "List/build"
 buildExpr6 ListFold =
@@ -1734,8 +1729,6 @@ typeWith ctx e@(TextAppend l r  ) = do
         Text -> return ()
         _    -> Left (TypeError ctx e (CantTextAppend False r tr))
     return Text
-typeWith _      TextConcat        = do
-    return (Pi "_" (App List Text) Text)
 typeWith _      List              = do
     return (Pi "_" (Const Type) (Const Type))
 typeWith ctx e@(ListLit t xs    ) = do
@@ -1951,17 +1944,6 @@ normalize e = case e of
 
                 extract (ListLit _ y) = Just y
                 extract  _            = Nothing
-            App TextConcat (ListLit _ xs)
-                | Data.Vector.all isText xs ->
-                    case traverse extract xs of
-                        Just ys -> normalize (TextLit (mconcat (toList ys)))
-                        _       -> error "normalize: Malformed `Text/concat`"
-              where
-                isText (TextLit _) = True
-                isText  _          = False
-
-                extract (TextLit y) = Just y
-                extract  _          = Nothing
             App (App (App (App (App MaybeFold _) (MaybeLit _ xs)) _) just) nothing ->
                 normalize (maybe nothing just' (toMaybe xs))
               where

@@ -84,7 +84,6 @@ import qualified NeatInterpolation
     'Integer'         { Dhall.Lexer.Integer        }
     'Double'          { Dhall.Lexer.Double         }
     'Text'            { Dhall.Lexer.Text           }
-    'Text/concat'     { Dhall.Lexer.TextConcat     }
     'List'            { Dhall.Lexer.List           }
     'List/build'      { Dhall.Lexer.ListBuild      }
     'List/fold'       { Dhall.Lexer.ListFold       }
@@ -207,8 +206,6 @@ Expr6
         { Double }
     | 'Text'
         { Text }
-    | 'Text/concat'
-        { TextConcat }
     | 'List'
         { List }
     | 'List/build'
