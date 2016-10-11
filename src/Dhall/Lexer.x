@@ -74,7 +74,6 @@ tokens :-
     "=="                                { emit DoubleEquals     }
     "/="                                { emit SlashEquals      }
     "+"                                 { emit Plus             }
-    "<>"                                { emit Diamond          }
     "++"                                { emit DoublePlus       }
     "*"                                 { emit Star             }
     "@"                                 { emit At               }
@@ -241,7 +240,6 @@ data Token
     | DoubleEquals
     | SlashEquals
     | Plus
-    | Diamond
     | DoublePlus
     | At
     | Star
@@ -327,8 +325,6 @@ instance Buildable Token where
         = "/="
     build  Plus
         = "+"
-    build  Diamond
-        = "<>"
     build  DoublePlus
         = "++"
     build  At

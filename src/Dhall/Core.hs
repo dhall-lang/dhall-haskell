@@ -226,7 +226,7 @@ data Expr a
     | Text
     -- | > TextLit t                                ~  t
     | TextLit Builder
-    -- | > TextAppend x y                           ~  x <> y
+    -- | > TextAppend x y                           ~  x ++ y
     | TextAppend (Expr a) (Expr a)
     -- | > List                                     ~  List
     | List
@@ -463,7 +463,7 @@ buildExpr2  a                = buildExpr3 a
 buildExpr3 :: Buildable a => Expr a -> Builder
 buildExpr3 (BoolOr      a b) = buildExpr3 a <> " || " <> buildExpr3 b
 buildExpr3 (NaturalPlus a b) = buildExpr3 a <> " + "  <> buildExpr3 b
-buildExpr3 (TextAppend  a b) = buildExpr3 a <> " <> " <> buildExpr3 b
+buildExpr3 (TextAppend  a b) = buildExpr3 a <> " ++ " <> buildExpr3 b
 buildExpr3  a                = buildExpr4 a
 
 buildExpr4 :: Buildable a => Expr a -> Builder
@@ -1135,9 +1135,9 @@ You tried to access a field named:
 
     build (CantTextAppend b expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
-Error: Cannot use `(<>)` on a value that's not a `Text`
+Error: Cannot use `(++)` on a value that's not a `Text`
 
-Explanation: The `(<>)` operator expects two arguments of type `Text`
+Explanation: The `(++)` operator expects two arguments of type `Text`
 
 You provided this argument:
 

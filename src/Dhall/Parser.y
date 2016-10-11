@@ -59,7 +59,6 @@ import qualified NeatInterpolation
     '=='              { Dhall.Lexer.DoubleEquals   }
     '/='              { Dhall.Lexer.SlashEquals    }
     '+'               { Dhall.Lexer.Plus           }
-    '<>'              { Dhall.Lexer.Diamond        }
     '++'              { Dhall.Lexer.DoublePlus     }
     '*'               { Dhall.Lexer.Star           }
     '@'               { Dhall.Lexer.At             }
@@ -111,7 +110,6 @@ import qualified NeatInterpolation
 %right '+'
 %right '*'
 %right '++'
-%right '<>'
 
 %%
 
@@ -158,7 +156,7 @@ Expr3
         { BoolOr $1 $3 }
     | Expr3 '+' Expr3
         { NaturalPlus $1 $3 }
-    | Expr3 '<>' Expr3
+    | Expr3 '++' Expr3
         { TextAppend $1 $3 }
     | Expr4
         { $1 }
