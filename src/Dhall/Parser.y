@@ -96,6 +96,7 @@ import qualified NeatInterpolation
     'List/concat'     { Dhall.Lexer.ListConcat     }
     'Maybe'           { Dhall.Lexer.Maybe          }
     'Maybe/fold'      { Dhall.Lexer.MaybeFold      }
+    'absurd'          { Dhall.Lexer.Absurd         }
     text              { Dhall.Lexer.TextLit    $$  }
     label             { Dhall.Lexer.Label      $$  }
     number            { Dhall.Lexer.Number     $$  }
@@ -248,6 +249,8 @@ Expr6
         { $1 }
     | Union
         { $1 }
+    | 'absurd'
+        { Absurd }
     | Import
         { Embed $1 }
     | Expr6 '.' label

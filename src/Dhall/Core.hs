@@ -265,6 +265,8 @@ data Expr a
     | RecordLit (Map Text (Expr a))
     -- | > Union     [(k1, t1), (k2, t2)]           ~  < k1 t1 | k2 t2 >
     | Union     (Map Text (Expr a))
+    -- | > Absurd                                   ~  absurd
+    | Absurd
     -- | > Field e x                                ~  e.x
     | Field (Expr a) Text
     -- | > Embed path                               ~  #path
@@ -330,6 +332,7 @@ instance Monad Expr where
     Record    kts    >>= k = Record    (fmap (>>= k) kts)
     RecordLit kvs    >>= k = RecordLit (fmap (>>= k) kvs)
     Union     kts    >>= k = Union     (fmap (>>= k) kts)
+    Absurd           >>= _ = Absurd
     Field r x        >>= k = Field (r >>= k) x
     Embed r          >>= k = k r
 
@@ -544,6 +547,8 @@ buildExpr6 (Record a) =
     buildRecord a
 buildExpr6 (Union a) =
     buildUnion a
+buildExpr6 Absurd =
+    "absurd"
 buildExpr6 (Embed a) =
     build a
 buildExpr6 (Field a b) =
@@ -1843,6 +1848,8 @@ typeWith ctx e@(Union     kts   ) = do
                 _          -> Left (TypeError ctx e (InvalidTagType k t))
     mapM_ process (Data.Map.toList kts)
     return (Const Type)
+typeWith _      Absurd            = do
+    return (Pi "_" (Union Data.Map.empty) (Pi "a" (Const Type) "a"))
 typeWith ctx e@(Field r x       ) = do
     t <- fmap normalize (typeWith ctx r)
     case t of

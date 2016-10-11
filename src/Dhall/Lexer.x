@@ -109,6 +109,7 @@ tokens :-
     "List/concat"                       { emit ListConcat       }
     "Maybe"                             { emit Maybe            }
     "Maybe/fold"                        { emit MaybeFold        }
+    "absurd"                            { emit Absurd           }
     \" ([^\"] | \\.)* \"                { capture (TextLit . str)        }
     $fst $labelchar* | "(" $opchar+ ")" { capture (Label . toText)       }
     \-? $digit+                         { capture (Number . toInt)       }
@@ -276,6 +277,7 @@ data Token
     | MaybeFold
     | TextLit Text
     | TextConcat
+    | Absurd
     | Label Text
     | Number Integer
     | File FilePath
@@ -402,6 +404,8 @@ instance Buildable Token where
         = "Maybe/fold"
     build (TextLit t)
         = Data.Text.Buildable.build (show t)
+    build  Absurd
+        = "absurd"
     build (Label t)
         = Data.Text.Buildable.build t
     build (Number n)
