@@ -174,8 +174,8 @@ data Expr a
     | Var Var             
     -- | > Lam x     A b                            ~  λ(x : A) -> b
     | Lam Text (Expr a) (Expr a)
-    -- | > Pi x      A B                            ~  ∀(x : A) -> B
-    --   > Pi unused A B                            ~        A  -> B
+    -- | > Pi "_" A B                               ~        A  -> B
+    --   > Pi x   A B                               ~  ∀(x : A) -> B
     | Pi  Text (Expr a) (Expr a)
     -- | > App f a                                  ~  f a
     | App (Expr a) (Expr a)
