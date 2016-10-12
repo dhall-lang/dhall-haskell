@@ -66,6 +66,7 @@ tokens :-
     "]"                                 { emit CloseBracket     }
     ":"                                 { emit Colon            }
     ","                                 { emit Comma            }
+    "|"                                 { emit Bar              }
     "."                                 { emit Dot              }
     "="                                 { emit Equals           }
     "&&"                                { emit And              }
@@ -231,6 +232,7 @@ data Token
     | CloseBracket
     | Colon
     | Comma
+    | Bar
     | Dot
     | Equals
     | And
@@ -307,6 +309,8 @@ instance Buildable Token where
         = ":"
     build  Comma
         = ","
+    build  Bar
+        = "|"
     build  Dot
         = "."
     build  Equals

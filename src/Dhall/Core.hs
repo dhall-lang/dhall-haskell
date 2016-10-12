@@ -609,7 +609,7 @@ buildUnion a =
 buildTagTypes :: Buildable a => [(Text, Expr a)] -> Builder
 buildTagTypes    []  = ""
 buildTagTypes   [a]  = buildTagType a
-buildTagTypes (a:bs) = buildTagType a <> ", " <> buildTagTypes bs
+buildTagTypes (a:bs) = buildTagType a <> " | " <> buildTagTypes bs
 
 buildTagType :: Buildable a => (Text, Expr a) -> Builder
 buildTagType (a, b) = build a <> " : " <> buildExpr0 b
@@ -627,7 +627,7 @@ buildUnionLit a b c
         <>  build a
         <>  " = "
         <>  buildExpr0 b
-        <>  ", "
+        <>  " | "
         <>  buildTagTypes (Data.Map.toList c)
         <>  " >"
 
@@ -1064,8 +1064,8 @@ You provided a record type with a key named:
 ↳ $txt0
 ... annotated with the following expression which is not a type:
 
-    {{ ... : $txt1, ... }}
-    --       ^ This needs to be a type
+    { ... : $txt1, ... }
+    --      ^ This needs to be a type
 
 You can fix the problem by changing the annotation to a type
 |]
@@ -1102,7 +1102,7 @@ Explanation: Records and unions may not have two fields of the same name
 
     { foo = True, foo = 1 }        -- This is not valid
 
-    < foo = True, foo : Integer >  -- This is also not valid
+    < foo = True | foo : Integer >  -- This is also not valid
 
 You have multiple fields named:
 ↳ $txt0

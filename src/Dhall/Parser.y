@@ -51,6 +51,7 @@ import qualified NeatInterpolation
     ']'               { Dhall.Lexer.CloseBracket   }
     ':'               { Dhall.Lexer.Colon          }
     ','               { Dhall.Lexer.Comma          }
+    '|'               { Dhall.Lexer.Bar            }
     '.'               { Dhall.Lexer.Dot            }
     '='               { Dhall.Lexer.Equals         }
     '&&'              { Dhall.Lexer.And            }
@@ -331,13 +332,13 @@ TagTypesRev
         { [] }
     | TagType
         { [$1] }
-    | TagTypesRev ',' TagType
+    | TagTypesRev '|' TagType
         { $3 : $1 }
 
 UnionLit
     : '<' label '=' Expr0 '>'
         { UnionLit $2 $4 Data.Map.empty }
-    | '<' label '=' Expr0 ',' TagTypes '>'
+    | '<' label '=' Expr0 '|' TagTypes '>'
         { UnionLit $2 $4 (Data.Map.fromList $6) }
 
 TagType
