@@ -607,7 +607,7 @@ buildTagTypes   [a]  = buildTagType a
 buildTagTypes (a:bs) = buildTagType a <> " | " <> buildTagTypes bs
 
 buildTagType :: Buildable a => (Text, Expr a) -> Builder
-buildTagType (a, b) = build a <> " " <> buildExpr0 b
+buildTagType (a, b) = build a <> " : " <> buildExpr0 b
 
 -- | Generates a syntactically valid Dhall program
 instance Buildable a => Buildable (Expr a)
@@ -632,8 +632,9 @@ data TypeMessage
     | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
     | InvalidFieldType Text (Expr X)
     | InvalidTagType Text (Expr X)
-    | NotARecord Text (Expr X) (Expr X)
+    | NotARecordOrUnion Text (Expr X) (Expr X)
     | MissingField Text (Expr X)
+    | UnsafeAccess Text (Expr X)
     | CantAnd Bool (Expr X) (Expr X)
     | CantOr Bool (Expr X) (Expr X)
     | CantEQ Bool (Expr X) (Expr X)
@@ -1070,25 +1071,27 @@ You can fix the problem by changing the annotation to a type
         txt0 = Text.toStrict (pretty k    )
         txt1 = Text.toStrict (pretty expr0)
 
-    build (NotARecord k expr0 expr1) =
+    build (NotARecordOrUnion k expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
-Error: Invalid record access
+Error: Not a record or union
 
-Explanation: You can only access fields on records, like this:
+Explanation: You can access fields on records:
 
-    { foo = True, bar = "ABC" }.foo              -- This is valid ...
+    { foo = True, bar = "ABC" }.foo            -- This is valid ...
+    λ(x : { foo : Bool, bar : Text }) → x.foo  -- ... and so is this
 
-    λ(r : {{ foo : Bool, bar : Text }}) → r.foo  -- ... and so is this
+... and you can also access the field of a union with just one alternative:
 
-... but you *cannot* access fields on non-record expressions, like this:
+    < foo = True >.foo                         -- This is valid ...
+    λ(x : < foo : Bool >) → x.foo              -- ... and so is this
 
-    1.foo                  -- `1` is not a valid record
+... but you *cannot* access fields on expressions that are not unions or records:
 
-    (λ(x : Bool) → x).foo  -- A function is not a valid record
+    1.foo  -- `1` is not a record or union
 
 You tried to access a field named:
 ↳ $txt0
-... on the following expression which is not a record:
+... on the following expression which is neither a record nor a union:
 ↳ $txt1
 ... but is actually an expression of type:
 ↳ $txt2
@@ -1100,21 +1103,52 @@ You tried to access a field named:
 
     build (MissingField k expr0) =
         Builder.fromText [NeatInterpolation.text|
-Error: Missing record field
+Error: Missing field
 
-Explanation: You can only retrieve record fields if they are present
+Explanation: You can only retrieve record or union fields if they are present
 
     { foo = True, bar = "ABC" }.foo              -- This is valid ...
 
-    λ(r : {{ foo : Bool, bar : Text }}) → r.foo  -- ... and so is this
+    λ(r : { foo : Bool, bar : Text }) → r.foo  -- ... and so is this
 
-... but you *cannot* access fields missing from a record:
+... but you *cannot* access fields missing from a record or union:
 
     { foo = True, bar = "ABC" }.qux  -- Not valid: the field `qux` is missing
+    {}                               -- Not valid: the field `qux` is missing
+
+    < foo = True >.qux               -- Not valid: the field `qux` is missing
+    λ(x : <>) → x.qux                -- Not valid: the field `qux` is missing
 
 You tried to access a field named:
 ↳ $txt0
-... but the field is missing because the record only defines these fields:
+... but only the following fields were defined:
+↳ $txt1
+|]
+      where
+        txt0 = Text.toStrict (pretty k    )
+        txt1 = Text.toStrict (pretty expr0)
+
+    build (UnsafeAccess k expr0) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Unsafe access
+
+Explanation: You can access the field of a union if it has just one alternative:
+
+    
+    < foo = True >.foo             -- This is valid ...
+    λ(x : < foo : Bool >) → x.foo  -- ... and so is this
+
+... but you cannot access the field of a union with more than one alternative:
+
+    λ(x : < foo : Bool | bar : Text >) → x.foo  -- Not valid
+
+... even if you *know* which alternative is present:
+
+    < foo = True | bar : Text >.foo              -- Still not valid
+
+You tried to access a field named:
+↳ $txt0
+... on a union that permits more than one alternative:
 ↳ $txt1
 |]
       where
@@ -1777,7 +1811,16 @@ typeWith ctx e@(Field r x       ) = do
             case Data.Map.lookup x kts of
                 Just t' -> return t'
                 Nothing -> Left (TypeError ctx e (MissingField x t))
-        _          -> Left (TypeError ctx e (NotARecord x r t))
+        Union kts  ->
+            case Data.Map.toList kts of
+                [] ->
+                    Left (TypeError ctx e (MissingField x t))
+                [(k, t')]
+                    | k == x    -> return t'
+                    | otherwise -> Left (TypeError ctx e (MissingField x t))
+                _  ->
+                    Left (TypeError ctx e (UnsafeAccess x t))
+        _          -> Left (TypeError ctx e (NotARecordOrUnion x r t))
 typeWith _     (Embed p         ) = do
     absurd p
 
@@ -1974,6 +2017,7 @@ normalize e = case e of
                 case Data.Map.lookup x kvs of
                     Just v  -> normalize v
                     Nothing -> Field (RecordLit (fmap normalize kvs)) x
+            -- TODO: Handle `UnionLit`
             r' -> Field r' x
     _ -> e
 

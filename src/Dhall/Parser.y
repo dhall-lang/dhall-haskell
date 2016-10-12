@@ -334,8 +334,8 @@ TagTypesRev
         { $3 : $1 }
 
 TagType
-    : label Expr0
-        { ($1, $2) } 
+    : label ':' Expr0
+        { ($1, $3) } 
 
 Import
     : file
