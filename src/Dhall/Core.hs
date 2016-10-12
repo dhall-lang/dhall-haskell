@@ -255,12 +255,14 @@ data Expr a
     | MaybeLit (Expr a) (Vector (Expr a))
     -- | > MaybeFold                                ~  Maybe/fold
     | MaybeFold
-    -- | > Record    [(k1, t1), (k2, t2)]           ~  { k1 : t1, k2 : t1 }
+    -- | > Record            [(k1, t1), (k2, t2)]   ~  { k1 : t1, k2 : t1 }
     | Record    (Map Text (Expr a))
-    -- | > RecordLit [(k1, v1), (k2, v2)]           ~  { k1 = v1, k2 = v2 }
+    -- | > RecordLit         [(k1, v1), (k2, v2)]   ~  { k1 = v1, k2 = v2 }
     | RecordLit (Map Text (Expr a))
-    -- | > Union     [(k1, t1), (k2, t2)]           ~  < k1 t1 | k2 t2 >
+    -- | > Union             [(k1, t1), (k2, t2)]   ~  < k1 : t1, k2 : t2 >
     | Union     (Map Text (Expr a))
+    -- | > UnionLit (k1, v1) [(k2, t2), (k3, t3)]   ~  < k1 = t1, k2 : t2, k3 : t3 > 
+    | UnionLit Text (Expr a) (Map Text (Expr a))
     -- | > Absurd                                   ~  absurd
     | Absurd
     -- | > Field e x                                ~  e.x
@@ -277,58 +279,59 @@ instance Applicative Expr where
 instance Monad Expr where
     return = pure
 
-    Const c          >>= _ = Const c
-    Var v            >>= _ = Var v
-    Lam x _A  b      >>= k = Lam x (_A >>= k) ( b >>= k)
-    Pi  x _A _B      >>= k = Pi  x (_A >>= k) (_B >>= k)
-    App f a          >>= k = App (f >>= k) (a >>= k)
-    Let f as mt r e  >>= k = Let f as' (fmap (>>= k) mt) (r >>= k) (e >>= k)
+    Const c           >>= _ = Const c
+    Var v             >>= _ = Var v
+    Lam x _A  b       >>= k = Lam x (_A >>= k) ( b >>= k)
+    Pi  x _A _B       >>= k = Pi  x (_A >>= k) (_B >>= k)
+    App f a           >>= k = App (f >>= k) (a >>= k)
+    Let f as mt r e   >>= k = Let f as' (fmap (>>= k) mt) (r >>= k) (e >>= k)
       where
         as' = do
             (x, t) <- as
             return (x, t >>= k)
-    Annot x t        >>= k = Annot (x >>= k) (t >>= k)
-    Bool             >>= _ = Bool
-    BoolLit b        >>= _ = BoolLit b
-    BoolAnd l r      >>= k = BoolAnd (l >>= k) (r >>= k)
-    BoolOr  l r      >>= k = BoolOr  (l >>= k) (r >>= k)
-    BoolEQ  l r      >>= k = BoolEQ  (l >>= k) (r >>= k)
-    BoolNE  l r      >>= k = BoolNE  (l >>= k) (r >>= k)
-    BoolIf x y z     >>= k = BoolIf (x >>= k) (y >>= k) (z >>= k)
-    Natural          >>= _ = Natural
-    NaturalLit n     >>= _ = NaturalLit n
-    NaturalFold      >>= _ = NaturalFold
-    NaturalIsZero    >>= _ = NaturalIsZero
-    NaturalEven      >>= _ = NaturalEven
-    NaturalOdd       >>= _ = NaturalOdd
-    NaturalPlus  l r >>= k = NaturalPlus  (l >>= k) (r >>= k)
-    NaturalTimes l r >>= k = NaturalTimes (l >>= k) (r >>= k)
-    Integer          >>= _ = Integer
-    IntegerLit n     >>= _ = IntegerLit n
-    Double           >>= _ = Double
-    DoubleLit n      >>= _ = DoubleLit n
-    Text             >>= _ = Text
-    TextLit t        >>= _ = TextLit t
-    TextAppend l r   >>= k = TextAppend (l >>= k) (r >>= k)
-    List             >>= _ = List
-    ListLit t es     >>= k = ListLit (t >>= k) (fmap (>>= k) es)
-    ListBuild        >>= _ = ListBuild
-    ListFold         >>= _ = ListFold
-    ListLength       >>= _ = ListLength
-    ListHead         >>= _ = ListHead
-    ListLast         >>= _ = ListLast
-    ListIndexed      >>= _ = ListIndexed
-    ListReverse      >>= _ = ListReverse
-    ListConcat       >>= _ = ListConcat
-    Maybe            >>= _ = Maybe
-    MaybeLit t es    >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
-    MaybeFold        >>= _ = MaybeFold
-    Record    kts    >>= k = Record    (fmap (>>= k) kts)
-    RecordLit kvs    >>= k = RecordLit (fmap (>>= k) kvs)
-    Union     kts    >>= k = Union     (fmap (>>= k) kts)
-    Absurd           >>= _ = Absurd
-    Field r x        >>= k = Field (r >>= k) x
-    Embed r          >>= k = k r
+    Annot x t         >>= k = Annot (x >>= k) (t >>= k)
+    Bool              >>= _ = Bool
+    BoolLit b         >>= _ = BoolLit b
+    BoolAnd l r       >>= k = BoolAnd (l >>= k) (r >>= k)
+    BoolOr  l r       >>= k = BoolOr  (l >>= k) (r >>= k)
+    BoolEQ  l r       >>= k = BoolEQ  (l >>= k) (r >>= k)
+    BoolNE  l r       >>= k = BoolNE  (l >>= k) (r >>= k)
+    BoolIf x y z      >>= k = BoolIf (x >>= k) (y >>= k) (z >>= k)
+    Natural           >>= _ = Natural
+    NaturalLit n      >>= _ = NaturalLit n
+    NaturalFold       >>= _ = NaturalFold
+    NaturalIsZero     >>= _ = NaturalIsZero
+    NaturalEven       >>= _ = NaturalEven
+    NaturalOdd        >>= _ = NaturalOdd
+    NaturalPlus  l r  >>= k = NaturalPlus  (l >>= k) (r >>= k)
+    NaturalTimes l r  >>= k = NaturalTimes (l >>= k) (r >>= k)
+    Integer           >>= _ = Integer
+    IntegerLit n      >>= _ = IntegerLit n
+    Double            >>= _ = Double
+    DoubleLit n       >>= _ = DoubleLit n
+    Text              >>= _ = Text
+    TextLit t         >>= _ = TextLit t
+    TextAppend l r    >>= k = TextAppend (l >>= k) (r >>= k)
+    List              >>= _ = List
+    ListLit t es      >>= k = ListLit (t >>= k) (fmap (>>= k) es)
+    ListBuild         >>= _ = ListBuild
+    ListFold          >>= _ = ListFold
+    ListLength        >>= _ = ListLength
+    ListHead          >>= _ = ListHead
+    ListLast          >>= _ = ListLast
+    ListIndexed       >>= _ = ListIndexed
+    ListReverse       >>= _ = ListReverse
+    ListConcat        >>= _ = ListConcat
+    Maybe             >>= _ = Maybe
+    MaybeLit t es     >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
+    MaybeFold         >>= _ = MaybeFold
+    Record    kts     >>= k = Record    (fmap (>>= k) kts)
+    RecordLit kvs     >>= k = RecordLit (fmap (>>= k) kvs)
+    Union     kts     >>= k = Union     (fmap (>>= k) kts)
+    UnionLit k' v kts >>= k = UnionLit k' (v >>= k) (fmap (>>= k) kts)
+    Absurd            >>= _ = Absurd
+    Field r x         >>= k = Field (r >>= k) x
+    Embed r           >>= k = k r
 
 match :: Var -> Var -> [(Text, Text)] -> Bool
 match (V xL nL) (V xR nR)             []  =
@@ -538,6 +541,8 @@ buildExpr6 (Record a) =
     buildRecord a
 buildExpr6 (Union a) =
     buildUnion a
+buildExpr6 (UnionLit a b c) =
+    buildUnionLit a b c
 buildExpr6 Absurd =
     "absurd"
 buildExpr6 (Embed a) =
@@ -604,10 +609,27 @@ buildUnion a =
 buildTagTypes :: Buildable a => [(Text, Expr a)] -> Builder
 buildTagTypes    []  = ""
 buildTagTypes   [a]  = buildTagType a
-buildTagTypes (a:bs) = buildTagType a <> " | " <> buildTagTypes bs
+buildTagTypes (a:bs) = buildTagType a <> ", " <> buildTagTypes bs
 
 buildTagType :: Buildable a => (Text, Expr a) -> Builder
 buildTagType (a, b) = build a <> " : " <> buildExpr0 b
+
+buildUnionLit :: Buildable a => Text -> Expr a -> Map Text (Expr a) -> Builder
+buildUnionLit a b c
+    | Data.Map.null c =
+            "< "
+        <>  build a
+        <>  " = "
+        <>  buildExpr0 b
+        <>  " >"
+    | otherwise =
+            "< "
+        <>  build a
+        <>  " = "
+        <>  buildExpr0 b
+        <>  ", "
+        <>  buildTagTypes (Data.Map.toList c)
+        <>  " >"
 
 -- | Generates a syntactically valid Dhall program
 instance Buildable a => Buildable (Expr a)
@@ -632,6 +654,7 @@ data TypeMessage
     | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
     | InvalidFieldType Text (Expr X)
     | InvalidTagType Text (Expr X)
+    | DuplicateField Text
     | NotARecordOrUnion Text (Expr X) (Expr X)
     | MissingField Text (Expr X)
     | UnsafeAccess Text (Expr X)
@@ -1062,14 +1085,30 @@ You provided a union type with a tag named:
 ↳ $txt0
 ... annotated with the following expression which is not a type:
 
-    < ... $txt1 | ... >
-    --    ^ This needs to be a type
+    < ... : $txt1 , ... >
+    --      ^ This needs to be a type
 
 You can fix the problem by changing the annotation to a type
 |]
       where
         txt0 = Text.toStrict (pretty k    )
         txt1 = Text.toStrict (pretty expr0)
+
+    build (DuplicateField k) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Duplicate field
+
+Explanation: Records and unions may not have two fields of the same name
+
+    { foo = True, foo = 1 }        -- This is not valid
+
+    < foo = True, foo : Integer >  -- This is also not valid
+
+You have multiple fields named:
+↳ $txt0
+|]
+      where
+        txt0 = Text.toStrict (pretty k)
 
     build (NotARecordOrUnion k expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
@@ -1140,11 +1179,11 @@ Explanation: You can access the field of a union if it has just one alternative:
 
 ... but you cannot access the field of a union with more than one alternative:
 
-    λ(x : < foo : Bool | bar : Text >) → x.foo  -- Not valid
+    λ(x : < foo : Bool , bar : Text >) → x.foo  -- Not valid
 
 ... even if you *know* which alternative is present:
 
-    < foo = True | bar : Text >.foo              -- Still not valid
+    < foo = True , bar : Text >.foo              -- Still not valid
 
 You tried to access a field named:
 ↳ $txt0
@@ -1381,9 +1420,10 @@ shift d v (MaybeLit a b) = MaybeLit a' b'
   where
     a' =       shift d v  a
     b' = fmap (shift d v) b
-shift d v (Record    kts) = Record    (fmap (shift d v) kts)
-shift d v (RecordLit kvs) = RecordLit (fmap (shift d v) kvs)
-shift d v (Union     kts) = Union     (fmap (shift d v) kts)
+shift d v (Record       kts) = Record                   (fmap (shift d v) kts)
+shift d v (RecordLit    kvs) = RecordLit                (fmap (shift d v) kvs)
+shift d v (Union        kts) = Union                    (fmap (shift d v) kts)
+shift d v (UnionLit a b kts) = UnionLit a (shift d v b) (fmap (shift d v) kts)
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
@@ -1480,9 +1520,10 @@ subst x e (MaybeLit a b) = MaybeLit a' b'
   where
     a' =       subst x e  a
     b' = fmap (subst x e) b
-subst x e (Record    kts) = Record    (fmap (subst x e) kts)
-subst x e (RecordLit kvs) = RecordLit (fmap (subst x e) kvs)
-subst x e (Union     kts) = Union     (fmap (subst x e) kts)
+subst x e (Record       kts) = Record                   (fmap (subst x e) kts)
+subst x e (RecordLit    kvs) = RecordLit                (fmap (subst x e) kvs)
+subst x e (Union        kts) = Union                    (fmap (subst x e) kts)
+subst x e (UnionLit a b kts) = UnionLit a (subst x e b) (fmap (subst x e) kts)
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
@@ -1802,6 +1843,12 @@ typeWith ctx e@(Union     kts   ) = do
                 _          -> Left (TypeError ctx e (InvalidTagType k t))
     mapM_ process (Data.Map.toList kts)
     return (Const Type)
+typeWith ctx e@(UnionLit k v kts) = do
+    case Data.Map.lookup k kts of
+        Just _  -> Left (TypeError ctx e (DuplicateField k))
+        Nothing -> return ()
+    t   <- typeWith ctx v
+    return (Union (Data.Map.insert k t kts))
 typeWith _      Absurd            = do
     return (Pi "_" (Union Data.Map.empty) (Pi "a" (Const Type) "a"))
 typeWith ctx e@(Field r x       ) = do
@@ -2018,6 +2065,11 @@ normalize e = case e of
                     Just v  -> normalize v
                     Nothing -> Field (RecordLit (fmap normalize kvs)) x
             -- TODO: Handle `UnionLit`
+            UnionLit k v kts
+                | k == x    -> normalize v
+                | otherwise -> Field (UnionLit k v' (fmap normalize kts)) x
+              where
+                v' = normalize v
             r' -> Field r' x
     _ -> e
 
