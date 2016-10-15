@@ -91,7 +91,6 @@ import qualified NeatInterpolation
     'List/last'       { Dhall.Lexer.ListLast       }
     'List/indexed'    { Dhall.Lexer.ListIndexed    }
     'List/reverse'    { Dhall.Lexer.ListReverse    }
-    'List/concat'     { Dhall.Lexer.ListConcat     }
     'Maybe'           { Dhall.Lexer.Maybe          }
     'Maybe/fold'      { Dhall.Lexer.MaybeFold      }
     'absurd'          { Dhall.Lexer.Absurd         }
@@ -218,8 +217,6 @@ Expr6
         { ListIndexed }
     | 'List/reverse'
         { ListReverse }
-    | 'List/concat'
-        { ListConcat }
     | 'Maybe'
         { Maybe }
     | 'Maybe/fold'

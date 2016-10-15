@@ -106,7 +106,6 @@ tokens :-
     "List/last"                         { emit ListLast         }
     "List/indexed"                      { emit ListIndexed      }
     "List/reverse"                      { emit ListReverse      }
-    "List/concat"                       { emit ListConcat       }
     "Maybe"                             { emit Maybe            }
     "Maybe/fold"                        { emit MaybeFold        }
     "absurd"                            { emit Absurd           }
@@ -274,7 +273,6 @@ data Token
     | ListLast
     | ListIndexed
     | ListReverse
-    | ListConcat
     | Maybe
     | MaybeFold
     | TextLit Builder
@@ -391,8 +389,6 @@ instance Buildable Token where
         = "List/indexed"
     build  ListReverse
         = "List/reverse"
-    build  ListConcat
-        = "List/concat"
     build  ListFold
         = "List/fold"
     build  Maybe
