@@ -1909,6 +1909,8 @@ normalize e = case e of
             App NaturalIsZero (NaturalLit n) -> BoolLit (n == 0)
             App NaturalEven (NaturalLit n) -> BoolLit (even n)
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
+            App (App ListBuild _) (App (App ListFold  _) e') -> normalize e'
+            App (App ListFold  _) (App (App ListBuild _) e') -> normalize e'
             App (App ListBuild t) k
                 | check     -> ListLit t (buildVector k')
                 | otherwise -> App f' a'
