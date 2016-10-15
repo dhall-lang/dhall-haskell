@@ -1400,6 +1400,11 @@ shift d v (BoolNE a b) = BoolNE a' b'
   where
     a' = shift d v a
     b' = shift d v b
+shift d v (BoolIf a b c) = BoolIf a' b' c'
+  where
+    a' = shift d v a
+    b' = shift d v b
+    c' = shift d v c
 shift d v (NaturalPlus a b) = NaturalPlus a' b'
   where
     a' = shift d v a
