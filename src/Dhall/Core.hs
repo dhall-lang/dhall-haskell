@@ -607,7 +607,7 @@ buildTagTypes   [a]  = buildTagType a
 buildTagTypes (a:bs) = buildTagType a <> " | " <> buildTagTypes bs
 
 buildTagType :: Buildable a => (Text, Expr a) -> Builder
-buildTagType (a, b) = build a <> " " <> buildExpr0 b
+buildTagType (a, b) = build a <> " : " <> buildExpr0 b
 
 buildUnionLit :: Buildable a => Text -> Expr a -> Map Text (Expr a) -> Builder
 buildUnionLit a b c

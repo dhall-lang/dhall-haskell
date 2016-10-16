@@ -339,8 +339,8 @@ UnionLit
         { UnionLit $2 $4 (Data.Map.fromList $6) }
 
 TagType
-    : label Expr0
-        { ($1, $2) } 
+    : label ':' Expr0
+        { ($1, $3) } 
 
 Import
     : file
