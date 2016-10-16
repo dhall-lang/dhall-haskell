@@ -127,10 +127,10 @@ Expr1
         { Pi $3 $5 $8 }
     | Expr2 '->' Expr1
         { Pi "_" $1 $3 }
-    | 'let' label Args '=' Expr0 'in' Expr1
-        { Let $2 $3 Nothing $5 $7 }
-    | 'let' label Args ':' Expr0 '=' Expr0 'in' Expr1
-        { Let $2 $3 (Just $5) $7 $9 }
+    | 'let' label '=' Expr0 'in' Expr1
+        { Let $2 Nothing $4 $6 }
+    | 'let' label ':' Expr0 '=' Expr0 'in' Expr1
+        { Let $2 (Just $4) $6 $8 }
     | '[' Elems ']' ':' ListLike Expr6
         { $5 $6 (Data.Vector.fromList $2) }
     | 'apply' Expr6 Expr6 ':' Expr5
@@ -250,20 +250,6 @@ Expr6
     | '(' Expr0 ')'
         { $2 }
     
-Args
-    : ArgsRev
-        { reverse $1 }
-
-ArgsRev
-    : {- empty -}
-        { [] }
-    | ArgsRev Arg
-        { $2 : $1 }
-
-Arg
-    : '(' label ':' Expr0 ')'
-        { ($2, $4) }
-
 Elems
     : ElemsRev
         { reverse $1 }

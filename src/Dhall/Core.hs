@@ -181,9 +181,9 @@ data Expr a
     | Pi  Text (Expr a) (Expr a)
     -- | > App f a                                  ~  f a
     | App (Expr a) (Expr a)
-    -- | > Let f [(x1, t1), (x2, t2)] Nothing  r e  ~  let f (x1 : t1) (x2 : t2)     = r in e
-    --   > Let f [(x1, t1), (x2, t2)] (Just t) r e  ~  let f (x1 : t1) (x2 : t2) : t = r in e
-    | Let Text [(Text, Expr a)] (Maybe (Expr a)) (Expr a) (Expr a)
+    -- | > Let x Nothing  r e  ~  let f     = r in e
+    --   > Let x (Just t) r e  ~  let f : t = r in e
+    | Let Text (Maybe (Expr a)) (Expr a) (Expr a)
     -- | > Annot x t                                ~  x : t
     | Annot (Expr a) (Expr a)
     -- | > Bool                                     ~  Bool
@@ -284,11 +284,7 @@ instance Monad Expr where
     Lam x _A  b       >>= k = Lam x (_A >>= k) ( b >>= k)
     Pi  x _A _B       >>= k = Pi  x (_A >>= k) (_B >>= k)
     App f a           >>= k = App (f >>= k) (a >>= k)
-    Let f as mt r e   >>= k = Let f as' (fmap (>>= k) mt) (r >>= k) (e >>= k)
-      where
-        as' = do
-            (x, t) <- as
-            return (x, t >>= k)
+    Let f mt r e      >>= k = Let f (fmap (>>= k) mt) (r >>= k) (e >>= k)
     Annot x t         >>= k = Annot (x >>= k) (t >>= k)
     Bool              >>= _ = Bool
     BoolLit b         >>= _ = BoolLit b
@@ -430,26 +426,22 @@ buildExpr1 (Pi a b c) =
     <>  buildExpr0 b
     <>  ") → "
     <>  buildExpr1 c
-buildExpr1 (Let a b Nothing d e) =
+buildExpr1 (Let a Nothing c d) =
         "let "
     <>  build a
-    <>  " "
-    <>  buildArgs b
-    <>  "= "
-    <>  buildExpr0 d
-    <>  " in "
-    <>  buildExpr1 e
-buildExpr1 (Let a b (Just c) d e) =
-        "let "
-    <>  build a
-    <>  " "
-    <>  buildArgs b
-    <>  ": "
+    <>  " = "
     <>  buildExpr0 c
-    <>  "= "
-    <>  buildExpr0 d
     <>  " in "
-    <>  buildExpr1 e
+    <>  buildExpr1 d
+buildExpr1 (Let a (Just b) c d) =
+        "let "
+    <>  build a
+    <>  " : "
+    <>  buildExpr0 b
+    <>  " = "
+    <>  buildExpr0 c
+    <>  " in "
+    <>  buildExpr1 d
 buildExpr1 (ListLit a b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExpr6 a
 buildExpr1 (MaybeLit a b) =
@@ -556,13 +548,6 @@ buildConst Kind = "Kind"
 buildVar :: Var -> Builder
 buildVar (V x 0) = build x
 buildVar (V x n) = build x <> "@" <> build (show n)
-
-buildArgs :: Buildable a => [(Text, Expr a)] -> Builder
-buildArgs (a:bs) = buildArg a <> buildArgs bs
-buildArgs    []  = ""
-
-buildArg :: Buildable a => (Text, Expr a) -> Builder
-buildArg (a, b) = "(" <> build a <> " : " <> buildExpr0 b <> ") "
 
 buildElems :: Buildable a => [Expr a] -> Builder
 buildElems   []   = ""
@@ -1388,8 +1373,8 @@ You provided this argument:
         txt1 = Text.toStrict (pretty expr1)
         insert =
             if b
-            then [NeatInterpolation.text|$txt0 <> ...|]
-            else [NeatInterpolation.text|... <> $txt0|]
+            then [NeatInterpolation.text|$txt0 ++ ...|]
+            else [NeatInterpolation.text|... ++ $txt0|]
 
     build (CantAdd b expr0 expr1) =
         buildNaturalOperator "+" b expr0 expr1
@@ -1537,13 +1522,14 @@ shift d v (App f a) = App f' a'
   where
     f' = shift d v f
     a' = shift d v a
-shift d (V x n) (Let f as mt r e) = Let f as' mt' r' e'
+shift d (V x n) (Let f mt r e) = Let f mt' r' e'
   where
     e' = shift d (V x n') e
       where
         n' = if x == f then n + 1 else n
 
-    ~(as', mt', r') = shiftArgs d (V x n) (as, mt, r)
+    mt' = fmap (shift d (V x n)) mt
+    r'  =       shift d (V x n)  r
 shift d v (Annot a b) = Annot a' b'
   where
     a' = shift d v a
@@ -1605,23 +1591,6 @@ shift d v (Field a b) = Field a' b
 shift _ _ (Embed p) = Embed p
 shift _ _ e = e
 
-shiftArgs
-    :: Integer
-    -> Var
-    -> ([(Text, Expr a)], Maybe (Expr a), Expr a)
-    -> ([(Text, Expr a)], Maybe (Expr a), Expr a)
-shiftArgs d      v  (       [], mt, r) = (         [], mt', r')
-  where
-    mt' = fmap (shift d v) mt
-    r'  =       shift d v   r
-shiftArgs d (V x n) ((y, t):as, mt, r) = ((y, t'):as', mt', r')
-  where
-    ~(as', mt', r') = shiftArgs d (V x n') (as, mt, r)
-      where
-        n' = if x == y then n + 1 else n
-
-    t' = shift d (V x n) t
-
 {-| Substitute all occurrences of a variable with an expression
 
 > subst x C B  ~  B[x := C]
@@ -1642,13 +1611,14 @@ subst v e (App f a) = App f' a'
     f' = subst v e f
     a' = subst v e a
 subst v e (Var v') = if v == v' then e else Var v'
-subst (V x n) e (Let f as mt r b) = Let f as' mt' r' b'
+subst (V x n) e (Let f mt r b) = Let f mt' r' b'
   where
     b' = subst (V x n') (shift 1 (V f 0) e) b
       where
         n' = if x == f then n + 1 else n
 
-    ~(as', mt', r') = substArgs (V x n) e (as, mt, r)
+    mt' = fmap (subst (V x n) e) mt
+    r'  =       subst (V x n) e  r
 subst x e (Annot y t) = Annot y' t'
   where
     y' = subst x e y
@@ -1710,23 +1680,6 @@ subst x e (Field a b) = Field a' b
 subst _ _ (Embed p) = Embed p
 subst _ _  e        = e
 
-substArgs
-    :: Var
-    -> Expr a
-    -> ([(Text, Expr a)], Maybe (Expr a), Expr a)
-    -> ([(Text, Expr a)], Maybe (Expr a), Expr a)
-substArgs      v  e (       [], mt, r) = (         [], mt', r')
-  where
-    mt' = fmap (subst v e) mt
-    r'  =       subst v e   r
-substArgs (V x n) e ((y, t):as, mt, r) = ((y, t'):as', mt', r')
-  where
-    ~(as', mt', r') = substArgs (V x n') (shift 1 (V y 0) e) (as, mt, r)
-      where
-        n' = if x == y then n + 1 else n
-
-    t' = subst (V x n) e t
-
 {-| Type-check an expression and return the expression's type if type-checking
     suceeds or an error if type-checking fails
 
@@ -1778,18 +1731,16 @@ typeWith ctx e@(App f a         ) = do
             let nf_A  = normalize _A
             let nf_A' = normalize _A'
             Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
-typeWith ctx e@(Let f as mt r b ) = do
-    let r' = foldr (\(x, _A) -> Lam x _A) r as
-    tr' <- typeWith ctx r'
+typeWith ctx e@(Let f mt r b ) = do
+    tr <- typeWith ctx r
     case mt of
-        Nothing -> return ()
-        Just t  -> do
-            let ctx' = foldr (\(x, _A) -> Context.insert x _A) ctx as
-            tr <- typeWith ctx' r
+        Nothing ->
+            return ()
+        Just t  ->
             if propEqual tr t
                 then return ()
                 else Left (TypeError ctx e (AnnotMismatch r t tr))
-    let ctx' = Context.insert f tr' ctx
+    let ctx' = Context.insert f tr ctx
     typeWith ctx' b
 typeWith ctx e@(Annot x t       ) = do
     t' <- typeWith ctx x
@@ -2160,11 +2111,10 @@ normalize e = case e of
             _ -> App f' a'
           where
             a' = normalize a
-    Let f as _ r b -> normalize b''
+    Let f _ r b -> normalize b''
       where
-        r'  = foldr (\(x, _A) -> Lam x _A) r as
-        r'' = shift 1 (V f 0) r'
-        b'  = subst (V f 0) r'' b
+        r' = shift 1 (V f 0) r
+        b'  = subst (V f 0) r' b
         b'' = shift (-1) (V f 0) b'
     Annot x _ -> normalize x
     BoolAnd x y ->
