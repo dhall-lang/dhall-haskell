@@ -312,7 +312,7 @@ module Dhall
     , Generic
     ) where
 
-import Control.Applicative (empty, liftA2)
+import Control.Applicative (empty, liftA2, (<|>))
 import Control.Exception (Exception)
 import Data.ByteString.Lazy (ByteString)
 import Data.Text.Lazy (Text)
@@ -519,6 +519,42 @@ instance Interpret a => Interpret (Vector a) where
 class GenericInterpret f where
     genericAuto :: Type (f a)
 
+instance GenericInterpret f => GenericInterpret (M1 D d f) where
+    genericAuto = fmap M1 genericAuto
+
+instance GenericInterpret V1 where
+    genericAuto = Type {..}
+      where
+        extract _ = Nothing
+
+        expected = Union Data.Map.empty
+
+instance (GenericInterpret f, GenericInterpret g) => GenericInterpret (f :+: g) where
+    genericAuto = Type {..}
+      where
+        extract e = fmap L1 (extractL e) <|> fmap R1 (extractR e)
+
+        expected = Union (Data.Map.union expectedL expectedR)
+
+        Type extractL (Union expectedL) = genericAuto
+        Type extractR (Union expectedR) = genericAuto
+
+instance (Constructor c, GenericInterpret f) => GenericInterpret (M1 C c f) where
+    genericAuto = Type {..}
+      where
+        n :: M1 i c f a
+        n = undefined
+
+        name = Data.Text.Lazy.pack (conName n)
+
+        extract (UnionLit name' e _)
+            | name == name' = fmap M1 (extract' e)
+            | otherwise     = Nothing
+
+        expected = Union (Data.Map.singleton name expected')
+
+        Type extract' expected' = genericAuto
+
 instance GenericInterpret U1 where
     genericAuto = Type {..}
       where
@@ -537,12 +573,6 @@ instance (GenericInterpret f, GenericInterpret g) => GenericInterpret (f :*: g) 
             Record ktsR = expectedR
         Type extractL expectedL = genericAuto
         Type extractR expectedR = genericAuto
-
-instance GenericInterpret f => GenericInterpret (M1 C c f) where
-    genericAuto = fmap M1 genericAuto
-
-instance GenericInterpret f => GenericInterpret (M1 D c f) where
-    genericAuto = fmap M1 genericAuto
 
 instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
     genericAuto = Type {..}
