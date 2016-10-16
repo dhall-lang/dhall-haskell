@@ -265,7 +265,7 @@ data Expr a
     | Absurd
     -- | > Field e x                                ~  e.x
     | Field (Expr a) Text
-    -- | > Embed path                               ~  #path
+    -- | > Embed path                               ~  path
     | Embed a
     deriving (Functor, Foldable, Traversable, Show)
 
