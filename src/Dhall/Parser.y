@@ -72,6 +72,7 @@ import qualified NeatInterpolation
     'Bool'            { Dhall.Lexer.Bool           }
     'True'            { Dhall.Lexer.True_          }
     'False'           { Dhall.Lexer.False_         }
+    'apply'           { Dhall.Lexer.Apply          }
     'if'              { Dhall.Lexer.If             }
     'then'            { Dhall.Lexer.Then           }
     'else'            { Dhall.Lexer.Else           }
@@ -132,6 +133,8 @@ Expr1
         { Let $2 $3 (Just $5) $7 $9 }
     | '[' Elems ']' ':' ListLike Expr6
         { $5 $6 (Data.Vector.fromList $2) }
+    | 'apply' Expr6 Expr6 ':' Expr5
+        { Apply $2 $3 $5 }
     | Expr2
         { $1 }
 

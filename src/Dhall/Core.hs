@@ -43,6 +43,7 @@ import Control.Monad.Trans.State.Strict (State)
 import Data.Foldable
 import Data.Map (Map)
 import Data.Monoid ((<>))
+import Data.Set (Set)
 import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
@@ -59,6 +60,7 @@ import qualified Control.Monad
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Map
 import qualified Data.Maybe
+import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
@@ -261,6 +263,8 @@ data Expr a
     | Union     (Map Text (Expr a))
     -- | > UnionLit (k1, v1) [(k2, t2), (k3, t3)]   ~  < k1 = t1, k2 : t2, k3 : t3 > 
     | UnionLit Text (Expr a) (Map Text (Expr a))
+    -- | > Apply x y t                              ~ apply x y : t
+    | Apply (Expr a) (Expr a) (Expr a)
     -- | > Field e x                                ~  e.x
     | Field (Expr a) Text
     -- | > Embed path                               ~  path
@@ -324,6 +328,7 @@ instance Monad Expr where
     RecordLit kvs     >>= k = RecordLit (fmap (>>= k) kvs)
     Union     kts     >>= k = Union     (fmap (>>= k) kts)
     UnionLit k' v kts >>= k = UnionLit k' (v >>= k) (fmap (>>= k) kts)
+    Apply x y t       >>= k = Apply (x >>= k) (y >>= k) (t >>= k)
     Field r x         >>= k = Field (r >>= k) x
     Embed r           >>= k = k r
 
@@ -449,6 +454,8 @@ buildExpr1 (ListLit a b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExpr6 a
 buildExpr1 (MaybeLit a b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : Maybe "  <> buildExpr6 a
+buildExpr1 (Apply a b c) =
+    "apply " <> buildExpr6 a <> " " <> buildExpr6 b <> " : " <> buildExpr5 c
 buildExpr1 a =
     buildExpr2 a
 
@@ -645,6 +652,13 @@ data TypeMessage
     | InvalidFieldType Text (Expr X)
     | InvalidTagType Text (Expr X)
     | DuplicateField Text
+    | MustApplyARecord (Expr X)
+    | MustApplyToUnion (Expr X)
+    | UnusedHandler (Set Text)
+    | MissingHandler (Set Text)
+    | HandlerInputTypeMismatch Text (Expr X) (Expr X)
+    | HandlerOutputTypeMismatch Text (Expr X) (Expr X)
+    | HandlerNotAFunction Text (Expr X)
     | NotARecord Text (Expr X) (Expr X)
     | MissingField Text (Expr X)
     | CantAnd Bool (Expr X) (Expr X)
@@ -1099,6 +1113,200 @@ You have multiple fields named:
       where
         txt0 = Text.toStrict (pretty k)
 
+    build (MustApplyARecord expr0) =
+        Builder.fromText [NeatInterpolation.text|
+Error: You can only `apply` a record of a handlers
+
+Explanation: You can consume a union by `apply`ing a record of handlers, like
+this:
+
+        let handlers = { Left = Natural/even, Right = \(x : Bool) -> x }
+    in  let union    = < Left = +2 | Right : Bool >
+    in  apply handlers union : Bool
+
+... but the first argument to `apply` must be a record and not another type.
+
+For example, the following expression is *not* valid:
+
+    let f (x : Bool) = x
+    in  apply f < Foo = True > : True  -- Invalid: `f` is not a record
+
+You provided the following handler, which is not a record:
+↳ $txt0
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+
+    build (MustApplyToUnion expr0) =
+        Builder.fromText [NeatInterpolation.text|
+Error: You can only `apply` handlers to a union
+
+Explanation: You can consume a union by `apply`ing a record of handlers, like
+this:
+
+        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
+    in  let union    = < Left = +2 | Right : Bool >
+    in  apply handlers union : Bool
+
+... but the second argument to `apply` must be a union and not another type.
+
+For example, the following expression is *not* valid:
+
+    let handlers = { Foo = λ(x : Bool) → x }
+    in  apply handlers True  -- Invalid: `True` is not a union
+
+You applied a record of handlers to this expression, which is not a union:
+↳ $txt0
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+
+    build (UnusedHandler ks) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Unused handler
+
+Explanation: You can consume a union by `apply`ing a record of handlers, like
+this:
+
+        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
+    in  let union    = < Left = +2 | Right : Bool >
+    in  apply handlers union : Bool
+
+... but there must be exactly one handler per alternative in the union.  You
+cannot have extra handlers.
+
+For example, the following expression is *not* valid:
+
+        let handlers =
+                { Left = Natural/even
+                , Right = λ(x : Bool) → x  -- Invalid: This handler is not used
+                }
+    in  let union = < Left = +2 >  -- The `Right` alternative is missing
+    in  apply handlers union : Bool  
+
+The following handlers had no matching alternatives:
+↳ $txt0
+|]
+      where
+        txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
+
+    build (MissingHandler ks) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Missing handler
+
+Explanation: You can consume a union by `apply`ing a record of handlers, like
+this:
+
+        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
+    in  let union    = < Left = +2 | Right : Bool >
+    in  apply handlers union : Bool
+
+... but there must be exactly one handler per alternative in the union.  You
+cannot have missing handlers.
+
+For example, the following expression is *not* valid:
+
+        let handlers = { Left = Natural/even }  -- Invalid: No `Right` handler
+    in  let union = < Left = +2 | Right : Bool >
+    in  apply handlers union : Bool
+
+The following handlers are missing:
+↳ $txt0
+|]
+      where
+        txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
+
+    build (HandlerInputTypeMismatch expr0 expr1 expr2) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Handler has the wrong input type
+
+Explanation: You can consume a union by `apply`ing a record of handlers, like
+this:
+
+        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
+    in  let union    = < Left = +2 | Right : Bool >
+    in  apply handlers union : Bool
+
+... but the input type of each handler must match the type of the corresponding
+alternative of the union:
+
+        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
+                             -- ^ This function ...
+    in  let union    = < Left = +2 | Right : Bool >
+                             -- ^ ... must accept a value of this type
+    in  apply handlers union : Bool
+
+Your handler for the following alternative:
+↳ $txt0
+... was supposed to accept a value of type:
+↳ $txt1
+... but actually accepts a value of type:
+↳ $txt2
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (pretty expr1)
+        txt2 = Text.toStrict (pretty expr2)
+
+    build (HandlerOutputTypeMismatch expr0 expr1 expr2) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Handler has the wrong output type
+
+Explanation: You can consume a union by `apply`ing a record of handlers, like
+this:
+
+        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
+    in  let union    = < Left = +2 | Right : Bool >
+    in  apply handlers union : Bool
+
+... but the output type of each handler must match the declared final type:
+
+        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
+                             -- ^                     ^
+                             -- These two functions ...
+    in  let union    = < Left = +2 | Right : Bool >
+    in  apply handlers union : Bool  -- ... must return a `Bool`
+
+Your handler for the following alternative:
+↳ $txt0
+... was supposed to return a value of type:
+↳ $txt1
+... but actually returns a value of type:
+↳ $txt2
+|]
+      where
+        txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (pretty expr1)
+        txt2 = Text.toStrict (pretty expr2)
+
+    build (HandlerNotAFunction k expr0) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Handler is not a function
+
+Explanation: You can consume a union by `apply`ing a record of handlers, like
+this:
+
+        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
+    in  let union    = < Left = +2 | Right : Bool >
+    in  apply handlers union : Bool
+
+... but the type of each handler must be a function.
+
+For example, the following expression is *not* valid:
+
+    apply { Foo = 1 } < Foo = 1 > : Integer
+               -- ^ Not a function
+
+Your handler for:
+↳ $txt0
+... has the following type:
+↳ $txt1
+... which is not the type of a function
+|]
+      where
+        txt0 = Text.toStrict (pretty k)
+        txt1 = Text.toStrict (pretty expr0)
+
     build (NotARecord k expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
 Error: Invalid record access
@@ -1385,6 +1593,11 @@ shift d v (Record       kts) = Record                   (fmap (shift d v) kts)
 shift d v (RecordLit    kvs) = RecordLit                (fmap (shift d v) kvs)
 shift d v (Union        kts) = Union                    (fmap (shift d v) kts)
 shift d v (UnionLit a b kts) = UnionLit a (shift d v b) (fmap (shift d v) kts)
+shift d v (Apply a b c) = Apply a' b' c'
+  where
+    a' = shift d v a
+    b' = shift d v b
+    c' = shift d v c
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
@@ -1485,6 +1698,11 @@ subst x e (Record       kts) = Record                   (fmap (subst x e) kts)
 subst x e (RecordLit    kvs) = RecordLit                (fmap (subst x e) kvs)
 subst x e (Union        kts) = Union                    (fmap (subst x e) kts)
 subst x e (UnionLit a b kts) = UnionLit a (subst x e b) (fmap (subst x e) kts)
+subst x e (Apply a b c) = Apply a' b' c'
+  where
+    a' = subst x e a
+    b' = subst x e b
+    c' = subst x e c
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
@@ -1807,6 +2025,41 @@ typeWith ctx e@(UnionLit k v kts) = do
         Nothing -> return ()
     t   <- typeWith ctx v
     return (Union (Data.Map.insert k t kts))
+typeWith ctx e@(Apply kvsX kvsY t) = do
+    tKvsX <- fmap normalize (typeWith ctx kvsX)
+    ktsX  <- case tKvsX of
+        Record kts -> return kts
+        _          -> Left (TypeError ctx e (MustApplyARecord tKvsX))
+    let ksX = Data.Map.keysSet ktsX
+
+    tKvsY <- fmap normalize (typeWith ctx kvsY)
+    ktsY  <- case tKvsY of
+        Union kts -> return kts
+        _         -> Left (TypeError ctx e (MustApplyToUnion tKvsY))
+    let ksY = Data.Map.keysSet ktsY
+
+    let diffX = Data.Set.difference ksX ksY
+    let diffY = Data.Set.difference ksY ksX
+
+    if Data.Set.null diffX
+        then return ()
+        else Left (TypeError ctx e (UnusedHandler diffX))
+
+    let process (kY, tY) = do
+            case Data.Map.lookup kY ktsX of
+                Nothing  -> Left (TypeError ctx e (MissingHandler diffY))
+                Just tX  ->
+                    case tX of
+                        Pi _ tY' t' -> do
+                            if propEqual tY tY'
+                                then return ()
+                                else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
+                            if propEqual t t'
+                                then return ()
+                                else Left (TypeError ctx e (HandlerOutputTypeMismatch kY t t'))
+                        _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
+    mapM_ process (Data.Map.toList ktsY)
+    return t
 typeWith ctx e@(Field r x       ) = do
     t <- fmap normalize (typeWith ctx r)
     case t of
@@ -1996,6 +2249,20 @@ normalize e = case e of
     Record    kts    -> Record    (fmap normalize kts)
     RecordLit kvs    -> RecordLit (fmap normalize kvs)
     Union     kts    -> Union     (fmap normalize kts)
+    Apply x y t      ->
+        case x of
+            RecordLit kvsX ->
+                case y of
+                    UnionLit kY vY _ ->
+                        case Data.Map.lookup kY kvsX of
+                            Just vX -> normalize (App vX vY)
+                            Nothing -> Apply x' y' t'
+                    _ -> Apply x' y' t'
+            _ -> Apply x' y' t'
+      where
+        x' = normalize x
+        y' = normalize y
+        t' = normalize t
     Field r x        ->
         case normalize r of
             RecordLit kvs ->

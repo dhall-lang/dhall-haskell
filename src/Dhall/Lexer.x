@@ -87,6 +87,7 @@ tokens :-
     "Bool"                              { emit Bool             }
     "True"                              { emit True_            }
     "False"                             { emit False_           }
+    "apply"                             { emit Apply            }
     "if"                                { emit If               }
     "then"                              { emit Then             }
     "else"                              { emit Else             }
@@ -251,6 +252,7 @@ data Token
     | Bool
     | True_
     | False_
+    | Apply
     | If
     | Then
     | Else
@@ -347,6 +349,8 @@ instance Buildable Token where
         = "True"
     build  False_
         = "False"
+    build  Apply
+        = "apply"
     build  If
         = "if"
     build  Then
