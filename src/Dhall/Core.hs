@@ -637,7 +637,7 @@ data TypeMessage
     | InvalidFieldType Text (Expr X)
     | InvalidTagType Text (Expr X)
     | DuplicateField Text
-    | MustApplyARecord (Expr X)
+    | MustApplyARecord (Expr X) (Expr X)
     | MustApplyToUnion (Expr X)
     | UnusedHandler (Set Text)
     | MissingHandler (Set Text)
@@ -1098,7 +1098,7 @@ You have multiple fields named:
       where
         txt0 = Text.toStrict (pretty k)
 
-    build (MustApplyARecord expr0) =
+    build (MustApplyARecord expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|
 Error: You can only `apply` a record of a handlers
 
@@ -1116,11 +1116,14 @@ For example, the following expression is *not* valid:
     let f (x : Bool) = x
     in  apply f < Foo = True > : True  -- Invalid: `f` is not a record
 
-You provided the following handler, which is not a record:
+You provided the following handler:
 ↳ $txt0
+... which is not a record, but is actually a value of type:
+↳ $txt1
 |]
       where
         txt0 = Text.toStrict (pretty expr0)
+        txt1 = Text.toStrict (pretty expr1)
 
     build (MustApplyToUnion expr0) =
         Builder.fromText [NeatInterpolation.text|
@@ -1980,7 +1983,7 @@ typeWith ctx e@(Apply kvsX kvsY t) = do
     tKvsX <- fmap normalize (typeWith ctx kvsX)
     ktsX  <- case tKvsX of
         Record kts -> return kts
-        _          -> Left (TypeError ctx e (MustApplyARecord tKvsX))
+        _          -> Left (TypeError ctx e (MustApplyARecord kvsX tKvsX))
     let ksX = Data.Map.keysSet ktsX
 
     tKvsY <- fmap normalize (typeWith ctx kvsY)
