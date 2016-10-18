@@ -95,7 +95,8 @@ import Filesystem.Path ((</>), FilePath)
 import Filesystem as Filesystem
 import Lens.Micro (Lens')
 import Lens.Micro.Mtl (zoom)
-import Dhall.Core (Expr, Path(..), X(..))
+import Dhall.Core (Expr, Path(..))
+import Dhall.TypeCheck (X(..))
 import Network.HTTP.Client (Manager)
 import Prelude hiding (FilePath)
 

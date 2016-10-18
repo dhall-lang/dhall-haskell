@@ -3,9 +3,7 @@
 {-# LANGUAGE DeriveFoldable             #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveTraversable          #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE QuasiQuotes                #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -15,7 +13,6 @@ module Dhall.Core (
     -- * Syntax
     Const(..),
     Path(..),
-    X(..),
     Var(..),
     Expr(..),
 
@@ -89,7 +86,7 @@ import qualified Filesystem.Path.CurrentOS        as Filesystem
     These are the same rule pairs as System Fω
 
     Note that Dhall does not support functions from terms to types and therefore
-    Dhall is not a dependently typed languaged
+    Dhall is not a dependently typed language
 -}
 data Const = Type | Kind deriving (Show, Bounded, Enum)
 
@@ -113,15 +110,6 @@ instance Buildable Path where
       where
         txt = Text.fromStrict (either id id (Filesystem.toText file))
     build (URL  str ) = build str <> " "
-
--- | Like `Data.Void.Void`, except with a shorter inferred type
-newtype X = X { absurd :: forall a . a }
-
-instance Show X where
-    show = absurd
-
-instance Buildable X where
-    build = absurd
 
 {-| Label for a bound variable
 
@@ -175,8 +163,8 @@ data Expr a
     | Pi  Text (Expr a) (Expr a)
     -- | > App f a                                  ~  f a
     | App (Expr a) (Expr a)
-    -- | > Let x Nothing  r e  ~  let f     = r in e
-    --   > Let x (Just t) r e  ~  let f : t = r in e
+    -- | > Let x Nothing  r e  ~  let x     = r in e
+    --   > Let x (Just t) r e  ~  let x : t = r in e
     | Let Text (Maybe (Expr a)) (Expr a) (Expr a)
     -- | > Annot x t                                ~  x : t
     | Annot (Expr a) (Expr a)
@@ -729,8 +717,7 @@ subst x e (Field a b) = Field a' b
 subst _ _ (Embed p) = Embed p
 subst _ _  e        = e
 
-{-| Reduce an expression to its normal form, performing both beta reduction and
-    eta reduction
+{-| Reduce an expression to its normal form, performing beta reduction
 
     `normalize` does not type-check the expression.  You may want to type-check
     expressions before normalizing them since normalization can convert an

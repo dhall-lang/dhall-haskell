@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE QuasiQuotes        #-}
+{-# LANGUAGE RankNTypes         #-}
 
 module Dhall.TypeCheck (
     -- * Type-checking
@@ -8,6 +9,7 @@ module Dhall.TypeCheck (
     , typeOf
 
     -- * Types
+    , X(..)
     , TypeError(..)
     , TypeMessage(..)
     ) where
@@ -21,7 +23,7 @@ import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Typeable (Typeable)
-import Dhall.Core (Const(..), Expr(..), Var(..), X(..))
+import Dhall.Core (Const(..), Expr(..), Var(..))
 import Dhall.Context (Context(..))
 
 import qualified Control.Monad.Trans.State.Strict as State
@@ -458,6 +460,15 @@ typeWith _     (Embed p         ) = do
 -}
 typeOf :: Expr X -> Either TypeError (Expr X)
 typeOf = typeWith Dhall.Context.empty
+
+-- | Like `Data.Void.Void`, except with a shorter inferred type
+newtype X = X { absurd :: forall a . a }
+
+instance Show X where
+    show = absurd
+
+instance Buildable X where
+    build = absurd
 
 -- | The specific type error
 data TypeMessage
