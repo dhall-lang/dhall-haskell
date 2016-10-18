@@ -330,6 +330,7 @@ import qualified Data.Vector
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
+import qualified Dhall.TypeCheck
 import qualified GHC.Generics
 
 throws :: Exception e => Either e a -> IO a
@@ -361,7 +362,7 @@ input
 input (Type {..}) bytes = do
     expr     <- throws (Dhall.Parser.exprFromBytes bytes)
     expr'    <- Dhall.Import.load Nothing expr
-    typeExpr <- throws (Dhall.Core.typeOf (Annot expr' expected))
+    typeExpr <- throws (Dhall.TypeCheck.typeOf (Annot expr' expected))
     case extract (Dhall.Core.normalize expr') of
         Just x  -> return x
         Nothing -> fail "input: malformed `Type`"

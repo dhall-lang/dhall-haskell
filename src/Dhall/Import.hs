@@ -106,8 +106,8 @@ import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
-import qualified Dhall.Core                       as Dhall
-import qualified Dhall.Parser                     as Dhall
+import qualified Dhall.Parser
+import qualified Dhall.TypeCheck
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified Filesystem.Path.CurrentOS        as Filesystem
@@ -338,7 +338,7 @@ loadDynamic p = do
         URL  url  -> readURL   url
     
     let abort err = liftIO (throwIO (Imported (p:paths) err))
-    case Dhall.exprFromBytes bytes of
+    case Dhall.Parser.exprFromBytes bytes of
         Left  err  -> case canonicalize (p:paths) of
             URL url -> do
                 -- Also try the fallback in case of a parse error, since the
@@ -349,7 +349,7 @@ loadDynamic p = do
                 m        <- needManager
                 response <- liftIO
                     (HTTP.httpLbs request' m `onException` abort err)
-                case Dhall.exprFromBytes (HTTP.responseBody response) of
+                case Dhall.Parser.exprFromBytes (HTTP.responseBody response) of
                     Left  _    -> liftIO (abort err)
                     Right expr -> return expr
             _       -> liftIO (abort err)
@@ -406,7 +406,7 @@ loadStatic path = do
     -- have already been checked
     if cached
         then return ()
-        else case Dhall.typeOf expr of
+        else case Dhall.TypeCheck.typeOf expr of
             Left  err -> liftIO (throwIO (Imported (path:paths) err))
             Right _   -> return ()
 

@@ -3,7 +3,7 @@ module Main where
 import Control.Exception (Exception, throwIO)
 import Data.Monoid (mempty)
 import Data.Traversable
-import Dhall.Core (typeOf, pretty, normalize)
+import Dhall.Core (pretty, normalize)
 import Dhall.Import (load)
 import Dhall.Parser (exprFromBytes)
 import Options.Applicative hiding (Const)
@@ -12,6 +12,7 @@ import System.Exit (exitFailure)
 
 import qualified Data.ByteString.Lazy
 import qualified Data.Text.Lazy.IO
+import qualified Dhall.TypeCheck
 
 throws :: Exception e => Either e a -> IO a
 throws (Left  e) = throwIO e
@@ -74,7 +75,7 @@ main = do
             inBytes  <- Data.ByteString.Lazy.getContents
             expr     <- throws (exprFromBytes inBytes)
             expr'    <- load Nothing expr
-            typeExpr <- throws (typeOf expr')
+            typeExpr <- throws (Dhall.TypeCheck.typeOf expr')
             Data.Text.Lazy.IO.hPutStrLn stderr (pretty (normalize typeExpr))
             Data.Text.Lazy.IO.hPutStrLn stderr mempty
             Data.Text.Lazy.IO.putStrLn (pretty (normalize expr'))
@@ -93,7 +94,7 @@ main = do
                     \remote references or just use `dhall` which combines \
                     \resolution, type-checking, and normalization." )
                 Just expr' -> do
-                    typeExpr <- throws (typeOf expr')
+                    typeExpr <- throws (Dhall.TypeCheck.typeOf expr')
                     Data.Text.Lazy.IO.putStrLn (pretty typeExpr)
         Normalize -> do
             inBytes <- Data.ByteString.Lazy.getContents

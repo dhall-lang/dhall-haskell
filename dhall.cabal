@@ -57,7 +57,8 @@ Library
         Dhall.Core,
         Dhall.Import,
         Dhall.Lexer,
-        Dhall.Parser
+        Dhall.Parser,
+        Dhall.TypeCheck
     Build-Tools: alex, happy
 
 Executable dhall
