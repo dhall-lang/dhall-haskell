@@ -18,7 +18,6 @@ module Dhall.Core (
     X(..),
     Var(..),
     Expr(..),
-    Context,
 
     -- * Normalization
     normalize,
@@ -62,7 +61,6 @@ import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Traversable
 import Data.Vector (Vector)
-import Dhall.Context (Context)
 import Filesystem.Path.CurrentOS (FilePath)
 import Numeric.Natural (Natural)
 import Prelude hiding (FilePath)
