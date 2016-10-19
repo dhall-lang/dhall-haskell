@@ -123,10 +123,10 @@ Expr1
         { Lam $3 $5 $8 }
     | 'if' Expr0 'then' Expr1 'else' Expr1
         { BoolIf $2 $4 $6 }
-    | 'forall' '(' label ':' Expr0 ')' '->' Expr1
-        { Pi $3 $5 $8 }
     | Expr2 '->' Expr1
         { Pi "_" $1 $3 }
+    | 'forall' '(' label ':' Expr0 ')' '->' Expr1
+        { Pi $3 $5 $8 }
     | 'let' label '=' Expr0 'in' Expr1
         { Let $2 Nothing $4 $6 }
     | 'let' label ':' Expr0 '=' Expr0 'in' Expr1
@@ -177,14 +177,10 @@ Expr5
         { $1 }
 
 Expr6
-    : label
-        { Var (V $1 0) }
-    | label '@' number
-        { Var (V $1 $3) }
-    | 'Type'
-        { Const Type }
-    | 'Kind'
-        { Const Kind }
+    : Var
+        { Var $1 }
+    | Const
+        { Const $1 }
     | 'Bool'
         { Bool }
     | 'Natural'
@@ -249,6 +245,18 @@ Expr6
         { Field $1 $3 }
     | '(' Expr0 ')'
         { $2 }
+
+Const
+    : 'Type'
+        { Type }
+    | 'Kind'
+        { Kind }
+
+Var
+    : label
+        { V $1 0 }
+    | label '@' number
+        { V $1 $3 }
     
 Elems
     : ElemsRev
@@ -263,10 +271,10 @@ ElemsRev
         { $3 : $1 }
 
 RecordLit
-    : '{' FieldValues '}'
-        { RecordLit (Data.Map.fromList $2) }
-    | '{=}'
+    : '{=}'
         { RecordLit (Data.Map.fromList []) }
+    | '{' FieldValues '}'
+        { RecordLit (Data.Map.fromList $2) }
 
 FieldValues
     : FieldValuesRev
@@ -318,15 +326,15 @@ TagTypesRev
     | TagTypesRev '|' TagType
         { $3 : $1 }
 
+TagType
+    : label ':' Expr0
+        { ($1, $3) } 
+
 UnionLit
     : '<' label '=' Expr0 '>'
         { UnionLit $2 $4 Data.Map.empty }
     | '<' label '=' Expr0 '|' TagTypes '>'
         { UnionLit $2 $4 (Data.Map.fromList $6) }
-
-TagType
-    : label ':' Expr0
-        { ($1, $3) } 
 
 Import
     : file
