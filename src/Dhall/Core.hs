@@ -18,10 +18,11 @@ module Dhall.Core (
 
     -- * Normalization
     normalize,
-    shift,
     subst,
+    shift,
 
     -- * Builders
+    pretty,
     buildExpr0,
     buildExpr1,
     buildExpr2,
@@ -42,7 +43,6 @@ module Dhall.Core (
     buildTagTypes,
     buildTagType,
     buildUnionLit,
-    pretty,
     ) where
 
 #if MIN_VERSION_base(4,8,0)
@@ -538,6 +538,67 @@ instance Buildable a => Buildable (Expr a)
   where
     build = buildExpr0
 
+{-| `shift` is used by both normalization and type-checking to avoid variable
+    capture by shifting variable indices
+
+    For example, suppose that you were to normalize the following expression:
+
+> λ(a : Type) → λ(x : a) → (λ(y : a) → λ(x : a) → y) x
+
+    If you were to substitute @y@ with @x@ without shifting any variable
+    indices, then you would get the following incorrect result:
+
+> λ(a : Type) → λ(x : a) → λ(x : a) → x  -- Incorrect normalized form
+
+    In order to substitute @x@ in place of @y@ we need to `shift` @x@ by @1@ in
+    order to avoid being misinterpreted as the @x@ bound by the innermost
+    lambda.  If we perform that `shift` then we get the correct result:
+
+> λ(a : Type) → λ(x : a) → λ(x : a) → x@1
+
+    As a more worked example, suppose that you were to normalize the following
+    expression:
+
+>     λ(a : Type)
+> →   λ(f : a → a → a)
+> →   λ(x : a)
+> →   λ(x : a)
+> →   (λ(x : a) → f x x@1) x@1
+
+    The correct normalized result would be:
+
+>     λ(a : Type)
+> →   λ(f : a → a → a)
+> →   λ(x : a)
+> →   λ(x : a)
+> →   f x@1 x
+
+    The above example illustrates how we need to both increase and decrease
+    variable indices as part of substitution:
+
+    * We need to increase the index of the outer @x\@1@ to @x\@2@ before we
+      substitute it into the body of the innermost lambda expression in order
+      to avoid variable capture.  This substitution changes the body of the
+      lambda expression to @(f x\@2 x\@1)@
+
+    * We then remove the innermost lambda and therefore decrease the indices of
+      both @x@s in @(f x\@2 x\@1)@ to @(f x\@1 x)@ in order to reflect that one
+      less @x@ variable is now bound within that scope
+
+    Formally, @(shift d (V x n) e)@ modifies the expression @e@ by adding @d@ to
+    the indices of all variables named @x@ whose indices are greater than
+    @(n + m)@, where @m@ is the number of bound variables of the same name
+    within that scope
+
+    In practice, @d@ is always @1@ or @-1@ because we either:
+
+    * increment variables by @1@ to avoid variable capture during substitution
+    * decrement variables by @1@ when deleting lambdas after substitution
+
+    @n@ starts off at @0@ when substitution begins and increments every time we
+    descend into a lambda or let expression that binds a variable of the same
+    name in order to avoid shifting the bound variables by mistake.
+-}
 shift :: Integer -> Var -> Expr a -> Expr a
 shift _ _ (Const k) = Const k
 shift d (V x n) (Var (V x' n')) = Var (V x' n'')
