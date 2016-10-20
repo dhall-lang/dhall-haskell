@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveTraversable          #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE QuasiQuotes                #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -66,11 +67,13 @@ import Prelude hiding (FilePath)
 import qualified Control.Monad
 import qualified Data.Map
 import qualified Data.Maybe
-import qualified Data.Text.Lazy                   as Text
-import qualified Data.Text.Lazy.Builder           as Builder
+import qualified Data.Text
+import qualified Data.Text.Lazy            as Text
+import qualified Data.Text.Lazy.Builder    as Builder
 import qualified Data.Vector
 import qualified Data.Vector.Mutable
-import qualified Filesystem.Path.CurrentOS        as Filesystem
+import qualified Filesystem.Path.CurrentOS as Filesystem
+import qualified NeatInterpolation
 
 {-| Constants for a pure type system
 
@@ -915,11 +918,21 @@ subst _ _ (Embed p) = Embed p
     `normalize` does not type-check the expression.  You may want to type-check
     expressions before normalizing them since normalization can convert an
     ill-typed expression into a well-typed expression.
+
+    However, `normalize` will not fail if the expression is ill-typed and will
+    leave ill-typed sub-expressions unevaluated.
 -}
 normalize :: Expr a -> Expr a
 normalize e = case e of
-    Lam x _A  b -> Lam x (normalize _A) (normalize  b)
-    Pi  x _A _B -> Pi  x (normalize _A) (normalize _B)
+    Const k -> Const k
+    Lam x _A b -> Lam x _A' b'
+      where
+        _A' = normalize _A
+        b'  = normalize b
+    Pi  x _A _B -> Pi  x _A' _B'
+      where
+        _A' = normalize _A
+        _B' = normalize _B
     App f a -> case normalize f of
         Lam x _A b -> normalize b''  -- Beta reduce
           where
@@ -927,6 +940,10 @@ normalize e = case e of
             b'  = subst (V x 0) a' b
             b'' = shift (-1) (V x 0) b'
         f' -> case App f' a' of
+            -- fold/build fusion
+            App (App ListBuild _) (App (App ListFold _) e') -> normalize e'
+            App (App ListFold _) (App (App ListBuild _) e') -> normalize e'
+
             App (App (App (App NaturalFold (NaturalLit n0)) _) succ') zero ->
                 normalize (go n0)
               where
@@ -935,8 +952,6 @@ normalize e = case e of
             App NaturalIsZero (NaturalLit n) -> BoolLit (n == 0)
             App NaturalEven (NaturalLit n) -> BoolLit (even n)
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
-            App (App ListBuild _) (App (App ListFold  _) e') -> normalize e'
-            App (App ListFold  _) (App (App ListBuild _) e') -> normalize e'
             App (App ListBuild t) k
                 | check     -> ListLit t (buildVector k')
                 | otherwise -> App f' a'
@@ -948,9 +963,7 @@ normalize e = case e of
                   where
                     go (App (App (Var "Cons") x) e') = cons x (go e')
                     go (Var "Nil")                   = nil
-                    go  _                            =
-                        error "normalize: Malformed `build`"
-
+                    go  _                            = internalError
                 check = go labeled
                   where
                     go (App (App (Var "Cons") _) e') = go e'
@@ -975,7 +988,9 @@ normalize e = case e of
               where
                 t' = Record (Data.Map.fromList kts)
                   where
-                    kts = [("index", Natural), ("value", t)]
+                    kts = [ ("index", Natural)
+                          , ("value", t)
+                          ]
                 adapt (n, x) = RecordLit (Data.Map.fromList kvs)
                   where
                     kvs = [ ("index", NaturalLit (fromIntegral n))
@@ -993,7 +1008,7 @@ normalize e = case e of
             a' = normalize a
     Let f _ r b -> normalize b''
       where
-        r' = shift 1 (V f 0) r
+        r'  = shift   1  (V f 0) r
         b'  = subst (V f 0) r' b
         b'' = shift (-1) (V f 0) b'
     Annot x _ -> normalize x
@@ -1101,6 +1116,32 @@ normalize e = case e of
                     Nothing -> Field (RecordLit (fmap normalize kvs)) x
             r' -> Field r' x
     _ -> e
+  where
+    internalError :: forall b . b
+    internalError = error (Data.Text.unpack [NeatInterpolation.text|
+Error: Compiler bug
+
+Explanation: This error message means that there is a bug in the Dhall compiler.
+You didn't do anything wrong, but if you would like to see this problem fixed
+then you should report the bug at:
+
+https://github.com/Gabriel439/Haskell-Dhall-Library/issues
+
+Please include the following text in your bug report:
+
+```
+$text
+```
+|])
+      where
+        -- This is to avoid a `Show` constraint on the @a@ in the type of
+        -- `normalize`.  In theory, this might change a failing repro case into
+        -- a successful one, but the risk of that is low enough to not warrant
+        -- the `Show` constraint.  I care more about proving at the type level
+        -- that the @a@ parameter is never used
+        e' = fmap (\_ -> ()) e
+
+        text = "normalize (" <> Data.Text.pack (show e') <> ")"
 
 buildVector :: (forall x . (a -> x -> x) -> x -> x) -> Vector a
 buildVector f = Data.Vector.reverse (Data.Vector.create (do
