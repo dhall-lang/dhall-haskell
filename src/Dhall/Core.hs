@@ -11,39 +11,39 @@
 
 module Dhall.Core (
     -- * Syntax
-    Const(..),
-    Path(..),
-    Var(..),
-    Expr(..),
+      Const(..)
+    , Path(..)
+    , Var(..)
+    , Expr(..)
 
     -- * Normalization
-    normalize,
-    subst,
-    shift,
+    , normalize
+    , subst
+    , shift
 
     -- * Builders
     -- $builders
-    pretty,
-    buildExpr0,
-    buildExpr1,
-    buildExpr2,
-    buildExpr3,
-    buildExpr4,
-    buildExpr5,
-    buildExpr6,
-    buildConst,
-    buildVar,
-    buildElems,
-    buildRecordLit,
-    buildFieldValues,
-    buildFieldValue,
-    buildRecord,
-    buildFieldTypes,
-    buildFieldType,
-    buildUnion,
-    buildTagTypes,
-    buildTagType,
-    buildUnionLit,
+    , pretty
+    , buildExpr0
+    , buildExpr1
+    , buildExpr2
+    , buildExpr3
+    , buildExpr4
+    , buildExpr5
+    , buildExpr6
+    , buildConst
+    , buildVar
+    , buildElems
+    , buildRecordLit
+    , buildFieldValues
+    , buildFieldValue
+    , buildRecord
+    , buildFieldTypes
+    , buildFieldType
+    , buildUnion
+    , buildTagTypes
+    , buildTagType
+    , buildUnionLit
     ) where
 
 #if MIN_VERSION_base(4,8,0)
@@ -706,6 +706,8 @@ shift d v (Annot a b) = Annot a' b'
   where
     a' = shift d v a
     b' = shift d v b
+shift _ _ Bool = Bool
+shift _ _ (BoolLit a) = BoolLit a
 shift d v (BoolAnd a b) = BoolAnd a' b'
   where
     a' = shift d v a
@@ -727,6 +729,12 @@ shift d v (BoolIf a b c) = BoolIf a' b' c'
     a' = shift d v a
     b' = shift d v b
     c' = shift d v c
+shift _ _ Natural = Natural
+shift _ _ (NaturalLit a) = NaturalLit a
+shift _ _ NaturalFold = NaturalFold
+shift _ _ NaturalIsZero = NaturalIsZero
+shift _ _ NaturalEven = NaturalEven
+shift _ _ NaturalOdd = NaturalOdd
 shift d v (NaturalPlus a b) = NaturalPlus a' b'
   where
     a' = shift d v a
@@ -735,22 +743,47 @@ shift d v (NaturalTimes a b) = NaturalTimes a' b'
   where
     a' = shift d v a
     b' = shift d v b
+shift _ _ Integer = Integer
+shift _ _ (IntegerLit a) = IntegerLit a
+shift _ _ Double = Double
+shift _ _ (DoubleLit a) = DoubleLit a
+shift _ _ Text = Text
+shift _ _ (TextLit a) = TextLit a
 shift d v (TextAppend a b) = TextAppend a' b'
   where
     a' = shift d v a
     b' = shift d v b
+shift _ _ List = List
 shift d v (ListLit a b) = ListLit a' b'
   where
     a' =       shift d v  a
     b' = fmap (shift d v) b
+shift _ _ ListBuild = ListBuild
+shift _ _ ListFold = ListFold
+shift _ _ ListLength = ListLength
+shift _ _ ListHead = ListHead
+shift _ _ ListLast = ListLast
+shift _ _ ListIndexed = ListIndexed
+shift _ _ ListReverse = ListReverse
+shift _ _ Maybe = Maybe
 shift d v (MaybeLit a b) = MaybeLit a' b'
   where
     a' =       shift d v  a
     b' = fmap (shift d v) b
-shift d v (Record       kts) = Record                   (fmap (shift d v) kts)
-shift d v (RecordLit    kvs) = RecordLit                (fmap (shift d v) kvs)
-shift d v (Union        kts) = Union                    (fmap (shift d v) kts)
-shift d v (UnionLit a b kts) = UnionLit a (shift d v b) (fmap (shift d v) kts)
+shift _ _ MaybeFold = MaybeFold
+shift d v (Record a) = Record a'
+  where
+    a' = fmap (shift d v) a
+shift d v (RecordLit a) = RecordLit a'
+  where
+    a' = fmap (shift d v) a
+shift d v (Union a) = Union a'
+  where
+    a' = fmap (shift d v) a
+shift d v (UnionLit a b c) = UnionLit a b' c'
+  where
+    b' =       shift d v  b
+    c' = fmap (shift d v) c
 shift d v (Apply a b c) = Apply a' b' c'
   where
     a' = shift d v a
@@ -760,8 +793,8 @@ shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
 -- The Dhall compiler enforces that all embedded values are closed expressions
+-- and `shift` does nothing to a closed expression
 shift _ _ (Embed p) = Embed p
-shift _ _ e = e
 
 {-| Substitute all occurrences of a variable with an expression
 
