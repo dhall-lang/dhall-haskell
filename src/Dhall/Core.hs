@@ -925,6 +925,7 @@ subst _ _ (Embed p) = Embed p
 normalize :: Expr a -> Expr a
 normalize e = case e of
     Const k -> Const k
+    Var v -> Var v
     Lam x _A b -> Lam x _A' b'
       where
         _A' = normalize _A
@@ -1012,6 +1013,8 @@ normalize e = case e of
         b'  = subst (V f 0) r' b
         b'' = shift (-1) (V f 0) b'
     Annot x _ -> normalize x
+    Bool -> Bool
+    BoolLit b -> BoolLit b
     BoolAnd x y ->
         case x' of
             BoolLit xn ->
@@ -1059,6 +1062,12 @@ normalize e = case e of
       where
         true'  = normalize true
         false' = normalize false
+    Natural -> Natural
+    NaturalLit n -> NaturalLit n
+    NaturalFold -> NaturalFold
+    NaturalIsZero -> NaturalIsZero
+    NaturalEven -> NaturalEven
+    NaturalOdd -> NaturalOdd
     NaturalPlus  x y ->
         case x' of
             NaturalLit xn ->
@@ -1079,6 +1088,12 @@ normalize e = case e of
       where
         x' = normalize x
         y' = normalize y
+    Integer -> Integer
+    IntegerLit n -> IntegerLit n
+    Double -> Double
+    DoubleLit n -> DoubleLit n
+    Text -> Text
+    TextLit t -> TextLit t
     TextAppend x y   ->
         case x' of
             TextLit xt ->
@@ -1089,11 +1104,37 @@ normalize e = case e of
       where
         x' = normalize x
         y' = normalize y
-    ListLit t es     -> ListLit (normalize t) (fmap normalize es)
-    MaybeLit t es    -> MaybeLit (normalize t) (fmap normalize es)
-    Record    kts    -> Record    (fmap normalize kts)
-    RecordLit kvs    -> RecordLit (fmap normalize kvs)
-    Union     kts    -> Union     (fmap normalize kts)
+    List -> List
+    ListLit t es -> ListLit t' es'
+      where
+        t'  =      normalize t
+        es' = fmap normalize es
+    ListBuild -> ListBuild
+    ListFold -> ListFold
+    ListLength -> ListLength
+    ListHead -> ListHead
+    ListLast -> ListLast
+    ListIndexed -> ListIndexed
+    ListReverse -> ListReverse
+    Maybe -> Maybe
+    MaybeLit t es -> MaybeLit t' es'
+      where
+        t'  =      normalize t
+        es' = fmap normalize es
+    MaybeFold -> MaybeFold
+    Record kts -> Record kts'
+      where
+        kts' = fmap normalize kts
+    RecordLit kvs -> RecordLit kvs'
+      where
+        kvs' = fmap normalize kvs
+    Union kts -> Union kts'
+      where
+        kts' = fmap normalize kts
+    UnionLit k v kvs -> UnionLit k v' kvs'
+      where
+        v'   =      normalize v
+        kvs' = fmap normalize kvs
     Apply x y t      ->
         case x of
             RecordLit kvsX ->
@@ -1115,7 +1156,7 @@ normalize e = case e of
                     Just v  -> normalize v
                     Nothing -> Field (RecordLit (fmap normalize kvs)) x
             r' -> Field r' x
-    _ -> e
+    Embed a -> Embed a
   where
     internalError :: forall b . b
     internalError = error (Data.Text.unpack [NeatInterpolation.text|
