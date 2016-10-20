@@ -674,7 +674,7 @@ instance Buildable a => Buildable (Expr a)
     name in order to avoid shifting the bound variables by mistake.
 -}
 shift :: Integer -> Var -> Expr a -> Expr a
-shift _ _ (Const k) = Const k
+shift _ _ (Const a) = Const a
 shift d (V x n) (Var (V x' n')) = Var (V x' n'')
   where
     n'' = if x == x' && n <= n' then n' + d else n'
@@ -801,6 +801,7 @@ shift _ _ (Embed p) = Embed p
 > subst x C B  ~  B[x := C]
 -}
 subst :: Var -> Expr a -> Expr a -> Expr a
+subst _ _ (Const a) = Const a
 subst (V x n) e (Lam y _A b) = Lam y _A' b'
   where
     _A' = subst (V x n )                  e  _A
@@ -824,10 +825,12 @@ subst (V x n) e (Let f mt r b) = Let f mt' r' b'
 
     mt' = fmap (subst (V x n) e) mt
     r'  =       subst (V x n) e  r
-subst x e (Annot y t) = Annot y' t'
+subst x e (Annot a b) = Annot a' b'
   where
-    y' = subst x e y
-    t' = subst x e t
+    a' = subst x e a
+    b' = subst x e b
+subst _ _ Bool = Bool
+subst _ _ (BoolLit a) = BoolLit a
 subst x e (BoolAnd a b) = BoolAnd a' b'
   where
     a' = subst x e a
@@ -849,6 +852,12 @@ subst x e (BoolIf a b c) = BoolIf a' b' c'
     a' = subst x e a
     b' = subst x e b
     c' = subst x e c
+subst _ _ Natural = Natural
+subst _ _ (NaturalLit a) = NaturalLit a
+subst _ _ NaturalFold = NaturalFold
+subst _ _ NaturalIsZero = NaturalIsZero
+subst _ _ NaturalEven = NaturalEven
+subst _ _ NaturalOdd = NaturalOdd
 subst x e (NaturalPlus a b) = NaturalPlus a' b'
   where
     a' = subst x e a
@@ -857,18 +866,34 @@ subst x e (NaturalTimes a b) = NaturalTimes a' b'
   where
     a' = subst x e a
     b' = subst x e b
+subst _ _ Integer = Integer
+subst _ _ (IntegerLit a) = IntegerLit a
+subst _ _ Double = Double
+subst _ _ (DoubleLit a) = DoubleLit a
+subst _ _ Text = Text
+subst _ _ (TextLit a) = TextLit a
 subst x e (TextAppend a b) = TextAppend a' b'
   where
     a' = subst x e a
     b' = subst x e b
+subst _ _ List = List
 subst x e (ListLit a b) = ListLit a' b'
   where
     a' =       subst x e  a
     b' = fmap (subst x e) b
+subst _ _ ListBuild = ListBuild
+subst _ _ ListFold = ListFold
+subst _ _ ListLength = ListLength
+subst _ _ ListHead = ListHead
+subst _ _ ListLast = ListLast
+subst _ _ ListIndexed = ListIndexed
+subst _ _ ListReverse = ListReverse
+subst _ _ Maybe = Maybe
 subst x e (MaybeLit a b) = MaybeLit a' b'
   where
     a' =       subst x e  a
     b' = fmap (subst x e) b
+subst _ _ MaybeFold = MaybeFold
 subst x e (Record       kts) = Record                   (fmap (subst x e) kts)
 subst x e (RecordLit    kvs) = RecordLit                (fmap (subst x e) kvs)
 subst x e (Union        kts) = Union                    (fmap (subst x e) kts)
@@ -882,8 +907,8 @@ subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
 -- The Dhall compiler enforces that all embedded values are closed expressions
+-- and `subst` does nothing to a closed expression
 subst _ _ (Embed p) = Embed p
-subst _ _  e        = e
 
 {-| Reduce an expression to its normal form, performing beta reduction
 
