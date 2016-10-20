@@ -379,7 +379,9 @@ instance Show ParseError where
 
 instance Exception ParseError
 
--- | Parse an expression from a `ByteString`
+{-| Parse an expression from a `ByteString` containing a UTF8-encoded Dhall
+    program
+-}
 exprFromBytes :: ByteString -> Either ParseError (Expr Path)
 exprFromBytes bytes = case Dhall.Lexer.runAlex bytes expr of
     Left  str -> Left (ParseError (Data.Text.Lazy.pack str))
