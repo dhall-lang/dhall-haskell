@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE RankNTypes         #-}
+{-# OPTIONS_GHC -Wall #-}
 
 module Dhall.TypeCheck (
     -- * Type-checking
@@ -24,7 +25,7 @@ import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Typeable (Typeable)
 import Dhall.Core (Const(..), Expr(..), Var(..))
-import Dhall.Context (Context(..))
+import Dhall.Context (Context)
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Map
