@@ -1340,8 +1340,7 @@ instance Exception TypeError
 instance Buildable TypeError where
     build (TypeError ctx expr msg)
         =   "\n"
-        <>  (    if  Text.null
-                         (Builder.toLazyText (buildContext ctx))
+        <>  (    if  Text.null (Builder.toLazyText (buildContext ctx))
                  then ""
                  else "Context:\n" <> buildContext ctx <> "\n"
             )
