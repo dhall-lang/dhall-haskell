@@ -47,7 +47,7 @@ $digit = 0-9
 $opchar = [\!\#\$\%\&\*\+\.\/\<\=\>\?\@\\\^\|\-\~]
 
 $fst       = [A-Za-z\_]
-$labelchar = [A-Za-z0-9\_]
+$labelchar = [A-Za-z0-9\_\/]
 
 $nonwhite = ~$white
 
@@ -174,6 +174,9 @@ str = Data.Text.Lazy.Builder.fromLazyText
 lexer :: (Token -> Alex a) -> Alex a
 lexer k = alexMonadScan' >>= k
 
+{-| This was forked from the auto-generated `alexMonadScan` function to improve
+    the error message
+-}
 alexMonadScan' :: Alex Token
 alexMonadScan' = do
   inp@(_,_,str,n) <- alexGetInput
