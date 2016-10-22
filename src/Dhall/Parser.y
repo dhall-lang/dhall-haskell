@@ -314,29 +314,29 @@ FieldType
         { ($1, $3) } 
 
 Union
-    : '<' TagTypes '>'
+    : '<' AlternativeTypes '>'
         { Union (Data.Map.fromList $2) }
 
-TagTypes
-    : TagTypesRev
+AlternativeTypes
+    : AlternativeTypesRev
         { reverse $1 }
 
-TagTypesRev
+AlternativeTypesRev
     : {- empty -}
         { [] }
-    | TagType
+    | AlternativeType
         { [$1] }
-    | TagTypesRev '|' TagType
+    | AlternativeTypesRev '|' AlternativeType
         { $3 : $1 }
 
-TagType
+AlternativeType
     : label ':' Expr0
         { ($1, $3) } 
 
 UnionLit
     : '<' label '=' Expr0 '>'
         { UnionLit $2 $4 Data.Map.empty }
-    | '<' label '=' Expr0 '|' TagTypes '>'
+    | '<' label '=' Expr0 '|' AlternativeTypes '>'
         { UnionLit $2 $4 (Data.Map.fromList $6) }
 
 Import

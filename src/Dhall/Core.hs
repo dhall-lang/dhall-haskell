@@ -42,8 +42,8 @@ module Dhall.Core (
     , buildFieldTypes
     , buildFieldType
     , buildUnion
-    , buildTagTypes
-    , buildTagType
+    , buildAlternativeTypes
+    , buildAlternativeType
     , buildUnionLit
     ) where
 
@@ -585,17 +585,20 @@ buildUnion :: Buildable a => Map Text (Expr a) -> Builder
 buildUnion a | Data.Map.null a =
     "<>"
 buildUnion a =
-    "< " <> buildTagTypes (Data.Map.toList a) <> " >"
+    "< " <> buildAlternativeTypes (Data.Map.toList a) <> " >"
 
--- | Builder corresponding to the @TagTypes@ parser in "Dhall.Parser"
-buildTagTypes :: Buildable a => [(Text, Expr a)] -> Builder
-buildTagTypes    []  = ""
-buildTagTypes   [a]  = buildTagType a
-buildTagTypes (a:bs) = buildTagType a <> " | " <> buildTagTypes bs
+-- | Builder corresponding to the @AlternativeTypes@ parser in "Dhall.Parser"
+buildAlternativeTypes :: Buildable a => [(Text, Expr a)] -> Builder
+buildAlternativeTypes [] =
+    ""
+buildAlternativeTypes [a] =
+    buildAlternativeType a
+buildAlternativeTypes (a:bs) =
+    buildAlternativeType a <> " | " <> buildAlternativeTypes bs
 
--- | Builder corresponding to the @TagType@ parser in "Dhall.Parser"
-buildTagType :: Buildable a => (Text, Expr a) -> Builder
-buildTagType (a, b) = buildLabel a <> " : " <> buildExpr0 b
+-- | Builder corresponding to the @AlternativeType@ parser in "Dhall.Parser"
+buildAlternativeType :: Buildable a => (Text, Expr a) -> Builder
+buildAlternativeType (a, b) = buildLabel a <> " : " <> buildExpr0 b
 
 -- | Builder corresponding to the @UnionLit@ parser in "Dhall.Parser"
 buildUnionLit :: Buildable a => Text -> Expr a -> Map Text (Expr a) -> Builder
@@ -612,7 +615,7 @@ buildUnionLit a b c
         <>  " = "
         <>  buildExpr0 b
         <>  " | "
-        <>  buildTagTypes (Data.Map.toList c)
+        <>  buildAlternativeTypes (Data.Map.toList c)
         <>  " >"
 
 -- | Generates a syntactically valid Dhall program

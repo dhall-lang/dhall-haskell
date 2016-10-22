@@ -407,7 +407,7 @@ typeWith ctx e@(Union     kts   ) = do
             s <- fmap Dhall.Core.normalize (typeWith ctx t)
             case s of
                 Const Type -> return ()
-                _          -> Left (TypeError ctx e (InvalidTagType k t))
+                _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
     mapM_ process (Data.Map.toList kts)
     return (Const Type)
 typeWith ctx e@(UnionLit k v kts) = do
@@ -495,7 +495,7 @@ data TypeMessage
     | InvalidPredicate (Expr X) (Expr X)
     | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
     | InvalidFieldType Text (Expr X)
-    | InvalidTagType Text (Expr X)
+    | InvalidAlternativeType Text (Expr X)
     | DuplicateField Text
     | MustApplyARecord (Expr X) (Expr X)
     | MustApplyToUnion (Expr X)
@@ -921,15 +921,15 @@ You can fix the problem by changing the annotation to a type
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
         txt1 = Text.toStrict (Dhall.Core.pretty expr0)
 
-    build (InvalidTagType k expr0) =
+    build (InvalidAlternativeType k expr0) =
         Builder.fromText [NeatInterpolation.text|
-Error: Invalid type of tag
+Error: Invalid type of alternative
 
-Explanation: Every union type has an annotated type for each tag
+Explanation: Every union type has an annotated type for each alternative
 
-However, tags *cannot* be annotated with expressions other than types
+However, alternatives *cannot* be annotated with expressions other than types
 
-You provided a union type with a tag named:
+You provided a union type with a alternative named:
 ↳ $txt0
 ... annotated with the following expression which is not a type:
 
