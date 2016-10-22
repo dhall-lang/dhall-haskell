@@ -255,8 +255,15 @@ typeWith _      NaturalFold       = do
     return
         (Pi "_" Natural
             (Pi "natural" (Const Type)
-                (Pi "succ" (Pi "pred" "natural" "natural")
+                (Pi "succ" (Pi "_" "natural" "natural")
                     (Pi "zero" "natural" "natural") ) ) )
+typeWith _      NaturalBuild      = do
+    return
+        (Pi "_"
+            (Pi "natural" (Const Type)
+                (Pi "succ" (Pi "_" "natural" "natural")
+                    (Pi "zero" "natural" "natural") ) )
+            Natural )
 typeWith _      NaturalIsZero     = do
     return (Pi "_" Natural Bool)
 typeWith _      NaturalEven       = do

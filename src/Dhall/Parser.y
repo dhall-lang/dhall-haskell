@@ -78,6 +78,7 @@ import qualified NeatInterpolation
     'else'            { Dhall.Lexer.Else           }
     'Natural'         { Dhall.Lexer.Natural        }
     'Natural/fold'    { Dhall.Lexer.NaturalFold    }
+    'Natural/build'   { Dhall.Lexer.NaturalBuild   }
     'Natural/isZero'  { Dhall.Lexer.NaturalIsZero  }
     'Natural/even'    { Dhall.Lexer.NaturalEven    }
     'Natural/odd'     { Dhall.Lexer.NaturalOdd     }
@@ -187,6 +188,8 @@ Expr6
         { Natural }
     | 'Natural/fold'
         { NaturalFold }
+    | 'Natural/build'
+        { NaturalBuild }
     | 'Natural/isZero'
         { NaturalIsZero }
     | 'Natural/even'

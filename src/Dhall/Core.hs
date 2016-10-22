@@ -195,6 +195,8 @@ data Expr a
     | NaturalLit Natural
     -- | > NaturalFold                              ~  Natural/fold
     | NaturalFold
+    -- | > NaturalBuild                             ~  Natural/build
+    | NaturalBuild
     -- | > NaturalIsZero                            ~  Natural/isZero
     | NaturalIsZero
     -- | > NaturalEven                              ~  Natural/even
@@ -285,6 +287,7 @@ instance Monad Expr where
     Natural           >>= _ = Natural
     NaturalLit n      >>= _ = NaturalLit n
     NaturalFold       >>= _ = NaturalFold
+    NaturalBuild      >>= _ = NaturalBuild
     NaturalIsZero     >>= _ = NaturalIsZero
     NaturalEven       >>= _ = NaturalEven
     NaturalOdd        >>= _ = NaturalOdd
@@ -466,6 +469,8 @@ buildExpr6 Natural =
     "Natural"
 buildExpr6 NaturalFold =
     "Natural/fold"
+buildExpr6 NaturalBuild =
+    "Natural/build"
 buildExpr6 NaturalIsZero =
     "Natural/isZero"
 buildExpr6 NaturalEven =
@@ -735,6 +740,7 @@ shift d v (BoolIf a b c) = BoolIf a' b' c'
 shift _ _ Natural = Natural
 shift _ _ (NaturalLit a) = NaturalLit a
 shift _ _ NaturalFold = NaturalFold
+shift _ _ NaturalBuild = NaturalBuild
 shift _ _ NaturalIsZero = NaturalIsZero
 shift _ _ NaturalEven = NaturalEven
 shift _ _ NaturalOdd = NaturalOdd
@@ -858,6 +864,7 @@ subst x e (BoolIf a b c) = BoolIf a' b' c'
 subst _ _ Natural = Natural
 subst _ _ (NaturalLit a) = NaturalLit a
 subst _ _ NaturalFold = NaturalFold
+subst _ _ NaturalBuild = NaturalBuild
 subst _ _ NaturalIsZero = NaturalIsZero
 subst _ _ NaturalEven = NaturalEven
 subst _ _ NaturalOdd = NaturalOdd
@@ -941,15 +948,36 @@ normalize e = case e of
             b'  = subst (V x 0) a' b
             b'' = shift (-1) (V x 0) b'
         f' -> case App f' a' of
-            -- fold/build fusion
+            -- fold/build fusion for `List`
             App (App ListBuild _) (App (App ListFold _) e') -> normalize e'
             App (App ListFold _) (App (App ListBuild _) e') -> normalize e'
+
+            -- fold/build fusion for `Natural`
+            App NaturalBuild (App NaturalFold e') -> normalize e'
+            App NaturalFold (App NaturalBuild e') -> normalize e'
 
             App (App (App (App NaturalFold (NaturalLit n0)) _) succ') zero ->
                 normalize (go n0)
               where
                 go !0 = zero
                 go !n = App succ' (go (n - 1))
+            App NaturalBuild k
+                | check     -> NaturalLit n
+                | otherwise -> App f' a'
+              where
+                labeled =
+                    normalize (App (App (App k Natural) "Succ") "Zero")
+
+                n = go 0 labeled
+                  where
+                    go !m (App (Var "Succ") e') = go (m + 1) e'
+                    go !m (Var "Zero")          = m
+                    go !_  _                    = internalError
+                check = go labeled
+                  where
+                    go (App (Var "Succ") e') = go e'
+                    go (Var "Zero")          = True
+                    go  _                    = False
             App NaturalIsZero (NaturalLit n) -> BoolLit (n == 0)
             App NaturalEven (NaturalLit n) -> BoolLit (even n)
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
@@ -1065,6 +1093,7 @@ normalize e = case e of
     Natural -> Natural
     NaturalLit n -> NaturalLit n
     NaturalFold -> NaturalFold
+    NaturalBuild -> NaturalBuild
     NaturalIsZero -> NaturalIsZero
     NaturalEven -> NaturalEven
     NaturalOdd -> NaturalOdd

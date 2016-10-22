@@ -93,6 +93,7 @@ tokens :-
     "else"                              { emit Else             }
     "Natural"                           { emit Natural          }
     "Natural/fold"                      { emit NaturalFold      }
+    "Natural/build"                     { emit NaturalBuild     }
     "Natural/isZero"                    { emit NaturalIsZero    }
     "Natural/even"                      { emit NaturalEven      }
     "Natural/odd"                       { emit NaturalOdd       }
@@ -262,6 +263,7 @@ data Token
     | Natural
     | NaturalLit Natural
     | NaturalFold
+    | NaturalBuild
     | NaturalIsZero
     | NaturalEven
     | NaturalOdd
@@ -366,6 +368,8 @@ instance Buildable Token where
         = "+" <> Data.Text.Buildable.build (fromIntegral n :: Integer)
     build  NaturalFold
         = "Natural/fold"
+    build  NaturalBuild
+        = "Natural/build"
     build  NaturalIsZero
         = "Natural/isZero"
     build  NaturalEven
