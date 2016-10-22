@@ -254,6 +254,8 @@ data Expr a
     | Union     (Map Text (Expr a))
     -- | > UnionLit (k1, v1) [(k2, t2), (k3, t3)]   ~  < k1 = t1, k2 : t2, k3 : t3 > 
     | UnionLit Text (Expr a) (Map Text (Expr a))
+    -- | > Merge x y                                ~  x ∧ y
+    | Merge (Expr a) (Expr a)
     -- | > Apply x y t                              ~ apply x y : t
     | Apply (Expr a) (Expr a) (Expr a)
     -- | > Field e x                                ~  e.x
@@ -316,6 +318,7 @@ instance Monad Expr where
     RecordLit kvs     >>= k = RecordLit (fmap (>>= k) kvs)
     Union     kts     >>= k = Union     (fmap (>>= k) kts)
     UnionLit k' v kts >>= k = UnionLit k' (v >>= k) (fmap (>>= k) kts)
+    Merge x y         >>= k = Merge (x >>= k) (y >>= k)
     Apply x y t       >>= k = Apply (x >>= k) (y >>= k) (t >>= k)
     Field r x         >>= k = Field (r >>= k) x
     Embed r           >>= k = k r
@@ -450,6 +453,7 @@ buildExpr3  a                = buildExpr4 a
 buildExpr4 :: Buildable a => Expr a -> Builder
 buildExpr4 (BoolAnd      a b) = buildExpr4 a <> " && " <> buildExpr4 b
 buildExpr4 (NaturalTimes a b) = buildExpr4 a <> " * "  <> buildExpr4 b
+buildExpr4 (Merge        a b) = buildExpr4 a <> " ∧ "  <> buildExpr4 b
 buildExpr4  a                 = buildExpr5 a
 
 -- | Builder corresponding to the @Expr5@ parser in "Dhall.Parser"
@@ -796,6 +800,10 @@ shift d v (UnionLit a b c) = UnionLit a b' c'
   where
     b' =       shift d v  b
     c' = fmap (shift d v) c
+shift d v (Merge a b) = Merge a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
 shift d v (Apply a b c) = Apply a' b' c'
   where
     a' = shift d v a
@@ -911,6 +919,10 @@ subst x e (Record       kts) = Record                   (fmap (subst x e) kts)
 subst x e (RecordLit    kvs) = RecordLit                (fmap (subst x e) kvs)
 subst x e (Union        kts) = Union                    (fmap (subst x e) kts)
 subst x e (UnionLit a b kts) = UnionLit a (subst x e b) (fmap (subst x e) kts)
+subst x e (Merge a b) = Merge a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
 subst x e (Apply a b c) = Apply a' b' c'
   where
     a' = subst x e a
@@ -1167,6 +1179,17 @@ normalize e = case e of
       where
         v'   =      normalize v
         kvs' = fmap normalize kvs
+    Merge x y ->
+        case x of
+            RecordLit kvsX ->
+                case y of
+                    RecordLit kvsY ->
+                        RecordLit (Data.Map.union kvsX kvsY)
+                    _ -> Merge x' y'
+            _ -> Merge x' y'
+      where
+        x' = normalize x
+        y' = normalize y
     Apply x y t      ->
         case x of
             RecordLit kvsX ->

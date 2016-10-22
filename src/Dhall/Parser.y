@@ -55,6 +55,7 @@ import qualified NeatInterpolation
     '.'               { Dhall.Lexer.Dot            }
     '='               { Dhall.Lexer.Equals         }
     '&&'              { Dhall.Lexer.And            }
+    '∧'               { Dhall.Lexer.Merge          }
     '||'              { Dhall.Lexer.Or             }
     '=='              { Dhall.Lexer.DoubleEquals   }
     '/='              { Dhall.Lexer.SlashEquals    }
@@ -168,6 +169,8 @@ Expr4
         { BoolAnd $1 $3 }
     | Expr4 '*' Expr4
         { NaturalTimes $1 $3 }
+    | Expr4 '∧' Expr4
+        { Merge $1 $3 }
     | Expr5
         { $1 }
 

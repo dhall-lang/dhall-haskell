@@ -416,6 +416,24 @@ typeWith ctx e@(UnionLit k v kts) = do
         Nothing -> return ()
     t   <- typeWith ctx v
     return (Union (Data.Map.insert k t kts))
+typeWith ctx e@(Merge kvsX kvsY) = do
+    tKvsX <- fmap Dhall.Core.normalize (typeWith ctx kvsX)
+    ktsX  <- case tKvsX of
+        Record kts -> return kts
+        _          -> Left (TypeError ctx e (MustMergeARecord kvsX tKvsX))
+    let ksX = Data.Map.keysSet ktsX
+
+    tKvsY <- fmap Dhall.Core.normalize (typeWith ctx kvsY)
+    ktsY  <- case tKvsY of
+        Record kts -> return kts
+        _          -> Left (TypeError ctx e (MustMergeARecord kvsY tKvsY))
+    let ksY = Data.Map.keysSet ktsY
+
+    let ks = Data.Set.intersection ksX ksY
+    if Data.Set.null ks
+        then return ()
+        else Left (TypeError ctx e (FieldCollision ks))
+    return (Record (Data.Map.union ktsX ktsY))
 typeWith ctx e@(Apply kvsX kvsY t) = do
     tKvsX <- fmap Dhall.Core.normalize (typeWith ctx kvsX)
     ktsX  <- case tKvsX of
@@ -497,6 +515,8 @@ data TypeMessage
     | InvalidFieldType Text (Expr X)
     | InvalidAlternativeType Text (Expr X)
     | DuplicateField Text
+    | MustMergeARecord (Expr X) (Expr X)
+    | FieldCollision (Set Text)
     | MustApplyARecord (Expr X) (Expr X)
     | MustApplyToUnion (Expr X)
     | UnusedHandler (Set Text)
@@ -957,6 +977,55 @@ You have multiple fields named:
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty k)
+
+    build (MustMergeARecord expr0 expr1) =
+        Builder.fromText [NeatInterpolation.text|
+Error: You can only merge records
+
+Explanation: You can merge records using the `(∧)` operator, like this:
+
+    { foo = 1, bar = "ABC" } ∧ { baz = True }             -- This is valid ...
+
+    \(r : { baz : Bool }) → { foo = 1, bar = "ABC" } ∧ r  -- ... and so is this
+
+... but you *cannot* merge values that are not records.
+
+For example, the following expressions are *not* valid:
+
+    { foo = 1 } ∧ 1               -- Invalid: `1` is not a record
+    { foo = 1 } ∧ < baz = True >  -- Invalid: `<baz = True`> is not a record
+
+You provided the following value:
+↳ $txt0
+... which is not a record, but is actually a value of type:
+↳ $txt1
+|]
+      where
+        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+
+    build (FieldCollision ks) =
+        Builder.fromText [NeatInterpolation.text|
+Error: Field collision
+
+Explanation: You can merge records if they don't share any fields in common,
+like this:
+
+    { foo = 1, bar = "ABC" } ∧ { baz = True }             -- This is valid ...
+
+    \(r : { baz : Bool }) → { foo = 1, bar = "ABC" } ∧ r  -- ... and so is this
+
+... but you *cannot* merge two records if they have matching fields.
+
+For example, the following expression is *not* valid:
+
+    { foo = 1, bar = "ABC" } ∧ { foo = 2 } -- Invalid: Colliding `foo` fields
+
+Both records share the following colliding fields:
+↳ $txt0
+|]
+      where
+        txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
 
     build (MustApplyARecord expr0 expr1) =
         Builder.fromText [NeatInterpolation.text|

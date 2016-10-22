@@ -70,6 +70,7 @@ tokens :-
     "."                                 { emit Dot              }
     "="                                 { emit Equals           }
     "&&"                                { emit And              }
+    "/\" | "∧"                          { emit Merge            }
     "||"                                { emit Or               }
     "=="                                { emit DoubleEquals     }
     "/="                                { emit SlashEquals      }
@@ -239,6 +240,7 @@ data Token
     | Dot
     | Equals
     | And
+    | Merge
     | Or
     | DoubleEquals
     | SlashEquals
@@ -320,6 +322,8 @@ instance Buildable Token where
         = "="
     build  And
         = "&&"
+    build  Merge
+        = "∧"
     build  Or
         = "||"
     build  DoubleEquals
@@ -343,11 +347,11 @@ instance Buildable Token where
     build  Kind
         = "Kind"
     build  Arrow
-        = "->"
+        = "→"
     build  Lambda
-        = "\\"
+        = "λ"
     build  Forall
-        = "forall"
+        = "∀"
     build  Bool
         = "Bool"
     build  True_
