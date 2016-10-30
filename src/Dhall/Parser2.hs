@@ -131,126 +131,125 @@ merge = symbol "/\\" <|> symbol "∧"
 label :: Parser Text
 label = Text.Parser.Token.ident identifierStyle
 
-expr0 :: Parser (Expr Src Path)
-expr0 = noted
-    (   try expr0A
+exprA :: Parser (Expr Src Path)
+exprA = noted
+    (   try exprA0
     )
-    <|>     expr0B
+    <|>     exprA1
   where
-    expr0A = do
-        a <- expr1
+    exprA0 = do
+        a <- exprB
         symbol ":"
-        b <- expr0
+        b <- exprA
         return (Annot a b)
 
-    expr0B = expr1
+    exprA1 = exprB
 
-expr1 :: Parser (Expr Src Path)
-expr1 = noted 
-    (   try expr1A
-    <|> try expr1B
-    <|> try expr1C
-    <|> try expr1D
-    <|> try expr1E
-    <|> try expr1F
-    <|> try expr1G
-    <|> try expr1H
+exprB :: Parser (Expr Src Path)
+exprB = noted 
+    (   try exprB0
+    <|> try exprB1
+    <|> try exprB2
+    <|> try exprB3
+    <|> try exprB4
+    <|> try exprB5
+    <|> try exprB6
+    <|> try exprB7
     )
-    <|>     expr1I
+    <|>     exprB8
   where
-    expr1A = do
+    exprB0 = do
         lambda
         symbol "("
         a <- label
         symbol ":"
-        b <- expr0
+        b <- exprA
         symbol ")"
         arrow
-        c <- expr1
+        c <- exprB
         return (Lam a b c)
 
-    expr1B = do
+    exprB1 = do
         symbol "if"
-        a <- expr0
+        a <- exprA
         symbol "then"
-        b <- expr1
+        b <- exprB
         symbol "else"
-        c <- expr2
+        c <- exprC
         return (BoolIf a b c)
 
-    expr1C = do
-        a <- expr2
+    exprB2 = do
+        a <- exprC
         arrow
-        b <- expr1
+        b <- exprB
         return (Pi "_" a b)
 
-    expr1D = do
+    exprB3 = do
         symbol "forall"
         symbol "("
         a <- label
         symbol ":"
-        b <- expr0
+        b <- exprA
         arrow
-        c <- expr1
+        c <- exprB
         return (Pi a b c)
 
-    expr1E = do
+    exprB4 = do
         symbol "let"
         a <- label
         symbol "="
-        b <- expr0
+        b <- exprA
         symbol "in"
-        c <- expr1
+        c <- exprB
         return (Let a Nothing b c)
 
-    expr1F = do
+    exprB5 = do
         symbol "let"
         a <- label
         symbol ":"
-        b <- expr0
+        b <- exprA
         symbol "="
-        c <- expr0
+        c <- exprA
         symbol "in"
-        d <- expr1
+        d <- exprB
         return (Let a (Just b) c d)
 
-    expr1G = do
+    exprB6 = do
         symbol "["
         a <- elems
         symbol "]"
         symbol ":"
         b <- listLike
-        c <- expr6
+        c <- exprE
         return (b c (Data.Vector.fromList a))
 
-    expr1H = do
+    exprB7 = do
         symbol "apply"
-        a <- expr6
-        b <- expr6
+        a <- exprE
+        b <- exprE
         symbol ":"
-        c <- expr5
+        c <- exprD
         return (Apply a b c)
 
-    expr1I = expr2
+    exprB8 = exprC
 
 listLike :: Parser (Expr Src Path -> Vector (Expr Src Path) -> Expr Src Path)
 listLike =
-    (   listLikeA
-    <|> listLikeB
+    (   listLike0
+    <|> listLike1
     )
   where
-    listLikeA = do
+    listLike0 = do
         symbol "List"
         return ListLit
 
-    listLikeB = do
+    listLike1 = do
         symbol "Maybe"
         return MaybeLit
 
 -- TODO: Add `noted` in the right places here
--- TODO: Change `expr5` to `expr3` and so forth
-expr2 :: Parser (Expr Src Path)
-expr2 = expressionParser
+exprC :: Parser (Expr Src Path)
+exprC = expressionParser
   where
     expressionParser = Text.Parser.Expression.buildExpressionParser
         [ [ operator BoolAnd      (symbol "&&")
@@ -265,226 +264,226 @@ expr2 = expressionParser
           , operator BoolNE       (symbol "/=")
           ]
         ]
-        expr5
+        exprD
 
     operator op parser = Infix (do parser; return op) AssocRight
 
 -- TODO: Add `noted` here
-expr5 :: Parser (Expr Src Path)
-expr5 = do
-    exprs <- some expr6
+exprD :: Parser (Expr Src Path)
+exprD = do
+    exprs <- some exprE
     return (Data.List.foldl1 App exprs)
 
-expr6 :: Parser (Expr Src Path)
-expr6 = noted
-    (   expr6AA
-    <|> expr6AB
-    <|> expr6AC
-    <|> expr6AD
-    <|> expr6AE
-    <|> expr6AF
-    <|> expr6AG
-    <|> expr6AH
-    <|> expr6AI
-    <|> expr6AJ
-    <|> expr6AK
-    <|> expr6AL
-    <|> expr6AM
-    <|> expr6AN
-    <|> expr6AO
-    <|> expr6AP
-    <|> expr6AQ
-    <|> expr6AR
-    <|> expr6AS
-    <|> expr6AT
-    <|> expr6AU
-    <|> expr6AV
-    <|> expr6AW
-    <|> expr6AX
-    <|> expr6AY
-    <|> expr6AZ
-    <|> expr6BA
-    <|> expr6BB
-    <|> expr6BC
-    <|> expr6BD
-    <|> expr6BE
-    <|> expr6BF
---  <|> expr6BG
-    <|> expr6BH
+exprE :: Parser (Expr Src Path)
+exprE = noted
+    (   exprE00
+    <|> exprE01
+    <|> exprE02
+    <|> exprE03
+    <|> exprE04
+    <|> exprE05
+    <|> exprE06
+    <|> exprE07
+    <|> exprE08
+    <|> exprE09
+    <|> exprE10
+    <|> exprE11
+    <|> exprE12
+    <|> exprE13
+    <|> exprE14
+    <|> exprE15
+    <|> exprE16
+    <|> exprE17
+    <|> exprE18
+    <|> exprE19
+    <|> exprE20
+    <|> exprE21
+    <|> exprE22
+    <|> exprE23
+    <|> exprE24
+    <|> exprE25
+    <|> exprE26
+    <|> exprE27
+    <|> exprE28
+    <|> exprE29
+    <|> exprE30
+    <|> exprE31
+--  <|> exprE32
+    <|> exprE33
     )
   where
-    expr6AA = do
+    exprE00 = do
         a <- var
         return (Var a)
 
-    expr6AB = do
+    exprE01 = do
         a <- const
         return (Const a)
 
-    expr6AC = do
+    exprE02 = do
         symbol "Natural"
         return Natural
 
-    expr6AD = do
+    exprE03 = do
         symbol "Natural/fold"
         return NaturalFold
 
-    expr6AE = do
+    exprE04 = do
         symbol "Natural/build"
         return NaturalBuild
 
-    expr6AF = do
+    exprE05 = do
         symbol "Natural/isZero"
         return NaturalIsZero
 
-    expr6AG = do
+    exprE06 = do
         symbol "Natural/even"
         return NaturalEven
 
-    expr6AH = do
+    exprE07 = do
         symbol "Natural/odd"
         return NaturalOdd
 
-    expr6AI = do
+    exprE08 = do
         symbol "Integer"
         return Integer
 
-    expr6AJ = do
+    exprE09 = do
         symbol "Double"
         return Double
 
-    expr6AK = do
+    exprE10 = do
         symbol "Text"
         return Text
 
-    expr6AL = do
+    exprE11 = do
         symbol "List"
         return List
 
-    expr6AM = do
+    exprE12 = do
         symbol "List/build"
         return ListBuild
 
-    expr6AN = do
+    exprE13 = do
         symbol "List/fold"
         return ListFold
 
-    expr6AO = do
+    exprE14 = do
         symbol "List/length"
         return ListLength
 
-    expr6AP = do
+    exprE15 = do
         symbol "List/head"
         return ListHead
 
-    expr6AQ = do
+    exprE16 = do
         symbol "List/last"
         return ListLast
 
-    expr6AR = do
+    exprE17 = do
         symbol "List/indexed"
         return ListIndexed
 
-    expr6AS = do
+    exprE18 = do
         symbol "List/reverse"
         return ListReverse
 
-    expr6AT = do
+    exprE19 = do
         symbol "Maybe"
         return Maybe
 
-    expr6AU = do
+    exprE20 = do
         symbol "Maybe/fold"
         return MaybeFold
 
-    expr6AV = do
+    exprE21 = do
         symbol "True"
         return (BoolLit True)
 
-    expr6AW = do
+    exprE22 = do
         symbol "False"
         return (BoolLit False)
 
-    expr6AX = do
+    exprE23 = do
         a <- Text.Parser.Token.natural
         return (IntegerLit a)
 
-    expr6AY = do
+    exprE24 = do
         Text.Parser.Char.char '+'
         a <- Text.Parser.Token.natural
         return (NaturalLit (fromIntegral a))
 
-    expr6AZ = do
+    exprE25 = do
         a <- Text.Parser.Token.double
         return (DoubleLit a)
 
-    expr6BA = do
+    exprE26 = do
         a <- Text.Parser.Token.stringLiteral
         return (TextLit a)
 
-    expr6BB = record
+    exprE27 = record
 
-    expr6BC = recordLit
+    exprE28 = recordLit
 
-    expr6BD = union
+    exprE29 = union
 
-    expr6BE = unionLit
+    exprE30 = unionLit
 
-    expr6BF = do
+    exprE31 = do
         a <- import_
         return (Embed a)
 
---  expr6BG = do
---      a <- expr6
+--  exprE32 = do
+--      a <- exprE
 --      symbol "."
 --      b <- label
 --      return (Field a b)
 
-    expr6BH = do
+    exprE33 = do
         symbol "("
-        a <- expr0
+        a <- exprA
         symbol ")"
         return a
 
 const :: Parser Const
-const = constA
-    <|> constB
+const = const0
+    <|> const1
   where
-    constA = do
+    const0 = do
         symbol "Type"
         return Type
 
-    constB = do
+    const1 = do
         symbol "Kind"
         return Kind
 
 var :: Parser Var
-var =   varA
-    <|> varB
+var =   var0
+    <|> var1
   where
-    varA = do
+    var0 = do
         a <- label
         return (V a 0)
 
-    varB = do
+    var1 = do
         a <- label
         symbol "@"
         b <- Text.Parser.Token.natural
         return (V a b)
 
 elems :: Parser [Expr Src Path]
-elems = Text.Parser.Combinators.sepBy expr0 (symbol ",")
+elems = Text.Parser.Combinators.sepBy exprA (symbol ",")
 
 recordLit :: Parser (Expr Src Path)
 recordLit =
-        recordLitA
-    <|> recordLitB
+        recordLit0
+    <|> recordLit1
   where
-    recordLitA = do
+    recordLit0 = do
         symbol "{=}"
         return (RecordLit (Data.Map.fromList []))
 
-    recordLitB = do
+    recordLit1 = do
         symbol "{"
         a <- fieldValues
         symbol "}"
@@ -497,7 +496,7 @@ fieldValue :: Parser (Text, Expr Src Path)
 fieldValue = do
     a <- label
     symbol "="
-    b <- expr0
+    b <- exprA
     return (a, b)
 
 record :: Parser (Expr Src Path)
@@ -514,7 +513,7 @@ fieldType :: Parser (Text, Expr Src Path)
 fieldType = do
     a <- label
     symbol ":"
-    b <- expr0
+    b <- exprA
     return (a, b)
 
 union :: Parser (Expr Src Path)
@@ -531,27 +530,27 @@ alternativeType :: Parser (Text, Expr Src Path)
 alternativeType = do
     a <- label
     symbol ":"
-    b <- expr0
+    b <- exprA
     return (a, b)
 
 unionLit :: Parser (Expr Src Path)
 unionLit =
-        try unionLitA
-    <|>     unionLitB
+        try unionLit0
+    <|>     unionLit1
   where
-    unionLitA = do
+    unionLit0 = do
         symbol "<"
         a <- label
         symbol "="
-        b <- expr0
+        b <- exprA
         symbol ">"
         return (UnionLit a b Data.Map.empty)
 
-    unionLitB = do
+    unionLit1 = do
         symbol "<"
         a <- label
         symbol "="
-        b <- expr0
+        b <- exprA
         symbol "|"
         c <- alternativeTypes
         symbol ">"
@@ -559,47 +558,47 @@ unionLit =
 
 import_ :: Parser Path
 import_ =
-        importA
-    <|> importB
+        import0
+    <|> import1
   where
-    importA = do
+    import0 = do
         a <- file
         return (File a)
 
-    importB = do
+    import1 = do
         a <- url
         return (URL a)
 
 file :: Parser FilePath
-file =  token fileA
-    <|> token fileB
-    <|> token fileC
+file =  token file0
+    <|> token file1
+    <|> token file2
   where
-    fileA = do
+    file0 = do
         a <- Text.Parser.Char.string "/"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
         return (Filesystem.Path.CurrentOS.decodeString (a <> b))
 
-    fileB = do
+    file1 = do
         a <- Text.Parser.Char.string "./"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
         return (Filesystem.Path.CurrentOS.decodeString (a <> b))
 
-    fileC = do
+    file2 = do
         a <- Text.Parser.Char.string "../"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
         return (Filesystem.Path.CurrentOS.decodeString (a <> b))
 
 url :: Parser Text
-url =   urlA
-    <|> urlB
+url =   url0
+    <|> url1
   where
-    urlA = do
+    url0 = do
         a <- Text.Parser.Char.string "https://"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
         return (Data.Text.Lazy.pack (a <> b))
 
-    urlB = do
+    url1 = do
         a <- Text.Parser.Char.string "http://"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
         return (Data.Text.Lazy.pack (a <> b))
