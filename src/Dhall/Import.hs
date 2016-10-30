@@ -96,6 +96,7 @@ import Filesystem as Filesystem
 import Lens.Micro (Lens')
 import Lens.Micro.Mtl (zoom)
 import Dhall.Core (Expr, Path(..))
+import Dhall.Parser (Src)
 import Dhall.TypeCheck (X(..))
 import Network.HTTP.Client (Manager)
 import Prelude hiding (FilePath)
@@ -182,7 +183,7 @@ instance Show e => Show (Imported e) where
 
 data Status = Status
     { _stack   :: [Path]
-    , _cache   :: Map Path (Expr X)
+    , _cache   :: Map Path (Expr Src X)
     , _manager :: Maybe Manager
     }
 
@@ -192,7 +193,7 @@ canonicalizeAll = map canonicalize . List.tails
 stack :: Lens' Status [Path]
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
 
-cache :: Lens' Status (Map Path (Expr X))
+cache :: Lens' Status (Map Path (Expr Src X))
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
 manager :: Lens' Status (Maybe Manager)
@@ -299,7 +300,7 @@ clean = strip . Filesystem.collapse
     This also returns the true final path (i.e. explicit "/@" at the end for
     directories)
 -}
-loadDynamic :: Path -> StateT Status IO (Expr Path)
+loadDynamic :: Path -> StateT Status IO (Expr Src Path)
 loadDynamic p = do
     paths <- zoom stack State.get
 
@@ -357,7 +358,7 @@ loadDynamic p = do
         Right expr -> return expr
 
 -- | Load a `Path` as a \"static\" expression (with all imports resolved)
-loadStatic :: Path -> StateT Status IO (Expr X)
+loadStatic :: Path -> StateT Status IO (Expr Src X)
 loadStatic path = do
     paths <- zoom stack State.get
 
@@ -421,9 +422,9 @@ loadStatic path = do
 load
     :: Maybe Path
     -- ^ Starting path
-    -> Expr Path
+    -> Expr Src Path
     -- ^ Expression to resolve
-    -> IO (Expr X)
+    -> IO (Expr Src X)
 load here expr =
     State.evalStateT (fmap join (traverse loadStatic expr)) status
   where

@@ -318,6 +318,7 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Text.Lazy (Text)
 import Data.Vector (Vector)
 import Dhall.Core (Expr(..))
+import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
 import GHC.Generics
 import Numeric.Natural (Natural)
@@ -386,8 +387,8 @@ input (Type {..}) bytes = do
 > input :: Type a -> Text -> IO a
 -}
 data Type a = Type
-    { extract  :: Expr X -> Maybe a
-    , expected :: Expr X
+    { extract  :: Expr X X -> Maybe a
+    , expected :: Expr Src X
     }
     deriving (Functor)
 

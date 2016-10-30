@@ -16,7 +16,6 @@ module Dhall.TypeCheck (
     ) where
 
 import Control.Exception (Exception)
-import Control.Monad.Trans.State.Strict (State)
 import Data.Foldable (forM_)
 import Data.Monoid ((<>))
 import Data.Set (Set)
@@ -38,7 +37,7 @@ import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified NeatInterpolation
 
-axiom :: Const -> Either TypeError Const
+axiom :: Const -> Either (TypeError s) Const
 axiom Type = return Kind
 axiom Kind = Left (TypeError Dhall.Context.empty (Const Kind) (Untyped Kind))
 
@@ -59,13 +58,12 @@ match (V xL nL) (V xR nR) ((xL', xR'):xs) =
     nL' = if xL == xL' then nL - 1 else nL
     nR' = if xR == xR' then nR - 1 else nR
 
-propEqual :: Expr X -> Expr X -> Bool
+propEqual :: Expr s X -> Expr t X -> Bool
 propEqual eL0 eR0 =
     State.evalState
         (go (Dhall.Core.normalize eL0) (Dhall.Core.normalize eR0))
         []
   where
-    go :: Expr X -> Expr X -> State [(Text, Text)] Bool
     go (Const Type) (Const Type) = return True
     go (Const Kind) (Const Kind) = return True
     go (Var vL) (Var vR) = do
@@ -120,7 +118,7 @@ propEqual eL0 eR0 =
     is not necessary for just type-checking.  If you actually care about the
     returned type then you may want to `normalize` it afterwards.
 -}
-typeWith :: Context (Expr X) -> Expr X -> Either TypeError (Expr X)
+typeWith :: Context (Expr s X) -> Expr s X -> Either (TypeError s) (Expr s X)
 typeWith _     (Const c         ) = do
     fmap Const (axiom c)
 typeWith ctx e@(Var (V x n)     ) = do
@@ -477,6 +475,10 @@ typeWith ctx e@(Field r x       ) = do
                 Just t' -> return t'
                 Nothing -> Left (TypeError ctx e (MissingField x t))
         _          -> Left (TypeError ctx e (NotARecord x r t))
+typeWith ctx   (Note s e'       ) = case typeWith ctx e' of
+    Left (TypeError ctx' (Note _ e'') m) -> Left (TypeError ctx' (Note s e'') m)
+    Left (TypeError ctx'         e''  m) -> Left (TypeError ctx' (Note s e'') m)
+    Right r                             -> Right r
 typeWith _     (Embed p         ) = do
     absurd p
 
@@ -484,7 +486,7 @@ typeWith _     (Embed p         ) = do
     expression must be closed (i.e. no free variables), otherwise type-checking
     will fail.
 -}
-typeOf :: Expr X -> Either TypeError (Expr X)
+typeOf :: Expr s X -> Either (TypeError s) (Expr s X)
 typeOf = typeWith Dhall.Context.empty
 
 -- | Like `Data.Void.Void`, except with a shorter inferred type
@@ -497,46 +499,46 @@ instance Buildable X where
     build = absurd
 
 -- | The specific type error
-data TypeMessage
+data TypeMessage s
     = UnboundVariable
-    | InvalidInputType (Expr X)
-    | InvalidOutputType (Expr X)
-    | NotAFunction (Expr X)
-    | TypeMismatch (Expr X) (Expr X)
-    | AnnotMismatch (Expr X) (Expr X) (Expr X)
+    | InvalidInputType (Expr s X)
+    | InvalidOutputType (Expr s X)
+    | NotAFunction (Expr s X)
+    | TypeMismatch (Expr s X) (Expr s X)
+    | AnnotMismatch (Expr s X) (Expr s X) (Expr s X)
     | Untyped Const
-    | InvalidListElement Int Int (Expr X) (Expr X) (Expr X)
-    | InvalidListType Bool (Expr X)
-    | InvalidMaybeElement (Expr X) (Expr X) (Expr X)
+    | InvalidListElement Int Int (Expr s X) (Expr s X) (Expr s X)
+    | InvalidListType Bool (Expr s X)
+    | InvalidMaybeElement (Expr s X) (Expr s X) (Expr s X)
     | InvalidMaybeLiteral Int
-    | InvalidMaybeType (Expr X)
-    | InvalidPredicate (Expr X) (Expr X)
-    | IfBranchMismatch (Expr X) (Expr X) (Expr X) (Expr X)
-    | InvalidFieldType Text (Expr X)
-    | InvalidAlternativeType Text (Expr X)
+    | InvalidMaybeType (Expr s X)
+    | InvalidPredicate (Expr s X) (Expr s X)
+    | IfBranchMismatch (Expr s X) (Expr s X) (Expr s X) (Expr s X)
+    | InvalidFieldType Text (Expr s X)
+    | InvalidAlternativeType Text (Expr s X)
     | DuplicateField Text
-    | MustMergeARecord (Expr X) (Expr X)
+    | MustMergeARecord (Expr s X) (Expr s X)
     | FieldCollision (Set Text)
-    | MustApplyARecord (Expr X) (Expr X)
-    | MustApplyToUnion (Expr X)
+    | MustApplyARecord (Expr s X) (Expr s X)
+    | MustApplyToUnion (Expr s X)
     | UnusedHandler (Set Text)
     | MissingHandler (Set Text)
-    | HandlerInputTypeMismatch Text (Expr X) (Expr X)
-    | HandlerOutputTypeMismatch Text (Expr X) (Expr X)
-    | HandlerNotAFunction Text (Expr X)
-    | NotARecord Text (Expr X) (Expr X)
-    | MissingField Text (Expr X)
-    | CantAnd Bool (Expr X) (Expr X)
-    | CantOr Bool (Expr X) (Expr X)
-    | CantEQ Bool (Expr X) (Expr X)
-    | CantNE Bool (Expr X) (Expr X)
-    | CantTextAppend Bool (Expr X) (Expr X)
-    | CantAdd Bool (Expr X) (Expr X)
-    | CantMultiply Bool (Expr X) (Expr X)
-    | NoDependentTypes (Expr X) (Expr X)
+    | HandlerInputTypeMismatch Text (Expr s X) (Expr s X)
+    | HandlerOutputTypeMismatch Text (Expr s X) (Expr s X)
+    | HandlerNotAFunction Text (Expr s X)
+    | NotARecord Text (Expr s X) (Expr s X)
+    | MissingField Text (Expr s X)
+    | CantAnd Bool (Expr s X) (Expr s X)
+    | CantOr Bool (Expr s X) (Expr s X)
+    | CantEQ Bool (Expr s X) (Expr s X)
+    | CantNE Bool (Expr s X) (Expr s X)
+    | CantTextAppend Bool (Expr s X) (Expr s X)
+    | CantAdd Bool (Expr s X) (Expr s X)
+    | CantMultiply Bool (Expr s X) (Expr s X)
+    | NoDependentTypes (Expr s X) (Expr s X)
     deriving (Show)
 
-instance Buildable TypeMessage where
+instance Buildable (TypeMessage s) where
     build UnboundVariable =
         Builder.fromText [NeatInterpolation.text|
 Error: Unbound variable
@@ -1335,7 +1337,7 @@ Your function type is invalid because the input is a term of type:
 indent :: Data.Text.Text -> Data.Text.Text
 indent = Data.Text.unlines . fmap ("    " <>) . Data.Text.lines
 
-buildBooleanOperator :: Text -> Bool -> Expr X -> Expr X -> Builder
+buildBooleanOperator :: Text -> Bool -> Expr s X -> Expr s X -> Builder
 buildBooleanOperator operator b expr0 expr1 =
     Builder.fromText [NeatInterpolation.text|
 Error: Cannot use `($txt2)` on a value that's not a `Bool`
@@ -1358,7 +1360,7 @@ You provided this argument:
         then [NeatInterpolation.text|$txt0 $txt2 ...|]
         else [NeatInterpolation.text|... $txt2 $txt0|]
 
-buildNaturalOperator :: Text -> Bool -> Expr X -> Expr X -> Builder
+buildNaturalOperator :: Text -> Bool -> Expr s X -> Expr s X -> Builder
 buildNaturalOperator operator b expr0 expr1 =
     Builder.fromText [NeatInterpolation.text|
 Error: Cannot use `($txt2)` on a value that's not a `Natural`
@@ -1402,18 +1404,18 @@ Example:
             _ -> mempty
 
 -- | A structured type error that includes context
-data TypeError = TypeError
-    { context     :: Context (Expr X)
-    , current     :: Expr X
-    , typeMessage :: TypeMessage
+data TypeError s = TypeError
+    { context     :: Context (Expr s X)
+    , current     :: Expr s X
+    , typeMessage :: TypeMessage s
     } deriving (Typeable)
 
-instance Show TypeError where
+instance Show (TypeError s) where
     show = Text.unpack . Dhall.Core.pretty
 
-instance Exception TypeError
+instance Typeable s => Exception (TypeError s)
 
-instance Buildable TypeError where
+instance Buildable (TypeError s) where
     build (TypeError ctx expr msg)
         =   "\n"
         <>  (    if  Text.null (Builder.toLazyText (buildContext ctx))

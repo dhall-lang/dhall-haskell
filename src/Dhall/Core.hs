@@ -51,6 +51,7 @@ module Dhall.Core (
 #else
 import Control.Applicative (Applicative(..), (<$>))
 #endif
+import Data.Bifunctor (Bifunctor(..))
 import Data.Foldable
 import Data.Map (Map)
 import Data.Monoid ((<>))
@@ -157,38 +158,38 @@ instance Buildable Var where
     build = buildVar
 
 -- | Syntax tree for expressions
-data Expr a
+data Expr s a
     -- | > Const c                                  ~  c
     = Const Const
     -- | > Var (V x 0)                              ~  x
     --   > Var (V x n)                              ~  x@n
     | Var Var             
     -- | > Lam x     A b                            ~  λ(x : A) -> b
-    | Lam Text (Expr a) (Expr a)
+    | Lam Text (Expr s a) (Expr s a)
     -- | > Pi "_" A B                               ~        A  -> B
     --   > Pi x   A B                               ~  ∀(x : A) -> B
-    | Pi  Text (Expr a) (Expr a)
+    | Pi  Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
-    | App (Expr a) (Expr a)
+    | App (Expr s a) (Expr s a)
     -- | > Let x Nothing  r e  ~  let x     = r in e
     --   > Let x (Just t) r e  ~  let x : t = r in e
-    | Let Text (Maybe (Expr a)) (Expr a) (Expr a)
+    | Let Text (Maybe (Expr s a)) (Expr s a) (Expr s a)
     -- | > Annot x t                                ~  x : t
-    | Annot (Expr a) (Expr a)
+    | Annot (Expr s a) (Expr s a)
     -- | > Bool                                     ~  Bool
     | Bool
     -- | > BoolLit b                                ~  b
     | BoolLit Bool
     -- | > BoolAnd x y                              ~  x && y
-    | BoolAnd (Expr a) (Expr a)
+    | BoolAnd (Expr s a) (Expr s a)
     -- | > BoolOr  x y                              ~  x || y
-    | BoolOr  (Expr a) (Expr a)
+    | BoolOr  (Expr s a) (Expr s a)
     -- | > BoolEQ  x y                              ~  x == y
-    | BoolEQ  (Expr a) (Expr a)
+    | BoolEQ  (Expr s a) (Expr s a)
     -- | > BoolNE  x y                              ~  x /= y
-    | BoolNE  (Expr a) (Expr a)
+    | BoolNE  (Expr s a) (Expr s a)
     -- | > BoolIf x y z                             ~  if x then y else z
-    | BoolIf (Expr a) (Expr a) (Expr a)
+    | BoolIf (Expr s a) (Expr s a) (Expr s a)
     -- | > Natural                                  ~  Natural
     | Natural
     -- | > NaturalLit n                             ~  +n
@@ -204,9 +205,9 @@ data Expr a
     -- | > NaturalOdd                               ~  Natural/odd
     | NaturalOdd
     -- | > NaturalPlus x y                          ~  x + y
-    | NaturalPlus (Expr a) (Expr a)
+    | NaturalPlus (Expr s a) (Expr s a)
     -- | > NaturalTimes x y                         ~  x * y
-    | NaturalTimes (Expr a) (Expr a)
+    | NaturalTimes (Expr s a) (Expr s a)
     -- | > Integer                                  ~  Integer
     | Integer
     -- | > IntegerLit n                             ~  n
@@ -220,11 +221,11 @@ data Expr a
     -- | > TextLit t                                ~  t
     | TextLit Builder
     -- | > TextAppend x y                           ~  x ++ y
-    | TextAppend (Expr a) (Expr a)
+    | TextAppend (Expr s a) (Expr s a)
     -- | > List                                     ~  List
     | List
     -- | > ListLit t [x, y, z]                      ~  [x, y, z] : List t
-    | ListLit (Expr a) (Vector (Expr a))
+    | ListLit (Expr s a) (Vector (Expr s a))
     -- | > ListBuild                                ~  List/build
     | ListBuild
     -- | > ListFold                                 ~  List/fold
@@ -243,33 +244,35 @@ data Expr a
     | Maybe
     -- | > MaybeLit t [e]                           ~  [e] : Maybe t
     --   > MaybeLit t []                            ~  []  : Maybe t
-    | MaybeLit (Expr a) (Vector (Expr a))
+    | MaybeLit (Expr s a) (Vector (Expr s a))
     -- | > MaybeFold                                ~  Maybe/fold
     | MaybeFold
     -- | > Record            [(k1, t1), (k2, t2)]   ~  { k1 : t1, k2 : t1 }
-    | Record    (Map Text (Expr a))
+    | Record    (Map Text (Expr s a))
     -- | > RecordLit         [(k1, v1), (k2, v2)]   ~  { k1 = v1, k2 = v2 }
-    | RecordLit (Map Text (Expr a))
+    | RecordLit (Map Text (Expr s a))
     -- | > Union             [(k1, t1), (k2, t2)]   ~  < k1 : t1, k2 : t2 >
-    | Union     (Map Text (Expr a))
+    | Union     (Map Text (Expr s a))
     -- | > UnionLit (k1, v1) [(k2, t2), (k3, t3)]   ~  < k1 = t1, k2 : t2, k3 : t3 > 
-    | UnionLit Text (Expr a) (Map Text (Expr a))
+    | UnionLit Text (Expr s a) (Map Text (Expr s a))
     -- | > Merge x y                                ~  x ∧ y
-    | Merge (Expr a) (Expr a)
+    | Merge (Expr s a) (Expr s a)
     -- | > Apply x y t                              ~ apply x y : t
-    | Apply (Expr a) (Expr a) (Expr a)
+    | Apply (Expr s a) (Expr s a) (Expr s a)
     -- | > Field e x                                ~  e.x
-    | Field (Expr a) Text
+    | Field (Expr s a) Text
+    -- | > Note s x                                 ~  e
+    | Note s (Expr s a)
     -- | > Embed path                               ~  path
     | Embed a
     deriving (Functor, Foldable, Traversable, Show)
 
-instance Applicative Expr where
+instance Applicative (Expr s) where
     pure = Embed
 
     (<*>) = Control.Monad.ap
 
-instance Monad Expr where
+instance Monad (Expr s) where
     return = pure
 
     Const c           >>= _ = Const c
@@ -321,9 +324,65 @@ instance Monad Expr where
     Merge x y         >>= k = Merge (x >>= k) (y >>= k)
     Apply x y t       >>= k = Apply (x >>= k) (y >>= k) (t >>= k)
     Field r x         >>= k = Field (r >>= k) x
+    Note a b          >>= k = Note a (b >>= k)
     Embed r           >>= k = k r
 
-instance IsString (Expr a)
+instance Bifunctor Expr where
+    first _ (Const a         ) = Const a
+    first _ (Var a           ) = Var a
+    first k (Lam a b c       ) = Lam a (first k b) (first k c)
+    first k (Pi a b c        ) = Pi a (first k b) (first k c)
+    first k (App a b         ) = App (first k a) (first k b)
+    first k (Let a b c d     ) = Let a (fmap (first k) b) (first k c) (first k d)
+    first k (Annot a b       ) = Annot (first k a) (first k b)
+    first _  Bool              = Bool
+    first _ (BoolLit a       ) = BoolLit a
+    first k (BoolAnd a b     ) = BoolAnd (first k a) (first k b)
+    first k (BoolOr a b      ) = BoolOr (first k a) (first k b)
+    first k (BoolEQ a b      ) = BoolEQ (first k a) (first k b)
+    first k (BoolNE a b      ) = BoolNE (first k a) (first k b)
+    first k (BoolIf a b c    ) = BoolIf (first k a) (first k b) (first k c)
+    first _  Natural           = Natural
+    first _ (NaturalLit a    ) = NaturalLit a
+    first _  NaturalFold       = NaturalFold
+    first _  NaturalBuild      = NaturalBuild
+    first _  NaturalIsZero     = NaturalIsZero
+    first _  NaturalEven       = NaturalEven
+    first _  NaturalOdd        = NaturalOdd
+    first k (NaturalPlus a b ) = NaturalPlus (first k a) (first k b)
+    first k (NaturalTimes a b) = NaturalTimes (first k a) (first k b)
+    first _  Integer           = Integer
+    first _ (IntegerLit a    ) = IntegerLit a
+    first _  Double            = Double
+    first _ (DoubleLit a     ) = DoubleLit a
+    first _  Text              = Text
+    first _ (TextLit a       ) = TextLit a
+    first k (TextAppend a b  ) = TextAppend (first k a) (first k b)
+    first _  List              = List
+    first k (ListLit a b     ) = ListLit (first k a) (fmap (first k) b)
+    first _  ListBuild         = ListBuild
+    first _  ListFold          = ListFold
+    first _  ListLength        = ListLength
+    first _  ListHead          = ListHead
+    first _  ListLast          = ListLast
+    first _  ListIndexed       = ListIndexed
+    first _  ListReverse       = ListReverse
+    first _  Maybe             = Maybe
+    first k (MaybeLit a b    ) = MaybeLit (first k a) (fmap (first k) b)
+    first _  MaybeFold         = MaybeFold
+    first k (Record a        ) = Record (fmap (first k) a)
+    first k (RecordLit a     ) = RecordLit (fmap (first k) a)
+    first k (Union a         ) = Union (fmap (first k) a)
+    first k (UnionLit a b c  ) = UnionLit a (first k b) (fmap (first k) c)
+    first k (Merge a b       ) = Merge (first k a) (first k b)
+    first k (Apply a b c     ) = Apply (first k a) (first k b) (first k c)
+    first k (Field a b       ) = Field (first k a) b
+    first k (Note a b        ) = Note (k a) (first k b)
+    first _ (Embed a         ) = Embed a
+
+    second = fmap
+
+instance IsString (Expr s a)
   where
     fromString str = Var (fromString str)
 
@@ -364,14 +423,14 @@ buildText :: Builder -> Builder
 buildText a = build (show a)
 
 -- | Builder corresponding to the @Expr0@ parser in "Dhall.Parser"
-buildExpr0 :: Buildable a => Expr a -> Builder
+buildExpr0 :: Buildable a => Expr s a -> Builder
 buildExpr0 (Annot a b) =
     buildExpr1 a <> " : " <> buildExpr0 b
 buildExpr0 a =
     buildExpr1 a
 
 -- | Builder corresponding to the @Expr1@ parser in "Dhall.Parser"
-buildExpr1 :: Buildable a => Expr a -> Builder
+buildExpr1 :: Buildable a => Expr s a -> Builder
 buildExpr1 (Lam a b c) =
         "λ("
     <>  buildLabel a
@@ -437,32 +496,32 @@ buildExpr1 a =
     buildExpr2 a
 
 -- | Builder corresponding to the @Expr2@ parser in "Dhall.Parser"
-buildExpr2 :: Buildable a => Expr a -> Builder
+buildExpr2 :: Buildable a => Expr s a -> Builder
 buildExpr2 (BoolEQ a b) = buildExpr2 a <> " == " <> buildExpr2 b
 buildExpr2 (BoolNE a b) = buildExpr2 a <> " /= " <> buildExpr2 b
 buildExpr2  a           = buildExpr3 a
 
 -- | Builder corresponding to the @Expr3@ parser in "Dhall.Parser"
-buildExpr3 :: Buildable a => Expr a -> Builder
+buildExpr3 :: Buildable a => Expr s a -> Builder
 buildExpr3 (BoolOr      a b) = buildExpr3 a <> " || " <> buildExpr3 b
 buildExpr3 (NaturalPlus a b) = buildExpr3 a <> " + "  <> buildExpr3 b
 buildExpr3 (TextAppend  a b) = buildExpr3 a <> " ++ " <> buildExpr3 b
 buildExpr3  a                = buildExpr4 a
 
 -- | Builder corresponding to the @Expr4@ parser in "Dhall.Parser"
-buildExpr4 :: Buildable a => Expr a -> Builder
+buildExpr4 :: Buildable a => Expr s a -> Builder
 buildExpr4 (BoolAnd      a b) = buildExpr4 a <> " && " <> buildExpr4 b
 buildExpr4 (NaturalTimes a b) = buildExpr4 a <> " * "  <> buildExpr4 b
 buildExpr4 (Merge        a b) = buildExpr4 a <> " ∧ "  <> buildExpr4 b
 buildExpr4  a                 = buildExpr5 a
 
 -- | Builder corresponding to the @Expr5@ parser in "Dhall.Parser"
-buildExpr5 :: Buildable a => Expr a -> Builder
+buildExpr5 :: Buildable a => Expr s a -> Builder
 buildExpr5 (App a b) = buildExpr5 a <> " " <> buildExpr6 b
 buildExpr5  a        = buildExpr6 a
 
 -- | Builder corresponding to the @Expr6@ parser in "Dhall.Parser"
-buildExpr6 :: Buildable a => Expr a -> Builder
+buildExpr6 :: Buildable a => Expr s a -> Builder
 buildExpr6 (Var a) =
     buildVar a
 buildExpr6 (Const k) =
@@ -545,54 +604,54 @@ buildVar (V x 0) = buildLabel x
 buildVar (V x n) = buildLabel x <> "@" <> buildNumber n
 
 -- | Builder corresponding to the @Elems@ parser in "Dhall.Parser"
-buildElems :: Buildable a => [Expr a] -> Builder
+buildElems :: Buildable a => [Expr s a] -> Builder
 buildElems   []   = ""
 buildElems   [a]  = buildExpr0 a
 buildElems (a:bs) = buildExpr0 a <> ", " <> buildElems bs
 
 -- | Builder corresponding to the @RecordLit@ parser in "Dhall.Parser"
-buildRecordLit :: Buildable a => Map Text (Expr a) -> Builder
+buildRecordLit :: Buildable a => Map Text (Expr s a) -> Builder
 buildRecordLit a | Data.Map.null a =
     "{=}"
 buildRecordLit a =
     "{ " <> buildFieldValues (Data.Map.toList a) <> " }"
 
 -- | Builder corresponding to the @FieldValues@ parser in "Dhall.Parser"
-buildFieldValues :: Buildable a => [(Text, Expr a)] -> Builder
+buildFieldValues :: Buildable a => [(Text, Expr s a)] -> Builder
 buildFieldValues    []  = ""
 buildFieldValues   [a]  = buildFieldValue a
 buildFieldValues (a:bs) = buildFieldValue a <> ", " <> buildFieldValues bs
 
 -- | Builder corresponding to the @FieldValue@ parser in "Dhall.Parser"
-buildFieldValue :: Buildable a => (Text, Expr a) -> Builder
+buildFieldValue :: Buildable a => (Text, Expr s a) -> Builder
 buildFieldValue (a, b) = buildLabel a <> " = " <> buildExpr0 b
 
 -- | Builder corresponding to the @Record@ parser in "Dhall.Parser"
-buildRecord :: Buildable a => Map Text (Expr a) -> Builder
+buildRecord :: Buildable a => Map Text (Expr s a) -> Builder
 buildRecord a | Data.Map.null a =
     "{}"
 buildRecord a =
     "{ " <> buildFieldTypes (Data.Map.toList a) <> " }"
 
 -- | Builder corresponding to the @FieldTypes@ parser in "Dhall.Parser"
-buildFieldTypes :: Buildable a => [(Text, Expr a)] -> Builder
+buildFieldTypes :: Buildable a => [(Text, Expr s a)] -> Builder
 buildFieldTypes    []  = ""
 buildFieldTypes   [a]  = buildFieldType a
 buildFieldTypes (a:bs) = buildFieldType a <> ", " <> buildFieldTypes bs
 
 -- | Builder corresponding to the @FieldType@ parser in "Dhall.Parser"
-buildFieldType :: Buildable a => (Text, Expr a) -> Builder
+buildFieldType :: Buildable a => (Text, Expr s a) -> Builder
 buildFieldType (a, b) = buildLabel a <> " : " <> buildExpr0 b
 
 -- | Builder corresponding to the @Union@ parser in "Dhall.Parser"
-buildUnion :: Buildable a => Map Text (Expr a) -> Builder
+buildUnion :: Buildable a => Map Text (Expr s a) -> Builder
 buildUnion a | Data.Map.null a =
     "<>"
 buildUnion a =
     "< " <> buildAlternativeTypes (Data.Map.toList a) <> " >"
 
 -- | Builder corresponding to the @AlternativeTypes@ parser in "Dhall.Parser"
-buildAlternativeTypes :: Buildable a => [(Text, Expr a)] -> Builder
+buildAlternativeTypes :: Buildable a => [(Text, Expr s a)] -> Builder
 buildAlternativeTypes [] =
     ""
 buildAlternativeTypes [a] =
@@ -601,11 +660,11 @@ buildAlternativeTypes (a:bs) =
     buildAlternativeType a <> " | " <> buildAlternativeTypes bs
 
 -- | Builder corresponding to the @AlternativeType@ parser in "Dhall.Parser"
-buildAlternativeType :: Buildable a => (Text, Expr a) -> Builder
+buildAlternativeType :: Buildable a => (Text, Expr s a) -> Builder
 buildAlternativeType (a, b) = buildLabel a <> " : " <> buildExpr0 b
 
 -- | Builder corresponding to the @UnionLit@ parser in "Dhall.Parser"
-buildUnionLit :: Buildable a => Text -> Expr a -> Map Text (Expr a) -> Builder
+buildUnionLit :: Buildable a => Text -> Expr s a -> Map Text (Expr s a) -> Builder
 buildUnionLit a b c
     | Data.Map.null c =
             "< "
@@ -623,7 +682,7 @@ buildUnionLit a b c
         <>  " >"
 
 -- | Generates a syntactically valid Dhall program
-instance Buildable a => Buildable (Expr a)
+instance Buildable a => Buildable (Expr s a)
   where
     build = buildExpr0
 
@@ -688,7 +747,7 @@ instance Buildable a => Buildable (Expr a)
     descend into a lambda or let expression that binds a variable of the same
     name in order to avoid shifting the bound variables by mistake.
 -}
-shift :: Integer -> Var -> Expr a -> Expr a
+shift :: Integer -> Var -> Expr s a -> Expr t a
 shift _ _ (Const a) = Const a
 shift d (V x n) (Var (V x' n')) = Var (V x' n'')
   where
@@ -812,6 +871,9 @@ shift d v (Apply a b c) = Apply a' b' c'
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
+shift d v (Note _ b) = b'
+  where
+    b' = shift d v b
 -- The Dhall compiler enforces that all embedded values are closed expressions
 -- and `shift` does nothing to a closed expression
 shift _ _ (Embed p) = Embed p
@@ -820,7 +882,7 @@ shift _ _ (Embed p) = Embed p
 
 > subst x C B  ~  B[x := C]
 -}
-subst :: Var -> Expr a -> Expr a -> Expr a
+subst :: Var -> Expr s a -> Expr t a -> Expr s a
 subst _ _ (Const a) = Const a
 subst (V x n) e (Lam y _A b) = Lam y _A' b'
   where
@@ -931,6 +993,9 @@ subst x e (Apply a b c) = Apply a' b' c'
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
+subst x e (Note _ b) = b'
+  where
+    b' = subst x e b
 -- The Dhall compiler enforces that all embedded values are closed expressions
 -- and `subst` does nothing to a closed expression
 subst _ _ (Embed p) = Embed p
@@ -944,7 +1009,7 @@ subst _ _ (Embed p) = Embed p
     However, `normalize` will not fail if the expression is ill-typed and will
     leave ill-typed sub-expressions unevaluated.
 -}
-normalize :: Expr a -> Expr a
+normalize :: Expr s a -> Expr t a
 normalize e = case e of
     Const k -> Const k
     Var v -> Var v
@@ -1184,7 +1249,7 @@ normalize e = case e of
             RecordLit kvsX ->
                 case y of
                     RecordLit kvsY ->
-                        RecordLit (Data.Map.union kvsX kvsY)
+                        RecordLit (fmap normalize (Data.Map.union kvsX kvsY))
                     _ -> Merge x' y'
             _ -> Merge x' y'
       where
@@ -1211,6 +1276,7 @@ normalize e = case e of
                     Just v  -> normalize v
                     Nothing -> Field (RecordLit (fmap normalize kvs)) x
             r' -> Field r' x
+    Note _ e' -> normalize e'
     Embed a -> Embed a
   where
     internalError :: forall b . b
@@ -1230,12 +1296,12 @@ $text
 ```
 |])
       where
-        -- This is to avoid a `Show` constraint on the @a@ in the type of
+        -- This is to avoid a `Show` constraint on the @a@ and @s@ in the type of
         -- `normalize`.  In theory, this might change a failing repro case into
         -- a successful one, but the risk of that is low enough to not warrant
         -- the `Show` constraint.  I care more about proving at the type level
-        -- that the @a@ parameter is never used
-        e' = fmap (\_ -> ()) e
+        -- that the @a@ and @s@ type parameters are never used
+        e' = bimap (\_ -> ()) (\_ -> ()) e
 
         text = "normalize (" <> Data.Text.pack (show e') <> ")"
 
