@@ -293,42 +293,42 @@ exprD = do
     return (Data.List.foldl1 App exprs)
 
 exprE :: Parser (Expr Src Path)
-exprE = noted
-    (   try exprE01
-    <|> try exprE03
-    <|> try exprE04
-    <|> try exprE05
-    <|> try exprE06
-    <|> try exprE12
-    <|> try exprE13
-    <|> try exprE14
-    <|> try exprE15
-    <|> try exprE16
-    <|> try exprE17
-    <|> try exprE18
-    <|> try exprE19
-    <|> try exprE20
-    <|> try exprE21
-    <|> try exprE22
-    <|> try exprE23
-    <|> try exprE24
-    <|> try exprE25
-    <|> try exprE26
-    <|> try exprE27
-    <|> try exprE28
-    <|> try exprE29
-    <|> try exprE30
-    <|> try exprE31
---  <|> try exprE32
-    <|> try exprE02
-    <|> try exprE07
-    <|> try exprE08
-    <|> try exprE09
-    <|> try exprE10
-    <|> try exprE11
-    <|> try exprE00
-    <|>     exprE33
-    )
+exprE = choice
+    [   noted      exprE01
+    ,   noted      exprE03
+    ,   noted      exprE04
+    ,   noted      exprE05
+    ,   noted      exprE06
+    ,   noted      exprE07
+    ,   noted      exprE12
+    ,   noted      exprE13
+    ,   noted      exprE14
+    ,   noted      exprE15
+    ,   noted      exprE16
+    ,   noted      exprE17
+    ,   noted      exprE18
+    ,   noted      exprE20
+    ,   noted      exprE19
+    ,   noted      exprE21
+    ,   noted      exprE22
+    ,   noted (try exprE25)
+    ,   noted      exprE23
+    ,   noted      exprE24
+    ,   noted      exprE26
+    ,   noted (try exprE27)
+    ,   noted      exprE28
+    ,   noted (try exprE29)
+    ,   noted      exprE30
+    ,   noted      exprE31
+--  ,   noted (try exprE32)
+    ,   noted      exprE02
+    ,   noted      exprE08
+    ,   noted      exprE09
+    ,   noted      exprE10
+    ,   noted      exprE11
+    ,   noted      exprE00
+    ,              exprE33
+    ]
   where
     exprE00 = do
         a <- var
