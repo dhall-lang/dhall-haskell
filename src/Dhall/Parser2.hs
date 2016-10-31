@@ -2,8 +2,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 
-module Dhall.Parser2 where
-{-
 module Dhall.Parser2 (
     -- * Parser
       exprFromText
@@ -12,7 +10,6 @@ module Dhall.Parser2 (
     , Src(..)
     , ParseError(..)
     ) where
--}
 
 import Control.Applicative (Alternative(..), optional)
 import Control.Exception (Exception)
@@ -328,6 +325,7 @@ exprF = choice
     ,   noted (try exprF29)
     ,   noted      exprF30
     ,   noted      exprF31
+    ,   noted      exprF32
     ,   noted      exprF02
     ,   noted      exprF08
     ,   noted      exprF09
@@ -422,39 +420,43 @@ exprF = choice
         return MaybeFold
 
     exprF21 = do
+        reserve "Bool"
+        return Bool
+
+    exprF22 = do
         reserve "True"
         return (BoolLit True)
 
-    exprF22 = do
+    exprF23 = do
         reserve "False"
         return (BoolLit False)
 
-    exprF23 = do
+    exprF24 = do
         a <- Text.Parser.Token.natural
         return (IntegerLit a)
 
-    exprF24 = do
+    exprF25 = do
         Text.Parser.Char.char '+'
         a <- Text.Parser.Token.natural
         return (NaturalLit (fromIntegral a))
 
-    exprF25 = do
+    exprF26 = do
         a <- Text.Parser.Token.double
         return (DoubleLit a)
 
-    exprF26 = do
+    exprF27 = do
         a <- Text.Parser.Token.stringLiteral
         return (TextLit a)
 
-    exprF27 = record
+    exprF28 = record
 
-    exprF28 = recordLit
+    exprF29 = recordLit
 
-    exprF29 = union
+    exprF30 = union
 
-    exprF30 = unionLit
+    exprF31 = unionLit
 
-    exprF31 = do
+    exprF32 = do
         a <- import_
         return (Embed a)
 
