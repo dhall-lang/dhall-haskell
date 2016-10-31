@@ -96,7 +96,7 @@ import Filesystem as Filesystem
 import Lens.Micro (Lens')
 import Lens.Micro.Mtl (zoom)
 import Dhall.Core (Expr, Path(..))
-import Dhall.Parser2 (Src)
+import Dhall.Parser (Src)
 import Dhall.TypeCheck (X(..))
 import Network.HTTP.Client (Manager)
 import Prelude hiding (FilePath)
@@ -108,7 +108,7 @@ import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
-import qualified Dhall.Parser2
+import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
@@ -341,7 +341,7 @@ loadDynamic p = do
         URL  url  -> readURL   url
     
     let abort err = liftIO (throwIO (Imported (p:paths) err))
-    case Dhall.Parser2.exprFromText bytes of
+    case Dhall.Parser.exprFromText bytes of
         Left  err  -> case canonicalize (p:paths) of
             URL url -> do
                 -- Also try the fallback in case of a parse error, since the
@@ -355,7 +355,7 @@ loadDynamic p = do
                 -- TODO: Handle UTF8 decoding errors
                 let bytes' = HTTP.responseBody response
                 let text  = Data.Text.Lazy.Encoding.decodeUtf8 bytes'
-                case Dhall.Parser2.exprFromText text of
+                case Dhall.Parser.exprFromText text of
                     Left  _    -> liftIO (abort err)
                     Right expr -> return expr
             _       -> liftIO (abort err)

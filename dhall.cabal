@@ -22,8 +22,6 @@ Description:
     .
     "Dhall .Core" contains the type checker and evaluator
     .
-    "Dhall.Lexer" contains the @alex@-generated lexer for Dhall
-    .
     "Morte.Parser" contains the parser for Dhall
     .
     Read "Dhall.Tutorial" to learn how to use this library
@@ -60,9 +58,7 @@ Library
         Dhall.Context,
         Dhall.Core,
         Dhall.Import,
-        Dhall.Lexer,
         Dhall.Parser,
-        Dhall.Parser2,
         Dhall.TypeCheck
     Build-Tools: alex, happy
 

@@ -2,7 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 
-module Dhall.Parser2 (
+module Dhall.Parser (
     -- * Parser
       exprFromText
 

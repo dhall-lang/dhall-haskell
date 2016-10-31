@@ -5,7 +5,7 @@ import Data.Monoid (mempty)
 import Data.Traversable
 import Dhall.Core (pretty, normalize)
 import Dhall.Import (load)
-import Dhall.Parser2 (exprFromText)
+import Dhall.Parser (exprFromText)
 import Options.Applicative hiding (Const)
 import System.IO (stderr)
 import System.Exit (exitFailure)

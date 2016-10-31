@@ -317,7 +317,7 @@ import Control.Exception (Exception)
 import Data.Text.Lazy (Text)
 import Data.Vector (Vector)
 import Dhall.Core (Expr(..))
-import Dhall.Parser2 (Src)
+import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
 import GHC.Generics
 import Numeric.Natural (Natural)
@@ -330,7 +330,7 @@ import qualified Data.Text.Lazy.Builder
 import qualified Data.Vector
 import qualified Dhall.Core
 import qualified Dhall.Import
-import qualified Dhall.Parser2
+import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified GHC.Generics
 
@@ -361,7 +361,7 @@ input
     -> IO a
     -- ^ The decoded value in Haskell
 input (Type {..}) text = do
-    expr     <- throws (Dhall.Parser2.exprFromText text)
+    expr     <- throws (Dhall.Parser.exprFromText text)
     expr'    <- Dhall.Import.load Nothing expr
     typeExpr <- throws (Dhall.TypeCheck.typeOf (Annot expr' expected))
     case extract (Dhall.Core.normalize expr') of
