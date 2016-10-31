@@ -320,10 +320,10 @@ exprF = choice
     ,   noted      exprF23
     ,   noted      exprF24
     ,   noted      exprF26
-    ,   noted (try exprF27)
-    ,   noted      exprF28
-    ,   noted (try exprF29)
-    ,   noted      exprF30
+    ,   noted      exprF27
+    ,   noted (try exprF28)
+    ,   noted      exprF29
+    ,   noted (try exprF30)
     ,   noted      exprF31
     ,   noted      exprF32
     ,   noted      exprF02
