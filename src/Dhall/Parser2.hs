@@ -476,18 +476,15 @@ const = const0
         return Kind
 
 var :: Parser Var
-var =   try var0
-    <|>     var1
-  where
-    var0 = do
-        a <- label
-        return (V a 0)
-
-    var1 = do
-        a <- label
+var = do
+    a <- label
+    m <- optional (do
         symbol "@"
-        b <- Text.Parser.Token.natural
-        return (V a b)
+        Text.Parser.Token.natural )
+    let b = case m of
+            Just b  -> b
+            Nothing -> 0
+    return (V a b)
 
 elems :: Parser [Expr Src Path]
 elems = Text.Parser.Combinators.sepBy exprA (symbol ",")
