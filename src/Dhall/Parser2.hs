@@ -1,24 +1,38 @@
+{-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 
 module Dhall.Parser2 where
+{-
+module Dhall.Parser2 (
+    -- * Parser
+      exprFromText
 
-import Control.Applicative (Alternative(..))
+    -- * Types
+    , Src(..)
+    , ParseError(..)
+    ) where
+-}
+
+import Control.Applicative (Alternative(..), optional)
+import Control.Exception (Exception)
 import Control.Monad (MonadPlus)
 import Data.ByteString (ByteString)
 import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Text.Lazy (Text)
+import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Dhall.Core (Const(..), Expr(..), Path(..), Var(..))
 import Filesystem.Path (FilePath)
-import Prelude hiding (FilePath, const)
-import Text.Parser.Combinators (try)
+import Prelude hiding (FilePath, const, pi)
+import Text.PrettyPrint.ANSI.Leijen (Doc)
+import Text.Parser.Combinators (choice, try)
 import Text.Parser.Expression (Assoc(..), Operator(..))
 import Text.Parser.Token (IdentifierStyle(..), TokenParsing(..))
 import Text.Parser.Token.Highlight (Highlight(..))
 import Text.Parser.Token.Style (CommentStyle(..))
-import Text.Trifecta (CharParsing, DeltaParsing, Parsing)
+import Text.Trifecta (CharParsing, DeltaParsing, Parsing, Result(..))
 import Text.Trifecta.Delta (Delta)
 
 import qualified Data.Char
@@ -63,12 +77,17 @@ instance TokenParsing Parser where
 
     highlight h (Parser m) = Parser (highlight h m)
 
+    token parser = do
+        r <- parser
+        Text.Parser.Token.whiteSpace
+        return r
+
 identifierStyle :: IdentifierStyle Parser
 identifierStyle = IdentifierStyle
     { _styleName     = "dhall"
     -- TODO: Restrict start and letter to ASCII letters
     , _styleStart    = Text.Parser.Char.letter   <|> Text.Parser.Char.char '_'
-    , _styleLetter   = Text.Parser.Char.alphaNum <|> Text.Parser.Char.oneOf "_\\"
+    , _styleLetter   = Text.Parser.Char.alphaNum <|> Text.Parser.Char.oneOf "_/"
     , _styleReserved = Data.HashSet.fromList
         -- TODO: Ensure that this list is complete
         [ "let"
@@ -76,6 +95,7 @@ identifierStyle = IdentifierStyle
         , "Type"
         , "Kind"
         , "forall"
+        , "∀"
         , "Bool"
         , "True"
         , "False"
@@ -114,13 +134,21 @@ noted parser = do
     after         <- Text.Trifecta.position
     return (Note (Src before after bytes) expr)
 
+reserve :: String -> Parser ()
+reserve string = do
+    _ <- Text.Parser.Token.reserve identifierStyle string
+    return ()
+
 symbol :: String -> Parser ()
 symbol string = do
-    _ <- Text.Parser.Token.reserve identifierStyle string
+    _ <- Text.Parser.Token.symbol string
     return ()
 
 lambda :: Parser ()
 lambda = symbol "\\" <|> symbol "λ"
+
+pi :: Parser ()
+pi = reserve "forall" <|> reserve "∀"
 
 arrow :: Parser ()
 arrow = symbol "->" <|> symbol "→"
@@ -132,10 +160,8 @@ label :: Parser Text
 label = Text.Parser.Token.ident identifierStyle
 
 exprA :: Parser (Expr Src Path)
-exprA = noted
-    (   try exprA0
-    )
-    <|>     exprA1
+exprA = noted (try exprA0)
+    <|>            exprA1
   where
     exprA0 = do
         a <- exprB
@@ -146,17 +172,17 @@ exprA = noted
     exprA1 = exprB
 
 exprB :: Parser (Expr Src Path)
-exprB = noted 
-    (   try exprB0
-    <|> try exprB1
-    <|> try exprB2
-    <|> try exprB3
-    <|> try exprB4
-    <|> try exprB5
-    <|> try exprB6
-    <|> try exprB7
-    )
-    <|>     exprB8
+exprB = choice
+    [   noted (try exprB0)
+    ,   noted (try exprB1)
+    ,   noted (try exprB2)
+    ,   noted (try exprB3)
+    ,   noted (try exprB4)
+    ,   noted (try exprB5)
+    ,   noted (try exprB6)
+    ,   noted (try exprB7)
+    ,              exprB8
+    ]
   where
     exprB0 = do
         lambda
@@ -170,11 +196,11 @@ exprB = noted
         return (Lam a b c)
 
     exprB1 = do
-        symbol "if"
+        reserve "if"
         a <- exprA
-        symbol "then"
+        reserve "then"
         b <- exprB
-        symbol "else"
+        reserve "else"
         c <- exprC
         return (BoolIf a b c)
 
@@ -185,32 +211,33 @@ exprB = noted
         return (Pi "_" a b)
 
     exprB3 = do
-        symbol "forall"
+        pi
         symbol "("
         a <- label
         symbol ":"
         b <- exprA
+        symbol ")"
         arrow
         c <- exprB
         return (Pi a b c)
 
     exprB4 = do
-        symbol "let"
+        reserve "let"
         a <- label
         symbol "="
         b <- exprA
-        symbol "in"
+        reserve "in"
         c <- exprB
         return (Let a Nothing b c)
 
     exprB5 = do
-        symbol "let"
+        reserve "let"
         a <- label
         symbol ":"
         b <- exprA
         symbol "="
         c <- exprA
-        symbol "in"
+        reserve "in"
         d <- exprB
         return (Let a (Just b) c d)
 
@@ -224,7 +251,7 @@ exprB = noted
         return (b c (Data.Vector.fromList a))
 
     exprB7 = do
-        symbol "apply"
+        reserve "apply"
         a <- exprE
         b <- exprE
         symbol ":"
@@ -240,11 +267,11 @@ listLike =
     )
   where
     listLike0 = do
-        symbol "List"
+        reserve "List"
         return ListLit
 
     listLike1 = do
-        symbol "Maybe"
+        reserve "Maybe"
         return MaybeLit
 
 -- TODO: Add `noted` in the right places here
@@ -276,40 +303,40 @@ exprD = do
 
 exprE :: Parser (Expr Src Path)
 exprE = noted
-    (   exprE00
-    <|> exprE01
-    <|> exprE02
-    <|> exprE03
-    <|> exprE04
-    <|> exprE05
-    <|> exprE06
-    <|> exprE07
-    <|> exprE08
-    <|> exprE09
-    <|> exprE10
-    <|> exprE11
-    <|> exprE12
-    <|> exprE13
-    <|> exprE14
-    <|> exprE15
-    <|> exprE16
-    <|> exprE17
-    <|> exprE18
-    <|> exprE19
-    <|> exprE20
-    <|> exprE21
-    <|> exprE22
-    <|> exprE23
-    <|> exprE24
-    <|> exprE25
-    <|> exprE26
-    <|> exprE27
-    <|> exprE28
-    <|> exprE29
-    <|> exprE30
-    <|> exprE31
---  <|> exprE32
-    <|> exprE33
+    (   try exprE01
+    <|> try exprE03
+    <|> try exprE04
+    <|> try exprE05
+    <|> try exprE06
+    <|> try exprE12
+    <|> try exprE13
+    <|> try exprE14
+    <|> try exprE15
+    <|> try exprE16
+    <|> try exprE17
+    <|> try exprE18
+    <|> try exprE19
+    <|> try exprE20
+    <|> try exprE21
+    <|> try exprE22
+    <|> try exprE23
+    <|> try exprE24
+    <|> try exprE25
+    <|> try exprE26
+    <|> try exprE27
+    <|> try exprE28
+    <|> try exprE29
+    <|> try exprE30
+    <|> try exprE31
+--  <|> try exprE32
+    <|> try exprE02
+    <|> try exprE07
+    <|> try exprE08
+    <|> try exprE09
+    <|> try exprE10
+    <|> try exprE11
+    <|> try exprE00
+    <|>     exprE33
     )
   where
     exprE00 = do
@@ -321,87 +348,87 @@ exprE = noted
         return (Const a)
 
     exprE02 = do
-        symbol "Natural"
+        reserve "Natural"
         return Natural
 
     exprE03 = do
-        symbol "Natural/fold"
+        reserve "Natural/fold"
         return NaturalFold
 
     exprE04 = do
-        symbol "Natural/build"
+        reserve "Natural/build"
         return NaturalBuild
 
     exprE05 = do
-        symbol "Natural/isZero"
+        reserve "Natural/isZero"
         return NaturalIsZero
 
     exprE06 = do
-        symbol "Natural/even"
+        reserve "Natural/even"
         return NaturalEven
 
     exprE07 = do
-        symbol "Natural/odd"
+        reserve "Natural/odd"
         return NaturalOdd
 
     exprE08 = do
-        symbol "Integer"
+        reserve "Integer"
         return Integer
 
     exprE09 = do
-        symbol "Double"
+        reserve "Double"
         return Double
 
     exprE10 = do
-        symbol "Text"
+        reserve "Text"
         return Text
 
     exprE11 = do
-        symbol "List"
+        reserve "List"
         return List
 
     exprE12 = do
-        symbol "List/build"
+        reserve "List/build"
         return ListBuild
 
     exprE13 = do
-        symbol "List/fold"
+        reserve "List/fold"
         return ListFold
 
     exprE14 = do
-        symbol "List/length"
+        reserve "List/length"
         return ListLength
 
     exprE15 = do
-        symbol "List/head"
+        reserve "List/head"
         return ListHead
 
     exprE16 = do
-        symbol "List/last"
+        reserve "List/last"
         return ListLast
 
     exprE17 = do
-        symbol "List/indexed"
+        reserve "List/indexed"
         return ListIndexed
 
     exprE18 = do
-        symbol "List/reverse"
+        reserve "List/reverse"
         return ListReverse
 
     exprE19 = do
-        symbol "Maybe"
+        reserve "Maybe"
         return Maybe
 
     exprE20 = do
-        symbol "Maybe/fold"
+        reserve "Maybe/fold"
         return MaybeFold
 
     exprE21 = do
-        symbol "True"
+        reserve "True"
         return (BoolLit True)
 
     exprE22 = do
-        symbol "False"
+        reserve "False"
         return (BoolLit False)
 
     exprE23 = do
@@ -450,16 +477,16 @@ const = const0
     <|> const1
   where
     const0 = do
-        symbol "Type"
+        reserve "Type"
         return Type
 
     const1 = do
-        symbol "Kind"
+        reserve "Kind"
         return Kind
 
 var :: Parser Var
-var =   var0
-    <|> var1
+var =   try var0
+    <|>     var1
   where
     var0 = do
         a <- label
@@ -490,7 +517,8 @@ recordLit =
         return (RecordLit (Data.Map.fromList a))
 
 fieldValues :: Parser [(Text, Expr Src Path)]
-fieldValues = Text.Parser.Combinators.sepBy1 fieldValue (symbol ",")
+fieldValues =
+    Text.Parser.Combinators.sepBy1 fieldValue (symbol ",")
 
 fieldValue :: Parser (Text, Expr Src Path)
 fieldValue = do
@@ -507,7 +535,8 @@ record = do
     return (Record (Data.Map.fromList a))
 
 fieldTypes :: Parser [(Text, Expr Src Path)]
-fieldTypes = Text.Parser.Combinators.sepBy fieldType (symbol ",")
+fieldTypes =
+    Text.Parser.Combinators.sepBy fieldType (symbol ",")
 
 fieldType :: Parser (Text, Expr Src Path)
 fieldType = do
@@ -524,7 +553,8 @@ union = do
     return (Union (Data.Map.fromList a))
 
 alternativeTypes :: Parser [(Text, Expr Src Path)]
-alternativeTypes = Text.Parser.Combinators.sepBy alternativeType (symbol "|")
+alternativeTypes =
+    Text.Parser.Combinators.sepBy alternativeType (symbol "|")
 
 alternativeType :: Parser (Text, Expr Src Path)
 alternativeType = do
@@ -602,3 +632,29 @@ url =   url0
         a <- Text.Parser.Char.string "http://"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
         return (Data.Text.Lazy.pack (a <> b))
+
+-- | A parsing error
+newtype ParseError = ParseError Doc deriving (Typeable)
+
+instance Show ParseError where
+    show (ParseError doc) = show doc
+
+instance Exception ParseError
+
+-- TODO: Support parsing from file for better error messages
+
+-- | Parse an expression from `Text` containing a Dhall program program
+exprFromText :: Text -> Either ParseError (Expr Src Path)
+exprFromText text = case result of
+    Success r       -> Right r
+    Failure errInfo -> Left (ParseError (Text.Trifecta._errDoc errInfo))
+  where
+    string = Data.Text.Lazy.unpack text
+
+    parser = do
+        Text.Parser.Token.whiteSpace
+        r <- unParser exprA
+        Text.Parser.Combinators.eof
+        return r
+
+    result = Text.Trifecta.parseString parser  mempty string

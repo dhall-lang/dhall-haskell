@@ -5,12 +5,11 @@ import Data.Monoid (mempty)
 import Data.Traversable
 import Dhall.Core (pretty, normalize)
 import Dhall.Import (load)
-import Dhall.Parser (exprFromBytes)
+import Dhall.Parser2 (exprFromText)
 import Options.Applicative hiding (Const)
 import System.IO (stderr)
 import System.Exit (exitFailure)
 
-import qualified Data.ByteString.Lazy
 import qualified Data.Text.Lazy.IO
 import qualified Dhall.TypeCheck
 
@@ -72,21 +71,21 @@ main = do
         )
     case mode of
         Default -> do
-            inBytes  <- Data.ByteString.Lazy.getContents
-            expr     <- throws (exprFromBytes inBytes)
+            inText   <- Data.Text.Lazy.IO.getContents
+            expr     <- throws (exprFromText inText)
             expr'    <- load Nothing expr
             typeExpr <- throws (Dhall.TypeCheck.typeOf expr')
             Data.Text.Lazy.IO.hPutStrLn stderr (pretty (normalize typeExpr))
             Data.Text.Lazy.IO.hPutStrLn stderr mempty
             Data.Text.Lazy.IO.putStrLn (pretty (normalize expr'))
         Resolve   -> do
-            inBytes <- Data.ByteString.Lazy.getContents
-            expr    <- throws (exprFromBytes inBytes)
+            inText  <- Data.Text.Lazy.IO.getContents
+            expr    <- throws (exprFromText inText)
             expr'   <- load Nothing expr
             Data.Text.Lazy.IO.putStrLn (pretty expr')
         TypeCheck -> do
-            inBytes <- Data.ByteString.Lazy.getContents
-            expr   <- throws (exprFromBytes inBytes)
+            inText  <- Data.Text.Lazy.IO.getContents
+            expr    <- throws (exprFromText inText)
             case traverse (\_ -> Nothing) expr of
                 Nothing    -> throwIO (userError
                     "`dhall typecheck` cannot type-check a program containing \
@@ -97,6 +96,6 @@ main = do
                     typeExpr <- throws (Dhall.TypeCheck.typeOf expr')
                     Data.Text.Lazy.IO.putStrLn (pretty typeExpr)
         Normalize -> do
-            inBytes <- Data.ByteString.Lazy.getContents
-            expr   <- throws (exprFromBytes inBytes)
+            inText  <- Data.Text.Lazy.IO.getContents
+            expr    <- throws (exprFromText inText)
             Data.Text.Lazy.IO.putStrLn (pretty (normalize expr))

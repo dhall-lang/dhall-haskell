@@ -424,10 +424,9 @@ buildText a = build (show a)
 
 -- | Builder corresponding to the @Expr0@ parser in "Dhall.Parser"
 buildExpr0 :: Buildable a => Expr s a -> Builder
-buildExpr0 (Annot a b) =
-    buildExpr1 a <> " : " <> buildExpr0 b
-buildExpr0 a =
-    buildExpr1 a
+buildExpr0 (Annot a b) = buildExpr1 a <> " : " <> buildExpr0 b
+buildExpr0 (Note  _ b) = buildExpr0 b
+buildExpr0 a           = buildExpr1 a
 
 -- | Builder corresponding to the @Expr1@ parser in "Dhall.Parser"
 buildExpr1 :: Buildable a => Expr s a -> Builder
@@ -492,6 +491,8 @@ buildExpr1 (MaybeLit a b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : Maybe "  <> buildExpr6 a
 buildExpr1 (Apply a b c) =
     "apply " <> buildExpr6 a <> " " <> buildExpr6 b <> " : " <> buildExpr5 c
+buildExpr1 (Note _ b) =
+    buildExpr1 b
 buildExpr1 a =
     buildExpr2 a
 
@@ -499,6 +500,7 @@ buildExpr1 a =
 buildExpr2 :: Buildable a => Expr s a -> Builder
 buildExpr2 (BoolEQ a b) = buildExpr2 a <> " == " <> buildExpr2 b
 buildExpr2 (BoolNE a b) = buildExpr2 a <> " /= " <> buildExpr2 b
+buildExpr2 (Note   _ b) = buildExpr2 b
 buildExpr2  a           = buildExpr3 a
 
 -- | Builder corresponding to the @Expr3@ parser in "Dhall.Parser"
@@ -506,6 +508,7 @@ buildExpr3 :: Buildable a => Expr s a -> Builder
 buildExpr3 (BoolOr      a b) = buildExpr3 a <> " || " <> buildExpr3 b
 buildExpr3 (NaturalPlus a b) = buildExpr3 a <> " + "  <> buildExpr3 b
 buildExpr3 (TextAppend  a b) = buildExpr3 a <> " ++ " <> buildExpr3 b
+buildExpr3 (Note        _ b) = buildExpr3 b
 buildExpr3  a                = buildExpr4 a
 
 -- | Builder corresponding to the @Expr4@ parser in "Dhall.Parser"
@@ -513,12 +516,14 @@ buildExpr4 :: Buildable a => Expr s a -> Builder
 buildExpr4 (BoolAnd      a b) = buildExpr4 a <> " && " <> buildExpr4 b
 buildExpr4 (NaturalTimes a b) = buildExpr4 a <> " * "  <> buildExpr4 b
 buildExpr4 (Merge        a b) = buildExpr4 a <> " ∧ "  <> buildExpr4 b
+buildExpr4 (Note         _ b) = buildExpr4 b
 buildExpr4  a                 = buildExpr5 a
 
 -- | Builder corresponding to the @Expr5@ parser in "Dhall.Parser"
 buildExpr5 :: Buildable a => Expr s a -> Builder
-buildExpr5 (App a b) = buildExpr5 a <> " " <> buildExpr6 b
-buildExpr5  a        = buildExpr6 a
+buildExpr5 (App  a b) = buildExpr5 a <> " " <> buildExpr6 b
+buildExpr5 (Note _ b) = buildExpr5 b
+buildExpr5  a         = buildExpr6 a
 
 -- | Builder corresponding to the @Expr6@ parser in "Dhall.Parser"
 buildExpr6 :: Buildable a => Expr s a -> Builder
@@ -590,6 +595,8 @@ buildExpr6 (Embed a) =
     build a
 buildExpr6 (Field a b) =
     buildExpr6 a <> "." <> buildLabel b
+buildExpr6 (Note _ b) =
+    buildExpr6 b
 buildExpr6 a =
     "(" <> buildExpr0 a <> ")"
 

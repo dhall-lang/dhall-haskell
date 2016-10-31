@@ -96,19 +96,19 @@ import Filesystem as Filesystem
 import Lens.Micro (Lens')
 import Lens.Micro.Mtl (zoom)
 import Dhall.Core (Expr, Path(..))
-import Dhall.Parser (Src)
+import Dhall.Parser2 (Src)
 import Dhall.TypeCheck (X(..))
 import Network.HTTP.Client (Manager)
 import Prelude hiding (FilePath)
 
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Data.ByteString.Lazy             as ByteString
 import qualified Data.Foldable                    as Foldable
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
-import qualified Dhall.Parser
+import qualified Data.Text.Lazy.Encoding
+import qualified Dhall.Parser2
 import qualified Dhall.TypeCheck
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
@@ -318,11 +318,12 @@ loadDynamic p = do
                                 `onException` throwIO (Imported paths e)
                         _ -> throwIO (Imported paths e) )
             response <- liftIO httpLbs'
-            return (HTTP.responseBody response)
+            let bytes = HTTP.responseBody response
+            return (Data.Text.Lazy.Encoding.decodeUtf8 bytes)
 
     let readFile' file = liftIO (do
-            (do bytes <- Filesystem.readFile file
-                return (ByteString.fromStrict bytes) ) `catch` (\e -> do
+            (do text <- Filesystem.readTextFile file
+                return (Text.fromStrict text) ) `catch` (\e -> do
                 -- Unfortunately, GHC throws an `InappropriateType`
                 -- exception when trying to read a directory, but does not
                 -- export the exception, so I must resort to a more
@@ -331,16 +332,16 @@ loadDynamic p = do
                 -- If the fallback fails, reuse the original exception to
                 -- avoid user confusion
                 let file' = file </> "@"
-                bytes <- Filesystem.readFile file'
+                text <- Filesystem.readTextFile file'
                     `onException` throwIO (Imported paths e)
-                return (ByteString.fromStrict bytes) ) )
+                return (Text.fromStrict text) ) )
 
     bytes <- case canonicalize (p:paths) of
         File file -> readFile' file
         URL  url  -> readURL   url
     
     let abort err = liftIO (throwIO (Imported (p:paths) err))
-    case Dhall.Parser.exprFromBytes bytes of
+    case Dhall.Parser2.exprFromText bytes of
         Left  err  -> case canonicalize (p:paths) of
             URL url -> do
                 -- Also try the fallback in case of a parse error, since the
@@ -351,7 +352,10 @@ loadDynamic p = do
                 m        <- needManager
                 response <- liftIO
                     (HTTP.httpLbs request' m `onException` abort err)
-                case Dhall.Parser.exprFromBytes (HTTP.responseBody response) of
+                -- TODO: Handle UTF8 decoding errors
+                let bytes' = HTTP.responseBody response
+                let text  = Data.Text.Lazy.Encoding.decodeUtf8 bytes'
+                case Dhall.Parser2.exprFromText text of
                     Left  _    -> liftIO (abort err)
                     Right expr -> return expr
             _       -> liftIO (abort err)

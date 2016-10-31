@@ -476,9 +476,9 @@ typeWith ctx e@(Field r x       ) = do
                 Nothing -> Left (TypeError ctx e (MissingField x t))
         _          -> Left (TypeError ctx e (NotARecord x r t))
 typeWith ctx   (Note s e'       ) = case typeWith ctx e' of
-    Left (TypeError ctx' (Note _ e'') m) -> Left (TypeError ctx' (Note s e'') m)
+--  Left (TypeError ctx' (Note _ e'') m) -> Left (TypeError ctx' (Note s e'') m)
     Left (TypeError ctx'         e''  m) -> Left (TypeError ctx' (Note s e'') m)
-    Right r                             -> Right r
+    Right r                              -> Right r
 typeWith _     (Embed p         ) = do
     absurd p
 
