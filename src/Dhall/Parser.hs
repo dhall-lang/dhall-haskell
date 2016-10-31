@@ -299,17 +299,17 @@ exprC = expressionParser
 
 -- TODO: Add `noted` here
 exprD :: Parser (Expr Src Path)
-exprD = do
+exprD = noted (do
     exprs <- some exprE
-    return (Data.List.foldl1 App exprs)
+    return (Data.List.foldl1 App exprs) )
 
 exprE :: Parser (Expr Src Path)
-exprE = do
+exprE = noted (do
     a <- exprF
     b <- many (do
         symbol "."
         label )
-    return (Data.List.foldl Field a b)
+    return (Data.List.foldl Field a b) )
 
 exprF :: Parser (Expr Src Path)
 exprF = choice
