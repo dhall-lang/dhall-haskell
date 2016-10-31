@@ -476,9 +476,9 @@ typeWith ctx e@(Field r x       ) = do
                 Nothing -> Left (TypeError ctx e (MissingField x t))
         _          -> Left (TypeError ctx e (NotARecord x r t))
 typeWith ctx   (Note s e'       ) = case typeWith ctx e' of
---  Left (TypeError ctx' (Note _ e'') m) -> Left (TypeError ctx' (Note s e'') m)
-    Left (TypeError ctx'         e''  m) -> Left (TypeError ctx' (Note s e'') m)
-    Right r                              -> Right r
+    Left (TypeError ctx' (Note s' e'') m) -> Left (TypeError ctx' (Note s' e'') m)
+    Left (TypeError ctx'          e''  m) -> Left (TypeError ctx' (Note s  e'') m)
+    Right r                               -> Right r
 typeWith _     (Embed p         ) = do
     absurd p
 
@@ -1410,12 +1410,12 @@ data TypeError s = TypeError
     , typeMessage :: TypeMessage s
     } deriving (Typeable)
 
-instance Show (TypeError s) where
+instance Buildable s => Show (TypeError s) where
     show = Text.unpack . Dhall.Core.pretty
 
-instance Typeable s => Exception (TypeError s)
+instance (Buildable s, Typeable s) => Exception (TypeError s)
 
-instance Buildable (TypeError s) where
+instance Buildable s => Buildable (TypeError s) where
     build (TypeError ctx expr msg)
         =   "\n"
         <>  (    if  Text.null (Builder.toLazyText (buildContext ctx))
@@ -1424,7 +1424,8 @@ instance Buildable (TypeError s) where
             )
         <>  "Expression: " <> build expr <> "\n"
         <>  "\n"
-        <>  build msg
+        <>  build msg <> "\n"
+        <>  source
       where
         buildKV (key, val) = build key <> " : " <> build val
 
@@ -1434,3 +1435,7 @@ instance Buildable (TypeError s) where
             .   map (Builder.toLazyText . buildKV)
             .   reverse
             .   Dhall.Context.toList
+
+        source = case expr of
+            Note s _ -> build s
+            _        -> mempty

@@ -17,6 +17,7 @@ import Control.Monad (MonadPlus)
 import Data.ByteString (ByteString)
 import Data.Map (Map)
 import Data.Monoid ((<>))
+import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
@@ -36,7 +37,10 @@ import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.Map
+import qualified Data.ByteString
+import qualified Data.ByteString.Lazy
 import qualified Data.Text.Lazy
+import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
 import qualified Filesystem.Path.CurrentOS
 import qualified Text.Parser.Char
@@ -44,11 +48,21 @@ import qualified Text.Parser.Combinators
 import qualified Text.Parser.Expression
 import qualified Text.Parser.Token
 import qualified Text.Parser.Token.Style
+import qualified Text.PrettyPrint.ANSI.Leijen
 import qualified Text.Trifecta
+import qualified Text.Trifecta.Delta
 
 -- TODO: Go through alternatives and see which ones require `try`
 
 data Src = Src Delta Delta ByteString deriving (Show)
+
+instance Buildable Src where
+    build (Src begin _ bytes) =
+            build (Data.Text.Lazy.Encoding.decodeUtf8 bytes') <> "\n"
+        <>  "\n"
+        <>  build (show (Text.PrettyPrint.ANSI.Leijen.pretty begin)) <> "\n"
+      where
+        bytes' = Data.ByteString.Lazy.fromStrict bytes
 
 newtype Parser a = Parser { unParser :: Text.Trifecta.Parser a }
     deriving
