@@ -60,7 +60,7 @@ instance Buildable Src where
     build (Src begin _ bytes) =
             build (Data.Text.Lazy.Encoding.decodeUtf8 bytes') <> "\n"
         <>  "\n"
-        <>  build (show (Text.PrettyPrint.ANSI.Leijen.pretty begin)) <> "\n"
+        <>  build (show (Text.PrettyPrint.ANSI.Leijen.pretty begin))
       where
         bytes' = Data.ByteString.Lazy.fromStrict bytes
 
