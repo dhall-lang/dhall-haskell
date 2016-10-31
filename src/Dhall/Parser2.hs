@@ -173,14 +173,13 @@ exprA = noted (try exprA0)
 
 exprB :: Parser (Expr Src Path)
 exprB = choice
-    [   noted (try exprB0)
-    ,   noted (try exprB1)
+    [   noted      exprB0
+    ,   noted      exprB1
+    ,   noted      exprB3
+    ,   noted      exprB5
+    ,   noted      exprB6
+    ,   noted      exprB7
     ,   noted (try exprB2)
-    ,   noted (try exprB3)
-    ,   noted (try exprB4)
-    ,   noted (try exprB5)
-    ,   noted (try exprB6)
-    ,   noted (try exprB7)
     ,              exprB8
     ]
   where
@@ -221,25 +220,17 @@ exprB = choice
         c <- exprB
         return (Pi a b c)
 
-    exprB4 = do
-        reserve "let"
-        a <- label
-        symbol "="
-        b <- exprA
-        reserve "in"
-        c <- exprB
-        return (Let a Nothing b c)
-
     exprB5 = do
         reserve "let"
         a <- label
-        symbol ":"
-        b <- exprA
+        b <- optional (do
+            symbol ":"
+            exprA )
         symbol "="
         c <- exprA
         reserve "in"
         d <- exprB
-        return (Let a (Just b) c d)
+        return (Let a b c d)
 
     exprB6 = do
         symbol "["
