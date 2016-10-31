@@ -293,171 +293,172 @@ exprD = do
     return (Data.List.foldl1 App exprs)
 
 exprE :: Parser (Expr Src Path)
-exprE = choice
-    [   noted      exprE01
-    ,   noted      exprE03
-    ,   noted      exprE04
-    ,   noted      exprE05
-    ,   noted      exprE06
-    ,   noted      exprE07
-    ,   noted      exprE12
-    ,   noted      exprE13
-    ,   noted      exprE14
-    ,   noted      exprE15
-    ,   noted      exprE16
-    ,   noted      exprE17
-    ,   noted      exprE18
-    ,   noted      exprE20
-    ,   noted      exprE19
-    ,   noted      exprE21
-    ,   noted      exprE22
-    ,   noted (try exprE25)
-    ,   noted      exprE23
-    ,   noted      exprE24
-    ,   noted      exprE26
-    ,   noted (try exprE27)
-    ,   noted      exprE28
-    ,   noted (try exprE29)
-    ,   noted      exprE30
-    ,   noted      exprE31
---  ,   noted (try exprE32)
-    ,   noted      exprE02
-    ,   noted      exprE08
-    ,   noted      exprE09
-    ,   noted      exprE10
-    ,   noted      exprE11
-    ,   noted      exprE00
-    ,              exprE33
+exprE = do
+    a <- exprF
+    b <- many (do
+        symbol "."
+        label )
+    return (Data.List.foldl Field a b)
+
+exprF :: Parser (Expr Src Path)
+exprF = choice
+    [   noted      exprF01
+    ,   noted      exprF03
+    ,   noted      exprF04
+    ,   noted      exprF05
+    ,   noted      exprF06
+    ,   noted      exprF07
+    ,   noted      exprF12
+    ,   noted      exprF13
+    ,   noted      exprF14
+    ,   noted      exprF15
+    ,   noted      exprF16
+    ,   noted      exprF17
+    ,   noted      exprF18
+    ,   noted      exprF20
+    ,   noted      exprF19
+    ,   noted      exprF21
+    ,   noted      exprF22
+    ,   noted (try exprF25)
+    ,   noted      exprF23
+    ,   noted      exprF24
+    ,   noted      exprF26
+    ,   noted (try exprF27)
+    ,   noted      exprF28
+    ,   noted (try exprF29)
+    ,   noted      exprF30
+    ,   noted      exprF31
+    ,   noted      exprF02
+    ,   noted      exprF08
+    ,   noted      exprF09
+    ,   noted      exprF10
+    ,   noted      exprF11
+    ,   noted      exprF00
+    ,              exprF33
     ]
   where
-    exprE00 = do
+    exprF00 = do
         a <- var
         return (Var a)
 
-    exprE01 = do
+    exprF01 = do
         a <- const
         return (Const a)
 
-    exprE02 = do
+    exprF02 = do
         reserve "Natural"
         return Natural
 
-    exprE03 = do
+    exprF03 = do
         reserve "Natural/fold"
         return NaturalFold
 
-    exprE04 = do
+    exprF04 = do
         reserve "Natural/build"
         return NaturalBuild
 
-    exprE05 = do
+    exprF05 = do
         reserve "Natural/isZero"
         return NaturalIsZero
 
-    exprE06 = do
+    exprF06 = do
         reserve "Natural/even"
         return NaturalEven
 
-    exprE07 = do
+    exprF07 = do
         reserve "Natural/odd"
         return NaturalOdd
 
-    exprE08 = do
+    exprF08 = do
         reserve "Integer"
         return Integer
 
-    exprE09 = do
+    exprF09 = do
         reserve "Double"
         return Double
 
-    exprE10 = do
+    exprF10 = do
         reserve "Text"
         return Text
 
-    exprE11 = do
+    exprF11 = do
         reserve "List"
         return List
 
-    exprE12 = do
+    exprF12 = do
         reserve "List/build"
         return ListBuild
 
-    exprE13 = do
+    exprF13 = do
         reserve "List/fold"
         return ListFold
 
-    exprE14 = do
+    exprF14 = do
         reserve "List/length"
         return ListLength
 
-    exprE15 = do
+    exprF15 = do
         reserve "List/head"
         return ListHead
 
-    exprE16 = do
+    exprF16 = do
         reserve "List/last"
         return ListLast
 
-    exprE17 = do
+    exprF17 = do
         reserve "List/indexed"
         return ListIndexed
 
-    exprE18 = do
+    exprF18 = do
         reserve "List/reverse"
         return ListReverse
 
-    exprE19 = do
+    exprF19 = do
         reserve "Maybe"
         return Maybe
 
-    exprE20 = do
+    exprF20 = do
         reserve "Maybe/fold"
         return MaybeFold
 
-    exprE21 = do
+    exprF21 = do
         reserve "True"
         return (BoolLit True)
 
-    exprE22 = do
+    exprF22 = do
         reserve "False"
         return (BoolLit False)
 
-    exprE23 = do
+    exprF23 = do
         a <- Text.Parser.Token.natural
         return (IntegerLit a)
 
-    exprE24 = do
+    exprF24 = do
         Text.Parser.Char.char '+'
         a <- Text.Parser.Token.natural
         return (NaturalLit (fromIntegral a))
 
-    exprE25 = do
+    exprF25 = do
         a <- Text.Parser.Token.double
         return (DoubleLit a)
 
-    exprE26 = do
+    exprF26 = do
         a <- Text.Parser.Token.stringLiteral
         return (TextLit a)
 
-    exprE27 = record
+    exprF27 = record
 
-    exprE28 = recordLit
+    exprF28 = recordLit
 
-    exprE29 = union
+    exprF29 = union
 
-    exprE30 = unionLit
+    exprF30 = unionLit
 
-    exprE31 = do
+    exprF31 = do
         a <- import_
         return (Embed a)
 
---  exprE32 = do
---      a <- exprE
---      symbol "."
---      b <- label
---      return (Field a b)
-
-    exprE33 = do
+    exprF33 = do
         symbol "("
         a <- exprA
         symbol ")"
