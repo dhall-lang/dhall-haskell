@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# OPTIONS_GHC -Wall #-}
 
 module Dhall.TypeCheck (
@@ -539,10 +540,28 @@ data TypeMessage s
     deriving (Show)
 
 instance Buildable (TypeMessage s) where
-    build UnboundVariable =
-        Builder.fromText [NeatInterpolation.text|
-Error: Unbound variable
+    build msg = build ("Error: " <> short (prettyTypeMessage msg) <> "\n")
 
+data ErrorMessages = ErrorMessages
+    { short :: Builder
+    -- ^ Default succinct 1-line explanation of what went wrong
+    , long  :: Builder
+    -- ^ Longer and more detailed explanation of the error
+    }
+
+instance Buildable ErrorMessages where
+    build (ErrorMessages {..}) =
+            "Error: " <> build short <> "\n"
+        <>  "\n"
+        <>  long
+
+prettyTypeMessage :: TypeMessage s -> ErrorMessages
+prettyTypeMessage UnboundVariable = ErrorMessages {..}
+  where
+    short = "Unbound variable"
+
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: Expressions can only reference previously introduced (i.e. "bound")
 variables that are still "in scope".  For example, these are valid expressions:
 
@@ -562,10 +581,12 @@ variables that are still "in scope".  For example, these are valid expressions:
     let x = x in x            -- The definition for `x` cannot reference itself
 |]
 
-    build (InvalidInputType expr) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Invalid input annotation for a function
+prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
+  where
+    short = "Invalid input annotation for a function"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: A function can accept an input term of a given "type", like this:
 
     ∀(x : Text) → Bool  -- This function accepts any term of type `Text`.
@@ -588,10 +609,12 @@ This input annotation you gave is neither a type nor a kind:
       where
         txt = Text.toStrict (Dhall.Core.pretty expr)
 
-    build (InvalidOutputType expr) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Invalid output annotation for a function
+prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
+  where
+    short = "Invalid output annotation for a function"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: A function can emit an output term of a given "type", like this:
 
     ∀(x : Text) → Bool  -- This function emits a term of type `Bool`.
@@ -612,10 +635,12 @@ This function output you specified is neither a type nor a kind:
       where
         txt = Text.toStrict (Dhall.Core.pretty expr)
 
-    build (NotAFunction expr) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Only functions may be applied to arguments
+prettyTypeMessage (NotAFunction expr) = ErrorMessages {..}
+  where
+    short = "Only functions may be applied to arguments"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: Expressions separated by whitespace denote function application.
 For example:
 
@@ -636,10 +661,12 @@ This is the expression that you incorrectly invoked as a function:
       where
         txt = Text.toStrict (Dhall.Core.pretty expr)
 
-    build (TypeMismatch expr0 expr1) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Function applied to the wrong type or kind of argument
+prettyTypeMessage (TypeMismatch expr0 expr1) = ErrorMessages {..}
+  where
+    short = "Function applied to the wrong type or kind of argument"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: Every function declares what type or kind of argument to accept
 
     λ(x : Bool) → x    -- Anonymous function which only accepts `Bool` arguments
@@ -662,10 +689,12 @@ You tried to invoke a function which expects an argument of type or kind:
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 
-    build (AnnotMismatch expr0 expr1 expr2) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Expression's inferred type does not match annotated type
+prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
+  where
+    short = "Expression's inferred type does not match annotated type"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: You can annotate the type or kind of an expression like this:
 
     x : t  -- `x` is the expression and `t` is the annotated type or kind of `x`
@@ -691,10 +720,16 @@ You or the interpreter annotated this expression:
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
         txt2 = Text.toStrict (Dhall.Core.pretty expr2)
 
-    build (Untyped c) =
-        Builder.fromText [NeatInterpolation.text|
-Error: `$txt` has no type, kind, or sort
+prettyTypeMessage (Untyped c) = ErrorMessages {..}
+  where
+    short =
+        Builder.fromText
+            [NeatInterpolation.text|"Error: `$txt` has no type, kind, or sort"|]
+      where
+        txt = Text.toStrict (Builder.toLazyText (Dhall.Core.buildConst c))
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: There are four levels of expressions that form a heirarchy:
 
 * terms
@@ -714,13 +749,13 @@ However, there is nothing above sorts in this the hierarchy.  So if you ever
 type-check an expression which includes `Kind` then you get this error because
 the compiler cannot infer what `Kind` belongs to
 |]
-      where
-        txt = Text.toStrict (Builder.toLazyText (Dhall.Core.buildConst c))
 
-    build (InvalidPredicate expr0 expr1) =
+prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
+  where
+    short = "Invalid predicate for `if`"
+
+    long =
         Builder.fromText [NeatInterpolation.text|
-Error: Invalid predicate for `if`
-
     if $txt0 then ...
     -- ^ Your `if` expression's predicate has the wrong type
 
@@ -732,10 +767,13 @@ Your `if` expression begins with a predicate that has type:
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 
-    build (IfBranchMismatch expr0 expr1 expr2 expr3) =
-        Builder.fromText [NeatInterpolation.text|
-Error: The `then` and `else` branches must have matching types
+prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
+    ErrorMessages {..}
+  where
+    short = "The `then` and `else` branches must have matching types"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
     if ... then $txt0
            else $txt1
     --          ^ The above two expressions need to have the same type
@@ -755,10 +793,12 @@ Fix the two branches to have matching types
         txt2 = Text.toStrict (Dhall.Core.pretty expr2)
         txt3 = Text.toStrict (Dhall.Core.pretty expr3)
 
-    build (InvalidListType isEmpty expr0) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Invalid type for list elements
+prettyTypeMessage (InvalidListType isEmpty expr0) = ErrorMessages {..}
+  where
+    short = "Invalid type for list elements"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: Every list ends with a type annotation for the elements of the list
 
 This annotation must be a type, but the annotation you gave is not a type:
@@ -780,10 +820,13 @@ You can fix the problem by changing the annotation to a type
     --             ^ This needs to be a type
 |]
 
-    build (InvalidListElement i n expr0 expr1 expr2) =
-        Builder.fromText [NeatInterpolation.text|
-Error: List with an element of the wrong type
+prettyTypeMessage (InvalidListElement i n expr0 expr1 expr2) =
+    ErrorMessages {..}
+  where
+    short = "List with an element of the wrong type"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: Every element in the list must have a type matching the type
 annotation at the end of the list
 
@@ -836,10 +879,12 @@ declared element type
     --       ^ ... needs to match this type
 |]
 
-    build (InvalidMaybeType expr0) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Invalid type for `Maybe`
+prettyTypeMessage (InvalidMaybeType expr0) = ErrorMessages {..}
+  where
+    short = "Invalid type for `Maybe`"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: Every optional value ends with a type annotation for the element
 that might be stored inside.  For example, these are valid expressions:
 
@@ -867,10 +912,12 @@ $insert
     --              ^ This needs to be a type
 |]
 
-    build (InvalidMaybeElement expr0 expr1 expr2) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Optional expression with an element of the wrong type
+prettyTypeMessage (InvalidMaybeElement expr0 expr1 expr2) = ErrorMessages {..}
+  where
+    short = "Optional expression with an element of the wrong type"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: An optional value that is present must have a type matching the
 corresponding type annotation.  For example, this is a valid optional value:
 
@@ -898,10 +945,12 @@ The element you provided actually has this type:
     --        ^ ... needs to have a type matching this type parameter
 |]
 
-    build (InvalidMaybeLiteral n) =
-        Builder.fromText [NeatInterpolation.text|
-Error: More than one element for an optional value
+prettyTypeMessage (InvalidMaybeLiteral n) = ErrorMessages {..}
+  where
+    short = "More than one element for an optional value"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: The syntax for an optional value resembles the syntax for `List`
 literals:
 
@@ -922,10 +971,12 @@ can only have at most one element
       where
         txt0 = Text.toStrict (Dhall.Core.pretty n)
 
-    build (InvalidFieldType k expr0) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Invalid type of field
+prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
+  where
+    short = "Invalid type of field"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: Every record type has an annotated type for each field
 
 However, fields *cannot* be annotated with expressions other than types
@@ -943,10 +994,12 @@ You can fix the problem by changing the annotation to a type
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
         txt1 = Text.toStrict (Dhall.Core.pretty expr0)
 
-    build (InvalidAlternativeType k expr0) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Invalid type of alternative
+prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
+  where
+    short = "Invalid type of alternative"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: Every union type has an annotated type for each alternative
 
 However, alternatives *cannot* be annotated with expressions other than types
@@ -964,10 +1017,12 @@ You can fix the problem by changing the annotation to a type
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
         txt1 = Text.toStrict (Dhall.Core.pretty expr0)
 
-    build (DuplicateField k) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Duplicate field
+prettyTypeMessage (DuplicateField k) = ErrorMessages {..}
+  where
+    short = "Duplicate field"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: Records and unions may not have two fields of the same name
 
     { foo = True, foo = 1 }        -- This is not valid
@@ -980,10 +1035,12 @@ You have multiple fields named:
       where
         txt0 = Text.toStrict (Dhall.Core.pretty k)
 
-    build (MustMergeARecord expr0 expr1) =
-        Builder.fromText [NeatInterpolation.text|
-Error: You can only merge records
+prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
+  where
+    short = "You can only merge records"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: You can merge records using the `(∧)` operator, like this:
 
     { foo = 1, bar = "ABC" } ∧ { baz = True }             -- This is valid ...
@@ -1006,10 +1063,12 @@ You provided the following value:
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 
-    build (FieldCollision ks) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Field collision
+prettyTypeMessage (FieldCollision ks) = ErrorMessages {..}
+  where
+    short = "Field collision"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: You can merge records if they don't share any fields in common,
 like this:
 
@@ -1029,10 +1088,12 @@ Both records share the following colliding fields:
       where
         txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
 
-    build (MustApplyARecord expr0 expr1) =
-        Builder.fromText [NeatInterpolation.text|
-Error: You can only `apply` a record of a handlers
+prettyTypeMessage (MustApplyARecord expr0 expr1) = ErrorMessages {..}
+  where
+    short = "You can only `apply` a record of a handlers"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: You can consume a union by `apply`ing a record of handlers, like
 this:
 
@@ -1056,10 +1117,12 @@ You provided the following handler:
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 
-    build (MustApplyToUnion expr0) =
-        Builder.fromText [NeatInterpolation.text|
-Error: You can only `apply` handlers to a union
+prettyTypeMessage (MustApplyToUnion expr0) = ErrorMessages {..}
+  where
+    short = "You can only `apply` handlers to a union"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: You can consume a union by `apply`ing a record of handlers, like
 this:
 
@@ -1080,10 +1143,12 @@ You applied a record of handlers to this expression, which is not a union:
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
 
-    build (UnusedHandler ks) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Unused handler
+prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
+  where
+    short = "Unused handler"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: You can consume a union by `apply`ing a record of handlers, like
 this:
 
@@ -1109,10 +1174,12 @@ The following handlers had no matching alternatives:
       where
         txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
 
-    build (MissingHandler ks) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Missing handler
+prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
+  where
+    short = "Missing handler"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: You can consume a union by `apply`ing a record of handlers, like
 this:
 
@@ -1135,10 +1202,13 @@ The following handlers are missing:
       where
         txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
 
-    build (HandlerInputTypeMismatch expr0 expr1 expr2) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Handler has the wrong input type
+prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
+    ErrorMessages {..}
+  where
+    short = "Handler has the wrong input type"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: You can consume a union by `apply`ing a record of handlers, like
 this:
 
@@ -1167,10 +1237,13 @@ Your handler for the following alternative:
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
         txt2 = Text.toStrict (Dhall.Core.pretty expr2)
 
-    build (HandlerOutputTypeMismatch expr0 expr1 expr2) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Handler has the wrong output type
+prettyTypeMessage (HandlerOutputTypeMismatch expr0 expr1 expr2) =
+    ErrorMessages {..}
+  where
+    short = "Handler has the wrong output type"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: You can consume a union by `apply`ing a record of handlers, like
 this:
 
@@ -1198,10 +1271,12 @@ Your handler for the following alternative:
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
         txt2 = Text.toStrict (Dhall.Core.pretty expr2)
 
-    build (HandlerNotAFunction k expr0) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Handler is not a function
+prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
+  where
+    short = "Handler is not a function"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: You can consume a union by `apply`ing a record of handlers, like
 this:
 
@@ -1226,10 +1301,12 @@ Your handler for:
         txt0 = Text.toStrict (Dhall.Core.pretty k)
         txt1 = Text.toStrict (Dhall.Core.pretty expr0)
 
-    build (NotARecord k expr0 expr1) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Invalid record access
+prettyTypeMessage (NotARecord k expr0 expr1) = ErrorMessages {..}
+  where
+    short = "Invalid record access"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: You can only access fields on records, like this:
 
     { foo = True, bar = "ABC" }.foo              -- This is valid ...
@@ -1254,10 +1331,12 @@ You tried to access a field named:
         txt1 = Text.toStrict (Dhall.Core.pretty expr0)
         txt2 = Text.toStrict (Dhall.Core.pretty expr1)
 
-    build (MissingField k expr0) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Missing record field
+prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
+  where
+    short = "Missing record field"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: You can only retrieve record fields if they are present
 
     { foo = True, bar = "ABC" }.foo              -- This is valid ...
@@ -1277,22 +1356,24 @@ You tried to access a field named:
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
         txt1 = Text.toStrict (Dhall.Core.pretty expr0)
 
-    build (CantAnd b expr0 expr1) =
+prettyTypeMessage (CantAnd b expr0 expr1) =
         buildBooleanOperator "&&" b expr0 expr1
 
-    build (CantOr b expr0 expr1) =
+prettyTypeMessage (CantOr b expr0 expr1) =
         buildBooleanOperator "||" b expr0 expr1
 
-    build (CantEQ b expr0 expr1) =
+prettyTypeMessage (CantEQ b expr0 expr1) =
         buildBooleanOperator "==" b expr0 expr1
 
-    build (CantNE b expr0 expr1) =
+prettyTypeMessage (CantNE b expr0 expr1) =
         buildBooleanOperator "/=" b expr0 expr1
 
-    build (CantTextAppend b expr0 expr1) =
-        Builder.fromText [NeatInterpolation.text|
-Error: Cannot use `(++)` on a value that's not a `Text`
+prettyTypeMessage (CantTextAppend b expr0 expr1) = ErrorMessages {..}
+  where
+    short = "Cannot use `(++)` on a value that's not a `Text`"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: The `(++)` operator expects two arguments of type `Text`
 
 You provided this argument:
@@ -1310,16 +1391,18 @@ You provided this argument:
             then [NeatInterpolation.text|$txt0 ++ ...|]
             else [NeatInterpolation.text|... ++ $txt0|]
 
-    build (CantAdd b expr0 expr1) =
+prettyTypeMessage (CantAdd b expr0 expr1) =
         buildNaturalOperator "+" b expr0 expr1
 
-    build (CantMultiply b expr0 expr1) =
+prettyTypeMessage (CantMultiply b expr0 expr1) =
         buildNaturalOperator "*" b expr0 expr1
 
-    build (NoDependentTypes expr0 expr1) =
-        Builder.fromText [NeatInterpolation.text|
-Error: No dependent types
+prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
+  where
+    short = "No dependent types"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: This programming language does not allow functions from terms to
 types.  For example, this is *not* a legal function type:
 
@@ -1337,11 +1420,13 @@ Your function type is invalid because the input is a term of type:
 indent :: Data.Text.Text -> Data.Text.Text
 indent = Data.Text.unlines . fmap ("    " <>) . Data.Text.lines
 
-buildBooleanOperator :: Text -> Bool -> Expr s X -> Expr s X -> Builder
-buildBooleanOperator operator b expr0 expr1 =
-    Builder.fromText [NeatInterpolation.text|
-Error: Cannot use `($txt2)` on a value that's not a `Bool`
+buildBooleanOperator :: Text -> Bool -> Expr s X -> Expr s X -> ErrorMessages
+buildBooleanOperator operator b expr0 expr1 = ErrorMessages {..}
+  where
+    short = "Cannot use `($txt2)` on a value that's not a `Bool`"
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: The `($txt2)` operator expects two arguments of type `Bool`
 
 You provided this argument:
@@ -1351,20 +1436,25 @@ You provided this argument:
 ... whose type is not `Bool`.  The type is actually:
 ↳ $txt1
 |]
-  where
-    txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-    txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+      where
+        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        insert =
+            if b
+            then [NeatInterpolation.text|$txt0 $txt2 ...|]
+            else [NeatInterpolation.text|... $txt2 $txt0|]
+
     txt2 = Text.toStrict operator
-    insert =
-        if b
-        then [NeatInterpolation.text|$txt0 $txt2 ...|]
-        else [NeatInterpolation.text|... $txt2 $txt0|]
 
-buildNaturalOperator :: Text -> Bool -> Expr s X -> Expr s X -> Builder
-buildNaturalOperator operator b expr0 expr1 =
-    Builder.fromText [NeatInterpolation.text|
-Error: Cannot use `($txt2)` on a value that's not a `Natural`
+buildNaturalOperator :: Text -> Bool -> Expr s X -> Expr s X -> ErrorMessages
+buildNaturalOperator operator b expr0 expr1 = ErrorMessages {..}
+  where
+    short =
+        Builder.fromText
+            [NeatInterpolation.text|Cannot use `($txt2)` on a value that's not a `Natural`|]
 
+    long =
+        Builder.fromText [NeatInterpolation.text|
 Explanation: The `($txt2)` operator expects two arguments of type `Natural`
 
 You provided this argument:
@@ -1373,35 +1463,36 @@ You provided this argument:
 
 ... whose type is not `Natural`.  The type is actually:
 ↳ $txt1$hint0$hint1|]
-  where
-    txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-    txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-    txt2 = Text.toStrict operator
-    insert0 =
-        if b
-        then [NeatInterpolation.text|$txt0 $txt2 ...|]
-        else [NeatInterpolation.text|... $txt2 $txt0|]
-    insert1 =
-        if b
-        then [NeatInterpolation.text|+$txt0 $txt2 ...|]
-        else [NeatInterpolation.text|... $txt2 +$txt0|]
-    hint0 =
-        case expr1 of
-            Integer -> "\n\n" <> [NeatInterpolation.text|
+      where
+        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        insert0 =
+            if b
+            then [NeatInterpolation.text|$txt0 $txt2 ...|]
+            else [NeatInterpolation.text|... $txt2 $txt0|]
+        insert1 =
+            if b
+            then [NeatInterpolation.text|+$txt0 $txt2 ...|]
+            else [NeatInterpolation.text|... $txt2 +$txt0|]
+        hint0 =
+            case expr1 of
+                Integer -> "\n\n" <> [NeatInterpolation.text|
 An `Integer` is not the same thing as a `Natural` number.  They are distinct
 types: `Integer`s can be negative, but `Natural` numbers must be non-negative
 |]
-            _ -> mempty
-    hint1 =
-        case expr0 of
-            IntegerLit _ -> "\n\n" <> [NeatInterpolation.text|
+                _ -> mempty
+        hint1 =
+            case expr0 of
+                IntegerLit _ -> "\n\n" <> [NeatInterpolation.text|
 You can prefix an `Integer` literal with a `+` to create a `Natural` literal
 
 Example:
 
     $insert1
 |]
-            _ -> mempty
+                _ -> mempty
+
+    txt2 = Text.toStrict operator
 
 -- | A structured type error that includes context
 data TypeError s = TypeError
@@ -1422,8 +1513,6 @@ instance Buildable s => Buildable (TypeError s) where
                  then ""
                  else "Context:\n" <> buildContext ctx <> "\n"
             )
-        <>  "Expression: " <> build expr <> "\n"
-        <>  "\n"
         <>  build msg <> "\n"
         <>  source
       where
