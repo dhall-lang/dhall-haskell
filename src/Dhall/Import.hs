@@ -175,11 +175,11 @@ instance Exception e => Exception (Imported e)
 instance Show e => Show (Imported e) where
     show (Imported paths e) =
             "\n"
-        ++  unlines (map (\path -> "⤷ " ++ builderToString (build path)) paths')
+        ++  unlines (map (\(n, path) -> take (2 * n) (repeat ' ') ++ "↳ " ++ builderToString (build path)) paths')
         ++  show e
       where
         -- Canonicalize all paths
-        paths' = drop 1 (reverse (canonicalizeAll paths))
+        paths' = zip [0..] (drop 1 (reverse (canonicalizeAll paths)))
 
 data Status = Status
     { _stack   :: [Path]

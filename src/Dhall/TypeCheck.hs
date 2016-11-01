@@ -1511,7 +1511,7 @@ instance Buildable s => Buildable (TypeError s) where
         =   "\n"
         <>  (    if  Text.null (Builder.toLazyText (buildContext ctx))
                  then ""
-                 else "Context:\n" <> buildContext ctx <> "\n"
+                 else buildContext ctx <> "\n"
             )
         <>  build msg <> "\n"
         <>  source
