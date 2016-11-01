@@ -58,11 +58,13 @@ data Src = Src Delta Delta ByteString deriving (Show)
 
 instance Buildable Src where
     build (Src begin _ bytes) =
-            build (Data.Text.Lazy.Encoding.decodeUtf8 bytes') <> "\n"
+            build text <> "\n"
         <>  "\n"
         <>  build (show (Text.PrettyPrint.ANSI.Leijen.pretty begin))
       where
         bytes' = Data.ByteString.Lazy.fromStrict bytes
+
+        text = Data.Text.Lazy.strip (Data.Text.Lazy.Encoding.decodeUtf8 bytes')
 
 newtype Parser a = Parser { unParser :: Text.Trifecta.Parser a }
     deriving
