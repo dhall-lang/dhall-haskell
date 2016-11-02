@@ -92,7 +92,6 @@ import Data.Traversable (traverse)
 #endif
 import Data.Typeable (Typeable)
 import Filesystem.Path ((</>), FilePath)
-import Filesystem as Filesystem
 import Lens.Micro (Lens')
 import Lens.Micro.Mtl (zoom)
 import Dhall.Core (Expr, Path(..))
@@ -321,9 +320,10 @@ loadDynamic p = do
             let bytes = HTTP.responseBody response
             return (Data.Text.Lazy.Encoding.decodeUtf8 bytes)
 
+    let abort err = liftIO (throwIO (Imported (p:paths) err))
+
     let readFile' file = liftIO (do
-            (do text <- Filesystem.readTextFile file
-                return (Text.fromStrict text) ) `catch` (\e -> do
+            x <- Dhall.Parser.exprFromFile file `catch` (\e -> do
                 -- Unfortunately, GHC throws an `InappropriateType`
                 -- exception when trying to read a directory, but does not
                 -- export the exception, so I must resort to a more
@@ -332,34 +332,34 @@ loadDynamic p = do
                 -- If the fallback fails, reuse the original exception to
                 -- avoid user confusion
                 let file' = file </> "@"
-                text <- Filesystem.readTextFile file'
-                    `onException` throwIO (Imported paths e)
-                return (Text.fromStrict text) ) )
+                Dhall.Parser.exprFromFile file'
+                    `onException` throwIO (Imported paths e) )
+            case x of
+                Left  err  -> liftIO (abort err)
+                Right expr -> return expr )
 
-    bytes <- case canonicalize (p:paths) of
+    case canonicalize (p:paths) of
         File file -> readFile' file
-        URL  url  -> readURL   url
-    
-    let abort err = liftIO (throwIO (Imported (p:paths) err))
-    case Dhall.Parser.exprFromText bytes of
-        Left  err  -> case canonicalize (p:paths) of
-            URL url -> do
-                -- Also try the fallback in case of a parse error, since the
-                -- parse error might signify that this URL points to a directory
-                -- list
-                request  <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
-                let request' = request { HTTP.path = HTTP.path request <> "/@" }
-                m        <- needManager
-                response <- liftIO
-                    (HTTP.httpLbs request' m `onException` abort err)
-                -- TODO: Handle UTF8 decoding errors
-                let bytes' = HTTP.responseBody response
-                let text  = Data.Text.Lazy.Encoding.decodeUtf8 bytes'
-                case Dhall.Parser.exprFromText text of
-                    Left  _    -> liftIO (abort err)
-                    Right expr -> return expr
-            _       -> liftIO (abort err)
-        Right expr -> return expr
+        URL  url  -> do
+            text <- readURL url
+            case Dhall.Parser.exprFromText text of
+                Left err -> do
+                    -- Also try the fallback in case of a parse error, since the
+                    -- parse error might signify that this URL points to a
+                    -- directory list
+                    request  <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
+                    let request' =
+                            request { HTTP.path = HTTP.path request <> "/@" }
+                    m        <- needManager
+                    response <- liftIO
+                        (HTTP.httpLbs request' m `onException` abort err)
+                    -- TODO: Handle UTF8 decoding errors
+                    let bytes' = HTTP.responseBody response
+                    let text'  = Data.Text.Lazy.Encoding.decodeUtf8 bytes'
+                    case Dhall.Parser.exprFromText text' of
+                        Left  _    -> liftIO (abort err)
+                        Right expr -> return expr
+                Right expr -> return expr
 
 -- | Load a `Path` as a \"static\" expression (with all imports resolved)
 loadStatic :: Path -> StateT Status IO (Expr Src X)
