@@ -99,17 +99,16 @@ instance TokenParsing Parser where
 identifierStyle :: IdentifierStyle Parser
 identifierStyle = IdentifierStyle
     { _styleName     = "dhall"
-    -- TODO: Restrict start and letter to ASCII letters
-    , _styleStart    = Text.Parser.Char.letter   <|> Text.Parser.Char.char '_'
-    , _styleLetter   = Text.Parser.Char.alphaNum <|> Text.Parser.Char.oneOf "_/"
+    , _styleStart    =
+        Text.Parser.Char.oneOf (['A'..'Z'] ++ ['a'..'z'] ++ "_")
+    , _styleLetter   =
+        Text.Parser.Char.oneOf (['A'..'Z'] ++ ['a'..'z'] ++ ['0'..'9'] ++ "_/")
     , _styleReserved = Data.HashSet.fromList
-        -- TODO: Ensure that this list is complete
         [ "let"
         , "in"
         , "Type"
         , "Kind"
         , "forall"
-        , "∀"
         , "Bool"
         , "True"
         , "False"
@@ -300,7 +299,6 @@ exprC = expressionParser
 
     operator op parser = Infix (do parser; return op) AssocRight
 
--- TODO: Add `noted` here
 -- We can't use left-recursion to define `exprD` otherwise the parser will
 -- loop infinitely. However, I'd still like to use left-recursion in the
 -- definition because left recursion greatly simplifies the use of `noted`.  The
