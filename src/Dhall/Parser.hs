@@ -30,7 +30,8 @@ import Text.Parser.Expression (Assoc(..), Operator(..))
 import Text.Parser.Token (IdentifierStyle(..), TokenParsing(..))
 import Text.Parser.Token.Highlight (Highlight(..))
 import Text.Parser.Token.Style (CommentStyle(..))
-import Text.Trifecta (CharParsing, DeltaParsing, Parsing, Result(..))
+import Text.Trifecta
+    (CharParsing, DeltaParsing, MarkParsing, Parsing, Result(..))
 import Text.Trifecta.Delta (Delta)
 
 import qualified Data.Char
@@ -50,9 +51,8 @@ import qualified Text.Parser.Token
 import qualified Text.Parser.Token.Style
 import qualified Text.PrettyPrint.ANSI.Leijen
 import qualified Text.Trifecta
+import qualified Text.Trifecta.Combinators
 import qualified Text.Trifecta.Delta
-
--- TODO: Go through alternatives and see which ones require `try`
 
 data Src = Src Delta Delta ByteString deriving (Show)
 
@@ -76,6 +76,7 @@ newtype Parser a = Parser { unParser :: Text.Trifecta.Parser a }
     ,   Parsing
     ,   CharParsing
     ,   DeltaParsing
+    ,   MarkParsing Delta
     )
 
 instance TokenParsing Parser where
@@ -300,10 +301,29 @@ exprC = expressionParser
     operator op parser = Infix (do parser; return op) AssocRight
 
 -- TODO: Add `noted` here
+-- We can't use left-recursion to define `exprD` otherwise the parser will
+-- loop infinitely. However, I'd still like to use left-recursion in the
+-- definition because left recursion greatly simplifies the use of `noted`.  The
+-- work-around is to parse in two phases:
+--
+-- * First, parse to count how many arguments the function is applied to
+-- * Second, restart the parse using left recursion bounded by the number of
+--   arguments
 exprD :: Parser (Expr Src Path)
 exprD = noted (do
-    exprs <- some exprE
-    return (Data.List.foldl1 App exprs) )
+    position <- Text.Trifecta.Combinators.mark
+    f  <- exprE
+    xs <- many exprE
+    Text.Trifecta.Combinators.release position
+    exprD' (length xs) )
+
+exprD' :: Int -> Parser (Expr Src Path)
+exprD' n
+    | n <= 0 = exprE
+    | otherwise = noted (do
+        a <- exprD' (n - 1)
+        b <- exprE
+        return (App a b) )
 
 exprE :: Parser (Expr Src Path)
 exprE = noted (do
