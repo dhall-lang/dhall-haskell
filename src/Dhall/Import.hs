@@ -104,8 +104,10 @@ import Dhall.TypeCheck (X(..))
 import Network.HTTP.Client (Manager)
 import Prelude hiding (FilePath)
 import Text.Trifecta (Result(..))
+import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.ByteString.Lazy
 import qualified Data.Foldable                    as Foldable
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
@@ -350,25 +352,35 @@ exprFromURL m url = do
         Left  err  -> throwIO err
         Right text -> return text
 
-    case Dhall.Parser.exprFromText text of
-        Left err -> do
+    let urlBytes = Data.Text.Lazy.Encoding.encodeUtf8 url
+    let delta = Directed (Data.ByteString.Lazy.toStrict urlBytes) 0 0 0 0
+    case Text.Trifecta.parseString parser delta (Text.unpack text) of
+        Failure err -> do
             -- Also try the fallback in case of a parse error, since the parse
             -- error might signify that this URL points to a directory list
+            let err' = ParseError (Text.Trifecta._errDoc err)
+
             request' <- HTTP.parseUrlThrow (Text.unpack url)
 
             let request'' = request' { HTTP.path = HTTP.path request' <> "/@" }
-            response' <- HTTP.httpLbs request'' m `onException` throwIO err
+            response' <- HTTP.httpLbs request'' m `onException` throwIO err'
 
             let bytes' = HTTP.responseBody response'
 
             text' <- case Data.Text.Lazy.Encoding.decodeUtf8' bytes' of
-                Left  _     -> throwIO err
+                Left  _     -> throwIO err'
                 Right text' -> return text'
 
             case Dhall.Parser.exprFromText text' of
-                Left  _    -> throwIO err
+                Left  _    -> throwIO err'
                 Right expr -> return expr
-        Right expr -> return expr
+        Success expr -> return expr
+  where
+    parser = do
+        Text.Parser.Token.whiteSpace
+        r <- unParser Dhall.Parser.exprA
+        Text.Parser.Combinators.eof
+        return r
 
 {-| Load a `Path` as a \"dynamic\" expression (without resolving any imports)
 

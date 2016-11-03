@@ -616,9 +616,10 @@ unionLit =
         return (UnionLit a b (Data.Map.fromList c))
 
 import_ :: Parser Path
-import_ =
-        import0
-    <|> import1
+import_ = do
+    a <- import0 <|> import1
+    Text.Parser.Token.whiteSpace
+    return a
   where
     import0 = do
         a <- file
@@ -649,7 +650,7 @@ file =  token file0
         return (Filesystem.Path.CurrentOS.decodeString (a <> b))
 
 url :: Parser Text
-url =   url0
+url =   try url0
     <|> url1
   where
     url0 = do
