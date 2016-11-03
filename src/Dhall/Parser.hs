@@ -65,6 +65,7 @@ instance Buildable Src where
             build text <> "\n"
         <>  "\n"
         <>  build (show (Text.PrettyPrint.ANSI.Leijen.pretty begin))
+        <>  "\n"
       where
         bytes' = Data.ByteString.Lazy.fromStrict bytes
 
@@ -672,8 +673,8 @@ instance Show ParseError where
 instance Exception ParseError
 
 -- | Parse an expression from `Text` containing a Dhall program
-exprFromText :: Text -> Either ParseError (Expr Src Path)
-exprFromText text = case result of
+exprFromText :: Delta -> Text -> Either ParseError (Expr Src Path)
+exprFromText delta text = case result of
     Success r       -> Right r
     Failure errInfo -> Left (ParseError (Text.Trifecta._errDoc errInfo))
   where
@@ -685,4 +686,4 @@ exprFromText text = case result of
         Text.Parser.Combinators.eof
         return r
 
-    result = Text.Trifecta.parseString parser  mempty string
+    result = Text.Trifecta.parseString parser delta string

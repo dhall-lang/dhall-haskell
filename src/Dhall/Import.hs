@@ -371,9 +371,9 @@ exprFromURL m url = do
                 Left  _     -> throwIO err'
                 Right text' -> return text'
 
-            case Dhall.Parser.exprFromText text' of
-                Left  _    -> throwIO err'
-                Right expr -> return expr
+            case Text.Trifecta.parseString parser delta (Text.unpack text') of
+                Failure _    -> throwIO err'
+                Success expr -> return expr
         Success expr -> return expr
   where
     parser = do

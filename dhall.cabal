@@ -70,4 +70,5 @@ Executable dhall
         bytestring                          < 0.11,
         dhall                                     ,
         optparse-applicative                < 0.13,
+        trifecta,
         text                 >= 0.11.1.0 && < 1.3

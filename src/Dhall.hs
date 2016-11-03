@@ -322,6 +322,7 @@ import Dhall.TypeCheck (X)
 import GHC.Generics
 import Numeric.Natural (Natural)
 import Prelude hiding (maybe)
+import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Exception
 import qualified Data.Map
@@ -361,7 +362,8 @@ input
     -> IO a
     -- ^ The decoded value in Haskell
 input (Type {..}) text = do
-    expr     <- throws (Dhall.Parser.exprFromText text)
+    let delta = Directed "(input)" 0 0 0 0
+    expr     <- throws (Dhall.Parser.exprFromText delta text)
     expr'    <- Dhall.Import.load Nothing expr
     typeExpr <- throws (Dhall.TypeCheck.typeOf (Annot expr' expected))
     case extract (Dhall.Core.normalize expr') of

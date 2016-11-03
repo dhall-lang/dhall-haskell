@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
 import Control.Exception (Exception, throwIO)
@@ -9,6 +11,7 @@ import Dhall.Parser (exprFromText)
 import Options.Applicative hiding (Const)
 import System.IO (stderr)
 import System.Exit (exitFailure)
+import Text.Trifecta.Delta (Delta(..))
 
 import qualified Data.Text.Lazy.IO
 import qualified Dhall.TypeCheck
@@ -69,10 +72,13 @@ main = do
                      \program's normalized type to standard error, and writing \
                      \the normalized program to standard output."
         )
+
+    let delta = Directed "(stdin)" 0 0 0 0
+
     case mode of
         Default -> do
             inText   <- Data.Text.Lazy.IO.getContents
-            expr     <- throws (exprFromText inText)
+            expr     <- throws (exprFromText delta inText)
             expr'    <- load Nothing expr
             typeExpr <- throws (Dhall.TypeCheck.typeOf expr')
             Data.Text.Lazy.IO.hPutStrLn stderr (pretty (normalize typeExpr))
@@ -80,12 +86,12 @@ main = do
             Data.Text.Lazy.IO.putStrLn (pretty (normalize expr'))
         Resolve   -> do
             inText  <- Data.Text.Lazy.IO.getContents
-            expr    <- throws (exprFromText inText)
+            expr    <- throws (exprFromText delta inText)
             expr'   <- load Nothing expr
             Data.Text.Lazy.IO.putStrLn (pretty expr')
         TypeCheck -> do
             inText  <- Data.Text.Lazy.IO.getContents
-            expr    <- throws (exprFromText inText)
+            expr    <- throws (exprFromText delta inText)
             case traverse (\_ -> Nothing) expr of
                 Nothing    -> throwIO (userError
                     "`dhall typecheck` cannot type-check a program containing \
@@ -97,5 +103,5 @@ main = do
                     Data.Text.Lazy.IO.putStrLn (pretty typeExpr)
         Normalize -> do
             inText  <- Data.Text.Lazy.IO.getContents
-            expr    <- throws (exprFromText inText)
+            expr    <- throws (exprFromText delta inText)
             Data.Text.Lazy.IO.putStrLn (pretty (normalize expr))
