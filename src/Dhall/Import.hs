@@ -72,6 +72,7 @@
 module Dhall.Import (
     -- * Import
       load
+    , exprFromFile
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -95,10 +96,11 @@ import Filesystem.Path ((</>), FilePath)
 import Lens.Micro (Lens')
 import Lens.Micro.Mtl (zoom)
 import Dhall.Core (Expr, Path(..))
-import Dhall.Parser (Src)
+import Dhall.Parser (Parser(..), ParseError(..), Src)
 import Dhall.TypeCheck (X(..))
 import Network.HTTP.Client (Manager)
 import Prelude hiding (FilePath)
+import Text.Trifecta (Result(..))
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable                    as Foldable
@@ -109,9 +111,13 @@ import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
+import qualified Filesystem.Path.CurrentOS
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified Filesystem.Path.CurrentOS        as Filesystem
+import qualified Text.Parser.Combinators
+import qualified Text.Parser.Token
+import qualified Text.Trifecta
 
 builderToString :: Builder -> String
 builderToString = Text.unpack . Builder.toLazyText
@@ -294,6 +300,22 @@ clean = strip . Filesystem.collapse
         Nothing -> p
         Just p' -> p'
 
+-- | Parse an expression from a `FilePath` containing a Dhall program
+exprFromFile :: FilePath -> IO (Either ParseError (Expr Src Path))
+exprFromFile path = do
+    let string = Filesystem.Path.CurrentOS.encodeString path
+    result <- Text.Trifecta.parseFromFileEx parser string
+    let r = case result of
+            Success expr    -> Right expr
+            Failure errInfo -> Left (ParseError (Text.Trifecta._errDoc errInfo))
+    return r
+  where
+    parser = do
+        Text.Parser.Token.whiteSpace
+        r <- unParser Dhall.Parser.exprA
+        Text.Parser.Combinators.eof
+        return r
+
 {-| Load a `Path` as a \"dynamic\" expression (without resolving any imports)
 
     This also returns the true final path (i.e. explicit "/@" at the end for
@@ -323,7 +345,7 @@ loadDynamic p = do
     let abort err = liftIO (throwIO (Imported (p:paths) err))
 
     let readFile' file = liftIO (do
-            x <- Dhall.Parser.exprFromFile file `catch` (\e -> do
+            x <- exprFromFile file `catch` (\e -> do
                 -- Unfortunately, GHC throws an `InappropriateType`
                 -- exception when trying to read a directory, but does not
                 -- export the exception, so I must resort to a more
@@ -332,7 +354,7 @@ loadDynamic p = do
                 -- If the fallback fails, reuse the original exception to
                 -- avoid user confusion
                 let file' = file </> "@"
-                Dhall.Parser.exprFromFile file'
+                exprFromFile file'
                     `onException` throwIO (Imported paths e) )
             case x of
                 Left  err  -> liftIO (abort err)

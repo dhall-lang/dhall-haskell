@@ -3,13 +3,16 @@
 {-# LANGUAGE OverloadedStrings          #-}
 
 module Dhall.Parser (
-    -- * Parser
+    -- * Utilities
       exprFromText
-    , exprFromFile
+
+    -- * Parsers
+    , exprA
 
     -- * Types
     , Src(..)
     , ParseError(..)
+    , Parser(..)
     ) where
 
 import Control.Applicative (Alternative(..), optional)
@@ -682,19 +685,3 @@ exprFromText text = case result of
         return r
 
     result = Text.Trifecta.parseString parser  mempty string
-
--- | Parse an expression from a `FilePath` containing a Dhall program
-exprFromFile :: FilePath -> IO (Either ParseError (Expr Src Path))
-exprFromFile path = do
-    let string = Filesystem.Path.CurrentOS.encodeString path
-    result <- Text.Trifecta.parseFromFileEx parser string
-    let r = case result of
-            Success r       -> Right r
-            Failure errInfo -> Left (ParseError (Text.Trifecta._errDoc errInfo))
-    return r
-  where
-    parser = do
-        Text.Parser.Token.whiteSpace
-        r <- unParser exprA
-        Text.Parser.Combinators.eof
-        return r
