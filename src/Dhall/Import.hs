@@ -78,7 +78,8 @@ module Dhall.Import (
     , Imported(..)
     ) where
 
-import Control.Exception (Exception, IOException, catch, onException, throwIO)
+import Control.Exception
+    (Exception, IOException, SomeException, catch, onException, throwIO)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
@@ -301,14 +302,26 @@ clean = strip . Filesystem.collapse
         Just p' -> p'
 
 -- | Parse an expression from a `FilePath` containing a Dhall program
-exprFromFile :: FilePath -> IO (Either ParseError (Expr Src Path))
+exprFromFile :: FilePath -> IO (Expr Src Path)
 exprFromFile path = do
     let string = Filesystem.Path.CurrentOS.encodeString path
-    result <- Text.Trifecta.parseFromFileEx parser string
-    let r = case result of
-            Success expr    -> Right expr
-            Failure errInfo -> Left (ParseError (Text.Trifecta._errDoc errInfo))
-    return r
+
+    -- Unfortunately, GHC throws an `InappropriateType`
+    -- exception when trying to read a directory, but does not
+    -- export the exception, so I must resort to a more
+    -- heavy-handed `catch`
+    let handler :: IOException -> IO (Result (Expr Src Path))
+        handler e = do
+            let string' = Filesystem.Path.CurrentOS.encodeString (path </> "@")
+
+            -- If the fallback fails, reuse the original exception to
+            -- avoid user confusion
+            Text.Trifecta.parseFromFileEx parser string' `onException` throwIO e
+
+    x <- Text.Trifecta.parseFromFileEx parser string `catch` handler
+    case x of
+        Failure errInfo -> throwIO (ParseError (Text.Trifecta._errDoc errInfo))
+        Success expr    -> return expr
   where
     parser = do
         Text.Parser.Token.whiteSpace
@@ -344,24 +357,11 @@ loadDynamic p = do
 
     let abort err = liftIO (throwIO (Imported (p:paths) err))
 
-    let readFile' file = liftIO (do
-            x <- exprFromFile file `catch` (\e -> do
-                -- Unfortunately, GHC throws an `InappropriateType`
-                -- exception when trying to read a directory, but does not
-                -- export the exception, so I must resort to a more
-                -- heavy-handed `catch`
-                let _ = e :: IOException
-                -- If the fallback fails, reuse the original exception to
-                -- avoid user confusion
-                let file' = file </> "@"
-                exprFromFile file'
-                    `onException` throwIO (Imported paths e) )
-            case x of
-                Left  err  -> liftIO (abort err)
-                Right expr -> return expr )
-
     case canonicalize (p:paths) of
-        File file -> readFile' file
+        File file -> do
+            let handler :: SomeException -> IO (Expr Src Path)
+                handler e = throwIO (Imported (p:paths) e)
+            liftIO (exprFromFile file `catch` handler)
         URL  url  -> do
             text <- readURL url
             case Dhall.Parser.exprFromText text of
