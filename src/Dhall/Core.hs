@@ -255,10 +255,10 @@ data Expr s a
     | Union     (Map Text (Expr s a))
     -- | > UnionLit (k1, v1) [(k2, t2), (k3, t3)]   ~  < k1 = t1, k2 : t2, k3 : t3 > 
     | UnionLit Text (Expr s a) (Map Text (Expr s a))
-    -- | > Merge x y                                ~  x ∧ y
-    | Merge (Expr s a) (Expr s a)
-    -- | > Apply x y t                              ~ apply x y : t
-    | Apply (Expr s a) (Expr s a) (Expr s a)
+    -- | > Combine x y                              ~  x ∧ y
+    | Combine (Expr s a) (Expr s a)
+    -- | > Merge x y t                              ~  merge x y : t
+    | Merge (Expr s a) (Expr s a) (Expr s a)
     -- | > Field e x                                ~  e.x
     | Field (Expr s a) Text
     -- | > Note s x                                 ~  e
@@ -321,8 +321,8 @@ instance Monad (Expr s) where
     RecordLit kvs     >>= k = RecordLit (fmap (>>= k) kvs)
     Union     kts     >>= k = Union     (fmap (>>= k) kts)
     UnionLit k' v kts >>= k = UnionLit k' (v >>= k) (fmap (>>= k) kts)
-    Merge x y         >>= k = Merge (x >>= k) (y >>= k)
-    Apply x y t       >>= k = Apply (x >>= k) (y >>= k) (t >>= k)
+    Combine x y       >>= k = Combine (x >>= k) (y >>= k)
+    Merge x y t       >>= k = Merge (x >>= k) (y >>= k) (t >>= k)
     Field r x         >>= k = Field (r >>= k) x
     Note a b          >>= k = Note a (b >>= k)
     Embed r           >>= k = k r
@@ -374,8 +374,8 @@ instance Bifunctor Expr where
     first k (RecordLit a     ) = RecordLit (fmap (first k) a)
     first k (Union a         ) = Union (fmap (first k) a)
     first k (UnionLit a b c  ) = UnionLit a (first k b) (fmap (first k) c)
-    first k (Merge a b       ) = Merge (first k a) (first k b)
-    first k (Apply a b c     ) = Apply (first k a) (first k b) (first k c)
+    first k (Combine a b     ) = Combine (first k a) (first k b)
+    first k (Merge a b c     ) = Merge (first k a) (first k b) (first k c)
     first k (Field a b       ) = Field (first k a) b
     first k (Note a b        ) = Note (k a) (first k b)
     first _ (Embed a         ) = Embed a
@@ -489,7 +489,7 @@ buildExpr1 (ListLit a b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExpr6 a
 buildExpr1 (MaybeLit a b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : Maybe "  <> buildExpr6 a
-buildExpr1 (Apply a b c) =
+buildExpr1 (Merge a b c) =
     "apply " <> buildExpr6 a <> " " <> buildExpr6 b <> " : " <> buildExpr5 c
 buildExpr1 (Note _ b) =
     buildExpr1 b
@@ -515,7 +515,7 @@ buildExpr3  a                = buildExpr4 a
 buildExpr4 :: Buildable a => Expr s a -> Builder
 buildExpr4 (BoolAnd      a b) = buildExpr4 a <> " && " <> buildExpr4 b
 buildExpr4 (NaturalTimes a b) = buildExpr4 a <> " * "  <> buildExpr4 b
-buildExpr4 (Merge        a b) = buildExpr4 a <> " ∧ "  <> buildExpr4 b
+buildExpr4 (Combine      a b) = buildExpr4 a <> " ∧ "  <> buildExpr4 b
 buildExpr4 (Note         _ b) = buildExpr4 b
 buildExpr4  a                 = buildExpr5 a
 
@@ -866,11 +866,11 @@ shift d v (UnionLit a b c) = UnionLit a b' c'
   where
     b' =       shift d v  b
     c' = fmap (shift d v) c
-shift d v (Merge a b) = Merge a' b'
+shift d v (Combine a b) = Combine a' b'
   where
     a' = shift d v a
     b' = shift d v b
-shift d v (Apply a b c) = Apply a' b' c'
+shift d v (Merge a b c) = Merge a' b' c'
   where
     a' = shift d v a
     b' = shift d v b
@@ -988,11 +988,11 @@ subst x e (Record       kts) = Record                   (fmap (subst x e) kts)
 subst x e (RecordLit    kvs) = RecordLit                (fmap (subst x e) kvs)
 subst x e (Union        kts) = Union                    (fmap (subst x e) kts)
 subst x e (UnionLit a b kts) = UnionLit a (subst x e b) (fmap (subst x e) kts)
-subst x e (Merge a b) = Merge a' b'
+subst x e (Combine a b) = Combine a' b'
   where
     a' = subst x e a
     b' = subst x e b
-subst x e (Apply a b c) = Apply a' b' c'
+subst x e (Merge a b c) = Merge a' b' c'
   where
     a' = subst x e a
     b' = subst x e b
@@ -1251,27 +1251,27 @@ normalize e = case e of
       where
         v'   =      normalize v
         kvs' = fmap normalize kvs
-    Merge x y ->
+    Combine x y ->
         case x of
             RecordLit kvsX ->
                 case y of
                     RecordLit kvsY ->
                         RecordLit (fmap normalize (Data.Map.union kvsX kvsY))
-                    _ -> Merge x' y'
-            _ -> Merge x' y'
+                    _ -> Combine x' y'
+            _ -> Combine x' y'
       where
         x' = normalize x
         y' = normalize y
-    Apply x y t      ->
+    Merge x y t      ->
         case x of
             RecordLit kvsX ->
                 case y of
                     UnionLit kY vY _ ->
                         case Data.Map.lookup kY kvsX of
                             Just vX -> normalize (App vX vY)
-                            Nothing -> Apply x' y' t'
-                    _ -> Apply x' y' t'
-            _ -> Apply x' y' t'
+                            Nothing -> Merge x' y' t'
+                    _ -> Merge x' y' t'
+            _ -> Merge x' y' t'
       where
         x' = normalize x
         y' = normalize y

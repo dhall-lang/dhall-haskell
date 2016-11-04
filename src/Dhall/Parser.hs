@@ -117,7 +117,7 @@ identifierStyle = IdentifierStyle
         , "Bool"
         , "True"
         , "False"
-        , "apply"
+        , "merge"
         , "if"
         , "then"
         , "else"
@@ -171,8 +171,8 @@ pi = reserve "forall" <|> reserve "∀"
 arrow :: Parser ()
 arrow = symbol "->" <|> symbol "→"
 
-merge :: Parser ()
-merge = symbol "/\\" <|> symbol "∧"
+combine :: Parser ()
+combine = symbol "/\\" <|> symbol "∧"
 
 label :: Parser Text
 label = Text.Parser.Token.ident identifierStyle
@@ -260,12 +260,12 @@ exprB = choice
         return (b c (Data.Vector.fromList a))
 
     exprB7 = do
-        reserve "apply"
+        reserve "merge"
         a <- exprE
         b <- exprE
         symbol ":"
         c <- exprD
-        return (Apply a b c)
+        return (Merge a b c)
 
     exprB8 = exprC
 
@@ -290,7 +290,7 @@ exprC = expressionParser
     expressionParser = Text.Parser.Expression.buildExpressionParser
         [ [ operator BoolAnd      (symbol "&&")
           , operator NaturalTimes (symbol "*" )
-          , operator Merge         merge
+          , operator Combine       combine
           ]
         , [ operator BoolOr       (symbol "||")
           , operator NaturalPlus  (symbol "+" )

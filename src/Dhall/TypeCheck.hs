@@ -415,7 +415,25 @@ typeWith ctx e@(UnionLit k v kts) = do
         Nothing -> return ()
     t   <- typeWith ctx v
     return (Union (Data.Map.insert k t kts))
-typeWith ctx e@(Merge kvsX kvsY) = do
+typeWith ctx e@(Combine kvsX kvsY) = do
+    tKvsX <- fmap Dhall.Core.normalize (typeWith ctx kvsX)
+    ktsX  <- case tKvsX of
+        Record kts -> return kts
+        _          -> Left (TypeError ctx e (MustCombineARecord kvsX tKvsX))
+    let ksX = Data.Map.keysSet ktsX
+
+    tKvsY <- fmap Dhall.Core.normalize (typeWith ctx kvsY)
+    ktsY  <- case tKvsY of
+        Record kts -> return kts
+        _          -> Left (TypeError ctx e (MustCombineARecord kvsY tKvsY))
+    let ksY = Data.Map.keysSet ktsY
+
+    let ks = Data.Set.intersection ksX ksY
+    if Data.Set.null ks
+        then return ()
+        else Left (TypeError ctx e (FieldCollision ks))
+    return (Record (Data.Map.union ktsX ktsY))
+typeWith ctx e@(Merge kvsX kvsY t) = do
     tKvsX <- fmap Dhall.Core.normalize (typeWith ctx kvsX)
     ktsX  <- case tKvsX of
         Record kts -> return kts
@@ -424,26 +442,8 @@ typeWith ctx e@(Merge kvsX kvsY) = do
 
     tKvsY <- fmap Dhall.Core.normalize (typeWith ctx kvsY)
     ktsY  <- case tKvsY of
-        Record kts -> return kts
-        _          -> Left (TypeError ctx e (MustMergeARecord kvsY tKvsY))
-    let ksY = Data.Map.keysSet ktsY
-
-    let ks = Data.Set.intersection ksX ksY
-    if Data.Set.null ks
-        then return ()
-        else Left (TypeError ctx e (FieldCollision ks))
-    return (Record (Data.Map.union ktsX ktsY))
-typeWith ctx e@(Apply kvsX kvsY t) = do
-    tKvsX <- fmap Dhall.Core.normalize (typeWith ctx kvsX)
-    ktsX  <- case tKvsX of
-        Record kts -> return kts
-        _          -> Left (TypeError ctx e (MustApplyARecord kvsX tKvsX))
-    let ksX = Data.Map.keysSet ktsX
-
-    tKvsY <- fmap Dhall.Core.normalize (typeWith ctx kvsY)
-    ktsY  <- case tKvsY of
         Union kts -> return kts
-        _         -> Left (TypeError ctx e (MustApplyToUnion tKvsY))
+        _         -> Left (TypeError ctx e (MustMergeUnion tKvsY))
     let ksY = Data.Map.keysSet ktsY
 
     let diffX = Data.Set.difference ksX ksY
@@ -518,10 +518,10 @@ data TypeMessage s
     | InvalidFieldType Text (Expr s X)
     | InvalidAlternativeType Text (Expr s X)
     | DuplicateField Text
-    | MustMergeARecord (Expr s X) (Expr s X)
+    | MustCombineARecord (Expr s X) (Expr s X)
     | FieldCollision (Set Text)
-    | MustApplyARecord (Expr s X) (Expr s X)
-    | MustApplyToUnion (Expr s X)
+    | MustMergeARecord (Expr s X) (Expr s X)
+    | MustMergeUnion (Expr s X)
     | UnusedHandler (Set Text)
     | MissingHandler (Set Text)
     | HandlerInputTypeMismatch Text (Expr s X) (Expr s X)
@@ -1035,19 +1035,19 @@ You have multiple fields named:
       where
         txt0 = Text.toStrict (Dhall.Core.pretty k)
 
-prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
+prettyTypeMessage (MustCombineARecord expr0 expr1) = ErrorMessages {..}
   where
-    short = "You can only merge records"
+    short = "You can only combine records"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can merge records using the `(∧)` operator, like this:
+Explanation: You can combine records using the `(∧)` operator, like this:
 
     { foo = 1, bar = "ABC" } ∧ { baz = True }             -- This is valid ...
 
     \(r : { baz : Bool }) → { foo = 1, bar = "ABC" } ∧ r  -- ... and so is this
 
-... but you *cannot* merge values that are not records.
+... but you *cannot* combine values that are not records.
 
 For example, the following expressions are *not* valid:
 
@@ -1088,25 +1088,25 @@ Both records share the following colliding fields:
       where
         txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
 
-prettyTypeMessage (MustApplyARecord expr0 expr1) = ErrorMessages {..}
+prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
   where
-    short = "You can only `apply` a record of a handlers"
+    short = "You can only `merge` a record of a handlers"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `apply`ing a record of handlers, like
+Explanation: You can consume a union by `merge`ing a record of handlers, like
 this:
 
         let handlers = { Left = Natural/even, Right = \(x : Bool) -> x }
     in  let union    = < Left = +2 | Right : Bool >
-    in  apply handlers union : Bool
+    in  merge handlers union : Bool
 
-... but the first argument to `apply` must be a record and not another type.
+... but the first argument to `merge` must be a record and not another type.
 
 For example, the following expression is *not* valid:
 
     let f (x : Bool) = x
-    in  apply f < Foo = True > : True  -- Invalid: `f` is not a record
+    in  merge f < Foo = True > : True  -- Invalid: `f` is not a record
 
 You provided the following handler:
 ↳ $txt0
@@ -1117,25 +1117,25 @@ You provided the following handler:
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 
-prettyTypeMessage (MustApplyToUnion expr0) = ErrorMessages {..}
+prettyTypeMessage (MustMergeUnion expr0) = ErrorMessages {..}
   where
-    short = "You can only `apply` handlers to a union"
+    short = "You can only `merge` handlers to a union"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `apply`ing a record of handlers, like
+Explanation: You can consume a union by `merge`ing a record of handlers, like
 this:
 
         let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
     in  let union    = < Left = +2 | Right : Bool >
-    in  apply handlers union : Bool
+    in  merge handlers union : Bool
 
-... but the second argument to `apply` must be a union and not another type.
+... but the second argument to `merge` must be a union and not another type.
 
 For example, the following expression is *not* valid:
 
     let handlers = { Foo = λ(x : Bool) → x }
-    in  apply handlers True  -- Invalid: `True` is not a union
+    in  merge handlers True  -- Invalid: `True` is not a union
 
 You applied a record of handlers to this expression, which is not a union:
 ↳ $txt0
@@ -1149,12 +1149,12 @@ prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `apply`ing a record of handlers, like
+Explanation: You can consume a union by `merge`ing a record of handlers, like
 this:
 
         let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
     in  let union    = < Left = +2 | Right : Bool >
-    in  apply handlers union : Bool
+    in  merge handlers union : Bool
 
 ... but there must be exactly one handler per alternative in the union.  You
 cannot have extra handlers.
@@ -1166,7 +1166,7 @@ For example, the following expression is *not* valid:
                 , Right = λ(x : Bool) → x  -- Invalid: This handler is not used
                 }
     in  let union = < Left = +2 >  -- The `Right` alternative is missing
-    in  apply handlers union : Bool  
+    in  merge handlers union : Bool  
 
 The following handlers had no matching alternatives:
 ↳ $txt0
@@ -1180,12 +1180,12 @@ prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `apply`ing a record of handlers, like
+Explanation: You can consume a union by `merge`ing a record of handlers, like
 this:
 
         let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
     in  let union    = < Left = +2 | Right : Bool >
-    in  apply handlers union : Bool
+    in  merge handlers union : Bool
 
 ... but there must be exactly one handler per alternative in the union.  You
 cannot have missing handlers.
@@ -1194,7 +1194,7 @@ For example, the following expression is *not* valid:
 
         let handlers = { Left = Natural/even }  -- Invalid: No `Right` handler
     in  let union = < Left = +2 | Right : Bool >
-    in  apply handlers union : Bool
+    in  merge handlers union : Bool
 
 The following handlers are missing:
 ↳ $txt0
@@ -1209,12 +1209,12 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `apply`ing a record of handlers, like
+Explanation: You can consume a union by `merge`ing a record of handlers, like
 this:
 
         let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
     in  let union    = < Left = +2 | Right : Bool >
-    in  apply handlers union : Bool
+    in  merge handlers union : Bool
 
 ... but the input type of each handler must match the type of the corresponding
 alternative of the union:
@@ -1223,7 +1223,7 @@ alternative of the union:
                              -- ^ This function ...
     in  let union    = < Left = +2 | Right : Bool >
                              -- ^ ... must accept a value of this type
-    in  apply handlers union : Bool
+    in  merge handlers union : Bool
 
 Your handler for the following alternative:
 ↳ $txt0
@@ -1244,12 +1244,12 @@ prettyTypeMessage (HandlerOutputTypeMismatch expr0 expr1 expr2) =
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `apply`ing a record of handlers, like
+Explanation: You can consume a union by `merge`ing a record of handlers, like
 this:
 
         let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
     in  let union    = < Left = +2 | Right : Bool >
-    in  apply handlers union : Bool
+    in  merge handlers union : Bool
 
 ... but the output type of each handler must match the declared final type:
 
@@ -1257,7 +1257,7 @@ this:
                              -- ^                     ^
                              -- These two functions ...
     in  let union    = < Left = +2 | Right : Bool >
-    in  apply handlers union : Bool  -- ... must return a `Bool`
+    in  merge handlers union : Bool  -- ... must return a `Bool`
 
 Your handler for the following alternative:
 ↳ $txt0
@@ -1277,18 +1277,18 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `apply`ing a record of handlers, like
+Explanation: You can consume a union by `merge`ing a record of handlers, like
 this:
 
         let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
     in  let union    = < Left = +2 | Right : Bool >
-    in  apply handlers union : Bool
+    in  merge handlers union : Bool
 
 ... but the type of each handler must be a function.
 
 For example, the following expression is *not* valid:
 
-    apply { Foo = 1 } < Foo = 1 > : Integer
+    merge { Foo = 1 } < Foo = 1 > : Integer
                -- ^ Not a function
 
 Your handler for:
