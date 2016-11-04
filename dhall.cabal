@@ -60,7 +60,6 @@ Library
         Dhall.Import,
         Dhall.Parser,
         Dhall.TypeCheck
-    Build-Tools: alex, happy
 
 Executable dhall
     Hs-Source-Dirs: exec
