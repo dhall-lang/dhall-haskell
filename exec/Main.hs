@@ -1,4 +1,8 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE TypeOperators      #-}
 
 module Main where
 
@@ -8,100 +12,43 @@ import Data.Traversable
 import Dhall.Core (pretty, normalize)
 import Dhall.Import (load)
 import Dhall.Parser (exprFromText)
-import Options.Applicative hiding (Const)
+import Dhall.TypeCheck (DetailedTypeError(..))
+import Options.Generic (Generic, ParseRecord, type (<?>)(..))
 import System.IO (stderr)
 import System.Exit (exitFailure)
 import Text.Trifecta.Delta (Delta(..))
 
 import qualified Data.Text.Lazy.IO
 import qualified Dhall.TypeCheck
-
-throws :: Exception e => Either e a -> IO a
-throws (Left  e) = throwIO e
-throws (Right r) = return r
+import qualified Options.Generic
 
 data Mode = Default | Resolve | TypeCheck | Normalize
 
-parser :: Parser Mode
-parser
-    =   subparser
-        (   command "resolve"
-            (info (helper <*> pure Resolve)
-                (   fullDesc
-                <>  header "dhall resolve - Resolve Dhall code"
-                <>  progDesc "Transitively replace all remote paths and URLs \
-                             \with the code that they refer to, reading the \
-                             \program from standard input and writing the \
-                             \fully resolved program to standard output."
-                )
-            )
-        <>  metavar "resolve"
-        )
-    <|> subparser
-        (   command "typecheck"
-            (   info (helper <*> pure TypeCheck)
-                (   fullDesc
-                <>  header "dhall typecheck - Type-check Dhall code"
-                <>  progDesc "Verify that Dhall code is well-formed by \
-                             \type-checking the program, reading the program \
-                             \from standard input and writing the program's \
-                             \inferred type to standard output."
-                ) )
-        <>  metavar "typecheck" )
-    <|> subparser
-        (   command "normalize"
-            (   info (helper <*> pure Normalize)
-                (   fullDesc
-                <>  header "dhall normalize - Normalize Dhall code"
-                <>  progDesc "Reduce Dhall code to normal form using \
-                             \β-reduction and η-reduction, reading the program \
-                             \from standard input and writing the normalized \
-                             \program to standard output."
-                ) )
-        <>  metavar "normalize"
-        )
-    <|> pure Default
+data Options = Options
+    { explain :: Bool <?> "Explain error messages in more detail"
+    } deriving (Generic)
+
+instance ParseRecord Options
 
 main :: IO ()
 main = do
-    mode <- execParser $ info (helper <*> parser) 
-        (   fullDesc
-        <>  header "dhall - A bare-bones calculus of constructions"
-        <>  progDesc "Type-check, resolve, and normalize a Dhall program, \
-                     \reading the program from standard input, writing the \
-                     \program's normalized type to standard error, and writing \
-                     \the normalized program to standard output."
-        )
+    options <- Options.Generic.getRecord "Compiler for the Dhall language"
 
-    let delta = Directed "(stdin)" 0 0 0 0
+    inText <- Data.Text.Lazy.IO.getContents
 
-    case mode of
-        Default -> do
-            inText   <- Data.Text.Lazy.IO.getContents
-            expr     <- throws (exprFromText delta inText)
-            expr'    <- load Nothing expr
-            typeExpr <- throws (Dhall.TypeCheck.typeOf expr')
-            Data.Text.Lazy.IO.hPutStrLn stderr (pretty (normalize typeExpr))
-            Data.Text.Lazy.IO.hPutStrLn stderr mempty
-            Data.Text.Lazy.IO.putStrLn (pretty (normalize expr'))
-        Resolve   -> do
-            inText  <- Data.Text.Lazy.IO.getContents
-            expr    <- throws (exprFromText delta inText)
-            expr'   <- load Nothing expr
-            Data.Text.Lazy.IO.putStrLn (pretty expr')
-        TypeCheck -> do
-            inText  <- Data.Text.Lazy.IO.getContents
-            expr    <- throws (exprFromText delta inText)
-            case traverse (\_ -> Nothing) expr of
-                Nothing    -> throwIO (userError
-                    "`dhall typecheck` cannot type-check a program containing \
-                    \remote references.  Use `dhall resolve` to resolve all \
-                    \remote references or just use `dhall` which combines \
-                    \resolution, type-checking, and normalization." )
-                Just expr' -> do
-                    typeExpr <- throws (Dhall.TypeCheck.typeOf expr')
-                    Data.Text.Lazy.IO.putStrLn (pretty typeExpr)
-        Normalize -> do
-            inText  <- Data.Text.Lazy.IO.getContents
-            expr    <- throws (exprFromText delta inText)
-            Data.Text.Lazy.IO.putStrLn (pretty (normalize expr))
+    expr <- case exprFromText (Directed "(stdin)" 0 0 0 0) inText of
+        Left  err  -> throwIO err
+        Right expr -> return expr
+
+    expr' <- load Nothing expr
+
+    typeExpr <- case Dhall.TypeCheck.typeOf expr' of
+        Left  err  -> do
+            if unHelpful (explain options)
+                then throwIO (DetailedTypeError err)
+                else throwIO err
+        Right typeExpr -> do
+            return typeExpr
+    Data.Text.Lazy.IO.hPutStrLn stderr (pretty (normalize typeExpr))
+    Data.Text.Lazy.IO.hPutStrLn stderr mempty
+    Data.Text.Lazy.IO.putStrLn (pretty (normalize expr'))

@@ -13,6 +13,7 @@ module Dhall.TypeCheck (
     -- * Types
     , X(..)
     , TypeError(..)
+    , DetailedTypeError(..)
     , TypeMessage(..)
     ) where
 
@@ -539,8 +540,19 @@ data TypeMessage s
     | NoDependentTypes (Expr s X) (Expr s X)
     deriving (Show)
 
-instance Buildable (TypeMessage s) where
-    build msg = build ("Error: " <> short (prettyTypeMessage msg) <> "\n")
+shortTypeMessage :: TypeMessage s -> Builder
+shortTypeMessage msg =
+    "Error: " <> build short <> "\n"
+  where
+    ErrorMessages {..} = prettyTypeMessage msg
+
+longTypeMessage :: TypeMessage s -> Builder
+longTypeMessage msg =
+        "Error: " <> build short <> "\n"
+    <>  "\n"
+    <>  long
+  where
+    ErrorMessages {..} = prettyTypeMessage msg
 
 data ErrorMessages = ErrorMessages
     { short :: Builder
@@ -1509,11 +1521,44 @@ instance (Buildable s, Typeable s) => Exception (TypeError s)
 instance Buildable s => Buildable (TypeError s) where
     build (TypeError ctx expr msg)
         =   "\n"
-        <>  (    if  Text.null (Builder.toLazyText (buildContext ctx))
-                 then ""
-                 else buildContext ctx <> "\n"
+        <>  "Add the --explain flag for a more detailed explanation of this error\n"
+        <>  "\n"
+        <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
+                then ""
+                else buildContext ctx <> "\n"
             )
-        <>  build msg <> "\n"
+        <>  shortTypeMessage msg <> "\n"
+        <>  source
+      where
+        buildKV (key, val) = build key <> " : " <> build val
+
+        buildContext =
+                build
+            .   Text.unlines
+            .   map (Builder.toLazyText . buildKV)
+            .   reverse
+            .   Dhall.Context.toList
+
+        source = case expr of
+            Note s _ -> build s
+            _        -> mempty
+
+newtype DetailedTypeError s = DetailedTypeError (TypeError s)
+    deriving (Typeable)
+
+instance Buildable s => Show (DetailedTypeError s) where
+    show = Text.unpack . Dhall.Core.pretty
+
+instance (Buildable s, Typeable s) => Exception (DetailedTypeError s)
+
+instance Buildable s => Buildable (DetailedTypeError s) where
+    build (DetailedTypeError (TypeError ctx expr msg))
+        =   "\n"
+        <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
+                then ""
+                else buildContext ctx <> "\n"
+            )
+        <>  longTypeMessage msg <> "\n"
         <>  source
       where
         buildKV (key, val) = build key <> " : " <> build val
