@@ -13,15 +13,17 @@
 -- features and use it as a strongly typed configuration format.  For example,
 -- suppose that you have the following configuration file:
 -- 
--- > $ cat > config
--- > { foo = 1
--- > , bar = [3.0, 4.0, 5.0] : List Double
--- > }
--- > <Ctrl-D>
+-- > $ cat config
+-- > < Example =
+-- >     { foo = 1
+-- >     , bar = [3.0, 4.0, 5.0] : List Double
+-- >     }
+-- > >
 -- 
 -- You can read the above configuration file into Haskell using the following
 -- code:
 -- 
+-- > $ cat example.hs
 -- > {-# LANGUAGE DeriveGeneric     #-}
 -- > {-# LANGUAGE OverloadedStrings #-}
 -- > 
@@ -37,12 +39,13 @@
 -- >     x <- input auto "./config"
 -- >     print (x :: Example)
 -- 
--- The above program prints:
+-- If you compile and run the above program, the program prints the
+-- corresponding Haskell record:
 -- 
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
 --
--- In the above code, the `Example` Haskell type represents the schema for our
+-- In the above code, the @Example@ Haskell type represents the schema for our
 -- configuration file.  Suppose that we modify our configuration file to no
 -- longer match the schema, like this:
 --
@@ -314,10 +317,11 @@ module Dhall
 
 import Control.Applicative (empty, liftA2, (<|>))
 import Control.Exception (Exception)
+import Data.Monoid ((<>))
 import Data.Text.Lazy (Text)
 import Data.Vector (Vector)
 import Dhall.Core (Expr(..))
-import Dhall.Parser (Src)
+import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (X)
 import GHC.Generics
 import Numeric.Natural (Natural)
@@ -325,9 +329,11 @@ import Prelude hiding (maybe)
 import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Exception
+import qualified Data.ByteString.Lazy
 import qualified Data.Map
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
+import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
 import qualified Dhall.Core
 import qualified Dhall.Import
@@ -365,7 +371,20 @@ input (Type {..}) text = do
     let delta = Directed "(input)" 0 0 0 0
     expr     <- throws (Dhall.Parser.exprFromText delta text)
     expr'    <- Dhall.Import.load Nothing expr
-    typeExpr <- throws (Dhall.TypeCheck.typeOf (Annot expr' expected))
+    let suffix =
+            ( Data.ByteString.Lazy.toStrict
+            . Data.Text.Lazy.Encoding.encodeUtf8
+            . Data.Text.Lazy.Builder.toLazyText
+            . Dhall.Core.buildExpr0
+            ) expected
+    let annot = case expr' of
+            Note (Src begin end bytes) _ ->
+                Note (Src begin end bytes') (Annot expr' expected)
+              where
+                bytes' = bytes <> " : " <> suffix
+            _ ->
+                Annot expr' expected
+    typeExpr <- throws (Dhall.TypeCheck.typeOf annot)
     case extract (Dhall.Core.normalize expr') of
         Just x  -> return x
         Nothing -> fail "input: malformed `Type`"
