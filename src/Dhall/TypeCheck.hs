@@ -1521,8 +1521,6 @@ instance (Buildable s, Typeable s) => Exception (TypeError s)
 instance Buildable s => Buildable (TypeError s) where
     build (TypeError ctx expr msg)
         =   "\n"
-        <>  "Add the --explain flag for a more detailed explanation of this error\n"
-        <>  "\n"
         <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
                 then ""
                 else buildContext ctx <> "\n"

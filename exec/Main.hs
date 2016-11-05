@@ -46,7 +46,9 @@ main = do
         Left  err  -> do
             if unHelpful (explain options)
                 then throwIO (DetailedTypeError err)
-                else throwIO err
+                else do
+                    Data.Text.Lazy.IO.hPutStrLn stderr "Add the --explain flag for a more detailed explanation of this error\n"
+                    throwIO err
         Right typeExpr -> do
             return typeExpr
     Data.Text.Lazy.IO.hPutStrLn stderr (pretty (normalize typeExpr))
