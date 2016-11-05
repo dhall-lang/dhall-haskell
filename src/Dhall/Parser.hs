@@ -29,7 +29,7 @@ import Dhall.Core (Const(..), Expr(..), Path(..), Var(..))
 import Filesystem.Path (FilePath)
 import Prelude hiding (FilePath, const, pi)
 import Text.PrettyPrint.ANSI.Leijen (Doc)
-import Text.Parser.Combinators (choice, try)
+import Text.Parser.Combinators (choice, try, (<?>))
 import Text.Parser.Expression (Assoc(..), Operator(..))
 import Text.Parser.Token (IdentifierStyle(..), TokenParsing(..))
 import Text.Parser.Token.Highlight (Highlight(..))
@@ -175,7 +175,7 @@ combine :: Parser ()
 combine = symbol "/\\" <|> symbol "∧"
 
 label :: Parser Text
-label = Text.Parser.Token.ident identifierStyle
+label = Text.Parser.Token.ident identifierStyle <?> "label"
 
 exprA :: Parser (Expr Src Path)
 exprA = noted (try exprA0)
@@ -357,8 +357,8 @@ exprF = choice
     ,   noted      exprF22
     ,   noted (try exprF25)
     ,   noted      exprF23
+    ,   noted (try exprF26)
     ,   noted      exprF24
-    ,   noted      exprF26
     ,   noted      exprF27
     ,   noted (try exprF28)
     ,   noted      exprF29
