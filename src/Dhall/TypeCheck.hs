@@ -1520,8 +1520,7 @@ instance (Buildable s, Typeable s) => Exception (TypeError s)
 
 instance Buildable s => Buildable (TypeError s) where
     build (TypeError ctx expr msg)
-        =   "\n"
-        <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
+        =   (   if  Text.null (Builder.toLazyText (buildContext ctx))
                 then ""
                 else buildContext ctx <> "\n"
             )
@@ -1551,8 +1550,7 @@ instance (Buildable s, Typeable s) => Exception (DetailedTypeError s)
 
 instance Buildable s => Buildable (DetailedTypeError s) where
     build (DetailedTypeError (TypeError ctx expr msg))
-        =   "\n"
-        <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
+        =   (   if  Text.null (Builder.toLazyText (buildContext ctx))
                 then ""
                 else buildContext ctx <> "\n"
             )

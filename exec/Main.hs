@@ -6,21 +6,24 @@
 
 module Main where
 
-import Control.Exception (Exception, throwIO)
+import Control.Exception (SomeException)
 import Data.Monoid (mempty)
 import Data.Traversable
 import Dhall.Core (pretty, normalize)
-import Dhall.Import (load)
-import Dhall.Parser (exprFromText)
-import Dhall.TypeCheck (DetailedTypeError(..))
+import Dhall.Import (Imported(..), load)
+import Dhall.Parser (Src, exprFromText)
+import Dhall.TypeCheck (DetailedTypeError(..), TypeError)
 import Options.Generic (Generic, ParseRecord, type (<?>)(..))
 import System.IO (stderr)
 import System.Exit (exitFailure)
 import Text.Trifecta.Delta (Delta(..))
 
+import qualified Control.Exception
 import qualified Data.Text.Lazy.IO
 import qualified Dhall.TypeCheck
 import qualified Options.Generic
+import qualified System.Exit
+import qualified System.IO
 
 data Mode = Default | Resolve | TypeCheck | Normalize
 
@@ -34,23 +37,44 @@ main :: IO ()
 main = do
     options <- Options.Generic.getRecord "Compiler for the Dhall language"
 
-    inText <- Data.Text.Lazy.IO.getContents
+    let handle =
+                Control.Exception.handle handler2
+            .   Control.Exception.handle handler1
+            .   Control.Exception.handle handler0
+          where
+            handler0 e = do
+                let _ = e :: TypeError Src
+                if unHelpful (explain options)
+                    then Control.Exception.throwIO (DetailedTypeError e)
+                    else do
+                        Data.Text.Lazy.IO.hPutStrLn stderr "Add the --explain flag for a more detailed explanation of this error\n"
+                        Control.Exception.throwIO e
 
-    expr <- case exprFromText (Directed "(stdin)" 0 0 0 0) inText of
-        Left  err  -> throwIO err
-        Right expr -> return expr
+            handler1 (Imported ps e) = do
+                let _ = e :: TypeError Src
+                if unHelpful (explain options)
+                    then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
+                    else do
+                        Data.Text.Lazy.IO.hPutStrLn stderr "Add the --explain flag for a more detailed explanation of this error\n"
+                        Control.Exception.throwIO e
 
-    expr' <- load Nothing expr
+            handler2 e = do
+                let _ = e :: SomeException
+                System.IO.hPrint stderr e
+                System.Exit.exitFailure
 
-    typeExpr <- case Dhall.TypeCheck.typeOf expr' of
-        Left  err  -> do
-            if unHelpful (explain options)
-                then throwIO (DetailedTypeError err)
-                else do
-                    Data.Text.Lazy.IO.hPutStrLn stderr "Add the --explain flag for a more detailed explanation of this error\n"
-                    throwIO err
-        Right typeExpr -> do
-            return typeExpr
-    Data.Text.Lazy.IO.hPutStrLn stderr (pretty (normalize typeExpr))
-    Data.Text.Lazy.IO.hPutStrLn stderr mempty
-    Data.Text.Lazy.IO.putStrLn (pretty (normalize expr'))
+    handle (do
+        inText <- Data.Text.Lazy.IO.getContents
+
+        expr <- case exprFromText (Directed "(stdin)" 0 0 0 0) inText of
+            Left  err  -> Control.Exception.throwIO err
+            Right expr -> return expr
+
+        expr' <- load Nothing expr
+
+        typeExpr <- case Dhall.TypeCheck.typeOf expr' of
+            Left  err      -> Control.Exception.throwIO err
+            Right typeExpr -> return typeExpr
+        Data.Text.Lazy.IO.hPutStrLn stderr (pretty (normalize typeExpr))
+        Data.Text.Lazy.IO.hPutStrLn stderr mempty
+        Data.Text.Lazy.IO.putStrLn (pretty (normalize expr')) )
