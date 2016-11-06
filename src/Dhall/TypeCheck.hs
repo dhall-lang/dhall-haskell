@@ -575,51 +575,135 @@ prettyTypeMessage UnboundVariable = ErrorMessages {..}
     long =
         Builder.fromText [NeatInterpolation.text|
 Explanation: Expressions can only reference previously introduced (i.e. "bound")
-variables that are still "in scope".  For example, these are valid expressions:
+variables that are still "in scope"
 
-    λ(x : Bool) → x       -- Anonymous functions introduce "bound" variables
+For example, the following valid expressions introduce a "bound" variable named
+❮x❯:
 
-    let x = 1 in x        -- `let` definitions introduce "bound" variables
 
-    let f (x : Bool) = x  -- Function arguments are "bound" variables
-    in  f True
+    ┌─────────────────┐
+    │ λ(x : Bool) → x │  Anonymous functions introduce "bound" variables
+    └─────────────────┘
+        ⇧
+        This is the bound variable
 
-... but these are not valid expressions:
 
-    λ(x : Bool) → y           -- The variable `y` hasn't been introduced yet
+    ┌─────────────────┐
+    │ let x = 1 in x  │  ❮let❯ expressions introduce "bound" variables
+    └─────────────────┘
+          ⇧
+          This is the bound variable
 
-    (let x = True in x) && x  -- `x` is undefined outside the parentheses
 
-    let x = x in x            -- The definition for `x` cannot reference itself
+However, the following expressions are not valid because they all reference a
+variable that has not been introduced yet (i.e. an "unbound" variable):
+
+
+    ┌─────────────────┐
+    │ λ(x : Bool) → y │  The variable ❮y❯ hasn't been introduced yet
+    └─────────────────┘
+                    ⇧
+                    This is the unbound variable
+
+
+    ┌──────────────────────────┐
+    │ (let x = True in x) && x │  ❮x❯ is undefined outside the parentheses
+    └──────────────────────────┘
+                             ⇧
+                             This is the unbound variable
+
+
+    ┌────────────────┐
+    │ let x = x in x │  The definition for ❮x❯ cannot reference itself
+    └────────────────┘
+              ⇧
+              This is the unbound variable
+
+
+Some common reasons why you might get this error:
+
+● You misspell a variable name, like this:
+
+
+    ┌────────────────────────────────────────────────────┐
+    │ λ(empty : Bool) → if emty then "Empty" else "Full" │
+    └────────────────────────────────────────────────────┘
+                           ⇧
+                           Typo
+
+
+● You misspell a reserved identifier, like this:
+
+
+    ┌──────────────────────────┐
+    │ foral (a : Type) → a → a │
+    └──────────────────────────┘
+      ⇧
+      Typo
 |]
 
 prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
   where
-    short = "Invalid input annotation for a function"
+    short = "Invalid function input"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: A function can accept an input term of a given "type", like this:
+Explanation: A function can accept an input "term" that has a given "type", like
+this:
 
-    ∀(x : Text) → Bool  -- This function accepts any term of type `Text`.
-                        -- `x` is the term's name and `Text` is the type
 
-    Bool → Integer  -- This function accepts any term of type `Bool`.
-                    -- The input term's name is omitted
+        This is the input term that the function accepts
+        ⇩
+    ┌───────────────────────┐
+    │ ∀(x : Natural) → Bool │  This is the type of a function that accepts an
+    └───────────────────────┘  input term named ❮x❯ that has type ❮Natural❯
+            ⇧
+            This is the type of the input term
 
-... or accept an input "type" of a given "kind", like this:
 
-    ∀(a : Type) → Type  -- This accepts any type `a` of kind `Type`
+    ┌────────────────┐
+    │ Bool → Integer │  This is the type of a function that accepts an anonymous
+    └────────────────┘  input term that has type ❮Bool❯
+      ⇧
+      This is the type of the input term
 
-Other input annotations are *not* valid, like this:
 
-    ∀(x : 1) → x  -- `1` is a term and not a "type" nor a "kind"
+... or a function can accept an input "type" that has a given "kind", like this:
 
-This input annotation you gave is neither a type nor a kind:
+
+        This is the input type that the function accepts
+        ⇩
+    ┌────────────────────┐
+    │ ∀(a : Type) → Type │  This is the type of a function that accepts an input
+    └────────────────────┘  type named ❮a❯ of kind ❮Type❯
+            ⇧
+            This is the kind of the input type
+
+
+    ┌──────────────────────┐
+    │ (Type → Type) → Type │  This is the type of a function that accepts an
+    └──────────────────────┘  anonymous input type that has kind ❮Type → Type❯
+       ⇧
+       This is the kind of the input type
+
+
+Other function inputs are $not0 valid, like this:
+
+
+    ┌──────────────┐
+    │ ∀(x : 1) → x │ ❮1❯ is a "term" and not a "type" nor a "kind" so ❮x❯ cannot
+    └──────────────┘ have "type" ❮1❯ or "kind" ❮1❯
+
+
+You annotated a function input with the following expression:
+
 ↳ $txt
+
+... which is neither a type nor a kind
 |]
       where
-        txt = Text.toStrict (Dhall.Core.pretty expr)
+        not0 = "\ESC[1mnot\ESC[0m"
+        txt  = Text.toStrict (Dhall.Core.pretty expr)
 
 prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
   where
