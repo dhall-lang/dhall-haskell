@@ -567,6 +567,9 @@ instance Buildable ErrorMessages where
         <>  "\n"
         <>  long
 
+_NOT :: Data.Text.Text
+_NOT = "\ESC[1mnot\ESC[0m"
+
 prettyTypeMessage :: TypeMessage s -> ErrorMessages
 prettyTypeMessage UnboundVariable = ErrorMessages {..}
   where
@@ -640,6 +643,37 @@ Some common reasons why you might get this error:
     └──────────────────────────┘
       ⇧
       Typo
+
+
+● You tried to define a recursive value, like this:
+
+
+    ┌─────────────────────┐
+    │ let x = x + +1 in x │
+    └─────────────────────┘
+              ⇧
+              Recursive definitions are not allowed
+
+
+● You accidentally forgot a ❮λ❯ or ❮∀❯/❮forall❯
+
+
+        Unbound variable
+        ⇩
+    ┌─────────────────┐
+    │  (x : Bool) → x │
+    └─────────────────┘
+      ⇧
+      A ❮λ❯ here would transform this into a valid anonymous function 
+
+
+        Unbound variable
+        ⇩
+    ┌────────────────────┐
+    │  (x : Bool) → Bool │
+    └────────────────────┘
+      ⇧
+      A ❮∀❯ or ❮forall❯ here would transform this into a valid function type
 |]
 
 prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
@@ -687,12 +721,21 @@ this:
        This is the kind of the input type
 
 
-Other function inputs are $not0 valid, like this:
+Other function inputs are $_NOT valid, like this:
 
 
     ┌──────────────┐
-    │ ∀(x : 1) → x │ ❮1❯ is a "term" and not a "type" nor a "kind" so ❮x❯ cannot
-    └──────────────┘ have "type" ❮1❯ or "kind" ❮1❯
+    │ ∀(x : 1) → x │  ❮1❯ is a "term" and not a "type" nor a "kind" so ❮x❯
+    └──────────────┘  cannot have "type" ❮1❯ or "kind" ❮1❯
+            ⇧
+            This is not a type or kind
+
+
+    ┌──────────┐
+    │ True → x │  ❮True❯ is a "term" and not a "type" nor a "kind" so the
+    └──────────┘  anonymous input cannot have "type" ❮True❯ or "kind" ❮True❯
+      ⇧
+      This is not a type or kind
 
 
 You annotated a function input with the following expression:
@@ -702,31 +745,81 @@ You annotated a function input with the following expression:
 ... which is neither a type nor a kind
 |]
       where
-        not0 = "\ESC[1mnot\ESC[0m"
         txt  = Text.toStrict (Dhall.Core.pretty expr)
 
 prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
   where
-    short = "Invalid output annotation for a function"
+    short = "Invalid function output"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: A function can emit an output term of a given "type", like this:
+Explanation: A function can emit an output "term" that has a given "type", like
+this:
 
-    ∀(x : Text) → Bool  -- This function emits a term of type `Bool`.
 
-    Bool → Int          -- This function emits a term of type `Int`.
+    ┌────────────────────┐
+    │ ∀(x : Text) → Bool │  This is the type of a function that emits an output
+    └────────────────────┘  term that has type ❮Bool❯
+                    ⇧
+                    This is the type of the output term
 
-... or emit an output "type" of a given "kind", like this:
 
-    ∀(a : Type) → Type  -- This emits a type of kind `Type`
+    ┌────────────────┐
+    │ Bool → Integer │  This is the type of a function that emits an output term
+    └────────────────┘  that has type ❮Int❯
+             ⇧
+             This is the type of the output term
 
-Other outputs are *not* valid, like this:
 
-    ∀(x : Text) → 1     -- `1` is a term and not a "type" nor a "kind"
+... or a function can emit an output "type" that has a given "kind", like this:
 
-This function output you specified is neither a type nor a kind:
+    ┌────────────────────┐
+    │ ∀(a : Type) → Type │  This is the type of a function that emits an output
+    └────────────────────┘  type that has kind ❮Type❯
+                    ⇧
+                    This is the kind of the output type
+
+
+    ┌──────────────────────┐
+    │ (Type → Type) → Type │  This is the type of a function that emits an
+    └──────────────────────┘  output type that has kind ❮Type❯
+                      ⇧
+                      This is the kind of the output type
+
+
+Other outputs are $_NOT valid, like this:
+
+
+    ┌─────────────────┐
+    │ ∀(x : Bool) → x │  ❮x❯ is a "term" and not a "type" nor a "kind" so the
+    └─────────────────┘  output cannot have "type" ❮x❯ or "kind" ❮x❯
+                    ⇧
+                    This is not a type or kind
+
+
+    ┌─────────────┐
+    │ Text → True │  ❮True❯ is a "term" and not a "type" nor a "kind" so the
+    └─────────────┘  output cannot have "type" ❮True❯ or "kind" ❮True❯
+             ⇧
+             This is not a type or kind
+
+
+You specified that your function outputs a:
+
 ↳ $txt
+
+... which is neither a type nor a kind:
+
+Some common reasons why you might get this error:
+
+● You use ❮∀❯ instead of ❮λ❯ by mistake, like this:
+
+
+    ┌────────────────┐
+    │ ∀(x: Bool) → x │
+    └────────────────┘
+      ⇧
+      Using ❮λ❯ here instead of ❮∀❯ would transform this into a valid function
 |]
       where
         txt = Text.toStrict (Dhall.Core.pretty expr)
