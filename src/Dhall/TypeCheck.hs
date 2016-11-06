@@ -152,7 +152,7 @@ typeWith ctx e@(App f a         ) = do
     tf <- fmap Dhall.Core.normalize (typeWith ctx f)
     (x, _A, _B) <- case tf of
         Pi x _A _B -> return (x, _A, _B)
-        _          -> Left (TypeError ctx e (NotAFunction f))
+        _          -> Left (TypeError ctx e (NotAFunction f tf))
     _A' <- typeWith ctx a
     if propEqual _A _A'
         then do
@@ -505,7 +505,7 @@ data TypeMessage s
     = UnboundVariable
     | InvalidInputType (Expr s X)
     | InvalidOutputType (Expr s X)
-    | NotAFunction (Expr s X)
+    | NotAFunction (Expr s X) (Expr s X)
     | TypeMismatch (Expr s X) (Expr s X)
     | AnnotMismatch (Expr s X) (Expr s X) (Expr s X)
     | Untyped Const
@@ -753,35 +753,36 @@ prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: A function can emit an output "term" that has a given "type", like
-this:
+Explanation: A function can return an output "term" that has a given "type",
+like this:
 
 
     ┌────────────────────┐
-    │ ∀(x : Text) → Bool │  This is the type of a function that emits an output
-    └────────────────────┘  term that has type ❮Bool❯
+    │ ∀(x : Text) → Bool │  This is the type of a function that returns an
+    └────────────────────┘  output term that has type ❮Bool❯
                     ⇧
                     This is the type of the output term
 
 
     ┌────────────────┐
-    │ Bool → Integer │  This is the type of a function that emits an output term
-    └────────────────┘  that has type ❮Int❯
+    │ Bool → Integer │  This is the type of a function that returns an output
+    └────────────────┘  term that has type ❮Int❯
              ⇧
              This is the type of the output term
 
 
-... or a function can emit an output "type" that has a given "kind", like this:
+... or a function can return an output "type" that has a given "kind", like
+this:
 
     ┌────────────────────┐
-    │ ∀(a : Type) → Type │  This is the type of a function that emits an output
-    └────────────────────┘  type that has kind ❮Type❯
+    │ ∀(a : Type) → Type │  This is the type of a function that returns an
+    └────────────────────┘  output type that has kind ❮Type❯
                     ⇧
                     This is the kind of the output type
 
 
     ┌──────────────────────┐
-    │ (Type → Type) → Type │  This is the type of a function that emits an
+    │ (Type → Type) → Type │  This is the type of a function that returns an
     └──────────────────────┘  output type that has kind ❮Type❯
                       ⇧
                       This is the kind of the output type
@@ -824,31 +825,111 @@ Some common reasons why you might get this error:
       where
         txt = Text.toStrict (Dhall.Core.pretty expr)
 
-prettyTypeMessage (NotAFunction expr) = ErrorMessages {..}
+prettyTypeMessage (NotAFunction expr0 expr1) = ErrorMessages {..}
   where
-    short = "Only functions may be applied to arguments"
+    short = "Not a function"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: Expressions separated by whitespace denote function application.
-For example:
+Explanation: Expressions separated by whitespace denote function application,
+like this:
 
-    f x  -- This denotes the function `f` applied to an argument `x`
 
-However, not everything is a valid function.  For example:
+    ┌─────┐
+    │ f x │  This denotes the function ❮f❯ applied to an argument named ❮x❯ 
+    └─────┘
 
-    1                         -- Primitive terms are not functions
-    Text                      -- Primitive types are not functions
-    Type                      -- Primitive kinds are not functions
-    { foo = 1, bar = "ABC" }  -- Records are not functions
 
-You tried to apply an expression that was not a function to an argument
+A function is a term that has type ❮a → b❯ for some ❮a❯ or ❮b❯.  For example,
+the following expressions are all functions because they have a function type:
 
-This is the expression that you incorrectly invoked as a function:
-↳ $txt
+
+                        The function's input type is ❮Bool❯
+                        ⇩
+    ┌───────────────────────────────┐
+    │ λ(x : Bool) → x : Bool → Bool │  User-defined anonymous function
+    └───────────────────────────────┘
+                               ⇧
+                               The function's output type is ❮Bool❯
+
+
+                     The function's input type is ❮Natural❯
+                     ⇩
+    ┌───────────────────────────────┐
+    │ Natural/even : Natural → Bool │  Built-in function
+    └───────────────────────────────┘
+                               ⇧
+                               The function's output type is ❮Bool❯
+
+
+                        The function's input kind is ❮Type❯
+                        ⇩
+    ┌───────────────────────────────┐
+    │ λ(a : Type) → a : Type → Type │  Type-level functions are still functions
+    └───────────────────────────────┘
+                               ⇧
+                               The function's output kind is ❮Type❯
+
+
+             The function's input kind is ❮Type❯
+             ⇩
+    ┌────────────────────┐
+    │ List : Type → Type │  Built-in type-level function
+    └────────────────────┘
+                    ⇧
+                    The function's output kind is ❮Type❯
+
+
+                        The function's input kind is ❮Type❯
+                        ⇩
+    ┌──────────────────────────────────────────────┐
+    │ List/head : ∀(a : Type) → (List a → Maybe a) │  A function can return
+    └──────────────────────────────────────────────┘  another function
+                                ⇧
+                                The function's output type is ❮List a → Maybe a❯
+
+
+                       The function's input type is ❮List Text❯
+                       ⇩
+    ┌─────────────────────────────────────────┐
+    │ List/head Text : List Text → Maybe Text │  A function applied to an
+    └─────────────────────────────────────────┘  argument can be a function
+                                   ⇧
+                                   The function's output type is ❮Maybe Text❯
+
+
+An expression is not a function if the expression's type is not of the form
+❮a → b❯.  For example, these are not functions:
+
+
+    ┌─────────────┐
+    │ 1 : Integer │  ❮1❯ is not a function because ❮Integer❯ is not the type of
+    └─────────────┘  a function
+
+
+    ┌────────────────────────┐
+    │ Natural/even +2 : Bool │  ❮Natural/even +2❯ is not a function because
+    └────────────────────────┘  ❮Bool❯ is not the type of a function
+
+
+    ┌──────────────────┐
+    │ List Text : Type │  ❮List Text❯ is not a function because ❮Type❯ is not
+    └──────────────────┘  the type of a function
+
+
+You tried to use the following expression as a function:
+
+↳ $txt0
+
+... but this expression's type is:
+
+↳ $txt1
+
+... which is not a function type
 |]
       where
-        txt = Text.toStrict (Dhall.Core.pretty expr)
+        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 
 prettyTypeMessage (TypeMismatch expr0 expr1) = ErrorMessages {..}
   where
