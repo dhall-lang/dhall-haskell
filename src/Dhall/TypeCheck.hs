@@ -163,7 +163,7 @@ typeWith ctx e@(App f a         ) = do
         else do
             let nf_A  = Dhall.Core.normalize _A
             let nf_A' = Dhall.Core.normalize _A'
-            Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
+            Left (TypeError ctx e (TypeMismatch f nf_A a nf_A'))
 typeWith ctx e@(Let f mt r b ) = do
     tr <- typeWith ctx r
     case mt of
@@ -506,7 +506,7 @@ data TypeMessage s
     | InvalidInputType (Expr s X)
     | InvalidOutputType (Expr s X)
     | NotAFunction (Expr s X) (Expr s X)
-    | TypeMismatch (Expr s X) (Expr s X)
+    | TypeMismatch (Expr s X) (Expr s X) (Expr s X) (Expr s X)
     | AnnotMismatch (Expr s X) (Expr s X) (Expr s X)
     | Untyped Const
     | InvalidListElement Int Int (Expr s X) (Expr s X) (Expr s X)
@@ -931,33 +931,135 @@ You tried to use the following expression as a function:
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 
-prettyTypeMessage (TypeMismatch expr0 expr1) = ErrorMessages {..}
+prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
-    short = "Function applied to the wrong type or kind of argument"
+    short = "Wrong function argument"
 
     long =
         Builder.fromText [NeatInterpolation.text|
 Explanation: Every function declares what type or kind of argument to accept
 
-    λ(x : Bool) → x    -- Anonymous function which only accepts `Bool` arguments
+For example:
 
-    let f (x : Bool) = x   -- Named function which only accepts `Bool` arguments
-    in  f True
 
-    λ(a : Type) → a    -- Anonymous function which only accepts `Type` arguments
+    ┌───────────────────────────────┐
+    │ λ(x : Bool) → x : Bool → Bool │  This anonymous function only accepts
+    └───────────────────────────────┘  arguments that have type ❮Bool❯
+                        ⇧
+                        The function's input type
 
-You *cannot* apply a function to the wrong type or kind of argument:
 
-    (λ(x : Bool) → x) "A"  -- "A" is `Text`, but the function expects a `Bool`
+    ┌───────────────────────────────┐
+    │ Natural/even : Natural → Bool │  This built-in function only accepts
+    └───────────────────────────────┘  arguments that have type ❮Natural❯
+                     ⇧
+                     The function's input type
 
-You tried to invoke a function which expects an argument of type or kind:
+
+    ┌───────────────────────────────┐
+    │ λ(a : Type) → a : Type → Type │  This anonymous function only accepts
+    └───────────────────────────────┘  arguments that have kind ❮Type❯
+                        ⇧
+                        The function's input kind
+
+
+    ┌────────────────────┐
+    │ List : Type → Type │  This built-in function only accepts arguments that
+    └────────────────────┘  have kind ❮Type❯
+             ⇧
+             The function's input kind
+
+
+For example, the following expressions are valid:
+
+
+    ┌────────────────────────┐
+    │ (λ(x : Bool) → x) True │  ❮True❯ has type ❮Bool❯, which matches the type
+    └────────────────────────┘  of argument that the anonymous function accepts
+
+
+    ┌─────────────────┐
+    │ Natural/even +2 │  ❮+2❯ has type ❮Natural❯, which matches the type of
+    └─────────────────┘  argument that the ❮Natural/even❯ function accepts,
+
+
+    ┌────────────────────────┐
+    │ (λ(a : Type) → a) Bool │  ❮Bool❯ has kind ❮Type❯, which matches the kind
+    └────────────────────────┘  of argument that the anonymous function accepts
+
+
+    ┌───────────┐
+    │ List Text │  ❮Text❯ has kind ❮Type❯, which matches the kind of argument
+    └───────────┘  that that the ❮List❯ function accepts
+
+
+However, you can $_NOT apply a function to the wrong type or kind of argument
+
+For example, the following expressions are not valid:
+
+
+    ┌───────────────────────┐
+    │ (λ(x : Bool) → x) "A" │  ❮"A"❯ has type ❮Text❯, but the anonymous function
+    └───────────────────────┘  expects an argument that has type ❮Bool❯
+
+
+    ┌──────────────────┐
+    │ Natural/even "A" │  ❮"A"❯ has type ❮Text❯, but the ❮Natural/even❯ function
+    └──────────────────┘  expects an argument that has type ❮Natural❯
+
+
+    ┌────────────────────────┐
+    │ (λ(a : Type) → a) True │  ❮True❯ has type ❮Bool❯, but the anonymous
+    └────────────────────────┘  function expects an argument of kind ❮Type❯
+
+
+    ┌────────┐
+    │ List 1 │  ❮1❯ has type ❮Integer❯, but the ❮List❯ function expects an
+    └────────┘  argument that has kind ❮Type❯
+
+
+You tried to invoke the following function:
+
 ↳ $txt0
-... on an argument of type or kind:
+
+... which expects an argument of type or kind:
+
 ↳ $txt1
+
+... on the following argument:
+
+↳ $txt2
+
+... which has type or kind:
+
+↳ $txt3
+
+Some common reasons why you might get this error:
+
+● You omit a function argument by mistake:
+
+
+    ┌────────────────────────────────────────┐
+    │ List/head   ([1, 2, 3] : List Integer) │
+    └────────────────────────────────────────┘
+                ⇧
+                ❮List/head❯ is missing the first argument,
+                which should be: ❮Integer❯
+
+
+● You supply an ❮Integer❯ literal to a function that expects a ❮Natural❯
+
+    ┌────────────────┐
+    │ Natural/even 2 │
+    └────────────────┘
+                   ⇧
+                   This should be ❮+2❯
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt3 = Text.toStrict (Dhall.Core.pretty expr3)
 
 prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
