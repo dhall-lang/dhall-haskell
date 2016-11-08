@@ -1693,7 +1693,8 @@ indent = Data.Text.unlines . fmap ("    " <>) . Data.Text.lines
 buildBooleanOperator :: Text -> Bool -> Expr s X -> Expr s X -> ErrorMessages
 buildBooleanOperator operator b expr0 expr1 = ErrorMessages {..}
   where
-    short = "Cannot use `($txt2)` on a value that's not a `Bool`"
+    short = Builder.fromText
+        [NeatInterpolation.text|Cannot use `($txt2)` on a value that's not a `Bool`|]
 
     long =
         Builder.fromText [NeatInterpolation.text|
