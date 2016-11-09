@@ -1063,29 +1063,94 @@ Some common reasons why you might get this error:
 
 prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
-    short = "Expression's inferred type does not match annotated type"
+    short = "Expression doesn't match annotation"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can annotate the type or kind of an expression like this:
+Explanation: You can annotate an expression with its type or kind using the
+❮:❯ symbol, like this:
 
-    x : t  -- `x` is the expression and `t` is the annotated type or kind of `x`
 
-Annotations are introduced in one of two ways:
+    ┌───────┐
+    │ x : t │  ❮x❯ is an expression and ❮t❯ is the annotated type or kind of ❮x❯
+    └───────┘
 
-* You can manually annotate expressions to declare the type or kind you expect
-* The interpreter also implicitly inserts a top-level type annotation
+The type checker verifies that the expression's type or kind matches the
+provided annotation
 
-Annotations are optional because the compiler can infer the type of all
-expressions.  However, if you or the interpreter inserts an annotation and the
-inferred type or kind does not match the annotation then type-checking fails.
+For example, all of the following are valid annotations that the type checker
+accepts:
+
+
+    ┌─────────────┐
+    │ 1 : Integer │  ❮1❯ is an expression that has type ❮Integer❯, so the type
+    └─────────────┘  checker accepts the annotation
+
+
+    ┌────────────────────────┐
+    │ Natural/even +2 : Bool │  ❮Natural/even +2❯ has type ❮Bool❯, so the type
+    └────────────────────────┘  checker accepts the annotation
+
+
+    ┌────────────────────┐
+    │ List : Type → Type │  ❮List❯ is an expression that has kind ❮Type → Type❯,
+    └────────────────────┘  so the type checker accepts the annotation
+
+
+    ┌──────────────────┐
+    │ List Text : Type │  ❮List Text❯ is an expression that has kind ❮Type❯, so
+    └──────────────────┘  the type checker accepts the annotation
+
+
+However, the following annotations are $_NOT valid and the type checker will
+reject them:
+
+
+    ┌──────────┐
+    │ 1 : Text │  The type checker rejects this because ❮1❯ does not have type
+    └──────────┘  ❮Text❯
+
+
+    ┌─────────────┐
+    │ List : Type │  ❮List❯ does not have kind ❮Type❯
+    └─────────────┘
+
 
 You or the interpreter annotated this expression:
+
 ↳ $txt0
+
 ... with this type or kind:
+
 ↳ $txt1
-... but the inferred type of the expression is actually this type or kind:
+
+... but the inferred type or kind of the expression is actually:
+
 ↳ $txt2
+
+Some common reasons why you might get this error:
+
+● The Haskell Dhall interpreter implicitly inserts a top-level annotation
+  matching the expected type
+
+  For example, if you run the following Haskell code:
+
+
+    ┌───────────────────────────────┐
+    │ >>> input auto "1" :: IO Text │
+    └───────────────────────────────┘
+
+
+  ... then the interpreter will actually type check the following annotated
+  expression:
+
+
+    ┌──────────┐
+    │ 1 : Text │
+    └──────────┘
+
+
+  ... and then type-checking will fail
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
@@ -1916,6 +1981,8 @@ instance Buildable s => Buildable (DetailedTypeError s) where
                 else buildContext ctx <> "\n"
             )
         <>  longTypeMessage msg <> "\n"
+        <>  "────────────────────────────────────────────────────────────────────────────────\n"
+        <>  "\n"
         <>  source
       where
         buildKV (key, val) = build key <> " : " <> build val
