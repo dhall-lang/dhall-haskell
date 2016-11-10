@@ -241,8 +241,18 @@ typeWith ctx e@(BoolIf x y z    ) = do
     case tx of
         Bool -> return ()
         _    -> Left (TypeError ctx e (InvalidPredicate x tx))
-    ty <- fmap Dhall.Core.normalize (typeWith ctx y)
+    ty  <- fmap Dhall.Core.normalize (typeWith ctx y )
+    tty <- fmap Dhall.Core.normalize (typeWith ctx ty)
+    case tty of
+        Const Type -> return ()
+        _          -> Left (TypeError ctx e (IfBranchMustBeTerm True y ty tty))
+
     tz <- fmap Dhall.Core.normalize (typeWith ctx z)
+    ttz <- fmap Dhall.Core.normalize (typeWith ctx tz)
+    case ttz of
+        Const Type -> return ()
+        _          -> Left (TypeError ctx e (IfBranchMustBeTerm False z tz ttz))
+
     if propEqual ty tz
         then return ()
         else Left (TypeError ctx e (IfBranchMismatch y z ty tz))
@@ -516,6 +526,7 @@ data TypeMessage s
     | InvalidMaybeType (Expr s X)
     | InvalidPredicate (Expr s X) (Expr s X)
     | IfBranchMismatch (Expr s X) (Expr s X) (Expr s X) (Expr s X)
+    | IfBranchMustBeTerm Bool (Expr s X) (Expr s X) (Expr s X)
     | InvalidFieldType Text (Expr s X)
     | InvalidAlternativeType Text (Expr s X)
     | DuplicateField Text
@@ -1180,6 +1191,27 @@ The following example illustrates this heirarchy:
 
 There is nothing above ❮Kind❯ in this hierarchy, so if you try to type check any
 expression containing ❮Kind❯ then type checking fails
+
+Some common reasons why you might get this error:
+
+● You supplied a kind where a type was expected
+
+  For example, the following expression will fail with this error:
+
+    ┌────────────────┐
+    │ [] : List Type │
+    └────────────────┘
+                ⇧
+                ❮Type❯ is a kind, not a type
+
+  matching the expected type
+
+  For example, if you run the following Haskell code:
+
+
+    ┌───────────────────────────────┐
+    │ >>> input auto "1" :: IO Text │
+    └───────────────────────────────┘
 |]
 
 prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
@@ -1243,6 +1275,95 @@ Some common reasons why you might get this error:
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+
+prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
+    ErrorMessages {..}
+  where
+    short = "❮if❯ branch is not a term"
+
+    long =
+        Builder.fromText [NeatInterpolation.text|
+Explanation: Every ❮if❯ expression has a ❮then❯ and ❮else❯ branch, each of which
+has an expression:
+
+
+                   Expression for ❮then❯ branch
+                   ⇩
+    ┌────────────────────────────────┐
+    │ if True then "Hello, world!"   │
+    │         else "Goodbye, world!" │
+    └────────────────────────────────┘
+                   ⇧
+                   Expression for ❮else❯ branch
+
+
+These expressions must be a "term", where a "term" is defined as an expression
+that has a type of kind ❮Type❯
+
+For example, the following expressions are all valid "terms":
+
+
+    ┌────────────────────┐
+    │ 1 : Integer : Type │  ❮1❯ is a term with a type (❮Integer❯) of kind ❮Type❯
+    └────────────────────┘
+      ⇧
+      term
+
+
+    ┌─────────────────────────────────────┐
+    │ Natural/odd : Natural → Bool : Type │  ❮Natural/odd❯ is a term with a type
+    └─────────────────────────────────────┘  (❮Natural → Bool❯) of kind ❮Type❯
+      ⇧
+      term
+
+
+However, the following expressions are $_NOT valid terms:
+
+
+    ┌────────────────────┐
+    │ Text : Type : Kind │  ❮Text❯ has kind (❮Type❯) of sort ❮Kind❯ and is
+    └────────────────────┘  therefore not a term
+      ⇧
+      type
+
+
+    ┌───────────────────────────┐
+    │ List : Type → Type : Kind │  ❮List❯ has kind (❮Type → Type❯) of sort
+    └───────────────────────────┘  ❮Kind❯ and is therefore not a term
+      ⇧
+      type-level function
+
+
+This means that you cannot define an ❮if❯ expression that returns a type.  For
+example, the following ❮if❯ expression is $_NOT valid:
+
+
+    ┌─────────────────────────────┐
+    │ if True then Text else Bool │  Invalid ❮if❯ expression
+    └─────────────────────────────┘
+                   ⇧         ⇧
+                   type      type
+
+
+Your ❮$txt0❯ branch of your ❮if❯ expression is:
+
+↳ $txt1
+
+... which has kind:
+
+↳ $txt2
+
+... of sort:
+
+↳ $txt3
+
+... and is not a term.  Therefore your ❮if❯ expression is not valid
+|]
+      where
+        txt0 = if b then "then" else "else"
+        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt2 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt3 = Text.toStrict (Dhall.Core.pretty expr2)
 
 prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     ErrorMessages {..}
