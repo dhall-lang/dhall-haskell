@@ -41,7 +41,7 @@ import qualified NeatInterpolation
 
 axiom :: Const -> Either (TypeError s) Const
 axiom Type = return Kind
-axiom Kind = Left (TypeError Dhall.Context.empty (Const Kind) (Untyped Kind))
+axiom Kind = Left (TypeError Dhall.Context.empty (Const Kind) Untyped)
 
 rule :: Const -> Const -> Either () Const
 rule Type Kind = Left ()
@@ -508,7 +508,7 @@ data TypeMessage s
     | NotAFunction (Expr s X) (Expr s X)
     | TypeMismatch (Expr s X) (Expr s X) (Expr s X) (Expr s X)
     | AnnotMismatch (Expr s X) (Expr s X) (Expr s X)
-    | Untyped Const
+    | Untyped
     | InvalidListElement Int Int (Expr s X) (Expr s X) (Expr s X)
     | InvalidListType Bool (Expr s X)
     | InvalidMaybeElement (Expr s X) (Expr s X) (Expr s X)
@@ -1157,34 +1157,29 @@ Some common reasons why you might get this error:
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
         txt2 = Text.toStrict (Dhall.Core.pretty expr2)
 
-prettyTypeMessage (Untyped c) = ErrorMessages {..}
+prettyTypeMessage Untyped = ErrorMessages {..}
   where
-    short =
-        Builder.fromText
-            [NeatInterpolation.text|"Error: `$txt` has no type, kind, or sort"|]
-      where
-        txt = Text.toStrict (Builder.toLazyText (Dhall.Core.buildConst c))
+    short = "❮Kind❯ has no type or kind"
 
     long =
         Builder.fromText [NeatInterpolation.text|
 Explanation: There are four levels of expressions that form a heirarchy:
 
-* terms
-* types
-* kinds
-* sorts
+● terms
+● types
+● kinds
+● sorts
 
-The following annotations illustrate this heirarchy:
+The following example illustrates this heirarchy:
 
-    "ABC" : Text : Type : Kind
+    ┌────────────────────────────┐
+    │ "ABC" : Text : Type : Kind │
+    └────────────────────────────┘
+       ⇧      ⇧      ⇧      ⇧
+       term   type   kind   sort
 
-Every term has a type.  For example, the term `"ABC"` has type `Text`
-Every type has a kind.  For example, the type `Text` has kind `Type`
-Every kind has a sort.  For example, the kind `Type` has sort `Kind`
-
-However, there is nothing above sorts in this the hierarchy.  So if you ever
-type-check an expression which includes `Kind` then you get this error because
-the compiler cannot infer what `Kind` belongs to
+There is nothing above ❮Kind❯ in this hierarchy, so if you try to type check any
+expression containing ❮Kind❯ then type checking fails
 |]
 
 prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
