@@ -293,8 +293,8 @@ exprC = expressionParser
           , operator Combine       combine
           ]
         , [ operator BoolOr       (symbol "||")
-          , operator NaturalPlus  (symbol "+" )
           , operator TextAppend   (symbol "++")
+          , operator NaturalPlus  (symbol "+" )
           ]
         , [ operator BoolEQ       (symbol "==")
           , operator BoolNE       (symbol "/=")
