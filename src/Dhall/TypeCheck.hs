@@ -899,7 +899,7 @@ the following expressions are all functions because they have a function type:
 
 
 An expression is not a function if the expression's type is not of the form
-❮a → b❯.  For example, these are not functions:
+❮a → b❯.  For example, these are $_NOT functions:
 
 
     ┌─────────────┐
@@ -1184,16 +1184,61 @@ expression containing ❮Kind❯ then type checking fails
 
 prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
   where
-    short = "Invalid predicate for `if`"
+    short = "Invalid predicate for ❮if❯"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-    if $txt0 then ...
-    -- ^ Your `if` expression's predicate has the wrong type
+Explanation: Every ❮if❯ expression begins with a predicate which must have type
+❮Bool❯
 
-Your `if` expression begins with a predicate that has type:
+For example, these are valid ❮if❯ expressions:
+
+
+    ┌──────────────────────────────┐
+    │ if True then "Yes" else "No" │
+    └──────────────────────────────┘
+         ⇧
+         Predicate
+
+
+    ┌─────────────────────────────────────────┐
+    │ λ(x : Bool) → if x then False else True │
+    └─────────────────────────────────────────┘
+                       ⇧
+                       Predicate
+
+
+... but these are $_NOT valid ❮if❯ expressions:
+
+
+    ┌───────────────────────────┐
+    │ if 0 then "Yes" else "No" │  ❮0❯ does not have type ❮Bool❯
+    └───────────────────────────┘
+
+
+    ┌────────────────────────────┐
+    │ if "" then False else True │  ❮""❯ does not have type ❮Bool❯
+    └────────────────────────────┘
+
+
+Your ❮if❯ expression begins with the following predicate:
+
+↳ $txt0
+
+... that has type:
+
 ↳ $txt1
-... but the predicate must have type `Bool`
+
+... but the predicate must instead have type ❮Bool❯
+
+Some common reasons why you might get this error:
+
+● You might be used to other programming languages that accept predicates other
+  than ❮Bool❯
+
+  For example, some languages permit ❮0❯ or ❮""❯ as valid predicates and treat
+  them as equivalent to ❮False❯.  However, the Dhall language does not permit
+  this
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
