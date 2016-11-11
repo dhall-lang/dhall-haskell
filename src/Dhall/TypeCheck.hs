@@ -1284,7 +1284,7 @@ prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
     long =
         Builder.fromText [NeatInterpolation.text|
 Explanation: Every ❮if❯ expression has a ❮then❯ and ❮else❯ branch, each of which
-has an expression:
+is an expression:
 
 
                    Expression for ❮then❯ branch
@@ -1368,22 +1368,73 @@ Your ❮$txt0❯ branch of your ❮if❯ expression is:
 prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     ErrorMessages {..}
   where
-    short = "The `then` and `else` branches must have matching types"
+    short = "❮if❯ branches must have matching types"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-    if ... then $txt0
-           else $txt1
-    --          ^ The above two expressions need to have the same type
+Explanation: Every ❮if❯ expression has a ❮then❯ and ❮else❯ branch, each of which
+is an expression:
 
-Your `if` expression has two branches with different types
 
-The type of the `then` branch is:
+                   Expression for ❮then❯ branch
+                   ⇩
+    ┌────────────────────────────────┐
+    │ if True then "Hello, world!"   │
+    │         else "Goodbye, world!" │
+    └────────────────────────────────┘
+                   ⇧
+                   Expression for ❮else❯ branch
+
+
+These two expressions must have the same type.  For example, the following ❮if❯
+expressions are all valid:
+
+
+    ┌──────────────────────────────────┐
+    │ λ(b : Bool) → if b then 0 else 1 │ Both branches have type ❮Integer❯
+    └──────────────────────────────────┘
+
+
+    ┌────────────────────────────┐
+    │ λ(b : Bool) →              │
+    │     if b then Natural/even │ Both branches have type ❮Natural → Bool❯
+    │          else Natural/odd  │
+    └────────────────────────────┘
+
+
+However, the following expression is $_NOT valid:
+
+
+                   This branch has type ❮Integer❯
+                   ⇩
+    ┌────────────────────────┐
+    │ if True then 0         │
+    │         else "ABC"     │
+    └────────────────────────┘
+                   ⇧
+                   This branch has type ❮Text❯
+
+
+The ❮then❯ and ❮else❯ branches must have matching types, even if the predicate is
+always ❮True❯ or ❮False❯
+
+Your ❮if❯ expression has the following ❮then❯ branch:
+
+↳ $txt0
+
+... which has type:
+
 ↳ $txt2
-The type of the `else` branch is:
+
+... and the following ❮else❯ branch:
+
+↳ $txt1
+
+... which has a different type:
+
 ↳ $txt3
 
-Fix the two branches to have matching types
+Fix your ❮then❯ and ❮else❯ branches to have matching types
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
