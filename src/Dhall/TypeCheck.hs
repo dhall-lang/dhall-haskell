@@ -331,7 +331,7 @@ typeWith ctx e@(ListLit t xs    ) = do
     s <- fmap Dhall.Core.normalize (typeWith ctx t)
     case s of
         Const Type -> return ()
-        _ -> Left (TypeError ctx e (InvalidListType (Data.Vector.null xs) t))
+        _ -> Left (TypeError ctx e (InvalidListType t))
     let n = Data.Vector.length xs
     flip Data.Vector.imapM_ xs (\i x -> do
         t' <- typeWith ctx x
@@ -520,7 +520,7 @@ data TypeMessage s
     | AnnotMismatch (Expr s X) (Expr s X) (Expr s X)
     | Untyped
     | InvalidListElement Int Int (Expr s X) (Expr s X) (Expr s X)
-    | InvalidListType Bool (Expr s X)
+    | InvalidListType (Expr s X)
     | InvalidMaybeElement (Expr s X) (Expr s X) (Expr s X)
     | InvalidMaybeLiteral Int
     | InvalidMaybeType (Expr s X)
@@ -1442,32 +1442,49 @@ Fix your ❮then❯ and ❮else❯ branches to have matching types
         txt2 = Text.toStrict (Dhall.Core.pretty expr2)
         txt3 = Text.toStrict (Dhall.Core.pretty expr3)
 
-prettyTypeMessage (InvalidListType isEmpty expr0) = ErrorMessages {..}
+prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
   where
     short = "Invalid type for list elements"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: Every list ends with a type annotation for the elements of the list
+Explanation: Every ❮List❯ documents the type of its elements with a type
+annotation, like this:
 
-This annotation must be a type, but the annotation you gave is not a type:
 
-$insert
+    ┌──────────────────────────┐
+    │ [1, 2, 3] : List Integer │
+    └──────────────────────────┘
+                       ⇧
+                       The type of the ❮List❯'s elements, which are ❮Integer❯s
 
-You can fix the problem by changing the annotation to a type
+
+The element type must be a type and not something else.  For example, the
+following element types are $_NOT valid:
+
+
+    ┌──────────────┐
+    │ ... : List 1 │
+    └──────────────┘
+                 ⇧
+                 This is an ❮Integer❯ and not a ❮Type❯
+
+
+    ┌─────────────────┐
+    │ ... : List Type │
+    └─────────────────┘
+                 ⇧
+                 This is a ❮Kind❯ and not a ❮Type❯
+
+
+You declared the ❮List❯'s element type to be:
+
+↳ $txt0
+
+... which is not a ❮Type❯
 |]
       where
         txt0 = Text.toStrict (Builder.toLazyText (Dhall.Core.buildExpr6 expr0))
-        insert = indent $
-            if isEmpty
-            then [NeatInterpolation.text|
-    [ ] : List $txt0
-    --         ^ This needs to be a type
-|]
-            else [NeatInterpolation.text|
-    [ ... ] : List $txt0
-    --             ^ This needs to be a type
-|]
 
 prettyTypeMessage (InvalidListElement i n expr0 expr1 expr2) =
     ErrorMessages {..}
