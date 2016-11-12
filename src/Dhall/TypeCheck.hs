@@ -1443,7 +1443,7 @@ Fix your ❮then❯ and ❮else❯ branches to have matching types
 
 prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
   where
-    short = "Invalid type for list elements"
+    short = "Invalid type for ❮List❯ elements"
 
     long =
         Builder.fromText [NeatInterpolation.text|
@@ -1476,7 +1476,7 @@ following element types are $_NOT valid:
                  This is a ❮Kind❯ and not a ❮Type❯
 
 
-You declared the ❮List❯'s element type to be:
+You declared that the ❮List❯'s elements should have type:
 
 ↳ $txt0
 
@@ -1531,7 +1531,7 @@ Your list elements should have this type:
 
 prettyTypeMessage (InvalidMaybeType expr0) = ErrorMessages {..}
   where
-    short = "Invalid type for `Maybe`"
+    short = "Invalid type for ❮Maybe❯ elements"
 
     long =
         Builder.fromText [NeatInterpolation.text|
