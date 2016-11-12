@@ -1452,10 +1452,17 @@ annotation, like this:
 
 
     ┌──────────────────────────┐
-    │ [1, 2, 3] : List Integer │
+    │ [1, 2, 3] : List Integer │  A ❮List❯ of three ❮Integer❯s
     └──────────────────────────┘
                        ⇧
                        The type of the ❮List❯'s elements, which are ❮Integer❯s
+
+
+    ┌───────────────────┐
+    │ [] : List Integer │  An empty ❮List❯
+    └───────────────────┘
+                ⇧
+                You still specify the type even when the ❮List❯ is empty
 
 
 The element type must be a type and not something else.  For example, the
@@ -1475,6 +1482,8 @@ following element types are $_NOT valid:
                  ⇧
                  This is a ❮Kind❯ and not a ❮Type❯
 
+
+Even if the ❮List❯ is empty you still must specify a valid type
 
 You declared that the ❮List❯'s elements should have type:
 
@@ -1531,36 +1540,57 @@ Your list elements should have this type:
 
 prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
   where
-    short = "Invalid type for ❮Optional❯ elements"
+    short = "Invalid type for ❮Optional❯ element"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: Every optional value ends with a type annotation for the element
-that might be stored inside.  For example, these are valid expressions:
+Explanation: Every optional element ends with a type annotation for the element
+that might be present, like this:
 
-    [1] : Optional Integer  -- An optional value that's present
-    []  : Optional Integer  -- An optional value that's absent
 
-The type following the `Optional` is the "type parameter", and must be a type:
+    ┌────────────────────────┐
+    │ [1] : Optional Integer │  An optional element that's present
+    └────────────────────────┘
+                     ⇧
+                     The type of the ❮Optional❯ element, which is an ❮Integer❯
 
-    Optional Integer -- This is valid, because `Integer` is a type
-    Optional Text    -- This is also valid, because `Text` is a type
 
-... but the type parameter must *not* be a term or kind:
+    ┌────────────────────────┐
+    │ [] : Optional Integer  │  An optional element that's absent
+    └────────────────────────┘
+                    ⇧
+                    You still specify the type even when the element is absent
 
-    Optional 1       -- This is invalid, because `1` is a term
-    Optional Type    -- This is invalid, because `Type` is a kind
 
-You provided a type parameter for the `Optional` that is not a valid type:
+The element type must be a type and not something else.  For example, the
+following element types are $_NOT valid:
 
-$insert
+
+    ┌──────────────────┐
+    │ ... : Optional 1 │
+    └──────────────────┘
+                     ⇧
+                     This is an ❮Integer❯ and not a ❮Type❯
+
+
+    ┌─────────────────────┐
+    │ ... : Optional Type │
+    └─────────────────────┘
+                     ⇧
+                     This is a ❮Kind❯ and not a ❮Type❯
+
+
+Even if the element is absent you still must specify a valid type
+
+You declared that the ❮Optional❯ element should have type:
+
+↳ $txt0
+
+... which is not a ❮Type❯
+
 |]
       where
         txt0 = Text.toStrict (Builder.toLazyText (Dhall.Core.buildExpr6 expr0))
-        insert = indent [NeatInterpolation.text|
-    [ ... ] : Optional $txt0
-    --              ^ This needs to be a type
-|]
 
 prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..}
   where
