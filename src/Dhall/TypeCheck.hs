@@ -1040,7 +1040,7 @@ You tried to invoke the following function:
 
 ↳ $txt2
 
-... which has type or kind:
+... which has a different type or kind:
 
 ↳ $txt3
 
