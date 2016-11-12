@@ -1681,6 +1681,17 @@ Your ❮Optional❯ value had this many elements:
 ↳ $txt0
 
 ... when an ❮Optional❯ value can only have at most one element
+
+Some common reasons why you might get this error:
+
+● You accidentally typed ❮Optional❯ when you meant ❮List❯, like this:
+
+
+    ┌────────────────────────────────────────────────────┐
+    │ List/length Integer ([1, 2, 3] : Optional Integer) │
+    └────────────────────────────────────────────────────┘
+                                       ⇧
+                                       This should be ❮List❯ instead
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty n)
