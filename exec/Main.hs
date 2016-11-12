@@ -56,7 +56,7 @@ main = do
                     then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
                     else do
                         Data.Text.Lazy.IO.hPutStrLn stderr "Add the --explain flag for a more detailed explanation of this error\n"
-                        Control.Exception.throwIO e
+                        Control.Exception.throwIO (Imported ps e)
 
             handler2 e = do
                 let _ = e :: SomeException
