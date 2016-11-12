@@ -591,7 +591,7 @@ Explanation: Expressions can only reference previously introduced (i.e. "bound")
 variables that are still "in scope"
 
 For example, the following valid expressions introduce a "bound" variable named
-❮x❯:
+❰x❱:
 
 
     ┌─────────────────┐
@@ -602,7 +602,7 @@ For example, the following valid expressions introduce a "bound" variable named
 
 
     ┌─────────────────┐
-    │ let x = 1 in x  │  ❮let❯ expressions introduce "bound" variables
+    │ let x = 1 in x  │  ❰let❱ expressions introduce "bound" variables
     └─────────────────┘
           ⇧
           This is the bound variable
@@ -613,21 +613,21 @@ variable that has not been introduced yet (i.e. an "unbound" variable):
 
 
     ┌─────────────────┐
-    │ λ(x : Bool) → y │  The variable ❮y❯ hasn't been introduced yet
+    │ λ(x : Bool) → y │  The variable ❰y❱ hasn't been introduced yet
     └─────────────────┘
                     ⇧
                     This is the unbound variable
 
 
     ┌──────────────────────────┐
-    │ (let x = True in x) && x │  ❮x❯ is undefined outside the parentheses
+    │ (let x = True in x) && x │  ❰x❱ is undefined outside the parentheses
     └──────────────────────────┘
                              ⇧
                              This is the unbound variable
 
 
     ┌────────────────┐
-    │ let x = x in x │  The definition for ❮x❯ cannot reference itself
+    │ let x = x in x │  The definition for ❰x❱ cannot reference itself
     └────────────────┘
               ⇧
               This is the unbound variable
@@ -665,7 +665,7 @@ Some common reasons why you might get this error:
               Recursive definitions are not allowed
 
 
-● You accidentally forgot a ❮λ❯ or ❮∀❯/❮forall❯
+● You accidentally forgot a ❰λ❱ or ❰∀❱/❰forall❱
 
 
         Unbound variable
@@ -674,7 +674,7 @@ Some common reasons why you might get this error:
     │  (x : Bool) → x │
     └─────────────────┘
       ⇧
-      A ❮λ❯ here would transform this into a valid anonymous function 
+      A ❰λ❱ here would transform this into a valid anonymous function 
 
 
         Unbound variable
@@ -683,7 +683,7 @@ Some common reasons why you might get this error:
     │  (x : Bool) → Bool │
     └────────────────────┘
       ⇧
-      A ❮∀❯ or ❮forall❯ here would transform this into a valid function type
+      A ❰∀❱ or ❰forall❱ here would transform this into a valid function type
 |]
 
 prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
@@ -700,14 +700,14 @@ this:
         ⇩
     ┌───────────────────────┐
     │ ∀(x : Natural) → Bool │  This is the type of a function that accepts an
-    └───────────────────────┘  input term named ❮x❯ that has type ❮Natural❯
+    └───────────────────────┘  input term named ❰x❱ that has type ❰Natural❱
             ⇧
             This is the type of the input term
 
 
     ┌────────────────┐
     │ Bool → Integer │  This is the type of a function that accepts an anonymous
-    └────────────────┘  input term that has type ❮Bool❯
+    └────────────────┘  input term that has type ❰Bool❱
       ⇧
       This is the type of the input term
 
@@ -719,14 +719,14 @@ this:
         ⇩
     ┌────────────────────┐
     │ ∀(a : Type) → Type │  This is the type of a function that accepts an input
-    └────────────────────┘  type named ❮a❯ of kind ❮Type❯
+    └────────────────────┘  type named ❰a❱ of kind ❰Type❱
             ⇧
             This is the kind of the input type
 
 
     ┌──────────────────────┐
     │ (Type → Type) → Type │  This is the type of a function that accepts an
-    └──────────────────────┘  anonymous input type that has kind ❮Type → Type❯
+    └──────────────────────┘  anonymous input type that has kind ❰Type → Type❱
        ⇧
        This is the kind of the input type
 
@@ -735,15 +735,15 @@ Other function inputs are $_NOT valid, like this:
 
 
     ┌──────────────┐
-    │ ∀(x : 1) → x │  ❮1❯ is a "term" and not a "type" nor a "kind" so ❮x❯
-    └──────────────┘  cannot have "type" ❮1❯ or "kind" ❮1❯
+    │ ∀(x : 1) → x │  ❰1❱ is a "term" and not a "type" nor a "kind" so ❰x❱
+    └──────────────┘  cannot have "type" ❰1❱ or "kind" ❰1❱
             ⇧
             This is not a type or kind
 
 
     ┌──────────┐
-    │ True → x │  ❮True❯ is a "term" and not a "type" nor a "kind" so the
-    └──────────┘  anonymous input cannot have "type" ❮True❯ or "kind" ❮True❯
+    │ True → x │  ❰True❱ is a "term" and not a "type" nor a "kind" so the
+    └──────────┘  anonymous input cannot have "type" ❰True❱ or "kind" ❰True❱
       ⇧
       This is not a type or kind
 
@@ -769,14 +769,14 @@ like this:
 
     ┌────────────────────┐
     │ ∀(x : Text) → Bool │  This is the type of a function that returns an
-    └────────────────────┘  output term that has type ❮Bool❯
+    └────────────────────┘  output term that has type ❰Bool❱
                     ⇧
                     This is the type of the output term
 
 
     ┌────────────────┐
     │ Bool → Integer │  This is the type of a function that returns an output
-    └────────────────┘  term that has type ❮Int❯
+    └────────────────┘  term that has type ❰Int❱
              ⇧
              This is the type of the output term
 
@@ -786,14 +786,14 @@ this:
 
     ┌────────────────────┐
     │ ∀(a : Type) → Type │  This is the type of a function that returns an
-    └────────────────────┘  output type that has kind ❮Type❯
+    └────────────────────┘  output type that has kind ❰Type❱
                     ⇧
                     This is the kind of the output type
 
 
     ┌──────────────────────┐
     │ (Type → Type) → Type │  This is the type of a function that returns an
-    └──────────────────────┘  output type that has kind ❮Type❯
+    └──────────────────────┘  output type that has kind ❰Type❱
                       ⇧
                       This is the kind of the output type
 
@@ -802,15 +802,15 @@ Other outputs are $_NOT valid, like this:
 
 
     ┌─────────────────┐
-    │ ∀(x : Bool) → x │  ❮x❯ is a "term" and not a "type" nor a "kind" so the
-    └─────────────────┘  output cannot have "type" ❮x❯ or "kind" ❮x❯
+    │ ∀(x : Bool) → x │  ❰x❱ is a "term" and not a "type" nor a "kind" so the
+    └─────────────────┘  output cannot have "type" ❰x❱ or "kind" ❰x❱
                     ⇧
                     This is not a type or kind
 
 
     ┌─────────────┐
-    │ Text → True │  ❮True❯ is a "term" and not a "type" nor a "kind" so the
-    └─────────────┘  output cannot have "type" ❮True❯ or "kind" ❮True❯
+    │ Text → True │  ❰True❱ is a "term" and not a "type" nor a "kind" so the
+    └─────────────┘  output cannot have "type" ❰True❱ or "kind" ❰True❱
              ⇧
              This is not a type or kind
 
@@ -823,14 +823,14 @@ You specified that your function outputs a:
 
 Some common reasons why you might get this error:
 
-● You use ❮∀❯ instead of ❮λ❯ by mistake, like this:
+● You use ❰∀❱ instead of ❰λ❱ by mistake, like this:
 
 
     ┌────────────────┐
     │ ∀(x: Bool) → x │
     └────────────────┘
       ⇧
-      Using ❮λ❯ here instead of ❮∀❯ would transform this into a valid function
+      Using ❰λ❱ here instead of ❰∀❱ would transform this into a valid function
 |]
       where
         txt = Text.toStrict (Dhall.Core.pretty expr)
@@ -846,84 +846,84 @@ like this:
 
 
     ┌─────┐
-    │ f x │  This denotes the function ❮f❯ applied to an argument named ❮x❯ 
+    │ f x │  This denotes the function ❰f❱ applied to an argument named ❰x❱ 
     └─────┘
 
 
-A function is a term that has type ❮a → b❯ for some ❮a❯ or ❮b❯.  For example,
+A function is a term that has type ❰a → b❱ for some ❰a❱ or ❰b❱.  For example,
 the following expressions are all functions because they have a function type:
 
 
-                        The function's input type is ❮Bool❯
+                        The function's input type is ❰Bool❱
                         ⇩
     ┌───────────────────────────────┐
     │ λ(x : Bool) → x : Bool → Bool │  User-defined anonymous function
     └───────────────────────────────┘
                                ⇧
-                               The function's output type is ❮Bool❯
+                               The function's output type is ❰Bool❱
 
 
-                     The function's input type is ❮Natural❯
+                     The function's input type is ❰Natural❱
                      ⇩
     ┌───────────────────────────────┐
     │ Natural/even : Natural → Bool │  Built-in function
     └───────────────────────────────┘
                                ⇧
-                               The function's output type is ❮Bool❯
+                               The function's output type is ❰Bool❱
 
 
-                        The function's input kind is ❮Type❯
+                        The function's input kind is ❰Type❱
                         ⇩
     ┌───────────────────────────────┐
     │ λ(a : Type) → a : Type → Type │  Type-level functions are still functions
     └───────────────────────────────┘
                                ⇧
-                               The function's output kind is ❮Type❯
+                               The function's output kind is ❰Type❱
 
 
-             The function's input kind is ❮Type❯
+             The function's input kind is ❰Type❱
              ⇩
     ┌────────────────────┐
     │ List : Type → Type │  Built-in type-level function
     └────────────────────┘
                     ⇧
-                    The function's output kind is ❮Type❯
+                    The function's output kind is ❰Type❱
 
 
-                        Function's input has kind ❮Type❯
+                        Function's input has kind ❰Type❱
                         ⇩
     ┌─────────────────────────────────────────────────┐
     │ List/head : ∀(a : Type) → (List a → Optional a) │  A function can return
     └─────────────────────────────────────────────────┘  another function
                                 ⇧
-                                Function's output has type ❮List a → Optional a❯
+                                Function's output has type ❰List a → Optional a❱
 
 
-                       The function's input type is ❮List Text❯
+                       The function's input type is ❰List Text❱
                        ⇩
     ┌────────────────────────────────────────────┐
     │ List/head Text : List Text → Optional Text │  A function applied to an
     └────────────────────────────────────────────┘  argument can be a function
                                    ⇧
-                                   The function's output type is ❮Optional Text❯
+                                   The function's output type is ❰Optional Text❱
 
 
 An expression is not a function if the expression's type is not of the form
-❮a → b❯.  For example, these are $_NOT functions:
+❰a → b❱.  For example, these are $_NOT functions:
 
 
     ┌─────────────┐
-    │ 1 : Integer │  ❮1❯ is not a function because ❮Integer❯ is not the type of
+    │ 1 : Integer │  ❰1❱ is not a function because ❰Integer❱ is not the type of
     └─────────────┘  a function
 
 
     ┌────────────────────────┐
-    │ Natural/even +2 : Bool │  ❮Natural/even +2❯ is not a function because
-    └────────────────────────┘  ❮Bool❯ is not the type of a function
+    │ Natural/even +2 : Bool │  ❰Natural/even +2❱ is not a function because
+    └────────────────────────┘  ❰Bool❱ is not the type of a function
 
 
     ┌──────────────────┐
-    │ List Text : Type │  ❮List Text❯ is not a function because ❮Type❯ is not
+    │ List Text : Type │  ❰List Text❱ is not a function because ❰Type❱ is not
     └──────────────────┘  the type of a function
 
 
@@ -954,28 +954,28 @@ For example:
 
     ┌───────────────────────────────┐
     │ λ(x : Bool) → x : Bool → Bool │  This anonymous function only accepts
-    └───────────────────────────────┘  arguments that have type ❮Bool❯
+    └───────────────────────────────┘  arguments that have type ❰Bool❱
                         ⇧
                         The function's input type
 
 
     ┌───────────────────────────────┐
     │ Natural/even : Natural → Bool │  This built-in function only accepts
-    └───────────────────────────────┘  arguments that have type ❮Natural❯
+    └───────────────────────────────┘  arguments that have type ❰Natural❱
                      ⇧
                      The function's input type
 
 
     ┌───────────────────────────────┐
     │ λ(a : Type) → a : Type → Type │  This anonymous function only accepts
-    └───────────────────────────────┘  arguments that have kind ❮Type❯
+    └───────────────────────────────┘  arguments that have kind ❰Type❱
                         ⇧
                         The function's input kind
 
 
     ┌────────────────────┐
     │ List : Type → Type │  This built-in function only accepts arguments that
-    └────────────────────┘  have kind ❮Type❯
+    └────────────────────┘  have kind ❰Type❱
              ⇧
              The function's input kind
 
@@ -984,23 +984,23 @@ For example, the following expressions are valid:
 
 
     ┌────────────────────────┐
-    │ (λ(x : Bool) → x) True │  ❮True❯ has type ❮Bool❯, which matches the type
+    │ (λ(x : Bool) → x) True │  ❰True❱ has type ❰Bool❱, which matches the type
     └────────────────────────┘  of argument that the anonymous function accepts
 
 
     ┌─────────────────┐
-    │ Natural/even +2 │  ❮+2❯ has type ❮Natural❯, which matches the type of
-    └─────────────────┘  argument that the ❮Natural/even❯ function accepts,
+    │ Natural/even +2 │  ❰+2❱ has type ❰Natural❱, which matches the type of
+    └─────────────────┘  argument that the ❰Natural/even❱ function accepts,
 
 
     ┌────────────────────────┐
-    │ (λ(a : Type) → a) Bool │  ❮Bool❯ has kind ❮Type❯, which matches the kind
+    │ (λ(a : Type) → a) Bool │  ❰Bool❱ has kind ❰Type❱, which matches the kind
     └────────────────────────┘  of argument that the anonymous function accepts
 
 
     ┌───────────┐
-    │ List Text │  ❮Text❯ has kind ❮Type❯, which matches the kind of argument
-    └───────────┘  that that the ❮List❯ function accepts
+    │ List Text │  ❰Text❱ has kind ❰Type❱, which matches the kind of argument
+    └───────────┘  that that the ❰List❱ function accepts
 
 
 However, you can $_NOT apply a function to the wrong type or kind of argument
@@ -1009,23 +1009,23 @@ For example, the following expressions are not valid:
 
 
     ┌───────────────────────┐
-    │ (λ(x : Bool) → x) "A" │  ❮"A"❯ has type ❮Text❯, but the anonymous function
-    └───────────────────────┘  expects an argument that has type ❮Bool❯
+    │ (λ(x : Bool) → x) "A" │  ❰"A"❱ has type ❰Text❱, but the anonymous function
+    └───────────────────────┘  expects an argument that has type ❰Bool❱
 
 
     ┌──────────────────┐
-    │ Natural/even "A" │  ❮"A"❯ has type ❮Text❯, but the ❮Natural/even❯ function
-    └──────────────────┘  expects an argument that has type ❮Natural❯
+    │ Natural/even "A" │  ❰"A"❱ has type ❰Text❱, but the ❰Natural/even❱ function
+    └──────────────────┘  expects an argument that has type ❰Natural❱
 
 
     ┌────────────────────────┐
-    │ (λ(a : Type) → a) True │  ❮True❯ has type ❮Bool❯, but the anonymous
-    └────────────────────────┘  function expects an argument of kind ❮Type❯
+    │ (λ(a : Type) → a) True │  ❰True❱ has type ❰Bool❱, but the anonymous
+    └────────────────────────┘  function expects an argument of kind ❰Type❱
 
 
     ┌────────┐
-    │ List 1 │  ❮1❯ has type ❮Integer❯, but the ❮List❯ function expects an
-    └────────┘  argument that has kind ❮Type❯
+    │ List 1 │  ❰1❱ has type ❰Integer❱, but the ❰List❱ function expects an
+    └────────┘  argument that has kind ❰Type❱
 
 
 You tried to invoke the following function:
@@ -1053,17 +1053,17 @@ Some common reasons why you might get this error:
     │ List/head   ([1, 2, 3] : List Integer) │
     └────────────────────────────────────────┘
                 ⇧
-                ❮List/head❯ is missing the first argument,
-                which should be: ❮Integer❯
+                ❰List/head❱ is missing the first argument,
+                which should be: ❰Integer❱
 
 
-● You supply an ❮Integer❯ literal to a function that expects a ❮Natural❯
+● You supply an ❰Integer❱ literal to a function that expects a ❰Natural❱
 
     ┌────────────────┐
     │ Natural/even 2 │
     └────────────────┘
                    ⇧
-                   This should be ❮+2❯
+                   This should be ❰+2❱
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
@@ -1078,11 +1078,11 @@ prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
     long =
         Builder.fromText [NeatInterpolation.text|
 Explanation: You can annotate an expression with its type or kind using the
-❮:❯ symbol, like this:
+❰:❱ symbol, like this:
 
 
     ┌───────┐
-    │ x : t │  ❮x❯ is an expression and ❮t❯ is the annotated type or kind of ❮x❯
+    │ x : t │  ❰x❱ is an expression and ❰t❱ is the annotated type or kind of ❰x❱
     └───────┘
 
 The type checker verifies that the expression's type or kind matches the
@@ -1093,22 +1093,22 @@ accepts:
 
 
     ┌─────────────┐
-    │ 1 : Integer │  ❮1❯ is an expression that has type ❮Integer❯, so the type
+    │ 1 : Integer │  ❰1❱ is an expression that has type ❰Integer❱, so the type
     └─────────────┘  checker accepts the annotation
 
 
     ┌────────────────────────┐
-    │ Natural/even +2 : Bool │  ❮Natural/even +2❯ has type ❮Bool❯, so the type
+    │ Natural/even +2 : Bool │  ❰Natural/even +2❱ has type ❰Bool❱, so the type
     └────────────────────────┘  checker accepts the annotation
 
 
     ┌────────────────────┐
-    │ List : Type → Type │  ❮List❯ is an expression that has kind ❮Type → Type❯,
+    │ List : Type → Type │  ❰List❱ is an expression that has kind ❰Type → Type❱,
     └────────────────────┘  so the type checker accepts the annotation
 
 
     ┌──────────────────┐
-    │ List Text : Type │  ❮List Text❯ is an expression that has kind ❮Type❯, so
+    │ List Text : Type │  ❰List Text❱ is an expression that has kind ❰Type❱, so
     └──────────────────┘  the type checker accepts the annotation
 
 
@@ -1117,12 +1117,12 @@ reject them:
 
 
     ┌──────────┐
-    │ 1 : Text │  The type checker rejects this because ❮1❯ does not have type
-    └──────────┘  ❮Text❯
+    │ 1 : Text │  The type checker rejects this because ❰1❱ does not have type
+    └──────────┘  ❰Text❱
 
 
     ┌─────────────┐
-    │ List : Type │  ❮List❯ does not have kind ❮Type❯
+    │ List : Type │  ❰List❱ does not have kind ❰Type❱
     └─────────────┘
 
 
@@ -1169,7 +1169,7 @@ Some common reasons why you might get this error:
 
 prettyTypeMessage Untyped = ErrorMessages {..}
   where
-    short = "❮Kind❯ has no type or kind"
+    short = "❰Kind❱ has no type or kind"
 
     long =
         Builder.fromText [NeatInterpolation.text|
@@ -1188,8 +1188,8 @@ The following example illustrates this heirarchy:
        ⇧      ⇧      ⇧      ⇧
        term   type   kind   sort
 
-There is nothing above ❮Kind❯ in this hierarchy, so if you try to type check any
-expression containing ❮Kind❯ then type checking fails
+There is nothing above ❰Kind❱ in this hierarchy, so if you try to type check any
+expression containing ❰Kind❱ then type checking fails
 
 Some common reasons why you might get this error:
 
@@ -1201,7 +1201,7 @@ Some common reasons why you might get this error:
     │ [] : List Type │
     └────────────────┘
                 ⇧
-                ❮Type❯ is a kind, not a type
+                ❰Type❱ is a kind, not a type
 
   matching the expected type
 
@@ -1215,14 +1215,14 @@ Some common reasons why you might get this error:
 
 prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
   where
-    short = "Invalid predicate for ❮if❯"
+    short = "Invalid predicate for ❰if❱"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: Every ❮if❯ expression begins with a predicate which must have type
-❮Bool❯
+Explanation: Every ❰if❱ expression begins with a predicate which must have type
+❰Bool❱
 
-For example, these are valid ❮if❯ expressions:
+For example, these are valid ❰if❱ expressions:
 
 
     ┌──────────────────────────────┐
@@ -1239,20 +1239,20 @@ For example, these are valid ❮if❯ expressions:
                        Predicate
 
 
-... but these are $_NOT valid ❮if❯ expressions:
+... but these are $_NOT valid ❰if❱ expressions:
 
 
     ┌───────────────────────────┐
-    │ if 0 then "Yes" else "No" │  ❮0❯ does not have type ❮Bool❯
+    │ if 0 then "Yes" else "No" │  ❰0❱ does not have type ❰Bool❱
     └───────────────────────────┘
 
 
     ┌────────────────────────────┐
-    │ if "" then False else True │  ❮""❯ does not have type ❮Bool❯
+    │ if "" then False else True │  ❰""❱ does not have type ❰Bool❱
     └────────────────────────────┘
 
 
-Your ❮if❯ expression begins with the following predicate:
+Your ❰if❱ expression begins with the following predicate:
 
 ↳ $txt0
 
@@ -1260,15 +1260,15 @@ Your ❮if❯ expression begins with the following predicate:
 
 ↳ $txt1
 
-... but the predicate must instead have type ❮Bool❯
+... but the predicate must instead have type ❰Bool❱
 
 Some common reasons why you might get this error:
 
 ● You might be used to other programming languages that accept predicates other
-  than ❮Bool❯
+  than ❰Bool❱
 
-  For example, some languages permit ❮0❯ or ❮""❯ as valid predicates and treat
-  them as equivalent to ❮False❯.  However, the Dhall language does not permit
+  For example, some languages permit ❰0❱ or ❰""❱ as valid predicates and treat
+  them as equivalent to ❰False❱.  However, the Dhall language does not permit
   this
 |]
       where
@@ -1278,40 +1278,40 @@ Some common reasons why you might get this error:
 prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "❮if❯ branch is not a term"
+    short = "❰if❱ branch is not a term"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: Every ❮if❯ expression has a ❮then❯ and ❮else❯ branch, each of which
+Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which
 is an expression:
 
 
-                   Expression for ❮then❯ branch
+                   Expression for ❰then❱ branch
                    ⇩
     ┌────────────────────────────────┐
     │ if True then "Hello, world!"   │
     │         else "Goodbye, world!" │
     └────────────────────────────────┘
                    ⇧
-                   Expression for ❮else❯ branch
+                   Expression for ❰else❱ branch
 
 
 These expressions must be a "term", where a "term" is defined as an expression
-that has a type of kind ❮Type❯
+that has a type of kind ❰Type❱
 
 For example, the following expressions are all valid "terms":
 
 
     ┌────────────────────┐
-    │ 1 : Integer : Type │  ❮1❯ is a term with a type (❮Integer❯) of kind ❮Type❯
+    │ 1 : Integer : Type │  ❰1❱ is a term with a type (❰Integer❱) of kind ❰Type❱
     └────────────────────┘
       ⇧
       term
 
 
     ┌─────────────────────────────────────┐
-    │ Natural/odd : Natural → Bool : Type │  ❮Natural/odd❯ is a term with a type
-    └─────────────────────────────────────┘  (❮Natural → Bool❯) of kind ❮Type❯
+    │ Natural/odd : Natural → Bool : Type │  ❰Natural/odd❱ is a term with a type
+    └─────────────────────────────────────┘  (❰Natural → Bool❱) of kind ❰Type❱
       ⇧
       term
 
@@ -1320,31 +1320,31 @@ However, the following expressions are $_NOT valid terms:
 
 
     ┌────────────────────┐
-    │ Text : Type : Kind │  ❮Text❯ has kind (❮Type❯) of sort ❮Kind❯ and is
+    │ Text : Type : Kind │  ❰Text❱ has kind (❰Type❱) of sort ❰Kind❱ and is
     └────────────────────┘  therefore not a term
       ⇧
       type
 
 
     ┌───────────────────────────┐
-    │ List : Type → Type : Kind │  ❮List❯ has kind (❮Type → Type❯) of sort
-    └───────────────────────────┘  ❮Kind❯ and is therefore not a term
+    │ List : Type → Type : Kind │  ❰List❱ has kind (❰Type → Type❱) of sort
+    └───────────────────────────┘  ❰Kind❱ and is therefore not a term
       ⇧
       type-level function
 
 
-This means that you cannot define an ❮if❯ expression that returns a type.  For
-example, the following ❮if❯ expression is $_NOT valid:
+This means that you cannot define an ❰if❱ expression that returns a type.  For
+example, the following ❰if❱ expression is $_NOT valid:
 
 
     ┌─────────────────────────────┐
-    │ if True then Text else Bool │  Invalid ❮if❯ expression
+    │ if True then Text else Bool │  Invalid ❰if❱ expression
     └─────────────────────────────┘
                    ⇧         ⇧
                    type      type
 
 
-Your ❮$txt0❯ branch of your ❮if❯ expression is:
+Your ❰$txt0❱ branch of your ❰if❱ expression is:
 
 ↳ $txt1
 
@@ -1356,7 +1356,7 @@ Your ❮$txt0❯ branch of your ❮if❯ expression is:
 
 ↳ $txt3
 
-... and is not a term.  Therefore your ❮if❯ expression is not valid
+... and is not a term.  Therefore your ❰if❱ expression is not valid
 |]
       where
         txt0 = if b then "then" else "else"
@@ -1367,36 +1367,36 @@ Your ❮$txt0❯ branch of your ❮if❯ expression is:
 prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     ErrorMessages {..}
   where
-    short = "❮if❯ branches must have matching types"
+    short = "❰if❱ branches must have matching types"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: Every ❮if❯ expression has a ❮then❯ and ❮else❯ branch, each of which
+Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which
 is an expression:
 
 
-                   Expression for ❮then❯ branch
+                   Expression for ❰then❱ branch
                    ⇩
     ┌────────────────────────────────┐
     │ if True then "Hello, world!"   │
     │         else "Goodbye, world!" │
     └────────────────────────────────┘
                    ⇧
-                   Expression for ❮else❯ branch
+                   Expression for ❰else❱ branch
 
 
-These two expressions must have the same type.  For example, the following ❮if❯
+These two expressions must have the same type.  For example, the following ❰if❱
 expressions are all valid:
 
 
     ┌──────────────────────────────────┐
-    │ λ(b : Bool) → if b then 0 else 1 │ Both branches have type ❮Integer❯
+    │ λ(b : Bool) → if b then 0 else 1 │ Both branches have type ❰Integer❱
     └──────────────────────────────────┘
 
 
     ┌────────────────────────────┐
     │ λ(b : Bool) →              │
-    │     if b then Natural/even │ Both branches have type ❮Natural → Bool❯
+    │     if b then Natural/even │ Both branches have type ❰Natural → Bool❱
     │          else Natural/odd  │
     └────────────────────────────┘
 
@@ -1404,20 +1404,20 @@ expressions are all valid:
 However, the following expression is $_NOT valid:
 
 
-                   This branch has type ❮Integer❯
+                   This branch has type ❰Integer❱
                    ⇩
     ┌────────────────────────┐
     │ if True then 0         │
     │         else "ABC"     │
     └────────────────────────┘
                    ⇧
-                   This branch has type ❮Text❯
+                   This branch has type ❰Text❱
 
 
-The ❮then❯ and ❮else❯ branches must have matching types, even if the predicate is
-always ❮True❯ or ❮False❯
+The ❰then❱ and ❰else❱ branches must have matching types, even if the predicate is
+always ❰True❱ or ❰False❱
 
-Your ❮if❯ expression has the following ❮then❯ branch:
+Your ❰if❱ expression has the following ❰then❱ branch:
 
 ↳ $txt0
 
@@ -1425,7 +1425,7 @@ Your ❮if❯ expression has the following ❮then❯ branch:
 
 ↳ $txt2
 
-... and the following ❮else❯ branch:
+... and the following ❰else❱ branch:
 
 ↳ $txt1
 
@@ -1433,7 +1433,7 @@ Your ❮if❯ expression has the following ❮then❯ branch:
 
 ↳ $txt3
 
-Fix your ❮then❯ and ❮else❯ branches to have matching types
+Fix your ❰then❱ and ❰else❱ branches to have matching types
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
@@ -1443,26 +1443,26 @@ Fix your ❮then❯ and ❮else❯ branches to have matching types
 
 prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
   where
-    short = "Invalid type for ❮List❯ elements"
+    short = "Invalid type for ❰List❱ elements"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: Every ❮List❯ documents the type of its elements with a type
+Explanation: Every ❰List❱ documents the type of its elements with a type
 annotation, like this:
 
 
     ┌──────────────────────────┐
-    │ [1, 2, 3] : List Integer │  A ❮List❯ of three ❮Integer❯s
+    │ [1, 2, 3] : List Integer │  A ❰List❱ of three ❰Integer❱s
     └──────────────────────────┘
                        ⇧
-                       The type of the ❮List❯'s elements, which are ❮Integer❯s
+                       The type of the ❰List❱'s elements, which are ❰Integer❱s
 
 
     ┌───────────────────┐
-    │ [] : List Integer │  An empty ❮List❯
+    │ [] : List Integer │  An empty ❰List❱
     └───────────────────┘
                 ⇧
-                You still specify the type even when the ❮List❯ is empty
+                You still specify the type even when the ❰List❱ is empty
 
 
 The element type must be a type and not something else.  For example, the
@@ -1473,23 +1473,23 @@ following element types are $_NOT valid:
     │ ... : List 1 │
     └──────────────┘
                  ⇧
-                 This is an ❮Integer❯ and not a ❮Type❯
+                 This is an ❰Integer❱ and not a ❰Type❱
 
 
     ┌─────────────────┐
     │ ... : List Type │
     └─────────────────┘
                  ⇧
-                 This is a ❮Kind❯ and not a ❮Type❯
+                 This is a ❰Kind❱ and not a ❰Type❱
 
 
-Even if the ❮List❯ is empty you still must specify a valid type
+Even if the ❰List❱ is empty you still must specify a valid type
 
-You declared that the ❮List❯'s elements should have type:
+You declared that the ❰List❱'s elements should have type:
 
 ↳ $txt0
 
-... which is not a ❮Type❯
+... which is not a ❰Type❱
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
@@ -1504,23 +1504,23 @@ prettyTypeMessage (InvalidListElement i expr0 expr1 expr2) =
 Explanation: Every element in the list must have a type matching the type
 annotation at the end of the list
 
-For example, this is a valid ❮List❯:
+For example, this is a valid ❰List❱:
 
 
     ┌──────────────────────────┐
-    │ [1, 2, 3] : List Integer │  Every element in this ❮List❯ is an ❮Integer❯
+    │ [1, 2, 3] : List Integer │  Every element in this ❰List❱ is an ❰Integer❱
     └──────────────────────────┘
 
 
-.. but this is $_NOT a valid ❮List❯:
+.. but this is $_NOT a valid ❰List❱:
 
 
     ┌──────────────────────────────┐
-    │ [1, "ABC", 3] : List Integer │  The second element is not an ❮Integer❯
+    │ [1, "ABC", 3] : List Integer │  The second element is not an ❰Integer❱
     └──────────────────────────────┘
 
 
-Your ❮List❯ elements should have this type:
+Your ❰List❱ elements should have this type:
 
 ↳ $txt0
 
@@ -1540,7 +1540,7 @@ Your ❮List❯ elements should have this type:
 
 prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
   where
-    short = "Invalid type for ❮Optional❯ element"
+    short = "Invalid type for ❰Optional❱ element"
 
     long =
         Builder.fromText [NeatInterpolation.text|
@@ -1552,7 +1552,7 @@ that might be present, like this:
     │ [1] : Optional Integer │  An optional element that's present
     └────────────────────────┘
                      ⇧
-                     The type of the ❮Optional❯ element, which is an ❮Integer❯
+                     The type of the ❰Optional❱ element, which is an ❰Integer❱
 
 
     ┌────────────────────────┐
@@ -1570,23 +1570,23 @@ following element types are $_NOT valid:
     │ ... : Optional 1 │
     └──────────────────┘
                      ⇧
-                     This is an ❮Integer❯ and not a ❮Type❯
+                     This is an ❰Integer❱ and not a ❰Type❱
 
 
     ┌─────────────────────┐
     │ ... : Optional Type │
     └─────────────────────┘
                      ⇧
-                     This is a ❮Kind❯ and not a ❮Type❯
+                     This is a ❰Kind❱ and not a ❰Type❱
 
 
 Even if the element is absent you still must specify a valid type
 
-You declared that the ❮Optional❯ element should have type:
+You declared that the ❰Optional❱ element should have type:
 
 ↳ $txt0
 
-... which is not a ❮Type❯
+... which is not a ❰Type❱
 
 |]
       where
@@ -1594,29 +1594,29 @@ You declared that the ❮Optional❯ element should have type:
 
 prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..}
   where
-    short = "❮Optional❯ element has the wrong type"
+    short = "❰Optional❱ element has the wrong type"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: An ❮Optional❯ element must have a type matching the type annotation
+Explanation: An ❰Optional❱ element must have a type matching the type annotation
 
-For example, this is a valid ❮Optional❯ value:
+For example, this is a valid ❰Optional❱ value:
 
 
     ┌────────────────────────┐
-    │ [1] : Optional Integer │  ❮1❯ is an ❮Integer❯, which matches the type
+    │ [1] : Optional Integer │  ❰1❱ is an ❰Integer❱, which matches the type
     └────────────────────────┘
 
 
-... but this is $_NOT a valid ❮Optional❯ value:
+... but this is $_NOT a valid ❰Optional❱ value:
 
 
     ┌────────────────────────────┐
-    │ ["ABC"] : Optional Integer │  ❮"ABC"❯ is not an ❮Integer❯
+    │ ["ABC"] : Optional Integer │  ❰"ABC"❱ is not an ❰Integer❱
     └────────────────────────────┘
 
 
-Your ❮Optional❯ element should have this type:
+Your ❰Optional❱ element should have this type:
 
 ↳ $txt0
 
@@ -1635,35 +1635,35 @@ Your ❮Optional❯ element should have this type:
 
 prettyTypeMessage (InvalidOptionalLiteral n) = ErrorMessages {..}
   where
-    short = "Multiple ❮Optional❯ elements not allowed"
+    short = "Multiple ❰Optional❱ elements not allowed"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: The syntax for ❮Optional❯ values resembles the syntax for ❮List❯s:
+Explanation: The syntax for ❰Optional❱ values resembles the syntax for ❰List❱s:
 
 
     ┌───────────────────────┐
-    │ [] : Optional Integer │  An ❮Optional❯ value which is absent
+    │ [] : Optional Integer │  An ❰Optional❱ value which is absent
     └───────────────────────┘
 
 
     ┌───────────────────────┐
-    │ [] : List     Integer │  An empty (0-element) ❮List❯
+    │ [] : List     Integer │  An empty (0-element) ❰List❱
     └───────────────────────┘
 
 
     ┌────────────────────────┐
-    │ [1] : Optional Integer │  An ❮Optional❯ value which is present
+    │ [1] : Optional Integer │  An ❰Optional❱ value which is present
     └────────────────────────┘
 
 
     ┌────────────────────────┐
-    │ [1] : List     Integer │  A singleton (1-element) ❮List❯
+    │ [1] : List     Integer │  A singleton (1-element) ❰List❱
     └────────────────────────┘
 
 
-However, an ❮Optional❯ value can $_NOT have more than one element, whereas a
-❮List❯ can have multiple elements:
+However, an ❰Optional❱ value can $_NOT have more than one element, whereas a
+❰List❱ can have multiple elements:
 
 
     ┌───────────────────────────┐
@@ -1676,22 +1676,22 @@ However, an ❮Optional❯ value can $_NOT have more than one element, whereas a
     └───────────────────────────┘
 
 
-Your ❮Optional❯ value had this many elements:
+Your ❰Optional❱ value had this many elements:
 
 ↳ $txt0
 
-... when an ❮Optional❯ value can only have at most one element
+... when an ❰Optional❱ value can only have at most one element
 
 Some common reasons why you might get this error:
 
-● You accidentally typed ❮Optional❯ when you meant ❮List❯, like this:
+● You accidentally typed ❰Optional❱ when you meant ❰List❱, like this:
 
 
     ┌────────────────────────────────────────────────────┐
     │ List/length Integer ([1, 2, 3] : Optional Integer) │
     └────────────────────────────────────────────────────┘
                                        ⇧
-                                       This should be ❮List❯ instead
+                                       This should be ❰List❱ instead
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty n)
