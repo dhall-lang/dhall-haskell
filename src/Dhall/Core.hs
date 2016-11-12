@@ -240,13 +240,13 @@ data Expr s a
     | ListIndexed
     -- | > ListReverse                              ~  List/reverse
     | ListReverse
-    -- | > Maybe                                    ~  Maybe
-    | Maybe
-    -- | > MaybeLit t [e]                           ~  [e] : Maybe t
-    --   > MaybeLit t []                            ~  []  : Maybe t
-    | MaybeLit (Expr s a) (Vector (Expr s a))
-    -- | > MaybeFold                                ~  Maybe/fold
-    | MaybeFold
+    -- | > Optional                                 ~  Optional
+    | Optional
+    -- | > OptionalLit t [e]                        ~  [e] : Optional t
+    --   > OptionalLit t []                         ~  []  : Optional t
+    | OptionalLit (Expr s a) (Vector (Expr s a))
+    -- | > OptionalFold                             ~  Optional/fold
+    | OptionalFold
     -- | > Record            [(k1, t1), (k2, t2)]   ~  { k1 : t1, k2 : t1 }
     | Record    (Map Text (Expr s a))
     -- | > RecordLit         [(k1, v1), (k2, v2)]   ~  { k1 = v1, k2 = v2 }
@@ -314,9 +314,9 @@ instance Monad (Expr s) where
     ListLast          >>= _ = ListLast
     ListIndexed       >>= _ = ListIndexed
     ListReverse       >>= _ = ListReverse
-    Maybe             >>= _ = Maybe
-    MaybeLit t es     >>= k = MaybeLit (t >>= k) (fmap (>>= k) es)
-    MaybeFold         >>= _ = MaybeFold
+    Optional          >>= _ = Optional
+    OptionalLit t es  >>= k = OptionalLit (t >>= k) (fmap (>>= k) es)
+    OptionalFold      >>= _ = OptionalFold
     Record    kts     >>= k = Record    (fmap (>>= k) kts)
     RecordLit kvs     >>= k = RecordLit (fmap (>>= k) kvs)
     Union     kts     >>= k = Union     (fmap (>>= k) kts)
@@ -367,9 +367,9 @@ instance Bifunctor Expr where
     first _  ListLast          = ListLast
     first _  ListIndexed       = ListIndexed
     first _  ListReverse       = ListReverse
-    first _  Maybe             = Maybe
-    first k (MaybeLit a b    ) = MaybeLit (first k a) (fmap (first k) b)
-    first _  MaybeFold         = MaybeFold
+    first _  Optional          = Optional
+    first k (OptionalLit a b ) = OptionalLit (first k a) (fmap (first k) b)
+    first _  OptionalFold      = OptionalFold
     first k (Record a        ) = Record (fmap (first k) a)
     first k (RecordLit a     ) = RecordLit (fmap (first k) a)
     first k (Union a         ) = Union (fmap (first k) a)
@@ -471,24 +471,10 @@ buildExpr1 (Let a (Just b) c d) =
     <>  buildExpr0 c
     <>  " in "
     <>  buildExpr1 d
--- Note: The corresponding @Expr1@ parser in "Dhall.Parser" deviates from the
--- following two cases due to the fact that the @alex@-generated parser does not
--- not backtrack perfectly.  The exact translation would be:
---
--- > Expr1
--- >     ...
--- >     | '[' Elems ']' : 'List' Expr6
--- >       { ListLit $6 (Data.Vector.fromList $2) }
--- >     | '[' Elems ']' : 'Maybe' Expr6
--- >       { MaybeLit $6 (Data.Vector.fromList $2) }
---
--- ... but that fails to parse @Maybe@ literals correctly, so I worked around
--- it by changing the parser to an equivalent parser but keeping the
--- builder the same.
 buildExpr1 (ListLit a b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExpr6 a
-buildExpr1 (MaybeLit a b) =
-    "[" <> buildElems (Data.Vector.toList b) <> "] : Maybe "  <> buildExpr6 a
+buildExpr1 (OptionalLit a b) =
+    "[" <> buildElems (Data.Vector.toList b) <> "] : Optional "  <> buildExpr6 a
 buildExpr1 (Merge a b c) =
     "apply " <> buildExpr6 a <> " " <> buildExpr6 b <> " : " <> buildExpr5 c
 buildExpr1 (Note _ b) =
@@ -567,10 +553,10 @@ buildExpr6 ListIndexed =
     "List/indexed"
 buildExpr6 ListReverse =
     "List/reverse"
-buildExpr6 Maybe =
-    "Maybe"
-buildExpr6 MaybeFold =
-    "Maybe/fold"
+buildExpr6 Optional =
+    "Optional"
+buildExpr6 OptionalFold =
+    "Optional/fold"
 buildExpr6 (BoolLit True) =
     "True"
 buildExpr6 (BoolLit False) =
@@ -847,12 +833,12 @@ shift _ _ ListHead = ListHead
 shift _ _ ListLast = ListLast
 shift _ _ ListIndexed = ListIndexed
 shift _ _ ListReverse = ListReverse
-shift _ _ Maybe = Maybe
-shift d v (MaybeLit a b) = MaybeLit a' b'
+shift _ _ Optional = Optional
+shift d v (OptionalLit a b) = OptionalLit a' b'
   where
     a' =       shift d v  a
     b' = fmap (shift d v) b
-shift _ _ MaybeFold = MaybeFold
+shift _ _ OptionalFold = OptionalFold
 shift d v (Record a) = Record a'
   where
     a' = fmap (shift d v) a
@@ -978,12 +964,12 @@ subst _ _ ListHead = ListHead
 subst _ _ ListLast = ListLast
 subst _ _ ListIndexed = ListIndexed
 subst _ _ ListReverse = ListReverse
-subst _ _ Maybe = Maybe
-subst x e (MaybeLit a b) = MaybeLit a' b'
+subst _ _ Optional = Optional
+subst x e (OptionalLit a b) = OptionalLit a' b'
   where
     a' =       subst x e  a
     b' = fmap (subst x e) b
-subst _ _ MaybeFold = MaybeFold
+subst _ _ OptionalFold = OptionalFold
 subst x e (Record       kts) = Record                   (fmap (subst x e) kts)
 subst x e (RecordLit    kvs) = RecordLit                (fmap (subst x e) kvs)
 subst x e (Union        kts) = Union                    (fmap (subst x e) kts)
@@ -1092,9 +1078,9 @@ normalize e = case e of
             App (App ListLength _) (ListLit _ ys) ->
                 NaturalLit (fromIntegral (Data.Vector.length ys))
             App (App ListHead _) (ListLit t ys) ->
-                normalize (MaybeLit t (Data.Vector.take 1 ys))
+                normalize (OptionalLit t (Data.Vector.take 1 ys))
             App (App ListLast _) (ListLit t ys) ->
-                normalize (MaybeLit t y)
+                normalize (OptionalLit t y)
               where
                 y = if Data.Vector.null ys
                     then Data.Vector.empty
@@ -1114,7 +1100,7 @@ normalize e = case e of
                           ]
             App (App ListReverse _) (ListLit t xs) ->
                 normalize (ListLit t (Data.Vector.reverse xs))
-            App (App (App (App (App MaybeFold _) (MaybeLit _ xs)) _) just) nothing ->
+            App (App (App (App (App OptionalFold _) (OptionalLit _ xs)) _) just) nothing ->
                 normalize (maybe nothing just' (toMaybe xs))
               where
                 just' y = App just y
@@ -1232,12 +1218,12 @@ normalize e = case e of
     ListLast -> ListLast
     ListIndexed -> ListIndexed
     ListReverse -> ListReverse
-    Maybe -> Maybe
-    MaybeLit t es -> MaybeLit t' es'
+    Optional -> Optional
+    OptionalLit t es -> OptionalLit t' es'
       where
         t'  =      normalize t
         es' = fmap normalize es
-    MaybeFold -> MaybeFold
+    OptionalFold -> OptionalFold
     Record kts -> Record kts'
       where
         kts' = fmap normalize kts

@@ -485,11 +485,11 @@ Nothing
 maybe :: Type a -> Type (Maybe a)
 maybe (Type extractIn expectedIn) = Type extractOut expectedOut
   where
-    extractOut (MaybeLit _ es) = traverse extractIn es'
+    extractOut (OptionalLit _ es) = traverse extractIn es'
       where
         es' = if Data.Vector.null es then Nothing else Just (Data.Vector.head es)
 
-    expectedOut = App Maybe expectedIn
+    expectedOut = App Optional expectedIn
 
 {-| Decode a `Vector`
 

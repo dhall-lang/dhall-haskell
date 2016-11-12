@@ -138,8 +138,8 @@ identifierStyle = IdentifierStyle
         , "List/last"
         , "List/indexed"
         , "List/reverse"
-        , "Maybe"
-        , "Maybe/fold"
+        , "Optional"
+        , "Optional/fold"
         ]
     , _styleHighlight         = Identifier
     , _styleReservedHighlight = ReservedIdentifier
@@ -280,8 +280,8 @@ listLike =
         return ListLit
 
     listLike1 = do
-        reserve "Maybe"
-        return MaybeLit
+        reserve "Optional"
+        return OptionalLit
 
 -- TODO: Add `noted` in the right places here
 exprC :: Parser (Expr Src Path)
@@ -451,12 +451,12 @@ exprF = choice
         return ListReverse
 
     exprF19 = do
-        reserve "Maybe"
-        return Maybe
+        reserve "Optional"
+        return Optional
 
     exprF20 = do
-        reserve "Maybe/fold"
-        return MaybeFold
+        reserve "Optional/fold"
+        return OptionalFold
 
     exprF21 = do
         reserve "Bool"

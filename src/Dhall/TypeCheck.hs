@@ -90,7 +90,7 @@ propEqual eL0 eR0 =
     go Double Double = return True
     go Text Text = return True
     go List List = return True
-    go Maybe Maybe = return True
+    go Optional Optional = return True
     go (Record ktsL0) (Record ktsR0) = do
         let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
                 | kL == kR = do
@@ -359,9 +359,9 @@ typeWith _      ListFold          = do
 typeWith _      ListLength        = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") Natural))
 typeWith _      ListHead          = do
-    return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a")))
+    return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Optional "a")))
 typeWith _      ListLast          = do
-    return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Maybe "a")))
+    return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Optional "a")))
 typeWith _      ListIndexed       = do
     let kts = [("index", Natural), ("value", "a")]
     return
@@ -370,16 +370,16 @@ typeWith _      ListIndexed       = do
                 (App List (Record (Data.Map.fromList kts))) ) )
 typeWith _      ListReverse       = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a")))
-typeWith _      Maybe             = do
+typeWith _      Optional          = do
     return (Pi "_" (Const Type) (Const Type))
-typeWith ctx e@(MaybeLit t xs   ) = do
+typeWith ctx e@(OptionalLit t xs) = do
     s <- fmap Dhall.Core.normalize (typeWith ctx t)
     case s of
         Const Type -> return ()
-        _ -> Left (TypeError ctx e (InvalidMaybeType t))
+        _ -> Left (TypeError ctx e (InvalidOptionalType t))
     let n = Data.Vector.length xs
     if 2 <= n
-        then Left (TypeError ctx e (InvalidMaybeLiteral n))
+        then Left (TypeError ctx e (InvalidOptionalLiteral n))
         else return ()
     forM_ xs (\x -> do
         t' <- typeWith ctx x
@@ -388,12 +388,12 @@ typeWith ctx e@(MaybeLit t xs   ) = do
             else do
                 let nf_t  = Dhall.Core.normalize t
                 let nf_t' = Dhall.Core.normalize t'
-                Left (TypeError ctx e (InvalidMaybeElement x nf_t nf_t')) )
-    return (App Maybe t)
-typeWith _      MaybeFold         = do
+                Left (TypeError ctx e (InvalidOptionalElement x nf_t nf_t')) )
+    return (App Optional t)
+typeWith _      OptionalFold      = do
     return
         (Pi "a" (Const Type)
-            (Pi "_" (App Maybe "a")
+            (Pi "_" (App Optional "a")
                 (Pi "maybe" (Const Type)
                     (Pi "just" (Pi "_" "a" "maybe")
                         (Pi "nothing" "maybe" "maybe") ) ) ) )
@@ -520,9 +520,9 @@ data TypeMessage s
     | Untyped
     | InvalidListElement Int (Expr s X) (Expr s X) (Expr s X)
     | InvalidListType (Expr s X)
-    | InvalidMaybeElement (Expr s X) (Expr s X) (Expr s X)
-    | InvalidMaybeLiteral Int
-    | InvalidMaybeType (Expr s X)
+    | InvalidOptionalElement (Expr s X) (Expr s X) (Expr s X)
+    | InvalidOptionalLiteral Int
+    | InvalidOptionalType (Expr s X)
     | InvalidPredicate (Expr s X) (Expr s X)
     | IfBranchMismatch (Expr s X) (Expr s X) (Expr s X) (Expr s X)
     | IfBranchMustBeTerm Bool (Expr s X) (Expr s X) (Expr s X)
@@ -890,22 +890,22 @@ the following expressions are all functions because they have a function type:
                     The function's output kind is ❮Type❯
 
 
-                        The function's input kind is ❮Type❯
+                        Function's input has kind ❮Type❯
                         ⇩
-    ┌──────────────────────────────────────────────┐
-    │ List/head : ∀(a : Type) → (List a → Maybe a) │  A function can return
-    └──────────────────────────────────────────────┘  another function
+    ┌─────────────────────────────────────────────────┐
+    │ List/head : ∀(a : Type) → (List a → Optional a) │  A function can return
+    └─────────────────────────────────────────────────┘  another function
                                 ⇧
-                                The function's output type is ❮List a → Maybe a❯
+                                Function's output has type ❮List a → Optional a❯
 
 
                        The function's input type is ❮List Text❯
                        ⇩
-    ┌─────────────────────────────────────────┐
-    │ List/head Text : List Text → Maybe Text │  A function applied to an
-    └─────────────────────────────────────────┘  argument can be a function
+    ┌────────────────────────────────────────────┐
+    │ List/head Text : List Text → Optional Text │  A function applied to an
+    └────────────────────────────────────────────┘  argument can be a function
                                    ⇧
-                                   The function's output type is ❮Maybe Text❯
+                                   The function's output type is ❮Optional Text❯
 
 
 An expression is not a function if the expression's type is not of the form
@@ -1529,40 +1529,40 @@ Your list elements should have this type:
         txt2 = Text.toStrict (Dhall.Core.pretty expr1)
         txt3 = Text.toStrict (Dhall.Core.pretty expr2)
 
-prettyTypeMessage (InvalidMaybeType expr0) = ErrorMessages {..}
+prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
   where
-    short = "Invalid type for ❮Maybe❯ elements"
+    short = "Invalid type for ❮Optional❯ elements"
 
     long =
         Builder.fromText [NeatInterpolation.text|
 Explanation: Every optional value ends with a type annotation for the element
 that might be stored inside.  For example, these are valid expressions:
 
-    [1] : Maybe Integer  -- An optional value that's present
-    []  : Maybe Integer  -- An optional value that's absent
+    [1] : Optional Integer  -- An optional value that's present
+    []  : Optional Integer  -- An optional value that's absent
 
-The type following the `Maybe` is the "type parameter", and must be a type:
+The type following the `Optional` is the "type parameter", and must be a type:
 
-    Maybe Integer -- This is valid, because `Integer` is a type
-    Maybe Text    -- This is also valid, because `Text` is a type
+    Optional Integer -- This is valid, because `Integer` is a type
+    Optional Text    -- This is also valid, because `Text` is a type
 
 ... but the type parameter must *not* be a term or kind:
 
-    Maybe 1       -- This is invalid, because `1` is a term
-    Maybe Type    -- This is invalid, because `Type` is a kind
+    Optional 1       -- This is invalid, because `1` is a term
+    Optional Type    -- This is invalid, because `Type` is a kind
 
-You provided a type parameter for the `Maybe` that is not a valid type:
+You provided a type parameter for the `Optional` that is not a valid type:
 
 $insert
 |]
       where
         txt0 = Text.toStrict (Builder.toLazyText (Dhall.Core.buildExpr6 expr0))
         insert = indent [NeatInterpolation.text|
-    [ ... ] : Maybe $txt0
+    [ ... ] : Optional $txt0
     --              ^ This needs to be a type
 |]
 
-prettyTypeMessage (InvalidMaybeElement expr0 expr1 expr2) = ErrorMessages {..}
+prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..}
   where
     short = "Optional expression with an element of the wrong type"
 
@@ -1571,11 +1571,11 @@ prettyTypeMessage (InvalidMaybeElement expr0 expr1 expr2) = ErrorMessages {..}
 Explanation: An optional value that is present must have a type matching the
 corresponding type annotation.  For example, this is a valid optional value:
 
-    [1] : Maybe Integer  -- The type of `1` is `Integer`, which matches
+    [1] : Optional Integer  -- The type of `1` is `Integer`, which matches
 
 ... but this is *not* a valid optional value:
 
-    [1] : Maybe Text     -- Invalid, because the type of `1` is not `Text`
+    [1] : Optional Text     -- Invalid, because the type of `1` is not `Text`
 
 Your optional value has a type which does not match the type annotation:
 
@@ -1591,11 +1591,11 @@ The element you provided actually has this type:
         insert = indent [NeatInterpolation.text|
     [  $txt0
     -- ^ This value ...
-    ] : Maybe $txt1
-    --        ^ ... needs to have a type matching this type parameter
+    ] : Optional $txt1
+    --           ^ ... needs to have a type matching this type parameter
 |]
 
-prettyTypeMessage (InvalidMaybeLiteral n) = ErrorMessages {..}
+prettyTypeMessage (InvalidOptionalLiteral n) = ErrorMessages {..}
   where
     short = "More than one element for an optional value"
 
@@ -1604,16 +1604,16 @@ prettyTypeMessage (InvalidMaybeLiteral n) = ErrorMessages {..}
 Explanation: The syntax for an optional value resembles the syntax for `List`
 literals:
 
-    []  : Maybe Integer  -- A valid literal for an absent optional value
-    [1] : Maybe Integer  -- A valid literal for a present optional value
-    []  : List  Integer  -- A valid literal for an empty     (0-element) `List`
-    [1] : List  Integer  -- A valid literal for a  singleton (1-element) `List`
+    []  : Optional Integer  -- A valid literal for an absent optional value
+    [1] : Optional Integer  -- A valid literal for a present optional value
+    []  : List     Integer  -- A valid literal for an empty     (0-element) `List`
+    [1] : List     Integer  -- A valid literal for a  singleton (1-element) `List`
 
 However, an optional value can *not* have more than one element, whereas a
 `List` can have multiple elements:
 
-    [1, 2] : Maybe Integer  -- Invalid: multiple elements not allowed
-    [1, 2] : List  Integer  -- Valid  : multiple elements allowed
+    [1, 2] : Optional Integer  -- Invalid: multiple elements not allowed
+    [1, 2] : List     Integer  -- Valid  : multiple elements allowed
 
 Your optional value had $txt0 elements, which is not allowed.  Optional values
 can only have at most one element
