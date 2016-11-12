@@ -332,7 +332,6 @@ typeWith ctx e@(ListLit t xs    ) = do
     case s of
         Const Type -> return ()
         _ -> Left (TypeError ctx e (InvalidListType t))
-    let n = Data.Vector.length xs
     flip Data.Vector.imapM_ xs (\i x -> do
         t' <- typeWith ctx x
         if propEqual t t'
@@ -340,7 +339,7 @@ typeWith ctx e@(ListLit t xs    ) = do
             else do
                 let nf_t  = Dhall.Core.normalize t
                 let nf_t' = Dhall.Core.normalize t'
-                Left (TypeError ctx e (InvalidListElement i n x nf_t nf_t')) )
+                Left (TypeError ctx e (InvalidListElement i nf_t x nf_t')) )
     return (App List t)
 typeWith _      ListBuild         = do
     return
@@ -519,7 +518,7 @@ data TypeMessage s
     | TypeMismatch (Expr s X) (Expr s X) (Expr s X) (Expr s X)
     | AnnotMismatch (Expr s X) (Expr s X) (Expr s X)
     | Untyped
-    | InvalidListElement Int Int (Expr s X) (Expr s X) (Expr s X)
+    | InvalidListElement Int (Expr s X) (Expr s X) (Expr s X)
     | InvalidListType (Expr s X)
     | InvalidMaybeElement (Expr s X) (Expr s X) (Expr s X)
     | InvalidMaybeLiteral Int
@@ -1486,64 +1485,49 @@ You declared the ❮List❯'s element type to be:
       where
         txt0 = Text.toStrict (Builder.toLazyText (Dhall.Core.buildExpr6 expr0))
 
-prettyTypeMessage (InvalidListElement i n expr0 expr1 expr2) =
+prettyTypeMessage (InvalidListElement i expr0 expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "List with an element of the wrong type"
+    short = "List element has the wrong type"
 
     long =
         Builder.fromText [NeatInterpolation.text|
 Explanation: Every element in the list must have a type matching the type
 annotation at the end of the list
 
-However, your list has an element of the wrong type:
+For example, this is a valid ❮List❯:
 
-$insert
 
-The element you provided actually has this type:
+    ┌──────────────────────────┐
+    │ [1, 2, 3] : List Integer │ Every element in this ❮List❯ is an ❮Integer❯
+    └──────────────────────────┘
+
+
+.. but this is $_NOT a valid ❮List❯:
+
+
+    ┌──────────────────────────────┐
+    │ [1, "ABC", 3] : List Integer │ The second element is not an ❮Integer❯
+    └──────────────────────────────┘
+
+
+Your list elements should have this type:
+
+↳ $txt0
+
+... but the following element at index $txt1:
+
 ↳ $txt2
 
-You can fix the problem by either changing the list element or changing the
-declared element type
+... has this type:
+
+↳ $txt3
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Builder.toLazyText (Dhall.Core.buildExpr6 expr1))
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
-        txt3 = Text.toStrict (Dhall.Core.pretty i    )
-        insert = indent $
-            if n == 1
-            then [NeatInterpolation.text|
-    [  $txt0
-    -- ^ This value ...
-    ] : List $txt1
-    --       ^ ... needs to match this type
-|]
-            else if i == 0
-            then [NeatInterpolation.text|
-    [  $txt0
-    -- ^ This value ...
-    ,  ...
-    ] : List $txt1
-    --       ^ ... needs to match this type
-    ]
-|]
-            else if i + 1 == n
-            then [NeatInterpolation.text|
-    [  ...
-    ,  $txt0
-    -- ^ This value ...
-    ] : List $txt1
-    --       ^ ... needs to match this type
-|]
-            else [NeatInterpolation.text|
-    [ ...
-    ,  $txt0
-    -- ^ This value at index #$txt3 ...
-    ,  ...
-    ] : List $txt1
-    --       ^ ... needs to match this type
-|]
+        txt1 = Text.toStrict (Dhall.Core.pretty i    )
+        txt2 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt3 = Text.toStrict (Dhall.Core.pretty expr2)
 
 prettyTypeMessage (InvalidMaybeType expr0) = ErrorMessages {..}
   where
