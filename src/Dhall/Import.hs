@@ -184,8 +184,8 @@ instance Exception e => Exception (Imported e)
 
 instance Show e => Show (Imported e) where
     show (Imported paths e) =
-            "\n"
-        ++  unlines (map (\(n, path) -> take (2 * n) (repeat ' ') ++ "↳ " ++ builderToString (build path)) paths')
+            unlines (map (\(n, path) -> take (2 * n) (repeat ' ') ++ "↳ " ++ builderToString (build path)) paths')
+        ++  "\n"
         ++  show e
       where
         -- Canonicalize all paths

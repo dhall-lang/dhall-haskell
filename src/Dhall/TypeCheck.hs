@@ -388,7 +388,7 @@ typeWith ctx e@(OptionalLit t xs) = do
             else do
                 let nf_t  = Dhall.Core.normalize t
                 let nf_t' = Dhall.Core.normalize t'
-                Left (TypeError ctx e (InvalidOptionalElement x nf_t nf_t')) )
+                Left (TypeError ctx e (InvalidOptionalElement nf_t x nf_t')) )
     return (App Optional t)
 typeWith _      OptionalFold      = do
     return
@@ -1492,7 +1492,7 @@ You declared that the ❮List❯'s elements should have type:
 ... which is not a ❮Type❯
 |]
       where
-        txt0 = Text.toStrict (Builder.toLazyText (Dhall.Core.buildExpr6 expr0))
+        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
 
 prettyTypeMessage (InvalidListElement i expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -1508,7 +1508,7 @@ For example, this is a valid ❮List❯:
 
 
     ┌──────────────────────────┐
-    │ [1, 2, 3] : List Integer │ Every element in this ❮List❯ is an ❮Integer❯
+    │ [1, 2, 3] : List Integer │  Every element in this ❮List❯ is an ❮Integer❯
     └──────────────────────────┘
 
 
@@ -1516,11 +1516,11 @@ For example, this is a valid ❮List❯:
 
 
     ┌──────────────────────────────┐
-    │ [1, "ABC", 3] : List Integer │ The second element is not an ❮Integer❯
+    │ [1, "ABC", 3] : List Integer │  The second element is not an ❮Integer❯
     └──────────────────────────────┘
 
 
-Your list elements should have this type:
+Your ❮List❯ elements should have this type:
 
 ↳ $txt0
 
@@ -1528,7 +1528,7 @@ Your list elements should have this type:
 
 ↳ $txt2
 
-... has this type:
+... has this type instead:
 
 ↳ $txt3
 |]
@@ -1590,40 +1590,48 @@ You declared that the ❮Optional❯ element should have type:
 
 |]
       where
-        txt0 = Text.toStrict (Builder.toLazyText (Dhall.Core.buildExpr6 expr0))
+        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
 
 prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..}
   where
-    short = "Optional expression with an element of the wrong type"
+    short = "❮Optional❯ element has the wrong type"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: An optional value that is present must have a type matching the
-corresponding type annotation.  For example, this is a valid optional value:
+Explanation: An ❮Optional❯ element must have a type matching the type annotation
 
-    [1] : Optional Integer  -- The type of `1` is `Integer`, which matches
+For example, this is a valid ❮Optional❯ value:
 
-... but this is *not* a valid optional value:
 
-    [1] : Optional Text     -- Invalid, because the type of `1` is not `Text`
+    ┌────────────────────────┐
+    │ [1] : Optional Integer │  ❮1❯ is an ❮Integer❯, which matches the type
+    └────────────────────────┘
 
-Your optional value has a type which does not match the type annotation:
 
-$insert
+... but this is $_NOT a valid ❮Optional❯ value:
 
-The element you provided actually has this type:
+
+    ┌────────────────────────────┐
+    │ ["ABC"] : Optional Integer │  ❮"ABC"❯ is not an ❮Integer❯
+    └────────────────────────────┘
+
+
+Your ❮Optional❯ element should have this type:
+
+↳ $txt0
+
+... but the element you provided:
+
+↳ $txt1
+
+... has this type instead:
+
 ↳ $txt2
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Builder.toLazyText (Dhall.Core.buildExpr6 expr1))
+        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
         txt2 = Text.toStrict (Dhall.Core.pretty expr2)
-        insert = indent [NeatInterpolation.text|
-    [  $txt0
-    -- ^ This value ...
-    ] : Optional $txt1
-    --           ^ ... needs to have a type matching this type parameter
-|]
 
 prettyTypeMessage (InvalidOptionalLiteral n) = ErrorMessages {..}
   where
@@ -2096,9 +2104,6 @@ Your function type is invalid because the input is a term of type:
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-
-indent :: Data.Text.Text -> Data.Text.Text
-indent = Data.Text.unlines . fmap ("    " <>) . Data.Text.lines
 
 buildBooleanOperator :: Text -> Bool -> Expr s X -> Expr s X -> ErrorMessages
 buildBooleanOperator operator b expr0 expr1 = ErrorMessages {..}
