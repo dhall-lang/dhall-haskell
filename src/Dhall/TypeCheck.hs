@@ -1635,26 +1635,52 @@ Your ❮Optional❯ element should have this type:
 
 prettyTypeMessage (InvalidOptionalLiteral n) = ErrorMessages {..}
   where
-    short = "More than one element for an optional value"
+    short = "Multiple ❮Optional❯ elements not allowed"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: The syntax for an optional value resembles the syntax for `List`
-literals:
+Explanation: The syntax for ❮Optional❯ values resembles the syntax for ❮List❯s:
 
-    []  : Optional Integer  -- A valid literal for an absent optional value
-    [1] : Optional Integer  -- A valid literal for a present optional value
-    []  : List     Integer  -- A valid literal for an empty     (0-element) `List`
-    [1] : List     Integer  -- A valid literal for a  singleton (1-element) `List`
 
-However, an optional value can *not* have more than one element, whereas a
-`List` can have multiple elements:
+    ┌───────────────────────┐
+    │ [] : Optional Integer │  An ❮Optional❯ value which is absent
+    └───────────────────────┘
 
-    [1, 2] : Optional Integer  -- Invalid: multiple elements not allowed
-    [1, 2] : List     Integer  -- Valid  : multiple elements allowed
 
-Your optional value had $txt0 elements, which is not allowed.  Optional values
-can only have at most one element
+    ┌───────────────────────┐
+    │ [] : List     Integer │  An empty (0-element) ❮List❯
+    └───────────────────────┘
+
+
+    ┌────────────────────────┐
+    │ [1] : Optional Integer │  An ❮Optional❯ value which is present
+    └────────────────────────┘
+
+
+    ┌────────────────────────┐
+    │ [1] : List     Integer │  A singleton (1-element) ❮List❯
+    └────────────────────────┘
+
+
+However, an ❮Optional❯ value can $_NOT have more than one element, whereas a
+❮List❯ can have multiple elements:
+
+
+    ┌───────────────────────────┐
+    │ [1, 2] : Optional Integer │  Invalid: multiple elements $_NOT allowed
+    └───────────────────────────┘
+
+
+    ┌───────────────────────────┐
+    │ [1, 2] : List     Integer │  Valid: multiple elements allowed
+    └───────────────────────────┘
+
+
+Your ❮Optional❯ value had this many elements:
+
+↳ $txt0
+
+... when an ❮Optional❯ value can only have at most one element
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty n)
