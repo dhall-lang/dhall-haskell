@@ -2289,28 +2289,58 @@ Your handler for this alternative:
 
 prettyTypeMessage (NotARecord k expr0 expr1) = ErrorMessages {..}
   where
-    short = "Invalid record access"
+    short = "Not a record"
 
     long =
         Builder.fromText [NeatInterpolation.text|
 Explanation: You can only access fields on records, like this:
 
-    { foo = True, bar = "ABC" }.foo              -- This is valid ...
 
-    λ(r : {{ foo : Bool, bar : Text }}) → r.foo  -- ... and so is this
+    ┌─────────────────────────────────┐
+    │ { foo = True, bar = "ABC" }.foo │  This is valid ...
+    └─────────────────────────────────┘
 
-... but you *cannot* access fields on non-record expressions, like this:
 
-    1.foo                  -- `1` is not a valid record
+    ┌───────────────────────────────────────────┐
+    │ λ(r : { foo : Bool, bar : Text }) → r.foo │  ... and so is this
+    └───────────────────────────────────────────┘
 
-    (λ(x : Bool) → x).foo  -- A function is not a valid record
+
+... but you cannot access fields on non-record expressions
+
+For example, the following expression is $_NOT valid:
+
+
+    ┌───────┐
+    │ 1.foo │
+    └───────┘
+      ⇧
+      Invalid: Not a record
+
 
 You tried to access a field named:
+
 ↳ $txt0
+
 ... on the following expression which is not a record:
+
 ↳ $txt1
+
 ... but is actually an expression of type:
+
 ↳ $txt2
+
+Some common reasons why you might get this error:
+
+● You accidentally try to access a field of a union instead of a record, like
+  this:
+
+
+    ┌─────────────────┐
+    │ < foo : a >.foo │
+    └─────────────────┘
+      ⇧
+      This is a union, not a record
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
