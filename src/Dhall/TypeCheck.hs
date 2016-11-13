@@ -421,7 +421,7 @@ typeWith ctx e@(Union     kts   ) = do
     return (Const Type)
 typeWith ctx e@(UnionLit k v kts) = do
     case Data.Map.lookup k kts of
-        Just _  -> Left (TypeError ctx e (DuplicateField k))
+        Just _  -> Left (TypeError ctx e (DuplicateAlternative k))
         Nothing -> return ()
     t   <- typeWith ctx v
     return (Union (Data.Map.insert k t kts))
@@ -528,7 +528,7 @@ data TypeMessage s
     | IfBranchMustBeTerm Bool (Expr s X) (Expr s X) (Expr s X)
     | InvalidFieldType Text (Expr s X)
     | InvalidAlternativeType Text (Expr s X)
-    | DuplicateField Text
+    | DuplicateAlternative Text
     | MustCombineARecord (Expr s X) (Expr s X)
     | FieldCollision (Set Text)
     | MustMergeARecord (Expr s X) (Expr s X)
@@ -1778,19 +1778,29 @@ Some common reasons why you might get this error:
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
         txt1 = Text.toStrict (Dhall.Core.pretty expr0)
 
-prettyTypeMessage (DuplicateField k) = ErrorMessages {..}
+prettyTypeMessage (DuplicateAlternative k) = ErrorMessages {..}
   where
-    short = "Duplicate field"
+    short = "Duplicate union alternative"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: Records and unions may not have two fields of the same name
+Explanation: Unions may not have two alternatives that share the same name
 
-    { foo = True, foo = 1 }        -- This is not valid
+For example, the following expressions are $_NOT valid:
 
-    < foo = True | foo : Integer >  -- This is also not valid
 
-You have multiple fields named:
+    ┌─────────────────────────────┐
+    │ < foo = True | foo : Text > │  Invalid: ❰foo❱ appears twice
+    └─────────────────────────────┘
+
+
+    ┌───────────────────────────────────────┐
+    │ < foo = 1 | bar : Bool | bar : Text > │  Invalid: ❰bar❱ appears twice
+    └───────────────────────────────────────┘
+
+
+You have more than one alternative named:
+
 ↳ $txt0
 |]
       where
@@ -1802,7 +1812,7 @@ prettyTypeMessage (MustCombineARecord expr0 expr1) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can combine records using the `(∧)` operator, like this:
+Explanation: You can combine records using the ❰∧❱ operator, like this:
 
     { foo = 1, bar = "ABC" } ∧ { baz = True }             -- This is valid ...
 
