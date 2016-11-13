@@ -552,13 +552,13 @@ data TypeMessage s
 
 shortTypeMessage :: TypeMessage s -> Builder
 shortTypeMessage msg =
-    "\ESC[1mError:\ESC[0m " <> build short <> "\n"
+    "\ESC[1;31mError:\ESC[0m " <> build short <> "\n"
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
 longTypeMessage :: TypeMessage s -> Builder
 longTypeMessage msg =
-        "\ESC[1mError\ESC[0m: " <> build short <> "\n"
+        "\ESC[1;31mError\ESC[0m: " <> build short <> "\n"
     <>  "\n"
     <>  long
   where
@@ -1698,22 +1698,44 @@ Some common reasons why you might get this error:
 
 prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
   where
-    short = "Invalid type of field"
+    short = "Invalid field type"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: Every record type has an annotated type for each field
+Explanation: Every record type documents the type of each field, like this:
 
-However, fields *cannot* be annotated with expressions other than types
+    ┌──────────────────────────────────────────────┐
+    │ { foo : Integer, bar : Integer, baz : Text } │
+    └──────────────────────────────────────────────┘
+
+However, fields cannot be annotated with expressions other than types
+
+For example, these record types are $_NOT valid:
+
+
+    ┌────────────────────────────┐
+    │ { foo : Integer, bar : 1 } │
+    └────────────────────────────┘
+                             ⇧
+                             ❰1❱ is an ❰Integer❱ and not a ❰Type❱
+
+
+    ┌───────────────────────────────┐
+    │ { foo : Integer, bar : Type } │
+    └───────────────────────────────┘
+                             ⇧
+                             ❰Type❱ is a ❰Kind❱ and not a ❰Type❱
+
 
 You provided a record type with a key named:
+
 ↳ $txt0
-... annotated with the following expression which is not a type:
 
-    { ... : $txt1, ... }
-    --      ^ This needs to be a type
+... annotated with the following expression:
 
-You can fix the problem by changing the annotation to a type
+↳ $txt1
+
+... which is not a type
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
