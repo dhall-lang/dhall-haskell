@@ -476,7 +476,7 @@ buildExpr1 (ListLit a b) =
 buildExpr1 (OptionalLit a b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : Optional "  <> buildExpr6 a
 buildExpr1 (Merge a b c) =
-    "apply " <> buildExpr6 a <> " " <> buildExpr6 b <> " : " <> buildExpr5 c
+    "merge " <> buildExpr6 a <> " " <> buildExpr6 b <> " : " <> buildExpr5 c
 buildExpr1 (Note _ b) =
     buildExpr1 b
 buildExpr1 a =
@@ -1249,9 +1249,9 @@ normalize e = case e of
         x' = normalize x
         y' = normalize y
     Merge x y t      ->
-        case x of
+        case x' of
             RecordLit kvsX ->
-                case y of
+                case y' of
                     UnionLit kY vY _ ->
                         case Data.Map.lookup kY kvsX of
                             Just vX -> normalize (App vX vY)
