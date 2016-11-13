@@ -178,16 +178,17 @@ label :: Parser Text
 label = Text.Parser.Token.ident identifierStyle <?> "label"
 
 exprA :: Parser (Expr Src Path)
-exprA = noted (try exprA0)
-    <|>            exprA1
-  where
-    exprA0 = do
-        a <- exprB
-        symbol ":"
-        b <- exprA
-        return (Annot a b)
+exprA = do
+    a <- exprB
 
-    exprA1 = exprB
+    let exprA0 = do
+            symbol ":"
+            b <- exprA
+            return (Annot a b)
+
+    let exprA1 = pure a
+
+    exprA0 <|> exprA1
 
 exprB :: Parser (Expr Src Path)
 exprB = choice
