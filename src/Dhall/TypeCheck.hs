@@ -2040,27 +2040,38 @@ prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `merge`ing a record of handlers, like
-this:
+Explanation: You can ❰merge❱ the alternatives of a union using a record with one
+handler per alternative, like this:
 
-        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
-    in  let union    = < Left = +2 | Right : Bool >
-    in  merge handlers union : Bool
 
-... but there must be exactly one handler per alternative in the union.  You
-cannot have extra handlers.
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │     let union    = < Left = +2 | Right : Bool >                     │
+    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
+    │ in  merge handlers union : Bool                                     │
+    └─────────────────────────────────────────────────────────────────────┘
 
-For example, the following expression is *not* valid:
 
-        let handlers =
-                { Left = Natural/even
-                , Right = λ(x : Bool) → x  -- Invalid: This handler is not used
-                }
-    in  let union = < Left = +2 >  -- The `Right` alternative is missing
-    in  merge handlers union : Bool  
+... but you must provide exactly one handler per alternative in the union.  You
+cannot supply extra handlers
 
-The following handlers had no matching alternatives:
+For example, the following expression is $_NOT valid:
+
+
+    ┌───────────────────────────────────────┐
+    │     let union    = < Left = +2 >      │  The ❰Right❱ alternative is missing
+    │ in  let handlers =                    │ 
+    │             { Left  = Natural/even    │
+    │             , Right = λ(x : Bool) → x │  Invalid: ❰Right❱ handler isn't used
+    │             }                         │
+    │ in  merge handlers union : Bool       │
+    └───────────────────────────────────────┘
+
+
+You provided the following handlers:
+
 ↳ $txt0
+
+... which had no matching alternatives in the union you tried to ❰merge❱
 |]
       where
         txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
