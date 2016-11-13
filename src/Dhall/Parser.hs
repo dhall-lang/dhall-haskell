@@ -631,13 +631,16 @@ import_ = do
         return (URL a)
 
 file :: Parser FilePath
-file =  token file0
-    <|> token file1
-    <|> token file2
+file =  try (token file0)
+    <|>      token file1
+    <|>      token file2
   where
     file0 = do
         a <- Text.Parser.Char.string "/"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
+        case b of
+            '\\':_ -> empty -- So that "/\" parses as the operator and not a path
+            _      -> return ()
         return (Filesystem.Path.CurrentOS.decodeString (a <> b))
 
     file1 = do

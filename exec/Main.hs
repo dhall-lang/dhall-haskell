@@ -47,7 +47,7 @@ main = do
                 if unHelpful (explain options)
                     then Control.Exception.throwIO (DetailedTypeError e)
                     else do
-                        Data.Text.Lazy.IO.hPutStrLn stderr "Add the --explain flag for a more detailed explanation of this error\n"
+                        Data.Text.Lazy.IO.hPutStrLn stderr "\ESC[2mAdd the --explain flag for a more detailed explanation of this error\ESC[0m\n"
                         Control.Exception.throwIO e
 
             handler1 (Imported ps e) = do

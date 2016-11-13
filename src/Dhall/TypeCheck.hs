@@ -552,13 +552,13 @@ data TypeMessage s
 
 shortTypeMessage :: TypeMessage s -> Builder
 shortTypeMessage msg =
-    "Error: " <> build short <> "\n"
+    "\ESC[1mError:\ESC[0m " <> build short <> "\n"
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
 longTypeMessage :: TypeMessage s -> Builder
 longTypeMessage msg =
-        "Error: " <> build short <> "\n"
+        "\ESC[1mError\ESC[0m: " <> build short <> "\n"
     <>  "\n"
     <>  long
   where
@@ -1814,20 +1814,49 @@ prettyTypeMessage (MustCombineARecord expr0 expr1) = ErrorMessages {..}
         Builder.fromText [NeatInterpolation.text|
 Explanation: You can combine records using the ❰∧❱ operator, like this:
 
-    { foo = 1, bar = "ABC" } ∧ { baz = True }             -- This is valid ...
 
-    \(r : { baz : Bool }) → { foo = 1, bar = "ABC" } ∧ r  -- ... and so is this
+    ┌───────────────────────────────────────────┐
+    │ { foo = 1, bar = "ABC" } ∧ { baz = True } │
+    └───────────────────────────────────────────┘
 
-... but you *cannot* combine values that are not records.
 
-For example, the following expressions are *not* valid:
+    ┌─────────────────────────────────────────────┐
+    │ λ(r : { foo : Bool }) → r ∧ { bar = "ABC" } │
+    └─────────────────────────────────────────────┘
 
-    { foo = 1 } ∧ 1               -- Invalid: `1` is not a record
-    { foo = 1 } ∧ < baz = True >  -- Invalid: `<baz = True`> is not a record
 
-You provided the following value:
+... but you cannot combine values that are not records.
+
+For example, the following expressions are $_NOT valid:
+
+
+    ┌──────────────────────────────┐
+    │ { foo = 1, bar = "ABC" } ∧ 1 │
+    └──────────────────────────────┘
+                                 ⇧
+                                 Invalid: Not a record
+
+
+    ┌───────────────────────────────────────────┐
+    │ { foo = 1, bar = "ABC" } ∧ { baz : Bool } │
+    └───────────────────────────────────────────┘
+                                 ⇧
+                                 Invalid: This is a record type and not a record
+
+
+    ┌───────────────────────────────────────────┐
+    │ { foo = 1, bar = "ABC" } ∧ < baz = True > │
+    └───────────────────────────────────────────┘
+                                 ⇧
+                                 Invalid: This is a union and not a record
+
+
+You tried to combine the following value:
+
 ↳ $txt0
+
 ... which is not a record, but is actually a value of type:
+
 ↳ $txt1
 |]
       where
