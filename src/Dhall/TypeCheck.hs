@@ -2215,6 +2215,18 @@ of the result:
     └─────────────────────────────┘
 
 
+For example, the following expression is $_NOT valid:
+
+
+    ┌──────────────────────────────────────────────────────────────────────┐
+    │     let union    = < Left = +2 | Right : Bool >                     │
+    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
+    │ in  merge handlers union : Text                                      │
+    └──────────────────────────────────────────────────────────────────────┘
+                                 ⇧
+                                 Invalid: Doesn't match output of either handler
+
+
 Your handler for the following alternative:
 
 ↳ $txt0
@@ -2238,24 +2250,37 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `merge`ing a record of handlers, like
-this:
+Explanation: You can ❰merge❱ the alternatives of a union using a record with one
+handler per alternative, like this:
 
-        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
-    in  let union    = < Left = +2 | Right : Bool >
-    in  merge handlers union : Bool
 
-... but the type of each handler must be a function.
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │     let union    = < Left = +2 | Right : Bool >                     │
+    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
+    │ in  merge handlers union : Bool                                     │
+    └─────────────────────────────────────────────────────────────────────┘
 
-For example, the following expression is *not* valid:
 
-    merge { Foo = 1 } < Foo = 1 > : Integer
-               -- ^ Not a function
+... as long as each handler is a function
 
-Your handler for:
+For example, the following expression is $_NOT valid:
+
+
+    ┌─────────────────────────────────────────┐
+    │ merge { Foo = True } < Foo = 1 > : Bool │
+    └─────────────────────────────────────────┘
+                    ⇧
+                    Invalid: Not a function
+
+
+Your handler for this alternative:
+
 ↳ $txt0
+
 ... has the following type:
+
 ↳ $txt1
+
 ... which is not the type of a function
 |]
       where
