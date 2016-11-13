@@ -2121,7 +2121,7 @@ You need to supply the following handlers:
 prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "Handler has the wrong input type"
+    short = "Wrong handler input type"
 
     long =
         Builder.fromText [NeatInterpolation.text|
@@ -2151,15 +2151,27 @@ corresponding alternative:
     └───────────────────────────────────────────────────────────┘
 
 
+For example, the following expression is $_NOT valid:
+
+
+      Invalid: Doesn't match the type of the ❰Right❱ alternative
+                                                               ⇩
+    ┌──────────────────────────────────────────────────────────────────────┐
+    │     let handlers = { Left = Natural/even | Right = λ(x : Text) → x } │
+    │ in  let union    = < Left = +2 | Right : Bool >                      │
+    │ in  merge handlers union : Bool                                      │
+    └──────────────────────────────────────────────────────────────────────┘
+
+
 Your handler for the following alternative:
 
 ↳ $txt0
 
-... needs to accept a value of type:
+... needs to accept an input value of type:
 
 ↳ $txt1
 
-... but actually accepts a value of type:
+... but actually accepts an input value of a different type:
 
 ↳ $txt2
 |]
@@ -2171,30 +2183,48 @@ Your handler for the following alternative:
 prettyTypeMessage (HandlerOutputTypeMismatch expr0 expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "Handler has the wrong output type"
+    short = "Wrong handler output type"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `merge`ing a record of handlers, like
-this:
+Explanation: You can ❰merge❱ the alternatives of a union using a record with one
+handler per alternative, like this:
 
-        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
-    in  let union    = < Left = +2 | Right : Bool >
-    in  merge handlers union : Bool
 
-... but the output type of each handler must match the declared final type:
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │     let union    = < Left = +2 | Right : Bool >                     │
+    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
+    │ in  merge handlers union : Bool                                     │
+    └─────────────────────────────────────────────────────────────────────┘
 
-        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
-                             -- ^                     ^
-                             -- These two functions ...
-    in  let union    = < Left = +2 | Right : Bool >
-    in  merge handlers union : Bool  -- ... must return a `Bool`
+
+... as long as the output type of each handler function matches the declared type
+of the result:
+
+
+    ┌───────────────────────────────────────────────────────────┐
+    │ handlers : { Left : Natural → Bool, Right : Bool → Bool } │
+    └───────────────────────────────────────────────────────────┘
+                                    ⇧                    ⇧
+                                    These output types ...
+
+                             ... must match the declared type of the ❰merge❱
+                             ⇩
+    ┌─────────────────────────────┐
+    │ merge handlers union : Bool │
+    └─────────────────────────────┘
+
 
 Your handler for the following alternative:
+
 ↳ $txt0
-... was supposed to return a value of type:
+
+... needs to return an output value of type:
+
 ↳ $txt1
-... but actually returns a value of type:
+
+... but actually returns an output value of a different type:
+
 ↳ $txt2
 |]
       where
