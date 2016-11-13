@@ -2082,23 +2082,37 @@ prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `merge`ing a record of handlers, like
-this:
+Explanation: You can ❰merge❱ the alternatives of a union using a record with one
+handler per alternative, like this:
 
-        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
-    in  let union    = < Left = +2 | Right : Bool >
-    in  merge handlers union : Bool
 
-... but there must be exactly one handler per alternative in the union.  You
-cannot have missing handlers.
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │     let union    = < Left = +2 | Right : Bool >                     │
+    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
+    │ in  merge handlers union : Bool                                     │
+    └─────────────────────────────────────────────────────────────────────┘
 
-For example, the following expression is *not* valid:
 
-        let handlers = { Left = Natural/even }  -- Invalid: No `Right` handler
-    in  let union = < Left = +2 | Right : Bool >
-    in  merge handlers union : Bool
+... but you must provide exactly one handler per alternative in the union.  You
+cannot omit any handlers
 
-The following handlers are missing:
+For example, the following expression is $_NOT valid:
+
+
+                                              Invalid: Missing ❰Right❱ handler
+                                              ⇩
+    ┌─────────────────────────────────────────────────┐
+    │     let handlers = { Left = Natural/even }      │
+    │ in  let union    = < Left = +2 | Right : Bool > │
+    │ in  merge handlers union : Bool                 │
+    └─────────────────────────────────────────────────┘
+
+
+Note that you need to provide handlers for other alternatives even if those
+alternatives are never used
+
+You need to supply the following handlers:
+
 ↳ $txt0
 |]
       where
