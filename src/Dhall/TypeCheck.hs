@@ -1891,21 +1891,49 @@ prettyTypeMessage (FieldCollision ks) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can merge records if they don't share any fields in common,
+Explanation: You can combine records if they don't share any fields in common,
 like this:
 
-    { foo = 1, bar = "ABC" } ∧ { baz = True }             -- This is valid ...
 
-    \(r : { baz : Bool }) → { foo = 1, bar = "ABC" } ∧ r  -- ... and so is this
+    ┌───────────────────────────────────────────┐
+    │ { foo = 1, bar = "ABC" } ∧ { baz = True } │
+    └───────────────────────────────────────────┘
 
-... but you *cannot* merge two records if they have matching fields.
 
-For example, the following expression is *not* valid:
+    ┌────────────────────────────────────────┐
+    │ λ(r : { baz : Bool}) → { foo = 1 } ∧ r │
+    └────────────────────────────────────────┘
 
-    { foo = 1, bar = "ABC" } ∧ { foo = 2 } -- Invalid: Colliding `foo` fields
 
-Both records share the following colliding fields:
+... but you cannot merge two records that share the same field
+
+For example, the following expression is $_NOT valid:
+
+
+    ┌───────────────────────────────────────────┐
+    │ { foo = 1, bar = "ABC" } ∧ { foo = True } │  Invalid: Colliding ❰foo❱ fields
+    └───────────────────────────────────────────┘
+
+
+You combined two records that share the following field:
+
 ↳ $txt0
+
+... which is not allowed
+
+Some common reasons why you might get this error:
+
+● You tried to use ❰∧❱ to update a field's value, like this:
+
+
+    ┌────────────────────────────────────────┐
+    │ { foo = 1, bar = "ABC" } ∧ { foo = 2 } │
+    └────────────────────────────────────────┘
+                                   ⇧
+                                   Invalid attempt to update ❰foo❱'s value to ❰2❱
+
+  Field updates are intentionally not allowed as the Dhall language discourages
+  patch-oriented programming
 |]
       where
         txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
