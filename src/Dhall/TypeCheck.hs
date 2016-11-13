@@ -2125,27 +2125,42 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `merge`ing a record of handlers, like
-this:
+Explanation: You can ❰merge❱ the alternatives of a union using a record with one
+handler per alternative, like this:
 
-        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
-    in  let union    = < Left = +2 | Right : Bool >
-    in  merge handlers union : Bool
 
-... but the input type of each handler must match the type of the corresponding
-alternative of the union:
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │     let union    = < Left = +2 | Right : Bool >                     │
+    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
+    │ in  merge handlers union : Bool                                     │
+    └─────────────────────────────────────────────────────────────────────┘
 
-        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
-                             -- ^ This function ...
-    in  let union    = < Left = +2 | Right : Bool >
-                             -- ^ ... must accept a value of this type
-    in  merge handlers union : Bool
+
+... as long as the input type of each handler function matches the type of the
+corresponding alternative:
+
+
+    ┌───────────────────────────────────────────────────────────┐
+    │ union    : < Left : Natural       | Right : Bool        > │
+    └───────────────────────────────────────────────────────────┘
+                          ⇧                       ⇧
+                   These must match        These must match
+                          ⇩                       ⇩
+    ┌───────────────────────────────────────────────────────────┐
+    │ handlers : { Left : Natural → Bool, Right : Bool → Bool } │
+    └───────────────────────────────────────────────────────────┘
+
 
 Your handler for the following alternative:
+
 ↳ $txt0
-... was supposed to accept a value of type:
+
+... needs to accept a value of type:
+
 ↳ $txt1
+
 ... but actually accepts a value of type:
+
 ↳ $txt2
 |]
       where

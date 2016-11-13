@@ -44,22 +44,25 @@ main = do
           where
             handler0 e = do
                 let _ = e :: TypeError Src
+                System.IO.hPutStrLn stderr ""
                 if unHelpful (explain options)
                     then Control.Exception.throwIO (DetailedTypeError e)
                     else do
-                        Data.Text.Lazy.IO.hPutStrLn stderr "\ESC[2mAdd the --explain flag for a more detailed explanation of this error\ESC[0m\n"
+                        Data.Text.Lazy.IO.hPutStrLn stderr "\ESC[2mAdd the --explain flag for a more detailed explanation of this error\ESC[0m"
                         Control.Exception.throwIO e
 
             handler1 (Imported ps e) = do
                 let _ = e :: TypeError Src
+                System.IO.hPutStrLn stderr ""
                 if unHelpful (explain options)
                     then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
                     else do
-                        Data.Text.Lazy.IO.hPutStrLn stderr "Add the --explain flag for a more detailed explanation of this error\n"
+                        Data.Text.Lazy.IO.hPutStrLn stderr "\ESC[2mAdd the --explain flag for a more detailed explanation of this error\ESC[0m"
                         Control.Exception.throwIO (Imported ps e)
 
             handler2 e = do
                 let _ = e :: SomeException
+                System.IO.hPutStrLn stderr ""
                 System.IO.hPrint stderr e
                 System.Exit.exitFailure
 
