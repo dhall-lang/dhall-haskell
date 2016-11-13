@@ -453,7 +453,7 @@ typeWith ctx e@(Merge kvsX kvsY t) = do
     tKvsY <- fmap Dhall.Core.normalize (typeWith ctx kvsY)
     ktsY  <- case tKvsY of
         Union kts -> return kts
-        _         -> Left (TypeError ctx e (MustMergeUnion tKvsY))
+        _         -> Left (TypeError ctx e (MustMergeUnion kvsY tKvsY))
     let ksY = Data.Map.keysSet ktsY
 
     let diffX = Data.Set.difference ksX ksY
@@ -532,7 +532,7 @@ data TypeMessage s
     | MustCombineARecord (Expr s X) (Expr s X)
     | FieldCollision (Set Text)
     | MustMergeARecord (Expr s X) (Expr s X)
-    | MustMergeUnion (Expr s X)
+    | MustMergeUnion (Expr s X) (Expr s X)
     | UnusedHandler (Set Text)
     | MissingHandler (Set Text)
     | HandlerInputTypeMismatch Text (Expr s X) (Expr s X)
@@ -1940,7 +1940,7 @@ Some common reasons why you might get this error:
 
 prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
   where
-    short = "You can only ❰merge❱ a record of a handlers"
+    short = "❰merge❱ expects a record of handlers"
 
     long =
         Builder.fromText [NeatInterpolation.text|
@@ -1962,8 +1962,10 @@ For example, the following expression is $_NOT valid:
 
     ┌─────────────────────────────────────────┐
     │ let handler = λ(x : Bool) → x           │
-    │ in  merge handler < Foo = True > : True │  Invalid: ❰handler❱ isn't a record
+    │ in  merge handler < Foo = True > : True │
     └─────────────────────────────────────────┘
+                ⇧
+                Invalid: ❰handler❱ isn't a record
 
 
 You provided the following handler:
@@ -1990,31 +1992,47 @@ Some common reasons why you might get this error:
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 
-prettyTypeMessage (MustMergeUnion expr0) = ErrorMessages {..}
+prettyTypeMessage (MustMergeUnion expr0 expr1) = ErrorMessages {..}
   where
-    short = "You can only `merge` handlers to a union"
+    short = "❰merge❱ expects a union"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `merge`ing a record of handlers, like
-this:
+Explanation: You can ❰merge❱ the alternatives of a union using a record with one
+handler per alternative, like this:
 
-        let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }
-    in  let union    = < Left = +2 | Right : Bool >
-    in  merge handlers union : Bool
 
-... but the second argument to `merge` must be a union and not another type.
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │     let union    = < Left = +2 | Right : Bool >                     │
+    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
+    │ in  merge handlers union : Bool                                     │
+    └─────────────────────────────────────────────────────────────────────┘
 
-For example, the following expression is *not* valid:
 
-    let handlers = { Foo = λ(x : Bool) → x }
-    in  merge handlers True  -- Invalid: `True` is not a union
+... but the second argument to ❰merge❱ must be a union and not some other type.
 
-You applied a record of handlers to this expression, which is not a union:
+For example, the following expression is $_NOT valid:
+
+
+    ┌──────────────────────────────────────────┐
+    │ let handlers = { Foo = λ(x : Bool) → x } │
+    │ in  merge handlers True : True           │
+    └──────────────────────────────────────────┘
+                         ⇧
+                         Invalid: ❰True❱ isn't a union
+
+
+You tried to ❰merge❱ this expression:
+
 ↳ $txt0
+
+... which is not a union, but is actually a value of type:
+
+↳ $txt1
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 
 prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
   where
