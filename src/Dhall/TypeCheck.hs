@@ -1940,28 +1940,51 @@ Some common reasons why you might get this error:
 
 prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
   where
-    short = "You can only `merge` a record of a handlers"
+    short = "You can only ❰merge❱ a record of a handlers"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can consume a union by `merge`ing a record of handlers, like
-this:
+Explanation: You can ❰merge❱ the alternatives of a union using a record with one
+handler per alternative, like this:
 
-        let handlers = { Left = Natural/even, Right = \(x : Bool) -> x }
-    in  let union    = < Left = +2 | Right : Bool >
-    in  merge handlers union : Bool
 
-... but the first argument to `merge` must be a record and not another type.
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │     let union    = < Left = +2 | Right : Bool >                     │
+    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
+    │ in  merge handlers union : Bool                                     │
+    └─────────────────────────────────────────────────────────────────────┘
 
-For example, the following expression is *not* valid:
 
-    let f (x : Bool) = x
-    in  merge f < Foo = True > : True  -- Invalid: `f` is not a record
+... but the first argument to ❰merge❱ must be a record and not some other type.
+
+For example, the following expression is $_NOT valid:
+
+
+    ┌─────────────────────────────────────────┐
+    │ let handler = λ(x : Bool) → x           │
+    │ in  merge handler < Foo = True > : True │  Invalid: ❰handler❱ isn't a record
+    └─────────────────────────────────────────┘
+
 
 You provided the following handler:
+
 ↳ $txt0
+
 ... which is not a record, but is actually a value of type:
+
 ↳ $txt1
+
+Some common reasons why you might get this error:
+
+● You accidentally provide an empty record type instead of an empty record when
+  you ❰merge❱ an empty union:
+
+
+    ┌──────────────────────────────────────────┐
+    │ λ(x : <>) → λ(a : Type) → merge {} x : a │
+    └──────────────────────────────────────────┘
+                                      ⇧
+                                      This should be ❰{=}❱ instead
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
