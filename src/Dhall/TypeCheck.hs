@@ -1725,18 +1725,54 @@ prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: Every union type has an annotated type for each alternative
+Explanation: Every union type specifies the type of each alternative, like this:
 
-However, alternatives *cannot* be annotated with expressions other than types
 
-You provided a union type with a alternative named:
+               The type of the first alternative is ❰Bool❱
+               ⇩
+    ┌──────────────────────────────────┐
+    │ < Left : Bool, Right : Natural > │  A union type with two alternatives
+    └──────────────────────────────────┘
+                             ⇧
+                             The type of the second alternative is ❰Natural❱
+
+
+However, these alternatives can only be annotated with types.  For example, the
+following union types are $_NOT valid:
+
+
+    ┌────────────────────────────┐
+    │ < Left : Bool, Right : 1 > │  Invalid union type
+    └────────────────────────────┘
+                             ⇧
+                             This is a term and not a type
+
+
+    ┌───────────────────────────────┐
+    │ < Left : Bool, Right : Type > │  Invalid union type
+    └───────────────────────────────┘
+                             ⇧
+                             This is a kind and not a type
+
+
+You provided a union type with an alternative named:
+
 ↳ $txt0
+
 ... annotated with the following expression which is not a type:
 
-    < ... : $txt1 , ... >
-    --      ^ This needs to be a type
+↳ $txt1
 
-You can fix the problem by changing the annotation to a type
+Some common reasons why you might get this error:
+
+● You accidentally typed ❰:❱ instead of ❰=❱ for a union literal with one
+  alternative:
+
+    ┌─────────────────┐
+    │ < Example : 1 > │
+    └─────────────────┘
+                ⇧
+                This could be ❰=❱ instead
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
