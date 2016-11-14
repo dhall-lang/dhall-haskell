@@ -45,6 +45,9 @@ module Dhall.Core (
     , buildAlternativeTypes
     , buildAlternativeType
     , buildUnionLit
+
+    -- * Miscellaneous
+    , internalError
     ) where
 
 #if MIN_VERSION_base(4,8,0)
@@ -1045,7 +1048,7 @@ normalize e = case e of
                   where
                     go !m (App (Var "Succ") e') = go (m + 1) e'
                     go !m (Var "Zero")          = m
-                    go !_  _                    = internalError
+                    go !_  _                    = internalError text
                 check = go labeled
                   where
                     go (App (Var "Succ") e') = go e'
@@ -1065,7 +1068,7 @@ normalize e = case e of
                   where
                     go (App (App (Var "Cons") x) e') = cons x (go e')
                     go (Var "Nil")                   = nil
-                    go  _                            = internalError
+                    go  _                            = internalError text
                 check = go labeled
                   where
                     go (App (App (Var "Cons") _) e') = go e'
@@ -1272,8 +1275,17 @@ normalize e = case e of
     Note _ e' -> normalize e'
     Embed a -> Embed a
   where
-    internalError :: forall b . b
-    internalError = error (Data.Text.unpack [NeatInterpolation.text|
+    -- This is to avoid a `Show` constraint on the @a@ and @s@ in the type of
+    -- `normalize`.  In theory, this might change a failing repro case into
+    -- a successful one, but the risk of that is low enough to not warrant
+    -- the `Show` constraint.  I care more about proving at the type level
+    -- that the @a@ and @s@ type parameters are never used
+    e'' = bimap (\_ -> ()) (\_ -> ()) e
+
+    text = "normalize (" <> Data.Text.pack (show e'') <> ")"
+
+internalError :: Data.Text.Text -> forall b . b
+internalError text = error (Data.Text.unpack [NeatInterpolation.text|
 Error: Compiler bug
 
 Explanation: This error message means that there is a bug in the Dhall compiler.
@@ -1288,15 +1300,6 @@ Please include the following text in your bug report:
 $text
 ```
 |])
-      where
-        -- This is to avoid a `Show` constraint on the @a@ and @s@ in the type of
-        -- `normalize`.  In theory, this might change a failing repro case into
-        -- a successful one, but the risk of that is low enough to not warrant
-        -- the `Show` constraint.  I care more about proving at the type level
-        -- that the @a@ and @s@ type parameters are never used
-        e' = bimap (\_ -> ()) (\_ -> ()) e
-
-        text = "normalize (" <> Data.Text.pack (show e') <> ")"
 
 buildVector :: (forall x . (a -> x -> x) -> x -> x) -> Vector a
 buildVector f = Data.Vector.reverse (Data.Vector.create (do

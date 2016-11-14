@@ -40,13 +40,15 @@ import Text.Trifecta.Delta (Delta)
 
 import qualified Data.Char
 import qualified Data.HashSet
-import qualified Data.List
 import qualified Data.Map
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
+import qualified Data.List
+import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
+import qualified Dhall.Core
 import qualified Filesystem.Path.CurrentOS
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
@@ -314,20 +316,13 @@ exprC = expressionParser
 -- * Second, restart the parse using left recursion bounded by the number of
 --   arguments
 exprD :: Parser (Expr Src Path)
-exprD = noted (do
-    position <- Text.Trifecta.Combinators.mark
-    f  <- exprE
-    xs <- many exprE
-    Text.Trifecta.Combinators.release position
-    exprD' (length xs) )
-
-exprD' :: Int -> Parser (Expr Src Path)
-exprD' n
-    | n <= 0 = exprE
-    | otherwise = noted (do
-        a <- exprD' (n - 1)
-        b <- exprE
-        return (App a b) )
+exprD = do
+    es <- some (noted exprE)
+    let app nL@(Note (Src before _ bytesL) eL) nR@(Note (Src _ after bytesR) eR) =
+            Note (Src before after (bytesL <> bytesR)) (App nL nR)
+        app _ _ = Dhall.Core.internalError
+            ("exprD: foldl1 app (" <> Data.Text.pack (show es) <> ")")
+    return (Data.List.foldl1 app es)
 
 exprE :: Parser (Expr Src Path)
 exprE = noted (do
