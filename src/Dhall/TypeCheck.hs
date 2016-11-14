@@ -2353,19 +2353,35 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can only retrieve record fields if they are present
+Explanation: You can only access fields on records, like this:
 
-    { foo = True, bar = "ABC" }.foo              -- This is valid ...
 
-    λ(r : {{ foo : Bool, bar : Text }}) → r.foo  -- ... and so is this
+    ┌─────────────────────────────────┐
+    │ { foo = True, bar = "ABC" }.foo │  This is valid ...
+    └─────────────────────────────────┘
 
-... but you *cannot* access fields missing from a record:
 
-    { foo = True, bar = "ABC" }.qux  -- Not valid: the field `qux` is missing
+    ┌───────────────────────────────────────────┐
+    │ λ(r : { foo : Bool, bar : Text }) → r.foo │  ... and so is this
+    └───────────────────────────────────────────┘
+
+
+... but you can only access fields if they are present
+
+For example, the following expression is $_NOT valid:
+
+    ┌─────────────────────────────────┐
+    │ { foo = True, bar = "ABC" }.qux │
+    └─────────────────────────────────┘
+                                  ⇧
+                                  Invalid: the record has no ❰qux❱ field
 
 You tried to access a field named:
+
 ↳ $txt0
-... but the field is missing because the record only defines these fields:
+
+... but the field is missing because the record only defines the following fields:
+
 ↳ $txt1
 |]
       where
