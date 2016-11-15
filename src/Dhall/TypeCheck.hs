@@ -192,48 +192,48 @@ typeWith ctx e@(BoolAnd l r     ) = do
     tl <- fmap Dhall.Core.normalize (typeWith ctx l)
     case tl of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (CantAnd True l tl))
+        _    -> Left (TypeError ctx e (CantAnd l tl))
 
     tr <- fmap Dhall.Core.normalize (typeWith ctx r)
     case tr of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (CantAnd False r tr))
+        _    -> Left (TypeError ctx e (CantAnd r tr))
 
     return Bool
 typeWith ctx e@(BoolOr  l r     ) = do
     tl <- fmap Dhall.Core.normalize (typeWith ctx l)
     case tl of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (CantOr True l tl))
+        _    -> Left (TypeError ctx e (CantOr l tl))
 
     tr <- fmap Dhall.Core.normalize (typeWith ctx r)
     case tr of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (CantOr False r tr))
+        _    -> Left (TypeError ctx e (CantOr r tr))
 
     return Bool
 typeWith ctx e@(BoolEQ  l r     ) = do
     tl <- fmap Dhall.Core.normalize (typeWith ctx l)
     case tl of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (CantEQ True l tl))
+        _    -> Left (TypeError ctx e (CantEQ l tl))
 
     tr <- fmap Dhall.Core.normalize (typeWith ctx r)
     case tr of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (CantEQ False r tr))
+        _    -> Left (TypeError ctx e (CantEQ r tr))
 
     return Bool
 typeWith ctx e@(BoolNE  l r     ) = do
     tl <- fmap Dhall.Core.normalize (typeWith ctx l)
     case tl of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (CantNE True l tl))
+        _    -> Left (TypeError ctx e (CantNE l tl))
 
     tr <- fmap Dhall.Core.normalize (typeWith ctx r)
     case tr of
         Bool -> return ()
-        _    -> Left (TypeError ctx e (CantNE False r tr))
+        _    -> Left (TypeError ctx e (CantNE r tr))
 
     return Bool
 typeWith ctx e@(BoolIf x y z    ) = do
@@ -284,23 +284,23 @@ typeWith ctx e@(NaturalPlus  l r) = do
     tl <- fmap Dhall.Core.normalize (typeWith ctx l)
     case tl of
         Natural -> return ()
-        _       -> Left (TypeError ctx e (CantAdd True l tl))
+        _       -> Left (TypeError ctx e (CantAdd l tl))
 
     tr <- fmap Dhall.Core.normalize (typeWith ctx r)
     case tr of
         Natural -> return ()
-        _       -> Left (TypeError ctx e (CantAdd False r tr))
+        _       -> Left (TypeError ctx e (CantAdd r tr))
     return Natural
 typeWith ctx e@(NaturalTimes l r) = do
     tl <- fmap Dhall.Core.normalize (typeWith ctx l)
     case tl of
         Natural -> return ()
-        _       -> Left (TypeError ctx e (CantMultiply True l tl))
+        _       -> Left (TypeError ctx e (CantMultiply l tl))
 
     tr <- fmap Dhall.Core.normalize (typeWith ctx r)
     case tr of
         Natural -> return ()
-        _       -> Left (TypeError ctx e (CantMultiply False r tr))
+        _       -> Left (TypeError ctx e (CantMultiply r tr))
     return Natural
 typeWith _      Integer           = do
     return (Const Type)
@@ -540,13 +540,13 @@ data TypeMessage s
     | HandlerNotAFunction Text (Expr s X)
     | NotARecord Text (Expr s X) (Expr s X)
     | MissingField Text (Expr s X)
-    | CantAnd Bool (Expr s X) (Expr s X)
-    | CantOr Bool (Expr s X) (Expr s X)
-    | CantEQ Bool (Expr s X) (Expr s X)
-    | CantNE Bool (Expr s X) (Expr s X)
+    | CantAnd (Expr s X) (Expr s X)
+    | CantOr (Expr s X) (Expr s X)
+    | CantEQ (Expr s X) (Expr s X)
+    | CantNE (Expr s X) (Expr s X)
     | CantTextAppend (Expr s X) (Expr s X)
-    | CantAdd Bool (Expr s X) (Expr s X)
-    | CantMultiply Bool (Expr s X) (Expr s X)
+    | CantAdd (Expr s X) (Expr s X)
+    | CantMultiply (Expr s X) (Expr s X)
     | NoDependentTypes (Expr s X) (Expr s X)
     deriving (Show)
 
@@ -2388,17 +2388,17 @@ You tried to access a field named:
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
         txt1 = Text.toStrict (Dhall.Core.pretty expr0)
 
-prettyTypeMessage (CantAnd b expr0 expr1) =
-        buildBooleanOperator "&&" b expr0 expr1
+prettyTypeMessage (CantAnd expr0 expr1) =
+        buildBooleanOperator "&&" expr0 expr1
 
-prettyTypeMessage (CantOr b expr0 expr1) =
-        buildBooleanOperator "||" b expr0 expr1
+prettyTypeMessage (CantOr expr0 expr1) =
+        buildBooleanOperator "||" expr0 expr1
 
-prettyTypeMessage (CantEQ b expr0 expr1) =
-        buildBooleanOperator "==" b expr0 expr1
+prettyTypeMessage (CantEQ expr0 expr1) =
+        buildBooleanOperator "==" expr0 expr1
 
-prettyTypeMessage (CantNE b expr0 expr1) =
-        buildBooleanOperator "/=" b expr0 expr1
+prettyTypeMessage (CantNE expr0 expr1) =
+        buildBooleanOperator "/=" expr0 expr1
 
 prettyTypeMessage (CantTextAppend expr0 expr1) = ErrorMessages {..}
   where
@@ -2431,11 +2431,11 @@ Some common reasons why you might get this error:
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 
-prettyTypeMessage (CantAdd b expr0 expr1) =
-        buildNaturalOperator "+" b expr0 expr1
+prettyTypeMessage (CantAdd expr0 expr1) =
+        buildNaturalOperator "+" expr0 expr1
 
-prettyTypeMessage (CantMultiply b expr0 expr1) =
-        buildNaturalOperator "*" b expr0 expr1
+prettyTypeMessage (CantMultiply expr0 expr1) =
+        buildNaturalOperator "*" expr0 expr1
 
 prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
   where
@@ -2476,78 +2476,84 @@ Your function type is invalid because the input has type:
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 
-buildBooleanOperator :: Text -> Bool -> Expr s X -> Expr s X -> ErrorMessages
-buildBooleanOperator operator b expr0 expr1 = ErrorMessages {..}
+buildBooleanOperator :: Text -> Expr s X -> Expr s X -> ErrorMessages
+buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
   where
-    short = Builder.fromText
-        [NeatInterpolation.text|Cannot use `($txt2)` on a value that's not a `Bool`|]
+    short =
+        Builder.fromText
+            (Data.Text.strip
+                [NeatInterpolation.text|❰$txt2❱ only works on ❰Bool❱s|] )
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: The `($txt2)` operator expects two arguments of type `Bool`
+Explanation: The ❰$txt2❱ operator expects two arguments that have type ❰Bool❱
 
 You provided this argument:
 
-    $insert
+↳ $txt0
 
-... whose type is not `Bool`.  The type is actually:
+... which does not have type ❰Bool❱ but instead has type:
+
 ↳ $txt1
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        insert =
-            if b
-            then [NeatInterpolation.text|$txt0 $txt2 ...|]
-            else [NeatInterpolation.text|... $txt2 $txt0|]
 
     txt2 = Text.toStrict operator
 
-buildNaturalOperator :: Text -> Bool -> Expr s X -> Expr s X -> ErrorMessages
-buildNaturalOperator operator b expr0 expr1 = ErrorMessages {..}
+buildNaturalOperator :: Text -> Expr s X -> Expr s X -> ErrorMessages
+buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
   where
     short =
         Builder.fromText
-            [NeatInterpolation.text|Cannot use `($txt2)` on a value that's not a `Natural`|]
+            (Data.Text.strip
+                [NeatInterpolation.text|❰$txt2❱ only works on ❰Natural❱s|] )
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: The `($txt2)` operator expects two arguments of type `Natural`
+Explanation: The ❰$txt2❱ operator expects two arguments that have type ❰Natural❱
 
 You provided this argument:
 
-    $insert0
+↳ $txt0
 
-... whose type is not `Natural`.  The type is actually:
-↳ $txt1$hint0$hint1|]
+... which does not have type ❰Natural❱ but instead has type:
+
+↳ $txt1
+
+Some common reasons why you might get this error:
+
+● You might have tried to use an ❰Integer❱, which is $_NOT allowed:
+
+
+    ┌─────────────────────────────────────────┐
+    │ λ(x : Integer) → λ(y : Integer) → x $txt2 y │  Not valid
+    └─────────────────────────────────────────┘
+
+
+  You can only use ❰Natural❱ numbers
+
+
+● You might have mistakenly used an ❰Integer❱ literal, which is $_NOT allowed:
+
+
+    ┌───────┐
+    │ 2 $txt2 2 │  Not valid
+    └───────┘
+
+
+  You need to prefix each literal with a ❰+❱ to transform them into ❰Natural❱
+  literals, like this:
+
+
+    ┌─────────┐
+    │ +2 $txt2 +2 │  Valid
+    └─────────┘
+|]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        insert0 =
-            if b
-            then [NeatInterpolation.text|$txt0 $txt2 ...|]
-            else [NeatInterpolation.text|... $txt2 $txt0|]
-        insert1 =
-            if b
-            then [NeatInterpolation.text|+$txt0 $txt2 ...|]
-            else [NeatInterpolation.text|... $txt2 +$txt0|]
-        hint0 =
-            case expr1 of
-                Integer -> "\n\n" <> [NeatInterpolation.text|
-An `Integer` is not the same thing as a `Natural` number.  They are distinct
-types: `Integer`s can be negative, but `Natural` numbers must be non-negative
-|]
-                _ -> mempty
-        hint1 =
-            case expr0 of
-                IntegerLit _ -> "\n\n" <> [NeatInterpolation.text|
-You can prefix an `Integer` literal with a `+` to create a `Natural` literal
-
-Example:
-
-    $insert1
-|]
-                _ -> mempty
 
     txt2 = Text.toStrict operator
 
