@@ -719,7 +719,7 @@ this:
         ⇩
     ┌────────────────────┐
     │ ∀(a : Type) → Type │  This is the type of a function that accepts an input
-    └────────────────────┘  type named ❰a❱ of kind ❰Type❱
+    └────────────────────┘  type named ❰a❱ that has kind ❰Type❱
             ⇧
             This is the kind of the input type
 
@@ -1297,7 +1297,7 @@ is an expression:
 
 
 These expressions must be a "term", where a "term" is defined as an expression
-that has a type of kind ❰Type❱
+that has a type thas has kind ❰Type❱
 
 For example, the following expressions are all valid "terms":
 
@@ -2443,14 +2443,33 @@ prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: This programming language does not allow functions from terms to
-types.  For example, this is *not* a legal function type:
+Explanation: The Dhall programming language does not allow functions from terms
+to types
 
-    Bool → Type
+For example, this is $_NOT a legal function type:
 
-Your function type is invalid because the input is a term of type:
+
+    ┌─────────────┐
+    │ Bool → Type │
+    └─────────────┘
+
+
+Similarly, this is $_NOT legal code:
+
+
+    ┌────────────────────────────────────────────────────┐
+    │ λ(Vector : Natural → Type → Type) → Vector +0 Text │
+    └────────────────────────────────────────────────────┘
+                 ⇧
+                 Invalid dependent type
+
+
+Your function type is invalid because the input has type:
+
 ↳ $txt0
-... and the output is a type of kind:
+
+... and the output has kind:
+
 ↳ $txt1
 |]
       where
