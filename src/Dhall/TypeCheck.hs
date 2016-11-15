@@ -318,12 +318,12 @@ typeWith ctx e@(TextAppend l r  ) = do
     tl <- fmap Dhall.Core.normalize (typeWith ctx l)
     case tl of
         Text -> return ()
-        _    -> Left (TypeError ctx e (CantTextAppend True l tl))
+        _    -> Left (TypeError ctx e (CantTextAppend l tl))
 
     tr <- fmap Dhall.Core.normalize (typeWith ctx r)
     case tr of
         Text -> return ()
-        _    -> Left (TypeError ctx e (CantTextAppend False r tr))
+        _    -> Left (TypeError ctx e (CantTextAppend r tr))
     return Text
 typeWith _      List              = do
     return (Pi "_" (Const Type) (Const Type))
@@ -544,7 +544,7 @@ data TypeMessage s
     | CantOr Bool (Expr s X) (Expr s X)
     | CantEQ Bool (Expr s X) (Expr s X)
     | CantNE Bool (Expr s X) (Expr s X)
-    | CantTextAppend Bool (Expr s X) (Expr s X)
+    | CantTextAppend (Expr s X) (Expr s X)
     | CantAdd Bool (Expr s X) (Expr s X)
     | CantMultiply Bool (Expr s X) (Expr s X)
     | NoDependentTypes (Expr s X) (Expr s X)
@@ -2400,28 +2400,36 @@ prettyTypeMessage (CantEQ b expr0 expr1) =
 prettyTypeMessage (CantNE b expr0 expr1) =
         buildBooleanOperator "/=" b expr0 expr1
 
-prettyTypeMessage (CantTextAppend b expr0 expr1) = ErrorMessages {..}
+prettyTypeMessage (CantTextAppend expr0 expr1) = ErrorMessages {..}
   where
-    short = "Cannot use `(++)` on a value that's not a `Text`"
+    short = "❰++❱ only works on ❰Text❱"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: The `(++)` operator expects two arguments of type `Text`
+Explanation: The ❰++❱ operator expects two arguments that have type ❰Text❱
 
 You provided this argument:
 
-    $insert
+↳ $txt0
 
-... whose type is not `Text`.  The type is actually:
+... which does not have type ❰Text❱ but instead has type:
+
 ↳ $txt1
+
+Some common reasons why you might get this error:
+
+● You might have thought that ❰++❱ was the operator to combine two lists:
+
+    ┌───────────────────────────────────────────────────────────┐
+    │ ([1, 2, 3] : List Integer) ++ ([4, 5, 6] : List Integer ) │  Not valid
+    └───────────────────────────────────────────────────────────┘
+
+  The Dhall programming language does not provide a built-in operator for
+  combining two lists
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        insert =
-            if b
-            then [NeatInterpolation.text|$txt0 ++ ...|]
-            else [NeatInterpolation.text|... ++ $txt0|]
 
 prettyTypeMessage (CantAdd b expr0 expr1) =
         buildNaturalOperator "+" b expr0 expr1
