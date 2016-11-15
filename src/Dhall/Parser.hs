@@ -679,10 +679,10 @@ exprFromText delta text = case result of
   where
     string = Data.Text.Lazy.unpack text
 
-    parser = do
+    parser = unParser (do
         Text.Parser.Token.whiteSpace
-        r <- unParser exprA
+        r <- exprA
         Text.Parser.Combinators.eof
-        return r
+        return r )
 
     result = Text.Trifecta.parseString parser delta string
