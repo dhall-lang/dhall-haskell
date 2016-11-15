@@ -2408,6 +2408,14 @@ prettyTypeMessage (CantTextAppend expr0 expr1) = ErrorMessages {..}
         Builder.fromText [NeatInterpolation.text|
 Explanation: The ❰++❱ operator expects two arguments that have type ❰Text❱
 
+For example, this is a valid use of ❰++❱: 
+
+
+    ┌────────────────┐
+    │ "ABC" ++ "DEF" │
+    └────────────────┘
+
+
 You provided this argument:
 
 ↳ $txt0
@@ -2488,6 +2496,14 @@ buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
         Builder.fromText [NeatInterpolation.text|
 Explanation: The ❰$txt2❱ operator expects two arguments that have type ❰Bool❱
 
+For example, this is a valid use of ❰$txt2❱: 
+
+
+    ┌───────────────┐
+    │ True $txt2 False │
+    └───────────────┘
+
+
 You provided this argument:
 
 ↳ $txt0
@@ -2513,6 +2529,14 @@ buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
     long =
         Builder.fromText [NeatInterpolation.text|
 Explanation: The ❰$txt2❱ operator expects two arguments that have type ❰Natural❱
+
+For example, this is a valid use of ❰$txt2❱: 
+
+
+    ┌─────────┐
+    │ +3 $txt2 +5 │
+    └─────────┘
+
 
 You provided this argument:
 
