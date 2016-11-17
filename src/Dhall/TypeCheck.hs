@@ -198,6 +198,9 @@ typeWith ctx e@(Let f mt r b ) = do
 
     return tB
 typeWith ctx e@(Annot x t       ) = do
+    -- This is mainly just to check that `t` is not `Kind`
+    _ <- typeWith ctx t
+
     t' <- typeWith ctx x
     if propEqual t t'
         then do
@@ -1212,28 +1215,19 @@ The following example illustrates this heirarchy:
        term   type   kind   sort
 
 There is nothing above ❰Kind❱ in this hierarchy, so if you try to type check any
-expression containing ❰Kind❱ then type checking fails
+expression containing ❰Kind❱ anywhere in the expression then type checking fails
 
 Some common reasons why you might get this error:
 
 ● You supplied a kind where a type was expected
 
-  For example, the following expression will fail with this error:
+  For example, the following expression will fail to type check:
 
     ┌────────────────┐
     │ [] : List Type │
     └────────────────┘
                 ⇧
                 ❰Type❱ is a kind, not a type
-
-  matching the expected type
-
-  For example, if you run the following Haskell code:
-
-
-    ┌───────────────────────────────┐
-    │ >>> input auto "1" :: IO Text │
-    └───────────────────────────────┘
 |]
 
 prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
