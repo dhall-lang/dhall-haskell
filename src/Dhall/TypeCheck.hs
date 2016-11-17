@@ -426,8 +426,8 @@ typeWith ctx e@(Record    kts   ) = do
     let process (k, t) = do
             s <- fmap Dhall.Core.normalize (typeWith ctx t)
             case s of
-                Const Type -> return ()
-                _          -> Left (TypeError ctx e (InvalidFieldType k t))
+                Const _ -> return ()
+                _       -> Left (TypeError ctx e (InvalidFieldType k t))
     mapM_ process (Data.Map.toList kts)
     return (Const Type)
 typeWith ctx   (RecordLit kvs   ) = do
@@ -1216,18 +1216,6 @@ The following example illustrates this heirarchy:
 
 There is nothing above ❰Kind❱ in this hierarchy, so if you try to type check any
 expression containing ❰Kind❱ anywhere in the expression then type checking fails
-
-Some common reasons why you might get this error:
-
-● You supplied a kind where a type was expected
-
-  For example, the following expression will fail to type check:
-
-    ┌────────────────┐
-    │ [] : List Type │
-    └────────────────┘
-                ⇧
-                ❰Type❱ is a kind, not a type
 |]
 
 prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
@@ -1725,23 +1713,16 @@ Explanation: Every record type documents the type of each field, like this:
     │ { foo : Integer, bar : Integer, baz : Text } │
     └──────────────────────────────────────────────┘
 
-However, fields cannot be annotated with expressions other than types
+These fields can only annotated with types or kinds
 
-For example, these record types are $_NOT valid:
+For example, the following record type is $_NOT valid:
 
 
     ┌────────────────────────────┐
     │ { foo : Integer, bar : 1 } │
     └────────────────────────────┘
                              ⇧
-                             ❰1❱ is an ❰Integer❱ and not a ❰Type❱
-
-
-    ┌───────────────────────────────┐
-    │ { foo : Integer, bar : Type } │
-    └───────────────────────────────┘
-                             ⇧
-                             ❰Type❱ is a ❰Kind❱ and not a ❰Type❱
+                             ❰1❱ is an ❰Integer❱ and not a ❰Type❱ or ❰Kind❱
 
 
 You provided a record type with a key named:
@@ -1752,7 +1733,7 @@ You provided a record type with a key named:
 
 ↳ $txt1
 
-... which is not a type
+... which is neither a ❰Type❱ nor a ❰Kind❱
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
