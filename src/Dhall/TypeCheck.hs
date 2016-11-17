@@ -165,16 +165,38 @@ typeWith ctx e@(App f a         ) = do
             let nf_A' = Dhall.Core.normalize _A'
             Left (TypeError ctx e (TypeMismatch f nf_A a nf_A'))
 typeWith ctx e@(Let f mt r b ) = do
-    tr <- typeWith ctx r
+    tR  <- typeWith ctx r
+    ttR <- fmap Dhall.Core.normalize (typeWith ctx tR)
+    kR  <- case ttR of
+        Const k -> return k
+        -- Don't bother to provide a `let`-specific version of this error
+        -- message because this should never happen anyway
+        _       -> Left (TypeError ctx e (InvalidInputType tR))
+
+    let ctx' = Dhall.Context.insert f tR ctx
+    tB  <- typeWith ctx' b
+    ttB <- fmap Dhall.Core.normalize (typeWith ctx tB)
+    kB  <- case ttB of
+        Const k -> return k
+        -- Don't bother to provide a `let`-specific version of this error
+        -- message because this should never happen anyway
+        _       -> Left (TypeError ctx e (InvalidOutputType tB))
+
+    case rule kR kB of
+        Left () -> Left (TypeError ctx e (NoDependentLet tR tB))
+        Right _ -> return ()
+
     case mt of
-        Nothing ->
+        Nothing -> do
             return ()
-        Just t  ->
-            if propEqual tr t
+        Just t  -> do
+            let nf_t  = Dhall.Core.normalize t
+            let nf_tR = Dhall.Core.normalize tR
+            if propEqual nf_tR nf_t
                 then return ()
-                else Left (TypeError ctx e (AnnotMismatch r t tr))
-    let ctx' = Dhall.Context.insert f tr ctx
-    typeWith ctx' b
+                else Left (TypeError ctx e (AnnotMismatch r nf_t nf_tR))
+
+    return tB
 typeWith ctx e@(Annot x t       ) = do
     t' <- typeWith ctx x
     if propEqual t t'
@@ -547,6 +569,7 @@ data TypeMessage s
     | CantTextAppend (Expr s X) (Expr s X)
     | CantAdd (Expr s X) (Expr s X)
     | CantMultiply (Expr s X) (Expr s X)
+    | NoDependentLet (Expr s X) (Expr s X)
     | NoDependentTypes (Expr s X) (Expr s X)
     deriving (Show)
 
@@ -2452,7 +2475,8 @@ prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
     long =
         Builder.fromText [NeatInterpolation.text|
 Explanation: The Dhall programming language does not allow functions from terms
-to types
+to types.  These function types are also known as "dependent function types"
+because you have a type whose value "depends" on the value of a term.
 
 For example, this is $_NOT a legal function type:
 
@@ -2479,6 +2503,95 @@ Your function type is invalid because the input has type:
 ... and the output has kind:
 
 ↳ $txt1
+
+... which makes this a forbidden dependent function type
+|]
+      where
+        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+
+prettyTypeMessage (NoDependentLet expr0 expr1) = ErrorMessages {..}
+  where
+    short = "No dependent ❰let❱"
+
+    long =
+        Builder.fromText [NeatInterpolation.text|
+Explanation: The Dhall programming language does not allow ❰let❱ expressions
+from terms to types.  These ❰let❱ expressions are also known as "dependent ❰let❱
+expressions" because you have a type whose value depends on the value of a term.
+
+The Dhall language forbids these dependent ❰let❱ expressions in order to
+guarantee that ❰let❱ expressions of the form:
+
+
+    ┌────────────────────┐
+    │ let x : t = r in e │
+    └────────────────────┘
+
+
+... are always equivalent to:
+
+
+    ┌──────────────────┐
+    │ (λ(x : t) → e) r │
+    └──────────────────┘
+
+
+This means that both expressions should normalize to the same result and if one
+of the two fails to type check then the other should fail to type check, too.
+
+For this reason, the following is $_NOT legal code:
+
+
+    ┌───────────────────┐
+    │ let x = 2 in Text │
+    └───────────────────┘
+
+
+... because the above ❰let❱ expression is equivalent to:
+
+
+    ┌─────────────────────────────┐
+    │ let x : Integer = 2 in Text │
+    └─────────────────────────────┘
+
+
+... which in turn must be equivalent to:
+
+
+    ┌───────────────────────────┐
+    │ (λ(x : Integer) → Text) 2 │
+    └───────────────────────────┘
+
+
+... which in turn fails to type check because this sub-expression:
+
+
+    ┌───────────────────────┐
+    │ λ(x : Integer) → Text │
+    └───────────────────────┘
+
+
+... has type:
+
+
+    ┌───────────────────────┐
+    │ ∀(x : Integer) → Text │
+    └───────────────────────┘
+
+
+... which is a forbidden dependent function type (i.e. a function from a term to
+a type).  Therefore the equivalent ❰let❱ expression is also forbidden.
+
+Your ❰let❱ expression is invalid because the input has type:
+
+↳ $txt0
+
+... and the output has kind:
+
+↳ $txt1
+
+... which makes this a forbidden dependent ❰let❱ expression
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
