@@ -452,8 +452,10 @@ typeWith ctx e@(UnionLit k v kts) = do
     case Data.Map.lookup k kts of
         Just _  -> Left (TypeError ctx e (DuplicateAlternative k))
         Nothing -> return ()
-    t   <- typeWith ctx v
-    return (Union (Data.Map.insert k t kts))
+    t <- typeWith ctx v
+    let union = Union (Data.Map.insert k t kts)
+    _ <- typeWith ctx union
+    return union
 typeWith ctx e@(Combine kvsX kvsY) = do
     tKvsX <- fmap Dhall.Core.normalize (typeWith ctx kvsX)
     ktsX  <- case tKvsX of
@@ -557,6 +559,7 @@ data TypeMessage s
     | IfBranchMustBeTerm Bool (Expr s X) (Expr s X) (Expr s X)
     | InvalidField Text (Expr s X)
     | InvalidFieldType Text (Expr s X)
+    | InvalidAlternative Text (Expr s X)
     | InvalidAlternativeType Text (Expr s X)
     | DuplicateAlternative Text
     | MustCombineARecord (Expr s X) (Expr s X)
@@ -1795,7 +1798,7 @@ For example, these record literals are $_NOT valid:
                          ❰Type❱ is a kind and not a term
 
 
-You provided a record type with a key named:
+You provided a record literal with a key named:
 
 ↳ $txt0
 
@@ -1811,7 +1814,67 @@ You provided a record type with a key named:
 
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
-    short = "Invalid type of alternative"
+    short = "Invalid alternative"
+
+    long =
+        Builder.fromText [NeatInterpolation.text|
+Explanation: Every union literal begins by selecting one alternative and
+specifying the value for that alternative, like this:
+
+
+        Select the ❰Left❱ alternative, whose value is ❰True❱
+        ⇩
+    ┌──────────────────────────────────┐
+    │ < Left = True, Right : Natural > │  A union literal with two alternatives
+    └──────────────────────────────────┘
+
+
+However, this value must be a term and not a type.  For example, the following
+values are $_NOT valid:
+
+
+    ┌──────────────────────────────────┐
+    │ < Left = Text, Right : Natural > │  Invalid union literal
+    └──────────────────────────────────┘
+               ⇧
+               This is a type and not a term
+
+
+    ┌───────────────────────────────┐
+    │ < Left = Type, Right : Type > │  Invalid union type
+    └───────────────────────────────┘
+               ⇧
+               This is a kind and not a term
+
+
+You provided a union literal with an alternative named:
+
+↳ $txt0
+
+... whose value is:
+
+↳ $txt1
+
+... which is not a term
+
+Some common reasons why you might get this error:
+
+● You accidentally typed ❰=❱ instead of ❰:❱ for a union literal with one
+  alternative:
+
+    ┌────────────────────┐
+    │ < Example = Text > │
+    └────────────────────┘
+                ⇧
+                This could be ❰:❱ instead
+|]
+      where
+        txt0 = Text.toStrict (Dhall.Core.pretty k    )
+        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+
+prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
+  where
+    short = "Invalid alternative"
 
     long =
         Builder.fromText [NeatInterpolation.text|
