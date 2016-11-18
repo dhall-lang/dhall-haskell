@@ -21,6 +21,7 @@ import Control.Monad (MonadPlus)
 import Data.ByteString (ByteString)
 import Data.Map (Map)
 import Data.Monoid ((<>))
+import Data.Sequence (ViewL(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Typeable (Typeable)
@@ -44,6 +45,7 @@ import qualified Data.Map
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.List
+import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Encoding
@@ -153,6 +155,20 @@ noted parser = do
     (expr, bytes) <- Text.Trifecta.slicedWith (,) parser
     after         <- Text.Trifecta.position
     return (Note (Src before after bytes) expr)
+
+toMap :: [(Text, a)] -> Parser (Map Text a)
+toMap kvs = do
+    let adapt (k, v) = (k, pure v)
+    let m = Data.Map.fromListWith (<|>) (fmap adapt kvs)
+    let action k vs = case Data.Sequence.viewl vs of
+            EmptyL  -> empty
+            v :< vs' ->
+                if null vs'
+                then pure v
+                else
+                    Text.Parser.Combinators.unexpected
+                        ("duplicate field: " ++ Data.Text.Lazy.unpack k)
+    Data.Map.traverseWithKey action m
 
 reserve :: String -> Parser ()
 reserve string = do
@@ -539,8 +555,9 @@ recordLit =
     recordLit1 = do
         symbol "{"
         a <- fieldValues
+        b <- toMap a
         symbol "}"
-        return (RecordLit (Data.Map.fromList a))
+        return (RecordLit b)
 
 fieldValues :: Parser [(Text, Expr Src Path)]
 fieldValues =
@@ -557,8 +574,9 @@ record :: Parser (Expr Src Path)
 record = do
     symbol "{"
     a <- fieldTypes
+    b <- toMap a
     symbol "}"
-    return (Record (Data.Map.fromList a))
+    return (Record b)
 
 fieldTypes :: Parser [(Text, Expr Src Path)]
 fieldTypes =
@@ -575,8 +593,9 @@ union :: Parser (Expr Src Path)
 union = do
     symbol "<"
     a <- alternativeTypes
+    b <- toMap a
     symbol ">"
-    return (Union (Data.Map.fromList a))
+    return (Union b)
 
 alternativeTypes :: Parser [(Text, Expr Src Path)]
 alternativeTypes =
@@ -609,8 +628,9 @@ unionLit =
         b <- exprA
         symbol "|"
         c <- alternativeTypes
+        d <- toMap c
         symbol ">"
-        return (UnionLit a b (Data.Map.fromList c))
+        return (UnionLit a b d)
 
 import_ :: Parser Path
 import_ = do
