@@ -430,9 +430,13 @@ typeWith ctx e@(Record    kts   ) = do
                 _          -> Left (TypeError ctx e (InvalidFieldType k t))
     mapM_ process (Data.Map.toList kts)
     return (Const Type)
-typeWith ctx   (RecordLit kvs   ) = do
+typeWith ctx e@(RecordLit kvs   ) = do
     let process (k, v) = do
             t <- typeWith ctx v
+            s <- fmap Dhall.Core.normalize (typeWith ctx t)
+            case s of
+                Const Type -> return ()
+                _          -> Left (TypeError ctx e (InvalidField k v))
             return (k, t)
     kts <- mapM process (Data.Map.toAscList kvs)
     return (Record (Data.Map.fromAscList kts))
@@ -551,6 +555,7 @@ data TypeMessage s
     | InvalidPredicate (Expr s X) (Expr s X)
     | IfBranchMismatch (Expr s X) (Expr s X) (Expr s X) (Expr s X)
     | IfBranchMustBeTerm Bool (Expr s X) (Expr s X) (Expr s X)
+    | InvalidField Text (Expr s X)
     | InvalidFieldType Text (Expr s X)
     | InvalidAlternativeType Text (Expr s X)
     | DuplicateAlternative Text
@@ -1753,6 +1758,52 @@ You provided a record type with a key named:
 ↳ $txt1
 
 ... which is not a type
+|]
+      where
+        txt0 = Text.toStrict (Dhall.Core.pretty k    )
+        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+
+prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
+  where
+    short = "Invalid field"
+
+    long =
+        Builder.fromText [NeatInterpolation.text|
+Explanation: Every record literal is a set of fields assigned to values, like
+this:
+
+    ┌────────────────────────────────────────┐
+    │ { foo = 100, bar = True, baz = "ABC" } │
+    └────────────────────────────────────────┘
+
+However, fields can only be terms and cannot be types or kinds
+
+For example, these record literals are $_NOT valid:
+
+
+    ┌───────────────────────────┐
+    │ { foo = 100, bar = Text } │
+    └───────────────────────────┘
+                         ⇧
+                         ❰Text❱ is a type and not a term
+
+
+    ┌───────────────────────────┐
+    │ { foo = 100, bar = Type } │
+    └───────────────────────────┘
+                         ⇧
+                         ❰Type❱ is a kind and not a term
+
+
+You provided a record type with a key named:
+
+↳ $txt0
+
+... whose value is:
+
+↳ $txt1
+
+... which is not a term
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
