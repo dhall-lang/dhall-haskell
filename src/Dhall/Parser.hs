@@ -302,26 +302,21 @@ listLike =
         reserve "Optional"
         return OptionalLit
 
--- TODO: Add `noted` in the right places here
 exprC :: Parser (Expr Src Path)
-exprC = expressionParser
+exprC = exprC0
   where
-    expressionParser = Text.Parser.Expression.buildExpressionParser
-        [ [ operator BoolAnd      (symbol "&&")
-          , operator NaturalTimes (symbol "*" )
-          , operator Combine       combine
-          ]
-        , [ operator BoolOr       (symbol "||")
-          , operator TextAppend   (symbol "++")
-          , operator NaturalPlus  (symbol "+" )
-          ]
-        , [ operator BoolEQ       (symbol "==")
-          , operator BoolNE       (symbol "/=")
-          ]
-        ]
-        exprD
+    chain pA pOp op pB = noted (do
+        a <- pA
+        try (do pOp; b <- pB; return (op a b)) <|> pure a )
 
-    operator op parser = Infix (do parser; return op) AssocRight
+    exprC0 = chain exprC1 (symbol "&&") BoolAnd      exprC0
+    exprC1 = chain exprC2 (symbol "*" ) NaturalTimes exprC1
+    exprC2 = chain exprC3  combine      Combine      exprC2
+    exprC3 = chain exprC4 (symbol "||") BoolOr       exprC3
+    exprC4 = chain exprC5 (symbol "++") TextAppend   exprC4
+    exprC5 = chain exprC6 (symbol "+" ) NaturalPlus  exprC5
+    exprC6 = chain exprC7 (symbol "==") BoolEQ       exprC6
+    exprC7 = chain exprD  (symbol "/=") BoolNE       exprC7
 
 -- We can't use left-recursion to define `exprD` otherwise the parser will
 -- loop infinitely. However, I'd still like to use left-recursion in the
