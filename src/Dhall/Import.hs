@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGuAGE QuasiQuotes        #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| Dhall lets you import external expressions located either in local files or
@@ -101,7 +102,7 @@ import Lens.Micro.Mtl (zoom)
 import Dhall.Core (Expr, Path(..))
 import Dhall.Parser (Parser(..), ParseError(..), Src)
 import Dhall.TypeCheck (X(..))
-import Network.HTTP.Client (Manager)
+import Network.HTTP.Client (HttpException(..), Manager)
 import Prelude hiding (FilePath)
 import Text.Trifecta (Result(..))
 import Text.Trifecta.Delta (Delta(..))
@@ -111,12 +112,14 @@ import qualified Data.ByteString.Lazy
 import qualified Data.Foldable                    as Foldable
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
+import qualified Data.Text
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Filesystem.Path.CurrentOS
+import qualified NeatInterpolation
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified Filesystem.Path.CurrentOS        as Filesystem
@@ -190,6 +193,22 @@ instance Show e => Show (Imported e) where
       where
         -- Canonicalize all paths
         paths' = zip [0..] (drop 1 (reverse (canonicalizeAll paths)))
+
+newtype PrettyHttpException = PrettyHttpException HttpException
+    deriving (Typeable)
+
+instance Exception PrettyHttpException
+
+instance Show PrettyHttpException where
+    show (PrettyHttpException (FailedConnectionException2 _ _ _ e)) =
+            "\ESC[1;31mError\ESC[0m: The server could not be reached due to the following exception\n"
+        <>  "\n"
+        <>  Data.Text.unpack [NeatInterpolation.text|
+↳ $txt0
+|]
+      where
+        txt0   = Data.Text.pack (show e)
+    show (PrettyHttpException e) = show e
 
 data Status = Status
     { _stack   :: [Path]
@@ -342,8 +361,8 @@ exprFromURL m url = do
             let request' = request { HTTP.path = HTTP.path request <> "/@" }
             -- If the fallback fails, reuse the original exception to avoid user
             -- confusion
-            HTTP.httpLbs request' m `onException` throwIO err
-        handler err = throwIO err
+            HTTP.httpLbs request' m `onException` throwIO (PrettyHttpException err)
+        handler err = throwIO (PrettyHttpException err)
     response <- HTTP.httpLbs request m `catch` handler
 
     let bytes = HTTP.responseBody response
@@ -468,7 +487,6 @@ load
     -> Expr Src Path
     -- ^ Expression to resolve
     -> IO (Expr Src X)
-load here expr =
-    State.evalStateT (fmap join (traverse loadStatic expr)) status
+load here expr = State.evalStateT (fmap join (traverse loadStatic expr)) status
   where
     status = Status (Foldable.toList here) Map.empty Nothing
