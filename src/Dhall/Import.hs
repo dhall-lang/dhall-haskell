@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGuAGE QuasiQuotes        #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| Dhall lets you import external expressions located either in local files or
@@ -112,14 +111,12 @@ import qualified Data.ByteString.Lazy
 import qualified Data.Foldable                    as Foldable
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
-import qualified Data.Text
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Filesystem.Path.CurrentOS
-import qualified NeatInterpolation
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified Filesystem.Path.CurrentOS        as Filesystem
@@ -200,15 +197,18 @@ newtype PrettyHttpException = PrettyHttpException HttpException
 instance Exception PrettyHttpException
 
 instance Show PrettyHttpException where
-    show (PrettyHttpException (FailedConnectionException2 _ _ _ e)) =
-            "\ESC[1;31mError\ESC[0m: Unreachable server\n"
-        <>  "\n"
-        <>  "↳ " <> show e
-    show (PrettyHttpException (InvalidDestinationHost host)) =
-            "\ESC[1;31mError\ESC[0m: Invalid host name\n"
-        <>  "\n"
-        <>  "↳ " <> show host
-    show (PrettyHttpException e) = show e
+    show (PrettyHttpException e) = case e of
+        FailedConnectionException2 _ _ _ e' ->
+                "\ESC[1;31mError\ESC[0m: Unreachable host\n"
+            <>  "\n"
+            <>  "↳ " <> show e'
+        InvalidDestinationHost host ->
+                "\ESC[1;31mError\ESC[0m: Invalid host name\n"
+            <>  "\n"
+            <>  "↳ " <> show host
+        ResponseTimeout ->
+                "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
+        e' -> show e'
 
 data Status = Status
     { _stack   :: [Path]
