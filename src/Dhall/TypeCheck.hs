@@ -586,7 +586,7 @@ data TypeMessage s
 
 shortTypeMessage :: TypeMessage s -> Builder
 shortTypeMessage msg =
-    "\ESC[1;31mError:\ESC[0m " <> build short <> "\n"
+    "\ESC[1;31mError\ESC[0m: " <> build short <> "\n"
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
