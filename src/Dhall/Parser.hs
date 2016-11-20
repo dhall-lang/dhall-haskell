@@ -332,7 +332,7 @@ exprD = do
     let app nL@(Note (Src before _ bytesL) eL) nR@(Note (Src _ after bytesR) eR) =
             Note (Src before after (bytesL <> bytesR)) (App nL nR)
         app _ _ = Dhall.Core.internalError
-            ("exprD: foldl1 app (" <> Data.Text.pack (show es) <> ")")
+            ("Dhall.Parser.exprD: foldl1 app (" <> Data.Text.pack (show es) <> ")")
     return (Data.List.foldl1 app es)
 
 exprE :: Parser (Expr Src Path)
