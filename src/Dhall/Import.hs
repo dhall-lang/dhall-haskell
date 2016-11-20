@@ -201,13 +201,13 @@ instance Exception PrettyHttpException
 
 instance Show PrettyHttpException where
     show (PrettyHttpException (FailedConnectionException2 _ _ _ e)) =
-            "\ESC[1;31mError\ESC[0m: The server could not be reached due to the following exception\n"
+            "\ESC[1;31mError\ESC[0m: Unreachable server\n"
         <>  "\n"
-        <>  Data.Text.unpack [NeatInterpolation.text|
-↳ $txt0
-|]
-      where
-        txt0   = Data.Text.pack (show e)
+        <>  "↳ " <> show e
+    show (PrettyHttpException (InvalidDestinationHost host)) =
+            "\ESC[1;31mError\ESC[0m: Invalid host name\n"
+        <>  "\n"
+        <>  "↳ " <> show host
     show (PrettyHttpException e) = show e
 
 data Status = Status
