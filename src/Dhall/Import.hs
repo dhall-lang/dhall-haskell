@@ -77,6 +77,8 @@ module Dhall.Import (
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
+    , PrettyHttpException(..)
+    , MissingFile(..)
     ) where
 
 import Control.Exception
@@ -116,6 +118,7 @@ import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
+import qualified Filesystem
 import qualified Filesystem.Path.CurrentOS
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
@@ -199,7 +202,7 @@ instance Exception PrettyHttpException
 instance Show PrettyHttpException where
     show (PrettyHttpException e) = case e of
         FailedConnectionException2 _ _ _ e' ->
-                "\ESC[1;31mError\ESC[0m: Unreachable host\n"
+                "\ESC[1;31mError\ESC[0m: Wrong host\n"
             <>  "\n"
             <>  "↳ " <> show e'
         InvalidDestinationHost host ->
@@ -209,6 +212,15 @@ instance Show PrettyHttpException where
         ResponseTimeout ->
                 "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
         e' -> show e'
+
+data MissingFile = MissingFile
+    deriving (Typeable)
+
+instance Exception MissingFile
+
+instance Show MissingFile where
+    show MissingFile =
+            "\ESC[1;31mError\ESC[0m: Missing file\n"
 
 data Status = Status
     { _stack   :: [Path]
@@ -340,6 +352,11 @@ exprFromFile path = do
             -- If the fallback fails, reuse the original exception to avoid user
             -- confusion
             Text.Trifecta.parseFromFileEx parser string' `onException` throwIO e
+
+    exists <- Filesystem.isFile path
+    if exists
+        then return ()
+        else Control.Exception.throwIO MissingFile
 
     x <- Text.Trifecta.parseFromFileEx parser string `catch` handler
     case x of
