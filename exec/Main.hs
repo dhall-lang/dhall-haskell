@@ -62,7 +62,6 @@ main = do
 
             handler2 e = do
                 let _ = e :: SomeException
-                System.IO.hPutStrLn stderr ""
                 System.IO.hPrint stderr e
                 System.Exit.exitFailure
 

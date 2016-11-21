@@ -139,7 +139,7 @@ newtype Cycle = Cycle
 instance Exception Cycle
 
 instance Show Cycle where
-    show (Cycle path) = "Cyclic import: " ++ builderToString (build path)
+    show (Cycle path) = "\nCyclic import: " ++ builderToString (build path)
 
 {-| Dhall tries to ensure that all expressions hosted on network endpoints are
     weakly referentially transparent, meaning roughly that any two clients will
@@ -175,7 +175,7 @@ instance Exception ReferentiallyOpaque
 
 instance Show ReferentiallyOpaque where
     show (ReferentiallyOpaque path) =
-        "Referentially opaque import: " ++ builderToString (build path)
+        "\nReferentially opaque import: " ++ builderToString (build path)
 
 -- | Extend another exception with the current import stack
 data Imported e = Imported
@@ -187,8 +187,8 @@ instance Exception e => Exception (Imported e)
 
 instance Show e => Show (Imported e) where
     show (Imported paths e) =
-            unlines (map (\(n, path) -> take (2 * n) (repeat ' ') ++ "↳ " ++ builderToString (build path)) paths')
-        ++  "\n"
+            (case paths of [] -> ""; _ -> "\n")
+        ++  unlines (map (\(n, path) -> take (2 * n) (repeat ' ') ++ "↳ " ++ builderToString (build path)) paths')
         ++  show e
       where
         -- Canonicalize all paths
@@ -202,16 +202,19 @@ instance Exception PrettyHttpException
 instance Show PrettyHttpException where
     show (PrettyHttpException e) = case e of
         FailedConnectionException2 _ _ _ e' ->
-                "\ESC[1;31mError\ESC[0m: Wrong host\n"
+                "\n"
+            <>  "\ESC[1;31mError\ESC[0m: Wrong host\n"
             <>  "\n"
             <>  "↳ " <> show e'
         InvalidDestinationHost host ->
-                "\ESC[1;31mError\ESC[0m: Invalid host name\n"
+                "\n"
+            <>  "\ESC[1;31mError\ESC[0m: Invalid host name\n"
             <>  "\n"
             <>  "↳ " <> show host
         ResponseTimeout ->
                 "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
-        e' -> show e'
+        e' ->   "\n"
+            <>  show e'
 
 data MissingFile = MissingFile
     deriving (Typeable)
@@ -220,7 +223,8 @@ instance Exception MissingFile
 
 instance Show MissingFile where
     show MissingFile =
-            "\ESC[1;31mError\ESC[0m: Missing file\n"
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Missing file\n"
 
 data Status = Status
     { _stack   :: [Path]
