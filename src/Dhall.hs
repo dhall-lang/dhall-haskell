@@ -55,29 +55,12 @@
 --
 -- > $ ./example
 -- > example: 
--- > Expression: 1 : { bar : List Double, foo : Integer }
+-- > example: 
+-- > Error: Expression doesn't match annotation
 -- > 
--- > Error: Expression's inferred type does not match annotated type
+-- > ./config : < Example : { bar : List Double, foo : Integer } >
 -- > 
--- > Explanation: You can annotate the type or kind of an expression like this:
--- > 
--- >     x : t  -- `x` is the expression and `t` is the annotated type or kind of `x`
--- > 
--- > Annotations are introduced in one of two ways:
--- > 
--- > * You can manually annotate expressions to declare the type or kind you expect
--- > * The interpreter also implicitly inserts a top-level type annotation
--- > 
--- > Annotations are optional because the compiler can infer the type of all
--- > expressions.  However, if you or the interpreter inserts an annotation and the
--- > inferred type or kind does not match the annotation then type-checking fails.
--- > 
--- > You or the interpreter annotated this expression:
--- > ↳ 1
--- > ... with this type or kind:
--- > ↳ { bar : List Double, foo : Integer }
--- > ... but the inferred type of the expression is actually this type or kind:
--- > ↳ Integer
+-- > (input):1:1
 --
 -- The Dhall programming language is a statically typed language and the
 -- above error message is the output of the language's type-checker.  Every
@@ -107,14 +90,16 @@
 -- example, we can ask the compiler what the type of our @makeBools@ file
 -- is:
 --
--- > $ dhall typecheck < makeBools
+-- > $ dhall < makeBools
 -- > ∀(n : Bool) → List Bool
+-- > 
+-- > λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool
 --
--- This says that @makeBools@ is a function of one argument named @n@ of type
--- `Bool` that returns a `Vector` of `Bool`s.
+-- The first line says that @makeBools@ is a function of one argument named @n@
+-- that has type @Bool@ and the function returns a @List@ of @Bool@s.
 --
--- We can apply our file to a `Bool` argument as if it were an ordinary
--- function, like this:
+-- We can @\"apply\"@ our file to a @Bool@ argument as if the file itself were
+-- an ordinary function, like this:
 --
 -- > {-# LANGUAGE OverloadedStrings #-}
 -- >
@@ -130,10 +115,10 @@
 -- > $ ./example
 -- > [True,False,True,True]
 --
--- Notice how we can decode into some types \"out-of-the-box\" without declaring
--- a Haskell record to store the output.  In the above example we marshalled
--- the result directly into a `Vector` of `Bool`s.  The instances for the
--- `Interpret` class list all types that are automatically supported.
+-- We can decode into some types \"out-of-the-box\" without declaring a Haskell
+-- record to store the output.  In the above example we marshalled the result
+-- directly into a `Vector` of `Bool`s.  The instances for the `Interpret` class
+-- class list all types that are automatically supported.
 --
 -- We can also test functions directly on the command line using the @dhall@
 -- compiler.  For example:
@@ -145,7 +130,7 @@
 -- > 
 -- > [False, False, True, False] : List Bool
 --
--- The @dhall@ compiler with no arguments produces two output lines:
+-- The @dhall@ compiler produces two output lines:
 --
 -- * The first output line is the type of the result
 -- * The second output line is the normal form of the expression that we input
