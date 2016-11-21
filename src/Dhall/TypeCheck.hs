@@ -605,12 +605,6 @@ data ErrorMessages = ErrorMessages
     -- ^ Longer and more detailed explanation of the error
     }
 
-instance Buildable ErrorMessages where
-    build (ErrorMessages {..}) =
-            "Error: " <> build short <> "\n"
-        <>  "\n"
-        <>  long
-
 _NOT :: Data.Text.Text
 _NOT = "\ESC[1mnot\ESC[0m"
 
