@@ -338,9 +338,9 @@ exprD = do
 exprE :: Parser (Expr Src Path)
 exprE = noted (do
     a <- exprF
-    b <- many (do
+    b <- many (try (do
         symbol "."
-        label )
+        label ))
     return (Data.List.foldl Field a b) )
 
 exprF :: Parser (Expr Src Path)
