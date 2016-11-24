@@ -7,11 +7,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators       #-}
 
--- | Dhall is a programming language specialized for configuration files.
+-- | Dhall is a programming language specialized for configuration files.  This
+-- tutorial explains how to author configuration files using this language.
 --
--- The simplest possible way to use Dhall is to ignore the programming language
--- features and use it as a strongly typed configuration format.  For example,
--- suppose that you have the following configuration file:
+-- The simplest way to use Dhall is to ignore the programming language features
+-- and use it as a strongly typed configuration format.  For example, suppose that
+-- you have the following configuration file:
 -- 
 -- > $ cat config
 -- > < Example =
@@ -23,7 +24,8 @@
 -- You can read the above configuration file into Haskell using the following
 -- code:
 -- 
--- > $ cat example.hs
+-- > -- example.hs
+-- > 
 -- > {-# LANGUAGE DeriveGeneric     #-}
 -- > {-# LANGUAGE OverloadedStrings #-}
 -- > 
@@ -45,16 +47,16 @@
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
 --
--- In the above code, the @Example@ Haskell type represents the schema for our
--- configuration file.  Suppose that we modify our configuration file to no
--- longer match the schema, like this:
+-- In the above code, the data type definition for the @Example@ record
+-- represents the schema for our configuration file.  Suppose that we modify our
+-- configuration file to no longer match the schema, like this:
 --
 -- > $ echo "1" > config
 --
--- This then throws an exception when we try to load the configuration file:
+-- Then our program will throw an exception when we try to load the
+-- configuration file:
 --
 -- > $ ./example
--- > example: 
 -- > example: 
 -- > Error: Expression doesn't match annotation
 -- > 
@@ -62,44 +64,127 @@
 -- > 
 -- > (input):1:1
 --
--- The Dhall programming language is a statically typed language and the
--- above error message is the output of the language's type-checker.  Every
--- expression we read into Haskell is type-checked against the expected schema.
+-- The Dhall programming language is a typed language and the above error
+-- message is the output of the language's type-checker.  Every expression we
+-- read into Haskell is type-checked against the expected schema.
 --
--- The above error message says that the type-checker expected a record with
--- two fields: a field named @bar@ that is a `Vector` of `Double`s, and a
--- field named @foo@ that is an `Integer`.  However, the type-checker found an
--- expression whose inferred type was an `Integer`.  Since an `Integer` is not
--- the same thing as a record the type-checking step fails and Dhall does not
--- bother to marshal the configuration into Haskell.
+-- The above error message says that the type-checker expected our @./config@ to
+-- be a record with two fields: a field named @bar@ that is a @List@ of
+-- @Double@s, and a field named @foo@ that is an @Integer@.  However, the type
+-- checker found an expression whose inferred type was an `Integer`.  Since an
+-- `Integer` is not the same thing as a record the type-checking step fails and
+-- the code does not bother to marshal the configuration into Haskell.
 --
--- Dhall is also a heavily restricted programming language.  For example, we can
--- define a configuration file that is an anonymous function:
+-- More specifically, the code excerpt from the above error message has two
+-- components:
+--
+-- * the expression being type checked (i.e. @./config@)
+-- * the expression's expected type
+--
+-- > ./config  :  < Example : { bar : List Double, foo : Integer } >
+-- > ⇧            ⇧
+-- > Expression   Expected type
+--
+-- The @:@ symbol is how Dhall annotates values with their expected types.
+-- Whenever you see:
+--
+-- > x : t
+--
+-- ... you should read that as \"we expect the expression @x@ to have type @t@\". 
+-- If you are familiar with other functional programming languages, this is
+-- exactly analogous to type annotations in Haskell or Purescript using the @(::)@
+-- symbol or type annotations in Elm or ML using the @(:)@ symbol.
+--
+-- File paths like @./config@ are valid expressions which expand out to the
+-- corresponding file's contents.  The @./config@ file's contents are currently
+-- @1@, so @./config@ is just an elaborate synonym for the number @1@.  This
+-- means that we could equivalently write:
+--
+-- > 1 : < Example : { bar : List Double, foo : Integer } >
+--
+-- The type checker rejects the above expression because the expression @1@
+-- does not have type @\< Example : { bar : List Double, foo : Integer } \>@.
+-- The actual type of @1@ is @Integer@, which is not even close to the same type.
+--
+-- The Dhall programming language also supports anonymous functions.  For
+-- example, we can define a configuration file that is a function like this:
 --
 -- > $ cat > makeBools
 -- > \(n : Bool) ->
 -- >         [ n && True, n && False, n || True, n || False ] : List Bool
 -- > <Ctrl-D>
 --
--- You can read this as a function of one argument named @n@ of type `Bool`
--- that returns a `Vector` of `Bool`s.  Each element of the `Vector` depends
+-- ... or we can use Dhall's support for Unicode characters to use @λ@ instead of
+-- @\\@ and @→@ instead of @->@:
+--
+-- > $ cat > makeBools
+-- > λ(n : Bool) →
+-- >         [ n && True, n && False, n || True, n || False ] : List Bool
+-- > <Ctrl-D>
+--
+-- You can read this as a function of one argument named @n@ that has type @Bool@
+-- This function returns a @List@ of @Bool@s.  Each element of the @List@ depends
 -- on the input argument.
 --
--- This library comes with a command-line compiler named @dhall@ that you can
--- use to type-check configuration files and convert them to a normal form.  For
--- example, we can ask the compiler what the type of our @makeBools@ file
--- is:
+-- We can test our @makeBools@ function without having to modify and recompile
+-- our Haskell program.  This library comes with a command-line executable program
+-- named @dhall@ that you can use to both type-check configuration files and
+-- convert them to a normal form.  Our compiler takes a program on standard input
+-- and then prints the program's type to standard error followed by the program's
+-- normal form to standard output:
 --
--- > $ dhall < makeBools
+-- > $ dhall <<< "./makeBools"
 -- > ∀(n : Bool) → List Bool
 -- > 
 -- > λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool
 --
 -- The first line says that @makeBools@ is a function of one argument named @n@
--- that has type @Bool@ and the function returns a @List@ of @Bool@s.
+-- that has type @Bool@ and the function returns a @List@ of @Bool@s.  The
+-- second line is our program's normal form, which in this case happens to be
+-- identical to our original program.
 --
--- We can @\"apply\"@ our file to a @Bool@ argument as if the file itself were
--- an ordinary function, like this:
+-- We can \"apply\" our file to a @Bool@ argument, like this:
+--
+-- > $ dhall <<< "./makeBools True"
+-- > List Bool
+-- > 
+-- > [True, False, True, True] : List Bool
+--
+-- Remember that file paths are synonymous with their contents, so the above
+-- code is equivalent to:
+-- 
+-- > $ dhall <<< "(λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool) True"
+-- > List Bool
+-- > 
+-- > [True, False, True, True] : List Bool
+--
+-- Functions are separated from their arguments by whitespace.  So if you see:
+--
+-- @f x@
+--
+-- ... you should read that as \"apply the function @f@ to the argument @x@\".
+--
+-- When you apply an anonymous function to an argument, you substitute the
+-- \"bound variable" with the function's argument:
+--
+-- > (λ(n : Bool) → ...) True
+-- >    ⇧                ⇧
+-- >    Bound variable   Function argument
+--
+-- So in our above example, we would replace all occurrences of @n@ with @True@,
+-- like this:
+--
+-- > -- If we replace all of these `n`s with `True` ...
+-- > [n && True, n && False, n || True, n || False] : List Bool
+-- >
+-- > -- ... then we get this:
+-- > [True && True, True && False, True || True, True || False] : List Bool
+-- >
+-- > -- ... which further reduces to:
+-- > [True, False, True, True] : List Bool
+--
+-- Now that we've verified that our function type checks and works, we can use
+-- the same function within our Haskell program:
 --
 -- > {-# LANGUAGE OverloadedStrings #-}
 -- >
@@ -115,28 +200,38 @@
 -- > $ ./example
 -- > [True,False,True,True]
 --
--- We can decode into some types \"out-of-the-box\" without declaring a Haskell
--- record to store the output.  In the above example we marshalled the result
--- directly into a `Vector` of `Bool`s.  The instances for the `Interpret` class
--- class list all types that are automatically supported.
+-- Note that the `input` function accepts any arbitrary Dhall expression and is
+-- not limited to just file paths.  For example, we could write:
 --
--- We can also test functions directly on the command line using the @dhall@
--- compiler.  For example:
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- >
+-- > import Dhall
+-- >
+-- > main :: IO ()
+-- > main = do
+-- >     x <- input auto "True && False"
+-- >     print (x :: Bool)
 --
--- > $ dhall
--- > ./makeBools False
--- > <Ctrl-D>
--- > List Bool
--- > 
--- > [False, False, True, False] : List Bool
+-- ... and that would print:
 --
--- The @dhall@ compiler produces two output lines:
+-- > $ ./example
+-- > False
 --
--- * The first output line is the type of the result
--- * The second output line is the normal form of the expression that we input
+-- We can also decode into some types without declaring a corresponding Haskell
+-- record to store the output.  In the last two examples we decoded the result
+-- directly into either a `Vector` of `Bool`s or a `Bool`.  You can see what types
+-- are supported \"out-of-the-box\" by examining the instances for the `Interpret`
+-- class.
 --
--- In the above example the type of the result is a `Vector` of `Bool`s and the
--- normal form of the expression just evaluates all functions.
+-- For example, the following instance says that we can directly decode any
+-- Dhall expression that evaluates to a @Bool@ into a Haskell `Bool`:
+--
+-- > instance Interpret Bool
+--
+-- ... and there is another instance that says that if we can decode a value of
+-- type @a@, then we can also decode a @List@ of values as a `Vector` of @a@s:
+--
+-- > instance Interpret a => Interpret (Vector a)
 --
 -- You can also use the Dhall compiler to evaluate expressions which have no
 -- file references.  For example:
