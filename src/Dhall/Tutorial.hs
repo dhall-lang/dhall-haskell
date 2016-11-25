@@ -20,6 +20,9 @@ module Dhall.Tutorial (
     -- * Built-in functions
     -- $builtins
 
+    -- ** Natural
+    -- $natural
+
     -- * Total
     -- $total
     ) where
@@ -353,10 +356,68 @@ import Dhall (Interpret(..), Type, detailed, input)
 
 -- $builtins
 --
--- Dhall is a very restricted programming language that only supports simple
--- built-in functions and operators
--- 
--- For example, Dhall only support addition and multiplication on @Natural@
+-- Dhall is a restricted programming language that only supports simple built-in
+-- functions and operators.  If you wish to do anything fancier you will need to
+-- load your data into Haskell for further processing
+--
+-- The language provides support for the following primitive types:
+--
+-- * @Bool@ values
+-- * @Natural@ values
+-- * @Integer@ values
+-- * @Double@ values
+-- * @Text@ values
+--
+-- ... as well as support for the following derived types:
+--
+-- * @List@s of values
+-- * @Optional@ values
+-- * Anonymous records
+-- * Anonymous unions
+--
+-- Each of the following sections provides an overview of builtin functions and
+-- operators for each type.  For each function you get:
+--
+-- * An example use of that function
+--
+-- * A \"type judgement\" explaining when that function or operator is well
+--   typed
+--
+-- For example, for the following judgement:
+--
+-- > Γ ⊢ x : Natural   Γ ⊢ y : Natural
+-- > ────────────────────────────────
+-- > Γ ⊢ x + y : Natural
+--
+-- ... you can read that as saying: "if @x@ has type @Natural@ and @y@ has type
+-- @Natural@, then @x + y@ has type @Natural@"
+--
+-- Similarly, for the following judgement:
+--
+-- > ─────────────────────────────────
+-- > Γ ⊢ Natural/even : Natural → Bool
+--
+-- ... you can read that as saying: "@Natural/even@ always has type
+-- @Natural → Bool@"
+--
+-- * Rules for how that function or operator behaves
+--
+-- These rules are just equalities that come in handy when reasoning about code.
+-- For example, the section on addition has the following rules:
+--
+-- > (x + y) + z = x + (y + z)
+-- >
+-- > x + +0 = x
+-- >
+-- > +0 + x = x
+--
+-- These rules are also a contract for how the compiler should behave.  If you
+-- ever observe code that does not obey these rules you should file a bug
+-- report.
+
+-- $natural
+--
+-- For example, Dhall only supports addition and multiplication on @Natural@
 -- numbers (i.e. non-negative numbers), which are not the same type of number as
 -- @Integer@s (which can be negative).  A @Natural@ number is a number prefixed
 -- with the @+@ symbol.  If you try to add or multiply two @Integer@s (without
@@ -383,10 +444,6 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- * Addition:
 --
--- > Γ ⊢ x : Natural   Γ ⊢ y : Natural
--- > ────────────────────────────────
--- > Γ ⊢ x + y : Natural
---
 -- Example:
 --
 -- > $ dhall
@@ -396,11 +453,21 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > +5
 --
--- * Multiplication
+-- Type:
 --
 -- > Γ ⊢ x : Natural   Γ ⊢ y : Natural
 -- > ────────────────────────────────
--- > Γ ⊢ x * y : Natural
+-- > Γ ⊢ x + y : Natural
+--
+-- Rules:
+--
+-- > (x + y) + z = x + (y + z)
+-- >
+-- > x + +0 = x
+-- >
+-- > +0 + x = x
+--
+-- * Multiplication
 --
 -- Example:
 --
@@ -411,10 +478,29 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > +6
 --
--- * Even
+-- Type:
 --
--- > ─────────────────────────────────
--- > Γ ⊢ Natural/even : Natural → Bool
+-- > Γ ⊢ x : Natural   Γ ⊢ y : Natural
+-- > ────────────────────────────────
+-- > Γ ⊢ x * y : Natural
+--
+-- Rules:
+--
+-- > (x * y) * z = x * (y * z)
+-- >
+-- > x * +1 = x
+-- >
+-- > +1 * x = x
+-- >
+-- > (x + y) * z = (x * z) + (y * z)
+-- >
+-- > x * (y + z) = (x * y) + (x * z)
+-- >
+-- > x * +0 = +0
+-- >
+-- > +0 * x = +0
+--
+-- * Even
 --
 -- Example:
 --
@@ -425,10 +511,22 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > True
 --
--- * Odd
+-- Type:
 --
--- > ────────────────────────────────
--- > Γ ⊢ Natural/odd : Natural → Bool
+-- > ─────────────────────────────────
+-- > Γ ⊢ Natural/even : Natural → Bool
+--
+-- Rules:
+--
+-- > Natural/even (x + y) = Natural/even x == Natural/even y
+-- >
+-- > Natural/even +0 = True
+-- >
+-- > Natural/even (x * y) = Natural/even x || Natural/even y
+-- >
+-- > Natural/even +1 = False
+--
+-- * Odd
 --
 -- Example:
 --
@@ -439,24 +537,48 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > False
 --
--- * Test for zero
+-- Type:
 --
--- > ───────────────────────────────────
--- > Γ ⊢ Natural/isZero : Natural → Bool
+-- > ────────────────────────────────
+-- > Γ ⊢ Natural/odd : Natural → Bool
+--
+-- Rules:
+--
+-- > Natural/odd (x + y) = Natural/odd x /= Natural/odd y
+-- >
+-- > Natural/odd +0 = False
+-- >
+-- > Natural/odd (x * y) = Natural/odd x && Natural/odd y
+-- >
+-- > Natural/odd +1 = True
+--
+-- * Test for zero
 --
 -- Example:
 --
 -- > $ dhall
--- > Natural/isZero +0
+-- > Natural/isZero +6
 -- > <Ctrl-D>
 -- > Bool
 -- > 
--- > True
+-- > False
+--
+-- Type:
+--
+-- > ───────────────────────────────────
+-- > Γ ⊢ Natural/isZero : Natural → Bool
+--
+-- Rules:
+--
+-- > Natural/isZero (x + y) = Natural/isZero x && Natural/isZero y
+-- >
+-- > Natural/isZero +0 = True
+-- >
+-- > Natural/isZero (x * y) = Natural/isZero x || Natural/isZero y
+-- >
+-- > Natural/isZero +1 = False
 --
 -- * Folding
---
--- > ──────────────────────────────────────────────────────────
--- > Γ ⊢ Natural/fold : Natural → ∀(a : Type) → (a → a) → a → a
 --
 -- Example:
 --
@@ -467,10 +589,22 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > "You're welcome!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 --
--- * Building
+-- Type:
 --
 -- > ──────────────────────────────────────────────────────────
--- > Γ ⊢ Natural/build : (∀(a : Type) → (a → a) → a → a) → Natural
+-- > Γ ⊢ Natural/fold : Natural → ∀(a : Type) → (a → a) → a → a
+--
+-- Rules:
+-- 
+-- > Natural/fold (x + y) n s z = Natural/fold x n s (Natural/fold y n s z)
+-- > 
+-- > Natural/fold +0 n s z = z
+-- > 
+-- > Natural/fold (x * y) n s = Natural/fold x n (Natural/fold y n s)
+-- > 
+-- > Natural/fold 1 n s = s
+--
+-- * Building
 --
 -- Example:
 --
@@ -479,6 +613,17 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > Natural
 -- > 
 -- > +2
+--
+-- Type:
+--
+-- > ─────────────────────────────────────────────────────────────
+-- > Γ ⊢ Natural/build : (∀(a : Type) → (a → a) → a → a) → Natural
+--
+-- Rules:
+--
+-- > Natural/fold (Natural/build x) = x
+-- >
+-- > Natural/build (Natural/fold x) = x
 
 -- $total
 --
