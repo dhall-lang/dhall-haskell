@@ -7,23 +7,39 @@
 module Dhall.Tutorial (
     -- * Introduction
     -- $introduction
+
+    -- * Types
+    -- $types
+
+    -- * Imports
+    -- $imports
+
+    -- * Functions
+    -- $functions
+
+    -- * Built-in functions
+    -- $builtins
+
+    -- * Total
+    -- $total
     ) where
 
 import Data.Vector (Vector)
-import Dhall (Interpret(..), detailed, input)
+import Dhall (Interpret(..), Type, detailed, input)
 
 -- $introduction
 --
 -- The simplest way to use Dhall is to ignore the programming language features
--- and use it as a strongly typed configuration format.  For example, suppose that
--- you have the following configuration file:
+-- and use it as a strongly typed configuration format.  For example, suppose
+-- that you create the following configuration file:
 -- 
--- > $ cat config
+-- > $ cat > config <<EOF
 -- > < Example =
 -- >     { foo = 1
 -- >     , bar = [3.0, 4.0, 5.0] : List Double
 -- >     }
 -- > >
+-- > EOF
 -- 
 -- You can read the above configuration file into Haskell using the following
 -- code:
@@ -51,67 +67,203 @@ import Dhall (Interpret(..), detailed, input)
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
 --
--- In the above code, the data type definition for the @Example@ record
--- represents the schema for our configuration file.  Suppose that we modify our
--- configuration file to no longer match the schema, like this:
+-- You can also load some types directly into Haskell without having to define a
+-- record, like this:
 --
--- > $ echo "1" > config
+-- > >>> :set -XOverloadedStrings
+-- > >>> input auto "True" :: IO Bool
+-- > True
 --
--- Then our program will throw an exception when we try to load the
--- configuration file:
+-- The `input` function can decode any value if we specify the value's expected
+-- `Type`:
 --
--- > $ ./example
--- > example: 
+-- > input
+-- >     :: Type a
+-- >     -> Text
+-- >     -> IO a
+--
+-- ... and we can either specify an explicit type like `bool`:
+--
+-- > bool :: Type Bool
+-- > 
+-- > input bool :: Text -> IO Bool
+-- >
+-- > input bool "True" :: IO Bool
+-- >
+-- > >>> input bool "True"
+-- > True
+--
+-- ... or we can use `auto` to let the compiler infer what type to decode from
+-- the expected return type:
+--
+-- > auto :: Interpret a => Type a
+-- >
+-- > input auto :: Interpret a => Text -> IO a
+-- >
+-- > >>> input auto "True" :: IO Bool
+-- > True
+--
+-- You can see what types `auto` supports \"out-of-the-box\" by browsing the
+-- instances for the `Interpret` class.  For example, the following instance
+-- says that we can directly decode any Dhall expression that evaluates to a
+-- @Bool@ into a Haskell `Bool`:
+--
+-- > instance Interpret Bool
+--
+-- ... which is why we could directly decode the string @"True"@ into a Haskell
+-- `Bool`.
+--
+-- There is also another instance that says that if we can decode a value of
+-- type @a@, then we can also decode a @List@ of values as a `Vector` of @a@s:
+--
+-- > instance Interpret a => Interpret (Vector a)
+--
+-- Therefore, since we can decode a @Bool@, we must also be able to decode a
+-- @List@ of @Bool@s.  Let's verify that this works, too:
+--
+-- > >>> input auto "[True, False] : List Bool" :: IO (Vector Bool)
+-- > [True,False]
+--
+-- We could have also used an explicit `Type` instead of `auto`:
+--
+-- > >>> input (vector bool) "[True, False] : List Bool"
+-- > [True, False]
+
+-- $types
+--
+-- Suppose that we try to decode a value of the wrong type, like this:
+--
+-- > >>> input auto "1" :: IO Bool
+-- > *** Exception: 
 -- > Error: Expression doesn't match annotation
 -- > 
--- > ./config : < Example : { bar : List Double, foo : Integer } >
+-- > 1 : Bool
 -- > 
 -- > (input):1:1
 --
--- The Dhall programming language is a typed language and the above error
--- message is the output of the language's type-checker.  Every expression we
--- read into Haskell is type-checked against the expected schema.
+-- The interpreter complains because the string @\"1\"@ cannot be decoded into a
+-- Haskell value of type `Bool`.
 --
--- The above error message says that the type-checker expected our @./config@ to
--- be a record with two fields: a field named @bar@ that is a @List@ of
--- @Double@s, and a field named @foo@ that is an @Integer@.  However, the type
--- checker found an expression whose inferred type was an `Integer`.  Since an
--- `Integer` is not the same thing as a record the type-checking step fails and
--- the code does not bother to marshal the configuration into Haskell.
+-- The code excerpt from the above error message has two components:
 --
--- More specifically, the code excerpt from the above error message has two
--- components:
+-- * the expression being type checked (i.e. @1@)
+-- * the expression's expected type (i.e. @Bool@)
 --
--- * the expression being type checked (i.e. @./config@)
--- * the expression's expected type
---
--- > ./config  :  < Example : { bar : List Double, foo : Integer } >
--- > ⇧            ⇧
--- > Expression   Expected type
+-- > Expression
+-- > ⇩
+-- > 1 : Bool
+-- >     ⇧
+-- >     Expected type
 --
 -- The @:@ symbol is how Dhall annotates values with their expected types.
 -- Whenever you see:
 --
 -- > x : t
 --
--- ... you should read that as \"we expect the expression @x@ to have type @t@\". 
--- If you are familiar with other functional programming languages, this is
--- exactly analogous to type annotations in Haskell or Purescript using the @(::)@
--- symbol or type annotations in Elm or ML using the @(:)@ symbol.
+-- ... you should read that as \"we expect the expression @x@ to have type
+-- @t@\". However, we might be wrong and if our expected type does not match the
+-- expression's actual type then the type checker will complain.
 --
--- File paths like @./config@ are valid expressions which expand out to the
--- corresponding file's contents.  The @./config@ file's contents are currently
--- @1@, so @./config@ is just an elaborate synonym for the number @1@.  This
--- means that we could equivalently write:
+-- If you are familiar with other functional programming languages, this
+-- notation is equivalent to type annotations in Haskell using the @(::)@
+-- symbol.
 --
--- > 1 : < Example : { bar : List Double, foo : Integer } >
+-- In this case, the expression @1@ does not have type @Bool@ so type checking
+-- fails with an exception.
+
+-- $imports
 --
--- The type checker rejects the above expression because the expression @1@
--- does not have type @\< Example : { bar : List Double, foo : Integer } \>@.
--- The actual type of @1@ is @Integer@, which is not even close to the same type.
+-- You might wonder why in some cases we can decode a configuration file:
 --
--- The Dhall programming language also supports anonymous functions.  For
--- example, we can define a configuration file that is a function like this:
+-- > >>> writeFile "bool" "True"
+-- > >>> input auto "./bool" :: IO Bool
+-- > True
+--
+-- ... and in other cases we can decode a value directly:
+--
+-- > >>> input auto "True" :: IO Bool
+-- > True
+--
+-- This is because importing from a file is a special case of a more general
+-- language feature: Dhall expressions can reference other expressions by their
+-- file path.
+--
+-- To illustrate this, let's create three files:
+-- 
+-- > $ echo 'True'  > bool1
+-- > $ echo 'False' > bool2
+-- > $ echo './bool1 && ./bool2' > both
+--
+-- ... and read in all three files in a single expression:
+-- 
+-- > >>> input auto "[ ./bool1 , ./bool2 , ./both ] : List Bool" :: IO (Vector Bool)
+-- > [True,False,False]
+--
+-- Each file path is replaced with the Dhall expression contained within that
+-- file.  If that file contains references to other files then those references
+-- are transitively resolved.
+--
+-- In other words: configuration files can reference other configuration files,
+-- either by their relative or absolute paths.  This means that we can split a
+-- configuration file into multiple files, like this:
+--
+-- > $ cat > config <<EOF
+-- > < Example =
+-- >   { foo = 1
+-- >   , bar = ./bar
+-- >   }
+-- > >
+-- > EOF
+--
+-- > $ cat > bar <<EOF
+-- > [ 3.0, 4.0, 5.0 ] : List Double
+-- > EOF
+--
+-- > $ ./example
+-- > Example {foo = 1, bar = [3.0,4.0,5.0]}
+--
+-- However, the Dhall language will forbid cycles in these file references.  For
+-- example, if we create the following cycle:
+--
+-- > $ echo './file1' > file2
+-- > $ echo './file2' > file1
+--
+-- ... then the interpreter will reject the import:
+--
+-- > >>> input auto "./file1" :: IO Integer
+-- > *** Exception: 
+-- > ↳ ./file1
+-- >   ↳ ./file2
+-- >
+-- > Cyclic import: ./file1
+--
+-- You can also import expressions by URL.  For example, you can find a Dhall
+-- expression hosted at this URL using @ipfs@:
+--
+-- <https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB>
+--
+-- > $ curl https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB
+-- > True
+--
+-- ... and you can reference that expression either directly:
+--
+-- > >>> input auto "https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB" :: IO Bool
+-- > True
+-- 
+-- ... or within a larger expression:
+--
+-- > >>> input auto "False == https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB" :: IO Bool
+-- > False
+--
+-- You're not limited to hosting Dhall expressions on @ipfs@.  You can host a
+-- Dhall expression anywhere that you can host raw plaintext on the web, such as
+-- Github, a pastebin, or your own web server.
+
+-- $functions
+--
+-- The Dhall programming language also supports user-defined anonymous
+-- functions.  For example, we can save the following anonymous function to a
+-- file:
 --
 -- > $ cat > makeBools
 -- > \(n : Bool) ->
@@ -119,23 +271,27 @@ import Dhall (Interpret(..), detailed, input)
 -- > <Ctrl-D>
 --
 -- ... or we can use Dhall's support for Unicode characters to use @λ@ instead of
--- @\\@ and @→@ instead of @->@:
+-- @\\@ and @→@ instead of @->@ (for people who are into that sort of thing):
 --
 -- > $ cat > makeBools
 -- > λ(n : Bool) →
 -- >         [ n && True, n && False, n || True, n || False ] : List Bool
 -- > <Ctrl-D>
 --
--- You can read this as a function of one argument named @n@ that has type @Bool@
--- This function returns a @List@ of @Bool@s.  Each element of the @List@ depends
--- on the input argument.
+-- You can read either one as a function of one argument named @n@ that has type
+-- @Bool@.  This function returns a @List@ of @Bool@s.  Each element of the
+-- @List@ depends on the input argument.
+--
+-- The (ASCII) syntax for anonymous functions resembles the syntax for anonymous
+-- functions in Haskell.  The only difference is that Dhall requires you to
+-- annotate the type of the function's input.
 --
 -- We can test our @makeBools@ function without having to modify and recompile
--- our Haskell program.  This library comes with a command-line executable program
--- named @dhall@ that you can use to both type-check configuration files and
--- convert them to a normal form.  Our compiler takes a program on standard input
--- and then prints the program's type to standard error followed by the program's
--- normal form to standard output:
+-- our Haskell program.  This library comes with a command-line executable
+-- program named @dhall@ that you can use to both type-check configuration files
+-- and convert them to a normal form.  Our compiler takes a program on standard
+-- input and then prints the program's type to standard error followed by the
+-- program's normal form to standard output:
 --
 -- > $ dhall <<< "./makeBools"
 -- > ∀(n : Bool) → List Bool
@@ -171,9 +327,11 @@ import Dhall (Interpret(..), detailed, input)
 -- When you apply an anonymous function to an argument, you substitute the
 -- \"bound variable" with the function's argument:
 --
+-- >    Bound variable
+-- >    ⇩
 -- > (λ(n : Bool) → ...) True
--- >    ⇧                ⇧
--- >    Bound variable   Function argument
+-- >                     ⇧
+-- >                     Function argument
 --
 -- So in our above example, we would replace all occurrences of @n@ with @True@,
 -- like this:
@@ -184,85 +342,25 @@ import Dhall (Interpret(..), detailed, input)
 -- > -- ... then we get this:
 -- > [True && True, True && False, True || True, True || False] : List Bool
 -- >
--- > -- ... which further reduces to:
+-- > -- ... which reduces to the following normal form:
 -- > [True, False, True, True] : List Bool
 --
 -- Now that we've verified that our function type checks and works, we can use
--- the same function within our Haskell program:
+-- the same function within Haskell:
 --
--- > {-# LANGUAGE OverloadedStrings #-}
--- >
--- > import Dhall
--- >
--- > main :: IO ()
--- > main = do
--- >     x <- input auto "./makeBools True"
--- >     print (x :: Vector Bool)
---
--- This produces the following output:
---
--- > $ ./example
+-- > >>> input auto "./makeBools True" :: IO (Vector Bool)
 -- > [True,False,True,True]
---
--- Note that the `input` function accepts any arbitrary Dhall expression and is
--- not limited to just file paths.  For example, we could write:
---
--- > {-# LANGUAGE OverloadedStrings #-}
--- >
--- > import Dhall
--- >
--- > main :: IO ()
--- > main = do
--- >     x <- input auto "True && False"
--- >     print (x :: Bool)
---
--- ... and that would print:
---
--- > $ ./example
--- > False
---
--- We can also decode into some types without declaring a corresponding Haskell
--- record to store the output.  In the last two examples we decoded the result
--- directly into either a `Vector` of `Bool`s or a `Bool`.  You can see what types
--- are supported \"out-of-the-box\" by browsing the instances for the `Interpret`
--- class.
---
--- For example, the following instance says that we can directly decode any
--- Dhall expression that evaluates to a @Bool@ into a Haskell `Bool`:
---
--- > instance Interpret Bool
---
--- ... and there is another instance that says that if we can decode a value of
--- type @a@, then we can also decode a @List@ of values as a `Vector` of @a@s:
---
--- > instance Interpret a => Interpret (Vector a)
---
--- Therefore, since we can decode a @Bool@, we must also be able to decode a
--- @List@ of @Bool@s.
---
--- You can also use the Dhall compiler to evaluate expressions which do not
--- reference any files.  For example:
---
--- > $ dhall
--- > "Hello, " <> "world!"
--- > <Ctrl-D>
--- > Text
--- > 
--- > "Hello, world!"
---
--- > $ dhall
--- > +10 * +10
--- > <Ctrl-D>
--- > Natural
--- > 
--- > +100
+
+-- $builtins
 --
 -- Dhall is a very restricted programming language that only supports simple
--- operations.  For example, Dhall only support addition and multiplication on
--- `Natural` numbers (i.e. non-negative numbers), which are not the same type of
--- number as `Integer`s (which can be negative).  A `Natural` number is a number
--- prefixed with the @+@ symbol.  If you try to add or multiply two `Integer`s
--- (without the @+@ prefix) you will get a type error:
+-- built-in functions and operators
+-- 
+-- For example, Dhall only support addition and multiplication on @Natural@
+-- numbers (i.e. non-negative numbers), which are not the same type of number as
+-- @Integer@s (which can be negative).  A @Natural@ number is a number prefixed
+-- with the @+@ symbol.  If you try to add or multiply two @Integer@s (without
+-- the @+@ prefix) you will get a type error:
 --
 -- > $ dhall
 -- > 2 + 2
@@ -275,189 +373,114 @@ import Dhall (Interpret(..), detailed, input)
 -- > 
 -- > (stdin):1:1
 --
--- Our `input` function also doesn't need to reference any files at all:
+-- In fact, there are no built-in functions for @Integer@s (or @Double@s).  As
+-- far as the language is concerned they are opaque values that can only be
+-- shuffled around but not used in any meaningful way until they have been
+-- loaded into Haskell.
 --
--- >>> input auto "True && False" :: IO Bool
--- False
+-- You can do useful things with @Natural@ numbers, though.  The built-in
+-- functions and operations are:
 --
--- Reading from an external configuration file is just a special case of Dhall's
--- support for embedding files as expressions.  There's no limit to how many
--- files-as-expressions that you can nest this way.  For example, we can define
--- one file that is a Dhall expression that in turn depends on another file
--- which is also a Dhall expression:
+-- * Addition:
 --
--- > $ echo './bool1 && ./bool2' > both
--- > $ echo 'True'  > bool1
--- > $ echo 'False' > bool2
--- > $ dhall
--- > [ ./bool1 , ./bool2 , ./both ] : List Bool
--- > <Ctrl-D>
--- > List Bool
--- > 
--- > [ True, False, False ] : List Bool
+-- > Γ ⊢ x : Natural   Γ ⊢ y : Natural
+-- > ────────────────────────────────
+-- > Γ ⊢ x + y : Natural
 --
--- The only restriction is that the Dhall language will forbid cycles in these
--- file references:
---
--- > $ echo './bar' > foo
--- > $ echo './foo' > bar
--- > $ dhall < ./foo
--- > dhall: 
--- > ⤷ ./bar 
--- > ⤷ ./foo 
--- > Cyclic import: ./bar 
---
--- The Dhall language also ensures that every expression is internally consistent.
--- For example, suppose that we call @./makeBools@ on a non-`Bool` argument:
+-- Example:
 --
 -- > $ dhall
--- > ./makeBools "ABC"
+-- > +2 + +3
 -- > <Ctrl-D>
--- > Use "dhall --explain" for detailed errors
+-- > Natural
 -- > 
--- > Error: Wrong type of function argument
--- > 
--- > ./makeBools "ABC"
--- > 
--- > (stdin):1:1
+-- > +5
 --
--- The type checker rejects our code because we supplied the wrong type of
--- argument to our function.  We can add the @--explain@ flag if we want the
--- compiler to explain exactly what went wrong:
+-- * Multiplication
 --
--- > $ dhall --explain
--- > ./makeBools "ABC"
+-- > Γ ⊢ x : Natural   Γ ⊢ y : Natural
+-- > ────────────────────────────────
+-- > Γ ⊢ x * y : Natural
+--
+-- Example:
+--
+-- > $ dhall
+-- > +2 * +3
 -- > <Ctrl-D>
+-- > Natural
 -- > 
--- > Error: Wrong type of function argument
--- > 
--- > Explanation: Every function declares what type or kind of argument to accept
--- > 
--- > For example:
--- > 
--- > 
--- >     ┌───────────────────────────────┐
--- >     │ λ(x : Bool) → x : Bool → Bool │  This anonymous function only accepts
--- >     └───────────────────────────────┘  arguments that have type ❰Bool❱
--- >                         ⇧
--- >                         The function's input type
--- > 
--- > 
--- >     ┌───────────────────────────────┐
--- >     │ Natural/even : Natural → Bool │  This built-in function only accepts
--- >     └───────────────────────────────┘  arguments that have type ❰Natural❱
--- >                      ⇧
--- >                      The function's input type
--- > 
--- > 
--- >     ┌───────────────────────────────┐
--- >     │ λ(a : Type) → a : Type → Type │  This anonymous function only accepts
--- >     └───────────────────────────────┘  arguments that have kind ❰Type❱
--- >                         ⇧
--- >                         The function's input kind
--- > 
--- > 
--- >     ┌────────────────────┐
--- >     │ List : Type → Type │  This built-in function only accepts arguments that
--- >     └────────────────────┘  have kind ❰Type❱
--- >              ⇧
--- >              The function's input kind
--- > 
--- > 
--- > For example, the following expressions are valid:
--- > 
--- > 
--- >     ┌────────────────────────┐
--- >     │ (λ(x : Bool) → x) True │  ❰True❱ has type ❰Bool❱, which matches the type
--- >     └────────────────────────┘  of argument that the anonymous function accepts
--- > 
--- > 
--- >     ┌─────────────────┐
--- >     │ Natural/even +2 │  ❰+2❱ has type ❰Natural❱, which matches the type of
--- >     └─────────────────┘  argument that the ❰Natural/even❱ function accepts,
--- > 
--- > 
--- >     ┌────────────────────────┐
--- >     │ (λ(a : Type) → a) Bool │  ❰Bool❱ has kind ❰Type❱, which matches the kind
--- >     └────────────────────────┘  of argument that the anonymous function accepts
--- > 
--- > 
--- >     ┌───────────┐
--- >     │ List Text │  ❰Text❱ has kind ❰Type❱, which matches the kind of argument
--- >     └───────────┘  that that the ❰List❱ function accepts
--- > 
--- > 
--- > However, you can not apply a function to the wrong type or kind of argument
--- > 
--- > For example, the following expressions are not valid:
--- > 
--- > 
--- >     ┌───────────────────────┐
--- >     │ (λ(x : Bool) → x) "A" │  ❰"A"❱ has type ❰Text❱, but the anonymous function
--- >     └───────────────────────┘  expects an argument that has type ❰Bool❱
--- > 
--- > 
--- >     ┌──────────────────┐
--- >     │ Natural/even "A" │  ❰"A"❱ has type ❰Text❱, but the ❰Natural/even❱ function
--- >     └──────────────────┘  expects an argument that has type ❰Natural❱
--- > 
--- > 
--- >     ┌────────────────────────┐
--- >     │ (λ(a : Type) → a) True │  ❰True❱ has type ❰Bool❱, but the anonymous
--- >     └────────────────────────┘  function expects an argument of kind ❰Type❱
--- > 
--- > 
--- >     ┌────────┐
--- >     │ List 1 │  ❰1❱ has type ❰Integer❱, but the ❰List❱ function expects an
--- >     └────────┘  argument that has kind ❰Type❱
--- > 
--- > 
--- > You tried to invoke the following function:
--- > 
--- > ↳ λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool
--- > 
--- > ... which expects an argument of type or kind:
--- > 
--- > ↳ Bool
--- > 
--- > ... on the following argument:
--- > 
--- > ↳ "ABC"
--- > 
--- > ... which has a different type or kind:
--- > 
--- > ↳ Text
--- > 
--- > Some common reasons why you might get this error:
--- > 
--- > ● You omit a function argument by mistake:
--- > 
--- > 
--- >     ┌────────────────────────────────────────┐
--- >     │ List/head   ([1, 2, 3] : List Integer) │
--- >     └────────────────────────────────────────┘
--- >                 ⇧
--- >                 ❰List/head❱ is missing the first argument,
--- >                 which should be: ❰Integer❱
--- > 
--- > 
--- > ● You supply an ❰Integer❱ literal to a function that expects a ❰Natural❱
--- > 
--- >     ┌────────────────┐
--- >     │ Natural/even 2 │
--- >     └────────────────┘
--- >                    ⇧
--- >                    This should be ❰+2❱
--- > 
--- > ────────────────────────────────────────────────────────────────────────────────
--- > 
--- > ./makeBools "ABC"
--- > 
--- > (stdin):1:1
--- > 
+-- > +6
 --
--- We get a type error saying that our function expects a @Bool@ argument, but
--- we supplied an argument of type @Text@ instead.
+-- * Even
+--
+-- > ─────────────────────────────────
+-- > Γ ⊢ Natural/even : Natural → Bool
+--
+-- Example:
+--
+-- > $ dhall
+-- > Natural/even +6
+-- > <Ctrl-D>
+-- > Bool
+-- > 
+-- > True
+--
+-- * Odd
+--
+-- > ────────────────────────────────
+-- > Γ ⊢ Natural/odd : Natural → Bool
+--
+-- Example:
+--
+-- > $ dhall
+-- > Natural/odd +6
+-- > <Ctrl-D>
+-- > Bool
+-- > 
+-- > False
+--
+-- * Test for zero
+--
+-- > ───────────────────────────────────
+-- > Γ ⊢ Natural/isZero : Natural → Bool
+--
+-- Example:
+--
+-- > $ dhall
+-- > Natural/isZero +0
+-- > <Ctrl-D>
+-- > Bool
+-- > 
+-- > True
+--
+-- * Folding
+--
+-- > ──────────────────────────────────────────────────────────
+-- > Γ ⊢ Natural/fold : Natural → ∀(a : Type) → (a → a) → a → a
+--
+-- Example:
+--
+-- > $ dhall
+-- > Natural/fold +40 Text (λ(t : Text) → t ++ "!") "You're welcome"
+-- > <Ctrl-D>
+-- > Text
+-- > 
+-- > "You're welcome!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+--
+-- * Building
+--
+-- > ──────────────────────────────────────────────────────────
+-- > Γ ⊢ Natural/build : (∀(a : Type) → (a → a) → a → a) → Natural
+--
+-- Example:
+--
+-- > $ dhall
+-- > Natural/build (λ(a : Type) → λ(succ : a → a) → λ(zero : a) → succ (succ zero))
+-- > Natural
+-- > 
+-- > +2
+
+-- $total
 --
 -- Dhall is a total programming language, which means that Dhall is not
 -- Turing-complete and evaluation of every Dhall program is guaranteed to

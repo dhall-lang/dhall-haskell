@@ -29,6 +29,7 @@ module Dhall
     , vector
 
     -- * Re-exports
+    , Natural
     , Text
     , Vector
     , Generic
