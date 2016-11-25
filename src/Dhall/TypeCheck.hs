@@ -971,7 +971,7 @@ You tried to use the following expression as a function:
 
 prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
-    short = "Wrong function argument"
+    short = "Wrong type of function argument"
 
     long =
         Builder.fromText [NeatInterpolation.text|

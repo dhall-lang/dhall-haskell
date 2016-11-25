@@ -20,14 +20,6 @@ Description:
     type-checks a Dhall file and reduces the file to a fully evaluated normal
     form.
     .
-    "Dhall.Core" contains the core syntax tree and evaluator
-    .
-    "Dhall.Import" contains logic for resolving remote file and URL references
-    .
-    "Dhall.TypeChecker" contains the type-checker
-    .
-    "Dhall.Parser" contains the parser
-    .
     Read "Dhall.Tutorial" to learn how to use this library
 Category: Compiler
 Source-Repository head
@@ -61,6 +53,7 @@ Library
         Dhall.Core,
         Dhall.Import,
         Dhall.Parser,
+        Dhall.Tutorial,
         Dhall.TypeCheck
 
 Executable dhall
