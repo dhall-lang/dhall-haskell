@@ -17,11 +17,56 @@ module Dhall.Tutorial (
     -- * Functions
     -- $functions
 
+    -- * Let expressions
+    -- $let
+
+    -- * Generic functions
+    -- $generics
+
     -- * Built-in functions
     -- $builtins
 
-    -- ** Natural
+    -- ** @Bool@
+    -- $bool
+
+    -- *** @(||)@
+    -- $or
+
+    -- *** @(&&)@
+    -- $and
+
+    -- *** @(==)@
+    -- $equal
+
+    -- *** @(/=)@
+    -- $unequal
+
+    -- *** @if@\/@then@\/@else@
+    -- $ifthenelse
+
+    -- ** @Natural@
     -- $natural
+
+    -- *** @(+)@
+    -- $plus
+
+    -- *** @(*)@
+    -- $times
+
+    -- *** @Natural/even@
+    -- $even
+
+    -- *** @Natural/odd@
+    -- $odd
+
+    -- *** @Natural/isZero@
+    -- $isZero
+
+    -- *** @Natural/fold@
+    -- $naturalFold
+
+    -- *** @Natural/build@
+    -- $naturalBuild
 
     -- * Total
     -- $total
@@ -36,7 +81,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- and use it as a strongly typed configuration format.  For example, suppose
 -- that you create the following configuration file:
 -- 
--- > $ cat > config <<EOF
+-- > $ cat > ./config <<EOF
 -- > < Example =
 -- >     { foo = 1
 -- >     , bar = [3.0, 4.0, 5.0] : List Double
@@ -81,9 +126,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- `Type`:
 --
 -- > input
--- >     :: Type a
--- >     -> Text
--- >     -> IO a
+-- >     :: Type a  -- Expected type
+-- >     -> Text    -- Dhall program
+-- >     -> IO a    -- Decoded expression
 --
 -- ... and we can either specify an explicit type like `bool`:
 --
@@ -113,8 +158,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > instance Interpret Bool
 --
--- ... which is why we could directly decode the string @"True"@ into a Haskell
--- `Bool`.
+-- ... which is why we could directly decode the string @\"True\"@ into a
+-- Haskell `Bool`.
 --
 -- There is also another instance that says that if we can decode a value of
 -- type @a@, then we can also decode a @List@ of values as a `Vector` of @a@s:
@@ -187,9 +232,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > >>> input auto "True" :: IO Bool
 -- > True
 --
--- This is because importing from a file is a special case of a more general
--- language feature: Dhall expressions can reference other expressions by their
--- file path.
+-- This is because importing a configuration from a file is a special case of a
+-- more general language feature: Dhall expressions can reference other
+-- expressions by their file path.
 --
 -- To illustrate this, let's create three files:
 -- 
@@ -210,7 +255,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- either by their relative or absolute paths.  This means that we can split a
 -- configuration file into multiple files, like this:
 --
--- > $ cat > config <<EOF
+-- > $ cat > ./config <<EOF
 -- > < Example =
 -- >   { foo = 1
 -- >   , bar = ./bar
@@ -218,9 +263,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > >
 -- > EOF
 --
--- > $ cat > bar <<EOF
--- > [ 3.0, 4.0, 5.0 ] : List Double
--- > EOF
+-- > $ echo "[ 3.0, 4.0, 5.0 ] : List Double" > ./bar
 --
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
@@ -253,7 +296,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > >>> input auto "https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB" :: IO Bool
 -- > True
 -- 
--- ... or within a larger expression:
+-- ... or inside of a larger expression:
 --
 -- > >>> input auto "False == https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB" :: IO Bool
 -- > False
@@ -261,6 +304,18 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- You're not limited to hosting Dhall expressions on @ipfs@.  You can host a
 -- Dhall expression anywhere that you can host raw plaintext on the web, such as
 -- Github, a pastebin, or your own web server.
+--
+-- You can import types, too.  For example, we can change our @./bar@ file to:
+--
+-- > $ echo "[ 3.0, 4.0, 5.0 ] : List ./type" > ./bar
+--
+-- ... and then specify the @./type@ in a separate file:
+--
+-- > $ echo "Double" > ./type
+--
+-- > $ ./example
+-- > Example {foo = 1, bar = [3.0,4.0,5.0]}
+--
 
 -- $functions
 --
@@ -289,12 +344,11 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- functions in Haskell.  The only difference is that Dhall requires you to
 -- annotate the type of the function's input.
 --
--- We can test our @makeBools@ function without having to modify and recompile
--- our Haskell program.  This library comes with a command-line executable
--- program named @dhall@ that you can use to both type-check configuration files
--- and convert them to a normal form.  Our compiler takes a program on standard
--- input and then prints the program's type to standard error followed by the
--- program's normal form to standard output:
+-- We can test our @makeBools@ function directly from the command line. This
+-- library comes with a command-line executable program named @dhall@ that you
+-- can use to both type-check files and convert them to a normal form.  Our
+-- compiler takes a program on standard input and then prints the program's type
+-- to standard error followed by the program's normal form to standard output:
 --
 -- > $ dhall <<< "./makeBools"
 -- > ∀(n : Bool) → List Bool
@@ -306,7 +360,12 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- second line is our program's normal form, which in this case happens to be
 -- identical to our original program.
 --
--- We can \"apply\" our file to a @Bool@ argument, like this:
+-- Functions are separated from their arguments by whitespace.  So if you see:
+--
+-- @f x@
+--
+-- ... you should read that as \"apply the function @f@ to the argument @x@\".
+-- This means that we can \"apply\" our function to a @Bool@ argument like this:
 --
 -- > $ dhall <<< "./makeBools True"
 -- > List Bool
@@ -320,12 +379,6 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > List Bool
 -- > 
 -- > [True, False, True, True] : List Bool
---
--- Functions are separated from their arguments by whitespace.  So if you see:
---
--- @f x@
---
--- ... you should read that as \"apply the function @f@ to the argument @x@\".
 --
 -- When you apply an anonymous function to an argument, you substitute the
 -- \"bound variable" with the function's argument:
@@ -354,6 +407,206 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > >>> input auto "./makeBools True" :: IO (Vector Bool)
 -- > [True,False,True,True]
 
+-- $let
+--
+-- Dhall also supports @let@ expressions, which you can use to define
+-- intermediate values in the course of a computation.
+--
+-- Here is an example @let@ expression:
+--
+-- > $ dhall
+-- > let x = "ha" in x ++ x
+-- > <Ctrl-D>
+-- > Text
+-- >
+-- > "haha"
+--
+-- You can also annotate the types of values defined within a @let@ expression,
+-- like this:
+--
+-- > $ dhall
+-- > let x : Text = "ha" in x ++ x
+-- > <Ctrl-D>
+-- > Text
+-- >
+-- > "haha"
+--
+-- Every @let@ expression of the form:
+--
+-- > let x : t = y in e
+--
+-- ... is exactly equivalent to:
+--
+-- > (λ(x : t) → e) y
+--
+-- So for example, this @let@ expression:
+--
+-- > let x : Text = "ha" in x ++ x
+--
+-- ... is equivalent to:
+--
+-- > (λ(x : Text) → x ++ x) "ha"
+--
+-- ... which in turn simplifies to:
+--
+-- > "ha" ++ "ha"
+--
+-- You need to nest @let@ expressions if you want to define more than one value
+-- in this way:
+--
+-- > $ dhall
+-- >     let x = "Hello, "
+-- > in  let y = "world!"
+-- > in  x ++ y
+-- > <Ctrl-D>
+-- > Text
+-- > 
+-- > "Hello, world!"
+--
+-- Dhall is completely whitespace-insensitive, so feel free to format things
+-- over multiple lines or indent in any way that you please.
+--
+-- If you want to define a named function, just give a name to an anonymous
+-- function:
+--
+-- > $ dhall
+-- > let twice = λ(x : Text) → x ++ x in twice "ha"
+-- > <Ctrl-D>
+-- > Text
+-- > 
+-- > "haha"
+--
+-- Unlike Haskell, Dhall does not support function arguments on the left-hand
+-- side of the equals sign, so this will not work:
+--
+-- > $ dhall
+-- > let twice (x : Text) = x ++ x in twice "ha"
+-- > <Ctrl-D>
+-- > (stdin):1:11: error: expected: ":",
+-- >     "="
+-- > let twice (x : Text) = x ++ x in twice "ha" 
+-- >           ^
+--
+-- The error message says that Dhall expected either a @(:)@ (i.e. the beginning
+-- of a type annotation) or a @(=)@ (the beginning of the assignment) and not a
+-- function argument.
+
+-- $generics
+--
+-- The Dhall language supports defining generic functions (a.k.a.
+-- \"polymorphic\" functions) that work on more than one type of value.
+-- However, Dhall differs from Haskell by not inferring the types of these
+-- generic functions.  Instead, you must be explicit about what type of value
+-- the function is specialized to.
+--
+-- Take, for example, Haskell's identity function named @id@:
+--
+-- > id :: a -> a
+-- > id = \x -> x
+--
+-- The identity function is generic, meaning that `id` works on values of
+-- different types:
+--
+-- > >>> id 4
+-- > 4
+-- > >>> id True
+-- > True
+--
+-- The equivalent function in Dhall is:
+--
+-- > λ(a : Type) → λ(x : a) → x
+--
+-- Notice how this function takes two arguments instead of one.  The first
+-- argument is the type of the second argument.
+--
+-- Let's illustrate how this works by actually using the above function:
+--
+-- > $ echo "λ(a : Type) → λ(x : a) → x" > id
+--
+-- If we supply the function alone to the compiler we get the inferred type as
+-- the first line:
+-- 
+-- > $ dhall <<< "./id"
+-- > ∀(a : Type) → ∀(x : a) → a
+-- > 
+-- > λ(a : Type) → λ(x : a) → x
+--
+-- You can read the type @(∀(a : Type) → ∀(x : a) → a)@ as saying: \"This is the
+-- type of a function whose first argument is named @a@ and is a @Type@.  The
+-- second argument is named @x@ and has type @a@ (i.e. the value of the first
+-- argument).  The result also has type @a@.\"
+--
+-- This means that the type of the second argument changes depending on what
+-- type we provide for the first argument:
+--
+-- > $ dhall <<< "./id Integer"
+-- > ∀(x : Integer) → Integer
+-- > 
+-- > λ(x : Integer) → x
+--
+-- > $ dhall <<< "./id Bool"
+-- > ∀(x : Bool) → Bool
+-- > 
+-- > λ(x : Bool) → x
+--
+-- When we apply @./id@ to @Integer@, we create a function that expects an
+-- @Integer@ argument.  Similarly, when we instead apply @./id@ to @Bool@, we
+-- create a function that expects a @Bool@ argument.
+--
+-- We can then supply the final argument to each of those functions to show
+-- that they work:
+--
+-- > $ dhall <<< "./id Integer 4"
+-- > Integer
+-- > 
+-- > 4
+--
+-- > $ dhall <<< "./id Bool True"
+-- > Bool
+-- > 
+-- > True
+--
+-- Built-in functions can also be generic, too.  For example, we can ask the
+-- compiler for the type of @List/reverse@, the function that reverses a list:
+--
+-- > $ dhall <<< "List/reverse"
+-- > ∀(a : Type) → List a → List a
+-- > 
+-- > List/reverse
+--
+-- The first argument to @List/reverse@ is the type of the list to reverse:
+--
+-- > $ dhall <<< "List/reverse Bool"
+-- > List Bool → List Bool
+-- > 
+-- > List/reverse Bool
+--
+-- ... and the second argument is the list to reverse:
+--
+-- > $ dhall <<< "List/reverse Bool ([True, False] : List Bool)"
+-- > List Bool
+-- > 
+-- > [False, True] : List Bool
+--
+-- Note that the second argument has no name.  This type:
+--
+-- > ∀(a : Type) → List a → List a
+--
+-- ... is equivalent to this type:
+--
+-- > ∀(a : Type) → ∀(_ : List a) → List a
+--
+-- In other words, if you don't see the @∀@ symbol surrounding a function
+-- argument type then that means that the name of the argument is @"_"@.  This
+-- is true even for user-defined functions:
+--
+-- > $ dhall <<< "λ(_ : Text) → 1"
+-- > Text → Integer
+-- > 
+-- > λ(_ : Text) → 1
+--
+-- The type @(Text → Integer)@ is the same as @(∀(_ : Text) → Integer)@
+
 -- $builtins
 --
 -- Dhall is a restricted programming language that only supports simple built-in
@@ -375,50 +628,11 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- * Anonymous records
 -- * Anonymous unions
 --
--- Each of the following sections provides an overview of builtin functions and
--- operators for each type.  For each function you get:
+-- Dhall differs in a few important ways from other programming languages, so
+-- you should keep the following caveats in mind:
 --
--- * An example use of that function
---
--- * A \"type judgement\" explaining when that function or operator is well
---   typed
---
--- For example, for the following judgement:
---
--- > Γ ⊢ x : Natural   Γ ⊢ y : Natural
--- > ────────────────────────────────
--- > Γ ⊢ x + y : Natural
---
--- ... you can read that as saying: "if @x@ has type @Natural@ and @y@ has type
--- @Natural@, then @x + y@ has type @Natural@"
---
--- Similarly, for the following judgement:
---
--- > ─────────────────────────────────
--- > Γ ⊢ Natural/even : Natural → Bool
---
--- ... you can read that as saying: "@Natural/even@ always has type
--- @Natural → Bool@"
---
--- * Rules for how that function or operator behaves
---
--- These rules are just equalities that come in handy when reasoning about code.
--- For example, the section on addition has the following rules:
---
--- > (x + y) + z = x + (y + z)
--- >
--- > x + +0 = x
--- >
--- > +0 + x = x
---
--- These rules are also a contract for how the compiler should behave.  If you
--- ever observe code that does not obey these rules you should file a bug
--- report.
-
--- $natural
---
--- For example, Dhall only supports addition and multiplication on @Natural@
--- numbers (i.e. non-negative numbers), which are not the same type of number as
+-- First, Dhall only supports addition and multiplication on @Natural@ numbers
+-- (i.e. non-negative numbers), which are not the same type of number as
 -- @Integer@s (which can be negative).  A @Natural@ number is a number prefixed
 -- with the @+@ symbol.  If you try to add or multiply two @Integer@s (without
 -- the @+@ prefix) you will get a type error:
@@ -439,10 +653,215 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- shuffled around but not used in any meaningful way until they have been
 -- loaded into Haskell.
 --
--- You can do useful things with @Natural@ numbers, though.  The built-in
--- functions and operations are:
+-- Second, the equality @(==)@ and inequality @(/=)@ operators only work on
+-- @Bool@s.  You cannot test any other types of values for equality.
 --
--- * Addition:
+-- Each of the following sections provides an overview of builtin functions and
+-- operators for each type.  For each function you get:
+--
+-- * An example use of that function
+--
+-- * A \"type judgement\" explaining when that function or operator is well
+--   typed
+--
+-- For example, for the following judgement:
+--
+-- > Γ ⊢ x : Bool   Γ ⊢ y : Bool
+-- > ───────────────────────────
+-- > Γ ⊢ x && y : Bool
+--
+-- ... you can read that as saying: "if @x@ has type @Bool@ and @y@ has type
+-- @Bool@, then @x && y@ has type @Bool@"
+--
+-- Similarly, for the following judgement:
+--
+-- > ─────────────────────────────────
+-- > Γ ⊢ Natural/even : Natural → Bool
+--
+-- ... you can read that as saying: "@Natural/even@ always has type
+-- @Natural → Bool@"
+--
+-- * Rules for how that function or operator behaves
+--
+-- These rules are just equalities that come in handy when reasoning about code.
+-- For example, the section on @(&&)@ has the following rules:
+--
+-- > (x && y) && z = x && (y && z)
+-- >
+-- > x && True = x
+-- >
+-- > True && x = x
+--
+-- These rules are also a contract for how the compiler should behave.  If you
+-- ever observe code that does not obey these rules you should file a bug
+-- report.
+
+-- $bool
+--
+-- There are two values that have type @Bool@ named @True@ and @False@:
+--
+-- > ───────────────
+-- > Γ ⊢ True : Bool
+--
+-- > ────────────────
+-- > Γ ⊢ False : Bool
+--
+-- The built-in operators for values of type @Bool@ are:
+--
+
+-- $or
+--
+-- Example:
+--
+-- > $ dhall
+-- > True || False
+-- > <Ctrl-D>
+-- > Bool
+-- > 
+-- > True
+--
+-- Type:
+--
+-- > Γ ⊢ x : Bool   Γ ⊢ y : Bool
+-- > ───────────────────────────
+-- > Γ ⊢ x || y : Bool
+--
+-- Laws:
+--
+-- > (x || y) || z = x || (y || z)
+-- > 
+-- > x || False = x
+-- > 
+-- > False || x = x
+-- >
+-- > x || (y && z) = (x || y) && (x || z)
+-- > 
+-- > x || True = True
+-- > 
+-- > True || x = True
+
+-- $and
+--
+-- Example:
+--
+-- > $ dhall
+-- > True && False
+-- > <Ctrl-D>
+-- > Bool
+-- > 
+-- > False
+--
+-- Type:
+--
+-- > Γ ⊢ x : Bool   Γ ⊢ y : Bool
+-- > ───────────────────────────
+-- > Γ ⊢ x && y : Bool
+--
+-- Laws:
+--
+-- > (x && y) && z = x && (y && z)
+-- > 
+-- > x && True = x
+-- > 
+-- > True && x = x
+-- >
+-- > x && (y || z) = (x && y) || (x && z)
+-- > 
+-- > x && False = False
+-- > 
+-- > False && x = False
+
+-- $equal
+--
+-- Example:
+--
+-- > $ dhall
+-- > True == False
+-- > <Ctrl-D>
+-- > Bool
+-- > 
+-- > False
+--
+-- Type:
+--
+-- > Γ ⊢ x : Bool   Γ ⊢ y : Bool
+-- > ───────────────────────────
+-- > Γ ⊢ x == y : Bool
+--
+-- Laws:
+--
+-- > (x == y) == z = x == (y == z)
+-- > 
+-- > x == True = x
+-- > 
+-- > True == x = x
+-- >
+-- > x == x = True
+
+-- $unequal
+--
+-- Example:
+--
+-- > $ dhall
+-- > True != False
+-- > <Ctrl-D>
+-- > Bool
+-- > 
+-- > True
+--
+-- Type:
+--
+-- > Γ ⊢ x : Bool   Γ ⊢ y : Bool
+-- > ───────────────────────────
+-- > Γ ⊢ x != y : Bool
+--
+-- Laws:
+--
+-- > (x != y) != z = x != (y != z)
+-- > 
+-- > x != False = x
+-- > 
+-- > False != x = x
+-- >
+-- > x != x = False
+
+-- $ifthenelse
+--
+-- Example:
+--
+-- > $ dhall
+-- > if True then 3 else 5
+-- > <Ctrl-D>
+-- > Integer
+-- > 
+-- > 3
+--
+-- Type:
+--
+-- >                Γ ⊢ t : Type
+-- >                ─────────────────────
+-- > Γ ⊢ b : Bool   Γ ⊢ l : t   Γ ⊢ r : t
+-- > ────────────────────────────────────
+-- > Γ ⊢ if b then l else r
+--
+-- Laws:
+--
+-- > if b then True else False = b
+-- > 
+-- > if True  then l else r = l
+-- > 
+-- > if False then l else r = r
+
+-- $natural
+--
+-- Natural literals are numbers prefixed by a @+@ sign, like this:
+--
+-- > +4 : Natural
+--
+-- If you omit the @+@ sign then you get an @Integer@ literal, which is a
+-- different type of value
+
+-- $plus
 --
 -- Example:
 --
@@ -466,8 +885,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > x + +0 = x
 -- >
 -- > +0 + x = x
---
--- * Multiplication
+
+-- $times
 --
 -- Example:
 --
@@ -499,8 +918,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > x * +0 = +0
 -- >
 -- > +0 * x = +0
---
--- * Even
+
+-- $even
 --
 -- Example:
 --
@@ -525,8 +944,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > Natural/even (x * y) = Natural/even x || Natural/even y
 -- >
 -- > Natural/even +1 = False
---
--- * Odd
+
+-- $odd
 --
 -- Example:
 --
@@ -551,8 +970,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > Natural/odd (x * y) = Natural/odd x && Natural/odd y
 -- >
 -- > Natural/odd +1 = True
---
--- * Test for zero
+
+-- $isZero
 --
 -- Example:
 --
@@ -577,8 +996,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > Natural/isZero (x * y) = Natural/isZero x || Natural/isZero y
 -- >
 -- > Natural/isZero +1 = False
---
--- * Folding
+
+-- $naturalFold
 --
 -- Example:
 --
@@ -603,13 +1022,14 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > Natural/fold (x * y) n s = Natural/fold x n (Natural/fold y n s)
 -- > 
 -- > Natural/fold 1 n s = s
---
--- * Building
+
+-- $naturalBuild
 --
 -- Example:
 --
 -- > $ dhall
 -- > Natural/build (λ(a : Type) → λ(succ : a → a) → λ(zero : a) → succ (succ zero))
+-- > <Ctrl-D>
 -- > Natural
 -- > 
 -- > +2
