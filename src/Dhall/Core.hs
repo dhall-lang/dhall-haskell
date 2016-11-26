@@ -189,7 +189,7 @@ data Expr s a
     | BoolOr  (Expr s a) (Expr s a)
     -- | > BoolEQ  x y                              ~  x == y
     | BoolEQ  (Expr s a) (Expr s a)
-    -- | > BoolNE  x y                              ~  x /= y
+    -- | > BoolNE  x y                              ~  x != y
     | BoolNE  (Expr s a) (Expr s a)
     -- | > BoolIf x y z                             ~  if x then y else z
     | BoolIf (Expr s a) (Expr s a) (Expr s a)
@@ -488,7 +488,7 @@ buildExpr1 a =
 -- | Builder corresponding to the @Expr2@ parser in "Dhall.Parser"
 buildExpr2 :: Buildable a => Expr s a -> Builder
 buildExpr2 (BoolEQ a b) = buildExpr2 a <> " == " <> buildExpr2 b
-buildExpr2 (BoolNE a b) = buildExpr2 a <> " /= " <> buildExpr2 b
+buildExpr2 (BoolNE a b) = buildExpr2 a <> " != " <> buildExpr2 b
 buildExpr2 (Note   _ b) = buildExpr2 b
 buildExpr2  a           = buildExpr3 a
 

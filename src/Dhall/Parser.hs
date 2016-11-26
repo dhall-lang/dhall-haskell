@@ -309,14 +309,14 @@ exprC = exprC0
         a <- pA
         try (do pOp; b <- pB; return (op a b)) <|> pure a )
 
-    exprC0 = chain exprC1 (symbol "&&") BoolAnd      exprC0
-    exprC1 = chain exprC2 (symbol "*" ) NaturalTimes exprC1
-    exprC2 = chain exprC3  combine      Combine      exprC2
-    exprC3 = chain exprC4 (symbol "||") BoolOr       exprC3
-    exprC4 = chain exprC5 (symbol "++") TextAppend   exprC4
-    exprC5 = chain exprC6 (symbol "+" ) NaturalPlus  exprC5
+    exprC0 = chain exprC1 (symbol "||") BoolOr       exprC0
+    exprC1 = chain exprC2 (symbol "+" ) NaturalPlus  exprC1
+    exprC2 = chain exprC3 (symbol "++") TextAppend   exprC2
+    exprC3 = chain exprC4 (symbol "&&") BoolAnd      exprC3
+    exprC4 = chain exprC5  combine      Combine      exprC4
+    exprC5 = chain exprC6 (symbol "*" ) NaturalTimes exprC5
     exprC6 = chain exprC7 (symbol "==") BoolEQ       exprC6
-    exprC7 = chain exprD  (symbol "/=") BoolNE       exprC7
+    exprC7 = chain exprD  (symbol "!=") BoolNE       exprC7
 
 -- We can't use left-recursion to define `exprD` otherwise the parser will
 -- loop infinitely. However, I'd still like to use left-recursion in the
