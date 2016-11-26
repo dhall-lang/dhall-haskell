@@ -23,6 +23,9 @@ module Dhall.Tutorial (
     -- * Generic functions
     -- $generics
 
+    -- * Total
+    -- $total
+
     -- * Built-in functions
     -- $builtins
 
@@ -67,9 +70,6 @@ module Dhall.Tutorial (
 
     -- *** @Natural/build@
     -- $naturalBuild
-
-    -- * Total
-    -- $total
     ) where
 
 import Data.Vector (Vector)
@@ -607,6 +607,44 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- The type @(Text → Integer)@ is the same as @(∀(_ : Text) → Integer)@
 
+-- $total
+--
+-- Dhall is a total programming language, which means that Dhall is not
+-- Turing-complete and evaluation of every Dhall program is guaranteed to
+-- eventually halt.  There is no upper bound on how long the program might take
+-- to evaluate, but the program is guaranteed to terminate in a finite amount of
+-- time and not hang forever.
+--
+-- This guarantees that all Dhall programs can be safely reduced to a normal
+-- form where all functions have been evaluated.  In fact, Dhall expressions can
+-- be evaluated even if all function arguments haven't been fully applied.  For
+-- example, the following program is an anonymous function:
+--
+-- > $ dhall
+-- > \(n : Bool) -> +10 * +10
+-- > <Ctrl-D>
+-- > ∀(n : Bool) → Natural
+-- > 
+-- > λ(n : Bool) → +100
+--
+-- ... and even though the function is still missing the first argument named
+-- @n@ the compiler is smart enough to evaluate the body of the anonymous
+-- function ahead of time before the function has even been invoked.
+--
+-- We can use the @map@ function from the Prelude to illustrate an even more
+-- complex example:
+--
+-- > $ dhall
+-- > let map = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- > in  λ(f : Integer → Integer) → map Integer Integer f ([1, 2, 3] : List Integer)
+-- > <Ctrl-D>
+-- > ∀(f : Integer → Integer) → List Integer
+-- > 
+-- > λ(f : Integer → Integer) → [f 1, f 2, f 3] : List Integer
+--
+-- Dhall knows to apply our function to each element of the list even before
+-- we specify which function to apply.
+
 -- $builtins
 --
 -- Dhall is a restricted programming language that only supports simple built-in
@@ -1044,27 +1082,3 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > Natural/fold (Natural/build x) = x
 -- >
 -- > Natural/build (Natural/fold x) = x
-
--- $total
---
--- Dhall is a total programming language, which means that Dhall is not
--- Turing-complete and evaluation of every Dhall program is guaranteed to
--- eventually halt.  There is no upper bound on how long the program might take
--- to evaluate, but the program is guaranteed to terminate in a finite amount of
--- time and not hang forever.
---
--- This guarantees that all Dhall programs can be safely reduced to a normal
--- form where all functions have been evaluated.  In fact, Dhall expressions can
--- be evaluated even if all function arguments haven't been fully applied.  For
--- example, the following program is an anonymous function:
---
--- > $ dhall
--- > \(n : Bool) -> +10 * +10
--- > <Ctrl-D>
--- > ∀(n : Bool) → Natural
--- > 
--- > λ(n : Bool) → +100
---
--- ... and even though the function is still missing the first argument named
--- @n@ the compiler is smart enough to evaluate the body of the anonymous
--- function ahead of time before the function has even been invoked.
