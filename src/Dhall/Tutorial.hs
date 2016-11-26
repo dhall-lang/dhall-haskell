@@ -14,11 +14,20 @@ module Dhall.Tutorial (
     -- * Imports
     -- $imports
 
+    -- * Lists
+    -- $lists
+
+    -- * Records
+    -- $records
+
     -- * Functions
     -- $functions
 
     -- * Let expressions
     -- $let
+
+    -- * Unions
+    -- $unions
 
     -- * Generic functions
     -- $generics
@@ -315,7 +324,70 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
+
+-- $lists
 --
+-- You can store 0 or more values of the same type in the list, like this:
+--
+-- > [1, 2, 3] : List Integer
+--
+-- Every list must be followed by the type of the list.  The type annotation is
+-- not optional.  You will get an error if you omit the annotation:
+--
+-- > $ dhall
+-- > [1, 2, 3]
+-- > (stdin):2:1: error: unexpected
+-- >     EOF, expected: ":"
+-- > <EOF>
+-- > ^
+--
+-- Also, the elements must all have the same type which must match the declare
+-- type of the list.  You will get an error if you try to store any other type
+-- of element:
+--
+-- > $ dhall
+-- > [1, True, 3] : List Integer
+-- > ^D
+-- > Use "dhall --explain" for detailed errors
+-- > 
+-- > Error: List element has the wrong type
+-- > 
+-- > [1, True, 3] : List Integer
+-- > 
+-- > (stdin):1:1
+
+-- $records
+--
+-- Record literals are delimited by curly braces and their fields are separated
+-- by commas.  For example, this is a valid record literal:
+--
+-- > { foo = "ABC"
+-- > , bar = 2
+-- > , baz = 4.2
+-- > }
+--
+-- A record type is like a record literal except instead of specifying each
+-- field's value we specify each field's type instead.  For example, the
+-- preceding record literal has the following record type:
+--
+-- > { foo : Text
+-- > , bar : Integer
+-- > , baz : Double
+-- > }
+--
+-- You can access the field of a record using the following syntax:
+--
+-- > record.fieldName
+--
+-- ... which means to access the value of the field named @fieldName@ from the
+-- @record@.  For example:
+--
+-- > $ dhall
+-- > { foo = "ABC", bar = 2, baz = 4.2 }.baz
+-- > <Ctrl-D>
+-- > Double
+-- > 
+-- > 4.2
 
 -- $functions
 --
@@ -491,6 +563,86 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- of a type annotation) or a @(=)@ (the beginning of the assignment) and not a
 -- function argument.
 
+-- $unions
+--
+-- A union is a value that can be one of many alternative types of values.  For
+-- example, the following union type:
+--
+-- > < Left : Natural | Right : Bool >
+--
+-- ... represents a value that can be either an @Integer@ or a @Text@ value.
+-- If you are familiar with Haskell these are exactly analogous to Haskell's
+-- \"sum types\".  You can think of them as anonymous sum types.
+--
+-- Each alternative is associated with a tag that distinguishes that alternative
+-- from others.  In the above example, the @Left@ tag is used for the @Natural@
+-- alternative and the @Right@ tag is used for the @Bool@ alternative.
+--
+-- A union literal specifies the value of one alternative and the types of the
+-- remaining alternatives.  For example, both of the following union literals
+-- have the above union type:
+--
+-- > < Left  = +0   | Right : Bool    >
+--
+-- > < Right = True | Left  : Natural >
+--
+-- You can consume a union using the built-in @merge@ function.  For example,
+-- suppose we want to convert our union to a @Bool@ but we want to behave
+-- differently depending on whether or not the union is an @Integer@ wrapped in
+-- the @Left@ tag or a @Bool@ wrapped in the @Right@ tag.  We would write:
+--
+-- > $ cat > process <<EOF
+-- >     λ(union : < Left : Natural | Right : Bool >)
+-- > →   let handlers =
+-- >             { Left  = Natural/even
+-- >             , Right = λ(b : Bool) → b
+-- >             }
+-- > in  merge handlers union : Bool
+-- > EOF
+--
+-- Now our @./process@ function can handle both alternatives:
+--
+-- > $ dhall
+-- > ./process < Left = +3 | Right : Bool >
+-- > Bool
+-- > 
+-- > False
+--
+-- > ./process < Right = True | Left : Natural >
+-- > Bool
+-- > 
+-- > True
+--
+-- Every @merge@ function is of the form:
+--
+-- > merge handlers union : type
+--
+-- ... where: 
+--
+-- * @union@ is the union you want to consume
+-- * @handlers@ is a record with one function per alternative of the union.
+-- * @type@ is the declared result type of the @merge@
+--
+-- The @merge@ function selects which function to apply depending on which
+-- alternative the union selects:
+--
+-- > merge { Foo = f, ... } < Foo = x | ... > : t = f x : t
+--
+-- So, for example:
+--
+-- > merge { Left = Natural/even, Right = λ(b : Bool) → b } < Left = +3 | Right : Bool > : Bool
+-- >     = Natural/even +3 : Bool
+-- >     = False
+--
+-- ... and similarly:
+--
+-- > merge { Left = Natural/even, Right = λ(b : Bool) → b } < Right = True | Left : Natural > : Bool
+-- >     = (λ(b : Bool) → b) True : Bool
+-- >     = True
+--
+-- Notice that each handler has to return the same type of result (@Bool@ in
+-- this case) which must also match the declared result type of the @merge@.
+
 -- $generics
 --
 -- The Dhall language supports defining generic functions (a.k.a.
@@ -635,7 +787,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- complex example:
 --
 -- > $ dhall
--- > let map = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- >     let map = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
 -- > in  λ(f : Integer → Integer) → map Integer Integer f ([1, 2, 3] : List Integer)
 -- > <Ctrl-D>
 -- > ∀(f : Integer → Integer) → List Integer
@@ -644,6 +796,10 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Dhall knows to apply our function to each element of the list even before
 -- we specify which function to apply.
+--
+-- The language will also never crash or throw any exceptions.  Every
+-- computation will succeed and produce something, even if the result might be
+-- an @Optional@ value.
 
 -- $builtins
 --
@@ -744,7 +900,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > ────────────────
 -- > Γ ⊢ False : Bool
 --
--- The built-in operators for values of type @Bool@ are:
+-- The built-in operations for values of type @Bool@ are:
 --
 
 -- $or
