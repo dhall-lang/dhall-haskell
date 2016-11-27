@@ -310,8 +310,8 @@ exprC = exprC0
         try (do pOp <?> "operator"; b <- pB; return (op a b)) <|> pure a )
 
     exprC0 = chain exprC1 (symbol "||") BoolOr       exprC0
-    exprC1 = chain exprC2 (symbol "+" ) NaturalPlus  exprC1
     exprC2 = chain exprC3 (symbol "++") TextAppend   exprC2
+    exprC1 = chain exprC2 (symbol "+" ) NaturalPlus  exprC1
     exprC3 = chain exprC4 (symbol "&&") BoolAnd      exprC3
     exprC4 = chain exprC5  combine      Combine      exprC4
     exprC5 = chain exprC6 (symbol "*" ) NaturalTimes exprC5
@@ -328,7 +328,7 @@ exprC = exprC0
 --   arguments
 exprD :: Parser (Expr Src Path)
 exprD = do
-    es <- some (noted exprE)
+    es <- some (noted (try exprE))
     let app nL@(Note (Src before _ bytesL) eL) nR@(Note (Src _ after bytesR) eR) =
             Note (Src before after (bytesL <> bytesR)) (App nL nR)
         app _ _ = Dhall.Core.internalError
@@ -345,8 +345,8 @@ exprE = noted (do
 
 exprF :: Parser (Expr Src Path)
 exprF = choice
-    [   noted (try exprF25)
-    ,   noted (try exprF26)
+    [   noted (try exprF26)
+    ,   noted (try exprF25)
     ,   noted      exprF24
     ,   noted      exprF27
     ,   noted (try exprF28)
@@ -490,7 +490,9 @@ exprF = choice
         return (NaturalLit (fromIntegral a)) ) <?> "natural"
 
     exprF26 = do
-        sign <- fmap (\_ -> negate) (Text.Parser.Char.char '-') <|> pure id
+        sign <-  fmap (\_ -> negate) (Text.Parser.Char.char '-')
+             <|> fmap (\_ -> id    ) (Text.Parser.Char.char '+')
+             <|> pure id
         a <- Text.Parser.Token.double
         return (DoubleLit (sign a))
 
