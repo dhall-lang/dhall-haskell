@@ -17,6 +17,9 @@ module Dhall.Tutorial (
     -- * Lists
     -- $lists
 
+    -- * Optional values
+    -- $optional
+
     -- * Records
     -- $records
 
@@ -79,6 +82,24 @@ module Dhall.Tutorial (
 
     -- *** @Natural/build@
     -- $naturalBuild
+
+    -- ** @Integer@
+    -- $integer
+
+    -- ** @Double@
+    -- $double
+
+    -- ** @Text@
+    -- $text
+
+    -- *** @(++)@
+    -- $textAppend
+
+    -- *** @List@
+    -- $list
+
+    -- *** @List/length@
+    -- $listLength
     ) where
 
 import Data.Vector (Vector)
@@ -117,8 +138,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- >     x <- input auto "./config"
 -- >     print (x :: Example)
 -- 
--- If you compile and run the above program, the program prints the
--- corresponding Haskell record:
+-- If you compile and run the above example, the program prints the corresponding
+-- Haskell record:
 -- 
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
@@ -166,8 +187,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > instance Interpret Bool
 --
--- ... which is why we could directly decode the string @\"True\"@ into a
--- Haskell `Bool`.
+-- ... which is why we could directly decode the string @\"True\"@ into the
+-- value `True`.
 --
 -- There is also another instance that says that if we can decode a value of
 -- type @a@, then we can also decode a @List@ of values as a `Vector` of @a@s:
@@ -175,12 +196,13 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > instance Interpret a => Interpret (Vector a)
 --
 -- Therefore, since we can decode a @Bool@, we must also be able to decode a
--- @List@ of @Bool@s:
+-- @List@ of @Bool@s, like this:
 --
 -- > >>> input auto "[True, False] : List Bool" :: IO (Vector Bool)
 -- > [True,False]
 --
--- We could have also used an explicit `Type` instead of `auto`:
+-- We could also specify what type to decode by providing an explicit `Type`
+-- instead of using `auto` with a type annotation:
 --
 -- > >>> input (vector bool) "[True, False] : List Bool"
 -- > [True, False]
@@ -243,9 +265,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- To illustrate this, let's create three files:
 -- 
--- > $ echo 'True'  > bool1
--- > $ echo 'False' > bool2
--- > $ echo './bool1 && ./bool2' > both
+-- > $ echo "True"  > bool1
+-- > $ echo "False" > bool2
+-- > $ echo "./bool1 && ./bool2" > both
 --
 -- ... and read in all three files in a single expression:
 -- 
@@ -307,8 +329,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > False
 --
 -- You're not limited to hosting Dhall expressions on @ipfs@.  You can host a
--- Dhall expression anywhere that you can host raw plaintext on the web, such as
--- Github, a pastebin, or your own web server.
+-- Dhall expression anywhere that you can host UTF8-encoded text on the web, such
+-- as Github, a pastebin, or your own web server.
 --
 -- You can import types, too.  For example, we can change our @./bar@ file to:
 --
@@ -322,38 +344,6 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
-
--- $lists
---
--- You can store 0 or more values of the same type in a list, like this:
---
--- > [1, 2, 3] : List Integer
---
--- Every list must be followed by the type of the list.  The type annotation is
--- not optional.  You will get an error if you omit the annotation:
---
--- > $ dhall
--- > [1, 2, 3]
--- > (stdin):2:1: error: unexpected
--- > <Ctrl-D>
--- >     EOF, expected: ":"
--- > <EOF>
--- > ^
---
--- Also, list elements must all have the same type which must match the declared
--- type of the list.  You will get an error if you try to store any other type
--- of element:
---
--- > $ dhall
--- > [1, True, 3] : List Integer
--- > <Ctrl-D>
--- > Use "dhall --explain" for detailed errors
--- > 
--- > Error: List element has the wrong type
--- > 
--- > [1, True, 3] : List Integer
--- > 
--- > (stdin):1:1
 --
 -- Note that all imports must be terminated by whitespace or you will get a
 -- parse error, like this:
@@ -383,6 +373,69 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > λ(x : Double) → x
 
+-- $lists
+--
+-- You can store 0 or more values of the same type in a list, like this:
+--
+-- > [1, 2, 3] : List Integer
+--
+-- Every list must be followed by the type of the list.  The type annotation is
+-- not optional and you will get an error if you omit the annotation:
+--
+-- > $ dhall
+-- > [1, 2, 3]
+-- > (stdin):2:1: error: unexpected
+-- > <Ctrl-D>
+-- >     EOF, expected: ":"
+-- > <EOF>
+-- > ^
+--
+-- Also, list elements must all have the same type which must match the declared
+-- type of the list.  You will get an error if you try to store any other type
+-- of element:
+--
+-- > $ dhall
+-- > [1, True, 3] : List Integer
+-- > <Ctrl-D>
+-- > Use "dhall --explain" for detailed errors
+-- > 
+-- > Error: List element has the wrong type
+-- > 
+-- > [1, True, 3] : List Integer
+-- > 
+-- > (stdin):1:1
+
+-- $optional
+--
+-- @Optional@ values are exactly like lists except they can only hold 0 or 1
+-- elements.  They cannot hold 2 or more elements:
+--
+-- For example, these are valid @Optional@ values:
+--
+-- > [1] : Optional Integer
+-- >
+-- > []  : Optional Integer
+--
+-- ... but this is not valid:
+--
+-- > $ dhall
+-- > [1, 2] : Optional Integer
+-- > <Ctrl-D>
+-- > Use "dhall --explain" for detailed errors
+-- > 
+-- > Error: Multiple ❰Optional❱ elements not allowed
+-- > 
+-- > [1, 2] : Optional Integer
+-- > 
+-- > (stdin):1:1
+--
+-- An @Optional@ corresponds to Haskell's `Maybe` type for decoding purposes:
+--
+-- > >>> input auto "[1] : Optional Integer" :: IO (Maybe Integer)
+-- > Just 1
+-- > >>> input auto "[] : Optional Integer" :: IO (Maybe Integer)
+-- > Nothing
+
 -- $records
 --
 -- Record literals are delimited by curly braces and their fields are separated
@@ -402,7 +455,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > , baz : Double
 -- > }
 --
--- You can access the field of a record using the following syntax:
+-- You can access a field of a record using the following syntax:
 --
 -- > record.fieldName
 --
@@ -416,7 +469,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > 4.2
 --
--- You can also combine two records, using the @(/\)@ operator:
+-- You can also combine two records, using the @(/\\)@ operator or the
+-- corresponding Unicode @(∧)@ (U+2227) operator:
 --
 -- > $ dhall
 -- > { foo = 1, bar = "ABC" } /\ { baz = True }
@@ -438,7 +492,6 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > (stdin):1:1
 
-
 -- $functions
 --
 -- The Dhall programming language also supports user-defined anonymous
@@ -450,8 +503,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- >         [ n && True, n && False, n || True, n || False ] : List Bool
 -- > <Ctrl-D>
 --
--- ... or we can use Dhall's support for Unicode characters to use @λ@ instead of
--- @\\@ and @→@ instead of @->@ (for people who are into that sort of thing):
+-- ... or we can use Dhall's support for Unicode characters to use @λ@ (U+03BB)
+-- instead of @\\@ and @→@ (U+2192) instead of @->@ (for people who are into that
+-- sort of thing):
 --
 -- > $ cat > makeBools
 -- > λ(n : Bool) →
@@ -480,16 +534,38 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool
 --
 -- The first line says that @makeBools@ is a function of one argument named @n@
--- that has type @Bool@ and the function returns a @List@ of @Bool@s.  The
--- second line is our program's normal form, which in this case happens to be
--- identical to our original program.
+-- that has type @Bool@ and the function returns a @List@ of @Bool@s.  The @∀@
+-- (U+2200) symbol is shorthand for the ASCII @forall@ keyword:
 --
--- Functions are separated from their arguments by whitespace.  So if you see:
+-- > ∀(x : a) → b        -- This type ...
+-- > 
+-- > forall (x : a) → b  -- ... is the same as this type
+--
+-- ... and Dhall's @forall@ keyword behaves the same way as Haskell's @forall@
+-- keyword for input values that are @Type@s:
+--
+-- > forall (x : Type) → b  -- This Dhall type ...
+-- 
+-- > forall x . b           -- ... is the same as this Haskell type
+--
+-- The part where Dhall differs from Haskell is that you can also use @∀@/@forall@
+-- to give names to non-@Type@ arguments (such as the first argument to
+-- @makeBools@).
+--
+-- The second line of Dhall's output is our program's normal form:
+--
+-- > λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool
+--
+-- ... which in this case happens to be identical to our original program.
+--
+-- To apply a function to an argument you separate the function and argument by
+-- whitespace (just like Haskell):
 --
 -- @f x@
 --
--- ... you should read that as \"apply the function @f@ to the argument @x@\".
--- This means that we can \"apply\" our function to a @Bool@ argument like this:
+-- You can read the above as \"apply the function @f@ to the argument @x@\".  This
+-- means that we can \"apply\" our @./makeBools@ function to a @Bool@ argument
+-- like this:
 --
 -- > $ dhall
 -- > ./makeBools True
@@ -499,7 +575,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > [True, False, True, True] : List Bool
 --
 -- Remember that file paths are synonymous with their contents, so the above
--- code is equivalent to:
+-- code is exactly equivalent to:
 -- 
 -- > $ dhall
 -- > (λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool) True
@@ -538,9 +614,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- $let
 --
 -- Dhall also supports @let@ expressions, which you can use to define
--- intermediate values in the course of a computation.
---
--- Here is an example @let@ expression:
+-- intermediate values in the course of a computation, like this:
 --
 -- > $ dhall
 -- > let x = "ha" in x ++ x
@@ -575,9 +649,13 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > (λ(x : Text) → x ++ x) "ha"
 --
--- ... which in turn simplifies to:
+-- ... which in turn reduces to:
 --
 -- > "ha" ++ "ha"
+--
+-- ... which in turn reduces to:
+--
+-- > "haha"
 --
 -- You need to nest @let@ expressions if you want to define more than one value
 -- in this way:
@@ -591,8 +669,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > "Hello, world!"
 --
--- Dhall is completely whitespace-insensitive, so feel free to format things
--- over multiple lines or indent in any way that you please.
+-- Dhall is whitespace-insensitive, so feel free to format things over multiple
+-- lines or indent in any way that you please.
 --
 -- If you want to define a named function, just give a name to an anonymous
 -- function:
@@ -637,7 +715,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- A union literal specifies the value of one alternative and the types of the
 -- remaining alternatives.  For example, both of the following union literals
--- have the above union type:
+-- have the same type, which is the above union type:
 --
 -- > < Left  = +0   | Right : Bool    >
 --
@@ -646,7 +724,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- You can consume a union using the built-in @merge@ function.  For example,
 -- suppose we want to convert our union to a @Bool@ but we want to behave
 -- differently depending on whether or not the union is a @Natural@ wrapped in
--- the @Left@ tag or a @Bool@ wrapped in the @Right@ tag.  We would write:
+-- the @Left@ alternative or a @Bool@ wrapped in the @Right@ alternative.  We
+-- would write:
 --
 -- > $ cat > process <<EOF
 -- >     λ(union : < Left : Natural | Right : Bool >)
@@ -661,11 +740,14 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > $ dhall
 -- > ./process < Left = +3 | Right : Bool >
+-- > <Ctrl-D>
 -- > Bool
 -- > 
 -- > False
 --
+-- > $ dhall
 -- > ./process < Right = True | Left : Natural >
+-- > <Ctrl-D>
 -- > Bool
 -- > 
 -- > True
@@ -677,11 +759,11 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- ... where: 
 --
 -- * @union@ is the union you want to consume
--- * @handlers@ is a record with one function per alternative of the union.
+-- * @handlers@ is a record with one function per alternative of the union
 -- * @type@ is the declared result type of the @merge@
 --
--- The @merge@ function selects which function to apply depending on which
--- alternative the union selects:
+-- The @merge@ function selects which function to apply from the record based on
+-- which alternative the union selects:
 --
 -- > merge { Foo = f, ... } < Foo = x | ... > : t = f x : t
 --
@@ -748,7 +830,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- argument).  The result also has type @a@.\"
 --
 -- This means that the type of the second argument changes depending on what
--- type we provide for the first argument:
+-- type we provide for the first argument.  When we apply @./id@ to @Integer@, we
+-- create a function that expects an @Integer@ argument:
 --
 -- > $ dhall
 -- > ./id Integer
@@ -757,6 +840,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > λ(x : Integer) → x
 --
+-- Similarly, when we apply @./id@ to @Bool@, we create a function that expects a
+-- @Bool@ argument:
+--
 -- > $ dhall
 -- > ./id Bool
 -- > <Ctrl-D>
@@ -764,12 +850,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > λ(x : Bool) → x
 --
--- When we apply @./id@ to @Integer@, we create a function that expects an
--- @Integer@ argument.  Similarly, when we apply @./id@ to @Bool@, we create a
--- function that expects a @Bool@ argument.
---
 -- We can then supply the final argument to each of those functions to show
--- that they work:
+-- that they both work on their respective types:
 --
 -- > $ dhall
 -- > ./id Integer 4
@@ -844,9 +926,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- time and not hang forever.
 --
 -- This guarantees that all Dhall programs can be safely reduced to a normal
--- form where all functions have been evaluated.  In fact, Dhall expressions can
--- be evaluated even if all function arguments haven't been fully applied.  For
--- example, the following program is an anonymous function:
+-- form where as many functions have been evaluated as possible.  In fact, Dhall
+-- expressions can be evaluated even if all function arguments haven't been fully
+-- applied.  For example, the following program is an anonymous function:
 --
 -- > $ dhall
 -- > \(n : Bool) -> +10 * +10
@@ -870,8 +952,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > λ(f : Integer → Integer) → [f 1, f 2, f 3] : List Integer
 --
--- Dhall knows to apply our function to each element of the list even before
--- we specify which function to apply.
+-- Dhall can apply our function to each element of the list even before we specify
+-- which function to apply.
 --
 -- The language will also never crash or throw any exceptions.  Every
 -- computation will succeed and produce something, even if the result might be
@@ -880,7 +962,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- $builtins
 --
 -- Dhall is a restricted programming language that only supports simple built-in
--- functions and operators.  If you wish to do anything fancier you will need to
+-- functions and operators.  If you want to do anything fancier you will need to
 -- load your data into Haskell for further processing
 --
 -- The language provides support for the following primitive types:
@@ -1124,7 +1206,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 
 -- $natural
 --
--- Natural literals are numbers prefixed by a @+@ sign, like this:
+-- @Natural@ literals are numbers prefixed by a @+@ sign, like this:
 --
 -- > +4 : Natural
 --
@@ -1314,3 +1396,93 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > Natural/fold (Natural/build x) = x
 -- >
 -- > Natural/build (Natural/fold x) = x
+
+-- $integer
+--
+-- @Integer@ literals are either prefixed with a @-@ sign (if they are negative)
+-- or no sign (if they are positive), like this:
+--
+-- >  3 : Integer
+-- > -2 : Integer
+--
+-- If you prefix them with a @+@ sign then they are @Natural@ literals and not
+-- @Integer@s
+--
+-- There are no built-in operations on @Integer@s.  For all practical purposes
+-- they are opaque values within the Dhall language
+
+-- $double
+--
+-- A @Double@ literal is a floating point value with at least one decimal
+-- place, such as:
+--
+-- > -2.0     : Double
+-- >  3.14159 : Double
+--
+-- There are no built-in operations on @Double@s.  For all practical purposes
+-- they are opaque values within the Dhall language
+
+-- $text
+--
+-- A @Text@ literal is just a sequence of characters enclosed in double quotes,
+-- like:
+--
+-- > "ABC" : Text
+--
+-- The only thing you can do with @Text@ values is concatenate them
+
+-- $textAppend
+--
+-- Example:
+--
+-- > $ dhall
+-- > "Hello, " ++ "world!"
+-- > <Ctrl-D>
+-- > Text
+-- > 
+-- > "Hello, world!"
+--
+-- Type:
+--
+-- > Γ ⊢ x : Text   Γ ⊢ y : Text
+-- > ───────────────────────────
+-- > Γ ⊢ x && y : Text
+--
+-- Laws:
+--
+-- > (x ++ y) ++ z = x ++ (y ++ z)
+-- > 
+-- > x ++ "" = x
+-- > 
+-- > "" ++ x = x
+
+-- $list
+--
+-- Dhall list literals are a sequence of values inside of brackets separated by
+-- commas, like this:
+--
+-- > [1, 2, 3] : List Integer
+--
+-- Also, every list must be followed by a mandatory type annotation
+--
+-- The built-in operations on lists are:
+
+-- $listLength
+--
+-- Example:
+--
+-- > $ dhall
+-- > List/length Integer ([1, 2, 3] : List Integer)
+-- > <Ctrl-D>
+-- > Natural
+-- > 
+-- > +3
+--
+-- Type:
+--
+-- > ──────────────────────────────────────────────────────────
+-- > Γ ⊢ List/length : ∀(a : Type) → List a → Natural
+--
+-- Laws:
+--
+-- > List/length t xs = List/fold t xs Natural (λ(_ : t) → λ(n : Natural) → n + +1) +0
