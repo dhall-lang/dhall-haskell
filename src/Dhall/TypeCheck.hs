@@ -393,7 +393,7 @@ typeWith _      ListIndexed       = do
         (Pi "a" (Const Type)
             (Pi "_" (App List "a")
                 (App List (Record (Data.Map.fromList kts))) ) )
-typeWith _      ListReverse       = do
+typeWith _      ListReversed      = do
     return (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a")))
 typeWith _      Optional          = do
     return (Pi "_" (Const Type) (Const Type))
