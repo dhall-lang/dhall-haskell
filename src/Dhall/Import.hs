@@ -367,11 +367,11 @@ exprFromFile path = do
         Failure errInfo -> throwIO (ParseError (Text.Trifecta._errDoc errInfo))
         Success expr    -> return expr
   where
-    parser = do
+    parser = unParser (do
         Text.Parser.Token.whiteSpace
-        r <- unParser Dhall.Parser.exprA
+        r <- Dhall.Parser.exprA
         Text.Parser.Combinators.eof
-        return r
+        return r )
 
 exprFromURL :: Manager -> Text -> IO (Expr Src Path)
 exprFromURL m url = do
@@ -416,11 +416,11 @@ exprFromURL m url = do
                 Success expr -> return expr
         Success expr -> return expr
   where
-    parser = do
+    parser = unParser (do
         Text.Parser.Token.whiteSpace
-        r <- unParser Dhall.Parser.exprA
+        r <- Dhall.Parser.exprA
         Text.Parser.Combinators.eof
-        return r
+        return r )
 
 {-| Load a `Path` as a \"dynamic\" expression (without resolving any imports)
 
