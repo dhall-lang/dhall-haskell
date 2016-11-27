@@ -1659,12 +1659,12 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let List/shift  = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/shift
--- > let List/concat = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
--- > let List/map    = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- > let List/shifted = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/shifted
+-- > let List/concat  = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
+-- > let List/map     = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
 -- > 
 -- > List/indexed a (List/concat a xss) =
--- >     List/shift a (List/map (List a) (List { index : Natural, value : a }) (List/indexed a) xss)
+-- >     List/shifted a (List/map (List a) (List { index : Natural, value : a }) (List/indexed a) xss)
 
 -- $listReversed
 --
@@ -1695,6 +1695,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- >
 -- > List/reversed b (List/concatMap a b f xs)
 -- >     = List/concatMap a b (λ(x : a) → List/reversed b (f x)) (List/reversed a xs)
+-- >
+-- > List/reversed a ([x, y] : List a) = [y, x] : List a
 
 -- $optional
 --
