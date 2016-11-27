@@ -124,6 +124,12 @@ module Dhall.Tutorial (
 
     -- *** @List/reversed@
     -- $listReversed
+
+    -- *** @Optional@
+    -- $optional
+
+    -- *** @Optional/fold@
+    -- $optionalFold
     ) where
 
 import Data.Vector (Vector)
@@ -1113,7 +1119,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > ───────────────────────────
 -- > Γ ⊢ x || y : Bool
 --
--- Laws:
+-- Rules:
 --
 -- > (x || y) || z = x || (y || z)
 -- > 
@@ -1144,7 +1150,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > ───────────────────────────
 -- > Γ ⊢ x && y : Bool
 --
--- Laws:
+-- Rules:
 --
 -- > (x && y) && z = x && (y && z)
 -- > 
@@ -1175,7 +1181,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > ───────────────────────────
 -- > Γ ⊢ x == y : Bool
 --
--- Laws:
+-- Rules:
 --
 -- > (x == y) == z = x == (y == z)
 -- > 
@@ -1202,7 +1208,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > ───────────────────────────
 -- > Γ ⊢ x != y : Bool
 --
--- Laws:
+-- Rules:
 --
 -- > (x != y) != z = x != (y != z)
 -- > 
@@ -1231,7 +1237,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > ────────────────────────────────────
 -- > Γ ⊢ if b then l else r
 --
--- Laws:
+-- Rules:
 --
 -- > if b then True else False = b
 -- > 
@@ -1483,7 +1489,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > ───────────────────────────
 -- > Γ ⊢ x && y : Text
 --
--- Laws:
+-- Rules:
 --
 -- > (x ++ y) ++ z = x ++ (y ++ z)
 -- > 
@@ -1493,16 +1499,16 @@ import Dhall (Interpret(..), Type, detailed, input)
 
 -- $list
 --
--- Dhall list literals are a sequence of values inside of brackets separated by
+-- Dhall @List@ literals are a sequence of values inside of brackets separated by
 -- commas:
 --
 -- > Γ ⊢ t : Type   Γ ⊢ x : t   Γ ⊢ y : t   ...
 -- > ──────────────────────────────────────────
 -- > Γ ⊢ [x, y, ... ] : List t
 --
--- Also, every list must be followed by a mandatory type annotation
+-- Also, every @List@ must end with a mandatory type annotation
 --
--- The built-in operations on lists are:
+-- The built-in operations on @List@s are:
 
 -- $listFold
 --
@@ -1547,7 +1553,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 -- > Γ ⊢ List/build : ∀(a : Type) → (∀(list : Type) → ∀(cons : a → list → list) → ∀(nil : list) → list) → List a
 --
--- Laws:
+-- Rules:
 --
 -- > List/build t (List/fold t x) = x
 -- >
@@ -1569,7 +1575,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > ────────────────────────────────────────────────
 -- > Γ ⊢ List/length : ∀(a : Type) → List a → Natural
 --
--- Laws:
+-- Rules:
 --
 -- > List/length t xs = List/fold t xs Natural (λ(_ : t) → λ(n : Natural) → n + +1) +0
 
@@ -1676,15 +1682,54 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > ─────────────────────────────────────────────────
 -- > Γ ⊢ List/reversed : ∀(a : Type) → List a → List a
 --
--- Laws:
+-- Rules:
 --
--- > let List/map    = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
--- > let List/concat = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
---
+-- > let List/map       = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- > let List/concat    = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concatMap
+-- > 
 -- > List/reversed a (List/concat a xss)
 -- >     = List/concat a (List/reversed (List a) (List/map (List a) (List a) (List/reversed a) xss))
 -- >
 -- > List/reversed a ([x] : List a) = [x] : List a
 -- >
--- > List/reversed b (./Prelude/List/concatMap a b f xs)
--- >     = ./Prelude/List/concatMap a b (λ(x : a) → List/reversed b (f x)) (List/reversed a xs)
+-- > List/reversed b (List/concatMap a b f xs)
+-- >     = List/concatMap a b (λ(x : a) → List/reversed b (f x)) (List/reversed a xs)
+
+-- $optional
+--
+-- Dhall @Optional@ literals are a 0 or 1 values inside of brackets:
+--
+-- > Γ ⊢ t : Type   Γ ⊢ x : t
+-- > ────────────────────────
+-- > Γ ⊢ ([x] : Optional t) : Optional t
+--
+-- > Γ ⊢ t : Type
+-- > ────────────────────────
+-- > Γ ⊢ ([] : Optional t) : Optional t
+--
+-- Also, every @Optional@ literal must end with a mandatory type annotation
+--
+-- The built-in operations on @Optional@ values are:
+
+-- $optionalFold
+--
+-- Example:
+--
+-- > $ dhall
+-- > Optional/fold Text (["ABC"] : Optional Text) Text (λ(t : Text) → t) ""
+-- > <Ctrl-D>
+-- > Text
+-- > 
+-- > "ABC"
+--
+-- Type:
+--
+-- > ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+-- > Γ ⊢ Optional/fold : ∀(a : Type) → Optional a → ∀(optional : Type) → ∀(just : a → optional) → ∀(nothing : optional) → optional
+--
+-- Rules:
+--
+-- > Optional/fold a ([]  : Optional a) o j n = n
+-- >
+-- > Optional/fold a ([x] : Optional a) o j n = j x
