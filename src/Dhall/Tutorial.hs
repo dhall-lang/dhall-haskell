@@ -355,6 +355,34 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > [1, True, 3] : List Integer
 -- > 
 -- > (stdin):1:1
+--
+-- Note that all imports must be terminated by whitespace or you will get a
+-- parse error, like this:
+--
+-- > $ dhall
+-- > λ(x : ./type) → x
+-- > <Ctrl-D>
+-- > (stdin):2:1: error: unexpected
+-- >     EOF, expected: "(", ")", ".",
+-- >     ":", "@", built-in value,
+-- >     double, import, integer, label,
+-- >     natural, operator,
+-- >     record literal, record type,
+-- >     string, union literal,
+-- >     union type
+-- > <EOF> 
+-- > ^   
+--
+-- This is because the parser thinks that @./type)@ is a single token due to
+-- the missing whitespace and therefore thinks that the opening parenthesis is
+-- missing the matching closing parenthesis.  To fix the problem we have to add
+-- a space after the import of @./type@:
+--
+-- > $ dhall
+-- > λ(x : ./type ) → x
+-- > ∀(x : Double) → Double
+-- > 
+-- > λ(x : Double) → x
 
 -- $records
 --
