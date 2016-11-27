@@ -29,8 +29,8 @@ module Dhall.Tutorial (
     -- * Unions
     -- $unions
 
-    -- * Generic functions
-    -- $generics
+    -- * Polymorphic functions
+    -- $polymorphic
 
     -- * Total
     -- $total
@@ -90,13 +90,12 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- and use it as a strongly typed configuration format.  For example, suppose
 -- that you create the following configuration file:
 -- 
--- > $ cat > ./config <<EOF
+-- > $ cat ./config
 -- > < Example =
 -- >     { foo = 1
 -- >     , bar = [3.0, 4.0, 5.0] : List Double
 -- >     }
 -- > >
--- > EOF
 -- 
 -- You can read the above configuration file into Haskell using the following
 -- code:
@@ -108,7 +107,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > import Dhall
 -- > 
--- > data Example = Example { foo :: Integer , bar :: Vector Double }
+-- > data Example = Example { foo :: Integer, bar :: Vector Double }
 -- >     deriving (Generic, Show)
 -- > 
 -- > instance Interpret Example
@@ -176,7 +175,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > instance Interpret a => Interpret (Vector a)
 --
 -- Therefore, since we can decode a @Bool@, we must also be able to decode a
--- @List@ of @Bool@s.  Let's verify that this works, too:
+-- @List@ of @Bool@s:
 --
 -- > >>> input auto "[True, False] : List Bool" :: IO (Vector Bool)
 -- > [True,False]
@@ -212,18 +211,15 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- >     ⇧
 -- >     Expected type
 --
--- The @:@ symbol is how Dhall annotates values with their expected types.
--- Whenever you see:
+-- The @(:)@ symbol is how Dhall annotates values with their expected types.
+-- This notation is equivalent to type annotations in Haskell using the @(::)@
+-- symbol.  Whenever you see:
 --
 -- > x : t
 --
 -- ... you should read that as \"we expect the expression @x@ to have type
 -- @t@\". However, we might be wrong and if our expected type does not match the
 -- expression's actual type then the type checker will complain.
---
--- If you are familiar with other functional programming languages, this
--- notation is equivalent to type annotations in Haskell using the @(::)@
--- symbol.
 --
 -- In this case, the expression @1@ does not have type @Bool@ so type checking
 -- fails with an exception.
@@ -318,16 +314,18 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > $ echo "[ 3.0, 4.0, 5.0 ] : List ./type" > ./bar
 --
--- ... and then specify the @./type@ in a separate file:
+-- ... then specify the @./type@ in a separate file:
 --
 -- > $ echo "Double" > ./type
+--
+-- ... and everything still type checks:
 --
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
 
 -- $lists
 --
--- You can store 0 or more values of the same type in the list, like this:
+-- You can store 0 or more values of the same type in a list, like this:
 --
 -- > [1, 2, 3] : List Integer
 --
@@ -337,17 +335,18 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > $ dhall
 -- > [1, 2, 3]
 -- > (stdin):2:1: error: unexpected
+-- > <Ctrl-D>
 -- >     EOF, expected: ":"
 -- > <EOF>
 -- > ^
 --
--- Also, the elements must all have the same type which must match the declare
+-- Also, list elements must all have the same type which must match the declared
 -- type of the list.  You will get an error if you try to store any other type
 -- of element:
 --
 -- > $ dhall
 -- > [1, True, 3] : List Integer
--- > ^D
+-- > <Ctrl-D>
 -- > Use "dhall --explain" for detailed errors
 -- > 
 -- > Error: List element has the wrong type
@@ -395,8 +394,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > }
 --
 -- A record type is like a record literal except instead of specifying each
--- field's value we specify each field's type instead.  For example, the
--- preceding record literal has the following record type:
+-- field's value we specify each field's type.  For example, the preceding
+-- record literal has the following record type:
 --
 -- > { foo : Text
 -- > , bar : Integer
@@ -416,6 +415,29 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > Double
 -- > 
 -- > 4.2
+--
+-- You can also combine two records, using the @(/\)@ operator:
+--
+-- > $ dhall
+-- > { foo = 1, bar = "ABC" } /\ { baz = True }
+-- > <Ctrl-D>
+-- > { bar : Text, baz : Bool, foo : Integer }
+-- > 
+-- > { bar = "ABC", baz = True, foo = 1 }
+--
+-- ... but you can only combine two records if they have no overlapping fields:
+--
+-- > $ dhall
+-- > { foo = 1, bar = "ABC" } /\ { foo = True }
+-- > <Ctrl-D>
+-- > Use "dhall --explain" for detailed errors
+-- > 
+-- > Error: Field collision
+-- > 
+-- > { foo = 1, bar = "ABC" } /\ { foo = True }
+-- > 
+-- > (stdin):1:1
+
 
 -- $functions
 --
@@ -450,7 +472,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- compiler takes a program on standard input and then prints the program's type
 -- to standard error followed by the program's normal form to standard output:
 --
--- > $ dhall <<< "./makeBools"
+-- > $ dhall
+-- > ./makeBools
+-- > <Ctrl-D>
 -- > ∀(n : Bool) → List Bool
 -- > 
 -- > λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool
@@ -467,7 +491,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- ... you should read that as \"apply the function @f@ to the argument @x@\".
 -- This means that we can \"apply\" our function to a @Bool@ argument like this:
 --
--- > $ dhall <<< "./makeBools True"
+-- > $ dhall
+-- > ./makeBools True
+-- > <Ctrl-D>
 -- > List Bool
 -- > 
 -- > [True, False, True, True] : List Bool
@@ -475,7 +501,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Remember that file paths are synonymous with their contents, so the above
 -- code is equivalent to:
 -- 
--- > $ dhall <<< "(λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool) True"
+-- > $ dhall
+-- > (λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool) True
+-- > <Ctrl-D>
 -- > List Bool
 -- > 
 -- > [True, False, True, True] : List Bool
@@ -598,13 +626,14 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > < Left : Natural | Right : Bool >
 --
--- ... represents a value that can be either an @Integer@ or a @Text@ value.
--- If you are familiar with Haskell these are exactly analogous to Haskell's
--- \"sum types\".  You can think of them as anonymous sum types.
+-- ... represents a value that can be either a @Natural@ or a @Bool@ value.  If
+-- you are familiar with Haskell these are exactly analogous to Haskell's
+-- \"sum types\".
 --
 -- Each alternative is associated with a tag that distinguishes that alternative
--- from others.  In the above example, the @Left@ tag is used for the @Natural@
--- alternative and the @Right@ tag is used for the @Bool@ alternative.
+-- from other alternatives.  In the above example, the @Left@ tag is used for
+-- the @Natural@ alternative and the @Right@ tag is used for the @Bool@
+-- alternative.
 --
 -- A union literal specifies the value of one alternative and the types of the
 -- remaining alternatives.  For example, both of the following union literals
@@ -616,7 +645,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- You can consume a union using the built-in @merge@ function.  For example,
 -- suppose we want to convert our union to a @Bool@ but we want to behave
--- differently depending on whether or not the union is an @Integer@ wrapped in
+-- differently depending on whether or not the union is a @Natural@ wrapped in
 -- the @Left@ tag or a @Bool@ wrapped in the @Right@ tag.  We would write:
 --
 -- > $ cat > process <<EOF
@@ -641,7 +670,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > True
 --
--- Every @merge@ function is of the form:
+-- Every @merge@ has the following form:
 --
 -- > merge handlers union : type
 --
@@ -671,20 +700,20 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Notice that each handler has to return the same type of result (@Bool@ in
 -- this case) which must also match the declared result type of the @merge@.
 
--- $generics
+-- $polymorphic
 --
--- The Dhall language supports defining generic functions (a.k.a.
--- \"polymorphic\" functions) that work on more than one type of value.
--- However, Dhall differs from Haskell by not inferring the types of these
--- generic functions.  Instead, you must be explicit about what type of value
--- the function is specialized to.
+-- The Dhall language supports defining polymorphic functions (a.k.a.
+-- \"generic\" functions) that work on more than one type of value.  However,
+-- Dhall differs from Haskell by not inferring the types of these polymorphic
+-- functions.  Instead, you must be explicit about what type of value the
+-- function is specialized to.
 --
 -- Take, for example, Haskell's identity function named @id@:
 --
 -- > id :: a -> a
 -- > id = \x -> x
 --
--- The identity function is generic, meaning that `id` works on values of
+-- The identity function is polymorphic, meaning that `id` works on values of
 -- different types:
 --
 -- > >>> id 4
@@ -706,7 +735,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- If we supply the function alone to the compiler we get the inferred type as
 -- the first line:
 -- 
--- > $ dhall <<< "./id"
+-- > $ dhall
+-- > ./id
+-- > <Ctrl-D>
 -- > ∀(a : Type) → ∀(x : a) → a
 -- > 
 -- > λ(a : Type) → λ(x : a) → x
@@ -719,51 +750,66 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- This means that the type of the second argument changes depending on what
 -- type we provide for the first argument:
 --
--- > $ dhall <<< "./id Integer"
+-- > $ dhall
+-- > ./id Integer
+-- > <Ctrl-D>
 -- > ∀(x : Integer) → Integer
 -- > 
 -- > λ(x : Integer) → x
 --
--- > $ dhall <<< "./id Bool"
+-- > $ dhall
+-- > ./id Bool
+-- > <Ctrl-D>
 -- > ∀(x : Bool) → Bool
 -- > 
 -- > λ(x : Bool) → x
 --
 -- When we apply @./id@ to @Integer@, we create a function that expects an
--- @Integer@ argument.  Similarly, when we instead apply @./id@ to @Bool@, we
--- create a function that expects a @Bool@ argument.
+-- @Integer@ argument.  Similarly, when we apply @./id@ to @Bool@, we create a
+-- function that expects a @Bool@ argument.
 --
 -- We can then supply the final argument to each of those functions to show
 -- that they work:
 --
--- > $ dhall <<< "./id Integer 4"
+-- > $ dhall
+-- > ./id Integer 4
+-- > <Ctrl-D>
 -- > Integer
 -- > 
 -- > 4
 --
--- > $ dhall <<< "./id Bool True"
+-- > $ dhall
+-- > ./id Bool True
+-- > <Ctrl-D>
 -- > Bool
 -- > 
 -- > True
 --
--- Built-in functions can also be generic, too.  For example, we can ask the
--- compiler for the type of @List/reverse@, the function that reverses a list:
+-- Built-in functions can also be polymorphic, too.  For example, we can ask
+-- the compiler for the type of @List/reverse@, the function that reverses a
+-- list:
 --
--- > $ dhall <<< "List/reverse"
+-- > $ dhall
+-- > List/reverse
+-- > <Ctrl-D>
 -- > ∀(a : Type) → List a → List a
 -- > 
 -- > List/reverse
 --
 -- The first argument to @List/reverse@ is the type of the list to reverse:
 --
--- > $ dhall <<< "List/reverse Bool"
+-- > $ dhall
+-- > List/reverse Bool
+-- > <Ctrl-D>
 -- > List Bool → List Bool
 -- > 
 -- > List/reverse Bool
 --
 -- ... and the second argument is the list to reverse:
 --
--- > $ dhall <<< "List/reverse Bool ([True, False] : List Bool)"
+-- > $ dhall
+-- > List/reverse Bool ([True, False] : List Bool)
+-- > <Ctrl-D>
 -- > List Bool
 -- > 
 -- > [False, True] : List Bool
@@ -780,7 +826,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- argument type then that means that the name of the argument is @"_"@.  This
 -- is true even for user-defined functions:
 --
--- > $ dhall <<< "λ(_ : Text) → 1"
+-- > $ dhall
+-- > λ(_ : Text) → 1
+-- > <Ctrl-D>
 -- > Text → Integer
 -- > 
 -- > λ(_ : Text) → 1
@@ -815,8 +863,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- complex example:
 --
 -- > $ dhall
--- >     let map = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
--- > in  λ(f : Integer → Integer) → map Integer Integer f ([1, 2, 3] : List Integer)
+-- >     let List/map = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- > in  λ(f : Integer → Integer) → List/map Integer Integer f ([1, 2, 3] : List Integer)
 -- > <Ctrl-D>
 -- > ∀(f : Integer → Integer) → List Integer
 -- > 
