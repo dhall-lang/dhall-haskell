@@ -1241,9 +1241,9 @@ normalize e = case e of
         v'   =      normalize v
         kvs' = fmap normalize kvs
     Combine x y ->
-        case x of
+        case x' of
             RecordLit kvsX ->
-                case y of
+                case y' of
                     RecordLit kvsY ->
                         RecordLit (fmap normalize (Data.Map.union kvsX kvsY))
                     _ -> Combine x' y'
