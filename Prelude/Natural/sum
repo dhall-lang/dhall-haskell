@@ -1,0 +1,2 @@
+    λ(xs : List Natural)
+→   List/fold Natural xs Natural (λ(l : Natural) → λ(r : Natural) → l + r) +0

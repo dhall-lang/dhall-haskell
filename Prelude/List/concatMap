@@ -1,0 +1,16 @@
+    λ(a : Type)
+→   λ(b : Type)
+→   λ(f : a → List b)
+→   λ(xs : List a)
+→   List/build
+    b
+    (   λ(list : Type)
+    →   λ(cons : b → list → list)
+    →   λ(nil : list)
+    →   List/fold
+        a
+        xs
+        list
+        (λ(x : a) → λ(ys : list) → List/fold b (f x) list cons ys)
+        nil
+    )

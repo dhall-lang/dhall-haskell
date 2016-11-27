@@ -1,0 +1,9 @@
+    λ(n : Natural)
+→   λ(a : Type)
+→   λ(x : a)
+→   List/build
+    a
+    (   λ(list : Type)
+    →   λ(cons : a → list → list)
+    →   Natural/fold n list (cons x)
+    )

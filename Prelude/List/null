@@ -1,0 +1,1 @@
+λ(a : Type) → λ(xs : List a) → Natural/isZero (List/length a xs)

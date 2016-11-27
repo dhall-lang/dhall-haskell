@@ -1,0 +1,5 @@
+    λ(n : Natural)
+→   λ(a : Type)
+→   λ(f : a -> a)
+→   λ(x : a)
+→   ./generate n a (λ(n : Natural) → Natural/fold n a f x)

@@ -1,0 +1,5 @@
+    λ(a : Type)
+→   λ(b : Type)
+→   λ(f : a → Optional b)
+→   λ(x : Optional a)
+→   Optional/fold a x (Optional b) f ([] : Optional b)
