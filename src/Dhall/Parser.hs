@@ -490,8 +490,9 @@ exprF = choice
         return (NaturalLit (fromIntegral a)) ) <?> "natural"
 
     exprF26 = do
+        sign <- fmap (\_ -> negate) (Text.Parser.Char.char '-') <|> pure id
         a <- Text.Parser.Token.double
-        return (DoubleLit a)
+        return (DoubleLit (sign a))
 
     exprF27 = do
         a <- Text.Parser.Token.stringLiteral
