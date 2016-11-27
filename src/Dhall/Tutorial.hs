@@ -41,6 +41,12 @@ module Dhall.Tutorial (
     -- * Built-in functions
     -- $builtins
 
+    -- ** Caveats
+    -- $caveats
+
+    -- ** Overview
+    -- $builtinOverview
+
     -- ** @Bool@
     -- $bool
 
@@ -98,8 +104,26 @@ module Dhall.Tutorial (
     -- *** @List@
     -- $list
 
+    -- *** @List/fold@
+    -- $listFold
+
+    -- *** @List/build@
+    -- $listBuild
+
     -- *** @List/length@
     -- $listLength
+
+    -- *** @List/head@
+    -- $listHead
+
+    -- *** @List/last@
+    -- $listLast
+
+    -- *** @List/indexed@
+    -- $listIndexed
+
+    -- *** @List/reverse@
+    -- $listReverse
     ) where
 
 import Data.Vector (Vector)
@@ -957,7 +981,14 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- The language will also never crash or throw any exceptions.  Every
 -- computation will succeed and produce something, even if the result might be
--- an @Optional@ value.
+-- an @Optional@ value:
+--
+-- > $ dhall
+-- > List/head Integer ([] : List Integer)
+-- > <Ctrl-D>
+-- > Optional Integer
+-- > 
+-- > [] : Optional Integer
 
 -- $builtins
 --
@@ -979,12 +1010,14 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- * @Optional@ values
 -- * Anonymous records
 -- * Anonymous unions
+
+-- $caveats
 --
 -- Dhall differs in a few important ways from other programming languages, so
 -- you should keep the following caveats in mind:
 --
 -- First, Dhall only supports addition and multiplication on @Natural@ numbers
--- (i.e. non-negative numbers), which are not the same type of number as
+-- (i.e. non-negative integers), which are not the same type of number as
 -- @Integer@s (which can be negative).  A @Natural@ number is a number prefixed
 -- with the @+@ symbol.  If you try to add or multiply two @Integer@s (without
 -- the @+@ prefix) you will get a type error:
@@ -1007,6 +1040,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Second, the equality @(==)@ and inequality @(/=)@ operators only work on
 -- @Bool@s.  You cannot test any other types of values for equality.
+
+-- $builtinOverview
 --
 -- Each of the following sections provides an overview of builtin functions and
 -- operators for each type.  For each function you get:
@@ -1227,7 +1262,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Type:
 --
 -- > Γ ⊢ x : Natural   Γ ⊢ y : Natural
--- > ────────────────────────────────
+-- > ─────────────────────────────────
 -- > Γ ⊢ x + y : Natural
 --
 -- Rules:
@@ -1252,7 +1287,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Type:
 --
 -- > Γ ⊢ x : Natural   Γ ⊢ y : Natural
--- > ────────────────────────────────
+-- > ─────────────────────────────────
 -- > Γ ⊢ x * y : Natural
 --
 -- Rules:
@@ -1362,8 +1397,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Type:
 --
--- > ──────────────────────────────────────────────────────────
--- > Γ ⊢ Natural/fold : Natural → ∀(a : Type) → (a → a) → a → a
+-- > ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+-- > Γ ⊢ Natural/fold : Natural → ∀(natural : Type) → ∀(succ : natural → natural) → ∀(zero : natural) → natural
 --
 -- Rules:
 -- 
@@ -1380,7 +1415,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Example:
 --
 -- > $ dhall
--- > Natural/build (λ(a : Type) → λ(succ : a → a) → λ(zero : a) → succ (succ zero))
+-- > Natural/build (λ(natural : Type) → λ(succ : natural → natural) → λ(zero : natural) → succ (succ zero))
 -- > <Ctrl-D>
 -- > Natural
 -- > 
@@ -1388,8 +1423,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Type:
 --
--- > ─────────────────────────────────────────────────────────────
--- > Γ ⊢ Natural/build : (∀(a : Type) → (a → a) → a → a) → Natural
+-- > ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+-- > Γ ⊢ Natural/build : (∀(natural : Type) → ∀(succ : natural → natural) → ∀(zero : natural) → natural) → Natural
 --
 -- Rules:
 --
@@ -1459,13 +1494,64 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- $list
 --
 -- Dhall list literals are a sequence of values inside of brackets separated by
--- commas, like this:
+-- commas:
 --
--- > [1, 2, 3] : List Integer
+-- > Γ ⊢ t : Type   Γ ⊢ x : t   Γ ⊢ y : t   ...
+-- > ──────────────────────────────────────────
+-- > Γ ⊢ [x, y, ... ] : List t
 --
 -- Also, every list must be followed by a mandatory type annotation
 --
 -- The built-in operations on lists are:
+
+-- $listFold
+--
+-- Example:
+--
+-- > $ dhall
+-- > List/fold Bool ([True, False, True] : List Bool) Bool (λ(x : Bool) → λ(y : Bool) → x && y) True
+-- > <Ctrl-D>
+-- > Bool
+-- > 
+-- > False
+--
+-- Type:
+--
+-- > ────────────────────────────────────────────────────────────────────────────────────────────────────────
+-- > Γ ⊢ List/fold : ∀(a : Type) → List a → ∀(list : Type) → ∀(cons : a → list → list) → ∀(nil : list) → list
+--
+-- Rules:
+--
+-- > let List/concat = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
+-- >
+-- > List/fold a (List/concat a xss) b c
+-- >     = List/fold (List a) xss b (λ(x : List a) → List/fold a x b c)
+-- >
+-- > List/fold a ([] : List a) b c n = n
+-- >
+-- > List/fold a ([x] : List a) b c = c x
+
+-- $listBuild
+--
+-- Example:
+--
+-- > $ dhall
+-- > List/build Integer (λ(list : Type) → λ(cons : Integer → list → list) → λ(nil : list) → cons 1 (cons 2 (cons 3 nil)))
+-- > <Ctrl-D>
+-- > List Integer
+-- > 
+-- > [1, 2, 3] : List Integer
+--
+-- Type:
+--
+-- > ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+-- > Γ ⊢ List/build : ∀(a : Type) → (∀(list : Type) → ∀(cons : a → list → list) → ∀(nil : list) → list) → List a
+--
+-- Laws:
+--
+-- > List/build t (List/fold t x) = x
+-- >
+-- > List/fold t (List/build t x) = x
 
 -- $listLength
 --
@@ -1480,9 +1566,125 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Type:
 --
--- > ──────────────────────────────────────────────────────────
+-- > ────────────────────────────────────────────────
 -- > Γ ⊢ List/length : ∀(a : Type) → List a → Natural
 --
 -- Laws:
 --
 -- > List/length t xs = List/fold t xs Natural (λ(_ : t) → λ(n : Natural) → n + +1) +0
+
+-- $listHead
+--
+-- Example:
+--
+-- > $ dhall
+-- > List/head Integer ([1, 2, 3] : List Integer)
+-- > <Ctrl-D>
+-- > Optional Integer
+-- > 
+-- > [1] : Optional Integer
+--
+-- Type:
+--
+-- > ─────────────────────────────────────
+-- > Γ ⊢ List/head ∀(a : Type) → List a → Optional a
+--
+-- Rules:
+--
+-- > let Optional/head  = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/Optional/head
+-- > let List/concat    = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- > 
+-- > List/head a (List/concat a xss) =
+-- >     Optional/head a (List/map (List a) (Optional a) (List/head a) xss)
+-- > 
+-- > List/head a ([x] : List a) = [x] : Optional a
+-- > 
+-- > List/head b (List/concatMap a b f m)
+-- >     = Optional/concatMap a b (λ(x : a) → List/head b (f x)) (List/head a m)
+
+-- $listLast
+--
+-- Example:
+--
+-- > $ dhall
+-- > List/last Integer ([1, 2, 3] : List Integer)
+-- > <Ctrl-D>
+-- > Optional Integer
+-- > 
+-- > [1] : Optional Integer
+--
+-- Type:
+--
+-- > ─────────────────────────────────────
+-- > Γ ⊢ List/last : ∀(a : Type) → List a → Optional a
+--
+-- Rules:
+--
+-- > let Optional/last  = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/Optional/last
+-- > let List/concat    = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- > 
+-- > List/last a (List/concat a xss) =
+-- >     Optional/last a (List/map (List a) (Optional a) (List/last a) xss)
+-- > 
+-- > List/last a ([x] : List a) = [x] : Optional a
+-- > 
+-- > List/last b (List/concatMap a b f m)
+-- >     = Optional/concatMap a b (λ(x : a) → List/last b (f x)) (List/last a m)
+
+-- $listIndexed
+--
+-- Example
+--
+-- > $ dhall
+-- > List/indexed Text (["ABC", "DEF", "GHI"] : List Text)
+-- > <Ctrl-D>
+-- > List { index : Natural, value : Text }
+-- > 
+-- > [{ index = +0, value = "ABC" }, { index = +1, value = "DEF" }, { index = +2, value = "GHI" }] : List { index : Natural, value : Text }
+--
+-- Type:
+--
+-- > ─────────────────────────────────────────────────────────────────────────────
+-- > Γ ⊢ List/indexed : ∀(a : Type) → List a → List { index : Natural, value : a }
+--
+-- Rules:
+--
+-- > let List/shift  = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/shift
+-- > let List/concat = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
+-- > let List/map    = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- > 
+-- > List/indexed a (List/concat a xss) =
+-- >     List/shift a (List/map (List a) (List { index : Natural, value : a }) (List/indexed a) xss)
+
+-- $listReverse
+--
+-- Example:
+--
+-- > $ dhall
+-- > List/reverse Integer ([1, 2, 3] : List Integer)
+-- > <Ctrl-D>
+-- > List Integer
+-- > 
+-- > [3, 2, 1] : List Integer
+--
+-- Type:
+--
+-- > ────────────────────────────────────────────────
+-- > Γ ⊢ List/reverse : ∀(a : Type) → List a → List a
+--
+-- Laws:
+--
+-- > let List/map    = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- > let List/concat = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
+--
+-- > List/reverse a (List/concat a xss)
+-- >     = List/concat a (List/reverse (List a) (List/map (List a) (List a) (List/reverse a) xss))
+-- >
+-- > List/reverse a ([x] : List a) = [x] : List a
+-- >
+-- > List/reverse b (./Prelude/List/concatMap a b f xs)
+-- >     = ./Prelude/List/concatMap a b (λ(x : a) → List/reverse b (f x)) (List/reverse a xs)
