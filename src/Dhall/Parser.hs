@@ -307,7 +307,7 @@ exprC = exprC0
   where
     chain pA pOp op pB = noted (do
         a <- pA
-        try (do pOp; b <- pB; return (op a b)) <|> pure a )
+        try (do pOp <?> "operator"; b <- pB; return (op a b)) <|> pure a )
 
     exprC0 = chain exprC1 (symbol "||") BoolOr       exprC0
     exprC1 = chain exprC2 (symbol "+" ) NaturalPlus  exprC1
@@ -345,25 +345,7 @@ exprE = noted (do
 
 exprF :: Parser (Expr Src Path)
 exprF = choice
-    [   noted      exprF01
-    ,   noted      exprF03
-    ,   noted      exprF04
-    ,   noted      exprF05
-    ,   noted      exprF06
-    ,   noted      exprF07
-    ,   noted      exprF12
-    ,   noted      exprF13
-    ,   noted      exprF14
-    ,   noted      exprF15
-    ,   noted      exprF16
-    ,   noted      exprF17
-    ,   noted      exprF18
-    ,   noted      exprF20
-    ,   noted      exprF19
-    ,   noted      exprF21
-    ,   noted      exprF22
-    ,   noted (try exprF25)
-    ,   noted      exprF23
+    [   noted (try exprF25)
     ,   noted (try exprF26)
     ,   noted      exprF24
     ,   noted      exprF27
@@ -372,11 +354,32 @@ exprF = choice
     ,   noted (try exprF30)
     ,   noted      exprF31
     ,   noted      exprF32
-    ,   noted      exprF02
-    ,   noted      exprF08
-    ,   noted      exprF09
-    ,   noted      exprF10
-    ,   noted      exprF11
+    ,   (choice
+            [   noted      exprF03
+            ,   noted      exprF04
+            ,   noted      exprF05
+            ,   noted      exprF06
+            ,   noted      exprF07
+            ,   noted      exprF12
+            ,   noted      exprF13
+            ,   noted      exprF14
+            ,   noted      exprF15
+            ,   noted      exprF16
+            ,   noted      exprF17
+            ,   noted      exprF18
+            ,   noted      exprF20
+            ,   noted      exprF21
+            ,   noted      exprF19
+            ,   noted      exprF02
+            ,   noted      exprF08
+            ,   noted      exprF09
+            ,   noted      exprF10
+            ,   noted      exprF11
+            ,   noted      exprF22
+            ,   noted      exprF23
+            ,   noted      exprF01
+            ]
+        ) <?> "built-in value"
     ,   noted      exprF00
     ,              exprF33
     ]
@@ -478,13 +481,13 @@ exprF = choice
         return (BoolLit False)
 
     exprF24 = do
-        a <- Text.Parser.Token.natural
+        a <- Text.Parser.Token.integer
         return (IntegerLit a)
 
-    exprF25 = do
+    exprF25 = (do
         Text.Parser.Char.char '+'
         a <- Text.Parser.Token.natural
-        return (NaturalLit (fromIntegral a))
+        return (NaturalLit (fromIntegral a)) ) <?> "natural"
 
     exprF26 = do
         a <- Text.Parser.Token.double
@@ -494,16 +497,16 @@ exprF = choice
         a <- Text.Parser.Token.stringLiteral
         return (TextLit a)
 
-    exprF28 = record
+    exprF28 = record <?> "record type"
 
-    exprF29 = recordLit
+    exprF29 = recordLit <?> "record literal"
 
-    exprF30 = union
+    exprF30 = union <?> "union type"
 
-    exprF31 = unionLit
+    exprF31 = unionLit <?> "union literal"
 
     exprF32 = do
-        a <- import_
+        a <- import_ <?> "import"
         return (Embed a)
 
     exprF33 = do
