@@ -1,0 +1,5 @@
+let concat : List Text → Text
+    =   λ(xs : List Text)
+    →   List/fold Text xs Text (λ(x : Text) → λ(y : Text) → x ++ y) ""
+
+in  concat

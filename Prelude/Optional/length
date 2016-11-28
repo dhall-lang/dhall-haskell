@@ -1,1 +1,6 @@
-λ(a : Type) → λ(xs : Optional a) → Optional/fold a xs Natural (λ(x : a) → +1) +0
+let length : ∀(a : Type) → Optional a → Natural
+    =   λ(a : Type)
+    →   λ(xs : Optional a)
+    →   Optional/fold a xs Natural (λ(x : a) → +1) +0
+
+in  length

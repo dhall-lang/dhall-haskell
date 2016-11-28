@@ -1,1 +1,4 @@
-λ(a : Type) → List a → a
+let Monoid : ∀(m : Type) → Type
+    =   λ(m : Type) → List m → m
+
+in  Monoid

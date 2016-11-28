@@ -1,0 +1,9 @@
+let fold
+    :   Natural
+    →   ∀(natural : Type)
+    →   ∀(succ : natural → natural)
+    →   ∀(zero : natural)
+    →   natural
+    =   Natural/fold
+
+in  fold

@@ -1,1 +1,4 @@
-λ(b : Bool) → b == False
+let not : Bool → Bool
+    =   λ(b : Bool) → b == False
+
+in  not

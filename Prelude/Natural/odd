@@ -1,0 +1,4 @@
+let odd : Natural → Bool
+    =   Natural/odd
+
+in  odd

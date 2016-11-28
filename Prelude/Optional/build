@@ -1,0 +1,18 @@
+let build
+    :   ∀(a : Type)
+    →   (   ∀(optional : Type)
+        →   ∀(just : a → optional)
+        →   ∀(nothing: optional)
+        →   optional
+        )
+    →   Optional a
+    =   λ(a : Type)
+    →   λ(  f
+        :   ∀(optional : Type)
+        →   ∀(just : a → optional)
+        →   ∀(nothing: optional)
+        →   optional
+        )
+    →   f (Optional a) (λ(x : a) → [x] : Optional a) ([] : Optional a)
+
+in  build

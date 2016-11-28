@@ -1,5 +1,9 @@
-    λ(a : Type)
-→   λ(b : Type)
-→   λ(f : a → Optional b)
-→   λ(x : Optional a)
-→   Optional/fold a x (Optional b) f ([] : Optional b)
+let concatMap
+    : ∀(a : Type) → ∀(b : Type) → (a → Optional b) → Optional a → Optional b
+    =   λ(a : Type)
+    →   λ(b : Type)
+    →   λ(f : a → Optional b)
+    →   λ(x : Optional a)
+    →   Optional/fold a x (Optional b) f ([] : Optional b)
+
+in  concatMap

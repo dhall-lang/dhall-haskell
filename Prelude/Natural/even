@@ -1,0 +1,4 @@
+let even : Natural → Bool
+    =   Natural/even
+
+in  even

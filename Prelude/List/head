@@ -1,0 +1,4 @@
+let head : ∀(a : Type) → List a → Optional a
+    =   List/head
+
+in  head

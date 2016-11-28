@@ -1,0 +1,4 @@
+let isZero : Natural → Bool
+    =   Natural/isZero
+
+in  isZero

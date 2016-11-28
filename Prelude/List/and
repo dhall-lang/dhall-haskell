@@ -1,2 +1,0 @@
-    λ(xs : List Bool)
-→   List/fold Bool xs Bool (λ(l : Bool) → λ(r : Bool) → l && r) True

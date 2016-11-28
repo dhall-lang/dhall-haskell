@@ -1,0 +1,4 @@
+let indexed : ∀(a : Type) → List a → List { index : Natural, value : a }
+    =   List/indexed
+
+in  indexed
