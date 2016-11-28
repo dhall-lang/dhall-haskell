@@ -975,7 +975,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- complex example:
 --
 -- > $ dhall
--- >     let List/map = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- >     let List/map = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/map
 -- > in  λ(f : Integer → Integer) → List/map Integer Integer f ([1, 2, 3] : List Integer)
 -- > <Ctrl-D>
 -- > ∀(f : Integer → Integer) → List Integer
@@ -1528,7 +1528,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let List/concat = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
+-- > let List/concat = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concat
 -- >
 -- > List/fold a (List/concat a xss) b c
 -- >     = List/fold (List a) xss b (λ(x : List a) → List/fold a x b c)
@@ -1597,10 +1597,10 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let Optional/head  = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/Optional/head
--- > let List/concat    = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concatMap
--- > let List/map       = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- > let Optional/head  = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/Optional/head
+-- > let List/concat    = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/map
 -- > 
 -- > List/head a (List/concat a xss) =
 -- >     Optional/head a (List/map (List a) (Optional a) (List/head a) xss)
@@ -1628,10 +1628,10 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let Optional/last  = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/Optional/last
--- > let List/concat    = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concatMap
--- > let List/map       = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- > let Optional/last  = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/Optional/last
+-- > let List/concat    = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/map
 -- > 
 -- > List/last a (List/concat a xss) =
 -- >     Optional/last a (List/map (List a) (Optional a) (List/last a) xss)
@@ -1659,9 +1659,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let List/shifted = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/shifted
--- > let List/concat  = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
--- > let List/map     = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
+-- > let List/shifted = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/shifted
+-- > let List/concat  = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concat
+-- > let List/map     = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/map
 -- > 
 -- > List/indexed a (List/concat a xss) =
 -- >     List/shifted a (List/map (List a) (List { index : Natural, value : a }) (List/indexed a) xss)
@@ -1684,9 +1684,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let List/map       = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/map
--- > let List/concat    = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmNnkjXfe3oP62w7Yx75DNCSGkWWK2iinHboF38fkYMZUP/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/map
+-- > let List/concat    = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concatMap
 -- > 
 -- > List/reversed a (List/concat a xss)
 -- >     = List/concat a (List/reversed (List a) (List/map (List a) (List a) (List/reversed a) xss))
