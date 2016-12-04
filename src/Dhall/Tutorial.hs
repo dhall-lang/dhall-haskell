@@ -978,7 +978,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- complex example:
 --
 -- > $ dhall
--- >     let List/map = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/map
+-- >     let List/map = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/map
 -- > in  λ(f : Integer → Integer) → List/map Integer Integer f ([1, 2, 3] : List Integer)
 -- > <Ctrl-D>
 -- > ∀(f : Integer → Integer) → List Integer
@@ -1538,7 +1538,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let List/concat = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concat
+-- > let List/concat = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concat
 -- >
 -- > List/fold a (List/concat a xss) b c
 -- >     = List/fold (List a) xss b (λ(x : List a) → List/fold a x b c)
@@ -1607,10 +1607,10 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let Optional/head  = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Optional/head
--- > let List/concat    = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concatMap
--- > let List/map       = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/map
+-- > let Optional/head  = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Optional/head
+-- > let List/concat    = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/map
 -- > 
 -- > List/head a (List/concat a xss) =
 -- >     Optional/head a (List/map (List a) (Optional a) (List/head a) xss)
@@ -1638,10 +1638,10 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let Optional/last  = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Optional/last
--- > let List/concat    = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concatMap
--- > let List/map       = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/map
+-- > let Optional/last  = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Optional/last
+-- > let List/concat    = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/map
 -- > 
 -- > List/last a (List/concat a xss) =
 -- >     Optional/last a (List/map (List a) (Optional a) (List/last a) xss)
@@ -1669,9 +1669,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let List/shifted = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/shifted
--- > let List/concat  = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concat
--- > let List/map     = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/map
+-- > let List/shifted = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/shifted
+-- > let List/concat  = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concat
+-- > let List/map     = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/map
 -- > 
 -- > List/indexed a (List/concat a xss) =
 -- >     List/shifted a (List/map (List a) (List { index : Natural, value : a }) (List/indexed a) xss)
@@ -1694,9 +1694,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let List/map       = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/map
--- > let List/concat    = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/map
+-- > let List/concat    = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concatMap
 -- > 
 -- > List/reverse a (List/concat a xss)
 -- >     = List/concat a (List/reverse (List a) (List/map (List a) (List a) (List/reverse a) xss))
@@ -1750,7 +1750,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- There is also a Prelude available at:
 --
--- <https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude>
+-- <https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude>
 --
 -- There is nothing \"official\" or \"standard\" about this Prelude other than
 -- the fact that it is mentioned in this tutorial.  The \"Prelude\" is just a
@@ -1761,12 +1761,12 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- subdirectories.  For example, the @Bool@ subdirectory has a @not@ file
 -- located here:
 --
--- <https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Bool/not>
+-- <https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not>
 --
 -- The @not@ function is just a UTF8-encoded text file hosted online with the
 -- following contents
 --
--- > $ curl https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Bool/not
+-- > $ curl https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not
 -- > {-
 -- > Flip the value of a `Bool`
 -- > 
@@ -1799,7 +1799,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- You can use this @not@ function either directly:
 --
 -- > $ dhall
--- > https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Bool/not True
+-- > https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not True
 -- > <Ctrl-D>
 -- > Bool
 -- > 
@@ -1808,7 +1808,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- ... or assign the URL to a shorter name:
 --
 -- > $ dhall
--- > let Bool/not = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Bool/not
+-- > let Bool/not = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not
 -- > in  Bool/not True
 -- > <Ctrl-D>
 -- > Bool
@@ -1819,7 +1819,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- consistency and documentation, such as @Prelude/Natural/even@, which
 -- re-exports the built-in @Natural/even@ function:
 --
--- > $ curl https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Natural/even
+-- > $ curl https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Natural/even
 -- > {-
 -- > Returns `True` if a number if even and returns `False` otherwise
 -- > 
@@ -1840,7 +1840,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- using local relative paths instead of URLs.  For example, you can use @wget@,
 -- like this:
 --
--- > $ wget -np -nH -r --cut-dirs=2 https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/
+-- > $ wget -np -nH -r --cut-dirs=2 https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/
 -- > $ tree Prelude
 -- > Prelude
 -- > ├── Bool
@@ -1898,9 +1898,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- locally like this:
 --
 -- > $ ipfs mount
--- > $ cd /ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude
+-- > $ cd /ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude
 --
 -- Browse the Prelude online to learn more by seeing what functions are
 -- available and reading their inline documentation:
 --
--- <https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude>
+-- <https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude>
