@@ -2013,7 +2013,7 @@ You tried to combine the following value:
 
 ↳ $txt0
 
-... which is not a record, but is actually a value of type:
+... which is not a record, but is actually a:
 
 ↳ $txt1
 |]

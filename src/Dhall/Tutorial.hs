@@ -26,6 +26,9 @@ module Dhall.Tutorial (
     -- * Functions
     -- $functions
 
+    -- * Combine
+    -- $combine
+
     -- * Let expressions
     -- $let
 
@@ -133,6 +136,9 @@ module Dhall.Tutorial (
 
     -- * Prelude
     -- $prelude
+
+    -- * Conclusion
+    -- $conclusion
     ) where
 
 import Data.Vector (Vector)
@@ -239,6 +245,37 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > >>> input (vector bool) "[True, False] : List Bool"
 -- > [True, False]
+--
+-- __Exercise:__ Create a @./config@ file that the following program can decode:
+--
+-- > {-# LANGUAGE DeriveGeneric     #-}
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- > 
+-- > import Dhall
+-- > 
+-- > data Person = Person { age :: Natural, name :: Text }
+-- >     deriving (Generic, Show)
+-- > 
+-- > instance Interpret Person
+-- > 
+-- > main :: IO ()
+-- > main = do
+-- >     x <- input auto "./config"
+-- >     print (x :: Person)
+--
+-- __Exercise:__ Create a @./config@ file that the following program can decode:
+--
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- > 
+-- > import Data.Functor.Identity
+-- > import Dhall
+-- > 
+-- > instance Interpret a => Interpret (Identity a)
+-- > 
+-- > main :: IO ()
+-- > main = do
+-- >     x <- input auto "./config"
+-- >     print (x :: Identity Double)
 
 -- $types
 --
@@ -278,6 +315,19 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- In this case, the expression @1@ does not have type @Bool@ so type checking
 -- fails with an exception.
+--
+-- __Exercise:__ Load the Dhall library into @ghci@ and run these commands to get
+-- get a more detailed error message:
+--
+-- > >>> import Dhall
+-- > >>> :set -XOverloadedStrings
+-- > >>> detailed (input auto "1") :: IO Bool
+-- > ...
+--
+-- ... then read the entire error message
+--
+-- __Exercise:__ Fix the type error, either by changing the value to decode or
+-- changing the expected type
 
 -- $imports
 --
@@ -378,33 +428,35 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
 --
--- Note that all imports must be terminated by whitespace or you will get a
--- parse error, like this:
+-- Note that all imports must be terminated by whitespace or you will get either
+-- an import error or a parse error, like this:
 --
--- > $ dhall
--- > λ(x : ./type) → x
--- > <Ctrl-D>
--- > (stdin):2:1: error: unexpected
--- >     EOF, expected: "(", ")", ".",
--- >     ":", "@", built-in value,
--- >     double, import, integer, label,
--- >     natural, operator,
--- >     record literal, record type,
--- >     string, union literal,
--- >     union type
--- > <EOF> 
--- > ^   
---
--- This is because the parser thinks that @./type)@ is a single token due to
--- the missing whitespace and therefore thinks that the opening parenthesis is
--- missing the matching closing parenthesis.  To fix the problem we have to add
--- a space after the import of @./type@:
---
--- > $ dhall
--- > λ(x : ./type ) → x
--- > ∀(x : Double) → Double
+-- > >>> writeFile "baz" "2.0"
+-- > >>> input auto "./baz: Double" :: IO Double
+-- > *** Exception: 
+-- > ↳ ./baz: 
 -- > 
--- > λ(x : Double) → x
+-- > Error: Missing file
+--
+-- This is because the parser thinks that @./baz:@ is a single token due to
+-- the missing whitespace before the colon and tries to import a file named
+-- @./baz:@, which does not exist.  To fix the problem we have to add a space
+-- after @./baz@:
+--
+-- > >>> input auto "./baz : Double" :: IO Double
+-- > 2.0
+--
+-- __Exercise:__ There is a @not@ function hosted online here:
+--
+-- <https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not>
+--
+-- Visit that link and read the documentation.  Then try to guess what this
+-- code returns:
+--
+-- > >>> input auto "https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB" :: IO Bool
+-- > ???
+--
+-- Run the code to test your guess
 
 -- $lists
 --
@@ -415,28 +467,28 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Every list must be followed by the type of the list.  The type annotation is
 -- not optional and you will get an error if you omit the annotation:
 --
--- > $ dhall
--- > [1, 2, 3]
--- > (stdin):2:1: error: unexpected
--- > <Ctrl-D>
+-- > >>> input auto "[1, 2, 3]" :: IO (Vector Integer)
+-- > *** Exception: (input):1:10: error: unexpected
 -- >     EOF, expected: ":"
--- > <EOF>
--- > ^
+-- > [1, 2, 3]<EOF> 
+-- >          ^     
 --
 -- Also, list elements must all have the same type which must match the declared
 -- type of the list.  You will get an error if you try to store any other type
 -- of element:
 --
--- > $ dhall
--- > [1, True, 3] : List Integer
--- > <Ctrl-D>
--- > Use "dhall --explain" for detailed errors
--- > 
+-- > input auto "[1, True, 3] : List Integer" :: IO (Vector Integer)
+-- > *** Exception: 
 -- > Error: List element has the wrong type
 -- > 
 -- > [1, True, 3] : List Integer
 -- > 
--- > (stdin):1:1
+-- > (input):1:1
+--
+-- __Exercise:__ Create a @./config@ file that decodes to the following result:
+--
+-- > >>> input auto "./config" :: IO (Vector (Vector Integer))
+-- > [[1,2,3],[4,5,6]]
 
 -- $optional
 --
@@ -449,18 +501,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- >
 -- > []  : Optional Integer
 --
--- ... but this is not valid:
+-- ... but this is /not/ valid:
 --
--- > $ dhall
--- > [1, 2] : Optional Integer
--- > <Ctrl-D>
--- > Use "dhall --explain" for detailed errors
--- > 
--- > Error: Multiple ❰Optional❱ elements not allowed
--- > 
--- > [1, 2] : Optional Integer
--- > 
--- > (stdin):1:1
+-- > [1, 2] : Optional Integer  -- NOT valid
 --
 -- An @Optional@ corresponds to Haskell's `Maybe` type for decoding purposes:
 --
@@ -468,13 +511,22 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > Just 1
 -- > >>> input auto "[] : Optional Integer" :: IO (Maybe Integer)
 -- > Nothing
+--
+-- __Exercise:__ What is the shortest possible @./config@ file that you can decode
+-- like this:
+--
+-- > >>> input auto "./config" :: IO (Maybe (Maybe (Maybe Integer)))
+-- > ???
+--
+-- __Exercise:__ Try to decode an @Optional@ value with more than one element and
+-- see what happens
 
 -- $records
 --
 -- Record literals are delimited by curly braces and their fields are separated
 -- by commas.  For example, this is a valid record literal:
 --
--- > { foo = "ABC"
+-- > { foo = True
 -- > , bar = 2
 -- > , baz = 4.2
 -- > }
@@ -483,10 +535,29 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- field's value we specify each field's type.  For example, the preceding
 -- record literal has the following record type:
 --
--- > { foo : Text
+-- > { foo : Bool
 -- > , bar : Integer
 -- > , baz : Double
 -- > }
+--
+-- If you want to specify an empty record literal, you must use @{=}@, which is
+-- special syntax reserved for empty records.  If you want to specify the empty
+-- record type, then you use @{}@.  If you forget which is which you can always
+-- ask the @dhall@ compiler to remind you of the type for each one:
+--
+-- > $ dhall
+-- > {=}
+-- > <Ctrl-D>
+-- > {}
+-- > 
+-- > {=}
+--
+-- > $ dhall
+-- > {}
+-- > <Ctrl-D>
+-- > Type
+-- > 
+-- > {}
 --
 -- You can access a field of a record using the following syntax:
 --
@@ -495,35 +566,20 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- ... which means to access the value of the field named @fieldName@ from the
 -- @record@.  For example:
 --
--- > $ dhall
--- > { foo = "ABC", bar = 2, baz = 4.2 }.baz
--- > <Ctrl-D>
--- > Double
--- > 
+-- > >>> input auto "{ foo = True, bar = 2, baz = 4.2 }.baz" :: IO Double
 -- > 4.2
 --
--- You can also combine two records, using the @(/\\)@ operator or the
--- corresponding Unicode @(∧)@ (U+2227) operator:
+-- __Exercise__: What is the type of this record:
 --
--- > $ dhall
--- > { foo = 1, bar = "ABC" } /\ { baz = True }
--- > <Ctrl-D>
--- > { bar : Text, baz : Bool, foo : Integer }
--- > 
--- > { bar = "ABC", baz = True, foo = 1 }
+-- > { foo = 1
+-- > , bar =
+-- >     { baz = 2.0
+-- >     , qux = True
+-- >     }
+-- > }
 --
--- ... but you can only combine two records if they have no overlapping fields:
---
--- > $ dhall
--- > { foo = 1, bar = "ABC" } /\ { foo = True }
--- > <Ctrl-D>
--- > Use "dhall --explain" for detailed errors
--- > 
--- > Error: Field collision
--- > 
--- > { foo = 1, bar = "ABC" } /\ { foo = True }
--- > 
--- > (stdin):1:1
+-- __Exercise__: Save the above code to a file named @./record@ and then try to
+-- access the value of the @baz@ field
 
 -- $functions
 --
@@ -643,6 +699,68 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > >>> input auto "./makeBools True" :: IO (Vector Bool)
 -- > [True,False,True,True]
+--
+-- __Exercise__: Create a file named @getFoo@ that is a function of the following
+-- type:
+--
+-- > ∀(r : { foo : Bool, bar : Text }) → Bool
+--
+-- This function should take a single input argument named @r@ that is a record
+-- with two fields.  The function should return the value of the @foo@ field.
+--
+-- __Exercise__: Use the @dhall@ compiler to infer the type of the function you
+-- just created and verify that your function has the correct type
+--
+-- __Exercise__: Use the @dhall@ compiler to apply your function to a sample
+-- record
+
+-- $combine
+--
+-- You can combine two records, using the @(/\\)@ operator or the
+-- corresponding Unicode @(∧)@ (U+2227) operator:
+--
+-- > $ dhall
+-- > { foo = 1, bar = "ABC" } /\ { baz = True }
+-- > <Ctrl-D>
+-- > { bar : Text, baz : Bool, foo : Integer }
+-- > 
+-- > { bar = "ABC", baz = True, foo = 1 }
+--
+-- > $ dhall
+-- > { foo = 1, bar = "ABC" } ∧ { baz = True }  -- Fancy unicode
+-- > <Ctrl-D>
+-- > { bar : Text, baz : Bool, foo : Integer }
+-- > 
+-- > { bar = "ABC", baz = True, foo = 1 }
+--
+-- Note that the order of record fields does not matter.  The compiler
+-- automatically sorts the fields when normalizing expressions.
+--
+-- The @(∧)@ operator also merges records recursively.  For example:
+--
+-- > $ dhall
+-- > { foo = { bar = True }, baz = "ABC" } ∧ { foo = { qux = 1.0 } }
+-- > <Ctrl-D>
+-- > { baz : Text, foo : { bar : Bool, qux : Double } }
+-- > 
+-- > { baz = "ABC", foo = { bar = True, qux = 1.0 } }
+--
+-- However, you cannot combine two records if they share a field that is not a
+-- record:
+--
+-- > $ dhall
+-- > { foo = 1, bar = "ABC" } ∧ { foo = True }
+-- > <Ctrl-D>
+-- > Use "dhall --explain" for detailed errors
+-- > 
+-- > Error: Field collision
+-- > 
+-- > { foo = 1, bar = "ABC" } ∧ { foo = True }
+-- > 
+-- > (stdin):1:1
+--
+-- __Exercise__: Combine any record with the empty record.  What do you expect to
+-- happen?
 
 -- $let
 --
@@ -729,6 +847,35 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- The error message says that Dhall expected either a @(:)@ (i.e. the beginning
 -- of a type annotation) or a @(=)@ (the beginning of the assignment) and not a
 -- function argument.
+--
+-- You can also use @let@ expressions to rename imports, like this:
+--
+-- > $ dhall
+-- > let not = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not
+-- > in  not True
+-- > <Ctrl-D>
+-- > Bool
+-- > 
+-- > False
+--
+-- __Exercise:__ What do you think the following code will normalize to?
+--
+-- >     let x = 1
+-- > in  let x = 2
+-- > in  x
+--
+-- Test your guess using the @dhall@ compiler
+--
+-- __Exercise:__ Now try to guess what this code will normalize to:
+--
+-- >     let x = "ha"
+-- > in  let x = x ++ "ha"
+-- > in  x
+--
+-- __Exercise:__ What about this code?
+--
+-- > let x = x ++ "ha"
+-- > in  x
 
 -- $unions
 --
@@ -763,7 +910,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > $ cat > process <<EOF
 -- >     λ(union : < Left : Natural | Right : Bool >)
 -- > →   let handlers =
--- >             { Left  = Natural/even
+-- >             { Left  = Natural/even  -- Natural/even is a built-in function
 -- >             , Right = λ(b : Bool) → b
 -- >             }
 -- > in  merge handlers union : Bool
@@ -814,6 +961,11 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Notice that each handler has to return the same type of result (@Bool@ in
 -- this case) which must also match the declared result type of the @merge@.
+--
+-- __Exercise__: Create a list of the following type with at least one element:
+-- per alternative:
+--
+-- > List < Left : Integer | Right : Double >
 
 -- $polymorphic
 --
@@ -949,6 +1101,8 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > λ(_ : Text) → 1
 --
 -- The type @(Text → Integer)@ is the same as @(∀(_ : Text) → Integer)@
+--
+-- __Exercise__ : Translate Haskell's `flip` function to Dhall
 
 -- $total
 --
@@ -998,6 +1152,20 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > Optional Integer
 -- > 
 -- > [] : Optional Integer
+--
+-- __Exercise__: The Dhall Prelude provides a @replicate@ function which you can
+-- find here:
+--
+-- <https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/replicate>
+--
+-- Test what the following Dhall expression normalizes to:
+--
+-- > let replicate = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/replicate
+-- > in  replicate +10
+--
+-- __Exercise__: If you have a lot of spare time, try to \"break the compiler\" by
+-- finding an input expression that crashes or loops forever (and file a bug
+-- report if you succeed)
 
 -- $builtins
 --
@@ -1011,6 +1179,10 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- hosted online that contains functions derived from these base utilities.  The
 -- Prelude also re-exports all built-in functions for people who prefer
 -- consistency.
+--
+-- The following documentation on built-ins is provided primarily as a reference.
+-- You don't need to read about every single built-in and you may want to skip to
+-- the following Prelude section.
 
 -- The language provides built-in support for the following primitive types:
 --
@@ -1755,7 +1927,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- There is nothing \"official\" or \"standard\" about this Prelude other than
 -- the fact that it is mentioned in this tutorial.  The \"Prelude\" is just a
 -- set of convenient utilities which didn't quite make the cut to be built into
--- the language.
+-- the language.  Feel free to host your own custom Prelude if you want!
 --
 -- If you visit the above link you can browse the Prelude, which has a few
 -- subdirectories.  For example, the @Bool@ subdirectory has a @not@ file
@@ -1794,7 +1966,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- * the type of the function
 -- * documentation (including a few examples)
 --
--- The performance penalty for adding these is negligible.
+-- The performance penalty for adding these helpful features is negligible.
 --
 -- You can use this @not@ function either directly:
 --
@@ -1902,3 +2074,21 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- available and reading their inline documentation:
 --
 -- <https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude>
+--
+-- __Exercise__: Try to use a new Prelude function that has not been covered
+-- previously in this tutorial
+
+-- $conclusion
+--
+-- By this point you should be able to use the Dhall configuration language to
+-- author, import, and program configuration files.  If you run into any issues
+-- you can report them at:
+--
+-- <https://github.com/Gabriel439/Haskell-Dhall-Library/issues>
+--
+-- You can also request features, support, or documentation improvements on the
+-- above issue tracker.
+--
+-- If you would like to contribute to the Dhall project you can try to port Dhall
+-- to other languages besides Haskell so that Dhall configuration files can be
+-- read into those languages, too.
