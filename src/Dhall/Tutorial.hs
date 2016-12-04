@@ -1846,15 +1846,16 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > ├── Bool
 -- > │   ├── and
 -- > │   ├── build
+-- > │   ├── even
 -- > │   ├── fold
 -- > │   ├── not
+-- > │   ├── odd
 -- > │   └── or
 -- > ├── List
 -- > │   ├── all
 -- > │   ├── any
 -- > │   ├── build
 -- > │   ├── concat
--- > │   ├── concatMap
 -- > │   ├── filter
 -- > │   ├── fold
 -- > │   ├── generate
@@ -1882,17 +1883,14 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > ├── Optional
 -- > │   ├── build
 -- > │   ├── concat
--- > │   ├── concatMap
 -- > │   ├── fold
 -- > │   ├── head
 -- > │   ├── last
--- > │   ├── length
--- > │   └── map
--- > ├── Text
--- > │   └── concat
--- > └── index.html
--- > 
--- > 5 directories, 43 files
+-- > │   ├── map
+-- > │   ├── toList
+-- > │   └── unzip
+-- > └── Text
+-- >     └── concat
 --
 -- ... or if you have an @ipfs@ daemon running, you can mount the Prelude
 -- locally like this:
