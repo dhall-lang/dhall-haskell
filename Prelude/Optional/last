@@ -1,3 +1,25 @@
+{-
+Returns the last non-empty `Optional` value in a `List`
+
+Examples:
+
+```
+./last
+Integer
+(   [[] : Optional Integer, [1] : Optional Integer, [2] : Optional Integer]
+    : List (Optional Integer)
+)
+= [2] : Optional Integer
+
+./last
+Integer
+([[] : Optional Integer, [] : Optional Integer] : List (Optional Integer))
+= [] : Optional Integer
+
+./last Integer ([] : List (Optional Integer))
+= [] : Optional Integer
+```
+-}
 let last : ∀(a : Type) → List (Optional a) → Optional a
     =   λ(a : Type)
     →   λ(xs : List (Optional a))

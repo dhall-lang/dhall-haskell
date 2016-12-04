@@ -1,3 +1,15 @@
+{-
+Returns `True` if the supplied function returns `True` for all elements in the
+`List`
+
+Examples:
+
+```
+./all Natural Natural/even ([+2, +3, +5] : List Natural) = False
+
+./all Natural Natural/even ([] : List Natural) = True
+```
+-}
 let all : ∀(a : Type) → (a → Bool) → List a → Bool
     =   λ(a : Type)
     →   λ(f : a → Bool)

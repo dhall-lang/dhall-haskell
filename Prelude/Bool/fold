@@ -1,3 +1,14 @@
+{-
+`fold` is essentially the same as `if`/`then`/else` except as a function
+
+Examples:
+
+```
+./fold True Integer 0 1 = 0
+
+./fold False Integer 0 1 = 1
+```
+-}
 let fold : ∀(b : Bool) → ∀(bool : Type) → ∀(true : bool) → ∀(false : bool) → bool
     =   λ(b : Bool)
     →   λ(bool : Type)

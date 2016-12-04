@@ -1,3 +1,14 @@
+{-
+Returns the number of elements in a list
+
+Examples:
+
+```
+./length Integer ([0, 1, 2] : List Integer) = +3
+
+./length Integer ([] : List Integer) = +0
+```
+-}
 let length : ∀(a : Type) → List a → Natural
     =   List/length
 

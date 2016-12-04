@@ -1,3 +1,14 @@
+{-
+Flip the value of a `Bool`
+
+Examples:
+
+```
+./not True = False
+
+./not False = True
+```
+-}
 let not : Bool → Bool
     =   λ(b : Bool) → b == False
 

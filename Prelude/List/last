@@ -1,3 +1,14 @@
+{-
+Retrieve the last element of the list
+
+Examples:
+
+```
+./last Integer ([0, 1, 2] : List Integer) = [2] : Optional Integer
+
+./last Integer ([] : List Integer) = [] : Optional Integer
+```
+-}
 let last : ∀(a : Type) → List a → Optional a
     =   List/last
 

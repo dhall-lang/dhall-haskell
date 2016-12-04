@@ -1,3 +1,16 @@
+{-
+Only keep elements of the list where the supplied function returns `True`
+
+Examples:
+
+```
+./filter Natural Natural/even ([+2, +3, +5] : List Natural)
+= [+2] : List Natural
+
+./filter Natural Natural/odd ([+2, +3, +5] : List Natural)
+= [+3, +5] : List Natural
+```
+-}
 let filter : ∀(a : Type) → (a → Bool) → List a → List a
     =   λ(a : Type)
     →   λ(f : a → Bool)

@@ -1,3 +1,39 @@
+{-
+`fold` is the primitive function for consuming `List`s
+
+If you treat the list `[x, y, z] : List t` as `cons x (cons y (cons z nil))`,
+then a `fold` just replaces each `cons` and `nil` with something else
+
+Examples:
+
+```
+    List/fold
+    Natural
+    ([+2, +3, +5] : List Natural)
+    Natural
+    (λ(x : Natural) → λ(y : Natural) → x + y)
+    +0
+=   +10
+
+    λ(nil : Natural)
+→   List/fold
+    Natural
+    ([+2, +3, +5] : List Natural)
+    Natural
+    (λ(x : Natural) → λ(y : Natural) → x + y)
+    nil
+=   λ(nil : Natural) → +2 + +3 + +5 + nil
+
+    λ(list : Type)
+→   λ(cons : Natural → list → list)
+→   λ(nil : list)
+→   List/fold Natural ([+2, +3, +5] : List Natural) list cons nil
+=   λ(list : Type)
+→   λ(cons : Natural → list → list)
+→   λ(nil : list)
+→   cons +2 (cons +3 (cons +5 nil))
+```
+-}
 let fold
     :   ∀(a : Type)
     →   List a

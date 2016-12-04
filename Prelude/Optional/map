@@ -1,3 +1,16 @@
+{-
+Transform an `Optional` value with a function
+
+Examples:
+
+```
+./map Natural Bool Natural/even ([+3] : Optional Natural)
+= [False] : Optional Bool
+
+./map Natural Bool Natural/even ([] : Optional Natural)
+= [] : Optional Bool
+```
+-}
 let map : ∀(a : Type) → ∀(b : Type) → (a → b) → Optional a → Optional b
     =   λ(a : Type)
     →   λ(b : Type)

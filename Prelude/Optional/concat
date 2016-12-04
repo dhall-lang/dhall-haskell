@@ -1,3 +1,19 @@
+{-
+Flatten two `Optional` layers into a single `Optional` layer
+
+Examples:
+
+```
+./concat Integer ([[1] : Optional Integer] : Optional (Optional Integer))
+= [1] : Optional Integer
+
+./concat Integer ([[] : Optional Integer] : Optional (Optional Integer))
+= [] : Optional Integer
+
+./concat Integer ([] : Optional (Optional Integer))
+= [] : Optional Integer
+```
+-}
 let concat : ∀(a : Type) → Optional (Optional a) → Optional a
     =   λ(a : Type)
     →   λ(x : Optional (Optional a))

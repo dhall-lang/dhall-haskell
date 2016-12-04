@@ -1,3 +1,25 @@
+{-
+Returns the first non-empty `Optional` value in a `List`
+
+Examples:
+
+```
+./head
+Integer
+(   [[] : Optional Integer, [1] : Optional Integer, [2] : Optional Integer]
+    : List (Optional Integer)
+)
+= [1] : Optional Integer
+
+./head
+Integer
+([[] : Optional Integer, [] : Optional Integer] : List (Optional Integer))
+= [] : Optional Integer
+
+./head Integer ([] : List (Optional Integer))
+= [] : Optional Integer
+```
+-}
 let head : ∀(a : Type) → List (Optional a) → Optional a
     =   λ(a : Type)
     →   λ(xs : List (Optional a))
