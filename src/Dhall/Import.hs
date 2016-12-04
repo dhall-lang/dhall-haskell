@@ -63,9 +63,9 @@
 
 module Dhall.Import (
     -- * Import
-      load
-    , exprFromFile
+      exprFromFile
     , exprFromURL
+    , load
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -491,15 +491,8 @@ loadStatic path = do
 
     return expr
 
-{-| Resolve all imports within an expression
-
-    By default the starting path is the current directory, but you can override
-    the starting path with a file if you read in the expression from that file
--}
-load
-    :: Expr Src Path
-    -- ^ Expression to resolve
-    -> IO (Expr Src X)
+-- | Resolve all imports within an expression
+load :: Expr Src Path -> IO (Expr Src X)
 load expr = State.evalStateT (fmap join (traverse loadStatic expr)) status
   where
     status = Status [] Map.empty Nothing
