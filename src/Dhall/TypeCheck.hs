@@ -18,12 +18,13 @@ module Dhall.TypeCheck (
     ) where
 
 import Control.Exception (Exception)
-import Data.Foldable (forM_)
+import Data.Foldable (forM_, toList)
 import Data.Monoid ((<>))
 import Data.Set (Set)
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
+import Data.Traversable (forM)
 import Data.Typeable (Typeable)
 import Dhall.Core (Const(..), Expr(..), Var(..))
 import Dhall.Context (Context)
@@ -461,19 +462,29 @@ typeWith ctx e@(Combine kvsX kvsY) = do
     ktsX  <- case tKvsX of
         Record kts -> return kts
         _          -> Left (TypeError ctx e (MustCombineARecord kvsX tKvsX))
-    let ksX = Data.Map.keysSet ktsX
 
     tKvsY <- fmap Dhall.Core.normalize (typeWith ctx kvsY)
     ktsY  <- case tKvsY of
         Record kts -> return kts
         _          -> Left (TypeError ctx e (MustCombineARecord kvsY tKvsY))
-    let ksY = Data.Map.keysSet ktsY
 
-    let ks = Data.Set.intersection ksX ksY
-    if Data.Set.null ks
-        then return ()
-        else Left (TypeError ctx e (FieldCollision ks))
-    return (Record (Data.Map.union ktsX ktsY))
+    let combineTypes ktsL ktsR = do
+            let ks =
+                    Data.Set.union (Data.Map.keysSet ktsL) (Data.Map.keysSet ktsR)
+            kts <- forM (toList ks) (\k -> do
+                case (Data.Map.lookup k ktsL, Data.Map.lookup k ktsR) of
+                    (Just (Record ktsL'), Just (Record ktsR')) -> do
+                        t <- combineTypes ktsL' ktsR'
+                        return (k, t)
+                    (Nothing, Just t) -> do
+                        return (k, t)
+                    (Just t, Nothing) -> do
+                        return (k, t)
+                    _ -> do
+                        Left (TypeError ctx e (FieldCollision k)) )
+            return (Record (Data.Map.fromList kts))
+
+    combineTypes ktsX ktsY
 typeWith ctx e@(Merge kvsX kvsY t) = do
     tKvsX <- fmap Dhall.Core.normalize (typeWith ctx kvsX)
     ktsX  <- case tKvsX of
@@ -563,7 +574,7 @@ data TypeMessage s
     | InvalidAlternativeType Text (Expr s X)
     | DuplicateAlternative Text
     | MustCombineARecord (Expr s X) (Expr s X)
-    | FieldCollision (Set Text)
+    | FieldCollision Text
     | MustMergeARecord (Expr s X) (Expr s X)
     | MustMergeUnion (Expr s X) (Expr s X)
     | UnusedHandler (Set Text)
@@ -2010,7 +2021,7 @@ You tried to combine the following value:
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 
-prettyTypeMessage (FieldCollision ks) = ErrorMessages {..}
+prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
   where
     short = "Field collision"
 
@@ -2061,7 +2072,7 @@ Some common reasons why you might get this error:
   patch-oriented programming
 |]
       where
-        txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
+        txt0 = Text.toStrict k
 
 prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
   where

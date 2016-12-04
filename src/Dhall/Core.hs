@@ -1240,17 +1240,15 @@ normalize e = case e of
       where
         v'   =      normalize v
         kvs' = fmap normalize kvs
-    Combine x y ->
-        case x' of
-            RecordLit kvsX ->
-                case y' of
+    Combine x0 y0 ->
+        let combine x y = case x of
+                RecordLit kvsX -> case y of
                     RecordLit kvsY ->
-                        RecordLit (fmap normalize (Data.Map.union kvsX kvsY))
-                    _ -> Combine x' y'
-            _ -> Combine x' y'
-      where
-        x' = normalize x
-        y' = normalize y
+                        let kvs = Data.Map.unionWith combine kvsX kvsY
+                        in  RecordLit (fmap normalize kvs)
+                    _ -> Combine x y
+                _ -> Combine x y
+        in  combine (normalize x0) (normalize y0)
     Merge x y t      ->
         case x' of
             RecordLit kvsX ->
