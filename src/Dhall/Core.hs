@@ -26,10 +26,8 @@ module Dhall.Core (
     , subst
     , shift
 
-    -- * Builders
-    -- $builders
+    -- * Pretty-printing
     , pretty
-    , buildExpr
 
     -- * Miscellaneous
     , internalError
@@ -374,8 +372,7 @@ instance IsString (Expr s a)
   where
     fromString str = Var (fromString str)
 
-{- $builders
-    There is a one-to-one correspondence between the builders in this section
+{-  There is a one-to-one correspondence between the builders in this section
     and the sub-parsers in "Dhall.Parser".  Each builder is named after the
     corresponding parser and the relationship between builders exactly matches
     the relationship between parsers.  This leads to the nice emergent property
@@ -702,7 +699,7 @@ buildUnionLit a b c
 -- | Generates a syntactically valid Dhall program
 instance Buildable a => Buildable (Expr s a)
   where
-    build = buildExprA
+    build = buildExpr
 
 {-| `shift` is used by both normalization and type-checking to avoid variable
     capture by shifting variable indices

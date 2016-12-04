@@ -38,7 +38,7 @@ module Dhall
 import Control.Applicative (empty, liftA2, (<|>))
 import Control.Exception (Exception)
 import Data.Monoid ((<>))
-import Data.Text.Buildable (Buildable)
+import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
@@ -98,7 +98,7 @@ input (Type {..}) text = do
             ( Data.ByteString.Lazy.toStrict
             . Data.Text.Lazy.Encoding.encodeUtf8
             . Data.Text.Lazy.Builder.toLazyText
-            . Dhall.Core.buildExpr
+            . build
             ) expected
     let annot = case expr' of
             Note (Src begin end bytes) _ ->
