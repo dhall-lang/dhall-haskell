@@ -98,7 +98,7 @@ input (Type {..}) text = do
             ( Data.ByteString.Lazy.toStrict
             . Data.Text.Lazy.Encoding.encodeUtf8
             . Data.Text.Lazy.Builder.toLazyText
-            . Dhall.Core.buildExpr0
+            . Dhall.Core.buildExpr
             ) expected
     let annot = case expr' of
             Note (Src begin end bytes) _ ->
@@ -317,8 +317,8 @@ text = Type {..}
 
 {-| Decode a `Maybe`
 
->>> input (maybe integer) "[] : Maybe Integer"
-Nothing
+>>> input (maybe integer) "[1] : Optional Integer"
+Just 1
 -}
 maybe :: Type a -> Type (Maybe a)
 maybe (Type extractIn expectedIn) = Type extractOut expectedOut

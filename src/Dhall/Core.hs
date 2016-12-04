@@ -8,7 +8,11 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# OPTIONS_GHC -Wall #-}
 
--- | This module contains the core calculus for the Dhall language.
+{-| This module contains the core calculus for the Dhall language.
+
+    Dhall is essentially a fork of the @morte@ compiler but with more built-in
+    functionality, better error messages, and Haskell integration
+-}
 
 module Dhall.Core (
     -- * Syntax
@@ -25,26 +29,7 @@ module Dhall.Core (
     -- * Builders
     -- $builders
     , pretty
-    , buildExpr0
-    , buildExpr1
-    , buildExpr2
-    , buildExpr3
-    , buildExpr4
-    , buildExpr5
-    , buildExpr6
-    , buildConst
-    , buildVar
-    , buildElems
-    , buildRecordLit
-    , buildFieldValues
-    , buildFieldValue
-    , buildRecord
-    , buildFieldTypes
-    , buildFieldType
-    , buildUnion
-    , buildAlternativeTypes
-    , buildAlternativeType
-    , buildUnionLit
+    , buildExpr
 
     -- * Miscellaneous
     , internalError
@@ -128,15 +113,15 @@ instance Buildable Path where
     nearest bound variable and the index increases by one for each bound
     variable of the same name going outward.  The following diagram may help:
 
->                           +-refers to-+
->                           |           |
->                           v           |
-> \(x : *) -> \(y : *) -> \(x : *) -> x@0
+>                                 +---refers to--+
+>                                 |              |
+>                                 v              |
+> \(x : Type) -> \(y : Type) -> \(x : Type) -> x@0
 >
->   +-------------refers to-------------+
->   |                                   |
->   v                                   |
-> \(x : *) -> \(y : *) -> \(x : *) -> x@1
+>   +------------------refers to-----------------+
+>   |                                            |
+>   v                                            |
+> \(x : Type) -> \(y : Type) -> \(x : Type) -> x@1
 
     This `Int` behaves like a De Bruijn index in the special case where all
     variables have the same name.
@@ -425,228 +410,265 @@ buildDouble a = build (show a)
 buildText :: Builder -> Builder
 buildText a = build (show a)
 
--- | Builder corresponding to the @Expr0@ parser in "Dhall.Parser"
-buildExpr0 :: Buildable a => Expr s a -> Builder
-buildExpr0 (Annot a b) = buildExpr1 a <> " : " <> buildExpr0 b
-buildExpr0 (Note  _ b) = buildExpr0 b
-buildExpr0 a           = buildExpr1 a
+-- | Builder corresponding to the @expr@ parser in "Dhall.Parser"
+buildExpr :: Buildable a => Expr s a -> Builder
+buildExpr = buildExprA
 
--- | Builder corresponding to the @Expr1@ parser in "Dhall.Parser"
-buildExpr1 :: Buildable a => Expr s a -> Builder
-buildExpr1 (Lam a b c) =
+-- | Builder corresponding to the @exprA@ parser in "Dhall.Parser"
+buildExprA :: Buildable a => Expr s a -> Builder
+buildExprA (Annot a b) = buildExprB a <> " : " <> buildExprA b
+buildExprA (Note  _ b) = buildExprA b
+buildExprA a           = buildExprB a
+
+-- | Builder corresponding to the @exprB@ parser in "Dhall.Parser"
+buildExprB :: Buildable a => Expr s a -> Builder
+buildExprB (Lam a b c) =
         "λ("
     <>  buildLabel a
-    <> " : "
-    <> buildExpr0 b
-    <> ") → "
-    <> buildExpr1 c
-buildExpr1 (BoolIf a b c) =
+    <>  " : "
+    <>  buildExprA b
+    <>  ") → "
+    <>  buildExprB c
+buildExprB (BoolIf a b c) =
         "if "
-    <>  buildExpr0 a
+    <>  buildExprA a
     <>  " then "
-    <>  buildExpr1 b
+    <>  buildExprB b
     <>  " else "
-    <> buildExpr1 c
-buildExpr1 (Pi "_" b c) =
-        buildExpr2 b
+    <>  buildExprC c
+buildExprB (Pi "_" b c) =
+        buildExprC b
     <>  " → "
-    <>  buildExpr1 c
-buildExpr1 (Pi a b c) =
+    <>  buildExprB c
+buildExprB (Pi a b c) =
         "∀("
     <>  buildLabel a
     <>  " : "
-    <>  buildExpr0 b
+    <>  buildExprA b
     <>  ") → "
-    <>  buildExpr1 c
-buildExpr1 (Let a Nothing c d) =
+    <>  buildExprB c
+buildExprB (Let a Nothing c d) =
         "let "
     <>  buildLabel a
     <>  " = "
-    <>  buildExpr0 c
+    <>  buildExprA c
     <>  " in "
-    <>  buildExpr1 d
-buildExpr1 (Let a (Just b) c d) =
+    <>  buildExprB d
+buildExprB (Let a (Just b) c d) =
         "let "
     <>  buildLabel a
     <>  " : "
-    <>  buildExpr0 b
+    <>  buildExprA b
     <>  " = "
-    <>  buildExpr0 c
+    <>  buildExprA c
     <>  " in "
-    <>  buildExpr1 d
-buildExpr1 (ListLit a b) =
-    "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExpr6 a
-buildExpr1 (OptionalLit a b) =
-    "[" <> buildElems (Data.Vector.toList b) <> "] : Optional "  <> buildExpr6 a
-buildExpr1 (Merge a b c) =
-    "merge " <> buildExpr6 a <> " " <> buildExpr6 b <> " : " <> buildExpr5 c
-buildExpr1 (Note _ b) =
-    buildExpr1 b
-buildExpr1 a =
-    buildExpr2 a
+    <>  buildExprB d
+buildExprB (ListLit a b) =
+    "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExprE a
+buildExprB (OptionalLit a b) =
+    "[" <> buildElems (Data.Vector.toList b) <> "] : Optional "  <> buildExprE a
+buildExprB (Merge a b c) =
+    "merge " <> buildExprE a <> " " <> buildExprE b <> " : " <> buildExprD c
+buildExprB (Note _ b) =
+    buildExprB b
+buildExprB a =
+    buildExprC a
 
--- | Builder corresponding to the @Expr2@ parser in "Dhall.Parser"
-buildExpr2 :: Buildable a => Expr s a -> Builder
-buildExpr2 (BoolEQ a b) = buildExpr2 a <> " == " <> buildExpr2 b
-buildExpr2 (BoolNE a b) = buildExpr2 a <> " != " <> buildExpr2 b
-buildExpr2 (Note   _ b) = buildExpr2 b
-buildExpr2  a           = buildExpr3 a
+-- | Builder corresponding to the @exprC@ parser in "Dhall.Parser"
+buildExprC :: Buildable a => Expr s a -> Builder
+buildExprC = buildExprC0
 
--- | Builder corresponding to the @Expr3@ parser in "Dhall.Parser"
-buildExpr3 :: Buildable a => Expr s a -> Builder
-buildExpr3 (BoolOr      a b) = buildExpr3 a <> " || " <> buildExpr3 b
-buildExpr3 (NaturalPlus a b) = buildExpr3 a <> " + "  <> buildExpr3 b
-buildExpr3 (TextAppend  a b) = buildExpr3 a <> " ++ " <> buildExpr3 b
-buildExpr3 (Note        _ b) = buildExpr3 b
-buildExpr3  a                = buildExpr4 a
+-- | Builder corresponding to the @exprC0@ parser in "Dhall.Parser"
+buildExprC0 :: Buildable a => Expr s a -> Builder
+buildExprC0 (BoolOr a b) = buildExprC1 a <> " || " <> buildExprC0 b
+buildExprC0 (Note   _ b) = buildExprC0 b
+buildExprC0  a           = buildExprC1 a
 
--- | Builder corresponding to the @Expr4@ parser in "Dhall.Parser"
-buildExpr4 :: Buildable a => Expr s a -> Builder
-buildExpr4 (BoolAnd      a b) = buildExpr4 a <> " && " <> buildExpr4 b
-buildExpr4 (NaturalTimes a b) = buildExpr4 a <> " * "  <> buildExpr4 b
-buildExpr4 (Combine      a b) = buildExpr4 a <> " ∧ "  <> buildExpr4 b
-buildExpr4 (Note         _ b) = buildExpr4 b
-buildExpr4  a                 = buildExpr5 a
+-- | Builder corresponding to the @exprC1@ parser in "Dhall.Parser"
+buildExprC1 :: Buildable a => Expr s a -> Builder
+buildExprC1 (TextAppend a b) = buildExprC2 a <> " ++ " <> buildExprC1 b
+buildExprC1 (Note       _ b) = buildExprC1 b
+buildExprC1  a               = buildExprC2 a
 
--- | Builder corresponding to the @Expr5@ parser in "Dhall.Parser"
-buildExpr5 :: Buildable a => Expr s a -> Builder
-buildExpr5 (App  a b) = buildExpr5 a <> " " <> buildExpr6 b
-buildExpr5 (Note _ b) = buildExpr5 b
-buildExpr5  a         = buildExpr6 a
+-- | Builder corresponding to the @exprC2@ parser in "Dhall.Parser"
+buildExprC2 :: Buildable a => Expr s a -> Builder
+buildExprC2 (NaturalPlus a b) = buildExprC3 a <> " + " <> buildExprC2 b
+buildExprC2 (Note        _ b) = buildExprC2 b
+buildExprC2  a                = buildExprC3 a
 
--- | Builder corresponding to the @Expr6@ parser in "Dhall.Parser"
-buildExpr6 :: Buildable a => Expr s a -> Builder
-buildExpr6 (Var a) =
+-- | Builder corresponding to the @exprC3@ parser in "Dhall.Parser"
+buildExprC3 :: Buildable a => Expr s a -> Builder
+buildExprC3 (BoolAnd a b) = buildExprC4 a <> " && " <> buildExprC3 b
+buildExprC3 (Note    _ b) = buildExprC3 b
+buildExprC3  a            = buildExprC4 a
+
+-- | Builder corresponding to the @exprC4@ parser in "Dhall.Parser"
+buildExprC4 :: Buildable a => Expr s a -> Builder
+buildExprC4 (Combine a b) = buildExprC5 a <> " ∧ " <> buildExprC4 b
+buildExprC4 (Note    _ b) = buildExprC4 b
+buildExprC4  a            = buildExprC5 a
+
+-- | Builder corresponding to the @exprC5@ parser in "Dhall.Parser"
+buildExprC5 :: Buildable a => Expr s a -> Builder
+buildExprC5 (NaturalTimes a b) = buildExprC6 a <> " * " <> buildExprC5 b
+buildExprC5 (Note         _ b) = buildExprC5 b
+buildExprC5  a                 = buildExprC6 a
+
+-- | Builder corresponding to the @exprC6@ parser in "Dhall.Parser"
+buildExprC6 :: Buildable a => Expr s a -> Builder
+buildExprC6 (BoolEQ a b) = buildExprC7 a <> " == " <> buildExprC6 b
+buildExprC6 (Note   _ b) = buildExprC6 b
+buildExprC6  a           = buildExprC7 a
+
+-- | Builder corresponding to the @exprC7@ parser in "Dhall.Parser"
+buildExprC7 :: Buildable a => Expr s a -> Builder
+buildExprC7 (BoolNE a b) = buildExprD  a <> " != " <> buildExprC7 b
+buildExprC7 (Note   _ b) = buildExprC7 b
+buildExprC7  a           = buildExprD  a
+
+-- | Builder corresponding to the @exprD@ parser in "Dhall.Parser"
+buildExprD :: Buildable a => Expr s a -> Builder
+buildExprD (App  a b) = buildExprD a <> " " <> buildExprE b
+buildExprD (Note _ b) = buildExprD b
+buildExprD  a         = buildExprE a
+
+-- | Builder corresponding to the @exprE@ parser in "Dhall.Parser"
+buildExprE :: Buildable a => Expr s a -> Builder
+buildExprE (Field a b) = buildExprE a <> "." <> buildLabel b
+buildExprE (Note  _ b) = buildExprE b
+buildExprE  a          = buildExprF a
+
+-- | Builder corresponding to the @exprF@ parser in "Dhall.Parser"
+buildExprF :: Buildable a => Expr s a -> Builder
+buildExprF (Var a) =
     buildVar a
-buildExpr6 (Const k) =
+buildExprF (Const k) =
     buildConst k
-buildExpr6 Bool =
+buildExprF Bool =
     "Bool"
-buildExpr6 Natural =
+buildExprF Natural =
     "Natural"
-buildExpr6 NaturalFold =
+buildExprF NaturalFold =
     "Natural/fold"
-buildExpr6 NaturalBuild =
+buildExprF NaturalBuild =
     "Natural/build"
-buildExpr6 NaturalIsZero =
+buildExprF NaturalIsZero =
     "Natural/isZero"
-buildExpr6 NaturalEven =
+buildExprF NaturalEven =
     "Natural/even"
-buildExpr6 NaturalOdd =
+buildExprF NaturalOdd =
     "Natural/odd"
-buildExpr6 Integer =
+buildExprF Integer =
     "Integer"
-buildExpr6 Double =
+buildExprF Double =
     "Double"
-buildExpr6 Text =
+buildExprF Text =
     "Text"
-buildExpr6 List =
+buildExprF List =
     "List"
-buildExpr6 ListBuild =
+buildExprF ListBuild =
     "List/build"
-buildExpr6 ListFold =
+buildExprF ListFold =
     "List/fold"
-buildExpr6 ListLength =
+buildExprF ListLength =
     "List/length"
-buildExpr6 ListHead =
+buildExprF ListHead =
     "List/head"
-buildExpr6 ListLast =
+buildExprF ListLast =
     "List/last"
-buildExpr6 ListIndexed =
+buildExprF ListIndexed =
     "List/indexed"
-buildExpr6 ListReverse =
+buildExprF ListReverse =
     "List/reverse"
-buildExpr6 Optional =
+buildExprF Optional =
     "Optional"
-buildExpr6 OptionalFold =
+buildExprF OptionalFold =
     "Optional/fold"
-buildExpr6 (BoolLit True) =
+buildExprF (BoolLit True) =
     "True"
-buildExpr6 (BoolLit False) =
+buildExprF (BoolLit False) =
     "False"
-buildExpr6 (IntegerLit a) =
+buildExprF (IntegerLit a) =
     buildNumber a
-buildExpr6 (NaturalLit a) =
+buildExprF (NaturalLit a) =
     "+" <> buildNatural a
-buildExpr6 (DoubleLit a) =
+buildExprF (DoubleLit a) =
     buildDouble a
-buildExpr6 (TextLit a) =
+buildExprF (TextLit a) =
     buildText a
-buildExpr6 (Record a) =
+buildExprF (Record a) =
     buildRecord a
-buildExpr6 (RecordLit a) =
+buildExprF (RecordLit a) =
     buildRecordLit a
-buildExpr6 (Union a) =
+buildExprF (Union a) =
     buildUnion a
-buildExpr6 (UnionLit a b c) =
+buildExprF (UnionLit a b c) =
     buildUnionLit a b c
-buildExpr6 (Embed a) =
+buildExprF (Embed a) =
     build a
-buildExpr6 (Field a b) =
-    buildExpr6 a <> "." <> buildLabel b
-buildExpr6 (Note _ b) =
-    buildExpr6 b
-buildExpr6 a =
-    "(" <> buildExpr0 a <> ")"
+buildExprF (Note _ b) =
+    buildExprF b
+buildExprF a =
+    "(" <> buildExprA a <> ")"
 
--- | Builder corresponding to the @Const@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @const@ parser in "Dhall.Parser"
 buildConst :: Const -> Builder
 buildConst Type = "Type"
 buildConst Kind = "Kind"
 
--- | Builder corresponding to the @Var@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @var@ parser in "Dhall.Parser"
 buildVar :: Var -> Builder
 buildVar (V x 0) = buildLabel x
 buildVar (V x n) = buildLabel x <> "@" <> buildNumber n
 
--- | Builder corresponding to the @Elems@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @elems@ parser in "Dhall.Parser"
 buildElems :: Buildable a => [Expr s a] -> Builder
 buildElems   []   = ""
-buildElems   [a]  = buildExpr0 a
-buildElems (a:bs) = buildExpr0 a <> ", " <> buildElems bs
+buildElems   [a]  = buildExprA a
+buildElems (a:bs) = buildExprA a <> ", " <> buildElems bs
 
--- | Builder corresponding to the @RecordLit@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @recordLit@ parser in "Dhall.Parser"
 buildRecordLit :: Buildable a => Map Text (Expr s a) -> Builder
 buildRecordLit a | Data.Map.null a =
     "{=}"
 buildRecordLit a =
     "{ " <> buildFieldValues (Data.Map.toList a) <> " }"
 
--- | Builder corresponding to the @FieldValues@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @fieldValues@ parser in "Dhall.Parser"
 buildFieldValues :: Buildable a => [(Text, Expr s a)] -> Builder
 buildFieldValues    []  = ""
 buildFieldValues   [a]  = buildFieldValue a
 buildFieldValues (a:bs) = buildFieldValue a <> ", " <> buildFieldValues bs
 
--- | Builder corresponding to the @FieldValue@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @fieldValue@ parser in "Dhall.Parser"
 buildFieldValue :: Buildable a => (Text, Expr s a) -> Builder
-buildFieldValue (a, b) = buildLabel a <> " = " <> buildExpr0 b
+buildFieldValue (a, b) = buildLabel a <> " = " <> buildExprA b
 
--- | Builder corresponding to the @Record@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @record@ parser in "Dhall.Parser"
 buildRecord :: Buildable a => Map Text (Expr s a) -> Builder
 buildRecord a | Data.Map.null a =
     "{}"
 buildRecord a =
     "{ " <> buildFieldTypes (Data.Map.toList a) <> " }"
 
--- | Builder corresponding to the @FieldTypes@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @fieldTypes@ parser in "Dhall.Parser"
 buildFieldTypes :: Buildable a => [(Text, Expr s a)] -> Builder
 buildFieldTypes    []  = ""
 buildFieldTypes   [a]  = buildFieldType a
 buildFieldTypes (a:bs) = buildFieldType a <> ", " <> buildFieldTypes bs
 
--- | Builder corresponding to the @FieldType@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @fieldType@ parser in "Dhall.Parser"
 buildFieldType :: Buildable a => (Text, Expr s a) -> Builder
-buildFieldType (a, b) = buildLabel a <> " : " <> buildExpr0 b
+buildFieldType (a, b) = buildLabel a <> " : " <> buildExprA b
 
--- | Builder corresponding to the @Union@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @union@ parser in "Dhall.Parser"
 buildUnion :: Buildable a => Map Text (Expr s a) -> Builder
 buildUnion a | Data.Map.null a =
     "<>"
 buildUnion a =
     "< " <> buildAlternativeTypes (Data.Map.toList a) <> " >"
 
--- | Builder corresponding to the @AlternativeTypes@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @alternativeTypes@ parser in "Dhall.Parser"
 buildAlternativeTypes :: Buildable a => [(Text, Expr s a)] -> Builder
 buildAlternativeTypes [] =
     ""
@@ -655,24 +677,24 @@ buildAlternativeTypes [a] =
 buildAlternativeTypes (a:bs) =
     buildAlternativeType a <> " | " <> buildAlternativeTypes bs
 
--- | Builder corresponding to the @AlternativeType@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @alternativeType@ parser in "Dhall.Parser"
 buildAlternativeType :: Buildable a => (Text, Expr s a) -> Builder
-buildAlternativeType (a, b) = buildLabel a <> " : " <> buildExpr0 b
+buildAlternativeType (a, b) = buildLabel a <> " : " <> buildExprA b
 
--- | Builder corresponding to the @UnionLit@ parser in "Dhall.Parser"
+-- | Builder corresponding to the @unionLit@ parser in "Dhall.Parser"
 buildUnionLit :: Buildable a => Text -> Expr s a -> Map Text (Expr s a) -> Builder
 buildUnionLit a b c
     | Data.Map.null c =
             "< "
         <>  buildLabel a
         <>  " = "
-        <>  buildExpr0 b
+        <>  buildExprA b
         <>  " >"
     | otherwise =
             "< "
         <>  buildLabel a
         <>  " = "
-        <>  buildExpr0 b
+        <>  buildExprA b
         <>  " | "
         <>  buildAlternativeTypes (Data.Map.toList c)
         <>  " >"
@@ -680,7 +702,7 @@ buildUnionLit a b c
 -- | Generates a syntactically valid Dhall program
 instance Buildable a => Buildable (Expr s a)
   where
-    build = buildExpr0
+    build = buildExprA
 
 {-| `shift` is used by both normalization and type-checking to avoid variable
     capture by shifting variable indices
