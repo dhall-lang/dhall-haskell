@@ -101,7 +101,7 @@ module Dhall.Tutorial (
     -- *** @(++)@
     -- $textAppend
 
-    -- *** @List@
+    -- ** @List@
     -- $list
 
     -- *** @List/fold@
@@ -133,58 +133,6 @@ module Dhall.Tutorial (
 
     -- * Prelude
     -- $prelude
-
-    -- ** @Bool@
-
-    -- *** @Bool/and@
-    -- $boolAnd
-
-    -- *** @Bool/or@
-    -- $boolOr
-
-    -- *** @Bool/not@
-    -- $boolNot
-
-    -- ** @List@
-
-    -- *** @List/all@
-    -- $listAll
-
-    -- *** @List/any@
-    -- $listAny
-
-    -- *** @List/concat@
-    -- $listConcat
-
-    -- *** @List/concatMap@
-    -- $listConcatMap
-
-    -- *** @List/filter@
-    -- $listFilter
-
-    -- *** @List/generate@
-    -- $listGenerate
-
-    -- *** @List/iterate@
-    -- $listIterate
-
-    -- *** @List/map@
-    -- $listMap
-
-    -- *** @List/null@
-    -- $listNull
-
-    -- *** @List/replicate@
-    -- $listReplicate
-
-    -- *** @List/shifted@
-    -- $listShifted
-
-    -- *** @List/unzip@
-    -- $listUnzip
-
-    -- ** @Monoid@
-    -- $monoid
     ) where
 
 import Data.Vector (Vector)
@@ -1030,7 +978,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- complex example:
 --
 -- > $ dhall
--- >     let List/map = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/map
+-- >     let List/map = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/map
 -- > in  λ(f : Integer → Integer) → List/map Integer Integer f ([1, 2, 3] : List Integer)
 -- > <Ctrl-D>
 -- > ∀(f : Integer → Integer) → List Integer
@@ -1590,7 +1538,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let List/concat = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concat
+-- > let List/concat = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concat
 -- >
 -- > List/fold a (List/concat a xss) b c
 -- >     = List/fold (List a) xss b (λ(x : List a) → List/fold a x b c)
@@ -1659,10 +1607,10 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let Optional/head  = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/Optional/head
--- > let List/concat    = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concatMap
--- > let List/map       = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/map
+-- > let Optional/head  = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Optional/head
+-- > let List/concat    = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/map
 -- > 
 -- > List/head a (List/concat a xss) =
 -- >     Optional/head a (List/map (List a) (Optional a) (List/head a) xss)
@@ -1690,10 +1638,10 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let Optional/last  = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/Optional/last
--- > let List/concat    = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concatMap
--- > let List/map       = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/map
+-- > let Optional/last  = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Optional/last
+-- > let List/concat    = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/map
 -- > 
 -- > List/last a (List/concat a xss) =
 -- >     Optional/last a (List/map (List a) (Optional a) (List/last a) xss)
@@ -1721,9 +1669,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let List/shifted = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/shifted
--- > let List/concat  = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concat
--- > let List/map     = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/map
+-- > let List/shifted = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/shifted
+-- > let List/concat  = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concat
+-- > let List/map     = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/map
 -- > 
 -- > List/indexed a (List/concat a xss) =
 -- >     List/shifted a (List/map (List a) (List { index : Natural, value : a }) (List/indexed a) xss)
@@ -1746,9 +1694,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > let List/map       = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/map
--- > let List/concat    = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/map
+-- > let List/concat    = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concatMap
 -- > 
 -- > List/reversed a (List/concat a xss)
 -- >     = List/concat a (List/reversed (List a) (List/map (List a) (List a) (List/reversed a) xss))
@@ -1802,7 +1750,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- There is also a Prelude available at:
 --
--- <https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude>
+-- <https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude>
 --
 -- There is nothing \"official\" or \"standard\" about this Prelude other than
 -- the fact that it is mentioned in this tutorial.  The \"Prelude\" is just a
@@ -1813,38 +1761,54 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- subdirectories.  For example, the @Bool@ subdirectory has a @not@ file
 -- located here:
 --
--- <https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/Bool/not>
+-- <https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Bool/not>
 --
 -- The @not@ function is just a UTF8-encoded text file hosted online with the
 -- following contents
 --
--- > $ curl https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/Bool/not
+-- > $ curl https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Bool/not
+-- > {-
+-- > Flip the value of a `Bool`
+-- > 
+-- > Examples:
+-- > 
+-- > ```
+-- > ./not True = False
+-- > 
+-- > ./not False = True
+-- > ```
+-- > -}
 -- > let not : Bool → Bool
 -- >     =   λ(b : Bool) → b == False
 -- > 
 -- > in  not
 --
--- The file could have been shorter and written as just this:
+-- The file could have been much shorter, like this:
 --
 -- > λ(b : Bool) → b == False
 --
--- ... but all the functions exported from the Prelude have a convention of
--- including the name and type of the function in order to be self-documenting.
--- The performance penalty for this slight indirection is negligible.
+-- ... but all the functions exported from the Prelude try to be as
+-- self-documenting as possible by including:
 --
--- You can use this function either directly:
+-- * the name of the function
+-- * the type of the function
+-- * documentation (including a few examples)
+--
+-- The performance penalty for adding these is negligible.
+--
+-- You can use this @not@ function either directly:
 --
 -- > $ dhall
--- > https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/Bool/not True
+-- > https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Bool/not True
 -- > <Ctrl-D>
 -- > Bool
 -- > 
 -- > False
 --
--- ... or bind the URL to a shorter name:
+-- ... or assign the URL to a shorter name:
 --
 -- > $ dhall
--- > let Bool/not = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/Bool/not
+-- > let Bool/not = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Bool/not
 -- > in  Bool/not True
 -- > <Ctrl-D>
 -- > Bool
@@ -1852,27 +1816,31 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > False
 --
 -- Some functions in the Prelude just re-export built-in functions for
--- consistency, such as @Prelude/Natural/fold@:
+-- consistency and documentation, such as @Prelude/Natural/even@, which
+-- re-exports the built-in @Natural/even@ function:
 --
--- > $ curl https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/Natural/fold
--- > let fold
--- >     :   Natural
--- >     →   ∀(natural : Type)
--- >     →   ∀(succ : natural → natural)
--- >     →   ∀(zero : natural)
--- >     →   natural
--- >     =   Natural/fold
+-- > $ curl https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/Natural/even
+-- > {-
+-- > Returns `True` if a number if even and returns `False` otherwise
 -- > 
--- > in  fold
---
--- ... which just re-exports the @Natural/fold@ built-in function with a type
--- signature
+-- > Examples:
+-- > 
+-- > ```
+-- > ./even +3 = False
+-- > 
+-- > ./even +0 = True
+-- > ```
+-- > -}
+-- > let even : Natural → Bool
+-- >     =   Natural/even
+-- > 
+-- > in  even
 --
 -- You can also download the Prelude locally to your filesystem if you prefer
 -- using local relative paths instead of URLs.  For example, you can use @wget@,
 -- like this:
 --
--- > $ wget -np -nH -r --cut-dirs=2 https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/
+-- > $ wget -np -nH -r --cut-dirs=2 https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/
 -- > $ tree Prelude
 -- > Prelude
 -- > ├── Bool
@@ -1926,282 +1894,13 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > 5 directories, 43 files
 --
--- ... or if you have an @ipfs@ daemon running, you can run:
+-- ... or if you have an @ipfs@ daemon running, you can mount the Prelude
+-- locally like this:
 --
 -- > $ ipfs mount
--- > $ cd /ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude
+-- > $ cd /ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude
 --
--- The following sections document the utilities provided by the Prelude, except
--- for the ones that just re-export built-in functions.
-
--- $boolAnd
+-- Browse the Prelude online to learn more by seeing what functions are
+-- available and reading their inline documentation:
 --
--- Example:
---
--- > $ dhall
--- > let Bool/and = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/Bool/and
--- > in  Bool/and ([True, False, True] : List Bool)
--- > <Ctrl-D>
--- > Bool
--- > 
--- > False
---
--- Type:
---
--- > ───────────────────────────────
--- > Γ ⊢ Bool/and : List Bool → Bool
-
--- $boolOr
---
--- Example:
---
--- > $ dhall
--- > let Bool/or = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/Bool/or
--- > in  Bool/or ([True, False, True] : List Bool)
--- > <Ctrl-D>
--- > Bool
--- > 
--- > True
---
--- Type:
---
--- > ──────────────────────────────
--- > Γ ⊢ Bool/or : List Bool → Bool
-
--- $boolNot
---
--- Example:
---
--- > $ dhall
--- > let Bool/not = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/Bool/not
--- > in  Bool/not True
--- > <Ctrl-D>
--- > Bool
--- > 
--- > False
---
--- Type:
---
--- > ──────────────────────────
--- > Γ ⊢ Bool/not : Bool → Bool
-
--- $listAll
---
--- Example:
---
--- > $ dhall
--- > let List/all = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/all
--- > in  List/all Natural Natural/even ([+2, +3, +5] : List Natural)
--- > <Ctrl-D>
--- > Bool
--- > 
--- > False
---
--- Type:
---
--- > ───────────────────────────────────────────────────────
--- > Γ ⊢ List/all : ∀(a : Type) → (a → Bool) → List a → Bool
-
--- $listAny
---
--- Example:
---
--- > $ dhall
--- > let List/any = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/any
--- > in  List/any Natural Natural/even ([+2, +3, +5] : List Natural)
--- > <Ctrl-D>
--- > Bool
--- > 
--- > True
---
--- Type:
---
--- > ───────────────────────────────────────────────────────
--- > Γ ⊢ List/any : ∀(a : Type) → (a → Bool) → List a → Bool
-
--- $listConcat
---
--- Example:
---
--- > let List/concat = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concat
--- > in  List/concat Integer ([[1, 2, 3] : List Integer, [4, 5, 6] : List Integer] : List (List Integer))
--- > <Ctrl-D>
--- > List Integer
--- > 
--- > [1, 2, 3, 4, 5, 6] : List Integer
---
--- Type:
---
--- > ──────────────────────────────────────────────────────
--- > Γ ⊢ List/concat : ∀(a : Type) → List (List a) → List a
-
--- $listConcatMap
---
--- Example:
---
--- > $ dhall
--- > let List/concatMap = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/concatMap
--- > in  List/concatMap Text Text (λ(x : Text) → [x, x] : List Text) (["ABC", "DEF"] : List Text)
--- > <Ctrl-D>
--- > List Text
--- > 
--- > ["ABC", "ABC", "DEF", "DEF"] : List Text
---
--- Type:
---
--- > ───────────────────────────────────────────────────────────────────────────────
--- > Γ ⊢ List/concatMap : ∀(a : Type) → ∀(b : Type) → (a → List b) → List a → List b
-
--- $listFilter
---
--- Example:
---
--- > let List/filter = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/filter
--- > in  List/filter Natural Natural/even ([+2, +3, +5] : List Natural)
--- > <Ctrl-D>
--- > List Natural
--- > 
--- > [+2] : List Natural
---
--- Type:
---
--- > ────────────────────────────────────────────────────────────
--- > Γ ⊢ List/filter : ∀(a : Type) → (a → Bool) → List a → List a
-
--- $listGenerate
---
--- Example:
---
--- > $ dhall
--- > let List/generate = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/generate
--- > in  List/generate +10 Bool Natural/even
--- > <Ctrl-D>
--- > List Bool
--- > 
--- > [True, False, True, False, True, False, True, False, True, False] : List Bool
---
--- Type:
---
--- > ──────────────────────────────────────────────────────────────────
--- > Γ ⊢ List/generate : Natural → ∀(a : Type) → (Natural → a) → List a
-
--- $listIterate
---
--- Example:
---
--- > let List/iterate = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/iterate
--- > in  List/iterate +10 Natural (λ(x : Natural) → x * +2) +1
--- > <Ctrl-D>
--- > List Natural
--- > 
--- > [+1, +2, +4, +8, +16, +32, +64, +128, +256, +512] : List Natural
---
--- Type:
---
--- > ───────────────────────────────────────────────────────────────
--- > Γ ⊢ List/iterate : Natural → ∀(a : Type) → (a → a) → a → List a
-
--- $listMap
---
--- Example:
---
--- > $ dhall
--- > let List/map = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/map
--- > in  List/map Natural Bool Natural/even ([+2, +3, +5] : List Natural)
--- > <Ctrl-D>
--- > List Bool
--- > 
--- > [True, False, False] : List Bool
---
--- Type:
---
--- > ────────────────────────────────────────────────────────────────────
--- > Γ ⊢ List/map : ∀(a : Type) → ∀(b : Type) → (a → b) → List a → List b
-
--- $listNull
---
--- Example:
---
--- > $ dhall
--- > let List/null = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/null
--- > in  List/null Integer ([1, 2, 3] : List Integer)
--- > <Ctrl-D>
--- > Bool
--- > 
--- > False
---
--- Type:
---
--- > ───────────────────────────────────────────
--- > Γ ⊢ List/null : ∀(a : Type) → List a → Bool
-
--- $listReplicate
---
--- Example:
---
--- > $ dhall
--- > let List/replicate = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/replicate
--- > in  List/replicate +10 Text "ABC"
--- > <Ctrl-D>
--- > List Text
--- > 
--- > ["ABC", "ABC", "ABC", "ABC", "ABC", "ABC", "ABC", "ABC", "ABC", "ABC"] : List Text
---
--- Type:
---
--- > ───────────────────────────────────────────────────────
--- > Γ ⊢ List/replicate : Natural → ∀(a : Type) → a → List a
-
--- $listShifted
---
--- Example:
---
--- > $ dhall
--- >     let List/shifted = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/shifted
--- > in  let lists =
--- >         [   [   { index = +0, value = True  }
--- >             ,   { index = +1, value = False }
--- >             ,   { index = +2, value = True  }
--- >             ]   : List { index : Natural, value : Bool }
--- >         ,   [   { index = +0, value = False }
--- >             ,   { index = +1, value = False }
--- >             ]   : List { index : Natural, value : Bool }
--- >         ,   [   { index = +0, value = False }
--- >             ,   { index = +1, value = False }
--- >             ,   { index = +2, value = True  }
--- >             ,   { index = +3, value = True  }
--- >             ]   :   List { index : Natural, value : Bool }
--- >         ]   :   List (List { index : Natural, value : Bool })
--- > in  List/shifted Bool lists
--- > <Ctrl-D>
--- > List { index : Natural, value : Bool }
--- > 
--- > [{ index = +0, value = True }, { index = +1, value = False }, { index = +2, value = True }, { index = +3, value = False }, { index = +4, value = False }, { index = +5, value = False }, { index = +6, value = False }, { index = +7, value = True }, { index = +8, value = True }] : List { index : Natural, value : Bool }
---
--- Type:
---
--- > ──────────────────────────────────────────────────────────────────────────
--- > Γ ⊢ List/shifted : ∀(a : Type) → List (List { index : Natural, value : a}) → List { index : Natural, value : a }
-
--- $listUnzip
---
--- Example:
---
--- > $ dhall
--- > let List/unzip = https://ipfs.io/ipfs/QmQdY4yX8EEdrSrKc52gMCM2AA2BUrvp1fzHu7oWVM51Xd/Prelude/List/unzip
--- > in  List/unzip Text Bool ([ { _1 = "ABC", _2 = True }, { _1 = "DEF", _2 = False } ] : List { _1 : Text, _2 : Bool })
--- > { _1 : List Text, _2 : List Bool }
--- > 
--- > { _1 = ["ABC", "DEF"] : List Text, _2 = [True, False] : List Bool }
---
--- Type:
---
--- > ───────────────────────────────────────────────────────────────────────────────────────────────────
--- > Γ ⊢ List/unzip : ∀(a : Type) → ∀(b : Type) → List { _1 : a, _2 : b } → { _1 : List a, _2 : List b }
-
--- $monoid
---
--- Type:
---
--- > ───────────────────────────────
--- > Γ ⊢ Monoid : ∀(m : Type) → Type
+-- <https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude>
