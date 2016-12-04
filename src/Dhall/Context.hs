@@ -2,7 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveFunctor              #-}
 
--- | All `Context`-related operations
+-- | This is a utility module that consolidates all `Context`-related operations
 
 module Dhall.Context (
     -- * Context
@@ -25,8 +25,8 @@ import Prelude hiding (lookup)
     * You consume a `Context` using `lookup` and `toList`
 
     The difference between a `Context` and a `Map` is that a `Context` lets you
-    have multiple occurrences of the same key and you can query for the @n@th
-    occurrence of a given key.
+    have multiple ordered occurrences of the same key and you can query for the
+    @n@th occurrence of a given key.
 -}
 newtype Context a = Context { getContext :: [(Text, a)] }
     deriving (Functor)
