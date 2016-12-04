@@ -125,7 +125,7 @@ module Dhall.Tutorial (
     -- *** @List/reversed@
     -- $listReversed
 
-    -- *** @Optional@
+    -- ** @Optional@
     -- $optional
 
     -- *** @Optional/fold@
