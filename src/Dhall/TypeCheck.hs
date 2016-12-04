@@ -5,6 +5,8 @@
 {-# LANGUAGE RecordWildCards    #-}
 {-# OPTIONS_GHC -Wall #-}
 
+-- | This module contains the logic for type checking Dhall code
+
 module Dhall.TypeCheck (
     -- * Type-checking
       typeWith
@@ -2842,6 +2844,9 @@ instance Buildable s => Buildable (TypeError s) where
             Note s _ -> build s
             _        -> mempty
 
+{-| Newtype used to wrap error messages so that they render with a more
+    detailed explanation of what went wrong
+-}
 newtype DetailedTypeError s = DetailedTypeError (TypeError s)
     deriving (Typeable)
 

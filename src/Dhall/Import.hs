@@ -194,6 +194,7 @@ instance Show e => Show (Imported e) where
         -- Canonicalize all paths
         paths' = zip [0..] (drop 1 (reverse (canonicalizeAll paths)))
 
+-- | Newtype used to wrap `HttpException`s with a prettier `Show` instance
 newtype PrettyHttpException = PrettyHttpException HttpException
     deriving (Typeable)
 
@@ -216,6 +217,7 @@ instance Show PrettyHttpException where
         e' ->   "\n"
             <>  show e'
 
+-- | Exception thrown when an imported file is missing
 data MissingFile = MissingFile
     deriving (Typeable)
 
@@ -369,10 +371,11 @@ exprFromFile path = do
   where
     parser = unParser (do
         Text.Parser.Token.whiteSpace
-        r <- Dhall.Parser.exprA
+        r <- Dhall.Parser.expr
         Text.Parser.Combinators.eof
         return r )
 
+-- | Parse an expression from a URL hosting a Dhall program
 exprFromURL :: Manager -> Text -> IO (Expr Src Path)
 exprFromURL m url = do
     request <- HTTP.parseUrlThrow (Text.unpack url)
@@ -418,7 +421,7 @@ exprFromURL m url = do
   where
     parser = unParser (do
         Text.Parser.Token.whiteSpace
-        r <- Dhall.Parser.exprA
+        r <- Dhall.Parser.expr
         Text.Parser.Combinators.eof
         return r )
 

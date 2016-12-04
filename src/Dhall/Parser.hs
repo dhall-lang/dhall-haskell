@@ -2,12 +2,14 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 
+-- | This module contains Dhall's parsing logic
+
 module Dhall.Parser (
     -- * Utilities
       exprFromText
 
     -- * Parsers
-    , exprA
+    , expr
 
     -- * Types
     , Src(..)
@@ -62,6 +64,7 @@ import qualified Text.Trifecta
 import qualified Text.Trifecta.Combinators
 import qualified Text.Trifecta.Delta
 
+-- | Source code extract
 data Src = Src Delta Delta ByteString deriving (Show)
 
 instance Buildable Src where
@@ -75,6 +78,10 @@ instance Buildable Src where
 
         text = Data.Text.Lazy.strip (Data.Text.Lazy.Encoding.decodeUtf8 bytes')
 
+{-| A `Parser` that is almost identical to
+    @"Text.Trifecta".`Text.Trifecta.Parser`@ except treating Haskell-style
+    comments as whitespace
+-}
 newtype Parser a = Parser { unParser :: Text.Trifecta.Parser a }
     deriving
     (   Functor
@@ -194,6 +201,10 @@ combine = symbol "/\\" <|> symbol "∧"
 
 label :: Parser Text
 label = Text.Parser.Token.ident identifierStyle <?> "label"
+
+-- | Parser for a top-level Dhall expression
+expr :: Parser (Expr Src Path)
+expr = exprA
 
 exprA :: Parser (Expr Src Path)
 exprA = do

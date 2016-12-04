@@ -1282,6 +1282,9 @@ normalize e = case e of
 
     text = "normalize (" <> Data.Text.pack (show e'') <> ")"
 
+{-| Utility function used to throw internal errors that should never happen
+    (in theory) but that are not enforced by the type system
+-}
 internalError :: Data.Text.Text -> forall b . b
 internalError text = error (Data.Text.unpack [NeatInterpolation.text|
 Error: Compiler bug
