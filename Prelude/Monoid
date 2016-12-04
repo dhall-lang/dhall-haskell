@@ -16,6 +16,10 @@ Examples:
     : ./Monoid Bool
 ./Bool/or
     : ./Monoid Bool
+./Bool/even
+    : ./Monoid Bool
+./Bool/odd
+    : ./Monoid Bool
 ./List/concat
     : ∀(a : Type) → ./Monoid (List a)
 ./List/shifted
