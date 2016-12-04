@@ -93,7 +93,7 @@ input
 input (Type {..}) text = do
     let delta = Directed "(input)" 0 0 0 0
     expr     <- throws (Dhall.Parser.exprFromText delta text)
-    expr'    <- Dhall.Import.load Nothing expr
+    expr'    <- Dhall.Import.load expr
     let suffix =
             ( Data.ByteString.Lazy.toStrict
             . Data.Text.Lazy.Encoding.encodeUtf8

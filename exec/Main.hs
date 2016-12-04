@@ -72,7 +72,7 @@ main = do
             Left  err  -> Control.Exception.throwIO err
             Right expr -> return expr
 
-        expr' <- load Nothing expr
+        expr' <- load expr
 
         typeExpr <- case Dhall.TypeCheck.typeOf expr' of
             Left  err      -> Control.Exception.throwIO err

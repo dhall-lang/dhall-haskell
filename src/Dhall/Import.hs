@@ -8,48 +8,40 @@
 
     To import a local file as an expression, just insert the path to the file,
     prepending a @./@ if the path is relative to the current directory.  For
-    example, suppose we had the following three local files:
+    example, if you create a file named @id@ with the following contents:
 
-    > -- id
-    > \(a : *) -> \(x : a) -> x
+    > $ cat id
+    > λ(a : Type) → λ(x : a) → x
 
-    > -- Bool
-    > forall (Bool : *) -> forall (True : Bool) -> forall (False : Bool) -> Bool
+    Then you can use the file directly within a @dhall@ program just by
+    referencing the file's path:
 
-    > -- True
-    > \(Bool : *) -> \(True : Bool) -> \(False : Bool) -> True
-
-    You could then reference them within a Dhall expression using this syntax:
-
-    > ./id ./Bool ./True
-
-    ... which would embed their expressions directly within the syntax tree:
-
-    > -- ... expands out to:
-    > (\(a : *) -> \(x : a) -> x)
-    >     (forall (Bool : *) -> forall (True : Bool) -> forall (False : Bool) -> True)
-    >     (\(Bool : *) -> \(True : Bool) -> \(False : Bool) -> True)
-
-    ... and which normalizes to:
-
-    > λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → True
+    > $ dhall
+    > ./id Bool True
+    > <Ctrl-D>
+    > Bool
+    > 
+    > True
 
     Imported expressions may contain imports of their own, too, which will
     continue to be resolved.  However, Dhall will prevent cyclic imports.  For
     example, if you had these two files:
 
-    > -- foo
+    > $ cat foo
     > ./bar
 
-    > -- bar
+    > $ cat bar
     > ./foo
 
     ... Dhall would throw the following exception if you tried to import @foo@:
 
-    > dhall: 
-    > ⤷ ./foo
-    > ⤷ ./bar
-    > Cyclic import: ./foo
+    > $ dhall
+    > ./foo
+    > ^D
+    > ↳ ./foo 
+    >   ↳ ./bar 
+    > 
+    > Cyclic import: ./foo 
 
     You can also import expressions hosted on network endpoints.  Just use the
     URL
@@ -110,7 +102,6 @@ import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.ByteString.Lazy
-import qualified Data.Foldable                    as Foldable
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Lazy                   as Text
@@ -506,11 +497,9 @@ loadStatic path = do
     the starting path with a file if you read in the expression from that file
 -}
 load
-    :: Maybe Path
-    -- ^ Starting path
-    -> Expr Src Path
+    :: Expr Src Path
     -- ^ Expression to resolve
     -> IO (Expr Src X)
-load here expr = State.evalStateT (fmap join (traverse loadStatic expr)) status
+load expr = State.evalStateT (fmap join (traverse loadStatic expr)) status
   where
-    status = Status (Foldable.toList here) Map.empty Nothing
+    status = Status [] Map.empty Nothing
