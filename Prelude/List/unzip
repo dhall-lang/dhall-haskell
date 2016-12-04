@@ -1,5 +1,5 @@
 {-
-Unzip a list into two separate lists
+Unzip a `List` into two separate `List`s
 
 Examples:
 

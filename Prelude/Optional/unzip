@@ -1,0 +1,41 @@
+{-
+Unzip an `Optional` value into two separate `Optional` values
+
+Examples:
+
+```
+./unzip
+Text
+Bool
+([{ _1 = "ABC", _2 = True  }] : Optional { _1 : Text, _2 : Bool })
+= { _1 = ["ABC"] : Optional Text, _2 = [True] : Optional Bool }
+
+./unzip Text Bool ([] : Optional { _1 : Text, _2 : Bool })
+= { _1 = [] : Optional Text, _2 = [] : Optional Bool }
+```
+-}
+let unzip
+    :   ∀(a : Type)
+    →   ∀(b : Type)
+    →   Optional { _1 : a, _2 : b }
+    →   { _1 : Optional a, _2 : Optional b }
+    =   λ(a : Type)
+    →   λ(b : Type)
+    →   λ(xs : Optional { _1 : a, _2 : b })
+    →   { _1 =
+            Optional/fold
+            { _1 : a, _2 : b }
+            xs
+            (Optional a)
+            (λ(x : { _1 : a, _2 : b }) → [x._1] : Optional a)
+            ([] : Optional a)
+        , _2 =
+            Optional/fold
+            { _1 : a, _2 : b }
+            xs
+            (Optional b)
+            (λ(x : { _1 : a, _2 : b }) → [x._2] : Optional b)
+            ([] : Optional b)
+        }
+
+in  unzip
