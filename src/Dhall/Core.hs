@@ -241,8 +241,8 @@ data Expr s a
     | ListLast
     -- | > ListIndexed                              ~  List/indexed
     | ListIndexed
-    -- | > ListReversed                             ~  List/reversed
-    | ListReversed
+    -- | > ListReverse                              ~  List/reverse
+    | ListReverse
     -- | > Optional                                 ~  Optional
     | Optional
     -- | > OptionalLit t [e]                        ~  [e] : Optional t
@@ -316,7 +316,7 @@ instance Monad (Expr s) where
     ListHead          >>= _ = ListHead
     ListLast          >>= _ = ListLast
     ListIndexed       >>= _ = ListIndexed
-    ListReversed      >>= _ = ListReversed
+    ListReverse       >>= _ = ListReverse
     Optional          >>= _ = Optional
     OptionalLit t es  >>= k = OptionalLit (t >>= k) (fmap (>>= k) es)
     OptionalFold      >>= _ = OptionalFold
@@ -369,7 +369,7 @@ instance Bifunctor Expr where
     first _  ListHead          = ListHead
     first _  ListLast          = ListLast
     first _  ListIndexed       = ListIndexed
-    first _  ListReversed      = ListReversed
+    first _  ListReverse       = ListReverse
     first _  Optional          = Optional
     first k (OptionalLit a b ) = OptionalLit (first k a) (fmap (first k) b)
     first _  OptionalFold      = OptionalFold
@@ -554,8 +554,8 @@ buildExpr6 ListLast =
     "List/last"
 buildExpr6 ListIndexed =
     "List/indexed"
-buildExpr6 ListReversed =
-    "List/reversed"
+buildExpr6 ListReverse =
+    "List/reverse"
 buildExpr6 Optional =
     "Optional"
 buildExpr6 OptionalFold =
@@ -835,7 +835,7 @@ shift _ _ ListLength = ListLength
 shift _ _ ListHead = ListHead
 shift _ _ ListLast = ListLast
 shift _ _ ListIndexed = ListIndexed
-shift _ _ ListReversed = ListReversed
+shift _ _ ListReverse = ListReverse
 shift _ _ Optional = Optional
 shift d v (OptionalLit a b) = OptionalLit a' b'
   where
@@ -966,7 +966,7 @@ subst _ _ ListLength = ListLength
 subst _ _ ListHead = ListHead
 subst _ _ ListLast = ListLast
 subst _ _ ListIndexed = ListIndexed
-subst _ _ ListReversed = ListReversed
+subst _ _ ListReverse = ListReverse
 subst _ _ Optional = Optional
 subst x e (OptionalLit a b) = OptionalLit a' b'
   where
@@ -1101,7 +1101,7 @@ normalize e = case e of
                     kvs = [ ("index", NaturalLit (fromIntegral n))
                           , ("value", x)
                           ]
-            App (App ListReversed _) (ListLit t xs) ->
+            App (App ListReverse _) (ListLit t xs) ->
                 normalize (ListLit t (Data.Vector.reverse xs))
             App (App (App (App (App OptionalFold _) (OptionalLit _ xs)) _) just) nothing ->
                 normalize (maybe nothing just' (toMaybe xs))
@@ -1220,7 +1220,7 @@ normalize e = case e of
     ListHead -> ListHead
     ListLast -> ListLast
     ListIndexed -> ListIndexed
-    ListReversed -> ListReversed
+    ListReverse -> ListReverse
     Optional -> Optional
     OptionalLit t es -> OptionalLit t' es'
       where

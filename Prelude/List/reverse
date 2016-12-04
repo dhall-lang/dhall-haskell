@@ -1,0 +1,15 @@
+{-
+Reverse a list
+
+Examples:
+
+```
+./reverse Integer ([0, 1, 2] : List Integer) = [2, 1, 0] : List Integer
+
+./reverse Integer ([] : List Integer) = [] : List Integer
+```
+-}
+let reverse : ∀(a : Type) → List a → List a
+    =   List/reverse
+
+in  reverse

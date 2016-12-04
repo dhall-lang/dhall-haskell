@@ -122,8 +122,8 @@ module Dhall.Tutorial (
     -- *** @List/indexed@
     -- $listIndexed
 
-    -- *** @List/reversed@
-    -- $listReversed
+    -- *** @List/reverse@
+    -- $listReverse
 
     -- ** @Optional@
     -- $optional
@@ -901,29 +901,29 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > True
 --
 -- Built-in functions can also be polymorphic, too.  For example, we can ask
--- the compiler for the type of @List/reversed@, the function that reverses a
+-- the compiler for the type of @List/reverse@, the function that reverses a
 -- list:
 --
 -- > $ dhall
--- > List/reversed
+-- > List/reverse
 -- > <Ctrl-D>
 -- > ∀(a : Type) → List a → List a
 -- > 
--- > List/reversed
+-- > List/reverse
 --
--- The first argument to @List/reversed@ is the type of the list to reverse:
+-- The first argument to @List/reverse@ is the type of the list to reverse:
 --
 -- > $ dhall
--- > List/reversed Bool
+-- > List/reverse Bool
 -- > <Ctrl-D>
 -- > List Bool → List Bool
 -- > 
--- > List/reversed Bool
+-- > List/reverse Bool
 --
 -- ... and the second argument is the list to reverse:
 --
 -- > $ dhall
--- > List/reversed Bool ([True, False] : List Bool)
+-- > List/reverse Bool ([True, False] : List Bool)
 -- > <Ctrl-D>
 -- > List Bool
 -- > 
@@ -1676,12 +1676,12 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > List/indexed a (List/concat a xss) =
 -- >     List/shifted a (List/map (List a) (List { index : Natural, value : a }) (List/indexed a) xss)
 
--- $listReversed
+-- $listReverse
 --
 -- Example:
 --
 -- > $ dhall
--- > List/reversed Integer ([1, 2, 3] : List Integer)
+-- > List/reverse Integer ([1, 2, 3] : List Integer)
 -- > <Ctrl-D>
 -- > List Integer
 -- > 
@@ -1690,7 +1690,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Type:
 --
 -- > ─────────────────────────────────────────────────
--- > Γ ⊢ List/reversed : ∀(a : Type) → List a → List a
+-- > Γ ⊢ List/reverse : ∀(a : Type) → List a → List a
 --
 -- Rules:
 --
@@ -1698,15 +1698,15 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > let List/concat    = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concat
 -- > let List/concatMap = https://ipfs.io/ipfs/QmfQbRCNC8An7KB17ReNYhNaA5CJngb3qKubWCo1A25Ub1/Prelude/List/concatMap
 -- > 
--- > List/reversed a (List/concat a xss)
--- >     = List/concat a (List/reversed (List a) (List/map (List a) (List a) (List/reversed a) xss))
+-- > List/reverse a (List/concat a xss)
+-- >     = List/concat a (List/reverse (List a) (List/map (List a) (List a) (List/reverse a) xss))
 -- >
--- > List/reversed a ([x] : List a) = [x] : List a
+-- > List/reverse a ([x] : List a) = [x] : List a
 -- >
--- > List/reversed b (List/concatMap a b f xs)
--- >     = List/concatMap a b (λ(x : a) → List/reversed b (f x)) (List/reversed a xs)
+-- > List/reverse b (List/concatMap a b f xs)
+-- >     = List/concatMap a b (λ(x : a) → List/reverse b (f x)) (List/reverse a xs)
 -- >
--- > List/reversed a ([x, y] : List a) = [y, x] : List a
+-- > List/reverse a ([x, y] : List a) = [y, x] : List a
 
 -- $optional
 --
@@ -1866,7 +1866,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > │   ├── map
 -- > │   ├── null
 -- > │   ├── replicate
--- > │   ├── reversed
+-- > │   ├── reverse
 -- > │   ├── shifted
 -- > │   └── unzip
 -- > ├── Monoid

@@ -141,7 +141,7 @@ identifierStyle = IdentifierStyle
         , "List/head"
         , "List/last"
         , "List/indexed"
-        , "List/reversed"
+        , "List/reverse"
         , "Optional"
         , "Optional/fold"
         ]
@@ -457,8 +457,8 @@ exprF = choice
         return ListIndexed
 
     exprF18 = do
-        reserve "List/reversed"
-        return ListReversed
+        reserve "List/reverse"
+        return ListReverse
 
     exprF19 = do
         reserve "Optional"
