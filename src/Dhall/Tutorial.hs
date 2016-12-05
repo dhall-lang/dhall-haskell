@@ -151,11 +151,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- that you create the following configuration file:
 -- 
 -- > $ cat ./config
--- > < Example =
--- >     { foo = 1
--- >     , bar = [3.0, 4.0, 5.0] : List Double
--- >     }
--- > >
+-- > { foo = 1
+-- > , bar = [3.0, 4.0, 5.0] : List Double
+-- > }
 -- 
 -- You can read the above configuration file into Haskell using the following
 -- code:
@@ -366,11 +364,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- configuration file into multiple files, like this:
 --
 -- > $ cat > ./config <<EOF
--- > < Example =
--- >   { foo = 1
--- >   , bar = ./bar
--- >   }
--- > >
+-- > { foo = 1
+-- > , bar = ./bar
+-- > }
 -- > EOF
 --
 -- > $ echo "[ 3.0, 4.0, 5.0 ] : List Double" > ./bar

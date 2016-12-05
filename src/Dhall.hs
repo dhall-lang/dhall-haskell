@@ -390,7 +390,64 @@ instance GenericInterpret V1 where
 
         expected = Union Data.Map.empty
 
-instance (GenericInterpret f, GenericInterpret g) => GenericInterpret (f :+: g) where
+instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret f2) => GenericInterpret (M1 C c1 f1 :+: M1 C c2 f2) where
+    genericAuto = Type {..}
+      where
+        nL :: M1 i c1 f1 a
+        nL = undefined
+
+        nR :: M1 i c2 f2 a
+        nR = undefined
+
+        nameL = Data.Text.Lazy.pack (conName nL)
+        nameR = Data.Text.Lazy.pack (conName nR)
+
+        extract (UnionLit name e _)
+            | name == nameL = fmap (L1 . M1) (extractL e)
+            | name == nameR = fmap (R1 . M1) (extractR e)
+            | otherwise     = Nothing
+
+        expected =
+            Union (Data.Map.fromList [(nameL, expectedL), (nameR, expectedR)])
+
+        Type extractL expectedL = genericAuto
+        Type extractR expectedR = genericAuto
+
+instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => GenericInterpret ((f :+: g) :+: M1 C c h) where
+    genericAuto = Type {..}
+      where
+        n :: M1 i c h a
+        n = undefined
+
+        name = Data.Text.Lazy.pack (conName n)
+
+        extract u@(UnionLit name' e _)
+            | name == name' = fmap (R1 . M1) (extractR e)
+            | otherwise     = fmap  L1       (extractL u)
+
+        expected = Union (Data.Map.insert name expectedR expectedL)
+
+        Type extractL (Union expectedL) = genericAuto
+        Type extractR        expectedR  = genericAuto
+
+instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => GenericInterpret (M1 C c f :+: (g :+: h)) where
+    genericAuto = Type {..}
+      where
+        n :: M1 i c f a
+        n = undefined
+
+        name = Data.Text.Lazy.pack (conName n)
+
+        extract u@(UnionLit name' e _)
+            | name == name' = fmap (L1 . M1) (extractL e)
+            | otherwise     = fmap  R1       (extractR u)
+
+        expected = Union (Data.Map.insert name expectedL expectedR)
+
+        Type extractL        expectedL  = genericAuto
+        Type extractR (Union expectedR) = genericAuto
+
+instance (GenericInterpret (f :+: g), GenericInterpret (h :+: i)) => GenericInterpret ((f :+: g) :+: (h :+: i)) where
     genericAuto = Type {..}
       where
         extract e = fmap L1 (extractL e) <|> fmap R1 (extractR e)
@@ -400,21 +457,8 @@ instance (GenericInterpret f, GenericInterpret g) => GenericInterpret (f :+: g) 
         Type extractL (Union expectedL) = genericAuto
         Type extractR (Union expectedR) = genericAuto
 
-instance (Constructor c, GenericInterpret f) => GenericInterpret (M1 C c f) where
-    genericAuto = Type {..}
-      where
-        n :: M1 i c f a
-        n = undefined
-
-        name = Data.Text.Lazy.pack (conName n)
-
-        extract (UnionLit name' e _)
-            | name == name' = fmap M1 (extract' e)
-            | otherwise     = Nothing
-
-        expected = Union (Data.Map.singleton name expected')
-
-        Type extract' expected' = genericAuto
+instance GenericInterpret f => GenericInterpret (M1 C c f) where
+    genericAuto = fmap M1 genericAuto
 
 instance GenericInterpret U1 where
     genericAuto = Type {..}
