@@ -88,6 +88,7 @@ False
 
 Now go read the
 [Dhall tutorial](https://hackage.haskell.org/package/dhall-1.0.1/docs/Dhall-Tutorial.html)
+to learn more
 
 ## Design philosophy
 
