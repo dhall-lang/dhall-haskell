@@ -36,10 +36,6 @@ main = do
     print (x :: Example)
 ```
 
-```bash
-$ stack install dhall
-```
-
 ... which reads in this configuration file:
 
 ```bash
