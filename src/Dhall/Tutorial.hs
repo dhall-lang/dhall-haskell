@@ -62,7 +62,7 @@ module Dhall.Tutorial (
     -- *** @(==)@
     -- $equal
 
-    -- *** @(/=)@
+    -- *** @(!=)@
     -- $unequal
 
     -- *** @if@\/@then@\/@else@
@@ -1222,7 +1222,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- shuffled around but not used in any meaningful way until they have been
 -- loaded into Haskell.
 --
--- Second, the equality @(==)@ and inequality @(/=)@ operators only work on
+-- Second, the equality @(==)@ and inequality @(!=)@ operators only work on
 -- @Bool@s.  You cannot test any other types of values for equality.
 
 -- $builtinOverview
@@ -1534,7 +1534,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- Rules:
 --
--- > Natural/odd (x + y) = Natural/odd x /= Natural/odd y
+-- > Natural/odd (x + y) = Natural/odd x != Natural/odd y
 -- >
 -- > Natural/odd +0 = False
 -- >
