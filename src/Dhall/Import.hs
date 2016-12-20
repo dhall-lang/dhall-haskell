@@ -95,7 +95,11 @@ import Lens.Micro.Mtl (zoom)
 import Dhall.Core (Expr, Path(..))
 import Dhall.Parser (Parser(..), ParseError(..), Src)
 import Dhall.TypeCheck (X(..))
+#if MIN_VERSION_http_client(0,5,0)
 import Network.HTTP.Client (HttpException(..), HttpExceptionContent(..), Manager)
+#else
+import Network.HTTP.Client (HttpException(..), Manager)
+#endif
 import Prelude hiding (FilePath)
 import Text.Trifecta (Result(..))
 import Text.Trifecta.Delta (Delta(..))
@@ -191,6 +195,7 @@ newtype PrettyHttpException = PrettyHttpException HttpException
 
 instance Exception PrettyHttpException
 
+#if MIN_VERSION_http_client(0,5,0)
 instance Show PrettyHttpException where
   show (PrettyHttpException (InvalidUrlException _ r)) =
     "\n"
@@ -211,6 +216,24 @@ instance Show PrettyHttpException where
     ResponseTimeout ->
       "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
     e' -> "\n" <> show e'
+#else
+instance Show PrettyHttpException where
+    show (PrettyHttpException e) = case e of
+        FailedConnectionException2 _ _ _ e' ->
+                "\n"
+            <>  "\ESC[1;31mError\ESC[0m: Wrong host\n"
+            <>  "\n"
+            <>  "↳ " <> show e'
+        InvalidDestinationHost host ->
+                "\n"
+            <>  "\ESC[1;31mError\ESC[0m: Invalid host name\n"
+            <>  "\n"
+            <>  "↳ " <> show host
+        ResponseTimeout ->
+                "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
+        e' ->   "\n"
+            <> show e'
+#endif
 
 -- | Exception thrown when an imported file is missing
 data MissingFile = MissingFile
@@ -248,7 +271,11 @@ needManager = do
         Just m  -> return m
         Nothing -> do
             let settings = HTTP.tlsManagerSettings
+#if MIN_VERSION_http_client(0,5,0)
                     { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro 1000000 }  -- 1 second
+#else
+                    { HTTP.managerResponseTimeout = Just 1000000 }  -- 1 second
+#endif
             m <- liftIO (HTTP.newManager settings)
             zoom manager (State.put (Just m))
             return m
@@ -376,7 +403,11 @@ exprFromURL m url = do
     request <- HTTP.parseUrlThrow (Text.unpack url)
 
     let handler :: HTTP.HttpException -> IO (HTTP.Response ByteString)
+#if MIN_VERSION_http_client(0,5,0)
         handler err@(HttpExceptionRequest _ (StatusCodeException _ _)) = do
+#else
+        handler err@(StatusCodeException _ _ _) = do
+#endif
             let request' = request { HTTP.path = HTTP.path request <> "/@" }
             -- If the fallback fails, reuse the original exception to avoid user
             -- confusion
