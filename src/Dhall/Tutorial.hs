@@ -251,7 +251,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > import Dhall
 -- > 
--- > data Person = Person { age :: Natural, name :: Text }
+-- > data Person = Person { age :: Integer, name :: Text }
 -- >     deriving (Generic, Show)
 -- > 
 -- > instance Interpret Person
