@@ -20,7 +20,7 @@
     > ./id Bool True
     > <Ctrl-D>
     > Bool
-    > 
+    >
     > True
 
     Imported expressions may contain imports of their own, too, which will
@@ -38,17 +38,17 @@
     > $ dhall
     > ./foo
     > ^D
-    > ↳ ./foo 
-    >   ↳ ./bar 
-    > 
-    > Cyclic import: ./foo 
+    > ↳ ./foo
+    >   ↳ ./bar
+    >
+    > Cyclic import: ./foo
 
     You can also import expressions hosted on network endpoints.  Just use the
     URL
 
     > http://host[:port]/path
 
-    The compiler expects the downloaded expressions to be in the same format 
+    The compiler expects the downloaded expressions to be in the same format
     as local files, specifically UTF8-encoded source code text.
 
     For example, if our @id@ expression were hosted at @http://example.com/id@,
@@ -95,7 +95,7 @@ import Lens.Micro.Mtl (zoom)
 import Dhall.Core (Expr, Path(..))
 import Dhall.Parser (Parser(..), ParseError(..), Src)
 import Dhall.TypeCheck (X(..))
-import Network.HTTP.Client (HttpException(..), Manager)
+import Network.HTTP.Client (HttpException(..), HttpExceptionContent(..), Manager)
 import Prelude hiding (FilePath)
 import Text.Trifecta (Result(..))
 import Text.Trifecta.Delta (Delta(..))
@@ -192,21 +192,25 @@ newtype PrettyHttpException = PrettyHttpException HttpException
 instance Exception PrettyHttpException
 
 instance Show PrettyHttpException where
-    show (PrettyHttpException e) = case e of
-        FailedConnectionException2 _ _ _ e' ->
-                "\n"
-            <>  "\ESC[1;31mError\ESC[0m: Wrong host\n"
-            <>  "\n"
-            <>  "↳ " <> show e'
-        InvalidDestinationHost host ->
-                "\n"
-            <>  "\ESC[1;31mError\ESC[0m: Invalid host name\n"
-            <>  "\n"
-            <>  "↳ " <> show host
-        ResponseTimeout ->
-                "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
-        e' ->   "\n"
-            <>  show e'
+  show (PrettyHttpException (InvalidUrlException _ r)) =
+    "\n"
+    <>  "\ESC[1;31mError\ESC[0m: Invalid URL\n"
+    <>  "\n"
+    <>  "↳ " <> show r
+  show (PrettyHttpException (HttpExceptionRequest _ e)) = case e of
+    ConnectionFailure e' ->
+      "\n"
+      <>  "\ESC[1;31mError\ESC[0m: Wrong host\n"
+      <>  "\n"
+      <>  "↳ " <> show e'
+    InvalidDestinationHost host ->
+      "\n"
+      <>  "\ESC[1;31mError\ESC[0m: Invalid host name\n"
+      <>  "\n"
+      <>  "↳ " <> show host
+    ResponseTimeout ->
+      "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
+    e' -> "\n" <> show e'
 
 -- | Exception thrown when an imported file is missing
 data MissingFile = MissingFile
@@ -244,7 +248,7 @@ needManager = do
         Just m  -> return m
         Nothing -> do
             let settings = HTTP.tlsManagerSettings
-                    { HTTP.managerResponseTimeout = Just 1000000 }  -- 1 second
+                    { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro 1000000 }  -- 1 second
             m <- liftIO (HTTP.newManager settings)
             zoom manager (State.put (Just m))
             return m
@@ -291,7 +295,7 @@ canonicalize (File file0:paths0) =
                 url' = parentURL (removeAtFromURL url)
             Nothing    -> case Filesystem.stripPrefix "." path of
                 Just path' -> combine url path'
-                Nothing    -> 
+                Nothing    ->
                     -- This `last` is safe because the lexer constrains all
                     -- URLs to be non-empty.  I couldn't find a simple and safe
                     -- equivalent in the `text` API
@@ -372,7 +376,7 @@ exprFromURL m url = do
     request <- HTTP.parseUrlThrow (Text.unpack url)
 
     let handler :: HTTP.HttpException -> IO (HTTP.Response ByteString)
-        handler err@(HTTP.StatusCodeException _ _ _) = do
+        handler err@(HttpExceptionRequest _ (StatusCodeException _ _)) = do
             let request' = request { HTTP.path = HTTP.path request <> "/@" }
             -- If the fallback fails, reuse the original exception to avoid user
             -- confusion
