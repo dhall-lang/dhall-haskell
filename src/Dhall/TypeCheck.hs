@@ -977,6 +977,37 @@ You tried to use the following expression as a function:
 ↳ $txt1
 
 ... which is not a function type
+
+Some common reasons why you might get this error:
+
+● You tried to add two ❰Integer❱s without a space around the ❰+❱, like this:
+
+
+    ┌─────┐
+    │ 2+2 │
+    └─────┘
+
+  The above code is parsed as:
+
+    ┌────────┐
+    │ 2 (+2) │
+    └────────┘
+      ⇧
+      The compiler thinks that this ❰2❱ is a function whose argument is ❰+2❱
+
+  This is because the ❰+❱ symbol has two meanings: you use ❰+❱ to add two
+  numbers, but you also can prefix ❰Integer❱ literals with a ❰+❱ to turn them
+  into ❰Natural❱ literals (like ❰+2❱)
+
+  To fix the code, you need to put spaces around the ❰+❱ and also prefix each
+  ❰2❱ with a ❰+❱, like this:
+
+    ┌─────────┐
+    │ +2 + +2 │
+    └─────────┘
+
+  You can only add ❰Natural❱ numbers, which is why you must also change each
+  ❰2❱ to ❰+2❱
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
