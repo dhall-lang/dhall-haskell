@@ -139,6 +139,9 @@ module Dhall.Tutorial (
 
     -- * Conclusion
     -- $conclusion
+
+    -- * Frequently Asked Questions (FAQ)
+    -- $faq
     ) where
 
 import Data.Vector (Vector)
@@ -2088,3 +2091,38 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- If you would like to contribute to the Dhall project you can try to port Dhall
 -- to other languages besides Haskell so that Dhall configuration files can be
 -- read into those languages, too.
+
+-- $faq
+--
+-- * Why do lists require a type annotation?
+--
+-- Dhall requires type annotations on lists in order to gracefully deal with
+-- empty lists.  Without a type annotation the compiler would not be able to
+-- infer the type of an empty list expression:
+--
+-- > []
+--
+-- Unlike Haskell, Dhall cannot infer a polymorphic type for the empty list
+-- because Dhall represents polymorphic values as functions of types, like this:
+--
+-- > λ(a : Type) → [] : List a
+--
+-- If the compiler treated an empty list literal as syntactic short-hand for
+-- the above polymorphic function then you'd get the unexpected behavior where
+-- a list literal is a function if the list has 0 elements but not a function
+-- otherwise.
+--
+-- * Why do lists require a type annotation when using `input`, like this:
+-- 
+-- > >>> input (list bool) "[True, False] : List Bool"
+--
+-- The type annotation on a list is not a real type annotation.  Instead, the
+-- annotation on a list is part of the mandatory syntax for lists.  This is why
+-- you get a parse error instead of a type error if you omit the annotation:
+--
+-- > dhall
+-- > [1, 2]
+-- > (stdin):2:1: error: unexpected
+-- >     EOF, expected: ":"
+-- >     <EOF> 
+-- >     ^    
