@@ -25,6 +25,7 @@ module Dhall.Core (
     , normalize
     , subst
     , shift
+    , isNormalized
 
     -- * Pretty-printing
     , pretty
@@ -49,7 +50,7 @@ import Data.Traversable
 import Data.Vector (Vector)
 import Filesystem.Path.CurrentOS (FilePath)
 import Numeric.Natural (Natural)
-import Prelude hiding (FilePath)
+import Prelude hiding (FilePath, succ)
 
 import qualified Control.Monad
 import qualified Data.Map
@@ -1300,6 +1301,167 @@ normalize e = case e of
     e'' = bimap (\_ -> ()) (\_ -> ()) e
 
     text = "normalize (" <> Data.Text.pack (show e'') <> ")"
+
+-- | Quickly check if an expression is in normal form
+isNormalized :: Expr s a -> Bool
+isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
+    Const _ -> True
+    Var _ -> True
+    Lam _ a b -> isNormalized a && isNormalized b
+    Pi _ a b -> isNormalized a && isNormalized b
+    App f a -> isNormalized f && isNormalized a && case App f a of
+        App (Lam _ _ _) _ -> False
+
+        App (App ListBuild _) (App (App ListFold _) _) -> False
+        App (App ListFold _) (App (App ListBuild _) _) -> False
+
+        -- fold/build fusion for `Natural`
+        App NaturalBuild (App NaturalFold _) -> False
+        App NaturalFold (App NaturalBuild _) -> False
+
+        App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
+        App NaturalBuild k0 -> isNormalized k0 && not (check0 k0)
+          where
+            check0 (Lam _ _ (Lam succ _ (Lam zero _ k))) = check1 succ zero k
+            check0 _ = False
+
+            check1 succ zero (App (Var (V succ' n)) k) =
+                succ == succ' && n == (if succ == zero then 1 else 0) && check1 succ zero k
+            check1 _ zero (Var (V zero' 0)) = zero == zero'
+            check1 _ _ _ = False
+        App NaturalIsZero (NaturalLit _) -> False
+        App NaturalEven (NaturalLit _) -> False
+        App NaturalOdd (NaturalLit _) -> False
+        App (App ListBuild t) k0 -> isNormalized t && isNormalized k0 && not (check0 k0)
+          where
+            check0 (Lam _ _ (Lam cons _ (Lam nil _ k))) = check1 cons nil k
+            check0 _ = False
+
+            check1 cons nil (App (Var (V cons' n)) k) =
+                cons == cons' && n == (if cons == nil then 1 else 0) && check1 cons nil k
+            check1 _ nil (Var (V nil' 0)) = nil == nil'
+            check1 _ _ _ = False
+        App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _ ->
+            False
+        App (App ListLength _) (ListLit _ _) -> False
+        App (App ListHead _) (ListLit _ _) -> False
+        App (App ListLast _) (ListLit _ _) -> False
+        App (App ListIndexed _) (ListLit _ _) -> False
+        App (App ListReverse _) (ListLit _ _) -> False
+        App (App (App (App (App OptionalFold _) (OptionalLit _ _)) _) _) _ ->
+            False
+        _ -> True
+    Let _ _ _ _ -> False
+    Annot _ _ -> False
+    Bool -> True
+    BoolLit _ -> True
+    BoolAnd x y -> isNormalized x && isNormalized y &&
+        case x of
+            BoolLit _ ->
+                case y of
+                    BoolLit _ -> False
+                    _ -> True
+            _ -> True
+    BoolOr x y -> isNormalized x && isNormalized y &&
+        case x of
+            BoolLit _ ->
+                case y of
+                    BoolLit _ -> False
+                    _ -> True
+            _ -> True
+    BoolEQ x y -> isNormalized x && isNormalized y &&
+        case x of
+            BoolLit _ ->
+                case y of
+                    BoolLit _ -> False
+                    _ -> True
+            _ -> True
+    BoolNE x y -> isNormalized x && isNormalized y &&
+        case x of
+            BoolLit _ ->
+                case y of
+                    BoolLit _ -> False
+                    _ -> True
+            _ -> True
+    BoolIf b true false -> isNormalized b && case b of
+        BoolLit _ -> False
+        _         -> isNormalized true && isNormalized false
+    Natural -> True
+    NaturalLit _ -> True
+    NaturalFold -> True
+    NaturalBuild -> True
+    NaturalIsZero -> True
+    NaturalEven -> True
+    NaturalOdd -> True
+    NaturalPlus x y -> isNormalized x && isNormalized y &&
+        case x of
+            NaturalLit _ ->
+                case y of
+                    NaturalLit _ -> False
+                    _ -> True
+            _ -> True
+    NaturalTimes x y -> isNormalized x && isNormalized y &&
+        case x of
+            NaturalLit _ ->
+                case y of
+                    NaturalLit _ -> False
+                    _ -> True
+            _ -> True
+    Integer -> True
+    IntegerLit _ -> True
+    Double -> True
+    DoubleLit _ -> True
+    Text -> True
+    TextLit _ -> True
+    TextAppend x y -> isNormalized x && isNormalized y &&
+        case x of
+            TextLit _ ->
+                case y of
+                    TextLit _ -> False
+                    _ -> True
+            _ -> True
+    List -> True
+    ListLit t es -> isNormalized t && all isNormalized es
+    ListBuild -> True
+    ListFold -> True
+    ListLength -> True
+    ListHead -> True
+    ListLast -> True
+    ListIndexed -> True
+    ListReverse -> True
+    Optional -> True
+    OptionalLit t es -> isNormalized t && all isNormalized es
+    OptionalFold -> True
+    Record kts -> all isNormalized kts
+    RecordLit kvs -> all isNormalized kvs
+    Union kts -> all isNormalized kts
+    UnionLit _ v kvs -> isNormalized v && all isNormalized kvs
+    Combine x0 y0 -> isNormalized x0 && isNormalized y0 && combine x0 y0
+      where
+        combine x y = case x of
+            RecordLit _ -> case y of
+                RecordLit _ -> False
+                _ -> True
+            _ -> True
+    Merge x y t -> isNormalized x && isNormalized y && isNormalized t &&
+        case x of
+            RecordLit kvsX ->
+                case y of
+                    UnionLit kY _  _ ->
+                        case Data.Map.lookup kY kvsX of
+                            Just _  -> False
+                            Nothing -> True
+                    _ -> True
+            _ -> True
+    Field r x -> isNormalized r && 
+        case r of
+            RecordLit kvs ->
+                case Data.Map.lookup x kvs of
+                    Just _  -> False
+                    Nothing -> True
+            _ -> True
+    Note _ e' -> isNormalized e'
+    Embed _ -> True
 
 {-| Utility function used to throw internal errors that should never happen
     (in theory) but that are not enforced by the type system
