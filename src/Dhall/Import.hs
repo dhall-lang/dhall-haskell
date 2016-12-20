@@ -78,11 +78,10 @@ import Control.Exception
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
-import Data.ByteString.Lazy (ByteString)
 import Data.Map.Strict (Map)
 import Data.Monoid ((<>))
 import Data.Text.Buildable (build)
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Text.Lazy.Builder (Builder)
 #if MIN_VERSION_base(4,8,0)
 #else
@@ -108,9 +107,10 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.ByteString.Lazy
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
-import qualified Data.Text.Lazy                   as Text
+import qualified Data.Text
+import qualified Data.Text.Encoding
+import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder           as Builder
-import qualified Data.Text.Lazy.Encoding
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Filesystem
@@ -123,7 +123,7 @@ import qualified Text.Parser.Token
 import qualified Text.Trifecta
 
 builderToString :: Builder -> String
-builderToString = Text.unpack . Builder.toLazyText
+builderToString = Data.Text.Lazy.unpack . Builder.toLazyText
 
 -- | An import failed because of a cycle in the import graph
 newtype Cycle = Cycle
@@ -326,13 +326,13 @@ canonicalize (File file0:paths0) =
                     -- This `last` is safe because the lexer constrains all
                     -- URLs to be non-empty.  I couldn't find a simple and safe
                     -- equivalent in the `text` API
-                    case Text.last url of
+                    case Data.Text.last url of
                         '/' -> URL (url <>        path')
                         _   -> URL (url <> "/" <> path')
                   where
-                    path' = Text.fromStrict (case Filesystem.toText path of
+                    path' = case Filesystem.toText path of
                         Left  txt -> txt
-                        Right txt -> txt )
+                        Right txt -> txt
     go currPath (File file:paths) =
         if Filesystem.relative file
         then go          file'  paths
@@ -342,13 +342,13 @@ canonicalize (File file0:paths0) =
 canonicalize (URL path:_) = URL path
 
 parentURL :: Text -> Text
-parentURL = Text.dropWhileEnd (/= '/')
+parentURL = Data.Text.dropWhileEnd (/= '/')
 
 removeAtFromURL:: Text -> Text
 removeAtFromURL url
-    | Text.isSuffixOf "/@" url = Text.dropEnd 2 url
-    | Text.isSuffixOf "/"  url = Text.dropEnd 1 url
-    | otherwise                =                url
+    | Data.Text.isSuffixOf "/@" url = Data.Text.dropEnd 2 url
+    | Data.Text.isSuffixOf "/"  url = Data.Text.dropEnd 1 url
+    | otherwise                     =                     url
 
 removeAtFromFile :: FilePath -> FilePath
 removeAtFromFile file =
@@ -400,9 +400,11 @@ exprFromFile path = do
 -- | Parse an expression from a URL hosting a Dhall program
 exprFromURL :: Manager -> Text -> IO (Expr Src Path)
 exprFromURL m url = do
-    request <- HTTP.parseUrlThrow (Text.unpack url)
+    request <- HTTP.parseUrlThrow (Data.Text.unpack url)
 
-    let handler :: HTTP.HttpException -> IO (HTTP.Response ByteString)
+    let handler
+            :: HTTP.HttpException
+            -> IO (HTTP.Response Data.ByteString.Lazy.ByteString)
 #if MIN_VERSION_http_client(0,5,0)
         handler err@(HttpExceptionRequest _ (StatusCodeException _ _)) = do
 #else
@@ -415,32 +417,32 @@ exprFromURL m url = do
         handler err = throwIO (PrettyHttpException err)
     response <- HTTP.httpLbs request m `catch` handler
 
-    let bytes = HTTP.responseBody response
+    let bytes = Data.ByteString.Lazy.toStrict (HTTP.responseBody response)
 
-    text <- case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
+    text <- case Data.Text.Encoding.decodeUtf8' bytes of
         Left  err  -> throwIO err
         Right text -> return text
 
-    let urlBytes = Data.Text.Lazy.Encoding.encodeUtf8 url
-    let delta = Directed (Data.ByteString.Lazy.toStrict urlBytes) 0 0 0 0
-    case Text.Trifecta.parseString parser delta (Text.unpack text) of
+    let urlBytes = Data.Text.Encoding.encodeUtf8 url
+    let delta = Directed urlBytes 0 0 0 0
+    case Text.Trifecta.parseString parser delta (Data.Text.unpack text) of
         Failure err -> do
             -- Also try the fallback in case of a parse error, since the parse
             -- error might signify that this URL points to a directory list
             let err' = ParseError (Text.Trifecta._errDoc err)
 
-            request' <- HTTP.parseUrlThrow (Text.unpack url)
+            request' <- HTTP.parseUrlThrow (Data.Text.unpack url)
 
             let request'' = request' { HTTP.path = HTTP.path request' <> "/@" }
             response' <- HTTP.httpLbs request'' m `onException` throwIO err'
 
-            let bytes' = HTTP.responseBody response'
+            let bytes' = Data.ByteString.Lazy.toStrict (HTTP.responseBody response')
 
-            text' <- case Data.Text.Lazy.Encoding.decodeUtf8' bytes' of
+            text' <- case Data.Text.Encoding.decodeUtf8' bytes' of
                 Left  _     -> throwIO err'
                 Right text' -> return text'
 
-            case Text.Trifecta.parseString parser delta (Text.unpack text') of
+            case Text.Trifecta.parseString parser delta (Data.Text.unpack text') of
                 Failure _    -> throwIO err'
                 Success expr -> return expr
         Success expr -> return expr
@@ -474,7 +476,7 @@ loadStatic :: Path -> StateT Status IO (Expr Src X)
 loadStatic path = do
     paths <- zoom stack State.get
 
-    let local (URL url) = case HTTP.parseUrlThrow (Text.unpack url) of
+    let local (URL url) = case HTTP.parseUrlThrow (Data.Text.unpack url) of
             Nothing      -> False
             Just request -> case HTTP.host request of
                 "127.0.0.1" -> True

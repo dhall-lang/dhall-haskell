@@ -13,7 +13,7 @@ module Dhall.Context (
     , toList
     ) where
 
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Prelude hiding (lookup)
 
 {-| A @(Context a)@ associates `Text` labels with values of type @a@

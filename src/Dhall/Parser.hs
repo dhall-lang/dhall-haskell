@@ -25,7 +25,7 @@ import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Sequence (ViewL(..))
 import Data.Text.Buildable (Buildable(..))
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Dhall.Core (Const(..), Expr(..), Path(..), Var(..))
@@ -174,7 +174,7 @@ toMap kvs = do
                 then pure v
                 else
                     Text.Parser.Combinators.unexpected
-                        ("duplicate field: " ++ Data.Text.Lazy.unpack k)
+                        ("duplicate field: " ++ Data.Text.unpack k)
     Data.Map.traverseWithKey action m
 
 reserve :: String -> Parser ()
@@ -688,12 +688,12 @@ url =   try url0
     url0 = do
         a <- Text.Parser.Char.string "https://"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
-        return (Data.Text.Lazy.pack (a <> b))
+        return (Data.Text.pack (a <> b))
 
     url1 = do
         a <- Text.Parser.Char.string "http://"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
-        return (Data.Text.Lazy.pack (a <> b))
+        return (Data.Text.pack (a <> b))
 
 -- | A parsing error
 newtype ParseError = ParseError Doc deriving (Typeable)
@@ -709,7 +709,7 @@ exprFromText delta text = case result of
     Success r       -> Right r
     Failure errInfo -> Left (ParseError (Text.Trifecta._errDoc errInfo))
   where
-    string = Data.Text.Lazy.unpack text
+    string = Data.Text.unpack text
 
     parser = unParser (do
         Text.Parser.Token.whiteSpace

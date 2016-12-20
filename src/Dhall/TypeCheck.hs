@@ -24,7 +24,7 @@ import Data.Foldable (forM_, toList)
 import Data.Monoid ((<>))
 import Data.Set (Set)
 import Data.Text.Buildable (Buildable(..))
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Traversable (forM)
 import Data.Typeable (Typeable)
@@ -35,7 +35,7 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Map
 import qualified Data.Set
 import qualified Data.Text
-import qualified Data.Text.Lazy                   as Text
+import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Vector
 import qualified Dhall.Context
@@ -618,7 +618,7 @@ data ErrorMessages = ErrorMessages
     -- ^ Longer and more detailed explanation of the error
     }
 
-_NOT :: Data.Text.Text
+_NOT :: Text
 _NOT = "\ESC[1mnot\ESC[0m"
 
 prettyTypeMessage :: TypeMessage s -> ErrorMessages
@@ -796,7 +796,7 @@ You annotated a function input with the following expression:
 ... which is neither a type nor a kind
 |]
       where
-        txt  = Text.toStrict (Dhall.Core.pretty expr)
+        txt  = Dhall.Core.pretty expr
 
 prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
   where
@@ -874,7 +874,7 @@ Some common reasons why you might get this error:
       Using ❰λ❱ here instead of ❰∀❱ would transform this into a valid function
 |]
       where
-        txt = Text.toStrict (Dhall.Core.pretty expr)
+        txt = Dhall.Core.pretty expr
 
 prettyTypeMessage (NotAFunction expr0 expr1) = ErrorMessages {..}
   where
@@ -979,8 +979,8 @@ You tried to use the following expression as a function:
 ... which is not a function type
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
 
 prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
@@ -1107,10 +1107,10 @@ Some common reasons why you might get this error:
                    This should be ❰+2❱
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
-        txt3 = Text.toStrict (Dhall.Core.pretty expr3)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
+        txt2 = Dhall.Core.pretty expr2
+        txt3 = Dhall.Core.pretty expr3
 
 prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
@@ -1204,9 +1204,9 @@ Some common reasons why you might get this error:
   ... and then type-checking will fail
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
+        txt2 = Dhall.Core.pretty expr2
 
 prettyTypeMessage Untyped = ErrorMessages {..}
   where
@@ -1304,8 +1304,8 @@ Some common reasons why you might get this error:
   this
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
 
 prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -1392,9 +1392,9 @@ Your ❰$txt0❱ branch of your ❰if❱ expression is:
 |]
       where
         txt0 = if b then "then" else "else"
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt3 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt1 = Dhall.Core.pretty expr0
+        txt2 = Dhall.Core.pretty expr1
+        txt3 = Dhall.Core.pretty expr2
 
 prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     ErrorMessages {..}
@@ -1468,10 +1468,10 @@ Your ❰if❱ expression has the following ❰then❱ branch:
 Fix your ❰then❱ and ❰else❱ branches to have matching types
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
-        txt3 = Text.toStrict (Dhall.Core.pretty expr3)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
+        txt2 = Dhall.Core.pretty expr2
+        txt3 = Dhall.Core.pretty expr3
 
 prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
   where
@@ -1524,7 +1524,7 @@ You declared that the ❰List❱'s elements should have type:
 ... which is not a ❰Type❱
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = Dhall.Core.pretty expr0
 
 prettyTypeMessage (InvalidListElement i expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -1565,10 +1565,10 @@ Your ❰List❱ elements should have this type:
 ↳ $txt3
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty i    )
-        txt2 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt3 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty i
+        txt2 = Dhall.Core.pretty expr1
+        txt3 = Dhall.Core.pretty expr2
 
 prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
   where
@@ -1622,7 +1622,7 @@ You declared that the ❰Optional❱ element should have type:
 
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = Dhall.Core.pretty expr0
 
 prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..}
   where
@@ -1661,9 +1661,9 @@ Your ❰Optional❱ element should have this type:
 ↳ $txt2
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
+        txt2 = Dhall.Core.pretty expr2
 
 prettyTypeMessage (InvalidOptionalLiteral n) = ErrorMessages {..}
   where
@@ -1726,7 +1726,7 @@ Some common reasons why you might get this error:
                                        This should be ❰List❱ instead
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty n)
+        txt0 = Dhall.Core.pretty n
 
 prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
   where
@@ -1770,8 +1770,8 @@ You provided a record type with a key named:
 ... which is not a type
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k    )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = Dhall.Core.pretty k
+        txt1 = Dhall.Core.pretty expr0
 
 prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
   where
@@ -1816,8 +1816,8 @@ You provided a record literal with a key named:
 ... which is not a term
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k    )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = Dhall.Core.pretty k
+        txt1 = Dhall.Core.pretty expr0
 
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
@@ -1876,8 +1876,8 @@ Some common reasons why you might get this error:
                 This could be ❰:❱ instead
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k    )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = Dhall.Core.pretty k
+        txt1 = Dhall.Core.pretty expr0
 
 prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
   where
@@ -1935,8 +1935,8 @@ Some common reasons why you might get this error:
                 This could be ❰=❱ instead
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k    )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = Dhall.Core.pretty k
+        txt1 = Dhall.Core.pretty expr0
 
 prettyTypeMessage (DuplicateAlternative k) = ErrorMessages {..}
   where
@@ -1964,7 +1964,7 @@ You have more than one alternative named:
 ↳ $txt0
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k)
+        txt0 = Dhall.Core.pretty k
 
 prettyTypeMessage (MustCombineARecord expr0 expr1) = ErrorMessages {..}
   where
@@ -2020,8 +2020,8 @@ You tried to combine the following value:
 ↳ $txt1
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
 
 prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
   where
@@ -2074,7 +2074,7 @@ Some common reasons why you might get this error:
   patch-oriented programming
 |]
       where
-        txt0 = Text.toStrict k
+        txt0 = k
 
 prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
   where
@@ -2127,8 +2127,8 @@ Some common reasons why you might get this error:
                                       This should be ❰{=}❱ instead
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
 
 prettyTypeMessage (MustMergeUnion expr0 expr1) = ErrorMessages {..}
   where
@@ -2169,8 +2169,8 @@ You tried to ❰merge❱ this expression:
 ↳ $txt1
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
 
 prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
   where
@@ -2212,7 +2212,7 @@ You provided the following handlers:
 ... which had no matching alternatives in the union you tried to ❰merge❱
 |]
       where
-        txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
+        txt0 = Data.Text.intercalate ", " (Data.Set.toList ks)
 
 prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
   where
@@ -2254,7 +2254,7 @@ You need to supply the following handlers:
 ↳ $txt0
 |]
       where
-        txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
+        txt0 = Data.Text.intercalate ", " (Data.Set.toList ks)
 
 prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -2314,9 +2314,9 @@ Your handler for the following alternative:
 ↳ $txt2
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
+        txt2 = Dhall.Core.pretty expr2
 
 prettyTypeMessage (HandlerOutputTypeMismatch expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -2378,9 +2378,9 @@ Your handler for the following alternative:
 ↳ $txt2
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
+        txt2 = Dhall.Core.pretty expr2
 
 prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
   where
@@ -2422,8 +2422,8 @@ Your handler for this alternative:
 ... which is not the type of a function
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = Dhall.Core.pretty k
+        txt1 = Dhall.Core.pretty expr0
 
 prettyTypeMessage (NotARecord k expr0 expr1) = ErrorMessages {..}
   where
@@ -2481,9 +2481,9 @@ Some common reasons why you might get this error:
       This is a union, not a record
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k    )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = Dhall.Core.pretty k
+        txt1 = Dhall.Core.pretty expr0
+        txt2 = Dhall.Core.pretty expr1
 
 prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
   where
@@ -2523,8 +2523,8 @@ You tried to access a field named:
 ↳ $txt1
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k    )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = Dhall.Core.pretty k
+        txt1 = Dhall.Core.pretty expr0
 
 prettyTypeMessage (CantAnd expr0 expr1) =
         buildBooleanOperator "&&" expr0 expr1
@@ -2574,8 +2574,8 @@ Some common reasons why you might get this error:
   combining two lists
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
 
 prettyTypeMessage (CantAdd expr0 expr1) =
         buildNaturalOperator "+" expr0 expr1
@@ -2622,8 +2622,8 @@ Your function type is invalid because the input has type:
 ... which makes this a forbidden dependent function type
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
 
 prettyTypeMessage (NoDependentLet expr0 expr1) = ErrorMessages {..}
   where
@@ -2709,8 +2709,8 @@ Your ❰let❱ expression is invalid because the input has type:
 ... which makes this a forbidden dependent ❰let❱ expression
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
 
 buildBooleanOperator :: Text -> Expr s X -> Expr s X -> ErrorMessages
 buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
@@ -2741,10 +2741,10 @@ You provided this argument:
 ↳ $txt1
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
 
-    txt2 = Text.toStrict operator
+    txt2 = operator
 
 buildNaturalOperator :: Text -> Expr s X -> Expr s X -> ErrorMessages
 buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
@@ -2804,10 +2804,10 @@ Some common reasons why you might get this error:
     └─────────┘
 |]
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = Dhall.Core.pretty expr0
+        txt1 = Dhall.Core.pretty expr1
 
-    txt2 = Text.toStrict operator
+    txt2 = operator
 
 -- | A structured type error that includes context
 data TypeError s = TypeError
@@ -2817,14 +2817,14 @@ data TypeError s = TypeError
     } deriving (Typeable)
 
 instance Buildable s => Show (TypeError s) where
-    show = Text.unpack . Dhall.Core.pretty
+    show = Data.Text.unpack . Dhall.Core.pretty
 
 instance (Buildable s, Typeable s) => Exception (TypeError s)
 
 instance Buildable s => Buildable (TypeError s) where
     build (TypeError ctx expr msg)
         =   "\n"
-        <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
+        <>  (   if  Data.Text.Lazy.null (Builder.toLazyText (buildContext ctx))
                 then ""
                 else buildContext ctx <> "\n"
             )
@@ -2835,7 +2835,7 @@ instance Buildable s => Buildable (TypeError s) where
 
         buildContext =
                 build
-            .   Text.unlines
+            .   Data.Text.Lazy.unlines
             .   map (Builder.toLazyText . buildKV)
             .   reverse
             .   Dhall.Context.toList
@@ -2851,14 +2851,14 @@ newtype DetailedTypeError s = DetailedTypeError (TypeError s)
     deriving (Typeable)
 
 instance Buildable s => Show (DetailedTypeError s) where
-    show = Text.unpack . Dhall.Core.pretty
+    show = Data.Text.unpack . Dhall.Core.pretty
 
 instance (Buildable s, Typeable s) => Exception (DetailedTypeError s)
 
 instance Buildable s => Buildable (DetailedTypeError s) where
     build (DetailedTypeError (TypeError ctx expr msg))
         =   "\n"
-        <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
+        <>  (   if  Data.Text.Lazy.null (Builder.toLazyText (buildContext ctx))
                 then ""
                 else buildContext ctx <> "\n"
             )
@@ -2871,7 +2871,7 @@ instance Buildable s => Buildable (DetailedTypeError s) where
 
         buildContext =
                 build
-            .   Text.unlines
+            .   Data.Text.Lazy.unlines
             .   map (Builder.toLazyText . buildKV)
             .   reverse
             .   Dhall.Context.toList

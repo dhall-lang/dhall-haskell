@@ -39,7 +39,7 @@ import Control.Applicative (empty, liftA2, (<|>))
 import Control.Exception (Exception)
 import Data.Monoid ((<>))
 import Data.Text.Buildable (Buildable(..))
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Dhall.Core (Expr(..))
@@ -54,6 +54,7 @@ import Text.Trifecta.Delta (Delta(..))
 import qualified Control.Exception
 import qualified Data.ByteString.Lazy
 import qualified Data.Map
+import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
@@ -310,8 +311,10 @@ double = Type {..}
 text :: Type Text
 text = Type {..}
   where
-    extract (TextLit t) = pure (Data.Text.Lazy.Builder.toLazyText t)
-    extract  _          = empty
+    extract (TextLit t) =
+        pure (Data.Text.Lazy.toStrict (Data.Text.Lazy.Builder.toLazyText t))
+    extract  _          =
+        empty
 
     expected = Text
 
@@ -399,8 +402,8 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
         nR :: M1 i c2 f2 a
         nR = undefined
 
-        nameL = Data.Text.Lazy.pack (conName nL)
-        nameR = Data.Text.Lazy.pack (conName nR)
+        nameL = Data.Text.pack (conName nL)
+        nameR = Data.Text.pack (conName nR)
 
         extract (UnionLit name e _)
             | name == nameL = fmap (L1 . M1) (extractL e)
@@ -419,7 +422,7 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
         n :: M1 i c h a
         n = undefined
 
-        name = Data.Text.Lazy.pack (conName n)
+        name = Data.Text.pack (conName n)
 
         extract u@(UnionLit name' e _)
             | name == name' = fmap (R1 . M1) (extractR e)
@@ -436,7 +439,7 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
         n :: M1 i c f a
         n = undefined
 
-        name = Data.Text.Lazy.pack (conName n)
+        name = Data.Text.pack (conName n)
 
         extract u@(UnionLit name' e _)
             | name == name' = fmap (L1 . M1) (extractL e)
@@ -489,12 +492,12 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
             case selName n of
                 ""   -> Nothing
                 name -> do
-                    e <- Data.Map.lookup (Data.Text.Lazy.pack name) m
+                    e <- Data.Map.lookup (Data.Text.pack name) m
                     fmap (M1 . K1) (extract' e)
         extract  _            = Nothing
 
         expected = Record (Data.Map.fromList [(key, expected')])
           where
-            key = Data.Text.Lazy.pack (selName n)
+            key = Data.Text.pack (selName n)
 
         Type extract' expected' = auto

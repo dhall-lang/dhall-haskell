@@ -19,7 +19,7 @@ import System.Exit (exitFailure)
 import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Exception
-import qualified Data.Text.Lazy.IO
+import qualified Data.Text.IO
 import qualified Dhall.TypeCheck
 import qualified Options.Generic
 import qualified System.Exit
@@ -48,7 +48,7 @@ main = do
                 if unHelpful (explain options)
                     then Control.Exception.throwIO (DetailedTypeError e)
                     else do
-                        Data.Text.Lazy.IO.hPutStrLn stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                        Data.Text.IO.hPutStrLn stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO e
 
             handler1 (Imported ps e) = do
@@ -57,7 +57,7 @@ main = do
                 if unHelpful (explain options)
                     then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
                     else do
-                        Data.Text.Lazy.IO.hPutStrLn stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                        Data.Text.IO.hPutStrLn stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO (Imported ps e)
 
             handler2 e = do
@@ -66,7 +66,7 @@ main = do
                 System.Exit.exitFailure
 
     handle (do
-        inText <- Data.Text.Lazy.IO.getContents
+        inText <- Data.Text.IO.getContents
 
         expr <- case exprFromText (Directed "(stdin)" 0 0 0 0) inText of
             Left  err  -> Control.Exception.throwIO err
@@ -77,6 +77,6 @@ main = do
         typeExpr <- case Dhall.TypeCheck.typeOf expr' of
             Left  err      -> Control.Exception.throwIO err
             Right typeExpr -> return typeExpr
-        Data.Text.Lazy.IO.hPutStrLn stderr (pretty (normalize typeExpr))
-        Data.Text.Lazy.IO.hPutStrLn stderr mempty
-        Data.Text.Lazy.IO.putStrLn (pretty (normalize expr')) )
+        Data.Text.IO.hPutStrLn stderr (pretty (normalize typeExpr))
+        Data.Text.IO.hPutStrLn stderr mempty
+        Data.Text.IO.putStrLn (pretty (normalize expr')) )

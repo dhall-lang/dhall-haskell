@@ -43,7 +43,7 @@ import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Traversable
 import Data.Vector (Vector)
@@ -55,7 +55,7 @@ import qualified Control.Monad
 import qualified Data.Map
 import qualified Data.Maybe
 import qualified Data.Text
-import qualified Data.Text.Lazy            as Text
+import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder    as Builder
 import qualified Data.Vector
 import qualified Data.Vector.Mutable
@@ -92,14 +92,14 @@ data Path
 
 instance Buildable Path where
     build (File file)
-        |  Text.isPrefixOf  "./" txt
-        || Text.isPrefixOf   "/" txt
-        || Text.isPrefixOf "../" txt
+        |  Data.Text.isPrefixOf  "./" txt
+        || Data.Text.isPrefixOf   "/" txt
+        || Data.Text.isPrefixOf "../" txt
         = build txt <> " "
         | otherwise
         = "./" <> build txt <> " "
       where
-        txt = Text.fromStrict (either id id (Filesystem.toText file))
+        txt = either id id (Filesystem.toText file)
     build (URL  str ) = build str <> " "
 
 {-| Label for a bound variable
@@ -385,7 +385,7 @@ instance IsString (Expr s a)
 
 -- | Pretty-print a value
 pretty :: Buildable a => a -> Text
-pretty = Builder.toLazyText . build
+pretty = Data.Text.Lazy.toStrict . Builder.toLazyText . build
 
 -- | Builder corresponding to the @label@ token in "Dhall.Parser"
 buildLabel :: Text -> Builder
