@@ -222,18 +222,23 @@ doubleSingleQuoteString = do
         Text.Parser.Char.string "''"
         p1
 
-    p1 = p2 <|> p3 <|> p4
+    p1 = p2 <|> p3 <|> p4 <|> p5
 
     p2 = do
+        Text.Parser.Char.text "'''"
+        s1 <- p1
+        return ("''" <> s1)
+
+    p3 = do
         Text.Parser.Char.text "''"
         return ""
 
-    p3 = do
-        s0 <- Text.Parser.Char.text "'''"
+    p4 = do
+        s0 <- Text.Parser.Char.text "'"
         s1 <- p1
         return (Data.Text.Lazy.Builder.fromText s0 <> s1)
 
-    p4 = do
+    p5 = do
         s0 <- some (Text.Trifecta.satisfy (/= '\''))
         s1 <- p1
         return (Data.Text.Lazy.Builder.fromString s0 <> s1)
