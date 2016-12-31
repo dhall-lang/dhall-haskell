@@ -26,6 +26,7 @@ import Data.Monoid ((<>))
 import Data.Sequence (ViewL(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
+import Data.Text.Lazy.Builder (Builder)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Dhall.Core (Const(..), Expr(..), Path(..), Var(..))
@@ -50,6 +51,7 @@ import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Lazy
+import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
 import qualified Dhall.Core
@@ -186,6 +188,55 @@ symbol :: String -> Parser ()
 symbol string = do
     _ <- Text.Parser.Token.symbol string
     return ()
+
+stringLiteral :: Parser Builder
+stringLiteral = Text.Parser.Token.stringLiteral <|> doubleSingleQuoteString
+
+doubleSingleQuoteString :: Parser Builder
+doubleSingleQuoteString = do
+    builder <- Text.Parser.Token.token p0
+    return (process builder)
+  where
+    process =
+          Data.Text.Lazy.Builder.fromLazyText
+        . Data.Text.Lazy.unlines
+        . trim
+        . Data.Text.Lazy.lines
+        . Data.Text.Lazy.Builder.toLazyText
+
+    trim lines_ = map (Data.Text.Lazy.drop shortestIndent) lines_
+      where
+        isEmpty = Data.Text.Lazy.all Data.Char.isSpace
+
+        nonEmptyLines = filter (not . isEmpty) lines_
+
+        indentLength line =
+            Data.Text.Lazy.length
+                (Data.Text.Lazy.takeWhile Data.Char.isSpace line)
+
+        shortestIndent = case nonEmptyLines of
+            [] -> 0
+            _  -> minimum (map indentLength nonEmptyLines)
+
+    p0 = do
+        Text.Parser.Char.string "''"
+        p1
+
+    p1 = p2 <|> p3 <|> p4
+
+    p2 = do
+        Text.Parser.Char.text "''"
+        return ""
+
+    p3 = do
+        s0 <- Text.Parser.Char.text "'''"
+        s1 <- p1
+        return (Data.Text.Lazy.Builder.fromText s0 <> s1)
+
+    p4 = do
+        s0 <- some (Text.Trifecta.satisfy (/= '\''))
+        s1 <- p1
+        return (Data.Text.Lazy.Builder.fromString s0 <> s1)
 
 lambda :: Parser ()
 lambda = symbol "\\" <|> symbol "λ"
@@ -508,7 +559,7 @@ exprF = choice
         return (DoubleLit (sign a))
 
     exprF27 = do
-        a <- Text.Parser.Token.stringLiteral
+        a <- stringLiteral
         return (TextLit a)
 
     exprF28 = record <?> "record type"

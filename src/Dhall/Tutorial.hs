@@ -26,6 +26,9 @@ module Dhall.Tutorial (
     -- * Functions
     -- $functions
 
+    -- * Strings
+    -- $strings
+
     -- * Combine
     -- $combine
 
@@ -712,6 +715,41 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- __Exercise__: Use the @dhall@ compiler to apply your function to a sample
 -- record
+
+-- $strings
+-- Dhall supports ordinary string literals with Haskell-style escaping rules:
+--
+-- > dhall
+-- > "Hello, \"world\"!"
+-- > <Ctrl-D>
+-- > Text
+-- >
+-- > "Hello, \"world\"!"
+--
+-- ... and Dhall also supports Nix-style multi-line string literals:
+--
+-- > dhall
+-- > ''
+-- >     #!/bin/bash
+-- >     
+-- >     echo "Hi!"
+-- > ''
+-- > <Ctrl-D>
+-- > Text
+-- >
+-- > "\n#!/bin/bash\n\necho \"Hi!\"\n"
+--
+-- These \"double single quote strings\" ignore all special characters, with one
+-- exception: if you want to include a @''@ in the string, you will need to
+-- escape it with a preceding @'@ (i.e. use @'''@ to insert @''@ into the final
+-- string).
+--
+-- These strings also strip leading whitespace using the same rules as Nix.
+-- Specifically: \"it strips from each line a number of spaces equal to the
+-- minimal indentation of the string as a whole (disregarding the indentation
+-- of empty lines).\"
+--
+-- Unlike Nix-style strings, you cannot interpolate variables into the string.
 
 -- $combine
 --
