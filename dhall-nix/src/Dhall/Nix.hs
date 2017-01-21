@@ -193,7 +193,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e3 = Fix (NBinary NLte "n" (Fix (NConstant (NInt 0))))
         let e4 = Fix (NAbs "succ" (Fix (NAbs "zero" (Fix (NIf e3 "zero" e2)))))
         let e5 = Fix (NAbs "n" (Fix (NAbs "t" e4)))
-        return (Fix (NLet [NamedVar [StaticKey "naturalFold"] e5] "naturalFold"))
+        return (Fix (NLet [NamedVar ["naturalFold"] e5] "naturalFold"))
     loop NaturalBuild = do
         let e0 = Fix (NBinary NPlus "n" (Fix (NConstant (NInt 1))))
         let e1 = Fix (NApp (Fix (NApp "k" (Fix (NSet [])))) (Fix (NAbs "n" e0)))
@@ -207,7 +207,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e2 = Fix (NBinary NNEq "n" (Fix (NConstant (NInt 1))))
         let e3 = Fix (NBinary NEq "n" (Fix (NConstant (NInt 0))))
         let e4 = Fix (NBinary NOr e3 (Fix (NBinary NAnd e2 e1)))
-        let e5 = NamedVar [StaticKey "naturalEven"] (Fix (NAbs "n" e4))
+        let e5 = NamedVar ["naturalEven"] (Fix (NAbs "n" e4))
         let e6 = Fix (NBinary NMinus (Fix (NConstant (NInt 0))) "n")
         let e7 = Fix (NBinary NLte "n" (Fix (NConstant (NInt 0))))
         let e8 = Fix (NAbs "n" (Fix (NApp "naturalEven" (Fix (NIf e7 e6 "n")))))
@@ -218,7 +218,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e2 = Fix (NBinary NNEq "n" (Fix (NConstant (NInt 0))))
         let e3 = Fix (NBinary NEq "n" (Fix (NConstant (NInt 1))))
         let e4 = Fix (NBinary NOr e3 (Fix (NBinary NAnd e2 e1)))
-        let e5 = NamedVar [StaticKey "naturalOdd"] (Fix (NAbs "n" e4))
+        let e5 = NamedVar ["naturalOdd"] (Fix (NAbs "n" e4))
         let e6 = Fix (NBinary NMinus (Fix (NConstant (NInt 0))) "n")
         let e7 = Fix (NBinary NLte "n" (Fix (NConstant (NInt 0))))
         let e8 = Fix (NAbs "n" (Fix (NApp "naturalOdd" (Fix (NIf e7 e6 "n")))))
@@ -277,8 +277,8 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e0 = Fix (NApp "builtins.length" "xs")
         let e1 = Fix (NApp (Fix (NApp "builtins.elemAt" "xs")) "i")
         let e2 =
-                [ NamedVar [StaticKey "index"] "i"
-                , NamedVar [StaticKey "value"] e1
+                [ NamedVar ["index"] "i"
+                , NamedVar ["value"] e1
                 ]
         let e3 = Fix (NApp "builtins.genList" (Fix (NAbs "i" (Fix (NSet e2)))))
         return (Fix (NAbs "t" (Fix (NAbs "xs" (Fix (NApp e3 e0))))))
@@ -289,7 +289,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e3 = Fix (NApp "builtins.genList" (Fix (NAbs "i" e2)))
         let e4 = Fix (NApp e3 "n")
         let e5 = Fix (NApp "builtins.length" "xs")
-        let e6 = Fix (NAbs "xs" (Fix (NLet [NamedVar [StaticKey "n"] e5] e4)))
+        let e6 = Fix (NAbs "xs" (Fix (NLet [NamedVar ["n"] e5] e4)))
         return (Fix (NAbs "t" e6))
     loop Optional = return (Fix (NAbs "t" (Fix (NSet []))))
     loop (OptionalLit _ b) =
@@ -322,8 +322,44 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop (Combine a b) = do
         a' <- dhallToNix a
         b' <- dhallToNix b
-        -- TODO: Do recursive update
-        return (Fix (NBinary NUpdate a' b'))
+        let e0 = Fix (NApp (Fix (NApp "map" "toKeyVals")) "ks")
+        let e1 = Fix (NApp "builtins.concatLists" e0)
+        let e2 = Fix (NApp "builtins.listToAttrs" e1)
+
+        let defL = Fix (NApp (Fix (NApp "builtins.hasAttr" "k")) "kvsL")
+        let defR = Fix (NApp (Fix (NApp "builtins.hasAttr" "k")) "kvsR")
+        let valL = Fix (NApp (Fix (NApp "builtins.getAttr" "k")) "kvsL")
+        let valR = Fix (NApp (Fix (NApp "builtins.getAttr" "k")) "kvsR")
+
+        let empty = Fix (NList [])
+        let toNameValue v =
+                let bindings =
+                        [ NamedVar ["name" ] "k"
+                        , NamedVar ["value"] v
+                        ]
+                in  Fix (NList [Fix (NSet bindings)])
+
+        let e3 = Fix (NApp (Fix (NApp "combine" valL)) valR)
+        let e4 = Fix (NApp "builtins.isAttrs" valL)
+        let e5 = Fix (NApp "builtins.isAttrs" valR)
+        let e6 = Fix (NBinary NAnd e4 e5)
+        let e7 = Fix (NIf e6 (toNameValue e3) (toNameValue valL))
+        let e8 = Fix (NIf defR e7 (toNameValue valL))
+        let e9 = Fix (NIf defR (toNameValue valR) empty)
+        let toKeyVals = Fix (NAbs "k" (Fix (NIf defL e8 e9)))
+
+        let ksL = Fix (NApp "builtins.attrNames" "kvsL")
+        let ksR = Fix (NApp "builtins.attrNames" "kvsR")
+        let ks  = Fix (NBinary NConcat ksL ksR)
+
+        let e10 =
+                [ NamedVar ["ks"       ] ks
+                , NamedVar ["toKeyVals"] toKeyVals
+                ]
+        let combine = Fix (NAbs "kvsL" (Fix (NAbs "kvsR" (Fix (NLet e10 e2)))))
+
+        let e11 = Fix (NApp (Fix (NApp "combine" a')) b')
+        return (Fix (NLet [NamedVar ["combine"] combine] e11))
     loop (Merge a b _) = do
         a' <- dhallToNix a
         b' <- dhallToNix b
