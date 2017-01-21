@@ -11,6 +11,76 @@
 
     This package also provides a @dhall-to-nix@ executable which you can use to
     compile Dhall source code directly to Nix source code for your convenience.
+
+    Any Dhall expression can be converted into an equivalent Nix expression.
+    For example, Dhall records can be converted into Nix records:
+
+> $ dhall-to-nix <<< "{ foo = 1, bar = True }"
+> { bar = true; foo = 1; }
+
+    ... and you can also convert Dhall functions to Nix functions, too:
+
+> $ dhall-to-nix <<< "λ(x : Bool) → x == False"
+> x: x == false
+
+    Many Dhall expressions have a straightforward translation to Nix expressions
+    but there are some translations that are not as obvious.  The following
+    section documents these trickier conversions:
+
+    First, all Dhall types translate to an empty record:
+
+> $ dhall-to-nix <<< "Integer"
+> {}
+
+    Polymorphic Dhall functions translate to Nix functions that ignore their
+    type argument:
+
+> $ dhall-to-nix <<< "List/head"
+> t: xs: if xs == []
+>       then null
+>       else builtins.head xs
+
+    `Optional` values translate to @null@ if missing or the unwrapped value if
+    present:
+
+> $ dhall-to-nix <<< "[] : Optional Integer"
+> null
+
+> $ dhall-to-nix <<< "[1] : Optional Integer"
+> 1
+
+    Unions are Church-encoded:
+
+> $ dhall-to-nix <<< "< Left = True | Right : Natural >"
+> { Left, Right }: Left true
+
+    `Dhall.Core.Double`s cannot be translated to Nix at all since Nix does not
+    support floating point values.
+
+    Also, all Dhall expressions are normalized before translation to Nix:
+
+> $ dhall-to-nix <<< "True == False"
+> false
+
+    You can use the @dhall-to-nix@ executable within Nix to assemble Nix
+    expressions from Dhall expressions using the following @dhallToNix@ utility
+    function:
+
+> dhallToNix = code :
+>   let
+>     file = builtins.toFile "dhall-expr" code;
+>
+>     drv = pkgs.stdenv.mkDerivation {
+>       name = "dhall-expr-as-nix";
+>
+>       buildCommand = ''
+>         dhall-to-nix <<< "${file}" > $out
+>       '';
+>
+>       buildInputs = [ pkgs.haskellPackages.dhall-nix ];
+>     };
+>   in
+>     import "${drv}";
 -}
 
 module Dhall.Nix (
