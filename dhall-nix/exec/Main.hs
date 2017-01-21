@@ -13,6 +13,7 @@ import qualified Dhall.Import
 import qualified Dhall.Nix
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
+import qualified GHC.IO.Encoding
 import qualified Nix.Pretty
 import qualified Options.Generic
 import qualified System.Exit
@@ -20,6 +21,7 @@ import qualified System.IO
 
 main :: IO ()
 main = handle (Dhall.detailed (do
+    GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
     () <- Options.Generic.getRecord "Compile Dhall to Nix"
 
     inText <- Data.Text.Lazy.IO.getContents
