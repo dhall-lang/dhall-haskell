@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE QuasiQuotes        #-}
 
 module Dhall.Nix where
 
@@ -22,15 +23,91 @@ import Nix.Expr
     )
 
 import qualified Data.Map
+import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Vector
 import qualified Dhall.Core
+import qualified NeatInterpolation
 
 data CompileError
-    = CannotReferenceShadowedVariable
-    | NoDoubles
-    deriving (Show, Typeable)
+    = CannotReferenceShadowedVariable Var
+    -- ^ Nix does not provide a way to reference a shadowed variable
+    | NoDoubles Double
+    -- ^ Nix does not provide a way to represent floating point values
+    deriving (Typeable)
+
+instance Show CompileError where
+    show (CannotReferenceShadowedVariable v) =
+        Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: Cannot reference shadowed variable
+
+Explanation: Whenever you introduce two variables of the same name, the latter
+variable takes precedence:
+
+
+                                  This ❰x❱ ...
+                                  ⇩
+    ┌───────────────────────────────┐
+    │ λ(x : Text) → λ(x : Text) → x │
+    └───────────────────────────────┘
+                      ⇧
+                      ... refers to this ❰x❱
+
+
+The former variable is "shadowed":
+
+
+    ┌───────────────────────────────┐
+    │ λ(x : Text) → λ(x : Text) → x │
+    └───────────────────────────────┘
+        ⇧
+        This ❰x❱ is shadowed
+
+
+... and Dhall lets you reference shadowed variables using the ❰@❱ notation:
+
+
+                                  This ❰x❱ ...
+                                  ⇩
+    ┌─────────────────────────────────┐
+    │ λ(x : Text) → λ(x : Text) → x@1 │
+    └─────────────────────────────────┘
+        ⇧
+        ... now refers to this ❰x❱
+
+
+However, the Nix language does not let you reference shadowed variables and
+there is nothing analogous to ❰@❱ in Nix
+
+Your code contains the following expression:
+
+↳ $txt
+
+... which references a shadowed variable and therefore cannot be translated to
+Nix
+|]
+      where
+        txt = Data.Text.Lazy.toStrict (Dhall.Core.pretty v)
+    show (NoDoubles n) =
+        Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: No doubles
+
+Explanation: Dhall values of type ❰Double❱ cannot be converted to Nix
+expressions because the Nix language provides no way to represent floating point
+values
+
+You provided the following value:
+
+↳ $txt
+
+... which cannot be translated to Nix
+|]
+      where
+        txt = Data.Text.pack (show n)
+
+_ERROR :: Data.Text.Text
+_ERROR = "\ESC[1;31mError\ESC[0m"
 
 instance Exception CompileError
 
@@ -39,7 +116,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
   where
     loop (Const _) = return (Fix (NSet []))
     loop (Var (V a 0)) = return (Fix (NSym (Data.Text.Lazy.toStrict a)))
-    loop (Var (V _ _)) = Left CannotReferenceShadowedVariable
+    loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
     loop (Lam a _ c) = do
         let a' = Data.Text.Lazy.toStrict a
         c' <- loop c
@@ -160,7 +237,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop Integer = return (Fix (NSet []))
     loop (IntegerLit n) = return (Fix (NConstant (NInt (fromIntegral n))))
     loop Double = return (Fix (NSet []))
-    loop (DoubleLit _) = Left NoDoubles
+    loop (DoubleLit n) = Left (NoDoubles n)
     loop Text = return (Fix (NSet []))
     loop (TextLit a) = do
         let a' = Data.Text.Lazy.toStrict (Data.Text.Lazy.Builder.toLazyText a)

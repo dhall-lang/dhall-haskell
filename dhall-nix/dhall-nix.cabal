@@ -23,6 +23,7 @@ Library
         data-fix,
         dhall,
         hnix,
+        neat-interpolation,
         text,
         vector
     Exposed-Modules:
