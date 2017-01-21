@@ -1,11 +1,12 @@
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeOperators     #-}
 
 module Main where
 
-import Options.Generic (Generic, ParseRecord, type (<?>))
 import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Exception
@@ -17,15 +18,9 @@ import qualified Dhall.TypeCheck
 import qualified Nix.Pretty
 import qualified Options.Generic
 
-data Options = Options
-    { explain :: Bool <?> "Explain error messages in more detail"
-    } deriving (Generic)
-
-instance ParseRecord Options
-
 main :: IO ()
 main = do
---  options <- Options.Generic.getRecord "Compile Dhall to Nix"
+    () <- Options.Generic.getRecord "Compile Dhall to Nix"
 
     inText <- Data.Text.Lazy.IO.getContents
 
