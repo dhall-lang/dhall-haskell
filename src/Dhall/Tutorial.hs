@@ -591,7 +591,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > $ cat > makeBools
 -- > \(n : Bool) ->
--- >         [ n && True, n && False, n || True, n || False ] : List Bool
+-- >     [ n && True, n && False, n || True, n || False ] : List Bool
 -- > <Ctrl-D>
 --
 -- ... or we can use Dhall's support for Unicode characters to use @λ@ (U+03BB)
@@ -600,12 +600,12 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > $ cat > makeBools
 -- > λ(n : Bool) →
--- >         [ n && True, n && False, n || True, n || False ] : List Bool
+-- >     [ n && True, n && False, n || True, n || False ] : List Bool
 -- > <Ctrl-D>
 --
--- You can read either one as a function of one argument named @n@ that has type
+-- You can read this as a function of one argument named @n@ that has type
 -- @Bool@.  This function returns a @List@ of @Bool@s.  Each element of the
--- @List@ depends on the input argument.
+-- @List@ depends on the input argument named @n@.
 --
 -- The (ASCII) syntax for anonymous functions resembles the syntax for anonymous
 -- functions in Haskell.  The only difference is that Dhall requires you to
@@ -2025,7 +2025,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > False
 --
 -- Some functions in the Prelude just re-export built-in functions for
--- consistency and documentation, such as @Prelude/Natural/even@, which
+-- consistency and documentation, such as @Prelude\/Natural\/even@, which
 -- re-exports the built-in @Natural/even@ function:
 --
 -- > $ curl https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Natural/even
