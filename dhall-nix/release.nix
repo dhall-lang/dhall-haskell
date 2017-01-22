@@ -13,7 +13,9 @@ let
     packageOverrides = pkgs: {
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: {
-          dhall-nix = haskellPackagesNew.callPackage ./default.nix { };
+          dhall-nix =
+            pkgs.haskell.lib.disableSharedExecutables
+              (haskellPackagesNew.callPackage ./default.nix { });
         };
       };
     };
@@ -136,10 +138,6 @@ in
             r : Bool
         '';
         testField = dhallToNix "λ(r : { foo : Bool, bar : Text }) → r.foo";
-        testRemote = dhallToNix ''
-          let replicate =https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/replicate
-          in  replicate +5 Integer
-        '';
       in
         assert (testConst == {});
         assert (testLam true == true);
@@ -204,7 +202,6 @@ in
         });
         assert (testMerge ({ Left, Right }: Left 2) == false);
         assert (testField { foo = true; bar = "ABC"; } == true);
-        assert (testRemote 1 == [1 1 1 1 1]);
         pkgs.stdenv.mkDerivation {
           name = "tests-pass";
 
