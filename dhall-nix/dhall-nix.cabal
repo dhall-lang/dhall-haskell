@@ -8,8 +8,16 @@ Copyright: 2017 Gabriel Gonzalez
 Author: Gabriel Gonzalez
 Maintainer: Gabriel439@gmail.com
 Bug-Reports: https://github.com/Gabriel439/Haskell-Dhall-Nix-Library/issues
-Synopsis: A configuration language guaranteed to terminate
-Description: TODO
+Synopsis: Dhall to Nix compiler
+Description:
+  Use this package if you want to compile Dhall expressions to the Nix language.
+  You can use this package as a library or an executable:
+  .
+  * See the "Dhall.Nix" module if you want to use this package as a library
+  .
+  * Use the @dhall-to-nix@ program from this package if you want an executable
+  .
+  The "Dhall.Nix" module also contains instructions for how to use this package
 Category: Compiler
 Source-Repository head
     Type: git
