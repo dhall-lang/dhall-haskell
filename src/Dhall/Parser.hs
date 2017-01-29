@@ -9,7 +9,7 @@ module Dhall.Parser (
       exprFromText
 
     -- * Parsers
-    , expr
+    , expr, exprA
 
     -- * Types
     , Src(..)
@@ -254,23 +254,25 @@ label = Text.Parser.Token.ident identifierStyle <?> "label"
 
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Path)
-expr = exprA
+expr = exprA import_
 
-exprA :: Parser (Expr Src Path)
-exprA = noted (do
-    a <- exprB
+-- | Parser for a top-level Dhall expression. The expression is parameterized
+-- over any parseable type, allowing the language to be extended as needed.
+exprA :: Show a => Parser a -> Parser (Expr Src a)
+exprA embedded = noted (do
+    a <- exprB embedded
 
     let exprA0 = do
             symbol ":"
-            b <- exprA
+            b <- exprA embedded
             return (Annot a b)
 
     let exprA1 = pure a
 
     exprA0 <|> exprA1 )
 
-exprB :: Parser (Expr Src Path)
-exprB = choice
+exprB :: Show a => Parser a -> Parser (Expr Src a)
+exprB embedded = choice
     [   noted      exprB0
     ,   noted      exprB1
     ,   noted      exprB3
@@ -286,25 +288,25 @@ exprB = choice
         symbol "("
         a <- label
         symbol ":"
-        b <- exprA
+        b <- exprA embedded
         symbol ")"
         arrow
-        c <- exprB
+        c <- exprB embedded
         return (Lam a b c)
 
     exprB1 = do
         reserve "if"
-        a <- exprA
+        a <- exprA embedded
         reserve "then"
-        b <- exprB
+        b <- exprB embedded
         reserve "else"
-        c <- exprC
+        c <- exprC embedded
         return (BoolIf a b c)
 
     exprB2 = do
-        a <- exprC
+        a <- exprC embedded
         arrow
-        b <- exprB
+        b <- exprB embedded
         return (Pi "_" a b)
 
     exprB3 = do
@@ -312,10 +314,10 @@ exprB = choice
         symbol "("
         a <- label
         symbol ":"
-        b <- exprA
+        b <- exprA embedded
         symbol ")"
         arrow
-        c <- exprB
+        c <- exprB embedded
         return (Pi a b c)
 
     exprB5 = do
@@ -323,33 +325,33 @@ exprB = choice
         a <- label
         b <- optional (do
             symbol ":"
-            exprA )
+            exprA embedded )
         symbol "="
-        c <- exprA
+        c <- exprA embedded
         reserve "in"
-        d <- exprB
+        d <- exprB embedded
         return (Let a b c d)
 
     exprB6 = do
         symbol "["
-        a <- elems
+        a <- elems embedded
         symbol "]"
         symbol ":"
         b <- listLike
-        c <- exprE
+        c <- exprE embedded
         return (b c a)
 
     exprB7 = do
         reserve "merge"
-        a <- exprE
-        b <- exprE
+        a <- exprE embedded
+        b <- exprE embedded
         symbol ":"
-        c <- exprD
+        c <- exprD embedded
         return (Merge a b c)
 
-    exprB8 = exprC
+    exprB8 = exprC embedded
 
-listLike :: Parser (Expr Src Path -> Vector (Expr Src Path) -> Expr Src Path)
+listLike :: Parser (Expr Src a -> Vector (Expr Src a) -> Expr Src a)
 listLike =
     (   listLike0
     <|> listLike1
@@ -363,8 +365,8 @@ listLike =
         reserve "Optional"
         return OptionalLit
 
-exprC :: Parser (Expr Src Path)
-exprC = exprC0
+exprC :: Show a => Parser a -> Parser (Expr Src a)
+exprC embedded = exprC0
   where
     chain pA pOp op pB = noted (do
         a <- pA
@@ -377,7 +379,7 @@ exprC = exprC0
     exprC4 = chain exprC5  combine      Combine      exprC4
     exprC5 = chain exprC6 (symbol "*" ) NaturalTimes exprC5
     exprC6 = chain exprC7 (symbol "==") BoolEQ       exprC6
-    exprC7 = chain exprD  (symbol "!=") BoolNE       exprC7
+    exprC7 = chain (exprD embedded)  (symbol "!=") BoolNE       exprC7
 
 -- We can't use left-recursion to define `exprD` otherwise the parser will
 -- loop infinitely. However, I'd still like to use left-recursion in the
@@ -387,25 +389,25 @@ exprC = exprC0
 -- * First, parse to count how many arguments the function is applied to
 -- * Second, restart the parse using left recursion bounded by the number of
 --   arguments
-exprD :: Parser (Expr Src Path)
-exprD = do
-    es <- some (noted (try exprE))
+exprD :: Show a => Parser a -> Parser (Expr Src a)
+exprD embedded = do
+    es <- some (noted (try (exprE embedded)))
     let app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
             Note (Src before after (bytesL <> bytesR)) (App nL nR)
         app _ _ = Dhall.Core.internalError
             ("Dhall.Parser.exprD: foldl1 app (" <> Data.Text.pack (show es) <> ")")
     return (Data.List.foldl1 app es)
 
-exprE :: Parser (Expr Src Path)
-exprE = noted (do
-    a <- exprF
+exprE :: Show a => Parser a -> Parser (Expr Src a)
+exprE embedded = noted (do
+    a <- exprF embedded
     b <- many (try (do
         symbol "."
         label ))
     return (Data.List.foldl Field a b) )
 
-exprF :: Parser (Expr Src Path)
-exprF = choice
+exprF :: Show a => Parser a -> Parser (Expr Src a)
+exprF embedded = choice
     [   noted (try exprF26)
     ,   noted (try exprF25)
     ,   noted      exprF24
@@ -562,23 +564,23 @@ exprF = choice
         a <- stringLiteral
         return (TextLit a)
 
-    exprF28 = record <?> "record type"
+    exprF28 = record embedded <?> "record type"
 
-    exprF29 = recordLit <?> "record literal"
+    exprF29 = recordLit embedded <?> "record literal"
 
-    exprF30 = union <?> "union type"
+    exprF30 = union embedded <?> "union type"
 
-    exprF31 = unionLit <?> "union literal"
+    exprF31 = unionLit embedded <?> "union literal"
 
-    exprF32 = listLit <?> "list literal"
+    exprF32 = listLit embedded <?> "list literal"
 
     exprF33 = do
-        a <- import_ <?> "import"
+        a <- embedded <?> "import"
         return (Embed a)
 
     exprF34 = do
         symbol "("
-        a <- exprA
+        a <- exprA embedded
         symbol ")"
         return a
 
@@ -605,13 +607,13 @@ var = do
             Nothing -> 0
     return (V a b)
 
-elems :: Parser (Vector (Expr Src Path))
-elems = do
-    a <- Text.Parser.Combinators.sepBy exprA (symbol ",")
+elems :: Show a => Parser a -> Parser (Vector (Expr Src a))
+elems embedded = do
+    a <- Text.Parser.Combinators.sepBy (exprA embedded) (symbol ",")
     return (Data.Vector.fromList a)
 
-recordLit :: Parser (Expr Src Path)
-recordLit =
+recordLit :: Show a => Parser a -> Parser (Expr Src a)
+recordLit embedded =
         recordLit0
     <|> recordLit1
   where
@@ -621,62 +623,62 @@ recordLit =
 
     recordLit1 = do
         symbol "{"
-        a <- fieldValues
+        a <- fieldValues embedded
         b <- toMap a
         symbol "}"
         return (RecordLit b)
 
-fieldValues :: Parser [(Text, Expr Src Path)]
-fieldValues =
-    Text.Parser.Combinators.sepBy1 fieldValue (symbol ",")
+fieldValues :: Show a => Parser a -> Parser [(Text, Expr Src a)]
+fieldValues embedded =
+    Text.Parser.Combinators.sepBy1 (fieldValue embedded) (symbol ",")
 
-fieldValue :: Parser (Text, Expr Src Path)
-fieldValue = do
+fieldValue :: Show a => Parser a -> Parser (Text, Expr Src a)
+fieldValue embedded = do
     a <- label
     symbol "="
-    b <- exprA
+    b <- exprA embedded
     return (a, b)
 
-record :: Parser (Expr Src Path)
-record = do
+record :: Show a => Parser a -> Parser (Expr Src a)
+record embedded = do
     symbol "{"
-    a <- fieldTypes
+    a <- fieldTypes embedded
     b <- toMap a
     symbol "}"
     return (Record b)
 
-fieldTypes :: Parser [(Text, Expr Src Path)]
-fieldTypes =
-    Text.Parser.Combinators.sepBy fieldType (symbol ",")
+fieldTypes :: Show a => Parser a -> Parser [(Text, Expr Src a)]
+fieldTypes embedded =
+    Text.Parser.Combinators.sepBy (fieldType embedded) (symbol ",")
 
-fieldType :: Parser (Text, Expr Src Path)
-fieldType = do
+fieldType :: Show a => Parser a -> Parser (Text, Expr Src a)
+fieldType embedded = do
     a <- label
     symbol ":"
-    b <- exprA
+    b <- exprA embedded
     return (a, b)
 
-union :: Parser (Expr Src Path)
-union = do
+union :: Show a => Parser a -> Parser (Expr Src a)
+union embedded = do
     symbol "<"
-    a <- alternativeTypes
+    a <- alternativeTypes embedded
     b <- toMap a
     symbol ">"
     return (Union b)
 
-alternativeTypes :: Parser [(Text, Expr Src Path)]
-alternativeTypes =
-    Text.Parser.Combinators.sepBy alternativeType (symbol "|")
+alternativeTypes :: Show a => Parser a -> Parser [(Text, Expr Src a)]
+alternativeTypes embedded =
+    Text.Parser.Combinators.sepBy (alternativeType embedded) (symbol "|")
 
-alternativeType :: Parser (Text, Expr Src Path)
-alternativeType = do
+alternativeType :: Show a => Parser a -> Parser (Text, Expr Src a)
+alternativeType embedded = do
     a <- label
     symbol ":"
-    b <- exprA
+    b <- exprA embedded
     return (a, b)
 
-unionLit :: Parser (Expr Src Path)
-unionLit =
+unionLit :: Show a => Parser a -> Parser (Expr Src a)
+unionLit embedded =
         try unionLit0
     <|>     unionLit1
   where
@@ -684,7 +686,7 @@ unionLit =
         symbol "<"
         a <- label
         symbol "="
-        b <- exprA
+        b <- exprA embedded
         symbol ">"
         return (UnionLit a b Data.Map.empty)
 
@@ -692,17 +694,17 @@ unionLit =
         symbol "<"
         a <- label
         symbol "="
-        b <- exprA
+        b <- exprA embedded
         symbol "|"
-        c <- alternativeTypes
+        c <- alternativeTypes embedded
         d <- toMap c
         symbol ">"
         return (UnionLit a b d)
 
-listLit :: Parser (Expr Src Path)
-listLit = do
+listLit :: Show a => Parser a -> Parser (Expr Src a)
+listLit embedded = do
     symbol "["
-    a <- elems
+    a <- elems embedded
     symbol "]"
     return (ListLit Nothing a)
 
@@ -775,7 +777,7 @@ exprFromText delta text = case result of
 
     parser = unParser (do
         Text.Parser.Token.whiteSpace
-        r <- exprA
+        r <- exprA import_
         Text.Parser.Combinators.eof
         return r )
 
