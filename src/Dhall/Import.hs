@@ -75,6 +75,7 @@ module Dhall.Import (
 
 import Control.Exception
     (Exception, IOException, SomeException, catch, onException, throwIO)
+import Control.Lens (Lens', zoom)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
@@ -90,8 +91,6 @@ import Data.Traversable (traverse)
 #endif
 import Data.Typeable (Typeable)
 import Filesystem.Path ((</>), FilePath)
-import Lens.Micro (Lens')
-import Lens.Micro.Mtl (zoom)
 import Dhall.Core (Expr, Path(..))
 import Dhall.Parser (Parser(..), ParseError(..), Src)
 import Dhall.TypeCheck (X(..))
