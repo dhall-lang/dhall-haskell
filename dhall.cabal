@@ -5,7 +5,7 @@ Build-Type: Simple
 Tested-With: GHC == 7.10.2, GHC == 8.0.1
 License: BSD3
 License-File: LICENSE
-Copyright: 2016 Gabriel Gonzalez
+Copyright: 2017 Gabriel Gonzalez
 Author: Gabriel Gonzalez
 Maintainer: Gabriel439@gmail.com
 Bug-Reports: https://github.com/Gabriel439/Haskell-Dhall-Library/issues
