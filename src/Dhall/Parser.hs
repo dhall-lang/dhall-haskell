@@ -263,7 +263,7 @@ expr :: Parser (Expr Src Path)
 expr = exprA
 
 exprA :: Parser (Expr Src Path)
-exprA = do
+exprA = noted (do
     a <- exprB
 
     let exprA0 = do
@@ -273,7 +273,7 @@ exprA = do
 
     let exprA1 = pure a
 
-    exprA0 <|> exprA1
+    exprA0 <|> exprA1 )
 
 exprB :: Parser (Expr Src Path)
 exprB = choice
