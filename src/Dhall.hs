@@ -40,7 +40,6 @@ import Control.Exception (Exception)
 import Data.Monoid ((<>))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
-import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Dhall.Core (Expr(..))
 import Dhall.Import (Imported(..))
@@ -62,7 +61,6 @@ import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
-import qualified GHC.Generics
 
 throws :: Exception e => Either e a -> IO a
 throws (Left  e) = Control.Exception.throwIO e
@@ -90,9 +88,9 @@ input
     -- ^ The Dhall program
     -> IO a
     -- ^ The decoded value in Haskell
-input (Type {..}) text = do
+input (Type {..}) txt = do
     let delta = Directed "(input)" 0 0 0 0
-    expr     <- throws (Dhall.Parser.exprFromText delta text)
+    expr     <- throws (Dhall.Parser.exprFromText delta txt)
     expr'    <- Dhall.Import.load expr
     let suffix =
             ( Data.ByteString.Lazy.toStrict
@@ -107,7 +105,7 @@ input (Type {..}) text = do
                 bytes' = bytes <> " : " <> suffix
             _ ->
                 Annot expr' expected
-    typeExpr <- throws (Dhall.TypeCheck.typeOf annot)
+    _ <- throws (Dhall.TypeCheck.typeOf annot)
     case extract (Dhall.Core.normalize expr') of
         Just x  -> return x
         Nothing -> fail "input: malformed `Type`"
@@ -326,6 +324,7 @@ maybe (Type extractIn expectedIn) = Type extractOut expectedOut
     extractOut (OptionalLit _ es) = traverse extractIn es'
       where
         es' = if Data.Vector.null es then Nothing else Just (Data.Vector.head es)
+    extractOut _ = Nothing
 
     expectedOut = App Optional expectedIn
 
@@ -338,6 +337,7 @@ vector :: Type a -> Type (Vector a)
 vector (Type extractIn expectedIn) = Type extractOut expectedOut
   where
     extractOut (ListLit _ es) = traverse extractIn es
+    extractOut  _             = Nothing
 
     expectedOut = App List expectedIn
 
@@ -406,6 +406,7 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
             | name == nameL = fmap (L1 . M1) (extractL e)
             | name == nameR = fmap (R1 . M1) (extractR e)
             | otherwise     = Nothing
+        extract _ = Nothing
 
         expected =
             Union (Data.Map.fromList [(nameL, expectedL), (nameR, expectedR)])
@@ -424,6 +425,7 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
         extract u@(UnionLit name' e _)
             | name == name' = fmap (R1 . M1) (extractR e)
             | otherwise     = fmap  L1       (extractL u)
+        extract _ = Nothing
 
         expected = Union (Data.Map.insert name expectedR expectedL)
 
@@ -441,6 +443,7 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
         extract u@(UnionLit name' e _)
             | name == name' = fmap (L1 . M1) (extractL e)
             | otherwise     = fmap  R1       (extractR u)
+        extract _ = Nothing
 
         expected = Union (Data.Map.insert name expectedL expectedR)
 

@@ -34,10 +34,8 @@ import Filesystem.Path (FilePath)
 import Prelude hiding (FilePath, const, pi)
 import Text.PrettyPrint.ANSI.Leijen (Doc)
 import Text.Parser.Combinators (choice, try, (<?>))
-import Text.Parser.Expression (Assoc(..), Operator(..))
 import Text.Parser.Token (IdentifierStyle(..), TokenParsing(..))
 import Text.Parser.Token.Highlight (Highlight(..))
-import Text.Parser.Token.Style (CommentStyle(..))
 import Text.Trifecta
     (CharParsing, DeltaParsing, MarkParsing, Parsing, Result(..))
 import Text.Trifecta.Delta (Delta)
@@ -45,7 +43,6 @@ import Text.Trifecta.Delta (Delta)
 import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.Map
-import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.List
 import qualified Data.Sequence
@@ -58,13 +55,10 @@ import qualified Dhall.Core
 import qualified Filesystem.Path.CurrentOS
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
-import qualified Text.Parser.Expression
 import qualified Text.Parser.Token
 import qualified Text.Parser.Token.Style
 import qualified Text.PrettyPrint.ANSI.Leijen
 import qualified Text.Trifecta
-import qualified Text.Trifecta.Combinators
-import qualified Text.Trifecta.Delta
 
 -- | Source code extract
 data Src = Src Delta Delta ByteString deriving (Show)
@@ -160,10 +154,10 @@ identifierStyle = IdentifierStyle
 
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
-    before        <- Text.Trifecta.position
-    (expr, bytes) <- Text.Trifecta.slicedWith (,) parser
-    after         <- Text.Trifecta.position
-    return (Note (Src before after bytes) expr)
+    before     <- Text.Trifecta.position
+    (e, bytes) <- Text.Trifecta.slicedWith (,) parser
+    after      <- Text.Trifecta.position
+    return (Note (Src before after bytes) e)
 
 toMap :: [(Text, a)] -> Parser (Map Text a)
 toMap kvs = do
@@ -219,18 +213,18 @@ doubleSingleQuoteString = do
             _  -> minimum (map indentLength nonEmptyLines)
 
     p0 = do
-        Text.Parser.Char.string "''"
+        _ <- Text.Parser.Char.string "''"
         p1
 
     p1 = p2 <|> p3 <|> p4 <|> p5
 
     p2 = do
-        Text.Parser.Char.text "'''"
+        _  <- Text.Parser.Char.text "'''"
         s1 <- p1
         return ("''" <> s1)
 
     p3 = do
-        Text.Parser.Char.text "''"
+        _ <- Text.Parser.Char.text "''"
         return ""
 
     p4 = do
@@ -374,7 +368,7 @@ exprC = exprC0
   where
     chain pA pOp op pB = noted (do
         a <- pA
-        try (do pOp <?> "operator"; b <- pB; return (op a b)) <|> pure a )
+        try (do _ <- pOp <?> "operator"; b <- pB; return (op a b)) <|> pure a )
 
     exprC0 = chain exprC1 (symbol "||") BoolOr       exprC0
     exprC2 = chain exprC3 (symbol "++") TextAppend   exprC2
@@ -396,7 +390,7 @@ exprC = exprC0
 exprD :: Parser (Expr Src Path)
 exprD = do
     es <- some (noted (try exprE))
-    let app nL@(Note (Src before _ bytesL) eL) nR@(Note (Src _ after bytesR) eR) =
+    let app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
             Note (Src before after (bytesL <> bytesR)) (App nL nR)
         app _ _ = Dhall.Core.internalError
             ("Dhall.Parser.exprD: foldl1 app (" <> Data.Text.pack (show es) <> ")")
@@ -553,7 +547,7 @@ exprF = choice
         return (IntegerLit a)
 
     exprF25 = (do
-        Text.Parser.Char.char '+'
+        _ <- Text.Parser.Char.char '+'
         a <- Text.Parser.Token.natural
         return (NaturalLit (fromIntegral a)) ) <?> "natural"
 
@@ -607,7 +601,7 @@ var = do
         symbol "@"
         Text.Parser.Token.natural )
     let b = case m of
-            Just b  -> b
+            Just r  -> r
             Nothing -> 0
     return (V a b)
 

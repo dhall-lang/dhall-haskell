@@ -8,7 +8,6 @@ module Main where
 
 import Control.Exception (SomeException)
 import Data.Monoid (mempty)
-import Data.Traversable
 import Dhall.Core (pretty, normalize)
 import Dhall.Import (Imported(..), load)
 import Dhall.Parser (Src, exprFromText)
@@ -22,7 +21,6 @@ import qualified Control.Exception
 import qualified Data.Text.Lazy.IO
 import qualified Dhall.TypeCheck
 import qualified Options.Generic
-import qualified System.Exit
 import qualified System.IO
 
 data Mode = Default | Resolve | TypeCheck | Normalize
