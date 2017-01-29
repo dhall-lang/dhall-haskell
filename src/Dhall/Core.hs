@@ -263,57 +263,57 @@ instance Applicative (Expr s) where
 instance Monad (Expr s) where
     return = pure
 
-    Const c           >>= _ = Const c
-    Var v             >>= _ = Var v
-    Lam x _A  b       >>= k = Lam x (_A >>= k) ( b >>= k)
-    Pi  x _A _B       >>= k = Pi  x (_A >>= k) (_B >>= k)
-    App f a           >>= k = App (f >>= k) (a >>= k)
-    Let f mt r e      >>= k = Let f (fmap (>>= k) mt) (r >>= k) (e >>= k)
-    Annot x t         >>= k = Annot (x >>= k) (t >>= k)
-    Bool              >>= _ = Bool
-    BoolLit b         >>= _ = BoolLit b
-    BoolAnd l r       >>= k = BoolAnd (l >>= k) (r >>= k)
-    BoolOr  l r       >>= k = BoolOr  (l >>= k) (r >>= k)
-    BoolEQ  l r       >>= k = BoolEQ  (l >>= k) (r >>= k)
-    BoolNE  l r       >>= k = BoolNE  (l >>= k) (r >>= k)
-    BoolIf x y z      >>= k = BoolIf (x >>= k) (y >>= k) (z >>= k)
-    Natural           >>= _ = Natural
-    NaturalLit n      >>= _ = NaturalLit n
-    NaturalFold       >>= _ = NaturalFold
-    NaturalBuild      >>= _ = NaturalBuild
-    NaturalIsZero     >>= _ = NaturalIsZero
-    NaturalEven       >>= _ = NaturalEven
-    NaturalOdd        >>= _ = NaturalOdd
-    NaturalPlus  l r  >>= k = NaturalPlus  (l >>= k) (r >>= k)
-    NaturalTimes l r  >>= k = NaturalTimes (l >>= k) (r >>= k)
-    Integer           >>= _ = Integer
-    IntegerLit n      >>= _ = IntegerLit n
-    Double            >>= _ = Double
-    DoubleLit n       >>= _ = DoubleLit n
-    Text              >>= _ = Text
-    TextLit t         >>= _ = TextLit t
-    TextAppend l r    >>= k = TextAppend (l >>= k) (r >>= k)
-    List              >>= _ = List
-    ListLit t es      >>= k = ListLit (fmap (>>= k) t) (fmap (>>= k) es)
-    ListBuild         >>= _ = ListBuild
-    ListFold          >>= _ = ListFold
-    ListLength        >>= _ = ListLength
-    ListHead          >>= _ = ListHead
-    ListLast          >>= _ = ListLast
-    ListIndexed       >>= _ = ListIndexed
-    ListReverse       >>= _ = ListReverse
-    Optional          >>= _ = Optional
-    OptionalLit t es  >>= k = OptionalLit (t >>= k) (fmap (>>= k) es)
-    OptionalFold      >>= _ = OptionalFold
-    Record    kts     >>= k = Record    (fmap (>>= k) kts)
-    RecordLit kvs     >>= k = RecordLit (fmap (>>= k) kvs)
-    Union     kts     >>= k = Union     (fmap (>>= k) kts)
-    UnionLit k' v kts >>= k = UnionLit k' (v >>= k) (fmap (>>= k) kts)
-    Combine x y       >>= k = Combine (x >>= k) (y >>= k)
-    Merge x y t       >>= k = Merge (x >>= k) (y >>= k) (t >>= k)
-    Field r x         >>= k = Field (r >>= k) x
-    Note a b          >>= k = Note a (b >>= k)
-    Embed r           >>= k = k r
+    Const a          >>= _ = Const a
+    Var a            >>= _ = Var a
+    Lam a b c        >>= k = Lam a (b >>= k) (c >>= k)
+    Pi  a b c        >>= k = Pi a (b >>= k) (c >>= k)
+    App a b          >>= k = App (a >>= k) (b >>= k)
+    Let a b c d      >>= k = Let a (fmap (>>= k) b) (c >>= k) (d >>= k)
+    Annot a b        >>= k = Annot (a >>= k) (b >>= k)
+    Bool             >>= _ = Bool
+    BoolLit a        >>= _ = BoolLit a
+    BoolAnd a b      >>= k = BoolAnd (a >>= k) (b >>= k)
+    BoolOr  a b      >>= k = BoolOr  (a >>= k) (b >>= k)
+    BoolEQ  a b      >>= k = BoolEQ  (a >>= k) (b >>= k)
+    BoolNE  a b      >>= k = BoolNE  (a >>= k) (b >>= k)
+    BoolIf a b c     >>= k = BoolIf (a >>= k) (b >>= k) (c >>= k)
+    Natural          >>= _ = Natural
+    NaturalLit a     >>= _ = NaturalLit a
+    NaturalFold      >>= _ = NaturalFold
+    NaturalBuild     >>= _ = NaturalBuild
+    NaturalIsZero    >>= _ = NaturalIsZero
+    NaturalEven      >>= _ = NaturalEven
+    NaturalOdd       >>= _ = NaturalOdd
+    NaturalPlus  a b >>= k = NaturalPlus  (a >>= k) (b >>= k)
+    NaturalTimes a b >>= k = NaturalTimes (a >>= k) (b >>= k)
+    Integer          >>= _ = Integer
+    IntegerLit a     >>= _ = IntegerLit a
+    Double           >>= _ = Double
+    DoubleLit a      >>= _ = DoubleLit a
+    Text             >>= _ = Text
+    TextLit a        >>= _ = TextLit a
+    TextAppend a b   >>= k = TextAppend (a >>= k) (b >>= k)
+    List             >>= _ = List
+    ListLit a b      >>= k = ListLit (fmap (>>= k) a) (fmap (>>= k) b)
+    ListBuild        >>= _ = ListBuild
+    ListFold         >>= _ = ListFold
+    ListLength       >>= _ = ListLength
+    ListHead         >>= _ = ListHead
+    ListLast         >>= _ = ListLast
+    ListIndexed      >>= _ = ListIndexed
+    ListReverse      >>= _ = ListReverse
+    Optional         >>= _ = Optional
+    OptionalLit a b  >>= k = OptionalLit (a >>= k) (fmap (>>= k) b)
+    OptionalFold     >>= _ = OptionalFold
+    Record    a      >>= k = Record (fmap (>>= k) a)
+    RecordLit a      >>= k = RecordLit (fmap (>>= k) a)
+    Union     a      >>= k = Union (fmap (>>= k) a)
+    UnionLit a b c   >>= k = UnionLit a (b >>= k) (fmap (>>= k) c)
+    Combine a b      >>= k = Combine (a >>= k) (b >>= k)
+    Merge a b c      >>= k = Merge (a >>= k) (b >>= k) (c >>= k)
+    Field a b        >>= k = Field (a >>= k) b
+    Note a b         >>= k = Note a (b >>= k)
+    Embed a          >>= k = k a
 
 instance Bifunctor Expr where
     first _ (Const a         ) = Const a
