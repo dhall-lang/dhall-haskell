@@ -281,7 +281,7 @@ exprB = choice
     ,   noted      exprB1
     ,   noted      exprB3
     ,   noted      exprB5
-    ,   noted      exprB6
+    ,   noted (try exprB6)
     ,   noted      exprB7
     ,   noted (try exprB2)
     ,              exprB8
@@ -343,7 +343,7 @@ exprB = choice
         symbol ":"
         b <- listLike
         c <- exprE
-        return (b c (Data.Vector.fromList a))
+        return (b c a)
 
     exprB7 = do
         reserve "merge"
@@ -363,7 +363,7 @@ listLike =
   where
     listLike0 = do
         reserve "List"
-        return ListLit
+        return (\a b -> ListLit (Just a) b)
 
     listLike1 = do
         reserve "Optional"
@@ -421,6 +421,7 @@ exprF = choice
     ,   noted (try exprF30)
     ,   noted      exprF31
     ,   noted      exprF32
+    ,   noted      exprF33
     ,   (choice
             [   noted      exprF03
             ,   noted      exprF04
@@ -448,7 +449,7 @@ exprF = choice
             ]
         ) <?> "built-in value"
     ,   noted      exprF00
-    ,              exprF33
+    ,              exprF34
     ]
   where
     exprF00 = do
@@ -575,11 +576,13 @@ exprF = choice
 
     exprF31 = unionLit <?> "union literal"
 
-    exprF32 = do
+    exprF32 = listLit <?> "list literal"
+
+    exprF33 = do
         a <- import_ <?> "import"
         return (Embed a)
 
-    exprF33 = do
+    exprF34 = do
         symbol "("
         a <- exprA
         symbol ")"
@@ -608,8 +611,10 @@ var = do
             Nothing -> 0
     return (V a b)
 
-elems :: Parser [Expr Src Path]
-elems = Text.Parser.Combinators.sepBy exprA (symbol ",")
+elems :: Parser (Vector (Expr Src Path))
+elems = do
+    a <- Text.Parser.Combinators.sepBy exprA (symbol ",")
+    return (Data.Vector.fromList a)
 
 recordLit :: Parser (Expr Src Path)
 recordLit =
@@ -699,6 +704,13 @@ unionLit =
         d <- toMap c
         symbol ">"
         return (UnionLit a b d)
+
+listLit :: Parser (Expr Src Path)
+listLit = do
+    symbol "["
+    a <- elems
+    symbol "]"
+    return (ListLit Nothing a)
 
 import_ :: Parser Path
 import_ = do

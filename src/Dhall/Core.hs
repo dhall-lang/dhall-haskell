@@ -211,8 +211,9 @@ data Expr s a
     | TextAppend (Expr s a) (Expr s a)
     -- | > List                                     ~  List
     | List
-    -- | > ListLit t [x, y, z]                      ~  [x, y, z] : List t
-    | ListLit (Expr s a) (Vector (Expr s a))
+    -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : List t
+    -- | > ListLit  Nothing  [x, y, z]              ~  [x, y, z]
+    | ListLit (Maybe (Expr s a)) (Vector (Expr s a))
     -- | > ListBuild                                ~  List/build
     | ListBuild
     -- | > ListFold                                 ~  List/fold
@@ -293,7 +294,7 @@ instance Monad (Expr s) where
     TextLit t         >>= _ = TextLit t
     TextAppend l r    >>= k = TextAppend (l >>= k) (r >>= k)
     List              >>= _ = List
-    ListLit t es      >>= k = ListLit (t >>= k) (fmap (>>= k) es)
+    ListLit t es      >>= k = ListLit (fmap (>>= k) t) (fmap (>>= k) es)
     ListBuild         >>= _ = ListBuild
     ListFold          >>= _ = ListFold
     ListLength        >>= _ = ListLength
@@ -346,7 +347,7 @@ instance Bifunctor Expr where
     first _ (TextLit a       ) = TextLit a
     first k (TextAppend a b  ) = TextAppend (first k a) (first k b)
     first _  List              = List
-    first k (ListLit a b     ) = ListLit (first k a) (fmap (first k) b)
+    first k (ListLit a b     ) = ListLit (fmap (first k) a) (fmap (first k) b)
     first _  ListBuild         = ListBuild
     first _  ListFold          = ListFold
     first _  ListLength        = ListLength
@@ -461,7 +462,9 @@ buildExprB (Let a (Just b) c d) =
     <>  buildExprA c
     <>  " in "
     <>  buildExprB d
-buildExprB (ListLit a b) =
+buildExprB (ListLit Nothing b) =
+    "[" <> buildElems (Data.Vector.toList b) <> "]"
+buildExprB (ListLit (Just a) b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExprE a
 buildExprB (OptionalLit a b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : Optional "  <> buildExprE a
@@ -847,7 +850,7 @@ shift d v (TextAppend a b) = TextAppend a' b'
 shift _ _ List = List
 shift d v (ListLit a b) = ListLit a' b'
   where
-    a' =       shift d v  a
+    a' = fmap (shift d v) a
     b' = fmap (shift d v) b
 shift _ _ ListBuild = ListBuild
 shift _ _ ListFold = ListFold
@@ -978,7 +981,7 @@ subst x e (TextAppend a b) = TextAppend a' b'
 subst _ _ List = List
 subst x e (ListLit a b) = ListLit a' b'
   where
-    a' =       subst x e  a
+    a' = fmap (subst x e) a
     b' = fmap (subst x e) b
 subst _ _ ListBuild = ListBuild
 subst _ _ ListFold = ListFold
@@ -1078,7 +1081,7 @@ normalize e = case e of
             App NaturalEven (NaturalLit n) -> BoolLit (even n)
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
             App (App ListBuild t) k
-                | check     -> ListLit t (buildVector k')
+                | check     -> ListLit (Just t) (buildVector k')
                 | otherwise -> App f' a'
               where
                 labeled =
@@ -1100,16 +1103,16 @@ normalize e = case e of
                 cons' y ys = App (App cons y) ys
             App (App ListLength _) (ListLit _ ys) ->
                 NaturalLit (fromIntegral (Data.Vector.length ys))
-            App (App ListHead _) (ListLit t ys) ->
+            App (App ListHead t) (ListLit _ ys) ->
                 normalize (OptionalLit t (Data.Vector.take 1 ys))
-            App (App ListLast _) (ListLit t ys) ->
+            App (App ListLast t) (ListLit _ ys) ->
                 normalize (OptionalLit t y)
               where
                 y = if Data.Vector.null ys
                     then Data.Vector.empty
                     else Data.Vector.singleton (Data.Vector.last ys)
-            App (App ListIndexed _) (ListLit t xs) ->
-                normalize (ListLit t' (fmap adapt (Data.Vector.indexed xs)))
+            App (App ListIndexed t) (ListLit _ xs) ->
+                normalize (ListLit (Just t') (fmap adapt (Data.Vector.indexed xs)))
               where
                 t' = Record (Data.Map.fromList kts)
                   where
@@ -1121,8 +1124,8 @@ normalize e = case e of
                     kvs = [ ("index", NaturalLit (fromIntegral n))
                           , ("value", x)
                           ]
-            App (App ListReverse _) (ListLit t xs) ->
-                normalize (ListLit t (Data.Vector.reverse xs))
+            App (App ListReverse t) (ListLit _ xs) ->
+                normalize (ListLit (Just t) (Data.Vector.reverse xs))
             App (App (App (App (App OptionalFold _) (OptionalLit _ xs)) _) just) nothing ->
                 normalize (maybe nothing just' (toMaybe xs))
               where
@@ -1232,7 +1235,7 @@ normalize e = case e of
     List -> List
     ListLit t es -> ListLit t' es'
       where
-        t'  =      normalize t
+        t'  = fmap normalize t
         es' = fmap normalize es
     ListBuild -> ListBuild
     ListFold -> ListFold
@@ -1421,7 +1424,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
                     _ -> True
             _ -> True
     List -> True
-    ListLit t es -> isNormalized t && all isNormalized es
+    ListLit t es -> all isNormalized t && all isNormalized es
     ListBuild -> True
     ListFold -> True
     ListLength -> True
