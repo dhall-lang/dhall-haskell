@@ -51,7 +51,7 @@ $ cat ./config
 
 ```
 $ cat ./bar
-[3.0, 4.0, 5.0] : List Double
+[3.0, 4.0, 5.0]
 ```
 
 ... you can interpret the Haskell program like this:
