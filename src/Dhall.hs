@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE QuasiQuotes         #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators       #-}
@@ -40,6 +41,7 @@ import Control.Exception (Exception)
 import Data.Monoid ((<>))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
+import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Dhall.Core (Expr(..))
 import Dhall.Import (Imported(..))
@@ -53,6 +55,7 @@ import Text.Trifecta.Delta (Delta(..))
 import qualified Control.Exception
 import qualified Data.ByteString.Lazy
 import qualified Data.Map
+import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
@@ -61,10 +64,33 @@ import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
+import qualified NeatInterpolation
 
 throws :: Exception e => Either e a -> IO a
 throws (Left  e) = Control.Exception.throwIO e
 throws (Right r) = return r
+
+{-| Every `Type` must obey the contract that if an expression's type matches the
+    the `expected` type then the `extract` function must succeed.  If not, then
+    this exception is thrown
+
+    This exception indicates that an invalid `Type` was provided to the `input`
+    function
+-}
+data InvalidType = InvalidType deriving (Typeable)
+
+_ERROR :: Data.Text.Text
+_ERROR = "\ESC[1;31mError\ESC[0m"
+
+instance Show InvalidType where
+    show InvalidType = Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: Invalid Dhall.Type
+
+Every Type must provide an extract function that succeeds if an expression
+matches the expected type.  You provided a Type that disobeys this contract
+|]
+
+instance Exception InvalidType
 
 {-| Type-check and evaluate a Dhall program, decoding the result into Haskell
 
@@ -90,8 +116,8 @@ input
     -- ^ The decoded value in Haskell
 input (Type {..}) txt = do
     let delta = Directed "(input)" 0 0 0 0
-    expr     <- throws (Dhall.Parser.exprFromText delta txt)
-    expr'    <- Dhall.Import.load expr
+    expr  <- throws (Dhall.Parser.exprFromText delta txt)
+    expr' <- Dhall.Import.load expr
     let suffix =
             ( Data.ByteString.Lazy.toStrict
             . Data.Text.Lazy.Encoding.encodeUtf8
@@ -108,7 +134,7 @@ input (Type {..}) txt = do
     _ <- throws (Dhall.TypeCheck.typeOf annot)
     case extract (Dhall.Core.normalize expr') of
         Just x  -> return x
-        Nothing -> fail "input: malformed `Type`"
+        Nothing -> Control.Exception.throwIO InvalidType
 
 {-| Use this to provide more detailed error messages
 
