@@ -777,7 +777,7 @@ exprFromText delta text = case result of
 
     parser = unParser (do
         Text.Parser.Token.whiteSpace
-        r <- exprA import_
+        r <- expr
         Text.Parser.Combinators.eof
         return r )
 

@@ -370,8 +370,7 @@ instance Bifunctor Expr where
 
     second = fmap
 
-instance IsString (Expr s a)
-  where
+instance IsString (Expr s a) where
     fromString str = Var (fromString str)
 
 {-  There is a one-to-one correspondence between the builders in this section
@@ -683,7 +682,8 @@ buildAlternativeType :: Buildable a => (Text, Expr s a) -> Builder
 buildAlternativeType (a, b) = buildLabel a <> " : " <> buildExprA b
 
 -- | Builder corresponding to the @unionLit@ parser in "Dhall.Parser"
-buildUnionLit :: Buildable a => Text -> Expr s a -> Map Text (Expr s a) -> Builder
+buildUnionLit
+    :: Buildable a => Text -> Expr s a -> Map Text (Expr s a) -> Builder
 buildUnionLit a b c
     | Data.Map.null c =
             "< "
@@ -1466,12 +1466,15 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
     Note _ e' -> isNormalized e'
     Embed _ -> True
 
+_ERROR :: Data.Text.Text
+_ERROR = "\ESC[1;31mError\ESC[0m"
+
 {-| Utility function used to throw internal errors that should never happen
     (in theory) but that are not enforced by the type system
 -}
 internalError :: Data.Text.Text -> forall b . b
 internalError text = error (Data.Text.unpack [NeatInterpolation.text|
-Error: Compiler bug
+$_ERROR: Compiler bug
 
 Explanation: This error message means that there is a bug in the Dhall compiler.
 You didn't do anything wrong, but if you would like to see this problem fixed
