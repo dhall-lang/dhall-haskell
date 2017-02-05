@@ -348,8 +348,8 @@ vector (Type extractIn expectedIn) = Type extractOut expectedOut
 [1,2,3]
 
     This class auto-generates a default implementation for records that
-    implement `Generic`.  This does not auto-generate an instance for sum types
-    nor recursive types.
+    implement `Generic`.  This does not auto-generate an instance for recursive
+    types.
 -}
 class Interpret a where
     auto :: Type a
