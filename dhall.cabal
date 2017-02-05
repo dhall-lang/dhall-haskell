@@ -1,5 +1,5 @@
 Name: dhall
-Version: 1.0.2
+Version: 1.1.0
 Cabal-Version: >=1.8.0.2
 Build-Type: Simple
 Tested-With: GHC == 7.10.2, GHC == 8.0.1
@@ -22,6 +22,7 @@ Description:
     .
     Read "Dhall.Tutorial" to learn how to use this library
 Category: Compiler
+Extra-Source-Files: CHANGELOG.md
 Source-Repository head
     Type: git
     Location: https://github.com/Gabriel439/Haskell-Dhall-Library
