@@ -241,13 +241,13 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Therefore, since we can decode a @Bool@, we must also be able to decode a
 -- @List@ of @Bool@s, like this:
 --
--- > >>> input auto "[True, False] : List Bool" :: IO (Vector Bool)
+-- > >>> input auto "[True, False]" :: IO (Vector Bool)
 -- > [True,False]
 --
 -- We could also specify what type to decode by providing an explicit `Type`
 -- instead of using `auto` with a type annotation:
 --
--- > >>> input (vector bool) "[True, False] : List Bool"
+-- > >>> input (vector bool) "[True, False]"
 -- > [True, False]
 --
 -- __Exercise:__ Create a @./config@ file that the following program can decode:
@@ -358,7 +358,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- ... and read in all three files in a single expression:
 -- 
--- > >>> input auto "[ ./bool1 , ./bool2 , ./both ] : List Bool" :: IO (Vector Bool)
+-- > >>> input auto "[ ./bool1 , ./bool2 , ./both ]" :: IO (Vector Bool)
 -- > [True,False,False]
 --
 -- Each file path is replaced with the Dhall expression contained within that
@@ -375,7 +375,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > }
 -- > EOF
 --
--- > $ echo "[ 3.0, 4.0, 5.0 ] : List Double" > ./bar
+-- > $ echo "[3.0, 4.0, 5.0]" > ./bar
 --
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
@@ -419,7 +419,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- You can import types, too.  For example, we can change our @./bar@ file to:
 --
--- > $ echo "[ 3.0, 4.0, 5.0 ] : List ./type" > ./bar
+-- > $ echo "[3.0, 4.0, 5.0] : List ./type" > ./bar
 --
 -- ... then specify the @./type@ in a separate file:
 --
@@ -480,22 +480,21 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > 
 -- > (stdin):1:1
 --
--- Also, list elements must all have the same type which must match the declared
--- type of the list.  You will get an error if you try to store any other type
--- of element:
+-- Also, list elements must all have the same type.  You will get an error if
+-- you try to store elements of different types in a list:
 --
--- > input auto "[1, True, 3] : List Integer" :: IO (Vector Integer)
+-- > input auto "[1, True, 3]" :: IO (Vector Integer)
 -- > *** Exception: 
--- > Error: List element has the wrong type
+-- > Error: List elements should have the same type
 -- > 
--- > [1, True, 3] : List Integer
+-- > [1, True, 3]
 -- > 
 -- > (input):1:1
 --
--- __Exercise:__ Create a @./config@ file that decodes to the following result:
+-- __Exercise:__ What is the shortest @./config@ file that you can decode using
+-- this command:
 --
 -- > >>> input auto "./config" :: IO (Vector (Vector Integer))
--- > [[1,2,3],[4,5,6]]
 
 -- $optional
 --
@@ -2148,18 +2147,3 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- the above polymorphic function then you'd get the unexpected behavior where
 -- a list literal is a function if the list has 0 elements but not a function
 -- otherwise.
---
--- * Why do lists require a type annotation when using `input`, like this:
--- 
--- > >>> input (list bool) "[True, False] : List Bool"
---
--- The type annotation on a list is not a real type annotation.  Instead, the
--- annotation on a list is part of the mandatory syntax for lists.  This is why
--- you get a parse error instead of a type error if you omit the annotation:
---
--- > dhall
--- > [1, 2]
--- > (stdin):2:1: error: unexpected
--- >     EOF, expected: ":"
--- >     <EOF> 
--- >     ^    

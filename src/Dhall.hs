@@ -72,7 +72,7 @@ throws (Right r) = return r
 
 >>> input integer "2"
 2
->>> input (vector double) "[ 1.0, 2.0 ] : List Bool"
+>>> input (vector double) "[1.0, 2.0]"
 [1.0,2.0]
 
     Use `auto` to automatically select which type to decode based on the
@@ -330,7 +330,7 @@ maybe (Type extractIn expectedIn) = Type extractOut expectedOut
 
 {-| Decode a `Vector`
 
->>> input (vector integer) "[ 1, 2, 3 ] : List Integer"
+>>> input (vector integer) "[1, 2, 3]"
 [1,2,3]
 -}
 vector :: Type a -> Type (Vector a)
@@ -344,7 +344,7 @@ vector (Type extractIn expectedIn) = Type extractOut expectedOut
 {-| Any value that implements `Interpret` can be automatically decoded based on
     the inferred return type of `input`
 
->>> input auto "[1, 2, 3 ] : List Integer" :: IO (Vector Integer)
+>>> input auto "[1, 2, 3]" :: IO (Vector Integer)
 [1,2,3]
 
     This class auto-generates a default implementation for records that
