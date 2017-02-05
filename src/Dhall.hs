@@ -21,6 +21,7 @@ module Dhall
     -- * Types
     , Type
     , Interpret(..)
+    , InvalidType(..)
     , bool
     , natural
     , integer
