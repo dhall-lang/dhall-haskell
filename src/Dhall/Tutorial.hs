@@ -18,7 +18,7 @@ module Dhall.Tutorial (
     -- $lists
 
     -- * Optional values
-    -- $optional
+    -- $optional0
 
     -- * Records
     -- $records
@@ -132,7 +132,7 @@ module Dhall.Tutorial (
     -- $listReverse
 
     -- ** @Optional@
-    -- $optional
+    -- $optional1
 
     -- *** @Optional/fold@
     -- $optionalFold
@@ -148,7 +148,7 @@ module Dhall.Tutorial (
     ) where
 
 import Data.Vector (Vector)
-import Dhall (Interpret(..), Type, detailed, input)
+import Dhall
 
 -- $introduction
 --
@@ -470,20 +470,20 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- required for empty lists but optional for non-empty lists.  You will get a
 -- type error if you provide an empty list without a type annotation:
 --
--- > $ dhall <<< "[]"
--- > 
--- > Use "dhall --explain" for detailed errors
--- > 
+-- > >>> input auto "[]" :: IO (Vector Integer)
+-- > *** Exception: 
 -- > Error: Empty lists need a type annotation
 -- > 
 -- > []
 -- > 
--- > (stdin):1:1
+-- > (input):1:1
+-- > >>> input auto "[] : List Integer" :: IO (Vector Integer)
+-- > []
 --
 -- Also, list elements must all have the same type.  You will get an error if
 -- you try to store elements of different types in a list:
 --
--- > input auto "[1, True, 3]" :: IO (Vector Integer)
+-- > >>> input auto "[1, True, 3]" :: IO (Vector Integer)
 -- > *** Exception: 
 -- > Error: List elements should have the same type
 -- > 
@@ -496,7 +496,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > >>> input auto "./config" :: IO (Vector (Vector Integer))
 
--- $optional
+-- $optional0
 --
 -- @Optional@ values are exactly like lists except they can only hold 0 or 1
 -- elements.  They cannot hold 2 or more elements:
@@ -517,6 +517,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > Just 1
 -- > >>> input auto "[] : Optional Integer" :: IO (Maybe Integer)
 -- > Nothing
+--
+-- You cannot omit the type annotation for @Optional@ values.  The type
+-- annotation is mandatory
 --
 -- __Exercise:__ What is the shortest possible @./config@ file that you can decode
 -- like this:
@@ -1003,7 +1006,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Notice that each handler has to return the same type of result (@Bool@ in
 -- this case) which must also match the declared result type of the @merge@.
 --
--- __Exercise__: Create a list of the following type with at least one element:
+-- __Exercise__: Create a list of the following type with at least one element
 -- per alternative:
 --
 -- > List < Left : Integer | Right : Double >
@@ -1921,9 +1924,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- >
 -- > List/reverse a ([x, y] : List a) = [y, x] : List a
 
--- $optional
+-- $optional1
 --
--- Dhall @Optional@ literals are a 0 or 1 values inside of brackets:
+-- Dhall @Optional@ literals are 0 or 1 values inside of brackets:
 --
 -- > Γ ⊢ t : Type   Γ ⊢ x : t
 -- > ────────────────────────

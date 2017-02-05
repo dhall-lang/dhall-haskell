@@ -112,25 +112,25 @@ instance Buildable Path where
     nearest bound variable and the index increases by one for each bound
     variable of the same name going outward.  The following diagram may help:
 
->                                 +---refers to--+
->                                 |              |
->                                 v              |
-> \(x : Type) -> \(y : Type) -> \(x : Type) -> x@0
+>                               ┌──refers to──┐
+>                               │             │
+>                               v             │
+> λ(x : Type) → λ(y : Type) → λ(x : Type) → x@0
 >
->   +------------------refers to-----------------+
->   |                                            |
->   v                                            |
-> \(x : Type) -> \(y : Type) -> \(x : Type) -> x@1
+> ┌─────────────────refers to─────────────────┐
+> │                                           │
+> v                                           │
+> λ(x : Type) → λ(y : Type) → λ(x : Type) → x@1
 
     This `Int` behaves like a De Bruijn index in the special case where all
     variables have the same name.
 
     You can optionally omit the index if it is @0@:
 
->                           +refers to+
->                           |         |
->                           v         |
-> \(x : *) -> \(y : *) -> \(x : *) -> x
+>                               ┌─refers to─┐
+>                               │           │
+>                               v           │
+> λ(x : Type) → λ(y : Type) → λ(x : Type) → x
 
     Zero indices are omitted when pretty-printing `Var`s and non-zero indices
     appear as a numeric suffix.
@@ -158,8 +158,8 @@ data Expr s a
     | Pi  Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
-    -- | > Let x Nothing  r e  ~  let x     = r in e
-    --   > Let x (Just t) r e  ~  let x : t = r in e
+    -- | > Let x Nothing  r e                       ~  let x     = r in e
+    --   > Let x (Just t) r e                       ~  let x : t = r in e
     | Let Text (Maybe (Expr s a)) (Expr s a) (Expr s a)
     -- | > Annot x t                                ~  x : t
     | Annot (Expr s a) (Expr s a)
@@ -212,7 +212,7 @@ data Expr s a
     -- | > List                                     ~  List
     | List
     -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : List t
-    -- | > ListLit  Nothing  [x, y, z]              ~  [x, y, z]
+    --   > ListLit  Nothing  [x, y, z]              ~  [x, y, z]
     | ListLit (Maybe (Expr s a)) (Vector (Expr s a))
     -- | > ListBuild                                ~  List/build
     | ListBuild
@@ -239,9 +239,9 @@ data Expr s a
     | Record    (Map Text (Expr s a))
     -- | > RecordLit         [(k1, v1), (k2, v2)]   ~  { k1 = v1, k2 = v2 }
     | RecordLit (Map Text (Expr s a))
-    -- | > Union             [(k1, t1), (k2, t2)]   ~  < k1 : t1, k2 : t2 >
+    -- | > Union             [(k1, t1), (k2, t2)]   ~  < k1 : t1 | k2 : t2 >
     | Union     (Map Text (Expr s a))
-    -- | > UnionLit (k1, v1) [(k2, t2), (k3, t3)]   ~  < k1 = t1, k2 : t2, k3 : t3 > 
+    -- | > UnionLit (k1, v1) [(k2, t2), (k3, t3)]   ~  < k1 = t1 | k2 : t2 | k3 : t3 > 
     | UnionLit Text (Expr s a) (Map Text (Expr s a))
     -- | > Combine x y                              ~  x ∧ y
     | Combine (Expr s a) (Expr s a)

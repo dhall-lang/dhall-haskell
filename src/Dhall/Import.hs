@@ -141,7 +141,7 @@ instance Show Cycle where
 
     To be precise, a strong interpretaton of referential transparency means that
     if you compiled a URL you could replace the expression hosted at that URL
-    with the compiled result.  Let's term this \"static linking\".  Dhall (very
+    with the compiled result.  Let's call this \"static linking\".  Dhall (very
     intentionally) does not satisfy this stronger interpretation of referential
     transparency since \"statically linking\" an expression (i.e. permanently
     resolving all imports) means that the expression will no longer update if

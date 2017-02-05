@@ -117,11 +117,11 @@ propEqual eL0 eR0 =
     go _ _ = return False
 
 {-| Type-check an expression and return the expression's type if type-checking
-    suceeds or an error if type-checking fails
+    succeeds or an error if type-checking fails
 
     `typeWith` does not necessarily normalize the type since full normalization
     is not necessary for just type-checking.  If you actually care about the
-    returned type then you may want to `normalize` it afterwards.
+    returned type then you may want to `Dhall.Core.normalize` it afterwards.
 -}
 typeWith :: Context (Expr s X) -> Expr s X -> Either (TypeError s) (Expr s X)
 typeWith _     (Const c         ) = do
