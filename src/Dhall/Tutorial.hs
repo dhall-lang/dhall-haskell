@@ -18,13 +18,16 @@ module Dhall.Tutorial (
     -- $lists
 
     -- * Optional values
-    -- $optional
+    -- $optional0
 
     -- * Records
     -- $records
 
     -- * Functions
     -- $functions
+
+    -- * Strings
+    -- $strings
 
     -- * Combine
     -- $combine
@@ -129,7 +132,7 @@ module Dhall.Tutorial (
     -- $listReverse
 
     -- ** @Optional@
-    -- $optional
+    -- $optional1
 
     -- *** @Optional/fold@
     -- $optionalFold
@@ -145,7 +148,7 @@ module Dhall.Tutorial (
     ) where
 
 import Data.Vector (Vector)
-import Dhall (Interpret(..), Type, detailed, input)
+import Dhall
 
 -- $introduction
 --
@@ -155,7 +158,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- 
 -- > $ cat ./config
 -- > { foo = 1
--- > , bar = [3.0, 4.0, 5.0] : List Double
+-- > , bar = [3.0, 4.0, 5.0]
 -- > }
 -- 
 -- You can read the above configuration file into Haskell using the following
@@ -238,13 +241,13 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Therefore, since we can decode a @Bool@, we must also be able to decode a
 -- @List@ of @Bool@s, like this:
 --
--- > >>> input auto "[True, False] : List Bool" :: IO (Vector Bool)
+-- > >>> input auto "[True, False]" :: IO (Vector Bool)
 -- > [True,False]
 --
 -- We could also specify what type to decode by providing an explicit `Type`
 -- instead of using `auto` with a type annotation:
 --
--- > >>> input (vector bool) "[True, False] : List Bool"
+-- > >>> input (vector bool) "[True, False]"
 -- > [True, False]
 --
 -- __Exercise:__ Create a @./config@ file that the following program can decode:
@@ -355,7 +358,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- ... and read in all three files in a single expression:
 -- 
--- > >>> input auto "[ ./bool1 , ./bool2 , ./both ] : List Bool" :: IO (Vector Bool)
+-- > >>> input auto "[ ./bool1 , ./bool2 , ./both ]" :: IO (Vector Bool)
 -- > [True,False,False]
 --
 -- Each file path is replaced with the Dhall expression contained within that
@@ -372,7 +375,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > }
 -- > EOF
 --
--- > $ echo "[ 3.0, 4.0, 5.0 ] : List Double" > ./bar
+-- > $ echo "[3.0, 4.0, 5.0]" > ./bar
 --
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
@@ -416,7 +419,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- You can import types, too.  For example, we can change our @./bar@ file to:
 --
--- > $ echo "[ 3.0, 4.0, 5.0 ] : List ./type" > ./bar
+-- > $ echo "[3.0, 4.0, 5.0] : List ./type" > ./bar
 --
 -- ... then specify the @./type@ in a separate file:
 --
@@ -461,35 +464,39 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- You can store 0 or more values of the same type in a list, like this:
 --
--- > [1, 2, 3] : List Integer
+-- > [1, 2, 3]
 --
--- Every list must be followed by the type of the list.  The type annotation is
--- not optional and you will get an error if you omit the annotation:
+-- Every list can be followed by the type of the list.  The type annotation is
+-- required for empty lists but optional for non-empty lists.  You will get a
+-- type error if you provide an empty list without a type annotation:
 --
--- > >>> input auto "[1, 2, 3]" :: IO (Vector Integer)
--- > *** Exception: (input):1:10: error: unexpected
--- >     EOF, expected: ":"
--- > [1, 2, 3]<EOF> 
--- >          ^     
---
--- Also, list elements must all have the same type which must match the declared
--- type of the list.  You will get an error if you try to store any other type
--- of element:
---
--- > input auto "[1, True, 3] : List Integer" :: IO (Vector Integer)
+-- > >>> input auto "[]" :: IO (Vector Integer)
 -- > *** Exception: 
--- > Error: List element has the wrong type
+-- > Error: Empty lists need a type annotation
 -- > 
--- > [1, True, 3] : List Integer
+-- > []
+-- > 
+-- > (input):1:1
+-- > >>> input auto "[] : List Integer" :: IO (Vector Integer)
+-- > []
+--
+-- Also, list elements must all have the same type.  You will get an error if
+-- you try to store elements of different types in a list:
+--
+-- > >>> input auto "[1, True, 3]" :: IO (Vector Integer)
+-- > *** Exception: 
+-- > Error: List elements should have the same type
+-- > 
+-- > [1, True, 3]
 -- > 
 -- > (input):1:1
 --
--- __Exercise:__ Create a @./config@ file that decodes to the following result:
+-- __Exercise:__ What is the shortest @./config@ file that you can decode using
+-- this command:
 --
 -- > >>> input auto "./config" :: IO (Vector (Vector Integer))
--- > [[1,2,3],[4,5,6]]
 
--- $optional
+-- $optional0
 --
 -- @Optional@ values are exactly like lists except they can only hold 0 or 1
 -- elements.  They cannot hold 2 or more elements:
@@ -510,6 +517,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > Just 1
 -- > >>> input auto "[] : Optional Integer" :: IO (Maybe Integer)
 -- > Nothing
+--
+-- You cannot omit the type annotation for @Optional@ values.  The type
+-- annotation is mandatory
 --
 -- __Exercise:__ What is the shortest possible @./config@ file that you can decode
 -- like this:
@@ -588,7 +598,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > $ cat > makeBools
 -- > \(n : Bool) ->
--- >         [ n && True, n && False, n || True, n || False ] : List Bool
+-- >     [ n && True, n && False, n || True, n || False ]
 -- > <Ctrl-D>
 --
 -- ... or we can use Dhall's support for Unicode characters to use @λ@ (U+03BB)
@@ -597,12 +607,12 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > $ cat > makeBools
 -- > λ(n : Bool) →
--- >         [ n && True, n && False, n || True, n || False ] : List Bool
+-- >     [ n && True, n && False, n || True, n || False ]
 -- > <Ctrl-D>
 --
--- You can read either one as a function of one argument named @n@ that has type
+-- You can read this as a function of one argument named @n@ that has type
 -- @Bool@.  This function returns a @List@ of @Bool@s.  Each element of the
--- @List@ depends on the input argument.
+-- @List@ depends on the input argument named @n@.
 --
 -- The (ASCII) syntax for anonymous functions resembles the syntax for anonymous
 -- functions in Haskell.  The only difference is that Dhall requires you to
@@ -619,7 +629,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > <Ctrl-D>
 -- > ∀(n : Bool) → List Bool
 -- > 
--- > λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool
+-- > λ(n : Bool) → [n && True, n && False, n || True, n || False]
 --
 -- The first line says that @makeBools@ is a function of one argument named @n@
 -- that has type @Bool@ and the function returns a @List@ of @Bool@s.  The @∀@
@@ -642,7 +652,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- The second line of Dhall's output is our program's normal form:
 --
--- > λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool
+-- > λ(n : Bool) → [n && True, n && False, n || True, n || False]
 --
 -- ... which in this case happens to be identical to our original program.
 --
@@ -660,17 +670,17 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > <Ctrl-D>
 -- > List Bool
 -- > 
--- > [True, False, True, True] : List Bool
+-- > [True, False, True, True]
 --
 -- Remember that file paths are synonymous with their contents, so the above
 -- code is exactly equivalent to:
 -- 
 -- > $ dhall
--- > (λ(n : Bool) → [n && True, n && False, n || True, n || False] : List Bool) True
+-- > (λ(n : Bool) → [n && True, n && False, n || True, n || False]) True
 -- > <Ctrl-D>
 -- > List Bool
 -- > 
--- > [True, False, True, True] : List Bool
+-- > [True, False, True, True]
 --
 -- When you apply an anonymous function to an argument, you substitute the
 -- \"bound variable" with the function's argument:
@@ -685,13 +695,13 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- like this:
 --
 -- > -- If we replace all of these `n`s with `True` ...
--- > [n && True, n && False, n || True, n || False] : List Bool
+-- > [n && True, n && False, n || True, n || False]
 -- >
 -- > -- ... then we get this:
--- > [True && True, True && False, True || True, True || False] : List Bool
+-- > [True && True, True && False, True || True, True || False]
 -- >
 -- > -- ... which reduces to the following normal form:
--- > [True, False, True, True] : List Bool
+-- > [True, False, True, True]
 --
 -- Now that we've verified that our function type checks and works, we can use
 -- the same function within Haskell:
@@ -712,6 +722,41 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- __Exercise__: Use the @dhall@ compiler to apply your function to a sample
 -- record
+
+-- $strings
+-- Dhall supports ordinary string literals with Haskell-style escaping rules:
+--
+-- > dhall
+-- > "Hello, \"world\"!"
+-- > <Ctrl-D>
+-- > Text
+-- >
+-- > "Hello, \"world\"!"
+--
+-- ... and Dhall also supports Nix-style multi-line string literals:
+--
+-- > dhall
+-- > ''
+-- >     #!/bin/bash
+-- >     
+-- >     echo "Hi!"
+-- > ''
+-- > <Ctrl-D>
+-- > Text
+-- >
+-- > "\n#!/bin/bash\n\necho \"Hi!\"\n"
+--
+-- These \"double single quote strings\" ignore all special characters, with one
+-- exception: if you want to include a @''@ in the string, you will need to
+-- escape it with a preceding @'@ (i.e. use @'''@ to insert @''@ into the final
+-- string).
+--
+-- These strings also strip leading whitespace using the same rules as Nix.
+-- Specifically: \"it strips from each line a number of spaces equal to the
+-- minimal indentation of the string as a whole (disregarding the indentation
+-- of empty lines).\"
+--
+-- Unlike Nix-style strings, you cannot interpolate variables into the string.
 
 -- $combine
 --
@@ -961,7 +1006,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Notice that each handler has to return the same type of result (@Bool@ in
 -- this case) which must also match the declared result type of the @merge@.
 --
--- __Exercise__: Create a list of the following type with at least one element:
+-- __Exercise__: Create a list of the following type with at least one element
 -- per alternative:
 --
 -- > List < Left : Integer | Right : Double >
@@ -1074,7 +1119,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- ... and the second argument is the list to reverse:
 --
 -- > $ dhall
--- > List/reverse Bool ([True, False] : List Bool)
+-- > List/reverse Bool [True, False]
 -- > <Ctrl-D>
 -- > List Bool
 -- > 
@@ -1132,7 +1177,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 --
 -- > $ dhall
 -- >     let List/map = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/map
--- > in  λ(f : Integer → Integer) → List/map Integer Integer f ([1, 2, 3] : List Integer)
+-- > in  λ(f : Integer → Integer) → List/map Integer Integer f [1, 2, 3]
 -- > <Ctrl-D>
 -- > ∀(f : Integer → Integer) → List Integer
 -- > 
@@ -1696,7 +1741,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Example:
 --
 -- > $ dhall
--- > List/fold Bool ([True, False, True] : List Bool) Bool (λ(x : Bool) → λ(y : Bool) → x && y) True
+-- > List/fold Bool [True, False, True] Bool (λ(x : Bool) → λ(y : Bool) → x && y) True
 -- > <Ctrl-D>
 -- > Bool
 -- > 
@@ -1745,7 +1790,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Example:
 --
 -- > $ dhall
--- > List/length Integer ([1, 2, 3] : List Integer)
+-- > List/length Integer [1, 2, 3]
 -- > <Ctrl-D>
 -- > Natural
 -- > 
@@ -1765,7 +1810,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Example:
 --
 -- > $ dhall
--- > List/head Integer ([1, 2, 3] : List Integer)
+-- > List/head Integer [1, 2, 3]
 -- > <Ctrl-D>
 -- > Optional Integer
 -- > 
@@ -1796,7 +1841,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Example:
 --
 -- > $ dhall
--- > List/last Integer ([1, 2, 3] : List Integer)
+-- > List/last Integer [1, 2, 3]
 -- > <Ctrl-D>
 -- > Optional Integer
 -- > 
@@ -1827,7 +1872,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Example
 --
 -- > $ dhall
--- > List/indexed Text (["ABC", "DEF", "GHI"] : List Text)
+-- > List/indexed Text ["ABC", "DEF", "GHI"]
 -- > <Ctrl-D>
 -- > List { index : Natural, value : Text }
 -- > 
@@ -1852,7 +1897,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- Example:
 --
 -- > $ dhall
--- > List/reverse Integer ([1, 2, 3] : List Integer)
+-- > List/reverse Integer [1, 2, 3]
 -- > <Ctrl-D>
 -- > List Integer
 -- > 
@@ -1879,9 +1924,9 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- >
 -- > List/reverse a ([x, y] : List a) = [y, x] : List a
 
--- $optional
+-- $optional1
 --
--- Dhall @Optional@ literals are a 0 or 1 values inside of brackets:
+-- Dhall @Optional@ literals are 0 or 1 values inside of brackets:
 --
 -- > Γ ⊢ t : Type   Γ ⊢ x : t
 -- > ────────────────────────
@@ -1987,7 +2032,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- > False
 --
 -- Some functions in the Prelude just re-export built-in functions for
--- consistency and documentation, such as @Prelude/Natural/even@, which
+-- consistency and documentation, such as @Prelude\/Natural\/even@, which
 -- re-exports the built-in @Natural/even@ function:
 --
 -- > $ curl https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Natural/even
@@ -2094,13 +2139,7 @@ import Dhall (Interpret(..), Type, detailed, input)
 
 -- $faq
 --
--- * Why do lists require a type annotation?
---
--- Dhall requires type annotations on lists in order to gracefully deal with
--- empty lists.  Without a type annotation the compiler would not be able to
--- infer the type of an empty list expression:
---
--- > []
+-- * Why do empty lists require a type annotation?
 --
 -- Unlike Haskell, Dhall cannot infer a polymorphic type for the empty list
 -- because Dhall represents polymorphic values as functions of types, like this:
@@ -2111,18 +2150,3 @@ import Dhall (Interpret(..), Type, detailed, input)
 -- the above polymorphic function then you'd get the unexpected behavior where
 -- a list literal is a function if the list has 0 elements but not a function
 -- otherwise.
---
--- * Why do lists require a type annotation when using `input`, like this:
--- 
--- > >>> input (list bool) "[True, False] : List Bool"
---
--- The type annotation on a list is not a real type annotation.  Instead, the
--- annotation on a list is part of the mandatory syntax for lists.  This is why
--- you get a parse error instead of a type error if you omit the annotation:
---
--- > dhall
--- > [1, 2]
--- > (stdin):2:1: error: unexpected
--- >     EOF, expected: ":"
--- >     <EOF> 
--- >     ^    

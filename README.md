@@ -1,4 +1,4 @@
-# `dhall 1.0.1`
+# `dhall 1.1.0`
 
 `dhall` is a total programming language specialized to configuration files
 
@@ -51,7 +51,7 @@ $ cat ./config
 
 ```
 $ cat ./bar
-[3.0, 4.0, 5.0] : List Double
+[3.0, 4.0, 5.0]
 ```
 
 ... you can interpret the Haskell program like this:
@@ -87,7 +87,7 @@ False
 ```
 
 Now go read the
-[Dhall tutorial](https://hackage.haskell.org/package/dhall-1.0.1/docs/Dhall-Tutorial.html)
+[Dhall tutorial](https://hackage.haskell.org/package/dhall/docs/Dhall-Tutorial.html)
 to learn more
 
 ## Design philosophy

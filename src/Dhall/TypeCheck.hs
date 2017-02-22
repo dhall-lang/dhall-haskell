@@ -117,11 +117,11 @@ propEqual eL0 eR0 =
     go _ _ = return False
 
 {-| Type-check an expression and return the expression's type if type-checking
-    suceeds or an error if type-checking fails
+    succeeds or an error if type-checking fails
 
     `typeWith` does not necessarily normalize the type since full normalization
     is not necessary for just type-checking.  If you actually care about the
-    returned type then you may want to `normalize` it afterwards.
+    returned type then you may want to `Dhall.Core.normalize` it afterwards.
 -}
 typeWith :: Context (Expr s X) -> Expr s X -> Either (TypeError s) (Expr s X)
 typeWith _     (Const c         ) = do
@@ -355,7 +355,26 @@ typeWith ctx e@(TextAppend l r  ) = do
     return Text
 typeWith _      List              = do
     return (Pi "_" (Const Type) (Const Type))
-typeWith ctx e@(ListLit t xs    ) = do
+typeWith ctx e@(ListLit  Nothing  xs) = do
+    if Data.Vector.null xs
+        then Left (TypeError ctx e MissingListType)
+        else do
+            t <- typeWith ctx (Data.Vector.head xs)
+            s <- fmap Dhall.Core.normalize (typeWith ctx t)
+            case s of
+                Const Type -> return ()
+                _ -> Left (TypeError ctx e (InvalidListType t))
+            flip Data.Vector.imapM_ xs (\i x -> do
+                t' <- typeWith ctx x
+                if propEqual t t'
+                    then return ()
+                    else do
+                        let nf_t  = Dhall.Core.normalize t
+                        let nf_t' = Dhall.Core.normalize t'
+                        let err   = MismatchedListElements i nf_t x nf_t'
+                        Left (TypeError ctx e err) )
+            return (App List t)
+typeWith ctx e@(ListLit (Just t ) xs) = do
     s <- fmap Dhall.Core.normalize (typeWith ctx t)
     case s of
         Const Type -> return ()
@@ -562,6 +581,8 @@ data TypeMessage s
     | TypeMismatch (Expr s X) (Expr s X) (Expr s X) (Expr s X)
     | AnnotMismatch (Expr s X) (Expr s X) (Expr s X)
     | Untyped
+    | MissingListType
+    | MismatchedListElements Int (Expr s X) (Expr s X) (Expr s X)
     | InvalidListElement Int (Expr s X) (Expr s X) (Expr s X)
     | InvalidListType (Expr s X)
     | InvalidOptionalElement (Expr s X) (Expr s X) (Expr s X)
@@ -1121,9 +1142,9 @@ Some common reasons why you might get this error:
 ● You omit a function argument by mistake:
 
 
-    ┌────────────────────────────────────────┐
-    │ List/head   ([1, 2, 3] : List Integer) │
-    └────────────────────────────────────────┘
+    ┌───────────────────────┐
+    │ List/head   [1, 2, 3] │
+    └───────────────────────┘
                 ⇧
                 ❰List/head❱ is missing the first argument,
                 which should be: ❰Integer❱
@@ -1510,8 +1531,8 @@ prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: Every ❰List❱ documents the type of its elements with a type
-annotation, like this:
+Explanation: ❰List❱s can optionally document the type of their elements with a
+type annotation, like this:
 
 
     ┌──────────────────────────┐
@@ -1525,7 +1546,7 @@ annotation, like this:
     │ [] : List Integer │  An empty ❰List❱
     └───────────────────┘
                 ⇧
-                You still specify the type even when the ❰List❱ is empty
+                You must specify the type when the ❰List❱ is empty
 
 
 The element type must be a type and not something else.  For example, the
@@ -1546,8 +1567,6 @@ following element types are $_NOT valid:
                  This is a ❰Kind❱ and not a ❰Type❱
 
 
-Even if the ❰List❱ is empty you still must specify a valid type
-
 You declared that the ❰List❱'s elements should have type:
 
 ↳ $txt0
@@ -1556,6 +1575,76 @@ You declared that the ❰List❱'s elements should have type:
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+
+prettyTypeMessage MissingListType = do
+    ErrorMessages {..}
+  where
+    short = "Empty lists need a type annotation"
+
+    long =
+        Builder.fromText [NeatInterpolation.text|
+Explanation: Lists do not require a type annotation if they have at least one
+element:
+
+
+    ┌───────────┐
+    │ [1, 2, 3] │  The compiler can infer that this list has type ❰List Integer❱
+    └───────────┘
+
+
+However, empty lists still require a type annotation:
+
+
+    ┌───────────────────┐
+    │ [] : List Integer │  This type annotation is mandatory
+    └───────────────────┘
+
+
+You cannot supply an empty list without a type annotation
+|]
+
+prettyTypeMessage (MismatchedListElements i expr0 expr1 expr2) =
+    ErrorMessages {..}
+  where
+    short = "List elements should have the same type"
+
+    long =
+        Builder.fromText [NeatInterpolation.text|
+Explanation: Every element in a list must have the same type
+
+For example, this is a valid ❰List❱:
+
+
+    ┌───────────┐
+    │ [1, 2, 3] │  Every element in this ❰List❱ is an ❰Integer❱
+    └───────────┘
+
+
+.. but this is $_NOT a valid ❰List❱:
+
+
+    ┌───────────────┐
+    │ [1, "ABC", 3] │  The first and second element have different types
+    └───────────────┘
+
+
+Your first ❰List❱ elements has this type:
+
+↳ $txt0
+
+... but the following element at index $txt1:
+
+↳ $txt2
+
+... has this type instead:
+
+↳ $txt3
+|]
+      where
+        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt1 = Text.toStrict (Dhall.Core.pretty i    )
+        txt2 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt3 = Text.toStrict (Dhall.Core.pretty expr2)
 
 prettyTypeMessage (InvalidListElement i expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -2597,9 +2686,9 @@ Some common reasons why you might get this error:
 
 ● You might have thought that ❰++❱ was the operator to combine two lists:
 
-    ┌───────────────────────────────────────────────────────────┐
-    │ ([1, 2, 3] : List Integer) ++ ([4, 5, 6] : List Integer ) │  Not valid
-    └───────────────────────────────────────────────────────────┘
+    ┌────────────────────────┐
+    │ [1, 2, 3] ++ [4, 5, 6] │  Not valid
+    └────────────────────────┘
 
   The Dhall programming language does not provide a built-in operator for
   combining two lists

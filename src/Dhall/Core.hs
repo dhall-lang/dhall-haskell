@@ -112,25 +112,25 @@ instance Buildable Path where
     nearest bound variable and the index increases by one for each bound
     variable of the same name going outward.  The following diagram may help:
 
->                                 +---refers to--+
->                                 |              |
->                                 v              |
-> \(x : Type) -> \(y : Type) -> \(x : Type) -> x@0
+>                               ┌──refers to──┐
+>                               │             │
+>                               v             │
+> λ(x : Type) → λ(y : Type) → λ(x : Type) → x@0
 >
->   +------------------refers to-----------------+
->   |                                            |
->   v                                            |
-> \(x : Type) -> \(y : Type) -> \(x : Type) -> x@1
+> ┌─────────────────refers to─────────────────┐
+> │                                           │
+> v                                           │
+> λ(x : Type) → λ(y : Type) → λ(x : Type) → x@1
 
     This `Int` behaves like a De Bruijn index in the special case where all
     variables have the same name.
 
     You can optionally omit the index if it is @0@:
 
->                           +refers to+
->                           |         |
->                           v         |
-> \(x : *) -> \(y : *) -> \(x : *) -> x
+>                               ┌─refers to─┐
+>                               │           │
+>                               v           │
+> λ(x : Type) → λ(y : Type) → λ(x : Type) → x
 
     Zero indices are omitted when pretty-printing `Var`s and non-zero indices
     appear as a numeric suffix.
@@ -158,8 +158,8 @@ data Expr s a
     | Pi  Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
-    -- | > Let x Nothing  r e  ~  let x     = r in e
-    --   > Let x (Just t) r e  ~  let x : t = r in e
+    -- | > Let x Nothing  r e                       ~  let x     = r in e
+    --   > Let x (Just t) r e                       ~  let x : t = r in e
     | Let Text (Maybe (Expr s a)) (Expr s a) (Expr s a)
     -- | > Annot x t                                ~  x : t
     | Annot (Expr s a) (Expr s a)
@@ -211,8 +211,9 @@ data Expr s a
     | TextAppend (Expr s a) (Expr s a)
     -- | > List                                     ~  List
     | List
-    -- | > ListLit t [x, y, z]                      ~  [x, y, z] : List t
-    | ListLit (Expr s a) (Vector (Expr s a))
+    -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : List t
+    --   > ListLit  Nothing  [x, y, z]              ~  [x, y, z]
+    | ListLit (Maybe (Expr s a)) (Vector (Expr s a))
     -- | > ListBuild                                ~  List/build
     | ListBuild
     -- | > ListFold                                 ~  List/fold
@@ -238,9 +239,9 @@ data Expr s a
     | Record    (Map Text (Expr s a))
     -- | > RecordLit         [(k1, v1), (k2, v2)]   ~  { k1 = v1, k2 = v2 }
     | RecordLit (Map Text (Expr s a))
-    -- | > Union             [(k1, t1), (k2, t2)]   ~  < k1 : t1, k2 : t2 >
+    -- | > Union             [(k1, t1), (k2, t2)]   ~  < k1 : t1 | k2 : t2 >
     | Union     (Map Text (Expr s a))
-    -- | > UnionLit (k1, v1) [(k2, t2), (k3, t3)]   ~  < k1 = t1, k2 : t2, k3 : t3 > 
+    -- | > UnionLit (k1, v1) [(k2, t2), (k3, t3)]   ~  < k1 = t1 | k2 : t2 | k3 : t3 > 
     | UnionLit Text (Expr s a) (Map Text (Expr s a))
     -- | > Combine x y                              ~  x ∧ y
     | Combine (Expr s a) (Expr s a)
@@ -262,57 +263,57 @@ instance Applicative (Expr s) where
 instance Monad (Expr s) where
     return = pure
 
-    Const c           >>= _ = Const c
-    Var v             >>= _ = Var v
-    Lam x _A  b       >>= k = Lam x (_A >>= k) ( b >>= k)
-    Pi  x _A _B       >>= k = Pi  x (_A >>= k) (_B >>= k)
-    App f a           >>= k = App (f >>= k) (a >>= k)
-    Let f mt r e      >>= k = Let f (fmap (>>= k) mt) (r >>= k) (e >>= k)
-    Annot x t         >>= k = Annot (x >>= k) (t >>= k)
-    Bool              >>= _ = Bool
-    BoolLit b         >>= _ = BoolLit b
-    BoolAnd l r       >>= k = BoolAnd (l >>= k) (r >>= k)
-    BoolOr  l r       >>= k = BoolOr  (l >>= k) (r >>= k)
-    BoolEQ  l r       >>= k = BoolEQ  (l >>= k) (r >>= k)
-    BoolNE  l r       >>= k = BoolNE  (l >>= k) (r >>= k)
-    BoolIf x y z      >>= k = BoolIf (x >>= k) (y >>= k) (z >>= k)
-    Natural           >>= _ = Natural
-    NaturalLit n      >>= _ = NaturalLit n
-    NaturalFold       >>= _ = NaturalFold
-    NaturalBuild      >>= _ = NaturalBuild
-    NaturalIsZero     >>= _ = NaturalIsZero
-    NaturalEven       >>= _ = NaturalEven
-    NaturalOdd        >>= _ = NaturalOdd
-    NaturalPlus  l r  >>= k = NaturalPlus  (l >>= k) (r >>= k)
-    NaturalTimes l r  >>= k = NaturalTimes (l >>= k) (r >>= k)
-    Integer           >>= _ = Integer
-    IntegerLit n      >>= _ = IntegerLit n
-    Double            >>= _ = Double
-    DoubleLit n       >>= _ = DoubleLit n
-    Text              >>= _ = Text
-    TextLit t         >>= _ = TextLit t
-    TextAppend l r    >>= k = TextAppend (l >>= k) (r >>= k)
-    List              >>= _ = List
-    ListLit t es      >>= k = ListLit (t >>= k) (fmap (>>= k) es)
-    ListBuild         >>= _ = ListBuild
-    ListFold          >>= _ = ListFold
-    ListLength        >>= _ = ListLength
-    ListHead          >>= _ = ListHead
-    ListLast          >>= _ = ListLast
-    ListIndexed       >>= _ = ListIndexed
-    ListReverse       >>= _ = ListReverse
-    Optional          >>= _ = Optional
-    OptionalLit t es  >>= k = OptionalLit (t >>= k) (fmap (>>= k) es)
-    OptionalFold      >>= _ = OptionalFold
-    Record    kts     >>= k = Record    (fmap (>>= k) kts)
-    RecordLit kvs     >>= k = RecordLit (fmap (>>= k) kvs)
-    Union     kts     >>= k = Union     (fmap (>>= k) kts)
-    UnionLit k' v kts >>= k = UnionLit k' (v >>= k) (fmap (>>= k) kts)
-    Combine x y       >>= k = Combine (x >>= k) (y >>= k)
-    Merge x y t       >>= k = Merge (x >>= k) (y >>= k) (t >>= k)
-    Field r x         >>= k = Field (r >>= k) x
-    Note a b          >>= k = Note a (b >>= k)
-    Embed r           >>= k = k r
+    Const a          >>= _ = Const a
+    Var a            >>= _ = Var a
+    Lam a b c        >>= k = Lam a (b >>= k) (c >>= k)
+    Pi  a b c        >>= k = Pi a (b >>= k) (c >>= k)
+    App a b          >>= k = App (a >>= k) (b >>= k)
+    Let a b c d      >>= k = Let a (fmap (>>= k) b) (c >>= k) (d >>= k)
+    Annot a b        >>= k = Annot (a >>= k) (b >>= k)
+    Bool             >>= _ = Bool
+    BoolLit a        >>= _ = BoolLit a
+    BoolAnd a b      >>= k = BoolAnd (a >>= k) (b >>= k)
+    BoolOr  a b      >>= k = BoolOr  (a >>= k) (b >>= k)
+    BoolEQ  a b      >>= k = BoolEQ  (a >>= k) (b >>= k)
+    BoolNE  a b      >>= k = BoolNE  (a >>= k) (b >>= k)
+    BoolIf a b c     >>= k = BoolIf (a >>= k) (b >>= k) (c >>= k)
+    Natural          >>= _ = Natural
+    NaturalLit a     >>= _ = NaturalLit a
+    NaturalFold      >>= _ = NaturalFold
+    NaturalBuild     >>= _ = NaturalBuild
+    NaturalIsZero    >>= _ = NaturalIsZero
+    NaturalEven      >>= _ = NaturalEven
+    NaturalOdd       >>= _ = NaturalOdd
+    NaturalPlus  a b >>= k = NaturalPlus  (a >>= k) (b >>= k)
+    NaturalTimes a b >>= k = NaturalTimes (a >>= k) (b >>= k)
+    Integer          >>= _ = Integer
+    IntegerLit a     >>= _ = IntegerLit a
+    Double           >>= _ = Double
+    DoubleLit a      >>= _ = DoubleLit a
+    Text             >>= _ = Text
+    TextLit a        >>= _ = TextLit a
+    TextAppend a b   >>= k = TextAppend (a >>= k) (b >>= k)
+    List             >>= _ = List
+    ListLit a b      >>= k = ListLit (fmap (>>= k) a) (fmap (>>= k) b)
+    ListBuild        >>= _ = ListBuild
+    ListFold         >>= _ = ListFold
+    ListLength       >>= _ = ListLength
+    ListHead         >>= _ = ListHead
+    ListLast         >>= _ = ListLast
+    ListIndexed      >>= _ = ListIndexed
+    ListReverse      >>= _ = ListReverse
+    Optional         >>= _ = Optional
+    OptionalLit a b  >>= k = OptionalLit (a >>= k) (fmap (>>= k) b)
+    OptionalFold     >>= _ = OptionalFold
+    Record    a      >>= k = Record (fmap (>>= k) a)
+    RecordLit a      >>= k = RecordLit (fmap (>>= k) a)
+    Union     a      >>= k = Union (fmap (>>= k) a)
+    UnionLit a b c   >>= k = UnionLit a (b >>= k) (fmap (>>= k) c)
+    Combine a b      >>= k = Combine (a >>= k) (b >>= k)
+    Merge a b c      >>= k = Merge (a >>= k) (b >>= k) (c >>= k)
+    Field a b        >>= k = Field (a >>= k) b
+    Note a b         >>= k = Note a (b >>= k)
+    Embed a          >>= k = k a
 
 instance Bifunctor Expr where
     first _ (Const a         ) = Const a
@@ -346,7 +347,7 @@ instance Bifunctor Expr where
     first _ (TextLit a       ) = TextLit a
     first k (TextAppend a b  ) = TextAppend (first k a) (first k b)
     first _  List              = List
-    first k (ListLit a b     ) = ListLit (first k a) (fmap (first k) b)
+    first k (ListLit a b     ) = ListLit (fmap (first k) a) (fmap (first k) b)
     first _  ListBuild         = ListBuild
     first _  ListFold          = ListFold
     first _  ListLength        = ListLength
@@ -369,8 +370,7 @@ instance Bifunctor Expr where
 
     second = fmap
 
-instance IsString (Expr s a)
-  where
+instance IsString (Expr s a) where
     fromString str = Var (fromString str)
 
 {-  There is a one-to-one correspondence between the builders in this section
@@ -461,7 +461,9 @@ buildExprB (Let a (Just b) c d) =
     <>  buildExprA c
     <>  " in "
     <>  buildExprB d
-buildExprB (ListLit a b) =
+buildExprB (ListLit Nothing b) =
+    "[" <> buildElems (Data.Vector.toList b) <> "]"
+buildExprB (ListLit (Just a) b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExprE a
 buildExprB (OptionalLit a b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : Optional "  <> buildExprE a
@@ -680,7 +682,8 @@ buildAlternativeType :: Buildable a => (Text, Expr s a) -> Builder
 buildAlternativeType (a, b) = buildLabel a <> " : " <> buildExprA b
 
 -- | Builder corresponding to the @unionLit@ parser in "Dhall.Parser"
-buildUnionLit :: Buildable a => Text -> Expr s a -> Map Text (Expr s a) -> Builder
+buildUnionLit
+    :: Buildable a => Text -> Expr s a -> Map Text (Expr s a) -> Builder
 buildUnionLit a b c
     | Data.Map.null c =
             "< "
@@ -847,7 +850,7 @@ shift d v (TextAppend a b) = TextAppend a' b'
 shift _ _ List = List
 shift d v (ListLit a b) = ListLit a' b'
   where
-    a' =       shift d v  a
+    a' = fmap (shift d v) a
     b' = fmap (shift d v) b
 shift _ _ ListBuild = ListBuild
 shift _ _ ListFold = ListFold
@@ -978,7 +981,7 @@ subst x e (TextAppend a b) = TextAppend a' b'
 subst _ _ List = List
 subst x e (ListLit a b) = ListLit a' b'
   where
-    a' =       subst x e  a
+    a' = fmap (subst x e) a
     b' = fmap (subst x e) b
 subst _ _ ListBuild = ListBuild
 subst _ _ ListFold = ListFold
@@ -1078,7 +1081,7 @@ normalize e = case e of
             App NaturalEven (NaturalLit n) -> BoolLit (even n)
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
             App (App ListBuild t) k
-                | check     -> ListLit t (buildVector k')
+                | check     -> ListLit (Just t) (buildVector k')
                 | otherwise -> App f' a'
               where
                 labeled =
@@ -1100,16 +1103,16 @@ normalize e = case e of
                 cons' y ys = App (App cons y) ys
             App (App ListLength _) (ListLit _ ys) ->
                 NaturalLit (fromIntegral (Data.Vector.length ys))
-            App (App ListHead _) (ListLit t ys) ->
+            App (App ListHead t) (ListLit _ ys) ->
                 normalize (OptionalLit t (Data.Vector.take 1 ys))
-            App (App ListLast _) (ListLit t ys) ->
+            App (App ListLast t) (ListLit _ ys) ->
                 normalize (OptionalLit t y)
               where
                 y = if Data.Vector.null ys
                     then Data.Vector.empty
                     else Data.Vector.singleton (Data.Vector.last ys)
-            App (App ListIndexed _) (ListLit t xs) ->
-                normalize (ListLit t' (fmap adapt (Data.Vector.indexed xs)))
+            App (App ListIndexed t) (ListLit _ xs) ->
+                normalize (ListLit (Just t') (fmap adapt (Data.Vector.indexed xs)))
               where
                 t' = Record (Data.Map.fromList kts)
                   where
@@ -1121,8 +1124,8 @@ normalize e = case e of
                     kvs = [ ("index", NaturalLit (fromIntegral n))
                           , ("value", x)
                           ]
-            App (App ListReverse _) (ListLit t xs) ->
-                normalize (ListLit t (Data.Vector.reverse xs))
+            App (App ListReverse t) (ListLit _ xs) ->
+                normalize (ListLit (Just t) (Data.Vector.reverse xs))
             App (App (App (App (App OptionalFold _) (OptionalLit _ xs)) _) just) nothing ->
                 normalize (maybe nothing just' (toMaybe xs))
               where
@@ -1232,7 +1235,7 @@ normalize e = case e of
     List -> List
     ListLit t es -> ListLit t' es'
       where
-        t'  =      normalize t
+        t'  = fmap normalize t
         es' = fmap normalize es
     ListBuild -> ListBuild
     ListFold -> ListFold
@@ -1421,7 +1424,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
                     _ -> True
             _ -> True
     List -> True
-    ListLit t es -> isNormalized t && all isNormalized es
+    ListLit t es -> all isNormalized t && all isNormalized es
     ListBuild -> True
     ListFold -> True
     ListLength -> True
@@ -1463,12 +1466,15 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
     Note _ e' -> isNormalized e'
     Embed _ -> True
 
+_ERROR :: Data.Text.Text
+_ERROR = "\ESC[1;31mError\ESC[0m"
+
 {-| Utility function used to throw internal errors that should never happen
     (in theory) but that are not enforced by the type system
 -}
 internalError :: Data.Text.Text -> forall b . b
 internalError text = error (Data.Text.unpack [NeatInterpolation.text|
-Error: Compiler bug
+$_ERROR: Compiler bug
 
 Explanation: This error message means that there is a bug in the Dhall compiler.
 You didn't do anything wrong, but if you would like to see this problem fixed

@@ -16,7 +16,8 @@ module Dhall.Context (
 import Data.Text.Lazy (Text)
 import Prelude hiding (lookup)
 
-{-| A @(Context a)@ associates `Text` labels with values of type @a@
+{-| A @(Context a)@ associates `Text` labels with values of type @a@.  Each
+    `Text` label can correspond to multiple values of type @a@
 
     The `Context` is used for type-checking when @(a = Expr X)@
 
@@ -24,9 +25,9 @@ import Prelude hiding (lookup)
     * You transform a `Context` using `fmap`
     * You consume a `Context` using `lookup` and `toList`
 
-    The difference between a `Context` and a `Map` is that a `Context` lets you
-    have multiple ordered occurrences of the same key and you can query for the
-    @n@th occurrence of a given key.
+    The difference between a `Context` and a `Data.Map.Map` is that a `Context`
+    lets you have multiple ordered occurrences of the same key and you can
+    query for the @n@th occurrence of a given key.
 -}
 newtype Context a = Context { getContext :: [(Text, a)] }
     deriving (Functor)
@@ -44,7 +45,7 @@ insert k v (Context kvs) = Context ((k, v) : kvs)
 
 > lookup _ _         empty  = Nothing
 > lookup k 0 (insert k v c) = Just v
-> lookup k n (insert k v c) = lookup k (n - 1) c  -- 1 <= n
+> lookup k n (insert k v c) = lookup k (n - 1) c
 > lookup k n (insert j v c) = lookup k  n      c  -- k /= j
 -}
 lookup :: Text -> Integer -> Context a -> Maybe a

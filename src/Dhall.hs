@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE QuasiQuotes         #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators       #-}
@@ -20,6 +21,7 @@ module Dhall
     -- * Types
     , Type
     , Interpret(..)
+    , InvalidType(..)
     , deriveAuto
     , InterpretOptions(..)
     , defaultInterpretOptions
@@ -57,6 +59,7 @@ import Text.Trifecta.Delta (Delta(..))
 import qualified Control.Exception
 import qualified Data.ByteString.Lazy
 import qualified Data.Map
+import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
@@ -65,11 +68,33 @@ import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
-import qualified GHC.Generics
+import qualified NeatInterpolation
 
 throws :: Exception e => Either e a -> IO a
 throws (Left  e) = Control.Exception.throwIO e
 throws (Right r) = return r
+
+{-| Every `Type` must obey the contract that if an expression's type matches the
+    the `expected` type then the `extract` function must succeed.  If not, then
+    this exception is thrown
+
+    This exception indicates that an invalid `Type` was provided to the `input`
+    function
+-}
+data InvalidType = InvalidType deriving (Typeable)
+
+_ERROR :: Data.Text.Text
+_ERROR = "\ESC[1;31mError\ESC[0m"
+
+instance Show InvalidType where
+    show InvalidType = Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: Invalid Dhall.Type
+
+Every Type must provide an extract function that succeeds if an expression
+matches the expected type.  You provided a Type that disobeys this contract
+|]
+
+instance Exception InvalidType
 
 {-| Type-check and evaluate a Dhall program, decoding the result into Haskell
 
@@ -77,7 +102,7 @@ throws (Right r) = return r
 
 >>> input integer "2"
 2
->>> input (vector double) "[ 1.0, 2.0 ] : List Bool"
+>>> input (vector double) "[1.0, 2.0]"
 [1.0,2.0]
 
     Use `auto` to automatically select which type to decode based on the
@@ -93,10 +118,10 @@ input
     -- ^ The Dhall program
     -> IO a
     -- ^ The decoded value in Haskell
-input (Type {..}) text = do
+input (Type {..}) txt = do
     let delta = Directed "(input)" 0 0 0 0
-    expr     <- throws (Dhall.Parser.exprFromText delta text)
-    expr'    <- Dhall.Import.load expr
+    expr  <- throws (Dhall.Parser.exprFromText delta txt)
+    expr' <- Dhall.Import.load expr
     let suffix =
             ( Data.ByteString.Lazy.toStrict
             . Data.Text.Lazy.Encoding.encodeUtf8
@@ -110,10 +135,10 @@ input (Type {..}) text = do
                 bytes' = bytes <> " : " <> suffix
             _ ->
                 Annot expr' expected
-    typeExpr <- throws (Dhall.TypeCheck.typeOf annot)
+    _ <- throws (Dhall.TypeCheck.typeOf annot)
     case extract (Dhall.Core.normalize expr') of
         Just x  -> return x
-        Nothing -> fail "input: malformed `Type`"
+        Nothing -> Control.Exception.throwIO InvalidType
 
 {-| Use this to provide more detailed error messages
 
@@ -329,30 +354,32 @@ maybe (Type extractIn expectedIn) = Type extractOut expectedOut
     extractOut (OptionalLit _ es) = traverse extractIn es'
       where
         es' = if Data.Vector.null es then Nothing else Just (Data.Vector.head es)
+    extractOut _ = Nothing
 
     expectedOut = App Optional expectedIn
 
 {-| Decode a `Vector`
 
->>> input (vector integer) "[ 1, 2, 3 ] : List Integer"
+>>> input (vector integer) "[1, 2, 3]"
 [1,2,3]
 -}
 vector :: Type a -> Type (Vector a)
 vector (Type extractIn expectedIn) = Type extractOut expectedOut
   where
     extractOut (ListLit _ es) = traverse extractIn es
+    extractOut  _             = Nothing
 
     expectedOut = App List expectedIn
 
 {-| Any value that implements `Interpret` can be automatically decoded based on
     the inferred return type of `input`
 
->>> input auto "[1, 2, 3 ] : List Integer" :: IO (Vector Integer)
+>>> input auto "[1, 2, 3]" :: IO (Vector Integer)
 [1,2,3]
 
     This class auto-generates a default implementation for records that
-    implement `Generic`.  This does not auto-generate an instance for sum types
-    nor recursive types.
+    implement `Generic`.  This does not auto-generate an instance for recursive
+    types.
 -}
 class Interpret a where
     auto :: Type a
@@ -445,6 +472,7 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
             | name == nameL = fmap (L1 . M1) (extractL e)
             | name == nameR = fmap (R1 . M1) (extractR e)
             | otherwise     = Nothing
+        extract _ = Nothing
 
         expected =
             Union (Data.Map.fromList [(nameL, expectedL), (nameR, expectedR)])
@@ -463,6 +491,7 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
         extract u@(UnionLit name' e _)
             | name == name' = fmap (R1 . M1) (extractR e)
             | otherwise     = fmap  L1       (extractL u)
+        extract _ = Nothing
 
         expected = Union (Data.Map.insert name expectedR expectedL)
 
@@ -480,6 +509,7 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
         extract u@(UnionLit name' e _)
             | name == name' = fmap (L1 . M1) (extractL e)
             | otherwise     = fmap  R1       (extractR u)
+        extract _ = Nothing
 
         expected = Union (Data.Map.insert name expectedL expectedR)
 

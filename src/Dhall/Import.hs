@@ -75,6 +75,7 @@ module Dhall.Import (
 
 import Control.Exception
     (Exception, IOException, SomeException, catch, onException, throwIO)
+import Control.Lens (Lens', zoom)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
@@ -90,13 +91,12 @@ import Data.Traversable (traverse)
 #endif
 import Data.Typeable (Typeable)
 import Filesystem.Path ((</>), FilePath)
-import Lens.Micro (Lens')
-import Lens.Micro.Mtl (zoom)
 import Dhall.Core (Expr, Path(..))
 import Dhall.Parser (Parser(..), ParseError(..), Src)
 import Dhall.TypeCheck (X(..))
 #if MIN_VERSION_http_client(0,5,0)
-import Network.HTTP.Client (HttpException(..), HttpExceptionContent(..), Manager)
+import Network.HTTP.Client
+    (HttpException(..), HttpExceptionContent(..), Manager)
 #else
 import Network.HTTP.Client (HttpException(..), Manager)
 #endif
@@ -142,7 +142,7 @@ instance Show Cycle where
 
     To be precise, a strong interpretaton of referential transparency means that
     if you compiled a URL you could replace the expression hosted at that URL
-    with the compiled result.  Let's term this \"static linking\".  Dhall (very
+    with the compiled result.  Let's call this \"static linking\".  Dhall (very
     intentionally) does not satisfy this stronger interpretation of referential
     transparency since \"statically linking\" an expression (i.e. permanently
     resolving all imports) means that the expression will no longer update if
@@ -183,9 +183,11 @@ instance Exception e => Exception (Imported e)
 instance Show e => Show (Imported e) where
     show (Imported paths e) =
             (case paths of [] -> ""; _ -> "\n")
-        ++  unlines (map (\(n, path) -> take (2 * n) (repeat ' ') ++ "↳ " ++ builderToString (build path)) paths')
+        ++  unlines (map indent paths')
         ++  show e
       where
+        indent (n, path) =
+            take (2 * n) (repeat ' ') ++ "↳ " ++ builderToString (build path)
         -- Canonicalize all paths
         paths' = zip [0..] (drop 1 (reverse (canonicalizeAll paths)))
 
@@ -295,7 +297,7 @@ needManager = do
       if you navigate to any downstream relative paths
     * Removing spurious @.@s and @..@s from the path
 
-    Also, there are way too many `reverse`s in the URL-handling cod  For now I
+    Also, there are way too many `reverse`s in the URL-handling code For now I
     don't mind, but if were to really do this correctly we'd store the URLs as
     `Text` for O(1) access to the end of the string.  The only reason we use
     `String` at all is for consistency with the @http-client@ library.
@@ -369,10 +371,9 @@ exprFromFile :: FilePath -> IO (Expr Src Path)
 exprFromFile path = do
     let string = Filesystem.Path.CurrentOS.encodeString path
 
-    -- Unfortunately, GHC throws an `InappropriateType`
-    -- exception when trying to read a directory, but does not
-    -- export the exception, so I must resort to a more
-    -- heavy-handed `catch`
+    -- Unfortunately, GHC throws an `InappropriateType` exception when trying to
+    -- to read a directory, but does not export the exception, so I must resort
+    -- to a more heavy-handed `catch`
     let handler :: IOException -> IO (Result (Expr Src Path))
         handler e = do
             let string' = Filesystem.Path.CurrentOS.encodeString (path </> "@")
