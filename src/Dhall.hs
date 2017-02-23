@@ -32,6 +32,7 @@ module Dhall
     , text
     , maybe
     , vector
+    , GenericInterpret(..)
 
     -- * Re-exports
     , Natural
@@ -443,6 +444,9 @@ defaultInterpretOptions = InterpretOptions
     , constructorModifier = id
     }
 
+{-| This is the underlying class that powers the `Interpret` class's support
+    for automatically deriving a generic implementation
+-}
 class GenericInterpret f where
     genericAuto :: InterpretOptions -> Type (f a)
 
