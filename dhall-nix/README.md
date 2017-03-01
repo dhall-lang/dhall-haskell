@@ -40,8 +40,8 @@ dhallToNix = code :
     import "${drv}";
 ```
 
-The long-term goal is to add the above `dhallToNix` utility to `nixpkgs` so
-that you can use Dhall to carve out typed and total subsets of Nix projects.
+The above `dhallToNix` utility is now in `nixpkgs` so you can use `pkgs.dhallToNix`
+to transform Dhall expressions to Nix expressions
 
 ## Development status
 
