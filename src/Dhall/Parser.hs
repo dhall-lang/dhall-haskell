@@ -391,12 +391,13 @@ exprC embedded = exprC0
 --   arguments
 exprD :: Show a => Parser a -> Parser (Expr Src a)
 exprD embedded = do
-    es <- some (noted (try (exprE embedded)))
+    e  <- noted (exprE embedded)
+    es <- many (noted (try (exprE embedded)))
     let app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
             Note (Src before after (bytesL <> bytesR)) (App nL nR)
         app _ _ = Dhall.Core.internalError
             ("Dhall.Parser.exprD: foldl1 app (" <> Data.Text.pack (show es) <> ")")
-    return (Data.List.foldl1 app es)
+    return (Data.List.foldl1 app (e:es))
 
 exprE :: Show a => Parser a -> Parser (Expr Src a)
 exprE embedded = noted (do
