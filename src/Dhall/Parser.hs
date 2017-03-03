@@ -774,7 +774,8 @@ url =   try url0
 newtype ParseError = ParseError Doc deriving (Typeable)
 
 instance Show ParseError where
-    show (ParseError doc) = show doc
+    show (ParseError doc) =
+      "\n\ESC[1;31mError\ESC[0m: Invalid input\n\n" <> show doc
 
 instance Exception ParseError
 
