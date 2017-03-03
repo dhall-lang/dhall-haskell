@@ -183,6 +183,19 @@ symbol string = do
     _ <- Text.Parser.Token.symbol string
     return ()
 
+sepBy :: Parser a -> Parser b -> Parser [a]
+sepBy p sep = sepBy1 p sep <|> pure []
+
+sepBy1 :: Parser a -> Parser b -> Parser [a]
+sepBy1 p sep = do
+    a <- p
+    b <- optional sep
+    case b of
+        Nothing -> return [a]
+        Just _  -> do
+            as <- sepBy p sep
+            return (a:as)
+
 stringLiteral :: Parser Builder
 stringLiteral = Text.Parser.Token.stringLiteral <|> doubleSingleQuoteString
 
@@ -610,7 +623,7 @@ var = do
 
 elems :: Show a => Parser a -> Parser (Vector (Expr Src a))
 elems embedded = do
-    a <- Text.Parser.Combinators.sepBy (exprA embedded) (symbol ",")
+    a <- sepBy (exprA embedded) (symbol ",")
     return (Data.Vector.fromList a)
 
 recordLit :: Show a => Parser a -> Parser (Expr Src a)
@@ -630,8 +643,7 @@ recordLit embedded =
         return (RecordLit b)
 
 fieldValues :: Show a => Parser a -> Parser [(Text, Expr Src a)]
-fieldValues embedded =
-    Text.Parser.Combinators.sepBy1 (fieldValue embedded) (symbol ",")
+fieldValues embedded = sepBy1 (fieldValue embedded) (symbol ",")
 
 fieldValue :: Show a => Parser a -> Parser (Text, Expr Src a)
 fieldValue embedded = do
@@ -649,8 +661,7 @@ record embedded = do
     return (Record b)
 
 fieldTypes :: Show a => Parser a -> Parser [(Text, Expr Src a)]
-fieldTypes embedded =
-    Text.Parser.Combinators.sepBy (fieldType embedded) (symbol ",")
+fieldTypes embedded = sepBy (fieldType embedded) (symbol ",")
 
 fieldType :: Show a => Parser a -> Parser (Text, Expr Src a)
 fieldType embedded = do
@@ -668,8 +679,7 @@ union embedded = do
     return (Union b)
 
 alternativeTypes :: Show a => Parser a -> Parser [(Text, Expr Src a)]
-alternativeTypes embedded =
-    Text.Parser.Combinators.sepBy (alternativeType embedded) (symbol "|")
+alternativeTypes embedded = sepBy (alternativeType embedded) (symbol "|")
 
 alternativeType :: Show a => Parser a -> Parser (Text, Expr Src a)
 alternativeType embedded = do
