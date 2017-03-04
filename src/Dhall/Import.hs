@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| Dhall lets you import external expressions located either in local files or
@@ -59,6 +60,18 @@
     You can also reuse directory names as expressions.  If you provide a path
     to a local or remote directory then the compiler will look for a file named
     @\@@ within that directory and use that file to represent the directory.
+
+    You can also import expressions stored within environment variables using
+    @env:NAME@, where @NAME@ is the name of the environment variable.  For
+    example:
+
+    > $ export FOO=1
+    > $ export BAR='"Hi"'
+    > $ export BAZ='λ(x : Bool) → x == False'
+    > $ dhall <<< "{ foo = env:FOO , bar = env:BAR , baz = env:BAZ }"
+    > { bar : Text, baz : ∀(x : Bool) → Bool, foo : Integer }
+    > 
+    > { bar = "Hi", baz = λ(x : Bool) → x == False, foo = 1 }
 -}
 
 module Dhall.Import (
@@ -118,6 +131,7 @@ import qualified Filesystem.Path.CurrentOS
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified Filesystem.Path.CurrentOS        as Filesystem
+import qualified System.Environment
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 import qualified Text.Trifecta
@@ -248,6 +262,19 @@ instance Show MissingFile where
             "\n"
         <>  "\ESC[1;31mError\ESC[0m: Missing file\n"
 
+-- | Exception thrown when an environment variable is missing
+newtype MissingEnvironmentVariable = MissingEnvironmentVariable { name :: Text }
+    deriving (Typeable)
+
+instance Exception MissingEnvironmentVariable
+
+instance Show MissingEnvironmentVariable where
+    show (MissingEnvironmentVariable {..}) =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Missing environment variable\n"
+        <>  "\n"
+        <>  "↳ " <> Text.unpack name
+
 data Status = Status
     { _stack   :: [Path]
     , _cache   :: Map Path (Expr Src X)
@@ -310,6 +337,7 @@ canonicalize (File file0:paths0) =
     else File (clean file0)
   where
     go currPath  []               = File (clean currPath)
+    go currPath (Env  _   :_    ) = File (clean currPath)
     go currPath (URL  url0:_    ) = combine prefix suffix
       where
         prefix = parentURL (removeAtFromURL url0)
@@ -342,6 +370,7 @@ canonicalize (File file0:paths0) =
       where
         file' = Filesystem.parent (removeAtFromFile file) </> currPath
 canonicalize (URL path:_) = URL path
+canonicalize (Env env :_) = Env env
 
 parentURL :: Text -> Text
 parentURL = Text.dropWhileEnd (/= '/')
@@ -452,6 +481,28 @@ exprFromURL m url = do
         Text.Parser.Combinators.eof
         return r )
 
+-- | Parse an expression from an environment variable
+exprFromEnv :: Text -> IO (Expr Src Path)
+exprFromEnv env = do
+    m <- System.Environment.lookupEnv (Text.unpack env)
+    case m of
+        Just str -> do
+            let envBytes = Data.Text.Lazy.Encoding.encodeUtf8 env
+            let delta =
+                    Directed (Data.ByteString.Lazy.toStrict envBytes) 0 0 0 0
+            case Text.Trifecta.parseString parser delta str of
+                Failure errInfo -> do
+                    throwIO (ParseError (Text.Trifecta._errDoc errInfo))
+                Success expr    -> do
+                    return expr
+        Nothing  -> throwIO (MissingEnvironmentVariable env)
+  where
+    parser = unParser (do
+        Text.Parser.Token.whiteSpace
+        r <- Dhall.Parser.expr
+        Text.Parser.Combinators.eof
+        return r )
+
 {-| Load a `Path` as a \"dynamic\" expression (without resolving any imports)
 
     This also returns the true final path (i.e. explicit "/@" at the end for
@@ -469,6 +520,8 @@ loadDynamic p = do
         URL  url  -> do
             m <- needManager
             liftIO (exprFromURL m url `catch` handler)
+        Env  env  -> do
+            liftIO (exprFromEnv env `catch` handler)
 
 -- | Load a `Path` as a \"static\" expression (with all imports resolved)
 loadStatic :: Path -> StateT Status IO (Expr Src X)
@@ -482,6 +535,7 @@ loadStatic path = do
                 "localhost" -> True
                 _           -> False
         local (File _)  = True
+        local (Env  _)  = True
 
     let parent = canonicalize paths
     let here   = canonicalize (path:paths)

@@ -88,7 +88,11 @@ instance Buildable Const where
 -- | Path to an external resource
 data Path
     = File FilePath
+    -- ^ Local path
     | URL  Text
+    -- ^ Remote resource
+    | Env  Text
+    -- ^ Environment variable
     deriving (Eq, Ord, Show)
 
 instance Buildable Path where
@@ -102,6 +106,7 @@ instance Buildable Path where
       where
         txt = Text.fromStrict (either id id (Filesystem.toText file))
     build (URL  str ) = build str <> " "
+    build (Env  env ) = "env:" <> build env
 
 {-| Label for a bound variable
 

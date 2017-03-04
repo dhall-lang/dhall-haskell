@@ -417,6 +417,12 @@ import Dhall
 -- Dhall expression anywhere that you can host UTF8-encoded text on the web, such
 -- as Github, a pastebin, or your own web server.
 --
+-- You can also import Dhall expressions from environment variables, too:
+--
+-- > >>> System.Environment.setEnv "FOO" "1"
+-- > >>> input auto "env:FOO" :: IO Integer
+-- > 1
+--
 -- You can import types, too.  For example, we can change our @./bar@ file to:
 --
 -- > $ echo "[3.0, 4.0, 5.0] : List ./type" > ./bar

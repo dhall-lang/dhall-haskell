@@ -721,7 +721,7 @@ listLit embedded = do
 
 import_ :: Parser Path
 import_ = do
-    a <- import0 <|> import1
+    a <- import0 <|> import1 <|> import2
     Text.Parser.Token.whiteSpace
     return a
   where
@@ -732,6 +732,10 @@ import_ = do
     import1 = do
         a <- url
         return (URL a)
+
+    import2 = do
+        a <- env
+        return (Env a)
 
 file :: Parser FilePath
 file =  try (token file0)
@@ -769,6 +773,12 @@ url =   try url0
         a <- Text.Parser.Char.string "http://"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
         return (Data.Text.Lazy.pack (a <> b))
+
+env :: Parser Text
+env = do
+    _ <- Text.Parser.Char.string "env:"
+    a <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
+    return (Data.Text.Lazy.pack a)
 
 -- | A parsing error
 newtype ParseError = ParseError Doc deriving (Typeable)
