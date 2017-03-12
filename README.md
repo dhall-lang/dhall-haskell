@@ -40,11 +40,9 @@ main = do
 
 ```bash
 $ cat ./config
-< Example =
-    { foo = 1
-    , bar = ./bar
-    }
->
+{ foo = 1
+, bar = ./bar
+}
 ```
 
 ... which in turn references this other file:
