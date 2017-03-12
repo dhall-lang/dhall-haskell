@@ -272,31 +272,16 @@ expr = exprA import_
 -- | Parser for a top-level Dhall expression. The expression is parameterized
 -- over any parseable type, allowing the language to be extended as needed.
 exprA :: Show a => Parser a -> Parser (Expr Src a)
-exprA embedded = noted (do
-    a <- exprB embedded
-
-    let exprA0 = do
-            symbol ":"
-            b <- exprA embedded
-            return (Annot a b)
-
-    let exprA1 = pure a
-
-    exprA0 <|> exprA1 )
-
-exprB :: Show a => Parser a -> Parser (Expr Src a)
-exprB embedded = choice
-    [   noted      exprB0
-    ,   noted      exprB1
-    ,   noted      exprB3
-    ,   noted      exprB5
-    ,   noted (try exprB6)
-    ,   noted      exprB7
-    ,   noted (try exprB2)
-    ,              exprB8
+exprA embedded = choice
+    [   noted      exprA0
+    ,   noted      exprA1
+    ,   noted      exprA2
+    ,   noted      exprA3
+    ,   noted (try exprA4)
+    ,              exprA5
     ]
   where
-    exprB0 = do
+    exprA0 = do
         lambda
         symbol "("
         a <- label
@@ -304,25 +289,19 @@ exprB embedded = choice
         b <- exprA embedded
         symbol ")"
         arrow
-        c <- exprB embedded
+        c <- exprA embedded
         return (Lam a b c)
 
-    exprB1 = do
+    exprA1 = do
         reserve "if"
         a <- exprA embedded
         reserve "then"
-        b <- exprB embedded
+        b <- exprA embedded
         reserve "else"
-        c <- exprC embedded
+        c <- exprA embedded
         return (BoolIf a b c)
 
-    exprB2 = do
-        a <- exprC embedded
-        arrow
-        b <- exprB embedded
-        return (Pi "_" a b)
-
-    exprB3 = do
+    exprA2 = do
         pi
         symbol "("
         a <- label
@@ -330,10 +309,10 @@ exprB embedded = choice
         b <- exprA embedded
         symbol ")"
         arrow
-        c <- exprB embedded
+        c <- exprA embedded
         return (Pi a b c)
 
-    exprB5 = do
+    exprA3 = do
         reserve "let"
         a <- label
         b <- optional (do
@@ -342,10 +321,33 @@ exprB embedded = choice
         symbol "="
         c <- exprA embedded
         reserve "in"
-        d <- exprB embedded
+        d <- exprA embedded
         return (Let a b c d)
 
-    exprB6 = do
+    exprA4 = do
+        a <- exprC embedded
+        arrow
+        b <- exprA embedded
+        return (Pi "_" a b)
+
+    exprA5 = exprB embedded
+
+exprB :: Show a => Parser a -> Parser (Expr Src a)
+exprB embedded = choice
+    [   noted      exprB0
+    ,   noted (try exprB1)
+    ,   noted      exprB2
+    ]
+  where
+    exprB0 = do
+        reserve "merge"
+        a <- exprE embedded
+        b <- exprE embedded
+        symbol ":"
+        c <- exprD embedded
+        return (Merge a b c)
+
+    exprB1 = do
         symbol "["
         a <- elems embedded
         symbol "]"
@@ -354,15 +356,17 @@ exprB embedded = choice
         c <- exprE embedded
         return (b c a)
 
-    exprB7 = do
-        reserve "merge"
-        a <- exprE embedded
-        b <- exprE embedded
-        symbol ":"
-        c <- exprD embedded
-        return (Merge a b c)
+    exprB2 = do
+        a <- exprC embedded
 
-    exprB8 = exprC embedded
+        let exprB2A= do
+                symbol ":"
+                b <- exprA embedded
+                return (Annot a b)
+
+        let exprB2B = pure a
+
+        exprB2A <|> exprB2B
 
 listLike :: Parser (Expr Src a -> Vector (Expr Src a) -> Expr Src a)
 listLike =
