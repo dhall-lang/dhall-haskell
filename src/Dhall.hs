@@ -404,10 +404,10 @@ instance Interpret Text where
     autoWith _ = text
 
 instance Interpret a => Interpret (Maybe a) where
-    autoWith _ = maybe auto
+    autoWith opts = maybe (autoWith opts)
 
 instance Interpret a => Interpret (Vector a) where
-    autoWith _ = vector auto
+    autoWith opts = vector (autoWith opts)
 
 {-| Use the default options for interpreting a configuration file
 
