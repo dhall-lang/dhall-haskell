@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RecordWildCards            #-}
 
 -- | This module contains Dhall's parsing logic
 
@@ -29,7 +30,7 @@ import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
-import Dhall.Core (Const(..), Expr(..), HasHome(..), Path(..), Var(..))
+import Dhall.Core
 import Prelude hiding (const, pi)
 import Text.PrettyPrint.ANSI.Leijen (Doc)
 import Text.Parser.Combinators (choice, try, (<?>))
@@ -50,7 +51,6 @@ import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
-import qualified Dhall.Core
 import qualified Filesystem.Path.CurrentOS
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
@@ -127,6 +127,7 @@ identifierStyle = IdentifierStyle
         , "if"
         , "then"
         , "else"
+        , "as"
         , "Natural"
         , "Natural/fold"
         , "Natural/build"
@@ -724,11 +725,16 @@ listLit embedded = do
 
 import_ :: Parser Path
 import_ = do
-    a <- file <|> url <|> env
+    pathType <- file <|> url <|> env
     Text.Parser.Token.whiteSpace
-    return a
+    let rawText = do
+            _ <- reserve "as"
+            _ <- reserve "Text"
+            return RawText
+    pathMode <- rawText <|> pure Code
+    return (Path {..})
 
-file :: Parser Path
+file :: Parser PathType
 file =  try (token file0)
     <|>      token file1
     <|>      token file2
@@ -758,7 +764,7 @@ file =  try (token file0)
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
         return (File Home (Filesystem.Path.CurrentOS.decodeString b))
 
-url :: Parser Path
+url :: Parser PathType
 url =   try url0
     <|> url1
   where
@@ -772,7 +778,7 @@ url =   try url0
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
         return (URL (Data.Text.Lazy.pack (a <> b)))
 
-env :: Parser Path
+env :: Parser PathType
 env = do
     _ <- Text.Parser.Char.string "env:"
     a <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))

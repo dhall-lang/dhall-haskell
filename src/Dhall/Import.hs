@@ -72,12 +72,35 @@
     > { bar : Text, baz : ∀(x : Bool) → Bool, foo : Integer }
     > 
     > { bar = "Hi", baz = λ(x : Bool) → x == False, foo = 1 }
+
+    If you wish to import the raw contents of a path as @Text@ then add
+    @as Text@ to the end of the import:
+
+    > $ dhall <<< "http://example.com as Text"
+    > Text
+    > 
+    > "<!doctype html>\n<html>\n<head>\n    <title>Example Domain</title>\n\n    <meta
+    >  charset=\"utf-8\" />\n    <meta http-equiv=\"Content-type\" content=\"text/html
+    > ; charset=utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, 
+    > initial-scale=1\" />\n    <style type=\"text/css\">\n    body {\n        backgro
+    > und-color: #f0f0f2;\n        margin: 0;\n        padding: 0;\n        font-famil
+    > y: \"Open Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n        \n 
+    >    }\n    div {\n        width: 600px;\n        margin: 5em auto;\n        paddi
+    > ng: 50px;\n        background-color: #fff;\n        border-radius: 1em;\n    }\n
+    >     a:link, a:visited {\n        color: #38488f;\n        text-decoration: none;
+    > \n    }\n    @media (max-width: 700px) {\n        body {\n            background
+    > -color: #fff;\n        }\n        div {\n            width: auto;\n            m
+    > argin: 0 auto;\n            border-radius: 0;\n            padding: 1em;\n      
+    >   }\n    }\n    </style>    \n</head>\n\n<body>\n<div>\n    <h1>Example Domain</
+    > h1>\n    <p>This domain is established to be used for illustrative examples in d
+    > ocuments. You may use this\n    domain in examples without prior coordination or
+    >  asking for permission.</p>\n    <p><a href=\"http://www.iana.org/domains/exampl
+    > e\">More information...</a></p>\n</div>\n</body>\n</html>\n"
 -}
 
 module Dhall.Import (
     -- * Import
-      exprFromFile
-    , exprFromURL
+      exprFromPath
     , load
     , Cycle(..)
     , ReferentiallyOpaque(..)
@@ -104,7 +127,8 @@ import Data.Traversable (traverse)
 #endif
 import Data.Typeable (Typeable)
 import Filesystem.Path ((</>), FilePath)
-import Dhall.Core (Expr, HasHome(..), Path(..))
+import Dhall.Core
+    (Expr(..), HasHome(..), PathMode(..), PathType(..), Path(..))
 import Dhall.Parser (Parser(..), ParseError(..), Src)
 import Dhall.TypeCheck (X(..))
 #if MIN_VERSION_http_client(0,5,0)
@@ -282,7 +306,7 @@ data Status = Status
     }
 
 canonicalizeAll :: [Path] -> [Path]
-canonicalizeAll = map canonicalize . List.tails
+canonicalizeAll = map canonicalizePath . List.tails
 
 stack :: Lens' Status [Path]
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
@@ -329,7 +353,7 @@ needManager = do
     `Text` for O(1) access to the end of the string.  The only reason we use
     `String` at all is for consistency with the @http-client@ library.
 -}
-canonicalize :: [Path] -> Path
+canonicalize :: [PathType] -> PathType
 canonicalize  []                          = File Homeless "."
 canonicalize (File hasHome0 file0:paths0) =
     if Filesystem.relative file0 && hasHome0 == Homeless
@@ -372,6 +396,18 @@ canonicalize (File hasHome0 file0:paths0) =
 canonicalize (URL path:_) = URL path
 canonicalize (Env env :_) = Env env
 
+canonicalizePath :: [Path] -> Path
+canonicalizePath [] =
+    Path
+        { pathMode = Code
+        , pathType = canonicalize []
+        }
+canonicalizePath (path:paths) =
+    Path
+        { pathMode = pathMode path
+        , pathType = canonicalize (map pathType (path:paths))
+        }
+
 parentURL :: Text -> Text
 parentURL = Text.dropWhileEnd (/= '/')
 
@@ -395,107 +431,119 @@ clean = strip . Filesystem.collapse
         Nothing -> p
         Just p' -> p'
 
--- | Parse an expression from a `FilePath` containing a Dhall program
-exprFromFile :: FilePath -> IO (Expr Src Path)
-exprFromFile path = do
-    let string = Filesystem.Path.CurrentOS.encodeString path
+-- | Parse an expression from a `Path` containing a Dhall program
+exprFromPath :: Manager -> Path -> IO (Expr Src Path)
+exprFromPath m (Path {..}) = case pathType of
+    File hasHome file -> do
+        path <- case hasHome of
+            Home -> do
+                home <- liftIO Filesystem.getHomeDirectory
+                return (home </> file)
+            Homeless -> do
+                return file
 
-    -- Unfortunately, GHC throws an `InappropriateType` exception when trying to
-    -- to read a directory, but does not export the exception, so I must resort
-    -- to a more heavy-handed `catch`
-    let handler :: IOException -> IO (Result (Expr Src Path))
-        handler e = do
-            let string' = Filesystem.Path.CurrentOS.encodeString (path </> "@")
+        case pathMode of
+            Code -> do
+                exists <- Filesystem.isFile path
+                if exists
+                    then return ()
+                    else Control.Exception.throwIO MissingFile
 
-            -- If the fallback fails, reuse the original exception to avoid user
-            -- confusion
-            Text.Trifecta.parseFromFileEx parser string' `onException` throwIO e
+                let string = Filesystem.Path.CurrentOS.encodeString path
 
-    exists <- Filesystem.isFile path
-    if exists
-        then return ()
-        else Control.Exception.throwIO MissingFile
+                -- Unfortunately, GHC throws an `InappropriateType` exception
+                -- when trying to read a directory, but does not export the
+                -- exception, so I must resort to a more heavy-handed `catch`
+                let handler :: IOException -> IO (Result (Expr Src Path))
+                    handler e = do
+                        let string' =
+                                Filesystem.Path.CurrentOS.encodeString
+                                    (path </> "@")
 
-    x <- Text.Trifecta.parseFromFileEx parser string `catch` handler
-    case x of
-        Failure errInfo -> throwIO (ParseError (Text.Trifecta._errDoc errInfo))
-        Success expr    -> return expr
-  where
-    parser = unParser (do
-        Text.Parser.Token.whiteSpace
-        r <- Dhall.Parser.expr
-        Text.Parser.Combinators.eof
-        return r )
+                        -- If the fallback fails, reuse the original exception
+                        -- to avoid user confusion
+                        Text.Trifecta.parseFromFileEx parser string'
+                            `onException` throwIO e
 
--- | Parse an expression from a URL hosting a Dhall program
-exprFromURL :: Manager -> Text -> IO (Expr Src Path)
-exprFromURL m url = do
-    request <- HTTP.parseUrlThrow (Text.unpack url)
+                x <- Text.Trifecta.parseFromFileEx parser string `catch` handler
+                case x of
+                    Failure errInfo -> do
+                        throwIO (ParseError (Text.Trifecta._errDoc errInfo))
+                    Success expr -> do
+                        return expr
+            RawText -> do
+                text <- Filesystem.readTextFile path
+                return (TextLit (build text))
+    URL url -> do
+        request <- HTTP.parseUrlThrow (Text.unpack url)
 
-    let handler :: HTTP.HttpException -> IO (HTTP.Response ByteString)
+        let handler :: HTTP.HttpException -> IO (HTTP.Response ByteString)
 #if MIN_VERSION_http_client(0,5,0)
-        handler err@(HttpExceptionRequest _ (StatusCodeException _ _)) = do
+            handler err@(HttpExceptionRequest _ (StatusCodeException _ _)) = do
 #else
-        handler err@(StatusCodeException _ _ _) = do
+            handler err@(StatusCodeException _ _ _) = do
 #endif
-            let request' = request { HTTP.path = HTTP.path request <> "/@" }
-            -- If the fallback fails, reuse the original exception to avoid user
-            -- confusion
-            HTTP.httpLbs request' m `onException` throwIO (PrettyHttpException err)
-        handler err = throwIO (PrettyHttpException err)
-    response <- HTTP.httpLbs request m `catch` handler
+                let request' = request { HTTP.path = HTTP.path request <> "/@" }
+                -- If the fallback fails, reuse the original exception to avoid
+                -- user confusion
+                HTTP.httpLbs request' m `onException` throwIO (PrettyHttpException err)
+            handler err = throwIO (PrettyHttpException err)
+        response <- HTTP.httpLbs request m `catch` handler
 
-    let bytes = HTTP.responseBody response
+        let bytes = HTTP.responseBody response
 
-    text <- case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
-        Left  err  -> throwIO err
-        Right text -> return text
+        text <- case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
+            Left  err  -> throwIO err
+            Right text -> return text
 
-    let urlBytes = Data.Text.Lazy.Encoding.encodeUtf8 url
-    let delta = Directed (Data.ByteString.Lazy.toStrict urlBytes) 0 0 0 0
-    case Text.Trifecta.parseString parser delta (Text.unpack text) of
-        Failure err -> do
-            -- Also try the fallback in case of a parse error, since the parse
-            -- error might signify that this URL points to a directory list
-            let err' = ParseError (Text.Trifecta._errDoc err)
+        case pathMode of
+            Code -> do
+                let urlBytes = Data.Text.Lazy.Encoding.encodeUtf8 url
+                let delta =
+                        Directed (Data.ByteString.Lazy.toStrict urlBytes) 0 0 0 0
+                case Text.Trifecta.parseString parser delta (Text.unpack text) of
+                    Failure err -> do
+                        -- Also try the fallback in case of a parse error, since
+                        -- the parse error might signify that this URL points to
+                        -- a directory list
+                        let err' = ParseError (Text.Trifecta._errDoc err)
 
-            request' <- HTTP.parseUrlThrow (Text.unpack url)
+                        request' <- HTTP.parseUrlThrow (Text.unpack url)
 
-            let request'' = request' { HTTP.path = HTTP.path request' <> "/@" }
-            response' <- HTTP.httpLbs request'' m `onException` throwIO err'
+                        let request'' =
+                                request'
+                                    { HTTP.path = HTTP.path request' <> "/@" }
+                        response' <- HTTP.httpLbs request'' m
+                            `onException` throwIO err'
 
-            let bytes' = HTTP.responseBody response'
+                        let bytes' = HTTP.responseBody response'
 
-            text' <- case Data.Text.Lazy.Encoding.decodeUtf8' bytes' of
-                Left  _     -> throwIO err'
-                Right text' -> return text'
+                        text' <- case Data.Text.Lazy.Encoding.decodeUtf8' bytes' of
+                            Left  _     -> throwIO err'
+                            Right text' -> return text'
 
-            case Text.Trifecta.parseString parser delta (Text.unpack text') of
-                Failure _    -> throwIO err'
-                Success expr -> return expr
-        Success expr -> return expr
-  where
-    parser = unParser (do
-        Text.Parser.Token.whiteSpace
-        r <- Dhall.Parser.expr
-        Text.Parser.Combinators.eof
-        return r )
-
--- | Parse an expression from an environment variable
-exprFromEnv :: Text -> IO (Expr Src Path)
-exprFromEnv env = do
-    m <- System.Environment.lookupEnv (Text.unpack env)
-    case m of
-        Just str -> do
-            let envBytes = Data.Text.Lazy.Encoding.encodeUtf8 env
-            let delta =
-                    Directed (Data.ByteString.Lazy.toStrict envBytes) 0 0 0 0
-            case Text.Trifecta.parseString parser delta str of
-                Failure errInfo -> do
-                    throwIO (ParseError (Text.Trifecta._errDoc errInfo))
-                Success expr    -> do
-                    return expr
-        Nothing  -> throwIO (MissingEnvironmentVariable env)
+                        case Text.Trifecta.parseString parser delta (Text.unpack text') of
+                            Failure _    -> throwIO err'
+                            Success expr -> return expr
+                    Success expr -> return expr
+            RawText -> do
+                return (TextLit (build text))
+    Env env -> do
+        x <- System.Environment.lookupEnv (Text.unpack env)
+        case x of
+            Just str -> do
+                case pathMode of
+                    Code -> do
+                        let envBytes = Data.Text.Lazy.Encoding.encodeUtf8 env
+                        let delta =
+                                Directed (Data.ByteString.Lazy.toStrict envBytes) 0 0 0 0
+                        case Text.Trifecta.parseString parser delta str of
+                            Failure errInfo -> do
+                                throwIO (ParseError (Text.Trifecta._errDoc errInfo))
+                            Success expr    -> do
+                                return expr
+                    RawText -> return (TextLit (build str))
+            Nothing  -> throwIO (MissingEnvironmentVariable env)
   where
     parser = unParser (do
         Text.Parser.Token.whiteSpace
@@ -514,37 +562,25 @@ loadDynamic p = do
 
     let handler :: SomeException -> IO (Expr Src Path)
         handler e = throwIO (Imported (p:paths) e)
-    case canonicalize (p:paths) of
-        File hasHome file -> do
-            path <- case hasHome of
-                Home -> do
-                    home <- liftIO Filesystem.getHomeDirectory
-                    return (home </> file)
-                Homeless -> do
-                    return file
-            liftIO (exprFromFile path `catch` handler)
-        URL  url  -> do
-            m <- needManager
-            liftIO (exprFromURL m url `catch` handler)
-        Env  env  -> do
-            liftIO (exprFromEnv env `catch` handler)
+    m <- needManager
+    liftIO (exprFromPath m (canonicalizePath (p:paths)) `catch` handler)
 
 -- | Load a `Path` as a \"static\" expression (with all imports resolved)
 loadStatic :: Path -> StateT Status IO (Expr Src X)
 loadStatic path = do
     paths <- zoom stack State.get
 
-    let local (URL url ) = case HTTP.parseUrlThrow (Text.unpack url) of
+    let local (Path (URL url ) _) = case HTTP.parseUrlThrow (Text.unpack url) of
             Nothing      -> False
             Just request -> case HTTP.host request of
                 "127.0.0.1" -> True
                 "localhost" -> True
                 _           -> False
-        local (File _ _) = True
-        local (Env  _  ) = True
+        local (Path (File _ _) _) = True
+        local (Path (Env  _  ) _) = True
 
-    let parent = canonicalize paths
-    let here   = canonicalize (path:paths)
+    let parent = canonicalizePath paths
+    let here   = canonicalizePath (path:paths)
 
     if local here && not (local parent)
         then liftIO (throwIO (Imported paths (ReferentiallyOpaque path)))
