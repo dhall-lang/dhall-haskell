@@ -17,6 +17,7 @@
 module Dhall.Core (
     -- * Syntax
       Const(..)
+    , HasHome(..)
     , Path(..)
     , Var(..)
     , Expr(..)
@@ -85,9 +86,12 @@ data Const = Type | Kind deriving (Show, Bounded, Enum)
 instance Buildable Const where
     build = buildConst
 
+-- | Whether or not a path is relative to the user's home directory
+data HasHome = Home | Homeless deriving (Eq, Ord, Show)
+
 -- | Path to an external resource
 data Path
-    = File FilePath
+    = File HasHome FilePath
     -- ^ Local path
     | URL  Text
     -- ^ Remote resource
@@ -96,7 +100,11 @@ data Path
     deriving (Eq, Ord, Show)
 
 instance Buildable Path where
-    build (File file)
+    build (File Home     file)
+        = "~/" <> build txt
+      where
+        txt = Text.fromStrict (either id id (Filesystem.toText file))
+    build (File Homeless file)
         |  Text.isPrefixOf  "./" txt
         || Text.isPrefixOf   "/" txt
         || Text.isPrefixOf "../" txt

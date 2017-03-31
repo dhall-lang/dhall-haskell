@@ -29,9 +29,8 @@ import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
-import Dhall.Core (Const(..), Expr(..), Path(..), Var(..))
-import Filesystem.Path (FilePath)
-import Prelude hiding (FilePath, const, pi)
+import Dhall.Core (Const(..), Expr(..), HasHome(..), Path(..), Var(..))
+import Prelude hiding (const, pi)
 import Text.PrettyPrint.ANSI.Leijen (Doc)
 import Text.Parser.Combinators (choice, try, (<?>))
 import Text.Parser.Token (IdentifierStyle(..), TokenParsing(..))
@@ -725,26 +724,15 @@ listLit embedded = do
 
 import_ :: Parser Path
 import_ = do
-    a <- import0 <|> import1 <|> import2
+    a <- file <|> url <|> env
     Text.Parser.Token.whiteSpace
     return a
-  where
-    import0 = do
-        a <- file
-        return (File a)
 
-    import1 = do
-        a <- url
-        return (URL a)
-
-    import2 = do
-        a <- env
-        return (Env a)
-
-file :: Parser FilePath
+file :: Parser Path
 file =  try (token file0)
     <|>      token file1
     <|>      token file2
+    <|>      token file3
   where
     file0 = do
         a <- Text.Parser.Char.string "/"
@@ -752,37 +740,43 @@ file =  try (token file0)
         case b of
             '\\':_ -> empty -- So that "/\" parses as the operator and not a path
             _      -> return ()
-        return (Filesystem.Path.CurrentOS.decodeString (a <> b))
+        return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a <> b)))
 
     file1 = do
         a <- Text.Parser.Char.string "./"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
-        return (Filesystem.Path.CurrentOS.decodeString (a <> b))
+        return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a <> b)))
 
     file2 = do
         a <- Text.Parser.Char.string "../"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
-        return (Filesystem.Path.CurrentOS.decodeString (a <> b))
+        return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a <> b)))
 
-url :: Parser Text
+    file3 = do
+        _ <- Text.Parser.Char.string "~"
+        _ <- some (Text.Parser.Char.string "/")
+        b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
+        return (File Home (Filesystem.Path.CurrentOS.decodeString b))
+
+url :: Parser Path
 url =   try url0
     <|> url1
   where
     url0 = do
         a <- Text.Parser.Char.string "https://"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
-        return (Data.Text.Lazy.pack (a <> b))
+        return (URL (Data.Text.Lazy.pack (a <> b)))
 
     url1 = do
         a <- Text.Parser.Char.string "http://"
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
-        return (Data.Text.Lazy.pack (a <> b))
+        return (URL (Data.Text.Lazy.pack (a <> b)))
 
-env :: Parser Text
+env :: Parser Path
 env = do
     _ <- Text.Parser.Char.string "env:"
     a <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
-    return (Data.Text.Lazy.pack a)
+    return (Env (Data.Text.Lazy.pack a))
 
 -- | A parsing error
 newtype ParseError = ParseError Doc deriving (Typeable)

@@ -104,7 +104,7 @@ import Data.Traversable (traverse)
 #endif
 import Data.Typeable (Typeable)
 import Filesystem.Path ((</>), FilePath)
-import Dhall.Core (Expr, Path(..))
+import Dhall.Core (Expr, HasHome(..), Path(..))
 import Dhall.Parser (Parser(..), ParseError(..), Src)
 import Dhall.TypeCheck (X(..))
 #if MIN_VERSION_http_client(0,5,0)
@@ -330,14 +330,14 @@ needManager = do
     `String` at all is for consistency with the @http-client@ library.
 -}
 canonicalize :: [Path] -> Path
-canonicalize  []                 = File "."
-canonicalize (File file0:paths0) =
-    if Filesystem.relative file0
-    then go          file0 paths0
-    else File (clean file0)
+canonicalize  []                          = File Homeless "."
+canonicalize (File hasHome0 file0:paths0) =
+    if Filesystem.relative file0 && hasHome0 == Homeless
+    then go file0 paths0
+    else File hasHome0 (clean file0)
   where
-    go currPath  []               = File (clean currPath)
-    go currPath (Env  _   :_    ) = File (clean currPath)
+    go currPath  []               = File hasHome0 (clean currPath)
+    go currPath (Env  _   :_    ) = File hasHome0 (clean currPath)
     go currPath (URL  url0:_    ) = combine prefix suffix
       where
         prefix = parentURL (removeAtFromURL url0)
@@ -363,10 +363,10 @@ canonicalize (File file0:paths0) =
                     path' = Text.fromStrict (case Filesystem.toText path of
                         Left  txt -> txt
                         Right txt -> txt )
-    go currPath (File file:paths) =
-        if Filesystem.relative file
-        then go          file'  paths
-        else File (clean file')
+    go currPath (File hasHome file:paths) =
+        if Filesystem.relative file && hasHome == Homeless
+        then go file' paths
+        else File hasHome0 (clean file')
       where
         file' = Filesystem.parent (removeAtFromFile file) </> currPath
 canonicalize (URL path:_) = URL path
@@ -515,8 +515,14 @@ loadDynamic p = do
     let handler :: SomeException -> IO (Expr Src Path)
         handler e = throwIO (Imported (p:paths) e)
     case canonicalize (p:paths) of
-        File file -> do
-            liftIO (exprFromFile file `catch` handler)
+        File hasHome file -> do
+            path <- case hasHome of
+                Home -> do
+                    home <- liftIO Filesystem.getHomeDirectory
+                    return (home </> file)
+                Homeless -> do
+                    return file
+            liftIO (exprFromFile path `catch` handler)
         URL  url  -> do
             m <- needManager
             liftIO (exprFromURL m url `catch` handler)
@@ -528,14 +534,14 @@ loadStatic :: Path -> StateT Status IO (Expr Src X)
 loadStatic path = do
     paths <- zoom stack State.get
 
-    let local (URL url) = case HTTP.parseUrlThrow (Text.unpack url) of
+    let local (URL url ) = case HTTP.parseUrlThrow (Text.unpack url) of
             Nothing      -> False
             Just request -> case HTTP.host request of
                 "127.0.0.1" -> True
                 "localhost" -> True
                 _           -> False
-        local (File _)  = True
-        local (Env  _)  = True
+        local (File _ _) = True
+        local (Env  _  ) = True
 
     let parent = canonicalize paths
     let here   = canonicalize (path:paths)
