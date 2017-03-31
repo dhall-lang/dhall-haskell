@@ -1,11 +1,12 @@
-{-# LANGUAGE BangPatterns               #-}
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DeriveFoldable             #-}
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE DeriveTraversable          #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE QuasiQuotes                #-}
-{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE BangPatterns      #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE DeriveFoldable    #-}
+{-# LANGUAGE DeriveFunctor     #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes       #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE RecordWildCards   #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| This module contains the core calculus for the Dhall language.
@@ -18,6 +19,8 @@ module Dhall.Core (
     -- * Syntax
       Const(..)
     , HasHome(..)
+    , PathType(..)
+    , PathMode(..)
     , Path(..)
     , Var(..)
     , Expr(..)
@@ -89,8 +92,8 @@ instance Buildable Const where
 -- | Whether or not a path is relative to the user's home directory
 data HasHome = Home | Homeless deriving (Eq, Ord, Show)
 
--- | Path to an external resource
-data Path
+-- | The type of path to import (i.e. local vs. remote vs. environment)
+data PathType
     = File HasHome FilePath
     -- ^ Local path
     | URL  Text
@@ -99,7 +102,7 @@ data Path
     -- ^ Environment variable
     deriving (Eq, Ord, Show)
 
-instance Buildable Path where
+instance Buildable PathType where
     build (File Home     file)
         = "~/" <> build txt
       where
@@ -115,6 +118,22 @@ instance Buildable Path where
         txt = Text.fromStrict (either id id (Filesystem.toText file))
     build (URL  str ) = build str <> " "
     build (Env  env ) = "env:" <> build env
+
+-- | How to interpret the path's contents (i.e. as Dhall code or raw text)
+data PathMode = Code | RawText deriving (Eq, Ord, Show)
+
+-- | Path to an external resource
+data Path = Path
+    { pathType :: PathType
+    , pathMode :: PathMode
+    } deriving (Eq, Ord, Show)
+
+instance Buildable Path where
+    build (Path {..}) = build pathType <> suffix
+      where
+        suffix = case pathMode of
+            RawText -> " as Text"
+            Code    -> ""
 
 {-| Label for a bound variable
 
