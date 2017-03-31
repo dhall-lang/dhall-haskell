@@ -132,7 +132,7 @@ instance Buildable Path where
     build (Path {..}) = build pathType <> suffix
       where
         suffix = case pathMode of
-            RawText -> " as Text"
+            RawText -> "as Text"
             Code    -> ""
 
 {-| Label for a bound variable
