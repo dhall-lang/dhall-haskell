@@ -3,6 +3,7 @@
 module Main where
 
 import Control.Exception (SomeException)
+import System.Exit (ExitCode(..))
 import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Exception
@@ -43,7 +44,10 @@ handle :: IO a -> IO a
 handle = Control.Exception.handle handler
   where
     handler :: SomeException -> IO a
-    handler e = do
-        System.IO.hPutStrLn System.IO.stderr ""
-        System.IO.hPrint    System.IO.stderr e
-        System.Exit.exitFailure
+    handler e = case Control.Exception.fromException e of
+        Just ExitSuccess -> do
+            Control.Exception.throwIO e
+        _ -> do
+            System.IO.hPutStrLn System.IO.stderr ""
+            System.IO.hPrint    System.IO.stderr e
+            System.Exit.exitFailure
