@@ -1,4 +1,4 @@
-# `dhall 1.1.0`
+# `dhall 1.2.0`
 
 `dhall` is a total programming language specialized to configuration files
 
