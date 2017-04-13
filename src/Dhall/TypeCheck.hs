@@ -482,12 +482,12 @@ typeWith ctx e@(Combine kvsX kvsY) = do
     tKvsX <- fmap Dhall.Core.normalize (typeWith ctx kvsX)
     ktsX  <- case tKvsX of
         Record kts -> return kts
-        _          -> Left (TypeError ctx e (MustCombineARecord kvsX tKvsX))
+        _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
 
     tKvsY <- fmap Dhall.Core.normalize (typeWith ctx kvsY)
     ktsY  <- case tKvsY of
         Record kts -> return kts
-        _          -> Left (TypeError ctx e (MustCombineARecord kvsY tKvsY))
+        _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
 
     let combineTypes ktsL ktsR = do
             let ks =
@@ -506,6 +506,17 @@ typeWith ctx e@(Combine kvsX kvsY) = do
             return (Record (Data.Map.fromList kts))
 
     combineTypes ktsX ktsY
+typeWith ctx e@(Prefer kvsX kvsY) = do
+    tKvsX <- fmap Dhall.Core.normalize (typeWith ctx kvsX)
+    ktsX  <- case tKvsX of
+        Record kts -> return kts
+        _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
+
+    tKvsY <- fmap Dhall.Core.normalize (typeWith ctx kvsY)
+    ktsY  <- case tKvsY of
+        Record kts -> return kts
+        _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
+    return (Record (Data.Map.union ktsY ktsX))
 typeWith ctx e@(Merge kvsX kvsY t) = do
     tKvsX <- fmap Dhall.Core.normalize (typeWith ctx kvsX)
     ktsX  <- case tKvsX of
@@ -596,7 +607,7 @@ data TypeMessage s
     | InvalidAlternative Text (Expr s X)
     | InvalidAlternativeType Text (Expr s X)
     | DuplicateAlternative Text
-    | MustCombineARecord (Expr s X) (Expr s X)
+    | MustCombineARecord Char (Expr s X) (Expr s X)
     | FieldCollision Text
     | MustMergeARecord (Expr s X) (Expr s X)
     | MustMergeUnion (Expr s X) (Expr s X)
@@ -2086,22 +2097,22 @@ You have more than one alternative named:
       where
         txt0 = Text.toStrict (Dhall.Core.pretty k)
 
-prettyTypeMessage (MustCombineARecord expr0 expr1) = ErrorMessages {..}
+prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
   where
     short = "You can only combine records"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: You can combine records using the ❰∧❱ operator, like this:
+Explanation: You can combine records using the ❰$op❱ operator, like this:
 
 
     ┌───────────────────────────────────────────┐
-    │ { foo = 1, bar = "ABC" } ∧ { baz = True } │
+    │ { foo = 1, bar = "ABC" } $op { baz = True } │
     └───────────────────────────────────────────┘
 
 
     ┌─────────────────────────────────────────────┐
-    │ λ(r : { foo : Bool }) → r ∧ { bar = "ABC" } │
+    │ λ(r : { foo : Bool }) → r $op { bar = "ABC" } │
     └─────────────────────────────────────────────┘
 
 
@@ -2111,21 +2122,21 @@ For example, the following expressions are $_NOT valid:
 
 
     ┌──────────────────────────────┐
-    │ { foo = 1, bar = "ABC" } ∧ 1 │
+    │ { foo = 1, bar = "ABC" } $op 1 │
     └──────────────────────────────┘
                                  ⇧
                                  Invalid: Not a record
 
 
     ┌───────────────────────────────────────────┐
-    │ { foo = 1, bar = "ABC" } ∧ { baz : Bool } │
+    │ { foo = 1, bar = "ABC" } $op { baz : Bool } │
     └───────────────────────────────────────────┘
                                  ⇧
                                  Invalid: This is a record type and not a record
 
 
     ┌───────────────────────────────────────────┐
-    │ { foo = 1, bar = "ABC" } ∧ < baz = True > │
+    │ { foo = 1, bar = "ABC" } $op < baz = True > │
     └───────────────────────────────────────────┘
                                  ⇧
                                  Invalid: This is a union and not a record
@@ -2140,6 +2151,7 @@ You tried to combine the following value:
 ↳ $txt1
 |]
       where
+        op   = Data.Text.singleton c
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
 

@@ -277,6 +277,8 @@ data Expr s a
     | UnionLit Text (Expr s a) (Map Text (Expr s a))
     -- | > Combine x y                              ~  x ∧ y
     | Combine (Expr s a) (Expr s a)
+    -- | > CombineRight x y                         ~  x ⫽ y
+    | Prefer (Expr s a) (Expr s a)
     -- | > Merge x y t                              ~  merge x y : t
     | Merge (Expr s a) (Expr s a) (Expr s a)
     -- | > Field e x                                ~  e.x
@@ -342,6 +344,7 @@ instance Monad (Expr s) where
     Union     a      >>= k = Union (fmap (>>= k) a)
     UnionLit a b c   >>= k = UnionLit a (b >>= k) (fmap (>>= k) c)
     Combine a b      >>= k = Combine (a >>= k) (b >>= k)
+    Prefer a b       >>= k = Prefer (a >>= k) (b >>= k)
     Merge a b c      >>= k = Merge (a >>= k) (b >>= k) (c >>= k)
     Field a b        >>= k = Field (a >>= k) b
     Note a b         >>= k = Note a (b >>= k)
@@ -395,6 +398,7 @@ instance Bifunctor Expr where
     first k (Union a         ) = Union (fmap (first k) a)
     first k (UnionLit a b c  ) = UnionLit a (first k b) (fmap (first k) c)
     first k (Combine a b     ) = Combine (first k a) (first k b)
+    first k (Prefer a b      ) = Prefer (first k a) (first k b)
     first k (Merge a b c     ) = Merge (first k a) (first k b) (first k c)
     first k (Field a b       ) = Field (first k a) b
     first k (Note a b        ) = Note (k a) (first k b)
@@ -536,27 +540,33 @@ buildExprC3  a            = buildExprC4 a
 
 -- | Builder corresponding to the @exprC4@ parser in "Dhall.Parser"
 buildExprC4 :: Buildable a => Expr s a -> Builder
-buildExprC4 (Combine a b) = buildExprC5 a <> " ∧ " <> buildExprC4 b
-buildExprC4 (Note    _ b) = buildExprC4 b
-buildExprC4  a            = buildExprC5 a
+buildExprC4 (Combine   a b) = buildExprC5 a <> " ∧ " <> buildExprC4 b
+buildExprC4 (Note      _ b) = buildExprC4 b
+buildExprC4  a              = buildExprC5 a
 
 -- | Builder corresponding to the @exprC5@ parser in "Dhall.Parser"
 buildExprC5 :: Buildable a => Expr s a -> Builder
-buildExprC5 (NaturalTimes a b) = buildExprC6 a <> " * " <> buildExprC5 b
-buildExprC5 (Note         _ b) = buildExprC5 b
-buildExprC5  a                 = buildExprC6 a
+buildExprC5 (Prefer a b) = buildExprC6 a <> " ⫽ " <> buildExprC5 b
+buildExprC5 (Note   _ b) = buildExprC5 b
+buildExprC5  a           = buildExprC6 a
 
 -- | Builder corresponding to the @exprC6@ parser in "Dhall.Parser"
 buildExprC6 :: Buildable a => Expr s a -> Builder
-buildExprC6 (BoolEQ a b) = buildExprC7 a <> " == " <> buildExprC6 b
-buildExprC6 (Note   _ b) = buildExprC6 b
-buildExprC6  a           = buildExprC7 a
+buildExprC6 (NaturalTimes a b) = buildExprC7 a <> " * " <> buildExprC6 b
+buildExprC6 (Note         _ b) = buildExprC6 b
+buildExprC6  a                 = buildExprC7 a
 
 -- | Builder corresponding to the @exprC7@ parser in "Dhall.Parser"
 buildExprC7 :: Buildable a => Expr s a -> Builder
-buildExprC7 (BoolNE a b) = buildExprD  a <> " != " <> buildExprC7 b
+buildExprC7 (BoolEQ a b) = buildExprC8 a <> " == " <> buildExprC7 b
 buildExprC7 (Note   _ b) = buildExprC7 b
-buildExprC7  a           = buildExprD  a
+buildExprC7  a           = buildExprC8 a
+
+-- | Builder corresponding to the @exprC8@ parser in "Dhall.Parser"
+buildExprC8 :: Buildable a => Expr s a -> Builder
+buildExprC8 (BoolNE a b) = buildExprD  a <> " != " <> buildExprC8 b
+buildExprC8 (Note   _ b) = buildExprC8 b
+buildExprC8  a           = buildExprD  a
 
 -- | Builder corresponding to the @exprD@ parser in "Dhall.Parser"
 buildExprD :: Buildable a => Expr s a -> Builder
@@ -914,6 +924,10 @@ shift d v (Combine a b) = Combine a' b'
   where
     a' = shift d v a
     b' = shift d v b
+shift d v (Prefer a b) = Prefer a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
 shift d v (Merge a b c) = Merge a' b' c'
   where
     a' = shift d v a
@@ -1033,6 +1047,10 @@ subst x e (RecordLit    kvs) = RecordLit                (fmap (subst x e) kvs)
 subst x e (Union        kts) = Union                    (fmap (subst x e) kts)
 subst x e (UnionLit a b kts) = UnionLit a (subst x e b) (fmap (subst x e) kts)
 subst x e (Combine a b) = Combine a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
+subst x e (Prefer a b) = Prefer a' b'
   where
     a' = subst x e a
     b' = subst x e b
@@ -1304,6 +1322,17 @@ normalize e = case e of
                     _ -> Combine x y
                 _ -> Combine x y
         in  combine (normalize x0) (normalize y0)
+    Prefer x y ->
+        case x' of
+            RecordLit kvsX ->
+                case y' of
+                    RecordLit kvsY ->
+                        RecordLit (fmap normalize (Data.Map.union kvsY kvsX))
+                    _ -> Prefer x' y'
+            _ -> Prefer x' y'
+      where
+        x' = normalize x
+        y' = normalize y
     Merge x y t      ->
         case x' of
             RecordLit kvsX ->
@@ -1471,9 +1500,16 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
     RecordLit kvs -> all isNormalized kvs
     Union kts -> all isNormalized kts
     UnionLit _ v kvs -> isNormalized v && all isNormalized kvs
-    Combine x0 y0 -> isNormalized x0 && isNormalized y0 && combine x0 y0
+    Combine x y -> isNormalized x && isNormalized y && combine
       where
-        combine x y = case x of
+        combine = case x of
+            RecordLit _ -> case y of
+                RecordLit _ -> False
+                _ -> True
+            _ -> True
+    Prefer x y -> isNormalized x && isNormalized y && combine
+      where
+        combine = case x of
             RecordLit _ -> case y of
                 RecordLit _ -> False
                 _ -> True
