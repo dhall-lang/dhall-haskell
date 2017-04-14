@@ -766,37 +766,40 @@ import Dhall
 
 -- $combine
 --
--- You can combine two records, using the @(/\\)@ operator or the
--- corresponding Unicode @(∧)@ (U+2227) operator:
+-- You can combine two records, using either the @(//)@ operator or the
+-- @(/\\)@ operator.
+--
+-- The @(//)@ operator (or @(⫽)@ U+2AFD) combines the fields of both records,
+-- preferring fields from the right record if they share fields in common:
 --
 -- > $ dhall
--- > { foo = 1, bar = "ABC" } /\ { baz = True }
+-- > { foo = 1, bar = "ABC" } // { baz = True }
 -- > <Ctrl-D>
 -- > { bar : Text, baz : Bool, foo : Integer }
 -- > 
 -- > { bar = "ABC", baz = True, foo = 1 }
---
 -- > $ dhall
--- > { foo = 1, bar = "ABC" } ∧ { baz = True }  -- Fancy unicode
+-- > { foo = 1, bar = "ABC" } ⫽ { bar = True }  -- Fancy unicode
 -- > <Ctrl-D>
--- > { bar : Text, baz : Bool, foo : Integer }
+-- > { bar : Bool, foo : Integer }
 -- > 
--- > { bar = "ABC", baz = True, foo = 1 }
+-- > { bar = True, foo = 1 }
 --
 -- Note that the order of record fields does not matter.  The compiler
--- automatically sorts the fields when normalizing expressions.
+-- automatically sorts the fields.
 --
--- The @(∧)@ operator also merges records recursively.  For example:
+-- The @(/\\)@ operator (or @(∧)@ U+2227) also lets you combine records, but
+-- behaves differently if the records share fields in common.  The operator
+-- combines shared fields recursively if they are both records:
 --
 -- > $ dhall
--- > { foo = { bar = True }, baz = "ABC" } ∧ { foo = { qux = 1.0 } }
+-- > { foo = { bar = True }, baz = "ABC" } /\ { foo = { qux = 1.0 } }
 -- > <Ctrl-D>
 -- > { baz : Text, foo : { bar : Bool, qux : Double } }
 -- > 
 -- > { baz = "ABC", foo = { bar = True, qux = 1.0 } }
 --
--- However, you cannot combine two records if they share a field that is not a
--- record:
+-- ... but fails with a type error if either shared field is not a record:
 --
 -- > $ dhall
 -- > { foo = 1, bar = "ABC" } ∧ { foo = True }
@@ -809,8 +812,8 @@ import Dhall
 -- > 
 -- > (stdin):1:1
 --
--- __Exercise__: Combine any record with the empty record.  What do you expect to
--- happen?
+-- __Exercise__: Combine any record with the empty record.  What do you expect
+-- to happen?
 
 -- $let
 --

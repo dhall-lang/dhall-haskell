@@ -262,6 +262,9 @@ arrow = symbol "->" <|> symbol "→"
 combine :: Parser ()
 combine = symbol "/\\" <|> symbol "∧"
 
+prefer :: Parser ()
+prefer = symbol "//" <|> symbol "⫽"
+
 label :: Parser Text
 label = Text.Parser.Token.ident identifierStyle <?> "label"
 
@@ -389,14 +392,15 @@ exprC embedded = exprC0
         a <- pA
         try (do _ <- pOp <?> "operator"; b <- pB; return (op a b)) <|> pure a )
 
-    exprC0 = chain exprC1 (symbol "||") BoolOr       exprC0
-    exprC2 = chain exprC3 (symbol "++") TextAppend   exprC2
-    exprC1 = chain exprC2 (symbol "+" ) NaturalPlus  exprC1
-    exprC3 = chain exprC4 (symbol "&&") BoolAnd      exprC3
-    exprC4 = chain exprC5  combine      Combine      exprC4
-    exprC5 = chain exprC6 (symbol "*" ) NaturalTimes exprC5
-    exprC6 = chain exprC7 (symbol "==") BoolEQ       exprC6
-    exprC7 = chain (exprD embedded)  (symbol "!=") BoolNE       exprC7
+    exprC0 = chain  exprC1          (symbol "||") BoolOr       exprC0
+    exprC1 = chain  exprC2          (symbol "+" ) NaturalPlus  exprC1
+    exprC2 = chain  exprC3          (symbol "++") TextAppend   exprC2
+    exprC3 = chain  exprC4          (symbol "&&") BoolAnd      exprC3
+    exprC4 = chain  exprC5           combine      Combine      exprC4
+    exprC5 = chain  exprC6           prefer       Prefer       exprC5
+    exprC6 = chain  exprC7          (symbol "*" ) NaturalTimes exprC6
+    exprC7 = chain  exprC8          (symbol "==") BoolEQ       exprC7
+    exprC8 = chain (exprD embedded) (symbol "!=") BoolNE       exprC8
 
 -- We can't use left-recursion to define `exprD` otherwise the parser will
 -- loop infinitely. However, I'd still like to use left-recursion in the
@@ -745,6 +749,7 @@ file =  try (token file0)
         b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
         case b of
             '\\':_ -> empty -- So that "/\" parses as the operator and not a path
+            '/' :_ -> empty -- So that "//" parses as the operator and not a path
             _      -> return ()
         return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a <> b)))
 
