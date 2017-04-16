@@ -325,9 +325,9 @@ needManager = do
         Nothing -> do
             let settings = HTTP.tlsManagerSettings
 #if MIN_VERSION_http_client(0,5,0)
-                    { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro 1000000 }  -- 1 second
+                    { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (30 * 1000 * 1000) }  -- 30 seconds
 #else
-                    { HTTP.managerResponseTimeout = Just 1000000 }  -- 1 second
+                    { HTTP.managerResponseTimeout = Just (30 * 1000 * 1000) }  -- 30 seconds
 #endif
             m <- liftIO (HTTP.newManager settings)
             zoom manager (State.put (Just m))
