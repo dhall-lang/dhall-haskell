@@ -738,6 +738,9 @@ import_ = do
     pathMode <- rawText <|> pure Code
     return (Path {..})
 
+pathChar :: Char -> Bool
+pathChar c = not (Data.Char.isSpace c || c == '(' || c == ')')
+
 file :: Parser PathType
 file =  try (token file0)
     <|>      token file1
@@ -746,7 +749,7 @@ file =  try (token file0)
   where
     file0 = do
         a <- Text.Parser.Char.string "/"
-        b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
+        b <- many (Text.Parser.Char.satisfy pathChar)
         case b of
             '\\':_ -> empty -- So that "/\" parses as the operator and not a path
             '/' :_ -> empty -- So that "//" parses as the operator and not a path
@@ -755,18 +758,18 @@ file =  try (token file0)
 
     file1 = do
         a <- Text.Parser.Char.string "./"
-        b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
+        b <- many (Text.Parser.Char.satisfy pathChar)
         return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a <> b)))
 
     file2 = do
         a <- Text.Parser.Char.string "../"
-        b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
+        b <- many (Text.Parser.Char.satisfy pathChar)
         return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a <> b)))
 
     file3 = do
         _ <- Text.Parser.Char.string "~"
         _ <- some (Text.Parser.Char.string "/")
-        b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
+        b <- many (Text.Parser.Char.satisfy pathChar)
         return (File Home (Filesystem.Path.CurrentOS.decodeString b))
 
 url :: Parser PathType
@@ -775,18 +778,18 @@ url =   try url0
   where
     url0 = do
         a <- Text.Parser.Char.string "https://"
-        b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
+        b <- many (Text.Parser.Char.satisfy pathChar)
         return (URL (Data.Text.Lazy.pack (a <> b)))
 
     url1 = do
         a <- Text.Parser.Char.string "http://"
-        b <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
+        b <- many (Text.Parser.Char.satisfy pathChar)
         return (URL (Data.Text.Lazy.pack (a <> b)))
 
 env :: Parser PathType
 env = do
     _ <- Text.Parser.Char.string "env:"
-    a <- many (Text.Parser.Char.satisfy (not . Data.Char.isSpace))
+    a <- many (Text.Parser.Char.satisfy pathChar)
     return (Env (Data.Text.Lazy.pack a))
 
 -- | A parsing error
