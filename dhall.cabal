@@ -67,3 +67,5 @@ Executable dhall
         trifecta         >= 1.6      && < 1.7,
         text             >= 0.11.1.0 && < 1.3
     GHC-Options: -Wall
+    Other-Modules:
+        Paths_dhall
