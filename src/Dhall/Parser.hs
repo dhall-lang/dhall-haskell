@@ -137,6 +137,7 @@ identifierStyle = IdentifierStyle
         , "Integer"
         , "Double"
         , "Text"
+        , "Text/length"
         , "List"
         , "List/build"
         , "List/fold"
@@ -446,6 +447,7 @@ exprF embedded = choice
             ,   noted      exprF05
             ,   noted      exprF06
             ,   noted      exprF07
+            ,   noted      exprF35
             ,   noted      exprF12
             ,   noted      exprF13
             ,   noted      exprF14
@@ -605,6 +607,10 @@ exprF embedded = choice
         a <- exprA embedded
         symbol ")"
         return a
+
+    exprF35 = do
+        reserve "Text/length"
+        return TextLength
 
 const :: Parser Const
 const = const0
