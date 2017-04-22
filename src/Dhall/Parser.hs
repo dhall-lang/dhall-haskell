@@ -454,6 +454,7 @@ exprF embedded = choice
             ,   noted      exprF17
             ,   noted      exprF18
             ,   noted      exprF20
+            ,   noted      exprF35
             ,   noted      exprF21
             ,   noted      exprF19
             ,   noted      exprF02
@@ -553,6 +554,10 @@ exprF embedded = choice
     exprF20 = do
         reserve "Optional/fold"
         return OptionalFold
+
+    exprF35 = do
+        reserve "Optional/build"
+        return OptionalBuild
 
     exprF21 = do
         reserve "Bool"

@@ -444,6 +444,13 @@ typeWith _      OptionalFold      = do
                 (Pi "optional" (Const Type)
                     (Pi "just" (Pi "_" "a" "optional")
                         (Pi "nothing" "optional" "optional") ) ) ) )
+typeWith _      OptionalBuild     = do
+    return
+        (Pi "a" (Const Type)
+            (Pi "_" f (App Optional "a") ) )
+    where f = Pi "optional" (Const Type)
+                  (Pi "just" (Pi "_" "a" "optional")
+                      (Pi "nothing" "optional" "optional") )
 typeWith ctx e@(Record    kts   ) = do
     let process (k, t) = do
             s <- fmap Dhall.Core.normalize (typeWith ctx t)
@@ -579,6 +586,9 @@ newtype X = X { absurd :: forall a . a }
 
 instance Show X where
     show = absurd
+
+instance Eq X where
+  _ == _ = True
 
 instance Buildable X where
     build = absurd
