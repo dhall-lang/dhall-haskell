@@ -444,6 +444,13 @@ typeWith _      OptionalFold      = do
                 (Pi "optional" (Const Type)
                     (Pi "just" (Pi "_" "a" "optional")
                         (Pi "nothing" "optional" "optional") ) ) ) )
+typeWith _      OptionalBuild     = do
+    return
+        (Pi "a" (Const Type)
+            (Pi "f" f (App Optional "a") ) )
+    where f = Pi "optional" (Const Type)
+                  (Pi "just" (Pi "_" "a" "optional")
+                      (Pi "nothing" "optional" "optional") )
 typeWith ctx e@(Record    kts   ) = do
     let process (k, t) = do
             s <- fmap Dhall.Core.normalize (typeWith ctx t)
