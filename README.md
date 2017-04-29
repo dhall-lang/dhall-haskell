@@ -88,6 +88,28 @@ Now go read the
 [Dhall tutorial](https://hackage.haskell.org/package/dhall/docs/Dhall-Tutorial.html)
 to learn more
 
+# Integrations
+
+This section keeps track of what languages and file formats natively support the
+Dhall configuration language:
+
+Complete:
+
+* [`dhall`](https://github.com/Gabriel439/Haskell-Dhall-Library) -
+  Haskell integration (this package)
+* [`dhall-nix`](https://github.com/Gabriel439/Haskell-Dhall-Nix-Library) -
+  Nix integration
+* [`dhall-json`](https://github.com/Gabriel439/Haskell-Dhall-JSON-Library) -
+  JSON and YAML integration
+* [`dhall-bash`](https://github.com/Gabriel439/Haskell-Dhall-Bash-Library) -
+  Bash integration
+
+In progress:
+
+* [`dhall-rs`](https://github.com/nanotech/dhall-rs) - Rust integration
+* [`dhall-scala`](https://github.com/missingfaktor/dhall-scala) - Scala
+  integration
+
 ## Design philosophy
 
 Programming languages are all about design tradeoffs and the Dhall language uses
