@@ -69,3 +69,16 @@ Executable dhall
     GHC-Options: -Wall
     Other-Modules:
         Paths_dhall
+
+Test-Suite test
+    Type: exitcode-stdio-1.0
+    Hs-Source-Dirs: tests
+    Main-Is: Tests.hs
+    Other-Modules:
+        Normalization
+    Build-Depends:
+        base             >= 4        && < 5,
+        dhall,
+        tasty            >= 0.11.2   && < 0.12,
+        tasty-hunit      >= 0.9.2    && < 0.10,
+        text             >= 0.11.1.0 && < 1.3

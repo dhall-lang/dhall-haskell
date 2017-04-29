@@ -84,7 +84,7 @@ import qualified NeatInterpolation
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
 -}
-data Const = Type | Kind deriving (Show, Bounded, Enum)
+data Const = Type | Kind deriving (Show, Eq, Bounded, Enum)
 
 instance Buildable Const where
     build = buildConst
@@ -287,7 +287,7 @@ data Expr s a
     | Note s (Expr s a)
     -- | > Embed path                               ~  path
     | Embed a
-    deriving (Functor, Foldable, Traversable, Show)
+    deriving (Functor, Foldable, Traversable, Show, Eq)
 
 instance Applicative (Expr s) where
     pure = Embed
