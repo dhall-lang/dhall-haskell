@@ -36,6 +36,7 @@ module Dhall.Core (
 
     -- * Miscellaneous
     , internalError
+    , reservedIdentifiers
     ) where
 
 #if MIN_VERSION_base(4,8,0)
@@ -44,6 +45,7 @@ import Control.Applicative (Applicative(..), (<$>))
 #endif
 import Data.Bifunctor (Bifunctor(..))
 import Data.Foldable
+import Data.HashSet (HashSet)
 import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.String (IsString(..))
@@ -57,6 +59,7 @@ import Numeric.Natural (Natural)
 import Prelude hiding (FilePath, succ)
 
 import qualified Control.Monad
+import qualified Data.HashSet
 import qualified Data.Map
 import qualified Data.Maybe
 import qualified Data.Text
@@ -426,7 +429,10 @@ pretty = Builder.toLazyText . build
 
 -- | Builder corresponding to the @label@ token in "Dhall.Parser"
 buildLabel :: Text -> Builder
-buildLabel = build
+buildLabel label =
+    if Data.HashSet.member label reservedIdentifiersText
+    then "`" <> build label <> "`"
+    else build label
 
 -- | Builder corresponding to the @number@ token in "Dhall.Parser"
 buildNumber :: Integer -> Builder
@@ -1575,3 +1581,43 @@ buildVector f = Data.Vector.reverse (Data.Vector.create (do
             return (0, 1, mv)
     (len, _, mv) <- f cons nil
     return (Data.Vector.Mutable.slice 0 len mv) ))
+
+reservedIdentifiers :: HashSet String
+reservedIdentifiers =
+    Data.HashSet.fromList
+        [ "let"
+        , "in"
+        , "Type"
+        , "Kind"
+        , "forall"
+        , "Bool"
+        , "True"
+        , "False"
+        , "merge"
+        , "if"
+        , "then"
+        , "else"
+        , "as"
+        , "Natural"
+        , "Natural/fold"
+        , "Natural/build"
+        , "Natural/isZero"
+        , "Natural/even"
+        , "Natural/odd"
+        , "Integer"
+        , "Double"
+        , "Text"
+        , "List"
+        , "List/build"
+        , "List/fold"
+        , "List/length"
+        , "List/head"
+        , "List/last"
+        , "List/indexed"
+        , "List/reverse"
+        , "Optional"
+        , "Optional/fold"
+        ]
+
+reservedIdentifiersText :: HashSet Text
+reservedIdentifiersText = Data.HashSet.map Text.pack reservedIdentifiers

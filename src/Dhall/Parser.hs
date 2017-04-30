@@ -41,7 +41,6 @@ import Text.Trifecta
 import Text.Trifecta.Delta (Delta)
 
 import qualified Data.Char
-import qualified Data.HashSet
 import qualified Data.Map
 import qualified Data.ByteString.Lazy
 import qualified Data.List
@@ -114,40 +113,7 @@ identifierStyle = IdentifierStyle
         Text.Parser.Char.oneOf (['A'..'Z'] ++ ['a'..'z'] ++ "_")
     , _styleLetter   =
         Text.Parser.Char.oneOf (['A'..'Z'] ++ ['a'..'z'] ++ ['0'..'9'] ++ "_-/")
-    , _styleReserved = Data.HashSet.fromList
-        [ "let"
-        , "in"
-        , "Type"
-        , "Kind"
-        , "forall"
-        , "Bool"
-        , "True"
-        , "False"
-        , "merge"
-        , "if"
-        , "then"
-        , "else"
-        , "as"
-        , "Natural"
-        , "Natural/fold"
-        , "Natural/build"
-        , "Natural/isZero"
-        , "Natural/even"
-        , "Natural/odd"
-        , "Integer"
-        , "Double"
-        , "Text"
-        , "List"
-        , "List/build"
-        , "List/fold"
-        , "List/length"
-        , "List/head"
-        , "List/last"
-        , "List/indexed"
-        , "List/reverse"
-        , "Optional"
-        , "Optional/fold"
-        ]
+    , _styleReserved = reservedIdentifiers
     , _styleHighlight         = Identifier
     , _styleReservedHighlight = ReservedIdentifier
     }
@@ -266,7 +232,16 @@ prefer :: Parser ()
 prefer = symbol "//" <|> symbol "⫽"
 
 label :: Parser Text
-label = Text.Parser.Token.ident identifierStyle <?> "label"
+label = (normalIdentifier <|> escapedIdentifier) <?> "label"
+  where
+    normalIdentifier = Text.Parser.Token.ident identifierStyle
+
+    escapedIdentifier = Text.Parser.Token.token (do
+        _  <- Text.Parser.Char.char '`'
+        c  <- Text.Parser.Token._styleStart  identifierStyle
+        cs <- many (Text.Parser.Token._styleLetter identifierStyle)
+        _  <- Text.Parser.Char.char '`'
+        return (Data.Text.Lazy.pack (c:cs)) )
 
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Path)
