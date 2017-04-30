@@ -113,7 +113,7 @@ identifierStyle = IdentifierStyle
     , _styleStart    =
         Text.Parser.Char.oneOf (['A'..'Z'] ++ ['a'..'z'] ++ "_")
     , _styleLetter   =
-        Text.Parser.Char.oneOf (['A'..'Z'] ++ ['a'..'z'] ++ ['0'..'9'] ++ "_/")
+        Text.Parser.Char.oneOf (['A'..'Z'] ++ ['a'..'z'] ++ ['0'..'9'] ++ "_-/")
     , _styleReserved = Data.HashSet.fromList
         [ "let"
         , "in"
