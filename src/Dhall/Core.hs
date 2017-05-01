@@ -42,6 +42,7 @@ module Dhall.Core (
 #else
 import Control.Applicative (Applicative(..), (<$>))
 #endif
+import Control.Applicative (empty)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Foldable
 import Data.Map (Map)
@@ -182,7 +183,7 @@ data Expr s a
     = Const Const
     -- | > Var (V x 0)                              ~  x
     --   > Var (V x n)                              ~  x@n
-    | Var Var             
+    | Var Var
     -- | > Lam x     A b                            ~  λ(x : A) -> b
     | Lam Text (Expr s a) (Expr s a)
     -- | > Pi "_" A B                               ~        A  -> B
@@ -253,7 +254,7 @@ data Expr s a
     -- | > ListLength                               ~  List/length
     | ListLength
     -- | > ListHead                                 ~  List/head
-    | ListHead 
+    | ListHead
     -- | > ListLast                                 ~  List/last
     | ListLast
     -- | > ListIndexed                              ~  List/indexed
@@ -267,13 +268,15 @@ data Expr s a
     | OptionalLit (Expr s a) (Vector (Expr s a))
     -- | > OptionalFold                             ~  Optional/fold
     | OptionalFold
+    -- | > OptionalBuild                            ~  Optional/build
+    | OptionalBuild
     -- | > Record            [(k1, t1), (k2, t2)]   ~  { k1 : t1, k2 : t1 }
     | Record    (Map Text (Expr s a))
     -- | > RecordLit         [(k1, v1), (k2, v2)]   ~  { k1 = v1, k2 = v2 }
     | RecordLit (Map Text (Expr s a))
     -- | > Union             [(k1, t1), (k2, t2)]   ~  < k1 : t1 | k2 : t2 >
     | Union     (Map Text (Expr s a))
-    -- | > UnionLit (k1, v1) [(k2, t2), (k3, t3)]   ~  < k1 = t1 | k2 : t2 | k3 : t3 > 
+    -- | > UnionLit (k1, v1) [(k2, t2), (k3, t3)]   ~  < k1 = t1 | k2 : t2 | k3 : t3 >
     | UnionLit Text (Expr s a) (Map Text (Expr s a))
     -- | > Combine x y                              ~  x ∧ y
     | Combine (Expr s a) (Expr s a)
@@ -339,6 +342,7 @@ instance Monad (Expr s) where
     Optional         >>= _ = Optional
     OptionalLit a b  >>= k = OptionalLit (a >>= k) (fmap (>>= k) b)
     OptionalFold     >>= _ = OptionalFold
+    OptionalBuild    >>= _ = OptionalBuild
     Record    a      >>= k = Record (fmap (>>= k) a)
     RecordLit a      >>= k = RecordLit (fmap (>>= k) a)
     Union     a      >>= k = Union (fmap (>>= k) a)
@@ -393,6 +397,7 @@ instance Bifunctor Expr where
     first _  Optional          = Optional
     first k (OptionalLit a b ) = OptionalLit (first k a) (fmap (first k) b)
     first _  OptionalFold      = OptionalFold
+    first _  OptionalBuild     = OptionalBuild
     first k (Record a        ) = Record (fmap (first k) a)
     first k (RecordLit a     ) = RecordLit (fmap (first k) a)
     first k (Union a         ) = Union (fmap (first k) a)
@@ -626,6 +631,8 @@ buildExprF Optional =
     "Optional"
 buildExprF OptionalFold =
     "Optional/fold"
+buildExprF OptionalBuild =
+    "Optional/build"
 buildExprF (BoolLit True) =
     "True"
 buildExprF (BoolLit False) =
@@ -907,6 +914,7 @@ shift d v (OptionalLit a b) = OptionalLit a' b'
     a' =       shift d v  a
     b' = fmap (shift d v) b
 shift _ _ OptionalFold = OptionalFold
+shift _ _ OptionalBuild = OptionalBuild
 shift d v (Record a) = Record a'
   where
     a' = fmap (shift d v) a
@@ -1042,6 +1050,7 @@ subst x e (OptionalLit a b) = OptionalLit a' b'
     a' =       subst x e  a
     b' = fmap (subst x e) b
 subst _ _ OptionalFold = OptionalFold
+subst _ _ OptionalBuild = OptionalBuild
 subst x e (Record       kts) = Record                   (fmap (subst x e) kts)
 subst x e (RecordLit    kvs) = RecordLit                (fmap (subst x e) kvs)
 subst x e (Union        kts) = Union                    (fmap (subst x e) kts)
@@ -1100,10 +1109,13 @@ normalize e = case e of
             -- fold/build fusion for `List`
             App (App ListBuild _) (App (App ListFold _) e') -> normalize e'
             App (App ListFold _) (App (App ListBuild _) e') -> normalize e'
-
             -- fold/build fusion for `Natural`
             App NaturalBuild (App NaturalFold e') -> normalize e'
             App NaturalFold (App NaturalBuild e') -> normalize e'
+
+            -- fold/build fusion for `Optional`
+            App (App OptionalBuild _) (App (App OptionalFold _) e') -> normalize e'
+            App (App OptionalFold _) (App (App OptionalBuild _) e') -> normalize e'
 
             App (App (App (App NaturalFold (NaturalLit n0)) _) succ') zero ->
                 normalize (go n0)
@@ -1130,6 +1142,22 @@ normalize e = case e of
             App NaturalIsZero (NaturalLit n) -> BoolLit (n == 0)
             App NaturalEven (NaturalLit n) -> BoolLit (even n)
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
+            App (App OptionalBuild t) k
+                | check     -> OptionalLit t k'
+                | otherwise -> App f' a'
+              where
+                labeled = normalize (App (App (App k (App Optional t)) "Just") "Nothing")
+
+                k' = go labeled
+                  where
+                    go (App (Var "Just") e') = pure e'
+                    go (Var "Nothing")       = empty
+                    go  _                    = internalError text
+                check = go labeled
+                  where
+                    go (App (Var "Just") _) = True
+                    go (Var "Nothing")      = True
+                    go  _                   = False
             App (App ListBuild t) k
                 | check     -> ListLit (Just t) (buildVector k')
                 | otherwise -> App f' a'
@@ -1300,6 +1328,7 @@ normalize e = case e of
         t'  =      normalize t
         es' = fmap normalize es
     OptionalFold -> OptionalFold
+    OptionalBuild -> OptionalBuild
     Record kts -> Record kts'
       where
         kts' = fmap normalize kts
@@ -1376,12 +1405,17 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
     App f a -> isNormalized f && isNormalized a && case App f a of
         App (Lam _ _ _) _ -> False
 
+        -- fold/build fusion for `List`
         App (App ListBuild _) (App (App ListFold _) _) -> False
         App (App ListFold _) (App (App ListBuild _) _) -> False
 
         -- fold/build fusion for `Natural`
         App NaturalBuild (App NaturalFold _) -> False
         App NaturalFold (App NaturalBuild _) -> False
+
+        -- fold/build fusion for `Optional`
+        App (App OptionalBuild _) (App (App OptionalFold _) _) -> False
+        App (App OptionalFold _) (App (App OptionalBuild _) _) -> False
 
         App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
         App NaturalBuild k0 -> isNormalized k0 && not (check0 k0)
@@ -1396,6 +1430,15 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
         App NaturalIsZero (NaturalLit _) -> False
         App NaturalEven (NaturalLit _) -> False
         App NaturalOdd (NaturalLit _) -> False
+        App (App OptionalBuild t) k0 -> isNormalized t && isNormalized k0 && not (check0 k0)
+          where
+            check0 (Lam _ _ (Lam just _ (Lam nothing _ k))) = check1 just nothing k
+            check0 _ = False
+
+            check1 just nothing (App (Var (V just' n)) _) =
+                just == just' && n == (if just == nothing then 1 else 0)
+            check1 _ nothing (Var (V nothing' 0)) = nothing == nothing'
+            check1 _ _ _ = False
         App (App ListBuild t) k0 -> isNormalized t && isNormalized k0 && not (check0 k0)
           where
             check0 (Lam _ _ (Lam cons _ (Lam nil _ k))) = check1 cons nil k
@@ -1496,6 +1539,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
     Optional -> True
     OptionalLit t es -> isNormalized t && all isNormalized es
     OptionalFold -> True
+    OptionalBuild -> True
     Record kts -> all isNormalized kts
     RecordLit kvs -> all isNormalized kvs
     Union kts -> all isNormalized kts
@@ -1524,7 +1568,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
                             Nothing -> True
                     _ -> True
             _ -> True
-    Field r x -> isNormalized r && 
+    Field r x -> isNormalized r &&
         case r of
             RecordLit kvs ->
                 case Data.Map.lookup x kvs of
