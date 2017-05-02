@@ -46,7 +46,7 @@ Library
         transformers         >= 0.2.0.0  && < 0.6 ,
         trifecta             >= 1.6      && < 1.7 ,
         unordered-containers >= 0.1.3.0  && < 0.3 ,
-        vector               >= 0.11.0.0 && < 0.12
+        vector               >= 0.11.0.0 && < 0.13
     Exposed-Modules:
         Dhall,
         Dhall.Context,
