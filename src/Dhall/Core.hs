@@ -242,6 +242,8 @@ data Expr s a
     | TextLit Builder
     -- | > TextAppend x y                           ~  x ++ y
     | TextAppend (Expr s a) (Expr s a)
+    -- | > TextLength                               ~  Text/length
+    | TextLength
     -- | > List                                     ~  List
     | List
     -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : List t
@@ -330,6 +332,7 @@ instance Monad (Expr s) where
     Text             >>= _ = Text
     TextLit a        >>= _ = TextLit a
     TextAppend a b   >>= k = TextAppend (a >>= k) (b >>= k)
+    TextLength       >>= _ = TextLength
     List             >>= _ = List
     ListLit a b      >>= k = ListLit (fmap (>>= k) a) (fmap (>>= k) b)
     ListBuild        >>= _ = ListBuild
@@ -385,6 +388,7 @@ instance Bifunctor Expr where
     first _  Text              = Text
     first _ (TextLit a       ) = TextLit a
     first k (TextAppend a b  ) = TextAppend (first k a) (first k b)
+    first _ TextLength         = TextLength
     first _  List              = List
     first k (ListLit a b     ) = ListLit (fmap (first k) a) (fmap (first k) b)
     first _  ListBuild         = ListBuild
@@ -611,6 +615,8 @@ buildExprF Double =
     "Double"
 buildExprF Text =
     "Text"
+buildExprF TextLength =
+    "Text/length"
 buildExprF List =
     "List"
 buildExprF ListBuild =
@@ -896,6 +902,7 @@ shift d v (TextAppend a b) = TextAppend a' b'
   where
     a' = shift d v a
     b' = shift d v b
+shift _ _ TextLength = TextLength
 shift _ _ List = List
 shift d v (ListLit a b) = ListLit a' b'
   where
@@ -1032,6 +1039,7 @@ subst x e (TextAppend a b) = TextAppend a' b'
   where
     a' = subst x e a
     b' = subst x e b
+subst _ _ TextLength = TextLength
 subst _ _ List = List
 subst x e (ListLit a b) = ListLit a' b'
   where
@@ -1209,6 +1217,7 @@ normalize e = case e of
               where
                 just' y = App just y
                 toMaybe = Data.Maybe.listToMaybe . Data.Vector.toList
+            App TextLength (TextLit b) -> NaturalLit (fromIntegral (Text.length (Builder.toLazyText b)))
             _ -> App f' a'
           where
             a' = normalize a
@@ -1310,6 +1319,7 @@ normalize e = case e of
       where
         x' = normalize x
         y' = normalize y
+    TextLength -> TextLength
     List -> List
     ListLit t es -> ListLit t' es'
       where
@@ -1457,6 +1467,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
         App (App ListReverse _) (ListLit _ _) -> False
         App (App (App (App (App OptionalFold _) (OptionalLit _ _)) _) _) _ ->
             False
+        App TextLength (TextLit _) -> False
         _ -> True
     Let _ _ _ _ -> False
     Annot _ _ -> False
@@ -1527,6 +1538,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
                     TextLit _ -> False
                     _ -> True
             _ -> True
+    TextLength -> True
     List -> True
     ListLit t es -> all isNormalized t && all isNormalized es
     ListBuild -> True

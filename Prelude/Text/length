@@ -1,0 +1,13 @@
+{-
+Returns the number of chars
+
+Examples:
+
+```
+./length "foo" = +3
+./length "" = +0
+```
+-}
+let length : Text -> Natural
+    = Text/length
+in length

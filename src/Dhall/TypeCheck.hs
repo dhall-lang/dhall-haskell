@@ -353,6 +353,8 @@ typeWith ctx e@(TextAppend l r  ) = do
         Text -> return ()
         _    -> Left (TypeError ctx e (CantTextAppend r tr))
     return Text
+typeWith _ TextLength             = do
+    return (Pi "_" Text Natural)
 typeWith _      List              = do
     return (Pi "_" (Const Type) (Const Type))
 typeWith ctx e@(ListLit  Nothing  xs) = do

@@ -107,6 +107,9 @@ module Dhall.Tutorial (
     -- *** @(++)@
     -- $textAppend
 
+    -- *** @Text/length@
+    -- $textLength
+
     -- ** @List@
     -- $list
 
@@ -1731,6 +1734,28 @@ import Dhall
 -- > x ++ "" = x
 -- > 
 -- > "" ++ x = x
+
+-- $textLength
+--
+-- Example:
+--
+-- > $ dhall
+-- > Text/length "dhall"
+-- > <Ctrl-D>
+-- > Natural
+-- >
+-- > +5
+--
+-- Type:
+--
+-- > ────────────────────────────────
+-- > Γ ⊢ Text/length : Text → Natural
+--
+-- Rules:
+--
+-- > Text/length "" = +0
+-- > Text/length (t1 ++ t2) = Text/length t1 + Text/length t2
+
 
 -- $list
 --
