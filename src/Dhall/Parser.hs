@@ -91,7 +91,7 @@ newtype Parser a = Parser { unParser :: Text.Trifecta.Parser a }
 
 instance TokenParsing Parser where
     someSpace =
-        Text.Parser.Token.Style.buildSomeSpaceParser 
+        Text.Parser.Token.Style.buildSomeSpaceParser
             (Parser someSpace)
             Text.Parser.Token.Style.haskellCommentStyle
 
@@ -405,187 +405,192 @@ exprE embedded = noted (do
 
 exprF :: Show a => Parser a -> Parser (Expr Src a)
 exprF embedded = choice
-    [   noted (try exprF26)
-    ,   noted (try exprF25)
-    ,   noted      exprF24
-    ,   noted      exprF27
-    ,   noted (try exprF28)
-    ,   noted      exprF29
-    ,   noted (try exprF30)
-    ,   noted      exprF31
-    ,   noted      exprF32
-    ,   noted      exprF33
+    [   noted (try exprParseDouble)
+    ,   noted (try exprNaturalLit)
+    ,   noted      exprIntegerLit
+    ,   noted      exprStringLiteral
+    ,   noted (try exprRecordType)
+    ,   noted      exprRecordLiteral
+    ,   noted (try exprUnionType)
+    ,   noted      exprUnionLiteral
+    ,   noted      exprListLiteral
+    ,   noted      exprImport
     ,   (choice
-            [   noted      exprF03
-            ,   noted      exprF04
-            ,   noted      exprF05
-            ,   noted      exprF06
-            ,   noted      exprF07
-            ,   noted      exprF36
-            ,   noted      exprF12
-            ,   noted      exprF13
-            ,   noted      exprF14
-            ,   noted      exprF15
-            ,   noted      exprF16
-            ,   noted      exprF17
-            ,   noted      exprF18
-            ,   noted      exprF20
-            ,   noted      exprF35
-            ,   noted      exprF21
-            ,   noted      exprF19
-            ,   noted      exprF02
-            ,   noted      exprF08
-            ,   noted      exprF09
-            ,   noted      exprF10
-            ,   noted      exprF11
-            ,   noted      exprF22
-            ,   noted      exprF23
-            ,   noted      exprF01
+            [   noted      exprNaturalFold
+            ,   noted      exprNaturalBuild
+            ,   noted      exprNaturalIsZero
+            ,   noted      exprNaturalEven
+            ,   noted      exprNaturalOdd
+            ,   noted      exprNaturalToInteger
+            ,   noted      exprNaturalShow
+            ,   noted      exprListBuild
+            ,   noted      exprListFold
+            ,   noted      exprListLength
+            ,   noted      exprListHead
+            ,   noted      exprListLast
+            ,   noted      exprListIndexed
+            ,   noted      exprListReverse
+            ,   noted      exprOptionalFold
+            ,   noted      exprOptionalBuild
+            ,   noted      exprBool
+            ,   noted      exprOptional
+            ,   noted      exprNatural
+            ,   noted      exprInteger
+            ,   noted      exprDouble
+            ,   noted      exprText
+            ,   noted      exprList
+            ,   noted      exprBoolLitTrue
+            ,   noted      exprBoolLitFalse
+            ,   noted      exprConst
             ]
         ) <?> "built-in value"
-    ,   noted      exprF00
-    ,              exprF34
+    ,   noted      exprVar
+    ,              exprParens
     ]
   where
-    exprF00 = do
+    exprVar = do
         a <- var
         return (Var a)
 
-    exprF01 = do
+    exprConst = do
         a <- const
         return (Const a)
 
-    exprF02 = do
+    exprNatural = do
         reserve "Natural"
         return Natural
 
-    exprF03 = do
+    exprNaturalFold = do
         reserve "Natural/fold"
         return NaturalFold
 
-    exprF04 = do
+    exprNaturalBuild = do
         reserve "Natural/build"
         return NaturalBuild
 
-    exprF05 = do
+    exprNaturalIsZero = do
         reserve "Natural/isZero"
         return NaturalIsZero
 
-    exprF06 = do
+    exprNaturalEven = do
         reserve "Natural/even"
         return NaturalEven
 
-    exprF07 = do
+    exprNaturalOdd = do
         reserve "Natural/odd"
         return NaturalOdd
 
-    exprF36 = do
+    exprNaturalToInteger = do
         reserve "Natural/toInteger"
         return NaturalToInteger
 
-    exprF08 = do
+    exprNaturalShow = do
+        reserve "Natural/show"
+        return NaturalShow
+
+    exprInteger = do
         reserve "Integer"
         return Integer
 
-    exprF09 = do
+    exprDouble = do
         reserve "Double"
         return Double
 
-    exprF10 = do
+    exprText = do
         reserve "Text"
         return Text
 
-    exprF11 = do
+    exprList = do
         reserve "List"
         return List
 
-    exprF12 = do
+    exprListBuild = do
         reserve "List/build"
         return ListBuild
 
-    exprF13 = do
+    exprListFold = do
         reserve "List/fold"
         return ListFold
 
-    exprF14 = do
+    exprListLength = do
         reserve "List/length"
         return ListLength
 
-    exprF15 = do
+    exprListHead = do
         reserve "List/head"
         return ListHead
 
-    exprF16 = do
+    exprListLast = do
         reserve "List/last"
         return ListLast
 
-    exprF17 = do
+    exprListIndexed = do
         reserve "List/indexed"
         return ListIndexed
 
-    exprF18 = do
+    exprListReverse = do
         reserve "List/reverse"
         return ListReverse
 
-    exprF19 = do
+    exprOptional = do
         reserve "Optional"
         return Optional
 
-    exprF20 = do
+    exprOptionalFold = do
         reserve "Optional/fold"
         return OptionalFold
 
-    exprF35 = do
+    exprOptionalBuild = do
         reserve "Optional/build"
         return OptionalBuild
 
-    exprF21 = do
+    exprBool = do
         reserve "Bool"
         return Bool
 
-    exprF22 = do
+    exprBoolLitTrue = do
         reserve "True"
         return (BoolLit True)
 
-    exprF23 = do
+    exprBoolLitFalse = do
         reserve "False"
         return (BoolLit False)
 
-    exprF24 = do
+    exprIntegerLit = do
         a <- Text.Parser.Token.integer
         return (IntegerLit a)
 
-    exprF25 = (do
+    exprNaturalLit = (do
         _ <- Text.Parser.Char.char '+'
         a <- Text.Parser.Token.natural
         return (NaturalLit (fromIntegral a)) ) <?> "natural"
 
-    exprF26 = do
+    exprParseDouble = do
         sign <-  fmap (\_ -> negate) (Text.Parser.Char.char '-')
              <|> fmap (\_ -> id    ) (Text.Parser.Char.char '+')
              <|> pure id
         a <- Text.Parser.Token.double
         return (DoubleLit (sign a))
 
-    exprF27 = do
+    exprStringLiteral = do
         a <- stringLiteral
         return (TextLit a)
 
-    exprF28 = record embedded <?> "record type"
+    exprRecordType = record embedded <?> "record type"
 
-    exprF29 = recordLit embedded <?> "record literal"
+    exprRecordLiteral = recordLit embedded <?> "record literal"
 
-    exprF30 = union embedded <?> "union type"
+    exprUnionType = union embedded <?> "union type"
 
-    exprF31 = unionLit embedded <?> "union literal"
+    exprUnionLiteral = unionLit embedded <?> "union literal"
 
-    exprF32 = listLit embedded <?> "list literal"
+    exprListLiteral = listLit embedded <?> "list literal"
 
-    exprF33 = do
+    exprImport = do
         a <- embedded <?> "import"
         return (Embed a)
 
-    exprF34 = do
+    exprParens = do
         symbol "("
         a <- exprA embedded
         symbol ")"
