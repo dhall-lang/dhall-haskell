@@ -16,12 +16,18 @@ normalizationTests = testGroup "normalization" [ constantFolding
                                                ]
 
 constantFolding :: TestTree
-constantFolding = testGroup "folding of constants" [ naturalPlus, optionalFold, optionalBuild ]
+constantFolding = testGroup "folding of constants" [ naturalPlus, naturalToInteger, optionalFold, optionalBuild ]
 
 naturalPlus :: TestTree
 naturalPlus = testCase "natural plus" $ do
   e <- code "+1 + +2"
   e `assertNormalizesTo` "+3"
+
+naturalToInteger :: TestTree
+naturalToInteger = testCase "Natural/toInteger" $ do
+  e <- code "Natural/toInteger +1"
+  isNormalized e @?= False
+  normalize' e @?= "1"
 
 optionalFold :: TestTree
 optionalFold = testGroup "Optional/fold" [ just, nothing ]

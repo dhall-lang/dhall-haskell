@@ -308,6 +308,8 @@ typeWith _      NaturalEven       = do
     return (Pi "_" Natural Bool)
 typeWith _      NaturalOdd        = do
     return (Pi "_" Natural Bool)
+typeWith _      NaturalToInteger  = do
+    return (Pi "_" Natural Integer)
 typeWith ctx e@(NaturalPlus  l r) = do
     tl <- fmap Dhall.Core.normalize (typeWith ctx l)
     case tl of
