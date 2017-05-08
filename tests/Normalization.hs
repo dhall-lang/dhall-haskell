@@ -4,29 +4,11 @@
 
 module Normalization (normalizationTests) where
 
-import qualified Control.Exception
-import qualified Data.Text
-import qualified Data.Text.Lazy
 import           Dhall.Core
-import           Dhall.Parser (Src)
-import qualified Dhall.Parser
-import qualified Dhall.Import
-import           Dhall.TypeCheck
 import qualified NeatInterpolation
 import           Test.Tasty
 import           Test.Tasty.HUnit
-
-code :: Data.Text.Text -> IO (Expr Src X)
-code strictText = do
-    let lazyText = Data.Text.Lazy.fromStrict strictText
-    expr0 <- case Dhall.Parser.exprFromText mempty lazyText of
-        Left parseError -> Control.Exception.throwIO parseError
-        Right expr0     -> return expr0
-    expr1 <- Dhall.Import.load expr0
-    case Dhall.TypeCheck.typeOf expr1 of
-        Left typeError -> Control.Exception.throwIO typeError
-        Right _        -> return ()
-    return expr1
+import           Util (code, normalize', assertNormalizesTo, assertNormalized)
 
 normalizationTests :: TestTree
 normalizationTests = testGroup "normalization" [ constantFolding
@@ -39,17 +21,15 @@ constantFolding = testGroup "folding of constants" [ naturalPlus, optionalFold, 
 naturalPlus :: TestTree
 naturalPlus = testCase "natural plus" $ do
   e <- code "+1 + +2"
-  isNormalized e @?= False
-  normalize' e @?= "+3"
+  e `assertNormalizesTo` "+3"
 
 optionalFold :: TestTree
 optionalFold = testGroup "Optional/fold" [ just, nothing ]
   where test label inp out = testCase label $ do
              e <- code [NeatInterpolation.text|
-Optional/fold Text ([$inp] : Optional Text) Natural (λ(j : Text) → +1) +2
-|]
-             isNormalized e @?= False
-             normalize' e @?= out
+                         Optional/fold Text ([$inp] : Optional Text) Natural (λ(j : Text) → +1) +2
+                       |]
+             e `assertNormalizesTo` out
         just = test "just" "\"foo\"" "+1"
         nothing = test "nothing" "" "+2"
 
@@ -70,8 +50,7 @@ Natural
 →   just +1
 )
 |]
-  isNormalized e @?= False
-  normalize' e @?= "[+1] : Optional Natural"
+  e `assertNormalizesTo` "[+1] : Optional Natural"
 
 optionalBuildShadowing :: TestTree
 optionalBuildShadowing = testCase "handles shadowing" $ do
@@ -84,8 +63,7 @@ Integer
 →   x@1 1
 )
 |]
-  isNormalized e @?= False
-  normalize' e @?= "[1] : Optional Integer"
+  e `assertNormalizesTo` "[1] : Optional Integer"
 
 optionalBuildIrreducible :: TestTree
 optionalBuildIrreducible = testCase "irreducible" $ do
@@ -99,11 +77,7 @@ optionalBuildIrreducible = testCase "irreducible" $ do
     →   id optional (just True)
     )
 |]
-  isNormalized e @?= True
--- normalize e @?= e
-
-normalize' :: Expr Src X -> Data.Text.Lazy.Text
-normalize' = Dhall.Core.pretty . normalize
+  assertNormalized e
 
 fusion :: TestTree
 fusion = testGroup "Optional build/fold fusion" [ fuseOptionalBF
@@ -113,11 +87,9 @@ fusion = testGroup "Optional build/fold fusion" [ fuseOptionalBF
 fuseOptionalBF :: TestTree
 fuseOptionalBF = testCase "fold . build" $ do
   j <- test "just \"foo\""
-  isNormalized j @?= False
-  normalize' j @?= "+42"
+  j `assertNormalizesTo` "+42"
   n <- test "nothing"
-  isNormalized n @?= False
-  normalize' n @?= "+2"
+  n `assertNormalizesTo` "+2"
   where
     test e = code [NeatInterpolation.text|
 Optional/fold
@@ -153,5 +125,4 @@ Natural
     )
 )
 |]
-  isNormalized test @?= False
-  normalize' test @?= "[+42] : Optional Natural"
+  test `assertNormalizesTo` "[+42] : Optional Natural"
