@@ -422,6 +422,7 @@ exprF embedded = choice
             ,   noted      exprF06
             ,   noted      exprF07
             ,   noted      exprF36
+            ,   noted      exprF37
             ,   noted      exprF12
             ,   noted      exprF13
             ,   noted      exprF14
@@ -482,6 +483,10 @@ exprF embedded = choice
     exprF36 = do
         reserve "Natural/toInteger"
         return NaturalToInteger
+
+    exprF37 = do
+        reserve "Natural/show"
+        return NaturalShow
 
     exprF08 = do
         reserve "Integer"
