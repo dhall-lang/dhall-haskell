@@ -92,43 +92,39 @@ fusion = testGroup "Optional build/fold fusion" [ fuseOptionalBF
 
 fuseOptionalBF :: TestTree
 fuseOptionalBF = testCase "fold . build" $ do
-  j <- test "just \"foo\""
-  j `assertNormalizesTo` "+42"
-  n <- test "nothing"
-  n `assertNormalizesTo` "+2"
-  where
-    test e = code [NeatInterpolation.text|
-Optional/fold
-Text
-(   Optional/build
-    Text
-    (   λ(optional : Type)
-    →   λ(just : Text → optional)
-    →   λ(nothing : optional)
-    →   $e
+  e0 <- code [NeatInterpolation.text|
+    λ(  f
+    :   ∀(optional : Type)
+    →   ∀(just : Text → optional)
+    →   ∀(nothing : optional)
+    →   optional
     )
-)
-Natural
-(λ(j : Text) → +42)
-+2
+→   Optional/fold
+    Text
+    (   Optional/build
+        Text
+        f
+    )
 |]
+  e1 <- code [NeatInterpolation.text|
+    λ(  f
+    :   ∀(optional : Type)
+    →   ∀(just : Text → optional)
+    →   ∀(nothing : optional)
+    →   optional
+    )
+→   f
+|]
+  e0 `assertNormalizesTo` (Dhall.Core.pretty e1)
 
 fuseOptionalFB :: TestTree
 fuseOptionalFB = testCase "build . fold" $ do
   test <- code [NeatInterpolation.text|
 Optional/build
-Natural
-(   λ(optional : Type)
-→   λ(just : Natural → optional)
-→   λ(nothing : optional)
-→   just
-    (   Optional/fold
-        Text
-        (["foo"] : Optional Text)
-        Natural
-        (λ(just : Text) → +42)
-        +2
-    )
+Text
+(   Optional/fold
+    Text
+    (["foo"] : Optional Text)
 )
 |]
-  test `assertNormalizesTo` "[+42] : Optional Natural"
+  test `assertNormalizesTo` "[\"foo\"] : Optional Text"
