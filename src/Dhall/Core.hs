@@ -227,6 +227,8 @@ data Expr s a
     | NaturalEven
     -- | > NaturalOdd                               ~  Natural/odd
     | NaturalOdd
+    -- | > NaturalToInteger                         ~  Natural/toInteger
+    | NaturalToInteger
     -- | > NaturalPlus x y                          ~  x + y
     | NaturalPlus (Expr s a) (Expr s a)
     -- | > NaturalTimes x y                         ~  x * y
@@ -324,6 +326,7 @@ instance Monad (Expr s) where
     NaturalIsZero    >>= _ = NaturalIsZero
     NaturalEven      >>= _ = NaturalEven
     NaturalOdd       >>= _ = NaturalOdd
+    NaturalToInteger >>= _ = NaturalToInteger
     NaturalPlus  a b >>= k = NaturalPlus  (a >>= k) (b >>= k)
     NaturalTimes a b >>= k = NaturalTimes (a >>= k) (b >>= k)
     Integer          >>= _ = Integer
@@ -379,6 +382,7 @@ instance Bifunctor Expr where
     first _  NaturalIsZero     = NaturalIsZero
     first _  NaturalEven       = NaturalEven
     first _  NaturalOdd        = NaturalOdd
+    first _  NaturalToInteger  = NaturalToInteger
     first k (NaturalPlus a b ) = NaturalPlus (first k a) (first k b)
     first k (NaturalTimes a b) = NaturalTimes (first k a) (first k b)
     first _  Integer           = Integer
@@ -611,6 +615,8 @@ buildExprF NaturalEven =
     "Natural/even"
 buildExprF NaturalOdd =
     "Natural/odd"
+buildExprF NaturalToInteger =
+    "Natural/toInteger"
 buildExprF Integer =
     "Integer"
 buildExprF Double =
@@ -884,6 +890,7 @@ shift _ _ NaturalBuild = NaturalBuild
 shift _ _ NaturalIsZero = NaturalIsZero
 shift _ _ NaturalEven = NaturalEven
 shift _ _ NaturalOdd = NaturalOdd
+shift _ _ NaturalToInteger = NaturalToInteger
 shift d v (NaturalPlus a b) = NaturalPlus a' b'
   where
     a' = shift d v a
@@ -1020,6 +1027,7 @@ subst _ _ NaturalBuild = NaturalBuild
 subst _ _ NaturalIsZero = NaturalIsZero
 subst _ _ NaturalEven = NaturalEven
 subst _ _ NaturalOdd = NaturalOdd
+subst _ _ NaturalToInteger = NaturalToInteger
 subst x e (NaturalPlus a b) = NaturalPlus a' b'
   where
     a' = subst x e a
@@ -1148,6 +1156,7 @@ normalize e = case e of
             App NaturalIsZero (NaturalLit n) -> BoolLit (n == 0)
             App NaturalEven (NaturalLit n) -> BoolLit (even n)
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
+            App NaturalToInteger (NaturalLit n) -> IntegerLit (toInteger n)
             App (App OptionalBuild t) k
                 | check     -> OptionalLit t k'
                 | otherwise -> App f' a'
@@ -1280,6 +1289,7 @@ normalize e = case e of
     NaturalIsZero -> NaturalIsZero
     NaturalEven -> NaturalEven
     NaturalOdd -> NaturalOdd
+    NaturalToInteger -> NaturalToInteger
     NaturalPlus  x y ->
         case x' of
             NaturalLit xn ->
@@ -1436,6 +1446,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
         App NaturalIsZero (NaturalLit _) -> False
         App NaturalEven (NaturalLit _) -> False
         App NaturalOdd (NaturalLit _) -> False
+        App NaturalToInteger (NaturalLit _) -> False
         App (App OptionalBuild t) k0 -> isNormalized t && isNormalized k0 && not (check0 k0)
           where
             check0 (Lam _ _ (Lam just _ (Lam nothing _ k))) = check1 just nothing k
@@ -1506,6 +1517,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
     NaturalIsZero -> True
     NaturalEven -> True
     NaturalOdd -> True
+    NaturalToInteger -> True
     NaturalPlus x y -> isNormalized x && isNormalized y &&
         case x of
             NaturalLit _ ->
@@ -1648,6 +1660,7 @@ reservedIdentifiers =
         , "Natural/isZero"
         , "Natural/even"
         , "Natural/odd"
+        , "Natural/toInteger"
         , "Integer"
         , "Double"
         , "Text"

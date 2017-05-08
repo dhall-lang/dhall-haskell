@@ -74,8 +74,10 @@ Test-Suite test
     Type: exitcode-stdio-1.0
     Hs-Source-Dirs: tests
     Main-Is: Tests.hs
+    GHC-Options: -Wall
     Other-Modules:
         Normalization
+        Util
     Build-Depends:
         base               >= 4        && < 5   ,
         dhall                                   ,
