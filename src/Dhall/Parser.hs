@@ -424,6 +424,7 @@ exprF embedded = choice
             ,   noted      exprNaturalToInteger
             ,   noted      exprNaturalShow
             ,   noted      exprIntegerShow
+            ,   noted      exprDoubleShow
             ,   noted      exprListBuild
             ,   noted      exprListFold
             ,   noted      exprListLength
@@ -500,6 +501,10 @@ exprF embedded = choice
     exprDouble = do
         reserve "Double"
         return Double
+
+    exprDoubleShow = do
+        reserve "Double/show"
+        return DoubleShow
 
     exprText = do
         reserve "Text"

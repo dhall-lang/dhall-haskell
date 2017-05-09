@@ -344,6 +344,8 @@ typeWith _      Double            = do
     return (Const Type)
 typeWith _     (DoubleLit _     ) = do
     return Double
+typeWith _     DoubleShow         = do
+    return (Pi "_" Double Text)
 typeWith _      Text              = do
     return (Const Type)
 typeWith _     (TextLit _       ) = do

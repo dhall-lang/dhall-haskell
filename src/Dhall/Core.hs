@@ -245,6 +245,8 @@ data Expr s a
     | Double
     -- | > DoubleLit n                              ~  n
     | DoubleLit Double
+    -- | > DoubleShow                               ~  Double/show
+    | DoubleShow
     -- | > Text                                     ~  Text
     | Text
     -- | > TextLit t                                ~  t
@@ -339,6 +341,7 @@ instance Monad (Expr s) where
     IntegerShow      >>= _ = IntegerShow
     Double           >>= _ = Double
     DoubleLit a      >>= _ = DoubleLit a
+    DoubleShow       >>= _ = DoubleShow
     Text             >>= _ = Text
     TextLit a        >>= _ = TextLit a
     TextAppend a b   >>= k = TextAppend (a >>= k) (b >>= k)
@@ -397,6 +400,7 @@ instance Bifunctor Expr where
     first _  IntegerShow       = IntegerShow
     first _  Double            = Double
     first _ (DoubleLit a     ) = DoubleLit a
+    first _  DoubleShow        = DoubleShow
     first _  Text              = Text
     first _ (TextLit a       ) = TextLit a
     first k (TextAppend a b  ) = TextAppend (first k a) (first k b)
@@ -633,6 +637,8 @@ buildExprF IntegerShow =
     "Integer/show"
 buildExprF Double =
     "Double"
+buildExprF DoubleShow =
+    "Double/show"
 buildExprF Text =
     "Text"
 buildExprF List =
@@ -917,6 +923,7 @@ shift _ _ (IntegerLit a) = IntegerLit a
 shift _ _ IntegerShow = IntegerShow
 shift _ _ Double = Double
 shift _ _ (DoubleLit a) = DoubleLit a
+shift _ _ DoubleShow = DoubleShow
 shift _ _ Text = Text
 shift _ _ (TextLit a) = TextLit a
 shift d v (TextAppend a b) = TextAppend a' b'
@@ -1056,6 +1063,7 @@ subst _ _ (IntegerLit a) = IntegerLit a
 subst _ _ IntegerShow = IntegerShow
 subst _ _ Double = Double
 subst _ _ (DoubleLit a) = DoubleLit a
+subst _ _ DoubleShow = DoubleShow
 subst _ _ Text = Text
 subst _ _ (TextLit a) = TextLit a
 subst x e (TextAppend a b) = TextAppend a' b'
@@ -1175,6 +1183,7 @@ normalize e = case e of
             App NaturalToInteger (NaturalLit n) -> IntegerLit (toInteger n)
             App NaturalShow (NaturalLit n) -> TextLit ("+" <> buildNatural n)
             App IntegerShow (IntegerLit n) -> TextLit (buildNumber n)
+            App DoubleShow (DoubleLit n) -> TextLit (buildDouble n)
             App (App OptionalBuild t) k
                 | check     -> OptionalLit t k'
                 | otherwise -> App f' a'
@@ -1334,6 +1343,7 @@ normalize e = case e of
     IntegerShow -> IntegerShow
     Double -> Double
     DoubleLit n -> DoubleLit n
+    DoubleShow -> DoubleShow
     Text -> Text
     TextLit t -> TextLit t
     TextAppend x y   ->
@@ -1469,6 +1479,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
         App NaturalShow (NaturalLit _) -> False
         App NaturalToInteger (NaturalLit _) -> False
         App IntegerShow (IntegerLit _) -> False
+        App DoubleShow (DoubleLit _) -> False
         App (App OptionalBuild t) k0 -> isNormalized t && isNormalized k0 && not (check0 k0)
           where
             check0 (Lam _ _ (Lam just _ (Lam nothing _ k))) = check1 just nothing k
@@ -1560,6 +1571,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
     IntegerShow -> True
     Double -> True
     DoubleLit _ -> True
+    DoubleShow -> True
     Text -> True
     TextLit _ -> True
     TextAppend x y -> isNormalized x && isNormalized y &&
@@ -1689,6 +1701,7 @@ reservedIdentifiers =
         , "Integer"
         , "Integer/show"
         , "Double"
+        , "Double/show"
         , "Text"
         , "List"
         , "List/build"
