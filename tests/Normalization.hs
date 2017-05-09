@@ -12,15 +12,22 @@ import           Util (code, normalize', assertNormalizesTo, assertNormalized)
 
 normalizationTests :: TestTree
 normalizationTests = testGroup "normalization" [ constantFolding
+                                               , conversions
                                                , fusion
                                                ]
 
 constantFolding :: TestTree
 constantFolding = testGroup "folding of constants" [ naturalPlus
-                                                   , naturalToInteger
-                                                   , naturalShow
                                                    , optionalFold
-                                                   , optionalBuild ]
+                                                   , optionalBuild
+                                                   ]
+
+conversions :: TestTree
+conversions = testGroup "conversions" [ naturalShow
+                                      , integerShow
+                                      , doubleShow
+                                      , naturalToInteger
+                                      ]
 
 naturalPlus :: TestTree
 naturalPlus = testCase "natural plus" $ do
@@ -37,6 +44,16 @@ naturalShow :: TestTree
 naturalShow = testCase "Natural/show" $ do
   e <- code "Natural/show +42"
   e `assertNormalizesTo` "\"+42\""
+
+integerShow :: TestTree
+integerShow = testCase "Integer/show" $ do
+  e <- code "[Integer/show 1337, Integer/show -42, Integer/show 0]"
+  e `assertNormalizesTo` "[\"1337\", \"-42\", \"0\"]"
+
+doubleShow :: TestTree
+doubleShow = testCase "Double/show" $ do
+  e <- code "[Double/show -0.42, Double/show 13.37]"
+  e `assertNormalizesTo` "[\"-0.42\", \"13.37\"]"
 
 optionalFold :: TestTree
 optionalFold = testGroup "Optional/fold" [ just, nothing ]
