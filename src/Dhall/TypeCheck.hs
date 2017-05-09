@@ -338,6 +338,8 @@ typeWith _      Integer           = do
     return (Const Type)
 typeWith _     (IntegerLit _    ) = do
     return Integer
+typeWith _      IntegerShow  = do
+    return (Pi "_" Integer Text)
 typeWith _      Double            = do
     return (Const Type)
 typeWith _     (DoubleLit _     ) = do

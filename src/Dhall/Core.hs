@@ -239,6 +239,8 @@ data Expr s a
     | Integer
     -- | > IntegerLit n                             ~  n
     | IntegerLit Integer
+    -- | > IntegerShow                              ~  Integer/show
+    | IntegerShow
     -- | > Double                                   ~  Double
     | Double
     -- | > DoubleLit n                              ~  n
@@ -334,6 +336,7 @@ instance Monad (Expr s) where
     NaturalTimes a b >>= k = NaturalTimes (a >>= k) (b >>= k)
     Integer          >>= _ = Integer
     IntegerLit a     >>= _ = IntegerLit a
+    IntegerShow      >>= _ = IntegerShow
     Double           >>= _ = Double
     DoubleLit a      >>= _ = DoubleLit a
     Text             >>= _ = Text
@@ -391,6 +394,7 @@ instance Bifunctor Expr where
     first k (NaturalTimes a b) = NaturalTimes (first k a) (first k b)
     first _  Integer           = Integer
     first _ (IntegerLit a    ) = IntegerLit a
+    first _  IntegerShow       = IntegerShow
     first _  Double            = Double
     first _ (DoubleLit a     ) = DoubleLit a
     first _  Text              = Text
@@ -625,6 +629,8 @@ buildExprF NaturalShow =
     "Natural/show"
 buildExprF Integer =
     "Integer"
+buildExprF IntegerShow =
+    "Integer/show"
 buildExprF Double =
     "Double"
 buildExprF Text =
@@ -908,6 +914,7 @@ shift d v (NaturalTimes a b) = NaturalTimes a' b'
     b' = shift d v b
 shift _ _ Integer = Integer
 shift _ _ (IntegerLit a) = IntegerLit a
+shift _ _ IntegerShow = IntegerShow
 shift _ _ Double = Double
 shift _ _ (DoubleLit a) = DoubleLit a
 shift _ _ Text = Text
@@ -1046,6 +1053,7 @@ subst x e (NaturalTimes a b) = NaturalTimes a' b'
     b' = subst x e b
 subst _ _ Integer = Integer
 subst _ _ (IntegerLit a) = IntegerLit a
+subst _ _ IntegerShow = IntegerShow
 subst _ _ Double = Double
 subst _ _ (DoubleLit a) = DoubleLit a
 subst _ _ Text = Text
@@ -1166,6 +1174,7 @@ normalize e = case e of
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
             App NaturalToInteger (NaturalLit n) -> IntegerLit (toInteger n)
             App NaturalShow (NaturalLit n) -> TextLit ("+" <> buildNatural n)
+            App IntegerShow (IntegerLit n) -> TextLit (buildNumber n)
             App (App OptionalBuild t) k
                 | check     -> OptionalLit t k'
                 | otherwise -> App f' a'
@@ -1322,6 +1331,7 @@ normalize e = case e of
         y' = normalize y
     Integer -> Integer
     IntegerLit n -> IntegerLit n
+    IntegerShow -> IntegerShow
     Double -> Double
     DoubleLit n -> DoubleLit n
     Text -> Text
@@ -1458,6 +1468,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
         App NaturalOdd (NaturalLit _) -> False
         App NaturalShow (NaturalLit _) -> False
         App NaturalToInteger (NaturalLit _) -> False
+        App IntegerShow (IntegerLit _) -> False
         App (App OptionalBuild t) k0 -> isNormalized t && isNormalized k0 && not (check0 k0)
           where
             check0 (Lam _ _ (Lam just _ (Lam nothing _ k))) = check1 just nothing k
@@ -1546,6 +1557,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
             _ -> True
     Integer -> True
     IntegerLit _ -> True
+    IntegerShow -> True
     Double -> True
     DoubleLit _ -> True
     Text -> True
@@ -1675,6 +1687,7 @@ reservedIdentifiers =
         , "Natural/toInteger"
         , "Natural/show"
         , "Integer"
+        , "Integer/show"
         , "Double"
         , "Text"
         , "List"

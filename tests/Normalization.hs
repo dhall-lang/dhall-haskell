@@ -19,6 +19,7 @@ constantFolding :: TestTree
 constantFolding = testGroup "folding of constants" [ naturalPlus
                                                    , naturalToInteger
                                                    , naturalShow
+                                                   , integerShow
                                                    , optionalFold
                                                    , optionalBuild ]
 
@@ -37,6 +38,11 @@ naturalShow :: TestTree
 naturalShow = testCase "Natural/show" $ do
   e <- code "Natural/show +42"
   e `assertNormalizesTo` "\"+42\""
+
+integerShow :: TestTree
+integerShow = testCase "Integer/show" $ do
+  e <- code "[Integer/show 1337, Integer/show -42, Integer/show 0]"
+  e `assertNormalizesTo` "[\"1337\", \"-42\", \"0\"]"
 
 optionalFold :: TestTree
 optionalFold = testGroup "Optional/fold" [ just, nothing ]
