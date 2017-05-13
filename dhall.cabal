@@ -22,7 +22,51 @@ Description:
     .
     Read "Dhall.Tutorial" to learn how to use this library
 Category: Compiler
-Extra-Source-Files: CHANGELOG.md Prelude
+Extra-Source-Files:
+    CHANGELOG.md
+    Prelude/Bool/and
+    Prelude/Bool/build
+    Prelude/Bool/even
+    Prelude/Bool/fold
+    Prelude/Bool/not
+    Prelude/Bool/odd
+    Prelude/Bool/or
+    Prelude/List/all
+    Prelude/List/any
+    Prelude/List/build
+    Prelude/List/concat
+    Prelude/List/filter
+    Prelude/List/fold
+    Prelude/List/generate
+    Prelude/List/head
+    Prelude/List/indexed
+    Prelude/List/iterate
+    Prelude/List/last
+    Prelude/List/length
+    Prelude/List/map
+    Prelude/List/null
+    Prelude/List/replicate
+    Prelude/List/reverse
+    Prelude/List/shifted
+    Prelude/List/unzip
+    Prelude/Monoid
+    Prelude/Natural/build
+    Prelude/Natural/enumerate
+    Prelude/Natural/even
+    Prelude/Natural/fold
+    Prelude/Natural/isZero
+    Prelude/Natural/odd
+    Prelude/Natural/product
+    Prelude/Natural/sum
+    Prelude/Optional/build
+    Prelude/Optional/concat
+    Prelude/Optional/fold
+    Prelude/Optional/head
+    Prelude/Optional/last
+    Prelude/Optional/map
+    Prelude/Optional/toList
+    Prelude/Optional/unzip
+    Prelude/Text/concat
 
 Source-Repository head
     Type: git
