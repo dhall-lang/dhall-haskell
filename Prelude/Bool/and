@@ -5,9 +5,9 @@ The `and` function returns `False` if there are any `False` elements in the
 Examples:
 
 ```
-./and ([True, False, True] : List Bool) = True
+./and ([True, False, True] : List Bool) = False
 
-./and ([] : List Bool) = False
+./and ([] : List Bool) = True
 ```
 -}
 let and : List Bool → Bool

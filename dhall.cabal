@@ -22,7 +22,8 @@ Description:
     .
     Read "Dhall.Tutorial" to learn how to use this library
 Category: Compiler
-Extra-Source-Files: CHANGELOG.md
+Extra-Source-Files: CHANGELOG.md Prelude
+
 Source-Repository head
     Type: git
     Location: https://github.com/Gabriel439/Haskell-Dhall-Library
@@ -76,6 +77,7 @@ Test-Suite test
     Main-Is: Tests.hs
     GHC-Options: -Wall
     Other-Modules:
+        Examples
         Normalization
         Util
     Build-Depends:

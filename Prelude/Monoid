@@ -29,9 +29,9 @@ Examples:
 ./Natural/product
     : ./Monoid Natural
 ./Optional/head
-    : ∀(a : Type) → ./Monoid (List (Optional a))
+    : ∀(a : Type) → ./Monoid (Optional a)
 ./Optional/last
-    : ∀(a : Type) → ./Monoid (List (Optional a))
+    : ∀(a : Type) → ./Monoid (Optional a)
 ./Text/concat
     : ./Monoid Text
 ```

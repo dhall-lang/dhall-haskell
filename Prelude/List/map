@@ -8,6 +8,7 @@ Examples:
 = [True, False, False] : List Bool
 
 ./map Natural Bool Natural/even ([] : List Natural)
+= [] : List Bool
 ```
 -}
 let map : ∀(a : Type) → ∀(b : Type) → (a → b) → List a → List b
