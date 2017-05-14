@@ -659,92 +659,81 @@ _List_unzip_1 = Test.Tasty.HUnit.testCase "Example #1" (do
     Test.Tasty.HUnit.assertEqual "" (Util.normalize' e) "{ _1 = [] : List Text, _2 = [] : List Bool }" )
 
 _Monoid_00 :: TestTree
-_Monoid_00 = Test.Tasty.HUnit.testCase "Example #0" (do
-    _ <- Util.code [NeatInterpolation.text|
+_Monoid_00 = Test.Tasty.HUnit.testCase "Example #0"
+    (Util.assertTypeChecks [NeatInterpolation.text|
 ./Prelude/Bool/and
     : ./Prelude/Monoid Bool
-|]
-    return () )
+|] )
 
 _Monoid_01 :: TestTree
-_Monoid_01 = Test.Tasty.HUnit.testCase "Example #1" (do
-    _ <- Util.code [NeatInterpolation.text|
+_Monoid_01 = Test.Tasty.HUnit.testCase "Example #1"
+    (Util.assertTypeChecks [NeatInterpolation.text|
 ./Prelude/Bool/or
     : ./Prelude/Monoid Bool
-|]
-    return () )
+|] )
 
 _Monoid_02 :: TestTree
-_Monoid_02 = Test.Tasty.HUnit.testCase "Example #2" (do
-    _ <- Util.code [NeatInterpolation.text|
+_Monoid_02 = Test.Tasty.HUnit.testCase "Example #2"
+    (Util.assertTypeChecks [NeatInterpolation.text|
 ./Prelude/Bool/even
     : ./Prelude/Monoid Bool
-|]
-    return () )
+|] )
 
 _Monoid_03 :: TestTree
-_Monoid_03 = Test.Tasty.HUnit.testCase "Example #3" (do
-    _ <- Util.code [NeatInterpolation.text|
+_Monoid_03 = Test.Tasty.HUnit.testCase "Example #3"
+    (Util.assertTypeChecks[NeatInterpolation.text|
 ./Prelude/Bool/odd
     : ./Prelude/Monoid Bool
-|]
-    return () )
+|] )
 
 _Monoid_04 :: TestTree
-_Monoid_04 = Test.Tasty.HUnit.testCase "Example #4" (do
-    _ <- Util.code [NeatInterpolation.text|
+_Monoid_04 = Test.Tasty.HUnit.testCase "Example #4"
+    (Util.assertTypeChecks [NeatInterpolation.text|
 ./Prelude/List/concat
     : ∀(a : Type) → ./Prelude/Monoid (List a)
-|]
-    return () )
+|] )
 
 _Monoid_05 :: TestTree
-_Monoid_05 = Test.Tasty.HUnit.testCase "Example #5" (do
-    _ <- Util.code [NeatInterpolation.text|
+_Monoid_05 = Test.Tasty.HUnit.testCase "Example #5"
+    (Util.assertTypeChecks [NeatInterpolation.text|
 ./Prelude/List/shifted
     : ∀(a : Type) → ./Prelude/Monoid (List { index : Natural, value : a })
-|]
-    return () )
+|] )
 
 _Monoid_06 :: TestTree
-_Monoid_06 = Test.Tasty.HUnit.testCase "Example #6" (do
-    _ <- Util.code [NeatInterpolation.text|
+_Monoid_06 = Test.Tasty.HUnit.testCase "Example #6"
+    (Util.assertTypeChecks [NeatInterpolation.text|
 ./Prelude/Natural/sum
     : ./Prelude/Monoid Natural
-|]
-    return () )
+|] )
 
 _Monoid_07 :: TestTree
-_Monoid_07 = Test.Tasty.HUnit.testCase "Example #7" (do
-    _ <- Util.code [NeatInterpolation.text|
+_Monoid_07 = Test.Tasty.HUnit.testCase "Example #7"
+    (Util.assertTypeChecks [NeatInterpolation.text|
 ./Prelude/Natural/product
     : ./Prelude/Monoid Natural
-|]
-    return () )
+|] )
 
 _Monoid_08 :: TestTree
-_Monoid_08 = Test.Tasty.HUnit.testCase "Example #8" (do
-    _ <- Util.code [NeatInterpolation.text|
+_Monoid_08 = Test.Tasty.HUnit.testCase "Example #8"
+    (Util.assertTypeChecks [NeatInterpolation.text|
 ./Prelude/Optional/head
     : ∀(a : Type) → ./Prelude/Monoid (Optional a)
-|]
-    return () )
+|] )
 
 _Monoid_09 :: TestTree
-_Monoid_09 = Test.Tasty.HUnit.testCase "Example #9" (do
-    _ <- Util.code [NeatInterpolation.text|
+_Monoid_09 = Test.Tasty.HUnit.testCase "Example #9"
+    (Util.assertTypeChecks [NeatInterpolation.text|
 ./Prelude/Optional/last
     : ∀(a : Type) → ./Prelude/Monoid (Optional a)
-|]
-    return () )
+|] )
 
 _Monoid_10 :: TestTree
-_Monoid_10 = Test.Tasty.HUnit.testCase "Example #10" (do
-    _ <- Util.code [NeatInterpolation.text|
+_Monoid_10 = Test.Tasty.HUnit.testCase "Example #10"
+    (Util.assertTypeChecks [NeatInterpolation.text|
 ./Prelude/Text/concat
     : ./Prelude/Monoid Text
-|]
-    return () )
+|] )
 
 _Natural_build_0 :: TestTree
 _Natural_build_0 = Test.Tasty.HUnit.testCase "Example #0" (do

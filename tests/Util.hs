@@ -1,9 +1,16 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Util (code, normalize', assertNormalizesTo, assertNormalized) where
+module Util
+    ( code
+    , normalize'
+    , assertNormalizesTo
+    , assertNormalized
+    , assertTypeChecks
+    ) where
 
 import qualified Control.Exception
-import qualified Data.Text
+import qualified Data.Functor
+import           Data.Text (Text)
 import qualified Data.Text.Lazy
 import qualified Dhall.Core
 import           Dhall.Core (Expr)
@@ -41,3 +48,6 @@ assertNormalized e = do
   assertEqual msg2 (normalize' e) (Dhall.Core.pretty e)
   where msg1 = "Expression was not in normal form"
         msg2 = "Normalization is not supposed to change the expression"
+
+assertTypeChecks :: Text -> IO ()
+assertTypeChecks text = Data.Functor.void (code text)
