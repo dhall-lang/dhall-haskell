@@ -7,6 +7,7 @@ Examples:
 ./product ([+2, +3, +5] : List Natural) = +30
 
 ./product ([] : List Natural) = +1
+```
 -}
 let product : List Natural → Natural
     =   λ(xs : List Natural)

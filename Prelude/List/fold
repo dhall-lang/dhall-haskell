@@ -7,7 +7,7 @@ then a `fold` just replaces each `cons` and `nil` with something else
 Examples:
 
 ```
-    List/fold
+    ./fold
     Natural
     ([+2, +3, +5] : List Natural)
     Natural
@@ -16,7 +16,7 @@ Examples:
 =   +10
 
     λ(nil : Natural)
-→   List/fold
+→   ./fold
     Natural
     ([+2, +3, +5] : List Natural)
     Natural
@@ -27,7 +27,7 @@ Examples:
     λ(list : Type)
 →   λ(cons : Natural → list → list)
 →   λ(nil : list)
-→   List/fold Natural ([+2, +3, +5] : List Natural) list cons nil
+→   ./fold Natural ([+2, +3, +5] : List Natural) list cons nil
 =   λ(list : Type)
 →   λ(cons : Natural → list → list)
 →   λ(nil : list)
