@@ -46,6 +46,22 @@ exampleTests =
                 [ _Bool_or_0
                 , _Bool_or_1
                 ]
+            , Test.Tasty.testGroup "show"
+                [ _Bool_show_0
+                , _Bool_show_1
+                ]
+            ]
+        , Test.Tasty.testGroup "Double"
+            [ Test.Tasty.testGroup "show"
+                [ _Double_show_0
+                , _Double_show_1
+                ]
+            ]
+        , Test.Tasty.testGroup "Integer"
+            [ Test.Tasty.testGroup "show"
+                [ _Integer_show_0
+                , _Integer_show_1
+                ]
             ]
         , Test.Tasty.testGroup "List"
             [ Test.Tasty.testGroup "all"
@@ -165,9 +181,17 @@ exampleTests =
                 [ _Natural_product_0
                 , _Natural_product_1
                 ]
+            , Test.Tasty.testGroup "show"
+                [ _Natural_show_0
+                , _Natural_show_1
+                ]
             , Test.Tasty.testGroup "sum"
                 [ _Natural_sum_0
                 , _Natural_sum_1
+                ]
+            , Test.Tasty.testGroup "toInteger"
+                [ _Natural_toInteger_0
+                , _Natural_toInteger_1
                 ]
             ]
         , Test.Tasty.testGroup "Optional"
@@ -340,6 +364,48 @@ _Bool_or_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 ./Prelude/Bool/or ([] : List Bool)
 |]
     Util.assertNormalizesTo e "False" )
+
+_Bool_show_0 :: TestTree
+_Bool_show_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Bool/show True
+|]
+    Util.assertNormalizesTo e "\"True\"" )
+
+_Bool_show_1 :: TestTree
+_Bool_show_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Bool/show False
+|]
+    Util.assertNormalizesTo e "\"False\"" )
+
+_Double_show_0 :: TestTree
+_Double_show_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Double/show -3.1
+|]
+    Util.assertNormalizesTo e "\"-3.1\"" )
+
+_Double_show_1 :: TestTree
+_Double_show_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Double/show 0.4
+|]
+    Util.assertNormalizesTo e "\"0.4\"" )
+
+_Integer_show_0 :: TestTree
+_Integer_show_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Integer/show -3
+|]
+    Util.assertNormalizesTo e "\"-3\"" )
+
+_Integer_show_1 :: TestTree
+_Integer_show_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Integer/show 0
+|]
+    Util.assertNormalizesTo e "\"0\"" )
 
 _List_all_0 :: TestTree
 _List_all_0 = Test.Tasty.HUnit.testCase "Example #0" (do
@@ -853,6 +919,20 @@ _Natural_product_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 |]
     Util.assertNormalizesTo e "+1" )
 
+_Natural_show_0 :: TestTree
+_Natural_show_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Natural/show +3
+|]
+    Util.assertNormalizesTo e "\"+3\"" )
+
+_Natural_show_1 :: TestTree
+_Natural_show_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Natural/show +0
+|]
+    Util.assertNormalizesTo e "\"+0\"" )
+
 _Natural_sum_0 :: TestTree
 _Natural_sum_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code [NeatInterpolation.text|
@@ -866,6 +946,20 @@ _Natural_sum_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 ./Prelude/Natural/sum ([] : List Natural)
 |]
     Util.assertNormalizesTo e "+0" )
+
+_Natural_toInteger_0 :: TestTree
+_Natural_toInteger_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Natural/toInteger +3
+|]
+    Util.assertNormalizesTo e "3" )
+
+_Natural_toInteger_1 :: TestTree
+_Natural_toInteger_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Natural/toInteger +0
+|]
+    Util.assertNormalizesTo e "0" )
 
 _Optional_build_0 :: TestTree
 _Optional_build_0 = Test.Tasty.HUnit.testCase "Example #0" (do
