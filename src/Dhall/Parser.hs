@@ -22,6 +22,7 @@ import Control.Applicative (Alternative(..), optional)
 import Control.Exception (Exception)
 import Control.Monad (MonadPlus)
 import Data.ByteString (ByteString)
+import Data.CharSet (CharSet)
 import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Sequence (ViewL(..))
@@ -41,6 +42,7 @@ import Text.Trifecta
 import Text.Trifecta.Delta (Delta)
 
 import qualified Data.Char
+import qualified Data.CharSet
 import qualified Data.Map
 import qualified Data.ByteString.Lazy
 import qualified Data.List
@@ -739,7 +741,14 @@ import_ = do
     return (Path {..})
 
 pathChar :: Char -> Bool
-pathChar c = not (Data.Char.isSpace c || c == '(' || c == ')')
+pathChar c =
+    not
+    (   Data.Char.isSpace c
+    ||  Data.CharSet.member c disallowedPathChars
+    )
+
+disallowedPathChars :: CharSet
+disallowedPathChars = Data.CharSet.fromList "()[]{}<>:"
 
 file :: Parser PathType
 file =  try (token file0)
