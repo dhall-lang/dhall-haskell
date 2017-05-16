@@ -456,12 +456,12 @@ import Dhall
 --
 -- __Exercise:__ There is a @not@ function hosted online here:
 --
--- <https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not>
+-- <https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/Bool/not>
 --
 -- Visit that link and read the documentation.  Then try to guess what this
 -- code returns:
 --
--- > >>> input auto "https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB" :: IO Bool
+-- > >>> input auto "https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/Bool/not https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB" :: IO Bool
 -- > ???
 --
 -- Run the code to test your guess
@@ -904,7 +904,7 @@ import Dhall
 -- You can also use @let@ expressions to rename imports, like this:
 --
 -- > $ dhall
--- > let not = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not
+-- > let not = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/Bool/not
 -- > in  not True
 -- > <Ctrl-D>
 -- > Bool
@@ -1185,7 +1185,7 @@ import Dhall
 -- complex example:
 --
 -- > $ dhall
--- >     let List/map = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/map
+-- >     let List/map = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/map
 -- > in  λ(f : Integer → Integer) → List/map Integer Integer f [1, 2, 3]
 -- > <Ctrl-D>
 -- > ∀(f : Integer → Integer) → List Integer
@@ -1209,11 +1209,11 @@ import Dhall
 -- __Exercise__: The Dhall Prelude provides a @replicate@ function which you can
 -- find here:
 --
--- <https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/replicate>
+-- <https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/replicate>
 --
 -- Test what the following Dhall expression normalizes to:
 --
--- > let replicate = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/replicate
+-- > let replicate = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/replicate
 -- > in  replicate +10
 --
 -- __Exercise__: If you have a lot of spare time, try to \"break the compiler\" by
@@ -1763,7 +1763,7 @@ import Dhall
 --
 -- Rules:
 --
--- > let List/concat = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concat
+-- > let List/concat = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/concat
 -- >
 -- > List/fold a (List/concat a xss) b c
 -- >     = List/fold (List a) xss b (λ(x : List a) → List/fold a x b c)
@@ -1832,10 +1832,10 @@ import Dhall
 --
 -- Rules:
 --
--- > let Optional/head  = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Optional/head
--- > let List/concat    = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concatMap
--- > let List/map       = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/map
+-- > let Optional/head  = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/Optional/head
+-- > let List/concat    = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/map
 -- > 
 -- > List/head a (List/concat a xss) =
 -- >     Optional/head a (List/map (List a) (Optional a) (List/head a) xss)
@@ -1863,10 +1863,10 @@ import Dhall
 --
 -- Rules:
 --
--- > let Optional/last  = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Optional/last
--- > let List/concat    = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concatMap
--- > let List/map       = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/map
+-- > let Optional/last  = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/Optional/last
+-- > let List/concat    = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/map
 -- > 
 -- > List/last a (List/concat a xss) =
 -- >     Optional/last a (List/map (List a) (Optional a) (List/last a) xss)
@@ -1894,9 +1894,9 @@ import Dhall
 --
 -- Rules:
 --
--- > let List/shifted = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/shifted
--- > let List/concat  = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concat
--- > let List/map     = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/map
+-- > let List/shifted = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/shifted
+-- > let List/concat  = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/concat
+-- > let List/map     = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/map
 -- > 
 -- > List/indexed a (List/concat a xss) =
 -- >     List/shifted a (List/map (List a) (List { index : Natural, value : a }) (List/indexed a) xss)
@@ -1919,9 +1919,9 @@ import Dhall
 --
 -- Rules:
 --
--- > let List/map       = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/map
--- > let List/concat    = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/concatMap
+-- > let List/map       = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/map
+-- > let List/concat    = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/concat
+-- > let List/concatMap = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/List/concatMap
 -- > 
 -- > List/reverse a (List/concat a xss)
 -- >     = List/concat a (List/reverse (List a) (List/map (List a) (List a) (List/reverse a) xss))
@@ -1975,7 +1975,7 @@ import Dhall
 --
 -- There is also a Prelude available at:
 --
--- <https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude>
+-- <https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude>
 --
 -- There is nothing \"official\" or \"standard\" about this Prelude other than
 -- the fact that it is mentioned in this tutorial.  The \"Prelude\" is just a
@@ -1986,12 +1986,12 @@ import Dhall
 -- subdirectories.  For example, the @Bool@ subdirectory has a @not@ file
 -- located here:
 --
--- <https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not>
+-- <https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/Bool/not>
 --
 -- The @not@ function is just a UTF8-encoded text file hosted online with the
 -- following contents
 --
--- > $ curl https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not
+-- > $ curl https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/Bool/not
 -- > {-
 -- > Flip the value of a `Bool`
 -- > 
@@ -2024,7 +2024,7 @@ import Dhall
 -- You can use this @not@ function either directly:
 --
 -- > $ dhall
--- > https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not True
+-- > https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/Bool/not True
 -- > <Ctrl-D>
 -- > Bool
 -- > 
@@ -2033,7 +2033,7 @@ import Dhall
 -- ... or assign the URL to a shorter name:
 --
 -- > $ dhall
--- > let Bool/not = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Bool/not
+-- > let Bool/not = https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/Bool/not
 -- > in  Bool/not True
 -- > <Ctrl-D>
 -- > Bool
@@ -2044,7 +2044,7 @@ import Dhall
 -- consistency and documentation, such as @Prelude\/Natural\/even@, which
 -- re-exports the built-in @Natural/even@ function:
 --
--- > $ curl https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/Natural/even
+-- > $ curl https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/Natural/even
 -- > {-
 -- > Returns `True` if a number if even and returns `False` otherwise
 -- > 
@@ -2065,7 +2065,7 @@ import Dhall
 -- using local relative paths instead of URLs.  For example, you can use @wget@,
 -- like this:
 --
--- > $ wget -np -nH -r --cut-dirs=2 https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/
+-- > $ wget -np -nH -r --cut-dirs=2 https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude/
 -- > $ tree Prelude
 -- > Prelude
 -- > ├── Bool
@@ -2075,7 +2075,12 @@ import Dhall
 -- > │   ├── fold
 -- > │   ├── not
 -- > │   ├── odd
--- > │   └── or
+-- > │   ├── or
+-- > │   └── show
+-- > ├── Double
+-- > │   └── show
+-- > ├── Integer
+-- > │   └── show
 -- > ├── List
 -- > │   ├── all
 -- > │   ├── any
@@ -2104,7 +2109,9 @@ import Dhall
 -- > │   ├── isZero
 -- > │   ├── odd
 -- > │   ├── product
--- > │   └── sum
+-- > │   ├── show
+-- > │   ├── sum
+-- > │   └── toInteger
 -- > ├── Optional
 -- > │   ├── build
 -- > │   ├── concat
@@ -2114,19 +2121,20 @@ import Dhall
 -- > │   ├── map
 -- > │   ├── toList
 -- > │   └── unzip
--- > └── Text
--- >     └── concat
+-- > ├── Text
+-- > │   └── concat
+-- > └── index.html
 --
 -- ... or if you have an @ipfs@ daemon running, you can mount the Prelude
 -- locally like this:
 --
 -- > $ ipfs mount
--- > $ cd /ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude
+-- > $ cd /ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude
 --
 -- Browse the Prelude online to learn more by seeing what functions are
 -- available and reading their inline documentation:
 --
--- <https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude>
+-- <https://ipfs.io/ipfs/Qmbh2ifwcpX9a384vJMehySbV7rdvYhzVbL5ySs84k8BgY/Prelude>
 --
 -- __Exercise__: Try to use a new Prelude function that has not been covered
 -- previously in this tutorial
