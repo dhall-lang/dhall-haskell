@@ -1,3 +1,29 @@
+1.3.0
+
+* BREAKING CHANGE TO THE API: Add support for new primitives, specifically:
+    * `(//)` - Right-biased and shallow record merge
+    * `Optional/build` (now a built-in in order to support build/fold fusion)
+    * `Natural/show`
+    * `Integer/show`
+    * `Double/show`
+    * `Natural/toInteger`
+    * These all add new constructors to the `Expr` type, which would break
+      exhaustive pattern matches
+* BREAKING CHANGE TO THE LANGUAGE: Imported paths and URLs no longer support
+  the characters: "()[]{}<>:"
+    * This reduces the number of cases where you have to add a space after
+      imports
+    * Note that this does not exclude the `:` in the URL scheme (i.e. `http://`)
+* Increase connection timeout for imports
+* Variable names now allow the `-` character for all but the first character
+* You can now escape identifiers with backticks
+    * This lets you name identifiers so that they don't conflict with reserved
+      key words
+    * This is most useful when converting Dhall to other file formats (like
+      JSON) where you might need to emit a field that conflicts with one of
+      Dhall's reserved keywords
+* New `--version` flag for the `dhall` executable
+
 1.2.0
 
 * BREAKING CHANGE: Add support for customizing derived `Interpret` instances
