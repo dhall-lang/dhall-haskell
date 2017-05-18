@@ -95,7 +95,7 @@ import Control.Exception (Exception)
 import Data.Foldable (toList)
 import Data.Fix (Fix(..))
 import Data.Typeable (Typeable)
-import Dhall.Core (Expr(..), Var(..))
+import Dhall.Core (Const(..), Expr(..), Var(..))
 import Dhall.TypeCheck (X(..))
 import Nix.Atoms (NAtom(..))
 import Nix.Expr
@@ -293,6 +293,11 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e7 = Fix (NBinary NLte "n" (Fix (NConstant (NInt 0))))
         let e8 = Fix (NAbs "n" (Fix (NApp "naturalOdd" (Fix (NIf e7 e6 "n")))))
         return (Fix (NLet [e5] e8))
+    loop NaturalShow = do
+        let e0 = Fix (NApp "toString" "x")
+        return (Fix (NAbs "x" (Fix (NBinary NPlus (Fix (NStr "+")) e0))))
+    loop NaturalToInteger = do
+        return (Fix (NAbs "n" "n"))
     loop (NaturalPlus a b) = do
         a' <- loop a
         b' <- loop b
@@ -303,8 +308,12 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return (Fix (NBinary NMult a' b'))
     loop Integer = return (Fix (NSet []))
     loop (IntegerLit n) = return (Fix (NConstant (NInt (fromIntegral n))))
+    loop IntegerShow = do
+        return "toString"
     loop Double = return (Fix (NSet []))
     loop (DoubleLit n) = Left (NoDoubles n)
+    loop DoubleShow = do
+        return "toString"
     loop Text = return (Fix (NSet []))
     loop (TextLit a) = do
         let a' = Data.Text.Lazy.toStrict (Data.Text.Lazy.Builder.toLazyText a)
@@ -371,6 +380,14 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e1 = Fix (NIf e0 "nothing" (Fix (NApp "just" "x")))
         let e2 = Fix (NAbs "t" (Fix (NAbs "just" (Fix (NAbs "nothing" e1)))))
         return (Fix (NAbs "t" (Fix (NAbs "x" e2))))
+    loop OptionalBuild = do
+        let e0 = Pi "nothing" "optional" "optional"
+        let e1 = Pi "just" (Pi "_" "a" "optional") e0
+        let e2 = Pi "optional" (Const Type) e1
+        let e3 = OptionalLit "a" Data.Vector.empty
+        let e4 = Lam "x" "a" (OptionalLit "a" (Data.Vector.singleton "x"))
+        let e5 = App (App (App "f" (App Optional "a")) e4) e3
+        loop (Lam "a" (Const Type) (Lam "f" e2 e5))
     loop (Record _) = return (Fix (NSet []))
     loop (RecordLit a) = do
         a' <- traverse dhallToNix a
@@ -434,6 +451,10 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- dhallToNix a
         b' <- dhallToNix b
         return (Fix (NApp b' a'))
+    loop (Prefer a b) = do
+        a' <- dhallToNix a
+        b' <- dhallToNix b
+        return (Fix (NBinary NUpdate a' b'))
     loop (Field a b) = do
         a' <- dhallToNix a
         let b' = Data.Text.Lazy.toStrict b
