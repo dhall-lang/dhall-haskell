@@ -219,9 +219,9 @@ doubleSingleQuoteString embedded = do
             [] -> 0
             _  -> minimum (map indentLength nonEmptyLines)
 
-    -- The purpose of this complicated `trim0`/`trim1`/`process0`/`process1` is
-    -- to ensure that we strip leading whitespace without stripping whitespace
-    -- after variable interpolation
+    -- The purpose of this complicated `trim0`/`trim1` is to ensure that we
+    -- strip leading whitespace without stripping whitespace after variable
+    -- interpolation
     let trim0 =
               build
             . Data.Text.Lazy.intercalate "\n"
@@ -237,23 +237,16 @@ doubleSingleQuoteString embedded = do
                 []   -> []
                 l:ls -> l:map (Data.Text.Lazy.drop shortestIndent) ls
 
-    let process1 (TextAppend (TextLit t) e) =
-            TextAppend (TextLit (trim1 t)) (process1 e)
-        process1 (TextAppend e0 e1) =
-            TextAppend e0 (process1 e1)
-        process1 (TextLit t) =
-            TextLit (trim1 t)
-        process1 e = e
+    let process trim (TextAppend (TextLit t) e) =
+            TextAppend (TextLit (trim t)) (process trim1 e)
+        process _    (TextAppend e0 e1) =
+            TextAppend e0 (process trim1 e1)
+        process trim (TextLit t) =
+            TextLit (trim t)
+        process _     e =
+            e
 
-    let process0 (TextAppend (TextLit t) e) =
-            TextAppend (TextLit (trim0 t)) (process1 e)
-        process0 (TextAppend e0 e1) =
-            TextAppend e0 (process1 e1)
-        process0 (TextLit t) =
-            TextLit (trim0 t)
-        process0 e = e
-    
-    return (process0 expr0)
+    return (process trim0 expr0)
   where
     -- This treats variable interpolation as breaking leading whitespace for the
     -- purposes of computing the shortest leading whitespace.  The "${VAR}"
