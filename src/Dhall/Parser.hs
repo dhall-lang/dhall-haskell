@@ -260,7 +260,11 @@ doubleSingleQuoteString embedded = do
         _ <- Text.Parser.Char.string "''"
         p1
 
-    p1 = p2 <|> p3 <|> p4 <|> p5 <|> p6
+    p1 =    p2
+        <|> p3
+        <|> p4 (Text.Parser.Char.char '\'')
+        <|> p5
+        <|> p4 Text.Parser.Char.anyChar
 
     p2 = do
         _  <- Text.Parser.Char.text "'''"
@@ -278,8 +282,8 @@ doubleSingleQuoteString embedded = do
         _ <- Text.Parser.Char.text "''"
         return (TextLit mempty)
 
-    p4 = do
-        s0 <- Text.Parser.Char.char '\''
+    p4 parser = do
+        s0 <- parser
         s1 <- p1
         let s4 = case s1 of
                 TextLit s2 ->
@@ -296,18 +300,6 @@ doubleSingleQuoteString embedded = do
         _  <- Text.Parser.Char.char '}'
         s3 <- p1
         return (TextAppend s1 s3)
-
-    p6 = do
-        s0 <- Text.Parser.Char.satisfy (\c -> c /= '\'' && c /= '$')
-        s1 <- p1
-        let s4 = case s1 of
-                TextLit s2 ->
-                    TextLit (build s0 <> s2)
-                TextAppend (TextLit s2) s3 ->
-                    TextAppend (TextLit (build s0 <> s2)) s3
-                _ ->
-                    TextAppend (TextLit (build s0)) s1
-        return s4
 
 lambda :: Parser ()
 lambda = symbol "\\" <|> symbol "λ"
