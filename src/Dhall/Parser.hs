@@ -28,7 +28,6 @@ import Data.Monoid ((<>))
 import Data.Sequence (ViewL(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
-import Data.Text.Lazy.Builder (Builder)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Dhall.Core
@@ -164,59 +163,156 @@ sepBy1 p sep = do
             as <- sepBy p sep
             return (a:as)
 
-stringLiteral :: Parser Builder
-stringLiteral = Text.Parser.Token.stringLiteral <|> doubleSingleQuoteString
+stringLiteral :: Show a => Parser a -> Parser (Expr Src a)
+stringLiteral embedded =
+    Text.Parser.Token.token
+        (   doubleQuoteLiteral embedded
+        <|> doubleSingleQuoteString embedded
+        )
 
-doubleSingleQuoteString :: Parser Builder
-doubleSingleQuoteString = do
-    builder <- Text.Parser.Token.token p0
-    return (process builder)
+doubleQuoteLiteral :: Show a => Parser a -> Parser (Expr Src a)
+doubleQuoteLiteral embedded = do
+    _  <- Text.Parser.Char.char '"'
+    go
   where
-    process =
-          Data.Text.Lazy.Builder.fromLazyText
-        . Data.Text.Lazy.unlines
-        . trim
-        . Data.Text.Lazy.lines
-        . Data.Text.Lazy.Builder.toLazyText
+    go = go0 <|> go1 <|> go2
 
-    trim lines_ = map (Data.Text.Lazy.drop shortestIndent) lines_
-      where
-        isEmpty = Data.Text.Lazy.all Data.Char.isSpace
+    go0 = do
+        _ <- Text.Parser.Char.char '"'
+        return (TextLit mempty) 
 
-        nonEmptyLines = filter (not . isEmpty) lines_
+    go1 = do
+        _ <- Text.Parser.Char.text "${"
+        a <- exprA embedded
+        _ <- Text.Parser.Char.char '}'
+        b <- go
+        return (TextAppend a b)
 
-        indentLength line =
+    go2 = do
+        a <- Text.Parser.Token.characterChar
+        b <- go
+        let e = case b of
+                TextLit cs ->
+                    TextLit (build a <> cs)
+                TextAppend (TextLit cs) d ->
+                    TextAppend (TextLit (build a <> cs)) d
+                _ ->
+                    TextAppend (TextLit (build a)) b
+        return e
+
+doubleSingleQuoteString :: Show a => Parser a -> Parser (Expr Src a)
+doubleSingleQuoteString embedded = do
+    expr0 <- Text.Parser.Token.token p0
+
+    let builder0      = concatFragments expr0
+    let text0         = Data.Text.Lazy.Builder.toLazyText builder0
+    let lines0        = Data.Text.Lazy.lines text0
+    let isEmpty       = Data.Text.Lazy.all Data.Char.isSpace
+    let nonEmptyLines = filter (not . isEmpty) lines0
+
+    let indentLength line =
             Data.Text.Lazy.length
                 (Data.Text.Lazy.takeWhile Data.Char.isSpace line)
 
-        shortestIndent = case nonEmptyLines of
+    let shortestIndent = case nonEmptyLines of
             [] -> 0
             _  -> minimum (map indentLength nonEmptyLines)
+
+    -- The purpose of this complicated `trim0`/`trim1`/`process0`/`process1` is
+    -- to ensure that we strip leading whitespace without stripping whitespace
+    -- after variable interpolation
+    let trim0 =
+              build
+            . Data.Text.Lazy.intercalate "\n"
+            . map (Data.Text.Lazy.drop shortestIndent)
+            . Data.Text.Lazy.splitOn "\n"
+            . Data.Text.Lazy.Builder.toLazyText
+
+    let trim1 builder = build (Data.Text.Lazy.intercalate "\n" lines_)
+          where
+            text = Data.Text.Lazy.Builder.toLazyText builder
+
+            lines_ = case Data.Text.Lazy.splitOn "\n" text of
+                []   -> []
+                l:ls -> l:map (Data.Text.Lazy.drop shortestIndent) ls
+
+    let process1 (TextAppend (TextLit t) e) =
+            TextAppend (TextLit (trim1 t)) (process1 e)
+        process1 (TextAppend e0 e1) =
+            TextAppend e0 (process1 e1)
+        process1 (TextLit t) =
+            TextLit (trim1 t)
+        process1 e = e
+
+    let process0 (TextAppend (TextLit t) e) =
+            TextAppend (TextLit (trim0 t)) (process1 e)
+        process0 (TextAppend e0 e1) =
+            TextAppend e0 (process1 e1)
+        process0 (TextLit t) =
+            TextLit (trim0 t)
+        process0 e = e
+    
+    return (process0 expr0)
+  where
+    -- This treats variable interpolation as breaking leading whitespace for the
+    -- purposes of computing the shortest leading whitespace.  The "${VAR}"
+    -- could really be any text that breaks whitespace
+    concatFragments (TextAppend (TextLit t) e) = t        <> concatFragments e
+    concatFragments (TextAppend  _          e) = "${VAR}" <> concatFragments e
+    concatFragments (TextLit t)                = t
+    concatFragments  _                         = mempty
 
     p0 = do
         _ <- Text.Parser.Char.string "''"
         p1
 
-    p1 = p2 <|> p3 <|> p4 <|> p5
+    p1 = p2 <|> p3 <|> p4 <|> p5 <|> p6
 
     p2 = do
         _  <- Text.Parser.Char.text "'''"
         s1 <- p1
-        return ("''" <> s1)
+        let s4 = case s1 of
+                TextLit s2 ->
+                    TextLit ("''" <> s2)
+                TextAppend (TextLit s2) s3 ->
+                    TextAppend (TextLit ("''" <> s2)) s3
+                _ ->
+                    TextAppend (TextLit "''") s1
+        return s4
 
     p3 = do
         _ <- Text.Parser.Char.text "''"
-        return ""
+        return (TextLit mempty)
 
     p4 = do
-        s0 <- Text.Parser.Char.text "'"
+        s0 <- Text.Parser.Char.char '\''
         s1 <- p1
-        return (Data.Text.Lazy.Builder.fromText s0 <> s1)
+        let s4 = case s1 of
+                TextLit s2 ->
+                    TextLit (build s0 <> s2)
+                TextAppend (TextLit s2) s3 ->
+                    TextAppend (TextLit (build s0 <> s2)) s3
+                _ -> TextAppend (TextLit (build s0)) s1
+        return s4
 
     p5 = do
-        s0 <- some (Text.Trifecta.satisfy (/= '\''))
+        _  <- Text.Parser.Char.text "${"
+        s1 <- exprA embedded
+        _  <- Text.Parser.Char.char '}'
+        s3 <- p1
+        return (TextAppend s1 s3)
+
+    p6 = do
+        s0 <- Text.Parser.Char.satisfy (\c -> c /= '\'' && c /= '$')
         s1 <- p1
-        return (Data.Text.Lazy.Builder.fromString s0 <> s1)
+        let s4 = case s1 of
+                TextLit s2 ->
+                    TextLit (build s0 <> s2)
+                TextAppend (TextLit s2) s3 ->
+                    TextAppend (TextLit (build s0 <> s2)) s3
+                _ ->
+                    TextAppend (TextLit (build s0)) s1
+        return s4
 
 lambda :: Parser ()
 lambda = symbol "\\" <|> symbol "λ"
@@ -584,9 +680,7 @@ exprF embedded = choice
         a <- Text.Parser.Token.double
         return (DoubleLit (sign a))
 
-    exprStringLiteral = do
-        a <- stringLiteral
-        return (TextLit a)
+    exprStringLiteral = stringLiteral embedded
 
     exprRecordType = record embedded <?> "record type"
 
