@@ -762,7 +762,28 @@ import Dhall
 -- minimal indentation of the string as a whole (disregarding the indentation
 -- of empty lines).\"
 --
--- Unlike Nix-style strings, you cannot interpolate variables into the string.
+-- You can also interpolate expressions into strings using @${...}@ syntax.  For
+-- example:
+--
+-- > $ dhall
+-- >     let name = "John Doe"
+-- > in  let age  = 21
+-- > in  "My name is ${name} and my age is ${Integer/show age}"
+-- > <Ctrl-D>
+-- > Text
+-- >
+-- > "My name is John Doe and my age is 21"
+--
+-- Note that you can only interpolate expressions of type @Text@
+--
+-- If you need to insert a @"${"@ into a string without interpolation then use
+-- @"'${"@ (same as Nix)
+--
+-- > ''
+-- >     for file in *; do
+-- >       echo "Found '${file}"
+-- >     done
+-- > ''
 
 -- $combine
 --
