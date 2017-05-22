@@ -175,7 +175,7 @@ doubleQuoteLiteral embedded = do
     _  <- Text.Parser.Char.char '"'
     go
   where
-    go = go0 <|> go1 <|> go2
+    go = go0 <|> go1 <|> go2 <|> go3
 
     go0 = do
         _ <- Text.Parser.Char.char '"'
@@ -190,6 +190,18 @@ doubleQuoteLiteral embedded = do
         return (TextAppend a b)
 
     go2 = do
+        _ <- Text.Parser.Char.text "'${"
+        b <- go
+        let e = case b of
+                TextLit cs ->
+                    TextLit ("${" <> cs)
+                TextAppend (TextLit cs) d ->
+                    TextAppend (TextLit ("${" <> cs)) d
+                _ ->
+                    TextAppend (TextLit "${") b
+        return e
+
+    go3 = do
         a <- Text.Parser.Token.characterChar
         b <- go
         let e = case b of
@@ -262,9 +274,10 @@ doubleSingleQuoteString embedded = do
 
     p1 =    p2
         <|> p3
-        <|> p4 (Text.Parser.Char.char '\'')
-        <|> p5
-        <|> p4 Text.Parser.Char.anyChar
+        <|> p4
+        <|> p5 (Text.Parser.Char.char '\'')
+        <|> p6
+        <|> p5 Text.Parser.Char.anyChar
 
     p2 = do
         _  <- Text.Parser.Char.text "'''"
@@ -279,10 +292,22 @@ doubleSingleQuoteString embedded = do
         return s4
 
     p3 = do
+        _  <- Text.Parser.Char.text "'${"
+        s1 <- p1
+        let s4 = case s1 of
+                TextLit s2 ->
+                    TextLit ("${" <> s2)
+                TextAppend (TextLit s2) s3 ->
+                    TextAppend (TextLit ("${" <> s2)) s3
+                _ ->
+                    TextAppend (TextLit "${") s1
+        return s4
+
+    p4 = do
         _ <- Text.Parser.Char.text "''"
         return (TextLit mempty)
 
-    p4 parser = do
+    p5 parser = do
         s0 <- parser
         s1 <- p1
         let s4 = case s1 of
@@ -293,7 +318,7 @@ doubleSingleQuoteString embedded = do
                 _ -> TextAppend (TextLit (build s0)) s1
         return s4
 
-    p5 = do
+    p6 = do
         _  <- Text.Parser.Char.text "${"
         Text.Parser.Token.whiteSpace
         s1 <- exprA embedded
