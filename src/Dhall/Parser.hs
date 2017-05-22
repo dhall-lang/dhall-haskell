@@ -183,6 +183,7 @@ doubleQuoteLiteral embedded = do
 
     go1 = do
         _ <- Text.Parser.Char.text "${"
+        Text.Parser.Token.whiteSpace
         a <- exprA embedded
         _ <- Text.Parser.Char.char '}'
         b <- go
@@ -297,6 +298,7 @@ doubleSingleQuoteString embedded = do
 
     p5 = do
         _  <- Text.Parser.Char.text "${"
+        Text.Parser.Token.whiteSpace
         s1 <- exprA embedded
         _  <- Text.Parser.Char.char '}'
         s3 <- p1
