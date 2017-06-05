@@ -33,7 +33,7 @@ _Interpolation_1 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code [NeatInterpolation.text|
 ''
     for file in *; do
-      echo "Found '$${file}"
+      echo "Found ''$${file}"
     done
 ''
 |]
