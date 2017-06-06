@@ -190,7 +190,7 @@ doubleQuoteLiteral embedded = do
         return (TextAppend a b)
 
     go2 = do
-        _ <- Text.Parser.Char.text "'${"
+        _ <- Text.Parser.Char.text "''${"
         b <- go
         let e = case b of
                 TextLit cs ->
@@ -292,7 +292,7 @@ doubleSingleQuoteString embedded = do
         return s4
 
     p3 = do
-        _  <- Text.Parser.Char.text "'${"
+        _  <- Text.Parser.Char.text "''${"
         s1 <- p1
         let s4 = case s1 of
                 TextLit s2 ->

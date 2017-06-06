@@ -777,11 +777,11 @@ import Dhall
 -- Note that you can only interpolate expressions of type @Text@
 --
 -- If you need to insert a @"${"@ into a string without interpolation then use
--- @"'${"@ (same as Nix)
+-- @"''${"@ (same as Nix)
 --
 -- > ''
 -- >     for file in *; do
--- >       echo "Found '${file}"
+-- >       echo "Found ''${file}"
 -- >     done
 -- > ''
 
