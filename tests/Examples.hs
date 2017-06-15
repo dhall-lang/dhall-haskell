@@ -236,6 +236,10 @@ exampleTests =
                 [ _Text_concat_0
                 , _Text_concat_1
                 ]
+            , Test.Tasty.testGroup "intercalate"
+                [ _Text_intercalate_0
+                , _Text_intercalate_1
+                ]
             ]
         ]
 
@@ -1132,5 +1136,19 @@ _Text_concat_1 :: TestTree
 _Text_concat_1 = Test.Tasty.HUnit.testCase "Example #1" (do
     e <- Util.code [NeatInterpolation.text|
 ./Prelude/Text/concat ([] : List Text)
+|]
+    Util.assertNormalizesTo e "\"\"" )
+
+_Text_intercalate_0 :: TestTree
+_Text_intercalate_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Text/intercalate ", " ["ABC", "DEF", "GHI"]
+|]
+    Util.assertNormalizesTo e "\"ABC, DEF, GHI\"" )
+
+_Text_intercalate_1 :: TestTree
+_Text_intercalate_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Text/intercalate ", " ([] : List Text)
 |]
     Util.assertNormalizesTo e "\"\"" )
