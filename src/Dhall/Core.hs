@@ -293,8 +293,9 @@ data Expr s a
     | Combine (Expr s a) (Expr s a)
     -- | > CombineRight x y                         ~  x ⫽ y
     | Prefer (Expr s a) (Expr s a)
-    -- | > Merge x y t                              ~  merge x y : t
-    | Merge (Expr s a) (Expr s a) (Expr s a)
+    -- | > Merge x y (Just t )                      ~  merge x y : t
+    -- | > Merge x y  Nothing                       ~  merge x y
+    | Merge (Expr s a) (Expr s a) (Maybe (Expr s a))
     -- | > Field e x                                ~  e.x
     | Field (Expr s a) Text
     -- | > Note s x                                 ~  e
@@ -364,7 +365,7 @@ instance Monad (Expr s) where
     UnionLit a b c   >>= k = UnionLit a (b >>= k) (fmap (>>= k) c)
     Combine a b      >>= k = Combine (a >>= k) (b >>= k)
     Prefer a b       >>= k = Prefer (a >>= k) (b >>= k)
-    Merge a b c      >>= k = Merge (a >>= k) (b >>= k) (c >>= k)
+    Merge a b c      >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
     Field a b        >>= k = Field (a >>= k) b
     Note a b         >>= k = Note a (b >>= k)
     Embed a          >>= k = k a
@@ -423,7 +424,7 @@ instance Bifunctor Expr where
     first k (UnionLit a b c  ) = UnionLit a (first k b) (fmap (first k) c)
     first k (Combine a b     ) = Combine (first k a) (first k b)
     first k (Prefer a b      ) = Prefer (first k a) (first k b)
-    first k (Merge a b c     ) = Merge (first k a) (first k b) (first k c)
+    first k (Merge a b c     ) = Merge (first k a) (first k b) (fmap (first k) c)
     first k (Field a b       ) = Field (first k a) b
     first k (Note a b        ) = Note (k a) (first k b)
     first _ (Embed a         ) = Embed a
@@ -530,8 +531,10 @@ buildExprB (ListLit (Just a) b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExprE a
 buildExprB (OptionalLit a b) =
     "[" <> buildElems (Data.Vector.toList b) <> "] : Optional "  <> buildExprE a
-buildExprB (Merge a b c) =
+buildExprB (Merge a b (Just c)) =
     "merge " <> buildExprE a <> " " <> buildExprE b <> " : " <> buildExprD c
+buildExprB (Merge a b Nothing) =
+    "merge " <> buildExprE a <> " " <> buildExprE b
 buildExprB (Note _ b) =
     buildExprB b
 buildExprB a =
@@ -972,9 +975,9 @@ shift d v (Prefer a b) = Prefer a' b'
     b' = shift d v b
 shift d v (Merge a b c) = Merge a' b' c'
   where
-    a' = shift d v a
-    b' = shift d v b
-    c' = shift d v c
+    a' =       shift d v  a
+    b' =       shift d v  b
+    c' = fmap (shift d v) c
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
@@ -1103,9 +1106,9 @@ subst x e (Prefer a b) = Prefer a' b'
     b' = subst x e b
 subst x e (Merge a b c) = Merge a' b' c'
   where
-    a' = subst x e a
-    b' = subst x e b
-    c' = subst x e c
+    a' =       subst x e  a
+    b' =       subst x e  b
+    c' = fmap (subst x e) c
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
@@ -1419,9 +1422,9 @@ normalize e = case e of
                     _ -> Merge x' y' t'
             _ -> Merge x' y' t'
       where
-        x' = normalize x
-        y' = normalize y
-        t' = normalize t
+        x' =      normalize x
+        y' =      normalize y
+        t' = fmap normalize t
     Field r x        ->
         case normalize r of
             RecordLit kvs ->
@@ -1612,7 +1615,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
                 RecordLit _ -> False
                 _ -> True
             _ -> True
-    Merge x y t -> isNormalized x && isNormalized y && isNormalized t &&
+    Merge x y t -> isNormalized x && isNormalized y && any isNormalized t &&
         case x of
             RecordLit kvsX ->
                 case y of
