@@ -100,8 +100,8 @@ data HasHome = Home | Homeless deriving (Eq, Ord, Show)
 data PathType
     = File HasHome FilePath
     -- ^ Local path
-    | URL  Text
-    -- ^ Remote resource
+    | URL  Text (Maybe PathType)
+    -- ^ URL of emote resource and optional headers stored in a path
     | Env  Text
     -- ^ Environment variable
     deriving (Eq, Ord, Show)
@@ -120,8 +120,9 @@ instance Buildable PathType where
         = "./" <> build txt <> " "
       where
         txt = Text.fromStrict (either id id (Filesystem.toText file))
-    build (URL  str ) = build str <> " "
-    build (Env  env ) = "env:" <> build env
+    build (URL str  Nothing      ) = build str <> " "
+    build (URL str (Just headers)) = build str <> " using " <> build headers <> " "
+    build (Env env) = "env:" <> build env
 
 -- | How to interpret the path's contents (i.e. as Dhall code or raw text)
 data PathMode = Code | RawText deriving (Eq, Ord, Show)
