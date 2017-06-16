@@ -532,7 +532,7 @@ typeWith ctx e@(Prefer kvsX kvsY) = do
         Record kts -> return kts
         _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
     return (Record (Data.Map.union ktsY ktsX))
-typeWith ctx e@(Merge kvsX kvsY t) = do
+typeWith ctx e@(Merge kvsX kvsY (Just t)) = do
     tKvsX <- fmap Dhall.Core.normalize (typeWith ctx kvsX)
     ktsX  <- case tKvsX of
         Record kts -> return kts
@@ -563,7 +563,46 @@ typeWith ctx e@(Merge kvsX kvsY t) = do
                                 else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
                             if propEqual t t'
                                 then return ()
-                                else Left (TypeError ctx e (HandlerOutputTypeMismatch kY t t'))
+                                else Left (TypeError ctx e (InvalidHandlerOutputType kY t t'))
+                        _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
+    mapM_ process (Data.Map.toList ktsY)
+    return t
+typeWith ctx e@(Merge kvsX kvsY Nothing) = do
+    tKvsX <- fmap Dhall.Core.normalize (typeWith ctx kvsX)
+    ktsX  <- case tKvsX of
+        Record kts -> return kts
+        _          -> Left (TypeError ctx e (MustMergeARecord kvsX tKvsX))
+    let ksX = Data.Map.keysSet ktsX
+
+    tKvsY <- fmap Dhall.Core.normalize (typeWith ctx kvsY)
+    ktsY  <- case tKvsY of
+        Union kts -> return kts
+        _         -> Left (TypeError ctx e (MustMergeUnion kvsY tKvsY))
+    let ksY = Data.Map.keysSet ktsY
+
+    let diffX = Data.Set.difference ksX ksY
+    let diffY = Data.Set.difference ksY ksX
+
+    if Data.Set.null diffX
+        then return ()
+        else Left (TypeError ctx e (UnusedHandler diffX))
+
+    (kX, t) <- case Data.Map.assocs ktsX of
+        []               -> Left (TypeError ctx e MissingMergeType)
+        (kX, Pi _ _ t):_ -> return (kX, t)
+        (kX, tX      ):_ -> Left (TypeError ctx e (HandlerNotAFunction kX tX))
+    let process (kY, tY) = do
+            case Data.Map.lookup kY ktsX of
+                Nothing  -> Left (TypeError ctx e (MissingHandler diffY))
+                Just tX  ->
+                    case tX of
+                        Pi _ tY' t' -> do
+                            if propEqual tY tY'
+                                then return ()
+                                else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
+                            if propEqual t t'
+                                then return ()
+                                else Left (TypeError ctx e (HandlerOutputTypeMismatch kX t kY t'))
                         _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
     mapM_ process (Data.Map.toList ktsY)
     return t
@@ -632,7 +671,9 @@ data TypeMessage s
     | UnusedHandler (Set Text)
     | MissingHandler (Set Text)
     | HandlerInputTypeMismatch Text (Expr s X) (Expr s X)
-    | HandlerOutputTypeMismatch Text (Expr s X) (Expr s X)
+    | HandlerOutputTypeMismatch Text (Expr s X) Text (Expr s X)
+    | InvalidHandlerOutputType Text (Expr s X) (Expr s X)
+    | MissingMergeType
     | HandlerNotAFunction Text (Expr s X)
     | NotARecord Text (Expr s X) (Expr s X)
     | MissingField Text (Expr s X)
@@ -1608,7 +1649,7 @@ You declared that the ❰List❱'s elements should have type:
 prettyTypeMessage MissingListType = do
     ErrorMessages {..}
   where
-    short = "Empty lists need a type annotation"
+    short = "An empty list requires a type annotation"
 
     long =
         Builder.fromText [NeatInterpolation.text|
@@ -2406,6 +2447,38 @@ You need to supply the following handlers:
       where
         txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
 
+prettyTypeMessage MissingMergeType =
+    ErrorMessages {..}
+  where
+    short = "An empty ❰merge❱ requires a type annotation"
+
+    long =
+        Builder.fromText [NeatInterpolation.text|
+Explanation: A ❰merge❱ does not require a type annotation if the union has at
+least one alternative, like this
+
+
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │     let union    = < Left = +2 | Right : Bool >                     │
+    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
+    │ in  merge handlers union                                            │
+    └─────────────────────────────────────────────────────────────────────┘
+
+
+However, you must provide a type annotation when merging an empty union:
+
+
+    ┌────────────────────────────────┐
+    │ λ(a : <>) → merge {=} a : Bool │
+    └────────────────────────────────┘
+                                ⇧
+                                This can be any type
+
+
+You can provide any type at all as the annotation, since merging an empty
+union can produce any type of output
+|]
+
 prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
     ErrorMessages {..}
   where
@@ -2468,7 +2541,7 @@ Your handler for the following alternative:
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
         txt2 = Text.toStrict (Dhall.Core.pretty expr2)
 
-prettyTypeMessage (HandlerOutputTypeMismatch expr0 expr1 expr2) =
+prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
     ErrorMessages {..}
   where
     short = "Wrong handler output type"
@@ -2507,8 +2580,8 @@ For example, the following expression is $_NOT valid:
 
 
     ┌──────────────────────────────────────────────────────────────────────┐
-    │     let union    = < Left = +2 | Right : Bool >                     │
-    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
+    │     let union    = < Left = +2 | Right : Bool >                      │
+    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }  │
     │ in  merge handlers union : Text                                      │
     └──────────────────────────────────────────────────────────────────────┘
                                  ⇧
@@ -2532,6 +2605,62 @@ Your handler for the following alternative:
         txt1 = Text.toStrict (Dhall.Core.pretty expr1)
         txt2 = Text.toStrict (Dhall.Core.pretty expr2)
 
+prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
+    ErrorMessages {..}
+  where
+    short = "Handlers should have the same output type"
+
+    long =
+        Builder.fromText [NeatInterpolation.text|
+Explanation: You can ❰merge❱ the alternatives of a union using a record with one
+handler per alternative, like this:
+
+
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │     let union    = < Left = +2 | Right : Bool >                     │
+    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
+    │ in  merge handlers union                                            │
+    └─────────────────────────────────────────────────────────────────────┘
+
+
+... as long as the output type of each handler function is the same:
+
+
+    ┌───────────────────────────────────────────────────────────┐
+    │ handlers : { Left : Natural → Bool, Right : Bool → Bool } │
+    └───────────────────────────────────────────────────────────┘
+                                    ⇧                    ⇧
+                                These output types both match
+
+
+For example, the following expression is $_NOT valid:
+
+
+    ┌─────────────────────────────────────────────────┐
+    │     let union    = < Left = +2 | Right : Bool > │
+    │ in  let handlers =                              │
+    │              { Left  = λ(x : Natural) → x       │  This outputs ❰Natural❱
+    │              , Right = λ(x : Bool   ) → x       │  This outputs ❰Bool❱
+    │              }                                  │
+    │ in  merge handlers union                        │
+    └─────────────────────────────────────────────────┘
+                ⇧
+                Invalid: The handlers in this record don't have matching outputs
+
+
+The handler for the ❰$txt0❱ alternative has this output type:
+
+↳ $txt1
+
+... but the handler for the ❰$txt2❱ alternative has this output type instead:
+
+↳ $txt3
+|]
+      where
+        txt0 = Text.toStrict (Dhall.Core.pretty key0 )
+        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt2 = Text.toStrict (Dhall.Core.pretty key1 )
+        txt3 = Text.toStrict (Dhall.Core.pretty expr1)
 prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
   where
     short = "Handler is not a function"

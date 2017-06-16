@@ -431,8 +431,9 @@ exprB embedded = choice
         reserve "merge"
         a <- exprE embedded
         b <- exprE embedded
-        symbol ":"
-        c <- exprD embedded
+        c <- optional (do
+            symbol ":"
+            exprD embedded )
         return (Merge a b c)
 
     exprB1 = do

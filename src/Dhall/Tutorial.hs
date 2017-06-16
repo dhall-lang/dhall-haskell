@@ -1036,6 +1036,11 @@ import Dhall
 -- Notice that each handler has to return the same type of result (@Bool@ in
 -- this case) which must also match the declared result type of the @merge@.
 --
+-- You can also omit the type annotation when merging a union with one or more
+-- alternatives, like this:
+--
+-- > merge { Left = Natural/even, Right = λ(b : Bool) → b } < Right = True | Left : Natural >
+--
 -- __Exercise__: Create a list of the following type with at least one element
 -- per alternative:
 --
