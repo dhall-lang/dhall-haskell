@@ -390,7 +390,7 @@ canonicalize (File hasHome0 file0:paths0) =
     go currPath (File hasHome file:paths) =
         if Filesystem.relative file && hasHome == Homeless
         then go file' paths
-        else File hasHome0 (clean file')
+        else File hasHome (clean file')
       where
         file' = Filesystem.parent (removeAtFromFile file) </> currPath
 canonicalize (URL path:_) = URL path
