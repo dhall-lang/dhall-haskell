@@ -1,0 +1,20 @@
+{-
+Transform each value in a `List` into `Text` and concatenate the result
+
+Examples:
+
+```
+./concatMap Integer (λ(n : Integer) → "${Integer/show n} ") [0, 1, 2]
+= "0 1 2 "
+
+./concatMap Integer (λ(n : Integer) → "${Integer/show n} ") ([] : List Integer)
+= ""
+```
+-}
+let concatMap : ∀(a : Type) → (a → Text) → List a → Text
+    =   λ(a : Type)
+    →   λ(f : a → Text)
+    →   λ(xs : List a)
+    →   List/fold a xs Text (λ(x : a) → λ(y : Text) → f x ++ y) ""
+
+in  concatMap
