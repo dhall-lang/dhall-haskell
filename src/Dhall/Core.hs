@@ -1677,6 +1677,7 @@ buildVector f = Data.Vector.reverse (Data.Vector.create (do
     (len, _, mv) <- f cons nil
     return (Data.Vector.Mutable.slice 0 len mv) ))
 
+-- | The set of reserved identifiers for the Dhall language
 reservedIdentifiers :: HashSet String
 reservedIdentifiers =
     Data.HashSet.fromList
