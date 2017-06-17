@@ -4,7 +4,7 @@
 }:
 mkDerivation {
   pname = "dhall-nix";
-  version = "1.0.0";
+  version = "1.0.4";
   src = ./.;
   isLibrary = true;
   isExecutable = true;
@@ -14,6 +14,6 @@ mkDerivation {
   executableHaskellDepends = [
     base dhall hnix optparse-generic text trifecta
   ];
-  description = "A configuration language guaranteed to terminate";
+  description = "Dhall to Nix compiler";
   license = stdenv.lib.licenses.bsd3;
 }
