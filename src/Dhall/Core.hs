@@ -1695,6 +1695,7 @@ reservedIdentifiers =
         , "then"
         , "else"
         , "as"
+        , "using"
         , "Natural"
         , "Natural/fold"
         , "Natural/build"
