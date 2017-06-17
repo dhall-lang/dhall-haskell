@@ -1,33 +1,37 @@
 {-
-Combine a `List` of `Text` values with a separator in between each value
+Transform each value in a `List` to `Text` and then concatenate them with a
+separator in between each value
 
 Examples:
 
 ```
-./intercalate ", " ["ABC", "DEF", "GHI"] = "ABC, DEF, GHI"
+./concatMapSep ", " Integer Integer/show [0, 1, 2] = "0, 1, 2"
 
-./intercalate ", " ([] : List Text) = ""
+./concatMapSep ", " Integer Integer/show ([] : List Integer) = ""
 ```
 -}
-let intercalate : ∀(separator : Text) → ∀(elements : List Text) → Text
+let concatMapSep
+    :   ∀(separator : Text) → ∀(a : Type) → (a → Text) → List a → Text
     =   λ(separator : Text)
-    →   λ(elements : List Text)
+    →   λ(a : Type)
+    →   λ(f : a → Text)
+    →   λ(elements : List a)
     →   let status
             =   List/fold
-                Text
+                a
                 elements
                 < Empty : {} | NonEmpty : Text >
-                (   λ(element : Text)
+                (   λ(element : a)
                 →   λ(status : < Empty : {} | NonEmpty : Text >)
                 →   merge
                     {   Empty
                         =   λ(_ : {})
-                        →   < NonEmpty = element
+                        →   < NonEmpty = f element
                             | Empty : {}
                             >
                     ,   NonEmpty
                         =   λ(result : Text)
-                        →   < NonEmpty = element ++ separator ++ result
+                        →   < NonEmpty = f element ++ separator ++ result
                             | Empty : {}
                             >
                     }
@@ -40,4 +44,4 @@ let intercalate : ∀(separator : Text) → ∀(elements : List Text) → Text
         }
         status : Text
 
-in  intercalate
+in  concatMapSep

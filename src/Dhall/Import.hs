@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -109,6 +110,7 @@ module Dhall.Import (
     , MissingFile(..)
     ) where
 
+import Control.Applicative (empty)
 import Control.Exception
     (Exception, IOException, SomeException, catch, onException, throwIO)
 import Control.Lens (Lens', zoom)
@@ -116,6 +118,7 @@ import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString.Lazy (ByteString)
+import Data.CaseInsensitive (CI)
 import Data.Map.Strict (Map)
 import Data.Monoid ((<>))
 import Data.Text.Buildable (build)
@@ -129,7 +132,7 @@ import Data.Typeable (Typeable)
 import Filesystem.Path ((</>), FilePath)
 import Dhall.Core
     (Expr(..), HasHome(..), PathMode(..), PathType(..), Path(..))
-import Dhall.Parser (Parser(..), ParseError(..), Src)
+import Dhall.Parser (Parser(..), ParseError(..), Src(..))
 import Dhall.TypeCheck (X(..))
 #if MIN_VERSION_http_client(0,5,0)
 import Network.HTTP.Client
@@ -142,16 +145,23 @@ import Text.Trifecta (Result(..))
 import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
+import qualified Data.CaseInsensitive
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
+import qualified Data.Text
+import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
+import qualified Data.Vector
+import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Filesystem
 import qualified Filesystem.Path.CurrentOS
+import qualified NeatInterpolation
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified Filesystem.Path.CurrentOS        as Filesystem
@@ -360,10 +370,12 @@ canonicalize (File hasHome0 file0:paths0) =
     then go file0 paths0
     else File hasHome0 (clean file0)
   where
-    go currPath  []               = File hasHome0 (clean currPath)
-    go currPath (Env  _   :_    ) = File hasHome0 (clean currPath)
-    go currPath (URL  url0:_    ) = combine prefix suffix
+    go currPath  []                       = File Homeless (clean currPath)
+    go currPath (Env  _           :_    ) = File Homeless (clean currPath)
+    go currPath (URL  url0 headers:rest ) = combine prefix suffix
       where
+        headers' = fmap (\h -> canonicalize (h:rest)) headers
+
         prefix = parentURL (removeAtFromURL url0)
 
         suffix = clean currPath
@@ -381,8 +393,8 @@ canonicalize (File hasHome0 file0:paths0) =
                     -- URLs to be non-empty.  I couldn't find a simple and safe
                     -- equivalent in the `text` API
                     case Text.last url of
-                        '/' -> URL (url <>        path')
-                        _   -> URL (url <> "/" <> path')
+                        '/' -> URL (url <>        path') headers'
+                        _   -> URL (url <> "/" <> path') headers'
                   where
                     path' = Text.fromStrict (case Filesystem.toText path of
                         Left  txt -> txt
@@ -393,8 +405,10 @@ canonicalize (File hasHome0 file0:paths0) =
         else File hasHome (clean file')
       where
         file' = Filesystem.parent (removeAtFromFile file) </> currPath
-canonicalize (URL path:_) = URL path
-canonicalize (Env env :_) = Env env
+canonicalize (URL path headers:rest) = URL path headers'
+  where
+    headers' = fmap (\h -> canonicalize (h:rest)) headers
+canonicalize (Env env         :_   ) = Env env
 
 canonicalizePath :: [Path] -> Path
 canonicalizePath [] =
@@ -430,6 +444,62 @@ clean = strip . Filesystem.collapse
     strip p = case Filesystem.stripPrefix "." p of
         Nothing -> p
         Just p' -> p'
+
+toHeaders
+  :: Expr s a
+  -> Maybe [(CI Data.ByteString.ByteString, Data.ByteString.ByteString)]
+toHeaders (ListLit _ hs) = do
+    hs' <- mapM toHeader hs
+    return (Data.Vector.toList hs')
+toHeaders  _             = do
+    empty
+
+toHeader
+  :: Expr s a
+  -> Maybe (CI Data.ByteString.ByteString, Data.ByteString.ByteString)
+toHeader (RecordLit m) = do
+    TextLit keyBuilder   <- Map.lookup "header" m
+    TextLit valueBuilder <- Map.lookup "value"  m
+    let keyText   = Text.toStrict (Builder.toLazyText keyBuilder  )
+    let valueText = Text.toStrict (Builder.toLazyText valueBuilder)
+    let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
+    let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
+    return (Data.CaseInsensitive.mk keyBytes, valueBytes)
+toHeader _ = do
+    empty
+
+
+{-| This exception indicates that there was an internal error in Dhall's
+    import-related logic
+    the `expected` type then the `extract` function must succeed.  If not, then
+    this exception is thrown
+
+    This exception indicates that an invalid `Type` was provided to the `input`
+    function
+-}
+data InternalError = InternalError deriving (Typeable)
+
+_ERROR :: Data.Text.Text
+_ERROR = "\ESC[1;31mError\ESC[0m"
+
+instance Show InternalError where
+    show InternalError = Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: Compiler bug
+
+Explanation: This error message means that there is a bug in the Dhall compiler.
+You didn't do anything wrong, but if you would like to see this problem fixed
+then you should report the bug at:
+
+https://github.com/Gabriel439/Haskell-Dhall-Library/issues
+
+Please include the following text in your bug report:
+
+```
+Header extraction failed even though the header type-checked
+```
+|]
+
+instance Exception InternalError
 
 -- | Parse an expression from a `Path` containing a Dhall program
 exprFromPath :: Manager -> Path -> IO (Expr Src Path)
@@ -474,7 +544,7 @@ exprFromPath m (Path {..}) = case pathType of
             RawText -> do
                 text <- Filesystem.readTextFile path
                 return (TextLit (build text))
-    URL url -> do
+    URL url headerPath -> do
         request <- HTTP.parseUrlThrow (Text.unpack url)
 
         let handler :: HTTP.HttpException -> IO (HTTP.Response ByteString)
@@ -488,7 +558,44 @@ exprFromPath m (Path {..}) = case pathType of
                 -- user confusion
                 HTTP.httpLbs request' m `onException` throwIO (PrettyHttpException err)
             handler err = throwIO (PrettyHttpException err)
-        response <- HTTP.httpLbs request m `catch` handler
+
+        requestWithHeaders <- case headerPath of
+            Nothing   -> return request
+            Just path -> do
+                expr <- load (Embed (Path path Code))
+                let expected :: Expr Src X
+                    expected =
+                        App List
+                            ( Record
+                                ( Map.fromList
+                                    [("header", Text), ("value", Text)]
+                                )
+                            )
+                let suffix =
+                        ( Data.ByteString.Lazy.toStrict
+                        . Data.Text.Lazy.Encoding.encodeUtf8
+                        . Builder.toLazyText
+                        . build
+                        ) expected
+                let annot = case expr of
+                        Note (Src begin end bytes) _ ->
+                            Note (Src begin end bytes') (Annot expr expected)
+                          where
+                            bytes' = bytes <> " : " <> suffix
+                        _ ->
+                            Annot expr expected
+                case Dhall.TypeCheck.typeOf annot of
+                    Left err -> Control.Exception.throwIO err
+                    Right _  -> return ()
+                let expr' = Dhall.Core.normalize expr
+                headers <- case toHeaders expr' of
+                    Just headers -> return headers
+                    Nothing      -> Control.Exception.throwIO InternalError
+                let requestWithHeaders = request
+                        { HTTP.requestHeaders = headers
+                        }
+                return requestWithHeaders
+        response <- HTTP.httpLbs requestWithHeaders m `catch` handler
 
         let bytes = HTTP.responseBody response
 
@@ -570,14 +677,15 @@ loadStatic :: Path -> StateT Status IO (Expr Src X)
 loadStatic path = do
     paths <- zoom stack State.get
 
-    let local (Path (URL url ) _) = case HTTP.parseUrlThrow (Text.unpack url) of
-            Nothing      -> False
-            Just request -> case HTTP.host request of
-                "127.0.0.1" -> True
-                "localhost" -> True
-                _           -> False
-        local (Path (File _ _) _) = True
-        local (Path (Env  _  ) _) = True
+    let local (Path (URL url _) _) =
+            case HTTP.parseUrlThrow (Text.unpack url) of
+                Nothing      -> False
+                Just request -> case HTTP.host request of
+                    "127.0.0.1" -> True
+                    "localhost" -> True
+                    _           -> False
+        local (Path (File _ _ ) _) = True
+        local (Path (Env  _   ) _) = True
 
     let parent = canonicalizePath paths
     let here   = canonicalizePath (path:paths)
