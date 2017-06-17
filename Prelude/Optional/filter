@@ -1,0 +1,31 @@
+{-
+Only keep an `Optional` element if the supplied function returns `True`
+
+Examples:
+
+```
+./filter Natural Natural/even ([+2] : Optional Natural)
+= [+2] : Optional Natural
+
+./filter Natural Natural/odd ([+2] : Optional Natural)
+= [] : Optional Natural
+```
+-}
+let filter : ∀(a : Type) → (a → Bool) → Optional a -> Optional a
+    =   λ(a : Type)
+    →   λ(f : a → Bool)
+    →   λ(xs : Optional a)
+    →   Optional/build
+        a
+        (   λ(optional : Type)
+        →   λ(just : a → optional)
+        →   λ(nil : optional)
+        →   Optional/fold
+            a
+            xs
+            optional
+            (λ(x : a) → if f x then just x else nil)
+            nil
+        )
+
+in  filter
