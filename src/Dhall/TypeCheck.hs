@@ -947,12 +947,6 @@ Other outputs are $_NOT valid, like this:
              This is not a type or kind
 
 
-You specified that your function outputs a:
-
-↳ $txt
-
-... which is neither a type nor a kind:
-
 Some common reasons why you might get this error:
 
 ● You use ❰∀❱ instead of ❰λ❱ by mistake, like this:
@@ -963,6 +957,15 @@ Some common reasons why you might get this error:
     └────────────────┘
       ⇧
       Using ❰λ❱ here instead of ❰∀❱ would transform this into a valid function
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+You specified that your function outputs a:
+
+↳ $txt
+
+... which is neither a type nor a kind:
 |]
       where
         txt = Text.toStrict (Dhall.Core.pretty expr)
@@ -1059,16 +1062,6 @@ An expression is not a function if the expression's type is not of the form
     └──────────────────┘  the type of a function
 
 
-You tried to use the following expression as a function:
-
-↳ $txt0
-
-... but this expression's type is:
-
-↳ $txt1
-
-... which is not a function type
-
 Some common reasons why you might get this error:
 
 ● You tried to add two ❰Integer❱s without a space around the ❰+❱, like this:
@@ -1078,13 +1071,16 @@ Some common reasons why you might get this error:
     │ 2+2 │
     └─────┘
 
+
   The above code is parsed as:
+
 
     ┌────────┐
     │ 2 (+2) │
     └────────┘
       ⇧
       The compiler thinks that this ❰2❱ is a function whose argument is ❰+2❱
+
 
   This is because the ❰+❱ symbol has two meanings: you use ❰+❱ to add two
   numbers, but you also can prefix ❰Integer❱ literals with a ❰+❱ to turn them
@@ -1093,12 +1089,26 @@ Some common reasons why you might get this error:
   To fix the code, you need to put spaces around the ❰+❱ and also prefix each
   ❰2❱ with a ❰+❱, like this:
 
+
     ┌─────────┐
     │ +2 + +2 │
     └─────────┘
 
+
   You can only add ❰Natural❱ numbers, which is why you must also change each
   ❰2❱ to ❰+2❱
+
+────────────────────────────────────────────────────────────────────────────────
+
+You tried to use the following expression as a function:
+
+↳ $txt0
+
+... but this expression's type is:
+
+↳ $txt1
+
+... which is not a function type
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
@@ -1191,22 +1201,6 @@ For example, the following expressions are not valid:
     └────────┘  argument that has kind ❰Type❱
 
 
-You tried to invoke the following function:
-
-↳ $txt0
-
-... which expects an argument of type or kind:
-
-↳ $txt1
-
-... on the following argument:
-
-↳ $txt2
-
-... which has a different type or kind:
-
-↳ $txt3
-
 Some common reasons why you might get this error:
 
 ● You omit a function argument by mistake:
@@ -1222,11 +1216,31 @@ Some common reasons why you might get this error:
 
 ● You supply an ❰Integer❱ literal to a function that expects a ❰Natural❱
 
+
     ┌────────────────┐
     │ Natural/even 2 │
     └────────────────┘
                    ⇧
                    This should be ❰+2❱
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+You tried to invoke the following function:
+
+↳ $txt0
+
+... which expects an argument of type or kind:
+
+↳ $txt1
+
+... on the following argument:
+
+↳ $txt2
+
+... which has a different type or kind:
+
+↳ $txt3
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
@@ -1289,18 +1303,6 @@ reject them:
     └─────────────┘
 
 
-You or the interpreter annotated this expression:
-
-↳ $txt0
-
-... with this type or kind:
-
-↳ $txt1
-
-... but the inferred type or kind of the expression is actually:
-
-↳ $txt2
-
 Some common reasons why you might get this error:
 
 ● The Haskell Dhall interpreter implicitly inserts a top-level annotation
@@ -1324,6 +1326,20 @@ Some common reasons why you might get this error:
 
 
   ... and then type-checking will fail
+
+────────────────────────────────────────────────────────────────────────────────
+
+You or the interpreter annotated this expression:
+
+↳ $txt0
+
+... with this type or kind:
+
+↳ $txt1
+
+... but the inferred type or kind of the expression is actually:
+
+↳ $txt2
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
@@ -1406,6 +1422,17 @@ For example, these are valid ❰if❱ expressions:
     └────────────────────────────┘
 
 
+Some common reasons why you might get this error:
+
+● You might be used to other programming languages that accept predicates other
+  than ❰Bool❱
+
+  For example, some languages permit ❰0❱ or ❰""❱ as valid predicates and treat
+  them as equivalent to ❰False❱.  However, the Dhall language does not permit
+  this
+
+────────────────────────────────────────────────────────────────────────────────
+
 Your ❰if❱ expression begins with the following predicate:
 
 ↳ $txt0
@@ -1415,15 +1442,6 @@ Your ❰if❱ expression begins with the following predicate:
 ↳ $txt1
 
 ... but the predicate must instead have type ❰Bool❱
-
-Some common reasons why you might get this error:
-
-● You might be used to other programming languages that accept predicates other
-  than ❰Bool❱
-
-  For example, some languages permit ❰0❱ or ❰""❱ as valid predicates and treat
-  them as equivalent to ❰False❱.  However, the Dhall language does not permit
-  this
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
@@ -1898,12 +1916,6 @@ However, an ❰Optional❱ value can $_NOT have more than one element, whereas a
     └───────────────────────────┘
 
 
-Your ❰Optional❱ value had this many elements:
-
-↳ $txt0
-
-... when an ❰Optional❱ value can only have at most one element
-
 Some common reasons why you might get this error:
 
 ● You accidentally typed ❰Optional❱ when you meant ❰List❱, like this:
@@ -1914,6 +1926,15 @@ Some common reasons why you might get this error:
     └────────────────────────────────────────────────────┘
                                        ⇧
                                        This should be ❰List❱ instead
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+Your ❰Optional❱ value had this many elements:
+
+↳ $txt0
+
+... when an ❰Optional❱ value can only have at most one element
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty n)
@@ -2044,6 +2065,21 @@ values are $_NOT valid:
                This is a kind and not a term
 
 
+Some common reasons why you might get this error:
+
+● You accidentally typed ❰=❱ instead of ❰:❱ for a union literal with one
+  alternative:
+
+
+    ┌────────────────────┐
+    │ < Example = Text > │
+    └────────────────────┘
+                ⇧
+                This could be ❰:❱ instead
+
+
+────────────────────────────────────────────────────────────────────────────────
+
 You provided a union literal with an alternative named:
 
 ↳ $txt0
@@ -2053,17 +2089,6 @@ You provided a union literal with an alternative named:
 ↳ $txt1
 
 ... which is not a term
-
-Some common reasons why you might get this error:
-
-● You accidentally typed ❰=❱ instead of ❰:❱ for a union literal with one
-  alternative:
-
-    ┌────────────────────┐
-    │ < Example = Text > │
-    └────────────────────┘
-                ⇧
-                This could be ❰:❱ instead
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
@@ -2105,14 +2130,6 @@ following union types are $_NOT valid:
                              This is a kind and not a type
 
 
-You provided a union type with an alternative named:
-
-↳ $txt0
-
-... annotated with the following expression which is not a type:
-
-↳ $txt1
-
 Some common reasons why you might get this error:
 
 ● You accidentally typed ❰:❱ instead of ❰=❱ for a union literal with one
@@ -2123,6 +2140,17 @@ Some common reasons why you might get this error:
     └─────────────────┘
                 ⇧
                 This could be ❰=❱ instead
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+You provided a union type with an alternative named:
+
+↳ $txt0
+
+... annotated with the following expression which is not a type:
+
+↳ $txt1
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
@@ -2244,12 +2272,6 @@ For example, the following expression is $_NOT valid:
     └───────────────────────────────────────────┘
 
 
-You combined two records that share the following field:
-
-↳ $txt0
-
-... which is not allowed
-
 Some common reasons why you might get this error:
 
 ● You tried to use ❰∧❱ to update a field's value, like this:
@@ -2263,6 +2285,14 @@ Some common reasons why you might get this error:
 
   Field updates are intentionally not allowed as the Dhall language discourages
   patch-oriented programming
+
+────────────────────────────────────────────────────────────────────────────────
+
+You combined two records that share the following field:
+
+↳ $txt0
+
+... which is not allowed
 |]
       where
         txt0 = Text.toStrict k
@@ -2297,14 +2327,6 @@ For example, the following expression is $_NOT valid:
                 Invalid: ❰handler❱ isn't a record
 
 
-You provided the following handler:
-
-↳ $txt0
-
-... which is not a record, but is actually a value of type:
-
-↳ $txt1
-
 Some common reasons why you might get this error:
 
 ● You accidentally provide an empty record type instead of an empty record when
@@ -2316,6 +2338,17 @@ Some common reasons why you might get this error:
     └──────────────────────────────────────────┘
                                       ⇧
                                       This should be ❰{=}❱ instead
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+You provided the following handler:
+
+↳ $txt0
+
+... which is not a record, but is actually a value of type:
+
+↳ $txt1
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
@@ -2735,18 +2768,6 @@ For example, the following expression is $_NOT valid:
       Invalid: Not a record
 
 
-You tried to access a field named:
-
-↳ $txt0
-
-... on the following expression which is not a record:
-
-↳ $txt1
-
-... but is actually an expression of type:
-
-↳ $txt2
-
 Some common reasons why you might get this error:
 
 ● You accidentally try to access a field of a union instead of a record, like
@@ -2758,6 +2779,21 @@ Some common reasons why you might get this error:
     └─────────────────┘
       ⇧
       This is a union, not a record
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+You tried to access a field named:
+
+↳ $txt0
+
+... on the following expression which is not a record:
+
+↳ $txt1
+
+... but is actually an expression of type:
+
+↳ $txt2
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
@@ -2833,6 +2869,21 @@ For example, this is a valid use of ❰++❱:
     └────────────────┘
 
 
+Some common reasons why you might get this error:
+
+● You might have thought that ❰++❱ was the operator to combine two lists:
+
+
+    ┌────────────────────────┐
+    │ [1, 2, 3] ++ [4, 5, 6] │  Not valid
+    └────────────────────────┘
+
+
+  The Dhall programming language does not provide a built-in operator for
+  combining two lists
+
+────────────────────────────────────────────────────────────────────────────────
+
 You provided this argument:
 
 ↳ $txt0
@@ -2840,17 +2891,6 @@ You provided this argument:
 ... which does not have type ❰Text❱ but instead has type:
 
 ↳ $txt1
-
-Some common reasons why you might get this error:
-
-● You might have thought that ❰++❱ was the operator to combine two lists:
-
-    ┌────────────────────────┐
-    │ [1, 2, 3] ++ [4, 5, 6] │  Not valid
-    └────────────────────────┘
-
-  The Dhall programming language does not provide a built-in operator for
-  combining two lists
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
@@ -3045,14 +3085,6 @@ For example, this is a valid use of ❰$txt2❱:
     └─────────┘
 
 
-You provided this argument:
-
-↳ $txt0
-
-... which does not have type ❰Natural❱ but instead has type:
-
-↳ $txt1
-
 Some common reasons why you might get this error:
 
 ● You might have tried to use an ❰Integer❱, which is $_NOT allowed:
@@ -3081,6 +3113,17 @@ Some common reasons why you might get this error:
     ┌─────────┐
     │ +2 $txt2 +2 │  Valid
     └─────────┘
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+You provided this argument:
+
+↳ $txt0
+
+... which does not have type ❰Natural❱ but instead has type:
+
+↳ $txt1
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)
