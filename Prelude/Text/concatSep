@@ -1,15 +1,15 @@
 {-
-Combine a `List` of `Text` values with a separator in between each value
+Concatenate a `List` of `Text` values with a separator in between each value
 
 Examples:
 
 ```
-./intercalate ", " ["ABC", "DEF", "GHI"] = "ABC, DEF, GHI"
+./concatSep ", " ["ABC", "DEF", "GHI"] = "ABC, DEF, GHI"
 
-./intercalate ", " ([] : List Text) = ""
+./concatSep ", " ([] : List Text) = ""
 ```
 -}
-let intercalate : ∀(separator : Text) → ∀(elements : List Text) → Text
+let concatSep : ∀(separator : Text) → ∀(elements : List Text) → Text
     =   λ(separator : Text)
     →   λ(elements : List Text)
     →   let status
@@ -40,4 +40,4 @@ let intercalate : ∀(separator : Text) → ∀(elements : List Text) → Text
         }
         status : Text
 
-in  intercalate
+in  concatSep
