@@ -63,15 +63,23 @@ Extra-Source-Files:
     Prelude/Natural/show
     Prelude/Natural/sum
     Prelude/Natural/toInteger
+    Prelude/Optional/all
+    Prelude/Optional/any
     Prelude/Optional/build
     Prelude/Optional/concat
+    Prelude/Optional/filter
     Prelude/Optional/fold
     Prelude/Optional/head
     Prelude/Optional/last
+    Prelude/Optional/length
     Prelude/Optional/map
+    Prelude/Optional/null
     Prelude/Optional/toList
     Prelude/Optional/unzip
     Prelude/Text/concat
+    Prelude/Text/concatMap
+    Prelude/Text/concatMapSep
+    Prelude/Text/concatSep
 
 Source-Repository head
     Type: git
