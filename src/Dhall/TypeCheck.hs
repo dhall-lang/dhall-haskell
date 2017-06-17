@@ -959,6 +959,8 @@ Some common reasons why you might get this error:
       Using ❰λ❱ here instead of ❰∀❱ would transform this into a valid function
 
 
+────────────────────────────────────────────────────────────────────────────────
+
 You specified that your function outputs a:
 
 ↳ $txt
@@ -1096,6 +1098,8 @@ Some common reasons why you might get this error:
   You can only add ❰Natural❱ numbers, which is why you must also change each
   ❰2❱ to ❰+2❱
 
+────────────────────────────────────────────────────────────────────────────────
+
 You tried to use the following expression as a function:
 
 ↳ $txt0
@@ -1220,6 +1224,8 @@ Some common reasons why you might get this error:
                    This should be ❰+2❱
 
 
+────────────────────────────────────────────────────────────────────────────────
+
 You tried to invoke the following function:
 
 ↳ $txt0
@@ -1320,6 +1326,8 @@ Some common reasons why you might get this error:
 
 
   ... and then type-checking will fail
+
+────────────────────────────────────────────────────────────────────────────────
 
 You or the interpreter annotated this expression:
 
@@ -1422,6 +1430,8 @@ Some common reasons why you might get this error:
   For example, some languages permit ❰0❱ or ❰""❱ as valid predicates and treat
   them as equivalent to ❰False❱.  However, the Dhall language does not permit
   this
+
+────────────────────────────────────────────────────────────────────────────────
 
 Your ❰if❱ expression begins with the following predicate:
 
@@ -1918,6 +1928,8 @@ Some common reasons why you might get this error:
                                        This should be ❰List❱ instead
 
 
+────────────────────────────────────────────────────────────────────────────────
+
 Your ❰Optional❱ value had this many elements:
 
 ↳ $txt0
@@ -2066,6 +2078,8 @@ Some common reasons why you might get this error:
                 This could be ❰:❱ instead
 
 
+────────────────────────────────────────────────────────────────────────────────
+
 You provided a union literal with an alternative named:
 
 ↳ $txt0
@@ -2127,6 +2141,8 @@ Some common reasons why you might get this error:
                 ⇧
                 This could be ❰=❱ instead
 
+
+────────────────────────────────────────────────────────────────────────────────
 
 You provided a union type with an alternative named:
 
@@ -2270,6 +2286,8 @@ Some common reasons why you might get this error:
   Field updates are intentionally not allowed as the Dhall language discourages
   patch-oriented programming
 
+────────────────────────────────────────────────────────────────────────────────
+
 You combined two records that share the following field:
 
 ↳ $txt0
@@ -2321,6 +2339,8 @@ Some common reasons why you might get this error:
                                       ⇧
                                       This should be ❰{=}❱ instead
 
+
+────────────────────────────────────────────────────────────────────────────────
 
 You provided the following handler:
 
@@ -2761,6 +2781,8 @@ Some common reasons why you might get this error:
       This is a union, not a record
 
 
+────────────────────────────────────────────────────────────────────────────────
+
 You tried to access a field named:
 
 ↳ $txt0
@@ -2859,6 +2881,8 @@ Some common reasons why you might get this error:
 
   The Dhall programming language does not provide a built-in operator for
   combining two lists
+
+────────────────────────────────────────────────────────────────────────────────
 
 You provided this argument:
 
@@ -3090,6 +3114,8 @@ Some common reasons why you might get this error:
     │ +2 $txt2 +2 │  Valid
     └─────────┘
 
+
+────────────────────────────────────────────────────────────────────────────────
 
 You provided this argument:
 
