@@ -44,6 +44,9 @@ module Dhall.Tutorial (
     -- * Total
     -- $total
 
+    -- * Headers
+    -- $headers
+
     -- * Built-in functions
     -- $builtins
 
@@ -1245,6 +1248,50 @@ import Dhall
 -- __Exercise__: If you have a lot of spare time, try to \"break the compiler\" by
 -- finding an input expression that crashes or loops forever (and file a bug
 -- report if you succeed)
+
+-- $headers
+--
+-- Sometimes you would like to provide additional request headers when importing
+-- Dhall expressions from URLs.  For example, you might want to provide an
+-- authorization header or specify the expected content type.
+--
+-- Dhall URL imports let you add or modify request headers with the @using@
+-- keyword:
+--
+-- > https://example.com using ./headers
+--
+-- ... where you can replace @./headers@ with any import that points to a Dhall
+-- expression of the following type:
+--
+-- > List { header : Text, value : Text }
+--
+-- For example, if you needed to specify the content type correctly in order to
+-- download the file, then your @./headers@ file might look like this:
+--
+-- > $ cat headers
+-- > [ { header = "Accept", value = "application/dhall" } ]
+--
+-- ... or if you needed to provide an authorization token to access a private
+-- GitHub repository, then your headers could look like this:
+--
+-- > [ { header = "Authorization", value = "token ${env:GITHUB_TOKEN}" } ]
+--
+-- This would read your GitHub API token from the @GITHUB_TOKEN@ environment
+-- variable and supply that token in the authorization header.
+--
+-- You cannot inline the headers within the same file as the URL.  You must
+-- provide them as a separate import.  That means that this is /not/ legal code:
+--
+-- > http://example.com using [ { header = "Accept", value = "application/dhall" } ]  -- NOT legal
+--
+-- Dhall will forward imports if you import an expression from a URL that
+-- contains a relative import.  For example, if you import an expression like
+-- this:
+-- 
+-- > http://example.com using ./headers
+-- 
+-- ... and @http:\/\/example.com@ contains a relative import of @./foo@ then
+-- Dhall will import @http:\/\/example.com/foo@ using the same @./headers@ file.
 
 -- $builtins
 --
