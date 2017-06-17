@@ -1,3 +1,33 @@
+1.4.0
+
+* BREAKING CHANGE TO THE LANGUAGE AND API: You can now supply custom headers for
+  URL imports with the new `using` keyword
+    * This is a breaking change to the language because this adds a new reserved
+      `using` keyword
+    * This is a breaking change to the API because this adds a new field to the
+      `URL` constructor to store optional custom headers
+* BUG FIX: `:` is no longer a disallowed path character
+    * This was breaking URL imports with a port
+* BUG FIX: If you import a home-anchored path (i.e. `~/foo`) and that imports a
+  relative path (like `./bar`), then the canonical path of the relative import
+  should be home-anchored (i.e. `~/bar`).  However, there was a bug that made
+  lose the home anchor (i.e. `./foo/bar`), which this release fixes
+  likely fail due to no longer being home-anchored (i.e. `./foob
+* Add support for string interpolation
+* `merge` no longer requires a type annotation if you are merging at least one
+  alternative
+* Expanded Prelude
+    * `./Prelude/Optional/all`
+    * `./Prelude/Optional/any`
+    * `./Prelude/Optional/filter`
+    * `./Prelude/Optional/length`
+    * `./Prelude/Optional/null`
+    * `./Prelude/Text/concatMap`
+    * `./Prelude/Text/concatMapSep`
+    * `./Prelude/Text/concatSep`
+* Rearrange detailed error messages to put summary information at the bottom of
+  the message
+
 1.3.0
 
 * BREAKING CHANGE TO THE API: Add support for new primitives, specifically:
