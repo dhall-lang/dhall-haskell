@@ -195,7 +195,15 @@ exampleTests =
                 ]
             ]
         , Test.Tasty.testGroup "Optional"
-            [ Test.Tasty.testGroup "build"
+            [ Test.Tasty.testGroup "all"
+                [ _Optional_all_0
+                , _Optional_all_1
+                ]
+            , Test.Tasty.testGroup "any"
+                [ _Optional_any_0
+                , _Optional_any_1
+                ]
+            , Test.Tasty.testGroup "build"
                 [ _Optional_build_0
                 , _Optional_build_1
                 ]
@@ -203,6 +211,10 @@ exampleTests =
                 [ _Optional_concat_0
                 , _Optional_concat_1
                 , _Optional_concat_2
+                ]
+            , Test.Tasty.testGroup "filter"
+                [ _Optional_filter_0
+                , _Optional_filter_1
                 ]
             , Test.Tasty.testGroup "fold"
                 [ _Optional_fold_0
@@ -217,6 +229,14 @@ exampleTests =
                 [ _Optional_last_0
                 , _Optional_last_1
                 , _Optional_last_2
+                ]
+            , Test.Tasty.testGroup "length"
+                [ _Optional_length_0
+                , _Optional_length_1
+                ]
+            , Test.Tasty.testGroup "null"
+                [ _Optional_null_0
+                , _Optional_null_1
                 ]
             , Test.Tasty.testGroup "map"
                 [ _Optional_map_0
@@ -965,6 +985,34 @@ _Natural_toInteger_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 |]
     Util.assertNormalizesTo e "0" )
 
+_Optional_all_0 :: TestTree
+_Optional_all_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Optional/all Natural Natural/even ([+3] : Optional Natural)
+|]
+    Util.assertNormalizesTo e "False" )
+
+_Optional_all_1 :: TestTree
+_Optional_all_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Optional/all Natural Natural/even ([] : Optional Natural)
+|]
+    Util.assertNormalizesTo e "True" )
+
+_Optional_any_0 :: TestTree
+_Optional_any_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Optional/any Natural Natural/even ([+2] : Optional Natural)
+|]
+    Util.assertNormalizesTo e "True" )
+
+_Optional_any_1 :: TestTree
+_Optional_any_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Optional/any Natural Natural/even ([] : Optional Natural)
+|]
+    Util.assertNormalizesTo e "False" )
+
 _Optional_build_0 :: TestTree
 _Optional_build_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code [NeatInterpolation.text|
@@ -1011,6 +1059,20 @@ _Optional_concat_2 = Test.Tasty.HUnit.testCase "Example #2" (do
 ./Prelude/Optional/concat Integer ([] : Optional (Optional Integer))
 |]
     Util.assertNormalizesTo e "[] : Optional Integer" )
+
+_Optional_filter_0 :: TestTree
+_Optional_filter_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Optional/filter Natural Natural/even ([+2] : Optional Natural)
+|]
+    Util.assertNormalizesTo e "[+2] : Optional Natural" )
+
+_Optional_filter_1 :: TestTree
+_Optional_filter_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Optional/filter Natural Natural/odd ([+2] : Optional Natural)
+|]
+    Util.assertNormalizesTo e "[] : Optional Natural" )
 
 _Optional_fold_0 :: TestTree
 _Optional_fold_0 = Test.Tasty.HUnit.testCase "Example #0" (do
@@ -1087,12 +1149,40 @@ _Optional_map_0 = Test.Tasty.HUnit.testCase "Example #0" (do
 |]
     Util.assertNormalizesTo e "[False] : Optional Bool" )
 
+_Optional_length_0 :: TestTree
+_Optional_length_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Optional/length Integer ([2] : Optional Integer)
+|]
+    Util.assertNormalizesTo e "+1" )
+
+_Optional_length_1 :: TestTree
+_Optional_length_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Optional/length Integer ([] : Optional Integer)
+|]
+    Util.assertNormalizesTo e "+0" )
+
 _Optional_map_1 :: TestTree
 _Optional_map_1 = Test.Tasty.HUnit.testCase "Example #1" (do
     e <- Util.code [NeatInterpolation.text|
 ./Prelude/Optional/map Natural Bool Natural/even ([] : Optional Natural)
 |]
     Util.assertNormalizesTo e "[] : Optional Bool" )
+
+_Optional_null_0 :: TestTree
+_Optional_null_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Optional/null Integer ([2] : Optional Integer)
+|]
+    Util.assertNormalizesTo e "False" )
+
+_Optional_null_1 :: TestTree
+_Optional_null_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Optional/null Integer ([] : Optional Integer)
+|]
+    Util.assertNormalizesTo e "True" )
 
 _Optional_toList_0 :: TestTree
 _Optional_toList_0 = Test.Tasty.HUnit.testCase "Example #0" (do
