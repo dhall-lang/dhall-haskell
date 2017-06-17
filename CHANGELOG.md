@@ -1,3 +1,7 @@
+1.4.1
+
+* Fix missing `tests/Tutorial.hs` module in package archive uploaded to Hackage
+
 1.4.0
 
 * BREAKING CHANGE TO THE LANGUAGE AND API: You can now supply custom headers for
