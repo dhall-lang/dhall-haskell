@@ -236,6 +236,10 @@ exampleTests =
                 [ _Text_concat_0
                 , _Text_concat_1
                 ]
+            , Test.Tasty.testGroup "concatMap"
+                [ _Text_concatMap_0
+                , _Text_concatMap_1
+                ]
             , Test.Tasty.testGroup "intercalate"
                 [ _Text_intercalate_0
                 , _Text_intercalate_1
@@ -1136,6 +1140,20 @@ _Text_concat_1 :: TestTree
 _Text_concat_1 = Test.Tasty.HUnit.testCase "Example #1" (do
     e <- Util.code [NeatInterpolation.text|
 ./Prelude/Text/concat ([] : List Text)
+|]
+    Util.assertNormalizesTo e "\"\"" )
+
+_Text_concatMap_0 :: TestTree
+_Text_concatMap_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Text//concatMap Integer (λ(n : Integer) → "${Integer/show n} ") [0, 1, 2]
+|]
+    Util.assertNormalizesTo e "\"0 1 2 \"" )
+
+_Text_concatMap_1 :: TestTree
+_Text_concatMap_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code [NeatInterpolation.text|
+./Prelude/Text/concatMap Integer (λ(n : Integer) → "${Integer/show n} ") ([] : List Integer)
 |]
     Util.assertNormalizesTo e "\"\"" )
 
