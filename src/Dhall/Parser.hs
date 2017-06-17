@@ -838,14 +838,16 @@ listLit embedded = do
 
 import_ :: Parser Path
 import_ = do
-    pathType <- file <|> url <|> env
-    Text.Parser.Token.whiteSpace
+    pathType <- pathType_
     let rawText = do
             _ <- reserve "as"
             _ <- reserve "Text"
             return RawText
     pathMode <- rawText <|> pure Code
     return (Path {..})
+
+pathType_ :: Parser PathType
+pathType_ = file <|> url <|> env
 
 pathChar :: Char -> Bool
 pathChar c =
@@ -855,7 +857,7 @@ pathChar c =
     )
 
 disallowedPathChars :: CharSet
-disallowedPathChars = Data.CharSet.fromList "()[]{}<>:"
+disallowedPathChars = Data.CharSet.fromList "()[]{}<>"
 
 file :: Parser PathType
 file =  try (token file0)
@@ -870,22 +872,26 @@ file =  try (token file0)
             '\\':_ -> empty -- So that "/\" parses as the operator and not a path
             '/' :_ -> empty -- So that "//" parses as the operator and not a path
             _      -> return ()
+        Text.Parser.Token.whiteSpace
         return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a <> b)))
 
     file1 = do
         a <- Text.Parser.Char.string "./"
         b <- many (Text.Parser.Char.satisfy pathChar)
+        Text.Parser.Token.whiteSpace
         return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a <> b)))
 
     file2 = do
         a <- Text.Parser.Char.string "../"
         b <- many (Text.Parser.Char.satisfy pathChar)
+        Text.Parser.Token.whiteSpace
         return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a <> b)))
 
     file3 = do
         _ <- Text.Parser.Char.string "~"
         _ <- some (Text.Parser.Char.string "/")
         b <- many (Text.Parser.Char.satisfy pathChar)
+        Text.Parser.Token.whiteSpace
         return (File Home (Filesystem.Path.CurrentOS.decodeString b))
 
 url :: Parser PathType
@@ -895,17 +901,28 @@ url =   try url0
     url0 = do
         a <- Text.Parser.Char.string "https://"
         b <- many (Text.Parser.Char.satisfy pathChar)
-        return (URL (Data.Text.Lazy.pack (a <> b)))
+        Text.Parser.Token.whiteSpace
+        c <- optional (do
+            _ <- Text.Parser.Char.string "using"
+            Text.Parser.Token.whiteSpace
+            pathType_ )
+        return (URL (Data.Text.Lazy.pack (a <> b)) c)
 
     url1 = do
         a <- Text.Parser.Char.string "http://"
         b <- many (Text.Parser.Char.satisfy pathChar)
-        return (URL (Data.Text.Lazy.pack (a <> b)))
+        Text.Parser.Token.whiteSpace
+        c <- optional (do
+            _ <- Text.Parser.Char.string "using"
+            Text.Parser.Token.whiteSpace
+            pathType_ )
+        return (URL (Data.Text.Lazy.pack (a <> b)) c)
 
 env :: Parser PathType
 env = do
     _ <- Text.Parser.Char.string "env:"
     a <- many (Text.Parser.Char.satisfy pathChar)
+    Text.Parser.Token.whiteSpace
     return (Env (Data.Text.Lazy.pack a))
 
 -- | A parsing error
