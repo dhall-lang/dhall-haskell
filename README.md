@@ -103,6 +103,7 @@ Complete:
   JSON and YAML integration
 * [`dhall-bash`](https://github.com/Gabriel439/Haskell-Dhall-Bash-Library) -
   Bash integration
+* [`dhall-text`](https://github.com/Gabriel439/Haskell-Dhall-Text-Library) - Template engine
 
 In progress:
 
