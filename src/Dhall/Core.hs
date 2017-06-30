@@ -252,8 +252,8 @@ data Expr s a
     | Text
     -- | > TextLit t                                ~  t
     | TextLit Builder
-    -- | > TextAppend x y                           ~  x ++ y
-    | TextAppend (Expr s a) (Expr s a)
+    -- | > Append x y                               ~  x ++ y
+    | Append (Expr s a) (Expr s a)
     -- | > List                                     ~  List
     | List
     -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : List t
@@ -346,7 +346,7 @@ instance Monad (Expr s) where
     DoubleShow       >>= _ = DoubleShow
     Text             >>= _ = Text
     TextLit a        >>= _ = TextLit a
-    TextAppend a b   >>= k = TextAppend (a >>= k) (b >>= k)
+    Append a b       >>= k = Append (a >>= k) (b >>= k)
     List             >>= _ = List
     ListLit a b      >>= k = ListLit (fmap (>>= k) a) (fmap (>>= k) b)
     ListBuild        >>= _ = ListBuild
@@ -405,7 +405,7 @@ instance Bifunctor Expr where
     first _  DoubleShow        = DoubleShow
     first _  Text              = Text
     first _ (TextLit a       ) = TextLit a
-    first k (TextAppend a b  ) = TextAppend (first k a) (first k b)
+    first k (Append a b      ) = Append (first k a) (first k b)
     first _  List              = List
     first k (ListLit a b     ) = ListLit (fmap (first k) a) (fmap (first k) b)
     first _  ListBuild         = ListBuild
@@ -553,9 +553,9 @@ buildExprC0  a           = buildExprC1 a
 
 -- | Builder corresponding to the @exprC1@ parser in "Dhall.Parser"
 buildExprC1 :: Buildable a => Expr s a -> Builder
-buildExprC1 (TextAppend a b) = buildExprC2 a <> " ++ " <> buildExprC1 b
-buildExprC1 (Note       _ b) = buildExprC1 b
-buildExprC1  a               = buildExprC2 a
+buildExprC1 (Append a b) = buildExprC2 a <> " ++ " <> buildExprC1 b
+buildExprC1 (Note   _ b) = buildExprC1 b
+buildExprC1  a           = buildExprC2 a
 
 -- | Builder corresponding to the @exprC2@ parser in "Dhall.Parser"
 buildExprC2 :: Buildable a => Expr s a -> Builder
@@ -930,7 +930,7 @@ shift _ _ (DoubleLit a) = DoubleLit a
 shift _ _ DoubleShow = DoubleShow
 shift _ _ Text = Text
 shift _ _ (TextLit a) = TextLit a
-shift d v (TextAppend a b) = TextAppend a' b'
+shift d v (Append a b) = Append a' b'
   where
     a' = shift d v a
     b' = shift d v b
@@ -1070,7 +1070,7 @@ subst _ _ (DoubleLit a) = DoubleLit a
 subst _ _ DoubleShow = DoubleShow
 subst _ _ Text = Text
 subst _ _ (TextLit a) = TextLit a
-subst x e (TextAppend a b) = TextAppend a' b'
+subst x e (Append a b) = Append a' b'
   where
     a' = subst x e a
     b' = subst x e b
@@ -1350,13 +1350,17 @@ normalize e = case e of
     DoubleShow -> DoubleShow
     Text -> Text
     TextLit t -> TextLit t
-    TextAppend x y   ->
+    Append x y   ->
         case x' of
             TextLit xt ->
                 case y' of
                     TextLit yt -> TextLit (xt <> yt)
-                    _ -> TextAppend x' y'
-            _ -> TextAppend x' y'
+                    _ -> Append x' y'
+            ListLit t xs ->
+                case y' of
+                    ListLit _ ys -> ListLit t (xs <> ys)
+                    _ -> Append x' y'
+            _ -> Append x' y'
       where
         x' = normalize x
         y' = normalize y
@@ -1578,11 +1582,15 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
     DoubleShow -> True
     Text -> True
     TextLit _ -> True
-    TextAppend x y -> isNormalized x && isNormalized y &&
+    Append x y -> isNormalized x && isNormalized y &&
         case x of
             TextLit _ ->
                 case y of
                     TextLit _ -> False
+                    _ -> True
+            ListLit _ _ ->
+                case y of
+                    ListLit _ _ -> False
                     _ -> True
             _ -> True
     List -> True
