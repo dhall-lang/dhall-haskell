@@ -1132,7 +1132,7 @@ subst _ _ (Embed p) = Embed p
     leave ill-typed sub-expressions unevaluated.
 -}
 normalize ::  Expr s a -> Expr t a
-normalize = normalizeWith (id)
+normalize = normalizeWith id
 
 
 {-| Reduce an expression to its normal form, performing beta reduction and applying
@@ -1148,16 +1148,16 @@ normalize = normalizeWith (id)
    
 -}
 normalizeWith :: CtxFun a -> Expr s a -> Expr t a
-normalizeWith ctx e = loop (shift 0 "_" e)
+normalizeWith ctx e0 = loop (shift 0 "_" e0)
  where
     -- This is to avoid a `Show` constraint on the @a@ and @s@ in the type of
     -- `loop`.  In theory, this might change a failing repro case into
     -- a successful one, but the risk of that is low enough to not warrant
     -- the `Show` constraint.  I care more about proving at the type level
     -- that the @a@ and @s@ type parameters are never used
- e'' = bimap (\_ -> ()) (\_ -> ()) e
+ e'' = bimap (\_ -> ()) (\_ -> ()) e0
 
- text = "(loop) (" <> Data.Text.pack (show e'') <> ")"
+ text = "NormalizeWith.loop (" <> Data.Text.pack (show e'') <> ")"
  loop e =  case ctx e of
     Const k -> Const k
     Var v -> Var v
@@ -1391,8 +1391,8 @@ normalizeWith ctx e = loop (shift 0 "_" e)
     List -> List
     ListLit t es -> ListLit t' es'
       where
-        t'  = fmap (loop) t
-        es' = fmap (loop) es
+        t'  = fmap loop t
+        es' = fmap loop es
     ListBuild -> ListBuild
     ListFold -> ListFold
     ListLength -> ListLength
@@ -1404,28 +1404,28 @@ normalizeWith ctx e = loop (shift 0 "_" e)
     OptionalLit t es -> OptionalLit t' es'
       where
         t'  =      loop t
-        es' = fmap (loop) es
+        es' = fmap loop es
     OptionalFold -> OptionalFold
     OptionalBuild -> OptionalBuild
     Record kts -> Record kts'
       where
-        kts' = fmap (loop) kts
+        kts' = fmap loop kts
     RecordLit kvs -> RecordLit kvs'
       where
-        kvs' = fmap (loop) kvs
+        kvs' = fmap loop kvs
     Union kts -> Union kts'
       where
-        kts' = fmap (loop) kts
+        kts' = fmap loop kts
     UnionLit k v kvs -> UnionLit k v' kvs'
       where
         v'   =      loop v
-        kvs' = fmap (loop) kvs
+        kvs' = fmap loop kvs
     Combine x0 y0 ->
         let combine x y = case x of
                 RecordLit kvsX -> case y of
                     RecordLit kvsY ->
                         let kvs = Data.Map.unionWith combine kvsX kvsY
-                        in  RecordLit (fmap (loop) kvs)
+                        in  RecordLit (fmap loop kvs)
                     _ -> Combine x y
                 _ -> Combine x y
         in  combine (loop x0) (loop y0)
@@ -1434,7 +1434,7 @@ normalizeWith ctx e = loop (shift 0 "_" e)
             RecordLit kvsX ->
                 case y' of
                     RecordLit kvsY ->
-                        RecordLit (fmap (loop) (Data.Map.union kvsY kvsX))
+                        RecordLit (fmap loop (Data.Map.union kvsY kvsX))
                     _ -> Prefer x' y'
             _ -> Prefer x' y'
       where
@@ -1453,13 +1453,13 @@ normalizeWith ctx e = loop (shift 0 "_" e)
       where
         x' =      loop x
         y' =      loop y
-        t' = fmap (loop) t
+        t' = fmap loop t
     Field r x        ->
         case loop r of
             RecordLit kvs ->
                 case Data.Map.lookup x kvs of
                     Just v  -> loop v
-                    Nothing -> Field (RecordLit (fmap (loop) kvs)) x
+                    Nothing -> Field (RecordLit (fmap loop kvs)) x
             r' -> Field r' x
     Note _ e' -> loop e'
     Embed a -> Embed a
