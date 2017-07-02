@@ -29,7 +29,8 @@ module Dhall
     , natural
     , integer
     , double
-    , text
+    , lazyText
+    , strictText
     , maybe
     , vector
     , GenericInterpret(..)
@@ -331,18 +332,26 @@ double = Type {..}
 
     expected = Double
 
-{-| Decode `Text`
+{-| Decode lazy `Text`
 
->>> input text "\"Test\""
+>>> input lazyText "\"Test\""
 "Test"
 -}
-text :: Type Text
-text = Type {..}
+lazyText :: Type Text
+lazyText = Type {..}
   where
     extract (TextLit t) = pure (Data.Text.Lazy.Builder.toLazyText t)
     extract  _          = empty
 
     expected = Text
+
+{-| Decode strict `Text`
+
+>>> input strictText "\"Test\""
+"Test"
+-}
+strictText :: Type Data.Text.Text
+strictText = fmap Data.Text.Lazy.toStrict lazyText
 
 {-| Decode a `Maybe`
 
@@ -401,7 +410,10 @@ instance Interpret Double where
     autoWith _ = double
 
 instance Interpret Text where
-    autoWith _ = text
+    autoWith _ = lazyText
+
+instance Interpret Data.Text.Text where
+    autoWith _ = strictText
 
 instance Interpret a => Interpret (Maybe a) where
     autoWith opts = maybe (autoWith opts)
