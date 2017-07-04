@@ -32,6 +32,7 @@ module Dhall.Core (
     , subst
     , shift
     , isNormalized
+    , isNormalizedWith
 
     -- * Pretty-printing
     , pretty
@@ -72,6 +73,8 @@ import qualified Data.Vector
 import qualified Data.Vector.Mutable
 import qualified Filesystem.Path.CurrentOS as Filesystem
 import qualified NeatInterpolation
+
+import Debug.Trace
 
 {-| Constants for a pure type system
 
@@ -1132,7 +1135,7 @@ subst _ _ (Embed p) = Embed p
     leave ill-typed sub-expressions unevaluated.
 -}
 normalize ::  Expr s a -> Expr t a
-normalize = normalizeWith id
+normalize = normalizeWith (const Nothing)
 
 
 {-| Reduce an expression to its normal form, performing beta reduction and applying
@@ -1158,7 +1161,7 @@ normalizeWith ctx e0 = loop (shift 0 "_" e0)
  e'' = bimap (\_ -> ()) (\_ -> ()) e0
 
  text = "NormalizeWith.loop (" <> Data.Text.pack (show e'') <> ")"
- loop e =  case ctx e of
+ loop e =  case e of
     Const k -> Const k
     Var v -> Var v
     Lam x _A b -> Lam x _A' b'
@@ -1283,7 +1286,9 @@ normalizeWith ctx e0 = loop (shift 0 "_" e0)
               where
                 just' y = App just y
                 toMaybe = Data.Maybe.listToMaybe . Data.Vector.toList
-            _ -> App f' a'
+            _ ->  case ctx (App f' a') of
+                    Nothing -> App f' a'
+                    Just app' -> loop app'
           where
             a' = loop a
     Let f _ r b -> loop b''
@@ -1466,7 +1471,15 @@ normalizeWith ctx e0 = loop (shift 0 "_" e0)
 
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
 --   polymorphic enough to be used.
-type CtxFun a = forall s. Expr s a -> Expr s a
+type CtxFun a = forall s. Expr s a -> Maybe (Expr s a)
+
+-- | Check if an expression is in a normal form given a context of evaluation.
+--   Unlike `isNormalized`, this will fully normalize and traverse through the expression. 
+--   
+--   It is much more efficient to use `isNormalized`.
+isNormalizedWith :: (Eq s, Eq a) => CtxFun a -> Expr s a -> Bool
+isNormalizedWith ctx e = e == (normalizeWith ctx e)
+
 
 -- | Quickly check if an expression is in normal form
 isNormalized :: Expr s a -> Bool
