@@ -158,6 +158,7 @@ import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
 import qualified Dhall.Core
 import qualified Dhall.Parser
+import qualified Dhall.Context
 import qualified Dhall.TypeCheck
 import qualified Filesystem
 import qualified Filesystem.Path.CurrentOS
@@ -674,7 +675,10 @@ loadDynamic p = do
 
 -- | Load a `Path` as a \"static\" expression (with all imports resolved)
 loadStatic :: Path -> StateT Status IO (Expr Src X)
-loadStatic path = do
+loadStatic = loadStaticWith Dhall.Context.empty
+
+loadStaticWith :: Dhall.Context.Context (Expr Src X) -> Path -> StateT Status IO (Expr Src X)
+loadStaticWith ctx path = do
     paths <- zoom stack State.get
 
     let local (Path (URL url _) _) =
@@ -725,7 +729,7 @@ loadStatic path = do
     -- have already been checked
     if cached
         then return ()
-        else case Dhall.TypeCheck.typeOf expr of
+        else case Dhall.TypeCheck.typeWith ctx expr of
             Left  err -> liftIO (throwIO (Imported (path:paths) err))
             Right _   -> return ()
 
