@@ -103,6 +103,7 @@ module Dhall.Import (
     -- * Import
       exprFromPath
     , load
+    , loadWith
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -738,5 +739,11 @@ loadStaticWith ctx path = do
 -- | Resolve all imports within an expression
 load :: Expr Src Path -> IO (Expr Src X)
 load expr = State.evalStateT (fmap join (traverse loadStatic expr)) status
+  where
+    status = Status [] Map.empty Nothing
+
+-- | Resolve all imports within an expression using a custom typing context
+loadWith :: Dhall.Context.Context (Expr Src X) -> Expr Src Path -> IO (Expr Src X)
+loadWith ctx expr = State.evalStateT (fmap join (traverse (loadStaticWith ctx) expr)) status
   where
     status = Status [] Map.empty Nothing
