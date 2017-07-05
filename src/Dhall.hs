@@ -16,7 +16,6 @@ module Dhall
     (
     -- * Input
       input
-    , rawInput
     , detailed
 
     -- * Types
@@ -34,6 +33,8 @@ module Dhall
     , maybe
     , vector
     , GenericInterpret(..)
+    -- * Miscellaneous
+    , rawInput
 
     -- * Re-exports
     , Natural
