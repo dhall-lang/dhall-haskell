@@ -18,7 +18,7 @@ import           Data.Bifunctor (first)
 import           Data.Text (Text)
 import qualified Data.Text.Lazy
 import qualified Dhall.Core
-import           Dhall.Core (Expr, CtxFun)
+import           Dhall.Core (Expr, Normalizer)
 import qualified Dhall.Context
 import           Dhall.Context (Context)
 import qualified Dhall.Import
@@ -31,7 +31,7 @@ import           Test.Tasty.HUnit
 normalize' :: Expr Src X -> Data.Text.Lazy.Text
 normalize' = Dhall.Core.pretty . Dhall.Core.normalize
 
-normalizeWith' :: CtxFun X -> Expr Src X -> Data.Text.Lazy.Text
+normalizeWith' :: Normalizer X -> Expr Src X -> Data.Text.Lazy.Text
 normalizeWith' ctx = Dhall.Core.pretty . Dhall.Core.normalizeWith ctx
 
 code :: Data.Text.Text -> IO (Expr Src X)
@@ -55,7 +55,7 @@ assertNormalizesTo e expected = do
   normalize' e @?= expected
   where msg = "Given expression is already in normal form"
 
-assertNormalizesToWith :: CtxFun X -> Expr Src X -> Data.Text.Lazy.Text -> IO ()
+assertNormalizesToWith :: Normalizer X -> Expr Src X -> Data.Text.Lazy.Text -> IO ()
 assertNormalizesToWith ctx e expected = do
   assertBool msg (not $ Dhall.Core.isNormalizedWith ctx (first (const ()) e))
   normalizeWith' ctx e @?= expected

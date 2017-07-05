@@ -34,7 +34,7 @@ conversions = testGroup "conversions" [ naturalShow
 customization :: TestTree
 customization = testGroup "customization"
                  [simpleCustomization
-                 ,doubleReduction]
+                 ,nestedReduction]
 
 simpleCustomization :: TestTree
 simpleCustomization = testCase "simpleCustomization" $ do
@@ -45,12 +45,12 @@ simpleCustomization = testCase "simpleCustomization" $ do
   e <- codeWith tyCtx "min (min +11 +12) +8 + +1" 
   assertNormalizesToWith valCtx e "+9"
 
-doubleReduction :: TestTree
-doubleReduction = testCase "doubleReduction" $ do
-  let tyCtx  =  insert "min" (Pi "_" Natural (Pi "_" Natural Natural)) 
-               . insert "fiveorless" (Pi "_" Natural Natural)
-               . insert "wurble" (Pi "_" Natural Integer)
-               $ empty 
+nestedReduction :: TestTree
+nestedReduction = testCase "doubleReduction" $ do
+  minType        <- insert "min"        <$> code "Natural → Natural → Natural"
+  fiveorlessType <- insert "fiveorless" <$> code "Natural → Natural"
+  wurbleType     <- insert "wurble"     <$> code "Natural → Integer"
+  let tyCtx = minType . fiveorlessType . wurbleType $ empty
       valCtx e = case e of
                     (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalLit y)) -> Just (NaturalLit (min x y))
                     (App (Var (V "wurble" 0)) (NaturalLit x)) -> Just

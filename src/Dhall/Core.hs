@@ -28,7 +28,7 @@ module Dhall.Core (
     -- * Normalization
     , normalize
     , normalizeWith
-    , CtxFun
+    , Normalizer
     , subst
     , shift
     , isNormalized
@@ -73,8 +73,6 @@ import qualified Data.Vector
 import qualified Data.Vector.Mutable
 import qualified Filesystem.Path.CurrentOS as Filesystem
 import qualified NeatInterpolation
-
-import Debug.Trace
 
 {-| Constants for a pure type system
 
@@ -1143,14 +1141,17 @@ normalize = normalizeWith (const Nothing)
    
     `normalizeWith` is designed to be used with function `typeWith`. The `typeWith`
     function allows typing of Dhall functions in a custom typing context whereas 
-    `normalizeWith` allows evaluating Dhall expressions in a custom context.
+    `normalizeWith` allows evaluating Dhall expressions in a custom context. 
+
+    To be more precise `normalizeWith` applies the given normalizer when it finds an
+    application term that it cannot reduce by other means.
 
     Note that the context used in normalization will determine the properties of normalization.
     That is, if the functions in custom context are not total then the Dhall language, evaluated
     with those functions is not total either.  
    
 -}
-normalizeWith :: CtxFun a -> Expr s a -> Expr t a
+normalizeWith :: Normalizer a -> Expr s a -> Expr t a
 normalizeWith ctx e0 = loop (shift 0 "_" e0)
  where
     -- This is to avoid a `Show` constraint on the @a@ and @s@ in the type of
@@ -1471,13 +1472,13 @@ normalizeWith ctx e0 = loop (shift 0 "_" e0)
 
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
 --   polymorphic enough to be used.
-type CtxFun a = forall s. Expr s a -> Maybe (Expr s a)
+type Normalizer a = forall s. Expr s a -> Maybe (Expr s a)
 
 -- | Check if an expression is in a normal form given a context of evaluation.
 --   Unlike `isNormalized`, this will fully normalize and traverse through the expression. 
 --   
 --   It is much more efficient to use `isNormalized`.
-isNormalizedWith :: (Eq s, Eq a) => CtxFun a -> Expr s a -> Bool
+isNormalizedWith :: (Eq s, Eq a) => Normalizer a -> Expr s a -> Bool
 isNormalizedWith ctx e = e == (normalizeWith ctx e)
 
 
