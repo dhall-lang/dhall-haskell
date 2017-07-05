@@ -103,6 +103,7 @@ module Dhall.Import (
     -- * Import
       exprFromPath
     , load
+    , loadWith
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -158,6 +159,7 @@ import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
 import qualified Dhall.Core
 import qualified Dhall.Parser
+import qualified Dhall.Context
 import qualified Dhall.TypeCheck
 import qualified Filesystem
 import qualified Filesystem.Path.CurrentOS
@@ -674,7 +676,10 @@ loadDynamic p = do
 
 -- | Load a `Path` as a \"static\" expression (with all imports resolved)
 loadStatic :: Path -> StateT Status IO (Expr Src X)
-loadStatic path = do
+loadStatic = loadStaticWith Dhall.Context.empty
+
+loadStaticWith :: Dhall.Context.Context (Expr Src X) -> Path -> StateT Status IO (Expr Src X)
+loadStaticWith ctx path = do
     paths <- zoom stack State.get
 
     let local (Path (URL url _) _) =
@@ -711,7 +716,8 @@ loadStatic path = do
                         Nothing   -> do
                             let paths' = path:paths
                             zoom stack (State.put paths')
-                            expr'' <- fmap join (traverse loadStatic expr')
+                            expr'' <- fmap join (traverse (loadStaticWith ctx)
+                                                           expr')
                             zoom stack (State.put paths)
                             return expr''
                     return (expr'', False)
@@ -725,7 +731,7 @@ loadStatic path = do
     -- have already been checked
     if cached
         then return ()
-        else case Dhall.TypeCheck.typeOf expr of
+        else case Dhall.TypeCheck.typeWith ctx expr of
             Left  err -> liftIO (throwIO (Imported (path:paths) err))
             Right _   -> return ()
 
@@ -734,5 +740,11 @@ loadStatic path = do
 -- | Resolve all imports within an expression
 load :: Expr Src Path -> IO (Expr Src X)
 load expr = State.evalStateT (fmap join (traverse loadStatic expr)) status
+  where
+    status = Status [] Map.empty Nothing
+
+-- | Resolve all imports within an expression using a custom typing context
+loadWith :: Dhall.Context.Context (Expr Src X) -> Expr Src Path -> IO (Expr Src X)
+loadWith ctx expr = State.evalStateT (fmap join (traverse (loadStaticWith ctx) expr)) status
   where
     status = Status [] Map.empty Nothing
