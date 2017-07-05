@@ -5,15 +5,17 @@
 module Normalization (normalizationTests) where
 
 import           Dhall.Core
+import           Dhall.Context
 import qualified NeatInterpolation
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           Util (code, normalize', assertNormalizesTo, assertNormalized)
+import           Util 
 
 normalizationTests :: TestTree
 normalizationTests = testGroup "normalization" [ constantFolding
                                                , conversions
                                                , fusion
+                                               , customization
                                                ]
 
 constantFolding :: TestTree
@@ -28,6 +30,36 @@ conversions = testGroup "conversions" [ naturalShow
                                       , doubleShow
                                       , naturalToInteger
                                       ]
+
+customization :: TestTree
+customization = testGroup "customization"
+                 [simpleCustomization
+                 ,nestedReduction]
+
+simpleCustomization :: TestTree
+simpleCustomization = testCase "simpleCustomization" $ do
+  let tyCtx  = insert "min" (Pi "_" Natural (Pi "_" Natural Natural)) empty 
+      valCtx e = case e of
+                    (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalLit y)) -> Just (NaturalLit (min x y))
+                    _ -> Nothing
+  e <- codeWith tyCtx "min (min +11 +12) +8 + +1" 
+  assertNormalizesToWith valCtx e "+9"
+
+nestedReduction :: TestTree
+nestedReduction = testCase "doubleReduction" $ do
+  minType        <- insert "min"        <$> code "Natural → Natural → Natural"
+  fiveorlessType <- insert "fiveorless" <$> code "Natural → Natural"
+  wurbleType     <- insert "wurble"     <$> code "Natural → Integer"
+  let tyCtx = minType . fiveorlessType . wurbleType $ empty
+      valCtx e = case e of
+                    (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalLit y)) -> Just (NaturalLit (min x y))
+                    (App (Var (V "wurble" 0)) (NaturalLit x)) -> Just
+                        (App (Var (V "fiveorless" 0)) (NaturalPlus (NaturalLit x) (NaturalLit 2))) 
+                    (App (Var (V "fiveorless" 0)) (NaturalLit x)) -> Just
+                        (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalPlus (NaturalLit 3) (NaturalLit 2)))
+                    _ -> Nothing
+  e <- codeWith tyCtx "wurble +6"
+  assertNormalizesToWith valCtx e "+5"
 
 naturalPlus :: TestTree
 naturalPlus = testCase "natural plus" $ do

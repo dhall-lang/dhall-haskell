@@ -27,9 +27,12 @@ module Dhall.Core (
 
     -- * Normalization
     , normalize
+    , normalizeWith
+    , Normalizer
     , subst
     , shift
     , isNormalized
+    , isNormalizedWith
 
     -- * Pretty-printing
     , pretty
@@ -1129,38 +1132,67 @@ subst _ _ (Embed p) = Embed p
     However, `normalize` will not fail if the expression is ill-typed and will
     leave ill-typed sub-expressions unevaluated.
 -}
-normalize :: Expr s a -> Expr t a
-normalize e = case e of
+normalize ::  Expr s a -> Expr t a
+normalize = normalizeWith (const Nothing)
+
+
+{-| Reduce an expression to its normal form, performing beta reduction and applying
+    any custom definitions.
+   
+    `normalizeWith` is designed to be used with function `typeWith`. The `typeWith`
+    function allows typing of Dhall functions in a custom typing context whereas 
+    `normalizeWith` allows evaluating Dhall expressions in a custom context. 
+
+    To be more precise `normalizeWith` applies the given normalizer when it finds an
+    application term that it cannot reduce by other means.
+
+    Note that the context used in normalization will determine the properties of normalization.
+    That is, if the functions in custom context are not total then the Dhall language, evaluated
+    with those functions is not total either.  
+   
+-}
+normalizeWith :: Normalizer a -> Expr s a -> Expr t a
+normalizeWith ctx e0 = loop (shift 0 "_" e0)
+ where
+    -- This is to avoid a `Show` constraint on the @a@ and @s@ in the type of
+    -- `loop`.  In theory, this might change a failing repro case into
+    -- a successful one, but the risk of that is low enough to not warrant
+    -- the `Show` constraint.  I care more about proving at the type level
+    -- that the @a@ and @s@ type parameters are never used
+ e'' = bimap (\_ -> ()) (\_ -> ()) e0
+
+ text = "NormalizeWith.loop (" <> Data.Text.pack (show e'') <> ")"
+ loop e =  case e of
     Const k -> Const k
     Var v -> Var v
     Lam x _A b -> Lam x _A' b'
       where
-        _A' = normalize _A
-        b'  = normalize b
+        _A' = loop _A
+        b'  = loop b
     Pi  x _A _B -> Pi  x _A' _B'
       where
-        _A' = normalize _A
-        _B' = normalize _B
-    App f a -> case normalize f of
-        Lam x _A b -> normalize b''  -- Beta reduce
+        _A' = loop _A
+        _B' = loop _B
+    App f a -> case loop f of
+        Lam x _A b -> loop b''  -- Beta reduce
           where
             a'  = shift   1  (V x 0) a
             b'  = subst (V x 0) a' b
             b'' = shift (-1) (V x 0) b'
         f' -> case App f' a' of
             -- fold/build fusion for `List`
-            App (App ListBuild _) (App (App ListFold _) e') -> normalize e'
-            App (App ListFold _) (App (App ListBuild _) e') -> normalize e'
+            App (App ListBuild _) (App (App ListFold _) e') -> loop e'
+            App (App ListFold _) (App (App ListBuild _) e') -> loop e'
             -- fold/build fusion for `Natural`
-            App NaturalBuild (App NaturalFold e') -> normalize e'
-            App NaturalFold (App NaturalBuild e') -> normalize e'
+            App NaturalBuild (App NaturalFold e') -> loop e'
+            App NaturalFold (App NaturalBuild e') -> loop e'
 
             -- fold/build fusion for `Optional`
-            App (App OptionalBuild _) (App (App OptionalFold _) e') -> normalize e'
-            App (App OptionalFold _) (App (App OptionalBuild _) e') -> normalize e'
+            App (App OptionalBuild _) (App (App OptionalFold _) e') -> loop e'
+            App (App OptionalFold _) (App (App OptionalBuild _) e') -> loop e'
 
             App (App (App (App NaturalFold (NaturalLit n0)) _) succ') zero ->
-                normalize (go n0)
+                loop (go n0)
               where
                 go !0 = zero
                 go !n = App succ' (go (n - 1))
@@ -1169,7 +1201,7 @@ normalize e = case e of
                 | otherwise -> App f' a'
               where
                 labeled =
-                    normalize (App (App (App k Natural) "Succ") "Zero")
+                    loop (App (App (App k Natural) "Succ") "Zero")
 
                 n = go 0 labeled
                   where
@@ -1192,7 +1224,7 @@ normalize e = case e of
                 | check     -> OptionalLit t k'
                 | otherwise -> App f' a'
               where
-                labeled = normalize (App (App (App k (App Optional t)) "Just") "Nothing")
+                labeled = loop (App (App (App k (App Optional t)) "Just") "Nothing")
 
                 k' = go labeled
                   where
@@ -1209,7 +1241,7 @@ normalize e = case e of
                 | otherwise -> App f' a'
               where
                 labeled =
-                    normalize (App (App (App k (App List t)) "Cons") "Nil")
+                    loop (App (App (App k (App List t)) "Cons") "Nil")
 
                 k' cons nil = go labeled
                   where
@@ -1222,21 +1254,21 @@ normalize e = case e of
                     go (Var "Nil")                   = True
                     go  _                            = False
             App (App (App (App (App ListFold _) (ListLit _ xs)) _) cons) nil ->
-                normalize (Data.Vector.foldr cons' nil xs)
+                loop (Data.Vector.foldr cons' nil xs)
               where
                 cons' y ys = App (App cons y) ys
             App (App ListLength _) (ListLit _ ys) ->
                 NaturalLit (fromIntegral (Data.Vector.length ys))
             App (App ListHead t) (ListLit _ ys) ->
-                normalize (OptionalLit t (Data.Vector.take 1 ys))
+                loop (OptionalLit t (Data.Vector.take 1 ys))
             App (App ListLast t) (ListLit _ ys) ->
-                normalize (OptionalLit t y)
+                loop (OptionalLit t y)
               where
                 y = if Data.Vector.null ys
                     then Data.Vector.empty
                     else Data.Vector.singleton (Data.Vector.last ys)
             App (App ListIndexed t) (ListLit _ xs) ->
-                normalize (ListLit (Just t') (fmap adapt (Data.Vector.indexed xs)))
+                loop (ListLit (Just t') (fmap adapt (Data.Vector.indexed xs)))
               where
                 t' = Record (Data.Map.fromList kts)
                   where
@@ -1249,21 +1281,23 @@ normalize e = case e of
                           , ("value", x)
                           ]
             App (App ListReverse t) (ListLit _ xs) ->
-                normalize (ListLit (Just t) (Data.Vector.reverse xs))
+                loop (ListLit (Just t) (Data.Vector.reverse xs))
             App (App (App (App (App OptionalFold _) (OptionalLit _ xs)) _) just) nothing ->
-                normalize (maybe nothing just' (toMaybe xs))
+                loop (maybe nothing just' (toMaybe xs))
               where
                 just' y = App just y
                 toMaybe = Data.Maybe.listToMaybe . Data.Vector.toList
-            _ -> App f' a'
+            _ ->  case ctx (App f' a') of
+                    Nothing -> App f' a'
+                    Just app' -> loop app'
           where
-            a' = normalize a
-    Let f _ r b -> normalize b''
+            a' = loop a
+    Let f _ r b -> loop b''
       where
         r'  = shift   1  (V f 0) r
         b'  = subst (V f 0) r' b
         b'' = shift (-1) (V f 0) b'
-    Annot x _ -> normalize x
+    Annot x _ -> loop x
     Bool -> Bool
     BoolLit b -> BoolLit b
     BoolAnd x y ->
@@ -1274,8 +1308,8 @@ normalize e = case e of
                     _ -> BoolAnd x' y'
             _ -> BoolAnd x' y'
       where
-        x' = normalize x
-        y' = normalize y
+        x' = loop x
+        y' = loop y
     BoolOr x y ->
         case x' of
             BoolLit xn ->
@@ -1284,8 +1318,8 @@ normalize e = case e of
                     _ -> BoolOr x' y'
             _ -> BoolOr x' y'
       where
-        x' = normalize x
-        y' = normalize y
+        x' = loop x
+        y' = loop y
     BoolEQ x y ->
         case x' of
             BoolLit xn ->
@@ -1294,8 +1328,8 @@ normalize e = case e of
                     _ -> BoolEQ x' y'
             _ -> BoolEQ x' y'
       where
-        x' = normalize x
-        y' = normalize y
+        x' = loop x
+        y' = loop y
     BoolNE x y ->
         case x' of
             BoolLit xn ->
@@ -1304,15 +1338,15 @@ normalize e = case e of
                     _ -> BoolNE x' y'
             _ -> BoolNE x' y'
       where
-        x' = normalize x
-        y' = normalize y
-    BoolIf b true false -> case normalize b of
+        x' = loop x
+        y' = loop y
+    BoolIf b true false -> case loop b of
         BoolLit True  -> true'
         BoolLit False -> false'
         b'            -> BoolIf b' true' false'
       where
-        true'  = normalize true
-        false' = normalize false
+        true'  = loop true
+        false' = loop false
     Natural -> Natural
     NaturalLit n -> NaturalLit n
     NaturalFold -> NaturalFold
@@ -1330,8 +1364,8 @@ normalize e = case e of
                     _ -> NaturalPlus x' y'
             _ -> NaturalPlus x' y'
       where
-        x' = normalize x
-        y' = normalize y
+        x' = loop x
+        y' = loop y
     NaturalTimes x y ->
         case x' of
             NaturalLit xn ->
@@ -1340,8 +1374,8 @@ normalize e = case e of
                     _ -> NaturalTimes x' y'
             _ -> NaturalTimes x' y'
       where
-        x' = normalize x
-        y' = normalize y
+        x' = loop x
+        y' = loop y
     Integer -> Integer
     IntegerLit n -> IntegerLit n
     IntegerShow -> IntegerShow
@@ -1358,13 +1392,13 @@ normalize e = case e of
                     _ -> TextAppend x' y'
             _ -> TextAppend x' y'
       where
-        x' = normalize x
-        y' = normalize y
+        x' = loop x
+        y' = loop y
     List -> List
     ListLit t es -> ListLit t' es'
       where
-        t'  = fmap normalize t
-        es' = fmap normalize es
+        t'  = fmap loop t
+        es' = fmap loop es
     ListBuild -> ListBuild
     ListFold -> ListFold
     ListLength -> ListLength
@@ -1375,75 +1409,78 @@ normalize e = case e of
     Optional -> Optional
     OptionalLit t es -> OptionalLit t' es'
       where
-        t'  =      normalize t
-        es' = fmap normalize es
+        t'  =      loop t
+        es' = fmap loop es
     OptionalFold -> OptionalFold
     OptionalBuild -> OptionalBuild
     Record kts -> Record kts'
       where
-        kts' = fmap normalize kts
+        kts' = fmap loop kts
     RecordLit kvs -> RecordLit kvs'
       where
-        kvs' = fmap normalize kvs
+        kvs' = fmap loop kvs
     Union kts -> Union kts'
       where
-        kts' = fmap normalize kts
+        kts' = fmap loop kts
     UnionLit k v kvs -> UnionLit k v' kvs'
       where
-        v'   =      normalize v
-        kvs' = fmap normalize kvs
+        v'   =      loop v
+        kvs' = fmap loop kvs
     Combine x0 y0 ->
         let combine x y = case x of
                 RecordLit kvsX -> case y of
                     RecordLit kvsY ->
                         let kvs = Data.Map.unionWith combine kvsX kvsY
-                        in  RecordLit (fmap normalize kvs)
+                        in  RecordLit (fmap loop kvs)
                     _ -> Combine x y
                 _ -> Combine x y
-        in  combine (normalize x0) (normalize y0)
+        in  combine (loop x0) (loop y0)
     Prefer x y ->
         case x' of
             RecordLit kvsX ->
                 case y' of
                     RecordLit kvsY ->
-                        RecordLit (fmap normalize (Data.Map.union kvsY kvsX))
+                        RecordLit (fmap loop (Data.Map.union kvsY kvsX))
                     _ -> Prefer x' y'
             _ -> Prefer x' y'
       where
-        x' = normalize x
-        y' = normalize y
+        x' = loop x
+        y' = loop y
     Merge x y t      ->
         case x' of
             RecordLit kvsX ->
                 case y' of
                     UnionLit kY vY _ ->
                         case Data.Map.lookup kY kvsX of
-                            Just vX -> normalize (App vX vY)
+                            Just vX -> loop (App vX vY)
                             Nothing -> Merge x' y' t'
                     _ -> Merge x' y' t'
             _ -> Merge x' y' t'
       where
-        x' =      normalize x
-        y' =      normalize y
-        t' = fmap normalize t
+        x' =      loop x
+        y' =      loop y
+        t' = fmap loop t
     Field r x        ->
-        case normalize r of
+        case loop r of
             RecordLit kvs ->
                 case Data.Map.lookup x kvs of
-                    Just v  -> normalize v
-                    Nothing -> Field (RecordLit (fmap normalize kvs)) x
+                    Just v  -> loop v
+                    Nothing -> Field (RecordLit (fmap loop kvs)) x
             r' -> Field r' x
-    Note _ e' -> normalize e'
+    Note _ e' -> loop e'
     Embed a -> Embed a
-  where
-    -- This is to avoid a `Show` constraint on the @a@ and @s@ in the type of
-    -- `normalize`.  In theory, this might change a failing repro case into
-    -- a successful one, but the risk of that is low enough to not warrant
-    -- the `Show` constraint.  I care more about proving at the type level
-    -- that the @a@ and @s@ type parameters are never used
-    e'' = bimap (\_ -> ()) (\_ -> ()) e
 
-    text = "normalize (" <> Data.Text.pack (show e'') <> ")"
+-- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
+--   polymorphic enough to be used.
+type Normalizer a = forall s. Expr s a -> Maybe (Expr s a)
+
+-- | Check if an expression is in a normal form given a context of evaluation.
+--   Unlike `isNormalized`, this will fully normalize and traverse through the expression. 
+--   
+--   It is much more efficient to use `isNormalized`.
+isNormalizedWith :: (Eq s, Eq a) => Normalizer a -> Expr s a -> Bool
+isNormalizedWith ctx e = e == (normalizeWith ctx e)
+
 
 -- | Quickly check if an expression is in normal form
 isNormalized :: Expr s a -> Bool
