@@ -34,6 +34,8 @@ module Dhall
     , maybe
     , vector
     , GenericInterpret(..)
+    -- * Miscellaneous
+    , rawInput
 
     -- * Re-exports
     , Natural
@@ -42,7 +44,7 @@ module Dhall
     , Generic
     ) where
 
-import Control.Applicative (empty, liftA2, (<|>))
+import Control.Applicative (empty, liftA2, (<|>), Alternative)
 import Control.Exception (Exception)
 import Data.Monoid ((<>))
 import Data.Text.Buildable (Buildable(..))
@@ -141,6 +143,27 @@ input (Type {..}) txt = do
     case extract (Dhall.Core.normalize expr') of
         Just x  -> return x
         Nothing -> Control.Exception.throwIO InvalidType
+
+-- | Use this function to extract Haskell values directly from Dhall AST.
+--   The intended use case is to allow easy extraction of Dhall values for
+--   making the function `Dhall.Core.normalizeWith` easier to use.
+--
+--   For other use cases, use `input` from `Dhall` module. It will give you
+--   a much better user experience.
+rawInput
+    :: Alternative f 
+    => Type a
+    -- ^ The type of value to decode from Dhall to Haskell
+    -> Expr s X
+    -- ^ a closed form Dhall program, which evaluates to the expected type
+    -> f a
+    -- ^ The decoded value in Haskell
+rawInput (Type {..}) expr = do
+    case extract (Dhall.Core.normalize expr) of
+        Just x  -> pure x
+        Nothing -> empty
+
+
 
 {-| Use this to provide more detailed error messages
 
