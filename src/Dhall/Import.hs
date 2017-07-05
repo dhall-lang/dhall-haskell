@@ -716,7 +716,8 @@ loadStaticWith ctx path = do
                         Nothing   -> do
                             let paths' = path:paths
                             zoom stack (State.put paths')
-                            expr'' <- fmap join (traverse loadStatic expr')
+                            expr'' <- fmap join (traverse (loadStaticWith ctx)
+                                                           expr')
                             zoom stack (State.put paths)
                             return expr''
                     return (expr'', False)
