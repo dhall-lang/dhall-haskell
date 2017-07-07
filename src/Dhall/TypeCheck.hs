@@ -350,17 +350,16 @@ typeWith _      Text              = do
     return (Const Type)
 typeWith _     (TextLit _       ) = do
     return Text
-typeWith ctx e@(TextAppend l r  ) = do
+typeWith ctx e@(Append l r      ) = do
     tl <- fmap Dhall.Core.normalize (typeWith ctx l)
-    case tl of
-        Text -> return ()
-        _    -> Left (TypeError ctx e (CantTextAppend l tl))
-
     tr <- fmap Dhall.Core.normalize (typeWith ctx r)
-    case tr of
-        Text -> return ()
-        _    -> Left (TypeError ctx e (CantTextAppend r tr))
-    return Text
+    case (tl, tr) of
+        (Text, Text) -> return Text
+        (App List el, App List er) -> do
+            if propEqual el er
+                then return (App List el)
+                else Left (TypeError ctx e (ListAppendMismatch el er))
+        _ -> Left (TypeError ctx e (CantAppend tl tr))
 typeWith _      List              = do
     return (Pi "_" (Const Type) (Const Type))
 typeWith ctx e@(ListLit  Nothing  xs) = do
@@ -681,7 +680,8 @@ data TypeMessage s
     | CantOr (Expr s X) (Expr s X)
     | CantEQ (Expr s X) (Expr s X)
     | CantNE (Expr s X) (Expr s X)
-    | CantTextAppend (Expr s X) (Expr s X)
+    | CantAppend (Expr s X) (Expr s X)
+    | ListAppendMismatch (Expr s X) (Expr s X)
     | CantAdd (Expr s X) (Expr s X)
     | CantMultiply (Expr s X) (Expr s X)
     | NoDependentLet (Expr s X) (Expr s X)
@@ -2853,44 +2853,99 @@ prettyTypeMessage (CantEQ expr0 expr1) =
 prettyTypeMessage (CantNE expr0 expr1) =
         buildBooleanOperator "/=" expr0 expr1
 
-prettyTypeMessage (CantTextAppend expr0 expr1) = ErrorMessages {..}
+prettyTypeMessage (CantAppend expr0 expr1) = ErrorMessages {..}
   where
-    short = "❰++❱ only works on ❰Text❱"
+    short = "❰++❱ can only append values that are both ❰Text❱ or both ❰List❱s"
 
     long =
         Builder.fromText [NeatInterpolation.text|
-Explanation: The ❰++❱ operator expects two arguments that have type ❰Text❱
+Explanation: The ❰++❱ operator expects two arguments that are both ❰Text❱ or
+❰List❱s
 
 For example, this is a valid use of ❰++❱: 
 
 
     ┌────────────────┐
-    │ "ABC" ++ "DEF" │
+    │ "ABC" ++ "DEF" │  Valid: Both arguments have type ❰Text❱
     └────────────────┘
 
 
-Some common reasons why you might get this error:
-
-● You might have thought that ❰++❱ was the operator to combine two lists:
+... and so is this:
 
 
     ┌────────────────────────┐
-    │ [1, 2, 3] ++ [4, 5, 6] │  Not valid
+    │ [1, 2, 3] ++ [4, 5, 6] │  Valid: Both arguments have type ❰List Integer❱
     └────────────────────────┘
 
 
-  The Dhall programming language does not provide a built-in operator for
-  combining two lists
+However, this is $_NOT legal:
+
+
+      This has type ❰List Integer❱
+      ⇩
+    ┌────────────────────┐
+    │ [1, 2, 3] ++ "ABC" │  Invalid: You cannot append different types of values
+    └────────────────────┘
+                   ⇧
+                   This has type ❰Text❱
+
 
 ────────────────────────────────────────────────────────────────────────────────
 
-You provided this argument:
+The left argument of ❰++❱ has this type:
 
 ↳ $txt0
 
-... which does not have type ❰Text❱ but instead has type:
+... whereas the right argument of ❰++❱ has this type:
 
 ↳ $txt1
+
+... which is not the same type
+|]
+      where
+        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+
+prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
+  where
+    short = "You cannot append ❰List❱s that have different element types"
+
+    long =
+        Builder.fromText [NeatInterpolation.text|
+Explanation: You can append two ❰List❱s with the ❰++❱ operator if they both
+have the same element type
+
+For example, this is a valid use of ❰++❱: 
+
+
+    ┌────────────────────────┐
+    │ [1, 2, 3] ++ [4, 5, 6] │  Valid: Both ❰List❱s have ❰Integer❱ elements
+    └────────────────────────┘
+
+
+However, this is $_NOT legal:
+
+
+      This has type ❰List Integer❱
+      ⇩
+    ┌────────────────────────────┐
+    │ [1, 2, 3] ++ [False, True] │  Invalid: The element types do not match
+    └────────────────────────────┘
+                   ⇧
+                   This has type ❰List Bool❱
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+The left argument of ❰++❱ has this type:
+
+↳ $txt0
+
+... whereas the right argument of ❰++❱ has this type:
+
+↳ $txt1
+
+... which is not the same type
 |]
       where
         txt0 = Text.toStrict (Dhall.Core.pretty expr0)

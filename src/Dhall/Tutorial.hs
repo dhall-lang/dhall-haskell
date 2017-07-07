@@ -108,7 +108,7 @@ module Dhall.Tutorial (
     -- $text
 
     -- *** @(++)@
-    -- $textAppend
+    -- $append
 
     -- ** @List@
     -- $list
@@ -1780,7 +1780,7 @@ import Dhall
 --
 -- The only thing you can do with @Text@ values is concatenate them
 
--- $textAppend
+-- $append
 --
 -- Example:
 --
@@ -1791,11 +1791,22 @@ import Dhall
 -- > 
 -- > "Hello, world!"
 --
+-- > $ dhall
+-- > [1, 2, 3] ++ [4, 5, 6]
+-- >
+-- > List Integer
+-- >
+-- > [1, 2, 3, 4, 5, 6]
+--
 -- Type:
 --
 -- > Γ ⊢ x : Text   Γ ⊢ y : Text
 -- > ───────────────────────────
--- > Γ ⊢ x && y : Text
+-- > Γ ⊢ x ++ y : Text
+-- > 
+-- > Γ ⊢ x : List a  Γ ⊢ y : List a
+-- > ───────────────────────────
+-- > Γ ⊢ x ++ y : List a
 --
 -- Rules:
 --
@@ -1804,6 +1815,10 @@ import Dhall
 -- > x ++ "" = x
 -- > 
 -- > "" ++ x = x
+-- >
+-- > x ++ ([] : List a) = x
+-- >
+-- > ([] : List a) ++ x = x
 
 -- $list
 --
