@@ -19,7 +19,7 @@ module Dhall
     , detailed
 
     -- * Types
-    , Type
+    , Type(..)
     , Interpret(..)
     , InvalidType(..)
     , auto
@@ -299,7 +299,9 @@ detailed =
 -}
 data Type a = Type
     { extract  :: Expr X X -> Maybe a
+    -- ^ Extracts Haskell value from the Dhall expression
     , expected :: Expr Src X
+    -- ^ Dhall type of the Haskell value
     }
     deriving (Functor)
 
