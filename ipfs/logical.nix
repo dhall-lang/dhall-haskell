@@ -5,21 +5,14 @@
           { name = "pin-${name}";
 
             value = {
-              path = [ pkgs.ipfs pkgs.utillinux ];
+              path = [ pkgs.bash ];
 
               script = ''
-                if [ ! -e ~/.ipfs ]; then
-                    ipfs init
-                fi
-                flock ~/.ipfs/repo.lock2 ipfs add --quiet -w --recursive ${path}
+                IPFS_PATH="/var/lib/ipfs/.ipfs" ${pkgs.ipfs}/bin/ipfs add --quiet -w --recursive ${path}
               '';
 
               serviceConfig = {
-                Group = "ipfs";
-
                 Type = "oneshot";
-
-                User = "ipfs";
               };
 
               wantedBy = [ "multi-user.target" ];
