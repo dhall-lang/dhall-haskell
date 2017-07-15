@@ -187,7 +187,7 @@ doubleQuoteLiteral embedded = do
         a <- exprA embedded
         _ <- Text.Parser.Char.char '}'
         b <- go
-        return (Append a b)
+        return (TextAppend a b)
 
     go2 = do
         _ <- Text.Parser.Char.text "''${"
@@ -195,10 +195,10 @@ doubleQuoteLiteral embedded = do
         let e = case b of
                 TextLit cs ->
                     TextLit ("${" <> cs)
-                Append (TextLit cs) d ->
-                    Append (TextLit ("${" <> cs)) d
+                TextAppend (TextLit cs) d ->
+                    TextAppend (TextLit ("${" <> cs)) d
                 _ ->
-                    Append (TextLit "${") b
+                    TextAppend (TextLit "${") b
         return e
 
     go3 = do
@@ -207,10 +207,10 @@ doubleQuoteLiteral embedded = do
         let e = case b of
                 TextLit cs ->
                     TextLit (build a <> cs)
-                Append (TextLit cs) d ->
-                    Append (TextLit (build a <> cs)) d
+                TextAppend (TextLit cs) d ->
+                    TextAppend (TextLit (build a <> cs)) d
                 _ ->
-                    Append (TextLit (build a)) b
+                    TextAppend (TextLit (build a)) b
         return e
 
 doubleSingleQuoteString :: Show a => Parser a -> Parser (Expr Src a)
@@ -249,10 +249,10 @@ doubleSingleQuoteString embedded = do
                 []   -> []
                 l:ls -> l:map (Data.Text.Lazy.drop shortestIndent) ls
 
-    let process trim (Append (TextLit t) e) =
-            Append (TextLit (trim t)) (process trim1 e)
-        process _    (Append e0 e1) =
-            Append e0 (process trim1 e1)
+    let process trim (TextAppend (TextLit t) e) =
+            TextAppend (TextLit (trim t)) (process trim1 e)
+        process _    (TextAppend e0 e1) =
+            TextAppend e0 (process trim1 e1)
         process trim (TextLit t) =
             TextLit (trim t)
         process _     e =
@@ -263,10 +263,10 @@ doubleSingleQuoteString embedded = do
     -- This treats variable interpolation as breaking leading whitespace for the
     -- purposes of computing the shortest leading whitespace.  The "${VAR}"
     -- could really be any text that breaks whitespace
-    concatFragments (Append (TextLit t) e) = t        <> concatFragments e
-    concatFragments (Append  _          e) = "${VAR}" <> concatFragments e
-    concatFragments (TextLit t)            = t
-    concatFragments  _                     = mempty
+    concatFragments (TextAppend (TextLit t) e) = t        <> concatFragments e
+    concatFragments (TextAppend  _          e) = "${VAR}" <> concatFragments e
+    concatFragments (TextLit t)                = t
+    concatFragments  _                         = mempty
 
     p0 = do
         _ <- Text.Parser.Char.string "''"
@@ -285,10 +285,10 @@ doubleSingleQuoteString embedded = do
         let s4 = case s1 of
                 TextLit s2 ->
                     TextLit ("''" <> s2)
-                Append (TextLit s2) s3 ->
-                    Append (TextLit ("''" <> s2)) s3
+                TextAppend (TextLit s2) s3 ->
+                    TextAppend (TextLit ("''" <> s2)) s3
                 _ ->
-                    Append (TextLit "''") s1
+                    TextAppend (TextLit "''") s1
         return s4
 
     p3 = do
@@ -297,10 +297,10 @@ doubleSingleQuoteString embedded = do
         let s4 = case s1 of
                 TextLit s2 ->
                     TextLit ("${" <> s2)
-                Append (TextLit s2) s3 ->
-                    Append (TextLit ("${" <> s2)) s3
+                TextAppend (TextLit s2) s3 ->
+                    TextAppend (TextLit ("${" <> s2)) s3
                 _ ->
-                    Append (TextLit "${") s1
+                    TextAppend (TextLit "${") s1
         return s4
 
     p4 = do
@@ -313,9 +313,9 @@ doubleSingleQuoteString embedded = do
         let s4 = case s1 of
                 TextLit s2 ->
                     TextLit (build s0 <> s2)
-                Append (TextLit s2) s3 ->
-                    Append (TextLit (build s0 <> s2)) s3
-                _ -> Append (TextLit (build s0)) s1
+                TextAppend (TextLit s2) s3 ->
+                    TextAppend (TextLit (build s0 <> s2)) s3
+                _ -> TextAppend (TextLit (build s0)) s1
         return s4
 
     p6 = do
@@ -324,7 +324,7 @@ doubleSingleQuoteString embedded = do
         s1 <- exprA embedded
         _  <- Text.Parser.Char.char '}'
         s3 <- p1
-        return (Append s1 s3)
+        return (TextAppend s1 s3)
 
 lambda :: Parser ()
 lambda = symbol "\\" <|> symbol "λ"
@@ -480,7 +480,7 @@ exprC embedded = exprC0
 
     exprC0 = chain  exprC1          (symbol "||") BoolOr       exprC0
     exprC1 = chain  exprC2          (symbol "+" ) NaturalPlus  exprC1
-    exprC2 = chain  exprC3          (symbol "++") Append       exprC2
+    exprC2 = chain  exprC3          (symbol "++") TextAppend   exprC2
     exprC3 = chain  exprC4          (symbol "&&") BoolAnd      exprC3
     exprC4 = chain  exprC5           combine      Combine      exprC4
     exprC5 = chain  exprC6           prefer       Prefer       exprC5
