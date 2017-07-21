@@ -34,6 +34,9 @@ module Dhall
     , maybe
     , vector
     , GenericInterpret(..)
+
+    , Inject(..)
+
     -- * Miscellaneous
     , rawInput
 
@@ -298,7 +301,7 @@ detailed =
 > input :: Type a -> Text -> IO a
 -}
 data Type a = Type
-    { extract  :: Expr X X -> Maybe a
+    { extract  :: Expr Src X -> Maybe a
     -- ^ Extracts Haskell value from the Dhall expression
     , expected :: Expr Src X
     -- ^ Dhall type of the Haskell value
@@ -445,6 +448,19 @@ instance Interpret a => Interpret (Maybe a) where
 
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
+
+instance (Inject a, Interpret b) => Interpret (a -> b) where
+    autoWith opts = Type extractOut expectedOut
+      where
+        extractOut e = Just (\i -> case extractIn (Dhall.Core.normalize (App e (embed i))) of
+            Just o  -> o
+            Nothing -> error "You cannot decode a function if it does not have the correct type" )
+
+        expectedOut = Pi "_" declared expectedIn
+
+        InputType {..} = inject
+
+        Type extractIn expectedIn = autoWith opts
 
 {-| Use the default options for interpreting a configuration file
 
@@ -604,3 +620,93 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
             key = fieldModifier (Data.Text.Lazy.pack (selName n))
 
         Type extract' expected' = autoWith opts
+
+{-| An @(InputType a)@ represents a way to marshal a value of type @\'a\'@ from
+    Haskell into Dhall
+-}
+data InputType a = InputType
+    { embed    :: a -> Expr Src X
+    -- ^ Embeds a Haskell value as a Dhall expression
+    , declared :: Expr Src X
+    -- ^ Dhall type of the Haskell value
+    }
+
+{-| This class is used by `Interpret` instance for functions:
+
+> instance (Inject a, Interpret b) => Interpret (a -> b)
+
+    You can convert Dhall functions with "simple" inputs (i.e. instances of this
+    class) into Haskell functions.  This works by:
+
+    * Marshaling the input to the Haskell function into a Dhall expression (i.e.
+      @x :: Expr Src X@)
+    * Applying the Dhall function (i.e. @f :: Expr Src X@) to the Dhall input
+      (i.e. @App f x@)
+    * Normalizing the syntax tree (i.e. @normalize (App f x)@)
+    * Marshaling the resulting Dhall expression back into a Haskell value
+-}
+class Inject a where
+    inject :: InputType a
+
+instance Inject Bool where
+    inject = InputType {..}
+      where
+        embed = BoolLit
+
+        declared = Bool
+
+instance Inject Text where
+    inject = InputType {..}
+      where
+        embed text = TextLit (Data.Text.Lazy.Builder.fromLazyText text)
+
+        declared = Text
+
+instance Inject Data.Text.Text where
+    inject = InputType {..}
+      where
+        embed text = TextLit (Data.Text.Lazy.Builder.fromText text)
+
+        declared = Text
+
+instance Inject Natural where
+    inject = InputType {..}
+      where
+        embed = NaturalLit
+
+        declared = Natural
+
+instance Inject Integer where
+    inject = InputType {..}
+      where
+        embed = IntegerLit
+
+        declared = Integer
+
+instance Inject Double where
+    inject = InputType {..}
+      where
+        embed = DoubleLit
+
+        declared = Double
+
+instance Inject a => Inject (Maybe a) where
+    inject = InputType embedOut declaredOut
+      where
+        embedOut (Just x) =
+            OptionalLit declaredIn (Data.Vector.singleton (embedIn x))
+        embedOut Nothing =
+            OptionalLit declaredIn  Data.Vector.empty
+
+        InputType embedIn declaredIn = inject
+
+        declaredOut = App Optional declaredIn
+
+instance Inject a => Inject (Vector a) where
+    inject = InputType embedOut declaredOut
+      where
+        embedOut xs = ListLit (Just declaredIn) (fmap embedIn xs)
+
+        declaredOut = App List declaredIn
+
+        InputType embedIn declaredIn = inject
