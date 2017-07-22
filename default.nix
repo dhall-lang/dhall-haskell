@@ -1,6 +1,6 @@
 { mkDerivation, ansi-wl-pprint, base, bytestring, case-insensitive
-, charset, containers, http-client, http-client-tls, lens
-, neat-interpolation, optparse-generic, parsers, stdenv
+, charset, containers, contravariant, http-client, http-client-tls
+, lens, neat-interpolation, optparse-generic, parsers, stdenv
 , system-fileio, system-filepath, tasty, tasty-hunit, text
 , text-format, transformers, trifecta, unordered-containers, vector
 }:
@@ -12,8 +12,8 @@ mkDerivation {
   isExecutable = true;
   libraryHaskellDepends = [
     ansi-wl-pprint base bytestring case-insensitive charset containers
-    http-client http-client-tls lens neat-interpolation parsers
-    system-fileio system-filepath text text-format transformers
+    contravariant http-client http-client-tls lens neat-interpolation
+    parsers system-fileio system-filepath text text-format transformers
     trifecta unordered-containers vector
   ];
   executableHaskellDepends = [ base optparse-generic text trifecta ];

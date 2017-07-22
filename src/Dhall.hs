@@ -34,6 +34,10 @@ module Dhall
     , maybe
     , vector
     , GenericInterpret(..)
+
+    , Inject(..)
+    , inject
+
     -- * Miscellaneous
     , rawInput
 
@@ -46,6 +50,7 @@ module Dhall
 
 import Control.Applicative (empty, liftA2, (<|>), Alternative)
 import Control.Exception (Exception)
+import Data.Functor.Contravariant (Contravariant(..))
 import Data.Monoid ((<>))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
@@ -298,7 +303,7 @@ detailed =
 > input :: Type a -> Text -> IO a
 -}
 data Type a = Type
-    { extract  :: Expr X X -> Maybe a
+    { extract  :: Expr Src X -> Maybe a
     -- ^ Extracts Haskell value from the Dhall expression
     , expected :: Expr Src X
     -- ^ Dhall type of the Haskell value
@@ -445,6 +450,19 @@ instance Interpret a => Interpret (Maybe a) where
 
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
+
+instance (Inject a, Interpret b) => Interpret (a -> b) where
+    autoWith opts = Type extractOut expectedOut
+      where
+        extractOut e = Just (\i -> case extractIn (Dhall.Core.normalize (App e (embed i))) of
+            Just o  -> o
+            Nothing -> error "Interpret: You cannot decode a function if it does not have the correct type" )
+
+        expectedOut = Pi "_" declared expectedIn
+
+        InputType {..} = inject
+
+        Type extractIn expectedIn = autoWith opts
 
 {-| Use the default options for interpreting a configuration file
 
@@ -604,3 +622,231 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
             key = fieldModifier (Data.Text.Lazy.pack (selName n))
 
         Type extract' expected' = autoWith opts
+
+{-| An @(InputType a)@ represents a way to marshal a value of type @\'a\'@ from
+    Haskell into Dhall
+-}
+data InputType a = InputType
+    { embed    :: a -> Expr Src X
+    -- ^ Embeds a Haskell value as a Dhall expression
+    , declared :: Expr Src X
+    -- ^ Dhall type of the Haskell value
+    }
+
+instance Contravariant InputType where
+    contramap f (InputType embed declared) = InputType embed' declared
+      where
+        embed' x = embed (f x)
+
+{-| This class is used by `Interpret` instance for functions:
+
+> instance (Inject a, Interpret b) => Interpret (a -> b)
+
+    You can convert Dhall functions with "simple" inputs (i.e. instances of this
+    class) into Haskell functions.  This works by:
+
+    * Marshaling the input to the Haskell function into a Dhall expression (i.e.
+      @x :: Expr Src X@)
+    * Applying the Dhall function (i.e. @f :: Expr Src X@) to the Dhall input
+      (i.e. @App f x@)
+    * Normalizing the syntax tree (i.e. @normalize (App f x)@)
+    * Marshaling the resulting Dhall expression back into a Haskell value
+-}
+class Inject a where
+    injectWith :: InterpretOptions -> InputType a
+    default injectWith
+        :: (Generic a, GenericInject (Rep a)) => InterpretOptions -> InputType a
+    injectWith options = contramap GHC.Generics.from (genericInjectWith options)
+
+{-| Use the default options for injecting a value
+
+> inject = inject defaultInterpretOptions
+-}
+inject :: Inject a => InputType a
+inject = injectWith defaultInterpretOptions
+
+instance Inject Bool where
+    injectWith _ = InputType {..}
+      where
+        embed = BoolLit
+
+        declared = Bool
+
+instance Inject Text where
+    injectWith _ = InputType {..}
+      where
+        embed text = TextLit (Data.Text.Lazy.Builder.fromLazyText text)
+
+        declared = Text
+
+instance Inject Data.Text.Text where
+    injectWith _ = InputType {..}
+      where
+        embed text = TextLit (Data.Text.Lazy.Builder.fromText text)
+
+        declared = Text
+
+instance Inject Natural where
+    injectWith _ = InputType {..}
+      where
+        embed = NaturalLit
+
+        declared = Natural
+
+instance Inject Integer where
+    injectWith _ = InputType {..}
+      where
+        embed = IntegerLit
+
+        declared = Integer
+
+instance Inject Double where
+    injectWith _ = InputType {..}
+      where
+        embed = DoubleLit
+
+        declared = Double
+
+instance Inject a => Inject (Maybe a) where
+    injectWith options = InputType embedOut declaredOut
+      where
+        embedOut (Just x) =
+            OptionalLit declaredIn (Data.Vector.singleton (embedIn x))
+        embedOut Nothing =
+            OptionalLit declaredIn  Data.Vector.empty
+
+        InputType embedIn declaredIn = injectWith options
+
+        declaredOut = App Optional declaredIn
+
+instance Inject a => Inject (Vector a) where
+    injectWith options = InputType embedOut declaredOut
+      where
+        embedOut xs = ListLit (Just declaredIn) (fmap embedIn xs)
+
+        declaredOut = App List declaredIn
+
+        InputType embedIn declaredIn = injectWith options
+
+{-| This is the underlying class that powers the `Interpret` class's support
+    for automatically deriving a generic implementation
+-}
+class GenericInject f where
+    genericInjectWith :: InterpretOptions -> InputType (f a)
+
+instance GenericInject f => GenericInject (M1 D d f) where
+    genericInjectWith = fmap (contramap unM1) genericInjectWith
+
+instance GenericInject f => GenericInject (M1 C c f) where
+    genericInjectWith = fmap (contramap unM1) genericInjectWith
+
+instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) => GenericInject (M1 C c1 f1 :+: M1 C c2 f2) where
+    genericInjectWith options@(InterpretOptions {..}) = InputType {..}
+      where
+        embed (L1 (M1 l)) = UnionLit keyL (embedL l) Data.Map.empty
+        embed (R1 (M1 r)) = UnionLit keyR (embedR r) Data.Map.empty
+
+        declared =
+            Union (Data.Map.fromList [(keyL, declaredL), (keyR, declaredR)])
+
+        nL :: M1 i c1 f1 a
+        nL = undefined
+
+        nR :: M1 i c2 f2 a
+        nR = undefined
+
+        keyL = constructorModifier (Data.Text.Lazy.pack (conName nL))
+        keyR = constructorModifier (Data.Text.Lazy.pack (conName nR))
+
+        InputType embedL declaredL = genericInjectWith options
+        InputType embedR declaredR = genericInjectWith options
+
+instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInject ((f :+: g) :+: M1 C c h) where
+    genericInjectWith options@(InterpretOptions {..}) = InputType {..}
+      where
+        embed (L1 l) = UnionLit keyL valL (Data.Map.insert keyR declaredR ktsL')
+          where
+            UnionLit keyL valL ktsL' = embedL l
+        embed (R1 (M1 r)) = UnionLit keyR (embedR r) ktsL
+
+        nR :: M1 i c h a
+        nR = undefined
+
+        keyR = constructorModifier (Data.Text.Lazy.pack (conName nR))
+
+        declared = Union (Data.Map.insert keyR declaredR ktsL)
+
+        InputType embedL (Union ktsL) = genericInjectWith options
+        InputType embedR  declaredR   = genericInjectWith options
+
+instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInject (M1 C c f :+: (g :+: h)) where
+    genericInjectWith options@(InterpretOptions {..}) = InputType {..}
+      where
+        embed (L1 (M1 l)) = UnionLit keyL (embedL l) ktsR
+        embed (R1 r) = UnionLit keyR valR (Data.Map.insert keyL declaredL ktsR')
+          where
+            UnionLit keyR valR ktsR' = embedR r
+
+        nL :: M1 i c f a
+        nL = undefined
+
+        keyL = constructorModifier (Data.Text.Lazy.pack (conName nL))
+
+        declared = Union (Data.Map.insert keyL declaredL ktsR)
+
+        InputType embedL  declaredL   = genericInjectWith options
+        InputType embedR (Union ktsR) = genericInjectWith options
+
+instance (GenericInject (f :+: g), GenericInject (h :+: i)) => GenericInject ((f :+: g) :+: (h :+: i)) where
+    genericInjectWith options = InputType {..}
+      where
+        embed (L1 l) = UnionLit keyL valR (Data.Map.union ktsL' ktsR)
+          where
+            UnionLit keyL valR ktsL' = embedL l
+        embed (R1 r) = UnionLit keyR valR (Data.Map.union ktsL ktsR')
+          where
+            UnionLit keyR valR ktsR' = embedR r
+
+        declared = Union (Data.Map.union ktsL ktsR)
+
+        InputType embedL (Union ktsL) = genericInjectWith options
+        InputType embedR (Union ktsR) = genericInjectWith options
+
+instance (GenericInject f, GenericInject g) => GenericInject (f :*: g) where
+    genericInjectWith options = InputType embedOut declaredOut
+      where
+        embedOut (l :*: r) = RecordLit (Data.Map.union mapL mapR)
+          where
+            RecordLit mapL = embedInL l
+            RecordLit mapR = embedInR r
+
+        declaredOut = Record (Data.Map.union mapL mapR)
+          where
+            Record mapL = declaredInL
+            Record mapR = declaredInR
+
+        InputType embedInL declaredInL = genericInjectWith options
+
+        InputType embedInR declaredInR = genericInjectWith options
+
+instance GenericInject U1 where
+    genericInjectWith _ = InputType {..}
+      where
+        embed _ = RecordLit Data.Map.empty
+
+        declared = Record Data.Map.empty
+
+instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
+    genericInjectWith opts@(InterpretOptions {..}) =
+        InputType embedOut declaredOut
+      where
+        n :: M1 i s f a
+        n = undefined
+
+        name = fieldModifier (Data.Text.Lazy.pack (selName n))
+
+        embedOut (M1 (K1 x)) = RecordLit (Data.Map.singleton name (embedIn x))
+
+        declaredOut = Record (Data.Map.singleton name declaredIn)
+
+        InputType embedIn declaredIn = injectWith opts
