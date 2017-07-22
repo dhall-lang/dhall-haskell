@@ -651,6 +651,29 @@ import Dhall
 -- However, you can't convert anything more complex than that like a polymorphic
 -- or higher-order function).  You will need to apply those functions to their
 -- arguments within Dhall before converting their result to a Haskell value.
+--
+-- Just like `Interpret`, you can derive `Inject` for user-defined data types:
+--
+-- > {-# LANGUAGE DeriveAnyClass    #-}
+-- > {-# LANGUAGE DeriveGeneric     #-}
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- > 
+-- > module Main where
+-- > 
+-- > import Dhall
+-- > 
+-- > data Example0 = Example0 { foo :: Bool, bar :: Bool }
+-- >     deriving (Generic, Inject)
+-- > 
+-- > main = do
+-- >     f <- input auto "λ(r : { foo : Bool, bar : Bool }) → r.foo && r.bar"
+-- >     print (f (Example0 { foo = True, bar = False }) :: Bool)
+-- >     print (f (Example0 { foo = True, bar = True  }) :: Bool)
+--
+-- The above program prints:
+--
+-- > False
+-- > True
 
 -- $compiler
 --
