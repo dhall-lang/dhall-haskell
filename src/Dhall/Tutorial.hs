@@ -26,6 +26,9 @@ module Dhall.Tutorial (
     -- * Functions
     -- $functions
 
+    -- * Compiler
+    -- $compiler
+
     -- * Strings
     -- $strings
 
@@ -627,9 +630,33 @@ import Dhall
 -- functions in Haskell.  The only difference is that Dhall requires you to
 -- annotate the type of the function's input.
 --
--- We can test our @makeBools@ function directly from the command line. This
--- library comes with a command-line executable program named @dhall@ that you
--- can use to both type-check files and convert them to a normal form.  Our
+-- You can import this function into Haskell, too:
+--
+-- >>> makeBools <- input auto "./makeBools" :: IO (Bool -> Vector Bool)
+-- >>> makeBools True
+-- [True,False,True,True]
+--
+-- The reason this works is that there is an `Interpret` instance for simple
+-- functions:
+--
+-- > instance (Inject a, Interpret b) => Interpret (a -> b)
+--
+-- Thanks to currying, this instance works for functions of multiple simple
+-- arguments:
+--
+-- >>> dhallAnd <- input auto "λ(x : Bool) → λ(y : Bool) → x && y" :: IO (Bool -> Bool -> Bool)
+-- >>> dhallAnd True False
+-- False
+--
+-- However, you can't convert anything more complex than that like a polymorphic
+-- or higher-order function).  You will need to apply those functions to their
+-- arguments within Dhall before converting their result to a Haskell value.
+
+-- $compiler
+--
+-- We can also test our @makeBools@ function directly from the command line.
+-- This library comes with a command-line executable program named @dhall@ that
+-- you can use to both type-check files and convert them to a normal form.  Our
 -- compiler takes a program on standard input and then prints the program's type
 -- to standard error followed by the program's normal form to standard output:
 --
@@ -655,9 +682,9 @@ import Dhall
 -- 
 -- > forall x . b           -- ... is the same as this Haskell type
 --
--- The part where Dhall differs from Haskell is that you can also use @∀@/@forall@
--- to give names to non-@Type@ arguments (such as the first argument to
--- @makeBools@).
+-- The part where Dhall differs from Haskell is that you can also use
+-- @∀@/@forall@ to give names to non-@Type@ arguments (such as the first
+-- argument to @makeBools@).
 --
 -- The second line of Dhall's output is our program's normal form:
 --
