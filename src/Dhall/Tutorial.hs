@@ -116,6 +116,9 @@ module Dhall.Tutorial (
     -- ** @List@
     -- $list
 
+    -- *** @(#)@
+    -- $listAppend
+
     -- *** @List/fold@
     -- $listFold
 
@@ -1867,6 +1870,31 @@ import Dhall
 -- Also, every @List@ must end with a mandatory type annotation
 --
 -- The built-in operations on @List@s are:
+
+-- $listAppend
+--
+-- Example:
+--
+-- > $ dhall
+-- > [1, 2, 3] # [5, 6, 7]
+-- > <Ctrl-D>
+-- > List Integer
+-- >
+-- > [1, 2, 3, 4, 5, 6]
+--
+-- Type:
+--
+-- > Γ ⊢ x : List a    Γ ⊢ y : List a
+-- > ─────────────────────────────────
+-- > Γ ⊢ x # y : List a
+--
+-- Rules:
+--
+-- > ([] : List a) # xs = xs
+-- >
+-- > xs # ([] : List a) = xs
+-- >
+-- > (xs # ys) # zs = xs # (ys # zs)
 
 -- $listFold
 --
