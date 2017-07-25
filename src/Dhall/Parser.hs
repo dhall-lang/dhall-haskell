@@ -481,12 +481,13 @@ exprC embedded = exprC0
     exprC0 = chain  exprC1          (symbol "||") BoolOr       exprC0
     exprC1 = chain  exprC2          (symbol "+" ) NaturalPlus  exprC1
     exprC2 = chain  exprC3          (symbol "++") TextAppend   exprC2
-    exprC3 = chain  exprC4          (symbol "&&") BoolAnd      exprC3
-    exprC4 = chain  exprC5           combine      Combine      exprC4
-    exprC5 = chain  exprC6           prefer       Prefer       exprC5
-    exprC6 = chain  exprC7          (symbol "*" ) NaturalTimes exprC6
-    exprC7 = chain  exprC8          (symbol "==") BoolEQ       exprC7
-    exprC8 = chain (exprD embedded) (symbol "!=") BoolNE       exprC8
+    exprC3 = chain  exprC4          (symbol "#" ) ListAppend   exprC3
+    exprC4 = chain  exprC5          (symbol "&&") BoolAnd      exprC4
+    exprC5 = chain  exprC6           combine      Combine      exprC5
+    exprC6 = chain  exprC7           prefer       Prefer       exprC6
+    exprC7 = chain  exprC8          (symbol "*" ) NaturalTimes exprC7
+    exprC8 = chain  exprC9          (symbol "==") BoolEQ       exprC8
+    exprC9 = chain (exprD embedded) (symbol "!=") BoolNE       exprC9
 
 -- We can't use left-recursion to define `exprD` otherwise the parser will
 -- loop infinitely. However, I'd still like to use left-recursion in the

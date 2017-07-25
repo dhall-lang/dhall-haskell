@@ -396,6 +396,20 @@ typeWith ctx e@(ListLit (Just t ) xs) = do
                 let nf_t' = Dhall.Core.normalize t'
                 Left (TypeError ctx e (InvalidListElement i nf_t x nf_t')) )
     return (App List t)
+typeWith ctx e@(ListAppend l r  ) = do
+    tl <- fmap Dhall.Core.normalize (typeWith ctx l)
+    el <- case tl of
+        App List el -> return el
+        _           -> Left (TypeError ctx e (CantListAppend l tl))
+
+    tr <- fmap Dhall.Core.normalize (typeWith ctx r)
+    er <- case tr of
+        App List er -> return er
+        _           -> Left (TypeError ctx e (CantListAppend r tr))
+
+    if propEqual el er
+        then return (App List el)
+        else Left (TypeError ctx e (ListAppendMismatch el er))
 typeWith _      ListBuild         = do
     return
         (Pi "a" (Const Type)
@@ -663,6 +677,7 @@ data TypeMessage s
     | InvalidFieldType Text (Expr s X)
     | InvalidAlternative Text (Expr s X)
     | InvalidAlternativeType Text (Expr s X)
+    | ListAppendMismatch (Expr s X) (Expr s X)
     | DuplicateAlternative Text
     | MustCombineARecord Char (Expr s X) (Expr s X)
     | FieldCollision Text
@@ -682,6 +697,7 @@ data TypeMessage s
     | CantEQ (Expr s X) (Expr s X)
     | CantNE (Expr s X) (Expr s X)
     | CantTextAppend (Expr s X) (Expr s X)
+    | CantListAppend (Expr s X) (Expr s X)
     | CantAdd (Expr s X) (Expr s X)
     | CantMultiply (Expr s X) (Expr s X)
     | NoDependentLet (Expr s X) (Expr s X)
@@ -2156,6 +2172,49 @@ You provided a union type with an alternative named:
         txt0 = Text.toStrict (Dhall.Core.pretty k    )
         txt1 = Text.toStrict (Dhall.Core.pretty expr0)
 
+prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
+  where
+    short = "You can only append ❰List❱s with matching element types"
+
+    long =
+        Builder.fromText [NeatInterpolation.text|
+Explanation: You can append two ❰List❱s using the ❰#❱ operator, like this:
+
+
+    ┌────────────────────┐
+    │ [1, 2, 3] # [4, 5] │
+    └────────────────────┘
+
+
+... but you cannot append two ❰List❱s if they have different element types.
+For example, the following expression is $_NOT valid:
+
+
+       These elements have type ❰Integer❱
+       ⇩
+    ┌───────────────────────────┐
+    │ [1, 2, 3] # [True, False] │  Invalid: the element types don't match
+    └───────────────────────────┘
+                  ⇧
+                  These elements have type ❰Bool❱
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+You tried to append a ❰List❱ thas has elements of type:
+
+↳ $txt0
+
+... with another ❰List❱ that has elements of type:
+
+↳ $txt1
+
+... and those two types do not match
+|]
+      where
+        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+
 prettyTypeMessage (DuplicateAlternative k) = ErrorMessages {..}
   where
     short = "Duplicate union alternative"
@@ -2879,8 +2938,13 @@ Some common reasons why you might get this error:
     └────────────────────────┘
 
 
-  The Dhall programming language does not provide a built-in operator for
-  combining two lists
+  ... but the list concatenation operator is actually ❰#❱:
+
+
+    ┌───────────────────────┐
+    │ [1, 2, 3] # [4, 5, 6] │  Valid
+    └───────────────────────┘
+
 
 ────────────────────────────────────────────────────────────────────────────────
 
@@ -2889,6 +2953,36 @@ You provided this argument:
 ↳ $txt0
 
 ... which does not have type ❰Text❱ but instead has type:
+
+↳ $txt1
+|]
+      where
+        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+
+prettyTypeMessage (CantListAppend expr0 expr1) = ErrorMessages {..}
+  where
+    short = "❰#❱ only works on ❰List❱s"
+
+    long =
+        Builder.fromText [NeatInterpolation.text|
+Explanation: The ❰#❱ operator expects two arguments that are both ❰List❱s
+
+For example, this is a valid use of ❰#❱: 
+
+
+    ┌───────────────────────┐
+    │ [1, 2, 3] # [4, 5, 6] │
+    └───────────────────────┘
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+You provided this argument:
+
+↳ $txt0
+
+... which is not a ❰List❱ but instead has type:
 
 ↳ $txt1
 |]

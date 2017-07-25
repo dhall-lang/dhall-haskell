@@ -262,6 +262,8 @@ data Expr s a
     -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : List t
     --   > ListLit  Nothing  [x, y, z]              ~  [x, y, z]
     | ListLit (Maybe (Expr s a)) (Vector (Expr s a))
+    -- | > ListAppend x y                           ~  x # y
+    | ListAppend (Expr s a) (Expr s a)
     -- | > ListBuild                                ~  List/build
     | ListBuild
     -- | > ListFold                                 ~  List/fold
@@ -352,6 +354,7 @@ instance Monad (Expr s) where
     TextAppend a b   >>= k = TextAppend (a >>= k) (b >>= k)
     List             >>= _ = List
     ListLit a b      >>= k = ListLit (fmap (>>= k) a) (fmap (>>= k) b)
+    ListAppend a b   >>= k = ListAppend (a >>= k) (b >>= k)
     ListBuild        >>= _ = ListBuild
     ListFold         >>= _ = ListFold
     ListLength       >>= _ = ListLength
@@ -411,6 +414,7 @@ instance Bifunctor Expr where
     first k (TextAppend a b  ) = TextAppend (first k a) (first k b)
     first _  List              = List
     first k (ListLit a b     ) = ListLit (fmap (first k) a) (fmap (first k) b)
+    first k (ListAppend a b  ) = ListAppend (first k a) (first k b)
     first _  ListBuild         = ListBuild
     first _  ListFold          = ListFold
     first _  ListLength        = ListLength
@@ -568,39 +572,45 @@ buildExprC2  a                = buildExprC3 a
 
 -- | Builder corresponding to the @exprC3@ parser in "Dhall.Parser"
 buildExprC3 :: Buildable a => Expr s a -> Builder
-buildExprC3 (BoolAnd a b) = buildExprC4 a <> " && " <> buildExprC3 b
-buildExprC3 (Note    _ b) = buildExprC3 b
-buildExprC3  a            = buildExprC4 a
+buildExprC3 (ListAppend a b) = buildExprC4 a <> " # " <> buildExprC3 b
+buildExprC3 (Note       _ b) = buildExprC3 b
+buildExprC3  a               = buildExprC4 a
 
 -- | Builder corresponding to the @exprC4@ parser in "Dhall.Parser"
 buildExprC4 :: Buildable a => Expr s a -> Builder
-buildExprC4 (Combine   a b) = buildExprC5 a <> " ∧ " <> buildExprC4 b
-buildExprC4 (Note      _ b) = buildExprC4 b
-buildExprC4  a              = buildExprC5 a
+buildExprC4 (BoolAnd a b) = buildExprC5 a <> " && " <> buildExprC4 b
+buildExprC4 (Note    _ b) = buildExprC4 b
+buildExprC4  a            = buildExprC5 a
 
 -- | Builder corresponding to the @exprC5@ parser in "Dhall.Parser"
 buildExprC5 :: Buildable a => Expr s a -> Builder
-buildExprC5 (Prefer a b) = buildExprC6 a <> " ⫽ " <> buildExprC5 b
-buildExprC5 (Note   _ b) = buildExprC5 b
-buildExprC5  a           = buildExprC6 a
+buildExprC5 (Combine   a b) = buildExprC6 a <> " ∧ " <> buildExprC5 b
+buildExprC5 (Note      _ b) = buildExprC5 b
+buildExprC5  a              = buildExprC6 a
 
 -- | Builder corresponding to the @exprC6@ parser in "Dhall.Parser"
 buildExprC6 :: Buildable a => Expr s a -> Builder
-buildExprC6 (NaturalTimes a b) = buildExprC7 a <> " * " <> buildExprC6 b
-buildExprC6 (Note         _ b) = buildExprC6 b
-buildExprC6  a                 = buildExprC7 a
+buildExprC6 (Prefer a b) = buildExprC7 a <> " ⫽ " <> buildExprC6 b
+buildExprC6 (Note   _ b) = buildExprC6 b
+buildExprC6  a           = buildExprC7 a
 
 -- | Builder corresponding to the @exprC7@ parser in "Dhall.Parser"
 buildExprC7 :: Buildable a => Expr s a -> Builder
-buildExprC7 (BoolEQ a b) = buildExprC8 a <> " == " <> buildExprC7 b
-buildExprC7 (Note   _ b) = buildExprC7 b
-buildExprC7  a           = buildExprC8 a
+buildExprC7 (NaturalTimes a b) = buildExprC8 a <> " * " <> buildExprC7 b
+buildExprC7 (Note         _ b) = buildExprC7 b
+buildExprC7  a                 = buildExprC8 a
 
 -- | Builder corresponding to the @exprC8@ parser in "Dhall.Parser"
 buildExprC8 :: Buildable a => Expr s a -> Builder
-buildExprC8 (BoolNE a b) = buildExprD  a <> " != " <> buildExprC8 b
+buildExprC8 (BoolEQ a b) = buildExprC9 a <> " == " <> buildExprC8 b
 buildExprC8 (Note   _ b) = buildExprC8 b
-buildExprC8  a           = buildExprD  a
+buildExprC8  a           = buildExprC9 a
+
+-- | Builder corresponding to the @exprC9@ parser in "Dhall.Parser"
+buildExprC9 :: Buildable a => Expr s a -> Builder
+buildExprC9 (BoolNE a b) = buildExprD  a <> " != " <> buildExprC9 b
+buildExprC9 (Note   _ b) = buildExprC9 b
+buildExprC9  a           = buildExprD  a
 
 -- | Builder corresponding to the @exprD@ parser in "Dhall.Parser"
 buildExprD :: Buildable a => Expr s a -> Builder
@@ -690,6 +700,8 @@ buildExprF (Union a) =
     buildUnion a
 buildExprF (UnionLit a b c) =
     buildUnionLit a b c
+buildExprF (ListLit Nothing b) =
+    "[" <> buildElems (Data.Vector.toList b) <> "]"
 buildExprF (Embed a) =
     build a
 buildExprF (Note _ b) =
@@ -943,6 +955,10 @@ shift d v (ListLit a b) = ListLit a' b'
     a' = fmap (shift d v) a
     b' = fmap (shift d v) b
 shift _ _ ListBuild = ListBuild
+shift d v (ListAppend a b) = ListAppend a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
 shift _ _ ListFold = ListFold
 shift _ _ ListLength = ListLength
 shift _ _ ListHead = ListHead
@@ -1082,6 +1098,10 @@ subst x e (ListLit a b) = ListLit a' b'
   where
     a' = fmap (subst x e) a
     b' = fmap (subst x e) b
+subst x e (ListAppend a b) = ListAppend a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
 subst _ _ ListBuild = ListBuild
 subst _ _ ListFold = ListFold
 subst _ _ ListLength = ListLength
@@ -1399,6 +1419,16 @@ normalizeWith ctx e0 = loop (shift 0 "_" e0)
       where
         t'  = fmap loop t
         es' = fmap loop es
+    ListAppend x y ->
+        case x' of
+            ListLit t xs ->
+                case y' of
+                    ListLit _ ys -> ListLit t (xs <> ys)
+                    _ -> ListAppend x' y'
+            _ -> ListAppend x' y'
+      where
+        x' = loop x
+        y' = loop y
     ListBuild -> ListBuild
     ListFold -> ListFold
     ListLength -> ListLength
@@ -1624,6 +1654,13 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
             _ -> True
     List -> True
     ListLit t es -> all isNormalized t && all isNormalized es
+    ListAppend x y -> isNormalized x && isNormalized y &&
+        case x of
+            ListLit _ _ ->
+                case y of
+                    ListLit _ _ -> False
+                    _ -> True
+            _ -> True
     ListBuild -> True
     ListFold -> True
     ListLength -> True
