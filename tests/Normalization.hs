@@ -1,15 +1,14 @@
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
 
 module Normalization (normalizationTests) where
 
-import           Dhall.Core
-import           Dhall.Context
-import qualified NeatInterpolation
-import           Test.Tasty
-import           Test.Tasty.HUnit
-import           Util 
+import Data.Monoid ((<>))
+import Dhall.Core
+import Dhall.Context
+import Test.Tasty
+import Test.Tasty.HUnit
+import Util 
 
 normalizationTests :: TestTree
 normalizationTests = testGroup "normalization" [ constantFolding
@@ -90,9 +89,7 @@ doubleShow = testCase "Double/show" $ do
 optionalFold :: TestTree
 optionalFold = testGroup "Optional/fold" [ just, nothing ]
   where test label inp out = testCase label $ do
-             e <- code [NeatInterpolation.text|
-                         Optional/fold Text ([$inp] : Optional Text) Natural (λ(j : Text) → +1) +2
-                       |]
+             e <- code ("Optional/fold Text ([" <> inp <> "] : Optional Text) Natural (λ(j : Text) → +1) +2")
              e `assertNormalizesTo` out
         just = test "just" "\"foo\"" "+1"
         nothing = test "nothing" "" "+2"
@@ -105,42 +102,39 @@ optionalBuild = testGroup "Optional/build" [ optionalBuild1
 
 optionalBuild1 :: TestTree
 optionalBuild1 = testCase "reducible" $ do
-  e <- code [NeatInterpolation.text|
-Optional/build
-Natural
-(   λ(optional : Type)
-→   λ(just : Natural → optional)
-→   λ(nothing : optional)
-→   just +1
-)
-|]
+  e <- code
+    "Optional/build                  \n\
+    \Natural                         \n\
+    \(   λ(optional : Type)          \n\
+    \→   λ(just : Natural → optional)\n\
+    \→   λ(nothing : optional)       \n\
+    \→   just +1                     \n\
+    \)                               \n"
   e `assertNormalizesTo` "[+1] : Optional Natural"
 
 optionalBuildShadowing :: TestTree
 optionalBuildShadowing = testCase "handles shadowing" $ do
-  e <- code [NeatInterpolation.text|
-Optional/build
-Integer
-(   λ(optional : Type)
-→   λ(x : Integer → optional)
-→   λ(x : optional)
-→   x@1 1
-)
-|]
+  e <- code
+    "Optional/build               \n\
+    \Integer                      \n\
+    \(   λ(optional : Type)       \n\
+    \→   λ(x : Integer → optional)\n\
+    \→   λ(x : optional)          \n\
+    \→   x@1 1                    \n\
+    \)                            \n"
   e `assertNormalizesTo` "[1] : Optional Integer"
 
 optionalBuildIrreducible :: TestTree
 optionalBuildIrreducible = testCase "irreducible" $ do
-  e <- code [NeatInterpolation.text|
-    λ(id : ∀(a : Type) → a → a)
-→   Optional/build
-    Bool
-    (   λ(optional : Type)
-    →   λ(just : Bool → optional)
-    →   λ(nothing : optional)
-    →   id optional (just True)
-    )
-|]
+  e <- code
+    "    λ(id : ∀(a : Type) → a → a)  \n\
+    \→   Optional/build               \n\
+    \    Bool                         \n\
+    \    (   λ(optional : Type)       \n\
+    \    →   λ(just : Bool → optional)\n\
+    \    →   λ(nothing : optional)    \n\
+    \    →   id optional (just True)  \n\
+    \    )                            \n"
   assertNormalized e
 
 fusion :: TestTree
@@ -150,39 +144,36 @@ fusion = testGroup "Optional build/fold fusion" [ fuseOptionalBF
 
 fuseOptionalBF :: TestTree
 fuseOptionalBF = testCase "fold . build" $ do
-  e0 <- code [NeatInterpolation.text|
-    λ(  f
-    :   ∀(optional : Type)
-    →   ∀(just : Text → optional)
-    →   ∀(nothing : optional)
-    →   optional
-    )
-→   Optional/fold
-    Text
-    (   Optional/build
-        Text
-        f
-    )
-|]
-  e1 <- code [NeatInterpolation.text|
-    λ(  f
-    :   ∀(optional : Type)
-    →   ∀(just : Text → optional)
-    →   ∀(nothing : optional)
-    →   optional
-    )
-→   f
-|]
+  e0 <- code
+    "    λ(  f                        \n\
+    \    :   ∀(optional : Type)       \n\
+    \    →   ∀(just : Text → optional)\n\
+    \    →   ∀(nothing : optional)    \n\
+    \    →   optional                 \n\
+    \    )                            \n\
+    \→   Optional/fold                \n\
+    \    Text                         \n\
+    \    (   Optional/build           \n\
+    \        Text                     \n\
+    \        f                        \n\
+    \    )                            \n"
+  e1 <- code
+    "    λ(  f                        \n\
+    \    :   ∀(optional : Type)       \n\
+    \    →   ∀(just : Text → optional)\n\
+    \    →   ∀(nothing : optional)    \n\
+    \    →   optional                 \n\
+    \    )                            \n\
+    \→   f                            \n"
   e0 `assertNormalizesTo` (Dhall.Core.pretty e1)
 
 fuseOptionalFB :: TestTree
 fuseOptionalFB = testCase "build . fold" $ do
-  test <- code [NeatInterpolation.text|
-Optional/build
-Text
-(   Optional/fold
-    Text
-    (["foo"] : Optional Text)
-)
-|]
+  test <- code
+    "Optional/build                 \n\
+    \Text                           \n\
+    \(   Optional/fold              \n\
+    \    Text                       \n\
+    \    ([\"foo\"] : Optional Text)\n\
+    \)                              \n"
   test `assertNormalizesTo` "[\"foo\"] : Optional Text"

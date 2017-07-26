@@ -4,7 +4,6 @@
 {-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -72,7 +71,6 @@ import qualified Data.Text.Lazy.Builder    as Builder
 import qualified Data.Vector
 import qualified Data.Vector.Mutable
 import qualified Filesystem.Path.CurrentOS as Filesystem
-import qualified NeatInterpolation
 
 {-| Constants for a pure type system
 
@@ -1710,28 +1708,28 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
     Note _ e' -> isNormalized e'
     Embed _ -> True
 
-_ERROR :: Data.Text.Text
+_ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
 {-| Utility function used to throw internal errors that should never happen
     (in theory) but that are not enforced by the type system
 -}
 internalError :: Data.Text.Text -> forall b . b
-internalError text = error (Data.Text.unpack [NeatInterpolation.text|
-$_ERROR: Compiler bug
-
-Explanation: This error message means that there is a bug in the Dhall compiler.
-You didn't do anything wrong, but if you would like to see this problem fixed
-then you should report the bug at:
-
-https://github.com/Gabriel439/Haskell-Dhall-Library/issues
-
-Please include the following text in your bug report:
-
-```
-$text
-```
-|])
+internalError text = error (unlines
+    [ _ERROR <> ": Compiler bug                                                        "
+    , "                                                                                "
+    , "Explanation: This error message means that there is a bug in the Dhall compiler."
+    , "You didn't do anything wrong, but if you would like to see this problem fixed   "
+    , "then you should report the bug at:                                              "
+    , "                                                                                "
+    , "https://github.com/Gabriel439/Haskell-Dhall-Library/issues                      "
+    , "                                                                                "
+    , "Please include the following text in your bug report:                           "
+    , "                                                                                "
+    , "```                                                                             "
+    , Data.Text.unpack text <> "                                                       "
+    , "```                                                                             "
+    ] )
 
 buildVector :: (forall x . (a -> x -> x) -> x -> x) -> Vector a
 buildVector f = Data.Vector.reverse (Data.Vector.create (do

@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE QuasiQuotes         #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators       #-}
@@ -77,7 +76,6 @@ import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
-import qualified NeatInterpolation
 
 throws :: Exception e => Either e a -> IO a
 throws (Left  e) = Control.Exception.throwIO e
@@ -92,16 +90,15 @@ throws (Right r) = return r
 -}
 data InvalidType = InvalidType deriving (Typeable)
 
-_ERROR :: Data.Text.Text
+_ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
 instance Show InvalidType where
-    show InvalidType = Data.Text.unpack [NeatInterpolation.text|
-$_ERROR: Invalid Dhall.Type
-
-Every Type must provide an extract function that succeeds if an expression
-matches the expected type.  You provided a Type that disobeys this contract
-|]
+    show InvalidType =
+        _ERROR <> ": Invalid Dhall.Type                                                  \n\
+        \                                                                                \n\
+        \Every Type must provide an extract function that succeeds if an expression      \n\
+        \matches the expected type.  You provided a Type that disobeys this contract     \n"
 
 instance Exception InvalidType
 

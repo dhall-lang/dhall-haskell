@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -151,7 +150,6 @@ import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
-import qualified Data.Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
@@ -163,7 +161,6 @@ import qualified Dhall.Context
 import qualified Dhall.TypeCheck
 import qualified Filesystem
 import qualified Filesystem.Path.CurrentOS
-import qualified NeatInterpolation
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified Filesystem.Path.CurrentOS        as Filesystem
@@ -481,25 +478,25 @@ toHeader _ = do
 -}
 data InternalError = InternalError deriving (Typeable)
 
-_ERROR :: Data.Text.Text
+_ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
 instance Show InternalError where
-    show InternalError = Data.Text.unpack [NeatInterpolation.text|
-$_ERROR: Compiler bug
-
-Explanation: This error message means that there is a bug in the Dhall compiler.
-You didn't do anything wrong, but if you would like to see this problem fixed
-then you should report the bug at:
-
-https://github.com/Gabriel439/Haskell-Dhall-Library/issues
-
-Please include the following text in your bug report:
-
-```
-Header extraction failed even though the header type-checked
-```
-|]
+    show InternalError = unlines
+        [ _ERROR <> ": Compiler bug                                                        "
+        , "                                                                                "
+        , "Explanation: This error message means that there is a bug in the Dhall compiler."
+        , "You didn't do anything wrong, but if you would like to see this problem fixed   "
+        , "then you should report the bug at:                                              "
+        , "                                                                                "
+        , "https://github.com/Gabriel439/Haskell-Dhall-Library/issues                      "
+        , "                                                                                "
+        , "Please include the following text in your bug report:                           "
+        , "                                                                                "
+        , "```                                                                             "
+        , "Header extraction failed even though the header type-checked                    "
+        , "```                                                                             "
+        ]
 
 instance Exception InternalError
 

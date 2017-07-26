@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -34,13 +33,11 @@ import Dhall.Context (Context)
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Map
 import qualified Data.Set
-import qualified Data.Text
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Vector
 import qualified Dhall.Context
 import qualified Dhall.Core
-import qualified NeatInterpolation
 
 axiom :: Const -> Either (TypeError s) Const
 axiom Type = return Kind
@@ -725,7 +722,7 @@ data ErrorMessages = ErrorMessages
     -- ^ Longer and more detailed explanation of the error
     }
 
-_NOT :: Data.Text.Text
+_NOT :: Builder
 _NOT = "\ESC[1mnot\ESC[0m"
 
 prettyTypeMessage :: TypeMessage s -> ErrorMessages
@@ -734,734 +731,718 @@ prettyTypeMessage UnboundVariable = ErrorMessages {..}
     short = "Unbound variable"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Expressions can only reference previously introduced (i.e. "bound")
-variables that are still "in scope"
-
-For example, the following valid expressions introduce a "bound" variable named
-❰x❱:
-
-
-    ┌─────────────────┐
-    │ λ(x : Bool) → x │  Anonymous functions introduce "bound" variables
-    └─────────────────┘
-        ⇧
-        This is the bound variable
-
-
-    ┌─────────────────┐
-    │ let x = 1 in x  │  ❰let❱ expressions introduce "bound" variables
-    └─────────────────┘
-          ⇧
-          This is the bound variable
-
-
-However, the following expressions are not valid because they all reference a
-variable that has not been introduced yet (i.e. an "unbound" variable):
-
-
-    ┌─────────────────┐
-    │ λ(x : Bool) → y │  The variable ❰y❱ hasn't been introduced yet
-    └─────────────────┘
-                    ⇧
-                    This is the unbound variable
-
-
-    ┌──────────────────────────┐
-    │ (let x = True in x) && x │  ❰x❱ is undefined outside the parentheses
-    └──────────────────────────┘
-                             ⇧
-                             This is the unbound variable
-
-
-    ┌────────────────┐
-    │ let x = x in x │  The definition for ❰x❱ cannot reference itself
-    └────────────────┘
-              ⇧
-              This is the unbound variable
-
-
-Some common reasons why you might get this error:
-
-● You misspell a variable name, like this:
-
-
-    ┌────────────────────────────────────────────────────┐
-    │ λ(empty : Bool) → if emty then "Empty" else "Full" │
-    └────────────────────────────────────────────────────┘
-                           ⇧
-                           Typo
-
-
-● You misspell a reserved identifier, like this:
-
-
-    ┌──────────────────────────┐
-    │ foral (a : Type) → a → a │
-    └──────────────────────────┘
-      ⇧
-      Typo
-
-
-● You tried to define a recursive value, like this:
-
-
-    ┌─────────────────────┐
-    │ let x = x + +1 in x │
-    └─────────────────────┘
-              ⇧
-              Recursive definitions are not allowed
-
-
-● You accidentally forgot a ❰λ❱ or ❰∀❱/❰forall❱
-
-
-        Unbound variable
-        ⇩
-    ┌─────────────────┐
-    │  (x : Bool) → x │
-    └─────────────────┘
-      ⇧
-      A ❰λ❱ here would transform this into a valid anonymous function 
-
-
-        Unbound variable
-        ⇩
-    ┌────────────────────┐
-    │  (x : Bool) → Bool │
-    └────────────────────┘
-      ⇧
-      A ❰∀❱ or ❰forall❱ here would transform this into a valid function type
-|]
+        "Explanation: Expressions can only reference previously introduced (i.e. \"bound\")\n\
+        \variables that are still \"in scope\"                                           \n\
+        \                                                                                \n\
+        \For example, the following valid expressions introduce a \"bound\" variable named\n\
+        \❰x❱:                                                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────┐                                                         \n\
+        \    │ λ(x : Bool) → x │  Anonymous functions introduce \"bound\" variables      \n\
+        \    └─────────────────┘                                                         \n\
+        \        ⇧                                                                       \n\
+        \        This is the bound variable                                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────┐                                                         \n\
+        \    │ let x = 1 in x  │  ❰let❱ expressions introduce \"bound\" variables        \n\
+        \    └─────────────────┘                                                         \n\
+        \          ⇧                                                                     \n\
+        \          This is the bound variable                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, the following expressions are not valid because they all reference a   \n\
+        \variable that has not been introduced yet (i.e. an \"unbound\" variable):       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────┐                                                         \n\
+        \    │ λ(x : Bool) → y │  The variable ❰y❱ hasn't been introduced yet            \n\
+        \    └─────────────────┘                                                         \n\
+        \                    ⇧                                                           \n\
+        \                    This is the unbound variable                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────┐                                                \n\
+        \    │ (let x = True in x) && x │  ❰x❱ is undefined outside the parentheses      \n\
+        \    └──────────────────────────┘                                                \n\
+        \                             ⇧                                                  \n\
+        \                             This is the unbound variable                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ let x = x in x │  The definition for ❰x❱ cannot reference itself          \n\
+        \    └────────────────┘                                                          \n\
+        \              ⇧                                                                 \n\
+        \              This is the unbound variable                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You misspell a variable name, like this:                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────────────────────┐                      \n\
+        \    │ λ(empty : Bool) → if emty then \"Empty\" else \"Full\" │                  \n\
+        \    └────────────────────────────────────────────────────┘                      \n\
+        \                           ⇧                                                    \n\
+        \                           Typo                                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \● You misspell a reserved identifier, like this:                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────┐                                                \n\
+        \    │ foral (a : Type) → a → a │                                                \n\
+        \    └──────────────────────────┘                                                \n\
+        \      ⇧                                                                         \n\
+        \      Typo                                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \● You tried to define a recursive value, like this:                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────┐                                                     \n\
+        \    │ let x = x + +1 in x │                                                     \n\
+        \    └─────────────────────┘                                                     \n\
+        \              ⇧                                                                 \n\
+        \              Recursive definitions are not allowed                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \● You accidentally forgot a ❰λ❱ or ❰∀❱/❰forall❱                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \        Unbound variable                                                        \n\
+        \        ⇩                                                                       \n\
+        \    ┌─────────────────┐                                                         \n\
+        \    │  (x : Bool) → x │                                                         \n\
+        \    └─────────────────┘                                                         \n\
+        \      ⇧                                                                         \n\
+        \      A ❰λ❱ here would transform this into a valid anonymous function           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \        Unbound variable                                                        \n\
+        \        ⇩                                                                       \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │  (x : Bool) → Bool │                                                      \n\
+        \    └────────────────────┘                                                      \n\
+        \      ⇧                                                                         \n\
+        \      A ❰∀❱ or ❰forall❱ here would transform this into a valid function type    \n"
 
 prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
   where
     short = "Invalid function input"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: A function can accept an input "term" that has a given "type", like
-this:
-
-
-        This is the input term that the function accepts
-        ⇩
-    ┌───────────────────────┐
-    │ ∀(x : Natural) → Bool │  This is the type of a function that accepts an
-    └───────────────────────┘  input term named ❰x❱ that has type ❰Natural❱
-            ⇧
-            This is the type of the input term
-
-
-    ┌────────────────┐
-    │ Bool → Integer │  This is the type of a function that accepts an anonymous
-    └────────────────┘  input term that has type ❰Bool❱
-      ⇧
-      This is the type of the input term
-
-
-... or a function can accept an input "type" that has a given "kind", like this:
-
-
-        This is the input type that the function accepts
-        ⇩
-    ┌────────────────────┐
-    │ ∀(a : Type) → Type │  This is the type of a function that accepts an input
-    └────────────────────┘  type named ❰a❱ that has kind ❰Type❱
-            ⇧
-            This is the kind of the input type
-
-
-    ┌──────────────────────┐
-    │ (Type → Type) → Type │  This is the type of a function that accepts an
-    └──────────────────────┘  anonymous input type that has kind ❰Type → Type❱
-       ⇧
-       This is the kind of the input type
-
-
-Other function inputs are $_NOT valid, like this:
-
-
-    ┌──────────────┐
-    │ ∀(x : 1) → x │  ❰1❱ is a "term" and not a "type" nor a "kind" so ❰x❱
-    └──────────────┘  cannot have "type" ❰1❱ or "kind" ❰1❱
-            ⇧
-            This is not a type or kind
-
-
-    ┌──────────┐
-    │ True → x │  ❰True❱ is a "term" and not a "type" nor a "kind" so the
-    └──────────┘  anonymous input cannot have "type" ❰True❱ or "kind" ❰True❱
-      ⇧
-      This is not a type or kind
-
-
-You annotated a function input with the following expression:
-
-↳ $txt
-
-... which is neither a type nor a kind
-|]
+        "Explanation: A function can accept an input \"term\" that has a given \"type\", like\n\
+        \this:                                                                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \        This is the input term that the function accepts                        \n\
+        \        ⇩                                                                       \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ ∀(x : Natural) → Bool │  This is the type of a function that accepts an   \n\
+        \    └───────────────────────┘  input term named ❰x❱ that has type ❰Natural❱     \n\
+        \            ⇧                                                                   \n\
+        \            This is the type of the input term                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ Bool → Integer │  This is the type of a function that accepts an anonymous\n\
+        \    └────────────────┘  input term that has type ❰Bool❱                         \n\
+        \      ⇧                                                                         \n\
+        \      This is the type of the input term                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... or a function can accept an input \"type\" that has a given \"kind\", like this:\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \        This is the input type that the function accepts                        \n\
+        \        ⇩                                                                       \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ ∀(a : Type) → Type │  This is the type of a function that accepts an input\n\
+        \    └────────────────────┘  type named ❰a❱ that has kind ❰Type❱                 \n\
+        \            ⇧                                                                   \n\
+        \            This is the kind of the input type                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────┐                                                    \n\
+        \    │ (Type → Type) → Type │  This is the type of a function that accepts an    \n\
+        \    └──────────────────────┘  anonymous input type that has kind ❰Type → Type❱  \n\
+        \       ⇧                                                                        \n\
+        \       This is the kind of the input type                                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Other function inputs are " <> _NOT <> " valid, like this:                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────┐                                                            \n\
+        \    │ ∀(x : 1) → x │  ❰1❱ is a \"term\" and not a \"type\" nor a \"kind\" so ❰x❱\n\
+        \    └──────────────┘  cannot have \"type\" ❰1❱ or \"kind\" ❰1❱                  \n\
+        \            ⇧                                                                   \n\
+        \            This is not a type or kind                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────┐                                                                \n\
+        \    │ True → x │  ❰True❱ is a \"term\" and not a \"type\" nor a \"kind\" so the \n\
+        \    └──────────┘  anonymous input cannot have \"type\" ❰True❱ or \"kind\" ❰True❱\n\
+        \      ⇧                                                                         \n\
+        \      This is not a type or kind                                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You annotated a function input with the following expression:                   \n\
+        \                                                                                \n\
+        \↳ " <> txt <> "                                                                 \n\
+        \                                                                                \n\
+        \... which is neither a type nor a kind                                          \n"
       where
-        txt  = Text.toStrict (Dhall.Core.pretty expr)
+        txt  = build expr
 
 prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
   where
     short = "Invalid function output"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: A function can return an output "term" that has a given "type",
-like this:
-
-
-    ┌────────────────────┐
-    │ ∀(x : Text) → Bool │  This is the type of a function that returns an
-    └────────────────────┘  output term that has type ❰Bool❱
-                    ⇧
-                    This is the type of the output term
-
-
-    ┌────────────────┐
-    │ Bool → Integer │  This is the type of a function that returns an output
-    └────────────────┘  term that has type ❰Int❱
-             ⇧
-             This is the type of the output term
-
-
-... or a function can return an output "type" that has a given "kind", like
-this:
-
-    ┌────────────────────┐
-    │ ∀(a : Type) → Type │  This is the type of a function that returns an
-    └────────────────────┘  output type that has kind ❰Type❱
-                    ⇧
-                    This is the kind of the output type
-
-
-    ┌──────────────────────┐
-    │ (Type → Type) → Type │  This is the type of a function that returns an
-    └──────────────────────┘  output type that has kind ❰Type❱
-                      ⇧
-                      This is the kind of the output type
-
-
-Other outputs are $_NOT valid, like this:
-
-
-    ┌─────────────────┐
-    │ ∀(x : Bool) → x │  ❰x❱ is a "term" and not a "type" nor a "kind" so the
-    └─────────────────┘  output cannot have "type" ❰x❱ or "kind" ❰x❱
-                    ⇧
-                    This is not a type or kind
-
-
-    ┌─────────────┐
-    │ Text → True │  ❰True❱ is a "term" and not a "type" nor a "kind" so the
-    └─────────────┘  output cannot have "type" ❰True❱ or "kind" ❰True❱
-             ⇧
-             This is not a type or kind
-
-
-Some common reasons why you might get this error:
-
-● You use ❰∀❱ instead of ❰λ❱ by mistake, like this:
-
-
-    ┌────────────────┐
-    │ ∀(x: Bool) → x │
-    └────────────────┘
-      ⇧
-      Using ❰λ❱ here instead of ❰∀❱ would transform this into a valid function
-
-
-────────────────────────────────────────────────────────────────────────────────
-
-You specified that your function outputs a:
-
-↳ $txt
-
-... which is neither a type nor a kind:
-|]
+        "Explanation: A function can return an output \"term\" that has a given \"type\",\n\
+        \like this:                                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ ∀(x : Text) → Bool │  This is the type of a function that returns an      \n\
+        \    └────────────────────┘  output term that has type ❰Bool❱                    \n\
+        \                    ⇧                                                           \n\
+        \                    This is the type of the output term                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ Bool → Integer │  This is the type of a function that returns an output   \n\
+        \    └────────────────┘  term that has type ❰Int❱                                \n\
+        \             ⇧                                                                  \n\
+        \             This is the type of the output term                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... or a function can return an output \"type\" that has a given \"kind\", like \n\
+        \this:                                                                           \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ ∀(a : Type) → Type │  This is the type of a function that returns an      \n\
+        \    └────────────────────┘  output type that has kind ❰Type❱                    \n\
+        \                    ⇧                                                           \n\
+        \                    This is the kind of the output type                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────┐                                                    \n\
+        \    │ (Type → Type) → Type │  This is the type of a function that returns an    \n\
+        \    └──────────────────────┘  output type that has kind ❰Type❱                  \n\
+        \                      ⇧                                                         \n\
+        \                      This is the kind of the output type                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Other outputs are " <> _NOT <> " valid, like this:                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────┐                                                         \n\
+        \    │ ∀(x : Bool) → x │  ❰x❱ is a \"term\" and not a \"type\" nor a \"kind\" so the\n\
+        \    └─────────────────┘  output cannot have \"type\" ❰x❱ or \"kind\" ❰x❱        \n\
+        \                    ⇧                                                           \n\
+        \                    This is not a type or kind                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────┐                                                             \n\
+        \    │ Text → True │  ❰True❱ is a \"term\" and not a \"type\" nor a \"kind\" so the\n\
+        \    └─────────────┘  output cannot have \"type\" ❰True❱ or \"kind\" ❰True❱      \n\
+        \             ⇧                                                                  \n\
+        \             This is not a type or kind                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You use ❰∀❱ instead of ❰λ❱ by mistake, like this:                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ ∀(x: Bool) → x │                                                          \n\
+        \    └────────────────┘                                                          \n\
+        \      ⇧                                                                         \n\
+        \      Using ❰λ❱ here instead of ❰∀❱ would transform this into a valid function  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You specified that your function outputs a:                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt <> "                                                                 \n\
+        \                                                                                \n\
+        \... which is neither a type nor a kind:                                         \n"
       where
-        txt = Text.toStrict (Dhall.Core.pretty expr)
+        txt = build expr
 
 prettyTypeMessage (NotAFunction expr0 expr1) = ErrorMessages {..}
   where
     short = "Not a function"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Expressions separated by whitespace denote function application,
-like this:
-
-
-    ┌─────┐
-    │ f x │  This denotes the function ❰f❱ applied to an argument named ❰x❱ 
-    └─────┘
-
-
-A function is a term that has type ❰a → b❱ for some ❰a❱ or ❰b❱.  For example,
-the following expressions are all functions because they have a function type:
-
-
-                        The function's input type is ❰Bool❱
-                        ⇩
-    ┌───────────────────────────────┐
-    │ λ(x : Bool) → x : Bool → Bool │  User-defined anonymous function
-    └───────────────────────────────┘
-                               ⇧
-                               The function's output type is ❰Bool❱
-
-
-                     The function's input type is ❰Natural❱
-                     ⇩
-    ┌───────────────────────────────┐
-    │ Natural/even : Natural → Bool │  Built-in function
-    └───────────────────────────────┘
-                               ⇧
-                               The function's output type is ❰Bool❱
-
-
-                        The function's input kind is ❰Type❱
-                        ⇩
-    ┌───────────────────────────────┐
-    │ λ(a : Type) → a : Type → Type │  Type-level functions are still functions
-    └───────────────────────────────┘
-                               ⇧
-                               The function's output kind is ❰Type❱
-
-
-             The function's input kind is ❰Type❱
-             ⇩
-    ┌────────────────────┐
-    │ List : Type → Type │  Built-in type-level function
-    └────────────────────┘
-                    ⇧
-                    The function's output kind is ❰Type❱
-
-
-                        Function's input has kind ❰Type❱
-                        ⇩
-    ┌─────────────────────────────────────────────────┐
-    │ List/head : ∀(a : Type) → (List a → Optional a) │  A function can return
-    └─────────────────────────────────────────────────┘  another function
-                                ⇧
-                                Function's output has type ❰List a → Optional a❱
-
-
-                       The function's input type is ❰List Text❱
-                       ⇩
-    ┌────────────────────────────────────────────┐
-    │ List/head Text : List Text → Optional Text │  A function applied to an
-    └────────────────────────────────────────────┘  argument can be a function
-                                   ⇧
-                                   The function's output type is ❰Optional Text❱
-
-
-An expression is not a function if the expression's type is not of the form
-❰a → b❱.  For example, these are $_NOT functions:
-
-
-    ┌─────────────┐
-    │ 1 : Integer │  ❰1❱ is not a function because ❰Integer❱ is not the type of
-    └─────────────┘  a function
-
-
-    ┌────────────────────────┐
-    │ Natural/even +2 : Bool │  ❰Natural/even +2❱ is not a function because
-    └────────────────────────┘  ❰Bool❱ is not the type of a function
-
-
-    ┌──────────────────┐
-    │ List Text : Type │  ❰List Text❱ is not a function because ❰Type❱ is not
-    └──────────────────┘  the type of a function
-
-
-Some common reasons why you might get this error:
-
-● You tried to add two ❰Integer❱s without a space around the ❰+❱, like this:
-
-
-    ┌─────┐
-    │ 2+2 │
-    └─────┘
-
-
-  The above code is parsed as:
-
-
-    ┌────────┐
-    │ 2 (+2) │
-    └────────┘
-      ⇧
-      The compiler thinks that this ❰2❱ is a function whose argument is ❰+2❱
-
-
-  This is because the ❰+❱ symbol has two meanings: you use ❰+❱ to add two
-  numbers, but you also can prefix ❰Integer❱ literals with a ❰+❱ to turn them
-  into ❰Natural❱ literals (like ❰+2❱)
-
-  To fix the code, you need to put spaces around the ❰+❱ and also prefix each
-  ❰2❱ with a ❰+❱, like this:
-
-
-    ┌─────────┐
-    │ +2 + +2 │
-    └─────────┘
-
-
-  You can only add ❰Natural❱ numbers, which is why you must also change each
-  ❰2❱ to ❰+2❱
-
-────────────────────────────────────────────────────────────────────────────────
-
-You tried to use the following expression as a function:
-
-↳ $txt0
-
-... but this expression's type is:
-
-↳ $txt1
-
-... which is not a function type
-|]
+        "Explanation: Expressions separated by whitespace denote function application,   \n\
+        \like this:                                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────┐                                                                     \n\
+        \    │ f x │  This denotes the function ❰f❱ applied to an argument named ❰x❱     \n\
+        \    └─────┘                                                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \A function is a term that has type ❰a → b❱ for some ❰a❱ or ❰b❱.  For example,   \n\
+        \the following expressions are all functions because they have a function type:  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \                        The function's input type is ❰Bool❱                     \n\
+        \                        ⇩                                                       \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ λ(x : Bool) → x : Bool → Bool │  User-defined anonymous function          \n\
+        \    └───────────────────────────────┘                                           \n\
+        \                               ⇧                                                \n\
+        \                               The function's output type is ❰Bool❱             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \                     The function's input type is ❰Natural❱                     \n\
+        \                     ⇩                                                          \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ Natural/even : Natural → Bool │  Built-in function                        \n\
+        \    └───────────────────────────────┘                                           \n\
+        \                               ⇧                                                \n\
+        \                               The function's output type is ❰Bool❱             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \                        The function's input kind is ❰Type❱                     \n\
+        \                        ⇩                                                       \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ λ(a : Type) → a : Type → Type │  Type-level functions are still functions \n\
+        \    └───────────────────────────────┘                                           \n\
+        \                               ⇧                                                \n\
+        \                               The function's output kind is ❰Type❱             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \             The function's input kind is ❰Type❱                                \n\
+        \             ⇩                                                                  \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ List : Type → Type │  Built-in type-level function                        \n\
+        \    └────────────────────┘                                                      \n\
+        \                    ⇧                                                           \n\
+        \                    The function's output kind is ❰Type❱                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \                        Function's input has kind ❰Type❱                        \n\
+        \                        ⇩                                                       \n\
+        \    ┌─────────────────────────────────────────────────┐                         \n\
+        \    │ List/head : ∀(a : Type) → (List a → Optional a) │  A function can return  \n\
+        \    └─────────────────────────────────────────────────┘  another function       \n\
+        \                                ⇧                                               \n\
+        \                                Function's output has type ❰List a → Optional a❱\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \                       The function's input type is ❰List Text❱                 \n\
+        \                       ⇩                                                        \n\
+        \    ┌────────────────────────────────────────────┐                              \n\
+        \    │ List/head Text : List Text → Optional Text │  A function applied to an    \n\
+        \    └────────────────────────────────────────────┘  argument can be a function  \n\
+        \                                   ⇧                                            \n\
+        \                                   The function's output type is ❰Optional Text❱\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \An expression is not a function if the expression's type is not of the form     \n\
+        \❰a → b❱.  For example, these are " <> _NOT <> " functions:                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────┐                                                             \n\
+        \    │ 1 : Integer │  ❰1❱ is not a function because ❰Integer❱ is not the type of \n\
+        \    └─────────────┘  a function                                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ Natural/even +2 : Bool │  ❰Natural/even +2❱ is not a function because     \n\
+        \    └────────────────────────┘  ❰Bool❱ is not the type of a function            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────┐                                                        \n\
+        \    │ List Text : Type │  ❰List Text❱ is not a function because ❰Type❱ is not   \n\
+        \    └──────────────────┘  the type of a function                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You tried to add two ❰Integer❱s without a space around the ❰+❱, like this:    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────┐                                                                     \n\
+        \    │ 2+2 │                                                                     \n\
+        \    └─────┘                                                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \  The above code is parsed as:                                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────┐                                                                  \n\
+        \    │ 2 (+2) │                                                                  \n\
+        \    └────────┘                                                                  \n\
+        \      ⇧                                                                         \n\
+        \      The compiler thinks that this ❰2❱ is a function whose argument is ❰+2❱    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \  This is because the ❰+❱ symbol has two meanings: you use ❰+❱ to add two       \n\
+        \  numbers, but you also can prefix ❰Integer❱ literals with a ❰+❱ to turn them   \n\
+        \  into ❰Natural❱ literals (like ❰+2❱)                                           \n\
+        \                                                                                \n\
+        \  To fix the code, you need to put spaces around the ❰+❱ and also prefix each   \n\
+        \  ❰2❱ with a ❰+❱, like this:                                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────┐                                                                 \n\
+        \    │ +2 + +2 │                                                                 \n\
+        \    └─────────┘                                                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \  You can only add ❰Natural❱ numbers, which is why you must also change each    \n\
+        \  ❰2❱ to ❰+2❱                                                                   \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to use the following expression as a function:                        \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... but this expression's type is:                                              \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a function type                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build expr0
+        txt1 = build expr1
 
 prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
     short = "Wrong type of function argument"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Every function declares what type or kind of argument to accept
-
-For example:
-
-
-    ┌───────────────────────────────┐
-    │ λ(x : Bool) → x : Bool → Bool │  This anonymous function only accepts
-    └───────────────────────────────┘  arguments that have type ❰Bool❱
-                        ⇧
-                        The function's input type
-
-
-    ┌───────────────────────────────┐
-    │ Natural/even : Natural → Bool │  This built-in function only accepts
-    └───────────────────────────────┘  arguments that have type ❰Natural❱
-                     ⇧
-                     The function's input type
-
-
-    ┌───────────────────────────────┐
-    │ λ(a : Type) → a : Type → Type │  This anonymous function only accepts
-    └───────────────────────────────┘  arguments that have kind ❰Type❱
-                        ⇧
-                        The function's input kind
-
-
-    ┌────────────────────┐
-    │ List : Type → Type │  This built-in function only accepts arguments that
-    └────────────────────┘  have kind ❰Type❱
-             ⇧
-             The function's input kind
-
-
-For example, the following expressions are valid:
-
-
-    ┌────────────────────────┐
-    │ (λ(x : Bool) → x) True │  ❰True❱ has type ❰Bool❱, which matches the type
-    └────────────────────────┘  of argument that the anonymous function accepts
-
-
-    ┌─────────────────┐
-    │ Natural/even +2 │  ❰+2❱ has type ❰Natural❱, which matches the type of
-    └─────────────────┘  argument that the ❰Natural/even❱ function accepts,
-
-
-    ┌────────────────────────┐
-    │ (λ(a : Type) → a) Bool │  ❰Bool❱ has kind ❰Type❱, which matches the kind
-    └────────────────────────┘  of argument that the anonymous function accepts
-
-
-    ┌───────────┐
-    │ List Text │  ❰Text❱ has kind ❰Type❱, which matches the kind of argument
-    └───────────┘  that that the ❰List❱ function accepts
-
-
-However, you can $_NOT apply a function to the wrong type or kind of argument
-
-For example, the following expressions are not valid:
-
-
-    ┌───────────────────────┐
-    │ (λ(x : Bool) → x) "A" │  ❰"A"❱ has type ❰Text❱, but the anonymous function
-    └───────────────────────┘  expects an argument that has type ❰Bool❱
-
-
-    ┌──────────────────┐
-    │ Natural/even "A" │  ❰"A"❱ has type ❰Text❱, but the ❰Natural/even❱ function
-    └──────────────────┘  expects an argument that has type ❰Natural❱
-
-
-    ┌────────────────────────┐
-    │ (λ(a : Type) → a) True │  ❰True❱ has type ❰Bool❱, but the anonymous
-    └────────────────────────┘  function expects an argument of kind ❰Type❱
-
-
-    ┌────────┐
-    │ List 1 │  ❰1❱ has type ❰Integer❱, but the ❰List❱ function expects an
-    └────────┘  argument that has kind ❰Type❱
-
-
-Some common reasons why you might get this error:
-
-● You omit a function argument by mistake:
-
-
-    ┌───────────────────────┐
-    │ List/head   [1, 2, 3] │
-    └───────────────────────┘
-                ⇧
-                ❰List/head❱ is missing the first argument,
-                which should be: ❰Integer❱
-
-
-● You supply an ❰Integer❱ literal to a function that expects a ❰Natural❱
-
-
-    ┌────────────────┐
-    │ Natural/even 2 │
-    └────────────────┘
-                   ⇧
-                   This should be ❰+2❱
-
-
-────────────────────────────────────────────────────────────────────────────────
-
-You tried to invoke the following function:
-
-↳ $txt0
-
-... which expects an argument of type or kind:
-
-↳ $txt1
-
-... on the following argument:
-
-↳ $txt2
-
-... which has a different type or kind:
-
-↳ $txt3
-|]
+        "Explanation: Every function declares what type or kind of argument to accept    \n\
+        \                                                                                \n\
+        \For example:                                                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ λ(x : Bool) → x : Bool → Bool │  This anonymous function only accepts     \n\
+        \    └───────────────────────────────┘  arguments that have type ❰Bool❱          \n\
+        \                        ⇧                                                       \n\
+        \                        The function's input type                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ Natural/even : Natural → Bool │  This built-in function only accepts      \n\
+        \    └───────────────────────────────┘  arguments that have type ❰Natural❱       \n\
+        \                     ⇧                                                          \n\
+        \                     The function's input type                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ λ(a : Type) → a : Type → Type │  This anonymous function only accepts     \n\
+        \    └───────────────────────────────┘  arguments that have kind ❰Type❱          \n\
+        \                        ⇧                                                       \n\
+        \                        The function's input kind                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ List : Type → Type │  This built-in function only accepts arguments that  \n\
+        \    └────────────────────┘  have kind ❰Type❱                                    \n\
+        \             ⇧                                                                  \n\
+        \             The function's input kind                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \For example, the following expressions are valid:                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ (λ(x : Bool) → x) True │  ❰True❱ has type ❰Bool❱, which matches the type  \n\
+        \    └────────────────────────┘  of argument that the anonymous function accepts \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────┐                                                         \n\
+        \    │ Natural/even +2 │  ❰+2❱ has type ❰Natural❱, which matches the type of     \n\
+        \    └─────────────────┘  argument that the ❰Natural/even❱ function accepts,     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ (λ(a : Type) → a) Bool │  ❰Bool❱ has kind ❰Type❱, which matches the kind  \n\
+        \    └────────────────────────┘  of argument that the anonymous function accepts \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────┐                                                               \n\
+        \    │ List Text │  ❰Text❱ has kind ❰Type❱, which matches the kind of argument   \n\
+        \    └───────────┘  that that the ❰List❱ function accepts                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, you can " <> _NOT <> " apply a function to the wrong type or kind of argument\n\
+        \                                                                                \n\
+        \For example, the following expressions are not valid:                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ (λ(x : Bool) → x) \"A\" │  ❰\"A\"❱ has type ❰Text❱, but the anonymous function\n\
+        \    └───────────────────────┘  expects an argument that has type ❰Bool❱         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────┐                                                        \n\
+        \    │ Natural/even \"A\" │  ❰\"A\"❱ has type ❰Text❱, but the ❰Natural/even❱ function\n\
+        \    └──────────────────┘  expects an argument that has type ❰Natural❱           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ (λ(a : Type) → a) True │  ❰True❱ has type ❰Bool❱, but the anonymous       \n\
+        \    └────────────────────────┘  function expects an argument of kind ❰Type❱     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────┐                                                                  \n\
+        \    │ List 1 │  ❰1❱ has type ❰Integer❱, but the ❰List❱ function expects an      \n\
+        \    └────────┘  argument that has kind ❰Type❱                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You omit a function argument by mistake:                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ List/head   [1, 2, 3] │                                                   \n\
+        \    └───────────────────────┘                                                   \n\
+        \                ⇧                                                               \n\
+        \                ❰List/head❱ is missing the first argument,                      \n\
+        \                which should be: ❰Integer❱                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \● You supply an ❰Integer❱ literal to a function that expects a ❰Natural❱        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ Natural/even 2 │                                                          \n\
+        \    └────────────────┘                                                          \n\
+        \                   ⇧                                                            \n\
+        \                   This should be ❰+2❱                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to invoke the following function:                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which expects an argument of type or kind:                                  \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... on the following argument:                                                  \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n\
+        \                                                                                \n\
+        \... which has a different type or kind:                                         \n\
+        \                                                                                \n\
+        \↳ " <> txt3 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
-        txt3 = Text.toStrict (Dhall.Core.pretty expr3)
+        txt0 = build expr0
+        txt1 = build expr1
+        txt2 = build expr2
+        txt3 = build expr3
 
 prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
     short = "Expression doesn't match annotation"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can annotate an expression with its type or kind using the
-❰:❱ symbol, like this:
-
-
-    ┌───────┐
-    │ x : t │  ❰x❱ is an expression and ❰t❱ is the annotated type or kind of ❰x❱
-    └───────┘
-
-The type checker verifies that the expression's type or kind matches the
-provided annotation
-
-For example, all of the following are valid annotations that the type checker
-accepts:
-
-
-    ┌─────────────┐
-    │ 1 : Integer │  ❰1❱ is an expression that has type ❰Integer❱, so the type
-    └─────────────┘  checker accepts the annotation
-
-
-    ┌────────────────────────┐
-    │ Natural/even +2 : Bool │  ❰Natural/even +2❱ has type ❰Bool❱, so the type
-    └────────────────────────┘  checker accepts the annotation
-
-
-    ┌────────────────────┐
-    │ List : Type → Type │  ❰List❱ is an expression that has kind ❰Type → Type❱,
-    └────────────────────┘  so the type checker accepts the annotation
-
-
-    ┌──────────────────┐
-    │ List Text : Type │  ❰List Text❱ is an expression that has kind ❰Type❱, so
-    └──────────────────┘  the type checker accepts the annotation
-
-
-However, the following annotations are $_NOT valid and the type checker will
-reject them:
-
-
-    ┌──────────┐
-    │ 1 : Text │  The type checker rejects this because ❰1❱ does not have type
-    └──────────┘  ❰Text❱
-
-
-    ┌─────────────┐
-    │ List : Type │  ❰List❱ does not have kind ❰Type❱
-    └─────────────┘
-
-
-Some common reasons why you might get this error:
-
-● The Haskell Dhall interpreter implicitly inserts a top-level annotation
-  matching the expected type
-
-  For example, if you run the following Haskell code:
-
-
-    ┌───────────────────────────────┐
-    │ >>> input auto "1" :: IO Text │
-    └───────────────────────────────┘
-
-
-  ... then the interpreter will actually type check the following annotated
-  expression:
-
-
-    ┌──────────┐
-    │ 1 : Text │
-    └──────────┘
-
-
-  ... and then type-checking will fail
-
-────────────────────────────────────────────────────────────────────────────────
-
-You or the interpreter annotated this expression:
-
-↳ $txt0
-
-... with this type or kind:
-
-↳ $txt1
-
-... but the inferred type or kind of the expression is actually:
-
-↳ $txt2
-|]
+        "Explanation: You can annotate an expression with its type or kind using the     \n\
+        \❰:❱ symbol, like this:                                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────┐                                                                   \n\
+        \    │ x : t │  ❰x❱ is an expression and ❰t❱ is the annotated type or kind of ❰x❱\n\
+        \    └───────┘                                                                   \n\
+        \                                                                                \n\
+        \The type checker verifies that the expression's type or kind matches the        \n\
+        \provided annotation                                                             \n\
+        \                                                                                \n\
+        \For example, all of the following are valid annotations that the type checker   \n\
+        \accepts:                                                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────┐                                                             \n\
+        \    │ 1 : Integer │  ❰1❱ is an expression that has type ❰Integer❱, so the type  \n\
+        \    └─────────────┘  checker accepts the annotation                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ Natural/even +2 : Bool │  ❰Natural/even +2❱ has type ❰Bool❱, so the type  \n\
+        \    └────────────────────────┘  checker accepts the annotation                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ List : Type → Type │  ❰List❱ is an expression that has kind ❰Type → Type❱,\n\
+        \    └────────────────────┘  so the type checker accepts the annotation          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────┐                                                        \n\
+        \    │ List Text : Type │  ❰List Text❱ is an expression that has kind ❰Type❱, so \n\
+        \    └──────────────────┘  the type checker accepts the annotation               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, the following annotations are " <> _NOT <> " valid and the type checker will\n\
+        \reject them:                                                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────┐                                                                \n\
+        \    │ 1 : Text │  The type checker rejects this because ❰1❱ does not have type  \n\
+        \    └──────────┘  ❰Text❱                                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────┐                                                             \n\
+        \    │ List : Type │  ❰List❱ does not have kind ❰Type❱                           \n\
+        \    └─────────────┘                                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● The Haskell Dhall interpreter implicitly inserts a top-level annotation       \n\
+        \  matching the expected type                                                    \n\
+        \                                                                                \n\
+        \  For example, if you run the following Haskell code:                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ >>> input auto \"1\" :: IO Text │                                         \n\
+        \    └───────────────────────────────┘                                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \  ... then the interpreter will actually type check the following annotated     \n\
+        \  expression:                                                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────┐                                                                \n\
+        \    │ 1 : Text │                                                                \n\
+        \    └──────────┘                                                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \  ... and then type-checking will fail                                          \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You or the interpreter annotated this expression:                               \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... with this type or kind:                                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... but the inferred type or kind of the expression is actually:                \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt0 = build expr0
+        txt1 = build expr1
+        txt2 = build expr2
 
 prettyTypeMessage Untyped = ErrorMessages {..}
   where
     short = "❰Kind❱ has no type or kind"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: There are four levels of expressions that form a heirarchy:
-
-● terms
-● types
-● kinds
-● sorts
-
-The following example illustrates this heirarchy:
-
-    ┌────────────────────────────┐
-    │ "ABC" : Text : Type : Kind │
-    └────────────────────────────┘
-       ⇧      ⇧      ⇧      ⇧
-       term   type   kind   sort
-
-There is nothing above ❰Kind❱ in this hierarchy, so if you try to type check any
-expression containing ❰Kind❱ anywhere in the expression then type checking fails
-
-Some common reasons why you might get this error:
-
-● You supplied a kind where a type was expected
-
-  For example, the following expression will fail to type check:
-
-    ┌────────────────┐
-    │ [] : List Type │
-    └────────────────┘
-                ⇧
-                ❰Type❱ is a kind, not a type
-|]
+        "Explanation: There are four levels of expressions that form a heirarchy:        \n\
+        \                                                                                \n\
+        \● terms                                                                         \n\
+        \● types                                                                         \n\
+        \● kinds                                                                         \n\
+        \● sorts                                                                         \n\
+        \                                                                                \n\
+        \The following example illustrates this heirarchy:                               \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ \"ABC\" : Text : Type : Kind │                                            \n\
+        \    └────────────────────────────┘                                              \n\
+        \       ⇧      ⇧      ⇧      ⇧                                                   \n\
+        \       term   type   kind   sort                                                \n\
+        \                                                                                \n\
+        \There is nothing above ❰Kind❱ in this hierarchy, so if you try to type check any\n\
+        \expression containing ❰Kind❱ anywhere in the expression then type checking fails\n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You supplied a kind where a type was expected                                 \n\
+        \                                                                                \n\
+        \  For example, the following expression will fail to type check:                \n\
+        \                                                                                \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ [] : List Type │                                                          \n\
+        \    └────────────────┘                                                          \n\
+        \                ⇧                                                               \n\
+        \                ❰Type❱ is a kind, not a type                                    \n"
 
 prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
   where
     short = "Invalid predicate for ❰if❱"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Every ❰if❱ expression begins with a predicate which must have type
-❰Bool❱
-
-For example, these are valid ❰if❱ expressions:
-
-
-    ┌──────────────────────────────┐
-    │ if True then "Yes" else "No" │
-    └──────────────────────────────┘
-         ⇧
-         Predicate
-
-
-    ┌─────────────────────────────────────────┐
-    │ λ(x : Bool) → if x then False else True │
-    └─────────────────────────────────────────┘
-                       ⇧
-                       Predicate
-
-
-... but these are $_NOT valid ❰if❱ expressions:
-
-
-    ┌───────────────────────────┐
-    │ if 0 then "Yes" else "No" │  ❰0❱ does not have type ❰Bool❱
-    └───────────────────────────┘
-
-
-    ┌────────────────────────────┐
-    │ if "" then False else True │  ❰""❱ does not have type ❰Bool❱
-    └────────────────────────────┘
-
-
-Some common reasons why you might get this error:
-
-● You might be used to other programming languages that accept predicates other
-  than ❰Bool❱
-
-  For example, some languages permit ❰0❱ or ❰""❱ as valid predicates and treat
-  them as equivalent to ❰False❱.  However, the Dhall language does not permit
-  this
-
-────────────────────────────────────────────────────────────────────────────────
-
-Your ❰if❱ expression begins with the following predicate:
-
-↳ $txt0
-
-... that has type:
-
-↳ $txt1
-
-... but the predicate must instead have type ❰Bool❱
-|]
+        "Explanation: Every ❰if❱ expression begins with a predicate which must have type \n\
+        \❰Bool❱                                                                          \n\
+        \                                                                                \n\
+        \For example, these are valid ❰if❱ expressions:                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────┐                                            \n\
+        \    │ if True then \"Yes\" else \"No\" │                                        \n\
+        \    └──────────────────────────────┘                                            \n\
+        \         ⇧                                                                      \n\
+        \         Predicate                                                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────┐                                 \n\
+        \    │ λ(x : Bool) → if x then False else True │                                 \n\
+        \    └─────────────────────────────────────────┘                                 \n\
+        \                       ⇧                                                        \n\
+        \                       Predicate                                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but these are " <> _NOT <> " valid ❰if❱ expressions:                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────┐                                               \n\
+        \    │ if 0 then \"Yes\" else \"No\" │  ❰0❱ does not have type ❰Bool❱            \n\
+        \    └───────────────────────────┘                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ if \"\" then False else True │  ❰\"\"❱ does not have type ❰Bool❱          \n\
+        \    └────────────────────────────┘                                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You might be used to other programming languages that accept predicates other \n\
+        \  than ❰Bool❱                                                                   \n\
+        \                                                                                \n\
+        \  For example, some languages permit ❰0❱ or ❰\"\"❱ as valid predicates and treat\n\
+        \  them as equivalent to ❰False❱.  However, the Dhall language does not permit   \n\
+        \  this                                                                          \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \Your ❰if❱ expression begins with the following predicate:                       \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... that has type:                                                              \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... but the predicate must instead have type ❰Bool❱                             \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build expr0
+        txt1 = build expr1
 
 prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -1469,88 +1450,86 @@ prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
     short = "❰if❱ branch is not a term"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which
-is an expression:
-
-
-                   Expression for ❰then❱ branch
-                   ⇩
-    ┌────────────────────────────────┐
-    │ if True then "Hello, world!"   │
-    │         else "Goodbye, world!" │
-    └────────────────────────────────┘
-                   ⇧
-                   Expression for ❰else❱ branch
-
-
-These expressions must be a "term", where a "term" is defined as an expression
-that has a type thas has kind ❰Type❱
-
-For example, the following expressions are all valid "terms":
-
-
-    ┌────────────────────┐
-    │ 1 : Integer : Type │  ❰1❱ is a term with a type (❰Integer❱) of kind ❰Type❱
-    └────────────────────┘
-      ⇧
-      term
-
-
-    ┌─────────────────────────────────────┐
-    │ Natural/odd : Natural → Bool : Type │  ❰Natural/odd❱ is a term with a type
-    └─────────────────────────────────────┘  (❰Natural → Bool❱) of kind ❰Type❱
-      ⇧
-      term
-
-
-However, the following expressions are $_NOT valid terms:
-
-
-    ┌────────────────────┐
-    │ Text : Type : Kind │  ❰Text❱ has kind (❰Type❱) of sort ❰Kind❱ and is
-    └────────────────────┘  therefore not a term
-      ⇧
-      type
-
-
-    ┌───────────────────────────┐
-    │ List : Type → Type : Kind │  ❰List❱ has kind (❰Type → Type❱) of sort
-    └───────────────────────────┘  ❰Kind❱ and is therefore not a term
-      ⇧
-      type-level function
-
-
-This means that you cannot define an ❰if❱ expression that returns a type.  For
-example, the following ❰if❱ expression is $_NOT valid:
-
-
-    ┌─────────────────────────────┐
-    │ if True then Text else Bool │  Invalid ❰if❱ expression
-    └─────────────────────────────┘
-                   ⇧         ⇧
-                   type      type
-
-
-Your ❰$txt0❱ branch of your ❰if❱ expression is:
-
-↳ $txt1
-
-... which has kind:
-
-↳ $txt2
-
-... of sort:
-
-↳ $txt3
-
-... and is not a term.  Therefore your ❰if❱ expression is not valid
-|]
+        "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
+        \is an expression:                                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \                   Expression for ❰then❱ branch                                 \n\
+        \                   ⇩                                                            \n\
+        \    ┌────────────────────────────────┐                                          \n\
+        \    │ if True then \"Hello, world!\"   │                                        \n\
+        \    │         else \"Goodbye, world!\" │                                        \n\
+        \    └────────────────────────────────┘                                          \n\
+        \                   ⇧                                                            \n\
+        \                   Expression for ❰else❱ branch                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \These expressions must be a \"term\", where a \"term\" is defined as an expression\n\
+        \that has a type thas has kind ❰Type❱                                            \n\
+        \                                                                                \n\
+        \For example, the following expressions are all valid \"terms\":                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ 1 : Integer : Type │  ❰1❱ is a term with a type (❰Integer❱) of kind ❰Type❱\n\
+        \    └────────────────────┘                                                      \n\
+        \      ⇧                                                                         \n\
+        \      term                                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────┐                                     \n\
+        \    │ Natural/odd : Natural → Bool : Type │  ❰Natural/odd❱ is a term with a type\n\
+        \    └─────────────────────────────────────┘  (❰Natural → Bool❱) of kind ❰Type❱  \n\
+        \      ⇧                                                                         \n\
+        \      term                                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, the following expressions are " <> _NOT <> " valid terms:              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ Text : Type : Kind │  ❰Text❱ has kind (❰Type❱) of sort ❰Kind❱ and is      \n\
+        \    └────────────────────┘  therefore not a term                                \n\
+        \      ⇧                                                                         \n\
+        \      type                                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────┐                                               \n\
+        \    │ List : Type → Type : Kind │  ❰List❱ has kind (❰Type → Type❱) of sort      \n\
+        \    └───────────────────────────┘  ❰Kind❱ and is therefore not a term           \n\
+        \      ⇧                                                                         \n\
+        \      type-level function                                                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \This means that you cannot define an ❰if❱ expression that returns a type.  For  \n\
+        \example, the following ❰if❱ expression is " <> _NOT <> " valid:                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────┐                                             \n\
+        \    │ if True then Text else Bool │  Invalid ❰if❱ expression                    \n\
+        \    └─────────────────────────────┘                                             \n\
+        \                   ⇧         ⇧                                                  \n\
+        \                   type      type                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Your ❰" <> txt0 <> "❱ branch of your ❰if❱ expression is:                        \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which has kind:                                                             \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n\
+        \                                                                                \n\
+        \... of sort:                                                                    \n\
+        \                                                                                \n\
+        \↳ " <> txt3 <> "                                                                \n\
+        \                                                                                \n\
+        \... and is not a term.  Therefore your ❰if❱ expression is not valid             \n"
       where
         txt0 = if b then "then" else "else"
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt3 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt1 = build expr0
+        txt2 = build expr1
+        txt3 = build expr2
 
 prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     ErrorMessages {..}
@@ -1558,127 +1537,123 @@ prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     short = "❰if❱ branches must have matching types"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which
-is an expression:
-
-
-                   Expression for ❰then❱ branch
-                   ⇩
-    ┌────────────────────────────────┐
-    │ if True then "Hello, world!"   │
-    │         else "Goodbye, world!" │
-    └────────────────────────────────┘
-                   ⇧
-                   Expression for ❰else❱ branch
-
-
-These two expressions must have the same type.  For example, the following ❰if❱
-expressions are all valid:
-
-
-    ┌──────────────────────────────────┐
-    │ λ(b : Bool) → if b then 0 else 1 │ Both branches have type ❰Integer❱
-    └──────────────────────────────────┘
-
-
-    ┌────────────────────────────┐
-    │ λ(b : Bool) →              │
-    │     if b then Natural/even │ Both branches have type ❰Natural → Bool❱
-    │          else Natural/odd  │
-    └────────────────────────────┘
-
-
-However, the following expression is $_NOT valid:
-
-
-                   This branch has type ❰Integer❱
-                   ⇩
-    ┌────────────────────────┐
-    │ if True then 0         │
-    │         else "ABC"     │
-    └────────────────────────┘
-                   ⇧
-                   This branch has type ❰Text❱
-
-
-The ❰then❱ and ❰else❱ branches must have matching types, even if the predicate is
-always ❰True❱ or ❰False❱
-
-Your ❰if❱ expression has the following ❰then❱ branch:
-
-↳ $txt0
-
-... which has type:
-
-↳ $txt2
-
-... and the following ❰else❱ branch:
-
-↳ $txt1
-
-... which has a different type:
-
-↳ $txt3
-
-Fix your ❰then❱ and ❰else❱ branches to have matching types
-|]
+        "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
+        \is an expression:                                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \                   Expression for ❰then❱ branch                                 \n\
+        \                   ⇩                                                            \n\
+        \    ┌────────────────────────────────┐                                          \n\
+        \    │ if True then \"Hello, world!\"   │                                        \n\
+        \    │         else \"Goodbye, world!\" │                                        \n\
+        \    └────────────────────────────────┘                                          \n\
+        \                   ⇧                                                            \n\
+        \                   Expression for ❰else❱ branch                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \These two expressions must have the same type.  For example, the following ❰if❱ \n\
+        \expressions are all valid:                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────┐                                        \n\
+        \    │ λ(b : Bool) → if b then 0 else 1 │ Both branches have type ❰Integer❱      \n\
+        \    └──────────────────────────────────┘                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ λ(b : Bool) →              │                                              \n\
+        \    │     if b then Natural/even │ Both branches have type ❰Natural → Bool❱     \n\
+        \    │          else Natural/odd  │                                              \n\
+        \    └────────────────────────────┘                                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, the following expression is " <> _NOT <> " valid:                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \                   This branch has type ❰Integer❱                               \n\
+        \                   ⇩                                                            \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ if True then 0         │                                                  \n\
+        \    │         else \"ABC\"     │                                                \n\
+        \    └────────────────────────┘                                                  \n\
+        \                   ⇧                                                            \n\
+        \                   This branch has type ❰Text❱                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \The ❰then❱ and ❰else❱ branches must have matching types, even if the predicate  \n\
+        \is always ❰True❱ or ❰False❱                                                     \n\
+        \                                                                                \n\
+        \Your ❰if❱ expression has the following ❰then❱ branch:                           \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which has type:                                                             \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n\
+        \                                                                                \n\
+        \... and the following ❰else❱ branch:                                            \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which has a different type:                                                 \n\
+        \                                                                                \n\
+        \↳ " <> txt3 <> "                                                                \n\
+        \                                                                                \n\
+        \Fix your ❰then❱ and ❰else❱ branches to have matching types                      \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
-        txt3 = Text.toStrict (Dhall.Core.pretty expr3)
+        txt0 = build expr0
+        txt1 = build expr1
+        txt2 = build expr2
+        txt3 = build expr3
 
 prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
   where
     short = "Invalid type for ❰List❱ elements"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: ❰List❱s can optionally document the type of their elements with a
-type annotation, like this:
-
-
-    ┌──────────────────────────┐
-    │ [1, 2, 3] : List Integer │  A ❰List❱ of three ❰Integer❱s
-    └──────────────────────────┘
-                       ⇧
-                       The type of the ❰List❱'s elements, which are ❰Integer❱s
-
-
-    ┌───────────────────┐
-    │ [] : List Integer │  An empty ❰List❱
-    └───────────────────┘
-                ⇧
-                You must specify the type when the ❰List❱ is empty
-
-
-The element type must be a type and not something else.  For example, the
-following element types are $_NOT valid:
-
-
-    ┌──────────────┐
-    │ ... : List 1 │
-    └──────────────┘
-                 ⇧
-                 This is an ❰Integer❱ and not a ❰Type❱
-
-
-    ┌─────────────────┐
-    │ ... : List Type │
-    └─────────────────┘
-                 ⇧
-                 This is a ❰Kind❱ and not a ❰Type❱
-
-
-You declared that the ❰List❱'s elements should have type:
-
-↳ $txt0
-
-... which is not a ❰Type❱
-|]
+        "Explanation: ❰List❱s can optionally document the type of their elements with a  \n\
+        \type annotation, like this:                                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────┐                                                \n\
+        \    │ [1, 2, 3] : List Integer │  A ❰List❱ of three ❰Integer❱s                  \n\
+        \    └──────────────────────────┘                                                \n\
+        \                       ⇧                                                        \n\
+        \                       The type of the ❰List❱'s elements, which are ❰Integer❱s  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────┐                                                       \n\
+        \    │ [] : List Integer │  An empty ❰List❱                                      \n\
+        \    └───────────────────┘                                                       \n\
+        \                ⇧                                                               \n\
+        \                You must specify the type when the ❰List❱ is empty              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \The element type must be a type and not something else.  For example, the       \n\
+        \following element types are " <> _NOT <> " valid:                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────┐                                                            \n\
+        \    │ ... : List 1 │                                                            \n\
+        \    └──────────────┘                                                            \n\
+        \                 ⇧                                                              \n\
+        \                 This is an ❰Integer❱ and not a ❰Type❱                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────┐                                                         \n\
+        \    │ ... : List Type │                                                         \n\
+        \    └─────────────────┘                                                         \n\
+        \                 ⇧                                                              \n\
+        \                 This is a ❰Kind❱ and not a ❰Type❱                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You declared that the ❰List❱'s elements should have type:                       \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a ❰Type❱                                                       \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = build expr0
 
 prettyTypeMessage MissingListType = do
     ErrorMessages {..}
@@ -1686,26 +1661,24 @@ prettyTypeMessage MissingListType = do
     short = "An empty list requires a type annotation"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Lists do not require a type annotation if they have at least one
-element:
-
-
-    ┌───────────┐
-    │ [1, 2, 3] │  The compiler can infer that this list has type ❰List Integer❱
-    └───────────┘
-
-
-However, empty lists still require a type annotation:
-
-
-    ┌───────────────────┐
-    │ [] : List Integer │  This type annotation is mandatory
-    └───────────────────┘
-
-
-You cannot supply an empty list without a type annotation
-|]
+        "Explanation: Lists do not require a type annotation if they have at least one   \n\
+        \element:                                                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────┐                                                               \n\
+        \    │ [1, 2, 3] │  The compiler can infer that this list has type ❰List Integer❱\n\
+        \    └───────────┘                                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, empty lists still require a type annotation:                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────┐                                                       \n\
+        \    │ [] : List Integer │  This type annotation is mandatory                    \n\
+        \    └───────────────────┘                                                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You cannot supply an empty list without a type annotation                       \n"
 
 prettyTypeMessage (MismatchedListElements i expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -1713,42 +1686,40 @@ prettyTypeMessage (MismatchedListElements i expr0 expr1 expr2) =
     short = "List elements should have the same type"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Every element in a list must have the same type
-
-For example, this is a valid ❰List❱:
-
-
-    ┌───────────┐
-    │ [1, 2, 3] │  Every element in this ❰List❱ is an ❰Integer❱
-    └───────────┘
-
-
-.. but this is $_NOT a valid ❰List❱:
-
-
-    ┌───────────────┐
-    │ [1, "ABC", 3] │  The first and second element have different types
-    └───────────────┘
-
-
-Your first ❰List❱ elements has this type:
-
-↳ $txt0
-
-... but the following element at index $txt1:
-
-↳ $txt2
-
-... has this type instead:
-
-↳ $txt3
-|]
+        "Explanation: Every element in a list must have the same type                    \n\
+        \                                                                                \n\
+        \For example, this is a valid ❰List❱:                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────┐                                                               \n\
+        \    │ [1, 2, 3] │  Every element in this ❰List❱ is an ❰Integer❱                 \n\
+        \    └───────────┘                                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \.. but this is " <> _NOT <> " a valid ❰List❱:                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────┐                                                           \n\
+        \    │ [1, \"ABC\", 3] │  The first and second element have different types      \n\
+        \    └───────────────┘                                                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Your first ❰List❱ elements has this type:                                       \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... but the following element at index " <> txt1 <> ":                          \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n\
+        \                                                                                \n\
+        \... has this type instead:                                                      \n\
+        \                                                                                \n\
+        \↳ " <> txt3 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty i    )
-        txt2 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt3 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt0 = build expr0
+        txt1 = build i
+        txt2 = build expr1
+        txt3 = build expr2
 
 prettyTypeMessage (InvalidListElement i expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -1756,788 +1727,755 @@ prettyTypeMessage (InvalidListElement i expr0 expr1 expr2) =
     short = "List element has the wrong type"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Every element in the list must have a type matching the type
-annotation at the end of the list
-
-For example, this is a valid ❰List❱:
-
-
-    ┌──────────────────────────┐
-    │ [1, 2, 3] : List Integer │  Every element in this ❰List❱ is an ❰Integer❱
-    └──────────────────────────┘
-
-
-.. but this is $_NOT a valid ❰List❱:
-
-
-    ┌──────────────────────────────┐
-    │ [1, "ABC", 3] : List Integer │  The second element is not an ❰Integer❱
-    └──────────────────────────────┘
-
-
-Your ❰List❱ elements should have this type:
-
-↳ $txt0
-
-... but the following element at index $txt1:
-
-↳ $txt2
-
-... has this type instead:
-
-↳ $txt3
-|]
+        "Explanation: Every element in the list must have a type matching the type       \n\
+        \annotation at the end of the list                                               \n\
+        \                                                                                \n\
+        \For example, this is a valid ❰List❱:                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────┐                                                \n\
+        \    │ [1, 2, 3] : List Integer │  Every element in this ❰List❱ is an ❰Integer❱  \n\
+        \    └──────────────────────────┘                                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \.. but this is " <> _NOT <> " a valid ❰List❱:                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────┐                                            \n\
+        \    │ [1, \"ABC\", 3] : List Integer │  The second element is not an ❰Integer❱  \n\
+        \    └──────────────────────────────┘                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Your ❰List❱ elements should have this type:                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... but the following element at index " <> txt1 <> ":                          \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n\
+        \                                                                                \n\
+        \... has this type instead:                                                      \n\
+        \                                                                                \n\
+        \↳ " <> txt3 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty i    )
-        txt2 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt3 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt0 = build expr0
+        txt1 = build i
+        txt2 = build expr1
+        txt3 = build expr2
 
 prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
   where
     short = "Invalid type for ❰Optional❱ element"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Every optional element ends with a type annotation for the element
-that might be present, like this:
-
-
-    ┌────────────────────────┐
-    │ [1] : Optional Integer │  An optional element that's present
-    └────────────────────────┘
-                     ⇧
-                     The type of the ❰Optional❱ element, which is an ❰Integer❱
-
-
-    ┌────────────────────────┐
-    │ [] : Optional Integer  │  An optional element that's absent
-    └────────────────────────┘
-                    ⇧
-                    You still specify the type even when the element is absent
-
-
-The element type must be a type and not something else.  For example, the
-following element types are $_NOT valid:
-
-
-    ┌──────────────────┐
-    │ ... : Optional 1 │
-    └──────────────────┘
-                     ⇧
-                     This is an ❰Integer❱ and not a ❰Type❱
-
-
-    ┌─────────────────────┐
-    │ ... : Optional Type │
-    └─────────────────────┘
-                     ⇧
-                     This is a ❰Kind❱ and not a ❰Type❱
-
-
-Even if the element is absent you still must specify a valid type
-
-You declared that the ❰Optional❱ element should have type:
-
-↳ $txt0
-
-... which is not a ❰Type❱
-
-|]
+        "Explanation: Every optional element ends with a type annotation for the element \n\
+        \that might be present, like this:                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ [1] : Optional Integer │  An optional element that's present              \n\
+        \    └────────────────────────┘                                                  \n\
+        \                     ⇧                                                          \n\
+        \                     The type of the ❰Optional❱ element, which is an ❰Integer❱  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ [] : Optional Integer  │  An optional element that's absent               \n\
+        \    └────────────────────────┘                                                  \n\
+        \                    ⇧                                                           \n\
+        \                    You still specify the type even when the element is absent  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \The element type must be a type and not something else.  For example, the       \n\
+        \following element types are " <> _NOT <> " valid:                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────┐                                                        \n\
+        \    │ ... : Optional 1 │                                                        \n\
+        \    └──────────────────┘                                                        \n\
+        \                     ⇧                                                          \n\
+        \                     This is an ❰Integer❱ and not a ❰Type❱                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────┐                                                     \n\
+        \    │ ... : Optional Type │                                                     \n\
+        \    └─────────────────────┘                                                     \n\
+        \                     ⇧                                                          \n\
+        \                     This is a ❰Kind❱ and not a ❰Type❱                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Even if the element is absent you still must specify a valid type               \n\
+        \                                                                                \n\
+        \You declared that the ❰Optional❱ element should have type:                      \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a ❰Type❱                                                       \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = build expr0
 
 prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..}
   where
     short = "❰Optional❱ element has the wrong type"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: An ❰Optional❱ element must have a type matching the type annotation
-
-For example, this is a valid ❰Optional❱ value:
-
-
-    ┌────────────────────────┐
-    │ [1] : Optional Integer │  ❰1❱ is an ❰Integer❱, which matches the type
-    └────────────────────────┘
-
-
-... but this is $_NOT a valid ❰Optional❱ value:
-
-
-    ┌────────────────────────────┐
-    │ ["ABC"] : Optional Integer │  ❰"ABC"❱ is not an ❰Integer❱
-    └────────────────────────────┘
-
-
-Your ❰Optional❱ element should have this type:
-
-↳ $txt0
-
-... but the element you provided:
-
-↳ $txt1
-
-... has this type instead:
-
-↳ $txt2
-|]
+        "Explanation: An ❰Optional❱ element must have a type matching the type annotation\n\
+        \                                                                                \n\
+        \For example, this is a valid ❰Optional❱ value:                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ [1] : Optional Integer │  ❰1❱ is an ❰Integer❱, which matches the type     \n\
+        \    └────────────────────────┘                                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but this is " <> _NOT <> " a valid ❰Optional❱ value:                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ [\"ABC\"] : Optional Integer │  ❰\"ABC\"❱ is not an ❰Integer❱             \n\
+        \    └────────────────────────────┘                                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Your ❰Optional❱ element should have this type:                                  \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... but the element you provided:                                               \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... has this type instead:                                                      \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt0 = build expr0
+        txt1 = build expr1
+        txt2 = build expr2
 
 prettyTypeMessage (InvalidOptionalLiteral n) = ErrorMessages {..}
   where
     short = "Multiple ❰Optional❱ elements not allowed"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: The syntax for ❰Optional❱ values resembles the syntax for ❰List❱s:
-
-
-    ┌───────────────────────┐
-    │ [] : Optional Integer │  An ❰Optional❱ value which is absent
-    └───────────────────────┘
-
-
-    ┌───────────────────────┐
-    │ [] : List     Integer │  An empty (0-element) ❰List❱
-    └───────────────────────┘
-
-
-    ┌────────────────────────┐
-    │ [1] : Optional Integer │  An ❰Optional❱ value which is present
-    └────────────────────────┘
-
-
-    ┌────────────────────────┐
-    │ [1] : List     Integer │  A singleton (1-element) ❰List❱
-    └────────────────────────┘
-
-
-However, an ❰Optional❱ value can $_NOT have more than one element, whereas a
-❰List❱ can have multiple elements:
-
-
-    ┌───────────────────────────┐
-    │ [1, 2] : Optional Integer │  Invalid: multiple elements $_NOT allowed
-    └───────────────────────────┘
-
-
-    ┌───────────────────────────┐
-    │ [1, 2] : List     Integer │  Valid: multiple elements allowed
-    └───────────────────────────┘
-
-
-Some common reasons why you might get this error:
-
-● You accidentally typed ❰Optional❱ when you meant ❰List❱, like this:
-
-
-    ┌────────────────────────────────────────────────────┐
-    │ List/length Integer ([1, 2, 3] : Optional Integer) │
-    └────────────────────────────────────────────────────┘
-                                       ⇧
-                                       This should be ❰List❱ instead
-
-
-────────────────────────────────────────────────────────────────────────────────
-
-Your ❰Optional❱ value had this many elements:
-
-↳ $txt0
-
-... when an ❰Optional❱ value can only have at most one element
-|]
+        "Explanation: The syntax for ❰Optional❱ values resembles the syntax for ❰List❱s: \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ [] : Optional Integer │  An ❰Optional❱ value which is absent              \n\
+        \    └───────────────────────┘                                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ [] : List     Integer │  An empty (0-element) ❰List❱                      \n\
+        \    └───────────────────────┘                                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ [1] : Optional Integer │  An ❰Optional❱ value which is present            \n\
+        \    └────────────────────────┘                                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ [1] : List     Integer │  A singleton (1-element) ❰List❱                  \n\
+        \    └────────────────────────┘                                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, an ❰Optional❱ value can " <> _NOT <> " have more than one element, whereas a\n\
+        \❰List❱ can have multiple elements:                                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────┐                                               \n\
+        \    │ [1, 2] : Optional Integer │  Invalid: multiple elements " <> _NOT <> " allowed\n\
+        \    └───────────────────────────┘                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────┐                                               \n\
+        \    │ [1, 2] : List     Integer │  Valid: multiple elements allowed             \n\
+        \    └───────────────────────────┘                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You accidentally typed ❰Optional❱ when you meant ❰List❱, like this:           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────────────────────┐                      \n\
+        \    │ List/length Integer ([1, 2, 3] : Optional Integer) │                      \n\
+        \    └────────────────────────────────────────────────────┘                      \n\
+        \                                       ⇧                                        \n\
+        \                                       This should be ❰List❱ instead            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \Your ❰Optional❱ value had this many elements:                                   \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... when an ❰Optional❱ value can only have at most one element                  \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty n)
+        txt0 = build n
 
 prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
   where
     short = "Invalid field type"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Every record type documents the type of each field, like this:
-
-    ┌──────────────────────────────────────────────┐
-    │ { foo : Integer, bar : Integer, baz : Text } │
-    └──────────────────────────────────────────────┘
-
-However, fields cannot be annotated with expressions other than types
-
-For example, these record types are $_NOT valid:
-
-
-    ┌────────────────────────────┐
-    │ { foo : Integer, bar : 1 } │
-    └────────────────────────────┘
-                             ⇧
-                             ❰1❱ is an ❰Integer❱ and not a ❰Type❱
-
-
-    ┌───────────────────────────────┐
-    │ { foo : Integer, bar : Type } │
-    └───────────────────────────────┘
-                             ⇧
-                             ❰Type❱ is a ❰Kind❱ and not a ❰Type❱
-
-
-You provided a record type with a key named:
-
-↳ $txt0
-
-... annotated with the following expression:
-
-↳ $txt1
-
-... which is not a type
-|]
+        "Explanation: Every record type documents the type of each field, like this:     \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────────┐                            \n\
+        \    │ { foo : Integer, bar : Integer, baz : Text } │                            \n\
+        \    └──────────────────────────────────────────────┘                            \n\
+        \                                                                                \n\
+        \However, fields cannot be annotated with expressions other than types           \n\
+        \                                                                                \n\
+        \For example, these record types are " <> _NOT <> " valid:                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ { foo : Integer, bar : 1 } │                                              \n\
+        \    └────────────────────────────┘                                              \n\
+        \                             ⇧                                                  \n\
+        \                             ❰1❱ is an ❰Integer❱ and not a ❰Type❱               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ { foo : Integer, bar : Type } │                                           \n\
+        \    └───────────────────────────────┘                                           \n\
+        \                             ⇧                                                  \n\
+        \                             ❰Type❱ is a ❰Kind❱ and not a ❰Type❱                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You provided a record type with a key named:                                    \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... annotated with the following expression:                                    \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a type                                                         \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k    )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = build k
+        txt1 = build expr0
 
 prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
   where
     short = "Invalid field"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Every record literal is a set of fields assigned to values, like
-this:
-
-    ┌────────────────────────────────────────┐
-    │ { foo = 100, bar = True, baz = "ABC" } │
-    └────────────────────────────────────────┘
-
-However, fields can only be terms and cannot be types or kinds
-
-For example, these record literals are $_NOT valid:
-
-
-    ┌───────────────────────────┐
-    │ { foo = 100, bar = Text } │
-    └───────────────────────────┘
-                         ⇧
-                         ❰Text❱ is a type and not a term
-
-
-    ┌───────────────────────────┐
-    │ { foo = 100, bar = Type } │
-    └───────────────────────────┘
-                         ⇧
-                         ❰Type❱ is a kind and not a term
-
-
-You provided a record literal with a key named:
-
-↳ $txt0
-
-... whose value is:
-
-↳ $txt1
-
-... which is not a term
-|]
+        "Explanation: Every record literal is a set of fields assigned to values, like   \n\
+        \this:                                                                           \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────────┐                                  \n\
+        \    │ { foo = 100, bar = True, baz = \"ABC\" } │                                \n\
+        \    └────────────────────────────────────────┘                                  \n\
+        \                                                                                \n\
+        \However, fields can only be terms and cannot be types or kinds                  \n\
+        \                                                                                \n\
+        \For example, these record literals are " <> _NOT <> " valid:                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────┐                                               \n\
+        \    │ { foo = 100, bar = Text } │                                               \n\
+        \    └───────────────────────────┘                                               \n\
+        \                         ⇧                                                      \n\
+        \                         ❰Text❱ is a type and not a term                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────┐                                               \n\
+        \    │ { foo = 100, bar = Type } │                                               \n\
+        \    └───────────────────────────┘                                               \n\
+        \                         ⇧                                                      \n\
+        \                         ❰Type❱ is a kind and not a term                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You provided a record literal with a key named:                                 \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... whose value is:                                                             \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a term                                                         \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k    )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = build k
+        txt1 = build expr0
 
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
     short = "Invalid alternative"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Every union literal begins by selecting one alternative and
-specifying the value for that alternative, like this:
-
-
-        Select the ❰Left❱ alternative, whose value is ❰True❱
-        ⇩
-    ┌──────────────────────────────────┐
-    │ < Left = True, Right : Natural > │  A union literal with two alternatives
-    └──────────────────────────────────┘
-
-
-However, this value must be a term and not a type.  For example, the following
-values are $_NOT valid:
-
-
-    ┌──────────────────────────────────┐
-    │ < Left = Text, Right : Natural > │  Invalid union literal
-    └──────────────────────────────────┘
-               ⇧
-               This is a type and not a term
-
-
-    ┌───────────────────────────────┐
-    │ < Left = Type, Right : Type > │  Invalid union type
-    └───────────────────────────────┘
-               ⇧
-               This is a kind and not a term
-
-
-Some common reasons why you might get this error:
-
-● You accidentally typed ❰=❱ instead of ❰:❱ for a union literal with one
-  alternative:
-
-
-    ┌────────────────────┐
-    │ < Example = Text > │
-    └────────────────────┘
-                ⇧
-                This could be ❰:❱ instead
-
-
-────────────────────────────────────────────────────────────────────────────────
-
-You provided a union literal with an alternative named:
-
-↳ $txt0
-
-... whose value is:
-
-↳ $txt1
-
-... which is not a term
-|]
+        "Explanation: Every union literal begins by selecting one alternative and        \n\
+        \specifying the value for that alternative, like this:                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \        Select the ❰Left❱ alternative, whose value is ❰True❱                    \n\
+        \        ⇩                                                                       \n\
+        \    ┌──────────────────────────────────┐                                        \n\
+        \    │ < Left = True, Right : Natural > │  A union literal with two alternatives \n\
+        \    └──────────────────────────────────┘                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, this value must be a term and not a type.  For example, the following  \n\
+        \values are " <> _NOT <> " valid:                                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────┐                                        \n\
+        \    │ < Left = Text, Right : Natural > │  Invalid union literal                 \n\
+        \    └──────────────────────────────────┘                                        \n\
+        \               ⇧                                                                \n\
+        \               This is a type and not a term                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ < Left = Type, Right : Type > │  Invalid union type                       \n\
+        \    └───────────────────────────────┘                                           \n\
+        \               ⇧                                                                \n\
+        \               This is a kind and not a term                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You accidentally typed ❰=❱ instead of ❰:❱ for a union literal with one        \n\
+        \  alternative:                                                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ < Example = Text > │                                                      \n\
+        \    └────────────────────┘                                                      \n\
+        \                ⇧                                                               \n\
+        \                This could be ❰:❱ instead                                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You provided a union literal with an alternative named:                         \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... whose value is:                                                             \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a term                                                         \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k    )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = build k
+        txt1 = build expr0
 
 prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
   where
     short = "Invalid alternative"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Every union type specifies the type of each alternative, like this:
-
-
-               The type of the first alternative is ❰Bool❱
-               ⇩
-    ┌──────────────────────────────────┐
-    │ < Left : Bool, Right : Natural > │  A union type with two alternatives
-    └──────────────────────────────────┘
-                             ⇧
-                             The type of the second alternative is ❰Natural❱
-
-
-However, these alternatives can only be annotated with types.  For example, the
-following union types are $_NOT valid:
-
-
-    ┌────────────────────────────┐
-    │ < Left : Bool, Right : 1 > │  Invalid union type
-    └────────────────────────────┘
-                             ⇧
-                             This is a term and not a type
-
-
-    ┌───────────────────────────────┐
-    │ < Left : Bool, Right : Type > │  Invalid union type
-    └───────────────────────────────┘
-                             ⇧
-                             This is a kind and not a type
-
-
-Some common reasons why you might get this error:
-
-● You accidentally typed ❰:❱ instead of ❰=❱ for a union literal with one
-  alternative:
-
-    ┌─────────────────┐
-    │ < Example : 1 > │
-    └─────────────────┘
-                ⇧
-                This could be ❰=❱ instead
-
-
-────────────────────────────────────────────────────────────────────────────────
-
-You provided a union type with an alternative named:
-
-↳ $txt0
-
-... annotated with the following expression which is not a type:
-
-↳ $txt1
-|]
+        "Explanation: Every union type specifies the type of each alternative, like this:\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \               The type of the first alternative is ❰Bool❱                      \n\
+        \               ⇩                                                                \n\
+        \    ┌──────────────────────────────────┐                                        \n\
+        \    │ < Left : Bool, Right : Natural > │  A union type with two alternatives    \n\
+        \    └──────────────────────────────────┘                                        \n\
+        \                             ⇧                                                  \n\
+        \                             The type of the second alternative is ❰Natural❱    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, these alternatives can only be annotated with types.  For example, the \n\
+        \following union types are " <> _NOT <> " valid:                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ < Left : Bool, Right : 1 > │  Invalid union type                          \n\
+        \    └────────────────────────────┘                                              \n\
+        \                             ⇧                                                  \n\
+        \                             This is a term and not a type                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ < Left : Bool, Right : Type > │  Invalid union type                       \n\
+        \    └───────────────────────────────┘                                           \n\
+        \                             ⇧                                                  \n\
+        \                             This is a kind and not a type                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You accidentally typed ❰:❱ instead of ❰=❱ for a union literal with one        \n\
+        \  alternative:                                                                  \n\
+        \                                                                                \n\
+        \    ┌─────────────────┐                                                         \n\
+        \    │ < Example : 1 > │                                                         \n\
+        \    └─────────────────┘                                                         \n\
+        \                ⇧                                                               \n\
+        \                This could be ❰=❱ instead                                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You provided a union type with an alternative named:                            \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... annotated with the following expression which is not a type:                \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k    )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = build k
+        txt1 = build expr0
 
 prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
   where
     short = "You can only append ❰List❱s with matching element types"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can append two ❰List❱s using the ❰#❱ operator, like this:
-
-
-    ┌────────────────────┐
-    │ [1, 2, 3] # [4, 5] │
-    └────────────────────┘
-
-
-... but you cannot append two ❰List❱s if they have different element types.
-For example, the following expression is $_NOT valid:
-
-
-       These elements have type ❰Integer❱
-       ⇩
-    ┌───────────────────────────┐
-    │ [1, 2, 3] # [True, False] │  Invalid: the element types don't match
-    └───────────────────────────┘
-                  ⇧
-                  These elements have type ❰Bool❱
-
-
-────────────────────────────────────────────────────────────────────────────────
-
-You tried to append a ❰List❱ thas has elements of type:
-
-↳ $txt0
-
-... with another ❰List❱ that has elements of type:
-
-↳ $txt1
-
-... and those two types do not match
-|]
+        "Explanation: You can append two ❰List❱s using the ❰#❱ operator, like this:      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ [1, 2, 3] # [4, 5] │                                                      \n\
+        \    └────────────────────┘                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot append two ❰List❱s if they have different element types.     \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \       These elements have type ❰Integer❱                                       \n\
+        \       ⇩                                                                        \n\
+        \    ┌───────────────────────────┐                                               \n\
+        \    │ [1, 2, 3] # [True, False] │  Invalid: the element types don't match       \n\
+        \    └───────────────────────────┘                                               \n\
+        \                  ⇧                                                             \n\
+        \                  These elements have type ❰Bool❱                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to append a ❰List❱ thas has elements of type:                         \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... with another ❰List❱ that has elements of type:                              \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... and those two types do not match                                            \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build expr0
+        txt1 = build expr1
 
 prettyTypeMessage (DuplicateAlternative k) = ErrorMessages {..}
   where
     short = "Duplicate union alternative"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: Unions may not have two alternatives that share the same name
-
-For example, the following expressions are $_NOT valid:
-
-
-    ┌─────────────────────────────┐
-    │ < foo = True | foo : Text > │  Invalid: ❰foo❱ appears twice
-    └─────────────────────────────┘
-
-
-    ┌───────────────────────────────────────┐
-    │ < foo = 1 | bar : Bool | bar : Text > │  Invalid: ❰bar❱ appears twice
-    └───────────────────────────────────────┘
-
-
-You have more than one alternative named:
-
-↳ $txt0
-|]
+        "Explanation: Unions may not have two alternatives that share the same name      \n\
+        \                                                                                \n\
+        \For example, the following expressions are " <> _NOT <> " valid:                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────┐                                             \n\
+        \    │ < foo = True | foo : Text > │  Invalid: ❰foo❱ appears twice               \n\
+        \    └─────────────────────────────┘                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────┐                                   \n\
+        \    │ < foo = 1 | bar : Bool | bar : Text > │  Invalid: ❰bar❱ appears twice     \n\
+        \    └───────────────────────────────────────┘                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You have more than one alternative named:                                       \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k)
+        txt0 = build k
 
 prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
   where
     short = "You can only combine records"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can combine records using the ❰$op❱ operator, like this:
-
-
-    ┌───────────────────────────────────────────┐
-    │ { foo = 1, bar = "ABC" } $op { baz = True } │
-    └───────────────────────────────────────────┘
-
-
-    ┌─────────────────────────────────────────────┐
-    │ λ(r : { foo : Bool }) → r $op { bar = "ABC" } │
-    └─────────────────────────────────────────────┘
-
-
-... but you cannot combine values that are not records.
-
-For example, the following expressions are $_NOT valid:
-
-
-    ┌──────────────────────────────┐
-    │ { foo = 1, bar = "ABC" } $op 1 │
-    └──────────────────────────────┘
-                                 ⇧
-                                 Invalid: Not a record
-
-
-    ┌───────────────────────────────────────────┐
-    │ { foo = 1, bar = "ABC" } $op { baz : Bool } │
-    └───────────────────────────────────────────┘
-                                 ⇧
-                                 Invalid: This is a record type and not a record
-
-
-    ┌───────────────────────────────────────────┐
-    │ { foo = 1, bar = "ABC" } $op < baz = True > │
-    └───────────────────────────────────────────┘
-                                 ⇧
-                                 Invalid: This is a union and not a record
-
-
-You tried to combine the following value:
-
-↳ $txt0
-
-... which is not a record, but is actually a:
-
-↳ $txt1
-|]
+        "Explanation: You can combine records using the ❰" <> op <> "❱ operator, like this:\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ { foo = 1, bar = \"ABC\" } " <> op <> " { baz = True } │                  \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────┐                             \n\
+        \    │ λ(r : { foo : Bool }) → r " <> op <> " { bar = \"ABC\" } │                \n\
+        \    └─────────────────────────────────────────────┘                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot combine values that are not records.                         \n\
+        \                                                                                \n\
+        \For example, the following expressions are " <> _NOT <> " valid:                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────┐                                            \n\
+        \    │ { foo = 1, bar = \"ABC\" } " <> op <> " 1 │                               \n\
+        \    └──────────────────────────────┘                                            \n\
+        \                                 ⇧                                              \n\
+        \                                 Invalid: Not a record                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ { foo = 1, bar = \"ABC\" } " <> op <> " { baz : Bool } │                  \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \                                 ⇧                                              \n\
+        \                                 Invalid: This is a record type and not a record\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ { foo = 1, bar = \"ABC\" } " <> op <> " < baz = True > │                  \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \                                 ⇧                                              \n\
+        \                                 Invalid: This is a union and not a record      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You tried to combine the following value:                                       \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a record, but is actually a:                                   \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n"
       where
-        op   = Data.Text.singleton c
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        op   = build c
+        txt0 = build expr0
+        txt1 = build expr1
 
 prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
   where
     short = "Field collision"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can combine records if they don't share any fields in common,
-like this:
-
-
-    ┌───────────────────────────────────────────┐
-    │ { foo = 1, bar = "ABC" } ∧ { baz = True } │
-    └───────────────────────────────────────────┘
-
-
-    ┌────────────────────────────────────────┐
-    │ λ(r : { baz : Bool}) → { foo = 1 } ∧ r │
-    └────────────────────────────────────────┘
-
-
-... but you cannot merge two records that share the same field
-
-For example, the following expression is $_NOT valid:
-
-
-    ┌───────────────────────────────────────────┐
-    │ { foo = 1, bar = "ABC" } ∧ { foo = True } │  Invalid: Colliding ❰foo❱ fields
-    └───────────────────────────────────────────┘
-
-
-Some common reasons why you might get this error:
-
-● You tried to use ❰∧❱ to update a field's value, like this:
-
-
-    ┌────────────────────────────────────────┐
-    │ { foo = 1, bar = "ABC" } ∧ { foo = 2 } │
-    └────────────────────────────────────────┘
-                                   ⇧
-                                   Invalid attempt to update ❰foo❱'s value to ❰2❱
-
-  Field updates are intentionally not allowed as the Dhall language discourages
-  patch-oriented programming
-
-────────────────────────────────────────────────────────────────────────────────
-
-You combined two records that share the following field:
-
-↳ $txt0
-
-... which is not allowed
-|]
+        "Explanation: You can combine records if they don't share any fields in common,  \n\
+        \like this:                                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ { foo = 1, bar = \"ABC\" } ∧ { baz = True } │                             \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────────┐                                  \n\
+        \    │ λ(r : { baz : Bool}) → { foo = 1 } ∧ r │                                  \n\
+        \    └────────────────────────────────────────┘                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot merge two records that share the same field                  \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ { foo = 1, bar = \"ABC\" } ∧ { foo = True } │  Invalid: Colliding ❰foo❱ fields\n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You tried to use ❰∧❱ to update a field's value, like this:                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────────┐                                  \n\
+        \    │ { foo = 1, bar = \"ABC\" } ∧ { foo = 2 } │                                \n\
+        \    └────────────────────────────────────────┘                                  \n\
+        \                                   ⇧                                            \n\
+        \                                   Invalid attempt to update ❰foo❱'s value to ❰2❱\n\
+        \                                                                                \n\
+        \  Field updates are intentionally not allowed as the Dhall language discourages \n\
+        \  patch-oriented programming                                                    \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You combined two records that share the following field:                        \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not allowed                                                        \n"
       where
-        txt0 = Text.toStrict k
+        txt0 = build k
 
 prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
   where
     short = "❰merge❱ expects a record of handlers"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can ❰merge❱ the alternatives of a union using a record with one
-handler per alternative, like this:
-
-
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │     let union    = < Left = +2 | Right : Bool >                     │
-    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
-    │ in  merge handlers union : Bool                                     │
-    └─────────────────────────────────────────────────────────────────────┘
-
-
-... but the first argument to ❰merge❱ must be a record and not some other type.
-
-For example, the following expression is $_NOT valid:
-
-
-    ┌─────────────────────────────────────────┐
-    │ let handler = λ(x : Bool) → x           │
-    │ in  merge handler < Foo = True > : True │
-    └─────────────────────────────────────────┘
-                ⇧
-                Invalid: ❰handler❱ isn't a record
-
-
-Some common reasons why you might get this error:
-
-● You accidentally provide an empty record type instead of an empty record when
-  you ❰merge❱ an empty union:
-
-
-    ┌──────────────────────────────────────────┐
-    │ λ(x : <>) → λ(a : Type) → merge {} x : a │
-    └──────────────────────────────────────────┘
-                                      ⇧
-                                      This should be ❰{=}❱ instead
-
-
-────────────────────────────────────────────────────────────────────────────────
-
-You provided the following handler:
-
-↳ $txt0
-
-... which is not a record, but is actually a value of type:
-
-↳ $txt1
-|]
+        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
+        \handler per alternative, like this:                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
+        \    │ in  merge handlers union : Bool                                     │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the first argument to ❰merge❱ must be a record and not some other type. \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────┐                                 \n\
+        \    │ let handler = λ(x : Bool) → x           │                                 \n\
+        \    │ in  merge handler < Foo = True > : True │                                 \n\
+        \    └─────────────────────────────────────────┘                                 \n\
+        \                ⇧                                                               \n\
+        \                Invalid: ❰handler❱ isn't a record                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You accidentally provide an empty record type instead of an empty record when \n\
+        \  you ❰merge❱ an empty union:                                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────┐                                \n\
+        \    │ λ(x : <>) → λ(a : Type) → merge {} x : a │                                \n\
+        \    └──────────────────────────────────────────┘                                \n\
+        \                                      ⇧                                         \n\
+        \                                      This should be ❰{=}❱ instead              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You provided the following handler:                                             \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a record, but is actually a value of type:                     \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build expr0
+        txt1 = build expr1
 
 prettyTypeMessage (MustMergeUnion expr0 expr1) = ErrorMessages {..}
   where
     short = "❰merge❱ expects a union"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can ❰merge❱ the alternatives of a union using a record with one
-handler per alternative, like this:
-
-
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │     let union    = < Left = +2 | Right : Bool >                     │
-    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
-    │ in  merge handlers union : Bool                                     │
-    └─────────────────────────────────────────────────────────────────────┘
-
-
-... but the second argument to ❰merge❱ must be a union and not some other type.
-
-For example, the following expression is $_NOT valid:
-
-
-    ┌──────────────────────────────────────────┐
-    │ let handlers = { Foo = λ(x : Bool) → x } │
-    │ in  merge handlers True : True           │
-    └──────────────────────────────────────────┘
-                         ⇧
-                         Invalid: ❰True❱ isn't a union
-
-
-You tried to ❰merge❱ this expression:
-
-↳ $txt0
-
-... which is not a union, but is actually a value of type:
-
-↳ $txt1
-|]
+        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
+        \handler per alternative, like this:                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
+        \    │ in  merge handlers union : Bool                                     │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the second argument to ❰merge❱ must be a union and not some other type. \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────┐                                \n\
+        \    │ let handlers = { Foo = λ(x : Bool) → x } │                                \n\
+        \    │ in  merge handlers True : True           │                                \n\
+        \    └──────────────────────────────────────────┘                                \n\
+        \                         ⇧                                                      \n\
+        \                         Invalid: ❰True❱ isn't a union                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You tried to ❰merge❱ this expression:                                           \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a union, but is actually a value of type:                      \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build expr0
+        txt1 = build expr1
 
 prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
   where
     short = "Unused handler"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can ❰merge❱ the alternatives of a union using a record with one
-handler per alternative, like this:
-
-
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │     let union    = < Left = +2 | Right : Bool >                     │
-    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
-    │ in  merge handlers union : Bool                                     │
-    └─────────────────────────────────────────────────────────────────────┘
-
-
-... but you must provide exactly one handler per alternative in the union.  You
-cannot supply extra handlers
-
-For example, the following expression is $_NOT valid:
-
-
-    ┌───────────────────────────────────────┐
-    │     let union    = < Left = +2 >      │  The ❰Right❱ alternative is missing
-    │ in  let handlers =                    │ 
-    │             { Left  = Natural/even    │
-    │             , Right = λ(x : Bool) → x │  Invalid: ❰Right❱ handler isn't used
-    │             }                         │
-    │ in  merge handlers union : Bool       │
-    └───────────────────────────────────────┘
-
-
-You provided the following handlers:
-
-↳ $txt0
-
-... which had no matching alternatives in the union you tried to ❰merge❱
-|]
+        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
+        \handler per alternative, like this:                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
+        \    │ in  merge handlers union : Bool                                     │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you must provide exactly one handler per alternative in the union.  You \n\
+        \cannot supply extra handlers                                                    \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────┐                                   \n\
+        \    │     let union    = < Left = +2 >      │  The ❰Right❱ alternative is missing\n\
+        \    │ in  let handlers =                    │                                   \n\
+        \    │             { Left  = Natural/even    │                                   \n\
+        \    │             , Right = λ(x : Bool) → x │  Invalid: ❰Right❱ handler isn't used\n\
+        \    │             }                         │                                   \n\
+        \    │ in  merge handlers union : Bool       │                                   \n\
+        \    └───────────────────────────────────────┘                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You provided the following handlers:                                            \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which had no matching alternatives in the union you tried to ❰merge❱        \n"
       where
-        txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
+        txt0 = build (Text.intercalate ", " (Data.Set.toList ks))
 
 prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
   where
     short = "Missing handler"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can ❰merge❱ the alternatives of a union using a record with one
-handler per alternative, like this:
-
-
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │     let union    = < Left = +2 | Right : Bool >                     │
-    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
-    │ in  merge handlers union : Bool                                     │
-    └─────────────────────────────────────────────────────────────────────┘
-
-
-... but you must provide exactly one handler per alternative in the union.  You
-cannot omit any handlers
-
-For example, the following expression is $_NOT valid:
-
-
-                                              Invalid: Missing ❰Right❱ handler
-                                              ⇩
-    ┌─────────────────────────────────────────────────┐
-    │     let handlers = { Left = Natural/even }      │
-    │ in  let union    = < Left = +2 | Right : Bool > │
-    │ in  merge handlers union : Bool                 │
-    └─────────────────────────────────────────────────┘
-
-
-Note that you need to provide handlers for other alternatives even if those
-alternatives are never used
-
-You need to supply the following handlers:
-
-↳ $txt0
-|]
+        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
+        \handler per alternative, like this:                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
+        \    │ in  merge handlers union : Bool                                     │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you must provide exactly one handler per alternative in the union.  You \n\
+        \cannot omit any handlers                                                        \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \                                              Invalid: Missing ❰Right❱ handler  \n\
+        \                                              ⇩                                 \n\
+        \    ┌─────────────────────────────────────────────────┐                         \n\
+        \    │     let handlers = { Left = Natural/even }      │                         \n\
+        \    │ in  let union    = < Left = +2 | Right : Bool > │                         \n\
+        \    │ in  merge handlers union : Bool                 │                         \n\
+        \    └─────────────────────────────────────────────────┘                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Note that you need to provide handlers for other alternatives even if those     \n\
+        \alternatives are never used                                                     \n\
+        \                                                                                \n\
+        \You need to supply the following handlers:                                      \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Text.intercalate ", " (Data.Set.toList ks))
+        txt0 = build (Text.intercalate ", " (Data.Set.toList ks))
 
 prettyTypeMessage MissingMergeType =
     ErrorMessages {..}
@@ -2545,31 +2483,29 @@ prettyTypeMessage MissingMergeType =
     short = "An empty ❰merge❱ requires a type annotation"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: A ❰merge❱ does not require a type annotation if the union has at
-least one alternative, like this
-
-
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │     let union    = < Left = +2 | Right : Bool >                     │
-    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
-    │ in  merge handlers union                                            │
-    └─────────────────────────────────────────────────────────────────────┘
-
-
-However, you must provide a type annotation when merging an empty union:
-
-
-    ┌────────────────────────────────┐
-    │ λ(a : <>) → merge {=} a : Bool │
-    └────────────────────────────────┘
-                                ⇧
-                                This can be any type
-
-
-You can provide any type at all as the annotation, since merging an empty
-union can produce any type of output
-|]
+        "Explanation: A ❰merge❱ does not require a type annotation if the union has at   \n\
+        \least one alternative, like this                                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
+        \    │ in  merge handlers union                                            │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, you must provide a type annotation when merging an empty union:        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────┐                                          \n\
+        \    │ λ(a : <>) → merge {=} a : Bool │                                          \n\
+        \    └────────────────────────────────┘                                          \n\
+        \                                ⇧                                               \n\
+        \                                This can be any type                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You can provide any type at all as the annotation, since merging an empty       \n\
+        \union can produce any type of output                                            \n"
 
 prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -2577,61 +2513,59 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
     short = "Wrong handler input type"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can ❰merge❱ the alternatives of a union using a record with one
-handler per alternative, like this:
-
-
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │     let union    = < Left = +2 | Right : Bool >                     │
-    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
-    │ in  merge handlers union : Bool                                     │
-    └─────────────────────────────────────────────────────────────────────┘
-
-
-... as long as the input type of each handler function matches the type of the
-corresponding alternative:
-
-
-    ┌───────────────────────────────────────────────────────────┐
-    │ union    : < Left : Natural       | Right : Bool        > │
-    └───────────────────────────────────────────────────────────┘
-                          ⇧                       ⇧
-                   These must match        These must match
-                          ⇩                       ⇩
-    ┌───────────────────────────────────────────────────────────┐
-    │ handlers : { Left : Natural → Bool, Right : Bool → Bool } │
-    └───────────────────────────────────────────────────────────┘
-
-
-For example, the following expression is $_NOT valid:
-
-
-      Invalid: Doesn't match the type of the ❰Right❱ alternative
-                                                               ⇩
-    ┌──────────────────────────────────────────────────────────────────────┐
-    │     let handlers = { Left = Natural/even | Right = λ(x : Text) → x } │
-    │ in  let union    = < Left = +2 | Right : Bool >                      │
-    │ in  merge handlers union : Bool                                      │
-    └──────────────────────────────────────────────────────────────────────┘
-
-
-Your handler for the following alternative:
-
-↳ $txt0
-
-... needs to accept an input value of type:
-
-↳ $txt1
-
-... but actually accepts an input value of a different type:
-
-↳ $txt2
-|]
+        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
+        \handler per alternative, like this:                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
+        \    │ in  merge handlers union : Bool                                     │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... as long as the input type of each handler function matches the type of the  \n\
+        \corresponding alternative:                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────────┐               \n\
+        \    │ union    : < Left : Natural       | Right : Bool        > │               \n\
+        \    └───────────────────────────────────────────────────────────┘               \n\
+        \                          ⇧                       ⇧                             \n\
+        \                   These must match        These must match                     \n\
+        \                          ⇩                       ⇩                             \n\
+        \    ┌───────────────────────────────────────────────────────────┐               \n\
+        \    │ handlers : { Left : Natural → Bool, Right : Bool → Bool } │               \n\
+        \    └───────────────────────────────────────────────────────────┘               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \      Invalid: Doesn't match the type of the ❰Right❱ alternative                \n\
+        \                                                               ⇩                \n\
+        \    ┌──────────────────────────────────────────────────────────────────────┐    \n\
+        \    │     let handlers = { Left = Natural/even | Right = λ(x : Text) → x } │    \n\
+        \    │ in  let union    = < Left = +2 | Right : Bool >                      │    \n\
+        \    │ in  merge handlers union : Bool                                      │    \n\
+        \    └──────────────────────────────────────────────────────────────────────┘    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Your handler for the following alternative:                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... needs to accept an input value of type:                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... but actually accepts an input value of a different type:                    \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt0 = build expr0
+        txt1 = build expr1
+        txt2 = build expr2
 
 prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -2639,63 +2573,61 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
     short = "Wrong handler output type"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can ❰merge❱ the alternatives of a union using a record with one
-handler per alternative, like this:
-
-
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │     let union    = < Left = +2 | Right : Bool >                     │
-    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
-    │ in  merge handlers union : Bool                                     │
-    └─────────────────────────────────────────────────────────────────────┘
-
-
-... as long as the output type of each handler function matches the declared type
-of the result:
-
-
-    ┌───────────────────────────────────────────────────────────┐
-    │ handlers : { Left : Natural → Bool, Right : Bool → Bool } │
-    └───────────────────────────────────────────────────────────┘
-                                    ⇧                    ⇧
-                                    These output types ...
-
-                             ... must match the declared type of the ❰merge❱
-                             ⇩
-    ┌─────────────────────────────┐
-    │ merge handlers union : Bool │
-    └─────────────────────────────┘
-
-
-For example, the following expression is $_NOT valid:
-
-
-    ┌──────────────────────────────────────────────────────────────────────┐
-    │     let union    = < Left = +2 | Right : Bool >                      │
-    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }  │
-    │ in  merge handlers union : Text                                      │
-    └──────────────────────────────────────────────────────────────────────┘
-                                 ⇧
-                                 Invalid: Doesn't match output of either handler
-
-
-Your handler for the following alternative:
-
-↳ $txt0
-
-... needs to return an output value of type:
-
-↳ $txt1
-
-... but actually returns an output value of a different type:
-
-↳ $txt2
-|]
+        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
+        \handler per alternative, like this:                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
+        \    │ in  merge handlers union : Bool                                     │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... as long as the output type of each handler function matches the declared type\n\
+        \of the result:                                                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────────┐               \n\
+        \    │ handlers : { Left : Natural → Bool, Right : Bool → Bool } │               \n\
+        \    └───────────────────────────────────────────────────────────┘               \n\
+        \                                    ⇧                    ⇧                      \n\
+        \                                    These output types ...                      \n\
+        \                                                                                \n\
+        \                             ... must match the declared type of the ❰merge❱    \n\
+        \                             ⇩                                                  \n\
+        \    ┌─────────────────────────────┐                                             \n\
+        \    │ merge handlers union : Bool │                                             \n\
+        \    └─────────────────────────────┘                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────────────────────────────────┐    \n\
+        \    │     let union    = < Left = +2 | Right : Bool >                      │    \n\
+        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }  │    \n\
+        \    │ in  merge handlers union : Text                                      │    \n\
+        \    └──────────────────────────────────────────────────────────────────────┘    \n\
+        \                                 ⇧                                              \n\
+        \                                 Invalid: Doesn't match output of either handler\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Your handler for the following alternative:                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... needs to return an output value of type:                                    \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... but actually returns an output value of a different type:                   \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr2)
+        txt0 = build expr0
+        txt1 = build expr1
+        txt2 = build expr2
 
 prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
     ErrorMessages {..}
@@ -2703,202 +2635,195 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
     short = "Handlers should have the same output type"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can ❰merge❱ the alternatives of a union using a record with one
-handler per alternative, like this:
-
-
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │     let union    = < Left = +2 | Right : Bool >                     │
-    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
-    │ in  merge handlers union                                            │
-    └─────────────────────────────────────────────────────────────────────┘
-
-
-... as long as the output type of each handler function is the same:
-
-
-    ┌───────────────────────────────────────────────────────────┐
-    │ handlers : { Left : Natural → Bool, Right : Bool → Bool } │
-    └───────────────────────────────────────────────────────────┘
-                                    ⇧                    ⇧
-                                These output types both match
-
-
-For example, the following expression is $_NOT valid:
-
-
-    ┌─────────────────────────────────────────────────┐
-    │     let union    = < Left = +2 | Right : Bool > │
-    │ in  let handlers =                              │
-    │              { Left  = λ(x : Natural) → x       │  This outputs ❰Natural❱
-    │              , Right = λ(x : Bool   ) → x       │  This outputs ❰Bool❱
-    │              }                                  │
-    │ in  merge handlers union                        │
-    └─────────────────────────────────────────────────┘
-                ⇧
-                Invalid: The handlers in this record don't have matching outputs
-
-
-The handler for the ❰$txt0❱ alternative has this output type:
-
-↳ $txt1
-
-... but the handler for the ❰$txt2❱ alternative has this output type instead:
-
-↳ $txt3
-|]
+        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
+        \handler per alternative, like this:                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
+        \    │ in  merge handlers union                                            │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... as long as the output type of each handler function is the same:            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────────┐               \n\
+        \    │ handlers : { Left : Natural → Bool, Right : Bool → Bool } │               \n\
+        \    └───────────────────────────────────────────────────────────┘               \n\
+        \                                    ⇧                    ⇧                      \n\
+        \                                These output types both match                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────┐                         \n\
+        \    │     let union    = < Left = +2 | Right : Bool > │                         \n\
+        \    │ in  let handlers =                              │                         \n\
+        \    │              { Left  = λ(x : Natural) → x       │  This outputs ❰Natural❱ \n\
+        \    │              , Right = λ(x : Bool   ) → x       │  This outputs ❰Bool❱    \n\
+        \    │              }                                  │                         \n\
+        \    │ in  merge handlers union                        │                         \n\
+        \    └─────────────────────────────────────────────────┘                         \n\
+        \                ⇧                                                               \n\
+        \                Invalid: The handlers in this record don't have matching outputs\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \The handler for the ❰" <> txt0 <> "❱ alternative has this output type:          \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... but the handler for the ❰" <> txt2 <> "❱ alternative has this output type instead:\n\
+        \                                                                                \n\
+        \↳ " <> txt3 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty key0 )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt2 = Text.toStrict (Dhall.Core.pretty key1 )
-        txt3 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build key0
+        txt1 = build expr0
+        txt2 = build key1
+        txt3 = build expr1
+
 prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
   where
     short = "Handler is not a function"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can ❰merge❱ the alternatives of a union using a record with one
-handler per alternative, like this:
-
-
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │     let union    = < Left = +2 | Right : Bool >                     │
-    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │
-    │ in  merge handlers union : Bool                                     │
-    └─────────────────────────────────────────────────────────────────────┘
-
-
-... as long as each handler is a function
-
-For example, the following expression is $_NOT valid:
-
-
-    ┌─────────────────────────────────────────┐
-    │ merge { Foo = True } < Foo = 1 > : Bool │
-    └─────────────────────────────────────────┘
-                    ⇧
-                    Invalid: Not a function
-
-
-Your handler for this alternative:
-
-↳ $txt0
-
-... has the following type:
-
-↳ $txt1
-
-... which is not the type of a function
-|]
+        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
+        \handler per alternative, like this:                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
+        \    │ in  merge handlers union : Bool                                     │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... as long as each handler is a function                                       \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────┐                                 \n\
+        \    │ merge { Foo = True } < Foo = 1 > : Bool │                                 \n\
+        \    └─────────────────────────────────────────┘                                 \n\
+        \                    ⇧                                                           \n\
+        \                    Invalid: Not a function                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Your handler for this alternative:                                              \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... has the following type:                                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not the type of a function                                         \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = build k
+        txt1 = build expr0
 
 prettyTypeMessage (NotARecord k expr0 expr1) = ErrorMessages {..}
   where
     short = "Not a record"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can only access fields on records, like this:
-
-
-    ┌─────────────────────────────────┐
-    │ { foo = True, bar = "ABC" }.foo │  This is valid ...
-    └─────────────────────────────────┘
-
-
-    ┌───────────────────────────────────────────┐
-    │ λ(r : { foo : Bool, bar : Text }) → r.foo │  ... and so is this
-    └───────────────────────────────────────────┘
-
-
-... but you cannot access fields on non-record expressions
-
-For example, the following expression is $_NOT valid:
-
-
-    ┌───────┐
-    │ 1.foo │
-    └───────┘
-      ⇧
-      Invalid: Not a record
-
-
-Some common reasons why you might get this error:
-
-● You accidentally try to access a field of a union instead of a record, like
-  this:
-
-
-    ┌─────────────────┐
-    │ < foo : a >.foo │
-    └─────────────────┘
-      ⇧
-      This is a union, not a record
-
-
-────────────────────────────────────────────────────────────────────────────────
-
-You tried to access a field named:
-
-↳ $txt0
-
-... on the following expression which is not a record:
-
-↳ $txt1
-
-... but is actually an expression of type:
-
-↳ $txt2
-|]
+        "Explanation: You can only access fields on records, like this:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ { foo = True, bar = \"ABC\" }.foo │  This is valid ...                    \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ λ(r : { foo : Bool, bar : Text }) → r.foo │  ... and so is this           \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot access fields on non-record expressions                      \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────┐                                                                   \n\
+        \    │ 1.foo │                                                                   \n\
+        \    └───────┘                                                                   \n\
+        \      ⇧                                                                         \n\
+        \      Invalid: Not a record                                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You accidentally try to access a field of a union instead of a record, like   \n\
+        \  this:                                                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────┐                                                         \n\
+        \    │ < foo : a >.foo │                                                         \n\
+        \    └─────────────────┘                                                         \n\
+        \      ⇧                                                                         \n\
+        \      This is a union, not a record                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to access a field named:                                              \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... on the following expression which is not a record:                          \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... but is actually an expression of type:                                      \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k    )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt2 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build k
+        txt1 = build expr0
+        txt2 = build expr1
 
 prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
   where
     short = "Missing record field"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: You can only access fields on records, like this:
-
-
-    ┌─────────────────────────────────┐
-    │ { foo = True, bar = "ABC" }.foo │  This is valid ...
-    └─────────────────────────────────┘
-
-
-    ┌───────────────────────────────────────────┐
-    │ λ(r : { foo : Bool, bar : Text }) → r.foo │  ... and so is this
-    └───────────────────────────────────────────┘
-
-
-... but you can only access fields if they are present
-
-For example, the following expression is $_NOT valid:
-
-    ┌─────────────────────────────────┐
-    │ { foo = True, bar = "ABC" }.qux │
-    └─────────────────────────────────┘
-                                  ⇧
-                                  Invalid: the record has no ❰qux❱ field
-
-You tried to access a field named:
-
-↳ $txt0
-
-... but the field is missing because the record only defines the following fields:
-
-↳ $txt1
-|]
+        "Explanation: You can only access fields on records, like this:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ { foo = True, bar = \"ABC\" }.foo │  This is valid ...                    \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ λ(r : { foo : Bool, bar : Text }) → r.foo │  ... and so is this           \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you can only access fields if they are present                          \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ { foo = True, bar = \"ABC\" }.qux │                                       \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \                                  ⇧                                             \n\
+        \                                  Invalid: the record has no ❰qux❱ field        \n\
+        \                                                                                \n\
+        \You tried to access a field named:                                              \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... but the field is missing because the record only defines the following fields:\n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty k    )
-        txt1 = Text.toStrict (Dhall.Core.pretty expr0)
+        txt0 = build k
+        txt1 = build expr0
 
 prettyTypeMessage (CantAnd expr0 expr1) =
         buildBooleanOperator "&&" expr0 expr1
@@ -2917,78 +2842,74 @@ prettyTypeMessage (CantTextAppend expr0 expr1) = ErrorMessages {..}
     short = "❰++❱ only works on ❰Text❱"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: The ❰++❱ operator expects two arguments that have type ❰Text❱
-
-For example, this is a valid use of ❰++❱: 
-
-
-    ┌────────────────┐
-    │ "ABC" ++ "DEF" │
-    └────────────────┘
-
-
-Some common reasons why you might get this error:
-
-● You might have thought that ❰++❱ was the operator to combine two lists:
-
-
-    ┌────────────────────────┐
-    │ [1, 2, 3] ++ [4, 5, 6] │  Not valid
-    └────────────────────────┘
-
-
-  ... but the list concatenation operator is actually ❰#❱:
-
-
-    ┌───────────────────────┐
-    │ [1, 2, 3] # [4, 5, 6] │  Valid
-    └───────────────────────┘
-
-
-────────────────────────────────────────────────────────────────────────────────
-
-You provided this argument:
-
-↳ $txt0
-
-... which does not have type ❰Text❱ but instead has type:
-
-↳ $txt1
-|]
+        "Explanation: The ❰++❱ operator expects two arguments that have type ❰Text❱      \n\
+        \                                                                                \n\
+        \For example, this is a valid use of ❰++❱:                                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ \"ABC\" ++ \"DEF\" │                                                      \n\
+        \    └────────────────┘                                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You might have thought that ❰++❱ was the operator to combine two lists:       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ [1, 2, 3] ++ [4, 5, 6] │  Not valid                                       \n\
+        \    └────────────────────────┘                                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \  ... but the list concatenation operator is actually ❰#❱:                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ [1, 2, 3] # [4, 5, 6] │  Valid                                            \n\
+        \    └───────────────────────┘                                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You provided this argument:                                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which does not have type ❰Text❱ but instead has type:                       \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build expr0
+        txt1 = build expr1
 
 prettyTypeMessage (CantListAppend expr0 expr1) = ErrorMessages {..}
   where
     short = "❰#❱ only works on ❰List❱s"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: The ❰#❱ operator expects two arguments that are both ❰List❱s
-
-For example, this is a valid use of ❰#❱: 
-
-
-    ┌───────────────────────┐
-    │ [1, 2, 3] # [4, 5, 6] │
-    └───────────────────────┘
-
-
-────────────────────────────────────────────────────────────────────────────────
-
-You provided this argument:
-
-↳ $txt0
-
-... which is not a ❰List❱ but instead has type:
-
-↳ $txt1
-|]
+        "Explanation: The ❰#❱ operator expects two arguments that are both ❰List❱s       \n\
+        \                                                                                \n\
+        \For example, this is a valid use of ❰#❱:                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ [1, 2, 3] # [4, 5, 6] │                                                   \n\
+        \    └───────────────────────┘                                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You provided this argument:                                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a ❰List❱ but instead has type:                                 \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build expr0
+        txt1 = build expr1
 
 prettyTypeMessage (CantAdd expr0 expr1) =
         buildNaturalOperator "+" expr0 expr1
@@ -3001,229 +2922,215 @@ prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
     short = "No dependent types"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: The Dhall programming language does not allow functions from terms
-to types.  These function types are also known as "dependent function types"
-because you have a type whose value "depends" on the value of a term.
-
-For example, this is $_NOT a legal function type:
-
-
-    ┌─────────────┐
-    │ Bool → Type │
-    └─────────────┘
-
-
-Similarly, this is $_NOT legal code:
-
-
-    ┌────────────────────────────────────────────────────┐
-    │ λ(Vector : Natural → Type → Type) → Vector +0 Text │
-    └────────────────────────────────────────────────────┘
-                 ⇧
-                 Invalid dependent type
-
-
-Your function type is invalid because the input has type:
-
-↳ $txt0
-
-... and the output has kind:
-
-↳ $txt1
-
-... which makes this a forbidden dependent function type
-|]
+        "Explanation: The Dhall programming language does not allow functions from terms \n\
+        \to types.  These function types are also known as \"dependent function types\"  \n\
+        \because you have a type whose value \"depends\" on the value of a term.         \n\
+        \                                                                                \n\
+        \For example, this is " <> _NOT <> " a legal function type:                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────┐                                                             \n\
+        \    │ Bool → Type │                                                             \n\
+        \    └─────────────┘                                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Similarly, this is " <> _NOT <> " legal code:                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────────────────────┐                      \n\
+        \    │ λ(Vector : Natural → Type → Type) → Vector +0 Text │                      \n\
+        \    └────────────────────────────────────────────────────┘                      \n\
+        \                 ⇧                                                              \n\
+        \                 Invalid dependent type                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Your function type is invalid because the input has type:                       \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... and the output has kind:                                                    \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which makes this a forbidden dependent function type                        \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build expr0
+        txt1 = build expr1
 
 prettyTypeMessage (NoDependentLet expr0 expr1) = ErrorMessages {..}
   where
     short = "No dependent ❰let❱"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: The Dhall programming language does not allow ❰let❱ expressions
-from terms to types.  These ❰let❱ expressions are also known as "dependent ❰let❱
-expressions" because you have a type whose value depends on the value of a term.
-
-The Dhall language forbids these dependent ❰let❱ expressions in order to
-guarantee that ❰let❱ expressions of the form:
-
-
-    ┌────────────────────┐
-    │ let x : t = r in e │
-    └────────────────────┘
-
-
-... are always equivalent to:
-
-
-    ┌──────────────────┐
-    │ (λ(x : t) → e) r │
-    └──────────────────┘
-
-
-This means that both expressions should normalize to the same result and if one
-of the two fails to type check then the other should fail to type check, too.
-
-For this reason, the following is $_NOT legal code:
-
-
-    ┌───────────────────┐
-    │ let x = 2 in Text │
-    └───────────────────┘
-
-
-... because the above ❰let❱ expression is equivalent to:
-
-
-    ┌─────────────────────────────┐
-    │ let x : Integer = 2 in Text │
-    └─────────────────────────────┘
-
-
-... which in turn must be equivalent to:
-
-
-    ┌───────────────────────────┐
-    │ (λ(x : Integer) → Text) 2 │
-    └───────────────────────────┘
-
-
-... which in turn fails to type check because this sub-expression:
-
-
-    ┌───────────────────────┐
-    │ λ(x : Integer) → Text │
-    └───────────────────────┘
-
-
-... has type:
-
-
-    ┌───────────────────────┐
-    │ ∀(x : Integer) → Text │
-    └───────────────────────┘
-
-
-... which is a forbidden dependent function type (i.e. a function from a term to
-a type).  Therefore the equivalent ❰let❱ expression is also forbidden.
-
-Your ❰let❱ expression is invalid because the input has type:
-
-↳ $txt0
-
-... and the output has kind:
-
-↳ $txt1
-
-... which makes this a forbidden dependent ❰let❱ expression
-|]
+        "Explanation: The Dhall programming language does not allow ❰let❱ expressions    \n\
+        \from terms to types.  These ❰let❱ expressions are also known as \"dependent ❰let❱\n\
+        \expressions\" because you have a type whose value depends on the value of a term.\n\
+        \                                                                                \n\
+        \The Dhall language forbids these dependent ❰let❱ expressions in order to        \n\
+        \guarantee that ❰let❱ expressions of the form:                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ let x : t = r in e │                                                      \n\
+        \    └────────────────────┘                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... are always equivalent to:                                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────┐                                                        \n\
+        \    │ (λ(x : t) → e) r │                                                        \n\
+        \    └──────────────────┘                                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \This means that both expressions should normalize to the same result and if one \n\
+        \of the two fails to type check then the other should fail to type check, too.   \n\
+        \                                                                                \n\
+        \For this reason, the following is " <> _NOT <> " legal code:                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────┐                                                       \n\
+        \    │ let x = 2 in Text │                                                       \n\
+        \    └───────────────────┘                                                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... because the above ❰let❱ expression is equivalent to:                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────┐                                             \n\
+        \    │ let x : Integer = 2 in Text │                                             \n\
+        \    └─────────────────────────────┘                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... which in turn must be equivalent to:                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────┐                                               \n\
+        \    │ (λ(x : Integer) → Text) 2 │                                               \n\
+        \    └───────────────────────────┘                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... which in turn fails to type check because this sub-expression:              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ λ(x : Integer) → Text │                                                   \n\
+        \    └───────────────────────┘                                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... has type:                                                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ ∀(x : Integer) → Text │                                                   \n\
+        \    └───────────────────────┘                                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... which is a forbidden dependent function type (i.e. a function from a term to\n\
+        \a type).  Therefore the equivalent ❰let❱ expression is also forbidden.          \n\
+        \                                                                                \n\
+        \Your ❰let❱ expression is invalid because the input has type:                    \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... and the output has kind:                                                    \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which makes this a forbidden dependent ❰let❱ expression                     \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build expr0
+        txt1 = build expr1
 
 buildBooleanOperator :: Text -> Expr s X -> Expr s X -> ErrorMessages
 buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
   where
-    short =
-        Builder.fromText
-            (Data.Text.strip
-                [NeatInterpolation.text|❰$txt2❱ only works on ❰Bool❱s|] )
+    short = "❰" <> txt2 <> "❱ only works on ❰Bool❱s"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: The ❰$txt2❱ operator expects two arguments that have type ❰Bool❱
-
-For example, this is a valid use of ❰$txt2❱: 
-
-
-    ┌───────────────┐
-    │ True $txt2 False │
-    └───────────────┘
-
-
-You provided this argument:
-
-↳ $txt0
-
-... which does not have type ❰Bool❱ but instead has type:
-
-↳ $txt1
-|]
+        "Explanation: The ❰" <> txt2 <> "❱ operator expects two arguments that have type ❰Bool❱\n\
+        \                                                                                \n\
+        \For example, this is a valid use of ❰" <> txt2 <> "❱:                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────┐                                                           \n\
+        \    │ True " <> txt2 <> " False │                                               \n\
+        \    └───────────────┘                                                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You provided this argument:                                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which does not have type ❰Bool❱ but instead has type:                       \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build expr0
+        txt1 = build expr1
 
-    txt2 = Text.toStrict operator
+    txt2 = build operator
 
 buildNaturalOperator :: Text -> Expr s X -> Expr s X -> ErrorMessages
 buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
   where
-    short =
-        Builder.fromText
-            (Data.Text.strip
-                [NeatInterpolation.text|❰$txt2❱ only works on ❰Natural❱s|] )
+    short = "❰" <> txt2 <> "❱ only works on ❰Natural❱s"
 
     long =
-        Builder.fromText [NeatInterpolation.text|
-Explanation: The ❰$txt2❱ operator expects two arguments that have type ❰Natural❱
-
-For example, this is a valid use of ❰$txt2❱: 
-
-
-    ┌─────────┐
-    │ +3 $txt2 +5 │
-    └─────────┘
-
-
-Some common reasons why you might get this error:
-
-● You might have tried to use an ❰Integer❱, which is $_NOT allowed:
-
-
-    ┌─────────────────────────────────────────┐
-    │ λ(x : Integer) → λ(y : Integer) → x $txt2 y │  Not valid
-    └─────────────────────────────────────────┘
-
-
-  You can only use ❰Natural❱ numbers
-
-
-● You might have mistakenly used an ❰Integer❱ literal, which is $_NOT allowed:
-
-
-    ┌───────┐
-    │ 2 $txt2 2 │  Not valid
-    └───────┘
-
-
-  You need to prefix each literal with a ❰+❱ to transform them into ❰Natural❱
-  literals, like this:
-
-
-    ┌─────────┐
-    │ +2 $txt2 +2 │  Valid
-    └─────────┘
-
-
-────────────────────────────────────────────────────────────────────────────────
-
-You provided this argument:
-
-↳ $txt0
-
-... which does not have type ❰Natural❱ but instead has type:
-
-↳ $txt1
-|]
+        "Explanation: The ❰" <> txt2 <> "❱ operator expects two arguments that have type ❰Natural❱\n\
+        \                                                                                \n\
+        \For example, this is a valid use of ❰" <> txt2 <> "❱:                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────┐                                                                 \n\
+        \    │ +3 " <> txt2 <> " +5 │                                                    \n\
+        \    └─────────┘                                                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You might have tried to use an ❰Integer❱, which is " <> _NOT <> " allowed:    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────┐                                 \n\
+        \    │ λ(x : Integer) → λ(y : Integer) → x " <> txt2 <> " y │  Not valid         \n\
+        \    └─────────────────────────────────────────┘                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \  You can only use ❰Natural❱ numbers                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \● You might have mistakenly used an ❰Integer❱ literal, which is " <> _NOT <> " allowed:\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────┐                                                                   \n\
+        \    │ 2 " <> txt2 <> " 2 │  Not valid                                           \n\
+        \    └───────┘                                                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \  You need to prefix each literal with a ❰+❱ to transform them into ❰Natural❱   \n\
+        \  literals, like this:                                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────┐                                                                 \n\
+        \    │ +2 " <> txt2 <> " +2 │  Valid                                             \n\
+        \    └─────────┘                                                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You provided this argument:                                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which does not have type ❰Natural❱ but instead has type:                    \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n"
       where
-        txt0 = Text.toStrict (Dhall.Core.pretty expr0)
-        txt1 = Text.toStrict (Dhall.Core.pretty expr1)
+        txt0 = build expr0
+        txt1 = build expr1
 
-    txt2 = Text.toStrict operator
+    txt2 = build operator
 
 -- | A structured type error that includes context
 data TypeError s = TypeError
