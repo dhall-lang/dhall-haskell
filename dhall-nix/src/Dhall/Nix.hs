@@ -323,6 +323,10 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         b' <- loop b
         return (Fix (NBinary NPlus a' b'))
     loop List = return (Fix (NAbs "t" (Fix (NSet []))))
+    loop (ListAppend a b) = do
+        a' <- loop a
+        b' <- loop b
+        return (Fix (NBinary NConcat a' b'))
     loop (ListLit _ bs) = do
         bs' <- mapM loop (toList bs)
         return (Fix (NList bs'))
