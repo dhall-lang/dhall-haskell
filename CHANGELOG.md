@@ -1,3 +1,18 @@
+1.5.0
+
+* BREAKING CHANGE: Add list concatenation operator: `(#)`
+    * This is a breaking change because it adds a new constructor to the `Expr`
+      type which breaks exhaustive pattern matches
+* BREAKING CHANGE: Add `Interpret` support for lazy `Text`
+    * This is a breaking change because it renames `text` to `strictText`
+* Add `Interpret` instance for decoding (a limited subset of) Dhall functions
+* Dhall no longer requires Template Haskell to compile
+    * This helps with cross-compilation
+* Add `rawInput` utility for decoding a Haskell value from the `Expr` type
+* Add `loadWith`/`normalizeWith` utilities for normalizing/importing modules
+  with a custom context
+* Export `Type` constructor
+
 1.4.2
 
 * Fix missing `Prelude` files in package archive uploaded to Hackage
