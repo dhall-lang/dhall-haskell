@@ -19,6 +19,7 @@ module Dhall
 
     -- * Types
     , Type(..)
+    , InputType(..)
     , Interpret(..)
     , InvalidType(..)
     , auto
