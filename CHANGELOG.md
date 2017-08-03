@@ -1,3 +1,7 @@
+1.5.1
+
+* Increase upper bound on `vector` and `optparse-generic`
+
 1.5.0
 
 * BREAKING CHANGE: Add list concatenation operator: `(#)`
