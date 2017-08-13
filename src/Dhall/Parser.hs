@@ -202,7 +202,7 @@ doubleQuoteLiteral embedded = do
         return e
 
     go3 = do
-        a <- Text.Parser.Token.characterChar
+        a <- stringChar
         b <- go
         let e = case b of
                 TextLit cs ->
@@ -325,6 +325,17 @@ doubleSingleQuoteString embedded = do
         _  <- Text.Parser.Char.char '}'
         s3 <- p1
         return (TextAppend s1 s3)
+
+stringChar :: Parser Char
+stringChar =
+        Text.Parser.Char.satisfy predicate
+    <|> (do _ <- Text.Parser.Char.text "\\\\"; return '\\')
+    <|> (do _ <- Text.Parser.Char.text "\\\""; return '"' )
+    <|> (do _ <- Text.Parser.Char.text "\\n" ; return '\n')
+    <|> (do _ <- Text.Parser.Char.text "\\r" ; return '\r')
+    <|> (do _ <- Text.Parser.Char.text "\\t" ; return '\t')
+  where
+    predicate c = c /= '"' && c /= '\\' && c > '\026'
 
 lambda :: Parser ()
 lambda = symbol "\\" <|> symbol "λ"

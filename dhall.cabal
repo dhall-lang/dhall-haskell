@@ -138,6 +138,7 @@ Test-Suite test
     Other-Modules:
         Examples
         Normalization
+        Regression
         Tutorial
         Util
     Build-Depends:
