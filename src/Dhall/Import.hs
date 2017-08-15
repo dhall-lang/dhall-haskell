@@ -1,7 +1,8 @@
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| Dhall lets you import external expressions located either in local files or
@@ -112,9 +113,11 @@ module Dhall.Import (
 
 import Control.Applicative (empty)
 import Control.Exception
-    (Exception, IOException, SomeException, catch, onException, throwIO)
+    (Exception, IOException, SomeException, onException, throwIO)
 import Control.Lens (Lens', zoom)
 import Control.Monad (join)
+import Control.Monad.Catch (throwM, MonadCatch(catch))
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString.Lazy (ByteString)
@@ -662,21 +665,30 @@ exprFromPath m (Path {..}) = case pathType of
     This also returns the true final path (i.e. explicit "/@" at the end for
     directories)
 -}
-loadDynamic :: Path -> StateT Status IO (Expr Src Path)
-loadDynamic p = do
+loadDynamic :: forall m . MonadCatch m => (Path -> m (Expr Src Path))
+    -> Path -> StateT Status m (Expr Src Path)
+loadDynamic from_path p = do
     paths <- zoom stack State.get
 
-    let handler :: SomeException -> IO (Expr Src Path)
-        handler e = throwIO (Imported (p:paths) e)
+    let handler :: SomeException -> m (Expr Src Path)
+        handler e = throwM (Imported (p:paths) e)
+
+    lift (from_path (canonicalizePath (p:paths)) `catch` handler)
+
+loadStaticIO :: Dhall.Context.Context (Expr Src X) -> Path -> StateT Status IO (Expr Src X)
+loadStaticIO ctx path = do
     m <- needManager
-    liftIO (exprFromPath m (canonicalizePath (p:paths)) `catch` handler)
+    loadStaticWith (exprFromPath m) ctx path
 
--- | Load a `Path` as a \"static\" expression (with all imports resolved)
-loadStatic :: Path -> StateT Status IO (Expr Src X)
-loadStatic = loadStaticWith Dhall.Context.empty
+-- | Resolve all imports within an expression using a custom typing context and Path
+-- resolving callback in arbitrary `MonadCatch` monad.
+loadWith :: MonadCatch m => (Path -> m (Expr Src Path))
+    -> Dhall.Context.Context (Expr Src X) -> Expr Src Path -> m (Expr Src X)
+loadWith from_path ctx = evalStatus (loadStaticWith from_path ctx)
 
-loadStaticWith :: Dhall.Context.Context (Expr Src X) -> Path -> StateT Status IO (Expr Src X)
-loadStaticWith ctx path = do
+loadStaticWith :: MonadCatch m => (Path -> m (Expr Src Path))
+    -> Dhall.Context.Context (Expr Src X) -> Path -> StateT Status m (Expr Src X)
+loadStaticWith from_path ctx path = do
     paths <- zoom stack State.get
 
     let local (Path (URL url _) _) =
@@ -693,17 +705,17 @@ loadStaticWith ctx path = do
     let here   = canonicalizePath (path:paths)
 
     if local here && not (local parent)
-        then liftIO (throwIO (Imported paths (ReferentiallyOpaque path)))
+        then throwM (Imported paths (ReferentiallyOpaque path))
         else return ()
 
     (expr, cached) <- if here `elem` canonicalizeAll paths
-        then liftIO (throwIO (Imported paths (Cycle path)))
+        then throwM (Imported paths (Cycle path))
         else do
             m <- zoom cache State.get
             case Map.lookup here m of
                 Just expr -> return (expr, True)
                 Nothing   -> do
-                    expr'  <- loadDynamic path
+                    expr'  <- loadDynamic from_path path
                     expr'' <- case traverse (\_ -> Nothing) expr' of
                         -- No imports left
                         Just expr -> do
@@ -713,7 +725,7 @@ loadStaticWith ctx path = do
                         Nothing   -> do
                             let paths' = path:paths
                             zoom stack (State.put paths')
-                            expr'' <- fmap join (traverse (loadStaticWith ctx)
+                            expr'' <- fmap join (traverse (loadStaticWith from_path ctx)
                                                            expr')
                             zoom stack (State.put paths)
                             return expr''
@@ -729,19 +741,17 @@ loadStaticWith ctx path = do
     if cached
         then return ()
         else case Dhall.TypeCheck.typeWith ctx expr of
-            Left  err -> liftIO (throwIO (Imported (path:paths) err))
+            Left  err -> throwM (Imported (path:paths) err)
             Right _   -> return ()
 
     return expr
 
--- | Resolve all imports within an expression
-load :: Expr Src Path -> IO (Expr Src X)
-load expr = State.evalStateT (fmap join (traverse loadStatic expr)) status
+evalStatus :: (Traversable f, Monad m, Monad f) =>
+                    (a -> StateT Status m (f b)) -> f a -> m (f b)
+evalStatus cb expr = State.evalStateT (fmap join (traverse cb expr)) status
   where
     status = Status [] Map.empty Nothing
 
--- | Resolve all imports within an expression using a custom typing context
-loadWith :: Dhall.Context.Context (Expr Src X) -> Expr Src Path -> IO (Expr Src X)
-loadWith ctx expr = State.evalStateT (fmap join (traverse (loadStaticWith ctx) expr)) status
-  where
-    status = Status [] Map.empty Nothing
+-- | Resolve all imports within an expression
+load :: Expr Src Path -> IO (Expr Src X)
+load = evalStatus (loadStaticIO Dhall.Context.empty)

@@ -95,6 +95,7 @@ Library
         charset                             < 0.4 ,
         containers           >= 0.5.0.0  && < 0.6 ,
         contravariant                       < 1.5 ,
+        exceptions           >= 0.8.3    && < 0.9 ,
         http-client          >= 0.4.30   && < 0.6 ,
         http-client-tls      >= 0.2.0    && < 0.4 ,
         lens                 >= 2.4      && < 4.16,
