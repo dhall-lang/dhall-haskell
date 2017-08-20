@@ -698,6 +698,14 @@ instance Inject Integer where
 
         declared = Integer
 
+instance Inject Int where
+    injectWith _ = InputType {..}
+      where
+        embed = IntegerLit . toInteger
+
+        declared = Integer
+
+
 instance Inject Double where
     injectWith _ = InputType {..}
       where
