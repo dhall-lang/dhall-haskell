@@ -1,5 +1,7 @@
 {-# LANGUAGE DefaultSignatures   #-}
+{-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -22,6 +24,7 @@ module Dhall
     , InputType(..)
     , Interpret(..)
     , InvalidType(..)
+    , R2(..)
     , auto
     , InterpretOptions(..)
     , defaultInterpretOptions
@@ -102,6 +105,9 @@ instance Show InvalidType where
         \matches the expected type.  You provided a Type that disobeys this contract     \n"
 
 instance Exception InvalidType
+
+-- | Dhall uses this type to represent (a, b) tuple.
+data R2 a b = R2 { _1 :: a, _2 :: b } deriving (Generic, Inject, Interpret, Show)
 
 {-| Type-check and evaluate a Dhall program, decoding the result into Haskell
 
@@ -449,6 +455,9 @@ instance Interpret a => Interpret (Maybe a) where
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
 
+instance (Interpret a, Interpret b) => Interpret (a, b) where
+    autoWith = fmap (\R2{..} -> (_1, _2)) . autoWith
+
 instance (Inject a, Interpret b) => Interpret (a -> b) where
     autoWith opts = Type extractOut expectedOut
       where
@@ -733,6 +742,11 @@ instance Inject a => Inject (Vector a) where
         declaredOut = App List declaredIn
 
         InputType embedIn declaredIn = injectWith options
+
+-- | (a, b) is mapped to { _1 = a, _2 = b }
+instance (Inject a, Inject b) => Inject (a, b) where
+    injectWith = fmap (contramap adapt) injectWith
+        where adapt (_1, _2) = R2 {..}
 
 {-| This is the underlying class that powers the `Interpret` class's support
     for automatically deriving a generic implementation
