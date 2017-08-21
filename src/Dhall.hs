@@ -106,8 +106,13 @@ instance Show InvalidType where
 
 instance Exception InvalidType
 
--- | Dhall uses this type to represent (a, b) tuple.
-data R2 a b = R2 { _1 :: a, _2 :: b } deriving (Generic, Inject, Interpret, Show)
+{-| Dhall uses the type @R2 a b@ to represent a 2-tuple of type @(a, b)@
+
+    You might prefer to use this type instead of a 2-tuple if you want the Dhall
+    type to exactly match the Haskell type
+-}
+data R2 a b = R2 { _1 :: a, _2 :: b }
+    deriving (Generic, Inject, Interpret, Show)
 
 {-| Type-check and evaluate a Dhall program, decoding the result into Haskell
 
@@ -455,6 +460,7 @@ instance Interpret a => Interpret (Maybe a) where
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
 
+-- | The Haskell type @(a, b)@ corresponds to the Dhall type @{ _1 : a, _2 : b }@
 instance (Interpret a, Interpret b) => Interpret (a, b) where
     autoWith = fmap (\R2{..} -> (_1, _2)) . autoWith
 
@@ -743,10 +749,11 @@ instance Inject a => Inject (Vector a) where
 
         InputType embedIn declaredIn = injectWith options
 
--- | (a, b) is mapped to { _1 = a, _2 = b }
+-- | The Haskell type @(a, b)@ corresponds to the Dhall type @{ _1 : a, _2 : b }@
 instance (Inject a, Inject b) => Inject (a, b) where
     injectWith = fmap (contramap adapt) injectWith
-        where adapt (_1, _2) = R2 {..}
+      where
+        adapt (_1, _2) = R2 {..}
 
 {-| This is the underlying class that powers the `Interpret` class's support
     for automatically deriving a generic implementation
