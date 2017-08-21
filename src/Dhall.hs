@@ -455,6 +455,9 @@ instance Interpret a => Interpret (Maybe a) where
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
 
+instance Interpret a => Interpret [a] where
+    autoWith = fmap (fmap Data.Vector.toList) autoWith
+
 instance (Interpret a, Interpret b) => Interpret (a, b) where
     autoWith = fmap (\R2{..} -> (_1, _2)) . autoWith
 
@@ -742,6 +745,9 @@ instance Inject a => Inject (Vector a) where
         declaredOut = App List declaredIn
 
         InputType embedIn declaredIn = injectWith options
+
+instance Inject a => Inject [a] where
+    injectWith = fmap (contramap Data.Vector.fromList) injectWith
 
 -- | (a, b) is mapped to { _1 = a, _2 = b }
 instance (Inject a, Inject b) => Inject (a, b) where
