@@ -53,6 +53,7 @@ module Dhall
 
 import Control.Applicative (empty, liftA2, (<|>), Alternative)
 import Control.Exception (Exception)
+import Control.Monad.Trans.State.Strict
 import Data.Functor.Contravariant (Contravariant(..))
 import Data.Monoid ((<>))
 import Data.Text.Buildable (Buildable(..))
@@ -434,7 +435,7 @@ class Interpret a where
     autoWith:: InterpretOptions -> Type a
     default autoWith
         :: (Generic a, GenericInterpret (Rep a)) => InterpretOptions -> Type a
-    autoWith options = fmap GHC.Generics.to (genericAutoWith options)
+    autoWith options = fmap GHC.Generics.to (evalState (genericAutoWith options) 1)
 
 instance Interpret Bool where
     autoWith _ = bool
@@ -514,20 +515,22 @@ defaultInterpretOptions = InterpretOptions
     for automatically deriving a generic implementation
 -}
 class GenericInterpret f where
-    genericAutoWith :: InterpretOptions -> Type (f a)
+    genericAutoWith :: InterpretOptions -> State Int (Type (f a))
 
 instance GenericInterpret f => GenericInterpret (M1 D d f) where
-    genericAutoWith = fmap (fmap M1) genericAutoWith
+    genericAutoWith options = do
+        res <- genericAutoWith options
+        pure (fmap M1 res)
 
 instance GenericInterpret V1 where
-    genericAutoWith _ = Type {..}
+    genericAutoWith _ = pure Type {..}
       where
         extract _ = Nothing
 
         expected = Union Data.Map.empty
 
 instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret f2) => GenericInterpret (M1 C c1 f1 :+: M1 C c2 f2) where
-    genericAutoWith options@(InterpretOptions {..}) = Type {..}
+    genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
       where
         nL :: M1 i c1 f1 a
         nL = undefined
@@ -547,11 +550,11 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
         expected =
             Union (Data.Map.fromList [(nameL, expectedL), (nameR, expectedR)])
 
-        Type extractL expectedL = genericAutoWith options
-        Type extractR expectedR = genericAutoWith options
+        Type extractL expectedL = evalState (genericAutoWith options) 1
+        Type extractR expectedR = evalState (genericAutoWith options) 1
 
 instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => GenericInterpret ((f :+: g) :+: M1 C c h) where
-    genericAutoWith options@(InterpretOptions {..}) = Type {..}
+    genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
       where
         n :: M1 i c h a
         n = undefined
@@ -565,11 +568,11 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
 
         expected = Union (Data.Map.insert name expectedR expectedL)
 
-        Type extractL (Union expectedL) = genericAutoWith options
-        Type extractR        expectedR  = genericAutoWith options
+        Type extractL (Union expectedL) = evalState (genericAutoWith options) 1
+        Type extractR        expectedR  = evalState (genericAutoWith options) 1
 
 instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => GenericInterpret (M1 C c f :+: (g :+: h)) where
-    genericAutoWith options@(InterpretOptions {..}) = Type {..}
+    genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
       where
         n :: M1 i c f a
         n = undefined
@@ -583,59 +586,59 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
 
         expected = Union (Data.Map.insert name expectedL expectedR)
 
-        Type extractL        expectedL  = genericAutoWith options
-        Type extractR (Union expectedR) = genericAutoWith options
+        Type extractL        expectedL  = evalState (genericAutoWith options) 1
+        Type extractR (Union expectedR) = evalState (genericAutoWith options) 1
 
 instance (GenericInterpret (f :+: g), GenericInterpret (h :+: i)) => GenericInterpret ((f :+: g) :+: (h :+: i)) where
-    genericAutoWith options = Type {..}
+    genericAutoWith options = pure (Type {..})
       where
         extract e = fmap L1 (extractL e) <|> fmap R1 (extractR e)
 
         expected = Union (Data.Map.union expectedL expectedR)
 
-        Type extractL (Union expectedL) = genericAutoWith options
-        Type extractR (Union expectedR) = genericAutoWith options
+        Type extractL (Union expectedL) = evalState (genericAutoWith options) 1
+        Type extractR (Union expectedR) = evalState (genericAutoWith options) 1
 
 instance GenericInterpret f => GenericInterpret (M1 C c f) where
-    genericAutoWith = fmap (fmap M1) genericAutoWith
+    genericAutoWith options = do
+        res <- genericAutoWith options
+        pure (fmap M1 res)
 
 instance GenericInterpret U1 where
-    genericAutoWith _ = Type {..}
+    genericAutoWith _ = pure (Type {..})
       where
         extract _ = Just U1
 
         expected = Record (Data.Map.fromList [])
 
 instance (GenericInterpret f, GenericInterpret g) => GenericInterpret (f :*: g) where
-    genericAutoWith options = Type {..}
-      where
-        extract = liftA2 (liftA2 (:*:)) extractL extractR
-
-        expected = Record (Data.Map.union ktsL ktsR)
-          where
-            Record ktsL = expectedL
-            Record ktsR = expectedR
-        Type extractL expectedL = genericAutoWith options
-        Type extractR expectedR = genericAutoWith options
+    genericAutoWith options = do
+        Type extractL expectedL <- genericAutoWith options
+        Type extractR expectedR <- genericAutoWith options
+        let Record ktsL = expectedL
+        let Record ktsR = expectedR
+        pure (Type { extract = liftA2 (liftA2 (:*:)) extractL extractR
+                        , expected = Record (Data.Map.union ktsL ktsR) })
 
 instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
-    genericAutoWith opts@(InterpretOptions {..}) = Type {..}
-      where
-        n :: M1 i s f a
-        n = undefined
-
-        extract (RecordLit m) = do
-            case selName n of
-                ""   -> Nothing
-                name -> do
+    genericAutoWith opts@(InterpretOptions {..}) = do
+        name <- case selName n of
+                    "" -> do i <- get
+                             put (i + 1)
+                             pure ("_" ++ show i)
+                    nn -> pure nn
+        let extract (RecordLit m) = do
                     let name' = fieldModifier (Data.Text.Lazy.pack name)
                     e <- Data.Map.lookup name' m
                     fmap (M1 . K1) (extract' e)
-        extract  _            = Nothing
-
-        expected = Record (Data.Map.fromList [(key, expected')])
-          where
-            key = fieldModifier (Data.Text.Lazy.pack (selName n))
+            extract _            = Nothing
+        let expected = Record (Data.Map.fromList [(key, expected')])
+              where
+                key = fieldModifier (Data.Text.Lazy.pack name)
+        pure (Type {..})
+      where
+        n :: M1 i s f a
+        n = undefined
 
         Type extract' expected' = autoWith opts
 
