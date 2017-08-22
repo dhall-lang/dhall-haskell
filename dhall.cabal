@@ -38,6 +38,7 @@ Extra-Source-Files:
     Prelude/List/any
     Prelude/List/build
     Prelude/List/concat
+    Prelude/List/concatMap
     Prelude/List/filter
     Prelude/List/fold
     Prelude/List/generate

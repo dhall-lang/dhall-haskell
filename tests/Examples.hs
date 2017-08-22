@@ -78,6 +78,10 @@ exampleTests =
                 [ _List_concat_0
                 , _List_concat_1
                 ]
+            , Test.Tasty.testGroup "concatMap"
+                [ _List_concatMap_0
+                , _List_concatMap_1
+                ]
             , Test.Tasty.testGroup "filter"
                 [ _List_filter_0
                 , _List_filter_1
@@ -456,6 +460,18 @@ _List_concat_1 = Test.Tasty.HUnit.testCase "Example #1" (do
         \    ]   : List (List Integer)\n\
         \)                            \n"
     Util.assertNormalizesTo e "[] : List Integer" )
+
+_List_concatMap_0 :: TestTree
+_List_concatMap_0 = Test.Tasty.HUnit.testCase "Example #0" (do
+    e <- Util.code
+        "./Prelude/List/concatMap Natural Natural (λ(n : Natural) → [n, n]) [+2, +3, +5]"
+    Util.assertNormalizesTo e "[+2, +2, +3, +3, +5, +5] : List Natural" )
+
+_List_concatMap_1 :: TestTree
+_List_concatMap_1 = Test.Tasty.HUnit.testCase "Example #1" (do
+    e <- Util.code
+        "./Prelude/List/concatMap Natural Natural (λ(n : Natural) → [n, n]) ([] : List Natural)"
+    Util.assertNormalizesTo e "[] : List Natural" )
 
 _List_filter_0 :: TestTree
 _List_filter_0 = Test.Tasty.HUnit.testCase "Example #0" (do
