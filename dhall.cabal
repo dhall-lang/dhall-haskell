@@ -145,6 +145,7 @@ Test-Suite test
         Util
     Build-Depends:
         base               >= 4        && < 5   ,
+        containers         >= 0.5.0.0  && < 0.6 ,
         dhall                                   ,
         tasty              >= 0.11.2   && < 0.12,
         tasty-hunit        >= 0.9.2    && < 0.10,
