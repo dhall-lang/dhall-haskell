@@ -678,7 +678,8 @@ class Inject a where
     injectWith :: InterpretOptions -> InputType a
     default injectWith
         :: (Generic a, GenericInject (Rep a)) => InterpretOptions -> InputType a
-    injectWith options = contramap GHC.Generics.from (genericInjectWith options)
+    injectWith options
+        = contramap GHC.Generics.from (evalState (genericInjectWith options) 1)
 
 {-| Use the default options for injecting a value
 
@@ -771,16 +772,20 @@ instance (Inject a, Inject b) => Inject (a, b) where
     for automatically deriving a generic implementation
 -}
 class GenericInject f where
-    genericInjectWith :: InterpretOptions -> InputType (f a)
+    genericInjectWith :: InterpretOptions -> State Int (InputType (f a))
 
 instance GenericInject f => GenericInject (M1 D d f) where
-    genericInjectWith = fmap (contramap unM1) genericInjectWith
+    genericInjectWith options = do
+        res <- genericInjectWith options
+        pure (contramap unM1 res)
 
 instance GenericInject f => GenericInject (M1 C c f) where
-    genericInjectWith = fmap (contramap unM1) genericInjectWith
+    genericInjectWith options = do
+        res <- genericInjectWith options
+        pure (contramap unM1 res)
 
 instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) => GenericInject (M1 C c1 f1 :+: M1 C c2 f2) where
-    genericInjectWith options@(InterpretOptions {..}) = InputType {..}
+    genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 (M1 l)) = UnionLit keyL (embedL l) Data.Map.empty
         embed (R1 (M1 r)) = UnionLit keyR (embedR r) Data.Map.empty
@@ -797,11 +802,11 @@ instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) =>
         keyL = constructorModifier (Data.Text.Lazy.pack (conName nL))
         keyR = constructorModifier (Data.Text.Lazy.pack (conName nR))
 
-        InputType embedL declaredL = genericInjectWith options
-        InputType embedR declaredR = genericInjectWith options
+        InputType embedL declaredL = evalState (genericInjectWith options) 1
+        InputType embedR declaredR = evalState (genericInjectWith options) 1
 
 instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInject ((f :+: g) :+: M1 C c h) where
-    genericInjectWith options@(InterpretOptions {..}) = InputType {..}
+    genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 l) = UnionLit keyL valL (Data.Map.insert keyR declaredR ktsL')
           where
@@ -815,11 +820,11 @@ instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInj
 
         declared = Union (Data.Map.insert keyR declaredR ktsL)
 
-        InputType embedL (Union ktsL) = genericInjectWith options
-        InputType embedR  declaredR   = genericInjectWith options
+        InputType embedL (Union ktsL) = evalState (genericInjectWith options) 1
+        InputType embedR  declaredR   = evalState (genericInjectWith options) 1
 
 instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInject (M1 C c f :+: (g :+: h)) where
-    genericInjectWith options@(InterpretOptions {..}) = InputType {..}
+    genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 (M1 l)) = UnionLit keyL (embedL l) ktsR
         embed (R1 r) = UnionLit keyR valR (Data.Map.insert keyL declaredL ktsR')
@@ -833,11 +838,11 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
 
         declared = Union (Data.Map.insert keyL declaredL ktsR)
 
-        InputType embedL  declaredL   = genericInjectWith options
-        InputType embedR (Union ktsR) = genericInjectWith options
+        InputType embedL  declaredL   = evalState (genericInjectWith options) 1
+        InputType embedR (Union ktsR) = evalState (genericInjectWith options) 1
 
 instance (GenericInject (f :+: g), GenericInject (h :+: i)) => GenericInject ((f :+: g) :+: (h :+: i)) where
-    genericInjectWith options = InputType {..}
+    genericInjectWith options = pure (InputType {..})
       where
         embed (L1 l) = UnionLit keyL valR (Data.Map.union ktsL' ktsR)
           where
@@ -848,44 +853,41 @@ instance (GenericInject (f :+: g), GenericInject (h :+: i)) => GenericInject ((f
 
         declared = Union (Data.Map.union ktsL ktsR)
 
-        InputType embedL (Union ktsL) = genericInjectWith options
-        InputType embedR (Union ktsR) = genericInjectWith options
+        InputType embedL (Union ktsL) = evalState (genericInjectWith options) 1
+        InputType embedR (Union ktsR) = evalState (genericInjectWith options) 1
 
 instance (GenericInject f, GenericInject g) => GenericInject (f :*: g) where
-    genericInjectWith options = InputType embedOut declaredOut
-      where
-        embedOut (l :*: r) = RecordLit (Data.Map.union mapL mapR)
-          where
-            RecordLit mapL = embedInL l
-            RecordLit mapR = embedInR r
+    genericInjectWith options = do
+        InputType embedInL declaredInL <- genericInjectWith options
+        InputType embedInR declaredInR <- genericInjectWith options
 
-        declaredOut = Record (Data.Map.union mapL mapR)
-          where
-            Record mapL = declaredInL
-            Record mapR = declaredInR
+        let embed (l :*: r) = RecordLit (Data.Map.union mapL mapR)
+              where
+                RecordLit mapL = embedInL l
+                RecordLit mapR = embedInR r
 
-        InputType embedInL declaredInL = genericInjectWith options
+        let declared = Record (Data.Map.union mapL mapR)
+              where
+                Record mapL = declaredInL
+                Record mapR = declaredInR
 
-        InputType embedInR declaredInR = genericInjectWith options
+        pure (InputType {..})
 
 instance GenericInject U1 where
-    genericInjectWith _ = InputType {..}
+    genericInjectWith _ = pure (InputType {..})
       where
         embed _ = RecordLit Data.Map.empty
 
         declared = Record Data.Map.empty
 
 instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
-    genericInjectWith opts@(InterpretOptions {..}) =
-        InputType embedOut declaredOut
+    genericInjectWith opts@(InterpretOptions {..}) = do
+        name <- fieldModifier . Data.Text.Lazy.pack <$> getSelName n
+        let embed (M1 (K1 x)) = RecordLit (Data.Map.singleton name (embedIn x))
+        let declared = Record (Data.Map.singleton name declaredIn)
+        pure (InputType {..})
       where
         n :: M1 i s f a
         n = undefined
-
-        name = fieldModifier (Data.Text.Lazy.pack (selName n))
-
-        embedOut (M1 (K1 x)) = RecordLit (Data.Map.singleton name (embedIn x))
-
-        declaredOut = Record (Data.Map.singleton name declaredIn)
 
         InputType embedIn declaredIn = injectWith opts
