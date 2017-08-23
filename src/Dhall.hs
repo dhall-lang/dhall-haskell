@@ -620,13 +620,16 @@ instance (GenericInterpret f, GenericInterpret g) => GenericInterpret (f :*: g) 
         pure (Type { extract = liftA2 (liftA2 (:*:)) extractL extractR
                         , expected = Record (Data.Map.union ktsL ktsR) })
 
+getSelName :: Selector s => M1 i s f a -> State Int String
+getSelName n = case selName n of
+    "" -> do i <- get
+             put (i + 1)
+             pure ("_" ++ show i)
+    nn -> pure nn
+
 instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
     genericAutoWith opts@(InterpretOptions {..}) = do
-        name <- case selName n of
-                    "" -> do i <- get
-                             put (i + 1)
-                             pure ("_" ++ show i)
-                    nn -> pure nn
+        name <- getSelName n
         let extract (RecordLit m) = do
                     let name' = fieldModifier (Data.Text.Lazy.pack name)
                     e <- Data.Map.lookup name' m
