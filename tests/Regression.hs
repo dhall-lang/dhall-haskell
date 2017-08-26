@@ -22,7 +22,7 @@ regressionTests =
         ]
 
 data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
-    deriving (Show, Dhall.Generic, Dhall.Interpret)
+    deriving (Show, Dhall.Generic, Dhall.Interpret, Dhall.Inject)
 
 unnamedFields :: TestTree
 unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
@@ -35,6 +35,17 @@ unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
                     ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Integer)]))
                 ,("Foo",Dhall.Core.Record (Data.Map.fromList [
                     ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool)]))]))
+
+    let inj = Dhall.inject @Foo
+    Test.Tasty.HUnit.assertEqual "Good Inject" (Dhall.declared inj) (Dhall.expected ty)
+
+    let tu_ty = Dhall.auto @(Integer, Bool)
+    Test.Tasty.HUnit.assertEqual "Auto Tuple" (Dhall.expected tu_ty) (Dhall.Core.Record (
+            Data.Map.fromList [ ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool) ]))
+
+    let tu_in = Dhall.inject @(Integer, Bool)
+    Test.Tasty.HUnit.assertEqual "Inj. Tuple" (Dhall.declared tu_in) (Dhall.expected tu_ty)
+
     return () )
 
 issue96 :: TestTree
