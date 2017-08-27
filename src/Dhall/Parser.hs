@@ -211,7 +211,7 @@ doubleQuoteLiteral embedded = do
 
 doubleSingleQuoteString :: Show a => Parser a -> Parser (Expr Src a)
 doubleSingleQuoteString embedded = do
-    expr0 <- Text.Parser.Token.token p0
+    expr0 <- p0
 
     let builder0      = concatFragments expr0
     let text0         = Data.Text.Lazy.Builder.toLazyText builder0

@@ -18,7 +18,8 @@ regressionTests :: TestTree
 regressionTests =
     Test.Tasty.testGroup "regression tests"
         [ issue96
-          , unnamedFields
+        , unnamedFields
+        , trailingSpaceAfterStringLiterals
         ]
 
 data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
@@ -53,3 +54,11 @@ issue96 = Test.Tasty.HUnit.testCase "Issue #96" (do
     -- Verify that parsing should not fail
     _ <- Util.code "\"bar'baz\""
     return () )
+
+trailingSpaceAfterStringLiterals :: TestTree
+trailingSpaceAfterStringLiterals =
+    Test.Tasty.HUnit.testCase "Trailing space after string literals" (do
+        -- Verify that string literals parse correctly with trailing space
+        -- (Yes, I did get this wrong at some point)
+        _ <- Util.code "(''ABC'' ++ \"DEF\" )"
+        return () )
