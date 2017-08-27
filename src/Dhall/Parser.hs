@@ -102,10 +102,7 @@ instance TokenParsing Parser where
 
     highlight h (Parser m) = Parser (highlight h m)
 
-    token parser = do
-        r <- parser
-        Text.Parser.Token.whiteSpace
-        return r
+    token parser = Parser (token (unParser parser))
 
 identifierStyle :: IdentifierStyle Parser
 identifierStyle = IdentifierStyle
