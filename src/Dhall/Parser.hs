@@ -46,7 +46,6 @@ import qualified Data.Map
 import qualified Data.ByteString.Lazy
 import qualified Data.List
 import qualified Data.Sequence
-import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
@@ -514,8 +513,7 @@ exprD embedded = do
     es <- many (noted (try (exprE embedded)))
     let app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
             Note (Src before after (bytesL <> bytesR)) (App nL nR)
-        app _ _ = Dhall.Core.internalError
-            ("Dhall.Parser.exprD: foldl1 app (" <> Data.Text.pack (show es) <> ")")
+        app nL nR = App nL nR
     return (Data.List.foldl1 app (e:es))
 
 exprE :: Show a => Parser a -> Parser (Expr Src a)
