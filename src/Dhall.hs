@@ -60,6 +60,7 @@ import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
+import Data.Word (Word8, Word16, Word32, Word64)
 import Dhall.Core (Expr(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
@@ -714,6 +715,34 @@ instance Inject Integer where
         declared = Integer
 
 instance Inject Int where
+    injectWith _ = InputType {..}
+      where
+        embed = IntegerLit . toInteger
+
+        declared = Integer
+
+instance Inject Word8 where
+    injectWith _ = InputType {..}
+      where
+        embed = IntegerLit . toInteger
+
+        declared = Integer
+
+instance Inject Word16 where
+    injectWith _ = InputType {..}
+      where
+        embed = IntegerLit . toInteger
+
+        declared = Integer
+
+instance Inject Word32 where
+    injectWith _ = InputType {..}
+      where
+        embed = IntegerLit . toInteger
+
+        declared = Integer
+
+instance Inject Word64 where
     injectWith _ = InputType {..}
       where
         embed = IntegerLit . toInteger
