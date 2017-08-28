@@ -72,7 +72,9 @@ import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Exception
 import qualified Data.ByteString.Lazy
+import qualified Data.Foldable
 import qualified Data.Map
+import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
@@ -780,6 +782,10 @@ instance Inject a => Inject (Vector a) where
 
 instance Inject a => Inject [a] where
     injectWith = fmap (contramap Data.Vector.fromList) injectWith
+
+instance Inject a => Inject (Data.Set.Set a) where
+    injectWith = fmap (contramap go) injectWith where
+        go se = Data.Vector.fromListN (Data.Set.size se) (Data.Foldable.toList se)
 
 deriving instance (Inject a, Inject b) => Inject (a, b)
 
