@@ -74,6 +74,7 @@ import qualified Control.Exception
 import qualified Data.ByteString.Lazy
 import qualified Data.Foldable
 import qualified Data.Map
+import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
@@ -786,6 +787,10 @@ instance Inject a => Inject [a] where
 instance Inject a => Inject (Data.Set.Set a) where
     injectWith = fmap (contramap go) injectWith where
         go se = Data.Vector.fromListN (Data.Set.size se) (Data.Foldable.toList se)
+
+instance Inject a => Inject (Data.Sequence.Seq a) where
+    injectWith = fmap (contramap go) injectWith where
+        go se = Data.Vector.fromListN (Data.Sequence.length se) (Data.Foldable.toList se)
 
 deriving instance (Inject a, Inject b) => Inject (a, b)
 
