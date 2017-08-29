@@ -33,6 +33,7 @@
         (pinPrelude { date = "2016-12-03"; })
         (pinPrelude { date = "2017-05-16"; })
         (pinPrelude { date = "2017-06-17"; })
+        (pinPrelude { date = "2017-08-28"; })
       ];
 
     in
