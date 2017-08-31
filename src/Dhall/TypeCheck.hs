@@ -125,7 +125,7 @@ typeWith _     (Const c         ) = do
     fmap Const (axiom c)
 typeWith ctx e@(Var (V x n)     ) = do
     case Dhall.Context.lookup x n ctx of
-        Nothing -> Left (TypeError ctx e UnboundVariable)
+        Nothing -> Left (TypeError ctx e (UnboundVariable x))
         Just a  -> return a
 typeWith ctx   (Lam x _A  b     ) = do
     let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x _A ctx)
@@ -653,7 +653,7 @@ instance Buildable X where
 
 -- | The specific type error
 data TypeMessage s
-    = UnboundVariable
+    = UnboundVariable Text
     | InvalidInputType (Expr s X)
     | InvalidOutputType (Expr s X)
     | NotAFunction (Expr s X) (Expr s X)
@@ -726,7 +726,9 @@ _NOT :: Builder
 _NOT = "\ESC[1mnot\ESC[0m"
 
 prettyTypeMessage :: TypeMessage s -> ErrorMessages
-prettyTypeMessage UnboundVariable = ErrorMessages {..}
+prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
+  -- We do not need to print variable name here. For the discussion see:
+  -- https://github.com/Gabriel439/Haskell-Dhall-Library/pull/116
   where
     short = "Unbound variable"
 
