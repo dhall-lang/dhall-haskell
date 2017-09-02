@@ -811,28 +811,22 @@ alternativeType embedded = do
     return (a, b)
 
 unionLit :: Show a => Parser a -> Parser (Expr Src a)
-unionLit embedded =
-        try unionLit0
-    <|>     unionLit1
-  where
-    unionLit0 = do
-        symbol "<"
-        a <- label
-        symbol "="
-        b <- exprA embedded
-        symbol ">"
-        return (UnionLit a b Data.Map.empty)
+unionLit embedded = do
+    symbol "<"
+    a <- label
+    symbol "="
+    b <- exprA embedded
+    let unionLit0 = do
+            symbol ">"
+            return (UnionLit a b Data.Map.empty)
 
-    unionLit1 = do
-        symbol "<"
-        a <- label
-        symbol "="
-        b <- exprA embedded
-        symbol "|"
-        c <- alternativeTypes embedded
-        d <- toMap c
-        symbol ">"
-        return (UnionLit a b d)
+    let unionLit1 = do
+            symbol "|"
+            c <- alternativeTypes embedded
+            d <- toMap c
+            symbol ">"
+            return (UnionLit a b d)
+    unionLit0 <|> unionLit1
 
 listLit :: Show a => Parser a -> Parser (Expr Src a)
 listLit embedded = do
