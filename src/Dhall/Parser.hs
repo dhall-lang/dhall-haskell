@@ -101,8 +101,6 @@ instance TokenParsing Parser where
 
     highlight h (Parser m) = Parser (highlight h m)
 
-    token parser = Parser (token (unParser parser))
-
 identifierStyle :: IdentifierStyle Parser
 identifierStyle = IdentifierStyle
     { _styleName     = "dhall"
