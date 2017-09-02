@@ -1,3 +1,22 @@
+1.6.0
+
+* BREAKING CHANGE TO THE API: Drop support for GHC 7.*
+* BREAKING CHANGE TO THE API: Add support for customizing Dhall import
+    * This is a breaking change because this changes the type of `loadWith`
+* BREAKING CHANGE TO THE API: Add field to `UnboundVariable` error containing
+* BUG FIX: Fix parsing single quotes in string literals
+  the name of the unbound variable
+* Add `List/concatMap` to the Prelude
+* You can now derive `Inject` and `Interpret` for types with unlabeled fields
+* Add new instances for `Interpret`:
+    * `[]`
+    * `(,)`
+* Add new instance for `Inject`
+    * `[]`, `Data.Set.Set`, `Data.Sequence.Seq`
+    * `(,)`
+    * `Int`, `Word8`, `Word16`, `Word32`, `Word64`
+* Add `Eq` instance for `Src`
+
 1.5.1
 
 * Increase upper bound on `vector` and `optparse-generic`
