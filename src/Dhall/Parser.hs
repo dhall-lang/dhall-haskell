@@ -365,14 +365,17 @@ expr = exprA import_
 -- | Parser for a top-level Dhall expression. The expression is parameterized
 -- over any parseable type, allowing the language to be extended as needed.
 exprA :: Show a => Parser a -> Parser (Expr Src a)
-exprA embedded = choice
-    [   noted      exprA0
-    ,   noted      exprA1
-    ,   noted      exprA2
-    ,   noted      exprA3
-    ,   noted (try exprA4)
-    ,              exprA5
-    ]
+exprA embedded =
+    (   noted
+        (   choice
+            [       exprA0
+            ,       exprA1
+            ,       exprA2
+            ,       exprA3
+            ,   try exprA4
+            ]
+        )
+    )   <|> exprA5
   where
     exprA0 = do
         lambda
@@ -426,11 +429,14 @@ exprA embedded = choice
     exprA5 = exprB embedded
 
 exprB :: Show a => Parser a -> Parser (Expr Src a)
-exprB embedded = choice
-    [   noted      exprB0
-    ,   noted (try exprB1)
-    ,   noted      exprB2
-    ]
+exprB embedded =
+    noted
+    (   choice
+        [       exprB0
+        ,   try exprB1
+        ,       exprB2
+        ]
+    )
   where
     exprB0 = do
         reserve "merge"
@@ -453,7 +459,7 @@ exprB embedded = choice
     exprB2 = do
         a <- exprC embedded
 
-        let exprB2A= do
+        let exprB2A = do
                 symbol ":"
                 b <- exprA embedded
                 return (Annot a b)
@@ -520,51 +526,53 @@ exprE embedded = noted (do
     return (Data.List.foldl Field a b) )
 
 exprF :: Show a => Parser a -> Parser (Expr Src a)
-exprF embedded = choice
-    [   noted (try exprParseDouble)
-    ,   noted (try exprNaturalLit)
-    ,   noted      exprIntegerLit
-    ,   noted      exprStringLiteral
-    ,   noted (try exprRecordType)
-    ,   noted      exprRecordLiteral
-    ,   noted (try exprUnionType)
-    ,   noted      exprUnionLiteral
-    ,   noted      exprListLiteral
-    ,   noted      exprImport
-    ,   (choice
-            [   noted      exprNaturalFold
-            ,   noted      exprNaturalBuild
-            ,   noted      exprNaturalIsZero
-            ,   noted      exprNaturalEven
-            ,   noted      exprNaturalOdd
-            ,   noted      exprNaturalToInteger
-            ,   noted      exprNaturalShow
-            ,   noted      exprIntegerShow
-            ,   noted      exprDoubleShow
-            ,   noted      exprListBuild
-            ,   noted      exprListFold
-            ,   noted      exprListLength
-            ,   noted      exprListHead
-            ,   noted      exprListLast
-            ,   noted      exprListIndexed
-            ,   noted      exprListReverse
-            ,   noted      exprOptionalFold
-            ,   noted      exprOptionalBuild
-            ,   noted      exprBool
-            ,   noted      exprOptional
-            ,   noted      exprNatural
-            ,   noted      exprInteger
-            ,   noted      exprDouble
-            ,   noted      exprText
-            ,   noted      exprList
-            ,   noted      exprBoolLitTrue
-            ,   noted      exprBoolLitFalse
-            ,   noted      exprConst
-            ]
-        ) <?> "built-in value"
-    ,   noted      exprVar
-    ,              exprParens
-    ]
+exprF embedded =
+    noted
+    (   choice
+        [   try exprParseDouble
+        ,   try exprNaturalLit
+        ,       exprIntegerLit
+        ,       exprStringLiteral
+        ,   try exprRecordType
+        ,       exprRecordLiteral
+        ,   try exprUnionType
+        ,       exprUnionLiteral
+        ,       exprListLiteral
+        ,       exprImport
+        ,   (choice
+                [   exprNaturalFold
+                ,   exprNaturalBuild
+                ,   exprNaturalIsZero
+                ,   exprNaturalEven
+                ,   exprNaturalOdd
+                ,   exprNaturalToInteger
+                ,   exprNaturalShow
+                ,   exprIntegerShow
+                ,   exprDoubleShow
+                ,   exprListBuild
+                ,   exprListFold
+                ,   exprListLength
+                ,   exprListHead
+                ,   exprListLast
+                ,   exprListIndexed
+                ,   exprListReverse
+                ,   exprOptionalFold
+                ,   exprOptionalBuild
+                ,   exprBool
+                ,   exprOptional
+                ,   exprNatural
+                ,   exprInteger
+                ,   exprDouble
+                ,   exprText
+                ,   exprList
+                ,   exprBoolLitTrue
+                ,   exprBoolLitFalse
+                ,   exprConst
+                ]
+            ) <?> "built-in value"
+        ,       exprVar
+        ]
+    )   <|> exprParens
   where
     exprVar = do
         a <- var
