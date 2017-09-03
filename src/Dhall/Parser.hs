@@ -492,7 +492,7 @@ exprC embedded = exprC0
   where
     chain pA pOp op pB = noted (do
         a <- pA
-        try (do _ <- pOp <?> "operator"; b <- pB; return (op a b)) <|> pure a )
+        (do _ <- pOp <?> "operator"; b <- pB; return (op a b)) <|> pure a )
 
     exprC0 = chain  exprC1          (symbol "||") BoolOr       exprC0
     exprC1 = chain  exprC2          (symbol "+" ) NaturalPlus  exprC1
