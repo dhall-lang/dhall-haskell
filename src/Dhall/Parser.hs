@@ -372,7 +372,7 @@ exprA embedded =
             ,       exprA1
             ,       exprA2
             ,       exprA3
-            ,   try exprA4
+            ,       exprA4
             ]
         )
     )   <|> exprA5
@@ -421,8 +421,7 @@ exprA embedded =
         return (Let a b c d)
 
     exprA4 = do
-        a <- exprC embedded
-        arrow
+        a <- try (exprC embedded <* arrow)
         b <- exprA embedded
         return (Pi "_" a b)
 
@@ -449,12 +448,32 @@ exprB embedded =
 
     exprB1 = do
         symbol "["
-        a <- elems embedded
-        symbol "]"
-        symbol ":"
-        b <- listLike
-        c <- exprE embedded
-        return (b c a)
+
+        let emptyListOrOptional = do
+                symbol "]"
+                symbol ":"
+
+                let emptyList = do
+                        reserve "List"
+                        a <- exprE embedded
+                        return (ListLit (Just a) Data.Vector.empty)
+
+                let emptyOptional = do
+                        reserve "Optional"
+                        a <- exprE embedded
+                        return (OptionalLit a Data.Vector.empty)
+
+                emptyList <|> emptyOptional
+
+        let nonEmptyOptional = do
+                a <- exprA embedded
+                symbol "]"
+                symbol ":"
+                reserve "Optional"
+                b <- exprE embedded
+                return (OptionalLit b (Data.Vector.singleton a))
+
+        emptyListOrOptional <|> nonEmptyOptional
 
     exprB2 = do
         a <- exprC embedded
@@ -467,20 +486,6 @@ exprB embedded =
         let exprB2B = pure a
 
         exprB2A <|> exprB2B
-
-listLike :: Parser (Expr Src a -> Vector (Expr Src a) -> Expr Src a)
-listLike =
-    (   listLike0
-    <|> listLike1
-    )
-  where
-    listLike0 = do
-        reserve "List"
-        return (\a b -> ListLit (Just a) b)
-
-    listLike1 = do
-        reserve "Optional"
-        return OptionalLit
 
 exprC :: Show a => Parser a -> Parser (Expr Src a)
 exprC embedded = exprC0
@@ -510,19 +515,22 @@ exprC embedded = exprC0
 --   arguments
 exprD :: Show a => Parser a -> Parser (Expr Src a)
 exprD embedded = do
-    e  <- noted (exprE embedded)
-    es <- many (noted (try (exprE embedded)))
+    es <- some (noted (exprE embedded))
     let app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
             Note (Src before after (bytesL <> bytesR)) (App nL nR)
         app nL nR = App nL nR
-    return (Data.List.foldl1 app (e:es))
+    return (Data.List.foldl1 app es)
 
 exprE :: Show a => Parser a -> Parser (Expr Src a)
 exprE embedded = noted (do
     a <- exprF embedded
-    b <- many (try (do
-        symbol "."
-        label ))
+
+    let field = do
+            symbol "."
+            label
+
+    b <- many field
+
     return (Data.List.foldl Field a b) )
 
 exprF :: Show a => Parser a -> Parser (Expr Src a)
@@ -531,12 +539,10 @@ exprF embedded =
     (   choice
         [   try exprParseDouble
         ,   try exprNaturalLit
-        ,       exprIntegerLit
+        ,   try exprIntegerLit
         ,       exprStringLiteral
-        ,   try exprRecordType
-        ,       exprRecordLiteral
-        ,   try exprUnionType
-        ,       exprUnionLiteral
+        ,       exprRecordTypeOrLiteral
+        ,       exprUnionTypeOrLiteral
         ,       exprListLiteral
         ,       exprImport
         ,   (choice
@@ -708,13 +714,9 @@ exprF embedded =
 
     exprStringLiteral = stringLiteral embedded
 
-    exprRecordType = record embedded <?> "record type"
+    exprRecordTypeOrLiteral = recordTypeOrLiteral embedded <?> "record type or literal"
 
-    exprRecordLiteral = recordLit embedded <?> "record literal"
-
-    exprUnionType = union embedded <?> "union type"
-
-    exprUnionLiteral = unionLit embedded <?> "union literal"
+    exprUnionTypeOrLiteral = unionTypeOrLiteral embedded <?> "union type or literal"
 
     exprListLiteral = listLit embedded <?> "list literal"
 
@@ -756,21 +758,59 @@ elems embedded = do
     a <- sepBy (exprA embedded) (symbol ",")
     return (Data.Vector.fromList a)
 
-recordLit :: Show a => Parser a -> Parser (Expr Src a)
-recordLit embedded =
-        recordLit0
-    <|> recordLit1
-  where
-    recordLit0 = do
-        symbol "{=}"
-        return (RecordLit (Data.Map.fromList []))
+recordTypeOrLiteral :: Show a => Parser a -> Parser (Expr Src a)
+recordTypeOrLiteral embedded = do
+    symbol "{"
 
-    recordLit1 = do
-        symbol "{"
-        a <- fieldValues embedded
-        b <- toMap a
-        symbol "}"
-        return (RecordLit b)
+    let emptyRecordLiteral = do
+            symbol "="
+            symbol "}"
+            return (RecordLit (Data.Map.fromList []))
+
+    let emptyRecordType = do
+            symbol "}"
+            return (Record (Data.Map.fromList []))
+
+    let nonEmptyRecordTypeOrLiteral = do
+            a <- label
+
+            let nonEmptyRecordLiteral = do
+                    symbol "="
+                    b <- exprA embedded
+
+                    let recordLiteralWithoutOtherFields = do
+                            symbol "}"
+                            return (RecordLit (Data.Map.singleton a b))
+
+                    let recordLiteralWithOtherFields = do
+                            symbol ","
+                            c <- fieldValues embedded
+                            d <- toMap ((a, b):c)
+                            symbol "}"
+                            return (RecordLit d)
+
+                    recordLiteralWithoutOtherFields <|> recordLiteralWithOtherFields
+
+            let nonEmptyRecordType = do
+                    symbol ":"
+                    b <- exprA embedded
+
+                    let recordTypeWithoutOtherFields = do
+                            symbol "}"
+                            return (Record (Data.Map.singleton a b))
+
+                    let recordTypeWithOtherFields = do
+                            symbol ","
+                            c <- fieldTypes embedded
+                            d <- toMap ((a, b):c)
+                            symbol "}"
+                            return (Record d)
+
+                    recordTypeWithoutOtherFields <|> recordTypeWithOtherFields
+
+            nonEmptyRecordLiteral <|> nonEmptyRecordType
+
+    emptyRecordLiteral <|> emptyRecordType <|> nonEmptyRecordTypeOrLiteral
 
 fieldValues :: Show a => Parser a -> Parser [(Text, Expr Src a)]
 fieldValues embedded = sepBy1 (fieldValue embedded) (symbol ",")
@@ -782,14 +822,6 @@ fieldValue embedded = do
     b <- exprA embedded
     return (a, b)
 
-record :: Show a => Parser a -> Parser (Expr Src a)
-record embedded = do
-    symbol "{"
-    a <- fieldTypes embedded
-    b <- toMap a
-    symbol "}"
-    return (Record b)
-
 fieldTypes :: Show a => Parser a -> Parser [(Text, Expr Src a)]
 fieldTypes embedded = sepBy (fieldType embedded) (symbol ",")
 
@@ -800,13 +832,52 @@ fieldType embedded = do
     b <- exprA embedded
     return (a, b)
 
-union :: Show a => Parser a -> Parser (Expr Src a)
-union embedded = do
+unionTypeOrLiteral :: Show a => Parser a -> Parser (Expr Src a)
+unionTypeOrLiteral embedded = do
     symbol "<"
-    a <- alternativeTypes embedded
-    b <- toMap a
-    symbol ">"
-    return (Union b)
+
+    let emptyUnionTypeOrLiteral = do
+            symbol ">"
+            return (Union Data.Map.empty)
+
+    let nonEmptyUnionTypeOrLiteral = do
+            a <- label
+
+            let unionType = do
+                    symbol ":"
+                    b <- exprA embedded
+
+                    let unionTypeWithoutAlternatives = do
+                            symbol ">"
+                            return (Union (Data.Map.singleton a b))
+
+                    let unionTypeWithAlternatives = do
+                            symbol "|"
+                            c <- alternativeTypes embedded
+                            symbol ">"
+                            d <- toMap ((a, b):c)
+                            return (Union d)
+
+                    unionTypeWithoutAlternatives <|> unionTypeWithAlternatives
+
+            let unionLiteral = do
+                    symbol "="
+                    b <- exprA embedded
+                    let unionLitWithoutAlternatives = do
+                            symbol ">"
+                            return (UnionLit a b Data.Map.empty)
+
+                    let unionLitWithAlternatives = do
+                            symbol "|"
+                            c <- alternativeTypes embedded
+                            d <- toMap c
+                            symbol ">"
+                            return (UnionLit a b d)
+                    unionLitWithoutAlternatives <|> unionLitWithAlternatives
+
+            unionType <|> unionLiteral
+
+    emptyUnionTypeOrLiteral <|> nonEmptyUnionTypeOrLiteral
 
 alternativeTypes :: Show a => Parser a -> Parser [(Text, Expr Src a)]
 alternativeTypes embedded = sepBy (alternativeType embedded) (symbol "|")
@@ -817,24 +888,6 @@ alternativeType embedded = do
     symbol ":"
     b <- exprA embedded
     return (a, b)
-
-unionLit :: Show a => Parser a -> Parser (Expr Src a)
-unionLit embedded = do
-    symbol "<"
-    a <- label
-    symbol "="
-    b <- exprA embedded
-    let unionLit0 = do
-            symbol ">"
-            return (UnionLit a b Data.Map.empty)
-
-    let unionLit1 = do
-            symbol "|"
-            c <- alternativeTypes embedded
-            d <- toMap c
-            symbol ">"
-            return (UnionLit a b d)
-    unionLit0 <|> unionLit1
 
 listLit :: Show a => Parser a -> Parser (Expr Src a)
 listLit embedded = do
