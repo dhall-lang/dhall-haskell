@@ -264,6 +264,7 @@ doubleSingleQuoteString embedded = do
 
     p0 = do
         _ <- Text.Parser.Char.string "''"
+        _ <- optional (Text.Parser.Char.char '\n')
         p1
 
     p1 =    p2

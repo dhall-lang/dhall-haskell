@@ -13,11 +13,13 @@ import qualified Test.Tasty.HUnit
 import qualified Util
 
 import Test.Tasty (TestTree)
+import Test.Tasty.HUnit ((@?=))
 
 regressionTests :: TestTree
 regressionTests =
     Test.Tasty.testGroup "regression tests"
         [ issue96
+        , issue126
         , unnamedFields
         , trailingSpaceAfterStringLiterals
         ]
@@ -54,6 +56,15 @@ issue96 = Test.Tasty.HUnit.testCase "Issue #96" (do
     -- Verify that parsing should not fail
     _ <- Util.code "\"bar'baz\""
     return () )
+
+issue126 :: TestTree
+issue126 = Test.Tasty.HUnit.testCase "Issue #126" (do
+    e <- Util.code
+        "''\n\
+        \  foo\n\
+        \  bar\n\
+        \''"
+    Util.normalize' e @?= "\"foo\\nbar\\n\"" )
 
 trailingSpaceAfterStringLiterals :: TestTree
 trailingSpaceAfterStringLiterals =
