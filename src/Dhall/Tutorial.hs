@@ -1867,7 +1867,9 @@ import Dhall
 -- > ──────────────────────────────────────────
 -- > Γ ⊢ [x, y, ... ] : List t
 --
--- Also, every @List@ must end with a mandatory type annotation
+-- Also, every empty @List@ must end with a mandatory type annotation, for example:
+--
+-- > [] : List Integer
 --
 -- The built-in operations on @List@s are:
 
