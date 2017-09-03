@@ -1097,6 +1097,41 @@ import Dhall
 --
 -- > merge { Left = Natural/even, Right = λ(b : Bool) → b } < Right = True | Left : Natural >
 --
+-- You can also store more than one value or less than one value within
+-- alternatives using Dhall's support for anonymous records.  You can nest an
+-- anonymous record within a union such as in this type:
+--
+-- > < Empty : {} | Person : { name : Text, age : Natural } >
+--
+-- This union of records resembles following equivalent Haskell data type:
+--
+-- > data Example = Empty | Person { name :: Text, age :: Text }
+--
+-- You can resemble Haskell further by defining convenient constructors for each
+-- alternative, like this:
+--
+-- >     let Empty  = < Empty = {=} | Person : { name : Text, age : Natural } >
+-- > in  let Person =
+-- >         λ(p : { name : Text, age : Natural }) → < Person = p | Empty : {} >
+-- > in  [   Empty
+-- >     ,   Person { name = "John", age = +23 }
+-- >     ,   Person { name = "Amy" , age = +25 }
+-- >     ,   Empty
+-- >     ]
+--
+-- You can also extract fields during pattern matching such as in the following
+-- function which renders each value to `Text`:
+--
+-- >     λ(x : < Empty : {} | Person : { name : Text, age : Natural } >)
+-- > →   merge
+-- >     {   Empty = λ(_ : {}) → "Unknown"
+-- >
+-- >     ,   Person =
+-- >             λ(person : { name : Text, age : Natural })
+-- >         →   "Name: ${person.name}, Age: ${Natural/show person.age}"
+-- >     }
+-- >     x
+--
 -- __Exercise__: Create a list of the following type with at least one element
 -- per alternative:
 --
