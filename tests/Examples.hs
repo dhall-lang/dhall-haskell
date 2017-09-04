@@ -998,7 +998,7 @@ _Optional_null_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 _Optional_toList_0 :: TestTree
 _Optional_toList_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code "./Prelude/Optional/toList Integer ([1] : Optional Integer)"
-    Util.assertNormalizesTo e "[1] : List Integer" )
+    Util.assertNormalizesTo e "[1]" )
 
 _Optional_toList_1 :: TestTree
 _Optional_toList_1 = Test.Tasty.HUnit.testCase "Example #1" (do
