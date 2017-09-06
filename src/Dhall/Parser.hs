@@ -837,51 +837,64 @@ unionTypeOrLiteral :: Show a => Parser a -> Parser (Expr Src a)
 unionTypeOrLiteral embedded = do
     symbol "<"
 
-    let emptyUnionTypeOrLiteral = do
+    let emptyUnionType = do
             symbol ">"
             return (Union Data.Map.empty)
 
-    let nonEmptyUnionTypeOrLiteral = do
+    let withLabel = do
             a <- label
 
-            let unionType = do
+            let withColon = do
                     symbol ":"
                     b <- exprA embedded
 
-                    let unionTypeWithoutAlternatives = do
+                    let withClose = do
                             symbol ">"
-                            return (Union (Data.Map.singleton a b))
+                            return (Union, [(a, b)])
 
-                    let unionTypeWithAlternatives = do
+                    let withBar = do
                             symbol "|"
-                            c <- alternativeTypes embedded
-                            symbol ">"
-                            d <- toMap ((a, b):c)
-                            return (Union d)
 
-                    unionTypeWithoutAlternatives <|> unionTypeWithAlternatives
+                            let continue = do
+                                    (c, d) <- withLabel
+                                    return (c, (a, b):d)
+
+                            withClose <|> continue
+
+                    withBar <|> withClose
 
             let unionLiteral = do
                     symbol "="
                     b <- exprA embedded
-                    let unionLitWithoutAlternatives = do
-                            symbol ">"
-                            return (UnionLit a b Data.Map.empty)
 
-                    let unionLitWithAlternatives = do
+                    let emptyUnionLiteral = do
+                            symbol ">"
+                            return (UnionLit a b, [])
+
+                    let nonEmptyUnionLiteral = do
                             symbol "|"
-                            c <- alternativeTypes embedded
-                            d <- toMap c
-                            symbol ">"
-                            return (UnionLit a b d)
-                    unionLitWithoutAlternatives <|> unionLitWithAlternatives
 
-            unionType <|> unionLiteral
+                            let stop = do
+                                    symbol ">"
+                                    return (UnionLit a b, [])
 
-    emptyUnionTypeOrLiteral <|> nonEmptyUnionTypeOrLiteral
+                            let continue = do
+                                    c <- Text.Parser.Combinators.sepEndBy (alternativeType embedded) (symbol "|")
+                                    symbol ">"
+                                    return (UnionLit a b, c)
 
-alternativeTypes :: Show a => Parser a -> Parser [(Text, Expr Src a)]
-alternativeTypes embedded = sepBy (alternativeType embedded) (symbol "|")
+                            stop <|> continue
+
+                    emptyUnionLiteral <|> nonEmptyUnionLiteral
+
+            withColon <|> unionLiteral
+
+    let nonEmptyUnionTypeOrLiteral = do
+            (a, b) <- withLabel
+            c <- toMap b
+            return (a c)
+
+    emptyUnionType <|> nonEmptyUnionTypeOrLiteral
 
 alternativeType :: Show a => Parser a -> Parser (Text, Expr Src a)
 alternativeType embedded = do
