@@ -22,6 +22,7 @@ regressionTests =
     Test.Tasty.testGroup "regression tests"
         [ issue96
         , issue126
+        , parsing0
         , unnamedFields
         , trailingSpaceAfterStringLiterals
         ]
