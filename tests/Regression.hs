@@ -5,9 +5,11 @@
 
 module Regression where
 
+import qualified Control.Exception
 import qualified Data.Map
 import qualified Dhall
 import qualified Dhall.Core
+import qualified Dhall.Parser
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 import qualified Util
@@ -20,6 +22,7 @@ regressionTests =
     Test.Tasty.testGroup "regression tests"
         [ issue96
         , issue126
+        , parsing0
         , unnamedFields
         , trailingSpaceAfterStringLiterals
         ]
@@ -65,6 +68,22 @@ issue126 = Test.Tasty.HUnit.testCase "Issue #126" (do
         \  bar\n\
         \''"
     Util.normalize' e @?= "\"foo\\nbar\\n\"" )
+
+parsing0 :: TestTree
+parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (do
+    -- Verify that parsing should not fail
+    --
+    -- In 267093f8cddf1c2f909f2d997c31fd0a7cb2440a I broke the parser when left
+    -- factoring the grammer by failing to handle the source tested by this
+    -- regression test.  The root of the problem was that the parser was trying
+    -- to parse `List ./Node` as `Field List "/Node"` instead of
+    -- `App List (Embed (Path (File Homeless "./Node") Code))`.  The latter is
+    -- the correct parse because `/Node` is not a valid field label, but the
+    -- mistaken parser was committed to the incorrect parse and never attempted
+    -- the correct parse.
+    case Dhall.Parser.exprFromText mempty "List ./Node" of
+        Left  e -> Control.Exception.throwIO e
+        Right _ -> return () )
 
 trailingSpaceAfterStringLiterals :: TestTree
 trailingSpaceAfterStringLiterals =
