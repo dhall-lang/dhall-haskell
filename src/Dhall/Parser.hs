@@ -526,9 +526,9 @@ exprE :: Show a => Parser a -> Parser (Expr Src a)
 exprE embedded = noted (do
     a <- exprF embedded
 
-    let field = do
+    let field = try (do
             symbol "."
-            label
+            label )
 
     b <- many field
 
