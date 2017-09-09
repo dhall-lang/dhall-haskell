@@ -1810,7 +1810,7 @@ import Dhall
 -- > 
 -- > Natural/fold (x * y) n s = Natural/fold x n (Natural/fold y n s)
 -- > 
--- > Natural/fold 1 n s = s
+-- > Natural/fold +1 n s = s
 
 -- $naturalBuild
 --
