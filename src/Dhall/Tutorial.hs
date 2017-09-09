@@ -1362,7 +1362,7 @@ import Dhall
 -- ... or if you needed to provide an authorization token to access a private
 -- GitHub repository, then your headers could look like this:
 --
--- > [ { header = "Authorization", value = "token ${env:GITHUB_TOKEN}" } ]
+-- > [ { header = "Authorization", value = "token ${env:GITHUB_TOKEN as Text}" } ]
 --
 -- This would read your GitHub API token from the @GITHUB_TOKEN@ environment
 -- variable and supply that token in the authorization header.
