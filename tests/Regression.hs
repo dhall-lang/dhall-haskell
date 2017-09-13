@@ -85,6 +85,18 @@ parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (do
         Left  e -> Control.Exception.throwIO e
         Right _ -> return () )
 
+typeChecking0 :: TestTree
+typeChecking0 = Test.Tasty.HUnit.testCase "Type-checking regression #0" (do
+    -- There used to be a bug in the type-checking logic where `T` would be
+    -- added to the context when inferring the type of `λ(x : T) → x`, but was
+    -- missing from the context when inferring the kind of the inferred type
+    -- (i.e. the kind of `∀(x : T) → T`).  This led to an unbound variable
+    -- error when inferring the kind
+    --
+    -- This bug was originally reported in issue #10
+    _ <- Util.code "let Day : Type = Natural in λ(x : Day) → x"
+    return ()
+
 trailingSpaceAfterStringLiterals :: TestTree
 trailingSpaceAfterStringLiterals =
     Test.Tasty.HUnit.testCase "Trailing space after string literals" (do
