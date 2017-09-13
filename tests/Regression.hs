@@ -95,7 +95,7 @@ typeChecking0 = Test.Tasty.HUnit.testCase "Type-checking regression #0" (do
     --
     -- This bug was originally reported in issue #10
     _ <- Util.code "let Day : Type = Natural in λ(x : Day) → x"
-    return ()
+    return () )
 
 trailingSpaceAfterStringLiterals :: TestTree
 trailingSpaceAfterStringLiterals =
