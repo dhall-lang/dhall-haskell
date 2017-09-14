@@ -175,7 +175,7 @@ typeWith ctx e@(Let f mt r b ) = do
 
     let ctx' = Dhall.Context.insert f tR ctx
     tB  <- typeWith ctx' b
-    ttB <- fmap Dhall.Core.normalize (typeWith ctx tB)
+    ttB <- fmap Dhall.Core.normalize (typeWith ctx' tB)
     kB  <- case ttB of
         Const k -> return k
         -- Don't bother to provide a `let`-specific version of this error
