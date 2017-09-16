@@ -173,7 +173,7 @@ typeWith ctx e@(Let f mt r b ) = do
         -- message because this should never happen anyway
         _       -> Left (TypeError ctx e (InvalidInputType tR))
 
-    let ctx' = Dhall.Context.insert f tR ctx
+    let ctx' = fmap (Dhall.Core.shift 1 (V f 0)) (Dhall.Context.insert f tR ctx)
     tB  <- typeWith ctx' b
     ttB <- fmap Dhall.Core.normalize (typeWith ctx' tB)
     kB  <- case ttB of
@@ -196,7 +196,10 @@ typeWith ctx e@(Let f mt r b ) = do
                 then return ()
                 else Left (TypeError ctx e (AnnotMismatch r nf_t nf_tR))
 
-    return tB
+    let r'   = Dhall.Core.shift 1 (V f 0) r
+    let tB'  = Dhall.Core.subst (V f 0) r' (Dhall.Core.normalize tB)
+    let tB'' = Dhall.Core.shift (-1) (V f 0) tB'
+    return tB''
 typeWith ctx e@(Annot x t       ) = do
     -- This is mainly just to check that `t` is not `Kind`
     _ <- typeWith ctx t
