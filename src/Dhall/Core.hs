@@ -630,7 +630,8 @@ prettyExprB a0@(Pi _ _ _) =
     docs (Note _   c) = docs c
     docs           c  = [ prettyExprB c ]
 prettyExprB a0@(Let _ _ _ _) =
-    enclose' "" "    " " in " "in  " (fmap duplicate (docs a0))
+    enclose' "" "    " " in " (Pretty.hardline <> "in  ")
+        (fmap duplicate (docs a0))
   where
     docs (Let a Nothing c d) =
         Pretty.group (Pretty.flatAlt long short) : docs d
