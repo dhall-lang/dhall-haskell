@@ -835,6 +835,7 @@ prettyExprD a0@(App _ _) =
     docs (App  a b) = prettyExprE b : docs a
     docs (Note _ b) = docs b
     docs         b  = [ prettyExprE b ]
+prettyExprD (Note _ b) = prettyExprD b
 prettyExprD a0 =
     prettyExprE a0
 
