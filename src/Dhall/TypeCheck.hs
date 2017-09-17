@@ -25,6 +25,7 @@ import Data.Set (Set)
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
+import Data.Text.Prettyprint.Doc (Pretty(..))
 import Data.Traversable (forM)
 import Data.Typeable (Typeable)
 import Dhall.Core (Const(..), Expr(..), Var(..))
@@ -653,6 +654,9 @@ instance Eq X where
 
 instance Buildable X where
     build = absurd
+
+instance Pretty X where
+    pretty = absurd
 
 -- | The specific type error
 data TypeMessage s

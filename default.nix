@@ -1,7 +1,7 @@
 { mkDerivation, ansi-wl-pprint, base, bytestring, case-insensitive
 , charset, containers, contravariant, exceptions, http-client
-, http-client-tls, lens, optparse-generic, parsers, stdenv
-, system-fileio, system-filepath, tasty, tasty-hunit, text
+, http-client-tls, lens, optparse-generic, parsers, prettyprinter
+, stdenv, system-fileio, system-filepath, tasty, tasty-hunit, text
 , text-format, transformers, trifecta, unordered-containers, vector
 }:
 mkDerivation {
@@ -13,8 +13,8 @@ mkDerivation {
   libraryHaskellDepends = [
     ansi-wl-pprint base bytestring case-insensitive charset containers
     contravariant exceptions http-client http-client-tls lens parsers
-    system-fileio system-filepath text text-format transformers
-    trifecta unordered-containers vector
+    prettyprinter system-fileio system-filepath text text-format
+    transformers trifecta unordered-containers vector
   ];
   executableHaskellDepends = [ base optparse-generic text trifecta ];
   testHaskellDepends = [

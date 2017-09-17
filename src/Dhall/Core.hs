@@ -55,6 +55,7 @@ import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
+import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Traversable
 import Data.Vector (Vector)
 import Filesystem.Path.CurrentOS (FilePath)
@@ -63,11 +64,13 @@ import Prelude hiding (FilePath, succ)
 
 import qualified Control.Monad
 import qualified Data.HashSet
+import qualified Data.List
 import qualified Data.Map
 import qualified Data.Maybe
 import qualified Data.Text
 import qualified Data.Text.Lazy            as Text
 import qualified Data.Text.Lazy.Builder    as Builder
+import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Vector
 import qualified Data.Vector.Mutable
 import qualified Filesystem.Path.CurrentOS as Filesystem
@@ -140,6 +143,9 @@ instance Buildable Path where
         suffix = case pathMode of
             RawText -> "as Text"
             Code    -> ""
+
+instance Pretty Path where
+    pretty path = Pretty.pretty (Builder.toLazyText (build path))
 
 {-| Label for a bound variable
 
@@ -450,6 +456,558 @@ instance IsString (Expr s a) where
     you add a new constructor to the syntax tree without adding a matching
     case the corresponding builder.
 -}
+
+{-| Internal utility for pretty-printing, used when generating element lists
+    to supply to `enclose` or `enclose'`.  This utility indicates that the
+    compact represent is the same as the multi-line representation for each
+    element
+-}
+duplicate :: a -> (a, a)
+duplicate x = (x, x)
+
+-- | Pretty-print a list
+list :: [Doc ann] -> Doc ann
+list   [] = "[]"
+list docs = enclose "[ " "[ " ", " ", " " ]" "]" (fmap duplicate docs)
+
+-- | Pretty-print union types and literals
+angles :: [(Doc ann, Doc ann)] -> Doc ann
+angles   [] = "<>"
+angles docs = enclose "< " "< " " | " "| " " >" ">" docs
+
+-- | Pretty-print record types and literals
+braces :: [(Doc ann, Doc ann)] -> Doc ann
+braces   [] = "{}"
+braces docs = enclose "{ " "{ " ", " ", " " }" "}" docs
+
+-- | Pretty-print anonymous functions and function types
+arrows :: [(Doc ann, Doc ann)] -> Doc ann
+arrows = enclose' "" "  " " → " "→ " 
+
+{-| Format an expression that holds a variable number of elements, such as a
+    list, record, or union
+-}
+enclose
+    :: Doc ann
+    -- ^ Beginning document for compact representation
+    -> Doc ann
+    -- ^ Beginning document for multi-line representation
+    -> Doc ann
+    -- ^ Separator for compact representation
+    -> Doc ann
+    -- ^ Separator for multi-line representation
+    -> Doc ann
+    -- ^ Ending document for compact representation
+    -> Doc ann
+    -- ^ Ending document for multi-line representation
+    -> [(Doc ann, Doc ann)]
+    -- ^ Elements to format, each of which is a pair: @(compact, multi-line)@
+    -> Doc ann
+enclose beginShort _         _        _       endShort _       []   =
+    beginShort <> endShort
+  where
+enclose beginShort beginLong sepShort sepLong endShort endLong docs =
+    Pretty.group
+        (Pretty.flatAlt
+            (Pretty.align
+                (mconcat (zipWith combineLong (beginLong : repeat sepLong) docsLong) <> endLong)
+            )
+            (mconcat (zipWith combineShort (beginShort : repeat sepShort) docsShort) <> endShort)
+        )
+  where
+    docsShort = fmap fst docs
+
+    docsLong = fmap snd docs
+
+    combineLong x y = x <> y <> Pretty.hardline
+
+    combineShort x y = x <> y
+
+{-| Format an expression that holds a variable number of elements without a
+    trailing document such as nested `let`, nested lambdas, or nested `forall`s
+-}
+enclose'
+    :: Doc ann
+    -- ^ Beginning document for compact representation
+    -> Doc ann
+    -- ^ Beginning document for multi-line representation
+    -> Doc ann
+    -- ^ Separator for compact representation
+    -> Doc ann
+    -- ^ Separator for multi-line representation
+    -> [(Doc ann, Doc ann)]
+    -- ^ Elements to format, each of which is a pair: @(compact, multi-line)@
+    -> Doc ann
+enclose' beginShort beginLong sepShort sepLong docs =
+    Pretty.group (Pretty.flatAlt long short)
+  where
+    longLines = zipWith (<>) (beginLong : repeat sepLong) docsLong
+
+    long =
+        Pretty.align (mconcat (Data.List.intersperse Pretty.hardline longLines))
+
+    short = mconcat (zipWith (<>) (beginShort : repeat sepShort) docsShort)
+
+    docsShort = fmap fst docs
+
+    docsLong = fmap snd docs
+
+prettyLabel :: Text -> Doc ann
+prettyLabel a =
+    if Data.HashSet.member a reservedIdentifiersText
+    then "`" <> Pretty.pretty a <> "`"
+    else Pretty.pretty a
+
+prettyNumber :: Integer -> Doc ann
+prettyNumber = Pretty.pretty
+
+prettyNatural :: Natural -> Doc ann
+prettyNatural = Pretty.pretty
+
+prettyDouble :: Double -> Doc ann
+prettyDouble = Pretty.pretty
+
+prettyText :: Builder -> Doc ann
+prettyText a = Pretty.pretty (show a)
+
+prettyConst :: Const -> Doc ann
+prettyConst Type = "Type"
+prettyConst Kind = "Kind"
+
+prettyVar :: Var -> Doc ann
+prettyVar (V x 0) = prettyLabel x
+prettyVar (V x n) = prettyLabel x <> "@" <> prettyNumber n
+
+prettyExprA :: Pretty a => Expr s a -> Doc ann
+prettyExprA a0@(Annot _ _) =
+    enclose' "" "  " " : " ": " (fmap duplicate (docs a0))
+  where
+    docs (Annot a b) = prettyExprB a : docs b
+    docs (Note  _ b) = docs b
+    docs          b  = [ prettyExprB b ]
+prettyExprA a0 = prettyExprB a0
+
+prettyExprB :: Pretty a => Expr s a -> Doc ann
+prettyExprB a0@(Lam _ _ _) = arrows (fmap duplicate (docs a0))
+  where
+    docs (Lam a b c) = Pretty.group (Pretty.flatAlt long short) : docs c
+      where
+        long =  "λ "
+            <>  Pretty.align
+                (   "( "
+                <>  prettyLabel a
+                <>  Pretty.hardline
+                <>  ": "
+                <>  prettyExprA b
+                <>  Pretty.hardline
+                <> ")"
+                )
+
+        short = "λ("
+            <>  prettyLabel a
+            <>  " : "
+            <>  prettyExprA b
+            <>  ")"
+    docs (Note  _ c) = docs c
+    docs          c  = [ prettyExprB c ]
+prettyExprB (BoolIf a b c) =
+    Pretty.group (Pretty.flatAlt long short)
+  where
+    long =
+         Pretty.align
+            (   "if    "
+            <>  prettyExprA a
+            <>  Pretty.hardline
+            <>  "then  "
+            <>  prettyExprB b
+            <>  Pretty.hardline
+            <>  "else  "
+            <>  prettyExprC c
+            )
+
+    short = "if "
+        <>  prettyExprA a
+        <>  " then "
+        <>  prettyExprB b
+        <>  " else "
+        <>  prettyExprC c
+
+prettyExprB a0@(Pi _ _ _) =
+    arrows (fmap duplicate (docs a0))
+  where
+    docs (Pi "_" b c) = prettyExprC b : docs c
+    docs (Pi a   b c) = Pretty.group (Pretty.flatAlt long short) : docs c
+      where
+        long =  "∀ "
+            <>  Pretty.align
+                (   "( "
+                <>  prettyLabel a
+                <>  Pretty.hardline
+                <>  ": "
+                <>  prettyExprA b
+                <>  Pretty.hardline
+                <>  ")"
+                )
+
+        short = "∀("
+            <>  prettyLabel a
+            <>  " : "
+            <>  prettyExprA b
+            <>  ")"
+    docs (Note _   c) = docs c
+    docs           c  = [ prettyExprB c ]
+prettyExprB a0@(Let _ _ _ _) =
+    enclose' "" "    " " in " (Pretty.hardline <> "in  ")
+        (fmap duplicate (docs a0))
+  where
+    docs (Let a Nothing c d) =
+        Pretty.group (Pretty.flatAlt long short) : docs d
+      where
+        long =  "let "
+            <>  Pretty.align
+                (   prettyLabel a
+                <>  " ="
+                <>  Pretty.hardline
+                <>  "  "
+                <>  prettyExprA c
+                )
+
+        short = "let "
+            <>  prettyLabel a
+            <>  " = "
+            <>  prettyExprA c
+    docs (Let a (Just b) c d) =
+        Pretty.group (Pretty.flatAlt long short) : docs d
+      where
+        long = "let "
+            <>  Pretty.align
+                (   prettyLabel a
+                <>  Pretty.hardline
+                <>  ": "
+                <>  prettyExprA b
+                <>  Pretty.hardline
+                <>  "= "
+                <>  prettyExprA c
+                )
+
+        short = "let "
+            <>  prettyLabel a
+            <>  " : "
+            <>  prettyExprA b
+            <>  " = "
+            <>  prettyExprA c
+    docs (Note _ d)  =
+        docs d
+    docs d =
+        [ prettyExprB d ]
+prettyExprB (ListLit Nothing b) =
+    list (map prettyExprA (Data.Vector.toList b))
+prettyExprB (ListLit (Just a) b) =
+        list (map prettyExprA (Data.Vector.toList b))
+    <>  " : "
+    <>  prettyExprD (App List a)
+prettyExprB (OptionalLit a b) =
+        list (map prettyExprA (Data.Vector.toList b))
+    <>  " : "
+    <>  prettyExprD (App Optional a)
+prettyExprB (Merge a b (Just c)) =
+    Pretty.group (Pretty.flatAlt long short)
+  where
+    long =
+        Pretty.align
+            (   "merge"
+            <>  Pretty.hardline
+            <>  prettyExprE a
+            <>  Pretty.hardline
+            <>  prettyExprE b
+            <>  Pretty.hardline
+            <>  ": "
+            <>  prettyExprD c
+            )
+
+    short = "merge "
+        <>  prettyExprE a
+        <>  " "
+        <>  prettyExprE b
+        <>  " : "
+        <>  prettyExprD c
+prettyExprB (Merge a b Nothing) =
+    Pretty.group (Pretty.flatAlt long short)
+  where
+    long =
+        Pretty.align
+            (   "merge"
+            <>  Pretty.hardline
+            <>  prettyExprE a
+            <>  Pretty.hardline
+            <>  prettyExprE b
+            )
+
+    short = "merge "
+        <>  prettyExprE a
+        <>  " "
+        <>  prettyExprE b
+prettyExprB (Note _ b) =
+    prettyExprB b
+prettyExprB a =
+    prettyExprC a
+
+prettyExprC :: Pretty a => Expr s a -> Doc ann
+prettyExprC = prettyExprC0
+
+prettyExprC0 :: Pretty a => Expr s a -> Doc ann
+prettyExprC0 a0@(BoolOr _ _) =
+    enclose' "" "    " " || " "||  " (fmap duplicate (docs a0))
+  where
+    docs (BoolOr a b) = prettyExprC1 a : docs b
+    docs (Note   _ b) = docs b
+    docs           b  = [ prettyExprC1 b ]
+prettyExprC0 a0 =
+    prettyExprC1 a0
+
+prettyExprC1 :: Pretty a => Expr s a -> Doc ann
+prettyExprC1 a0@(TextAppend _ _) =
+    enclose' "" "    " " ++ " "++  " (fmap duplicate (docs a0))
+  where
+    docs (TextAppend a b) = prettyExprC2 a : docs b
+    docs (Note       _ b) = docs b
+    docs               b  = [ prettyExprC2 b ]
+prettyExprC1 a0 =
+    prettyExprC2 a0
+
+prettyExprC2 :: Pretty a => Expr s a -> Doc ann
+prettyExprC2 a0@(NaturalPlus _ _) =
+    enclose' "" "  " " + " "+ " (fmap duplicate (docs a0))
+  where
+    docs (NaturalPlus a b) = prettyExprC3 a : docs b
+    docs (Note        _ b) = docs b
+    docs                b  = [ prettyExprC3 b ]
+prettyExprC2 a0 =
+    prettyExprC3 a0
+
+prettyExprC3 :: Pretty a => Expr s a -> Doc ann
+prettyExprC3 a0@(ListAppend _ _) =
+    enclose' "" "  " " # " "# " (fmap duplicate (docs a0))
+  where
+    docs (ListAppend a b) = prettyExprC4 a : docs b
+    docs (Note       _ b) = docs b
+    docs               b  = [ prettyExprC4 b ]
+prettyExprC3 a0 =
+    prettyExprC4 a0
+
+prettyExprC4 :: Pretty a => Expr s a -> Doc ann
+prettyExprC4 a0@(BoolAnd _ _) =
+    enclose' "" "    " " && " "&&  " (fmap duplicate (docs a0))
+  where
+    docs (BoolAnd a b) = prettyExprC5 a : docs b
+    docs (Note    _ b) = docs b
+    docs            b  = [ prettyExprC5 b ]
+prettyExprC4 a0 =
+   prettyExprC5 a0
+
+prettyExprC5 :: Pretty a => Expr s a -> Doc ann
+prettyExprC5 a0@(Combine _ _) =
+    enclose' "" "  " " ∧ " "∧ " (fmap duplicate (docs a0))
+  where
+    docs (Combine a b) = prettyExprC6 a : docs b
+    docs (Note    _ b) = docs b
+    docs            b  = [ prettyExprC6 b ]
+prettyExprC5 a0 =
+    prettyExprC6 a0
+
+prettyExprC6 :: Pretty a => Expr s a -> Doc ann
+prettyExprC6 a0@(Prefer _ _) =
+    enclose' "" "  " " ⫽ " "⫽ " (fmap duplicate (docs a0))
+  where
+    docs (Prefer a b) = prettyExprC7 a : docs b
+    docs (Note   _ b) = docs b
+    docs           b  = [ prettyExprC7 b ]
+prettyExprC6 a0 =
+    prettyExprC7 a0
+
+prettyExprC7 :: Pretty a => Expr s a -> Doc ann
+prettyExprC7 a0@(NaturalTimes _ _) =
+    enclose' "" "  " " * " "* " (fmap duplicate (docs a0))
+  where
+    docs (NaturalTimes a b) = prettyExprC8 a : docs b
+    docs (Note         _ b) = docs b
+    docs                 b  = [ prettyExprC8 b ]
+prettyExprC7 a0 =
+    prettyExprC8 a0
+
+prettyExprC8 :: Pretty a => Expr s a -> Doc ann
+prettyExprC8 a0@(BoolEQ _ _) =
+    enclose' "" "    " " == " "==  " (fmap duplicate (docs a0))
+  where
+    docs (BoolEQ a b) = prettyExprC9 a : docs b
+    docs (Note   _ b) = docs b
+    docs           b  = [ prettyExprC9 b ]
+prettyExprC8 a0 =
+    prettyExprC9 a0
+
+prettyExprC9 :: Pretty a => Expr s a -> Doc ann
+prettyExprC9 a0@(BoolNE _ _) =
+    enclose' "" "    " " != " "!=  " (fmap duplicate (docs a0))
+  where
+    docs (BoolNE a b) = prettyExprD a : docs b
+    docs (Note   _ b) = docs b
+    docs           b  = [ prettyExprD b ]
+prettyExprC9 a0 =
+    prettyExprD a0
+
+prettyExprD :: Pretty a => Expr s a -> Doc ann
+prettyExprD a0@(App _ _) =
+    enclose' "" "" " " "" (fmap duplicate (reverse (docs a0)))
+  where
+    docs (App  a b) = prettyExprE b : docs a
+    docs (Note _ b) = docs b
+    docs         b  = [ prettyExprE b ]
+prettyExprD (Note _ b) = prettyExprD b
+prettyExprD a0 =
+    prettyExprE a0
+
+prettyExprE :: Pretty a => Expr s a -> Doc ann
+prettyExprE (Field a b) = prettyExprE a <> "." <> prettyLabel b
+prettyExprE (Note  _ b) = prettyExprE b
+prettyExprE  a          = prettyExprF a
+
+prettyExprF :: Pretty a => Expr s a -> Doc ann
+prettyExprF (Var a) =
+    prettyVar a
+prettyExprF (Const k) =
+    prettyConst k
+prettyExprF Bool =
+    "Bool"
+prettyExprF Natural =
+    "Natural"
+prettyExprF NaturalFold =
+    "Natural/fold"
+prettyExprF NaturalBuild =
+    "Natural/build"
+prettyExprF NaturalIsZero =
+    "Natural/isZero"
+prettyExprF NaturalEven =
+    "Natural/even"
+prettyExprF NaturalOdd =
+    "Natural/odd"
+prettyExprF NaturalToInteger =
+    "Natural/toInteger"
+prettyExprF NaturalShow =
+    "Natural/show"
+prettyExprF Integer =
+    "Integer"
+prettyExprF IntegerShow =
+    "Integer/show"
+prettyExprF Double =
+    "Double"
+prettyExprF DoubleShow =
+    "Double/show"
+prettyExprF Text =
+    "Text"
+prettyExprF List =
+    "List"
+prettyExprF ListBuild =
+    "List/build"
+prettyExprF ListFold =
+    "List/fold"
+prettyExprF ListLength =
+    "List/length"
+prettyExprF ListHead =
+    "List/head"
+prettyExprF ListLast =
+    "List/last"
+prettyExprF ListIndexed =
+    "List/indexed"
+prettyExprF ListReverse =
+    "List/reverse"
+prettyExprF Optional =
+    "Optional"
+prettyExprF OptionalFold =
+    "Optional/fold"
+prettyExprF OptionalBuild =
+    "Optional/build"
+prettyExprF (BoolLit True) =
+    "True"
+prettyExprF (BoolLit False) =
+    "False"
+prettyExprF (IntegerLit a) =
+    prettyNumber a
+prettyExprF (NaturalLit a) =
+    "+" <> prettyNatural a
+prettyExprF (DoubleLit a) =
+    prettyDouble a
+prettyExprF (TextLit a) =
+    prettyText a
+prettyExprF (Record a) =
+    prettyRecord a
+prettyExprF (RecordLit a) =
+    prettyRecordLit a
+prettyExprF (Union a) =
+    prettyUnion a
+prettyExprF (UnionLit a b c) =
+    prettyUnionLit a b c
+prettyExprF (ListLit Nothing b) =
+    list (map prettyExprA (Data.Vector.toList b))
+prettyExprF (Embed a) =
+    Pretty.pretty a
+prettyExprF (Note _ b) =
+    prettyExprF b
+prettyExprF a =
+    Pretty.group (Pretty.flatAlt long short)
+  where
+    long = Pretty.align ("( " <> prettyExprA a <> Pretty.hardline <> ")")
+
+    short = "(" <> prettyExprA a <> ")"
+
+prettyKeyValue
+    :: Pretty a
+    => Doc ann
+    -> Int
+    -> (Text, Expr s a)
+    -> (Doc ann, Doc ann)
+prettyKeyValue separator keyLength (key, value) =
+    (   prettyLabel key <> " " <> separator <> " " <> prettyExprA value
+    ,       Pretty.fill keyLength (prettyLabel key)
+        <>  " "
+        <>  separator
+        <>  Pretty.group (Pretty.flatAlt long short)
+    )
+  where
+    long = Pretty.hardline <> "    " <> prettyExprA value
+
+    short = " " <> prettyExprA value
+
+prettyRecord :: Pretty a => Map Text (Expr s a) -> Doc ann
+prettyRecord a = braces (map adapt (Data.Map.toList a))
+  where
+    keyLength = fromIntegral (maximum (map Text.length (Data.Map.keys a)))
+
+    adapt = prettyKeyValue ":" keyLength 
+
+prettyRecordLit :: Pretty a => Map Text (Expr s a) -> Doc ann
+prettyRecordLit a
+    | Data.Map.null a = "{=}"
+    | otherwise       = braces (map adapt (Data.Map.toList a))
+  where
+    keyLength = fromIntegral (maximum (map Text.length (Data.Map.keys a)))
+
+    adapt = prettyKeyValue "=" keyLength
+
+prettyUnion :: Pretty a => Map Text (Expr s a) -> Doc ann
+prettyUnion a = angles (map adapt (Data.Map.toList a))
+  where
+    keyLength = fromIntegral (maximum (map Text.length (Data.Map.keys a)))
+
+    adapt = prettyKeyValue ":" keyLength
+
+prettyUnionLit :: Pretty a => Text -> Expr s a -> Map Text (Expr s a) -> Doc ann
+prettyUnionLit a b c = angles (front : map adapt (Data.Map.toList c))
+  where
+    keyLength = fromIntegral (maximum (map Text.length (a : Data.Map.keys c)))
+
+    front = prettyKeyValue "=" keyLength (a, b)
+
+    adapt = prettyKeyValue ":" keyLength
 
 -- | Pretty-print a value
 pretty :: Buildable a => a -> Text
@@ -797,9 +1355,11 @@ buildUnionLit a b c
         <>  " >"
 
 -- | Generates a syntactically valid Dhall program
-instance Buildable a => Buildable (Expr s a)
-  where
+instance Buildable a => Buildable (Expr s a) where
     build = buildExpr
+
+instance Pretty a => Pretty (Expr s a) where
+    pretty = prettyExprA
 
 {-| `shift` is used by both normalization and type-checking to avoid variable
     capture by shifting variable indices
