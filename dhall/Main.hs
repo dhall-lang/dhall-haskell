@@ -27,8 +27,6 @@ import qualified Dhall.TypeCheck
 import qualified Options.Generic
 import qualified System.IO
 
-data Mode = Default | Resolve | TypeCheck | Normalize
-
 data Options = Options
     { explain :: Bool <?> "Explain error messages in more detail"
     , version :: Bool <?> "Display version and exit"

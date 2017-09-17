@@ -29,8 +29,6 @@ import qualified Filesystem.Path.CurrentOS
 import qualified Options.Generic
 import qualified System.IO
 
-data Mode = Default | Resolve | TypeCheck | Normalize
-
 data Options = Options
     { version :: Bool           <?> "Display version and exit"
     , inplace :: Maybe FilePath <?> "Modify the specified file in-place"
