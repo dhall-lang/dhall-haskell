@@ -4,6 +4,21 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE TypeOperators      #-}
 
+{-| Utility executable for pretty-printing Dhall code
+
+    You typically want to use this to either:
+
+    * improve the readability of Dhall code (either written or generated)
+    * automatically format your Dhall code to avoid stylistic debates
+
+    Note that this does not yet support:
+
+    * Preserving comments (currently, this just removes them)
+    * Preserving multi-line strings (this reduces them to ordinary strings)
+    * Preserving string interpolation (this expands interpolation to @++@)
+
+    See the @Dhall.Tutorial@ module for example usage
+-}
 module Main where
 
 import Control.Exception (SomeException)
