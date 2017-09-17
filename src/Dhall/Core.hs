@@ -654,8 +654,7 @@ prettyExprB a0@(Let _ _ _ _) =
       where
         long = "let "
             <>  Pretty.align
-                (   "  "
-                <>  prettyLabel a
+                (   prettyLabel a
                 <>  Pretty.hardline
                 <>  ": "
                 <>  prettyExprA b

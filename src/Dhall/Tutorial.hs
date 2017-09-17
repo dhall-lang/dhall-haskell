@@ -50,6 +50,9 @@ module Dhall.Tutorial (
     -- * Headers
     -- $headers
 
+    -- * Formatting code
+    -- $format
+
     -- * Built-in functions
     -- $builtins
 
@@ -1380,6 +1383,173 @@ import Dhall
 -- 
 -- ... and @http:\/\/example.com@ contains a relative import of @./foo@ then
 -- Dhall will import @http:\/\/example.com/foo@ using the same @./headers@ file.
+
+-- $format
+--
+-- This package also provides a @dhall-format@ executable that you can use to
+-- automatically format Dhall expressions.  For example, we can take the
+-- following unformatted Dhall expression:
+--
+-- > $ cat ./unformatted
+-- > λ(a : Type) → λ(kvss : List (List { index : Natural, value : a })) → 
+-- > List/build { index : Natural, value : a } (λ(list : Type) → λ(cons : { 
+-- > index : Natural, value : a } → list → list) → λ(nil : list) → 
+-- > (List/fold (List { index : Natural, value : a }) kvss { count : Natural, diff : 
+-- > Natural → list } (λ(kvs : List { index : Natural, value : a }) → λ(y : { 
+-- > count : Natural, diff : Natural → list }) → { count = y.count + List/length 
+-- > { index : Natural, value : a } kvs, diff = λ(n : Natural) → List/fold { 
+-- > index : Natural, value : a } kvs list (λ(kvOld : { index : Natural, value : a 
+-- > }) → λ(z : list) → cons { index = kvOld.index + n, value = kvOld.value } 
+-- > z) (y.diff (n + List/length { index : Natural, value : a } kvs)) }) { count = 
+-- > +0, diff = λ(_ : Natural) → nil }).diff +0)
+--
+-- ... and run the expression through the @dhall-format@ executable:
+--
+-- > $ dhall-format < ./unformatted
+-- >   λ(a : Type)
+-- > → λ(kvss : List (List { index : Natural, value : a }))
+-- > → List/build
+-- >   { index : Natural, value : a }
+-- >   (   λ(list : Type)
+-- >     → λ(cons : { index : Natural, value : a } → list → list)
+-- >     → λ(nil : list)
+-- >     → ( List/fold
+-- >         (List { index : Natural, value : a })
+-- >         kvss
+-- >         { count : Natural, diff : Natural → list }
+-- >         (   λ(kvs : List { index : Natural, value : a })
+-- >           → λ(y : { count : Natural, diff : Natural → list })
+-- >           → { count = y.count + List/length { index : Natural, value : a } kvs
+-- >             , diff  =
+-- >                   λ(n : Natural)
+-- >                 → List/fold
+-- >                   { index : Natural, value : a }
+-- >                   kvs
+-- >                   list
+-- >                   (   λ(kvOld : { index : Natural, value : a })
+-- >                     → λ(z : list)
+-- >                     → cons { index = kvOld.index + n, value = kvOld.value } z
+-- >                   )
+-- >                   (y.diff (n + List/length { index : Natural, value : a } kvs))
+-- >             }
+-- >         )
+-- >         { count = +0, diff = λ(_ : Natural) → nil }
+-- >       ).diff
+-- >       +0
+-- >   )
+--
+-- The executable formats expressions without resolving, type-checking, or
+-- normalizing them:
+--
+-- > $ dhall-format
+-- > let replicate = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/replicate 
+-- > in replicate +5 (List (List Integer)) (replicate +5 (List Integer) (replicate +5 Integer 1))
+-- > <Ctrl-D>
+-- >     let replicate =
+-- >           https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/replicate 
+-- > 
+-- > in  replicate
+-- >     +5
+-- >     (List (List Integer))
+-- >     (replicate +5 (List Integer) (replicate +5 Integer 1))
+--
+-- If you want to evaluate and format an expression then you can combine the
+-- @dhall@ and @dhall-format@ executables:
+--
+-- > $ dhall | dhall-format
+-- > let replicate = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/replicate 
+-- > in replicate +5 (List (List Integer)) (replicate +5 (List Integer) (replicate +5 Integer 1))
+-- > <Ctrl-D>
+-- > List (List (List Integer))
+-- > 
+-- > (   [ (   [ ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           ]
+-- >         : List (List Integer)
+-- >       )
+-- >     , (   [ ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           ]
+-- >         : List (List Integer)
+-- >       )
+-- >     , (   [ ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           ]
+-- >         : List (List Integer)
+-- >       )
+-- >     , (   [ ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           ]
+-- >         : List (List Integer)
+-- >       )
+-- >     , (   [ ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
+-- >           ]
+-- >         : List (List Integer)
+-- >       )
+-- >     ]
+-- >   : List (List (List Integer))
+-- > )
+--
+-- You can also use the formatter to modify files in place using the
+-- @--inplace@ flag:
+--
+-- > $ dhall-format --inplace ./unformatted
+-- > $ cat ./unformatted
+-- >   λ(a : Type)
+-- > → λ(kvss : List (List { index : Natural, value : a }))
+-- > → List/build
+-- >   { index : Natural, value : a }
+-- >   (   λ(list : Type)
+-- >     → λ(cons : { index : Natural, value : a } → list → list)
+-- >     → λ(nil : list)
+-- >     → ( List/fold
+-- >         (List { index : Natural, value : a })
+-- >         kvss
+-- >         { count : Natural, diff : Natural → list }
+-- >         (   λ(kvs : List { index : Natural, value : a })
+-- >           → λ(y : { count : Natural, diff : Natural → list })
+-- >           → { count = y.count + List/length { index : Natural, value : a } kvs
+-- >             , diff  =
+-- >                   λ(n : Natural)
+-- >                 → List/fold
+-- >                   { index : Natural, value : a }
+-- >                   kvs
+-- >                   list
+-- >                   (   λ(kvOld : { index : Natural, value : a })
+-- >                     → λ(z : list)
+-- >                     → cons { index = kvOld.index + n, value = kvOld.value } z
+-- >                   )
+-- >                   (y.diff (n + List/length { index : Natural, value : a } kvs))
+-- >             }
+-- >         )
+-- >         { count = +0, diff = λ(_ : Natural) → nil }
+-- >       ).diff
+-- >       +0
+-- >   )
+--
+-- Carefully note that the code formatter does not yet preserve comments:
+--
+-- > $ dhall-format
+-- > -- Hello!
+-- > 1
+-- > <Ctrl-D>
+-- > 1
 
 -- $builtins
 --
