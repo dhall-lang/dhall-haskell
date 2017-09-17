@@ -457,32 +457,51 @@ instance IsString (Expr s a) where
     case the corresponding builder.
 -}
 
+{-| Internal utility for pretty-printing, used when generating element lists
+    to supply to `enclose` or `enclose'`.  This utility indicates that the
+    compact represent is the same as the multi-line representation for each
+    element
+-}
 duplicate :: a -> (a, a)
 duplicate x = (x, x)
 
+-- | Pretty-print a list
 list :: [Doc ann] -> Doc ann
 list   [] = "[]"
 list docs = enclose "[ " "[ " ", " ", " " ]" "]" (fmap duplicate docs)
 
+-- | Pretty-print union types and literals
 angles :: [(Doc ann, Doc ann)] -> Doc ann
 angles   [] = "<>"
 angles docs = enclose "< " "< " " | " "| " " >" ">" docs
 
+-- | Pretty-print record types and literals
 braces :: [(Doc ann, Doc ann)] -> Doc ann
 braces   [] = "{}"
 braces docs = enclose "{ " "{ " ", " ", " " }" "}" docs
 
+-- | Pretty-print anonymous functions and function types
 arrows :: [(Doc ann, Doc ann)] -> Doc ann
 arrows = enclose' "" "  " " → " "→ " 
 
+{-| Format an expression that holds a variable number of elements, such as a
+    list, record, or union
+-}
 enclose
     :: Doc ann
+    -- ^ Beginning document for compact representation
     -> Doc ann
+    -- ^ Beginning document for multi-line representation
     -> Doc ann
+    -- ^ Separator for compact representation
     -> Doc ann
+    -- ^ Separator for multi-line representation
     -> Doc ann
+    -- ^ Ending document for compact representation
     -> Doc ann
+    -- ^ Ending document for multi-line representation
     -> [(Doc ann, Doc ann)]
+    -- ^ Elements to format, each of which is a pair: @(compact, multi-line)@
     -> Doc ann
 enclose beginShort _         _        _       endShort _       []   =
     beginShort <> endShort
@@ -504,12 +523,20 @@ enclose beginShort beginLong sepShort sepLong endShort endLong docs =
 
     combineShort x y = x <> y
 
+{-| Format an expression that holds a variable number of elements without a
+    trailing document such as nested `let`, nested lambdas, or nested `forall`s
+-}
 enclose'
     :: Doc ann
+    -- ^ Beginning document for compact representation
     -> Doc ann
+    -- ^ Beginning document for multi-line representation
     -> Doc ann
+    -- ^ Separator for compact representation
     -> Doc ann
+    -- ^ Separator for multi-line representation
     -> [(Doc ann, Doc ann)]
+    -- ^ Elements to format, each of which is a pair: @(compact, multi-line)@
     -> Doc ann
 enclose' beginShort beginLong sepShort sepLong docs =
     Pretty.group (Pretty.flatAlt long short)
