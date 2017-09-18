@@ -1361,14 +1361,14 @@ prettyTypeMessage Untyped = ErrorMessages {..}
     short = "❰Kind❱ has no type or kind"
 
     long =
-        "Explanation: There are four levels of expressions that form a heirarchy:        \n\
+        "Explanation: There are four levels of expressions that form a hierarchy:        \n\
         \                                                                                \n\
         \● terms                                                                         \n\
         \● types                                                                         \n\
         \● kinds                                                                         \n\
         \● sorts                                                                         \n\
         \                                                                                \n\
-        \The following example illustrates this heirarchy:                               \n\
+        \The following example illustrates this hierarchy:                               \n\
         \                                                                                \n\
         \    ┌────────────────────────────┐                                              \n\
         \    │ \"ABC\" : Text : Type : Kind │                                            \n\
