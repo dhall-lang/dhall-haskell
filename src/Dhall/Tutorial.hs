@@ -50,6 +50,9 @@ module Dhall.Tutorial (
     -- * Headers
     -- $headers
 
+    -- * Raw text
+    -- $rawText
+
     -- * Formatting code
     -- $format
 
@@ -1383,6 +1386,51 @@ import Dhall
 -- 
 -- ... and @http:\/\/example.com@ contains a relative import of @./foo@ then
 -- Dhall will import @http:\/\/example.com/foo@ using the same @./headers@ file.
+
+-- $rawText
+--
+-- Sometimes you want to import the contents of a raw text file as a Dhall
+-- value of type `Text`.  For example, one of the fields of a record might be
+-- the contents of a software license:
+--
+-- > { package = "dhall"
+-- > , author  = "Gabriel Gonzalez"
+-- > , license = ./LICENSE
+-- > }
+--
+-- Normally if you wanted to import a text file you would need to wrap the
+-- contents of the file in double single-quotes, like this:
+--
+-- > $ cat LICENSE
+-- > ''
+-- > Copyright (c) 2017 Gabriel Gonzalez
+-- > All rights reserved.
+-- > 
+-- > ...
+-- > (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+-- > SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-- > ''
+--
+-- ... which does not work well if you need to reuse the same text file for
+-- other programs
+--
+-- However, Dhall supports importing a raw text file by adding @as Text@ to the
+-- end of the import, like this:
+--
+-- > { package = "dhall"
+-- > , author  = "Gabriel Gonzalez"
+-- > , license = ./LICENSE as Text
+-- > }
+--
+-- ... and then you can use the original text file unmodified:
+--
+-- > $ cat LICENSE
+-- > Copyright (c) 2017 Gabriel Gonzalez
+-- > All rights reserved.
+-- > 
+-- > ...
+-- > (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+-- > SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 -- $format
 --
