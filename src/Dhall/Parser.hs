@@ -23,6 +23,7 @@ import Control.Exception (Exception)
 import Control.Monad (MonadPlus)
 import Data.ByteString (ByteString)
 import Data.CharSet (CharSet)
+import Data.Functor (void)
 import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Sequence (ViewL(..))
@@ -46,6 +47,7 @@ import qualified Data.Map
 import qualified Data.ByteString.Lazy
 import qualified Data.List
 import qualified Data.Sequence
+import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
@@ -119,6 +121,588 @@ noted parser = do
     (e, bytes) <- Text.Trifecta.slicedWith (,) parser
     after      <- Text.Trifecta.position
     return (Note (Src before after bytes) e)
+
+--------
+
+notEndOfLine :: Parser ()
+notEndOfLine = void (Text.Parser.Char.satisfy predicate)
+  where
+    predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
+
+notBrace :: Parser ()
+notBrace =
+        void (Text.Parser.Char.satisfy predicate)
+    <|> void (Text.Parser.Char.text "\r\n")
+  where
+    predicate c =
+            ('\x20' <= c && c <= '\x7A')
+        ||  c == '\x7C'
+        ||  ('\x7E' <= c && c <= '\x10FFFF')
+        ||  c == '\n'
+        ||  c == '\t'
+
+blockComment :: Parser ()
+blockComment = do
+    _ <- Text.Parser.Char.char '{'
+    Text.Parser.Combinators.skipMany notBrace
+    Text.Parser.Combinators.skipMany $ do
+        blockComment
+        Text.Parser.Combinators.skipMany notBrace
+    _ <- Text.Parser.Char.char '}'
+    return ()
+
+lineComment :: Parser ()
+lineComment = do
+    _ <- Text.Parser.Char.text "--"
+    Text.Parser.Combinators.skipMany notEndOfLine
+    endOfLine
+    return ()
+  where
+    endOfLine =
+            void (Text.Parser.Char.char '\n'  )
+        <|> void (Text.Parser.Char.text "\r\n")
+
+whitespaceChunk :: Parser ()
+whitespaceChunk =
+        void (Text.Parser.Char.satisfy predicate)
+    <|> void (Text.Parser.Char.text "\r\n")
+    <|> lineComment
+    <|> blockComment
+  where
+    predicate c = c == ' ' || c == '\t' || c == '\n'
+
+whitespace :: Parser ()
+whitespace = Text.Parser.Combinators.skipMany whitespaceChunk
+
+alpha :: Char -> Bool
+alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
+
+digit :: Char -> Bool
+digit c = '\x30' <= c && c <= '\x39'
+
+hexdig :: Char -> Bool
+hexdig c =
+        ('0' <= c && c <= '9')
+    ||  ('A' <= c && c <= 'F')
+    ||  ('a' <= c && c <= 'f')
+
+hexNumber :: Parser Int
+hexNumber = hexNumber <|> hexUpper <|> hexLower
+  where
+    hexNumber = do
+        c <- Text.Parser.Char.satisfy predicate
+        return (Data.Char.ord c - Data.Char.ord '0')
+      where
+        predicate c = '0' <= c && c <= '9'
+
+    hexUpper = do
+        c <- Text.Parser.Char.satisfy predicate
+        return (Data.Char.ord c - Data.Char.ord 'A')
+      where
+        predicate c = 'A' <= c && c <= 'F'
+
+    hexLower = do
+        c <- Text.Parser.Char.satisfy predicate
+        return (Data.Char.ord c - Data.Char.ord 'a')
+      where
+        predicate c = 'a' <= c && c <= 'f'
+
+simpleLabel :: Parser Text
+simpleLabel = do
+    c  <- Text.Parser.Char.satisfy headCharacter
+    cs <- many (Text.Parser.Char.satisfy tailCharacter)
+    return (Data.Text.Lazy.pack (c:cs))
+  where
+    headCharacter c = alpha c || c == '_'
+
+    tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
+
+complexLabel :: Parser Text
+complexLabel = do
+    _ <- Text.Parser.Char.char '`'
+    t <- simpleLabel
+    _ <- Text.Parser.Char.char '`'
+    return t
+
+label :: Parser Text
+label = do
+    t <- complexLabel <|> simpleLabel 
+    whitespace
+    return t
+
+-- | Combine consecutive chunks to eliminate gratuitous appends
+textAppend :: Expr Src a -> Expr Src a -> Expr Src a
+textAppend (TextLit a) (TextLit b) =
+    TextLit (a <> b)
+textAppend (TextLit a) (TextAppend (TextLit b) c) =
+    TextAppend (TextLit (a <> b)) c
+textAppend a b =
+    TextAppend a b
+
+doubleQuotedChunk :: Parser a -> Parser (Expr Src a)
+doubleQuotedChunk embedded =
+        interpolation
+    <|> escapeInterpolation
+    <|> unescapedCharacter
+    <|> escapedCharacter
+  where
+    interpolation = do
+        _ <- Text.Parser.Char.text "${"
+        e <- expression embedded
+        _ <- Text.Parser.Char.char '}'
+        return e
+
+    escapeInterpolation = do
+        _ <- Text.Parser.Char.text "''${"
+        return (TextLit "''${")
+
+    unescapedCharacter = do
+        c <- Text.Parser.Char.satisfy predicate
+        return (TextLit (Data.Text.Lazy.Builder.singleton c))
+      where
+        predicate c =
+                ('\x20' <= c && c <= '\x21'    )
+            ||  ('\x23' <= c && c <= '\x5B'    )
+            ||  ('\x5D' <= c && c <= '\x10FFFF')
+
+    escapedCharacter = do
+        _ <- Text.Parser.Char.char '\\'
+        c <- (   quotationMark
+             <|> dollarSign
+             <|> backSlash
+             <|> forwardSlash
+             <|> backSpace
+             <|> formFeed
+             <|> lineFeed
+             <|> carriageReturn
+             <|> tab
+             <|> unicode
+             )
+        return (TextLit (Data.Text.Lazy.Builder.singleton c))
+      where
+        quotationMark = Text.Parser.Char.char '"'
+
+        dollarSign = Text.Parser.Char.char '$'
+
+        backSlash = Text.Parser.Char.char '\\'
+
+        forwardSlash = Text.Parser.Char.char '/'
+
+        backSpace = do _ <- Text.Parser.Char.char 'b'; return '\b'
+
+        formFeed = do _ <- Text.Parser.Char.char 'f'; return '\f'
+
+        lineFeed = do _ <- Text.Parser.Char.char 'n'; return '\n'
+
+        carriageReturn = do _ <- Text.Parser.Char.char 'r'; return '\r'
+
+        tab = do _ <- Text.Parser.Char.char 't'; return '\t'
+
+        unicode = do
+            _  <- Text.Parser.Char.char 'u';
+            n0 <- hexNumber
+            n1 <- hexNumber
+            n2 <- hexNumber
+            n3 <- hexNumber
+            let n = ((n0 * 16 + n1) * 16 + n2) * 16 + n3
+            return (Data.Char.chr n)
+
+doubleQuotedLiteral :: Parser a -> Parser (Expr Src a)
+doubleQuotedLiteral embedded = do
+    _      <- Text.Parser.Char.char '"'
+    chunks <- many (doubleQuotedChunk embedded)
+    _      <- Text.Parser.Char.char '"'
+    return (foldr textAppend (TextLit "") chunks)
+
+singleQuotedChunk :: Parser a -> Parser (Expr Src a)
+singleQuotedChunk embedded =
+        escapeSingleQuotes
+    <|> interpolation
+    <|> escapeInterpolation
+    <|> unescapedCharacter
+    <|> endOfLine
+    <|> tab
+  where
+        escapeSingleQuotes = do
+            _ <- Text.Parser.Char.text "'''"
+            return (TextLit "'''")
+
+        interpolation = do
+            _ <- Text.Parser.Char.text "${"
+            e <- expression embedded
+            _ <- Text.Parser.Char.char '}'
+            return e
+
+        escapeInterpolation = do
+            _ <- Text.Parser.Char.text "''${"
+            return (TextLit "''${")
+
+        unescapedCharacter = do
+            c <- Text.Parser.Char.satisfy predicate
+            return (TextLit (Data.Text.Lazy.Builder.singleton c))
+          where
+            predicate c = '\x20' <= c && c <= '\x10FFFF'
+
+        endOfLine =
+                (do _ <- Text.Parser.Char.char '\n'  ; return (TextLit "\n"  ))
+            <|> (do _ <- Text.Parser.Char.text "\r\n"; return (TextLit "\r\n"))
+
+        tab = do
+            _ <- Text.Parser.Char.char '\t'
+            return (TextLit "\t")
+
+singleQuotedLiteral :: Parser a -> Parser (Expr Src a)
+singleQuotedLiteral embedded = do
+    _      <- Text.Parser.Char.text "''"
+    chunks <- many (singleQuotedChunk embedded)
+    _      <- Text.Parser.Char.text "''"
+    return (foldr textAppend (TextLit "") chunks)
+
+textLiteral :: Parser a -> Parser (Expr Src a)
+textLiteral embedded = do
+    literal <- doubleQuotedLiteral embedded <|> singleQuotedLiteral embedded
+    whitespace
+    return literal
+
+reserved :: Data.Text.Text -> Parser ()
+reserved x = do _ <- Text.Parser.Char.text x; whitespace
+
+_if :: Parser ()
+_if = reserved "if"
+
+_then :: Parser ()
+_then = reserved "then"
+
+_else :: Parser ()
+_else = reserved "else"
+
+_let :: Parser ()
+_let = reserved "let"
+
+_in :: Parser ()
+_in = reserved "in"
+
+_as :: Parser ()
+_as = reserved "as"
+
+_using :: Parser ()
+_using = reserved "using"
+
+_merge :: Parser ()
+_merge = reserved "merge"
+
+_NaturalFold :: Parser ()
+_NaturalFold = reserved "Natural/fold"
+
+_NaturalBuild :: Parser ()
+_NaturalBuild = reserved "Natural/build"
+
+_NaturalIsZero :: Parser ()
+_NaturalIsZero = reserved "Natural/isZero"
+
+_NaturalEven :: Parser ()
+_NaturalEven = reserved "Natural/even"
+
+_NaturalOdd :: Parser ()
+_NaturalOdd = reserved "Natural/odd"
+
+_NaturalToInteger :: Parser ()
+_NaturalToInteger = reserved "Natural/toInteger"
+
+_NaturalShow :: Parser ()
+_NaturalShow = reserved "Natural/show"
+
+_IntegerShow :: Parser ()
+_IntegerShow = reserved "Integer/show"
+
+_DoubleShow :: Parser ()
+_DoubleShow = reserved "Double/show"
+
+_ListBuild :: Parser ()
+_ListBuild = reserved "List/build"
+
+_ListFold :: Parser ()
+_ListFold = reserved "List/fold"
+
+_ListLength :: Parser ()
+_ListLength = reserved "List/length"
+
+_ListHead :: Parser ()
+_ListHead = reserved "List/head"
+
+_ListLast :: Parser ()
+_ListLast = reserved "List/last"
+
+_ListIndexed :: Parser ()
+_ListIndexed = reserved "List/indexed"
+
+_ListReverse :: Parser ()
+_ListReverse = reserved "List/reverse"
+
+_OptionalFold :: Parser ()
+_OptionalFold = reserved "Optional/fold"
+
+_OptionalBuild :: Parser ()
+_OptionalBuild = reserved "Optional/build"
+
+_Bool :: Parser ()
+_Bool = reserved "Bool"
+
+_Optional :: Parser ()
+_Optional = reserved "Optional"
+
+_Natural :: Parser ()
+_Natural = reserved "Natural"
+
+_Integer :: Parser ()
+_Integer = reserved "Integer"
+
+_Double :: Parser ()
+_Double = reserved "Double"
+
+_Text :: Parser ()
+_Text = reserved "Text"
+
+_List :: Parser ()
+_List = reserved "List"
+
+_True :: Parser ()
+_True = reserved "True"
+
+_False :: Parser ()
+_False = reserved "False"
+
+_Type :: Parser ()
+_Type = reserved "Type"
+
+_Kind :: Parser ()
+_Kind = reserved "Kind"
+
+_equal :: Parser ()
+_equal = reserved "="
+
+_or :: Parser ()
+_or = reserved "||"
+
+_plus :: Parser ()
+_plus = reserved "+"
+
+_textAppend :: Parser ()
+_textAppend = reserved "++"
+
+_listAppend :: Parser ()
+_listAppend = reserved "#"
+
+_and :: Parser ()
+_and = reserved "&&"
+
+_times :: Parser ()
+_times = reserved "*"
+
+_doubleEqual :: Parser ()
+_doubleEqual = reserved "=="
+
+_notEqual :: Parser ()
+_notEqual = reserved "!="
+
+_dot :: Parser ()
+_dot = reserved "."
+
+_openBrace :: Parser ()
+_openBrace = reserved "{"
+
+_closeBrace :: Parser ()
+_closeBrace = reserved "}"
+
+_openBracket :: Parser ()
+_openBracket = reserved "["
+
+_closeBracket :: Parser ()
+_closeBracket = reserved "]"
+
+_openAngle :: Parser ()
+_openAngle = reserved "<"
+
+_closeAngle :: Parser ()
+_closeAngle = reserved ">"
+
+_bar :: Parser ()
+_bar = reserved "|"
+
+_comma :: Parser ()
+_comma = reserved ","
+
+_openParens :: Parser ()
+_openParens = reserved "("
+
+_closeParens :: Parser ()
+_closeParens = reserved ")"
+
+_colon :: Parser ()
+_colon = reserved ":"
+
+_at :: Parser ()
+_at = reserved "@"
+
+_combine :: Parser ()
+_combine = do
+    void (Text.Parser.Char.char '∧') <|> void (Text.Parser.Char.text "/\\")
+    whitespace
+
+_prefer :: Parser ()
+_prefer = do
+    void (Text.Parser.Char.char '⫽') <|> void (Text.Parser.Char.text "//")
+    whitespace
+
+_lambda :: Parser ()
+_lambda = do
+    _ <- Text.Parser.Char.satisfy predicate
+    whitespace
+  where
+    predicate 'λ'  = True
+    predicate '\\' = True
+    predicate _    = False
+
+_forall :: Parser ()
+_forall = do
+    void (Text.Parser.Char.char '∀') <|> void (Text.Parser.Char.text "forall")
+    whitespace
+
+_arrow :: Parser ()
+_arrow = do
+    void (Text.Parser.Char.char '→') <|> void (Text.Parser.Char.text "->")
+    whitespace
+
+-- TODO: Follow grammar
+doubleLiteral :: Parser Double
+doubleLiteral = do
+    sign <-  fmap (\_ -> negate) (Text.Parser.Char.char '-')
+         <|> pure id
+    a    <-  Text.Parser.Token.double
+    return (sign a)
+
+-- TODO: Follow grammar
+integerLiteral :: Parser Integer
+integerLiteral = Text.Parser.Token.integer
+
+-- TODO: Follow grammar
+naturalLiteral :: Parser Integer
+naturalLiteral = do
+    _ <- Text.Parser.Char.char '+'
+    Text.Parser.Token.natural
+
+expression :: a
+expression = undefined
+
+identifier :: Parser Var
+identifier = do
+    x <- label
+
+    let indexed = do
+            _ <- Text.Parser.Char.char '@'
+            Text.Parser.Token.natural
+
+    n <- indexed <|> pure 0
+    return (V x n)
+
+headPathCharacter :: Char -> Bool
+headPathCharacter c =
+        ('\x21' <= c && c <= '\x27')
+    ||  ('\x2A' <= c && c <= '\x2E')
+    ||  ('\x30' <= c && c <= '\x3B')
+    ||  c == '\x3D'
+    ||  ('\x3F' <= c && c <= '\x5A')
+    ||  ('\x5E' <= c && c <= '\x7A')
+    ||  ('\x7C' <= c && c <= '\x7E')
+
+pathCharacter :: Char -> Bool
+pathCharacter c =
+        headPathCharacter c
+    ||  c == '\\'
+    ||  c == '/'
+
+fileRaw :: Parser PathType
+fileRaw = try absolutePath <|> relativePath <|> parentPath <|> homePath
+  where
+    absolutePath = do
+        _  <- Text.Parser.Char.char '/'
+        a  <- Text.Parser.Char.satisfy headPathCharacter
+        bs <- many (Text.Parser.Char.satisfy pathCharacter)
+        return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a:bs)))
+
+    relativePath = do
+        _  <- Text.Parser.Char.text "./"
+        as <- many (Text.Parser.Char.satisfy pathCharacter)
+        let string = "./" <> as
+        return (File Homeless (Filesystem.Path.CurrentOS.decodeString string))
+
+    parentPath = do
+        _  <- Text.Parser.Char.text "../"
+        as <- many (Text.Parser.Char.satisfy pathCharacter)
+        let string = "../" <> as
+        return (File Homeless (Filesystem.Path.CurrentOS.decodeString string))
+
+    homePath = do
+        _  <- Text.Parser.Char.text "~/"
+        as <- many (Text.Parser.Char.satisfy pathCharacter)
+        return (File Home (Filesystem.Path.CurrentOS.decodeString as))
+
+file :: Parser PathType
+file = do
+    a <- fileRaw
+    whitespace
+    return a
+
+unreserved :: Char -> Bool
+unreserved c =
+    alpha c || digit c || c == '-' || c == '.' || c == '_' || c == '~'
+
+pctEncoded :: Parser Text
+pctEncoded = do
+    _ <- Text.Parser.Char.char '%'
+    a <- Text.Parser.Char.satisfy hexdig
+    b <- Text.Parser.Char.satisfy hexdig
+    return (Data.Text.Lazy.pack ['%', a, b])
+
+subDelims :: Char -> Bool
+subDelims c =
+        c == '!'
+    ||  c == '$'
+    ||  c == '&'
+    ||  c == '\''
+    ||  c == '('
+    ||  c == ')'
+    ||  c == '*'
+    ||  c == '+'
+    ||  c == ','
+    ||  c == ';'
+    ||  c == '='
+
+pchar :: Parser Text
+pchar =
+        (do c <- Text.Parser.Char.satisfy unreserved
+            return (Data.Text.Lazy.singleton c)
+        )
+    <|> pctEncoded
+    <|> (do c <- Text.Parser.Char.satisfy subDelims
+            return (Data.Text.Lazy.singleton c)
+        )
+    <|> (do _ <- Text.Parser.Char.char ':'
+            return ":"
+        )
+    <|> (do _ <- Text.Parser.Char.char 
+
+scheme :: Parser ()
+scheme =
+    void (Text.Parser.Char.text "https") <|> void (Text.Parser.Char.text "http")
+
+httpRaw :: Parser PathType
+httpRaw = do
+    scheme
+    Text.Parser.Char.text "://"
+    authority
+
+--------
 
 toMap :: [(Text, a)] -> Parser (Map Text a)
 toMap kvs = do
@@ -347,6 +931,7 @@ combine = symbol "/\\" <|> symbol "∧"
 prefer :: Parser ()
 prefer = symbol "//" <|> symbol "⫽"
 
+{-
 label :: Parser Text
 label = (normalIdentifier <|> escapedIdentifier) <?> "label"
   where
@@ -358,6 +943,7 @@ label = (normalIdentifier <|> escapedIdentifier) <?> "label"
         cs <- many (Text.Parser.Token._styleLetter identifierStyle)
         _  <- Text.Parser.Char.char '`'
         return (Data.Text.Lazy.pack (c:cs)) )
+-}
 
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Path)
@@ -932,41 +1518,6 @@ pathChar c =
 
 disallowedPathChars :: CharSet
 disallowedPathChars = Data.CharSet.fromList "()[]{}<>"
-
-file :: Parser PathType
-file =  try (token file0)
-    <|>      token file1
-    <|>      token file2
-    <|>      token file3
-  where
-    file0 = do
-        a <- Text.Parser.Char.string "/"
-        b <- many (Text.Parser.Char.satisfy pathChar)
-        case b of
-            '\\':_ -> empty -- So that "/\" parses as the operator and not a path
-            '/' :_ -> empty -- So that "//" parses as the operator and not a path
-            _      -> return ()
-        Text.Parser.Token.whiteSpace
-        return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a <> b)))
-
-    file1 = do
-        a <- Text.Parser.Char.string "./"
-        b <- many (Text.Parser.Char.satisfy pathChar)
-        Text.Parser.Token.whiteSpace
-        return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a <> b)))
-
-    file2 = do
-        a <- Text.Parser.Char.string "../"
-        b <- many (Text.Parser.Char.satisfy pathChar)
-        Text.Parser.Token.whiteSpace
-        return (File Homeless (Filesystem.Path.CurrentOS.decodeString (a <> b)))
-
-    file3 = do
-        _ <- Text.Parser.Char.string "~"
-        _ <- some (Text.Parser.Char.string "/")
-        b <- many (Text.Parser.Char.satisfy pathChar)
-        Text.Parser.Token.whiteSpace
-        return (File Home (Filesystem.Path.CurrentOS.decodeString b))
 
 url :: Parser PathType
 url =   try url0
