@@ -27,8 +27,10 @@ import Data.Functor (void)
 import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Sequence (ViewL(..))
+import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
+import Data.Text.Lazy.Builder (Builder)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Dhall.Core
@@ -91,6 +93,14 @@ newtype Parser a = Parser { unParser :: Text.Trifecta.Parser a }
     ,   MarkParsing Delta
     )
 
+instance Monoid a => Monoid (Parser a) where
+    mempty = pure mempty
+
+    mappend = liftA2 mappend
+
+instance IsString a => IsString (Parser a) where
+    fromString x = pure (fromString x)
+
 instance TokenParsing Parser where
     someSpace =
         Text.Parser.Token.Style.buildSomeSpaceParser
@@ -123,6 +133,27 @@ noted parser = do
     return (Note (Src before after bytes) e)
 
 --------
+
+char :: Char -> Parser Builder
+char c = fmap Data.Text.Lazy.Builder.singleton (Text.Parser.Char.char c)
+
+range :: Monoid a => Int -> Int -> Parser a -> Parser a
+range minBound maxMatches parser = do
+    xs <- replicateM minBound parser
+    ys <- loop maxMatches
+    return (mconcat xs <> ys)
+  where
+    loop 0 = return mempty
+    loop n =
+            (do x <- parser; xs <- loop (n - 1); return (x <> xs))
+        <|> return mempty
+
+count :: Monoid a => Int -> Parser a -> Parser a
+count n parser = fmap mconcat (replicateM 3 parser)
+
+satisfy :: (Char -> Bool) -> Parser Builder
+satisfy predicate =
+    fmap Data.Text.Lazy.Builder.singleton (Text.Parser.Char.satisfy predicate)
 
 notEndOfLine :: Parser ()
 notEndOfLine = void (Text.Parser.Char.satisfy predicate)
@@ -657,12 +688,12 @@ unreserved :: Char -> Bool
 unreserved c =
     alpha c || digit c || c == '-' || c == '.' || c == '_' || c == '~'
 
-pctEncoded :: Parser Text
+pctEncoded :: Parser Builder
 pctEncoded = do
     _ <- Text.Parser.Char.char '%'
     a <- Text.Parser.Char.satisfy hexdig
     b <- Text.Parser.Char.satisfy hexdig
-    return (Data.Text.Lazy.pack ['%', a, b])
+    return (Data.Text.Lazy.Builder.fromString ['%', a, b])
 
 subDelims :: Char -> Bool
 subDelims c =
@@ -678,19 +709,80 @@ subDelims c =
     ||  c == ';'
     ||  c == '='
 
-pchar :: Parser Text
-pchar =
-        (do c <- Text.Parser.Char.satisfy unreserved
-            return (Data.Text.Lazy.singleton c)
+userinfo :: Parser Builder
+userinfo = do
+    let predicate c = unreserved c || subDelims c || c == ':'
+
+    let parseChar = do
+            c <- Text.Parser.Char.satisfy predicate
+            return (Data.Text.Lazy.Builder.singleton c)
+
+    cs <- many (parseChar <|> pctEncoded)
+    return (mconcat cs)
+
+h16 :: Parser Builder
+h16 = range 1 3 (Text.Parser.Char.satisfy hexdig)
+
+decOctet :: Parser Builder
+decOctet =
+        alternative0
+    <|> alternative1
+    <|> alternative2
+    <|> alternative3
+    <|> alternative4
+  where
+    alternative0 = satisfy digit
+
+    alternative1 = satisfy predicate <> satisfy digit
+      where
+        predicate c = '\x31' <= c && c <= '\x39'
+
+    alternative2 = "1" <> count 2 (satisfy digit)
+
+    alternative3 = "2" <> satisfy predicate <> satisfy digit
+      where
+        predicate c = '\x30' <= c && c <= '\x34'
+
+    alternative4 = "25" <> satisfy predicate
+      where
+        predicate c = '\x30' <= c && c <= '\x35'
+
+ipV4Address :: Parser Builder
+ipV4Address = decOctet <> "." <> decOctet <> "." <> decOctet <> "." <> decOctet
+
+ls32 :: Parser Builder
+ls32 = (h16 <> ":" <> h16) <|> ipV4Address
+
+ipV6Address :: Parser Builder
+ipV6Address = do
+        alternative0
+    <|> alternative1
+  where
+    alternative0 = count 6 (h16 <> ":") <> ls32
+
+    alternative1 = "::" <> count 5 (h16 <> ":") <> ls32
+
+    alternative2 = (h16 <|> "") <> "::" <> count 4 (h16 <> ":") <> ls32
+
+    alternative3 =
+            ((range 0 1 (h16 <> ":") <> h16) <|> "")
+        <>  "::"
+        <>  count 3 (h16 <> ":")
+        <>  ls32
+
+    alternative4 =
+        
+
+pchar :: Parser Builder
+pchar = (do c <- Text.Parser.Char.satisfy unreserved
+            return (Data.Text.Lazy.Builder.singleton c)
         )
     <|> pctEncoded
     <|> (do c <- Text.Parser.Char.satisfy subDelims
-            return (Data.Text.Lazy.singleton c)
+            return (Data.Text.Lazy.Builder.singleton c)
         )
-    <|> (do _ <- Text.Parser.Char.char ':'
-            return ":"
-        )
-    <|> (do _ <- Text.Parser.Char.char 
+    <|> char ':'
+    <|> char '@'
 
 scheme :: Parser ()
 scheme =
