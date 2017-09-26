@@ -619,18 +619,18 @@ prettyExprB (BoolIf a b c) =
             <>  prettyExprA a
             <>  Pretty.hardline
             <>  "then  "
-            <>  prettyExprB b
+            <>  prettyExprA b
             <>  Pretty.hardline
             <>  "else  "
-            <>  prettyExprC c
+            <>  prettyExprA c
             )
 
     short = "if "
         <>  prettyExprA a
         <>  " then "
-        <>  prettyExprB b
+        <>  prettyExprA b
         <>  " else "
-        <>  prettyExprC c
+        <>  prettyExprA c
 
 prettyExprB a0@(Pi _ _ _) =
     arrows (fmap duplicate (docs a0))
@@ -1059,9 +1059,9 @@ buildExprB (BoolIf a b c) =
         "if "
     <>  buildExprA a
     <>  " then "
-    <>  buildExprB b
+    <>  buildExprA b
     <>  " else "
-    <>  buildExprC c
+    <>  buildExprA c
 buildExprB (Pi "_" b c) =
         buildExprC b
     <>  " → "
