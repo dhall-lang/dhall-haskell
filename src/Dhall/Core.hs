@@ -610,28 +610,27 @@ prettyExprB a0@(Lam _ _ _) = arrows (fmap duplicate (docs a0))
             <>  ")"
     docs (Note  _ c) = docs c
     docs          c  = [ prettyExprB c ]
-prettyExprB (BoolIf a b c) =
-    Pretty.group (Pretty.flatAlt long short)
+prettyExprB a0@(BoolIf _ _ _) =
+    enclose' "" "      " " else " (Pretty.hardline <> "else  ") (fmap duplicate (docs a0))
   where
-    long =
-         Pretty.align
-            (   "if    "
+    docs (BoolIf a b c) =
+        Pretty.group (Pretty.flatAlt long short) : docs c
+      where
+        long =
+             Pretty.align
+                (   "if    "
+                <>  prettyExprA a
+                <>  Pretty.hardline
+                <>  "then  "
+                <>  prettyExprA b
+                )
+
+        short = "if "
             <>  prettyExprA a
-            <>  Pretty.hardline
-            <>  "then  "
+            <>  " then "
             <>  prettyExprA b
-            <>  Pretty.hardline
-            <>  "else  "
-            <>  prettyExprA c
-            )
-
-    short = "if "
-        <>  prettyExprA a
-        <>  " then "
-        <>  prettyExprA b
-        <>  " else "
-        <>  prettyExprA c
-
+    docs (Note  _    c) = docs c
+    docs             c  = [ prettyExprB c ]
 prettyExprB a0@(Pi _ _ _) =
     arrows (fmap duplicate (docs a0))
   where
