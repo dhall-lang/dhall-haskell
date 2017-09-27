@@ -1712,6 +1712,27 @@ subst _ _ (Embed p) = Embed p
 normalize ::  Expr s a -> Expr t a
 normalize = normalizeWith (const Nothing)
 
+{-| This function is used to determine whether folds like @Natural/fold@ or
+    @List/fold@ should be lazy or strict in their accumulator based on the type
+    of the accumulator
+
+    If this function returns `True`, then they will be strict in their
+    accumulator since we can guarantee an upper bound on the amount of work to
+    normalize the accumulator on each step of the loop.  If this function
+    returns `False` then they will be lazy in their accumulator and only
+    normalize the final result at the end of the fold
+-}
+boundedType :: Expr s a -> Bool
+boundedType Bool             = True
+boundedType Natural          = True
+boundedType Integer          = True
+boundedType Double           = True
+boundedType Text             = True
+boundedType (App List _)     = False
+boundedType (App Optional t) = boundedType t
+boundedType (Record kvs)     = all boundedType kvs
+boundedType (Union kvs)      = all boundedType kvs
+boundedType _                = False
 
 {-| Reduce an expression to its normal form, performing beta reduction and applying
     any custom definitions.
@@ -1768,11 +1789,17 @@ normalizeWith ctx e0 = loop (shift 0 "_" e0)
             App (App OptionalBuild _) (App (App OptionalFold _) e') -> loop e'
             App (App OptionalFold _) (App (App OptionalBuild _) e') -> loop e'
 
-            App (App (App (App NaturalFold (NaturalLit n0)) _) succ') zero ->
-                loop (go n0)
+            App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero ->
+                if boundedType (loop t) then strict else lazy
               where
-                go !0 = zero
-                go !n = App succ' (go (n - 1))
+                strict =       strictLoop n0
+                lazy   = loop (  lazyLoop n0)
+
+                strictLoop !0 = loop zero
+                strictLoop !n = loop (App succ' (strictLoop (n - 1)))
+
+                lazyLoop !0 = zero
+                lazyLoop !n = App succ' (lazyLoop (n - 1))
             App NaturalBuild k
                 | check     -> NaturalLit n
                 | otherwise -> App f' a'
@@ -1830,10 +1857,17 @@ normalizeWith ctx e0 = loop (shift 0 "_" e0)
                     go (App (App (Var "Cons") _) e') = go e'
                     go (Var "Nil")                   = True
                     go  _                            = False
-            App (App (App (App (App ListFold _) (ListLit _ xs)) _) cons) nil ->
-                loop (Data.Vector.foldr cons' nil xs)
+            App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil ->
+                if boundedType (loop t) then strict else lazy
               where
-                cons' y ys = App (App cons y) ys
+                strict =       Data.Vector.foldr strictCons strictNil xs
+                lazy   = loop (Data.Vector.foldr   lazyCons   lazyNil xs)
+
+                strictNil = loop nil
+                lazyNil   =      nil
+
+                strictCons y ys = loop (App (App cons y) ys)
+                lazyCons   y ys =       App (App cons y) ys
             App (App ListLength _) (ListLit _ ys) ->
                 NaturalLit (fromIntegral (Data.Vector.length ys))
             App (App ListHead t) (ListLit _ ys) ->
