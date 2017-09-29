@@ -760,6 +760,13 @@ instance Inject Double where
 
         declared = Double
 
+instance Inject () where
+    injectWith _ = InputType {..}
+      where
+        embed = const (RecordLit Data.Map.empty)
+
+        declared = Record Data.Map.empty
+
 instance Inject a => Inject (Maybe a) where
     injectWith options = InputType embedOut declaredOut
       where
