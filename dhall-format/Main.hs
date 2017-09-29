@@ -23,8 +23,9 @@ module Main where
 
 import Control.Exception (SomeException)
 import Control.Monad (when)
+import Data.Monoid ((<>))
 import Data.Version (showVersion)
-import Dhall.Parser (exprFromText)
+import Dhall.Parser (exprAndHeaderFromText)
 import Filesystem.Path.CurrentOS (FilePath)
 import Options.Generic (Generic, ParseRecord, type (<?>)(..))
 import Prelude hiding (FilePath)
@@ -74,20 +75,20 @@ main = do
                 let fileString = Filesystem.Path.CurrentOS.encodeString file
                 strictText <- Data.Text.IO.readFile fileString
                 let lazyText = Data.Text.Lazy.fromStrict strictText
-                expr <- case exprFromText (Directed "(stdin)" 0 0 0 0) lazyText of
-                    Left  err  -> Control.Exception.throwIO err
-                    Right expr -> return expr
+                (header, expr) <- case exprAndHeaderFromText (Directed "(stdin)" 0 0 0 0) lazyText of
+                    Left  err -> Control.Exception.throwIO err
+                    Right x   -> return x
 
-                let doc = Pretty.pretty expr
+                let doc = Pretty.pretty header <> Pretty.pretty expr
                 System.IO.withFile fileString System.IO.WriteMode (\handle -> do
                     Pretty.renderIO handle (Pretty.layoutSmart opts doc) )
             Nothing -> do
                 inText <- Data.Text.Lazy.IO.getContents
 
-                expr <- case exprFromText (Directed "(stdin)" 0 0 0 0) inText of
-                    Left  err  -> Control.Exception.throwIO err
-                    Right expr -> return expr
+                (header, expr) <- case exprAndHeaderFromText (Directed "(stdin)" 0 0 0 0) inText of
+                    Left  err -> Control.Exception.throwIO err
+                    Right x   -> return x
 
-                let doc = Pretty.pretty expr
+                let doc = Pretty.pretty header <> Pretty.pretty expr
                 Pretty.renderIO System.IO.stdout (Pretty.layoutSmart opts doc)
                 Data.Text.IO.putStrLn "" )
