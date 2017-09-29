@@ -1591,12 +1591,18 @@ import Dhall
 -- >       +0
 -- >   )
 --
--- Carefully note that the code formatter does not yet preserve comments:
+-- Carefully note that the code formatter does not preserve all comments.
+-- Currently, the formatter only preserves leading comments and whitespace
+-- up until the last newline preceding the code.  In other words:
 --
 -- > $ dhall-format
--- > -- Hello!
--- > 1
+-- > {- This comment will be preserved by the formatter -}
+-- > -- ... and this comment will be preserved, too
+-- > {- This comment will *NOT* be preserved -} 1
+-- > -- ... and this comment will also *NOT* be preserved
 -- > <Ctrl-D>
+-- > {- This comment will be preserved by the formatter -}
+-- > -- ... and this comment will be preserved, too
 -- > 1
 
 -- $builtins

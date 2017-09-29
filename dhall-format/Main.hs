@@ -13,7 +13,12 @@
 
     Note that this does not yet support:
 
-    * Preserving comments (currently, this just removes them)
+    * Preserving all comments
+        * Currently, this only preserves all leading comments and whitespace
+          up until the last newline preceding the code
+        * This lets you preserve a comment header but if you want to document
+          subexpressions then you will need to split them into a separate
+          file for now
     * Preserving multi-line strings (this reduces them to ordinary strings)
     * Preserving string interpolation (this expands interpolation to @++@)
 
@@ -23,8 +28,9 @@ module Main where
 
 import Control.Exception (SomeException)
 import Control.Monad (when)
+import Data.Monoid ((<>))
 import Data.Version (showVersion)
-import Dhall.Parser (exprFromText)
+import Dhall.Parser (exprAndHeaderFromText)
 import Filesystem.Path.CurrentOS (FilePath)
 import Options.Generic (Generic, ParseRecord, type (<?>)(..))
 import Prelude hiding (FilePath)
@@ -74,20 +80,21 @@ main = do
                 let fileString = Filesystem.Path.CurrentOS.encodeString file
                 strictText <- Data.Text.IO.readFile fileString
                 let lazyText = Data.Text.Lazy.fromStrict strictText
-                expr <- case exprFromText (Directed "(stdin)" 0 0 0 0) lazyText of
-                    Left  err  -> Control.Exception.throwIO err
-                    Right expr -> return expr
+                (header, expr) <- case exprAndHeaderFromText (Directed "(stdin)" 0 0 0 0) lazyText of
+                    Left  err -> Control.Exception.throwIO err
+                    Right x   -> return x
 
-                let doc = Pretty.pretty expr
+                let doc = Pretty.pretty header <> Pretty.pretty expr
                 System.IO.withFile fileString System.IO.WriteMode (\handle -> do
-                    Pretty.renderIO handle (Pretty.layoutSmart opts doc) )
+                    Pretty.renderIO handle (Pretty.layoutSmart opts doc)
+                    Data.Text.IO.hPutStrLn handle "" )
             Nothing -> do
                 inText <- Data.Text.Lazy.IO.getContents
 
-                expr <- case exprFromText (Directed "(stdin)" 0 0 0 0) inText of
-                    Left  err  -> Control.Exception.throwIO err
-                    Right expr -> return expr
+                (header, expr) <- case exprAndHeaderFromText (Directed "(stdin)" 0 0 0 0) inText of
+                    Left  err -> Control.Exception.throwIO err
+                    Right x   -> return x
 
-                let doc = Pretty.pretty expr
+                let doc = Pretty.pretty header <> Pretty.pretty expr
                 Pretty.renderIO System.IO.stdout (Pretty.layoutSmart opts doc)
                 Data.Text.IO.putStrLn "" )

@@ -8,6 +8,7 @@
 module Dhall.Parser (
     -- * Utilities
       exprFromText
+    , exprAndHeaderFromText
 
     -- * Parsers
     , expr, exprA
@@ -26,6 +27,7 @@ import Data.CharSet (CharSet)
 import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Sequence (ViewL(..))
+import Data.String (fromString)
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Typeable (Typeable)
@@ -46,6 +48,8 @@ import qualified Data.Map
 import qualified Data.ByteString.Lazy
 import qualified Data.List
 import qualified Data.Sequence
+import qualified Data.Text
+import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
@@ -1010,16 +1014,39 @@ instance Exception ParseError
 
 -- | Parse an expression from `Text` containing a Dhall program
 exprFromText :: Delta -> Text -> Either ParseError (Expr Src Path)
-exprFromText delta text = case result of
-    Success r       -> Right r
-    Failure errInfo -> Left (ParseError (Text.Trifecta._errDoc errInfo))
+exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
+
+{-| Like `exprFromText` but also returns the leading comments and whitespace
+    (i.e. header) up to the last newline before the code begins
+
+    In other words, if you have a Dhall file of the form:
+
+> -- Comment 1
+> {- Comment -} 2
+
+    Then this will preserve @Comment 1@, but not @Comment 2@
+
+    This is used by @dhall-format@ to preserve leading comments and whitespace
+-}
+exprAndHeaderFromText
+    :: Delta
+    -> Text
+    -> Either ParseError (Text, Expr Src Path)
+exprAndHeaderFromText delta text = case result of
+    Failure errInfo    -> Left (ParseError (Text.Trifecta._errDoc errInfo))
+    Success (bytes, r) -> case Data.Text.Encoding.decodeUtf8' bytes of
+        Left  errInfo -> Left (ParseError (fromString (show errInfo)))
+        Right txt     -> do
+            let stripped = Data.Text.dropWhileEnd (/= '\n') txt
+            let lazyText = Data.Text.Lazy.fromStrict stripped
+            Right (lazyText, r)
   where
     string = Data.Text.Lazy.unpack text
 
     parser = unParser (do
-        Text.Parser.Token.whiteSpace
+        bytes <- Text.Trifecta.slicedWith (\_ x -> x) (Text.Parser.Token.whiteSpace)
         r <- expr
         Text.Parser.Combinators.eof
-        return r )
+        return (bytes, r) )
 
     result = Text.Trifecta.parseString parser delta string
