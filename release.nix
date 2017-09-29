@@ -14,6 +14,8 @@ let
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: {
           dhall = haskellPackagesNew.callPackage ./default.nix { };
+
+          prettyprinter = haskellPackagesNew.callPackage ./prettyprinter.nix { };
         };
       };
     };
