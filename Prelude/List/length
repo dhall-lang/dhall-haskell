@@ -9,7 +9,4 @@ Examples:
 ./length Integer ([] : List Integer) = +0
 ```
 -}
-let length : ∀(a : Type) → List a → Natural
-    =   List/length
-
-in  length
+let length : ∀(a : Type) → List a → Natural = List/length in length

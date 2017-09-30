@@ -9,7 +9,4 @@ Examples:
 ./last Integer ([] : List Integer) = [] : Optional Integer
 ```
 -}
-let last : ∀(a : Type) → List a → Optional a
-    =   List/last
-
-in  last
+let last : ∀(a : Type) → List a → Optional a = List/last in last

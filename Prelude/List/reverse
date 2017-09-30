@@ -9,7 +9,4 @@ Examples:
 ./reverse Integer ([] : List Integer) = [] : List Integer
 ```
 -}
-let reverse : ∀(a : Type) → List a → List a
-    =   List/reverse
-
-in  reverse
+let reverse : ∀(a : Type) → List a → List a = List/reverse in reverse

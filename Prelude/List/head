@@ -9,7 +9,4 @@ Examples:
 ./head Integer ([] : List Integer) = [] : Optional Integer
 ```
 -}
-let head : ∀(a : Type) → List a → Optional a
-    =   List/head
-
-in  head
+let head : ∀(a : Type) → List a → Optional a = List/head in head
