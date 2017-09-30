@@ -11,21 +11,22 @@ Examples:
 = [] : Optional Natural
 ```
 -}
-let filter : ∀(a : Type) → (a → Bool) → Optional a -> Optional a
-    =   λ(a : Type)
-    →   λ(f : a → Bool)
-    →   λ(xs : Optional a)
-    →   Optional/build
-        a
-        (   λ(optional : Type)
-        →   λ(just : a → optional)
-        →   λ(nil : optional)
-        →   Optional/fold
+    let filter
+        : ∀(a : Type) → (a → Bool) → Optional a → Optional a
+        =   λ(a : Type)
+          → λ(f : a → Bool)
+          → λ(xs : Optional a)
+          → Optional/build
             a
-            xs
-            optional
-            (λ(x : a) → if f x then just x else nil)
-            nil
-        )
+            (   λ(optional : Type)
+              → λ(just : a → optional)
+              → λ(nil : optional)
+              → Optional/fold
+                a
+                xs
+                optional
+                (λ(x : a) → if f x then just x else nil)
+                nil
+            )
 
 in  filter

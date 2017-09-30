@@ -9,7 +9,4 @@ Examples:
 ./isZero +0 = True
 ```
 -}
-let isZero : Natural → Bool
-    =   Natural/isZero
-
-in  isZero
+let isZero : Natural → Bool = Natural/isZero in isZero

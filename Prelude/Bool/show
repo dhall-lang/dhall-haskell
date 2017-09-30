@@ -10,7 +10,4 @@ Examples:
 ./show False = "False"
 ```
 -}
-let show : Bool → Text
-    =   λ(b : Bool) → if b then "True" else "False"
-
-in  show
+let show : Bool → Text = λ(b : Bool) → if b then "True" else "False" in show

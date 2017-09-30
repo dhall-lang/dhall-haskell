@@ -9,7 +9,4 @@ Examples:
 ./odd +0 = False
 ```
 -}
-let odd : Natural → Bool
-    =   Natural/odd
-
-in  odd
+let odd : Natural → Bool = Natural/odd in odd

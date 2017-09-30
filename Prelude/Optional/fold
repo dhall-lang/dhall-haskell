@@ -9,13 +9,13 @@ Examples:
 ./fold Integer ([]  : Optional Integer) Integer (λ(x : Integer) → x) 0 = 0
 ```
 -}
-let fold
-    :   ∀(a : Type)
-    →   Optional a
-    →   ∀(optional : Type)
-    →   ∀(just : a → optional)
-    →   ∀(nothing : optional)
-    →   optional
-    =   Optional/fold
+    let fold
+        :   ∀(a : Type)
+          → Optional a
+          → ∀(optional : Type)
+          → ∀(just : a → optional)
+          → ∀(nothing : optional)
+          → optional
+        = Optional/fold
 
 in  fold

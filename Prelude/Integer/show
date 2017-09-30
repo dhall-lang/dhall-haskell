@@ -10,7 +10,4 @@ Examples:
 ./show  0 =  "0"
 ```
 -}
-let show : Integer → Text
-    =   Integer/show
-
-in  show
+let show : Integer → Text = Integer/show in show

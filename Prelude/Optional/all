@@ -10,10 +10,11 @@ Examples:
 ./all Natural Natural/even ([] : Optional Natural) = True
 ```
 -}
-let all : ∀(a : Type) → (a → Bool) → Optional a → Bool
-    =   λ(a : Type)
-    →   λ(f : a → Bool)
-    →   λ(xs : Optional a)
-    →   Optional/fold a xs Bool f True
+    let all
+        : ∀(a : Type) → (a → Bool) → Optional a → Bool
+        =   λ(a : Type)
+          → λ(f : a → Bool)
+          → λ(xs : Optional a)
+          → Optional/fold a xs Bool f True
 
 in  all
