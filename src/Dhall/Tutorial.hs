@@ -1855,7 +1855,7 @@ import Dhall
 -- >                ─────────────────────
 -- > Γ ⊢ b : Bool   Γ ⊢ l : t   Γ ⊢ r : t
 -- > ────────────────────────────────────
--- > Γ ⊢ if b then l else r
+-- > Γ ⊢ if b then l else r : t
 --
 -- Rules:
 --
