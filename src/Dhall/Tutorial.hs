@@ -1855,7 +1855,7 @@ import Dhall
 -- >                ─────────────────────
 -- > Γ ⊢ b : Bool   Γ ⊢ l : t   Γ ⊢ r : t
 -- > ────────────────────────────────────
--- > Γ ⊢ if b then l else r
+-- > Γ ⊢ if b then l else r : t
 --
 -- Rules:
 --
@@ -2137,7 +2137,7 @@ import Dhall
 -- Example:
 --
 -- > $ dhall
--- > [1, 2, 3] # [5, 6, 7]
+-- > [1, 2, 3] # [4, 5, 6]
 -- > <Ctrl-D>
 -- > List Integer
 -- >
