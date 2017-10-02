@@ -1053,7 +1053,7 @@ notEqualExpression =
 applicationExpression :: Parser a -> Parser (Expr Src a)
 applicationExpression embedded = do
     a <- selectorExpression embedded
-    b <- many (try (selectorExpression embedded))
+    b <- many (selectorExpression embedded)
     return (foldl1 App (a:b))
 
 selectorExpression :: Parser a -> Parser (Expr Src a)
