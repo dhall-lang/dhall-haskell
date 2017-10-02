@@ -9,7 +9,4 @@ Examples:
 ./even +0 = True
 ```
 -}
-let even : Natural → Bool
-    =   Natural/even
-
-in  even
+let even : Natural → Bool = Natural/even in even

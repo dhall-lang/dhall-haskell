@@ -9,7 +9,8 @@ Examples:
 ./null Integer ([] : List Integer) = True
 ```
 -}
-let null : ∀(a : Type) → List a → Bool
-    =   λ(a : Type) → λ(xs : List a) → Natural/isZero (List/length a xs)
+    let null
+        : ∀(a : Type) → List a → Bool
+        = λ(a : Type) → λ(xs : List a) → Natural/isZero (List/length a xs)
 
 in  null

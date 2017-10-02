@@ -9,7 +9,4 @@ Examples:
 ./not False = True
 ```
 -}
-let not : Bool → Bool
-    =   λ(b : Bool) → b == False
-
-in  not
+let not : Bool → Bool = λ(b : Bool) → b == False in not

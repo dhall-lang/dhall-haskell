@@ -10,7 +10,4 @@ Examples:
 ./show +0 = "+0"
 ```
 -}
-let show : Natural → Text
-    =   Natural/show
-
-in  show
+let show : Natural → Text = Natural/show in show

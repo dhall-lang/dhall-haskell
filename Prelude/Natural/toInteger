@@ -9,7 +9,4 @@ Examples:
 ./toInteger +0 = 0
 ```
 -}
-let toInteger : Natural → Integer
-    =   Natural/toInteger
-
-in  toInteger
+let toInteger : Natural → Integer = Natural/toInteger in toInteger

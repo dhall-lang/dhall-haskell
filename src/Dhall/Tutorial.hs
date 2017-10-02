@@ -50,6 +50,9 @@ module Dhall.Tutorial (
     -- * Headers
     -- $headers
 
+    -- * Raw text
+    -- $rawText
+
     -- * Formatting code
     -- $format
 
@@ -1384,6 +1387,51 @@ import Dhall
 -- ... and @http:\/\/example.com@ contains a relative import of @./foo@ then
 -- Dhall will import @http:\/\/example.com/foo@ using the same @./headers@ file.
 
+-- $rawText
+--
+-- Sometimes you want to import the contents of a raw text file as a Dhall
+-- value of type `Text`.  For example, one of the fields of a record might be
+-- the contents of a software license:
+--
+-- > { package = "dhall"
+-- > , author  = "Gabriel Gonzalez"
+-- > , license = ./LICENSE
+-- > }
+--
+-- Normally if you wanted to import a text file you would need to wrap the
+-- contents of the file in double single-quotes, like this:
+--
+-- > $ cat LICENSE
+-- > ''
+-- > Copyright (c) 2017 Gabriel Gonzalez
+-- > All rights reserved.
+-- > 
+-- > ...
+-- > (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+-- > SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-- > ''
+--
+-- ... which does not work well if you need to reuse the same text file for
+-- other programs
+--
+-- However, Dhall supports importing a raw text file by adding @as Text@ to the
+-- end of the import, like this:
+--
+-- > { package = "dhall"
+-- > , author  = "Gabriel Gonzalez"
+-- > , license = ./LICENSE as Text
+-- > }
+--
+-- ... and then you can use the original text file unmodified:
+--
+-- > $ cat LICENSE
+-- > Copyright (c) 2017 Gabriel Gonzalez
+-- > All rights reserved.
+-- > 
+-- > ...
+-- > (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+-- > SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 -- $format
 --
 -- This package also provides a @dhall-format@ executable that you can use to
@@ -1543,12 +1591,18 @@ import Dhall
 -- >       +0
 -- >   )
 --
--- Carefully note that the code formatter does not yet preserve comments:
+-- Carefully note that the code formatter does not preserve all comments.
+-- Currently, the formatter only preserves leading comments and whitespace
+-- up until the last newline preceding the code.  In other words:
 --
 -- > $ dhall-format
--- > -- Hello!
--- > 1
+-- > {- This comment will be preserved by the formatter -}
+-- > -- ... and this comment will be preserved, too
+-- > {- This comment will *NOT* be preserved -} 1
+-- > -- ... and this comment will also *NOT* be preserved
 -- > <Ctrl-D>
+-- > {- This comment will be preserved by the formatter -}
+-- > -- ... and this comment will be preserved, too
 -- > 1
 
 -- $builtins
@@ -1801,7 +1855,7 @@ import Dhall
 -- >                ─────────────────────
 -- > Γ ⊢ b : Bool   Γ ⊢ l : t   Γ ⊢ r : t
 -- > ────────────────────────────────────
--- > Γ ⊢ if b then l else r
+-- > Γ ⊢ if b then l else r : t
 --
 -- Rules:
 --
@@ -2083,7 +2137,7 @@ import Dhall
 -- Example:
 --
 -- > $ dhall
--- > [1, 2, 3] # [5, 6, 7]
+-- > [1, 2, 3] # [4, 5, 6]
 -- > <Ctrl-D>
 -- > List Integer
 -- >

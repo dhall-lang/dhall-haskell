@@ -23,14 +23,14 @@ Integer
 = [] : Optional Integer
 ```
 -}
-let build
-    :   ∀(a : Type)
-    →   (   ∀(optional : Type)
-        →   ∀(just : a → optional)
-        →   ∀(nothing : optional)
-        →   optional
-        )
-    →   Optional a
-    =   Optional/build
+    let build
+        :   ∀(a : Type)
+          → (   ∀(optional : Type)
+              → ∀(just : a → optional)
+              → ∀(nothing : optional)
+              → optional
+            )
+          → Optional a
+        = Optional/build
 
 in  build

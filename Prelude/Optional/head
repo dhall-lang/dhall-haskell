@@ -20,17 +20,18 @@ Integer
 = [] : Optional Integer
 ```
 -}
-let head : ∀(a : Type) → List (Optional a) → Optional a
-    =   λ(a : Type)
-    →   λ(xs : List (Optional a))
-    →   List/fold
-        (Optional a)
-        xs
-        (Optional a)
-        (   λ(l : Optional a)
-        →   λ(r : Optional a)
-        →   Optional/fold a l (Optional a) (λ(x : a) → [x] : Optional a) r
-        )
-        ([] : Optional a)
+    let head
+        : ∀(a : Type) → List (Optional a) → Optional a
+        =   λ(a : Type)
+          → λ(xs : List (Optional a))
+          → List/fold
+            (Optional a)
+            xs
+            (Optional a)
+            (   λ(l : Optional a)
+              → λ(r : Optional a)
+              → Optional/fold a l (Optional a) (λ(x : a) → [ x ] : Optional a) r
+            )
+            ([] : Optional a)
 
 in  head
