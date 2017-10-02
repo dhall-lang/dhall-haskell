@@ -708,7 +708,7 @@ httpRaw =
     <>  option ("#" <> fragment)
 
 authority :: Parser Builder
-authority = option (userinfo <> "@") <> host <> option (":" <> port)
+authority = option (try (userinfo <> "@")) <> host <> option (":" <> port)
 
 userinfo :: Parser Builder
 userinfo = star (satisfy predicate <|> pctEncoded)
@@ -716,7 +716,7 @@ userinfo = star (satisfy predicate <|> pctEncoded)
     predicate c = unreserved c || subDelims c || c == ':'
 
 host :: Parser Builder
-host = ipLiteral <> ipV4Address <> regName
+host = ipLiteral <|> ipV4Address <|> regName
 
 port :: Parser Builder
 port = star (satisfy digit)
