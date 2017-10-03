@@ -37,8 +37,7 @@ import Numeric.Natural (Natural)
 import Prelude hiding (const, pi)
 import Text.PrettyPrint.ANSI.Leijen (Doc)
 import Text.Parser.Combinators (choice, try, (<?>))
-import Text.Parser.Token (IdentifierStyle(..), TokenParsing(..))
-import Text.Parser.Token.Highlight (Highlight(..))
+import Text.Parser.Token (TokenParsing(..))
 import Text.Trifecta
     (CharParsing, DeltaParsing, MarkParsing, Parsing, Result(..))
 import Text.Trifecta.Delta (Delta)
@@ -119,18 +118,6 @@ instance TokenParsing Parser where
 
     highlight h (Parser m) = Parser (highlight h m)
 
-identifierStyle :: IdentifierStyle Parser
-identifierStyle = IdentifierStyle
-    { _styleName     = "dhall"
-    , _styleStart    =
-        Text.Parser.Char.oneOf (['A'..'Z'] ++ ['a'..'z'] ++ "_")
-    , _styleLetter   =
-        Text.Parser.Char.oneOf (['A'..'Z'] ++ ['a'..'z'] ++ ['0'..'9'] ++ "_-/")
-    , _styleReserved = reservedIdentifiers
-    , _styleHighlight         = Identifier
-    , _styleReservedHighlight = ReservedIdentifier
-    }
-
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
     before     <- Text.Trifecta.position
@@ -138,15 +125,13 @@ noted parser = do
     after      <- Text.Trifecta.position
     return (Note (Src before after bytes) e)
 
---------
-
 count :: Monoid a => Int -> Parser a -> Parser a
 count n parser = fmap mconcat (Control.Monad.replicateM n parser)
 
 range :: Monoid a => Int -> Int -> Parser a -> Parser a
-range minBound maxMatches parser = do
-    xs <- count minBound parser
-    ys <- loop maxMatches
+range minimumBound maximumMatches parser = do
+    xs <- count minimumBound parser
+    ys <- loop maximumMatches
     return (xs <> ys)
   where
     loop 0 = return mempty
@@ -239,9 +224,9 @@ hexdig c =
     ||  ('a' <= c && c <= 'f')
 
 hexNumber :: Parser Int
-hexNumber = hexNumber <|> hexUpper <|> hexLower
+hexNumber = hexDigit <|> hexUpper <|> hexLower
   where
-    hexNumber = do
+    hexDigit = do
         c <- Text.Parser.Char.satisfy predicate
         return (Data.Char.ord c - Data.Char.ord '0')
       where
@@ -412,11 +397,11 @@ dedent expr0 = process trimBegin expr0
     -- This is the trim function we use after each variable interpolation
     -- where we indent each line except the first line (since it's not a true
     -- beginning of a line)
-    trimContinue builder = build (Data.Text.Lazy.intercalate "\n" lines)
+    trimContinue builder = build (Data.Text.Lazy.intercalate "\n" lines_)
       where
         text = Data.Text.Lazy.Builder.toLazyText builder
 
-        lines = case Data.Text.Lazy.splitOn "\n" text of
+        lines_ = case Data.Text.Lazy.splitOn "\n" text of
             []   -> []
             l:ls -> l:map (Data.Text.Lazy.drop shortestIndent) ls
 
@@ -988,11 +973,13 @@ posixEnvironmentVariableCharacter =
 
 expression :: Parser a -> Parser (Expr Src a)
 expression embedded =
-        alternative0
-    <|> alternative1
-    <|> alternative2
-    <|> alternative3
-    <|> alternative4
+    noted
+        (   alternative0
+        <|> alternative1
+        <|> alternative2
+        <|> alternative3
+        <|> alternative4
+        )
     <|> alternative5
   where
     alternative0 = do
@@ -1047,7 +1034,7 @@ expression embedded =
 
 annotatedExpression :: Parser a -> Parser (Expr Src a)
 annotatedExpression embedded =
-    alternative0 <|> try alternative1 <|> alternative2
+    noted (alternative0 <|> try alternative1 <|> alternative2)
   where
     alternative0 = do
         _merge
@@ -1097,16 +1084,18 @@ nonEmptyOptional embedded = do
 operatorExpression :: Parser a -> Parser (Expr Src a)
 operatorExpression = orExpression
 
+-- TODO: Restrict `noted` to be per operator
 makeOperatorExpression
     :: (Parser a -> Parser (Expr Src a))
     -> Parser ()
     -> (Expr Src a -> Expr Src a -> Expr Src a)
     -> Parser a
     -> Parser (Expr Src a)
-makeOperatorExpression subExpression operatorParser operator embedded = do
-    a <- subExpression embedded
-    b <- many (do operatorParser; subExpression embedded)
-    return (foldr1 operator (a:b))
+makeOperatorExpression subExpression operatorParser operator embedded =
+    noted (do
+        a <- subExpression embedded
+        b <- many (do operatorParser; subExpression embedded)
+        return (foldr1 operator (a:b)) )
 
 orExpression :: Parser a -> Parser (Expr Src a)
 orExpression =
@@ -1150,56 +1139,62 @@ notEqualExpression =
 
 applicationExpression :: Parser a -> Parser (Expr Src a)
 applicationExpression embedded = do
-    a <- selectorExpression embedded
-    b <- many (selectorExpression embedded)
-    return (foldl1 App (a:b))
+    a <- some (noted (selectorExpression embedded))
+    return (foldl1 app a)
+  where
+    app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
+        Note (Src before after (bytesL <> bytesR)) (App nL nR)
+    app nL nR =
+        App nL nR
 
 selectorExpression :: Parser a -> Parser (Expr Src a)
-selectorExpression embedded = do
+selectorExpression embedded = noted (do
     a <- primitiveExpression embedded
     b <- many (try (do _dot; label))
-    return (foldl Field a b)
+    return (foldl Field a b) )
 
 primitiveExpression :: Parser a -> Parser (Expr Src a)
 primitiveExpression embedded =
-        alternative00
-    <|> alternative01
-    <|> alternative02
-    <|> alternative03
-    <|> alternative04
-    <|> alternative05
-    <|> alternative06
-    <|> alternative07
-    <|> alternative08
-    <|> alternative09
-    <|> alternative10
-    <|> alternative11
-    <|> alternative12
-    <|> alternative13
-    <|> alternative14
-    <|> alternative15
-    <|> alternative16
-    <|> alternative17
-    <|> alternative18
-    <|> alternative19
-    <|> alternative20
-    <|> alternative21
-    <|> alternative22
-    <|> alternative23
-    <|> alternative24
-    <|> alternative25
-    <|> alternative26
-    <|> alternative27
-    <|> alternative28
-    <|> alternative29
-    <|> alternative30
-    <|> alternative31
-    <|> alternative32
-    <|> alternative33
-    <|> alternative34
-    <|> alternative35
-    <|> alternative36
-    <|> alternative37
+    noted
+        (   alternative00
+        <|> alternative01
+        <|> alternative02
+        <|> alternative03
+        <|> alternative04
+        <|> alternative05
+        <|> alternative06
+        <|> alternative07
+        <|> alternative08
+        <|> alternative09
+        <|> alternative10
+        <|> alternative11
+        <|> alternative12
+        <|> alternative13
+        <|> alternative14
+        <|> alternative15
+        <|> alternative16
+        <|> alternative17
+        <|> alternative18
+        <|> alternative19
+        <|> alternative20
+        <|> alternative21
+        <|> alternative22
+        <|> alternative23
+        <|> alternative24
+        <|> alternative25
+        <|> alternative26
+        <|> alternative27
+        <|> alternative28
+        <|> alternative29
+        <|> alternative30
+        <|> alternative31
+        <|> alternative32
+        <|> alternative33
+        <|> alternative34
+        <|> alternative35
+        <|> alternative36
+        <|> alternative37
+        )
     <|> alternative38
   where
     alternative00 = do
@@ -1454,10 +1449,6 @@ completeExpression embedded = do
     whitespace
     expression embedded
 
--- TODO: Mirror `try`s
-
---------
-
 toMap :: [(Text, a)] -> Parser (Map Text a)
 toMap kvs = do
     let adapt (k, v) = (k, pure v)
@@ -1479,7 +1470,7 @@ expr = exprA import_
 -- | Parser for a top-level Dhall expression. The expression is parameterized
 -- over any parseable type, allowing the language to be extended as needed.
 exprA :: Parser a -> Parser (Expr Src a)
-exprA = expression
+exprA = completeExpression
 
 pathType_ :: Parser PathType
 pathType_ = file <|> http <|> env
