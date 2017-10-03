@@ -187,12 +187,33 @@ notBrace =
 blockComment :: Parser ()
 blockComment = do
     _ <- Text.Parser.Char.text "{-"
-    Text.Parser.Combinators.skipMany notBrace
-    Text.Parser.Combinators.skipMany $ do
-        blockComment
-        Text.Parser.Combinators.skipMany notBrace
-    _ <- Text.Parser.Char.text "-}"
-    return ()
+    blockCommentContinue
+
+blockCommentChunk :: Parser ()
+blockCommentChunk =
+        blockComment  -- Nested block comment
+    <|> character
+    <|> tab
+    <|> endOfLine
+  where
+    character = void (Text.Parser.Char.satisfy predicate)
+      where
+        predicate c = '\x20' <= c && c <= '\x10FFFF'
+
+    tab = void (Text.Parser.Char.char '\t')
+
+    endOfLine =
+            void (Text.Parser.Char.char '\n')
+        <|> void (Text.Parser.Char.text "\r\n")
+
+blockCommentContinue :: Parser ()
+blockCommentContinue = endOfComment <|> continue
+  where
+    endOfComment = void (Text.Parser.Char.text "-}")
+
+    continue = do
+        blockCommentChunk
+        blockCommentContinue
 
 lineComment :: Parser ()
 lineComment = do
