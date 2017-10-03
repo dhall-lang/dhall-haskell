@@ -359,6 +359,70 @@ doubleQuotedLiteral embedded = do
     _      <- Text.Parser.Char.char '"'
     return (foldr textAppend (TextLit "") chunks)
 
+dedent :: Expr Src a -> Expr Src a
+dedent expr0 = process trimBegin expr0
+  where
+    -- This treats variable interpolation as breaking leading whitespace for the
+    -- purposes of computing the shortest leading whitespace.  The "${x}"
+    -- could really be any text that breaks whitespace
+    concatFragments (TextAppend (TextLit t) e) = t      <> concatFragments e
+    concatFragments (TextAppend  _          e) = "${x}" <> concatFragments e
+    concatFragments (TextLit t)                = t
+    concatFragments  _                         = mempty
+
+    builder0 = concatFragments expr0
+
+    text0 = Data.Text.Lazy.Builder.toLazyText builder0
+
+    lines0 = Data.Text.Lazy.lines text0
+
+    isEmpty = Data.Text.Lazy.all Data.Char.isSpace
+
+    nonEmptyLines = filter (not . isEmpty) lines0
+
+    indentLength line =
+        Data.Text.Lazy.length (Data.Text.Lazy.takeWhile Data.Char.isSpace line)
+
+    shortestIndent = case nonEmptyLines of
+        [] -> 0
+        _  -> minimum (map indentLength nonEmptyLines)
+
+    -- The purpose of this complicated `trim0`/`trim1` is to ensure that we
+    -- strip leading whitespace without stripping whitespace after variable
+    -- interpolation
+
+    -- This is the trim function we use up until the first variable
+    -- interpolation, dedenting all lines
+    trimBegin =
+          build
+        . Data.Text.Lazy.intercalate "\n"
+        . map (Data.Text.Lazy.drop shortestIndent)
+        . Data.Text.Lazy.splitOn "\n"
+        . Data.Text.Lazy.Builder.toLazyText
+
+    -- This is the trim function we use after each variable interpolation
+    -- where we indent each line except the first line (since it's not a true
+    -- beginning of a line)
+    trimContinue builder = build (Data.Text.Lazy.intercalate "\n" lines)
+      where
+        text = Data.Text.Lazy.Builder.toLazyText builder
+
+        lines = case Data.Text.Lazy.splitOn "\n" text of
+            []   -> []
+            l:ls -> l:map (Data.Text.Lazy.drop shortestIndent) ls
+
+    -- This is the loop that drives whether or not to use `trimBegin` or
+    -- `trimContinue`.  We call this function with `trimBegin`, but after the
+    -- first interpolation we switch permanently to `trimContinue`
+    process trim (TextAppend (TextLit t) e) =
+        TextAppend (TextLit (trim t)) (process trimContinue e)
+    process _    (TextAppend e0 e1) =
+        TextAppend e0 (process trimContinue e1)
+    process trim (TextLit t) =
+        TextLit (trim t)
+    process _     e =
+        e
+
 singleQuotedChunk :: Parser a -> Parser (Expr Src a)
 singleQuotedChunk embedded =
         escapeSingleQuotes
@@ -393,13 +457,23 @@ singleQuotedChunk embedded =
 singleQuotedLiteral :: Parser a -> Parser (Expr Src a)
 singleQuotedLiteral embedded = do
     _  <- Text.Parser.Char.text "''"
+
+    -- This is technically not in the grammar, but it's still equivalent to the
+    -- original grammar and an easy way to discard the first character if it's
+    -- a newline
+    _  <- optional endOfLine
+
     a  <- many (singleQuotedChunk embedded)
     b  <- many (try (do
         b <- fmap TextLit "'"
         c <- some (singleQuotedChunk embedded)
         return (foldr textAppend (TextLit "") (b:c)) ))
     _  <- Text.Parser.Char.text "''"
-    return (foldr textAppend (TextLit "") (a <> b))
+    return (dedent (foldr textAppend (TextLit "") (a <> b)))
+  where
+    endOfLine =
+            void (Text.Parser.Char.char '\n'  )
+        <|> void (Text.Parser.Char.text "\r\n")
 
 textLiteral :: Parser a -> Parser (Expr Src a)
 textLiteral embedded = do
