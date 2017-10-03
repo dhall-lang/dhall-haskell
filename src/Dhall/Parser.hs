@@ -172,18 +172,6 @@ notEndOfLine = void (Text.Parser.Char.satisfy predicate)
   where
     predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
 
-notBrace :: Parser ()
-notBrace =
-        void (Text.Parser.Char.satisfy predicate)
-    <|> void (Text.Parser.Char.text "\r\n")
-  where
-    predicate c =
-            ('\x20' <= c && c <= '\x2C')
-        ||  ('\x2E' <= c && c <= '\x7A')
-        ||  ('\x7C' <= c && c <= '\x10FFFF')
-        ||  c == '\n'
-        ||  c == '\t'
-
 blockComment :: Parser ()
 blockComment = do
     _ <- Text.Parser.Char.text "{-"
@@ -320,7 +308,7 @@ doubleQuotedChunk embedded =
 
     escapeInterpolation = do
         _ <- Text.Parser.Char.text "''${"
-        return (TextLit "''${")
+        return (TextLit "${")
 
     unescapedCharacter = do
         c <- Text.Parser.Char.satisfy predicate
@@ -444,53 +432,68 @@ dedent expr0 = process trimBegin expr0
     process _     e =
         e
 
-singleQuotedChunk :: Parser a -> Parser (Expr Src a)
-singleQuotedChunk embedded =
+singleQuoteContinue :: Parser a -> Parser (Expr Src a)
+singleQuoteContinue embedded =
         escapeSingleQuotes
     <|> interpolation
     <|> escapeInterpolation
+    <|> endLiteral
     <|> unescapedCharacter
     <|> tab
     <|> endOfLine
   where
-        escapeSingleQuotes = fmap TextLit "'''"
+        escapeSingleQuotes = do
+            a <- fmap TextLit "'''"
+            b <- singleQuoteContinue embedded
+            return (textAppend a b)
 
         interpolation = do
             _ <- Text.Parser.Char.text "${"
-            e <- expression embedded
+            a <- expression embedded
             _ <- Text.Parser.Char.char '}'
-            return e
+            b <- singleQuoteContinue embedded
+            return (textAppend a b)
 
-        escapeInterpolation = fmap TextLit "''${"
+        escapeInterpolation = do
+            _ <- Text.Parser.Char.text "''${"
+            b <- singleQuoteContinue embedded
+            return (textAppend (TextLit "${") b)
 
-        unescapedCharacter = fmap TextLit (satisfy predicate)
+        endLiteral = do
+            _ <- Text.Parser.Char.text "''"
+            return (TextLit "")
+
+        unescapedCharacter = do
+            a <- fmap TextLit (satisfy predicate)
+            b <- singleQuoteContinue embedded
+            return (textAppend a b)
           where
             predicate c =
                     ('\x20' <= c && c <= '\x26'    )
                 ||  ('\x28' <= c && c <= '\x10FFFF')
 
-        endOfLine = fmap TextLit "\n" <|> fmap TextLit "\r\n"
+        endOfLine = do
+            a <- fmap TextLit "\n" <|> fmap TextLit "\r\n"
+            b <- singleQuoteContinue embedded
+            return (textAppend a b)
 
         tab = do
             _ <- Text.Parser.Char.char '\t'
-            return (TextLit "\t")
+            b <- singleQuoteContinue embedded
+            return (textAppend (TextLit "\t") b)
 
-singleQuotedLiteral :: Parser a -> Parser (Expr Src a)
-singleQuotedLiteral embedded = do
-    _  <- Text.Parser.Char.text "''"
+singleQuoteLiteral :: Parser a -> Parser (Expr Src a)
+singleQuoteLiteral embedded = do
+    _ <- Text.Parser.Char.text "''"
 
     -- This is technically not in the grammar, but it's still equivalent to the
     -- original grammar and an easy way to discard the first character if it's
     -- a newline
-    _  <- optional endOfLine
+    _ <- optional endOfLine
 
-    a  <- many (singleQuotedChunk embedded)
-    b  <- many (try (do
-        b <- fmap TextLit "'"
-        c <- some (singleQuotedChunk embedded)
-        return (foldr textAppend (TextLit "") (b:c)) ))
-    _  <- Text.Parser.Char.text "''"
-    return (dedent (foldr textAppend (TextLit "") (a <> b)))
+    a <- singleQuoteContinue embedded
+
+    return (dedent a)
   where
     endOfLine =
             void (Text.Parser.Char.char '\n'  )
@@ -498,7 +501,7 @@ singleQuotedLiteral embedded = do
 
 textLiteral :: Parser a -> Parser (Expr Src a)
 textLiteral embedded = do
-    literal <- doubleQuotedLiteral embedded <|> singleQuotedLiteral embedded
+    literal <- doubleQuotedLiteral embedded <|> singleQuoteLiteral embedded
     whitespace
     return literal
 
