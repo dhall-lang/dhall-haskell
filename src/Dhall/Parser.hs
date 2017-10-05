@@ -207,7 +207,7 @@ whitespaceChunk =
         , void (Text.Parser.Char.text "\r\n")
         , lineComment
         , blockComment
-        ]
+        ] <?> "whitespace"
   where
     predicate c = c == ' ' || c == '\t' || c == '\n'
 
@@ -267,10 +267,10 @@ complexLabel = do
     return t
 
 label :: Parser Text
-label = do
+label = (do
     t <- complexLabel <|> simpleLabel
     whitespace
-    return t
+    return t ) <?> "label"
 
 -- | Combine consecutive chunks to eliminate gratuitous appends
 textAppend :: Expr Src a -> Expr Src a -> Expr Src a
@@ -493,10 +493,10 @@ singleQuoteLiteral embedded = do
         <|> void (Text.Parser.Char.text "\r\n")
 
 textLiteral :: Parser a -> Parser (Expr Src a)
-textLiteral embedded = do
+textLiteral embedded = (do
     literal <- doubleQuotedLiteral embedded <|> singleQuoteLiteral embedded
     whitespace
-    return literal
+    return literal ) <?> "text literal"
 
 reserved :: Data.Text.Text -> Parser ()
 reserved x = do _ <- Text.Parser.Char.text x; whitespace
@@ -680,12 +680,12 @@ _at = reserved "@"
 
 _combine :: Parser ()
 _combine = do
-    void (Text.Parser.Char.char '∧') <|> void (Text.Parser.Char.text "/\\")
+    void (Text.Parser.Char.char '∧' <?> "\"∧\"") <|> void (Text.Parser.Char.text "/\\")
     whitespace
 
 _prefer :: Parser ()
 _prefer = do
-    void (Text.Parser.Char.char '⫽') <|> void (Text.Parser.Char.text "//")
+    void (Text.Parser.Char.char '⫽' <?> "\"⫽\"") <|> void (Text.Parser.Char.text "//")
     whitespace
 
 _lambda :: Parser ()
@@ -699,32 +699,32 @@ _lambda = do
 
 _forall :: Parser ()
 _forall = do
-    void (Text.Parser.Char.char '∀') <|> void (Text.Parser.Char.text "forall")
+    void (Text.Parser.Char.char '∀' <?> "\"∀\"") <|> void (Text.Parser.Char.text "forall")
     whitespace
 
 _arrow :: Parser ()
 _arrow = do
-    void (Text.Parser.Char.char '→') <|> void (Text.Parser.Char.text "->")
+    void (Text.Parser.Char.char '→' <?> "\"→\"") <|> void (Text.Parser.Char.text "->")
     whitespace
 
 -- TODO: Follow grammar
 doubleLiteral :: Parser Double
-doubleLiteral = do
+doubleLiteral = (do
     sign <-  fmap (\_ -> negate) (Text.Parser.Char.char '-')
          <|> pure id
     a    <-  Text.Parser.Token.double
-    return (sign a)
+    return (sign a) ) <?> "double literal"
 
 -- TODO: Follow grammar
 integerLiteral :: Parser Integer
-integerLiteral = Text.Parser.Token.integer
+integerLiteral = Text.Parser.Token.integer <?> "integer literal"
 
 -- TODO: Follow grammar
 naturalLiteral :: Parser Natural
-naturalLiteral = do
+naturalLiteral = (do
     _ <- Text.Parser.Char.char '+'
     a <- Text.Parser.Token.natural
-    return (fromIntegral a)
+    return (fromIntegral a) ) <?> "natural literal"
 
 identifier :: Parser Var
 identifier = do
@@ -991,7 +991,7 @@ posixEnvironmentVariableCharacter =
 
 expression :: Parser a -> Parser (Expr Src a)
 expression embedded =
-    noted
+    (   noted
         ( choice
             [ alternative0
             , alternative1
@@ -1001,6 +1001,7 @@ expression embedded =
             ]
         )
     <|> alternative5
+    ) <?> "expression"
   where
     alternative0 = do
         _lambda
@@ -1071,9 +1072,10 @@ annotatedExpression embedded =
             applicationExpression embedded )
         return (Merge a b c)
 
-    alternative1 = do
+    alternative1 = (do
         _openBracket
-        (emptyCollection embedded <|> nonEmptyOptional embedded)
+        (emptyCollection embedded <|> nonEmptyOptional embedded) )
+        <?> "list literal"
 
     alternative2 = do
         a <- operatorExpression embedded
@@ -1191,35 +1193,38 @@ primitiveExpression embedded =
             , alternative05
             , alternative06
             , alternative07
-            , alternative08
-            , alternative09
-            , alternative10
-            , alternative11
-            , alternative12
-            , alternative13
-            , alternative14
-            , alternative15
-            , alternative16
-            , alternative17
-            , alternative18
-            , alternative19
-            , alternative20
-            , alternative21
-            , alternative22
-            , alternative23
-            , alternative24
-            , alternative25
-            , alternative26
-            , alternative27
-            , alternative28
-            , alternative29
-            , alternative30
-            , alternative31
-            , alternative32
-            , alternative33
-            , alternative34
-            , alternative35
-            , alternative36
+
+            , choice
+                [ alternative08
+                , alternative09
+                , alternative10
+                , alternative11
+                , alternative12
+                , alternative13
+                , alternative14
+                , alternative15
+                , alternative16
+                , alternative17
+                , alternative18
+                , alternative19
+                , alternative20
+                , alternative21
+                , alternative22
+                , alternative23
+                , alternative24
+                , alternative25
+                , alternative26
+                , alternative27
+                , alternative28
+                , alternative29
+                , alternative30
+                , alternative31
+                , alternative32
+                , alternative33
+                , alternative34
+                , alternative35
+                , alternative36
+                ] <?> "built-in expression"
             , alternative37
             ]
         )
@@ -1239,17 +1244,17 @@ primitiveExpression embedded =
 
     alternative03 = textLiteral embedded
 
-    alternative04 = do
+    alternative04 = (do
         _openBrace
         a <- recordTypeOrLiteral embedded
         _closeBrace
-        return a
+        return a ) <?> "record type or literal"
 
-    alternative05 = do
+    alternative05 = (do
         _openAngle
         a <- unionTypeOrLiteral embedded
         _closeAngle
-        return a
+        return a ) <?> "union type or literal"
 
     alternative06 = nonEmptyListLiteral embedded
 
@@ -1467,12 +1472,12 @@ nonEmptyUnionTypeOrLiteral embedded = do
         alternative0 <|> alternative1
 
 nonEmptyListLiteral :: Parser a -> Parser (Expr Src a)
-nonEmptyListLiteral embedded = do
+nonEmptyListLiteral embedded = (do
     _openBracket
     a <- expression embedded
     b <- many (do _comma; expression embedded)
     _closeBracket
-    return (ListLit Nothing (Data.Vector.fromList (a:b)))
+    return (ListLit Nothing (Data.Vector.fromList (a:b))) ) <?> "list literal"
 
 completeExpression :: Parser a -> Parser (Expr Src a)
 completeExpression embedded = do
@@ -1506,10 +1511,10 @@ pathType_ :: Parser PathType
 pathType_ = choice [ file, http, env ]
 
 import_ :: Parser Path
-import_ = do
+import_ = (do
     pathType <- pathType_
     pathMode <- alternative <|> pure Code
-    return (Path {..})
+    return (Path {..}) ) <?> "import"
   where
     alternative = do
         _as
