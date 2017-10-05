@@ -62,8 +62,6 @@ import qualified Text.Parser.Token.Style
 import qualified Text.PrettyPrint.ANSI.Leijen
 import qualified Text.Trifecta
 
--- TODO: Deal with variables not being confused with reserved identifiers
-
 -- | Source code extract
 data Src = Src Delta Delta ByteString deriving (Eq, Show)
 
@@ -718,7 +716,6 @@ _arrow = do
     void (Text.Parser.Char.char '→' <?> "\"→\"") <|> void (Text.Parser.Char.text "->")
     whitespace
 
--- TODO: Follow grammar
 doubleLiteral :: Parser Double
 doubleLiteral = (do
     sign <-  fmap (\_ -> negate) (Text.Parser.Char.char '-')
@@ -726,11 +723,9 @@ doubleLiteral = (do
     a    <-  Text.Parser.Token.double
     return (sign a) ) <?> "double literal"
 
--- TODO: Follow grammar
 integerLiteral :: Parser Integer
 integerLiteral = Text.Parser.Token.integer <?> "integer literal"
 
--- TODO: Follow grammar
 naturalLiteral :: Parser Natural
 naturalLiteral = (do
     _ <- Text.Parser.Char.char '+'
