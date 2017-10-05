@@ -259,10 +259,21 @@ simpleLabel = try (do
 
     tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
 
+quotedLabel :: Parser Text
+quotedLabel = try (do
+    c  <- Text.Parser.Char.satisfy headCharacter
+    cs <- many (Text.Parser.Char.satisfy tailCharacter)
+    let string = c:cs
+    return (Data.Text.Lazy.pack string) )
+  where
+    headCharacter c = alpha c || c == '_'
+
+    tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
+
 complexLabel :: Parser Text
 complexLabel = do
     _ <- Text.Parser.Char.char '`'
-    t <- simpleLabel
+    t <- quotedLabel
     _ <- Text.Parser.Char.char '`'
     return t
 
