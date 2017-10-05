@@ -63,7 +63,6 @@ import qualified Text.PrettyPrint.ANSI.Leijen
 import qualified Text.Trifecta
 
 -- TODO: Deal with variables not being confused with reserved identifiers
--- TODO: Fix grammar for block comments
 
 -- | Source code extract
 data Src = Src Delta Delta ByteString deriving (Eq, Show)
@@ -164,10 +163,12 @@ blockComment = do
 
 blockCommentChunk :: Parser ()
 blockCommentChunk =
-        blockComment  -- Nested block comment
-    <|> character
-    <|> tab
-    <|> endOfLine
+    choice
+        [ blockComment  -- Nested block comment
+        , character
+        , tab
+        , endOfLine
+        ]
   where
     character = void (Text.Parser.Char.satisfy predicate)
       where
@@ -201,10 +202,12 @@ lineComment = do
 
 whitespaceChunk :: Parser ()
 whitespaceChunk =
-        void (Text.Parser.Char.satisfy predicate)
-    <|> void (Text.Parser.Char.text "\r\n")
-    <|> lineComment
-    <|> blockComment
+    choice
+        [ void (Text.Parser.Char.satisfy predicate)
+        , void (Text.Parser.Char.text "\r\n")
+        , lineComment
+        , blockComment
+        ]
   where
     predicate c = c == ' ' || c == '\t' || c == '\n'
 
@@ -224,7 +227,7 @@ hexdig c =
     ||  ('a' <= c && c <= 'f')
 
 hexNumber :: Parser Int
-hexNumber = hexDigit <|> hexUpper <|> hexLower
+hexNumber = choice [ hexDigit, hexUpper, hexLower ]
   where
     hexDigit = do
         c <- Text.Parser.Char.satisfy predicate
@@ -280,10 +283,12 @@ textAppend a b =
 
 doubleQuotedChunk :: Parser a -> Parser (Expr Src a)
 doubleQuotedChunk embedded =
-        interpolation
-    <|> escapeInterpolation
-    <|> unescapedCharacter
-    <|> escapedCharacter
+    choice
+        [ interpolation
+        , escapeInterpolation
+        , unescapedCharacter
+        , escapedCharacter
+        ]
   where
     interpolation = do
         _ <- Text.Parser.Char.text "${"
@@ -306,17 +311,18 @@ doubleQuotedChunk embedded =
 
     escapedCharacter = do
         _ <- Text.Parser.Char.char '\\'
-        c <- (   quotationMark
-             <|> dollarSign
-             <|> backSlash
-             <|> forwardSlash
-             <|> backSpace
-             <|> formFeed
-             <|> lineFeed
-             <|> carriageReturn
-             <|> tab
-             <|> unicode
-             )
+        c <- choice
+            [ quotationMark
+            , dollarSign
+            , backSlash
+            , forwardSlash
+            , backSpace
+            , formFeed
+            , lineFeed
+            , carriageReturn
+            , tab
+            , unicode
+            ]
         return (TextLit (Data.Text.Lazy.Builder.singleton c))
       where
         quotationMark = Text.Parser.Char.char '"'
@@ -419,13 +425,15 @@ dedent expr0 = process trimBegin expr0
 
 singleQuoteContinue :: Parser a -> Parser (Expr Src a)
 singleQuoteContinue embedded =
-        escapeSingleQuotes
-    <|> interpolation
-    <|> escapeInterpolation
-    <|> endLiteral
-    <|> unescapedCharacter
-    <|> tab
-    <|> endOfLine
+    choice
+        [ escapeSingleQuotes
+        , interpolation
+        , escapeInterpolation
+        , endLiteral
+        , unescapedCharacter
+        , tab
+        , endOfLine
+        ]
   where
         escapeSingleQuotes = do
             a <- fmap TextLit "'''"
@@ -746,7 +754,13 @@ pathCharacter c =
     ||  c == '/'
 
 fileRaw :: Parser PathType
-fileRaw = try absolutePath <|> relativePath <|> parentPath <|> homePath
+fileRaw =
+    choice
+        [ try absolutePath
+        , relativePath
+        , parentPath
+        , homePath
+        ]
   where
     absolutePath = do
         _  <- Text.Parser.Char.char '/'
@@ -799,7 +813,7 @@ userinfo = star (satisfy predicate <|> pctEncoded)
     predicate c = unreserved c || subDelims c || c == ':'
 
 host :: Parser Builder
-host = ipLiteral <|> ipV4Address <|> regName
+host = choice [ ipLiteral, ipV4Address, regName ]
 
 port :: Parser Builder
 port = star (satisfy digit)
@@ -813,16 +827,18 @@ ipVFuture = "v" <> plus (satisfy hexdig) <> "." <> plus (satisfy predicate)
     predicate c = unreserved c || subDelims c || c == ':'
 
 ipV6Address :: Parser Builder
-ipV6Address = do
-        alternative0
-    <|> alternative1
-    <|> alternative2
-    <|> alternative3
-    <|> alternative4
-    <|> alternative5
-    <|> alternative6
-    <|> alternative7
-    <|> alternative8
+ipV6Address =
+    choice
+        [ alternative0
+        , alternative1
+        , alternative2
+        , alternative3
+        , alternative4
+        , alternative5
+        , alternative6
+        , alternative7
+        , alternative8
+        ]
   where
     alternative0 = count 6 (h16 <> ":") <> ls32
 
@@ -865,11 +881,13 @@ ipV4Address = decOctet <> "." <> decOctet <> "." <> decOctet <> "." <> decOctet
 
 decOctet :: Parser Builder
 decOctet =
-        alternative0
-    <|> alternative1
-    <|> alternative2
-    <|> alternative3
-    <|> alternative4
+    choice
+        [ alternative0
+        , alternative1
+        , alternative2
+        , alternative3
+        , alternative4
+        ]
   where
     alternative0 = satisfy digit
 
@@ -974,11 +992,13 @@ posixEnvironmentVariableCharacter =
 expression :: Parser a -> Parser (Expr Src a)
 expression embedded =
     noted
-        (   alternative0
-        <|> alternative1
-        <|> alternative2
-        <|> alternative3
-        <|> alternative4
+        ( choice
+            [ alternative0
+            , alternative1
+            , alternative2
+            , alternative3
+            , alternative4
+            ]
         )
     <|> alternative5
   where
@@ -1034,7 +1054,13 @@ expression embedded =
 
 annotatedExpression :: Parser a -> Parser (Expr Src a)
 annotatedExpression embedded =
-    noted (alternative0 <|> try alternative1 <|> alternative2)
+    noted
+        ( choice
+            [ alternative0
+            , try alternative1
+            , alternative2
+            ]
+        )
   where
     alternative0 = do
         _merge
@@ -1156,44 +1182,46 @@ selectorExpression embedded = noted (do
 primitiveExpression :: Parser a -> Parser (Expr Src a)
 primitiveExpression embedded =
     noted
-        (   alternative00
-        <|> alternative01
-        <|> alternative02
-        <|> alternative03
-        <|> alternative04
-        <|> alternative05
-        <|> alternative06
-        <|> alternative07
-        <|> alternative08
-        <|> alternative09
-        <|> alternative10
-        <|> alternative11
-        <|> alternative12
-        <|> alternative13
-        <|> alternative14
-        <|> alternative15
-        <|> alternative16
-        <|> alternative17
-        <|> alternative18
-        <|> alternative19
-        <|> alternative20
-        <|> alternative21
-        <|> alternative22
-        <|> alternative23
-        <|> alternative24
-        <|> alternative25
-        <|> alternative26
-        <|> alternative27
-        <|> alternative28
-        <|> alternative29
-        <|> alternative30
-        <|> alternative31
-        <|> alternative32
-        <|> alternative33
-        <|> alternative34
-        <|> alternative35
-        <|> alternative36
-        <|> alternative37
+        ( choice
+            [ alternative00
+            , alternative01
+            , alternative02
+            , alternative03
+            , alternative04
+            , alternative05
+            , alternative06
+            , alternative07
+            , alternative08
+            , alternative09
+            , alternative10
+            , alternative11
+            , alternative12
+            , alternative13
+            , alternative14
+            , alternative15
+            , alternative16
+            , alternative17
+            , alternative18
+            , alternative19
+            , alternative20
+            , alternative21
+            , alternative22
+            , alternative23
+            , alternative24
+            , alternative25
+            , alternative26
+            , alternative27
+            , alternative28
+            , alternative29
+            , alternative30
+            , alternative31
+            , alternative32
+            , alternative33
+            , alternative34
+            , alternative35
+            , alternative36
+            , alternative37
+            ]
         )
     <|> alternative38
   where
@@ -1357,9 +1385,11 @@ primitiveExpression embedded =
 
 recordTypeOrLiteral :: Parser a -> Parser (Expr Src a)
 recordTypeOrLiteral embedded =
-        alternative0
-    <|> alternative1
-    <|> alternative2
+    choice
+        [ alternative0
+        , alternative1
+        , alternative2
+        ]
   where
     alternative0 = do
         _equal
@@ -1473,7 +1503,7 @@ exprA :: Parser a -> Parser (Expr Src a)
 exprA = completeExpression
 
 pathType_ :: Parser PathType
-pathType_ = file <|> http <|> env
+pathType_ = choice [ file, http, env ]
 
 import_ :: Parser Path
 import_ = do
