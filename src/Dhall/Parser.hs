@@ -149,11 +149,6 @@ satisfy :: (Char -> Bool) -> Parser Builder
 satisfy predicate =
     fmap Data.Text.Lazy.Builder.singleton (Text.Parser.Char.satisfy predicate)
 
-notEndOfLine :: Parser ()
-notEndOfLine = void (Text.Parser.Char.satisfy predicate)
-  where
-    predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
-
 blockComment :: Parser ()
 blockComment = do
     _ <- Text.Parser.Char.text "{-"
@@ -164,19 +159,14 @@ blockCommentChunk =
     choice
         [ blockComment  -- Nested block comment
         , character
-        , tab
         , endOfLine
         ]
   where
     character = void (Text.Parser.Char.satisfy predicate)
       where
-        predicate c = '\x20' <= c && c <= '\x10FFFF'
+        predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
 
-    tab = void (Text.Parser.Char.char '\t')
-
-    endOfLine =
-            void (Text.Parser.Char.char '\n')
-        <|> void (Text.Parser.Char.text "\r\n")
+    endOfLine = void (Text.Parser.Char.text "\r\n")
 
 blockCommentContinue :: Parser ()
 blockCommentContinue = endOfComment <|> continue
@@ -197,6 +187,11 @@ lineComment = do
     endOfLine =
             void (Text.Parser.Char.char '\n'  )
         <|> void (Text.Parser.Char.text "\r\n")
+
+    notEndOfLine = void (Text.Parser.Char.satisfy predicate)
+      where
+        predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
+
 
 whitespaceChunk :: Parser ()
 whitespaceChunk =
@@ -247,11 +242,9 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
 
 simpleLabel :: Parser Text
 simpleLabel = try (do
-    c  <- Text.Parser.Char.satisfy headCharacter
-    cs <- many (Text.Parser.Char.satisfy tailCharacter)
-    let string = c:cs
-    Control.Monad.guard (not (Data.HashSet.member string reservedIdentifiers))
-    return (Data.Text.Lazy.pack string) )
+    text <- quotedLabel
+    Control.Monad.guard (not (Data.HashSet.member text reservedIdentifiers))
+    return text )
   where
     headCharacter c = alpha c || c == '_'
 

@@ -554,7 +554,7 @@ enclose' beginShort beginLong sepShort sepLong docs =
 
 prettyLabel :: Text -> Doc ann
 prettyLabel a =
-    if Data.HashSet.member a reservedIdentifiersText
+    if Data.HashSet.member a reservedIdentifiers
     then "`" <> Pretty.pretty a <> "`"
     else Pretty.pretty a
 
@@ -1015,7 +1015,7 @@ pretty = Builder.toLazyText . build
 -- | Builder corresponding to the @label@ token in "Dhall.Parser"
 buildLabel :: Text -> Builder
 buildLabel label =
-    if Data.HashSet.member label reservedIdentifiersText
+    if Data.HashSet.member label reservedIdentifiers
     then "`" <> build label <> "`"
     else build label
 
@@ -2344,7 +2344,7 @@ buildVector f = Data.Vector.reverse (Data.Vector.create (do
     return (Data.Vector.Mutable.slice 0 len mv) ))
 
 -- | The set of reserved identifiers for the Dhall language
-reservedIdentifiers :: HashSet String
+reservedIdentifiers :: HashSet Text
 reservedIdentifiers =
     Data.HashSet.fromList
         [ "let"
@@ -2385,6 +2385,3 @@ reservedIdentifiers =
         , "Optional"
         , "Optional/fold"
         ]
-
-reservedIdentifiersText :: HashSet Text
-reservedIdentifiersText = Data.HashSet.map Text.pack reservedIdentifiers
