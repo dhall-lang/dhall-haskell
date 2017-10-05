@@ -99,9 +99,7 @@ instance Monoid a => Monoid (Parser a) where
     mappend = liftA2 mappend
 
 instance IsString a => IsString (Parser a) where
-    fromString x = do
-        a <- Text.Parser.Char.string x
-        return (fromString a)
+    fromString x = fmap fromString (Text.Parser.Char.string x)
 
 instance TokenParsing Parser where
     someSpace =
@@ -123,27 +121,23 @@ noted parser = do
     return (Note (Src before after bytes) e)
 
 count :: Monoid a => Int -> Parser a -> Parser a
-count n parser = fmap mconcat (Control.Monad.replicateM n parser)
+count n parser = mconcat (replicate n parser)
 
 range :: Monoid a => Int -> Int -> Parser a -> Parser a
-range minimumBound maximumMatches parser = do
-    xs <- count minimumBound parser
-    ys <- loop maximumMatches
-    return (xs <> ys)
+range minimumBound maximumMatches parser =
+    count minimumBound parser <> loop maximumMatches
   where
-    loop 0 = return mempty
-    loop n =
-            (do x <- parser; xs <- loop (n - 1); return (x <> xs))
-        <|> return mempty
+    loop 0 = mempty
+    loop n = (parser <> loop (n - 1)) <|> mempty
 
 option :: (Alternative f, Monoid a) => f a -> f a
 option p = p <|> pure mempty
 
 star :: (Alternative f, Monoid a) => f a -> f a
-star p = fmap mconcat (many p)
+star p = plus p <|> pure mempty
 
 plus :: (Alternative f, Monoid a) => f a -> f a
-plus p = fmap mconcat (some p)
+plus p = mappend <$> p <*> star p
 
 satisfy :: (Char -> Bool) -> Parser Builder
 satisfy predicate =
@@ -245,10 +239,6 @@ simpleLabel = try (do
     text <- quotedLabel
     Control.Monad.guard (not (Data.HashSet.member text reservedIdentifiers))
     return text )
-  where
-    headCharacter c = alpha c || c == '_'
-
-    tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
 
 quotedLabel :: Parser Text
 quotedLabel = try (do
@@ -261,8 +251,8 @@ quotedLabel = try (do
 
     tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
 
-complexLabel :: Parser Text
-complexLabel = do
+backtickLabel :: Parser Text
+backtickLabel = do
     _ <- Text.Parser.Char.char '`'
     t <- quotedLabel
     _ <- Text.Parser.Char.char '`'
@@ -270,7 +260,7 @@ complexLabel = do
 
 label :: Parser Text
 label = (do
-    t <- complexLabel <|> simpleLabel
+    t <- backtickLabel <|> simpleLabel
     whitespace
     return t ) <?> "label"
 
