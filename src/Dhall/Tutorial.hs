@@ -2387,6 +2387,10 @@ import Dhall
 --
 -- There is also a Prelude available at:
 --
+-- <http://prelude.dhall-lang.org>
+--
+-- ... which currenty redirects to:
+--
 -- <https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude>
 --
 -- There is nothing \"official\" or \"standard\" about this Prelude other than
