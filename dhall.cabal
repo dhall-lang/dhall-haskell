@@ -82,6 +82,7 @@ Extra-Source-Files:
     Prelude/Text/concatMapSep
     Prelude/Text/concatSep
     tests/parser/*.dhall
+    tests/regression/*.dhall
 
 Source-Repository head
     Type: git

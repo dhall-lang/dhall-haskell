@@ -14,6 +14,9 @@ import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 import qualified Util
 
+import Dhall.Import (Imported)
+import Dhall.Parser (Src)
+import Dhall.TypeCheck (TypeError)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit ((@?=))
 
@@ -22,6 +25,7 @@ regressionTests =
     Test.Tasty.testGroup "regression tests"
         [ issue96
         , issue126
+        , issue151
         , parsing0
         , typeChecking0
         , typeChecking1
@@ -71,6 +75,37 @@ issue126 = Test.Tasty.HUnit.testCase "Issue #126" (do
         \  bar\n\
         \''"
     Util.normalize' e @?= "\"foo\\nbar\\n\"" )
+
+issue151 :: TestTree
+issue151 = Test.Tasty.HUnit.testCase "Issue #151" (do
+    let shouldNotTypeCheck text = do
+            let handler :: Imported (TypeError Src) -> IO Bool
+                handler _ = return True
+
+            let typeCheck = do
+                    _ <- Util.code text
+                    return False
+            b <- Control.Exception.handle handler typeCheck
+            Test.Tasty.HUnit.assertBool "The expression should not type-check" b
+            
+    -- These two examples contain the following expression that loops infinitely
+    -- if you normalize the expression before type-checking the expression:
+    --
+    --     (λ(x : A) → x x) (λ(x : A) → x x)
+    --
+    -- There was a bug in the Dhall type-checker were expressions were not
+    -- being type-checked before being added to the context (which is a
+    -- violation of the standard type-checking rules for a pure type system).
+    -- The reason this is problematic is that several places in the
+    -- type-checking logic assume that the context is safe to normalize.
+    --
+    -- Both of these examples exercise area of the type-checker logic that
+    -- assume that the context is normalized.  If you fail to type-check terms
+    -- before adding them to the context then this test will "fail" with an
+    -- infinite loop.  This test "succeeds" if the examples terminate
+    -- immediately with a type-checking failure.
+    shouldNotTypeCheck "./tests/regression/issue151a.dhall"
+    shouldNotTypeCheck "./tests/regression/issue151b.dhall" )
 
 parsing0 :: TestTree
 parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (do
