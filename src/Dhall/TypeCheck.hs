@@ -129,6 +129,7 @@ typeWith ctx e@(Var (V x n)     ) = do
         Nothing -> Left (TypeError ctx e (UnboundVariable x))
         Just a  -> return a
 typeWith ctx   (Lam x _A  b     ) = do
+    _ <- typeWith ctx _A
     let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x _A ctx)
     _B <- typeWith ctx' b
     let p = Pi x _A _B
@@ -140,6 +141,7 @@ typeWith ctx e@(Pi  x _A _B     ) = do
         Const k -> return k
         _       -> Left (TypeError ctx e (InvalidInputType _A))
 
+    _ <- typeWith ctx _A
     let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x _A ctx)
     tB <- fmap Dhall.Core.normalize (typeWith ctx' _B)
     kB <- case tB of
@@ -191,6 +193,7 @@ typeWith ctx e@(Let f mt r b ) = do
         Nothing -> do
             return ()
         Just t  -> do
+            _ <- typeWith ctx t
             let nf_t  = Dhall.Core.normalize t
             let nf_tR = Dhall.Core.normalize tR
             if propEqual nf_tR nf_t
