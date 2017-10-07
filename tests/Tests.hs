@@ -2,6 +2,7 @@ module Main where
 
 import Normalization (normalizationTests)
 import Examples (exampleTests)
+import Parser (parserTests)
 import Regression (regressionTests)
 import Tutorial (tutorialTests)
 import Test.Tasty
@@ -11,8 +12,9 @@ allTests =
     testGroup "Dhall Tests"
         [ normalizationTests
         , exampleTests
-        , tutorialTests
+        , parserTests
         , regressionTests
+        , tutorialTests
         ]
 
 main :: IO ()

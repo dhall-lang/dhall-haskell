@@ -81,6 +81,7 @@ Extra-Source-Files:
     Prelude/Text/concatMap
     Prelude/Text/concatMapSep
     Prelude/Text/concatSep
+    tests/parser/*.dhall
 
 Source-Repository head
     Type: git
@@ -156,6 +157,7 @@ Test-Suite test
     Other-Modules:
         Examples
         Normalization
+        Parser
         Regression
         Tutorial
         Util
