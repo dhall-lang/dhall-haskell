@@ -63,6 +63,7 @@ import Numeric.Natural (Natural)
 import Prelude hiding (FilePath, succ)
 
 import qualified Control.Monad
+import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.Map
@@ -568,7 +569,7 @@ prettyDouble :: Double -> Doc ann
 prettyDouble = Pretty.pretty
 
 prettyText :: Builder -> Doc ann
-prettyText a = Pretty.pretty (show a)
+prettyText a = Pretty.pretty (Builder.toLazyText (buildText a))
 
 prettyConst :: Const -> Doc ann
 prettyConst Type = "Type"
@@ -1033,7 +1034,33 @@ buildDouble a = build (show a)
 
 -- | Builder corresponding to the @text@ token in "Dhall.Parser"
 buildText :: Builder -> Builder
-buildText a = build (show a)
+buildText a = "\"" <> Builder.fromLazyText (Text.concatMap adapt text) <> "\""
+  where
+    adapt c
+        | '\x20' <= c && c <= '\x21' = Text.singleton c
+        | '\x23' <= c && c <= '\x5B' = Text.singleton c
+        | '\x5D' <= c && c <= '\x7F' = Text.singleton c
+        | c == '"'                   = "\\\""
+        | c == '$'                   = "\\$"
+        | c == '\\'                  = "\\\\"
+        | c == '\b'                  = "\\b"
+        | c == '\f'                  = "\\f"
+        | c == '\n'                  = "\\n"
+        | c == '\r'                  = "\\r"
+        | c == '\t'                  = "\\t"
+        | otherwise                  = "\\u" <> showDigits (Data.Char.ord c)
+
+    showDigits r0 = Text.pack (map showDigit [q1, q2, q3, r3])
+      where
+        (q1, r1) = r0 `quotRem` 4096
+        (q2, r2) = r1 `quotRem`  256
+        (q3, r3) = r2 `quotRem`   16
+
+    showDigit n
+        | n < 10    = Data.Char.chr (Data.Char.ord '0' + n)
+        | otherwise = Data.Char.chr (Data.Char.ord 'A' + n - 10)
+
+    text = Builder.toLazyText a
 
 -- | Builder corresponding to the @expr@ parser in "Dhall.Parser"
 buildExpr :: Buildable a => Expr s a -> Builder
