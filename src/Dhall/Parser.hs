@@ -277,7 +277,6 @@ doubleQuotedChunk :: Parser a -> Parser (Expr Src a)
 doubleQuotedChunk embedded =
     choice
         [ interpolation
-        , escapeInterpolation
         , unescapedCharacter
         , escapedCharacter
         ]
@@ -287,10 +286,6 @@ doubleQuotedChunk embedded =
         e <- expression embedded
         _ <- Text.Parser.Char.char '}'
         return e
-
-    escapeInterpolation = do
-        _ <- Text.Parser.Char.text "''${"
-        return (TextLit "${")
 
     unescapedCharacter = do
         c <- Text.Parser.Char.satisfy predicate
