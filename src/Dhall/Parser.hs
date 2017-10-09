@@ -224,13 +224,13 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
 
     hexUpper = do
         c <- Text.Parser.Char.satisfy predicate
-        return (Data.Char.ord c - Data.Char.ord 'A')
+        return (10 + Data.Char.ord c - Data.Char.ord 'A')
       where
         predicate c = 'A' <= c && c <= 'F'
 
     hexLower = do
         c <- Text.Parser.Char.satisfy predicate
-        return (Data.Char.ord c - Data.Char.ord 'a')
+        return (10 + Data.Char.ord c - Data.Char.ord 'a')
       where
         predicate c = 'a' <= c && c <= 'f'
 
