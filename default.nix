@@ -6,7 +6,7 @@
 }:
 mkDerivation {
   pname = "dhall";
-  version = "1.6.0";
+  version = "1.7.0";
   src = ./.;
   isLibrary = true;
   isExecutable = true;
@@ -16,7 +16,9 @@ mkDerivation {
     prettyprinter system-fileio system-filepath text text-format
     transformers trifecta unordered-containers vector
   ];
-  executableHaskellDepends = [ base optparse-generic text trifecta ];
+  executableHaskellDepends = [
+    base optparse-generic prettyprinter system-filepath text trifecta
+  ];
   testHaskellDepends = [
     base containers tasty tasty-hunit text vector
   ];
