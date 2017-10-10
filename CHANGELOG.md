@@ -1,3 +1,27 @@
+1.7.0
+
+* BREAKING CHANGE TO LANGUAGE: Update parser to match standardized grammar
+    * Trailing commas and bars no longer supported for union and record literals
+    * Paths no longer permit commas
+    * URL grammar is now RFC-compliant
+    * Environment variables can now be quoted to support full range of
+      POSIX-compliant names
+    * Text literals support full set of JSON escape sequences (such as `\u2192`)
+* BREAKING CHANGE TO LANGUAGE: Single quoted strings strip leading newlines
+* BUG FIX: Fixed type-checking infinite loops due to non-type-checked variables
+  in context
+* BUG FIX: Fixed type-checking bug due to missing context when type-checking
+  certain expressions
+* BUG FIX: Fixed type-checking bug due to off-by-one errors in name shadowing
+  logic
+* New `dhall-format` executable to automatically format code
+* Performance optimizations to `Natural/fold` and `List/fold`
+* Improved parsing performance (over 3x faster)
+* Union literals can now specify the set value anywhere in the literal
+    * i.e. `< A : Integer | B = False | C : Text >`
+* New `Inject` instance for `()`
+* Several tutorial fixes and improvements
+
 1.6.0
 
 * BREAKING CHANGE TO THE API: Drop support for GHC 7.*
