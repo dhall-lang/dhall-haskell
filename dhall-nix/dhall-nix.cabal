@@ -1,5 +1,5 @@
 Name: dhall-nix
-Version: 1.0.7
+Version: 1.0.8
 Cabal-Version: >=1.8.0.2
 Build-Type: Simple
 Tested-With: GHC == 8.0.1
