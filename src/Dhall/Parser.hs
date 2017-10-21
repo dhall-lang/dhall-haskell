@@ -448,9 +448,7 @@ singleQuoteContinue embedded =
             b <- singleQuoteContinue embedded
             return (textAppend a b)
           where
-            predicate c =
-                    ('\x20' <= c && c <= '\x26'    )
-                ||  ('\x28' <= c && c <= '\x10FFFF')
+            predicate c = '\x20' <= c && c <= '\x10FFFF'
 
         endOfLine = do
             a <- fmap TextLit "\n" <|> fmap TextLit "\r\n"
