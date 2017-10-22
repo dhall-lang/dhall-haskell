@@ -1,8 +1,9 @@
-{ mkDerivation, ansi-wl-pprint, base, bytestring, case-insensitive
-, charset, containers, contravariant, exceptions, http-client
-, http-client-tls, lens, optparse-generic, parsers, prettyprinter
-, stdenv, system-fileio, system-filepath, tasty, tasty-hunit, text
-, text-format, transformers, trifecta, unordered-containers, vector
+{ mkDerivation, ansi-wl-pprint, base, base16-bytestring, bytestring
+, case-insensitive, charset, containers, contravariant, cryptohash
+, exceptions, http-client, http-client-tls, lens, optparse-generic
+, parsers, prettyprinter, stdenv, system-fileio, system-filepath
+, tasty, tasty-hunit, text, text-format, transformers, trifecta
+, unordered-containers, vector
 }:
 mkDerivation {
   pname = "dhall";
@@ -11,10 +12,11 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    ansi-wl-pprint base bytestring case-insensitive charset containers
-    contravariant exceptions http-client http-client-tls lens parsers
-    prettyprinter system-fileio system-filepath text text-format
-    transformers trifecta unordered-containers vector
+    ansi-wl-pprint base base16-bytestring bytestring case-insensitive
+    charset containers contravariant cryptohash exceptions http-client
+    http-client-tls lens parsers prettyprinter system-fileio
+    system-filepath text text-format transformers trifecta
+    unordered-containers vector
   ];
   executableHaskellDepends = [
     base optparse-generic prettyprinter system-filepath text trifecta
