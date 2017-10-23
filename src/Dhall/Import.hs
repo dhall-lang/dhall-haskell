@@ -134,7 +134,13 @@ import Data.Traversable (traverse)
 import Data.Typeable (Typeable)
 import Filesystem.Path ((</>), FilePath)
 import Dhall.Core
-    (Expr(..), HasHome(..), PathMode(..), PathType(..), Path(..))
+    ( Expr(..)
+    , HasHome(..)
+    , PathHashed(..)
+    , PathMode(..)
+    , PathType(..)
+    , Path(..)
+    )
 import Dhall.Parser (Parser(..), ParseError(..), Src(..))
 import Dhall.TypeCheck (X(..))
 #if MIN_VERSION_http_client(0,5,0)
@@ -148,7 +154,10 @@ import Text.Trifecta (Result(..))
 import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Crypto.Hash.SHA256
 import qualified Data.ByteString
+import qualified Data.ByteString.Base16
+import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.List                        as List
@@ -157,6 +166,7 @@ import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
+import qualified Data.Text.Lazy.IO
 import qualified Data.Vector
 import qualified Dhall.Core
 import qualified Dhall.Parser
@@ -376,7 +386,7 @@ canonicalize (File hasHome0 file0:paths0) =
     go currPath (Env  _           :_    ) = File Homeless (clean currPath)
     go currPath (URL  url0 headers:rest ) = combine prefix suffix
       where
-        headers' = fmap (\h -> canonicalize (h:rest)) headers
+        headers' = fmap (onPathType (\h -> canonicalize (h:rest))) headers
 
         prefix = parentURL (removeAtFromURL url0)
 
@@ -409,19 +419,29 @@ canonicalize (File hasHome0 file0:paths0) =
         file' = Filesystem.parent (removeAtFromFile file) </> currPath
 canonicalize (URL path headers:rest) = URL path headers'
   where
-    headers' = fmap (\h -> canonicalize (h:rest)) headers
+    headers' = fmap (onPathType (\h -> canonicalize (h:rest))) headers
 canonicalize (Env env         :_   ) = Env env
+
+onPathType :: (PathType -> PathType) -> PathHashed -> PathHashed
+onPathType f (PathHashed a b) = PathHashed a (f b)
 
 canonicalizePath :: [Path] -> Path
 canonicalizePath [] =
     Path
-        { pathMode = Code
-        , pathType = canonicalize []
+        { pathMode   = Code
+        , pathHashed = PathHashed
+            { hash = Nothing
+            , pathType = canonicalize []
+            }
         }
 canonicalizePath (path:paths) =
     Path
-        { pathMode = pathMode path
-        , pathType = canonicalize (map pathType (path:paths))
+        { pathMode   = pathMode path
+        , pathHashed = (pathHashed path)
+             { hash     = hash (pathHashed path)
+             , pathType =
+                 canonicalize (map (pathType . pathHashed) (path:paths))
+             }
         }
 
 parentURL :: Text -> Text
@@ -503,6 +523,67 @@ instance Show InternalError where
 
 instance Exception InternalError
 
+-- | Exception thrown when an integrity check fails
+data HashMismatch = HashMismatch
+    { expectedHash :: Data.ByteString.ByteString
+    , actualHash   :: Data.ByteString.ByteString
+    } deriving (Typeable)
+
+instance Exception HashMismatch
+
+instance Show HashMismatch where
+    show (HashMismatch {..}) =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Import integrity check failed\n"
+        <>  "\n"
+        <>  "Expected hash:\n"
+        <>  "\n"
+        <>  "↳ " <> toString expectedHash <> "\n"
+        <>  "\n"
+        <>  "Actual hash:\n"
+        <>  "\n"
+        <>  "↳ " <> toString actualHash <> "\n"
+      where
+        toString =
+            Data.ByteString.Char8.unpack . Data.ByteString.Base16.encode
+
+assertHash :: Maybe Data.ByteString.ByteString -> Text -> IO ()
+assertHash  Nothing _ =
+    return ()
+assertHash (Just expectedHash) text =
+    if expectedHash == actualHash
+    then return ()
+    else Control.Exception.throwIO (HashMismatch {..})
+  where
+    actualBytes = Data.Text.Lazy.Encoding.encodeUtf8 text
+
+    actualHash = Crypto.Hash.SHA256.hashlazy actualBytes
+
+parseFromFileEx
+    :: Maybe Data.ByteString.ByteString
+    -> Text.Trifecta.Parser a
+    -> FilePath
+    -> IO (Text.Trifecta.Result a)
+parseFromFileEx hash parser path = do
+    text <- Data.Text.Lazy.IO.readFile stringPath
+    assertHash hash text
+
+    let lazyBytes = Data.Text.Lazy.Encoding.encodeUtf8 text
+
+    let strictBytes = Data.ByteString.Lazy.toStrict lazyBytes
+
+    let delta = Directed bytesPath 0 0 0 0
+
+    return (Text.Trifecta.parseByteString parser delta strictBytes)
+  where
+    stringPath = Filesystem.Path.CurrentOS.encodeString path
+
+    textPath = case Filesystem.Path.CurrentOS.toText path of
+       Left  text -> text
+       Right text -> text
+
+    bytesPath = Data.Text.Encoding.encodeUtf8 textPath
+
 -- | Parse an expression from a `Path` containing a Dhall program
 exprFromPath :: Manager -> Path -> IO (Expr Src Path)
 exprFromPath m (Path {..}) = case pathType of
@@ -521,23 +602,17 @@ exprFromPath m (Path {..}) = case pathType of
                     then return ()
                     else Control.Exception.throwIO MissingFile
 
-                let string = Filesystem.Path.CurrentOS.encodeString path
-
                 -- Unfortunately, GHC throws an `InappropriateType` exception
                 -- when trying to read a directory, but does not export the
                 -- exception, so I must resort to a more heavy-handed `catch`
                 let handler :: IOException -> IO (Result (Expr Src Path))
                     handler e = do
-                        let string' =
-                                Filesystem.Path.CurrentOS.encodeString
-                                    (path </> "@")
-
                         -- If the fallback fails, reuse the original exception
                         -- to avoid user confusion
-                        Text.Trifecta.parseFromFileEx parser string'
+                        parseFromFileEx hash parser (path </> "@")
                             `onException` throwIO e
 
-                x <- Text.Trifecta.parseFromFileEx parser string `catch` handler
+                x <- parseFromFileEx hash parser path `catch` handler
                 case x of
                     Failure errInfo -> do
                         throwIO (ParseError (Text.Trifecta._errDoc errInfo))
@@ -545,6 +620,7 @@ exprFromPath m (Path {..}) = case pathType of
                         return expr
             RawText -> do
                 text <- Filesystem.readTextFile path
+                assertHash hash (Text.fromStrict text)
                 return (TextLit (build text))
     URL url headerPath -> do
         request <- HTTP.parseUrlThrow (Text.unpack url)
@@ -605,6 +681,8 @@ exprFromPath m (Path {..}) = case pathType of
             Left  err  -> throwIO err
             Right text -> return text
 
+        assertHash hash text
+
         case pathMode of
             Code -> do
                 let urlBytes = Data.Text.Lazy.Encoding.encodeUtf8 url
@@ -641,6 +719,8 @@ exprFromPath m (Path {..}) = case pathType of
         x <- System.Environment.lookupEnv (Text.unpack env)
         case x of
             Just str -> do
+                assertHash hash (Text.pack str)
+
                 case pathMode of
                     Code -> do
                         let envBytes = Data.Text.Lazy.Encoding.encodeUtf8 env
@@ -654,6 +734,8 @@ exprFromPath m (Path {..}) = case pathType of
                     RawText -> return (TextLit (build str))
             Nothing  -> throwIO (MissingEnvironmentVariable env)
   where
+    PathHashed {..} = pathHashed
+
     parser = unParser (do
         Text.Parser.Token.whiteSpace
         r <- Dhall.Parser.expr
@@ -691,15 +773,15 @@ loadStaticWith :: MonadCatch m => (Path -> m (Expr Src Path))
 loadStaticWith from_path ctx path = do
     paths <- zoom stack State.get
 
-    let local (Path (URL url _) _) =
+    let local (Path (PathHashed _ (URL url _)) _) =
             case HTTP.parseUrlThrow (Text.unpack url) of
                 Nothing      -> False
                 Just request -> case HTTP.host request of
                     "127.0.0.1" -> True
                     "localhost" -> True
                     _           -> False
-        local (Path (File _ _ ) _) = True
-        local (Path (Env  _   ) _) = True
+        local (Path (PathHashed _ (File _ _ )) _) = True
+        local (Path (PathHashed _ (Env  _   )) _) = True
 
     let parent = canonicalizePath paths
     let here   = canonicalizePath (path:paths)

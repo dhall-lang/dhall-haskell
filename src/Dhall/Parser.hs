@@ -43,6 +43,7 @@ import Text.Trifecta
 import Text.Trifecta.Delta (Delta)
 
 import qualified Control.Monad
+import qualified Data.ByteString.Base16.Lazy
 import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.Map
@@ -931,7 +932,7 @@ http = do
     whitespace
     b <- optional (do
         _using
-        pathType_ )
+        pathHashed_ )
     return (URL (Data.Text.Lazy.Builder.toLazyText a) b)
 
 env :: Parser PathType
@@ -1493,10 +1494,27 @@ exprA = completeExpression
 pathType_ :: Parser PathType
 pathType_ = choice [ file, http, env ]
 
+pathHashed_ :: Parser PathHashed
+pathHashed_ = do
+    pathType <- pathType_
+    hash     <- optional pathHash_
+    return (PathHashed {..})
+  where
+    pathHash_ = do
+        _ <- Text.Parser.Char.text "sha256:"
+        builder <- count 64 (satisfy hexdig <?> "hex digit")
+        whitespace
+        let lazyText = Data.Text.Lazy.Builder.toLazyText builder
+        let lazyBytes = Data.Text.Lazy.Encoding.encodeUtf8 lazyText
+        let (hash, suffix) = Data.ByteString.Base16.Lazy.decode lazyBytes
+        if Data.ByteString.Lazy.null suffix
+            then return (Data.ByteString.Lazy.toStrict hash)
+            else fail "Invalid sha256 hash"
+
 import_ :: Parser Path
 import_ = (do
-    pathType <- pathType_
-    pathMode <- alternative <|> pure Code
+    pathHashed <- pathHashed_
+    pathMode   <- alternative <|> pure Code
     return (Path {..}) ) <?> "import"
   where
     alternative = do

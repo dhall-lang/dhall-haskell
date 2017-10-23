@@ -19,6 +19,7 @@ module Dhall.Core (
       Const(..)
     , HasHome(..)
     , PathType(..)
+    , PathHashed(..)
     , PathMode(..)
     , Path(..)
     , Var(..)
@@ -63,6 +64,9 @@ import Numeric.Natural (Natural)
 import Prelude hiding (FilePath, succ)
 
 import qualified Control.Monad
+import qualified Data.ByteString
+import qualified Data.ByteString.Char8
+import qualified Data.ByteString.Base16
 import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List
@@ -105,7 +109,7 @@ data HasHome = Home | Homeless deriving (Eq, Ord, Show)
 data PathType
     = File HasHome FilePath
     -- ^ Local path
-    | URL  Text (Maybe PathType)
+    | URL  Text (Maybe PathHashed)
     -- ^ URL of emote resource and optional headers stored in a path
     | Env  Text
     -- ^ Environment variable
@@ -132,14 +136,27 @@ instance Buildable PathType where
 -- | How to interpret the path's contents (i.e. as Dhall code or raw text)
 data PathMode = Code | RawText deriving (Eq, Ord, Show)
 
+data PathHashed = PathHashed
+    { hash     :: Maybe Data.ByteString.ByteString
+    , pathType :: PathType
+    } deriving (Eq, Ord, Show)
+
+instance Buildable PathHashed where
+    build (PathHashed  Nothing p) = build p
+    build (PathHashed (Just h) p) = build p <> "sha256:" <> build string <> " "
+      where
+        bytes = Data.ByteString.Base16.encode h
+
+        string = Data.ByteString.Char8.unpack bytes
+
 -- | Path to an external resource
 data Path = Path
-    { pathType :: PathType
-    , pathMode :: PathMode
+    { pathHashed :: PathHashed
+    , pathMode   :: PathMode
     } deriving (Eq, Ord, Show)
 
 instance Buildable Path where
-    build (Path {..}) = build pathType <> suffix
+    build (Path {..}) = build pathHashed <> suffix
       where
         suffix = case pathMode of
             RawText -> "as Text"
