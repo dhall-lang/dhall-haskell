@@ -75,7 +75,8 @@ import qualified Data.Maybe
 import qualified Data.Text
 import qualified Data.Text.Lazy            as Text
 import qualified Data.Text.Lazy.Builder    as Builder
-import qualified Data.Text.Prettyprint.Doc as Pretty
+import qualified Data.Text.Prettyprint.Doc             as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Data.Vector
 import qualified Data.Vector.Mutable
 import qualified Filesystem.Path.CurrentOS as Filesystem
@@ -1027,8 +1028,10 @@ prettyUnionLit a b c = angles (front : map adapt (Data.Map.toList c))
     adapt = prettyKeyValue ":" keyLength
 
 -- | Pretty-print a value
-pretty :: Buildable a => a -> Text
-pretty = Builder.toLazyText . build
+pretty :: Pretty a => a -> Text
+pretty = Pretty.renderLazy . Pretty.layoutPretty options . Pretty.pretty
+  where
+   options = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
 
 -- | Builder corresponding to the @label@ token in "Dhall.Parser"
 buildLabel :: Text -> Builder

@@ -3152,7 +3152,7 @@ data TypeError s = TypeError
     } deriving (Typeable)
 
 instance Buildable s => Show (TypeError s) where
-    show = Text.unpack . Dhall.Core.pretty
+    show = Text.unpack . Builder.toLazyText . build
 
 instance (Buildable s, Typeable s) => Exception (TypeError s)
 
@@ -3186,7 +3186,7 @@ newtype DetailedTypeError s = DetailedTypeError (TypeError s)
     deriving (Typeable)
 
 instance Buildable s => Show (DetailedTypeError s) where
-    show = Text.unpack . Dhall.Core.pretty
+    show = Text.unpack . Builder.toLazyText . build
 
 instance (Buildable s, Typeable s) => Exception (DetailedTypeError s)
 
