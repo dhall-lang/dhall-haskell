@@ -2676,3 +2676,14 @@ import Dhall
 -- the above polymorphic function then you'd get the unexpected behavior where
 -- a list literal is a function if the list has 0 elements but not a function
 -- otherwise.
+--
+-- * Does Dhall support type synonyms like Haskell?
+--
+-- No.  For example, the following expression will not type-check:
+--
+-- > let MyType = Integer in 1 : MyType
+--
+-- Haskell can support type synonyms because Haskell does not allow type-level
+-- functions like Dhall does.  Dhall's support for type-level computation means
+-- that type synonyms cannot be safely substituted until after the type-checking
+-- phase, otherwise type-checking might infinitely loop
