@@ -5,7 +5,7 @@ Returns `True` if the supplied function returns `True` for all elements in the
 Examples:
 
 ```
-./all Natural Natural/even ([+2, +3, +5] : List Natural) = False
+./all Natural Natural/even ([ +2, +3, +5 ] : List Natural) = False
 
 ./all Natural Natural/even ([] : List Natural) = True
 ```

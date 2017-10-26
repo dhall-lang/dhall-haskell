@@ -4,7 +4,7 @@ Retrieve the last element of the list
 Examples:
 
 ```
-./last Integer ([0, 1, 2] : List Integer) = [2] : Optional Integer
+./last Integer ([ 0, 1, 2 ] : List Integer) = [ 2 ] : Optional Integer
 
 ./last Integer ([] : List Integer) = [] : Optional Integer
 ```

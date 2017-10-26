@@ -5,10 +5,10 @@ Examples:
 
 ```
 ./filter Natural Natural/even ([+2, +3, +5] : List Natural)
-= [+2] : List Natural
+= [ +2 ] : List Natural
 
 ./filter Natural Natural/odd ([+2, +3, +5] : List Natural)
-= [+3, +5] : List Natural
+= [ +3, +5 ] : List Natural
 ```
 -}
     let filter

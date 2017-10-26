@@ -4,8 +4,8 @@ Tranform a list by applying a function to each element
 Examples:
 
 ```
-./map Natural Bool Natural/even ([+2, +3, +5] : List Natural)
-= [True, False, False] : List Bool
+./map Natural Bool Natural/even ([ +2, +3, +5 ] : List Natural)
+= [ True, False, False ] : List Bool
 
 ./map Natural Bool Natural/even ([] : List Natural)
 = [] : List Bool

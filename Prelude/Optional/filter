@@ -4,10 +4,10 @@ Only keep an `Optional` element if the supplied function returns `True`
 Examples:
 
 ```
-./filter Natural Natural/even ([+2] : Optional Natural)
-= [+2] : Optional Natural
+./filter Natural Natural/even ([ +2 ] : Optional Natural)
+= [ +2 ] : Optional Natural
 
-./filter Natural Natural/odd ([+2] : Optional Natural)
+./filter Natural Natural/odd ([ +2 ] : Optional Natural)
 = [] : Optional Natural
 ```
 -}

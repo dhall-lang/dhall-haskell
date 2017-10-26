@@ -6,14 +6,16 @@ Examples:
 ```
 ./last
 Integer
-(   [[] : Optional Integer, [1] : Optional Integer, [2] : Optional Integer]
-    : List (Optional Integer)
+(   [ [   ] : Optional Integer
+    , [ 1 ] : Optional Integer
+    , [ 2 ] : Optional Integer
+    ] : List (Optional Integer)
 )
-= [2] : Optional Integer
+= [ 2 ] : Optional Integer
 
 ./last
 Integer
-([[] : Optional Integer, [] : Optional Integer] : List (Optional Integer))
+([ [] : Optional Integer, [] : Optional Integer ] : List (Optional Integer))
 = [] : Optional Integer
 
 ./last Integer ([] : List (Optional Integer))

@@ -5,7 +5,7 @@ separator in between each value
 Examples:
 
 ```
-./concatMapSep ", " Integer Integer/show [0, 1, 2] = "0, 1, 2"
+./concatMapSep ", " Integer Integer/show [ 0, 1, 2 ] = "0, 1, 2"
 
 ./concatMapSep ", " Integer Integer/show ([] : List Integer) = ""
 ```

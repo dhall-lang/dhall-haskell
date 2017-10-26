@@ -50,6 +50,9 @@ module Dhall.Tutorial (
     -- * Headers
     -- $headers
 
+    -- * Import integrity
+    -- $integrity
+
     -- * Raw text
     -- $rawText
 
@@ -1386,6 +1389,96 @@ import Dhall
 -- 
 -- ... and @http:\/\/example.com@ contains a relative import of @./foo@ then
 -- Dhall will import @http:\/\/example.com/foo@ using the same @./headers@ file.
+
+-- $integrity
+--
+-- Sometimes you want to use share code while still ensuring that the imported
+-- value never changes and can't be corrupted by a malicious attacker.  Dhall
+-- provides built-in support for hashing imported values to verify that their
+-- value never changes
+--
+-- For example, suppose you save the following two files:
+--
+-- > $ cat ./foo
+-- > ./bar sha256:6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b
+--
+-- > $ cat ./bar
+-- > ./baz
+--
+-- > $ cat ./baz
+-- > 1
+--
+-- The first file named @./foo@ contains an example of an integrity check.  You
+-- can add @sha256:XXX@ after any import (such as after @./bar@), where @XXX@ is
+-- an expected 64-character @sha256@ hash of the Dhall value.  To be precise,
+-- the hash represents a @sha256@ hash of the UTF-8 encoding of a canonical text
+-- representation of the fully resolved and normalized abstract syntax tree of
+-- the imported expression.
+--
+-- Dhall will verify that the expected hash matches the actual hash of the
+-- imported Dhall value and reject the import if there is a hash mismatch:
+--
+-- > $ dhall <<< './foo'
+-- > Integer
+-- > 
+-- > 1
+--
+-- This implies that the hash only changes if the Dhall value changes.  For
+-- example, if you add a comment to the @./bar@ file:
+--
+-- > $ cat ./bar
+-- > -- This comment does not change the hash
+-- > ./baz
+--
+-- ... then @./foo@ will still successfully import @./bar@ because the hash
+-- only depends on the normalized value and does not depend on meaningless
+-- changes to whitespace or comments:
+--
+-- > $ dhall <<< './foo'  # This still succeeds
+-- > Integer
+-- > 
+-- > 1
+--
+-- On the other hand, if you change the value of the @./baz@ file:
+--
+-- > $ cat ./baz
+-- > 2
+--
+-- ... then the @./foo@ file will fail to import @./bar@, even though the
+-- text of the @./bar@ file technically never changed:
+--
+-- > dhall <<< './foo'
+-- > 
+-- > Error: Import integrity check failed
+-- > 
+-- > Expected hash:
+-- > 
+-- > ↳ 6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b
+-- > 
+-- > Actual hash:
+-- > 
+-- > ↳ d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35
+--
+-- This is because the @./bar@ file now represents a new value (@2@ instead of
+-- @1@), even though the text of the @./bar@ is still the same.  Since the value
+-- changed the hash must change as well.  However, we could change @./baz@ to:
+--
+-- > $ cat baz
+-- > if True then 1 else 2
+--
+-- ... and the import would succeed again because the final result is still @1@.
+--
+-- The integrity hash ensures that your import's final meaning can never change,
+-- so an attacker can never compromise an imported value protected by a hash
+-- unless they can break SHA-256 encryption.  The hash not only protects the
+-- file that you immediately import, but also protects every transitive import
+-- as well.
+--
+-- You can also safely refactor your imported dependencies knowing that the
+-- refactor will not change your hash so long as your refactor is
+-- behavior-preserving.  This provides an easy way to detect refactoring errors
+-- that you might accidentally introduce.  The hash not only protects you
+-- from attackers, but also protects against human error, too!
 
 -- $rawText
 --

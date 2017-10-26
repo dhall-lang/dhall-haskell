@@ -547,26 +547,12 @@ instance Show HashMismatch where
         toString =
             Data.ByteString.Char8.unpack . Data.ByteString.Base16.encode
 
-assertHash :: Maybe Data.ByteString.ByteString -> Text -> IO ()
-assertHash  Nothing _ =
-    return ()
-assertHash (Just expectedHash) text =
-    if expectedHash == actualHash
-    then return ()
-    else Control.Exception.throwIO (HashMismatch {..})
-  where
-    actualBytes = Data.Text.Lazy.Encoding.encodeUtf8 text
-
-    actualHash = Crypto.Hash.SHA256.hashlazy actualBytes
-
 parseFromFileEx
-    :: Maybe Data.ByteString.ByteString
-    -> Text.Trifecta.Parser a
+    :: Text.Trifecta.Parser a
     -> FilePath
     -> IO (Text.Trifecta.Result a)
-parseFromFileEx hash parser path = do
+parseFromFileEx parser path = do
     text <- Data.Text.Lazy.IO.readFile stringPath
-    assertHash hash text
 
     let lazyBytes = Data.Text.Lazy.Encoding.encodeUtf8 text
 
@@ -609,10 +595,10 @@ exprFromPath m (Path {..}) = case pathType of
                     handler e = do
                         -- If the fallback fails, reuse the original exception
                         -- to avoid user confusion
-                        parseFromFileEx hash parser (path </> "@")
+                        parseFromFileEx parser (path </> "@")
                             `onException` throwIO e
 
-                x <- parseFromFileEx hash parser path `catch` handler
+                x <- parseFromFileEx parser path `catch` handler
                 case x of
                     Failure errInfo -> do
                         throwIO (ParseError (Text.Trifecta._errDoc errInfo))
@@ -620,7 +606,6 @@ exprFromPath m (Path {..}) = case pathType of
                         return expr
             RawText -> do
                 text <- Filesystem.readTextFile path
-                assertHash hash (Text.fromStrict text)
                 return (TextLit (build text))
     URL url headerPath -> do
         request <- HTTP.parseUrlThrow (Text.unpack url)
@@ -681,8 +666,6 @@ exprFromPath m (Path {..}) = case pathType of
             Left  err  -> throwIO err
             Right text -> return text
 
-        assertHash hash text
-
         case pathMode of
             Code -> do
                 let urlBytes = Data.Text.Lazy.Encoding.encodeUtf8 url
@@ -719,8 +702,6 @@ exprFromPath m (Path {..}) = case pathType of
         x <- System.Environment.lookupEnv (Text.unpack env)
         case x of
             Just str -> do
-                assertHash hash (Text.pack str)
-
                 case pathMode of
                     Code -> do
                         let envBytes = Data.Text.Lazy.Encoding.encodeUtf8 env
@@ -813,10 +794,11 @@ loadStaticWith from_path ctx path = do
                             return expr''
                     return (expr'', False)
 
-    -- Type-check expressions here for two separate reasons:
+    -- Type-check expressions here for three separate reasons:
     --
     --  * to verify that they are closed
     --  * to catch type errors as early in the import process as possible
+    --  * to avoid normalizing ill-typed expressions that need to be hashed
     --
     -- There is no need to check expressions that have been cached, since they
     -- have already been checked
@@ -825,6 +807,17 @@ loadStaticWith from_path ctx path = do
         else case Dhall.TypeCheck.typeWith ctx expr of
             Left  err -> throwM (Imported (path:paths) err)
             Right _   -> return ()
+
+    case hash (pathHashed path) of
+        Nothing -> do
+            return ()
+        Just expectedHash -> do
+            let text = Dhall.Core.pretty (Dhall.Core.normalize expr)
+            let actualBytes = Data.Text.Lazy.Encoding.encodeUtf8 text
+            let actualHash = Crypto.Hash.SHA256.hashlazy actualBytes
+            if expectedHash == actualHash
+                then return ()
+                else throwM (HashMismatch {..})
 
     return expr
 

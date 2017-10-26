@@ -4,7 +4,7 @@ Add all the numbers in a `List`
 Examples:
 
 ```
-./sum ([+2, +3, +5] : List Natural) = +10
+./sum ([ +2, +3, +5 ] : List Natural) = +10
 
 ./sum ([] : List Natural) = +0
 ```
