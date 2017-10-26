@@ -2687,3 +2687,14 @@ import Dhall
 -- functions like Dhall does.  Dhall's support for type-level computation means
 -- that type synonyms cannot be safely substituted until after the type-checking
 -- phase, otherwise type-checking might infinitely loop
+--
+-- You can work around this limitation using Dhall's import system by saving the
+-- type synonym to a path and importing that path, like this:
+--
+-- > cat ./MyType
+-- > Integer
+--
+-- > 1 : ./MyType  -- This will type-check
+--
+-- This is because import resolution precedes type-checking and does not run the
+-- risk of causing the type-checker to diverge
