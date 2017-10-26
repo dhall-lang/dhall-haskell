@@ -79,12 +79,12 @@ naturalShow = testCase "Natural/show" $ do
 integerShow :: TestTree
 integerShow = testCase "Integer/show" $ do
   e <- code "[Integer/show 1337, Integer/show -42, Integer/show 0]"
-  e `assertNormalizesTo` "[\"1337\", \"-42\", \"0\"]"
+  e `assertNormalizesTo` "[ \"1337\", \"-42\", \"0\" ]"
 
 doubleShow :: TestTree
 doubleShow = testCase "Double/show" $ do
   e <- code "[Double/show -0.42, Double/show 13.37]"
-  e `assertNormalizesTo` "[\"-0.42\", \"13.37\"]"
+  e `assertNormalizesTo` "[ \"-0.42\", \"13.37\" ]"
 
 optionalFold :: TestTree
 optionalFold = testGroup "Optional/fold" [ just, nothing ]
@@ -110,7 +110,7 @@ optionalBuild1 = testCase "reducible" $ do
     \→   λ(nothing : optional)       \n\
     \→   just +1                     \n\
     \)                               \n"
-  e `assertNormalizesTo` "[+1] : Optional Natural"
+  e `assertNormalizesTo` "[ +1 ] : Optional Natural"
 
 optionalBuildShadowing :: TestTree
 optionalBuildShadowing = testCase "handles shadowing" $ do
@@ -122,7 +122,7 @@ optionalBuildShadowing = testCase "handles shadowing" $ do
     \→   λ(x : optional)          \n\
     \→   x@1 1                    \n\
     \)                            \n"
-  e `assertNormalizesTo` "[1] : Optional Integer"
+  e `assertNormalizesTo` "[ 1 ] : Optional Integer"
 
 optionalBuildIrreducible :: TestTree
 optionalBuildIrreducible = testCase "irreducible" $ do
@@ -176,4 +176,4 @@ fuseOptionalFB = testCase "build . fold" $ do
     \    Text                       \n\
     \    ([\"foo\"] : Optional Text)\n\
     \)                              \n"
-  test `assertNormalizesTo` "[\"foo\"] : Optional Text"
+  test `assertNormalizesTo` "[ \"foo\" ] : Optional Text"

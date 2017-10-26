@@ -4,7 +4,7 @@ Returns `True` if the `List` is empty and `False` otherwise
 Examples:
 
 ```
-./null Integer ([0, 1, 2] : List Integer) = False
+./null Integer ([ 0, 1, 2 ] : List Integer) = False
 
 ./null Integer ([] : List Integer) = True
 ```

@@ -4,9 +4,9 @@
 Examples:
 
 ```
-./fold Integer ([2] : Optional Integer) Integer (λ(x : Integer) → x) 0 = 2
+./fold Integer ([ 2 ] : Optional Integer) Integer (λ(x : Integer) → x) 0 = 2
 
-./fold Integer ([]  : Optional Integer) Integer (λ(x : Integer) → x) 0 = 0
+./fold Integer ([] : Optional Integer) Integer (λ(x : Integer) → x) 0 = 0
 ```
 -}
     let fold

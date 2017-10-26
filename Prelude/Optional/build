@@ -11,7 +11,7 @@ Integer
 →   λ(nothing : optional)
 →   just 1
 )
-= [1] : Optional Integer
+= [ 1 ] : Optional Integer
 
 ./build
 Integer

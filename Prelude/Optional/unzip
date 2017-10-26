@@ -7,8 +7,8 @@ Examples:
 ./unzip
 Text
 Bool
-([{ _1 = "ABC", _2 = True  }] : Optional { _1 : Text, _2 : Bool })
-= { _1 = ["ABC"] : Optional Text, _2 = [True] : Optional Bool }
+([ { _1 = "ABC", _2 = True  } ] : Optional { _1 : Text, _2 : Bool })
+= { _1 = [ "ABC" ] : Optional Text, _2 = [ True ] : Optional Bool }
 
 ./unzip Text Bool ([] : Optional { _1 : Text, _2 : Bool })
 = { _1 = [] : Optional Text, _2 = [] : Optional Bool }

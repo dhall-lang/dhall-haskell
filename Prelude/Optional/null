@@ -4,7 +4,7 @@ Returns `True` if the `Optional` value is absent and `False` if present
 Examples:
 
 ```
-./null Integer ([2] : Optional Integer) = False
+./null Integer ([ 2 ] : Optional Integer) = False
 
 ./null Integer ([] : Optional Integer) = True
 ```

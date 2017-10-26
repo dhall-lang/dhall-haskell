@@ -5,7 +5,7 @@ Returns `True` if the supplied function returns `True` for a present element and
 Examples:
 
 ```
-./any Natural Natural/even ([+2] : Optional Natural) = True
+./any Natural Natural/even ([ +2 ] : Optional Natural) = True
 
 ./any Natural Natural/even ([] : Optional Natural) = False
 ```

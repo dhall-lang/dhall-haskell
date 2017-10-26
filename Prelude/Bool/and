@@ -5,7 +5,7 @@ The `and` function returns `False` if there are any `False` elements in the
 Examples:
 
 ```
-./and ([True, False, True] : List Bool) = False
+./and ([ True, False, True ] : List Bool) = False
 
 ./and ([] : List Bool) = True
 ```

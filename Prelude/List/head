@@ -4,7 +4,7 @@ Retrieve the first element of the list
 Examples:
 
 ```
-./head Integer ([0, 1, 2] : List Integer) = [0] : Optional Integer
+./head Integer ([ 0, 1, 2 ] : List Integer) = [ 0 ] : Optional Integer
 
 ./head Integer ([] : List Integer) = [] : Optional Integer
 ```
