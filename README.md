@@ -173,7 +173,7 @@ as time permits.
 
 ## Development status
 
-[![Build Status](https://travis-ci.org/Gabriel439/Haskell-Dhall-Library.png)](https://travis-ci.org/Gabriel439/Haskell-Dhall-Library)
+[![Build Status](https://travis-ci.org/dhall-lang/dhall-haskell.png)](https://travis-ci.org/dhall-lang/dhall-haskell)
 
 The compiler is built upon a theoretically sound foundation, meaning that if
 there are no bugs then the language will never crash and will always halt.
