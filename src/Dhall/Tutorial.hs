@@ -1439,7 +1439,15 @@ import Dhall
 -- > 
 -- > 1
 --
--- On the other hand, if you change the value of the @./baz@ file:
+-- You can compute the Hash for any import by using the @dhall-hash@ utility
+-- installed by this package.  For example:
+--
+-- > dhall-hash <<< './bar'
+-- > sha256:6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b
+--
+-- Then you can paste that output into your code after the import
+--
+-- Now suppose that you you change the value of the @./baz@ file:
 --
 -- > $ cat ./baz
 -- > 2

@@ -104,6 +104,8 @@ module Dhall.Import (
       exprFromPath
     , load
     , loadWith
+    , hashExpression
+    , hashExpressionToCode
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -812,9 +814,7 @@ loadStaticWith from_path ctx path = do
         Nothing -> do
             return ()
         Just expectedHash -> do
-            let text = Dhall.Core.pretty (Dhall.Core.normalize expr)
-            let actualBytes = Data.Text.Lazy.Encoding.encodeUtf8 text
-            let actualHash = Crypto.Hash.SHA256.hashlazy actualBytes
+            let actualHash = hashExpression expr
             if expectedHash == actualHash
                 then return ()
                 else throwM (HashMismatch {..})
@@ -830,3 +830,29 @@ evalStatus cb expr = State.evalStateT (fmap join (traverse cb expr)) status
 -- | Resolve all imports within an expression
 load :: Expr Src Path -> IO (Expr Src X)
 load = evalStatus (loadStaticIO Dhall.Context.empty)
+
+-- | Hash a fully resolved expression
+hashExpression :: Expr s X -> Data.ByteString.ByteString
+hashExpression expr = Crypto.Hash.SHA256.hashlazy actualBytes
+  where
+    text = Dhall.Core.pretty (Dhall.Core.normalize expr)
+    actualBytes = Data.Text.Lazy.Encoding.encodeUtf8 text
+
+{-| Convenience utility to hash a fully resolved expression and return the
+    base-16 encoded hash with the @sha256:@ prefix
+
+    In other words, the output of this function can be pasted into Dhall
+    source code to add an integrity check to an import
+-}
+hashExpressionToCode :: Expr s X -> Text
+hashExpressionToCode expr = "sha256:" <> lazyText
+  where
+    bytes = hashExpression expr
+
+    bytes16 = Data.ByteString.Base16.encode bytes
+
+    -- Notes that `decodeUtf8` is partial, but the base16-encoded bytestring
+    -- should always successfully decode
+    text = Data.Text.Encoding.decodeUtf8 bytes16
+
+    lazyText = Text.fromStrict text
