@@ -604,7 +604,10 @@ prettyExprA a0@(Annot _ _) =
     docs (Annot a b) = prettyExprB a : docs b
     docs (Note  _ b) = docs b
     docs          b  = [ prettyExprB b ]
-prettyExprA a0 = prettyExprB a0
+prettyExprA (Note _ a) =
+    prettyExprA a
+prettyExprA a0 =
+    prettyExprB a0
 
 prettyExprB :: Pretty a => Expr s a -> Doc ann
 prettyExprB a0@(Lam _ _ _) = arrows (fmap duplicate (docs a0))
@@ -780,6 +783,8 @@ prettyExprC0 a0@(BoolOr _ _) =
     docs (BoolOr a b) = prettyExprC1 a : docs b
     docs (Note   _ b) = docs b
     docs           b  = [ prettyExprC1 b ]
+prettyExprC0 (Note _ a) =
+    prettyExprC0 a
 prettyExprC0 a0 =
     prettyExprC1 a0
 
@@ -790,6 +795,8 @@ prettyExprC1 a0@(TextAppend _ _) =
     docs (TextAppend a b) = prettyExprC2 a : docs b
     docs (Note       _ b) = docs b
     docs               b  = [ prettyExprC2 b ]
+prettyExprC1 (Note _ a) =
+    prettyExprC1 a
 prettyExprC1 a0 =
     prettyExprC2 a0
 
@@ -800,6 +807,8 @@ prettyExprC2 a0@(NaturalPlus _ _) =
     docs (NaturalPlus a b) = prettyExprC3 a : docs b
     docs (Note        _ b) = docs b
     docs                b  = [ prettyExprC3 b ]
+prettyExprC2 (Note _ a) =
+    prettyExprC2 a
 prettyExprC2 a0 =
     prettyExprC3 a0
 
@@ -810,6 +819,8 @@ prettyExprC3 a0@(ListAppend _ _) =
     docs (ListAppend a b) = prettyExprC4 a : docs b
     docs (Note       _ b) = docs b
     docs               b  = [ prettyExprC4 b ]
+prettyExprC3 (Note _ a) =
+    prettyExprC3 a
 prettyExprC3 a0 =
     prettyExprC4 a0
 
@@ -820,6 +831,8 @@ prettyExprC4 a0@(BoolAnd _ _) =
     docs (BoolAnd a b) = prettyExprC5 a : docs b
     docs (Note    _ b) = docs b
     docs            b  = [ prettyExprC5 b ]
+prettyExprC4 (Note _ a) =
+    prettyExprC4 a
 prettyExprC4 a0 =
    prettyExprC5 a0
 
@@ -830,6 +843,8 @@ prettyExprC5 a0@(Combine _ _) =
     docs (Combine a b) = prettyExprC6 a : docs b
     docs (Note    _ b) = docs b
     docs            b  = [ prettyExprC6 b ]
+prettyExprC5 (Note _ a) =
+    prettyExprC5 a
 prettyExprC5 a0 =
     prettyExprC6 a0
 
@@ -840,6 +855,8 @@ prettyExprC6 a0@(Prefer _ _) =
     docs (Prefer a b) = prettyExprC7 a : docs b
     docs (Note   _ b) = docs b
     docs           b  = [ prettyExprC7 b ]
+prettyExprC6 (Note _ a) =
+    prettyExprC6 a
 prettyExprC6 a0 =
     prettyExprC7 a0
 
@@ -850,6 +867,8 @@ prettyExprC7 a0@(NaturalTimes _ _) =
     docs (NaturalTimes a b) = prettyExprC8 a : docs b
     docs (Note         _ b) = docs b
     docs                 b  = [ prettyExprC8 b ]
+prettyExprC7 (Note _ a) =
+    prettyExprC7 a
 prettyExprC7 a0 =
     prettyExprC8 a0
 
@@ -860,6 +879,8 @@ prettyExprC8 a0@(BoolEQ _ _) =
     docs (BoolEQ a b) = prettyExprC9 a : docs b
     docs (Note   _ b) = docs b
     docs           b  = [ prettyExprC9 b ]
+prettyExprC8 (Note _ a) =
+    prettyExprC8 a
 prettyExprC8 a0 =
     prettyExprC9 a0
 
@@ -870,6 +891,8 @@ prettyExprC9 a0@(BoolNE _ _) =
     docs (BoolNE a b) = prettyExprD a : docs b
     docs (Note   _ b) = docs b
     docs           b  = [ prettyExprD b ]
+prettyExprC9 (Note _ a) =
+    prettyExprC9 a
 prettyExprC9 a0 =
     prettyExprD a0
 
