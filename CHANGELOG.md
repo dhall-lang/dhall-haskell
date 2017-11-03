@@ -1,3 +1,17 @@
+1.8.0
+
+* BREAKING CHANGE TO LANGUAGE: Add support for import integrity checks
+    * In practice, the likelihood of this breaking code in the wild is
+      astronomically low
+    * This would only break code of the form `sha256:aaa...aaa` (i.e. a
+      variabled named `sha256` with a type annotation for a type with a name
+      64 characters long drawn from the first 6 characters of the alphabet)
+* BUG FIX: Fix parsing of single quotes in single-quoted strings
+* BUG FIX: Fix superfluous parentheses introduced by `dhall-format`
+* New `dhall-hash` executable
+    * This goes hand-in-hand with the added support for integrity checks since
+      the executable lets you compute the current hash of an import
+
 1.7.0
 
 * BREAKING CHANGE TO LANGUAGE: Update parser to match standardized grammar
