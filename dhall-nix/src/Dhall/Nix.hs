@@ -111,6 +111,7 @@ import Nix.Expr
 
 import qualified Data.Map
 import qualified Data.Text
+import qualified Data.Text.Buildable
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Vector
@@ -178,7 +179,10 @@ Your code contains the following expression:
 Nix
 |]
       where
-        txt = Data.Text.Lazy.toStrict (Dhall.Core.pretty v)
+        builder = Data.Text.Buildable.build v
+
+        txt =
+            Data.Text.Lazy.toStrict (Data.Text.Lazy.Builder.toLazyText builder)
     show (NoDoubles n) =
         Data.Text.unpack [NeatInterpolation.text|
 $_ERROR: No doubles

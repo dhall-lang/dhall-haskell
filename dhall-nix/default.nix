@@ -1,6 +1,6 @@
 { mkDerivation, base, containers, data-fix, dhall, hnix
-, neat-interpolation, optparse-generic, stdenv, text, trifecta
-, vector
+, neat-interpolation, optparse-generic, stdenv, text, text-format
+, trifecta, vector
 }:
 mkDerivation {
   pname = "dhall-nix";
@@ -9,7 +9,8 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    base containers data-fix dhall hnix neat-interpolation text vector
+    base containers data-fix dhall hnix neat-interpolation text
+    text-format vector
   ];
   executableHaskellDepends = [
     base dhall hnix optparse-generic text trifecta
