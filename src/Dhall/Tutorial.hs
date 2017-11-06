@@ -1611,49 +1611,43 @@ import Dhall
 -- > <Ctrl-D>
 -- > List (List (List Integer))
 -- > 
--- > (   [ (   [ ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           ]
--- >         : List (List Integer)
--- >       )
--- >     , (   [ ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           ]
--- >         : List (List Integer)
--- >       )
--- >     , (   [ ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           ]
--- >         : List (List Integer)
--- >       )
--- >     , (   [ ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           ]
--- >         : List (List Integer)
--- >       )
--- >     , (   [ ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           , ([ 1, 1, 1, 1, 1 ] : List Integer)
--- >           ]
--- >         : List (List Integer)
--- >       )
--- >     ]
--- >   : List (List (List Integer))
--- > )
+-- >   [   [ [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       ]
+-- >     : List (List Integer)
+-- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       ]
+-- >     : List (List Integer)
+-- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       ]
+-- >     : List (List Integer)
+-- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       ]
+-- >     : List (List Integer)
+-- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       ]
+-- >     : List (List Integer)
+-- >   ]
+-- > : List (List (List Integer))
 --
 -- You can also use the formatter to modify files in place using the
 -- @--inplace@ flag:
