@@ -8,7 +8,7 @@ License-File: LICENSE
 Copyright: 2017 Gabriel Gonzalez
 Author: Gabriel Gonzalez
 Maintainer: Gabriel439@gmail.com
-Bug-Reports: https://github.com/Gabriel439/Haskell-Dhall-Library/issues
+Bug-Reports: https://github.com/dhall-lang/dhall-haskell/issues
 Synopsis: A configuration language guaranteed to terminate
 Description:
     Dhall is an explicitly typed configuration language that is not Turing
@@ -86,7 +86,7 @@ Extra-Source-Files:
 
 Source-Repository head
     Type: git
-    Location: https://github.com/Gabriel439/Haskell-Dhall-Library
+    Location: https://github.com/dhall-lang/dhall-haskell
 
 Library
     Hs-Source-Dirs: src

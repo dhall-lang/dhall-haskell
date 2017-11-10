@@ -2656,7 +2656,7 @@ import Dhall
 -- author, import, and program configuration files.  If you run into any issues
 -- you can report them at:
 --
--- <https://github.com/Gabriel439/Haskell-Dhall-Library/issues>
+-- <https://github.com/dhall-lang/dhall-haskell/issues>
 --
 -- You can also request features, support, or documentation improvements on the
 -- above issue tracker.

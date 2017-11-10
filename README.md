@@ -95,15 +95,13 @@ Dhall configuration language:
 
 Complete:
 
-* [`dhall`](https://github.com/Gabriel439/Haskell-Dhall-Library) -
+* [`dhall-haskell`](https://github.com/dhall-lang/dhall-haskell) -
   Haskell integration (this package)
-* [`dhall-nix`](https://github.com/Gabriel439/Haskell-Dhall-Nix-Library) -
-  Nix integration
-* [`dhall-json`](https://github.com/Gabriel439/Haskell-Dhall-JSON-Library) -
+* [`dhall-nix`](https://github.com/dhall-lang/dhall-nix) - Nix integration
+* [`dhall-json`](https://github.com/dhall-lang/dhall-json) -
   JSON and YAML integration
-* [`dhall-bash`](https://github.com/Gabriel439/Haskell-Dhall-Bash-Library) -
-  Bash integration
-* [`dhall-text`](https://github.com/Gabriel439/Haskell-Dhall-Text-Library) - Template engine
+* [`dhall-bash`](https://github.com/dhall-lang/dhall-bash) - Bash integration
+* [`dhall-text`](https://github.com/dhall-lang/dhall-text) - Template engine
 
 In progress:
 

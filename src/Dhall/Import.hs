@@ -514,7 +514,7 @@ instance Show InternalError where
         , "You didn't do anything wrong, but if you would like to see this problem fixed   "
         , "then you should report the bug at:                                              "
         , "                                                                                "
-        , "https://github.com/Gabriel439/Haskell-Dhall-Library/issues                      "
+        , "https://github.com/dhall-lang/dhall-haskell/issues                              "
         , "                                                                                "
         , "Please include the following text in your bug report:                           "
         , "                                                                                "

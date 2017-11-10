@@ -738,7 +738,7 @@ _NOT = "\ESC[1mnot\ESC[0m"
 prettyTypeMessage :: TypeMessage s -> ErrorMessages
 prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
-  -- https://github.com/Gabriel439/Haskell-Dhall-Library/pull/116
+  -- https://github.com/dhall-lang/dhall-haskell/pull/116
   where
     short = "Unbound variable"
 
