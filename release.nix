@@ -1,10 +1,10 @@
 # You can build this repository using Nix by running:
 #
-#     $ nix-build -A dhall release.nix
+#     $ nix-build release.nix
 #
 # You can also open up this repository inside of a Nix shell by running:
 #
-#     $ nix-shell -A dhall.env release.nix
+#     $ nix-shell
 #
 # ... and then Nix will supply the correct Haskell development environment for
 # you
@@ -14,8 +14,6 @@ let
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: {
           dhall = haskellPackagesNew.callPackage ./default.nix { };
-
-          prettyprinter = haskellPackagesNew.callPackage ./prettyprinter.nix { };
         };
       };
     };
