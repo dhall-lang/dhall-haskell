@@ -13,13 +13,23 @@ before_cache:
 
 matrix:
   include:
-    - env: CABALVER=1.24 GHCVER=8.0.1
+    - env: CABALVER=1.24 GHCVER=8.0.1 DEPLOY_GITHUB_RELEASE=true
       compiler: ": #GHC 8.0.1"
       addons: {apt: {packages: [cabal-install-1.24,ghc-8.0.1], sources: [hvr-ghc]}}
+    - env: CABALVER=1.24 GHCVER=8.0.1 DEPLOY_GITHUB_RELEASE=true
+      compiler: ": #GHC 8.0.1"
+      os: osx
 
 before_install:
  - unset CC
  - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
+ # Work around travis issue by updating Homebrew: https://github.com/travis-ci/travis-ci/issues/8552
+ - if [ "$TRAVIS_OS_NAME" = osx ];
+   then
+     brew update;
+     brew install cabal-install;
+     brew install gnu-sed --with-default-names;
+   fi
 
 install:
  - cabal --version
@@ -72,5 +82,21 @@ script:
 # `cabal install --force-reinstalls dist/*-*.tar.gz`
  - SRC_TGZ=$(cabal info . | awk '{print $2;exit}').tar.gz &&
    (cd dist && cabal install --force-reinstalls "$SRC_TGZ")
+
+before_deploy:
+  - tar --create --file "$TRAVIS_OS_NAME.tar" --files-from /dev/null
+  - tar --append --file "$TRAVIS_OS_NAME.tar" --directory dist/build/dhall dhall
+  - tar --append --file "$TRAVIS_OS_NAME.tar" --directory dist/build/dhall-format dhall-format
+  - tar --append --file "$TRAVIS_OS_NAME.tar" --directory dist/build/dhall-hash dhall-hash
+  - gzip "$TRAVIS_OS_NAME.tar"
+
+deploy:
+  provider: releases
+  api_key: "$GITHUB_OAUTH_TOKEN"
+  file: "$TRAVIS_OS_NAME.tar.gz"
+  on:
+    condition: $DEPLOY_GITHUB_RELEASE = true
+    tags: true
+  skip_cleanup: true
 
 # EOF
