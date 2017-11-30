@@ -165,6 +165,7 @@ import qualified Data.CaseInsensitive
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Encoding
+import qualified Data.Text.IO
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
@@ -607,7 +608,8 @@ exprFromPath m (Path {..}) = case pathType of
                     Success expr -> do
                         return expr
             RawText -> do
-                text <- Filesystem.readTextFile path
+                let pathString = Filesystem.Path.CurrentOS.encodeString path
+                text <- Data.Text.IO.readFile pathString
                 return (TextLit (build text))
     URL url headerPath -> do
         request <- HTTP.parseUrlThrow (Text.unpack url)
