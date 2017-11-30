@@ -1311,8 +1311,8 @@ import Dhall
 -- complex example:
 --
 -- > $ dhall
--- >     let List/map = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/map
--- > in  λ(f : Integer → Integer) → List/map Integer Integer f [1, 2, 3]
+-- >     let Prelude/List/map = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/map
+-- > in  λ(f : Integer → Integer) → Prelude/List/map Integer Integer f [1, 2, 3]
 -- > <Ctrl-D>
 -- > ∀(f : Integer → Integer) → List Integer
 -- > 
@@ -2270,9 +2270,9 @@ import Dhall
 --
 -- Rules:
 --
--- > let List/concat = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concat
+-- > let Prelude/List/concat = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concat
 -- >
--- > List/fold a (List/concat a xss) b c
+-- > List/fold a (Prelude/List/concat a xss) b c
 -- >     = List/fold (List a) xss b (λ(x : List a) → List/fold a x b c)
 -- >
 -- > List/fold a ([] : List a) b c n = n
@@ -2339,18 +2339,18 @@ import Dhall
 --
 -- Rules:
 --
--- > let Optional/head  = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/Optional/head
--- > let List/concat    = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concatMap
--- > let List/map       = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/map
+-- > let Prelude/Optional/head  = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/Optional/head
+-- > let Prelude/List/concat    = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concat
+-- > let Prelude/List/concatMap = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concatMap
+-- > let Prelude/List/map       = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/map
 -- > 
--- > List/head a (List/concat a xss) =
--- >     Optional/head a (List/map (List a) (Optional a) (List/head a) xss)
+-- > List/head a (Prelude/List/concat a xss) =
+-- >     Prelude/Optional/head a (Prelude/List/map (List a) (Optional a) (List/head a) xss)
 -- > 
 -- > List/head a ([x] : List a) = [x] : Optional a
 -- > 
--- > List/head b (List/concatMap a b f m)
--- >     = Optional/concatMap a b (λ(x : a) → List/head b (f x)) (List/head a m)
+-- > List/head b (Prelude/List/concatMap a b f m)
+-- >     = Prelude/Optional/concatMap a b (λ(x : a) → List/head b (f x)) (List/head a m)
 
 -- $listLast
 --
@@ -2370,18 +2370,18 @@ import Dhall
 --
 -- Rules:
 --
--- > let Optional/last  = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/Optional/last
--- > let List/concat    = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concatMap
--- > let List/map       = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/map
+-- > let Prelude/Optional/last  = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/Optional/last
+-- > let Prelude/List/concat    = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concat
+-- > let Prelude/List/concatMap = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concatMap
+-- > let Prelude/List/map       = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/map
 -- > 
--- > List/last a (List/concat a xss) =
--- >     Optional/last a (List/map (List a) (Optional a) (List/last a) xss)
+-- > List/last a (Prelude/List/concat a xss) =
+-- >     Prelude/Optional/last a (Prelude/List/map (List a) (Optional a) (List/last a) xss)
 -- > 
 -- > List/last a ([x] : List a) = [x] : Optional a
 -- > 
--- > List/last b (List/concatMap a b f m)
--- >     = Optional/concatMap a b (λ(x : a) → List/last b (f x)) (List/last a m)
+-- > List/last b (Prelude/List/concatMap a b f m)
+-- >     = Prelude/Optional/concatMap a b (λ(x : a) → List/last b (f x)) (List/last a m)
 
 -- $listIndexed
 --
@@ -2401,12 +2401,12 @@ import Dhall
 --
 -- Rules:
 --
--- > let List/shifted = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/shifted
--- > let List/concat  = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concat
--- > let List/map     = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/map
+-- > let Prelude/List/shifted = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/shifted
+-- > let Prelude/List/concat  = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concat
+-- > let Prelude/List/map     = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/map
 -- > 
--- > List/indexed a (List/concat a xss) =
--- >     List/shifted a (List/map (List a) (List { index : Natural, value : a }) (List/indexed a) xss)
+-- > List/indexed a (Prelude/List/concat a xss) =
+-- >     Prelude/List/shifted a (Prelude/List/map (List a) (List { index : Natural, value : a }) (List/indexed a) xss)
 
 -- $listReverse
 --
@@ -2426,17 +2426,17 @@ import Dhall
 --
 -- Rules:
 --
--- > let List/map       = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/map
--- > let List/concat    = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concat
--- > let List/concatMap = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concatMap
+-- > let Prelude/List/map       = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/map
+-- > let Prelude/List/concat    = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concat
+-- > let Prelude/List/concatMap = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/concatMap
 -- > 
--- > List/reverse a (List/concat a xss)
--- >     = List/concat a (List/reverse (List a) (List/map (List a) (List a) (List/reverse a) xss))
+-- > List/reverse a (Prelude/List/concat a xss)
+-- >     = Prelude/List/concat a (List/reverse (List a) (Prelude/List/map (List a) (List a) (List/reverse a) xss))
 -- >
 -- > List/reverse a ([x] : List a) = [x] : List a
 -- >
--- > List/reverse b (List/concatMap a b f xs)
--- >     = List/concatMap a b (λ(x : a) → List/reverse b (f x)) (List/reverse a xs)
+-- > List/reverse b (Prelude/List/concatMap a b f xs)
+-- >     = Prelude/List/concatMap a b (λ(x : a) → List/reverse b (f x)) (List/reverse a xs)
 -- >
 -- > List/reverse a ([x, y] : List a) = [y, x] : List a
 
