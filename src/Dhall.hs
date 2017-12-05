@@ -162,7 +162,7 @@ input (Type {..}) txt = do
 --   For other use cases, use `input` from `Dhall` module. It will give you
 --   a much better user experience.
 rawInput
-    :: Alternative f 
+    :: Alternative f
     => Type a
     -- ^ The type of value to decode from Dhall to Haskell
     -> Expr s X
@@ -180,103 +180,103 @@ rawInput (Type {..}) expr = do
 
 >> input auto "True" :: IO Integer
 > *** Exception: Error: Expression doesn't match annotation
-> 
+>
 > True : Integer
-> 
+>
 > (input):1:1
 
 >> detailed (input auto "True") :: IO Integer
 > *** Exception: Error: Expression doesn't match annotation
-> 
+>
 > Explanation: You can annotate an expression with its type or kind using the
 > ❰:❱ symbol, like this:
-> 
-> 
+>
+>
 >     ┌───────┐
 >     │ x : t │  ❰x❱ is an expression and ❰t❱ is the annotated type or kind of ❰x❱
 >     └───────┘
-> 
+>
 > The type checker verifies that the expression's type or kind matches the
 > provided annotation
-> 
+>
 > For example, all of the following are valid annotations that the type checker
 > accepts:
-> 
-> 
+>
+>
 >     ┌─────────────┐
 >     │ 1 : Integer │  ❰1❱ is an expression that has type ❰Integer❱, so the type
 >     └─────────────┘  checker accepts the annotation
-> 
-> 
+>
+>
 >     ┌────────────────────────┐
 >     │ Natural/even +2 : Bool │  ❰Natural/even +2❱ has type ❰Bool❱, so the type
 >     └────────────────────────┘  checker accepts the annotation
-> 
-> 
+>
+>
 >     ┌────────────────────┐
 >     │ List : Type → Type │  ❰List❱ is an expression that has kind ❰Type → Type❱,
 >     └────────────────────┘  so the type checker accepts the annotation
-> 
-> 
+>
+>
 >     ┌──────────────────┐
 >     │ List Text : Type │  ❰List Text❱ is an expression that has kind ❰Type❱, so
 >     └──────────────────┘  the type checker accepts the annotation
-> 
-> 
+>
+>
 > However, the following annotations are not valid and the type checker will
 > reject them:
-> 
-> 
+>
+>
 >     ┌──────────┐
 >     │ 1 : Text │  The type checker rejects this because ❰1❱ does not have type
 >     └──────────┘  ❰Text❱
-> 
-> 
+>
+>
 >     ┌─────────────┐
 >     │ List : Type │  ❰List❱ does not have kind ❰Type❱
 >     └─────────────┘
-> 
-> 
+>
+>
 > You or the interpreter annotated this expression:
-> 
+>
 > ↳ True
-> 
+>
 > ... with this type or kind:
-> 
+>
 > ↳ Integer
-> 
+>
 > ... but the inferred type or kind of the expression is actually:
-> 
+>
 > ↳ Bool
-> 
+>
 > Some common reasons why you might get this error:
-> 
+>
 > ● The Haskell Dhall interpreter implicitly inserts a top-level annotation
 >   matching the expected type
-> 
+>
 >   For example, if you run the following Haskell code:
-> 
-> 
+>
+>
 >     ┌───────────────────────────────┐
 >     │ >>> input auto "1" :: IO Text │
 >     └───────────────────────────────┘
-> 
-> 
+>
+>
 >   ... then the interpreter will actually type check the following annotated
 >   expression:
-> 
-> 
+>
+>
 >     ┌──────────┐
 >     │ 1 : Text │
 >     └──────────┘
-> 
-> 
+>
+>
 >   ... and then type-checking will fail
-> 
+>
 > ────────────────────────────────────────────────────────────────────────────────
-> 
+>
 > True : Integer
-> 
+>
 > (input):1:1
 
 -}
@@ -284,11 +284,11 @@ detailed :: IO a -> IO a
 detailed =
     Control.Exception.handle handler1 . Control.Exception.handle handler0
   where
-    handler0 :: Imported (TypeError Src) -> IO a
+    handler0 :: Imported (TypeError Src X) -> IO a
     handler0 (Imported ps e) =
         Control.Exception.throwIO (Imported ps (DetailedTypeError e))
 
-    handler1 :: TypeError Src -> IO a
+    handler1 :: TypeError Src X -> IO a
     handler1 e = Control.Exception.throwIO (DetailedTypeError e)
 
 {-| A @(Type a)@ represents a way to marshal a value of type @\'a\'@ from Dhall

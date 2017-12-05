@@ -13,7 +13,7 @@ import Data.Version (showVersion)
 import Dhall.Core (pretty, normalize)
 import Dhall.Import (Imported(..), hashExpressionToCode, load)
 import Dhall.Parser (Src, exprFromText)
-import Dhall.TypeCheck (DetailedTypeError(..), TypeError)
+import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import Options.Generic (Generic, ParseRecord, type (<?>)(..))
 import System.IO (stderr)
 import System.Exit (exitFailure, exitSuccess)
@@ -46,7 +46,7 @@ main = do
             .   Control.Exception.handle handler0
           where
             handler0 e = do
-                let _ = e :: TypeError Src
+                let _ = e :: TypeError Src X
                 System.IO.hPutStrLn stderr ""
                 if unHelpful (explain options)
                     then Control.Exception.throwIO (DetailedTypeError e)
@@ -55,7 +55,7 @@ main = do
                         Control.Exception.throwIO e
 
             handler1 (Imported ps e) = do
-                let _ = e :: TypeError Src
+                let _ = e :: TypeError Src X
                 System.IO.hPutStrLn stderr ""
                 if unHelpful (explain options)
                     then Control.Exception.throwIO (Imported ps (DetailedTypeError e))

@@ -16,7 +16,7 @@ import qualified Util
 
 import Dhall.Import (Imported)
 import Dhall.Parser (Src)
-import Dhall.TypeCheck (TypeError)
+import Dhall.TypeCheck (TypeError, X)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit ((@?=))
 
@@ -80,7 +80,7 @@ issue126 = Test.Tasty.HUnit.testCase "Issue #126" (do
 issue151 :: TestTree
 issue151 = Test.Tasty.HUnit.testCase "Issue #151" (do
     let shouldNotTypeCheck text = do
-            let handler :: Imported (TypeError Src) -> IO Bool
+            let handler :: Imported (TypeError Src X) -> IO Bool
                 handler _ = return True
 
             let typeCheck = do
@@ -88,7 +88,7 @@ issue151 = Test.Tasty.HUnit.testCase "Issue #151" (do
                     return False
             b <- Control.Exception.handle handler typeCheck
             Test.Tasty.HUnit.assertBool "The expression should not type-check" b
-            
+
     -- These two examples contain the following expression that loops infinitely
     -- if you normalize the expression before type-checking the expression:
     --

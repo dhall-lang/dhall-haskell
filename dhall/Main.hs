@@ -13,7 +13,7 @@ import Data.Version (showVersion)
 import Dhall.Core (normalize)
 import Dhall.Import (Imported(..), load)
 import Dhall.Parser (Src, exprAndHeaderFromText)
-import Dhall.TypeCheck (DetailedTypeError(..), TypeError)
+import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import Options.Generic (Generic, ParseRecord, type (<?>)(..))
 import System.Exit (exitFailure, exitSuccess)
 import Text.Trifecta.Delta (Delta(..))
@@ -55,7 +55,7 @@ main = do
             .   Control.Exception.handle handler0
           where
             handler0 e = do
-                let _ = e :: TypeError Src
+                let _ = e :: TypeError Src X
                 System.IO.hPutStrLn System.IO.stderr ""
                 if unHelpful (explain options)
                     then Control.Exception.throwIO (DetailedTypeError e)
@@ -64,7 +64,7 @@ main = do
                         Control.Exception.throwIO e
 
             handler1 (Imported ps e) = do
-                let _ = e :: TypeError Src
+                let _ = e :: TypeError Src X
                 System.IO.hPutStrLn System.IO.stderr ""
                 if unHelpful (explain options)
                     then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
