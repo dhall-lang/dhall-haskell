@@ -71,6 +71,7 @@ main = do
 
     let handler e = do
             let _ = e :: SomeException
+            System.IO.hSetEncoding System.IO.stderr System.IO.utf8
             System.IO.hPrint stderr e
             System.Exit.exitFailure
 
