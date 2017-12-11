@@ -74,10 +74,12 @@ main = do
 
             handler2 e = do
                 let _ = e :: SomeException
+                System.IO.hSetEncoding System.IO.stderr System.IO.utf8
                 System.IO.hPrint System.IO.stderr e
                 System.Exit.exitFailure
 
     handle (do
+        System.IO.hSetEncoding System.IO.stdin System.IO.utf8
         inText <- Data.Text.Lazy.IO.getContents
 
         (header, expr) <- case exprAndHeaderFromText (Directed "(stdin)" 0 0 0 0) inText of
