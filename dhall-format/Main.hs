@@ -90,6 +90,7 @@ main = do
                     Pretty.renderIO handle (Pretty.layoutSmart opts doc)
                     Data.Text.IO.hPutStrLn handle "" )
             Nothing -> do
+                System.IO.hSetEncoding System.IO.stdin System.IO.utf8
                 inText <- Data.Text.Lazy.IO.getContents
 
                 (header, expr) <- case exprAndHeaderFromText (Directed "(stdin)" 0 0 0 0) inText of

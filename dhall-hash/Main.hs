@@ -70,6 +70,7 @@ main = do
                 System.Exit.exitFailure
 
     handle (do
+        System.IO.hSetEncoding System.IO.stdin System.IO.utf8
         inText <- Data.Text.Lazy.IO.getContents
 
         expr <- case exprFromText (Directed "(stdin)" 0 0 0 0) inText of
