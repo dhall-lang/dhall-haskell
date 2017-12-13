@@ -164,6 +164,7 @@ import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
+import qualified Data.Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy                   as Text
@@ -301,15 +302,22 @@ instance Show PrettyHttpException where
 #endif
 
 -- | Exception thrown when an imported file is missing
-data MissingFile = MissingFile
+data MissingFile = MissingFile FilePath
     deriving (Typeable)
 
 instance Exception MissingFile
 
 instance Show MissingFile where
-    show MissingFile =
+    show (MissingFile path) =
             "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Missing file\n"
+        <>  "\ESC[1;31mError\ESC[0m: Missing file "
+        <>  Data.Text.unpack formattedPath
+        <>  "\n"
+      where
+        formattedPath = case Filesystem.Path.CurrentOS.toText path of
+            (Right t) -> t
+            (Left  t) -> t
+                <> "\n\ESC[1;31mWarning\ESC[0m: Filename contains non-displayable characters"
 
 -- | Exception thrown when an environment variable is missing
 newtype MissingEnvironmentVariable = MissingEnvironmentVariable { name :: Text }
@@ -589,7 +597,7 @@ exprFromPath m (Path {..}) = case pathType of
                 exists <- Filesystem.isFile path
                 if exists
                     then return ()
-                    else Control.Exception.throwIO MissingFile
+                    else Control.Exception.throwIO (MissingFile path)
 
                 -- Unfortunately, GHC throws an `InappropriateType` exception
                 -- when trying to read a directory, but does not export the
