@@ -1,6 +1,13 @@
+1.8.2
+
+* Add `typeWithA` for type-checking custom `Embed`ded values
+* Fix `dhall{,-*}` executables to ignore ambient locale and use UTF8
+* Increase upper bound on `tasty` dependency
+
 1.8.1
 
-* 
+* `dhall` executable can now format output using `--pretty`
+* Improved Unicode suppport on Windows
 
 1.8.0
 
