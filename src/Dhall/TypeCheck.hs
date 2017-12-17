@@ -1725,7 +1725,7 @@ prettyTypeMessage (MismatchedListElements i expr0 expr1 expr2) =
         \    └───────────────┘                                                           \n\
         \                                                                                \n\
         \                                                                                \n\
-        \Your first ❰List❱ elements has this type:                                       \n\
+        \Your first ❰List❱ element has this type:                                        \n\
         \                                                                                \n\
         \↳ " <> txt0 <> "                                                                \n\
         \                                                                                \n\
