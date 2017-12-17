@@ -119,7 +119,6 @@ import Control.Exception
 import Control.Lens (Lens', zoom)
 import Control.Monad (join)
 import Control.Monad.Catch (throwM, MonadCatch(catch))
-import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString.Lazy (ByteString)
@@ -337,6 +336,9 @@ data Status = Status
     , _cache   :: Map Path (Expr Src X)
     , _manager :: Maybe Manager
     }
+
+emptyStatus :: Status
+emptyStatus = Status [] Map.empty Nothing
 
 canonicalizeAll :: [Path] -> [Path]
 canonicalizeAll = map canonicalizePath . List.tails
@@ -582,12 +584,12 @@ parseFromFileEx parser path = do
     bytesPath = Data.Text.Encoding.encodeUtf8 textPath
 
 -- | Parse an expression from a `Path` containing a Dhall program
-exprFromPath :: Manager -> Path -> IO (Expr Src Path)
-exprFromPath m (Path {..}) = case pathType of
-    File hasHome file -> do
+exprFromPath :: Path -> StateT Status IO (Expr Src Path)
+exprFromPath (Path {..}) = case pathType of
+    File hasHome file -> liftIO (do
         path <- case hasHome of
             Home -> do
-                home <- liftIO Filesystem.getHomeDirectory
+                home <- Filesystem.getHomeDirectory
                 return (home </> file)
             Homeless -> do
                 return file
@@ -597,7 +599,7 @@ exprFromPath m (Path {..}) = case pathType of
                 exists <- Filesystem.isFile path
                 if exists
                     then return ()
-                    else Control.Exception.throwIO (MissingFile path)
+                    else throwIO (MissingFile path)
 
                 -- Unfortunately, GHC throws an `InappropriateType` exception
                 -- when trying to read a directory, but does not export the
@@ -618,9 +620,10 @@ exprFromPath m (Path {..}) = case pathType of
             RawText -> do
                 let pathString = Filesystem.Path.CurrentOS.encodeString path
                 text <- Data.Text.IO.readFile pathString
-                return (TextLit (build text))
+                return (TextLit (build text)) )
     URL url headerPath -> do
-        request <- HTTP.parseUrlThrow (Text.unpack url)
+        m       <- needManager
+        request <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
 
         let handler :: HTTP.HttpException -> IO (HTTP.Response ByteString)
 #if MIN_VERSION_http_client(0,5,0)
@@ -637,7 +640,7 @@ exprFromPath m (Path {..}) = case pathType of
         requestWithHeaders <- case headerPath of
             Nothing   -> return request
             Just path -> do
-                expr <- load (Embed (Path path Code))
+                expr <- loadStaticIO Dhall.Context.empty (Path path Code)
                 let expected :: Expr Src X
                     expected =
                         App List
@@ -660,22 +663,24 @@ exprFromPath m (Path {..}) = case pathType of
                         _ ->
                             Annot expr expected
                 case Dhall.TypeCheck.typeOf annot of
-                    Left err -> Control.Exception.throwIO err
+                    Left err -> liftIO (throwIO err)
                     Right _  -> return ()
                 let expr' = Dhall.Core.normalize expr
                 headers <- case toHeaders expr' of
-                    Just headers -> return headers
-                    Nothing      -> Control.Exception.throwIO InternalError
+                    Just headers -> do
+                        return headers
+                    Nothing      -> do
+                        liftIO (throwIO InternalError)
                 let requestWithHeaders = request
                         { HTTP.requestHeaders = headers
                         }
                 return requestWithHeaders
-        response <- HTTP.httpLbs requestWithHeaders m `catch` handler
+        response <- liftIO (HTTP.httpLbs requestWithHeaders m `catch` handler)
 
         let bytes = HTTP.responseBody response
 
         text <- case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
-            Left  err  -> throwIO err
+            Left  err  -> liftIO (throwIO err)
             Right text -> return text
 
         case pathMode of
@@ -690,27 +695,26 @@ exprFromPath m (Path {..}) = case pathType of
                         -- a directory list
                         let err' = ParseError (Text.Trifecta._errDoc err)
 
-                        request' <- HTTP.parseUrlThrow (Text.unpack url)
+                        request' <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
 
                         let request'' =
                                 request'
                                     { HTTP.path = HTTP.path request' <> "/@" }
-                        response' <- HTTP.httpLbs request'' m
-                            `onException` throwIO err'
+                        response' <- liftIO (HTTP.httpLbs request'' m `onException` throwIO err' )
 
                         let bytes' = HTTP.responseBody response'
 
                         text' <- case Data.Text.Lazy.Encoding.decodeUtf8' bytes' of
-                            Left  _     -> throwIO err'
+                            Left  _     -> liftIO (throwIO err')
                             Right text' -> return text'
 
                         case Text.Trifecta.parseString parser delta (Text.unpack text') of
-                            Failure _    -> throwIO err'
+                            Failure _    -> liftIO (throwIO err')
                             Success expr -> return expr
                     Success expr -> return expr
             RawText -> do
                 return (TextLit (build text))
-    Env env -> do
+    Env env -> liftIO (do
         x <- System.Environment.lookupEnv (Text.unpack env)
         case x of
             Just str -> do
@@ -725,7 +729,7 @@ exprFromPath m (Path {..}) = case pathType of
                             Success expr    -> do
                                 return expr
                     RawText -> return (TextLit (build str))
-            Nothing  -> throwIO (MissingEnvironmentVariable env)
+            Nothing  -> throwIO (MissingEnvironmentVariable env) )
   where
     PathHashed {..} = pathHashed
 
@@ -740,29 +744,41 @@ exprFromPath m (Path {..}) = case pathType of
     This also returns the true final path (i.e. explicit "/@" at the end for
     directories)
 -}
-loadDynamic :: forall m . MonadCatch m => (Path -> m (Expr Src Path))
-    -> Path -> StateT Status m (Expr Src Path)
+loadDynamic
+    :: forall m . MonadCatch m
+    => (Path -> StateT Status m (Expr Src Path))
+    -> Path
+    -> StateT Status m (Expr Src Path)
 loadDynamic from_path p = do
     paths <- zoom stack State.get
 
-    let handler :: SomeException -> m (Expr Src Path)
+    let handler :: SomeException -> StateT Status m (Expr Src Path)
         handler e = throwM (Imported (p:paths) e)
 
-    lift (from_path (canonicalizePath (p:paths)) `catch` handler)
+    from_path (canonicalizePath (p:paths)) `catch` handler
 
-loadStaticIO :: Dhall.Context.Context (Expr Src X) -> Path -> StateT Status IO (Expr Src X)
-loadStaticIO ctx path = do
-    m <- needManager
-    loadStaticWith (exprFromPath m) ctx path
+loadStaticIO
+    :: Dhall.Context.Context (Expr Src X)
+    -> Path
+    -> StateT Status IO (Expr Src X)
+loadStaticIO = loadStaticWith exprFromPath
 
 -- | Resolve all imports within an expression using a custom typing context and Path
 -- resolving callback in arbitrary `MonadCatch` monad.
-loadWith :: MonadCatch m => (Path -> m (Expr Src Path))
-    -> Dhall.Context.Context (Expr Src X) -> Expr Src Path -> m (Expr Src X)
+loadWith
+    :: MonadCatch m
+    => (Path -> StateT Status m (Expr Src Path))
+    -> Dhall.Context.Context (Expr Src X)
+    -> Expr Src Path
+    -> m (Expr Src X)
 loadWith from_path ctx = evalStatus (loadStaticWith from_path ctx)
 
-loadStaticWith :: MonadCatch m => (Path -> m (Expr Src Path))
-    -> Dhall.Context.Context (Expr Src X) -> Path -> StateT Status m (Expr Src X)
+loadStaticWith
+    :: MonadCatch m
+    => (Path -> StateT Status m (Expr Src Path))
+    -> Dhall.Context.Context (Expr Src X)
+    -> Path
+    -> StateT Status m (Expr Src X)
 loadStaticWith from_path ctx path = do
     paths <- zoom stack State.get
 
@@ -831,11 +847,10 @@ loadStaticWith from_path ctx path = do
 
     return expr
 
-evalStatus :: (Traversable f, Monad m, Monad f) =>
-                    (a -> StateT Status m (f b)) -> f a -> m (f b)
-evalStatus cb expr = State.evalStateT (fmap join (traverse cb expr)) status
-  where
-    status = Status [] Map.empty Nothing
+evalStatus
+    :: (Traversable f, Monad m, Monad f)
+    => (a -> StateT Status m (f b)) -> f a -> m (f b)
+evalStatus cb expr = State.evalStateT (fmap join (traverse cb expr)) emptyStatus
 
 -- | Resolve all imports within an expression
 load :: Expr Src Path -> IO (Expr Src X)
