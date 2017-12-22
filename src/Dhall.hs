@@ -26,6 +26,7 @@ module Dhall
     , Interpret(..)
     , InvalidType(..)
     , auto
+    , genericAuto
     , InterpretOptions(..)
     , defaultInterpretOptions
     , bool
@@ -481,6 +482,14 @@ deriving instance (Interpret a, Interpret b) => Interpret (a, b)
 -}
 auto :: Interpret a => Type a
 auto = autoWith defaultInterpretOptions
+
+{-| `genericAuto` is the default implementation for `auto` if you derive
+    `Interpret`.  The difference is that you can use `genericAuto` without
+    having to explicitly provide an `Interpret` instance for a type as long as
+    the type derives `Generic`
+-}
+genericAuto :: (Generic a, GenericInterpret (Rep a)) => Type a
+genericAuto = fmap to (evalState (genericAutoWith defaultInterpretOptions) 1)
 
 {-| Use these options to tweak how Dhall derives a generic implementation of
     `Interpret`
