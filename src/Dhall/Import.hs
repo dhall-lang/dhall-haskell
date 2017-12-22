@@ -782,15 +782,9 @@ loadStaticWith
 loadStaticWith from_path ctx path = do
     paths <- zoom stack State.get
 
-    let local (Path (PathHashed _ (URL url _)) _) =
-            case HTTP.parseUrlThrow (Text.unpack url) of
-                Nothing      -> False
-                Just request -> case HTTP.host request of
-                    "127.0.0.1" -> True
-                    "localhost" -> True
-                    _           -> False
-        local (Path (PathHashed _ (File _ _ )) _) = True
-        local (Path (PathHashed _ (Env  _   )) _) = True
+    let local (Path (PathHashed _ (URL _ _ )) _) = False
+        local (Path (PathHashed _ (File _ _)) _) = True
+        local (Path (PathHashed _ (Env  _  )) _) = True
 
     let parent = canonicalizePath paths
     let here   = canonicalizePath (path:paths)
