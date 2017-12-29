@@ -637,6 +637,16 @@ typeWithA tpa = loop
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
         mapM_ process (Data.Map.toList ktsY)
         return t
+    loop ctx e@(Constructors t  ) = do
+        _ <- loop ctx t
+
+        kts <- case Dhall.Core.normalize t of
+            Union kts -> return kts
+            t'        -> Left (TypeError ctx e (ConstructorsRequiresAUnionType t t'))
+
+        let adapt k t_ = Pi k t_ (Union kts)
+
+        return (Record (Data.Map.mapWithKey adapt kts))
     loop ctx e@(Field r x       ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
         case t of
@@ -711,6 +721,7 @@ data TypeMessage s a
     | InvalidHandlerOutputType Text (Expr s a) (Expr s a)
     | MissingMergeType
     | HandlerNotAFunction Text (Expr s a)
+    | ConstructorsRequiresAUnionType (Expr s a) (Expr s a)
     | NotARecord Text (Expr s a) (Expr s a)
     | MissingField Text (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
@@ -2751,6 +2762,58 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
         txt0 = build k
         txt1 = build expr0
 
+prettyTypeMessage (ConstructorsRequiresAUnionType expr0 expr1) = ErrorMessages {..}
+  where
+    short = "❰constructors❱ requires a union type"
+
+    long =
+        "Explanation: You can only use the ❰constructors❱ keyword on an argument that is \n\
+        \a union type literal, like this:                                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────┐                           \n\
+        \    │ constructors < Left : Natural, Right : Bool > │                           \n\
+        \    └───────────────────────────────────────────────┘                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot use the ❰constructors❱ keyword on any other type of argument.\n\
+        \For example, you cannot use a variable argument:                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────┐                                            \n\
+        \    │ λ(t : Type) → constructors t │  Invalid: ❰t❱ might not be a union type    \n\
+        \    └──────────────────────────────┘                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────┐                         \n\
+        \    │ let t : Type = < Left : Natural, Right : Bool > │  Invalid: Type-checking \n\
+        \    │ in  constructors t                              │  precedes normalization \n\
+        \    └─────────────────────────────────────────────────┘                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, you can import the union type argument:                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────┐                                          \n\
+        \    │ constructors ./unionType.dhall │ Valid: Import resolution precedes        \n\
+        \    └────────────────────────────────┘ type-checking                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to supply the following argument:                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which normalized to:                                                        \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a union type literal                                           \n"
+      where
+        txt0 = build expr0
+        txt1 = build expr1
+ 
 prettyTypeMessage (NotARecord k expr0 expr1) = ErrorMessages {..}
   where
     short = "Not a record"

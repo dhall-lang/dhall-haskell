@@ -3,6 +3,7 @@
 module Util
     ( code
     , codeWith
+    , equivalent
     , normalize'
     , normalizeWith'
     , assertNormalizesTo
@@ -47,6 +48,12 @@ codeWith ctx strictText = do
         Left typeError -> Control.Exception.throwIO typeError
         Right _        -> return ()
     return expr1
+
+equivalent :: Data.Text.Text -> Data.Text.Text -> IO ()
+equivalent text0 text1 = do
+    expr0 <- fmap Dhall.Core.normalize (Util.code text0) :: IO (Expr X X)
+    expr1 <- fmap Dhall.Core.normalize (Util.code text1) :: IO (Expr X X)
+    assertEqual "Expressions are not equivalent" expr0 expr1
 
 assertNormalizesTo :: Expr Src X -> Data.Text.Lazy.Text -> IO ()
 assertNormalizesTo e expected = do 

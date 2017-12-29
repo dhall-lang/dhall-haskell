@@ -83,6 +83,7 @@ Extra-Source-Files:
     Prelude/Text/concatSep
     tests/parser/*.dhall
     tests/regression/*.dhall
+    tests/tutorial/*.dhall
 
 Source-Repository head
     Type: git

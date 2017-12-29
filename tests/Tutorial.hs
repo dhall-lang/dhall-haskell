@@ -10,8 +10,11 @@ import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 import qualified Util
 
+import Data.Monoid ((<>))
+import Data.Text (Text)
 import Dhall (Inject)
 import GHC.Generics (Generic)
+import Numeric.Natural (Natural)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit ((@?=))
 
@@ -26,6 +29,13 @@ tutorialTests =
             [ _Functions_0
             , _Functions_1
             , _Functions_2
+            ]
+        , Test.Tasty.testGroup "Unions"
+            [ example 0 "./tests/tutorial/unions0A.dhall" "./tests/tutorial/unions0B.dhall"
+            , example 1 "./tests/tutorial/unions1A.dhall" "./tests/tutorial/unions1B.dhall"
+            , example 2 "./tests/tutorial/unions2A.dhall" "./tests/tutorial/unions2B.dhall"
+            , example 3 "./tests/tutorial/unions3A.dhall" "./tests/tutorial/unions3B.dhall"
+            , example 4 "./tests/tutorial/unions4A.dhall" "./tests/tutorial/unions4B.dhall"
             ]
         ]
 
@@ -67,3 +77,9 @@ _Functions_2 = Test.Tasty.HUnit.testCase "Example #2" (do
     f <- Dhall.input Dhall.auto "λ(r : { foo : Bool, bar : Bool }) → r.foo && r.bar"
     f (Example0 { foo = True, bar = False }) @?= False
     f (Example0 { foo = True, bar = True  }) @?= True )
+
+example :: Natural -> Text -> Text -> TestTree
+example n text0 text1 =
+    Test.Tasty.HUnit.testCase
+        ("Example #" <> show n)
+        (Util.equivalent text0 text1)

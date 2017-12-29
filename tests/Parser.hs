@@ -108,6 +108,9 @@ parserTests =
                 "merge"
                 "./tests/parser/merge.dhall"
             , shouldPass
+                "constructors"
+                "./tests/parser/constructors.dhall"
+            , shouldPass
                 "fields"
                 "./tests/parser/fields.dhall"
             , shouldPass

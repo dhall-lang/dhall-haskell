@@ -1128,6 +1128,36 @@ import Dhall
 -- >     ,   Empty
 -- >     ]
 --
+-- ... and Dhall even provides the @constructors@ keyword to automate this
+-- common pattern:
+--
+-- >     let MyType = constructors < Empty : {} | Person : { name : Text, age : Natural } >
+-- > in  [   MyType.Empty {}
+-- >     ,   MyType.Person { name = "John", age = +23 }
+-- >     ,   MyType.Person { name = "Amy" , age = +25 }
+-- >     ]
+--
+-- The @constructors@ keyword takes a union type argument and returns a record
+-- with one field per union type constructor:
+--
+-- > $ dhall --pretty
+-- > constructors < Empty : {} | Person : { name : Text, age : Natural } >
+-- > <Ctrl-D>
+-- >
+-- > { Empty  :
+-- >     ∀(Empty : {}) → < Empty : {} | Person : { age : Natural, name : Text } >
+-- > , Person :
+-- >       ∀(Person : { age : Natural, name : Text })
+-- >     → < Empty : {} | Person : { age : Natural, name : Text } >
+-- > }
+-- >
+-- > { Empty  =
+-- >     λ(Empty : {}) → < Empty = Empty | Person : { age : Natural, name : Text } >
+-- > , Person =
+-- >       λ(Person : { age : Natural, name : Text })
+-- >     → < Person = Person | Empty : {} >
+-- > }
+--
 -- You can also extract fields during pattern matching such as in the following
 -- function which renders each value to `Text`:
 --
