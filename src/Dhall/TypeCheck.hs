@@ -137,7 +137,9 @@ typeWithA tpa = loop
     loop ctx e@(Var (V x n)     ) = do
         case Dhall.Context.lookup x n ctx of
             Nothing -> Left (TypeError ctx e (UnboundVariable x))
-            Just a  -> return a
+            Just a  -> do
+                _ <- loop ctx a
+                return a
     loop ctx   (Lam x _A  b     ) = do
         _ <- loop ctx _A
         let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x _A ctx)
@@ -215,7 +217,6 @@ typeWithA tpa = loop
         let tB'' = Dhall.Core.shift (-1) (V f 0) tB'
         return tB''
     loop ctx e@(Annot x t       ) = do
-        -- This is mainly just to check that `t` is not `Kind`
         _ <- loop ctx t
 
         t' <- loop ctx x
@@ -496,15 +497,15 @@ typeWithA tpa = loop
         mapM_ process (Data.Map.toList kts)
         return (Const Type)
     loop ctx e@(RecordLit kvs   ) = do
-        let process (k, v) = do
+        let process k v = do
                 t <- loop ctx v
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
                     _          -> Left (TypeError ctx e (InvalidField k v))
-                return (k, t)
-        kts <- mapM process (Data.Map.toAscList kvs)
-        return (Record (Data.Map.fromAscList kts))
+                return t
+        kts <- Data.Map.traverseWithKey process kvs
+        return (Record kts)
     loop ctx e@(Union     kts   ) = do
         let process (k, t) = do
                 s <- fmap Dhall.Core.normalize (loop ctx t)
@@ -561,6 +562,8 @@ typeWithA tpa = loop
             _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
         return (Record (Data.Map.union ktsY ktsX))
     loop ctx e@(Merge kvsX kvsY (Just t)) = do
+        _ <- loop ctx t
+
         tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
         ktsX  <- case tKvsX of
             Record kts -> return kts
@@ -637,7 +640,9 @@ typeWithA tpa = loop
     loop ctx e@(Field r x       ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
         case t of
-            Record kts ->
+            Record kts -> do
+                _ <- loop ctx t
+
                 case Data.Map.lookup x kts of
                     Just t' -> return t'
                     Nothing -> Left (TypeError ctx e (MissingField x t))
