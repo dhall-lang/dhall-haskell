@@ -325,6 +325,8 @@ data Expr s a
     -- | > Merge x y (Just t )                      ~  merge x y : t
     -- | > Merge x y  Nothing                       ~  merge x y
     | Merge (Expr s a) (Expr s a) (Maybe (Expr s a))
+    -- | > Constructors e                           ~  constructors e
+    | Constructors (Expr s a)
     -- | > Field e x                                ~  e.x
     | Field (Expr s a) Text
     -- | > Note s x                                 ~  e
@@ -396,6 +398,7 @@ instance Monad (Expr s) where
     Combine a b      >>= k = Combine (a >>= k) (b >>= k)
     Prefer a b       >>= k = Prefer (a >>= k) (b >>= k)
     Merge a b c      >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
+    Constructors a   >>= k = Constructors (a >>= k)
     Field a b        >>= k = Field (a >>= k) b
     Note a b         >>= k = Note a (b >>= k)
     Embed a          >>= k = k a
@@ -456,6 +459,7 @@ instance Bifunctor Expr where
     first k (Combine a b     ) = Combine (first k a) (first k b)
     first k (Prefer a b      ) = Prefer (first k a) (first k b)
     first k (Merge a b c     ) = Merge (first k a) (first k b) (fmap (first k) c)
+    first k (Constructors a  ) = Constructors (first k a)
     first k (Field a b       ) = Field (first k a) b
     first k (Note a b        ) = Note (k a) (first k b)
     first _ (Embed a         ) = Embed a
@@ -900,9 +904,10 @@ prettyExprD :: Pretty a => Expr s a -> Doc ann
 prettyExprD a0@(App _ _) =
     enclose' "" "" " " "" (fmap duplicate (reverse (docs a0)))
   where
-    docs (App  a b) = prettyExprE b : docs a
-    docs (Note _ b) = docs b
-    docs         b  = [ prettyExprE b ]
+    docs (App        a b) = prettyExprE b : docs a
+    docs (Constructors b) = [ prettyExprE b , "constructors" ]
+    docs (Note       _ b) = docs b
+    docs               b  = [ prettyExprE b ]
 prettyExprD (Note _ b) = prettyExprD b
 prettyExprD a0 =
     prettyExprE a0
@@ -1239,9 +1244,10 @@ buildExprC9  a           = buildExprD  a
 
 -- | Builder corresponding to the @exprD@ parser in "Dhall.Parser"
 buildExprD :: Buildable a => Expr s a -> Builder
-buildExprD (App  a b) = buildExprD a <> " " <> buildExprE b
-buildExprD (Note _ b) = buildExprD b
-buildExprD  a         = buildExprE a
+buildExprD (App        a b) = buildExprD a <> " " <> buildExprE b
+buildExprD (Constructors b) = "constructors " <> buildExprE b
+buildExprD (Note       _ b) = buildExprD b
+buildExprD  a               = buildExprE a
 
 -- | Builder corresponding to the @exprE@ parser in "Dhall.Parser"
 buildExprE :: Buildable a => Expr s a -> Builder
@@ -1625,6 +1631,9 @@ shift d v (Merge a b c) = Merge a' b' c'
     a' =       shift d v  a
     b' =       shift d v  b
     c' = fmap (shift d v) c
+shift d v (Constructors a) = Constructors a'
+  where
+    a' = shift d v  a
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
@@ -1760,6 +1769,9 @@ subst x e (Merge a b c) = Merge a' b' c'
     a' =       subst x e  a
     b' =       subst x e  b
     c' = fmap (subst x e) c
+subst x e (Constructors a) = Constructors a'
+  where
+    a' = subst x e  a
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
@@ -2151,6 +2163,18 @@ normalizeWith ctx e0 = loop (shift 0 "_" e0)
         x' =      loop x
         y' =      loop y
         t' = fmap loop t
+    Constructors t   ->
+        case t' of
+            Union kts -> RecordLit kvs
+              where
+                kvs = Data.Map.mapWithKey adapt kts
+
+                adapt k t_ = Lam k t_ (UnionLit k (Var (V k 0)) rest)
+                  where
+                    rest = Data.Map.delete k kts
+            _ -> Constructors t'
+      where
+        t' = loop t
     Field r x        ->
         case loop r of
             RecordLit kvs ->
@@ -2361,6 +2385,10 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
                             Nothing -> True
                     _ -> True
             _ -> True
+    Constructors t -> isNormalized t &&
+        case t of
+            Union _ -> False
+            _       -> True
     Field r x -> isNormalized r &&
         case r of
             RecordLit kvs ->

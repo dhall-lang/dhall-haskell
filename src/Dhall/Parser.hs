@@ -511,6 +511,9 @@ _using = reserved "using"
 _merge :: Parser ()
 _merge = reserved "merge"
 
+_constructors :: Parser ()
+_constructors = reserved "constructors"
+
 _NaturalFold :: Parser ()
 _NaturalFold = reserved "Natural/fold"
 
@@ -1151,8 +1154,10 @@ notEqualExpression =
 
 applicationExpression :: Parser a -> Parser (Expr Src a)
 applicationExpression embedded = do
-    a <- some (noted (selectorExpression embedded))
-    return (foldl1 app a)
+    f <- (do _constructors; return Constructors) <|> return id
+    a <- noted (selectorExpression embedded)
+    b <- many (noted (selectorExpression embedded))
+    return (foldl app (f a) b)
   where
     app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
         Note (Src before after (bytesL <> bytesR)) (App nL nR)
