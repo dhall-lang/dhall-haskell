@@ -27,6 +27,7 @@ regressionTests =
         , issue126
         , issue151
         , issue164
+        , issue201
         , parsing0
         , typeChecking0
         , typeChecking1
@@ -113,6 +114,12 @@ issue164 = Test.Tasty.HUnit.testCase "Issue #164" (do
     -- Verify that parsing should not fail on a single-quote within a
     -- single-quoted string
     _ <- Util.code "./tests/regression/issue164.dhall"
+    return () )
+
+issue201 :: TestTree
+issue201 = Test.Tasty.HUnit.testCase "Issue #201" (do
+    -- Verify that type synonyms work
+    _ <- Util.code "./tests/regression/issue201.dhall"
     return () )
 
 parsing0 :: TestTree
