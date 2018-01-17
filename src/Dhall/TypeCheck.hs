@@ -180,17 +180,19 @@ typeWithA tpa = loop
                 let nf_A' = Dhall.Core.normalize _A'
                 Left (TypeError ctx e (TypeMismatch f nf_A a nf_A'))
     loop ctx e@(Let x mA a0 b0) = do
+        _A1 <- loop ctx a0
         case mA of
             Just _A0 -> do
-                _A1 <- loop ctx a0
+                _ <- loop ctx _A0
                 let nf_A0 = Dhall.Core.normalize _A0
                 let nf_A1 = Dhall.Core.normalize _A1
                 if propEqual _A0 _A1
                     then return ()
                     else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
             Nothing -> return ()
-        let a1 = Dhall.Core.shift 1 (V x 0) a0
-        let b1 = Dhall.Core.subst (V x 0) a1 b0
+        let a1 = Dhall.Core.normalize a0
+        let a2 = Dhall.Core.shift 1 (V x 0) a1
+        let b1 = Dhall.Core.subst (V x 0) a2 b0
         let b2 = Dhall.Core.shift (-1) (V x 0) b1
         loop ctx b2
     loop ctx e@(Annot x t       ) = do
