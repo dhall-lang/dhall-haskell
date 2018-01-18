@@ -237,16 +237,12 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
 
 simpleLabel :: Parser Text
 simpleLabel = try (do
-    text <- quotedLabel
-    Control.Monad.guard (not (Data.HashSet.member text reservedIdentifiers))
-    return text )
-
-quotedLabel :: Parser Text
-quotedLabel = try (do
     c  <- Text.Parser.Char.satisfy headCharacter
     cs <- many (Text.Parser.Char.satisfy tailCharacter)
     let string = c:cs
-    return (Data.Text.Lazy.pack string) )
+    let text = Data.Text.Lazy.pack string
+    Control.Monad.guard (not (Data.HashSet.member text reservedIdentifiers))
+    return text )
   where
     headCharacter c = alpha c || c == '_'
 
@@ -255,9 +251,11 @@ quotedLabel = try (do
 backtickLabel :: Parser Text
 backtickLabel = do
     _ <- Text.Parser.Char.char '`'
-    t <- quotedLabel
+    t <- some (Text.Parser.Char.satisfy predicate)
     _ <- Text.Parser.Char.char '`'
-    return t
+    return (Data.Text.Lazy.pack t)
+  where
+    predicate c = alpha c || digit c || elem c ("-/_:" :: String)
 
 label :: Parser Text
 label = (do
