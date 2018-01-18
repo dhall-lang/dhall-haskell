@@ -179,43 +179,22 @@ typeWithA tpa = loop
                 let nf_A  = Dhall.Core.normalize _A
                 let nf_A' = Dhall.Core.normalize _A'
                 Left (TypeError ctx e (TypeMismatch f nf_A a nf_A'))
-    loop ctx e@(Let f mt r b ) = do
-        tR  <- loop ctx r
-        ttR <- fmap Dhall.Core.normalize (loop ctx tR)
-        kR  <- case ttR of
-            Const k -> return k
-            -- Don't bother to provide a `let`-specific version of this error
-            -- message because this should never happen anyway
-            _       -> Left (TypeError ctx e (InvalidInputType tR))
-
-        let ctx' = fmap (Dhall.Core.shift 1 (V f 0)) (Dhall.Context.insert f tR ctx)
-        tB  <- loop ctx' b
-        ttB <- fmap Dhall.Core.normalize (loop ctx' tB)
-        kB  <- case ttB of
-            Const k -> return k
-            -- Don't bother to provide a `let`-specific version of this error
-            -- message because this should never happen anyway
-            _       -> Left (TypeError ctx e (InvalidOutputType tB))
-
-        case rule kR kB of
-            Left () -> Left (TypeError ctx e (NoDependentLet tR tB))
-            Right _ -> return ()
-
-        case mt of
-            Nothing -> do
-                return ()
-            Just t  -> do
-                _ <- loop ctx t
-                let nf_t  = Dhall.Core.normalize t
-                let nf_tR = Dhall.Core.normalize tR
-                if propEqual nf_tR nf_t
+    loop ctx e@(Let x mA a0 b0) = do
+        _A1 <- loop ctx a0
+        case mA of
+            Just _A0 -> do
+                _ <- loop ctx _A0
+                let nf_A0 = Dhall.Core.normalize _A0
+                let nf_A1 = Dhall.Core.normalize _A1
+                if propEqual _A0 _A1
                     then return ()
-                    else Left (TypeError ctx e (AnnotMismatch r nf_t nf_tR))
-
-        let r'   = Dhall.Core.shift 1 (V f 0) r
-        let tB'  = Dhall.Core.subst (V f 0) r' (Dhall.Core.normalize tB)
-        let tB'' = Dhall.Core.shift (-1) (V f 0) tB'
-        return tB''
+                    else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
+            Nothing -> return ()
+        let a1 = Dhall.Core.normalize a0
+        let a2 = Dhall.Core.shift 1 (V x 0) a1
+        let b1 = Dhall.Core.subst (V x 0) a2 b0
+        let b2 = Dhall.Core.shift (-1) (V x 0) b1
+        loop ctx b2
     loop ctx e@(Annot x t       ) = do
         _ <- loop ctx t
 
@@ -732,7 +711,6 @@ data TypeMessage s a
     | CantListAppend (Expr s a) (Expr s a)
     | CantAdd (Expr s a) (Expr s a)
     | CantMultiply (Expr s a) (Expr s a)
-    | NoDependentLet (Expr s a) (Expr s a)
     | NoDependentTypes (Expr s a) (Expr s a)
     deriving (Show)
 
@@ -3042,91 +3020,6 @@ prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
         \↳ " <> txt1 <> "                                                                \n\
         \                                                                                \n\
         \... which makes this a forbidden dependent function type                        \n"
-      where
-        txt0 = build expr0
-        txt1 = build expr1
-
-prettyTypeMessage (NoDependentLet expr0 expr1) = ErrorMessages {..}
-  where
-    short = "No dependent ❰let❱"
-
-    long =
-        "Explanation: The Dhall programming language does not allow ❰let❱ expressions    \n\
-        \from terms to types.  These ❰let❱ expressions are also known as \"dependent ❰let❱\n\
-        \expressions\" because you have a type whose value depends on the value of a term.\n\
-        \                                                                                \n\
-        \The Dhall language forbids these dependent ❰let❱ expressions in order to        \n\
-        \guarantee that ❰let❱ expressions of the form:                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────┐                                                      \n\
-        \    │ let x : t = r in e │                                                      \n\
-        \    └────────────────────┘                                                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... are always equivalent to:                                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────┐                                                        \n\
-        \    │ (λ(x : t) → e) r │                                                        \n\
-        \    └──────────────────┘                                                        \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \This means that both expressions should normalize to the same result and if one \n\
-        \of the two fails to type check then the other should fail to type check, too.   \n\
-        \                                                                                \n\
-        \For this reason, the following is " <> _NOT <> " legal code:                    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────┐                                                       \n\
-        \    │ let x = 2 in Text │                                                       \n\
-        \    └───────────────────┘                                                       \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... because the above ❰let❱ expression is equivalent to:                        \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────┐                                             \n\
-        \    │ let x : Integer = 2 in Text │                                             \n\
-        \    └─────────────────────────────┘                                             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... which in turn must be equivalent to:                                        \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ (λ(x : Integer) → Text) 2 │                                               \n\
-        \    └───────────────────────────┘                                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... which in turn fails to type check because this sub-expression:              \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────┐                                                   \n\
-        \    │ λ(x : Integer) → Text │                                                   \n\
-        \    └───────────────────────┘                                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... has type:                                                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────┐                                                   \n\
-        \    │ ∀(x : Integer) → Text │                                                   \n\
-        \    └───────────────────────┘                                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... which is a forbidden dependent function type (i.e. a function from a term to\n\
-        \a type).  Therefore the equivalent ❰let❱ expression is also forbidden.          \n\
-        \                                                                                \n\
-        \Your ❰let❱ expression is invalid because the input has type:                    \n\
-        \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
-        \                                                                                \n\
-        \... and the output has kind:                                                    \n\
-        \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
-        \                                                                                \n\
-        \... which makes this a forbidden dependent ❰let❱ expression                     \n"
       where
         txt0 = build expr0
         txt1 = build expr1
