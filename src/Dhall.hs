@@ -128,7 +128,7 @@ instance Exception InvalidType
 True
 -}
 input
-    :: Type a
+    :: Type X a
     -- ^ The type of value to decode from Dhall to Haskell
     -> Text
     -- ^ The Dhall program
@@ -164,9 +164,9 @@ input (Type {..}) txt = do
 --   a much better user experience.
 rawInput
     :: Alternative f
-    => Type a
+    => Type x a
     -- ^ The type of value to decode from Dhall to Haskell
-    -> Expr s X
+    -> Expr s x
     -- ^ a closed form Dhall program, which evaluates to the expected type
     -> f a
     -- ^ The decoded value in Haskell
@@ -292,27 +292,31 @@ detailed =
     handler1 :: TypeError Src X -> IO a
     handler1 e = Control.Exception.throwIO (DetailedTypeError e)
 
-{-| A @(Type a)@ represents a way to marshal a value of type @\'a\'@ from Dhall
-    into Haskell
+{-| A @(Type x a)@ represents a way to marshal a value of type @\'a\'@ from
+    Dhall into Haskell
 
     You can produce `Type`s either explicitly:
 
-> example :: Type (Vector Text)
+> example :: Type x (Vector Text)
 > example = vector text
 
     ... or implicitly using `auto`:
 
-> example :: Type (Vector Text)
+> example :: Type x (Vector Text)
 > example = auto
 
     You can consume `Type`s using the `input` function:
 
-> input :: Type a -> Text -> IO a
+> input :: Type X a -> Text -> IO a
+
+    The @x@ parameter allows you to `Embed` domain-specific data into your
+    marshalling. This is often just `X`, indicating that there is no extra
+    information.
 -}
-data Type a = Type
-    { extract  :: Expr Src X -> Maybe a
+data Type x a = Type
+    { extract  :: Expr Src x -> Maybe a
     -- ^ Extracts Haskell value from the Dhall expression
-    , expected :: Expr Src X
+    , expected :: Expr Src x
     -- ^ Dhall type of the Haskell value
     }
     deriving (Functor)
@@ -322,7 +326,7 @@ data Type a = Type
 >>> input bool "True"
 True
 -}
-bool :: Type Bool
+bool :: Type x Bool
 bool = Type {..}
   where
     extract (BoolLit b) = pure b
@@ -335,7 +339,7 @@ bool = Type {..}
 >>> input natural "+42"
 42
 -}
-natural :: Type Natural
+natural :: Type x Natural
 natural = Type {..}
   where
     extract (NaturalLit n) = pure n
@@ -348,7 +352,7 @@ natural = Type {..}
 >>> input integer "42"
 42
 -}
-integer :: Type Integer
+integer :: Type x Integer
 integer = Type {..}
   where
     extract (IntegerLit n) = pure n
@@ -361,7 +365,7 @@ integer = Type {..}
 >>> input double "42.0"
 42.0
 -}
-double :: Type Double
+double :: Type x Double
 double = Type {..}
   where
     extract (DoubleLit n) = pure n
@@ -374,7 +378,7 @@ double = Type {..}
 >>> input lazyText "\"Test\""
 "Test"
 -}
-lazyText :: Type Text
+lazyText :: Type x Text
 lazyText = Type {..}
   where
     extract (TextLit t) = pure (Data.Text.Lazy.Builder.toLazyText t)
@@ -387,7 +391,7 @@ lazyText = Type {..}
 >>> input strictText "\"Test\""
 "Test"
 -}
-strictText :: Type Data.Text.Text
+strictText :: Type x Data.Text.Text
 strictText = fmap Data.Text.Lazy.toStrict lazyText
 
 {-| Decode a `Maybe`
@@ -395,7 +399,7 @@ strictText = fmap Data.Text.Lazy.toStrict lazyText
 >>> input (maybe integer) "[1] : Optional Integer"
 Just 1
 -}
-maybe :: Type a -> Type (Maybe a)
+maybe :: Type x a -> Type x (Maybe a)
 maybe (Type extractIn expectedIn) = Type extractOut expectedOut
   where
     extractOut (OptionalLit _ es) = traverse extractIn es'
@@ -410,7 +414,7 @@ maybe (Type extractIn expectedIn) = Type extractOut expectedOut
 >>> input (vector integer) "[1, 2, 3]"
 [1,2,3]
 -}
-vector :: Type a -> Type (Vector a)
+vector :: Type x a -> Type x (Vector a)
 vector (Type extractIn expectedIn) = Type extractOut expectedOut
   where
     extractOut (ListLit _ es) = traverse extractIn es
@@ -429,9 +433,9 @@ vector (Type extractIn expectedIn) = Type extractOut expectedOut
     types.
 -}
 class Interpret a where
-    autoWith:: InterpretOptions -> Type a
+    autoWith:: InterpretOptions -> Type x a
     default autoWith
-        :: (Generic a, GenericInterpret (Rep a)) => InterpretOptions -> Type a
+        :: (Generic a, GenericInterpret (Rep a)) => InterpretOptions -> Type x a
     autoWith options = fmap GHC.Generics.to (evalState (genericAutoWith options) 1)
 
 instance Interpret Bool where
@@ -480,7 +484,7 @@ deriving instance (Interpret a, Interpret b) => Interpret (a, b)
 
 > auto = autoWith defaultInterpretOptions
 -}
-auto :: Interpret a => Type a
+auto :: Interpret a => Type x a
 auto = autoWith defaultInterpretOptions
 
 {-| `genericAuto` is the default implementation for `auto` if you derive
@@ -488,7 +492,7 @@ auto = autoWith defaultInterpretOptions
     having to explicitly provide an `Interpret` instance for a type as long as
     the type derives `Generic`
 -}
-genericAuto :: (Generic a, GenericInterpret (Rep a)) => Type a
+genericAuto :: (Generic a, GenericInterpret (Rep a)) => Type x a
 genericAuto = fmap to (evalState (genericAutoWith defaultInterpretOptions) 1)
 
 {-| Use these options to tweak how Dhall derives a generic implementation of
@@ -518,7 +522,7 @@ defaultInterpretOptions = InterpretOptions
     for automatically deriving a generic implementation
 -}
 class GenericInterpret f where
-    genericAutoWith :: InterpretOptions -> State Int (Type (f a))
+    genericAutoWith :: InterpretOptions -> State Int (Type x (f a))
 
 instance GenericInterpret f => GenericInterpret (M1 D d f) where
     genericAutoWith options = do
@@ -651,14 +655,14 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
 {-| An @(InputType a)@ represents a way to marshal a value of type @\'a\'@ from
     Haskell into Dhall
 -}
-data InputType a = InputType
-    { embed    :: a -> Expr Src X
+data InputType x a = InputType
+    { embed    :: a -> Expr Src x
     -- ^ Embeds a Haskell value as a Dhall expression
-    , declared :: Expr Src X
+    , declared :: Expr Src x
     -- ^ Dhall type of the Haskell value
     }
 
-instance Contravariant InputType where
+instance Contravariant (InputType x) where
     contramap f (InputType embed declared) = InputType embed' declared
       where
         embed' x = embed (f x)
@@ -678,9 +682,9 @@ instance Contravariant InputType where
     * Marshaling the resulting Dhall expression back into a Haskell value
 -}
 class Inject a where
-    injectWith :: InterpretOptions -> InputType a
+    injectWith :: InterpretOptions -> InputType x a
     default injectWith
-        :: (Generic a, GenericInject (Rep a)) => InterpretOptions -> InputType a
+        :: (Generic a, GenericInject (Rep a)) => InterpretOptions -> InputType x a
     injectWith options
         = contramap GHC.Generics.from (evalState (genericInjectWith options) 1)
 
@@ -688,7 +692,7 @@ class Inject a where
 
 > inject = inject defaultInterpretOptions
 -}
-inject :: Inject a => InputType a
+inject :: Inject a => InputType x a
 inject = injectWith defaultInterpretOptions
 
 instance Inject Bool where
@@ -814,7 +818,7 @@ deriving instance (Inject a, Inject b) => Inject (a, b)
     for automatically deriving a generic implementation
 -}
 class GenericInject f where
-    genericInjectWith :: InterpretOptions -> State Int (InputType (f a))
+    genericInjectWith :: InterpretOptions -> State Int (InputType x (f a))
 
 instance GenericInject f => GenericInject (M1 D d f) where
     genericInjectWith options = do

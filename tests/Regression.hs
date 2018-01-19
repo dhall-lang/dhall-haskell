@@ -41,7 +41,7 @@ data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
 
 unnamedFields :: TestTree
 unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
-    let ty = Dhall.auto @Foo
+    let ty = Dhall.auto @Foo @X
     Test.Tasty.HUnit.assertEqual "Good type" (Dhall.expected ty) (Dhall.Core.Union (
             Data.Map.fromList [
                 ("Bar",Dhall.Core.Record (Data.Map.fromList [
@@ -54,7 +54,7 @@ unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
     let inj = Dhall.inject @Foo
     Test.Tasty.HUnit.assertEqual "Good Inject" (Dhall.declared inj) (Dhall.expected ty)
 
-    let tu_ty = Dhall.auto @(Integer, Bool)
+    let tu_ty = Dhall.auto @(Integer, Bool) @X
     Test.Tasty.HUnit.assertEqual "Auto Tuple" (Dhall.expected tu_ty) (Dhall.Core.Record (
             Data.Map.fromList [ ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool) ]))
 
