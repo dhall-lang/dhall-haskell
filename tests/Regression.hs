@@ -10,10 +10,12 @@ import qualified Data.Map
 import qualified Dhall
 import qualified Dhall.Core
 import qualified Dhall.Parser
+import qualified System.Timeout
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 import qualified Util
 
+import Control.DeepSeq (($!!))
 import Dhall.Import (Imported)
 import Dhall.Parser (Src)
 import Dhall.TypeCheck (TypeError, X)
@@ -120,6 +122,15 @@ issue201 :: TestTree
 issue201 = Test.Tasty.HUnit.testCase "Issue #201" (do
     -- Verify that type synonyms work
     _ <- Util.code "./tests/regression/issue201.dhall"
+    return () )
+
+issue209 :: TestTree
+issue209 = Test.Tasty.HUnit.testCase "Issue #209" (do
+    -- Verify that pretty-printing `constructors` doesn't trigger an infinite
+    -- loop
+    e <- Util.code "./tests/regression/issue209.dhall"
+    let text = Dhall.Core.pretty e
+    Just _ <- System.Timeout.timeout 1000000 (Control.Exception.evaluate $!! text)
     return () )
 
 parsing0 :: TestTree
