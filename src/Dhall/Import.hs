@@ -104,6 +104,7 @@ module Dhall.Import (
       exprFromPath
     , load
     , loadWith
+    , loadWithContext
     , hashExpression
     , hashExpressionToCode
     , Cycle(..)
@@ -774,6 +775,15 @@ loadWith
     -> m (Expr Src X)
 loadWith from_path ctx = evalStatus (loadStaticWith from_path ctx)
 
+-- | Resolve all imports within an expression using a custom typing context.
+--
+-- @load = loadWithContext Dhall.Context.empty@
+loadWithContext
+    :: Dhall.Context.Context (Expr Src X)
+    -> Expr Src Path
+    -> IO (Expr Src X)
+loadWithContext ctx = evalStatus (loadStaticIO ctx)
+
 loadStaticWith
     :: MonadCatch m
     => (Path -> StateT Status m (Expr Src Path))
@@ -849,7 +859,7 @@ evalStatus cb expr = State.evalStateT (fmap join (traverse cb expr)) emptyStatus
 
 -- | Resolve all imports within an expression
 load :: Expr Src Path -> IO (Expr Src X)
-load = evalStatus (loadStaticIO Dhall.Context.empty)
+load = loadWithContext Dhall.Context.empty
 
 -- | Hash a fully resolved expression
 hashExpression :: Expr s X -> Data.ByteString.ByteString
