@@ -901,16 +901,18 @@ prettyExprC9 a0 =
     prettyExprD a0
 
 prettyExprD :: Pretty a => Expr s a -> Doc ann
-prettyExprD a0@(App _ _) =
-    enclose' "" "" " " "" (fmap duplicate (reverse (docs a0)))
+prettyExprD a0 = case a0 of
+    App _ _        -> result
+    Constructors _ -> result
+    Note _ b       -> prettyExprD b
+    _              -> prettyExprE a0
   where
+    result = enclose' "" "" " " "" (fmap duplicate (reverse (docs a0)))
+
     docs (App        a b) = prettyExprE b : docs a
     docs (Constructors b) = [ prettyExprE b , "constructors" ]
     docs (Note       _ b) = docs b
     docs               b  = [ prettyExprE b ]
-prettyExprD (Note _ b) = prettyExprD b
-prettyExprD a0 =
-    prettyExprE a0
 
 prettyExprE :: Pretty a => Expr s a -> Doc ann
 prettyExprE (Field a b) = prettyExprE a <> "." <> prettyLabel b
