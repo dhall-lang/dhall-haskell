@@ -97,6 +97,15 @@
     > ocuments. You may use this\n    domain in examples without prior coordination or
     >  asking for permission.</p>\n    <p><a href=\"http://www.iana.org/domains/exampl
     > e\">More information...</a></p>\n</div>\n</body>\n</html>\n"
+
+    If you wish to just interpolate the contents of a path with the current scope as
+    @Text@ then add @as Template@ to the end of the import:
+
+    > $ echo 'value of var is \${var}'
+    > $ dhall <<< 'let var = "val" in ./template as Template'
+    > Text
+    > 
+    > "value of var is val\n"
 -}
 
 module Dhall.Import (
@@ -144,7 +153,7 @@ import Dhall.Core
     , PathType(..)
     , Path(..)
     )
-import Dhall.Parser (Parser(..), ParseError(..), Src(..))
+import Dhall.Parser (Parser(..), ParseError(..), Src(..), exprFromText)
 import Dhall.TypeCheck (X(..))
 #if MIN_VERSION_http_client(0,5,0)
 import Network.HTTP.Client
@@ -622,7 +631,23 @@ exprFromPath (Path {..}) = case pathType of
             RawText -> do
                 let pathString = Filesystem.Path.CurrentOS.encodeString path
                 text <- Data.Text.IO.readFile pathString
-                return (TextLit (build text)) )
+                return (TextLit (build text))
+            Template -> do
+                let pathString = Filesystem.Path.CurrentOS.encodeString path
+                template <- Data.Text.IO.readFile pathString
+
+                let textPath = case Filesystem.Path.CurrentOS.toText path of
+                      Left  text -> text
+                      Right text -> text
+                    bytesPath = Data.Text.Encoding.encodeUtf8 textPath
+                let delta =
+                        Directed bytesPath 0 0 0 0
+                case exprFromText delta (Text.fromStrict $ "''" <> template <> "''") of
+                    Left parserError -> do
+                        throwIO parserError
+                    Right expr -> do
+                        return expr )
+
     URL url headerPath -> do
         m       <- needManager
         request <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
@@ -716,6 +741,17 @@ exprFromPath (Path {..}) = case pathType of
                     Success expr -> return expr
             RawText -> do
                 return (TextLit (build text))
+            Template -> do
+                let urlBytes = Data.Text.Lazy.Encoding.encodeUtf8 url
+                let delta =
+                        Directed (Data.ByteString.Lazy.toStrict urlBytes) 0 0 0 0
+                case exprFromText delta ("''" <> text <> "''") of
+                    Left parserError -> do
+                        liftIO (throwIO parserError)
+                    Right expr -> do
+                        return expr
+
+
     Env env -> liftIO (do
         x <- System.Environment.lookupEnv (Text.unpack env)
         case x of
@@ -731,6 +767,16 @@ exprFromPath (Path {..}) = case pathType of
                             Success expr    -> do
                                 return expr
                     RawText -> return (TextLit (build str))
+                    Template -> do
+                        let envBytes = Data.Text.Lazy.Encoding.encodeUtf8 env
+                        let delta =
+                                Directed (Data.ByteString.Lazy.toStrict envBytes) 0 0 0 0
+                        case exprFromText delta (Text.pack $ "''" <> str <> "''") of
+                            Left parserError -> do
+                                throwIO parserError
+                            Right expr -> do
+                                return expr
+
             Nothing  -> throwIO (MissingEnvironmentVariable env) )
   where
     PathHashed {..} = pathHashed
@@ -835,7 +881,9 @@ loadStaticWith from_path ctx path = do
     --
     -- There is no need to check expressions that have been cached, since they
     -- have already been checked
-    if cached
+    --
+    -- Also do not type check templates on their own; they are not closed.
+    if cached || (pathMode path == Template)
         then return ()
         else case Dhall.TypeCheck.typeWith ctx expr of
             Left  err -> throwM (Imported (path:paths) err)

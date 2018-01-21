@@ -136,7 +136,7 @@ instance Buildable PathType where
     build (Env env) = "env:" <> build env
 
 -- | How to interpret the path's contents (i.e. as Dhall code or raw text)
-data PathMode = Code | RawText deriving (Eq, Ord, Show)
+data PathMode = Code | RawText | Template deriving (Eq, Ord, Show)
 
 data PathHashed = PathHashed
     { hash     :: Maybe Data.ByteString.ByteString
@@ -162,6 +162,7 @@ instance Buildable Path where
       where
         suffix = case pathMode of
             RawText -> "as Text"
+            Template -> "as Template"
             Code    -> ""
 
 instance Pretty Path where
@@ -2537,6 +2538,7 @@ reservedIdentifiers =
         , "Double"
         , "Double/show"
         , "Text"
+        , "Template"
         , "List"
         , "List/build"
         , "List/fold"

@@ -584,6 +584,9 @@ _Double = reserved "Double"
 _Text :: Parser ()
 _Text = reserved "Text"
 
+_Template :: Parser ()
+_Template = reserved "Template"
+
 _List :: Parser ()
 _List = reserved "List"
 
@@ -1517,13 +1520,17 @@ pathHashed_ = do
 import_ :: Parser Path
 import_ = (do
     pathHashed <- pathHashed_
-    pathMode   <- alternative <|> pure Code
+    pathMode   <- choice [ asTemplate, asText, pure Code ]
     return (Path {..}) ) <?> "import"
   where
-    alternative = do
+    asText = do
         _as
         _Text
         return RawText
+    asTemplate = do
+        _as
+        _Template
+        return Template
 
 -- | A parsing error
 newtype ParseError = ParseError Doc deriving (Typeable)
