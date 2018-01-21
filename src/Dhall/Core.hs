@@ -23,6 +23,7 @@ module Dhall.Core (
     , PathMode(..)
     , Path(..)
     , Var(..)
+    , Chunks(..)
     , Expr(..)
 
     -- * Normalization
@@ -40,6 +41,7 @@ module Dhall.Core (
     -- * Miscellaneous
     , internalError
     , reservedIdentifiers
+    , escapeText
     ) where
 
 #if MIN_VERSION_base(4,8,0)
@@ -276,8 +278,8 @@ data Expr s a
     | DoubleShow
     -- | > Text                                     ~  Text
     | Text
-    -- | > TextLit t                                ~  t
-    | TextLit Builder
+    -- | > TextLit (Chunks [(t1, e1), (t2, e2)] t3) ~  "t1${e1}t2${e2}t3"
+    | TextLit (Chunks s a)
     -- | > TextAppend x y                           ~  x ++ y
     | TextAppend (Expr s a) (Expr s a)
     -- | > List                                     ~  List
@@ -343,131 +345,145 @@ instance Applicative (Expr s) where
 instance Monad (Expr s) where
     return = pure
 
-    Const a          >>= _ = Const a
-    Var a            >>= _ = Var a
-    Lam a b c        >>= k = Lam a (b >>= k) (c >>= k)
-    Pi  a b c        >>= k = Pi a (b >>= k) (c >>= k)
-    App a b          >>= k = App (a >>= k) (b >>= k)
-    Let a b c d      >>= k = Let a (fmap (>>= k) b) (c >>= k) (d >>= k)
-    Annot a b        >>= k = Annot (a >>= k) (b >>= k)
-    Bool             >>= _ = Bool
-    BoolLit a        >>= _ = BoolLit a
-    BoolAnd a b      >>= k = BoolAnd (a >>= k) (b >>= k)
-    BoolOr  a b      >>= k = BoolOr  (a >>= k) (b >>= k)
-    BoolEQ  a b      >>= k = BoolEQ  (a >>= k) (b >>= k)
-    BoolNE  a b      >>= k = BoolNE  (a >>= k) (b >>= k)
-    BoolIf a b c     >>= k = BoolIf (a >>= k) (b >>= k) (c >>= k)
-    Natural          >>= _ = Natural
-    NaturalLit a     >>= _ = NaturalLit a
-    NaturalFold      >>= _ = NaturalFold
-    NaturalBuild     >>= _ = NaturalBuild
-    NaturalIsZero    >>= _ = NaturalIsZero
-    NaturalEven      >>= _ = NaturalEven
-    NaturalOdd       >>= _ = NaturalOdd
-    NaturalToInteger >>= _ = NaturalToInteger
-    NaturalShow      >>= _ = NaturalShow
-    NaturalPlus  a b >>= k = NaturalPlus  (a >>= k) (b >>= k)
-    NaturalTimes a b >>= k = NaturalTimes (a >>= k) (b >>= k)
-    Integer          >>= _ = Integer
-    IntegerLit a     >>= _ = IntegerLit a
-    IntegerShow      >>= _ = IntegerShow
-    Double           >>= _ = Double
-    DoubleLit a      >>= _ = DoubleLit a
-    DoubleShow       >>= _ = DoubleShow
-    Text             >>= _ = Text
-    TextLit a        >>= _ = TextLit a
-    TextAppend a b   >>= k = TextAppend (a >>= k) (b >>= k)
-    List             >>= _ = List
-    ListLit a b      >>= k = ListLit (fmap (>>= k) a) (fmap (>>= k) b)
-    ListAppend a b   >>= k = ListAppend (a >>= k) (b >>= k)
-    ListBuild        >>= _ = ListBuild
-    ListFold         >>= _ = ListFold
-    ListLength       >>= _ = ListLength
-    ListHead         >>= _ = ListHead
-    ListLast         >>= _ = ListLast
-    ListIndexed      >>= _ = ListIndexed
-    ListReverse      >>= _ = ListReverse
-    Optional         >>= _ = Optional
-    OptionalLit a b  >>= k = OptionalLit (a >>= k) (fmap (>>= k) b)
-    OptionalFold     >>= _ = OptionalFold
-    OptionalBuild    >>= _ = OptionalBuild
-    Record    a      >>= k = Record (fmap (>>= k) a)
-    RecordLit a      >>= k = RecordLit (fmap (>>= k) a)
-    Union     a      >>= k = Union (fmap (>>= k) a)
-    UnionLit a b c   >>= k = UnionLit a (b >>= k) (fmap (>>= k) c)
-    Combine a b      >>= k = Combine (a >>= k) (b >>= k)
-    Prefer a b       >>= k = Prefer (a >>= k) (b >>= k)
-    Merge a b c      >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
-    Constructors a   >>= k = Constructors (a >>= k)
-    Field a b        >>= k = Field (a >>= k) b
-    Note a b         >>= k = Note a (b >>= k)
-    Embed a          >>= k = k a
+    Const a              >>= _ = Const a
+    Var a                >>= _ = Var a
+    Lam a b c            >>= k = Lam a (b >>= k) (c >>= k)
+    Pi  a b c            >>= k = Pi a (b >>= k) (c >>= k)
+    App a b              >>= k = App (a >>= k) (b >>= k)
+    Let a b c d          >>= k = Let a (fmap (>>= k) b) (c >>= k) (d >>= k)
+    Annot a b            >>= k = Annot (a >>= k) (b >>= k)
+    Bool                 >>= _ = Bool
+    BoolLit a            >>= _ = BoolLit a
+    BoolAnd a b          >>= k = BoolAnd (a >>= k) (b >>= k)
+    BoolOr  a b          >>= k = BoolOr  (a >>= k) (b >>= k)
+    BoolEQ  a b          >>= k = BoolEQ  (a >>= k) (b >>= k)
+    BoolNE  a b          >>= k = BoolNE  (a >>= k) (b >>= k)
+    BoolIf a b c         >>= k = BoolIf (a >>= k) (b >>= k) (c >>= k)
+    Natural              >>= _ = Natural
+    NaturalLit a         >>= _ = NaturalLit a
+    NaturalFold          >>= _ = NaturalFold
+    NaturalBuild         >>= _ = NaturalBuild
+    NaturalIsZero        >>= _ = NaturalIsZero
+    NaturalEven          >>= _ = NaturalEven
+    NaturalOdd           >>= _ = NaturalOdd
+    NaturalToInteger     >>= _ = NaturalToInteger
+    NaturalShow          >>= _ = NaturalShow
+    NaturalPlus  a b     >>= k = NaturalPlus  (a >>= k) (b >>= k)
+    NaturalTimes a b     >>= k = NaturalTimes (a >>= k) (b >>= k)
+    Integer              >>= _ = Integer
+    IntegerLit a         >>= _ = IntegerLit a
+    IntegerShow          >>= _ = IntegerShow
+    Double               >>= _ = Double
+    DoubleLit a          >>= _ = DoubleLit a
+    DoubleShow           >>= _ = DoubleShow
+    Text                 >>= _ = Text
+    TextLit (Chunks a b) >>= k = TextLit (Chunks (fmap (fmap (>>= k)) a) b)
+    TextAppend a b       >>= k = TextAppend (a >>= k) (b >>= k)
+    List                 >>= _ = List
+    ListLit a b          >>= k = ListLit (fmap (>>= k) a) (fmap (>>= k) b)
+    ListAppend a b       >>= k = ListAppend (a >>= k) (b >>= k)
+    ListBuild            >>= _ = ListBuild
+    ListFold             >>= _ = ListFold
+    ListLength           >>= _ = ListLength
+    ListHead             >>= _ = ListHead
+    ListLast             >>= _ = ListLast
+    ListIndexed          >>= _ = ListIndexed
+    ListReverse          >>= _ = ListReverse
+    Optional             >>= _ = Optional
+    OptionalLit a b      >>= k = OptionalLit (a >>= k) (fmap (>>= k) b)
+    OptionalFold         >>= _ = OptionalFold
+    OptionalBuild        >>= _ = OptionalBuild
+    Record    a          >>= k = Record (fmap (>>= k) a)
+    RecordLit a          >>= k = RecordLit (fmap (>>= k) a)
+    Union     a          >>= k = Union (fmap (>>= k) a)
+    UnionLit a b c       >>= k = UnionLit a (b >>= k) (fmap (>>= k) c)
+    Combine a b          >>= k = Combine (a >>= k) (b >>= k)
+    Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
+    Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
+    Constructors a       >>= k = Constructors (a >>= k)
+    Field a b            >>= k = Field (a >>= k) b
+    Note a b             >>= k = Note a (b >>= k)
+    Embed a              >>= k = k a
 
 instance Bifunctor Expr where
-    first _ (Const a         ) = Const a
-    first _ (Var a           ) = Var a
-    first k (Lam a b c       ) = Lam a (first k b) (first k c)
-    first k (Pi a b c        ) = Pi a (first k b) (first k c)
-    first k (App a b         ) = App (first k a) (first k b)
-    first k (Let a b c d     ) = Let a (fmap (first k) b) (first k c) (first k d)
-    first k (Annot a b       ) = Annot (first k a) (first k b)
-    first _  Bool              = Bool
-    first _ (BoolLit a       ) = BoolLit a
-    first k (BoolAnd a b     ) = BoolAnd (first k a) (first k b)
-    first k (BoolOr a b      ) = BoolOr (first k a) (first k b)
-    first k (BoolEQ a b      ) = BoolEQ (first k a) (first k b)
-    first k (BoolNE a b      ) = BoolNE (first k a) (first k b)
-    first k (BoolIf a b c    ) = BoolIf (first k a) (first k b) (first k c)
-    first _  Natural           = Natural
-    first _ (NaturalLit a    ) = NaturalLit a
-    first _  NaturalFold       = NaturalFold
-    first _  NaturalBuild      = NaturalBuild
-    first _  NaturalIsZero     = NaturalIsZero
-    first _  NaturalEven       = NaturalEven
-    first _  NaturalOdd        = NaturalOdd
-    first _  NaturalToInteger  = NaturalToInteger
-    first _  NaturalShow       = NaturalShow
-    first k (NaturalPlus a b ) = NaturalPlus (first k a) (first k b)
-    first k (NaturalTimes a b) = NaturalTimes (first k a) (first k b)
-    first _  Integer           = Integer
-    first _ (IntegerLit a    ) = IntegerLit a
-    first _  IntegerShow       = IntegerShow
-    first _  Double            = Double
-    first _ (DoubleLit a     ) = DoubleLit a
-    first _  DoubleShow        = DoubleShow
-    first _  Text              = Text
-    first _ (TextLit a       ) = TextLit a
-    first k (TextAppend a b  ) = TextAppend (first k a) (first k b)
-    first _  List              = List
-    first k (ListLit a b     ) = ListLit (fmap (first k) a) (fmap (first k) b)
-    first k (ListAppend a b  ) = ListAppend (first k a) (first k b)
-    first _  ListBuild         = ListBuild
-    first _  ListFold          = ListFold
-    first _  ListLength        = ListLength
-    first _  ListHead          = ListHead
-    first _  ListLast          = ListLast
-    first _  ListIndexed       = ListIndexed
-    first _  ListReverse       = ListReverse
-    first _  Optional          = Optional
-    first k (OptionalLit a b ) = OptionalLit (first k a) (fmap (first k) b)
-    first _  OptionalFold      = OptionalFold
-    first _  OptionalBuild     = OptionalBuild
-    first k (Record a        ) = Record (fmap (first k) a)
-    first k (RecordLit a     ) = RecordLit (fmap (first k) a)
-    first k (Union a         ) = Union (fmap (first k) a)
-    first k (UnionLit a b c  ) = UnionLit a (first k b) (fmap (first k) c)
-    first k (Combine a b     ) = Combine (first k a) (first k b)
-    first k (Prefer a b      ) = Prefer (first k a) (first k b)
-    first k (Merge a b c     ) = Merge (first k a) (first k b) (fmap (first k) c)
-    first k (Constructors a  ) = Constructors (first k a)
-    first k (Field a b       ) = Field (first k a) b
-    first k (Note a b        ) = Note (k a) (first k b)
-    first _ (Embed a         ) = Embed a
+    first _ (Const a             ) = Const a
+    first _ (Var a               ) = Var a
+    first k (Lam a b c           ) = Lam a (first k b) (first k c)
+    first k (Pi a b c            ) = Pi a (first k b) (first k c)
+    first k (App a b             ) = App (first k a) (first k b)
+    first k (Let a b c d         ) = Let a (fmap (first k) b) (first k c) (first k d)
+    first k (Annot a b           ) = Annot (first k a) (first k b)
+    first _  Bool                  = Bool
+    first _ (BoolLit a           ) = BoolLit a
+    first k (BoolAnd a b         ) = BoolAnd (first k a) (first k b)
+    first k (BoolOr a b          ) = BoolOr (first k a) (first k b)
+    first k (BoolEQ a b          ) = BoolEQ (first k a) (first k b)
+    first k (BoolNE a b          ) = BoolNE (first k a) (first k b)
+    first k (BoolIf a b c        ) = BoolIf (first k a) (first k b) (first k c)
+    first _  Natural               = Natural
+    first _ (NaturalLit a        ) = NaturalLit a
+    first _  NaturalFold           = NaturalFold
+    first _  NaturalBuild          = NaturalBuild
+    first _  NaturalIsZero         = NaturalIsZero
+    first _  NaturalEven           = NaturalEven
+    first _  NaturalOdd            = NaturalOdd
+    first _  NaturalToInteger      = NaturalToInteger
+    first _  NaturalShow           = NaturalShow
+    first k (NaturalPlus a b     ) = NaturalPlus (first k a) (first k b)
+    first k (NaturalTimes a b    ) = NaturalTimes (first k a) (first k b)
+    first _  Integer               = Integer
+    first _ (IntegerLit a        ) = IntegerLit a
+    first _  IntegerShow           = IntegerShow
+    first _  Double                = Double
+    first _ (DoubleLit a         ) = DoubleLit a
+    first _  DoubleShow            = DoubleShow
+    first _  Text                  = Text
+    first k (TextLit (Chunks a b)) = TextLit (Chunks (fmap (fmap (first k)) a) b)
+    first k (TextAppend a b      ) = TextAppend (first k a) (first k b)
+    first _  List                  = List
+    first k (ListLit a b         ) = ListLit (fmap (first k) a) (fmap (first k) b)
+    first k (ListAppend a b      ) = ListAppend (first k a) (first k b)
+    first _  ListBuild             = ListBuild
+    first _  ListFold              = ListFold
+    first _  ListLength            = ListLength
+    first _  ListHead              = ListHead
+    first _  ListLast              = ListLast
+    first _  ListIndexed           = ListIndexed
+    first _  ListReverse           = ListReverse
+    first _  Optional              = Optional
+    first k (OptionalLit a b     ) = OptionalLit (first k a) (fmap (first k) b)
+    first _  OptionalFold          = OptionalFold
+    first _  OptionalBuild         = OptionalBuild
+    first k (Record a            ) = Record (fmap (first k) a)
+    first k (RecordLit a         ) = RecordLit (fmap (first k) a)
+    first k (Union a             ) = Union (fmap (first k) a)
+    first k (UnionLit a b c      ) = UnionLit a (first k b) (fmap (first k) c)
+    first k (Combine a b         ) = Combine (first k a) (first k b)
+    first k (Prefer a b          ) = Prefer (first k a) (first k b)
+    first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
+    first k (Constructors a      ) = Constructors (first k a)
+    first k (Field a b           ) = Field (first k a) b
+    first k (Note a b            ) = Note (k a) (first k b)
+    first _ (Embed a             ) = Embed a
 
     second = fmap
 
 instance IsString (Expr s a) where
     fromString str = Var (fromString str)
+
+data Chunks s a = Chunks [(Builder, Expr s a)] Builder
+    deriving (Functor, Foldable, Traversable, Show, Eq)
+
+instance Monoid (Chunks s a) where
+    mempty = Chunks [] mempty
+
+    mappend (Chunks xysL zL) (Chunks         []    zR) =
+        Chunks xysL (zL <> zR)
+    mappend (Chunks xysL zL) (Chunks ((x, y):xysR) zR) =
+        Chunks (xysL ++ (zL <> x, y):xysR) zR
+
+instance IsString (Chunks s a) where
+    fromString str = Chunks [] (fromString str)
 
 {-  There is a one-to-one correspondence between the builders in this section
     and the sub-parsers in "Dhall.Parser".  Each builder is named after the
@@ -590,8 +606,13 @@ prettyNatural = Pretty.pretty
 prettyDouble :: Double -> Doc ann
 prettyDouble = Pretty.pretty
 
-prettyText :: Builder -> Doc ann
-prettyText a = Pretty.pretty (Builder.toLazyText (buildText a))
+prettyChunks :: Pretty a => Chunks s a -> Doc ann
+prettyChunks (Chunks a b) =
+    "\"" <> foldMap prettyChunk a <> prettyText b <> "\""
+  where
+    prettyChunk (c, d) = prettyText c <> "${" <> prettyExprA d <> "}"
+
+    prettyText t = Pretty.pretty (Builder.toLazyText (escapeText t))
 
 prettyConst :: Const -> Doc ann
 prettyConst Type = "Type"
@@ -985,7 +1006,7 @@ prettyExprF (NaturalLit a) =
 prettyExprF (DoubleLit a) =
     prettyDouble a
 prettyExprF (TextLit a) =
-    prettyText a
+    prettyChunks a
 prettyExprF (Record a) =
     prettyRecord a
 prettyExprF (RecordLit a) =
@@ -1083,8 +1104,16 @@ buildDouble :: Double -> Builder
 buildDouble a = build (show a)
 
 -- | Builder corresponding to the @text@ token in "Dhall.Parser"
-buildText :: Builder -> Builder
-buildText a = "\"" <> Builder.fromLazyText (Text.concatMap adapt text) <> "\""
+buildChunks :: Buildable a => Chunks s a -> Builder
+buildChunks (Chunks a b) = "\"" <> foldMap buildChunk a <> escapeText b <> "\""
+  where
+    buildChunk (c, d) = escapeText c <> "${" <> buildExprA d <> "}"
+
+-- | Escape a `Builder` literal using Dhall's escaping rules
+--
+-- Note that the result does not include surrounding quotes
+escapeText :: Builder -> Builder
+escapeText a = Builder.fromLazyText (Text.concatMap adapt text)
   where
     adapt c
         | '\x20' <= c && c <= '\x21' = Text.singleton c
@@ -1324,7 +1353,7 @@ buildExprF (NaturalLit a) =
 buildExprF (DoubleLit a) =
     buildDouble a
 buildExprF (TextLit a) =
-    buildText a
+    buildChunks a
 buildExprF (Record a) =
     buildRecord a
 buildExprF (RecordLit a) =
@@ -1579,7 +1608,9 @@ shift _ _ Double = Double
 shift _ _ (DoubleLit a) = DoubleLit a
 shift _ _ DoubleShow = DoubleShow
 shift _ _ Text = Text
-shift _ _ (TextLit a) = TextLit a
+shift d v (TextLit (Chunks a b)) = TextLit (Chunks a' b)
+  where
+    a' = fmap (fmap (shift d v)) a
 shift d v (TextAppend a b) = TextAppend a' b'
   where
     a' = shift d v a
@@ -1726,7 +1757,9 @@ subst _ _ Double = Double
 subst _ _ (DoubleLit a) = DoubleLit a
 subst _ _ DoubleShow = DoubleShow
 subst _ _ Text = Text
-subst _ _ (TextLit a) = TextLit a
+subst x e (TextLit (Chunks a b)) = TextLit (Chunks a' b)
+  where
+    a' = fmap (fmap (subst x e)) a
 subst x e (TextAppend a b) = TextAppend a' b'
   where
     a' = subst x e a
@@ -1905,9 +1938,12 @@ normalizeWith ctx e0 = loop (shift 0 "_" e0)
             App NaturalEven (NaturalLit n) -> BoolLit (even n)
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
             App NaturalToInteger (NaturalLit n) -> IntegerLit (toInteger n)
-            App NaturalShow (NaturalLit n) -> TextLit ("+" <> buildNatural n)
-            App IntegerShow (IntegerLit n) -> TextLit (buildNumber n)
-            App DoubleShow (DoubleLit n) -> TextLit (buildDouble n)
+            App NaturalShow (NaturalLit n) ->
+                TextLit (Chunks [] ("+" <> buildNatural n))
+            App IntegerShow (IntegerLit n) ->
+                TextLit (Chunks [] (buildNumber n))
+            App DoubleShow (DoubleLit n) ->
+                TextLit (Chunks [] (buildDouble n))
             App (App OptionalBuild t) k
                 | check     -> OptionalLit t k'
                 | otherwise -> App f' a'
@@ -2078,7 +2114,16 @@ normalizeWith ctx e0 = loop (shift 0 "_" e0)
     DoubleLit n -> DoubleLit n
     DoubleShow -> DoubleShow
     Text -> Text
-    TextLit t -> TextLit t
+    TextLit (Chunks xys z) ->
+        case mconcat chunks of
+            Chunks [("", x)] "" -> x
+            c                   -> TextLit c
+      where
+        chunks = concatMap process xys ++ [Chunks [] z]
+
+        process (x, y) = case loop y of
+            TextLit c -> [Chunks [] x, c]
+            y'        -> [Chunks [(x, y')] mempty]
     TextAppend x y   ->
         case x' of
             TextLit xt ->
@@ -2331,7 +2376,7 @@ isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
     DoubleLit _ -> True
     DoubleShow -> True
     Text -> True
-    TextLit _ -> True
+    TextLit (Chunks xys _) -> all (all isNormalized) xys
     TextAppend x y -> isNormalized x && isNormalized y &&
         case x of
             TextLit _ ->

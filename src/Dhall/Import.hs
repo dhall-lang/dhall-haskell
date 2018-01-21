@@ -138,6 +138,7 @@ import Data.Typeable (Typeable)
 import Filesystem.Path ((</>), FilePath)
 import Dhall.Core
     ( Expr(..)
+    , Chunks(..)
     , HasHome(..)
     , PathHashed(..)
     , PathMode(..)
@@ -495,8 +496,8 @@ toHeader
   :: Expr s a
   -> Maybe (CI Data.ByteString.ByteString, Data.ByteString.ByteString)
 toHeader (RecordLit m) = do
-    TextLit keyBuilder   <- Map.lookup "header" m
-    TextLit valueBuilder <- Map.lookup "value"  m
+    TextLit (Chunks [] keyBuilder  ) <- Map.lookup "header" m
+    TextLit (Chunks [] valueBuilder) <- Map.lookup "value"  m
     let keyText   = Text.toStrict (Builder.toLazyText keyBuilder  )
     let valueText = Text.toStrict (Builder.toLazyText valueBuilder)
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
@@ -622,7 +623,7 @@ exprFromPath (Path {..}) = case pathType of
             RawText -> do
                 let pathString = Filesystem.Path.CurrentOS.encodeString path
                 text <- Data.Text.IO.readFile pathString
-                return (TextLit (build text)) )
+                return (TextLit (Chunks [] (build text))) )
     URL url headerPath -> do
         m       <- needManager
         request <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
@@ -715,7 +716,7 @@ exprFromPath (Path {..}) = case pathType of
                             Success expr -> return expr
                     Success expr -> return expr
             RawText -> do
-                return (TextLit (build text))
+                return (TextLit (Chunks [] (build text)))
     Env env -> liftIO (do
         x <- System.Environment.lookupEnv (Text.unpack env)
         case x of
@@ -730,7 +731,7 @@ exprFromPath (Path {..}) = case pathType of
                                 throwIO (ParseError (Text.Trifecta._errDoc errInfo))
                             Success expr    -> do
                                 return expr
-                    RawText -> return (TextLit (build str))
+                    RawText -> return (TextLit (Chunks [] (build str)))
             Nothing  -> throwIO (MissingEnvironmentVariable env) )
   where
     PathHashed {..} = pathHashed
