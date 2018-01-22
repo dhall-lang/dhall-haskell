@@ -37,6 +37,7 @@ module Dhall
     , strictText
     , maybe
     , vector
+    , unit
     , GenericInterpret(..)
 
     , Inject(..)
@@ -417,6 +418,19 @@ vector (Type extractIn expectedIn) = Type extractOut expectedOut
     extractOut  _             = Nothing
 
     expectedOut = App List expectedIn
+
+{-| Decode `()` from an empty record.
+
+>>> input unit "{=}"
+()
+-}
+unit :: Type ()
+unit = Type extractOut expectedOut
+  where
+    extractOut (RecordLit fields) | Data.Map.null fields = return ()
+    extractOut _ = Nothing
+
+    expectedOut = Record Data.Map.empty
 
 {-| Any value that implements `Interpret` can be automatically decoded based on
     the inferred return type of `input`
