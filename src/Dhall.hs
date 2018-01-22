@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving  #-}
@@ -18,6 +19,7 @@ module Dhall
     (
     -- * Input
       input
+    , inputWith
     , detailed
 
     -- * Types
@@ -82,6 +84,7 @@ import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
+import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
@@ -134,10 +137,26 @@ input
     -- ^ The Dhall program
     -> IO a
     -- ^ The decoded value in Haskell
-input (Type {..}) txt = do
+input ty txt =
+  inputWith ty Dhall.Context.empty (const Nothing) txt
+
+{-| Extend 'input' with a custom typing context and normalization process.
+
+-}
+inputWith
+    :: Type a
+    -- ^ The type of value to decode from Dhall to Haskell
+    -> Dhall.Context.Context (Expr Src X)
+    -- ^ The starting context for type-checking
+    -> Dhall.Core.Normalizer X
+    -> Text
+    -- ^ The Dhall program
+    -> IO a
+    -- ^ The decoded value in Haskell
+inputWith (Type {..}) ctx n txt = do
     let delta = Directed "(input)" 0 0 0 0
     expr  <- throws (Dhall.Parser.exprFromText delta txt)
-    expr' <- Dhall.Import.load expr
+    expr' <- Dhall.Import.loadWithContext ctx expr
     let suffix =
             ( Data.ByteString.Lazy.toStrict
             . Data.Text.Lazy.Encoding.encodeUtf8
@@ -151,8 +170,8 @@ input (Type {..}) txt = do
                 bytes' = bytes <> " : " <> suffix
             _ ->
                 Annot expr' expected
-    _ <- throws (Dhall.TypeCheck.typeOf annot)
-    case extract (Dhall.Core.normalize expr') of
+    _ <- throws (Dhall.TypeCheck.typeWith ctx annot)
+    case extract (Dhall.Core.normalizeWith n expr') of
         Just x  -> return x
         Nothing -> Control.Exception.throwIO InvalidType
 
