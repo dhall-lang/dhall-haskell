@@ -1,3 +1,21 @@
+1.9.0
+
+* Feature: BREAKING CHANGE TO LANGUAGE AND API: Add `constructors` keyword
+    * This new keyword generates constructors from a union type
+    * This means that `constructors` is now a reserved keyword
+    * This adds a new `Constructors` constructor to the `Expr` type
+* Feature: BREAKING CHANGE TO THE API: `dhall-format` preserves interpolation
+    * This changes the `TextLit` constructor to represent an interpolated `Text`
+      literal
+* Feature: You can now define type synonyms using `let`
+* Feature: Quoted labels now export an expanded character set
+* Performance: Improve startup time when importing files, but not URLs
+* Security: `localhost`/`127.0.0.1` imports no longer count as local imports
+    * Specifically: they cannot import environment variables or files
+* Security: Fix type-checking bug
+* Expose `MissingEnvironmentVariable` exception type
+* Add `genericAuto`, `inputWith`, and `loadWithContext`
+
 1.8.2
 
 * Add `typeWithA` for type-checking custom `Embed`ded values
