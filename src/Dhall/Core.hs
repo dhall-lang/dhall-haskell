@@ -34,6 +34,7 @@ module Dhall.Core (
     , shift
     , isNormalized
     , isNormalizedWith
+    , denote
 
     -- * Pretty-printing
     , pretty
@@ -1528,7 +1529,7 @@ instance Pretty a => Pretty (Expr s a) where
     descend into a lambda or let expression that binds a variable of the same
     name in order to avoid shifting the bound variables by mistake.
 -}
-shift :: Integer -> Var -> Expr s a -> Expr t a
+shift :: Integer -> Var -> Expr s a -> Expr s a
 shift _ _ (Const a) = Const a
 shift d (V x n) (Var (V x' n')) = Var (V x' n'')
   where
@@ -1670,7 +1671,7 @@ shift d v (Constructors a) = Constructors a'
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
-shift d v (Note _ b) = b'
+shift d v (Note a b) = Note a b'
   where
     b' = shift d v b
 -- The Dhall compiler enforces that all embedded values are closed expressions
@@ -1681,7 +1682,7 @@ shift _ _ (Embed p) = Embed p
 
 > subst x C B  ~  B[x := C]
 -}
-subst :: Var -> Expr s a -> Expr t a -> Expr s a
+subst :: Var -> Expr s a -> Expr s a -> Expr s a
 subst _ _ (Const a) = Const a
 subst (V x n) e (Lam y _A b) = Lam y _A' b'
   where
@@ -1810,7 +1811,7 @@ subst x e (Constructors a) = Constructors a'
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
-subst x e (Note _ b) = b'
+subst x e (Note a b) = Note a b'
   where
     b' = subst x e b
 -- The Dhall compiler enforces that all embedded values are closed expressions
@@ -1851,6 +1852,68 @@ boundedType (Record kvs)     = all boundedType kvs
 boundedType (Union kvs)      = all boundedType kvs
 boundedType _                = False
 
+-- | Remove all `Note` constructors from an `Expr` (i.e. de-`Note`)
+denote :: Expr s a -> Expr t a
+denote (Note _ b        ) = denote b
+denote (Const a         ) = Const a
+denote (Var a           ) = Var a
+denote (Lam a b c       ) = Lam a (denote b) (denote c)
+denote (Pi a b c        ) = Pi a (denote b) (denote c)
+denote (App a b         ) = App (denote a) (denote b)
+denote (Let a b c d     ) = Let a (fmap denote b) (denote c) (denote d)
+denote (Annot a b       ) = Annot (denote a) (denote b)
+denote  Bool              = Bool
+denote (BoolLit a       ) = BoolLit a
+denote (BoolAnd a b     ) = BoolAnd (denote a) (denote b)
+denote (BoolOr a b      ) = BoolOr (denote a) (denote b)
+denote (BoolEQ a b      ) = BoolEQ (denote a) (denote b)
+denote (BoolNE a b      ) = BoolNE (denote a) (denote b)
+denote (BoolIf a b c    ) = BoolIf (denote a) (denote b) (denote c)
+denote  Natural           = Natural
+denote (NaturalLit a    ) = NaturalLit a
+denote  NaturalFold       = NaturalFold
+denote  NaturalBuild      = NaturalBuild
+denote  NaturalIsZero     = NaturalIsZero
+denote  NaturalEven       = NaturalEven
+denote  NaturalOdd        = NaturalOdd
+denote  NaturalToInteger  = NaturalToInteger
+denote  NaturalShow       = NaturalShow
+denote (NaturalPlus a b ) = NaturalPlus (denote a) (denote b)
+denote (NaturalTimes a b) = NaturalTimes (denote a) (denote b)
+denote  Integer           = Integer
+denote (IntegerLit a    ) = IntegerLit a
+denote  IntegerShow       = IntegerShow
+denote  Double            = Double
+denote (DoubleLit a     ) = DoubleLit a
+denote  DoubleShow        = DoubleShow
+denote  Text              = Text
+denote (TextLit a       ) = TextLit a
+denote (TextAppend a b  ) = TextAppend (denote a) (denote b)
+denote  List              = List
+denote (ListLit a b     ) = ListLit (fmap denote a) (fmap denote b)
+denote (ListAppend a b  ) = ListAppend (denote a) (denote b)
+denote  ListBuild         = ListBuild
+denote  ListFold          = ListFold
+denote  ListLength        = ListLength
+denote  ListHead          = ListHead
+denote  ListLast          = ListLast
+denote  ListIndexed       = ListIndexed
+denote  ListReverse       = ListReverse
+denote  Optional          = Optional
+denote (OptionalLit a b ) = OptionalLit (denote a) (fmap denote b)
+denote  OptionalFold      = OptionalFold
+denote  OptionalBuild     = OptionalBuild
+denote (Record a        ) = Record (fmap denote a)
+denote (RecordLit a     ) = RecordLit (fmap denote a)
+denote (Union a         ) = Union (fmap denote a)
+denote (UnionLit a b c  ) = UnionLit a (denote b) (fmap denote c)
+denote (Combine a b     ) = Combine (denote a) (denote b)
+denote (Prefer a b      ) = Prefer (denote a) (denote b)
+denote (Merge a b c     ) = Merge (denote a) (denote b) (fmap denote c)
+denote (Constructors a  ) = Constructors (denote a)
+denote (Field a b       ) = Field (denote a) b
+denote (Embed a         ) = Embed a
+
 {-| Reduce an expression to its normal form, performing beta reduction and applying
     any custom definitions.
    
@@ -1867,7 +1930,7 @@ boundedType _                = False
    
 -}
 normalizeWith :: Normalizer a -> Expr s a -> Expr t a
-normalizeWith ctx e0 = loop (shift 0 "_" e0)
+normalizeWith ctx e0 = loop (denote e0)
  where
     -- This is to avoid a `Show` constraint on the @a@ and @s@ in the type of
     -- `loop`.  In theory, this might change a failing repro case into
@@ -2246,7 +2309,7 @@ isNormalizedWith ctx e = e == (normalizeWith ctx e)
 
 -- | Quickly check if an expression is in normal form
 isNormalized :: Expr s a -> Bool
-isNormalized e = case shift 0 "_" e of  -- `shift` is a hack to delete `Note`
+isNormalized e = case denote e of
     Const _ -> True
     Var _ -> True
     Lam _ a b -> isNormalized a && isNormalized b
