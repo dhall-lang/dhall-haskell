@@ -2,19 +2,33 @@
 
 * Feature: BREAKING CHANGE TO LANGUAGE AND API: Add `constructors` keyword
     * This new keyword generates constructors from a union type
+        * See the updated Haskell tutorial for more details
     * This means that `constructors` is now a reserved keyword
     * This adds a new `Constructors` constructor to the `Expr` type
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/199
 * Feature: BREAKING CHANGE TO THE API: `dhall-format` preserves interpolation
     * This changes the `TextLit` constructor to represent an interpolated `Text`
       literal
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/220
 * Feature: You can now define type synonyms using `let`
-* Feature: Quoted labels now export an expanded character set
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/202
+* Feature: Extend valid set of quoted labels
+    * See: https://github.com/dhall-lang/dhall-lang/pull/65
 * Performance: Improve startup time when importing files, but not URLs
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/194
 * Security: `localhost`/`127.0.0.1` imports no longer count as local imports
     * Specifically: they cannot import environment variables or files
-* Security: Fix type-checking bug
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/197
+* Security: Fix potential type-checking bug
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/198
 * Expose `MissingEnvironmentVariable` exception type
-* Add `genericAuto`, `inputWith`, and `loadWithContext`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/196
+* Add `genericAuto`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/195
+* Add `inputWith`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/222
+* Add`loadWithContext`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/215
 
 1.8.2
 
