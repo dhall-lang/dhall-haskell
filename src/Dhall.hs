@@ -37,6 +37,7 @@ module Dhall
     , strictText
     , maybe
     , vector
+    , list
     , unit
     , string
     , pair
@@ -420,6 +421,14 @@ vector (Type extractIn expectedIn) = Type extractOut expectedOut
     extractOut  _             = Nothing
 
     expectedOut = App List expectedIn
+
+{-| Decode a list
+
+>>> input (list integer) "[1, 2, 3]"
+[1,2,3]
+-}
+list :: Type a -> Type [a]
+list = fmap Data.Vector.toList . vector
 
 {-| Decode `()` from an empty record.
 
