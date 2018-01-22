@@ -38,6 +38,7 @@ module Dhall
     , maybe
     , vector
     , unit
+    , string
     , GenericInterpret(..)
 
     , Inject(..)
@@ -431,6 +432,15 @@ unit = Type extractOut expectedOut
     extractOut _ = Nothing
 
     expectedOut = Record Data.Map.empty
+
+{-| Decode a `String`
+
+>>> input string "\"ABC\""
+"ABC"
+
+"-}
+string :: Type String
+string = Data.Text.Lazy.unpack <$> lazyText
 
 {-| Any value that implements `Interpret` can be automatically decoded based on
     the inferred return type of `input`
