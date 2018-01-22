@@ -39,6 +39,7 @@ module Dhall
     , vector
     , unit
     , string
+    , pair
     , GenericInterpret(..)
 
     , Inject(..)
@@ -441,6 +442,22 @@ unit = Type extractOut expectedOut
 "-}
 string :: Type String
 string = Data.Text.Lazy.unpack <$> lazyText
+
+{-| Given a pair of `Type`s, decode a tuple-record into their pairing.
+
+>>> input (pair natural bool) "{ _1 = +42, _2 = False }"
+(42, False)
+-}
+pair :: Type a -> Type b -> Type (a, b)
+pair l r = Type extractOut expectedOut
+  where
+    extractOut (RecordLit fields) =
+      (,) <$> ( Data.Map.lookup "_1" fields >>= extract l )
+          <*> ( Data.Map.lookup "_2" fields >>= extract r )
+    extractOut _ = Nothing
+
+    expectedOut = Record (Data.Map.fromList [("_1", expected l)
+                                            ,("_2", expected r)])
 
 {-| Any value that implements `Interpret` can be automatically decoded based on
     the inferred return type of `input`
