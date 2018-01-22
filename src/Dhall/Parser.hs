@@ -263,16 +263,7 @@ label = (do
     whitespace
     return t ) <?> "label"
 
--- | Combine consecutive chunks to eliminate gratuitous appends
-textAppend :: Expr Src a -> Expr Src a -> Expr Src a
-textAppend (TextLit a) (TextLit b) =
-    TextLit (a <> b)
-textAppend (TextLit a) (TextAppend (TextLit b) c) =
-    TextAppend (TextLit (a <> b)) c
-textAppend a b =
-    TextAppend a b
-
-doubleQuotedChunk :: Parser a -> Parser (Expr Src a)
+doubleQuotedChunk :: Parser a -> Parser (Chunks Src a)
 doubleQuotedChunk embedded =
     choice
         [ interpolation
@@ -284,11 +275,11 @@ doubleQuotedChunk embedded =
         _ <- Text.Parser.Char.text "${"
         e <- expression embedded
         _ <- Text.Parser.Char.char '}'
-        return e
+        return (Chunks [(mempty, e)] mempty)
 
     unescapedCharacter = do
         c <- Text.Parser.Char.satisfy predicate
-        return (TextLit (Data.Text.Lazy.Builder.singleton c))
+        return (Chunks [] (Data.Text.Lazy.Builder.singleton c))
       where
         predicate c =
                 ('\x20' <= c && c <= '\x21'    )
@@ -309,7 +300,7 @@ doubleQuotedChunk embedded =
             , tab
             , unicode
             ]
-        return (TextLit (Data.Text.Lazy.Builder.singleton c))
+        return (Chunks [] (Data.Text.Lazy.Builder.singleton c))
       where
         quotationMark = Text.Parser.Char.char '"'
 
@@ -338,25 +329,29 @@ doubleQuotedChunk embedded =
             let n = ((n0 * 16 + n1) * 16 + n2) * 16 + n3
             return (Data.Char.chr n)
 
-doubleQuotedLiteral :: Parser a -> Parser (Expr Src a)
+doubleQuotedLiteral :: Parser a -> Parser (Chunks Src a)
 doubleQuotedLiteral embedded = do
     _      <- Text.Parser.Char.char '"'
     chunks <- many (doubleQuotedChunk embedded)
     _      <- Text.Parser.Char.char '"'
-    return (foldr textAppend (TextLit "") chunks)
+    return (mconcat chunks)
 
-dedent :: Expr Src a -> Expr Src a
-dedent expr0 = process trimBegin expr0
+-- | Similar to `Dhall.Core.buildChunks` except that this doesn't bother to
+-- render interpolated expressions to avoid a `Buildable a` constraint.  The
+-- interpolated contents are not necessary for computing how much to dedent a
+-- multi-line string
+--
+-- This also doesn't include the surrounding quotes since they would interfere
+-- with the whitespace detection
+buildChunks :: Chunks s a -> Builder
+buildChunks (Chunks a b) = foldMap buildChunk a <> escapeText b
   where
-    -- This treats variable interpolation as breaking leading whitespace for the
-    -- purposes of computing the shortest leading whitespace.  The "${x}"
-    -- could really be any text that breaks whitespace
-    concatFragments (TextAppend (TextLit t) e) = t      <> concatFragments e
-    concatFragments (TextAppend  _          e) = "${x}" <> concatFragments e
-    concatFragments (TextLit t)                = t
-    concatFragments  _                         = mempty
+    buildChunk (c, _) = escapeText c <> "${x}"
 
-    builder0 = concatFragments expr0
+dedent :: Chunks Src a -> Chunks Src a
+dedent chunks0 = process chunks0
+  where
+    builder0 = buildChunks chunks0
 
     text0 = Data.Text.Lazy.Builder.toLazyText builder0
 
@@ -373,9 +368,9 @@ dedent expr0 = process trimBegin expr0
         [] -> 0
         _  -> minimum (map indentLength nonEmptyLines)
 
-    -- The purpose of this complicated `trim0`/`trim1` is to ensure that we
-    -- strip leading whitespace without stripping whitespace after variable
-    -- interpolation
+    -- The purpose of this complicated `trimBegin`/`trimContinue` is to ensure
+    -- that we strip leading whitespace without stripping whitespace after
+    -- variable interpolation
 
     -- This is the trim function we use up until the first variable
     -- interpolation, dedenting all lines
@@ -400,16 +395,14 @@ dedent expr0 = process trimBegin expr0
     -- This is the loop that drives whether or not to use `trimBegin` or
     -- `trimContinue`.  We call this function with `trimBegin`, but after the
     -- first interpolation we switch permanently to `trimContinue`
-    process trim (TextAppend (TextLit t) e) =
-        TextAppend (TextLit (trim t)) (process trimContinue e)
-    process _    (TextAppend e0 e1) =
-        TextAppend e0 (process trimContinue e1)
-    process trim (TextLit t) =
-        TextLit (trim t)
-    process _     e =
-        e
+    process (Chunks ((x0, y0):xys) z) =
+        Chunks ((trimBegin x0, y0):xys') (trimContinue z)
+      where
+        xys' = [ (trimContinue x, y) | (x, y) <- xys ]
+    process (Chunks [] z) =
+        Chunks [] (trimBegin z)
 
-singleQuoteContinue :: Parser a -> Parser (Expr Src a)
+singleQuoteContinue :: Parser a -> Parser (Chunks Src a)
 singleQuoteContinue embedded =
     choice
         [ escapeSingleQuotes
@@ -422,44 +415,44 @@ singleQuoteContinue embedded =
         ]
   where
         escapeSingleQuotes = do
-            a <- fmap TextLit "'''"
+            _ <- "'''" :: Parser Builder
             b <- singleQuoteContinue embedded
-            return (textAppend a b)
+            return ("''" <> b)
 
         interpolation = do
             _ <- Text.Parser.Char.text "${"
             a <- expression embedded
             _ <- Text.Parser.Char.char '}'
             b <- singleQuoteContinue embedded
-            return (textAppend a b)
+            return (Chunks [(mempty, a)] mempty <> b)
 
         escapeInterpolation = do
             _ <- Text.Parser.Char.text "''${"
             b <- singleQuoteContinue embedded
-            return (textAppend (TextLit "${") b)
+            return ("${" <> b)
 
         endLiteral = do
             _ <- Text.Parser.Char.text "''"
-            return (TextLit "")
+            return mempty
 
         unescapedCharacter = do
-            a <- fmap TextLit (satisfy predicate)
+            a <- satisfy predicate
             b <- singleQuoteContinue embedded
-            return (textAppend a b)
+            return (Chunks [] a <> b)
           where
             predicate c = '\x20' <= c && c <= '\x10FFFF'
 
         endOfLine = do
-            a <- fmap TextLit "\n" <|> fmap TextLit "\r\n"
+            a <- "\n" <|> "\r\n"
             b <- singleQuoteContinue embedded
-            return (textAppend a b)
+            return (Chunks [] a <> b)
 
         tab = do
             _ <- Text.Parser.Char.char '\t'
             b <- singleQuoteContinue embedded
-            return (textAppend (TextLit "\t") b)
+            return ("\t" <> b)
 
-singleQuoteLiteral :: Parser a -> Parser (Expr Src a)
+singleQuoteLiteral :: Parser a -> Parser (Chunks Src a)
 singleQuoteLiteral embedded = do
     _ <- Text.Parser.Char.text "''"
 
@@ -480,7 +473,7 @@ textLiteral :: Parser a -> Parser (Expr Src a)
 textLiteral embedded = (do
     literal <- doubleQuotedLiteral embedded <|> singleQuoteLiteral embedded
     whitespace
-    return literal ) <?> "text literal"
+    return (TextLit literal) ) <?> "text literal"
 
 reserved :: Data.Text.Text -> Parser ()
 reserved x = do _ <- Text.Parser.Char.text x; whitespace

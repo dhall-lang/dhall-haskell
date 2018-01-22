@@ -64,7 +64,7 @@ import Data.Text.Lazy (Text)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Data.Word (Word8, Word16, Word32, Word64)
-import Dhall.Core (Expr(..))
+import Dhall.Core (Expr(..), Chunks(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
@@ -396,8 +396,8 @@ double = Type {..}
 lazyText :: Type Text
 lazyText = Type {..}
   where
-    extract (TextLit t) = pure (Data.Text.Lazy.Builder.toLazyText t)
-    extract  _          = empty
+    extract (TextLit (Chunks [] t)) = pure (Data.Text.Lazy.Builder.toLazyText t)
+    extract  _                      = empty
 
     expected = Text
 
@@ -720,14 +720,15 @@ instance Inject Bool where
 instance Inject Text where
     injectWith _ = InputType {..}
       where
-        embed text = TextLit (Data.Text.Lazy.Builder.fromLazyText text)
+        embed text =
+            TextLit (Chunks [] (Data.Text.Lazy.Builder.fromLazyText text))
 
         declared = Text
 
 instance Inject Data.Text.Text where
     injectWith _ = InputType {..}
       where
-        embed text = TextLit (Data.Text.Lazy.Builder.fromText text)
+        embed text = TextLit (Chunks [] (Data.Text.Lazy.Builder.fromText text))
 
         declared = Text
 

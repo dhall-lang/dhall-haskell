@@ -7,6 +7,9 @@ module Regression where
 
 import qualified Control.Exception
 import qualified Data.Map
+import qualified Data.Text.Lazy.IO
+import qualified Data.Text.Prettyprint.Doc
+import qualified Data.Text.Prettyprint.Doc.Render.Text
 import qualified Dhall
 import qualified Dhall.Core
 import qualified Dhall.Parser
@@ -30,6 +33,8 @@ regressionTests =
         , issue151
         , issue164
         , issue201
+        , issue209
+        , issue216
         , parsing0
         , typeChecking0
         , typeChecking1
@@ -132,6 +137,25 @@ issue209 = Test.Tasty.HUnit.testCase "Issue #209" (do
     let text = Dhall.Core.pretty e
     Just _ <- System.Timeout.timeout 1000000 (Control.Exception.evaluate $!! text)
     return () )
+
+opts :: Data.Text.Prettyprint.Doc.LayoutOptions
+opts =
+    Data.Text.Prettyprint.Doc.defaultLayoutOptions
+        { Data.Text.Prettyprint.Doc.layoutPageWidth =
+            Data.Text.Prettyprint.Doc.AvailablePerLine 80 1.0
+        }
+
+issue216 :: TestTree
+issue216 = Test.Tasty.HUnit.testCase "Issue #216" (do
+    -- Verify that pretty-printing preserves string interpolation
+    e <- Util.code "./tests/regression/issue216a.dhall"
+    let doc       = Data.Text.Prettyprint.Doc.pretty e
+    let docStream = Data.Text.Prettyprint.Doc.layoutSmart opts doc
+    let text0 = Data.Text.Prettyprint.Doc.Render.Text.renderLazy docStream
+
+    text1 <- Data.Text.Lazy.IO.readFile "./tests/regression/issue216b.dhall"
+
+    Test.Tasty.HUnit.assertEqual "Pretty-printing should preserve string interpolation" text1 text0 )
 
 parsing0 :: TestTree
 parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (do
