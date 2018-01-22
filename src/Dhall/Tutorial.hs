@@ -2708,3 +2708,10 @@ import Dhall
 -- the above polymorphic function then you'd get the unexpected behavior where
 -- a list literal is a function if the list has 0 elements but not a function
 -- otherwise.
+-- 
+-- * Does Dhall support user-defined recursive types?
+--
+-- No, but you can translate recursive code to non-recursive code by following
+-- this guide:
+--
+-- <https://github.com/dhall-lang/dhall-lang/wiki/How-to-translate-recursive-code-to-Dhall How to translate recursive code to Dhall>
