@@ -21,6 +21,13 @@
     * See: https://github.com/dhall-lang/dhall-haskell/pull/197
 * Security: Fix potential type-checking bug
     * See: https://github.com/dhall-lang/dhall-haskell/pull/198
+* Fix: BREAKING CHANGE TO API: Improve localization of error messages
+    * This required fixing the type of `normalize`/`shift`/`subst` to preserve
+      the first type parameter of `Expr` (i.e. they no longer delete `Note`
+      constructors)
+    * A new `denote` function was added for the explicit purpose of deleting
+      `Note` constructors
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/218
 * Expose `MissingEnvironmentVariable` exception type
     * See: https://github.com/dhall-lang/dhall-haskell/pull/196
 * Add `genericAuto`
