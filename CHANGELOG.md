@@ -29,6 +29,8 @@
     * See: https://github.com/dhall-lang/dhall-haskell/pull/222
 * Add`loadWithContext`
     * See: https://github.com/dhall-lang/dhall-haskell/pull/215
+* Add `pair`/`unit`/`string`/`list`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/227
 
 1.8.2
 
