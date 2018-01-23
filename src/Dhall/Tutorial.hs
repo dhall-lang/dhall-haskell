@@ -923,30 +923,6 @@ import Dhall
 -- >
 -- > "haha"
 --
--- Every @let@ expression of the form:
---
--- > let x : t = y in e
---
--- ... is exactly equivalent to:
---
--- > (λ(x : t) → e) y
---
--- So for example, this @let@ expression:
---
--- > let x : Text = "ha" in x ++ x
---
--- ... is equivalent to:
---
--- > (λ(x : Text) → x ++ x) "ha"
---
--- ... which in turn reduces to:
---
--- > "ha" ++ "ha"
---
--- ... which in turn reduces to:
---
--- > "haha"
---
 -- You need to nest @let@ expressions if you want to define more than one value
 -- in this way:
 --
@@ -996,6 +972,13 @@ import Dhall
 -- > Bool
 -- > 
 -- > False
+--
+-- ... or to define synonyms for types:
+--
+-- > $ dhall <<< 'let Name : Type = Text in [ "John", "Mary" ] : List Name'
+-- > List Text
+-- > 
+-- > [ "John", "Mary" ]
 --
 -- __Exercise:__ What do you think the following code will normalize to?
 --
