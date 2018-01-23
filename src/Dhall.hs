@@ -39,6 +39,10 @@ module Dhall
     , strictText
     , maybe
     , vector
+    , list
+    , unit
+    , string
+    , pair
     , GenericInterpret(..)
 
     , Inject(..)
@@ -436,6 +440,52 @@ vector (Type extractIn expectedIn) = Type extractOut expectedOut
     extractOut  _             = Nothing
 
     expectedOut = App List expectedIn
+
+{-| Decode a list
+
+>>> input (list integer) "[1, 2, 3]"
+[1,2,3]
+-}
+list :: Type a -> Type [a]
+list = fmap Data.Vector.toList . vector
+
+{-| Decode `()` from an empty record.
+
+>>> input unit "{=}"
+()
+-}
+unit :: Type ()
+unit = Type extractOut expectedOut
+  where
+    extractOut (RecordLit fields) | Data.Map.null fields = return ()
+    extractOut _ = Nothing
+
+    expectedOut = Record Data.Map.empty
+
+{-| Decode a `String`
+
+>>> input string "\"ABC\""
+"ABC"
+
+"-}
+string :: Type String
+string = Data.Text.Lazy.unpack <$> lazyText
+
+{-| Given a pair of `Type`s, decode a tuple-record into their pairing.
+
+>>> input (pair natural bool) "{ _1 = +42, _2 = False }"
+(42, False)
+-}
+pair :: Type a -> Type b -> Type (a, b)
+pair l r = Type extractOut expectedOut
+  where
+    extractOut (RecordLit fields) =
+      (,) <$> ( Data.Map.lookup "_1" fields >>= extract l )
+          <*> ( Data.Map.lookup "_2" fields >>= extract r )
+    extractOut _ = Nothing
+
+    expectedOut = Record (Data.Map.fromList [("_1", expected l)
+                                            ,("_2", expected r)])
 
 {-| Any value that implements `Interpret` can be automatically decoded based on
     the inferred return type of `input`
