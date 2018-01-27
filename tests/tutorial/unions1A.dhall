@@ -1,1 +1,1 @@
-./process < Right = True | Left : Natural >
+./process.dhall < Right = True | Left : Natural >
