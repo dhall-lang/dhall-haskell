@@ -13,11 +13,8 @@ let
     packageOverrides = pkgs: {
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: {
-          dhall =
-            haskellPackagesNew.callPackage ./dhall.nix { };
-
           dhall-nix =
-            pkgs.haskell.lib.disableSharedExecutables
+            pkgs.haskell.lib.justStaticExecutables
               (haskellPackagesNew.callPackage ./default.nix { });
         };
       };
@@ -88,6 +85,7 @@ in
         testIntegerLit = dhallToNix "123";
         testDouble = dhallToNix "Double";
         testTextLit = dhallToNix ''"ABC"'';
+        testInterpolation = dhallToNix ''λ(x : Text) → "ABC''${x}GHI"'' "DEF";
         testTextAppend = dhallToNix "λ(x : Text) → λ(y : Text) → x ++ y";
         testList = dhallToNix "List Integer";
         testListLit = dhallToNix "[1, 2, 3] : List Integer";
@@ -172,6 +170,7 @@ in
         assert (testIntegerLit == 123);
         assert (testDouble == {});
         assert (testTextLit == "ABC");
+        assert (testInterpolation == "ABCDEFGHI");
         assert (testTextAppend "ABC" "DEF" == "ABCDEF");
         assert (testList == {});
         assert (testListLit == [1 2 3]);

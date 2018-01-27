@@ -95,7 +95,7 @@ import Control.Exception (Exception)
 import Data.Foldable (toList)
 import Data.Fix (Fix(..))
 import Data.Typeable (Typeable)
-import Dhall.Core (Const(..), Expr(..), Var(..))
+import Dhall.Core (Chunks(..), Const(..), Expr(..), Var(..))
 import Dhall.TypeCheck (X(..))
 import Nix.Atoms (NAtom(..))
 import Nix.Expr
@@ -126,6 +126,8 @@ data CompileError
     -- ^ Nix does not provide a way to reference a shadowed variable
     | NoDoubles Double
     -- ^ Nix does not provide a way to represent floating point values
+    | UnexpectedConstructorsKeyword
+    -- ^ The @constructors@ keyword is not yet supported
     deriving (Typeable)
 
 instance Show CompileError where
@@ -183,6 +185,7 @@ Nix
 
         txt =
             Data.Text.Lazy.toStrict (Data.Text.Lazy.Builder.toLazyText builder)
+
     show (NoDoubles n) =
         Data.Text.unpack [NeatInterpolation.text|
 $_ERROR: No doubles
@@ -200,6 +203,20 @@ You provided the following value:
       where
         txt = Data.Text.pack (show n)
 
+    show UnexpectedConstructorsKeyword =
+        Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: Unexpected ❰constructors❱ keyword
+
+Explanation: The dhallToNix Haskell API function has a precondition that the
+Dhall expression to translate to Nix must have already been type-checked.  This
+precondition ensures that the normalized expression will have no remaining
+❰constructors❱ keywords.
+
+However, the dhallToNix Haskell API function was called with a Dhall expression
+that still had a ❰constructors❱ keyword, which indicates that the expression had
+not yet been type-checked.
+|]
+
 _ERROR :: Data.Text.Text
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
@@ -213,6 +230,8 @@ Right (NAbs (Param "x") (NAbs (Param "y") (NBinary NPlus (NSym "x") (NSym "y")))
 >>> fmap Nix.Pretty.prettyNix it
 Right x: y: x + y
 
+    Precondition: You must first type-check the Dhall expression before passing
+    the expression to `dhallToNix`
 -}
 dhallToNix :: Expr s X -> Either CompileError (Fix NExprF)
 dhallToNix e = loop (Dhall.Core.normalize e)
@@ -319,9 +338,19 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop DoubleShow = do
         return "toString"
     loop Text = return (Fix (NSet []))
-    loop (TextLit a) = do
-        let a' = Data.Text.Lazy.toStrict (Data.Text.Lazy.Builder.toLazyText a)
-        return (Fix (NStr (DoubleQuoted [Plain a'])))
+    loop (TextLit (Chunks abs_ c)) = do
+        let process (a, b) = do
+                let text = Data.Text.Lazy.Builder.toLazyText a
+                let a'   = Data.Text.Lazy.toStrict text
+                b' <- loop b
+                return [Plain a', Antiquoted b']
+        abs' <- mapM process abs_
+
+        let text = Data.Text.Lazy.Builder.toLazyText c
+        let c'   = Data.Text.Lazy.toStrict text
+
+        let chunks = concat abs' ++ [Plain c']
+        return (Fix (NStr (DoubleQuoted chunks)))
     loop (TextAppend a b) = do
         a' <- loop a
         b' <- loop b
@@ -382,7 +411,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop (OptionalLit _ b) =
         if Data.Vector.null b
             then return (Fix (NConstant NNull))
-            else dhallToNix (Data.Vector.head b)
+            else loop (Data.Vector.head b)
     loop OptionalFold = do
         let e0 = Fix (NBinary NEq "x" (Fix (NConstant NNull)))
         let e1 = Fix (NIf e0 "nothing" (Fix (NApp "just" "x")))
@@ -398,7 +427,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         loop (Lam "a" (Const Type) (Lam "f" e2 e5))
     loop (Record _) = return (Fix (NSet []))
     loop (RecordLit a) = do
-        a' <- traverse dhallToNix a
+        a' <- traverse loop a
         let a'' = do
                 (k, v) <- Data.Map.toAscList a'
                 let k' = Data.Text.Lazy.toStrict k
@@ -406,7 +435,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return (Fix (NSet a''))
     loop (Union _) = return (Fix (NSet []))
     loop (UnionLit k v kts) = do
-        v' <- dhallToNix v
+        v' <- loop v
         let k'   = Data.Text.Lazy.toStrict k
         let e0   = do
                 k'' <- k : toList (Data.Map.keysSet kts)
@@ -415,8 +444,8 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e2   = Fix (NApp (Fix (NSym k')) v')
         return (Fix (NAbs (ParamSet (FixedParamSet e1) Nothing) e2))
     loop (Combine a b) = do
-        a' <- dhallToNix a
-        b' <- dhallToNix b
+        a' <- loop a
+        b' <- loop b
         let e0 = Fix (NApp (Fix (NApp "map" "toKeyVals")) "ks")
         let e1 = Fix (NApp "builtins.concatLists" e0)
         let e2 = Fix (NApp "builtins.listToAttrs" e1)
@@ -456,15 +485,17 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e11 = Fix (NApp (Fix (NApp "combine" a')) b')
         return (Fix (NLet [NamedVar ["combine"] combine] e11))
     loop (Merge a b _) = do
-        a' <- dhallToNix a
-        b' <- dhallToNix b
+        a' <- loop a
+        b' <- loop b
         return (Fix (NApp b' a'))
+    loop (Constructors _) = do
+        Left UnexpectedConstructorsKeyword
     loop (Prefer a b) = do
-        a' <- dhallToNix a
-        b' <- dhallToNix b
+        a' <- loop a
+        b' <- loop b
         return (Fix (NBinary NUpdate a' b'))
     loop (Field a b) = do
-        a' <- dhallToNix a
+        a' <- loop a
         let b' = Data.Text.Lazy.toStrict b
         return (Fix (NSelect a' [StaticKey b'] Nothing))
     loop (Note _ b) = loop b
