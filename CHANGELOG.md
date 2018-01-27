@@ -14,6 +14,7 @@
     * See: https://github.com/dhall-lang/dhall-haskell/pull/202
 * Feature: Extend valid set of quoted labels
     * See: https://github.com/dhall-lang/dhall-lang/pull/65
+    * See: https://github.com/dhall-lang/dhall-lang/pull/77
 * Performance: Improve startup time when importing files, but not URLs
     * See: https://github.com/dhall-lang/dhall-haskell/pull/194
 * Security: `localhost`/`127.0.0.1` imports no longer count as local imports
