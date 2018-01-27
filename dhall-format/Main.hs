@@ -20,7 +20,6 @@
           subexpressions then you will need to split them into a separate
           file for now
     * Preserving multi-line strings (this reduces them to ordinary strings)
-    * Preserving string interpolation (this expands interpolation to @++@)
 
     See the @Dhall.Tutorial@ module for example usage
 -}

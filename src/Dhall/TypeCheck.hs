@@ -30,7 +30,7 @@ import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Pretty(..))
 import Data.Traversable (forM)
 import Data.Typeable (Typeable)
-import Dhall.Core (Const(..), Expr(..), Var(..))
+import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 
 import qualified Control.Monad.Trans.State.Strict as State
@@ -342,7 +342,13 @@ typeWithA tpa = loop
         return (Pi "_" Double Text)
     loop _      Text              = do
         return (Const Type)
-    loop _     (TextLit _       ) = do
+    loop ctx e@(TextLit (Chunks xys _)) = do
+        let process (_, y) = do
+                ty <- fmap Dhall.Core.normalize (loop ctx y)
+                case ty of
+                    Text -> return ()
+                    _    -> Left (TypeError ctx e (CantInterpolate y ty))
+        mapM_ process xys
         return Text
     loop ctx e@(TextAppend l r  ) = do
         tl <- fmap Dhall.Core.normalize (loop ctx l)
@@ -707,6 +713,7 @@ data TypeMessage s a
     | CantOr (Expr s a) (Expr s a)
     | CantEQ (Expr s a) (Expr s a)
     | CantNE (Expr s a) (Expr s a)
+    | CantInterpolate (Expr s a) (Expr s a)
     | CantTextAppend (Expr s a) (Expr s a)
     | CantListAppend (Expr s a) (Expr s a)
     | CantAdd (Expr s a) (Expr s a)
@@ -2903,6 +2910,70 @@ prettyTypeMessage (CantEQ expr0 expr1) =
 
 prettyTypeMessage (CantNE expr0 expr1) =
         buildBooleanOperator "/=" expr0 expr1
+
+prettyTypeMessage (CantInterpolate expr0 expr1) = ErrorMessages {..}
+  where
+    short = "You can only interpolate ❰Text❱"
+
+    long =
+        "Explanation: Text interpolation only works on expressions of type ❰Text❱        \n\
+        \                                                                                \n\
+        \For example, these are all valid uses of string interpolation:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────┐                                                        \n\
+        \    │ \"ABC${\"DEF\"}GHI\" │                                                    \n\
+        \    └──────────────────┘                                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ λ(x : Text) → \"ABC${x}GHI\" │                                            \n\
+        \    └────────────────────────────┘                                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────────────────┐       \n\
+        \    │ λ(age : Natural) → \"Age: ${Integer/show (Natural/toInteger age)}\" │     \n\
+        \    └───────────────────────────────────────────────────────────────────┘       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You might have thought that string interpolation automatically converts the   \n\
+        \  interpolated value to a ❰Text❱ representation of that value:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────┐                                        \n\
+        \    │ λ(age : Natural) → \"Age: ${age}\" │                                      \n\
+        \    └──────────────────────────────────┘                                        \n\
+        \                                  ⇧                                             \n\
+        \                                  Invalid: ❰age❱ has type ❰Natural❱             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \● You might have forgotten to escape a string interpolation that you wanted     \n\
+        \  Dhall to ignore and pass through:                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ \"echo ${HOME}\" │                                                        \n\
+        \    └────────────────┘                                                          \n\
+        \             ⇧                                                                  \n\
+        \             ❰HOME❱ is not in scope and this might have meant to use ❰\\${HOME}❱\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You interpolated this expression:                                               \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which does not have type ❰Text❱ but instead has type:                       \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n"
+      where
+        txt0 = build expr0
+        txt1 = build expr1
+
+ 
 
 prettyTypeMessage (CantTextAppend expr0 expr1) = ErrorMessages {..}
   where

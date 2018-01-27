@@ -594,9 +594,11 @@ enclose' beginShort beginLong sepShort sepLong docs =
 
 prettyLabel :: Text -> Doc ann
 prettyLabel a =
-    if Data.HashSet.member a reservedIdentifiers || Text.any (== ':') a
+    if Data.HashSet.member a reservedIdentifiers || Text.any predicate a
     then "`" <> Pretty.pretty a <> "`"
     else Pretty.pretty a
+  where
+    predicate c = c == ':' || c == '.'
 
 prettyNumber :: Integer -> Doc ann
 prettyNumber = Pretty.pretty
@@ -1088,9 +1090,11 @@ pretty = Pretty.renderLazy . Pretty.layoutPretty options . Pretty.pretty
 -- | Builder corresponding to the @label@ token in "Dhall.Parser"
 buildLabel :: Text -> Builder
 buildLabel label =
-    if Data.HashSet.member label reservedIdentifiers || Text.any (== ':') label
+    if Data.HashSet.member label reservedIdentifiers || Text.any predicate label
     then "`" <> build label <> "`"
     else build label
+  where
+    predicate c = c == ':' || c == '.'
 
 -- | Builder corresponding to the @number@ token in "Dhall.Parser"
 buildNumber :: Integer -> Builder
