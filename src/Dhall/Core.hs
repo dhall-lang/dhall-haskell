@@ -609,10 +609,35 @@ prettyNatural = Pretty.pretty
 prettyDouble :: Double -> Doc ann
 prettyDouble = Pretty.pretty
 
+-- TODO: Correctly escape multi-line literals
 prettyChunks :: Pretty a => Chunks s a -> Doc ann
 prettyChunks (Chunks a b) =
-    "\"" <> foldMap prettyChunk a <> prettyText b <> "\""
+    if any (\(builder, _) -> hasNewLine builder) a || hasNewLine b
+    then
+        Pretty.align
+        (   "''" <> Pretty.hardline
+        <>  Pretty.align
+            (foldMap prettyMultilineChunk a <> prettyMultilineBuilder b)
+        <>  "''"
+        )
+    else "\"" <> foldMap prettyChunk a <> prettyText b <> "\""
   where
+    hasNewLine builder = Text.any (== '\n') lazyText
+      where
+        lazyText = Builder.toLazyText builder
+
+    prettyMultilineChunk (c, d) =
+      prettyMultilineBuilder c <> "${" <> prettyExprA d <> "}"
+
+    prettyMultilineBuilder builder = mconcat docs
+      where
+        lazyText = Builder.toLazyText builder
+
+        lazyLines = Text.splitOn "\n" lazyText
+
+        docs =
+            Data.List.intersperse Pretty.hardline (fmap Pretty.pretty lazyLines)
+
     prettyChunk (c, d) = prettyText c <> "${" <> prettyExprA d <> "}"
 
     prettyText t = Pretty.pretty (Builder.toLazyText (escapeText t))
