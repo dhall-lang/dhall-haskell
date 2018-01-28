@@ -380,7 +380,7 @@ typeWithA tpa = loop
                             let nf_t  = Dhall.Core.normalize t
                             let nf_t' = Dhall.Core.normalize t'
                             let err   = MismatchedListElements i nf_t x nf_t'
-                            Left (TypeError ctx e err) )
+                            Left (TypeError ctx x err) )
                 return (App List t)
     loop ctx e@(ListLit (Just t ) xs) = do
         s <- fmap Dhall.Core.normalize (loop ctx t)
@@ -394,7 +394,7 @@ typeWithA tpa = loop
                 else do
                     let nf_t  = Dhall.Core.normalize t
                     let nf_t' = Dhall.Core.normalize t'
-                    Left (TypeError ctx e (InvalidListElement i nf_t x nf_t')) )
+                    Left (TypeError ctx x (InvalidListElement i nf_t x nf_t')) )
         return (App List t)
     loop ctx e@(ListAppend l r  ) = do
         tl <- fmap Dhall.Core.normalize (loop ctx l)
@@ -1702,10 +1702,10 @@ prettyTypeMessage MissingListType = do
         \                                                                                \n\
         \You cannot supply an empty list without a type annotation                       \n"
 
-prettyTypeMessage (MismatchedListElements i expr0 expr1 expr2) =
+prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "List elements should have the same type"
+    short = "List elements should all have the same type"
 
     long =
         "Explanation: Every element in a list must have the same type                    \n\
@@ -1730,20 +1730,15 @@ prettyTypeMessage (MismatchedListElements i expr0 expr1 expr2) =
         \                                                                                \n\
         \↳ " <> txt0 <> "                                                                \n\
         \                                                                                \n\
-        \... but the following element at index " <> txt1 <> ":                          \n\
-        \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n\
-        \                                                                                \n\
-        \... has this type instead:                                                      \n\
+        \... but the element at index #" <> txt1 <> " has this type instead:             \n\
         \                                                                                \n\
         \↳ " <> txt3 <> "                                                                \n"
       where
         txt0 = build expr0
         txt1 = build i
-        txt2 = build expr1
         txt3 = build expr2
 
-prettyTypeMessage (InvalidListElement i expr0 expr1 expr2) =
+prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
     ErrorMessages {..}
   where
     short = "List element has the wrong type"
@@ -1772,17 +1767,12 @@ prettyTypeMessage (InvalidListElement i expr0 expr1 expr2) =
         \                                                                                \n\
         \↳ " <> txt0 <> "                                                                \n\
         \                                                                                \n\
-        \... but the following element at index " <> txt1 <> ":                          \n\
-        \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n\
-        \                                                                                \n\
-        \... has this type instead:                                                      \n\
+        \... but the element at index #" <> txt1 <> " has this type instead:             \n\
         \                                                                                \n\
         \↳ " <> txt3 <> "                                                                \n"
       where
         txt0 = build expr0
         txt1 = build i
-        txt2 = build expr1
         txt3 = build expr2
 
 prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
