@@ -118,7 +118,6 @@ module Dhall.Import (
 import Control.Applicative (empty)
 import Control.Exception
     (Exception, IOException, SomeException, onException, throwIO)
-import Control.Lens (Lens', zoom)
 import Control.Monad (join)
 import Control.Monad.Catch (throwM, MonadCatch(catch))
 import Control.Monad.IO.Class (MonadIO(..))
@@ -147,6 +146,8 @@ import Dhall.Core
     )
 import Dhall.Parser (Parser(..), ParseError(..), Src(..))
 import Dhall.TypeCheck (X(..))
+import Lens.Family (LensLike')
+import Lens.Family.State.Strict (zoom)
 #if MIN_VERSION_http_client(0,5,0)
 import Network.HTTP.Client
     (HttpException(..), HttpExceptionContent(..), Manager)
@@ -346,13 +347,13 @@ emptyStatus = Status [] Map.empty Nothing
 canonicalizeAll :: [Path] -> [Path]
 canonicalizeAll = map canonicalizePath . List.tails
 
-stack :: Lens' Status [Path]
+stack :: Functor f => LensLike' f Status [Path]
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
 
-cache :: Lens' Status (Map Path (Expr Src X))
+cache :: Functor f => LensLike' f Status (Map Path (Expr Src X))
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
-manager :: Lens' Status (Maybe Manager)
+manager :: Functor f => LensLike' f Status (Maybe Manager)
 manager k s = fmap (\x -> s { _manager = x }) (k (_manager s))
 
 needManager :: StateT Status IO Manager
