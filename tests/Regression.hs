@@ -83,7 +83,7 @@ issue126 = Test.Tasty.HUnit.testCase "Issue #126" (do
         \  foo\n\
         \  bar\n\
         \''"
-    Util.normalize' e @?= "\"foo\\nbar\\n\"" )
+    Util.normalize' e @?= "''\nfoo\nbar\n''" )
 
 issue151 :: TestTree
 issue151 = Test.Tasty.HUnit.testCase "Issue #151" (do

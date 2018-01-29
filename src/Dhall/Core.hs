@@ -611,8 +611,32 @@ prettyDouble = Pretty.pretty
 
 prettyChunks :: Pretty a => Chunks s a -> Doc ann
 prettyChunks (Chunks a b) =
-    "\"" <> foldMap prettyChunk a <> prettyText b <> "\""
+    if any (\(builder, _) -> hasNewLine builder) a || hasNewLine b
+    then
+        Pretty.align
+        (   "''" <> Pretty.hardline
+        <>  Pretty.align
+            (foldMap prettyMultilineChunk a <> prettyMultilineBuilder b)
+        <>  "''"
+        )
+    else "\"" <> foldMap prettyChunk a <> prettyText b <> "\""
   where
+    hasNewLine builder = Text.any (== '\n') lazyText
+      where
+        lazyText = Builder.toLazyText builder
+
+    prettyMultilineChunk (c, d) =
+      prettyMultilineBuilder c <> "${" <> prettyExprA d <> "}"
+
+    prettyMultilineBuilder builder = mconcat docs
+      where
+        lazyText = Builder.toLazyText (escapeSingleQuotedText builder)
+
+        lazyLines = Text.splitOn "\n" lazyText
+
+        docs =
+            Data.List.intersperse Pretty.hardline (fmap Pretty.pretty lazyLines)
+
     prettyChunk (c, d) = prettyText c <> "${" <> prettyExprA d <> "}"
 
     prettyText t = Pretty.pretty (Builder.toLazyText (escapeText t))
@@ -1114,6 +1138,19 @@ buildChunks (Chunks a b) = "\"" <> foldMap buildChunk a <> escapeText b <> "\""
   where
     buildChunk (c, d) = escapeText c <> "${" <> buildExprA d <> "}"
 
+-- | Escape a `Builder` literal using Dhall's escaping rules for single-quoted
+--   @Text@
+escapeSingleQuotedText :: Builder -> Builder
+escapeSingleQuotedText inputBuilder = outputBuilder
+  where
+    inputText = Builder.toLazyText inputBuilder
+
+    outputText = substitute "${" "''${" (substitute "''" "'''" inputText)
+
+    outputBuilder = Builder.fromLazyText outputText
+
+    substitute before after = Text.intercalate after . Text.splitOn before
+
 -- | Escape a `Builder` literal using Dhall's escaping rules
 --
 -- Note that the result does not include surrounding quotes
@@ -1122,7 +1159,11 @@ escapeText a = Builder.fromLazyText (Text.concatMap adapt text)
   where
     adapt c
         | '\x20' <= c && c <= '\x21' = Text.singleton c
-        | '\x23' <= c && c <= '\x5B' = Text.singleton c
+        -- '\x22' == '"'
+        | '\x23' == c                = Text.singleton c
+        -- '\x24' == '$'
+        | '\x25' <= c && c <= '\x5B' = Text.singleton c
+        -- '\x5C' == '\\'
         | '\x5D' <= c && c <= '\x7F' = Text.singleton c
         | c == '"'                   = "\\\""
         | c == '$'                   = "\\$"

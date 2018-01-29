@@ -81,6 +81,7 @@ Extra-Source-Files:
     Prelude/Text/concatMap
     Prelude/Text/concatMapSep
     Prelude/Text/concatSep
+    tests/format/*.dhall
     tests/parser/*.dhall
     tests/regression/*.dhall
     tests/tutorial/*.dhall
@@ -173,6 +174,7 @@ Test-Suite test
     GHC-Options: -Wall
     Other-Modules:
         Examples
+        Format
         Normalization
         Parser
         Regression
