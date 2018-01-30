@@ -660,7 +660,7 @@ import Dhall
 -- >>> dhallAnd True False
 -- False
 --
--- However, you can't convert anything more complex than that like a polymorphic
+-- However, you can't convert anything more complex than that (like a polymorphic
 -- or higher-order function).  You will need to apply those functions to their
 -- arguments within Dhall before converting their result to a Haskell value.
 --
