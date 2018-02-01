@@ -1,3 +1,12 @@
+1.9.1
+
+* `dhall-format` now emits single-quoted strings for multi-line strings
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/237
+* Improved error messages for list elements with the wrong type
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/236
+* Change `lens` dependency to `lens-family-core`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/238
+
 1.9.0
 
 * Feature: BREAKING CHANGE TO LANGUAGE AND API: Add `constructors` keyword
