@@ -24,6 +24,9 @@ formatTests =
         , should
             "escape ${ for single-quoted strings"
             "escapeSingleQuotedOpenInterpolation"
+        , should
+            "preserve the original order of fields"
+            "fieldOrder"
         ]
 
 opts :: Data.Text.Prettyprint.Doc.LayoutOptions
