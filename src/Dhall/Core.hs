@@ -1055,55 +1055,34 @@ prettyExprF a =
 
     short = "(" <> prettyExprA a <> ")"
 
-prettyKeyValue
-    :: Pretty a
-    => Doc ann
-    -> Int
-    -> (Text, Expr s a)
-    -> (Doc ann, Doc ann)
-prettyKeyValue separator keyLength (key, value) =
+prettyKeyValue :: Pretty a => Doc ann -> (Text, Expr s a) -> (Doc ann, Doc ann)
+prettyKeyValue separator (key, value) =
     (   prettyLabel key <> " " <> separator <> " " <> prettyExprA value
-    ,       Pretty.fill keyLength (prettyLabel key)
+    ,       prettyLabel key
         <>  " "
         <>  separator
-        <>  Pretty.group (Pretty.flatAlt long short)
+        <>  long
     )
   where
     long = Pretty.hardline <> "    " <> prettyExprA value
 
-    short = " " <> prettyExprA value
-
 prettyRecord :: Pretty a => Map Text (Expr s a) -> Doc ann
-prettyRecord a = braces (map adapt (Data.Map.toList a))
-  where
-    keyLength = fromIntegral (maximum (map Text.length (Data.Map.keys a)))
-
-    adapt = prettyKeyValue ":" keyLength 
+prettyRecord = braces . map (prettyKeyValue ":") . Data.Map.toList
 
 prettyRecordLit :: Pretty a => Map Text (Expr s a) -> Doc ann
 prettyRecordLit a
     | Data.Map.null a = "{=}"
-    | otherwise       = braces (map adapt (Data.Map.toList a))
-  where
-    keyLength = fromIntegral (maximum (map Text.length (Data.Map.keys a)))
-
-    adapt = prettyKeyValue "=" keyLength
+    | otherwise       = braces (map (prettyKeyValue "=") (Data.Map.toList a))
 
 prettyUnion :: Pretty a => Map Text (Expr s a) -> Doc ann
-prettyUnion a = angles (map adapt (Data.Map.toList a))
-  where
-    keyLength = fromIntegral (maximum (map Text.length (Data.Map.keys a)))
-
-    adapt = prettyKeyValue ":" keyLength
+prettyUnion = angles . map (prettyKeyValue ":") . Data.Map.toList
 
 prettyUnionLit :: Pretty a => Text -> Expr s a -> Map Text (Expr s a) -> Doc ann
 prettyUnionLit a b c = angles (front : map adapt (Data.Map.toList c))
   where
-    keyLength = fromIntegral (maximum (map Text.length (a : Data.Map.keys c)))
+    front = prettyKeyValue "=" (a, b)
 
-    front = prettyKeyValue "=" keyLength (a, b)
-
-    adapt = prettyKeyValue ":" keyLength
+    adapt = prettyKeyValue ":"
 
 -- | Pretty-print a value
 pretty :: Pretty a => a -> Text
