@@ -515,6 +515,9 @@ instance Interpret Integer where
 instance Interpret Double where
     autoWith _ = double
 
+instance {-# OVERLAPS #-} Interpret [Char] where
+    autoWith _ = string
+
 instance Interpret Text where
     autoWith _ = lazyText
 

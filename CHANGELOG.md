@@ -1,3 +1,8 @@
+HEAD
+
+* Add the instance `Interpret String`.
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/247
+
 1.9.1
 
 * `dhall-format` now emits single-quoted strings for multi-line strings
