@@ -1055,56 +1055,40 @@ prettyExprF a =
 
     short = "(" <> prettyExprA a <> ")"
 
-prettyKeyValue
-    :: Pretty a
-    => Doc ann
-    -> Int
-    -> (Text, Expr s a)
-    -> (Doc ann, Doc ann)
-prettyKeyValue separator keyLength (key, value) =
+prettyKeyValue :: Pretty a => Doc ann -> (Text, Expr s a) -> (Doc ann, Doc ann)
+prettyKeyValue separator (key, value) =
     (   prettyLabel key <> " " <> separator <> " " <> prettyExprA value
-    ,       Pretty.fill keyLength (prettyLabel key)
+    ,       prettyLabel key
         <>  " "
         <>  separator
-        <>  Pretty.group (Pretty.flatAlt long short)
+        <>  long
     )
   where
     long = Pretty.hardline <> "    " <> prettyExprA value
 
-    short = " " <> prettyExprA value
-
 prettyRecord :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc ann
-prettyRecord a = braces (map adapt (Data.HashMap.Strict.InsOrd.toList a))
-  where
-    keyLength = fromIntegral (maximum (map Text.length (Data.HashMap.Strict.InsOrd.keys a)))
-
-    adapt = prettyKeyValue ":" keyLength 
+prettyRecord =
+    braces . map (prettyKeyValue ":") . Data.HashMap.Strict.InsOrd.toList
 
 prettyRecordLit :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc ann
 prettyRecordLit a
-    | Data.HashMap.Strict.InsOrd.null a = "{=}"
-    | otherwise       = braces (map adapt (Data.HashMap.Strict.InsOrd.toList a))
-  where
-    keyLength = fromIntegral (maximum (map Text.length (Data.HashMap.Strict.InsOrd.keys a)))
-
-    adapt = prettyKeyValue "=" keyLength
+    | Data.HashMap.Strict.InsOrd.null a =
+        "{=}"
+    | otherwise
+        = braces (map (prettyKeyValue "=") (Data.HashMap.Strict.InsOrd.toList a))
 
 prettyUnion :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc ann
-prettyUnion a = angles (map adapt (Data.HashMap.Strict.InsOrd.toList a))
-  where
-    keyLength = fromIntegral (maximum (map Text.length (Data.HashMap.Strict.InsOrd.keys a)))
-
-    adapt = prettyKeyValue ":" keyLength
+prettyUnion =
+    angles . map (prettyKeyValue ":") . Data.HashMap.Strict.InsOrd.toList
 
 prettyUnionLit
     :: Pretty a => Text -> Expr s a -> InsOrdHashMap Text (Expr s a) -> Doc ann
-prettyUnionLit a b c = angles (front : map adapt (Data.HashMap.Strict.InsOrd.toList c))
+prettyUnionLit a b c =
+    angles (front : map adapt (Data.HashMap.Strict.InsOrd.toList c))
   where
-    keyLength = fromIntegral (maximum (map Text.length (a : Data.HashMap.Strict.InsOrd.keys c)))
+    front = prettyKeyValue "=" (a, b)
 
-    front = prettyKeyValue "=" keyLength (a, b)
-
-    adapt = prettyKeyValue ":" keyLength
+    adapt = prettyKeyValue ":"
 
 -- | Pretty-print a value
 pretty :: Pretty a => a -> Text
