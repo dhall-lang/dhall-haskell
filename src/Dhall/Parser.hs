@@ -24,7 +24,7 @@ import Control.Exception (Exception)
 import Control.Monad (MonadPlus)
 import Data.ByteString (ByteString)
 import Data.Functor (void)
-import Data.Map (Map)
+import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
 import Data.Sequence (ViewL(..))
 import Data.String (IsString(..))
@@ -44,10 +44,11 @@ import Text.Trifecta.Delta (Delta)
 
 import qualified Control.Monad
 import qualified Data.ByteString.Base16.Lazy
-import qualified Data.Char
-import qualified Data.HashSet
-import qualified Data.Map
 import qualified Data.ByteString.Lazy
+import qualified Data.Char
+import qualified Data.HashMap.Strict.InsOrd
+import qualified Data.HashSet
+import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Encoding
@@ -1378,11 +1379,11 @@ recordTypeOrLiteral embedded =
   where
     alternative0 = do
         _equal
-        return (RecordLit Data.Map.empty)
+        return (RecordLit Data.HashMap.Strict.InsOrd.empty)
 
     alternative1 = nonEmptyRecordTypeOrLiteral embedded
 
-    alternative2 = return (Record Data.Map.empty)
+    alternative2 = return (Record Data.HashMap.Strict.InsOrd.empty)
 
 nonEmptyRecordTypeOrLiteral :: Parser a -> Parser (Expr Src a)
 nonEmptyRecordTypeOrLiteral embedded = do
@@ -1397,7 +1398,7 @@ nonEmptyRecordTypeOrLiteral embedded = do
                 _colon
                 d <- expression embedded
                 return (c, d) )
-            return (Record (Data.Map.fromList ((a, b):e)))
+            return (Record (Data.HashMap.Strict.InsOrd.fromList ((a, b):e)))
 
     let nonEmptyRecordLiteral = do
             _equal
@@ -1408,13 +1409,14 @@ nonEmptyRecordTypeOrLiteral embedded = do
                 _equal
                 d <- expression embedded
                 return (c, d) )
-            return (RecordLit (Data.Map.fromList ((a, b):e)))
+            return (RecordLit (Data.HashMap.Strict.InsOrd.fromList ((a, b):e)))
 
     nonEmptyRecordType <|> nonEmptyRecordLiteral
 
 unionTypeOrLiteral :: Parser a -> Parser (Expr Src a)
 unionTypeOrLiteral embedded =
-    nonEmptyUnionTypeOrLiteral embedded <|> return (Union Data.Map.empty)
+        nonEmptyUnionTypeOrLiteral embedded
+    <|> return (Union Data.HashMap.Strict.InsOrd.empty)
 
 nonEmptyUnionTypeOrLiteral :: Parser a -> Parser (Expr Src a)
 nonEmptyUnionTypeOrLiteral embedded = do
@@ -1464,10 +1466,10 @@ completeExpression embedded = do
     whitespace
     expression embedded
 
-toMap :: [(Text, a)] -> Parser (Map Text a)
+toMap :: [(Text, a)] -> Parser (InsOrdHashMap Text a)
 toMap kvs = do
     let adapt (k, v) = (k, pure v)
-    let m = Data.Map.fromListWith (<|>) (fmap adapt kvs)
+    let m = fromListWith (<|>) (fmap adapt kvs)
     let action k vs = case Data.Sequence.viewl vs of
             EmptyL  -> empty
             v :< vs' ->
@@ -1476,7 +1478,13 @@ toMap kvs = do
                 else
                     Text.Parser.Combinators.unexpected
                         ("duplicate field: " ++ Data.Text.Lazy.unpack k)
-    Data.Map.traverseWithKey action m
+    Data.HashMap.Strict.InsOrd.traverseWithKey action m
+  where
+    fromListWith combine = Data.List.foldl' snoc nil
+      where
+        nil = Data.HashMap.Strict.InsOrd.empty
+
+        snoc m (k, v) = Data.HashMap.Strict.InsOrd.insertWith combine k v m
 
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Path)
