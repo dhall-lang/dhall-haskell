@@ -489,7 +489,7 @@ pair l r = Type extractOut expectedOut
         Record
             (Data.HashMap.Strict.InsOrd.fromList
                 [ ("_1", expected l)
-                ,("_2", expected r)
+                , ("_2", expected r)
                 ]
             )
 
