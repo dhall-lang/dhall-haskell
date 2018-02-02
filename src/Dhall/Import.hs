@@ -403,11 +403,11 @@ canonicalize (File hasHome0 file0:paths0) =
 
         -- `clean` will resolve internal @.@/@..@'s in @currPath@, but we still
         -- need to manually handle @.@/@..@'s at the beginning of the path
-        combine url path = case List.stripPrefix ".." path of
+        combine url path = case List.stripPrefix "../" path of
             Just path' -> combine url' path'
               where
                 url' = parentURL (removeAtFromURL url)
-            Nothing    -> case List.stripPrefix "." path of
+            Nothing    -> case List.stripPrefix "./" path of
                 Just path' -> combine url path'
                 Nothing    ->
                     -- This `last` is safe because the lexer constrains all
