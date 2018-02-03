@@ -56,7 +56,6 @@ import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
-import qualified Filesystem.Path.CurrentOS
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
@@ -746,25 +745,25 @@ fileRaw =
         _  <- Text.Parser.Char.char '/'
         a  <- Text.Parser.Char.satisfy headPathCharacter
         bs <- many (Text.Parser.Char.satisfy pathCharacter)
-        let string = '/':a:bs
-        return (File Homeless (Filesystem.Path.CurrentOS.decodeString string))
+        let filepath = '/':a:bs
+        return (File Homeless filepath)
 
     relativePath = do
         _  <- Text.Parser.Char.text "./"
         as <- many (Text.Parser.Char.satisfy pathCharacter)
-        let string = "./" <> as
-        return (File Homeless (Filesystem.Path.CurrentOS.decodeString string))
+        let filepath = "./" <> as
+        return (File Homeless filepath)
 
     parentPath = do
         _  <- Text.Parser.Char.text "../"
         as <- many (Text.Parser.Char.satisfy pathCharacter)
-        let string = "../" <> as
-        return (File Homeless (Filesystem.Path.CurrentOS.decodeString string))
+        let filepath = "../" <> as
+        return (File Homeless filepath)
 
     homePath = do
         _  <- Text.Parser.Char.text "~/"
         as <- many (Text.Parser.Char.satisfy pathCharacter)
-        return (File Home (Filesystem.Path.CurrentOS.decodeString as))
+        return (File Home as)
 
 file :: Parser PathType
 file = do

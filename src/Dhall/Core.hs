@@ -62,9 +62,8 @@ import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Traversable
 import Data.Vector (Vector)
-import Filesystem.Path.CurrentOS (FilePath)
 import Numeric.Natural (Natural)
-import Prelude hiding (FilePath, succ)
+import Prelude hiding (succ)
 
 import qualified Control.Monad
 import qualified Data.ByteString
@@ -82,7 +81,6 @@ import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Data.Vector
 import qualified Data.Vector.Mutable
-import qualified Filesystem.Path.CurrentOS as Filesystem
 
 {-| Constants for a pure type system
 
@@ -121,9 +119,7 @@ data PathType
 
 instance Buildable PathType where
     build (File Home     file)
-        = "~/" <> build txt
-      where
-        txt = Text.fromStrict (either id id (Filesystem.toText file))
+        = "~/" <> build (Text.pack file)
     build (File Homeless file)
         |  Text.isPrefixOf  "./" txt
         || Text.isPrefixOf   "/" txt
@@ -132,7 +128,7 @@ instance Buildable PathType where
         | otherwise
         = "./" <> build txt <> " "
       where
-        txt = Text.fromStrict (either id id (Filesystem.toText file))
+        txt = Text.pack file
     build (URL str  Nothing      ) = build str <> " "
     build (URL str (Just headers)) = build str <> " using " <> build headers <> " "
     build (Env env) = "env:" <> build env

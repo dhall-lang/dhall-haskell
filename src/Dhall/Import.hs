@@ -134,7 +134,7 @@ import Data.Text.Lazy.Builder (Builder)
 import Data.Traversable (traverse)
 #endif
 import Data.Typeable (Typeable)
-import Filesystem.Path ((</>), FilePath)
+import System.FilePath ((</>))
 import Dhall.Core
     ( Expr(..)
     , Chunks(..)
@@ -154,7 +154,6 @@ import Network.HTTP.Client
 #else
 import Network.HTTP.Client (HttpException(..), Manager)
 #endif
-import Prelude hiding (FilePath)
 import Text.Trifecta (Result(..))
 import Text.Trifecta.Delta (Delta(..))
 
@@ -168,7 +167,6 @@ import qualified Data.CaseInsensitive
 import qualified Data.List                        as List
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Map.Strict                  as Map
-import qualified Data.Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy                   as Text
@@ -180,12 +178,11 @@ import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.Context
 import qualified Dhall.TypeCheck
-import qualified Filesystem
-import qualified Filesystem.Path.CurrentOS
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
-import qualified Filesystem.Path.CurrentOS        as Filesystem
 import qualified System.Environment
+import qualified System.Directory
+import qualified System.FilePath                  as FilePath
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 import qualified Text.Trifecta
@@ -315,13 +312,8 @@ instance Show MissingFile where
     show (MissingFile path) =
             "\n"
         <>  "\ESC[1;31mError\ESC[0m: Missing file "
-        <>  Data.Text.unpack formattedPath
+        <>  path
         <>  "\n"
-      where
-        formattedPath = case Filesystem.Path.CurrentOS.toText path of
-            (Right t) -> t
-            (Left  t) -> t
-                <> "\n\ESC[1;31mWarning\ESC[0m: Filename contains non-displayable characters"
 
 -- | Exception thrown when an environment variable is missing
 newtype MissingEnvironmentVariable = MissingEnvironmentVariable { name :: Text }
@@ -396,27 +388,27 @@ needManager = do
 canonicalize :: [PathType] -> PathType
 canonicalize  []                          = File Homeless "."
 canonicalize (File hasHome0 file0:paths0) =
-    if Filesystem.relative file0 && hasHome0 == Homeless
+    if FilePath.isRelative file0 && hasHome0 == Homeless
     then go file0 paths0
-    else File hasHome0 (clean file0)
+    else File hasHome0 (FilePath.normalise file0)
   where
-    go currPath  []                       = File Homeless (clean currPath)
-    go currPath (Env  _           :_    ) = File Homeless (clean currPath)
+    go currPath  []                       = File Homeless (FilePath.normalise currPath)
+    go currPath (Env  _           :_    ) = File Homeless (FilePath.normalise currPath)
     go currPath (URL  url0 headers:rest ) = combine prefix suffix
       where
         headers' = fmap (onPathType (\h -> canonicalize (h:rest))) headers
 
         prefix = parentURL (removeAtFromURL url0)
 
-        suffix = clean currPath
+        suffix = FilePath.normalise currPath
 
         -- `clean` will resolve internal @.@/@..@'s in @currPath@, but we still
         -- need to manually handle @.@/@..@'s at the beginning of the path
-        combine url path = case Filesystem.stripPrefix ".." path of
+        combine url path = case List.stripPrefix "../" path of
             Just path' -> combine url' path'
               where
                 url' = parentURL (removeAtFromURL url)
-            Nothing    -> case Filesystem.stripPrefix "." path of
+            Nothing    -> case List.stripPrefix "./" path of
                 Just path' -> combine url path'
                 Nothing    ->
                     -- This `last` is safe because the lexer constrains all
@@ -426,15 +418,13 @@ canonicalize (File hasHome0 file0:paths0) =
                         '/' -> URL (url <>        path') headers'
                         _   -> URL (url <> "/" <> path') headers'
                   where
-                    path' = Text.fromStrict (case Filesystem.toText path of
-                        Left  txt -> txt
-                        Right txt -> txt )
+                    path' = Text.pack path
     go currPath (File hasHome file:paths) =
-        if Filesystem.relative file && hasHome == Homeless
+        if FilePath.isRelative file && hasHome == Homeless
         then go file' paths
-        else File hasHome (clean file')
+        else File hasHome (FilePath.normalise file')
       where
-        file' = Filesystem.parent (removeAtFromFile file) </> currPath
+        file' = FilePath.takeDirectory (removeAtFromFilename file) </> currPath
 canonicalize (URL path headers:rest) = URL path headers'
   where
     headers' = fmap (onPathType (\h -> canonicalize (h:rest))) headers
@@ -471,19 +461,11 @@ removeAtFromURL url
     | Text.isSuffixOf "/"  url = Text.dropEnd 1 url
     | otherwise                =                url
 
-removeAtFromFile :: FilePath -> FilePath
-removeAtFromFile file =
-    if Filesystem.filename file == "@"
-    then Filesystem.parent file
-    else file
-
--- | Remove all @.@'s and @..@'s in the path
-clean :: FilePath -> FilePath
-clean = strip . Filesystem.collapse
-  where
-    strip p = case Filesystem.stripPrefix "." p of
-        Nothing -> p
-        Just p' -> p'
+removeAtFromFilename :: FilePath -> FilePath
+removeAtFromFilename fp =
+    if FilePath.takeFileName fp == "@"
+    then FilePath.takeDirectory fp
+    else fp
 
 toHeaders
   :: Expr s a
@@ -570,7 +552,7 @@ parseFromFileEx
     -> FilePath
     -> IO (Text.Trifecta.Result a)
 parseFromFileEx parser path = do
-    text <- Data.Text.Lazy.IO.readFile stringPath
+    text <- Data.Text.Lazy.IO.readFile path
 
     let lazyBytes = Data.Text.Lazy.Encoding.encodeUtf8 text
 
@@ -580,13 +562,7 @@ parseFromFileEx parser path = do
 
     return (Text.Trifecta.parseByteString parser delta strictBytes)
   where
-    stringPath = Filesystem.Path.CurrentOS.encodeString path
-
-    textPath = case Filesystem.Path.CurrentOS.toText path of
-       Left  text -> text
-       Right text -> text
-
-    bytesPath = Data.Text.Encoding.encodeUtf8 textPath
+    bytesPath = Data.ByteString.Char8.pack path
 
 -- | Parse an expression from a `Path` containing a Dhall program
 exprFromPath :: Path -> StateT Status IO (Expr Src Path)
@@ -594,14 +570,14 @@ exprFromPath (Path {..}) = case pathType of
     File hasHome file -> liftIO (do
         path <- case hasHome of
             Home -> do
-                home <- Filesystem.getHomeDirectory
+                home <- System.Directory.getHomeDirectory
                 return (home </> file)
             Homeless -> do
                 return file
 
         case pathMode of
             Code -> do
-                exists <- Filesystem.isFile path
+                exists <- System.Directory.doesFileExist path
                 if exists
                     then return ()
                     else throwIO (MissingFile path)
@@ -623,8 +599,7 @@ exprFromPath (Path {..}) = case pathType of
                     Success expr -> do
                         return expr
             RawText -> do
-                let pathString = Filesystem.Path.CurrentOS.encodeString path
-                text <- Data.Text.IO.readFile pathString
+                text <- Data.Text.IO.readFile path
                 return (TextLit (Chunks [] (build text))) )
     URL url headerPath -> do
         m       <- needManager
