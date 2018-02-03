@@ -119,9 +119,7 @@ data PathType
 
 instance Buildable PathType where
     build (File Home     file)
-        = "~/" <> build txt
-      where
-        txt = Text.pack file
+        = "~/" <> build (Text.pack file)
     build (File Homeless file)
         |  Text.isPrefixOf  "./" txt
         || Text.isPrefixOf   "/" txt

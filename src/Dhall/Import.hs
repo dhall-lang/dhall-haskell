@@ -389,17 +389,17 @@ canonicalize  []                          = File Homeless "."
 canonicalize (File hasHome0 file0:paths0) =
     if FilePath.isRelative file0 && hasHome0 == Homeless
     then go file0 paths0
-    else File hasHome0 (clean file0)
+    else File hasHome0 (FilePath.normalise file0)
   where
-    go currPath  []                       = File Homeless (clean currPath)
-    go currPath (Env  _           :_    ) = File Homeless (clean currPath)
+    go currPath  []                       = File Homeless (FilePath.normalise currPath)
+    go currPath (Env  _           :_    ) = File Homeless (FilePath.normalise currPath)
     go currPath (URL  url0 headers:rest ) = combine prefix suffix
       where
         headers' = fmap (onPathType (\h -> canonicalize (h:rest))) headers
 
         prefix = parentURL (removeAtFromURL url0)
 
-        suffix = clean currPath
+        suffix = FilePath.normalise currPath
 
         -- `clean` will resolve internal @.@/@..@'s in @currPath@, but we still
         -- need to manually handle @.@/@..@'s at the beginning of the path
@@ -421,7 +421,7 @@ canonicalize (File hasHome0 file0:paths0) =
     go currPath (File hasHome file:paths) =
         if FilePath.isRelative file && hasHome == Homeless
         then go file' paths
-        else File hasHome (clean file')
+        else File hasHome (FilePath.normalise file')
       where
         file' = FilePath.takeDirectory (removeAtFromFilename file) </> currPath
 canonicalize (URL path headers:rest) = URL path headers'
@@ -465,14 +465,6 @@ removeAtFromFilename fp =
     if FilePath.takeFileName fp == "@"
     then FilePath.takeDirectory fp
     else fp
-
--- | Remove all @.@'s and @..@'s in the path
-clean :: FilePath -> FilePath
-clean = strip . FilePath.normalise
-  where
-    strip p = case List.stripPrefix "." p of
-        Nothing -> p
-        Just p' -> p'
 
 toHeaders
   :: Expr s a
