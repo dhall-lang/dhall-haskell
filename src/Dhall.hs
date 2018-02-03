@@ -80,7 +80,7 @@ import Text.Trifecta.Delta (Delta(..))
 import qualified Control.Exception
 import qualified Data.ByteString.Lazy
 import qualified Data.Foldable
-import qualified Data.Map
+import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
@@ -457,10 +457,11 @@ list = fmap Data.Vector.toList . vector
 unit :: Type ()
 unit = Type extractOut expectedOut
   where
-    extractOut (RecordLit fields) | Data.Map.null fields = return ()
+    extractOut (RecordLit fields)
+        | Data.HashMap.Strict.InsOrd.null fields = return ()
     extractOut _ = Nothing
 
-    expectedOut = Record Data.Map.empty
+    expectedOut = Record Data.HashMap.Strict.InsOrd.empty
 
 {-| Decode a `String`
 
@@ -480,12 +481,17 @@ pair :: Type a -> Type b -> Type (a, b)
 pair l r = Type extractOut expectedOut
   where
     extractOut (RecordLit fields) =
-      (,) <$> ( Data.Map.lookup "_1" fields >>= extract l )
-          <*> ( Data.Map.lookup "_2" fields >>= extract r )
+      (,) <$> ( Data.HashMap.Strict.InsOrd.lookup "_1" fields >>= extract l )
+          <*> ( Data.HashMap.Strict.InsOrd.lookup "_2" fields >>= extract r )
     extractOut _ = Nothing
 
-    expectedOut = Record (Data.Map.fromList [("_1", expected l)
-                                            ,("_2", expected r)])
+    expectedOut =
+        Record
+            (Data.HashMap.Strict.InsOrd.fromList
+                [ ("_1", expected l)
+                , ("_2", expected r)
+                ]
+            )
 
 {-| Any value that implements `Interpret` can be automatically decoded based on
     the inferred return type of `input`
@@ -514,6 +520,9 @@ instance Interpret Integer where
 
 instance Interpret Double where
     autoWith _ = double
+
+instance {-# OVERLAPS #-} Interpret [Char] where
+    autoWith _ = string
 
 instance Interpret Text where
     autoWith _ = lazyText
@@ -599,7 +608,7 @@ instance GenericInterpret V1 where
       where
         extract _ = Nothing
 
-        expected = Union Data.Map.empty
+        expected = Union Data.HashMap.Strict.InsOrd.empty
 
 instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret f2) => GenericInterpret (M1 C c1 f1 :+: M1 C c2 f2) where
     genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
@@ -620,7 +629,7 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
         extract _ = Nothing
 
         expected =
-            Union (Data.Map.fromList [(nameL, expectedL), (nameR, expectedR)])
+            Union (Data.HashMap.Strict.InsOrd.fromList [(nameL, expectedL), (nameR, expectedR)])
 
         Type extractL expectedL = evalState (genericAutoWith options) 1
         Type extractR expectedR = evalState (genericAutoWith options) 1
@@ -638,7 +647,8 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
             | otherwise     = fmap  L1       (extractL u)
         extract _ = Nothing
 
-        expected = Union (Data.Map.insert name expectedR expectedL)
+        expected =
+            Union (Data.HashMap.Strict.InsOrd.insert name expectedR expectedL)
 
         Type extractL (Union expectedL) = evalState (genericAutoWith options) 1
         Type extractR        expectedR  = evalState (genericAutoWith options) 1
@@ -656,7 +666,8 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
             | otherwise     = fmap  R1       (extractR u)
         extract _ = Nothing
 
-        expected = Union (Data.Map.insert name expectedL expectedR)
+        expected =
+            Union (Data.HashMap.Strict.InsOrd.insert name expectedL expectedR)
 
         Type extractL        expectedL  = evalState (genericAutoWith options) 1
         Type extractR (Union expectedR) = evalState (genericAutoWith options) 1
@@ -666,7 +677,7 @@ instance (GenericInterpret (f :+: g), GenericInterpret (h :+: i)) => GenericInte
       where
         extract e = fmap L1 (extractL e) <|> fmap R1 (extractR e)
 
-        expected = Union (Data.Map.union expectedL expectedR)
+        expected = Union (Data.HashMap.Strict.InsOrd.union expectedL expectedR)
 
         Type extractL (Union expectedL) = evalState (genericAutoWith options) 1
         Type extractR (Union expectedR) = evalState (genericAutoWith options) 1
@@ -681,7 +692,7 @@ instance GenericInterpret U1 where
       where
         extract _ = Just U1
 
-        expected = Record (Data.Map.fromList [])
+        expected = Record (Data.HashMap.Strict.InsOrd.fromList [])
 
 instance (GenericInterpret f, GenericInterpret g) => GenericInterpret (f :*: g) where
     genericAutoWith options = do
@@ -689,8 +700,12 @@ instance (GenericInterpret f, GenericInterpret g) => GenericInterpret (f :*: g) 
         Type extractR expectedR <- genericAutoWith options
         let Record ktsL = expectedL
         let Record ktsR = expectedR
-        pure (Type { extract = liftA2 (liftA2 (:*:)) extractL extractR
-                        , expected = Record (Data.Map.union ktsL ktsR) })
+        pure
+            (Type
+                { extract = liftA2 (liftA2 (:*:)) extractL extractR
+                , expected = Record (Data.HashMap.Strict.InsOrd.union ktsL ktsR)
+                }
+            )
 
 getSelName :: Selector s => M1 i s f a -> State Int String
 getSelName n = case selName n of
@@ -704,10 +719,11 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
         name <- getSelName n
         let extract (RecordLit m) = do
                     let name' = fieldModifier (Data.Text.Lazy.pack name)
-                    e <- Data.Map.lookup name' m
+                    e <- Data.HashMap.Strict.InsOrd.lookup name' m
                     fmap (M1 . K1) (extract' e)
             extract _            = Nothing
-        let expected = Record (Data.Map.fromList [(key, expected')])
+        let expected =
+                Record (Data.HashMap.Strict.InsOrd.fromList [(key, expected')])
               where
                 key = fieldModifier (Data.Text.Lazy.pack name)
         pure (Type {..})
@@ -842,9 +858,9 @@ instance Inject Double where
 instance Inject () where
     injectWith _ = InputType {..}
       where
-        embed = const (RecordLit Data.Map.empty)
+        embed = const (RecordLit Data.HashMap.Strict.InsOrd.empty)
 
-        declared = Record Data.Map.empty
+        declared = Record Data.HashMap.Strict.InsOrd.empty
 
 instance Inject a => Inject (Maybe a) where
     injectWith options = InputType embedOut declaredOut
@@ -899,11 +915,14 @@ instance GenericInject f => GenericInject (M1 C c f) where
 instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) => GenericInject (M1 C c1 f1 :+: M1 C c2 f2) where
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
-        embed (L1 (M1 l)) = UnionLit keyL (embedL l) Data.Map.empty
-        embed (R1 (M1 r)) = UnionLit keyR (embedR r) Data.Map.empty
+        embed (L1 (M1 l)) =
+            UnionLit keyL (embedL l) Data.HashMap.Strict.InsOrd.empty
+
+        embed (R1 (M1 r)) =
+            UnionLit keyR (embedR r) Data.HashMap.Strict.InsOrd.empty
 
         declared =
-            Union (Data.Map.fromList [(keyL, declaredL), (keyR, declaredR)])
+            Union (Data.HashMap.Strict.InsOrd.fromList [(keyL, declaredL), (keyR, declaredR)])
 
         nL :: M1 i c1 f1 a
         nL = undefined
@@ -920,7 +939,8 @@ instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) =>
 instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInject ((f :+: g) :+: M1 C c h) where
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
-        embed (L1 l) = UnionLit keyL valL (Data.Map.insert keyR declaredR ktsL')
+        embed (L1 l) =
+            UnionLit keyL valL (Data.HashMap.Strict.InsOrd.insert keyR declaredR ktsL')
           where
             UnionLit keyL valL ktsL' = embedL l
         embed (R1 (M1 r)) = UnionLit keyR (embedR r) ktsL
@@ -930,7 +950,7 @@ instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInj
 
         keyR = constructorModifier (Data.Text.Lazy.pack (conName nR))
 
-        declared = Union (Data.Map.insert keyR declaredR ktsL)
+        declared = Union (Data.HashMap.Strict.InsOrd.insert keyR declaredR ktsL)
 
         InputType embedL (Union ktsL) = evalState (genericInjectWith options) 1
         InputType embedR  declaredR   = evalState (genericInjectWith options) 1
@@ -939,7 +959,8 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 (M1 l)) = UnionLit keyL (embedL l) ktsR
-        embed (R1 r) = UnionLit keyR valR (Data.Map.insert keyL declaredL ktsR')
+        embed (R1 r) =
+            UnionLit keyR valR (Data.HashMap.Strict.InsOrd.insert keyL declaredL ktsR')
           where
             UnionLit keyR valR ktsR' = embedR r
 
@@ -948,7 +969,7 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
 
         keyL = constructorModifier (Data.Text.Lazy.pack (conName nL))
 
-        declared = Union (Data.Map.insert keyL declaredL ktsR)
+        declared = Union (Data.HashMap.Strict.InsOrd.insert keyL declaredL ktsR)
 
         InputType embedL  declaredL   = evalState (genericInjectWith options) 1
         InputType embedR (Union ktsR) = evalState (genericInjectWith options) 1
@@ -956,14 +977,16 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
 instance (GenericInject (f :+: g), GenericInject (h :+: i)) => GenericInject ((f :+: g) :+: (h :+: i)) where
     genericInjectWith options = pure (InputType {..})
       where
-        embed (L1 l) = UnionLit keyL valR (Data.Map.union ktsL' ktsR)
+        embed (L1 l) =
+            UnionLit keyL valR (Data.HashMap.Strict.InsOrd.union ktsL' ktsR)
           where
             UnionLit keyL valR ktsL' = embedL l
-        embed (R1 r) = UnionLit keyR valR (Data.Map.union ktsL ktsR')
+        embed (R1 r) =
+            UnionLit keyR valR (Data.HashMap.Strict.InsOrd.union ktsL ktsR')
           where
             UnionLit keyR valR ktsR' = embedR r
 
-        declared = Union (Data.Map.union ktsL ktsR)
+        declared = Union (Data.HashMap.Strict.InsOrd.union ktsL ktsR)
 
         InputType embedL (Union ktsL) = evalState (genericInjectWith options) 1
         InputType embedR (Union ktsR) = evalState (genericInjectWith options) 1
@@ -973,12 +996,13 @@ instance (GenericInject f, GenericInject g) => GenericInject (f :*: g) where
         InputType embedInL declaredInL <- genericInjectWith options
         InputType embedInR declaredInR <- genericInjectWith options
 
-        let embed (l :*: r) = RecordLit (Data.Map.union mapL mapR)
+        let embed (l :*: r) =
+                RecordLit (Data.HashMap.Strict.InsOrd.union mapL mapR)
               where
                 RecordLit mapL = embedInL l
                 RecordLit mapR = embedInR r
 
-        let declared = Record (Data.Map.union mapL mapR)
+        let declared = Record (Data.HashMap.Strict.InsOrd.union mapL mapR)
               where
                 Record mapL = declaredInL
                 Record mapR = declaredInR
@@ -988,15 +1012,17 @@ instance (GenericInject f, GenericInject g) => GenericInject (f :*: g) where
 instance GenericInject U1 where
     genericInjectWith _ = pure (InputType {..})
       where
-        embed _ = RecordLit Data.Map.empty
+        embed _ = RecordLit Data.HashMap.Strict.InsOrd.empty
 
-        declared = Record Data.Map.empty
+        declared = Record Data.HashMap.Strict.InsOrd.empty
 
 instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
     genericInjectWith opts@(InterpretOptions {..}) = do
         name <- fieldModifier . Data.Text.Lazy.pack <$> getSelName n
-        let embed (M1 (K1 x)) = RecordLit (Data.Map.singleton name (embedIn x))
-        let declared = Record (Data.Map.singleton name declaredIn)
+        let embed (M1 (K1 x)) =
+                RecordLit (Data.HashMap.Strict.InsOrd.singleton name (embedIn x))
+        let declared =
+                Record (Data.HashMap.Strict.InsOrd.singleton name declaredIn)
         pure (InputType {..})
       where
         n :: M1 i s f a

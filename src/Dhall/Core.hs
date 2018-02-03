@@ -52,8 +52,8 @@ import Control.Applicative (Applicative(..), (<$>))
 import Control.Applicative (empty)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Foldable
+import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.HashSet (HashSet)
-import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
@@ -70,9 +70,9 @@ import qualified Data.ByteString
 import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Base16
 import qualified Data.Char
+import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
 import qualified Data.List
-import qualified Data.Map
 import qualified Data.Maybe
 import qualified Data.Text
 import qualified Data.Text.Lazy            as Text
@@ -310,13 +310,13 @@ data Expr s a
     -- | > OptionalBuild                            ~  Optional/build
     | OptionalBuild
     -- | > Record            [(k1, t1), (k2, t2)]   ~  { k1 : t1, k2 : t1 }
-    | Record    (Map Text (Expr s a))
+    | Record    (InsOrdHashMap Text (Expr s a))
     -- | > RecordLit         [(k1, v1), (k2, v2)]   ~  { k1 = v1, k2 = v2 }
-    | RecordLit (Map Text (Expr s a))
+    | RecordLit (InsOrdHashMap Text (Expr s a))
     -- | > Union             [(k1, t1), (k2, t2)]   ~  < k1 : t1 | k2 : t2 >
-    | Union     (Map Text (Expr s a))
+    | Union     (InsOrdHashMap Text (Expr s a))
     -- | > UnionLit (k1, v1) [(k2, t2), (k3, t3)]   ~  < k1 = t1 | k2 : t2 | k3 : t3 >
-    | UnionLit Text (Expr s a) (Map Text (Expr s a))
+    | UnionLit Text (Expr s a) (InsOrdHashMap Text (Expr s a))
     -- | > Combine x y                              ~  x ∧ y
     | Combine (Expr s a) (Expr s a)
     -- | > CombineRight x y                         ~  x ⫽ y
@@ -1062,19 +1062,25 @@ prettyKeyValue separator (key, value) =
   where
     long = Pretty.hardline <> "    " <> prettyExprA value
 
-prettyRecord :: Pretty a => Map Text (Expr s a) -> Doc ann
-prettyRecord = braces . map (prettyKeyValue ":") . Data.Map.toList
+prettyRecord :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc ann
+prettyRecord =
+    braces . map (prettyKeyValue ":") . Data.HashMap.Strict.InsOrd.toList
 
-prettyRecordLit :: Pretty a => Map Text (Expr s a) -> Doc ann
+prettyRecordLit :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc ann
 prettyRecordLit a
-    | Data.Map.null a = "{=}"
-    | otherwise       = braces (map (prettyKeyValue "=") (Data.Map.toList a))
+    | Data.HashMap.Strict.InsOrd.null a =
+        "{=}"
+    | otherwise
+        = braces (map (prettyKeyValue "=") (Data.HashMap.Strict.InsOrd.toList a))
 
-prettyUnion :: Pretty a => Map Text (Expr s a) -> Doc ann
-prettyUnion = angles . map (prettyKeyValue ":") . Data.Map.toList
+prettyUnion :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc ann
+prettyUnion =
+    angles . map (prettyKeyValue ":") . Data.HashMap.Strict.InsOrd.toList
 
-prettyUnionLit :: Pretty a => Text -> Expr s a -> Map Text (Expr s a) -> Doc ann
-prettyUnionLit a b c = angles (front : map adapt (Data.Map.toList c))
+prettyUnionLit
+    :: Pretty a => Text -> Expr s a -> InsOrdHashMap Text (Expr s a) -> Doc ann
+prettyUnionLit a b c =
+    angles (front : map adapt (Data.HashMap.Strict.InsOrd.toList c))
   where
     front = prettyKeyValue "=" (a, b)
 
@@ -1409,11 +1415,11 @@ buildElems   [a]  = buildExprA a
 buildElems (a:bs) = buildExprA a <> ", " <> buildElems bs
 
 -- | Builder corresponding to the @recordLit@ parser in "Dhall.Parser"
-buildRecordLit :: Buildable a => Map Text (Expr s a) -> Builder
-buildRecordLit a | Data.Map.null a =
+buildRecordLit :: Buildable a => InsOrdHashMap Text (Expr s a) -> Builder
+buildRecordLit a | Data.HashMap.Strict.InsOrd.null a =
     "{=}"
 buildRecordLit a =
-    "{ " <> buildFieldValues (Data.Map.toList a) <> " }"
+    "{ " <> buildFieldValues (Data.HashMap.Strict.InsOrd.toList a) <> " }"
 
 -- | Builder corresponding to the @fieldValues@ parser in "Dhall.Parser"
 buildFieldValues :: Buildable a => [(Text, Expr s a)] -> Builder
@@ -1426,11 +1432,11 @@ buildFieldValue :: Buildable a => (Text, Expr s a) -> Builder
 buildFieldValue (a, b) = buildLabel a <> " = " <> buildExprA b
 
 -- | Builder corresponding to the @record@ parser in "Dhall.Parser"
-buildRecord :: Buildable a => Map Text (Expr s a) -> Builder
-buildRecord a | Data.Map.null a =
+buildRecord :: Buildable a => InsOrdHashMap Text (Expr s a) -> Builder
+buildRecord a | Data.HashMap.Strict.InsOrd.null a =
     "{}"
 buildRecord a =
-    "{ " <> buildFieldTypes (Data.Map.toList a) <> " }"
+    "{ " <> buildFieldTypes (Data.HashMap.Strict.InsOrd.toList a) <> " }"
 
 -- | Builder corresponding to the @fieldTypes@ parser in "Dhall.Parser"
 buildFieldTypes :: Buildable a => [(Text, Expr s a)] -> Builder
@@ -1443,11 +1449,11 @@ buildFieldType :: Buildable a => (Text, Expr s a) -> Builder
 buildFieldType (a, b) = buildLabel a <> " : " <> buildExprA b
 
 -- | Builder corresponding to the @union@ parser in "Dhall.Parser"
-buildUnion :: Buildable a => Map Text (Expr s a) -> Builder
-buildUnion a | Data.Map.null a =
+buildUnion :: Buildable a => InsOrdHashMap Text (Expr s a) -> Builder
+buildUnion a | Data.HashMap.Strict.InsOrd.null a =
     "<>"
 buildUnion a =
-    "< " <> buildAlternativeTypes (Data.Map.toList a) <> " >"
+    "< " <> buildAlternativeTypes (Data.HashMap.Strict.InsOrd.toList a) <> " >"
 
 -- | Builder corresponding to the @alternativeTypes@ parser in "Dhall.Parser"
 buildAlternativeTypes :: Buildable a => [(Text, Expr s a)] -> Builder
@@ -1464,9 +1470,10 @@ buildAlternativeType (a, b) = buildLabel a <> " : " <> buildExprA b
 
 -- | Builder corresponding to the @unionLit@ parser in "Dhall.Parser"
 buildUnionLit
-    :: Buildable a => Text -> Expr s a -> Map Text (Expr s a) -> Builder
+    :: Buildable a
+    => Text -> Expr s a -> InsOrdHashMap Text (Expr s a) -> Builder
 buildUnionLit a b c
-    | Data.Map.null c =
+    | Data.HashMap.Strict.InsOrd.null c =
             "< "
         <>  buildLabel a
         <>  " = "
@@ -1478,7 +1485,7 @@ buildUnionLit a b c
         <>  " = "
         <>  buildExprA b
         <>  " | "
-        <>  buildAlternativeTypes (Data.Map.toList c)
+        <>  buildAlternativeTypes (Data.HashMap.Strict.InsOrd.toList c)
         <>  " >"
 
 -- | Generates a syntactically valid Dhall program
@@ -2084,12 +2091,12 @@ normalizeWith ctx e0 = loop (denote e0)
             App (App ListIndexed t) (ListLit _ xs) ->
                 loop (ListLit (Just t') (fmap adapt (Data.Vector.indexed xs)))
               where
-                t' = Record (Data.Map.fromList kts)
+                t' = Record (Data.HashMap.Strict.InsOrd.fromList kts)
                   where
                     kts = [ ("index", Natural)
                           , ("value", t)
                           ]
-                adapt (n, x) = RecordLit (Data.Map.fromList kvs)
+                adapt (n, x) = RecordLit (Data.HashMap.Strict.InsOrd.fromList kvs)
                   where
                     kvs = [ ("index", NaturalLit (fromIntegral n))
                           , ("value", x)
@@ -2263,7 +2270,7 @@ normalizeWith ctx e0 = loop (denote e0)
         let combine x y = case x of
                 RecordLit kvsX -> case y of
                     RecordLit kvsY ->
-                        let kvs = Data.Map.unionWith combine kvsX kvsY
+                        let kvs = Data.HashMap.Strict.InsOrd.unionWith combine kvsX kvsY
                         in  RecordLit (fmap loop kvs)
                     _ -> Combine x y
                 _ -> Combine x y
@@ -2273,7 +2280,7 @@ normalizeWith ctx e0 = loop (denote e0)
             RecordLit kvsX ->
                 case y' of
                     RecordLit kvsY ->
-                        RecordLit (fmap loop (Data.Map.union kvsY kvsX))
+                        RecordLit (fmap loop (Data.HashMap.Strict.InsOrd.union kvsY kvsX))
                     _ -> Prefer x' y'
             _ -> Prefer x' y'
       where
@@ -2284,7 +2291,7 @@ normalizeWith ctx e0 = loop (denote e0)
             RecordLit kvsX ->
                 case y' of
                     UnionLit kY vY _ ->
-                        case Data.Map.lookup kY kvsX of
+                        case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
                             Just vX -> loop (App vX vY)
                             Nothing -> Merge x' y' t'
                     _ -> Merge x' y' t'
@@ -2297,18 +2304,18 @@ normalizeWith ctx e0 = loop (denote e0)
         case t' of
             Union kts -> RecordLit kvs
               where
-                kvs = Data.Map.mapWithKey adapt kts
+                kvs = Data.HashMap.Strict.InsOrd.mapWithKey adapt kts
 
                 adapt k t_ = Lam k t_ (UnionLit k (Var (V k 0)) rest)
                   where
-                    rest = Data.Map.delete k kts
+                    rest = Data.HashMap.Strict.InsOrd.delete k kts
             _ -> Constructors t'
       where
         t' = loop t
     Field r x        ->
         case loop r of
             RecordLit kvs ->
-                case Data.Map.lookup x kvs of
+                case Data.HashMap.Strict.InsOrd.lookup x kvs of
                     Just v  -> loop v
                     Nothing -> Field (RecordLit (fmap loop kvs)) x
             r' -> Field r' x
@@ -2510,7 +2517,7 @@ isNormalized e = case denote e of
             RecordLit kvsX ->
                 case y of
                     UnionLit kY _  _ ->
-                        case Data.Map.lookup kY kvsX of
+                        case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
                             Just _  -> False
                             Nothing -> True
                     _ -> True
@@ -2522,7 +2529,7 @@ isNormalized e = case denote e of
     Field r x -> isNormalized r &&
         case r of
             RecordLit kvs ->
-                case Data.Map.lookup x kvs of
+                case Data.HashMap.Strict.InsOrd.lookup x kvs of
                     Just _  -> False
                     Nothing -> True
             _ -> True

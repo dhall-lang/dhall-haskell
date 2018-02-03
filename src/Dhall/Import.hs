@@ -124,7 +124,7 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString.Lazy (ByteString)
 import Data.CaseInsensitive (CI)
-import Data.Map.Strict (Map)
+import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Text.Buildable (build)
 import Data.Text.Lazy (Text)
@@ -165,6 +165,7 @@ import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.List                        as List
+import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Encoding
 import qualified Data.Text.IO
@@ -479,8 +480,8 @@ toHeader
   :: Expr s a
   -> Maybe (CI Data.ByteString.ByteString, Data.ByteString.ByteString)
 toHeader (RecordLit m) = do
-    TextLit (Chunks [] keyBuilder  ) <- Map.lookup "header" m
-    TextLit (Chunks [] valueBuilder) <- Map.lookup "value"  m
+    TextLit (Chunks [] keyBuilder  ) <- Data.HashMap.Strict.InsOrd.lookup "header" m
+    TextLit (Chunks [] valueBuilder) <- Data.HashMap.Strict.InsOrd.lookup "value"  m
     let keyText   = Text.toStrict (Builder.toLazyText keyBuilder  )
     let valueText = Text.toStrict (Builder.toLazyText valueBuilder)
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
@@ -624,7 +625,7 @@ exprFromPath (Path {..}) = case pathType of
                     expected =
                         App List
                             ( Record
-                                ( Map.fromList
+                                ( Data.HashMap.Strict.InsOrd.fromList
                                     [("header", Text), ("value", Text)]
                                 )
                             )
