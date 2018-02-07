@@ -27,6 +27,7 @@ import Data.Functor (void)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
 import Data.Sequence (ViewL(..))
+import Data.Scientific (Scientific)
 import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
@@ -687,11 +688,11 @@ _arrow = do
     void (Text.Parser.Char.char '→' <?> "\"→\"") <|> void (Text.Parser.Char.text "->")
     whitespace
 
-doubleLiteral :: Parser Double
+doubleLiteral :: Parser Scientific
 doubleLiteral = (do
     sign <-  fmap (\_ -> negate) (Text.Parser.Char.char '-')
          <|> pure id
-    a    <-  Text.Parser.Token.double
+    a    <-  Text.Parser.Token.scientific
     return (sign a) ) <?> "double literal"
 
 integerLiteral :: Parser Integer

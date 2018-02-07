@@ -30,6 +30,9 @@ formatTests =
         , should
             "escape numeric labels correctly"
             "escapeNumericLabel"
+        , should
+            "correctly handle scientific notation with a large exponent"
+            "largeExponent"
         ]
 
 opts :: Data.Text.Prettyprint.Doc.LayoutOptions
