@@ -2607,6 +2607,7 @@ reservedIdentifiers =
         , "else"
         , "as"
         , "using"
+        , "constructors"
         , "Natural"
         , "Natural/fold"
         , "Natural/build"
@@ -2629,5 +2630,6 @@ reservedIdentifiers =
         , "List/indexed"
         , "List/reverse"
         , "Optional"
+        , "Optional/build"
         , "Optional/fold"
         ]

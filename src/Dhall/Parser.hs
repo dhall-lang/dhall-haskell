@@ -1173,6 +1173,7 @@ primitiveExpression embedded =
             , alternative05
             , alternative06
             , alternative07
+            , alternative37
 
             , choice
                 [ alternative08
@@ -1205,7 +1206,6 @@ primitiveExpression embedded =
                 , alternative35
                 , alternative36
                 ] <?> "built-in expression"
-            , alternative37
             ]
         )
     <|> alternative38
