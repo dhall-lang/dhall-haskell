@@ -27,6 +27,9 @@ formatTests =
         , should
             "preserve the original order of fields"
             "fieldOrder"
+        , should
+            "escape numeric labels correctly"
+            "escapeNumericLabel"
         ]
 
 opts :: Data.Text.Prettyprint.Doc.LayoutOptions

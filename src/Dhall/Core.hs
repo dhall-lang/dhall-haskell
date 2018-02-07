@@ -588,13 +588,24 @@ enclose' beginShort beginLong sepShort sepLong docs =
 
     docsLong = fmap snd docs
 
+alpha :: Char -> Bool
+alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
+
+digit :: Char -> Bool
+digit c = '\x30' <= c && c <= '\x39'
+
+headCharacter :: Char -> Bool
+headCharacter c = alpha c || c == '_'
+
+tailCharacter :: Char -> Bool
+tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
+
 prettyLabel :: Text -> Doc ann
-prettyLabel a =
-    if Data.HashSet.member a reservedIdentifiers || Text.any predicate a
-    then "`" <> Pretty.pretty a <> "`"
-    else Pretty.pretty a
-  where
-    predicate c = c == ':' || c == '.'
+prettyLabel a = case Text.uncons a of
+    Just (h, t)
+        | headCharacter h && Text.all tailCharacter t && not (Data.HashSet.member a reservedIdentifiers)
+            -> Pretty.pretty a
+    _       -> "`" <> Pretty.pretty a <> "`"
 
 prettyNumber :: Integer -> Doc ann
 prettyNumber = Pretty.pretty
@@ -1094,12 +1105,12 @@ pretty = Pretty.renderLazy . Pretty.layoutPretty options . Pretty.pretty
 
 -- | Builder corresponding to the @label@ token in "Dhall.Parser"
 buildLabel :: Text -> Builder
-buildLabel label =
-    if Data.HashSet.member label reservedIdentifiers || Text.any predicate label
-    then "`" <> build label <> "`"
-    else build label
-  where
-    predicate c = c == ':' || c == '.'
+buildLabel label = case Text.uncons label of
+    Just (h, t)
+        | headCharacter h && Text.all tailCharacter t && not (Data.HashSet.member label reservedIdentifiers)
+            -> build label
+    _       -> "`" <> build label <> "`"
+
 
 -- | Builder corresponding to the @number@ token in "Dhall.Parser"
 buildNumber :: Integer -> Builder
