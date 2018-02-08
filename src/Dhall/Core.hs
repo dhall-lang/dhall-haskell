@@ -56,6 +56,7 @@ import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.HashSet (HashSet)
 import Data.Monoid ((<>))
 import Data.String (IsString(..))
+import Data.Scientific (Scientific)
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
@@ -75,8 +76,8 @@ import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.Maybe
 import qualified Data.Text
-import qualified Data.Text.Lazy            as Text
-import qualified Data.Text.Lazy.Builder    as Builder
+import qualified Data.Text.Lazy                        as Text
+import qualified Data.Text.Lazy.Builder                as Builder
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Data.Vector
@@ -270,7 +271,7 @@ data Expr s a
     -- | > Double                                   ~  Double
     | Double
     -- | > DoubleLit n                              ~  n
-    | DoubleLit Double
+    | DoubleLit Scientific
     -- | > DoubleShow                               ~  Double/show
     | DoubleShow
     -- | > Text                                     ~  Text
@@ -613,8 +614,8 @@ prettyNumber = Pretty.pretty
 prettyNatural :: Natural -> Doc ann
 prettyNatural = Pretty.pretty
 
-prettyDouble :: Double -> Doc ann
-prettyDouble = Pretty.pretty
+prettyScientific :: Scientific -> Doc ann
+prettyScientific = Pretty.pretty . show
 
 prettyChunks :: Pretty a => Chunks s a -> Doc ann
 prettyChunks (Chunks a b) =
@@ -1038,7 +1039,7 @@ prettyExprF (IntegerLit a) =
 prettyExprF (NaturalLit a) =
     "+" <> prettyNatural a
 prettyExprF (DoubleLit a) =
-    prettyDouble a
+    prettyScientific a
 prettyExprF (TextLit a) =
     prettyChunks a
 prettyExprF (Record a) =
@@ -1121,8 +1122,8 @@ buildNatural :: Natural -> Builder
 buildNatural a = build (show a)
 
 -- | Builder corresponding to the @double@ token in "Dhall.Parser"
-buildDouble :: Double -> Builder
-buildDouble a = build (show a)
+buildScientific :: Scientific -> Builder
+buildScientific = build . show
 
 -- | Builder corresponding to the @text@ token in "Dhall.Parser"
 buildChunks :: Buildable a => Chunks s a -> Builder
@@ -1389,7 +1390,7 @@ buildExprF (IntegerLit a) =
 buildExprF (NaturalLit a) =
     "+" <> buildNatural a
 buildExprF (DoubleLit a) =
-    buildDouble a
+    buildScientific a
 buildExprF (TextLit a) =
     buildChunks a
 buildExprF (Record a) =
@@ -2044,7 +2045,7 @@ normalizeWith ctx e0 = loop (denote e0)
             App IntegerShow (IntegerLit n) ->
                 TextLit (Chunks [] (buildNumber n))
             App DoubleShow (DoubleLit n) ->
-                TextLit (Chunks [] (buildDouble n))
+                TextLit (Chunks [] (buildScientific n))
             App (App OptionalBuild t) k
                 | check     -> OptionalLit t k'
                 | otherwise -> App f' a'
