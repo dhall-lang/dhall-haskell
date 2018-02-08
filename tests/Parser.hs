@@ -128,6 +128,9 @@ parserTests =
             , shouldPass
                 "large expression"
                 "./tests/parser/largeExpression.dhall"
+            , shouldPass
+                "names that begin with reserved identifiers"
+                "./tests/parser/reservedPrefix.dhall"
             ]
         ]
 
