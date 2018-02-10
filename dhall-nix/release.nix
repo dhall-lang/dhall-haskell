@@ -13,6 +13,8 @@ let
     packageOverrides = pkgs: {
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: {
+          dhall = haskellPackagesNew.callPackage ./dhall.nix { };
+
           dhall-nix =
             pkgs.haskell.lib.justStaticExecutables
               (haskellPackagesNew.callPackage ./default.nix { });
