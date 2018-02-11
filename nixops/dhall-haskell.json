@@ -2,7 +2,7 @@
 , "hidden": false
 , "description": "dhall-haskell pull requests"
 , "nixexprinput": "dhall-haskell"
-, "nixexprpath": "nixops/dhall-haskell.nix"
+, "nixexprpath": "dhall-haskell.nix"
 , "checkinterval": "20"
 , "schedulingshares": 1
 , "enableemail": false
@@ -10,8 +10,13 @@
 , "keepnr": 1
 , "inputs":
   { "dhall-haskell":
+    { "type": "path"
+    , "value": "/etc/hydra/"
+    , "emailresponsible": false
+    }
+  , "nixpkgs":
     { "type": "git"
-    , "value": "https://github.com/dhall-lang/dhall-haskell.git gabriel/hydra"
+    , "value": "https://github.com/NixOS/nixpkgs.git 89acf89f6b214377de4fffdeca597d13241a0dd0"
     , "emailresponsible": false
     }
   , "pullRequestsJSON":

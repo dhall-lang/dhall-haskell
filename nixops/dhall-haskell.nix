@@ -1,14 +1,6 @@
-{ pullRequestsJSON, dhall-haskell }:
+{ pullRequestsJSON, dhall-haskell, nixpkgs }:
 
 let
-  fetchNixpkgs = import ./fetchNixpkgs.nix;
-
-  nixpkgs = fetchNixpkgs {
-     rev = "89acf89f6b214377de4fffdeca597d13241a0dd0";
-
-     sha256 = "1jn02zfpyiabgp8qmln7s04y8rxj2d3za21r299an1prqn3smr2v";
-  };
-
   pkgs = import nixpkgs { config = {}; };
 
   pullRequests = builtins.fromJSON (builtins.readFile pullRequestsJSON);

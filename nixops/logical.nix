@@ -58,6 +58,9 @@
     environment = {
       etc = {
         "hydra/dhall-haskell.json".text = builtins.readFile ./dhall-haskell.json;
+
+        "hydra/dhall-haskell.nix".text = builtins.readFile ./dhall-haskell.nix;
+
         "hydra/machines".text = ''
           hydra-queue-runner@hydra x86_64-linux /etc/keys/hydra-queue-runner/hydra-queue-runner_rsa 1 1 local
         '';
@@ -68,7 +71,11 @@
 
     networking.firewall.allowedTCPPorts = [ 22 80 ];
 
-    nix.gc.automatic = true;
+    nix = {
+#     autoOptimiseStore = true;
+
+      gc.automatic = true;
+    };
 
     nixpkgs.overlays =
       let
@@ -94,7 +101,7 @@
           <githubstatus>
             jobs = dhall-haskell:.*:*
             inputs = src
-            authorization = gabriel
+            authorization = dhall-lang
           </githubstatus>
         '';
 
