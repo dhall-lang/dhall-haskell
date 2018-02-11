@@ -27,7 +27,7 @@ in
 
           inherit (resources.ec2KeyPairs) keyPair;
 
-          instanceType = "t2.micro";
+          instanceType = "t2.small";
         };
       };
     };

@@ -38,7 +38,7 @@ let
       src = {
         type = "git";
 
-        value = "https://github.com/${info.head.repo.owner.login}/${info.head.repo.name}.git ${info.head.ref}";
+        value = "https://github.com/dhall-lang/dhall-haskell.git ${info.head.ref}";
 
         emailresponsible = false;
       };

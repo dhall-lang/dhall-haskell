@@ -87,6 +87,7 @@
 
       hydra = {
         buildMachinesFiles = [ "/etc/hydra/machines" ];
+
         enable = true;
 
         extraConfig = ''
