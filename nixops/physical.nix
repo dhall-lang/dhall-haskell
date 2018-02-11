@@ -21,6 +21,8 @@ in
         targetEnv = "ec2";
 
         ec2 = {
+          ebsInitialRootDiskSize = 20;
+
           inherit region;
 
           inherit (resources.ec2KeyPairs) keyPair;

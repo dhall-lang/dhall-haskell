@@ -39,10 +39,14 @@
     in
       { networking.firewall.allowedTCPPorts = [ 22 4001 ];
 
-        services.ipfs = {
-          enable = true;
+        services = {
+          fail2ban.enable = true;
 
-          enableGC = true;
+          ipfs = {
+            enable = true;
+
+            enableGC = true;
+          };
         };
 
         systemd.services = builtins.listToAttrs services // {
@@ -52,12 +56,19 @@
 
   hydra = { pkgs, ... }: {
     environment = {
-      etc."hydra/dhall-haskell.json".text = builtins.readFile ./dhall-haskell.json;
+      etc = {
+        "hydra/dhall-haskell.json".text = builtins.readFile ./dhall-haskell.json;
+        "hydra/machines".text = ''
+          hydra-queue-runner@hydra x86_64-linux /etc/keys/hydra-queue-runner/hydra-queue-runner_rsa 1 1 local
+        '';
+      };
 
       systemPackages = [ pkgs.hydra ];
     };
 
     networking.firewall.allowedTCPPorts = [ 22 80 ];
+
+    nix.gc.automatic = true;
 
     nixpkgs.overlays =
       let
@@ -72,7 +83,10 @@
         [ secureHydra ];
 
     services = {
+      fail2ban.enable = true;
+
       hydra = {
+        buildMachinesFiles = [ "/etc/hydra/machines" ];
         enable = true;
 
         extraConfig = ''
@@ -105,7 +119,42 @@
       };
     };
 
-    # TODO: `/etc/hydra/machines`?
-    nix.gc.automatic = true;
+    systemd.services.generate-hydra-queue-runner-key-pair = {
+      script =
+        let
+          keyDirectory = "/etc/keys/hydra-queue-runner";
+
+          user = "hydra-queue-runner";
+
+          group = "hydra";
+
+          privateKey = "${keyDirectory}/${user}_rsa";
+
+          publicKey = "${privateKey}.pub";
+
+          authorizedKeysDirectory = "/etc/ssh/authorized_keys.d";
+
+          authorizedKeysFile = "${authorizedKeysDirectory}/${user}";
+        in
+          ''
+            if ! [ -e ${privateKey} ] || ! [ -e ${publicKey} ]; then
+              mkdir -p ${keyDirectory}
+
+              ${pkgs.openssh}/bin/ssh-keygen -t rsa -N "" -f ${privateKey} -C "${user}@hydra" >/dev/null
+
+              chown -R ${user}:${group} ${keyDirectory}
+            fi
+
+            if ! [ -e ${authorizedKeysFile} ]; then
+              mkdir -p "${authorizedKeysDirectory}"
+
+              cp ${publicKey} ${authorizedKeysFile}
+            fi
+          '';
+
+      serviceConfig.Type = "oneshot";
+
+      wantedBy = [ "multi-user.target" ];
+    };
   };
 }
