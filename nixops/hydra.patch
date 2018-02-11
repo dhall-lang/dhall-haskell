@@ -1,0 +1,24 @@
+diff --git a/src/lib/Hydra/Plugin/GithubStatus.pm b/src/lib/Hydra/Plugin/GithubStatus.pm
+index 08ba25bb..5b8742a3 100644
+--- a/src/lib/Hydra/Plugin/GithubStatus.pm
++++ b/src/lib/Hydra/Plugin/GithubStatus.pm
+@@ -2,6 +2,7 @@ package Hydra::Plugin::GithubStatus;
+ 
+ use strict;
+ use parent 'Hydra::Plugin';
++use File::Slurp;
+ use HTTP::Request;
+ use JSON;
+ use LWP::UserAgent;
+@@ -61,7 +62,10 @@ sub common {
+                     my $req = HTTP::Request->new('POST', "https://api.github.com/repos/$owner/$repo/statuses/$rev");
+                     $req->header('Content-Type' => 'application/json');
+                     $req->header('Accept' => 'application/vnd.github.v3+json');
+-                    $req->header('Authorization' => ($self->{config}->{github_authorization}->{$owner} // $conf->{authorization}));
++                    my $authorization = $self->{config}->{github_authorization}->{$owner} // $conf->{authorization};
++                    my $token = read_file("/etc/hydra/authorization/$authorization");
++                    $token =~ s/\s+//;
++                    $req->header('Authorization' => "token $token");
+                     $req->content($body);
+                     my $res = $ua->request($req);
+                     print STDERR $res->status_line, ": ", $res->decoded_content, "\n" unless $res->is_success;
