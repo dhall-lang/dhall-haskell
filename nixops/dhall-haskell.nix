@@ -1,44 +1,52 @@
 { pullRequestsJSON, dhall-haskell }:
 
 let
- pkgs = import <nixpkgs> {};
+  fetchNixpkgs = import ./fetchNixpkgs.nix;
 
- pullRequests = builtins.fromJSON (builtins.readFile pullRequestsJSON);
+  nixpkgs = fetchNixpkgs {
+     rev = "89acf89f6b214377de4fffdeca597d13241a0dd0";
 
- toJobset = num: info: {
-   enabled = 1;
+     sha256 = "1jn02zfpyiabgp8qmln7s04y8rxj2d3za21r299an1prqn3smr2v";
+  };
 
-   hidden = false;
+  pkgs = import nixpkgs { config = {}; };
 
-   description = info.title;
+  pullRequests = builtins.fromJSON (builtins.readFile pullRequestsJSON);
 
-   nixexprinput = "src";
+  toJobset = num: info: {
+    enabled = 1;
 
-   nixexprpath = "release.nix";
+    hidden = false;
 
-   checkinterval = 20;
+    description = info.title;
 
-   schedulingshares = 1;
+    nixexprinput = "src";
 
-   enableemail = false;
+    nixexprpath = "release.nix";
 
-   emailoverride = "";
+    checkinterval = 20;
 
-   keepnr = 1;
+    schedulingshares = 1;
 
-   inputs = {
-     src = {
-       type = "git";
+    enableemail = false;
 
-       value = "https://github.com/${info.head.repo.owner.login}/${info.head.repo.name}.git ${info.head.ref}";
+    emailoverride = "";
 
-       emailresponsible = false;
-     };
-   };
- };
+    keepnr = 1;
 
- jobsets = pkgs.lib.mapAttrs toJobset pullRequests;
+    inputs = {
+      src = {
+        type = "git";
+
+        value = "https://github.com/${info.head.repo.owner.login}/${info.head.repo.name}.git ${info.head.ref}";
+
+        emailresponsible = false;
+      };
+    };
+  };
+
+  jobsets = pkgs.lib.mapAttrs toJobset pullRequests;
 
 in
- { jobsets = pkgs.writeText "jobsets.json" (builtins.toJSON jobsets);
- }
+  { jobsets = pkgs.writeText "jobsets.json" (builtins.toJSON jobsets);
+  }
