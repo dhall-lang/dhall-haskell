@@ -69,7 +69,7 @@
       systemPackages = [ pkgs.hydra ];
     };
 
-    networking.firewall.allowedTCPPorts = [ 22 80 ];
+    networking.firewall.allowedTCPPorts = [ 22 80 443 ];
 
     nix = {
       autoOptimiseStore = true;
@@ -86,10 +86,36 @@
           );
         };
 
-      in
-        [ secureHydra ];
+        fixSimple = packagesNew: packagesOld: {
+          certbot = packagesOld.certbot.overrideAttrs (oldAttributes: rec {
+              version = "0.19.0";
 
-    security.sudo.wheelNeedsPassword = false;
+              src = packagesNew.fetchFromGitHub {
+                owner = "certbot";
+
+                repo = "certbot";
+
+                rev = "v${version}";
+
+                sha256 = "14i3q59v7j0q2pa1dri420fhil4h0vgl4vb471hp81f4y14gq6h7";
+              };
+            }
+          );
+
+          simp_le = packagesOld.simp_le.overrideAttrs (oldAttributes: {
+              version = "0.6.1";
+
+              src = oldAttributes.src.override {
+                sha256 = "0x4fky9jizs3xi55cdy217cvm3ikpghiabysan71b07ackkdfj6k";
+              };
+            }
+          );
+        };
+
+      in
+        [ secureHydra fixSimple ];
+
+    security.acme.certs."hydra.dhall-lang.org".email = "Gabriel439@gmail.com";
 
     services = {
       fail2ban.enable = true;
@@ -117,12 +143,20 @@
       nginx = {
         enable = true;
 
+        recommendedGzipSettings = true;
+
+        recommendedOptimisation = true;
+
         recommendedProxySettings = true;
+
+        recommendedTlsSettings = true;
 
         virtualHosts."hydra.dhall-lang.org" = {
           default = true;
 
-          listen = [ { addr = "0.0.0.0"; port = 80; } ];
+          enableACME = true;
+
+          addSSL = true;
 
           locations."/".proxyPass = "http://127.0.0.1:3000";
         };
