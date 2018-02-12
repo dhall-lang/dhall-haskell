@@ -56,19 +56,24 @@
 
   hydra = { pkgs, ... }: {
     environment = {
-      etc = {
-        "hydra/jobsets.nix".text = builtins.readFile ./jobsets.nix;
+      etc =
+        let
+          toProject = suffix: {
+            name = "hydra/dhall-${suffix}.json";
 
-        "hydra/dhall-haskell.json".text =
-          builtins.toJSON (import ./project.nix "haskell");
+            value = { text = builtins.toJSON (import ./project.nix suffix); };
+          };
 
-        "hydra/dhall-json.json".text =
-          builtins.toJSON (import ./project.nix "json");
+          suffixes = [ "bash" "haskell" "json" "nix" "text" ];
 
-        "hydra/machines".text = ''
-          hydra-queue-runner@hydra x86_64-linux /etc/keys/hydra-queue-runner/hydra-queue-runner_rsa 1 1 local
-        '';
-      };
+        in
+          builtins.listToAttrs (builtins.map toProject suffixes) // {
+            "hydra/jobsets.nix".text = builtins.readFile ./jobsets.nix;
+
+            "hydra/machines".text = ''
+              hydra-queue-runner@hydra x86_64-linux /etc/keys/hydra-queue-runner/hydra-queue-runner_rsa 1 1 local
+            '';
+          };
 
       systemPackages = [ pkgs.hydra ];
     };
