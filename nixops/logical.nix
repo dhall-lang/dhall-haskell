@@ -89,6 +89,8 @@
       in
         [ secureHydra ];
 
+    security.sudo.wheelNeedsPassword = false;
+
     services = {
       fail2ban.enable = true;
 
@@ -124,6 +126,12 @@
 
           locations."/".proxyPass = "http://127.0.0.1:3000";
         };
+      };
+
+      openssh = {
+        enable = true;
+
+        permitRootLogin = "yes";
       };
     };
 
@@ -163,6 +171,26 @@
       serviceConfig.Type = "oneshot";
 
       wantedBy = [ "multi-user.target" ];
+    };
+
+    users = {
+      mutableUsers = false;
+
+      users = {
+        root.openssh.authorizedKeys.keys = [
+          "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDpG1ppNeZh3Kspf+h/lZn/Z4huhUb3nIFWtthbC/xhNroFgw75iXC5bbu29myOQoZ7orRsCiaWUBcZeRWaYtC2P6TEWRdsACQecFmdXnLmtYB4PIlZp9UVj76rrpNouMcxu0JJSclziM/Nf73tZo4SMlzd9hpI4HHcHhdyyDVVDAsgpPjiwfXtfE6uFQIcZMCbQOei9qLKWGxnPW9J5HJ0UoVlziuC0ZOtwUIL3ARAbX0uGu9+9daO+ihZRh+5bcW9g7h1/+H/6bzkoxycNPT7be62ZkOCG3gWtrVlglv3PsMvSykIC9MnF+PllqDdIeJyPmmEV3YyuxDqf5cTFDDV gabriel@Gabriels-MBP"
+        ];
+
+        gabriel = {
+          extraGroups = [ "wheel" ];
+
+          isNormalUser = true;
+
+          openssh.authorizedKeys.keys = [
+            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDpG1ppNeZh3Kspf+h/lZn/Z4huhUb3nIFWtthbC/xhNroFgw75iXC5bbu29myOQoZ7orRsCiaWUBcZeRWaYtC2P6TEWRdsACQecFmdXnLmtYB4PIlZp9UVj76rrpNouMcxu0JJSclziM/Nf73tZo4SMlzd9hpI4HHcHhdyyDVVDAsgpPjiwfXtfE6uFQIcZMCbQOei9qLKWGxnPW9J5HJ0UoVlziuC0ZOtwUIL3ARAbX0uGu9+9daO+ihZRh+5bcW9g7h1/+H/6bzkoxycNPT7be62ZkOCG3gWtrVlglv3PsMvSykIC9MnF+PllqDdIeJyPmmEV3YyuxDqf5cTFDDV gabriel@Gabriels-MBP"
+          ];
+        };
+      };
     };
   };
 }
