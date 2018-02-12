@@ -59,9 +59,11 @@
       etc = {
         "hydra/jobsets.nix".text = builtins.readFile ./jobsets.nix;
 
-        "hydra/dhall-haskell.json".text = builtins.readFile ./dhall-haskell.json;
+        "hydra/dhall-haskell.json".text =
+          builtins.toJSON (import ./project.nix "haskell");
 
-        "hydra/dhall-json.json".text = builtins.readFile ./dhall-json.json;
+        "hydra/dhall-json.json".text =
+          builtins.toJSON (import ./project.nix "json");
 
         "hydra/machines".text = ''
           hydra-queue-runner@hydra x86_64-linux /etc/keys/hydra-queue-runner/hydra-queue-runner_rsa 1 1 local
