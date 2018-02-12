@@ -1,4 +1,4 @@
-{ pullRequestsJSON, dhall-haskell, nixpkgs }:
+{ pullRequestsJSON, nixpkgs, ... }:
 
 let
   pkgs = import nixpkgs { config = {}; };

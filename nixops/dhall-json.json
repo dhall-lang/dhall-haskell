@@ -1,6 +1,6 @@
 { "enabled": 1
 , "hidden": false
-, "description": "dhall-haskell pull requests"
+, "description": "dhall-json pull requests"
 , "nixexprinput": "local"
 , "nixexprpath": "jobsets.nix"
 , "checkinterval": "20"
@@ -21,7 +21,7 @@
     }
   , "pullRequestsJSON":
     { "type": "githubpulls"
-    , "value": "dhall-lang dhall-haskell"
+    , "value": "dhall-lang dhall-json"
     , "emailresponsible": false
     }
   }
