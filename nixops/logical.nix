@@ -127,9 +127,10 @@
 
         extraConfig = ''
           <githubstatus>
-            jobs = dhall-haskell:.*:*
+            jobs = .*
             inputs = src
             authorization = dhall-lang
+            context = hydra
           </githubstatus>
         '';
 
