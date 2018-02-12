@@ -72,7 +72,7 @@
     networking.firewall.allowedTCPPorts = [ 22 80 ];
 
     nix = {
-#     autoOptimiseStore = true;
+      autoOptimiseStore = true;
 
       gc.automatic = true;
     };
