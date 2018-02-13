@@ -497,7 +497,7 @@ instance Buildable a => Buildable (Expr s a) where
     build = buildExpr
 
 instance Pretty a => Pretty (Expr s a) where
-    pretty = prettyExpr
+    pretty = Pretty.unAnnotate . prettyExpr
 
 {-| `shift` is used by both normalization and type-checking to avoid variable
     capture by shifting variable indices
