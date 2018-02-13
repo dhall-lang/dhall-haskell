@@ -131,7 +131,9 @@ propEqual eL0 eR0 =
     returned type then you may want to `Dhall.Core.normalize` it afterwards.
 -}
 typeWith :: Context (Expr s X) -> Expr s X -> Either (TypeError s X) (Expr s X)
-typeWith = typeWithA absurd
+typeWith ctx expr = do
+    checkContext ctx
+    typeWithA absurd ctx expr
 
 type Typer a = forall s. a -> Expr s a
 
@@ -3254,3 +3256,18 @@ instance (Buildable a, Buildable s) => Buildable (DetailedTypeError s a) where
         source = case expr of
             Note s _ -> build s
             _        -> mempty
+
+{-| This function verifies that a custom context is well-formed so that
+    type-checking will not loop
+-}
+checkContext :: Context (Expr s X) -> Either (TypeError s X) ()
+checkContext context =
+    case Dhall.Context.match context of
+        Nothing -> do
+            return ()
+        Just (x, v, context') -> do
+            let shiftedV       =       Dhall.Core.shift (-1) (V x 0)  v
+            let shiftedContext = fmap (Dhall.Core.shift (-1) (V x 0)) context'
+            checkContext shiftedContext
+            _ <- typeWith shiftedContext shiftedV
+            return ()

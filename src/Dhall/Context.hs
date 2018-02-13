@@ -9,6 +9,7 @@ module Dhall.Context (
       Context
     , empty
     , insert
+    , match
     , lookup
     , toList
     ) where
@@ -40,6 +41,17 @@ empty = Context []
 insert :: Text -> a -> Context a -> Context a
 insert k v (Context kvs) = Context ((k, v) : kvs)
 {-# INLINABLE insert #-}
+
+{-| \"Pattern match\" on a `Context`
+
+> match (insert k v ctx) = Just (k, v, ctx)
+> match  empty           = Nothing
+-}
+match :: Context a -> Maybe (Text, a, Context a)
+match (Context ((k, v) : kvs)) = Just (k, v, Context kvs)
+match (Context           []  ) = Nothing
+
+{-# INLINABLE match #-}
 
 {-| Look up a key by name and index
 
