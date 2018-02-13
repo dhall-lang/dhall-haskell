@@ -10,13 +10,15 @@ import Prelude
 
 import {-# SOURCE #-} Dhall.Core
 
+data Ann
+
 buildConst :: Const -> Builder
 
 buildVar :: Var -> Builder
 
 buildExpr :: Buildable a => Expr s a -> Builder
 
-prettyExpr :: Pretty a => Expr s a -> Doc ann
+prettyExpr :: Pretty a => Expr s a -> Doc Ann
 
 buildNatural :: Natural -> Builder
 
