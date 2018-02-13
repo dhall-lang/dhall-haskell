@@ -11,6 +11,7 @@ module Dhall.TypeCheck (
       typeWith
     , typeOf
     , typeWithA
+    , checkContext
 
     -- * Types
     , Typer
@@ -3259,6 +3260,9 @@ instance (Buildable a, Buildable s) => Buildable (DetailedTypeError s a) where
 
 {-| This function verifies that a custom context is well-formed so that
     type-checking will not loop
+
+    Note that `typeWith` already calls `checkContext` for you on the `Context`
+    that you supply
 -}
 checkContext :: Context (Expr s X) -> Either (TypeError s X) ()
 checkContext context =
