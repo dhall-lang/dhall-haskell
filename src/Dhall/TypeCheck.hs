@@ -3272,6 +3272,5 @@ checkContext context =
         Just (x, v, context') -> do
             let shiftedV       =       Dhall.Core.shift (-1) (V x 0)  v
             let shiftedContext = fmap (Dhall.Core.shift (-1) (V x 0)) context'
-            checkContext shiftedContext
             _ <- typeWith shiftedContext shiftedV
             return ()
