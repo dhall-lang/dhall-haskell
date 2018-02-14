@@ -124,8 +124,11 @@ Library
         Dhall.Core,
         Dhall.Import,
         Dhall.Parser,
+        Dhall.Pretty,
         Dhall.Tutorial,
         Dhall.TypeCheck
+    Other-Modules:
+        Dhall.Pretty.Internal
     GHC-Options: -Wall
 
 Executable dhall
