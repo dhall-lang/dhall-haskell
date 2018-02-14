@@ -323,7 +323,7 @@ data Expr s a
     -- | > CombineRight x y                         ~  x ⫽ y
     | Prefer (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
-    -- | > Merge x y  Nothing                       ~  merge x y
+    --   > Merge x y  Nothing                       ~  merge x y
     | Merge (Expr s a) (Expr s a) (Maybe (Expr s a))
     -- | > Constructors e                           ~  constructors e
     | Constructors (Expr s a)
