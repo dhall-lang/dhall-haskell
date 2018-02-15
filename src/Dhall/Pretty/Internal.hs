@@ -713,7 +713,7 @@ prettyRecord =
 prettyRecordLit :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc Ann
 prettyRecordLit a
     | Data.HashMap.Strict.InsOrd.null a =
-        lbrace <> equals <> rbracke
+        lbrace <> equals <> rbracket
     | otherwise
         = braces (map (prettyKeyValue equals) (Data.HashMap.Strict.InsOrd.toList a))
 
