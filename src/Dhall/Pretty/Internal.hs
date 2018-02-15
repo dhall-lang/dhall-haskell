@@ -52,8 +52,8 @@ data Ann
   | Builtin     -- ^ Builtin types and values
 
 annToAnsiStyle :: Ann -> Terminal.AnsiStyle
-annToAnsiStyle Keyword  = Terminal.color Terminal.White
-annToAnsiStyle Syntax   = Terminal.colorDull Terminal.White
+annToAnsiStyle Keyword  = Terminal.bold
+annToAnsiStyle Syntax   = mempty
 annToAnsiStyle Label    = Terminal.color Terminal.Green
 annToAnsiStyle Literal  = Terminal.color Terminal.Magenta
 annToAnsiStyle Builtin  = Terminal.color Terminal.Red
