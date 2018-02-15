@@ -99,7 +99,7 @@ dot      = syntax "."
 
 -- | Pretty-print a list
 list :: [Doc Ann] -> Doc Ann
-list   [] = literal "[]"
+list   [] = lbracket <> rbracket
 list docs =
     enclose
         (lbracket <> space)
@@ -112,7 +112,7 @@ list docs =
 
 -- | Pretty-print union types and literals
 angles :: [(Doc Ann, Doc Ann)] -> Doc Ann
-angles   [] = literal "<>"
+angles   [] = langle <> rangle
 angles docs =
     enclose
         (langle <> space)
@@ -125,7 +125,7 @@ angles docs =
 
 -- | Pretty-print record types and literals
 braces :: [(Doc Ann, Doc Ann)] -> Doc Ann
-braces   [] = literal "{}"
+braces   [] = lbrace <> rbrace
 braces docs =
     enclose
         (lbrace <> space)
@@ -713,7 +713,7 @@ prettyRecord =
 prettyRecordLit :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc Ann
 prettyRecordLit a
     | Data.HashMap.Strict.InsOrd.null a =
-        literal "{=}"
+        lbrace <> equals <> rbracke
     | otherwise
         = braces (map (prettyKeyValue equals) (Data.HashMap.Strict.InsOrd.toList a))
 
