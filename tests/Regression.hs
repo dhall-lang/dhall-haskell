@@ -11,8 +11,10 @@ import qualified Data.Text.Lazy.IO
 import qualified Data.Text.Prettyprint.Doc
 import qualified Data.Text.Prettyprint.Doc.Render.Text
 import qualified Dhall
+import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Parser
+import qualified Dhall.TypeCheck
 import qualified System.Timeout
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
@@ -35,6 +37,7 @@ regressionTests =
         , issue201
         , issue209
         , issue216
+        , issue253
         , parsing0
         , typeChecking0
         , typeChecking1
@@ -156,6 +159,17 @@ issue216 = Test.Tasty.HUnit.testCase "Issue #216" (do
     text1 <- Data.Text.Lazy.IO.readFile "./tests/regression/issue216b.dhall"
 
     Test.Tasty.HUnit.assertEqual "Pretty-printing should preserve string interpolation" text1 text0 )
+
+issue253 :: TestTree
+issue253 = Test.Tasty.HUnit.testCase "Issue #253" (do
+    -- Verify that type-checking rejects ill-formed custom contexts
+    let context = Dhall.Context.insert "x" "x" Dhall.Context.empty
+    let result = Dhall.TypeCheck.typeWith context "x"
+
+    -- If the context is not validated correctly then type-checking will
+    -- infinitely loop
+    Just _ <- System.Timeout.timeout 1000000 (Control.Exception.evaluate $! result)
+    return () )
 
 parsing0 :: TestTree
 parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (do
