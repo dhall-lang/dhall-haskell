@@ -3,7 +3,9 @@
 {-# OPTIONS_GHC -Wall #-}
 
 module Dhall.Pretty.Internal (
-      prettyExpr
+      Ann(..)
+    , annToAnsiStyle
+    , prettyExpr
     , buildConst
     , buildVar
     , buildExpr
@@ -27,9 +29,10 @@ import Data.Scientific (Scientific)
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
-import Data.Text.Prettyprint.Doc (Doc, Pretty)
+import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
 
 import qualified Data.Char
 import qualified Data.HashMap.Strict.InsOrd
@@ -41,7 +44,21 @@ import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Data.Vector
 
-prettyExpr :: Pretty a => Expr s a -> Doc ann
+data Ann
+  = Keyword     -- ^ Used for syntactic keywords
+  | Syntax      -- ^ Syntax punctuation such as commas, parenthesis, and braces
+  | Label       -- ^ Record labels
+  | Literal     -- ^ Literals such as integers and strings
+  | Builtin     -- ^ Builtin types and values
+
+annToAnsiStyle :: Ann -> Terminal.AnsiStyle
+annToAnsiStyle Keyword  = Terminal.bold
+annToAnsiStyle Syntax   = mempty
+annToAnsiStyle Label    = Terminal.color Terminal.Green
+annToAnsiStyle Literal  = Terminal.color Terminal.Magenta
+annToAnsiStyle Builtin  = Terminal.color Terminal.Red
+
+prettyExpr :: Pretty a => Expr s a -> Doc Ann
 prettyExpr = prettyExprA
 
 {-| Internal utility for pretty-printing, used when generating element lists
@@ -52,24 +69,81 @@ prettyExpr = prettyExprA
 duplicate :: a -> (a, a)
 duplicate x = (x, x)
 
+-- Annotation helpers
+keyword, syntax, label, literal, builtin :: Doc Ann -> Doc Ann
+keyword  = Pretty.annotate Keyword
+syntax   = Pretty.annotate Syntax
+label    = Pretty.annotate Label
+literal  = Pretty.annotate Literal
+builtin  = Pretty.annotate Builtin
+
+comma, lbracket, rbracket, langle, rangle, lbrace, rbrace, lparen, rparen, pipe, rarrow, backtick, dollar, colon, lambda, forall, equals, dot :: Doc Ann
+comma    = syntax Pretty.comma
+lbracket = syntax Pretty.lbracket
+rbracket = syntax Pretty.rbracket
+langle   = syntax Pretty.langle
+rangle   = syntax Pretty.rangle
+lbrace   = syntax Pretty.lbrace
+rbrace   = syntax Pretty.rbrace
+lparen   = syntax Pretty.lparen
+rparen   = syntax Pretty.rparen
+pipe     = syntax Pretty.pipe
+rarrow   = syntax "→"
+backtick = syntax "`"
+dollar   = syntax "$"
+colon    = syntax ":"
+lambda   = syntax "λ"
+forall   = syntax "∀"
+equals   = syntax "="
+dot      = syntax "."
+
 -- | Pretty-print a list
-list :: [Doc ann] -> Doc ann
-list   [] = "[]"
-list docs = enclose "[ " "[ " ", " ", " " ]" "]" (fmap duplicate docs)
+list :: [Doc Ann] -> Doc Ann
+list   [] = lbracket <> rbracket
+list docs =
+    enclose
+        (lbracket <> space)
+        (lbracket <> space)
+        (comma <> space)
+        (comma <> space)
+        (space <> rbracket)
+        rbracket
+        (fmap duplicate docs)
 
 -- | Pretty-print union types and literals
-angles :: [(Doc ann, Doc ann)] -> Doc ann
-angles   [] = "<>"
-angles docs = enclose "< " "< " " | " "| " " >" ">" docs
+angles :: [(Doc Ann, Doc Ann)] -> Doc Ann
+angles   [] = langle <> rangle
+angles docs =
+    enclose
+        (langle <> space)
+        (langle <> space)
+        (space <> pipe <> space)
+        (pipe <> space)
+        (space <> rangle)
+        rangle
+        docs
 
 -- | Pretty-print record types and literals
-braces :: [(Doc ann, Doc ann)] -> Doc ann
-braces   [] = "{}"
-braces docs = enclose "{ " "{ " ", " ", " " }" "}" docs
+braces :: [(Doc Ann, Doc Ann)] -> Doc Ann
+braces   [] = lbrace <> rbrace
+braces docs =
+    enclose
+        (lbrace <> space)
+        (lbrace <> space)
+        (comma <> space)
+        (comma <> space)
+        (space <> rbrace)
+        rbrace
+        docs
 
 -- | Pretty-print anonymous functions and function types
-arrows :: [(Doc ann, Doc ann)] -> Doc ann
-arrows = enclose' "" "  " " → " "→ "
+arrows :: [(Doc Ann, Doc Ann)] -> Doc Ann
+arrows =
+    enclose'
+        ""
+        "  "
+        (" " <> rarrow <> " ")
+        (rarrow <> space)
 
 {-| Format an expression that holds a variable number of elements, such as a
     list, record, or union
@@ -151,42 +225,45 @@ headCharacter c = alpha c || c == '_'
 tailCharacter :: Char -> Bool
 tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
 
-prettyLabel :: Text -> Doc ann
-prettyLabel a = case Text.uncons a of
-    Just (h, t)
-        | headCharacter h && Text.all tailCharacter t && not (Data.HashSet.member a reservedIdentifiers)
-            -> Pretty.pretty a
-    _       -> "`" <> Pretty.pretty a <> "`"
+prettyLabel :: Text -> Doc Ann
+prettyLabel a = label doc
+    where
+        doc =
+            case Text.uncons a of
+                Just (h, t)
+                    | headCharacter h && Text.all tailCharacter t && not (Data.HashSet.member a reservedIdentifiers)
+                        -> Pretty.pretty a
+                _       -> backtick <> Pretty.pretty a <> backtick
 
-prettyNumber :: Integer -> Doc ann
-prettyNumber = Pretty.pretty
+prettyNumber :: Integer -> Doc Ann
+prettyNumber = literal . Pretty.pretty
 
-prettyNatural :: Natural -> Doc ann
-prettyNatural = Pretty.pretty
+prettyNatural :: Natural -> Doc Ann
+prettyNatural = literal . Pretty.pretty
 
-prettyScientific :: Scientific -> Doc ann
-prettyScientific = Pretty.pretty . show
+prettyScientific :: Scientific -> Doc Ann
+prettyScientific = literal . Pretty.pretty . show
 
-prettyChunks :: Pretty a => Chunks s a -> Doc ann
+prettyChunks :: Pretty a => Chunks s a -> Doc Ann
 prettyChunks (Chunks a b) =
     if any (\(builder, _) -> hasNewLine builder) a || hasNewLine b
     then
         Pretty.align
-        (   "''" <> Pretty.hardline
+        (   literal ("''" <> Pretty.hardline)
         <>  Pretty.align
             (foldMap prettyMultilineChunk a <> prettyMultilineBuilder b)
-        <>  "''"
+        <>  literal "''"
         )
-    else "\"" <> foldMap prettyChunk a <> prettyText b <> "\""
+    else literal "\"" <> foldMap prettyChunk a <> literal (prettyText b <> "\"")
   where
     hasNewLine builder = Text.any (== '\n') lazyText
       where
         lazyText = Builder.toLazyText builder
 
     prettyMultilineChunk (c, d) =
-      prettyMultilineBuilder c <> "${" <> prettyExprA d <> "}"
+      prettyMultilineBuilder c <> dollar <> lbrace <> prettyExprA d <> rbrace
 
-    prettyMultilineBuilder builder = mconcat docs
+    prettyMultilineBuilder builder = literal (mconcat docs)
       where
         lazyText = Builder.toLazyText (escapeSingleQuotedText builder)
 
@@ -195,21 +272,26 @@ prettyChunks (Chunks a b) =
         docs =
             Data.List.intersperse Pretty.hardline (fmap Pretty.pretty lazyLines)
 
-    prettyChunk (c, d) = prettyText c <> "${" <> prettyExprA d <> "}"
+    prettyChunk (c, d) = prettyText c <> syntax "${" <> prettyExprA d <> syntax rbrace
 
-    prettyText t = Pretty.pretty (Builder.toLazyText (escapeText t))
+    prettyText t = literal (Pretty.pretty (Builder.toLazyText (escapeText t)))
 
-prettyConst :: Const -> Doc ann
-prettyConst Type = "Type"
-prettyConst Kind = "Kind"
+prettyConst :: Const -> Doc Ann
+prettyConst Type = builtin "Type"
+prettyConst Kind = builtin "Kind"
 
-prettyVar :: Var -> Doc ann
-prettyVar (V x 0) = prettyLabel x
-prettyVar (V x n) = prettyLabel x <> "@" <> prettyNumber n
+prettyVar :: Var -> Doc Ann
+prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
+prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyNumber n))
 
-prettyExprA :: Pretty a => Expr s a -> Doc ann
+prettyExprA :: Pretty a => Expr s a -> Doc Ann
 prettyExprA a0@(Annot _ _) =
-    enclose' "" "  " " : " ": " (fmap duplicate (docs a0))
+    enclose'
+        ""
+        "  "
+        (" " <> colon <> " ")
+        (colon <> space)
+        (fmap duplicate (docs a0))
   where
     docs (Annot a b) = prettyExprB a : docs b
     docs (Note  _ b) = docs b
@@ -219,47 +301,47 @@ prettyExprA (Note _ a) =
 prettyExprA a0 =
     prettyExprB a0
 
-prettyExprB :: Pretty a => Expr s a -> Doc ann
+prettyExprB :: Pretty a => Expr s a -> Doc Ann
 prettyExprB a0@(Lam _ _ _) = arrows (fmap duplicate (docs a0))
   where
     docs (Lam a b c) = Pretty.group (Pretty.flatAlt long short) : docs c
       where
-        long =  "λ "
+        long =  (lambda <> space)
             <>  Pretty.align
-                (   "( "
+                (   (lparen <> space)
                 <>  prettyLabel a
                 <>  Pretty.hardline
-                <>  ": "
+                <>  (colon <> space)
                 <>  prettyExprA b
                 <>  Pretty.hardline
-                <> ")"
+                <>  rparen
                 )
 
-        short = "λ("
+        short = (lambda <> lparen)
             <>  prettyLabel a
-            <>  " : "
+            <>  (space <> colon <> space)
             <>  prettyExprA b
-            <>  ")"
+            <>  rparen
     docs (Note  _ c) = docs c
     docs          c  = [ prettyExprB c ]
 prettyExprB a0@(BoolIf _ _ _) =
-    enclose' "" "      " " else " (Pretty.hardline <> "else  ") (fmap duplicate (docs a0))
+    enclose' "" "      " (space <> keyword "else" <> space) (Pretty.hardline <> keyword "else" <> "  ") (fmap duplicate (docs a0))
   where
     docs (BoolIf a b c) =
         Pretty.group (Pretty.flatAlt long short) : docs c
       where
         long =
              Pretty.align
-                (   "if    "
+                (   (keyword "if" <> "    ")
                 <>  prettyExprA a
                 <>  Pretty.hardline
-                <>  "then  "
+                <>  (keyword "then" <> "  ")
                 <>  prettyExprA b
                 )
 
-        short = "if "
+        short = (keyword "if" <> " ")
             <>  prettyExprA a
-            <>  " then "
+            <>  (space <> keyword "then" <> space)
             <>  prettyExprA b
     docs (Note  _    c) = docs c
     docs             c  = [ prettyExprB c ]
@@ -269,63 +351,63 @@ prettyExprB a0@(Pi _ _ _) =
     docs (Pi "_" b c) = prettyExprC b : docs c
     docs (Pi a   b c) = Pretty.group (Pretty.flatAlt long short) : docs c
       where
-        long =  "∀ "
+        long =  forall <> space
             <>  Pretty.align
-                (   "( "
+                (   lparen <> space
                 <>  prettyLabel a
                 <>  Pretty.hardline
-                <>  ": "
+                <>  colon <> space
                 <>  prettyExprA b
                 <>  Pretty.hardline
-                <>  ")"
+                <>  rparen
                 )
 
-        short = "∀("
+        short = forall <> lparen
             <>  prettyLabel a
-            <>  " : "
+            <>  space <> colon <> space
             <>  prettyExprA b
-            <>  ")"
+            <>  rparen
     docs (Note _   c) = docs c
     docs           c  = [ prettyExprB c ]
 prettyExprB a0@(Let _ _ _ _) =
-    enclose' "" "    " " in " (Pretty.hardline <> "in  ")
+    enclose' "" "    " (space <> keyword "in" <> space) (Pretty.hardline <> keyword "in" <> "  ")
         (fmap duplicate (docs a0))
   where
     docs (Let a Nothing c d) =
         Pretty.group (Pretty.flatAlt long short) : docs d
       where
-        long =  "let "
+        long =  keyword "let" <> space
             <>  Pretty.align
                 (   prettyLabel a
-                <>  " ="
+                <>  space <> equals
                 <>  Pretty.hardline
                 <>  "  "
                 <>  prettyExprA c
                 )
 
-        short = "let "
+        short = keyword "let" <> space
             <>  prettyLabel a
-            <>  " = "
+            <>  (space <> equals <> space)
             <>  prettyExprA c
     docs (Let a (Just b) c d) =
         Pretty.group (Pretty.flatAlt long short) : docs d
       where
-        long = "let "
+        long = keyword "let" <> space
             <>  Pretty.align
                 (   prettyLabel a
                 <>  Pretty.hardline
-                <>  ": "
+                <>  colon <> space
                 <>  prettyExprA b
                 <>  Pretty.hardline
-                <>  "= "
+                <>  equals <> space
                 <>  prettyExprA c
                 )
 
-        short = "let "
+        short = keyword "let" <> space
             <>  prettyLabel a
-            <>  " : "
+            <>  space <> colon <> space
             <>  prettyExprA b
-            <>  " = "
+            <>  space <> equals <> space
             <>  prettyExprA c
     docs (Note _ d)  =
         docs d
@@ -346,35 +428,35 @@ prettyExprB (Merge a b (Just c)) =
   where
     long =
         Pretty.align
-            (   "merge"
+            (   keyword "merge"
             <>  Pretty.hardline
             <>  prettyExprE a
             <>  Pretty.hardline
             <>  prettyExprE b
             <>  Pretty.hardline
-            <>  ": "
+            <>  colon <> space
             <>  prettyExprD c
             )
 
-    short = "merge "
+    short = keyword "merge" <> space
         <>  prettyExprE a
         <>  " "
         <>  prettyExprE b
-        <>  " : "
+        <>  space <> colon <> space
         <>  prettyExprD c
 prettyExprB (Merge a b Nothing) =
     Pretty.group (Pretty.flatAlt long short)
   where
     long =
         Pretty.align
-            (   "merge"
+            (   keyword "merge"
             <>  Pretty.hardline
             <>  prettyExprE a
             <>  Pretty.hardline
             <>  prettyExprE b
             )
 
-    short = "merge "
+    short = keyword "merge" <> space
         <>  prettyExprE a
         <>  " "
         <>  prettyExprE b
@@ -383,12 +465,12 @@ prettyExprB (Note _ b) =
 prettyExprB a =
     prettyExprC a
 
-prettyExprC :: Pretty a => Expr s a -> Doc ann
+prettyExprC :: Pretty a => Expr s a -> Doc Ann
 prettyExprC = prettyExprC0
 
-prettyExprC0 :: Pretty a => Expr s a -> Doc ann
+prettyExprC0 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC0 a0@(BoolOr _ _) =
-    enclose' "" "    " " || " "||  " (fmap duplicate (docs a0))
+    enclose' "" "    " (space <> builtin "||" <> space) (builtin "||" <> "  ") (fmap duplicate (docs a0))
   where
     docs (BoolOr a b) = prettyExprC1 a : docs b
     docs (Note   _ b) = docs b
@@ -398,9 +480,9 @@ prettyExprC0 (Note _ a) =
 prettyExprC0 a0 =
     prettyExprC1 a0
 
-prettyExprC1 :: Pretty a => Expr s a -> Doc ann
+prettyExprC1 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC1 a0@(TextAppend _ _) =
-    enclose' "" "    " " ++ " "++  " (fmap duplicate (docs a0))
+    enclose' "" "    " (" " <> builtin "++" <> " ") (builtin "++" <> "  ") (fmap duplicate (docs a0))
   where
     docs (TextAppend a b) = prettyExprC2 a : docs b
     docs (Note       _ b) = docs b
@@ -410,9 +492,9 @@ prettyExprC1 (Note _ a) =
 prettyExprC1 a0 =
     prettyExprC2 a0
 
-prettyExprC2 :: Pretty a => Expr s a -> Doc ann
+prettyExprC2 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC2 a0@(NaturalPlus _ _) =
-    enclose' "" "  " " + " "+ " (fmap duplicate (docs a0))
+    enclose' "" "  " (" " <> builtin "+" <> " ") (builtin "+" <> " ") (fmap duplicate (docs a0))
   where
     docs (NaturalPlus a b) = prettyExprC3 a : docs b
     docs (Note        _ b) = docs b
@@ -422,9 +504,9 @@ prettyExprC2 (Note _ a) =
 prettyExprC2 a0 =
     prettyExprC3 a0
 
-prettyExprC3 :: Pretty a => Expr s a -> Doc ann
+prettyExprC3 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC3 a0@(ListAppend _ _) =
-    enclose' "" "  " " # " "# " (fmap duplicate (docs a0))
+    enclose' "" "  " (" " <> builtin "#" <> " ") (builtin "#" <> " ") (fmap duplicate (docs a0))
   where
     docs (ListAppend a b) = prettyExprC4 a : docs b
     docs (Note       _ b) = docs b
@@ -434,9 +516,9 @@ prettyExprC3 (Note _ a) =
 prettyExprC3 a0 =
     prettyExprC4 a0
 
-prettyExprC4 :: Pretty a => Expr s a -> Doc ann
+prettyExprC4 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC4 a0@(BoolAnd _ _) =
-    enclose' "" "    " " && " "&&  " (fmap duplicate (docs a0))
+    enclose' "" "    " (" " <> builtin "&&" <> " ") (builtin "&&" <> "  ") (fmap duplicate (docs a0))
   where
     docs (BoolAnd a b) = prettyExprC5 a : docs b
     docs (Note    _ b) = docs b
@@ -446,9 +528,9 @@ prettyExprC4 (Note _ a) =
 prettyExprC4 a0 =
    prettyExprC5 a0
 
-prettyExprC5 :: Pretty a => Expr s a -> Doc ann
+prettyExprC5 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC5 a0@(Combine _ _) =
-    enclose' "" "  " " ∧ " "∧ " (fmap duplicate (docs a0))
+    enclose' "" "  " (" " <> builtin "∧" <> " ") (builtin "∧" <> " ") (fmap duplicate (docs a0))
   where
     docs (Combine a b) = prettyExprC6 a : docs b
     docs (Note    _ b) = docs b
@@ -458,9 +540,9 @@ prettyExprC5 (Note _ a) =
 prettyExprC5 a0 =
     prettyExprC6 a0
 
-prettyExprC6 :: Pretty a => Expr s a -> Doc ann
+prettyExprC6 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC6 a0@(Prefer _ _) =
-    enclose' "" "  " " ⫽ " "⫽ " (fmap duplicate (docs a0))
+    enclose' "" "  " (" " <> builtin "⫽" <> " ") (builtin "⫽" <> " ") (fmap duplicate (docs a0))
   where
     docs (Prefer a b) = prettyExprC7 a : docs b
     docs (Note   _ b) = docs b
@@ -470,9 +552,9 @@ prettyExprC6 (Note _ a) =
 prettyExprC6 a0 =
     prettyExprC7 a0
 
-prettyExprC7 :: Pretty a => Expr s a -> Doc ann
+prettyExprC7 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC7 a0@(NaturalTimes _ _) =
-    enclose' "" "  " " * " "* " (fmap duplicate (docs a0))
+    enclose' "" "  " (" " <> builtin "*" <> " ") (builtin "*" <> " ") (fmap duplicate (docs a0))
   where
     docs (NaturalTimes a b) = prettyExprC8 a : docs b
     docs (Note         _ b) = docs b
@@ -482,9 +564,9 @@ prettyExprC7 (Note _ a) =
 prettyExprC7 a0 =
     prettyExprC8 a0
 
-prettyExprC8 :: Pretty a => Expr s a -> Doc ann
+prettyExprC8 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC8 a0@(BoolEQ _ _) =
-    enclose' "" "    " " == " "==  " (fmap duplicate (docs a0))
+    enclose' "" "    " (" " <> builtin "==" <> " ") (builtin "==" <> "  ") (fmap duplicate (docs a0))
   where
     docs (BoolEQ a b) = prettyExprC9 a : docs b
     docs (Note   _ b) = docs b
@@ -494,9 +576,9 @@ prettyExprC8 (Note _ a) =
 prettyExprC8 a0 =
     prettyExprC9 a0
 
-prettyExprC9 :: Pretty a => Expr s a -> Doc ann
+prettyExprC9 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC9 a0@(BoolNE _ _) =
-    enclose' "" "    " " != " "!=  " (fmap duplicate (docs a0))
+    enclose' "" "    " (" " <> builtin "!=" <> " ") (builtin "!=" <> "  ") (fmap duplicate (docs a0))
   where
     docs (BoolNE a b) = prettyExprD a : docs b
     docs (Note   _ b) = docs b
@@ -506,7 +588,7 @@ prettyExprC9 (Note _ a) =
 prettyExprC9 a0 =
     prettyExprD a0
 
-prettyExprD :: Pretty a => Expr s a -> Doc ann
+prettyExprD :: Pretty a => Expr s a -> Doc Ann
 prettyExprD a0 = case a0 of
     App _ _        -> result
     Constructors _ -> result
@@ -516,74 +598,74 @@ prettyExprD a0 = case a0 of
     result = enclose' "" "" " " "" (fmap duplicate (reverse (docs a0)))
 
     docs (App        a b) = prettyExprE b : docs a
-    docs (Constructors b) = [ prettyExprE b , "constructors" ]
+    docs (Constructors b) = [ prettyExprE b , keyword "constructors" ]
     docs (Note       _ b) = docs b
     docs               b  = [ prettyExprE b ]
 
-prettyExprE :: Pretty a => Expr s a -> Doc ann
-prettyExprE (Field a b) = prettyExprE a <> "." <> prettyLabel b
+prettyExprE :: Pretty a => Expr s a -> Doc Ann
+prettyExprE (Field a b) = prettyExprE a <> dot <> prettyLabel b
 prettyExprE (Note  _ b) = prettyExprE b
 prettyExprE  a          = prettyExprF a
 
-prettyExprF :: Pretty a => Expr s a -> Doc ann
+prettyExprF :: Pretty a => Expr s a -> Doc Ann
 prettyExprF (Var a) =
     prettyVar a
 prettyExprF (Const k) =
     prettyConst k
 prettyExprF Bool =
-    "Bool"
+    builtin "Bool"
 prettyExprF Natural =
-    "Natural"
+    builtin "Natural"
 prettyExprF NaturalFold =
-    "Natural/fold"
+    builtin "Natural/fold"
 prettyExprF NaturalBuild =
-    "Natural/build"
+    builtin "Natural/build"
 prettyExprF NaturalIsZero =
-    "Natural/isZero"
+    builtin "Natural/isZero"
 prettyExprF NaturalEven =
-    "Natural/even"
+    builtin "Natural/even"
 prettyExprF NaturalOdd =
-    "Natural/odd"
+    builtin "Natural/odd"
 prettyExprF NaturalToInteger =
-    "Natural/toInteger"
+    builtin "Natural/toInteger"
 prettyExprF NaturalShow =
-    "Natural/show"
+    builtin "Natural/show"
 prettyExprF Integer =
-    "Integer"
+    builtin "Integer"
 prettyExprF IntegerShow =
-    "Integer/show"
+    builtin "Integer/show"
 prettyExprF Double =
-    "Double"
+    builtin "Double"
 prettyExprF DoubleShow =
-    "Double/show"
+    builtin "Double/show"
 prettyExprF Text =
-    "Text"
+    builtin "Text"
 prettyExprF List =
-    "List"
+    builtin "List"
 prettyExprF ListBuild =
-    "List/build"
+    builtin "List/build"
 prettyExprF ListFold =
-    "List/fold"
+    builtin "List/fold"
 prettyExprF ListLength =
-    "List/length"
+    builtin "List/length"
 prettyExprF ListHead =
-    "List/head"
+    builtin "List/head"
 prettyExprF ListLast =
-    "List/last"
+    builtin "List/last"
 prettyExprF ListIndexed =
-    "List/indexed"
+    builtin "List/indexed"
 prettyExprF ListReverse =
-    "List/reverse"
+    builtin "List/reverse"
 prettyExprF Optional =
-    "Optional"
+    builtin "Optional"
 prettyExprF OptionalFold =
-    "Optional/fold"
+    builtin "Optional/fold"
 prettyExprF OptionalBuild =
-    "Optional/build"
+    builtin "Optional/build"
 prettyExprF (BoolLit True) =
-    "True"
+    literal "True"
 prettyExprF (BoolLit False) =
-    "False"
+    literal "False"
 prettyExprF (IntegerLit a) =
     prettyNumber a
 prettyExprF (NaturalLit a) =
@@ -609,11 +691,11 @@ prettyExprF (Note _ b) =
 prettyExprF a =
     Pretty.group (Pretty.flatAlt long short)
   where
-    long = Pretty.align ("( " <> prettyExprA a <> Pretty.hardline <> ")")
+    long = Pretty.align (lparen <> space <> prettyExprA a <> Pretty.hardline <> rparen)
 
-    short = "(" <> prettyExprA a <> ")"
+    short = lparen <> prettyExprA a <> rparen
 
-prettyKeyValue :: Pretty a => Doc ann -> (Text, Expr s a) -> (Doc ann, Doc ann)
+prettyKeyValue :: Pretty a => Doc Ann -> (Text, Expr s a) -> (Doc Ann, Doc Ann)
 prettyKeyValue separator (key, value) =
     (   prettyLabel key <> " " <> separator <> " " <> prettyExprA value
     ,       prettyLabel key
@@ -624,29 +706,29 @@ prettyKeyValue separator (key, value) =
   where
     long = Pretty.hardline <> "    " <> prettyExprA value
 
-prettyRecord :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc ann
+prettyRecord :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc Ann
 prettyRecord =
-    braces . map (prettyKeyValue ":") . Data.HashMap.Strict.InsOrd.toList
+    braces . map (prettyKeyValue colon) . Data.HashMap.Strict.InsOrd.toList
 
-prettyRecordLit :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc ann
+prettyRecordLit :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc Ann
 prettyRecordLit a
     | Data.HashMap.Strict.InsOrd.null a =
-        "{=}"
+        lbrace <> equals <> rbracket
     | otherwise
-        = braces (map (prettyKeyValue "=") (Data.HashMap.Strict.InsOrd.toList a))
+        = braces (map (prettyKeyValue equals) (Data.HashMap.Strict.InsOrd.toList a))
 
-prettyUnion :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc ann
+prettyUnion :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc Ann
 prettyUnion =
-    angles . map (prettyKeyValue ":") . Data.HashMap.Strict.InsOrd.toList
+    angles . map (prettyKeyValue colon) . Data.HashMap.Strict.InsOrd.toList
 
 prettyUnionLit
-    :: Pretty a => Text -> Expr s a -> InsOrdHashMap Text (Expr s a) -> Doc ann
+    :: Pretty a => Text -> Expr s a -> InsOrdHashMap Text (Expr s a) -> Doc Ann
 prettyUnionLit a b c =
     angles (front : map adapt (Data.HashMap.Strict.InsOrd.toList c))
   where
-    front = prettyKeyValue "=" (a, b)
+    front = prettyKeyValue equals (a, b)
 
-    adapt = prettyKeyValue ":"
+    adapt = prettyKeyValue colon
 
 -- | Pretty-print a value
 pretty :: Pretty a => a -> Text
@@ -656,11 +738,11 @@ pretty = Pretty.renderLazy . Pretty.layoutPretty options . Pretty.pretty
 
 -- | Builder corresponding to the @label@ token in "Dhall.Parser"
 buildLabel :: Text -> Builder
-buildLabel label = case Text.uncons label of
+buildLabel l = case Text.uncons l of
     Just (h, t)
-        | headCharacter h && Text.all tailCharacter t && not (Data.HashSet.member label reservedIdentifiers)
-            -> build label
-    _       -> "`" <> build label <> "`"
+        | headCharacter h && Text.all tailCharacter t && not (Data.HashSet.member l reservedIdentifiers)
+            -> build l
+    _       -> "`" <> build l <> "`"
 
 
 -- | Builder corresponding to the @number@ token in "Dhall.Parser"

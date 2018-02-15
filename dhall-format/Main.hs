@@ -30,6 +30,7 @@ import Control.Monad (when)
 import Data.Monoid ((<>))
 import Data.Version (showVersion)
 import Dhall.Parser (exprAndHeaderFromText)
+import Dhall.Pretty (annToAnsiStyle, prettyExpr)
 import Filesystem.Path.CurrentOS (FilePath)
 import Options.Generic (Generic, ParseRecord, type (<?>)(..))
 import Prelude hiding (FilePath)
@@ -43,10 +44,11 @@ import qualified Control.Exception
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.IO
-import qualified Data.Text.Prettyprint.Doc             as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
+import qualified Data.Text.Prettyprint.Doc                 as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty (renderIO)
 import qualified Filesystem.Path.CurrentOS
 import qualified Options.Generic
+import qualified System.Console.ANSI
 import qualified System.IO
 
 data Options = Options
@@ -96,6 +98,17 @@ main = do
                     Left  err -> Control.Exception.throwIO err
                     Right x   -> return x
 
-                let doc = Pretty.pretty header <> Pretty.pretty expr
-                Pretty.renderIO System.IO.stdout (Pretty.layoutSmart opts doc)
-                Data.Text.IO.putStrLn "" )
+                let doc = Pretty.pretty header <> prettyExpr expr
+
+                supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
+
+                if supportsANSI
+                  then
+                    Pretty.renderIO
+                      System.IO.stdout
+                      (fmap annToAnsiStyle (Pretty.layoutSmart opts doc))
+                  else
+                    Pretty.renderIO
+                      System.IO.stdout
+                      (Pretty.layoutSmart opts (Pretty.unAnnotate doc))
+                Data.Text.IO.putStrLn "")
