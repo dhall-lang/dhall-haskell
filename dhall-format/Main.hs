@@ -48,6 +48,7 @@ import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty (renderIO)
 import qualified Filesystem.Path.CurrentOS
 import qualified Options.Generic
+import qualified System.Console.ANSI
 import qualified System.IO
 
 data Options = Options
@@ -98,7 +99,16 @@ main = do
                     Right x   -> return x
 
                 let doc = Pretty.pretty header <> prettyExpr expr
-                Pretty.renderIO
-                  System.IO.stdout
-                  (fmap annToAnsiStyle (Pretty.layoutSmart opts doc))
-                Data.Text.IO.putStrLn "" )
+
+                supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
+
+                if supportsANSI
+                  then
+                    Pretty.renderIO
+                      System.IO.stdout
+                      (fmap annToAnsiStyle (Pretty.layoutSmart opts doc))
+                  else
+                    Pretty.renderIO
+                      System.IO.stdout
+                      (Pretty.layoutSmart opts (Pretty.unAnnotate doc))
+                Data.Text.IO.putStrLn "")
