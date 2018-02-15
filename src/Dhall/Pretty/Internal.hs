@@ -272,7 +272,7 @@ prettyChunks (Chunks a b) =
         docs =
             Data.List.intersperse Pretty.hardline (fmap Pretty.pretty lazyLines)
 
-    prettyChunk (c, d) = prettyText c <> "${" <> prettyExprA d <> "}"
+    prettyChunk (c, d) = prettyText c <> syntax "${" <> prettyExprA d <> syntax rbrace
 
     prettyText t = literal (Pretty.pretty (Builder.toLazyText (escapeText t)))
 
