@@ -46,7 +46,6 @@ import qualified Data.Vector
 
 data Ann
   = Keyword     -- ^ Used for syntactic keywords
-  | Variable    -- ^ Bound variables
   | Syntax      -- ^ Syntax punctuation such as commas, parenthesis, and braces
   | Label       -- ^ Record labels
   | Literal     -- ^ Literals such as integers and strings
@@ -54,7 +53,6 @@ data Ann
 
 annToAnsiStyle :: Ann -> Terminal.AnsiStyle
 annToAnsiStyle Keyword  = Terminal.color Terminal.White
-annToAnsiStyle Variable = Terminal.color Terminal.Green
 annToAnsiStyle Syntax   = Terminal.colorDull Terminal.White
 annToAnsiStyle Label    = Terminal.color Terminal.Green
 annToAnsiStyle Literal  = Terminal.color Terminal.Magenta
@@ -72,9 +70,8 @@ duplicate :: a -> (a, a)
 duplicate x = (x, x)
 
 -- Annotation helpers
-keyword, variable, syntax, label, literal, builtin :: Doc Ann -> Doc Ann
+keyword, syntax, label, literal, builtin :: Doc Ann -> Doc Ann
 keyword  = Pretty.annotate Keyword
-variable = Pretty.annotate Variable
 syntax   = Pretty.annotate Syntax
 label    = Pretty.annotate Label
 literal  = Pretty.annotate Literal
@@ -284,8 +281,8 @@ prettyConst Type = builtin "Type"
 prettyConst Kind = builtin "Kind"
 
 prettyVar :: Var -> Doc Ann
-prettyVar (V x 0) = variable (Pretty.unAnnotate (prettyLabel x))
-prettyVar (V x n) = variable (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyNumber n))
+prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
+prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyNumber n))
 
 prettyExprA :: Pretty a => Expr s a -> Doc Ann
 prettyExprA a0@(Annot _ _) =
