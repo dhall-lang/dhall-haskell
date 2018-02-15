@@ -23,8 +23,9 @@ mkDerivation {
     transformers trifecta unordered-containers vector
   ];
   executableHaskellDepends = [
-    base containers haskeline mtl optparse-generic prettyprinter
-    prettyprinter-ansi-terminal repline system-filepath text trifecta
+    ansi-terminal base containers haskeline mtl optparse-generic
+    prettyprinter prettyprinter-ansi-terminal repline system-filepath
+    text trifecta
   ];
   testHaskellDepends = [
     base containers deepseq insert-ordered-containers prettyprinter
