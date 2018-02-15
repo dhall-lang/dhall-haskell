@@ -2,9 +2,10 @@
 , base16-bytestring, bytestring, case-insensitive, charset
 , containers, contravariant, cryptohash, deepseq, directory
 , exceptions, filepath, http-client, http-client-tls
-, insert-ordered-containers, lens-family-core, optparse-generic
-, parsers, prettyprinter, prettyprinter-ansi-terminal, scientific
-, stdenv, system-filepath, tasty, tasty-hunit, text, text-format
+, insert-ordered-containers, lens-family-core, mtl
+, optparse-generic, parsers, prettyprinter
+, prettyprinter-ansi-terminal, repline, scientific, stdenv
+, system-filepath, tasty, tasty-hunit, text, text-format
 , transformers, trifecta, unordered-containers, vector
 }:
 mkDerivation {
@@ -22,7 +23,8 @@ mkDerivation {
     transformers trifecta unordered-containers vector
   ];
   executableHaskellDepends = [
-    base optparse-generic prettyprinter system-filepath text trifecta
+    base containers mtl optparse-generic prettyprinter
+    prettyprinter-ansi-terminal repline system-filepath text trifecta
   ];
   testHaskellDepends = [
     base containers deepseq insert-ordered-containers prettyprinter
