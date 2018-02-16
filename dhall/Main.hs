@@ -114,7 +114,7 @@ makeRender options header = do
                 let doc = Pretty.pretty header <> prettyExpr e
                 render h (Pretty.layoutSmart opts doc)
             else do
-                render h (Pretty.layoutSmart unbounded (prettyExpr e))
+                render h (Pretty.layoutPretty unbounded (prettyExpr e))
         Data.Text.Lazy.IO.hPutStrLn h ""
 
     where
