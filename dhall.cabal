@@ -137,12 +137,14 @@ Executable dhall
     Hs-Source-Dirs: dhall
     Main-Is: Main.hs
     Build-Depends:
-        base             >= 4        && < 5  ,
-        dhall                                ,
-        optparse-generic >= 1.1.1    && < 1.3,
-        prettyprinter                        ,
-        trifecta         >= 1.6      && < 1.8,
-        text             >= 0.11.1.0 && < 1.3
+        ansi-terminal               >= 0.6.3.1  && < 0.7 ,
+        base                        >= 4        && < 5   ,
+        dhall                                            ,
+        optparse-generic            >= 1.1.1    && < 1.3 ,
+        prettyprinter                                    ,
+        prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
+        trifecta                    >= 1.6      && < 1.8 ,
+        text                        >= 0.11.1.0 && < 1.3
     GHC-Options: -Wall
     Other-Modules:
         Paths_dhall
