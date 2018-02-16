@@ -2,20 +2,21 @@
 {-# language NamedFieldPuns #-}
 {-# language OverloadedStrings #-}
 
-module Main ( main ) where 
+module Main ( main ) where
 
 import Control.Exception ( SomeException(SomeException), displayException, throwIO )
-import Control.Monad.State.Strict ( evalStateT )
-import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.IO.Class ( MonadIO, liftIO )
+import Control.Monad.State.Class ( MonadState, get, modify )
+import Control.Monad.State.Strict ( evalStateT )
+import Data.List ( foldl' )
 
 import qualified Data.Map.Strict as StrictMap
-import qualified Data.Text.Lazy as LazyText 
+import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
 import qualified Dhall
 import qualified Dhall.Context
-import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize, subst )
+import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize )
 import qualified Dhall.Pretty
 import qualified Dhall.Core as Expr ( Expr(..) )
 import qualified Dhall.Import as Dhall
@@ -29,7 +30,7 @@ import qualified Text.Trifecta.Delta as Trifecta
 
 main :: IO ()
 main =
-  evalStateT 
+  evalStateT
     ( Repline.evalRepl
         "⊢ "
         ( dontCrash . eval )
@@ -41,14 +42,16 @@ main =
 
 
 data Env = Env
-  { envBindings :: StrictMap.Map Dhall.Text Binding
+  { envBindings :: Dhall.Context.Context Binding
+  , envIt :: Maybe Binding
   }
 
 
 emptyEnv :: Env
 emptyEnv =
   Env
-    { envBindings = mempty
+    { envBindings = Dhall.Context.empty
+    , envIt = Nothing
     }
 
 
@@ -58,12 +61,14 @@ data Binding = Binding
   }
 
 
-envToContext :: Env -> Dhall.Context.Context ( Dhall.Expr Dhall.Src Dhall.X )
-envToContext Env{ envBindings } =
-  StrictMap.foldlWithKey'
-    ( \ctx k b -> Dhall.Context.insert k ( bindingType b ) ctx )
-    Dhall.Context.empty
-    envBindings
+envToContext :: Env -> Dhall.Context.Context Binding
+envToContext Env{ envBindings, envIt } =
+  case envIt of
+    Nothing ->
+      envBindings
+
+    Just it ->
+      Dhall.Context.insert "it" it envBindings
 
 
 parseAndLoad
@@ -92,16 +97,10 @@ eval src = do
   expr <-
     normalize loaded
 
-  modify
-    ( \e ->
-        e
-          { envBindings =
-              StrictMap.insert "it" ( Binding expr exprType ) ( envBindings e )
-          }
-    )
+  modify ( \e -> e { envIt = Just ( Binding expr exprType ) } )
 
   output expr
-    
+
 
 
 typeOf :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
@@ -132,12 +131,12 @@ normalize e = do
 
   return
     ( Dhall.normalize
-        ( StrictMap.foldlWithKey'
-            ( \a k expr ->
-                Dhall.subst ( Dhall.V k 0 ) ( bindingExpr expr ) a
+        ( foldl'
+            ( \a (k, Binding { bindingType, bindingExpr }) ->
+                Expr.Let k ( Just bindingType ) bindingExpr a
             )
             e
-            ( envBindings env )
+            ( Dhall.Context.toList ( envToContext env ) )
         )
     )
 
@@ -149,7 +148,7 @@ typeCheck expr = do
   env <-
     get
 
-  case Dhall.typeWith ( envToContext env ) expr of
+  case Dhall.typeWith ( bindingType <$> envToContext env ) expr of
     Left e ->
       liftIO ( throwIO e )
 
@@ -158,16 +157,16 @@ typeCheck expr = do
 
 
 addBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
-addBinding (k : "=" : srcs) = do 
+addBinding (k : "=" : srcs) = do
   let
     varName =
       LazyText.pack k
-  
+
   loaded <-
     parseAndLoad ( unwords srcs )
 
   t <-
-    typeCheck expr
+    typeCheck loaded
 
   expr <-
     normalize loaded
@@ -176,14 +175,14 @@ addBinding (k : "=" : srcs) = do
     ( \e ->
         e
           { envBindings =
-              StrictMap.insert
+              Dhall.Context.insert
                 varName
-                ( Binding { bindingType = t, bindingExpr = expr } )
+                Binding { bindingType = t, bindingExpr = expr }
                 ( envBindings e )
           }
     )
 
-  output 
+  output
     ( Expr.Annot ( Expr.Var ( Dhall.V varName 0 ) ) t )
 
 addBinding _ =
