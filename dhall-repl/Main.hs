@@ -187,7 +187,7 @@ addBinding (k : "=" : srcs) = do
     ( Expr.Annot ( Expr.Var ( Dhall.V varName 0 ) ) t )
 
 addBinding _ =
-  error ":let should be of the form `:let x = y`"
+  liftIO ( fail ":let should be of the form `:let x = y`" )
 
 
 options
