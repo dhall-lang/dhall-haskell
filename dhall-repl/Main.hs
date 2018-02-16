@@ -166,11 +166,11 @@ addBinding (k : "=" : srcs) = do
   loaded <-
     parseAndLoad ( unwords srcs )
 
-  expr <-
-    normalize loaded
-
   t <-
     typeCheck expr
+
+  expr <-
+    normalize loaded
 
   modify
     ( \e ->
