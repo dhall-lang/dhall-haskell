@@ -108,14 +108,14 @@ makeRender options header = do
                 then Pretty.renderIO h (fmap annToAnsiStyle doc)
                 else Pretty.renderIO h (Pretty.unAnnotateS doc)
 
-    return $ \h e ->
+    return $ \h e -> do
         if unHelpful (pretty options)
-        then do
-            let doc = Pretty.pretty header <> prettyExpr e
-            render h (Pretty.layoutSmart opts doc)
-            Data.Text.Lazy.IO.hPutStrLn h ""
-        else do
-            render h (Pretty.layoutSmart unbounded (prettyExpr e))
+            then do
+                let doc = Pretty.pretty header <> prettyExpr e
+                render h (Pretty.layoutSmart opts doc)
+            else do
+                render h (Pretty.layoutSmart unbounded (prettyExpr e))
+        Data.Text.Lazy.IO.hPutStrLn h ""
 
     where
 
