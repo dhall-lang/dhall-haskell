@@ -147,8 +147,8 @@ Executable dhall
     Other-Modules:
         Paths_dhall
 
-Executable dhalli
-    Hs-Source-Dirs: dhalli
+Executable dhall-repl
+    Hs-Source-Dirs: dhall-repl
     Main-Is: Main.hs
     Build-Depends:
         base             >= 4        && < 5   ,

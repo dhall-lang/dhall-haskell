@@ -206,7 +206,7 @@ completer _ =
 
 greeter :: MonadIO m => m ()
 greeter =
-  liftIO ( putStrLn "dhalli: I don't write terminating configuration files, I am terminating configuration files." )
+  return ()
 
 
 dontCrash :: ( MonadIO m, Haskeline.MonadException m ) => m () -> m ()
