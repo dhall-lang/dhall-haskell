@@ -677,7 +677,8 @@ prettyExprF (TextLit a) =
 prettyExprF (Record a) =
     prettyRecord a
 prettyExprF (RecordLit a) =
-    prettyRecordLit a
+    
+    a
 prettyExprF (Union a) =
     prettyUnion a
 prettyExprF (UnionLit a b c) =
@@ -713,7 +714,7 @@ prettyRecord =
 prettyRecordLit :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc Ann
 prettyRecordLit a
     | Data.HashMap.Strict.InsOrd.null a =
-        lbrace <> equals <> rbracket
+        lbrace <> equals <> rbrace
     | otherwise
         = braces (map (prettyKeyValue equals) (Data.HashMap.Strict.InsOrd.toList a))
 
