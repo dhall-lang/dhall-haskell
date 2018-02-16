@@ -13,6 +13,7 @@ import Data.Version (showVersion)
 import Dhall.Core (normalize)
 import Dhall.Import (Imported(..), load)
 import Dhall.Parser (Src, exprAndHeaderFromText)
+import Dhall.Pretty (annToAnsiStyle, prettyExpr)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import Options.Generic (Generic, ParseRecord, type (<?>)(..))
 import System.Exit (exitFailure, exitSuccess)
@@ -22,11 +23,12 @@ import qualified Paths_dhall as Meta
 
 import qualified Control.Exception
 import qualified Data.Text.Lazy.IO
-import qualified Data.Text.Prettyprint.Doc             as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
+import qualified Data.Text.Prettyprint.Doc                 as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty (renderIO)
 import qualified Dhall.Core
 import qualified Dhall.TypeCheck
 import qualified Options.Generic
+import qualified System.Console.ANSI
 import qualified System.IO
 
 data Options = Options
@@ -86,20 +88,35 @@ main = do
             Left  err -> Control.Exception.throwIO err
             Right x   -> return x
 
-        let render h e =
-                if unHelpful (pretty options)
-                then do
-                    let doc = Pretty.pretty header <> Pretty.pretty e
-                    Pretty.renderIO h (Pretty.layoutSmart opts doc)
-                    Data.Text.Lazy.IO.hPutStrLn h ""
-                else do
-                    Data.Text.Lazy.IO.hPutStrLn h (Dhall.Core.pretty e)
-
+        render <- makeRender options header
         expr' <- load expr
 
         typeExpr <- case Dhall.TypeCheck.typeOf expr' of
             Left  err      -> Control.Exception.throwIO err
             Right typeExpr -> return typeExpr
+
         render System.IO.stderr (normalize typeExpr)
         Data.Text.Lazy.IO.hPutStrLn System.IO.stderr mempty
         render System.IO.stdout (normalize expr') )
+
+makeRender :: (Pretty.Pretty t, Pretty.Pretty a) => Options -> t -> IO (System.IO.Handle -> Dhall.Core.Expr s a -> IO ())
+makeRender options header = do
+    supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
+
+    let render h doc =
+            if supportsANSI
+                then Pretty.renderIO h (fmap annToAnsiStyle doc)
+                else Pretty.renderIO h (Pretty.unAnnotateS doc)
+
+    return $ \h e ->
+        if unHelpful (pretty options)
+        then do
+            let doc = Pretty.pretty header <> prettyExpr e
+            render h (Pretty.layoutSmart opts doc)
+            Data.Text.Lazy.IO.hPutStrLn h ""
+        else do
+            render h (Pretty.layoutSmart unbounded (prettyExpr e))
+
+    where
+
+        unbounded = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
