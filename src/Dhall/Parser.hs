@@ -22,7 +22,6 @@ module Dhall.Parser (
 import Control.Applicative (Alternative(..), liftA2, optional)
 import Control.Exception (Exception)
 import Control.Monad (MonadPlus)
-import Data.ByteString (ByteString)
 import Data.Functor (void)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
@@ -33,15 +32,13 @@ import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Typeable (Typeable)
+import Data.Void (Void)
 import Dhall.Core
 import Numeric.Natural (Natural)
 import Prelude hiding (const, pi)
 import Text.PrettyPrint.ANSI.Leijen (Doc)
 import Text.Parser.Combinators (choice, try, (<?>))
 import Text.Parser.Token (TokenParsing(..))
-import Text.Trifecta
-    (CharParsing, DeltaParsing, MarkParsing, Parsing, Result(..))
-import Text.Trifecta.Delta (Delta)
 
 import qualified Control.Monad
 import qualified Data.ByteString.Base16.Lazy
@@ -52,47 +49,40 @@ import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.Text
-import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
+import qualified Text.Megaparsec
+import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 import qualified Text.Parser.Token.Style
-import qualified Text.PrettyPrint.ANSI.Leijen
-import qualified Text.Trifecta
 
 -- | Source code extract
-data Src = Src Delta Delta ByteString deriving (Eq, Show)
+data Src = Src Text.Megaparsec.SourcePos Text.Megaparsec.SourcePos Text
+  deriving (Eq, Show)
 
 instance Buildable Src where
-    build (Src begin _ bytes) =
+    build (Src begin _ text) =
             build text <> "\n"
         <>  "\n"
-        <>  build (show (Text.PrettyPrint.ANSI.Leijen.pretty begin))
+        <>  build (show begin)
         <>  "\n"
-      where
-        bytes' = Data.ByteString.Lazy.fromStrict bytes
-
-        text = Data.Text.Lazy.strip (Data.Text.Lazy.Encoding.decodeUtf8 bytes')
 
 {-| A `Parser` that is almost identical to
-    @"Text.Trifecta".`Text.Trifecta.Parser`@ except treating Haskell-style
+    @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
     comments as whitespace
 -}
-newtype Parser a = Parser { unParser :: Text.Trifecta.Parser a }
+newtype Parser a = Parser { unParser :: Text.Megaparsec.Parsec Void Text a }
     deriving
     (   Functor
     ,   Applicative
     ,   Monad
     ,   Alternative
     ,   MonadPlus
-    ,   Parsing
-    ,   CharParsing
-    ,   DeltaParsing
-    ,   MarkParsing Delta
+    ,   Text.Megaparsec.MonadParsec Void Text
     )
 
 instance Monoid a => Monoid (Parser a) where
@@ -101,26 +91,34 @@ instance Monoid a => Monoid (Parser a) where
     mappend = liftA2 mappend
 
 instance IsString a => IsString (Parser a) where
-    fromString x = fmap fromString (Text.Parser.Char.string x)
+    fromString x = fromString x <$ Text.Megaparsec.Char.string (fromString x)
+
+instance Text.Parser.Combinators.Parsing Parser where
+  unexpected = fail
+  eof = Parser Text.Megaparsec.eof
+  try = Text.Megaparsec.try
+  (<?>) = (Text.Megaparsec.<?>)
+  notFollowedBy = Text.Megaparsec.notFollowedBy
+
+instance Text.Parser.Char.CharParsing Parser where
+  satisfy = Parser . Text.Megaparsec.Char.satisfy
 
 instance TokenParsing Parser where
     someSpace =
         Text.Parser.Token.Style.buildSomeSpaceParser
-            (Parser someSpace)
+            (Parser (Text.Megaparsec.skipSome (Text.Megaparsec.Char.satisfy Data.Char.isSpace)))
             Text.Parser.Token.Style.haskellCommentStyle
 
-    nesting (Parser m) = Parser (nesting m)
+    nesting = id
 
-    semi = Parser semi
-
-    highlight h (Parser m) = Parser (highlight h m)
+    highlight _ = id
 
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
-    before     <- Text.Trifecta.position
-    (e, bytes) <- Text.Trifecta.slicedWith (,) parser
-    after      <- Text.Trifecta.position
-    return (Note (Src before after bytes) e)
+    before      <- Text.Megaparsec.getPosition
+    (tokens, e) <- Text.Megaparsec.match parser
+    after       <- Text.Megaparsec.getPosition
+    return (Note (Src before after tokens) e)
 
 count :: Monoid a => Int -> Parser a -> Parser a
 count n parser = mconcat (replicate n parser)
@@ -1536,7 +1534,7 @@ instance Show ParseError where
 instance Exception ParseError
 
 -- | Parse an expression from `Text` containing a Dhall program
-exprFromText :: Delta -> Text -> Either ParseError (Expr Src Path)
+exprFromText :: String -> Text -> Either ParseError (Expr Src Path)
 exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
 
 {-| Like `exprFromText` but also returns the leading comments and whitespace
@@ -1552,24 +1550,17 @@ exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
     This is used by @dhall-format@ to preserve leading comments and whitespace
 -}
 exprAndHeaderFromText
-    :: Delta
+    :: String
     -> Text
     -> Either ParseError (Text, Expr Src Path)
 exprAndHeaderFromText delta text = case result of
-    Failure errInfo    -> Left (ParseError (Text.Trifecta._errDoc errInfo))
-    Success (bytes, r) -> case Data.Text.Encoding.decodeUtf8' bytes of
-        Left  errInfo -> Left (ParseError (fromString (show errInfo)))
-        Right txt     -> do
-            let stripped = Data.Text.dropWhileEnd (/= '\n') txt
-            let lazyText = Data.Text.Lazy.fromStrict stripped
-            Right (lazyText, r)
+    Left errInfo   -> Left (ParseError (fromString (Text.Megaparsec.parseErrorPretty errInfo)))
+    Right (txt, r) -> Right (Data.Text.Lazy.dropWhileEnd (/= '\n') txt, r)
   where
-    string = Data.Text.Lazy.unpack text
-
-    parser = unParser (do
-        bytes <- Text.Trifecta.slicedWith (\_ x -> x) whitespace
+    parser = do
+        (bytes, _) <- Text.Megaparsec.match whitespace
         r <- expr
-        Text.Parser.Combinators.eof
-        return (bytes, r) )
+        Text.Megaparsec.eof
+        return (bytes, r)
 
-    result = Text.Trifecta.parseString parser delta string
+    result = Text.Megaparsec.parse (unParser parser) delta text

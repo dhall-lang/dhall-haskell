@@ -17,7 +17,6 @@ import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import Options.Generic (Generic, ParseRecord, type (<?>)(..))
 import System.IO (stderr)
 import System.Exit (exitFailure, exitSuccess)
-import Text.Trifecta.Delta (Delta(..))
 
 import qualified Paths_dhall as Meta
 
