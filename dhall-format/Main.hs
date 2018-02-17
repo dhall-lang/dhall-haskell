@@ -31,9 +31,7 @@ import Data.Monoid ((<>))
 import Data.Version (showVersion)
 import Dhall.Parser (exprAndHeaderFromText)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr)
-import Filesystem.Path.CurrentOS (FilePath)
 import Options.Generic (Generic, ParseRecord, type (<?>)(..))
-import Prelude hiding (FilePath)
 import System.IO (stderr)
 import System.Exit (exitFailure, exitSuccess)
 import Text.Trifecta.Delta (Delta(..))
@@ -46,7 +44,6 @@ import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty (renderIO)
-import qualified Filesystem.Path.CurrentOS
 import qualified Options.Generic
 import qualified System.Console.ANSI
 import qualified System.IO
@@ -79,15 +76,14 @@ main = do
     Control.Exception.handle handler (do
         case unHelpful (inplace options) of
             Just file -> do
-                let fileString = Filesystem.Path.CurrentOS.encodeString file
-                strictText <- Data.Text.IO.readFile fileString
+                strictText <- Data.Text.IO.readFile file
                 let lazyText = Data.Text.Lazy.fromStrict strictText
                 (header, expr) <- case exprAndHeaderFromText (Directed "(stdin)" 0 0 0 0) lazyText of
                     Left  err -> Control.Exception.throwIO err
                     Right x   -> return x
 
                 let doc = Pretty.pretty header <> Pretty.pretty expr
-                System.IO.withFile fileString System.IO.WriteMode (\handle -> do
+                System.IO.withFile file System.IO.WriteMode (\handle -> do
                     Pretty.renderIO handle (Pretty.layoutSmart opts doc)
                     Data.Text.IO.hPutStrLn handle "" )
             Nothing -> do
