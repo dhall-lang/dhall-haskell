@@ -10,11 +10,9 @@ import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
 import Data.List ( foldl' )
 
-import qualified Data.Map.Strict as StrictMap
 import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
-import qualified Dhall
 import qualified Dhall.Context
 import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize )
 import qualified Dhall.Pretty

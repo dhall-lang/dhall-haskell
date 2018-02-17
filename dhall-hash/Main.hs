@@ -8,9 +8,8 @@ module Main where
 
 import Control.Exception (SomeException)
 import Control.Monad (when)
-import Data.Monoid (mempty)
 import Data.Version (showVersion)
-import Dhall.Core (pretty, normalize)
+import Dhall.Core (normalize)
 import Dhall.Import (Imported(..), hashExpressionToCode, load)
 import Dhall.Parser (Src, exprFromText)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
