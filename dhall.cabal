@@ -82,6 +82,7 @@ Extra-Source-Files:
     Prelude/Text/concatMapSep
     Prelude/Text/concatSep
     tests/format/*.dhall
+    tests/normalization/*.dhall
     tests/parser/*.dhall
     tests/regression/*.dhall
     tests/tutorial/*.dhall
