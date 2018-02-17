@@ -14,6 +14,10 @@ let
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: {
           dhall = haskellPackagesNew.callPackage ./default.nix { };
+
+          parser-combinators = haskellPackagesNew.callPackage ./parser-combinators.nix { };
+
+          megaparsec = haskellPackagesNew.callPackage ./megaparsec.nix { };
         };
       };
     };

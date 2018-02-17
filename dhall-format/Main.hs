@@ -34,7 +34,6 @@ import Dhall.Pretty (annToAnsiStyle, prettyExpr)
 import Options.Generic (Generic, ParseRecord, type (<?>)(..))
 import System.IO (stderr)
 import System.Exit (exitFailure, exitSuccess)
-import Text.Trifecta.Delta (Delta(..))
 
 import qualified Paths_dhall as Meta
 
@@ -78,7 +77,7 @@ main = do
             Just file -> do
                 strictText <- Data.Text.IO.readFile file
                 let lazyText = Data.Text.Lazy.fromStrict strictText
-                (header, expr) <- case exprAndHeaderFromText (Directed "(stdin)" 0 0 0 0) lazyText of
+                (header, expr) <- case exprAndHeaderFromText "stdin" lazyText of
                     Left  err -> Control.Exception.throwIO err
                     Right x   -> return x
 
@@ -90,7 +89,7 @@ main = do
                 System.IO.hSetEncoding System.IO.stdin System.IO.utf8
                 inText <- Data.Text.Lazy.IO.getContents
 
-                (header, expr) <- case exprAndHeaderFromText (Directed "(stdin)" 0 0 0 0) inText of
+                (header, expr) <- case exprAndHeaderFromText "stdin" inText of
                     Left  err -> Control.Exception.throwIO err
                     Right x   -> return x
 
