@@ -101,7 +101,9 @@ should name basename =
         case Dhall.TypeCheck.typeOf expectedResolved of
             Left  err -> Control.Exception.throwIO err
             Right _   -> return ()
-        let expectedNormalized = Dhall.Core.normalize expectedResolved
+        -- Use `denote` instead of `normalize` to enforce that the expected
+        -- expression is already in normal form
+        let expectedNormalized = Dhall.Core.denote expectedResolved
 
         let message =
                 "The normalized expression did not match the expected output"
