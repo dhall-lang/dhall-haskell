@@ -11,64 +11,63 @@ import qualified Data.Text.Lazy.IO
 import qualified Dhall.Parser
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
-import qualified Util
 
 parserTests :: TestTree
 parserTests =
     Test.Tasty.testGroup "parser tests"
         [ Test.Tasty.testGroup "whitespace"
-            [ shouldPass
+            [ shouldParse
                 "prefix/suffix"
                 "./tests/parser/whitespace.dhall"
-            , shouldPass
+            , shouldParse
                 "block comment"
                 "./tests/parser/blockComment.dhall"
-            , shouldPass
+            , shouldParse
                 "nested block comment"
                 "./tests/parser/nestedBlockComment.dhall"
-            , shouldPass
+            , shouldParse
                 "line comment"
                 "./tests/parser/lineComment.dhall"
-            , shouldPass
+            , shouldParse
                 "Unicode comment"
                 "./tests/parser/unicodeComment.dhall"
-            , shouldPass
+            , shouldParse
                 "whitespace buffet"
                 "./tests/parser/whitespaceBuffet.dhall"
-            , shouldPass
+            , shouldParse
                 "label"
                 "./tests/parser/label.dhall"
-            , shouldPass
+            , shouldParse
                 "quoted label"
                 "./tests/parser/quotedLabel.dhall"
-            , shouldPass
+            , shouldParse
                 "double quoted string"
                 "./tests/parser/doubleQuotedString.dhall"
-            , shouldPass
+            , shouldParse
                 "Unicode double quoted string"
                 "./tests/parser/unicodeDoubleQuotedString.dhall"
-            , shouldPass
+            , shouldParse
                 "escaped double quoted string"
                 "./tests/parser/escapedDoubleQuotedString.dhall"
-            , shouldPass
+            , shouldParse
                 "interpolated double quoted string"
                 "./tests/parser/interpolatedDoubleQuotedString.dhall"
-            , shouldPass
+            , shouldParse
                 "single quoted string"
                 "./tests/parser/singleQuotedString.dhall"
-            , shouldPass
+            , shouldParse
                 "escaped single quoted string"
                 "./tests/parser/escapedSingleQuotedString.dhall"
-            , shouldPass
+            , shouldParse
                 "interpolated single quoted string"
                 "./tests/parser/interpolatedSingleQuotedString.dhall"
-            , shouldPass
+            , shouldParse
                 "double"
                 "./tests/parser/double.dhall"
-            , shouldPass
+            , shouldParse
                 "natural"
                 "./tests/parser/natural.dhall"
-            , shouldPass
+            , shouldParse
                 "identifier"
                 "./tests/parser/identifier.dhall"
             , shouldParse
@@ -83,61 +82,56 @@ parserTests =
             , shouldParse
                 "environmentVariables"
                 "./tests/parser/environmentVariables.dhall"
-            , shouldPass
+            , shouldParse
                 "lambda"
                 "./tests/parser/lambda.dhall"
-            , shouldPass
+            , shouldParse
                 "if then else"
                 "./tests/parser/ifThenElse.dhall"
-            , shouldPass
+            , shouldParse
                 "let"
                 "./tests/parser/let.dhall"
-            , shouldPass
+            , shouldParse
                 "forall"
                 "./tests/parser/forall.dhall"
-            , shouldPass
+            , shouldParse
                 "function type"
                 "./tests/parser/functionType.dhall"
-            , shouldPass
+            , shouldParse
                 "operators"
                 "./tests/parser/operators.dhall"
-            , shouldPass
+            , shouldParse
                 "annotations"
                 "./tests/parser/annotations.dhall"
-            , shouldPass
+            , shouldParse
                 "merge"
                 "./tests/parser/merge.dhall"
-            , shouldPass
+            , shouldParse
                 "constructors"
                 "./tests/parser/constructors.dhall"
-            , shouldPass
+            , shouldParse
                 "fields"
                 "./tests/parser/fields.dhall"
-            , shouldPass
+            , shouldParse
                 "record"
                 "./tests/parser/record.dhall"
-            , shouldPass
+            , shouldParse
                 "union"
                 "./tests/parser/union.dhall"
-            , shouldPass
+            , shouldParse
                 "list"
                 "./tests/parser/list.dhall"
-            , shouldPass
+            , shouldParse
                 "builtins"
                 "./tests/parser/builtins.dhall"
-            , shouldPass
+            , shouldParse
                 "large expression"
                 "./tests/parser/largeExpression.dhall"
-            , shouldPass
+            , shouldParse
                 "names that begin with reserved identifiers"
                 "./tests/parser/reservedPrefix.dhall"
             ]
         ]
-
-shouldPass :: Text -> Text -> TestTree
-shouldPass name code = Test.Tasty.HUnit.testCase (Data.Text.unpack name) (do
-    _ <- Util.code code
-    return () )
 
 shouldParse :: Text -> FilePath -> TestTree
 shouldParse name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) (do

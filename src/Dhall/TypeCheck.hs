@@ -498,6 +498,7 @@ typeWithA tpa = loop
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
+                    Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidFieldType k t))
         mapM_ process (Data.HashMap.Strict.InsOrd.toList kts)
         return (Const Type)
@@ -507,6 +508,7 @@ typeWithA tpa = loop
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
+                    Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidField k v))
                 return t
         kts <- Data.HashMap.Strict.InsOrd.traverseWithKey process kvs
@@ -516,6 +518,7 @@ typeWithA tpa = loop
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
+                    Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
         mapM_ process (Data.HashMap.Strict.InsOrd.toList kts)
         return (Const Type)
