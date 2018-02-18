@@ -57,16 +57,18 @@ data Ann
   | Label       -- ^ Record labels
   | Literal     -- ^ Literals such as integers and strings
   | Builtin     -- ^ Builtin types and values
+  | Operator    -- ^ Operators
 
 {-| Convert annotations to their corresponding color for syntax highlighting
     purposes
 -}
 annToAnsiStyle :: Ann -> Terminal.AnsiStyle
-annToAnsiStyle Keyword  = Terminal.bold
-annToAnsiStyle Syntax   = mempty
-annToAnsiStyle Label    = Terminal.color Terminal.Green
-annToAnsiStyle Literal  = Terminal.color Terminal.Magenta
-annToAnsiStyle Builtin  = Terminal.color Terminal.Red
+annToAnsiStyle Keyword  = Terminal.colorDull Terminal.Green
+annToAnsiStyle Syntax   = Terminal.colorDull Terminal.Green
+annToAnsiStyle Label    = mempty
+annToAnsiStyle Literal  = Terminal.colorDull Terminal.Magenta
+annToAnsiStyle Builtin  = Terminal.underlined
+annToAnsiStyle Operator = Terminal.colorDull Terminal.Green
 
 -- | Pretty print an expression
 prettyExpr :: Pretty a => Expr s a -> Doc Ann
@@ -81,12 +83,13 @@ duplicate :: a -> (a, a)
 duplicate x = (x, x)
 
 -- Annotation helpers
-keyword, syntax, label, literal, builtin :: Doc Ann -> Doc Ann
+keyword, syntax, label, literal, builtin, operator :: Doc Ann -> Doc Ann
 keyword  = Pretty.annotate Keyword
 syntax   = Pretty.annotate Syntax
 label    = Pretty.annotate Label
 literal  = Pretty.annotate Literal
 builtin  = Pretty.annotate Builtin
+operator = Pretty.annotate Operator
 
 comma, lbracket, rbracket, langle, rangle, lbrace, rbrace, lparen, rparen, pipe, rarrow, backtick, dollar, colon, lambda, forall, equals, dot :: Doc Ann
 comma    = syntax Pretty.comma
@@ -486,7 +489,7 @@ prettyExprC = prettyExprC0
 
 prettyExprC0 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC0 a0@(BoolOr _ _) =
-    enclose' "" "    " (space <> builtin "||" <> space) (builtin "||" <> "  ") (fmap duplicate (docs a0))
+    enclose' "" "    " (space <> operator "||" <> space) (operator "||" <> "  ") (fmap duplicate (docs a0))
   where
     docs (BoolOr a b) = prettyExprC1 a : docs b
     docs (Note   _ b) = docs b
@@ -498,7 +501,7 @@ prettyExprC0 a0 =
 
 prettyExprC1 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC1 a0@(TextAppend _ _) =
-    enclose' "" "    " (" " <> builtin "++" <> " ") (builtin "++" <> "  ") (fmap duplicate (docs a0))
+    enclose' "" "    " (" " <> operator "++" <> " ") (operator "++" <> "  ") (fmap duplicate (docs a0))
   where
     docs (TextAppend a b) = prettyExprC2 a : docs b
     docs (Note       _ b) = docs b
@@ -510,7 +513,7 @@ prettyExprC1 a0 =
 
 prettyExprC2 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC2 a0@(NaturalPlus _ _) =
-    enclose' "" "  " (" " <> builtin "+" <> " ") (builtin "+" <> " ") (fmap duplicate (docs a0))
+    enclose' "" "  " (" " <> operator "+" <> " ") (operator "+" <> " ") (fmap duplicate (docs a0))
   where
     docs (NaturalPlus a b) = prettyExprC3 a : docs b
     docs (Note        _ b) = docs b
@@ -522,7 +525,7 @@ prettyExprC2 a0 =
 
 prettyExprC3 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC3 a0@(ListAppend _ _) =
-    enclose' "" "  " (" " <> builtin "#" <> " ") (builtin "#" <> " ") (fmap duplicate (docs a0))
+    enclose' "" "  " (" " <> operator "#" <> " ") (operator "#" <> " ") (fmap duplicate (docs a0))
   where
     docs (ListAppend a b) = prettyExprC4 a : docs b
     docs (Note       _ b) = docs b
@@ -534,7 +537,7 @@ prettyExprC3 a0 =
 
 prettyExprC4 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC4 a0@(BoolAnd _ _) =
-    enclose' "" "    " (" " <> builtin "&&" <> " ") (builtin "&&" <> "  ") (fmap duplicate (docs a0))
+    enclose' "" "    " (" " <> operator "&&" <> " ") (operator "&&" <> "  ") (fmap duplicate (docs a0))
   where
     docs (BoolAnd a b) = prettyExprC5 a : docs b
     docs (Note    _ b) = docs b
@@ -546,7 +549,7 @@ prettyExprC4 a0 =
 
 prettyExprC5 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC5 a0@(Combine _ _) =
-    enclose' "" "  " (" " <> builtin "∧" <> " ") (builtin "∧" <> " ") (fmap duplicate (docs a0))
+    enclose' "" "  " (" " <> operator "∧" <> " ") (operator "∧" <> " ") (fmap duplicate (docs a0))
   where
     docs (Combine a b) = prettyExprC6 a : docs b
     docs (Note    _ b) = docs b
@@ -558,7 +561,7 @@ prettyExprC5 a0 =
 
 prettyExprC6 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC6 a0@(Prefer _ _) =
-    enclose' "" "  " (" " <> builtin "⫽" <> " ") (builtin "⫽" <> " ") (fmap duplicate (docs a0))
+    enclose' "" "  " (" " <> operator "⫽" <> " ") (operator "⫽" <> " ") (fmap duplicate (docs a0))
   where
     docs (Prefer a b) = prettyExprC7 a : docs b
     docs (Note   _ b) = docs b
@@ -570,7 +573,7 @@ prettyExprC6 a0 =
 
 prettyExprC7 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC7 a0@(NaturalTimes _ _) =
-    enclose' "" "  " (" " <> builtin "*" <> " ") (builtin "*" <> " ") (fmap duplicate (docs a0))
+    enclose' "" "  " (" " <> operator "*" <> " ") (operator "*" <> " ") (fmap duplicate (docs a0))
   where
     docs (NaturalTimes a b) = prettyExprC8 a : docs b
     docs (Note         _ b) = docs b
@@ -582,7 +585,7 @@ prettyExprC7 a0 =
 
 prettyExprC8 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC8 a0@(BoolEQ _ _) =
-    enclose' "" "    " (" " <> builtin "==" <> " ") (builtin "==" <> "  ") (fmap duplicate (docs a0))
+    enclose' "" "    " (" " <> operator "==" <> " ") (operator "==" <> "  ") (fmap duplicate (docs a0))
   where
     docs (BoolEQ a b) = prettyExprC9 a : docs b
     docs (Note   _ b) = docs b
@@ -594,7 +597,7 @@ prettyExprC8 a0 =
 
 prettyExprC9 :: Pretty a => Expr s a -> Doc Ann
 prettyExprC9 a0@(BoolNE _ _) =
-    enclose' "" "    " (" " <> builtin "!=" <> " ") (builtin "!=" <> "  ") (fmap duplicate (docs a0))
+    enclose' "" "    " (" " <> operator "!=" <> " ") (operator "!=" <> "  ") (fmap duplicate (docs a0))
   where
     docs (BoolNE a b) = prettyExprD a : docs b
     docs (Note   _ b) = docs b
@@ -679,13 +682,13 @@ prettyExprF OptionalFold =
 prettyExprF OptionalBuild =
     builtin "Optional/build"
 prettyExprF (BoolLit True) =
-    literal "True"
+    builtin "True"
 prettyExprF (BoolLit False) =
-    literal "False"
+    builtin "False"
 prettyExprF (IntegerLit a) =
     prettyNumber a
 prettyExprF (NaturalLit a) =
-    "+" <> prettyNatural a
+    literal "+" <> prettyNatural a
 prettyExprF (DoubleLit a) =
     prettyScientific a
 prettyExprF (TextLit a) =
