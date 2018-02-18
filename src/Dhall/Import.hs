@@ -107,6 +107,8 @@ module Dhall.Import (
     , loadWithContext
     , hashExpression
     , hashExpressionToCode
+    , Status(..)
+    , emptyStatus
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -328,12 +330,19 @@ instance Show MissingEnvironmentVariable where
         <>  "\n"
         <>  "↳ " <> Text.unpack name
 
+-- | State threaded throughout the import process
 data Status = Status
     { _stack   :: [Path]
+    -- ^ Stack of `Path`s that we've imported along the way to get to the
+    -- current point
     , _cache   :: Map Path (Expr Src X)
+    -- ^ Cache of imported expressions in order to avoid importing the same
+    --   expression twice with different values
     , _manager :: Maybe Manager
+    -- ^ Cache for the `Manager` so that we only acquire it once
     }
 
+-- | Default starting `Status`
 emptyStatus :: Status
 emptyStatus = Status [] Map.empty Nothing
 

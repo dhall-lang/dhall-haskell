@@ -2,6 +2,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wall #-}
 
+{-| This module provides internal pretty-printing utilities which are used by
+    other modules but are not part of the public facing API
+-}
+
 module Dhall.Pretty.Internal (
       Ann(..)
     , annToAnsiStyle
@@ -44,6 +48,9 @@ import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Data.Vector
 
+{-| Annotation type used to tag elements in a pretty-printed document for
+    syntax highlighting purposes
+-}
 data Ann
   = Keyword     -- ^ Used for syntactic keywords
   | Syntax      -- ^ Syntax punctuation such as commas, parenthesis, and braces
@@ -52,6 +59,9 @@ data Ann
   | Builtin     -- ^ Builtin types and values
   | Operator    -- ^ Operators
 
+{-| Convert annotations to their corresponding color for syntax highlighting
+    purposes
+-}
 annToAnsiStyle :: Ann -> Terminal.AnsiStyle
 annToAnsiStyle Keyword  = Terminal.colorDull Terminal.Green
 annToAnsiStyle Syntax   = Terminal.colorDull Terminal.Green
@@ -60,6 +70,7 @@ annToAnsiStyle Literal  = Terminal.colorDull Terminal.Magenta
 annToAnsiStyle Builtin  = Terminal.underlined
 annToAnsiStyle Operator = Terminal.colorDull Terminal.Green
 
+-- | Pretty print an expression
 prettyExpr :: Pretty a => Expr s a -> Doc Ann
 prettyExpr = prettyExprA
 
@@ -784,9 +795,10 @@ escapeSingleQuotedText inputBuilder = outputBuilder
 
     substitute before after = Text.intercalate after . Text.splitOn before
 
--- | Escape a `Builder` literal using Dhall's escaping rules
---
--- Note that the result does not include surrounding quotes
+{-| Escape a `Builder` literal using Dhall's escaping rules
+  
+    Note that the result does not include surrounding quotes
+-}
 escapeText :: Builder -> Builder
 escapeText a = Builder.fromLazyText (Text.concatMap adapt text)
   where
