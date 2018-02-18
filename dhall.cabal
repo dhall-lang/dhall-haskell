@@ -94,7 +94,6 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.9.0.0  && < 5   ,
-        ansi-wl-pprint                           < 0.7 ,
         base16-bytestring                        < 0.2 ,
         bytestring                               < 0.11,
         case-insensitive                         < 1.3 ,

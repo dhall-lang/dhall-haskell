@@ -72,7 +72,7 @@ main = do
         System.IO.hSetEncoding System.IO.stdin System.IO.utf8
         inText <- Data.Text.Lazy.IO.getContents
 
-        expr <- case exprFromText (Directed "(stdin)" 0 0 0 0) inText of
+        expr <- case exprFromText "(stdin)" inText of
             Left  err  -> Control.Exception.throwIO err
             Right expr -> return expr
 

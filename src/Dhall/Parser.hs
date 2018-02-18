@@ -31,12 +31,10 @@ import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
-import Data.Typeable (Typeable)
 import Data.Void (Void)
 import Dhall.Core
 import Numeric.Natural (Natural)
 import Prelude hiding (const, pi)
-import Text.PrettyPrint.ANSI.Leijen (Doc)
 import Text.Parser.Combinators (choice, try, (<?>))
 import Text.Parser.Token (TokenParsing(..))
 
@@ -1525,11 +1523,11 @@ import_ = (do
         return RawText
 
 -- | A parsing error
-newtype ParseError = ParseError Doc deriving (Typeable)
+newtype ParseError = ParseError{ unwrap :: Text.Megaparsec.ParseError Char Void}
 
 instance Show ParseError where
-    show (ParseError doc) =
-      "\n\ESC[1;31mError\ESC[0m: Invalid input\n\n" <> show doc
+    show (err) =
+      "\n\ESC[1;31mError\ESC[0m: Invalid input\n\n" <> Text.Megaparsec.parseErrorPretty (unwrap err)
 
 instance Exception ParseError
 
@@ -1554,7 +1552,7 @@ exprAndHeaderFromText
     -> Text
     -> Either ParseError (Text, Expr Src Path)
 exprAndHeaderFromText delta text = case result of
-    Left errInfo   -> Left (ParseError (fromString (Text.Megaparsec.parseErrorPretty errInfo)))
+    Left errInfo   -> Left (ParseError errInfo)
     Right (txt, r) -> Right (Data.Text.Lazy.dropWhileEnd (/= '\n') txt, r)
   where
     parser = do

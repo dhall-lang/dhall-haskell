@@ -115,7 +115,6 @@ module Dhall.Import (
     , MissingEnvironmentVariable(..)
     ) where
 
-import Data.String (fromString)
 import Data.Void (Void)
 import Control.Applicative (empty)
 import Control.Exception
@@ -586,7 +585,7 @@ exprFromPath (Path {..}) = case pathType of
                 x <- parseFromFileEx parser path `catch` handler
                 case x of
                     Left errInfo -> do
-                        throwIO (ParseError (fromString (Text.Megaparsec.parseErrorPretty errInfo)))
+                        throwIO (ParseError errInfo)
                     Right expr -> do
                         return expr
             RawText -> do
@@ -659,7 +658,7 @@ exprFromPath (Path {..}) = case pathType of
                         -- Also try the fallback in case of a parse error, since
                         -- the parse error might signify that this URL points to
                         -- a directory list
-                        let err' = ParseError (fromString (Text.Megaparsec.parseErrorPretty err))
+                        let err' = ParseError err
 
                         request' <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
 
@@ -688,7 +687,7 @@ exprFromPath (Path {..}) = case pathType of
                     Code ->
                         case Text.Megaparsec.parse parser (Text.unpack env) (Text.pack str) of
                             Left errInfo -> do
-                                throwIO (ParseError (fromString (Text.Megaparsec.parseErrorPretty errInfo)))
+                                throwIO (ParseError errInfo)
                             Right expr   -> do
                                 return expr
                     RawText -> return (TextLit (Chunks [] (build str)))
