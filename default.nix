@@ -4,7 +4,7 @@
 , http-client-tls, insert-ordered-containers, lens-family-core
 , megaparsec, mtl, optparse-generic, parsers, prettyprinter
 , prettyprinter-ansi-terminal, repline, scientific, stdenv, tasty
-, tasty-hunit, text, text-format, transformers, trifecta
+, tasty-hunit, text, text-format, transformers
 , unordered-containers, vector
 }:
 mkDerivation {
@@ -24,7 +24,7 @@ mkDerivation {
   executableHaskellDepends = [
     ansi-terminal base containers haskeline megaparsec mtl
     optparse-generic prettyprinter prettyprinter-ansi-terminal repline
-    text trifecta
+    text
   ];
   testHaskellDepends = [
     base containers deepseq insert-ordered-containers prettyprinter
