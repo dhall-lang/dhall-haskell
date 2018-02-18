@@ -92,14 +92,32 @@ instance IsString a => IsString (Parser a) where
     fromString x = fromString x <$ Text.Megaparsec.Char.string (fromString x)
 
 instance Text.Parser.Combinators.Parsing Parser where
-  unexpected = fail
-  eof = Parser Text.Megaparsec.eof
   try = Text.Megaparsec.try
+
   (<?>) = (Text.Megaparsec.<?>)
+
+  skipMany = Text.Megaparsec.skipMany
+
+  skipSome = Text.Megaparsec.skipSome
+
+  unexpected = fail
+
+  eof = Parser Text.Megaparsec.eof
+
   notFollowedBy = Text.Megaparsec.notFollowedBy
 
 instance Text.Parser.Char.CharParsing Parser where
   satisfy = Parser . Text.Megaparsec.Char.satisfy
+
+  char = Text.Megaparsec.Char.char
+
+  notChar = Text.Megaparsec.Char.char
+
+  anyChar = Text.Megaparsec.Char.anyChar
+
+  string = fmap Data.Text.Lazy.unpack . Text.Megaparsec.Char.string . fromString
+
+  text = fmap Data.Text.Lazy.toStrict . Text.Megaparsec.Char.string . Data.Text.Lazy.fromStrict
 
 instance TokenParsing Parser where
     someSpace =
@@ -107,9 +125,9 @@ instance TokenParsing Parser where
             (Parser (Text.Megaparsec.skipSome (Text.Megaparsec.Char.satisfy Data.Char.isSpace)))
             Text.Parser.Token.Style.haskellCommentStyle
 
-    nesting = id
-
     highlight _ = id
+
+    semi = token (Text.Megaparsec.Char.char ';' <?> ";")
 
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
