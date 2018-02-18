@@ -35,15 +35,19 @@ import Data.Typeable (Typeable)
 import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 
-import qualified Control.Monad.Trans.State.Strict as State
+import qualified Control.Monad.Trans.State.Strict          as State
 import qualified Data.HashMap.Strict
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Set
-import qualified Data.Text.Lazy                   as Text
-import qualified Data.Text.Lazy.Builder           as Builder
+import qualified Data.Text.Lazy                            as Text
+import qualified Data.Text.Lazy.Builder                    as Builder
+import qualified Data.Text.Prettyprint.Doc                 as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Data.Vector
 import qualified Dhall.Context
 import qualified Dhall.Core
+import qualified Dhall.Diff
+import qualified Dhall.Pretty
 
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
@@ -733,13 +737,17 @@ data TypeMessage s a
     | NoDependentTypes (Expr s a) (Expr s a)
     deriving (Show)
 
-shortTypeMessage :: Buildable a => TypeMessage s a -> Builder
+shortTypeMessage
+    :: (Buildable a, Eq a, Eq s, Pretty a)
+    => TypeMessage s a -> Builder
 shortTypeMessage msg =
     "\ESC[1;31mError\ESC[0m: " <> build short <> "\n"
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
-longTypeMessage :: Buildable a => TypeMessage s a -> Builder
+longTypeMessage
+    :: (Buildable a, Eq a, Eq s, Pretty a)
+    => TypeMessage s a -> Builder
 longTypeMessage msg =
         "\ESC[1;31mError\ESC[0m: " <> build short <> "\n"
     <>  "\n"
@@ -757,7 +765,21 @@ data ErrorMessages = ErrorMessages
 _NOT :: Builder
 _NOT = "\ESC[1mnot\ESC[0m"
 
-prettyTypeMessage :: Buildable a => TypeMessage s a -> ErrorMessages
+prettyDiff :: (Eq a, Eq s, Pretty a) => Expr s a -> Expr s a -> Builder
+prettyDiff exprL exprR = builder
+  where
+    doc = fmap Dhall.Pretty.annToAnsiStyle (Dhall.Diff.diff exprL exprR)
+
+    opts = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
+
+    stream = Pretty.layoutPretty opts doc
+
+    lazyText = Pretty.renderLazy stream
+
+    builder = Builder.fromLazyText lazyText
+
+prettyTypeMessage
+    :: (Buildable a, Eq a, Eq s, Pretty a) => TypeMessage s a -> ErrorMessages
 prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
   -- https://github.com/dhall-lang/dhall-haskell/pull/116
@@ -1287,8 +1309,9 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
 
 prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
-    short = "Expression doesn't match annotation"
-
+    short = "Expression doesn't match annotation\n"
+        <>  "\n"
+        <>  prettyDiff expr1 expr2
     long =
         "Explanation: You can annotate an expression with its type or kind using the     \n\
         \❰:❱ symbol, like this:                                                          \n\
@@ -3194,12 +3217,12 @@ data TypeError s a = TypeError
     , typeMessage :: TypeMessage s a
     } deriving (Typeable)
 
-instance (Buildable a, Buildable s) => Show (TypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a) => Show (TypeError s a) where
     show = Text.unpack . Builder.toLazyText . build
 
-instance (Buildable a, Buildable s, Typeable a, Typeable s) => Exception (TypeError s a)
+instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a, Typeable a, Typeable s) => Exception (TypeError s a)
 
-instance (Buildable a, Buildable s) => Buildable (TypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a) => Buildable (TypeError s a) where
     build (TypeError ctx expr msg)
         =   "\n"
         <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
@@ -3228,12 +3251,12 @@ instance (Buildable a, Buildable s) => Buildable (TypeError s a) where
 newtype DetailedTypeError s a = DetailedTypeError (TypeError s a)
     deriving (Typeable)
 
-instance (Buildable a, Buildable s) => Show (DetailedTypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a) => Show (DetailedTypeError s a) where
     show = Text.unpack . Builder.toLazyText . build
 
-instance (Buildable a, Buildable s, Typeable a, Typeable s) => Exception (DetailedTypeError s a)
+instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a, Typeable a, Typeable s) => Exception (DetailedTypeError s a)
 
-instance (Buildable a, Buildable s) => Buildable (DetailedTypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a) => Buildable (DetailedTypeError s a) where
     build (DetailedTypeError (TypeError ctx expr msg))
         =   "\n"
         <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))

@@ -14,6 +14,15 @@ module Dhall.Pretty.Internal (
     , buildScientific
     , pretty
     , escapeText
+    , label
+    , lbrace
+    , rbrace
+    , comma
+    , equals
+    , colon
+    , langle
+    , rangle
+    , pipe
     ) where
 
 import {-# SOURCE #-} Dhall.Core
