@@ -136,9 +136,20 @@ typeWith ctx expr = do
     checkContext ctx
     typeWithA absurd ctx expr
 
+{-| Function that converts the value inside an `Embed` constructor into a new
+    expression
+-}
 type Typer a = forall s. a -> Expr s a
 
-typeWithA :: Eq a => Typer a -> Context (Expr s a) -> Expr s a -> Either (TypeError s a) (Expr s a)
+{-| Generalization of `typeWith` that allows type-checking the `Embed`
+    constructor with custom logic
+-}
+typeWithA
+    :: Eq a
+    => Typer a
+    -> Context (Expr s a)
+    -> Expr s a
+    -> Either (TypeError s a) (Expr s a)
 typeWithA tpa = loop
   where
     loop _     (Const c         ) = do
