@@ -135,6 +135,7 @@ instance Buildable PathType where
 -- | How to interpret the path's contents (i.e. as Dhall code or raw text)
 data PathMode = Code | RawText deriving (Eq, Ord, Show)
 
+-- | A `PathType` extended with an optional hash for semantic integrity checks
 data PathHashed = PathHashed
     { hash     :: Maybe Data.ByteString.ByteString
     , pathType :: PathType
@@ -467,6 +468,7 @@ instance Bifunctor Expr where
 instance IsString (Expr s a) where
     fromString str = Var (fromString str)
 
+-- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Builder, Expr s a)] Builder
     deriving (Functor, Foldable, Traversable, Show, Eq)
 
