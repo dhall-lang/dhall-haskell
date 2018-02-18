@@ -247,15 +247,20 @@ prettyScientific = literal . Pretty.pretty . show
 prettyChunks :: Pretty a => Chunks s a -> Doc Ann
 prettyChunks (Chunks a b) =
     if any (\(builder, _) -> hasNewLine builder) a || hasNewLine b
-    then
+    then Pretty.flatAlt long short
+    else short
+  where
+    long =
         Pretty.align
         (   literal ("''" <> Pretty.hardline)
         <>  Pretty.align
             (foldMap prettyMultilineChunk a <> prettyMultilineBuilder b)
         <>  literal "''"
         )
-    else literal "\"" <> foldMap prettyChunk a <> literal (prettyText b <> "\"")
-  where
+
+    short =
+        literal "\"" <> foldMap prettyChunk a <> literal (prettyText b <> "\"")
+
     hasNewLine builder = Text.any (== '\n') lazyText
       where
         lazyText = Builder.toLazyText builder

@@ -5,6 +5,7 @@ import Examples (exampleTests)
 import Parser (parserTests)
 import Regression (regressionTests)
 import Tutorial (tutorialTests)
+import TypeCheck (typecheckTests)
 import Format (formatTests)
 import Test.Tasty
 
@@ -17,6 +18,7 @@ allTests =
         , regressionTests
         , tutorialTests
         , formatTests
+        , typecheckTests
         ]
 
 main :: IO ()
