@@ -82,9 +82,11 @@ Extra-Source-Files:
     Prelude/Text/concatMapSep
     Prelude/Text/concatSep
     tests/format/*.dhall
+    tests/normalization/*.dhall
     tests/parser/*.dhall
     tests/regression/*.dhall
     tests/tutorial/*.dhall
+    tests/typecheck/*.dhall
 
 Source-Repository head
     Type: git
@@ -93,65 +95,89 @@ Source-Repository head
 Library
     Hs-Source-Dirs: src
     Build-Depends:
-        base                      >= 4.9.0.0  && < 5   ,
+        base                        >= 4.9.0.0  && < 5   ,
+        ansi-terminal               >= 0.6.3.1  && < 0.8 ,
         base16-bytestring                        < 0.2 ,
         bytestring                               < 0.11,
         case-insensitive                         < 1.3 ,
         charset                                  < 0.4 ,
-        containers                >= 0.5.0.0  && < 0.6 ,
+        containers                  >= 0.5.0.0  && < 0.6 ,
         contravariant                            < 1.5 ,
         cryptohash                               < 0.12,
-        exceptions                >= 0.8.3    && < 0.9 ,
-        directory                 >= 1.3      && < 1.4 ,
-        filepath                  >= 1.4      && < 1.5 ,
-        http-client               >= 0.4.30   && < 0.6 ,
-        http-client-tls           >= 0.2.0    && < 0.4 ,
-        insert-ordered-containers >= 0.1.0.1  && < 0.3 ,
-        lens-family-core          >= 1.0.0    && < 1.3 ,
-        megaparsec                >= 6.1.1    && < 6.5 ,
-        parsers                   >= 0.12.4   && < 0.13,
-        prettyprinter             >= 1.1.1    && < 1.2 ,
-        scientific                >= 0.3.0.0  && < 0.4 ,
-        text                      >= 0.11.1.0 && < 1.3 ,
+        exceptions                  >= 0.8.3    && < 0.9 ,
+        directory                   >= 1.3      && < 1.4 ,
+        filepath                    >= 1.4      && < 1.5 ,
+        http-client                 >= 0.4.30   && < 0.6 ,
+        http-client-tls             >= 0.2.0    && < 0.4 ,
+        insert-ordered-containers   >= 0.1.0.1  && < 0.3 ,
+        lens-family-core            >= 1.0.0    && < 1.3 ,
+        megaparsec                  >= 6.1.1    && < 6.5 ,
+        parsers                     >= 0.12.4   && < 0.13,
+        prettyprinter               >= 1.1.1    && < 1.2 ,
+        prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
+        scientific                  >= 0.3.0.0  && < 0.4 ,
+        text                        >= 0.11.1.0 && < 1.3 ,
         text-format                              < 0.4 ,
-        transformers              >= 0.2.0.0  && < 0.6 ,
-        unordered-containers      >= 0.1.3.0  && < 0.3 ,
-        vector                    >= 0.11.0.0 && < 0.13
+        transformers                >= 0.2.0.0  && < 0.6 ,
+        unordered-containers        >= 0.1.3.0  && < 0.3 ,
+        vector                      >= 0.11.0.0 && < 0.13
     Exposed-Modules:
         Dhall,
         Dhall.Context,
         Dhall.Core,
         Dhall.Import,
         Dhall.Parser,
+        Dhall.Pretty,
         Dhall.Tutorial,
         Dhall.TypeCheck
+    Other-Modules:
+        Dhall.Pretty.Internal
     GHC-Options: -Wall
 
 Executable dhall
     Hs-Source-Dirs: dhall
     Main-Is: Main.hs
     Build-Depends:
-        base             >= 4        && < 5  ,
-        dhall                                ,
-        optparse-generic >= 1.1.1    && < 1.3,
-        prettyprinter                        ,
-        megaparsec       >= 6.4.0    && < 6.5 ,
-        text             >= 0.11.1.0 && < 1.3
+        ansi-terminal               >= 0.6.3.1  && < 0.8 ,
+        base                        >= 4        && < 5   ,
+        dhall                                            ,
+        optparse-generic            >= 1.1.1    && < 1.3 ,
+        prettyprinter                                    ,
+        prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
+        megaparsec                  >= 6.4.0    && < 6.5 ,
+        text                        >= 0.11.1.0 && < 1.3
     GHC-Options: -Wall
     Other-Modules:
         Paths_dhall
+
+Executable dhall-repl
+    Hs-Source-Dirs: dhall-repl
+    Main-Is: Main.hs
+    Build-Depends:
+        base             >= 4        && < 5   ,
+        dhall                                 ,
+        containers                            ,
+        haskeline        >= 0.7.3.0  && < 0.8 ,
+        mtl              >= 2.2.1    && < 2.3 ,
+        repline          >= 0.1.6.0  && < 0.2 ,
+        prettyprinter                         ,
+        prettyprinter-ansi-terminal           ,
+        text                                  ,
+        trifecta
+    GHC-Options: -Wall
 
 Executable dhall-format
     Hs-Source-Dirs: dhall-format
     Main-Is: Main.hs
     Build-Depends:
-        base             >= 4        && < 5  ,
-        dhall                                ,
-        optparse-generic >= 1.1.1    && < 1.3,
-        prettyprinter    >= 1.1.1    && < 1.2,
-        system-filepath  >= 0.3.1    && < 0.5,
-        megaparsec       >= 6.4.0    && < 6.5 ,
-        text             >= 0.11.1.0 && < 1.3
+        base                        >= 4        && < 5   ,
+        ansi-terminal               >= 0.6.3.1  && < 0.8 ,
+        dhall                                            ,
+        megaparsec                  >= 6.4.0    && < 6.5 ,
+        optparse-generic            >= 1.1.1    && < 1.3 ,
+        prettyprinter               >= 1.1.1    && < 1.2 ,
+        prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
+        text                        >= 0.11.1.0 && < 1.3
     GHC-Options: -Wall
     Other-Modules:
         Paths_dhall
@@ -180,6 +206,7 @@ Test-Suite test
         Parser
         Regression
         Tutorial
+        TypeCheck
         Util
     Build-Depends:
         base                      >= 4        && < 5   ,

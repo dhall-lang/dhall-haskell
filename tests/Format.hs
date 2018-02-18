@@ -33,6 +33,9 @@ formatTests =
         , should
             "correctly handle scientific notation with a large exponent"
             "largeExponent"
+        , should
+            "correctly format the empty record literal"
+            "emptyRecord"
         ]
 
 opts :: Data.Text.Prettyprint.Doc.LayoutOptions
