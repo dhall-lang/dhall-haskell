@@ -158,12 +158,12 @@ Executable dhall-repl
         dhall                                 ,
         containers                            ,
         haskeline        >= 0.7.3.0  && < 0.8 ,
+        megaparsec                            ,
         mtl              >= 2.2.1    && < 2.3 ,
         repline          >= 0.1.6.0  && < 0.2 ,
         prettyprinter                         ,
         prettyprinter-ansi-terminal           ,
         text                                  ,
-        trifecta
     GHC-Options: -Wall
 
 Executable dhall-format
