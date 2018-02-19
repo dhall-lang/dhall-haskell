@@ -65,22 +65,38 @@ import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 import qualified Text.Parser.Token.Style
 
+alpha :: Char -> Bool
+alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
+
+digit :: Char -> Bool
+digit c = '\x30' <= c && c <= '\x39'
+
+hexdig :: Char -> Bool
+hexdig c =
+        ('0' <= c && c <= '9')
+    ||  ('A' <= c && c <= 'F')
+    ||  ('a' <= c && c <= 'f')
+
+printable :: Char -> Bool
+printable c = '\x20' <= c && c <= '\x10FFFF'
+
 data Token
     = Label Data.Text.Text
-    | Arrow
-    | Bar
-    | CloseAngle
-    | CloseBrace
-    | CloseParens
-    | Colon
-    | Comma
-    | Dot
-    | DoublePlus
-    | Equals
-    | Lambda
-    | OpenAngle
-    | OpenBrace
-    | OpenParens
+    | TokenArrow
+    | TokenBar
+    | TokenCloseAngle
+    | TokenCloseBrace
+    | TokenCloseParens
+    | TokenColon
+    | TokenComma
+    | TokenDot
+    | TokenDoublePlus
+    | TokenEquals
+    | TokenLambda
+    | TokenOpenAngle
+    | TokenOpenBrace
+    | TokenOpenParens
+    | TokenText Data.Text.Text
     deriving (Show)
 
 instance NFData Token where
@@ -111,6 +127,7 @@ parseToken = parseNonWhitespace <* parseWhitespace
             , parseOpenAngle
             , parseOpenBrace
             , parseOpenParens
+            , parseDoubleQuoteLiteral
             , parseLabel
             ]
 
@@ -144,52 +161,95 @@ parseLabel = parseSimpleLabel <|> parseQuotedLabel
 
 parseArrow :: Attoparsec.Parser Token
 parseArrow =
-        (Attoparsec.char '→' *> pure Arrow)
-    <|> (Attoparsec.string "->" *> pure Arrow)
+        (Attoparsec.char '→' *> pure TokenArrow)
+    <|> (Attoparsec.string "->" *> pure TokenArrow)
 
 parseBar :: Attoparsec.Parser Token
-parseBar = Attoparsec.char '|' *> pure Bar
+parseBar = Attoparsec.char '|' *> pure TokenBar
 
 parseCloseAngle :: Attoparsec.Parser Token
-parseCloseAngle = Attoparsec.char '>' *> pure CloseAngle
+parseCloseAngle = Attoparsec.char '>' *> pure TokenCloseAngle
 
 parseCloseBrace :: Attoparsec.Parser Token
-parseCloseBrace = Attoparsec.char '}' *> pure CloseBrace
+parseCloseBrace = Attoparsec.char '}' *> pure TokenCloseBrace
 
 parseCloseParens :: Attoparsec.Parser Token
-parseCloseParens = Attoparsec.char ')' *> pure CloseParens
+parseCloseParens = Attoparsec.char ')' *> pure TokenCloseParens
 
 parseColon :: Attoparsec.Parser Token
-parseColon = Attoparsec.char ':' *> pure Colon
+parseColon = Attoparsec.char ':' *> pure TokenColon
 
 parseComma :: Attoparsec.Parser Token
-parseComma = Attoparsec.char ',' *> pure Comma
+parseComma = Attoparsec.char ',' *> pure TokenComma
 
 parseDot :: Attoparsec.Parser Token
-parseDot = Attoparsec.char '.' *> pure Dot
+parseDot = Attoparsec.char '.' *> pure TokenDot
 
 parseDoublePlus :: Attoparsec.Parser Token
-parseDoublePlus = Attoparsec.string "++" *> pure DoublePlus
+parseDoublePlus = Attoparsec.string "++" *> pure TokenDoublePlus
 
 parseEquals :: Attoparsec.Parser Token
-parseEquals = Attoparsec.char ',' *> pure Equals
+parseEquals = Attoparsec.char '=' *> pure TokenEquals
 
 parseLambda :: Attoparsec.Parser Token
-parseLambda = (Attoparsec.char 'λ' <|> Attoparsec.char '\\') *> pure Lambda
+parseLambda = (Attoparsec.char 'λ' <|> Attoparsec.char '\\') *> pure TokenLambda
 
 parseOpenAngle :: Attoparsec.Parser Token
-parseOpenAngle = Attoparsec.char '<' *> pure OpenAngle
+parseOpenAngle = Attoparsec.char '<' *> pure TokenOpenAngle
 
 parseOpenBrace :: Attoparsec.Parser Token
-parseOpenBrace = Attoparsec.char '{' *> pure OpenBrace
+parseOpenBrace = Attoparsec.char '{' *> pure TokenOpenBrace
 
 parseOpenParens :: Attoparsec.Parser Token
-parseOpenParens = Attoparsec.char '(' *> pure OpenParens
+parseOpenParens = Attoparsec.char '(' *> pure TokenOpenParens
 
-data BlockComment = BlockComment
-    { _previousCharacter :: Maybe Char
-    , _nestingLevel      :: Natural
-    }
+data TextStatus
+    = TextStatusWaiting
+    | TextStatusPossibleEscapeSequence
+    | TextStatusUnicode Int
+    | TextStatusComplete
+
+parseDoubleQuoteLiteral :: Attoparsec.Parser Token
+parseDoubleQuoteLiteral = do
+    _ <- Attoparsec.char '"'
+    (text, TextStatusComplete) <- Attoparsec.runScanner initialStatus step
+    return (TokenText (Data.Text.init text))
+  where
+    initialStatus  = TextStatusWaiting
+
+    step s c =
+        case s of
+            TextStatusWaiting ->
+                case c of
+                    '"'             -> Just TextStatusComplete
+                    '\\'            -> Just TextStatusPossibleEscapeSequence
+                    _ | printable c -> Just TextStatusWaiting
+                      | otherwise   -> Nothing
+            TextStatusPossibleEscapeSequence ->
+                case c of
+                    '"'  -> Just TextStatusWaiting
+                    '$'  -> Just TextStatusWaiting
+                    '\\' -> Just TextStatusWaiting
+                    '/'  -> Just TextStatusWaiting
+                    'b'  -> Just TextStatusWaiting
+                    'f'  -> Just TextStatusWaiting
+                    'n'  -> Just TextStatusWaiting
+                    'r'  -> Just TextStatusWaiting
+                    't'  -> Just TextStatusWaiting
+                    'u'  -> Just (TextStatusUnicode 0)
+                    _    -> Nothing
+            TextStatusUnicode n
+                | hexdig c  ->
+                    if n == 3
+                    then Just TextStatusWaiting
+                    else Just (TextStatusUnicode (n + 1))
+                | otherwise -> Nothing
+            TextStatusComplete -> Nothing
+
+-- parseSingleQuoteLiteral :: Attoparsec.Parser Token
+-- parseSingleQuoteLiteral
+
+data BlockComment = BlockComment (Maybe Char) Natural | BlockCommentComplete
 
 parseWhitespace :: Attoparsec.Parser ()
 parseWhitespace = Attoparsec.skipMany parseWhitespaceChunk
@@ -210,13 +270,13 @@ parseWhitespace = Attoparsec.skipMany parseWhitespaceChunk
       where
         predicate c = c /= '\n'
 
-    parseBlockComment = do
-        _ <- Attoparsec.string "{-"
-        (_, BlockComment m _) <- Attoparsec.runScanner initialState step
-        case m of
-            Just '}' -> return ()
-            _        -> empty
+    parseBlockComment = Attoparsec.string "{-" *> rest
       where
+        rest = do
+            _ <- Attoparsec.string "{-"
+            (_, BlockCommentComplete) <- Attoparsec.runScanner initialState step
+            return ()
+
         initialState = BlockComment Nothing 0
 
         predicate c =
@@ -237,12 +297,13 @@ parseWhitespace = Attoparsec.skipMany parseWhitespaceChunk
                 _ | predicate c1 -> Just (BlockComment (Just c1) n)
                   | otherwise    -> Nothing
             '-'  -> case c1 of
-                '}' | n == 0       -> Nothing
+                '}' | n == 0       -> Just BlockCommentComplete
                     | otherwise    -> Just (BlockComment (Just c1) (n - 1))
                 _   | predicate c1 -> Just (BlockComment (Just c1) n)
                     | otherwise    -> Nothing
             _ | predicate c1 -> Just (BlockComment (Just c1) n)
               | otherwise    -> Nothing
+        step BlockCommentComplete _ = Nothing
                        
 -- | Source code extract
 data Src = Src Text.Megaparsec.SourcePos Text.Megaparsec.SourcePos Text
@@ -384,18 +445,6 @@ whitespaceChunk =
 
 whitespace :: Parser ()
 whitespace = Text.Parser.Combinators.skipMany whitespaceChunk
-
-alpha :: Char -> Bool
-alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
-
-digit :: Char -> Bool
-digit c = '\x30' <= c && c <= '\x39'
-
-hexdig :: Char -> Bool
-hexdig c =
-        ('0' <= c && c <= '9')
-    ||  ('A' <= c && c <= 'F')
-    ||  ('a' <= c && c <= 'f')
 
 hexNumber :: Parser Int
 hexNumber = choice [ hexDigit, hexUpper, hexLower ]
