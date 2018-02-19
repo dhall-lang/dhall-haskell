@@ -15,6 +15,9 @@ let
                 (pkgs.haskell.lib.justStaticExecutables
                   (haskellPackagesNew.callPackage ./default.nix { })
                 );
+
+          prettyprinter =
+            haskellPackagesNew.callPackage ./nix/prettyprinter.nix { };
         };
       };
     };

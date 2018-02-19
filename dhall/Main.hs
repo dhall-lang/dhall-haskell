@@ -26,8 +26,7 @@ import qualified Paths_dhall as Meta
 import qualified Control.Exception
 import qualified Data.Text.Lazy.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Dhall.TypeCheck
 import qualified Options.Generic
 import qualified System.Console.ANSI
@@ -95,10 +94,10 @@ main = do
 
         let render h e = do
                 supportsANSI <- System.Console.ANSI.hSupportsANSI h
-                let renderIO doc =
+                let renderIO stream =
                         if supportsANSI
-                        then Pretty.Terminal.renderIO h (fmap annToAnsiStyle doc)
-                        else Pretty.Text.renderIO h (Pretty.unAnnotateS doc)
+                        then Pretty.renderIO h (fmap annToAnsiStyle stream)
+                        else Pretty.renderIO h (Pretty.unAnnotateS stream)
 
                 if pretty
                     then do
@@ -106,7 +105,7 @@ main = do
                         renderIO (Pretty.layoutSmart opts doc)
                     else do
                         let doc = prettyExpr e
-                        renderIO (Pretty.layoutPretty unbounded doc)
+                        renderIO (Pretty.layoutSmart unbounded doc)
                 Data.Text.Lazy.IO.hPutStrLn h ""
 
 
