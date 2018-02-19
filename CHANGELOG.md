@@ -5,7 +5,7 @@
     * See: https://github.com/dhall-lang/dhall-haskell/pull/273
 * Feature: New `dhall-repl` for interactively evaluating Dhall expressions
     * See: https://github.com/dhall-lang/dhall-haskell/pull/266
-* Feature: BREAKING CHANGE TO THE API: Syntax highlighting
+* Feature: Syntax highlighting
     * See: https://github.com/dhall-lang/dhall-haskell/pull/260
 * Feature: BREAKING CHANGE TO THE API: `dhall-format` preserves field order
     * This changes the syntax tree to use an `InsOrdHashMap` instead of a `Map`
