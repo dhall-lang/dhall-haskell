@@ -5,7 +5,7 @@ let
         overrides = haskellPackagesNew: haskellPackagesOld: {
           dhall =
             pkgs.haskell.lib.justStaticExecutables
-              (haskellPackagesNew.callPackage ./nix/dhall.nix { })
+              (haskellPackagesNew.callPackage ./default.nix { })
             ;
 
           prettyprinter =
