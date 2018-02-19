@@ -28,6 +28,7 @@ normalizationTests =
         , conversions
         , shouldNormalize "Optional build/fold fusion" "optionalBuildFold"
         , customization
+        , shouldNormalize "a remote-systems.conf builder" "remoteSystems"
         ]
 
 constantFolding :: TestTree
