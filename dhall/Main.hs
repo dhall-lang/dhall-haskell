@@ -94,10 +94,10 @@ main = do
 
         let render h e = do
                 supportsANSI <- System.Console.ANSI.hSupportsANSI h
-                let renderIO doc =
+                let renderIO stream =
                         if supportsANSI
-                        then Pretty.renderIO h (fmap annToAnsiStyle doc)
-                        else Pretty.renderIO h (Pretty.unAnnotateS doc)
+                        then Pretty.renderIO h (fmap annToAnsiStyle stream)
+                        else Pretty.renderIO h (Pretty.unAnnotateS stream)
 
                 if pretty
                     then do
