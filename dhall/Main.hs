@@ -105,7 +105,7 @@ main = do
                         renderIO (Pretty.layoutSmart opts doc)
                     else do
                         let doc = prettyExpr e
-                        renderIO (Pretty.layoutPretty unbounded doc)
+                        renderIO (Pretty.layoutSmart unbounded doc)
                 Data.Text.Lazy.IO.hPutStrLn h ""
 
 
