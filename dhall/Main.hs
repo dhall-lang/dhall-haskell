@@ -28,7 +28,6 @@ import qualified Data.Text.Lazy.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
-import qualified Dhall.Core
 import qualified Dhall.TypeCheck
 import qualified Options.Generic
 import qualified System.Console.ANSI
@@ -94,12 +93,12 @@ main = do
             Left  err -> Control.Exception.throwIO err
             Right x   -> return x
 
-        let render handle e = do
-                supportsANSI <- System.Console.ANSI.hSupportsANSI handle
+        let render h e = do
+                supportsANSI <- System.Console.ANSI.hSupportsANSI h
                 let renderIO doc =
                         if supportsANSI
-                        then Pretty.Terminal.renderIO handle (fmap annToAnsiStyle doc)
-                        else Pretty.Text.renderIO handle (Pretty.unAnnotateS doc)
+                        then Pretty.Terminal.renderIO h (fmap annToAnsiStyle doc)
+                        else Pretty.Text.renderIO h (Pretty.unAnnotateS doc)
 
                 if pretty
                     then do
@@ -108,7 +107,7 @@ main = do
                     else do
                         let doc = prettyExpr e
                         renderIO (Pretty.layoutPretty unbounded doc)
-                Data.Text.Lazy.IO.hPutStrLn handle ""
+                Data.Text.Lazy.IO.hPutStrLn h ""
 
 
         expr' <- load expr
