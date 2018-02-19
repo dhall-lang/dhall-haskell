@@ -46,6 +46,7 @@ module Dhall
     , string
     , pair
     , GenericInterpret(..)
+    , GenericInject(..)
 
     , Inject(..)
     , inject

@@ -82,9 +82,11 @@ Extra-Source-Files:
     Prelude/Text/concatMapSep
     Prelude/Text/concatSep
     tests/format/*.dhall
+    tests/normalization/*.dhall
     tests/parser/*.dhall
     tests/regression/*.dhall
     tests/tutorial/*.dhall
+    tests/typecheck/*.dhall
 
 Source-Repository head
     Type: git
@@ -96,6 +98,7 @@ Library
         base                        >= 4.9.0.0  && < 5   ,
         ansi-terminal               >= 0.6.3.1  && < 0.8 ,
         ansi-wl-pprint                           < 0.7 ,
+        attoparsec,
         base16-bytestring                        < 0.2 ,
         bytestring                               < 0.11,
         case-insensitive                         < 1.3 ,
@@ -104,6 +107,8 @@ Library
         contravariant                            < 1.5 ,
         cryptohash                               < 0.12,
         exceptions                  >= 0.8.3    && < 0.9 ,
+        criterion,
+        deepseq,
         directory                   >= 1.3      && < 1.4 ,
         filepath                    >= 1.4      && < 1.5 ,
         http-client                 >= 0.4.30   && < 0.6 ,
@@ -132,6 +137,17 @@ Library
     Other-Modules:
         Dhall.Pretty.Internal
     GHC-Options: -Wall
+
+Benchmark bench
+    Type: exitcode-stdio-1.0
+    Hs-Source-Dirs: bench
+    Main-Is: Main.hs
+    GHC-Options: -Wall
+    Build-Depends:
+        base,
+        criterion,
+        dhall,
+        text
 
 Executable dhall
     Hs-Source-Dirs: dhall
@@ -201,6 +217,7 @@ Test-Suite test
         Parser
         Regression
         Tutorial
+        TypeCheck
         Util
     Build-Depends:
         base                      >= 4        && < 5   ,

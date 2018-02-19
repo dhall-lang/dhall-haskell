@@ -136,9 +136,20 @@ typeWith ctx expr = do
     checkContext ctx
     typeWithA absurd ctx expr
 
+{-| Function that converts the value inside an `Embed` constructor into a new
+    expression
+-}
 type Typer a = forall s. a -> Expr s a
 
-typeWithA :: Eq a => Typer a -> Context (Expr s a) -> Expr s a -> Either (TypeError s a) (Expr s a)
+{-| Generalization of `typeWith` that allows type-checking the `Embed`
+    constructor with custom logic
+-}
+typeWithA
+    :: Eq a
+    => Typer a
+    -> Context (Expr s a)
+    -> Expr s a
+    -> Either (TypeError s a) (Expr s a)
 typeWithA tpa = loop
   where
     loop _     (Const c         ) = do
@@ -487,6 +498,7 @@ typeWithA tpa = loop
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
+                    Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidFieldType k t))
         mapM_ process (Data.HashMap.Strict.InsOrd.toList kts)
         return (Const Type)
@@ -496,6 +508,7 @@ typeWithA tpa = loop
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
+                    Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidField k v))
                 return t
         kts <- Data.HashMap.Strict.InsOrd.traverseWithKey process kvs
@@ -505,6 +518,7 @@ typeWithA tpa = loop
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
+                    Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
         mapM_ process (Data.HashMap.Strict.InsOrd.toList kts)
         return (Const Type)

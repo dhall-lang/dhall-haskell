@@ -17,11 +17,15 @@ module Dhall.Parser (
     , Src(..)
     , ParseError(..)
     , Parser(..)
+
+    , tokenize
+    , Token
     ) where
 
 import Control.Applicative (Alternative(..), liftA2, optional)
 import Control.Exception (Exception)
 import Control.Monad (MonadPlus)
+import Control.DeepSeq (NFData(..))
 import Data.Functor (void)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
@@ -40,6 +44,7 @@ import Text.PrettyPrint.ANSI.Leijen (Doc)
 import Text.Parser.Combinators (choice, try, (<?>))
 import Text.Parser.Token (TokenParsing(..))
 
+import qualified Data.Attoparsec.Text.Lazy   as Attoparsec
 import qualified Control.Monad
 import qualified Data.ByteString.Base16.Lazy
 import qualified Data.ByteString.Lazy
@@ -60,6 +65,185 @@ import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 import qualified Text.Parser.Token.Style
 
+data Token
+    = Label Data.Text.Text
+    | Arrow
+    | Bar
+    | CloseAngle
+    | CloseBrace
+    | CloseParens
+    | Colon
+    | Comma
+    | Dot
+    | DoublePlus
+    | Equals
+    | Lambda
+    | OpenAngle
+    | OpenBrace
+    | OpenParens
+    deriving (Show)
+
+instance NFData Token where
+    rnf a = seq a ()
+
+tokenize :: Text -> [Token]
+tokenize text =
+    case Attoparsec.parse parseToken text of
+        Attoparsec.Done text' x -> x : tokenize text'
+        _                       -> []
+
+parseToken :: Attoparsec.Parser Token
+parseToken = parseNonWhitespace <* parseWhitespace
+  where
+    parseNonWhitespace =
+        Attoparsec.choice
+            [ parseArrow
+            , parseBar
+            , parseCloseAngle
+            , parseCloseBrace
+            , parseCloseParens
+            , parseColon
+            , parseComma
+            , parseDot
+            , parseDoublePlus
+            , parseEquals
+            , parseLambda
+            , parseOpenAngle
+            , parseOpenBrace
+            , parseOpenParens
+            , parseLabel
+            ]
+
+parseLabel :: Attoparsec.Parser Token
+parseLabel = parseSimpleLabel <|> parseQuotedLabel
+  where
+    parseSimpleLabel =
+            adapt
+        <$> Attoparsec.satisfy headPredicate
+        <*> Attoparsec.takeWhile tailPredicate
+      where
+        adapt x xs = Label (Data.Text.cons x xs)
+
+        headPredicate c = alpha c || c == '_'
+
+        tailPredicate c = alpha c || digit c || c == '-' || c == '/' || c == '_'
+
+    parseQuotedLabel =
+            Attoparsec.char '`'
+        *>  fmap Label (Attoparsec.takeWhile1 predicate)
+        <*  Attoparsec.char '`'
+      where
+        predicate c =
+                alpha c
+            ||  digit c
+            ||  c == '-'
+            ||  c == '/'
+            ||  c == '_'
+            ||  c == ':'
+            ||  c == '.'
+
+parseArrow :: Attoparsec.Parser Token
+parseArrow =
+        (Attoparsec.char '→' *> pure Arrow)
+    <|> (Attoparsec.string "->" *> pure Arrow)
+
+parseBar :: Attoparsec.Parser Token
+parseBar = Attoparsec.char '|' *> pure Bar
+
+parseCloseAngle :: Attoparsec.Parser Token
+parseCloseAngle = Attoparsec.char '>' *> pure CloseAngle
+
+parseCloseBrace :: Attoparsec.Parser Token
+parseCloseBrace = Attoparsec.char '}' *> pure CloseBrace
+
+parseCloseParens :: Attoparsec.Parser Token
+parseCloseParens = Attoparsec.char ')' *> pure CloseParens
+
+parseColon :: Attoparsec.Parser Token
+parseColon = Attoparsec.char ':' *> pure Colon
+
+parseComma :: Attoparsec.Parser Token
+parseComma = Attoparsec.char ',' *> pure Comma
+
+parseDot :: Attoparsec.Parser Token
+parseDot = Attoparsec.char '.' *> pure Dot
+
+parseDoublePlus :: Attoparsec.Parser Token
+parseDoublePlus = Attoparsec.string "++" *> pure DoublePlus
+
+parseEquals :: Attoparsec.Parser Token
+parseEquals = Attoparsec.char ',' *> pure Equals
+
+parseLambda :: Attoparsec.Parser Token
+parseLambda = (Attoparsec.char 'λ' <|> Attoparsec.char '\\') *> pure Lambda
+
+parseOpenAngle :: Attoparsec.Parser Token
+parseOpenAngle = Attoparsec.char '<' *> pure OpenAngle
+
+parseOpenBrace :: Attoparsec.Parser Token
+parseOpenBrace = Attoparsec.char '{' *> pure OpenBrace
+
+parseOpenParens :: Attoparsec.Parser Token
+parseOpenParens = Attoparsec.char '(' *> pure OpenParens
+
+data BlockComment = BlockComment
+    { _previousCharacter :: Maybe Char
+    , _nestingLevel      :: Natural
+    }
+
+parseWhitespace :: Attoparsec.Parser ()
+parseWhitespace = Attoparsec.skipMany parseWhitespaceChunk
+  where
+    parseWhitespaceChunk =
+        Attoparsec.choice
+            [ parseSpace
+            , parseLineComment
+            , parseBlockComment
+            ]
+
+    parseSpace = Attoparsec.takeWhile1 predicate *> pure ()
+      where
+        predicate c = c == ' ' || c == '\n' || c == '\t' || c == '\r'
+
+    parseLineComment =
+        Attoparsec.string "--" *> Attoparsec.takeWhile predicate *> pure ()
+      where
+        predicate c = c /= '\n'
+
+    parseBlockComment = do
+        _ <- Attoparsec.string "{-"
+        (_, BlockComment m _) <- Attoparsec.runScanner initialState step
+        case m of
+            Just '}' -> return ()
+            _        -> empty
+      where
+        initialState = BlockComment Nothing 0
+
+        predicate c =
+               ('\x20' <= c && c <= '\x10FFFF')
+            || c == '\n'
+            || c == '\t'
+            || c == '\r'
+
+        step (BlockComment  Nothing  n) c1
+            | predicate c1 = Just (BlockComment (Just c1) n)
+            | otherwise    = Nothing
+        step (BlockComment (Just c0) n) c1 = case c0 of
+            '{'  -> case c1 of
+                -- Note that `previousCharacter` is not `Just c0` here so that
+                -- "{-}" doesn't get parsed as both as block comment open and
+                -- a block comment close
+                '-'              -> Just (BlockComment Nothing (n + 1))
+                _ | predicate c1 -> Just (BlockComment (Just c1) n)
+                  | otherwise    -> Nothing
+            '-'  -> case c1 of
+                '}' | n == 0       -> Nothing
+                    | otherwise    -> Just (BlockComment (Just c1) (n - 1))
+                _   | predicate c1 -> Just (BlockComment (Just c1) n)
+                    | otherwise    -> Nothing
+            _ | predicate c1 -> Just (BlockComment (Just c1) n)
+              | otherwise    -> Nothing
+                       
 -- | Source code extract
 data Src = Src Text.Megaparsec.SourcePos Text.Megaparsec.SourcePos Text
   deriving (Eq, Show)
