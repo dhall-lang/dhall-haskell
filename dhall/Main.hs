@@ -10,11 +10,11 @@ module Main where
 
 import Control.Exception (SomeException)
 import Control.Monad (when)
-import Data.Monoid (mempty, (<>))
+import Data.Monoid (mempty)
 import Data.Version (showVersion)
 import Dhall.Core (normalize)
 import Dhall.Import (Imported(..), load)
-import Dhall.Parser (Src, exprAndHeaderFromText)
+import Dhall.Parser (Src)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import Options.Generic (Generic, ParseRecord, Wrapped, type (<?>)(..), (:::))
@@ -27,6 +27,7 @@ import qualified Control.Exception
 import qualified Data.Text.Lazy.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Options.Generic
 import qualified System.Console.ANSI
@@ -88,24 +89,23 @@ main = do
         System.IO.hSetEncoding System.IO.stdin System.IO.utf8
         inText <- Data.Text.Lazy.IO.getContents
 
-        (header, expr) <- case exprAndHeaderFromText (Directed "(stdin)" 0 0 0 0) inText of
+        expr <- case Dhall.Parser.exprFromText (Directed "(stdin)" 0 0 0 0) inText of
             Left  err -> Control.Exception.throwIO err
             Right x   -> return x
 
         let render h e = do
-                supportsANSI <- System.Console.ANSI.hSupportsANSI h
-                let renderIO stream =
-                        if supportsANSI
-                        then Pretty.renderIO h (fmap annToAnsiStyle stream)
-                        else Pretty.renderIO h (Pretty.unAnnotateS stream)
+                let doc = prettyExpr e
 
-                if pretty
-                    then do
-                        let doc = Pretty.pretty header <> prettyExpr e
-                        renderIO (Pretty.layoutSmart opts doc)
-                    else do
-                        let doc = prettyExpr e
-                        renderIO (Pretty.layoutSmart unbounded doc)
+                let layoutOptions = if pretty then opts else unbounded
+                let stream = Pretty.layoutSmart layoutOptions doc
+
+                supportsANSI <- System.Console.ANSI.hSupportsANSI h
+                let ansiStream =
+                        if supportsANSI
+                        then fmap annToAnsiStyle stream
+                        else Pretty.unAnnotateS stream
+
+                Pretty.renderIO h ansiStream
                 Data.Text.Lazy.IO.hPutStrLn h ""
 
 
