@@ -118,12 +118,15 @@ module Dhall.Import (
 import Control.Applicative (empty)
 import Control.Exception
     (Exception, IOException, SomeException, onException, throwIO)
+import Lens.Family ((^.))
 import Control.Monad (join)
 import Control.Monad.Catch (throwM, MonadCatch(catch))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString.Lazy (ByteString)
 import Data.CaseInsensitive (CI)
+import Data.Conduit
+import qualified Data.Conduit.List as C
 import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Text.Buildable (build)
@@ -169,6 +172,7 @@ import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Encoding
 import qualified Data.Text.IO
+import qualified Data.Text                        as T
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
@@ -178,6 +182,9 @@ import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.Context
 import qualified Dhall.TypeCheck
+import qualified Network.AWS                      as Az
+import qualified Network.AWS.Data.Body            as Az
+import qualified Network.AWS.S3                   as S3
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified System.Environment
@@ -394,6 +401,18 @@ canonicalize (File hasHome0 file0:paths0) =
   where
     go currPath  []                       = File Homeless (FilePath.normalise currPath)
     go currPath (Env  _           :_    ) = File Homeless (FilePath.normalise currPath)
+    -- TODO: This is wrong
+    go currPath (S3URL b@(S3.BucketName bkt) o@(S3.ObjectKey obj) headers:rest) = combine (FilePath.normalise currPath)
+      where
+        headers' = fmap (onPathType (\h -> canonicalize (h:rest))) headers
+        combine :: String -> PathType
+        combine path = case List.stripPrefix "../" path of
+          Just path' -> combine (Text.unpack $ parentObjKey o)
+          Nothing -> case List.stripPrefix "./" path of
+            Just path' -> combine path'
+            Nothing -> case T.last bkt of
+              '/' -> S3URL (S3.BucketName bkt) (S3.ObjectKey (T.pack path)) headers'
+              _   -> S3URL (S3.BucketName bkt) (S3.ObjectKey (T.pack path)) headers'
     go currPath (URL  url0 headers:rest ) = combine prefix suffix
       where
         headers' = fmap (onPathType (\h -> canonicalize (h:rest))) headers
@@ -428,6 +447,9 @@ canonicalize (File hasHome0 file0:paths0) =
 canonicalize (URL path headers:rest) = URL path headers'
   where
     headers' = fmap (onPathType (\h -> canonicalize (h:rest))) headers
+canonicalize (S3URL bucketName object headers:rest) = S3URL bucketName object headers'
+  where
+    headers' = fmap (onPathType (\h -> canonicalize (h:rest))) headers
 canonicalize (Env env         :_   ) = Env env
 
 onPathType :: (PathType -> PathType) -> PathHashed -> PathHashed
@@ -454,6 +476,9 @@ canonicalizePath (path:paths) =
 
 parentURL :: Text -> Text
 parentURL = Text.dropWhileEnd (/= '/')
+
+parentObjKey :: S3.ObjectKey -> Text
+parentObjKey (S3.ObjectKey path) = parentURL (Text.fromStrict path)
 
 removeAtFromURL:: Text -> Text
 removeAtFromURL url
@@ -601,6 +626,24 @@ exprFromPath (Path {..}) = case pathType of
             RawText -> do
                 text <- Data.Text.IO.readFile path
                 return (TextLit (Chunks [] (build text))) )
+    S3URL bkt@(S3.BucketName b) obj@(S3.ObjectKey o) headerPath -> do
+      liftIO $ putStrLn "bkt" >> print bkt >> putStrLn "obj" >> print obj
+      env <- Az.newEnv Az.Discover
+      let delta = Directed (Data.Text.Encoding.encodeUtf8 (b <> "/" <> o)) 0 0 0 0
+      (stat, str) <- Az.runResourceT $ Az.runAWS env $ do
+          f   <- Az.send (S3.getObject bkt obj)
+          -- let bodStream = Az.sinkBody C.consume $ f ^. S3.gorsBody
+          str   <- Data.ByteString.Char8.unpack . mconcat <$>
+                   Az.sinkBody (f ^. S3.gorsBody) C.consume
+          return (f ^.S3.gorsResponseStatus, str)
+      liftIO $ putStrLn "response:" >> putStrLn str
+      case stat of
+        200 -> case Text.Trifecta.parseString parser delta str of
+          Failure errInfo -> do
+            liftIO $ throwIO (ParseError (Text.Trifecta._errDoc errInfo))
+          Success expr    -> do
+            return expr
+        _ -> error $ "response from s3: " <> show stat
     URL url headerPath -> do
         m       <- needManager
         request <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
@@ -771,9 +814,10 @@ loadStaticWith
 loadStaticWith from_path ctx path = do
     paths <- zoom stack State.get
 
-    let local (Path (PathHashed _ (URL _ _ )) _) = False
-        local (Path (PathHashed _ (File _ _)) _) = True
-        local (Path (PathHashed _ (Env  _  )) _) = True
+    let local (Path (PathHashed _ (URL   _ _  )) _) = False
+        local (Path (PathHashed _ (S3URL _ _ _)) _) = False
+        local (Path (PathHashed _ (File  _ _  )) _) = True
+        local (Path (PathHashed _ (Env   _    )) _) = True
 
     let parent = canonicalizePath paths
     let here   = canonicalizePath (path:paths)

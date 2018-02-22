@@ -57,6 +57,7 @@ import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
+import qualified Network.AWS.S3                        as S3
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
@@ -775,6 +776,18 @@ file = do
 scheme :: Parser Builder
 scheme = "http" <> option "s"
 
+s3Scheme :: Parser Builder
+s3Scheme = "s3"
+
+s3Raw :: Parser (Text,Text)
+s3Raw = do
+    _ <- s3Scheme
+    _ <- "://" :: Parser Text
+    bkt <- host
+    _ <- ("/" :: Parser Text)
+    obj <- fragment
+    return (Data.Text.Lazy.Builder.toLazyText bkt, Data.Text.Lazy.Builder.toLazyText obj)
+
 httpRaw :: Parser Builder
 httpRaw =
         scheme
@@ -920,6 +933,18 @@ unreserved c =
 
 subDelims :: Char -> Bool
 subDelims c = c `elem` ("!$&'()*+,;=" :: String)
+
+-- s3://
+s3 :: Parser PathType
+s3 = do
+    (bktName, objKey) <- s3Raw
+    whitespace
+    b <- optional (do
+         _using
+         pathHashed_ )
+    return (S3URL (S3.BucketName $ Data.Text.Lazy.toStrict bktName)
+                  (S3.ObjectKey $ Data.Text.Lazy.toStrict objKey)
+            b)
 
 http :: Parser PathType
 http = do
@@ -1496,7 +1521,7 @@ exprA :: Parser a -> Parser (Expr Src a)
 exprA = completeExpression
 
 pathType_ :: Parser PathType
-pathType_ = choice [ file, http, env ]
+pathType_ = choice [ file, s3, http, env ]
 
 pathHashed_ :: Parser PathHashed
 pathHashed_ = do

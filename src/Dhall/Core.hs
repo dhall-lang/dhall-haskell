@@ -80,6 +80,7 @@ import qualified Data.Text.Lazy.Builder                as Builder
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Vector
 import qualified Data.Vector.Mutable
+import qualified Network.AWS.S3                        as S3
 
 {-| Constants for a pure type system
 
@@ -111,7 +112,9 @@ data PathType
     = File HasHome FilePath
     -- ^ Local path
     | URL  Text (Maybe PathHashed)
-    -- ^ URL of emote resource and optional headers stored in a path
+    -- ^ URL of remote resource and optional headers stored in a path
+    | S3URL S3.BucketName S3.ObjectKey (Maybe PathHashed)
+    -- ^ s3 URL of remote resource and optional headers stored in a path
     | Env  Text
     -- ^ Environment variable
     deriving (Eq, Ord, Show)
@@ -130,6 +133,8 @@ instance Buildable PathType where
         txt = Text.pack file
     build (URL str  Nothing      ) = build str <> " "
     build (URL str (Just headers)) = build str <> " using " <> build headers <> " "
+    build (S3URL (S3.BucketName bkt) (S3.ObjectKey obj) Nothing)  = "s3://" <> build bkt <> " " <> build obj
+    build (S3URL b o (Just headers)) = build (S3URL b o Nothing) <> " " <> build headers <> " "
     build (Env env) = "env:" <> build env
 
 -- | How to interpret the path's contents (i.e. as Dhall code or raw text)

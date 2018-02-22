@@ -1,4 +1,4 @@
-{ mkDerivation, ansi-terminal, ansi-wl-pprint, base
+{ mkDerivation, amazonka, amazonka-s3, ansi-terminal, ansi-wl-pprint, base
 , base16-bytestring, bytestring, case-insensitive, charset
 , containers, contravariant, cryptohash, deepseq, directory
 , exceptions, filepath, haskeline, http-client, http-client-tls
@@ -15,7 +15,7 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    ansi-terminal ansi-wl-pprint base base16-bytestring bytestring
+    amazonka amazonka-s3 ansi-terminal ansi-wl-pprint base base16-bytestring bytestring
     case-insensitive charset containers contravariant cryptohash
     directory exceptions filepath http-client http-client-tls
     insert-ordered-containers lens-family-core parsers prettyprinter
