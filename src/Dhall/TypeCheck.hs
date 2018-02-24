@@ -38,6 +38,8 @@ import Dhall.Context (Context)
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.HashMap.Strict
 import qualified Data.HashMap.Strict.InsOrd
+import qualified Data.List
+import qualified Data.Ord
 import qualified Data.Set
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
@@ -66,9 +68,11 @@ match (V xL nL) (V xR nR) ((xL', xR'):xs) =
     nL' = if xL == xL' then nL - 1 else nL
     nR' = if xR == xR' then nR - 1 else nR
 
-toSortedList :: InsOrdHashMap k v -> [(k, v)]
+toSortedList :: Ord k => InsOrdHashMap k v -> [(k, v)]
 toSortedList =
-    Data.HashMap.Strict.toList . Data.HashMap.Strict.InsOrd.toHashMap
+      Data.List.sortBy (Data.Ord.comparing fst)
+    . Data.HashMap.Strict.toList
+    . Data.HashMap.Strict.InsOrd.toHashMap
 
 propEqual :: Eq a => Expr s a -> Expr t a -> Bool
 propEqual eL0 eR0 =
