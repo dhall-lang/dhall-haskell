@@ -46,7 +46,6 @@ import qualified Data.Text.Lazy                        as Text
 import qualified Data.Text.Lazy.Builder                as Builder
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
-import qualified Data.Vector
 
 {-| Annotation type used to tag elements in a pretty-printed document for
     syntax highlighting purposes
@@ -433,13 +432,13 @@ prettyExprB a0@(Let _ _ _ _) =
     docs d =
         [ prettyExprB d ]
 prettyExprB (ListLit Nothing b) =
-    list (map prettyExprA (Data.Vector.toList b))
+    list (map prettyExprA (Data.Foldable.toList b))
 prettyExprB (ListLit (Just a) b) =
-        list (map prettyExprA (Data.Vector.toList b))
+        list (map prettyExprA (Data.Foldable.toList b))
     <>  " : "
     <>  prettyExprD (App List a)
 prettyExprB (OptionalLit a b) =
-        list (map prettyExprA (Data.Vector.toList b))
+        list (map prettyExprA (Data.Foldable.toList b))
     <>  " : "
     <>  prettyExprD (App Optional a)
 prettyExprB (Merge a b (Just c)) =
@@ -702,7 +701,7 @@ prettyExprF (Union a) =
 prettyExprF (UnionLit a b c) =
     prettyUnionLit a b c
 prettyExprF (ListLit Nothing b) =
-    list (map prettyExprA (Data.Vector.toList b))
+    list (map prettyExprA (Data.Foldable.toList b))
 prettyExprF (Embed a) =
     Pretty.pretty a
 prettyExprF (Note _ b) =
@@ -886,11 +885,11 @@ buildExprB (Let a (Just b) c d) =
     <>  " in "
     <>  buildExprB d
 buildExprB (ListLit Nothing b) =
-    "[" <> buildElems (Data.Vector.toList b) <> "]"
+    "[" <> buildElems (Data.Foldable.toList b) <> "]"
 buildExprB (ListLit (Just a) b) =
-    "[" <> buildElems (Data.Vector.toList b) <> "] : List "  <> buildExprE a
+    "[" <> buildElems (Data.Foldable.toList b) <> "] : List "  <> buildExprE a
 buildExprB (OptionalLit a b) =
-    "[" <> buildElems (Data.Vector.toList b) <> "] : Optional "  <> buildExprE a
+    "[" <> buildElems (Data.Foldable.toList b) <> "] : Optional "  <> buildExprE a
 buildExprB (Merge a b (Just c)) =
     "merge " <> buildExprE a <> " " <> buildExprE b <> " : " <> buildExprD c
 buildExprB (Merge a b Nothing) =
@@ -1054,7 +1053,7 @@ buildExprF (Union a) =
 buildExprF (UnionLit a b c) =
     buildUnionLit a b c
 buildExprF (ListLit Nothing b) =
-    "[" <> buildElems (Data.Vector.toList b) <> "]"
+    "[" <> buildElems (Data.Foldable.toList b) <> "]"
 buildExprF (Embed a) =
     build a
 buildExprF (Note _ b) =

@@ -5,7 +5,7 @@ and returns `False` otherwise
 Examples:
 
 ```
-./or ([ True, False, True ] : List Bool) = True
+./or [ True, False, True ] = True
 
 ./or ([] : List Bool) = False
 ```

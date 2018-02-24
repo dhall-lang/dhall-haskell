@@ -5,11 +5,11 @@ returns `False` otherwise
 Examples:
 
 ```
-./odd ([ True, False, True ] : List Bool) = False
+./odd [ True, False, True ] = False
 
-./odd ([ True, False ] : List Bool) = True
+./odd [ True, False ] = True
 
-./odd ([ True ] : List Bool) = True
+./odd [ True ] = True
 
 ./odd ([] : List Bool) = False
 ```

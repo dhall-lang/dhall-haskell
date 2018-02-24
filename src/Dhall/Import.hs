@@ -166,6 +166,7 @@ import qualified Data.ByteString.Base16
 import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
+import qualified Data.Foldable
 import qualified Data.List                        as List
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Map.Strict                  as Map
@@ -175,7 +176,6 @@ import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Data.Text.Lazy.IO
-import qualified Data.Vector
 import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.Context
@@ -481,7 +481,7 @@ toHeaders
   -> Maybe [(CI Data.ByteString.ByteString, Data.ByteString.ByteString)]
 toHeaders (ListLit _ hs) = do
     hs' <- mapM toHeader hs
-    return (Data.Vector.toList hs')
+    return (Data.Foldable.toList hs')
 toHeaders  _             = do
     empty
 

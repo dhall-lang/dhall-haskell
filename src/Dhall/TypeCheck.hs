@@ -25,6 +25,7 @@ import Control.Exception (Exception)
 import Data.Foldable (forM_, toList)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
+import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
@@ -36,14 +37,19 @@ import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.Foldable
 import qualified Data.HashMap.Strict
 import qualified Data.HashMap.Strict.InsOrd
+import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
-import qualified Data.Vector
 import qualified Dhall.Context
 import qualified Dhall.Core
+
+traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
+traverseWithIndex_ k xs =
+    Data.Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
 
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
@@ -384,15 +390,14 @@ typeWithA tpa = loop
     loop _      List              = do
         return (Pi "_" (Const Type) (Const Type))
     loop ctx e@(ListLit  Nothing  xs) = do
-        if Data.Vector.null xs
-            then Left (TypeError ctx e MissingListType)
-            else do
-                t <- loop ctx (Data.Vector.head xs)
+        case Data.Sequence.viewl xs of
+            x0 :< _ -> do
+                t <- loop ctx x0
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
                     _ -> Left (TypeError ctx e (InvalidListType t))
-                flip Data.Vector.imapM_ xs (\i x -> do
+                flip traverseWithIndex_ xs (\i x -> do
                     t' <- loop ctx x
                     if propEqual t t'
                         then return ()
@@ -402,12 +407,13 @@ typeWithA tpa = loop
                             let err   = MismatchedListElements i nf_t x nf_t'
                             Left (TypeError ctx x err) )
                 return (App List t)
+            _ -> Left (TypeError ctx e MissingListType)
     loop ctx e@(ListLit (Just t ) xs) = do
         s <- fmap Dhall.Core.normalize (loop ctx t)
         case s of
             Const Type -> return ()
             _ -> Left (TypeError ctx e (InvalidListType t))
-        flip Data.Vector.imapM_ xs (\i x -> do
+        flip traverseWithIndex_ xs (\i x -> do
             t' <- loop ctx x
             if propEqual t t'
                 then return ()
@@ -466,10 +472,6 @@ typeWithA tpa = loop
         case s of
             Const Type -> return ()
             _ -> Left (TypeError ctx e (InvalidOptionalType t))
-        let n = Data.Vector.length xs
-        if 2 <= n
-            then Left (TypeError ctx e (InvalidOptionalLiteral n))
-            else return ()
         forM_ xs (\x -> do
             t' <- loop ctx x
             if propEqual t t'
@@ -710,7 +712,6 @@ data TypeMessage s a
     | InvalidListElement Int (Expr s a) (Expr s a) (Expr s a)
     | InvalidListType (Expr s a)
     | InvalidOptionalElement (Expr s a) (Expr s a) (Expr s a)
-    | InvalidOptionalLiteral Int
     | InvalidOptionalType (Expr s a)
     | InvalidPredicate (Expr s a) (Expr s a)
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
@@ -1890,70 +1891,6 @@ prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..
         txt0 = build expr0
         txt1 = build expr1
         txt2 = build expr2
-
-prettyTypeMessage (InvalidOptionalLiteral n) = ErrorMessages {..}
-  where
-    short = "Multiple ❰Optional❱ elements not allowed"
-
-    long =
-        "Explanation: The syntax for ❰Optional❱ values resembles the syntax for ❰List❱s: \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────┐                                                   \n\
-        \    │ [] : Optional Integer │  An ❰Optional❱ value which is absent              \n\
-        \    └───────────────────────┘                                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────┐                                                   \n\
-        \    │ [] : List     Integer │  An empty (0-element) ❰List❱                      \n\
-        \    └───────────────────────┘                                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────┐                                                  \n\
-        \    │ [1] : Optional Integer │  An ❰Optional❱ value which is present            \n\
-        \    └────────────────────────┘                                                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────┐                                                  \n\
-        \    │ [1] : List     Integer │  A singleton (1-element) ❰List❱                  \n\
-        \    └────────────────────────┘                                                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, an ❰Optional❱ value can " <> _NOT <> " have more than one element, whereas a\n\
-        \❰List❱ can have multiple elements:                                              \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ [1, 2] : Optional Integer │  Invalid: multiple elements " <> _NOT <> " allowed\n\
-        \    └───────────────────────────┘                                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ [1, 2] : List     Integer │  Valid: multiple elements allowed             \n\
-        \    └───────────────────────────┘                                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Some common reasons why you might get this error:                               \n\
-        \                                                                                \n\
-        \● You accidentally typed ❰Optional❱ when you meant ❰List❱, like this:           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────────────────────────┐                      \n\
-        \    │ List/length Integer ([1, 2, 3] : Optional Integer) │                      \n\
-        \    └────────────────────────────────────────────────────┘                      \n\
-        \                                       ⇧                                        \n\
-        \                                       This should be ❰List❱ instead            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \────────────────────────────────────────────────────────────────────────────────\n\
-        \                                                                                \n\
-        \Your ❰Optional❱ value had this many elements:                                   \n\
-        \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
-        \                                                                                \n\
-        \... when an ❰Optional❱ value can only have at most one element                  \n"
-      where
-        txt0 = build n
 
 prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
   where

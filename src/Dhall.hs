@@ -40,8 +40,9 @@ module Dhall
     , lazyText
     , strictText
     , maybe
-    , vector
+    , sequence
     , list
+    , vector
     , unit
     , string
     , pair
@@ -56,6 +57,7 @@ module Dhall
 
     -- * Re-exports
     , Natural
+    , Seq
     , Text
     , Vector
     , Generic
@@ -67,6 +69,7 @@ import Control.Monad.Trans.State.Strict
 import Data.Functor.Contravariant (Contravariant(..))
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
+import Data.Sequence (Seq)
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Typeable (Typeable)
@@ -78,7 +81,7 @@ import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import GHC.Generics
 import Numeric.Natural (Natural)
-import Prelude hiding (maybe)
+import Prelude hiding (maybe, sequence)
 import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Exception
@@ -434,20 +437,18 @@ Just 1
 maybe :: Type a -> Type (Maybe a)
 maybe (Type extractIn expectedIn) = Type extractOut expectedOut
   where
-    extractOut (OptionalLit _ es) = traverse extractIn es'
-      where
-        es' = if Data.Vector.null es then Nothing else Just (Data.Vector.head es)
-    extractOut _ = Nothing
+    extractOut (OptionalLit _ es) = traverse extractIn es
+    extractOut  _                 = Nothing
 
     expectedOut = App Optional expectedIn
 
-{-| Decode a `Vector`
-
->>> input (vector integer) "[1, 2, 3]"
+{-| Decode a `Seq`
+ -
+>>> input (sequence integer) "[1, 2, 3]"
 [1,2,3]
 -}
-vector :: Type a -> Type (Vector a)
-vector (Type extractIn expectedIn) = Type extractOut expectedOut
+sequence :: Type a -> Type (Seq a)
+sequence (Type extractIn expectedIn) = Type extractOut expectedOut
   where
     extractOut (ListLit _ es) = traverse extractIn es
     extractOut  _             = Nothing
@@ -460,7 +461,15 @@ vector (Type extractIn expectedIn) = Type extractOut expectedOut
 [1,2,3]
 -}
 list :: Type a -> Type [a]
-list = fmap Data.Vector.toList . vector
+list = fmap Data.Foldable.toList . sequence
+
+{-| Decode a `Vector`
+
+>>> input (vector integer) "[1, 2, 3]"
+[1,2,3]
+-}
+vector :: Type a -> Type (Vector a)
+vector = fmap Data.Vector.fromList . list
 
 {-| Decode `()` from an empty record.
 
@@ -549,11 +558,14 @@ instance Interpret Data.Text.Text where
 instance Interpret a => Interpret (Maybe a) where
     autoWith opts = maybe (autoWith opts)
 
-instance Interpret a => Interpret (Vector a) where
-    autoWith opts = vector (autoWith opts)
+instance Interpret a => Interpret (Seq a) where
+    autoWith opts = sequence (autoWith opts)
 
 instance Interpret a => Interpret [a] where
     autoWith = fmap (fmap Data.Vector.toList) autoWith
+
+instance Interpret a => Interpret (Vector a) where
+    autoWith opts = vector (autoWith opts)
 
 instance (Inject a, Interpret b) => Interpret (a -> b) where
     autoWith opts = Type extractOut expectedOut
@@ -885,15 +897,15 @@ instance Inject a => Inject (Maybe a) where
     injectWith options = InputType embedOut declaredOut
       where
         embedOut (Just x) =
-            OptionalLit declaredIn (Data.Vector.singleton (embedIn x))
+            OptionalLit declaredIn (pure (embedIn x))
         embedOut Nothing =
-            OptionalLit declaredIn  Data.Vector.empty
+            OptionalLit declaredIn  empty
 
         InputType embedIn declaredIn = injectWith options
 
         declaredOut = App Optional declaredIn
 
-instance Inject a => Inject (Vector a) where
+instance Inject a => Inject (Seq a) where
     injectWith options = InputType embedOut declaredOut
       where
         embedOut xs = ListLit (Just declaredIn) (fmap embedIn xs)
@@ -903,15 +915,13 @@ instance Inject a => Inject (Vector a) where
         InputType embedIn declaredIn = injectWith options
 
 instance Inject a => Inject [a] where
-    injectWith = fmap (contramap Data.Vector.fromList) injectWith
+    injectWith = fmap (contramap Data.Sequence.fromList) injectWith
+
+instance Inject a => Inject (Vector a) where
+    injectWith = fmap (contramap Data.Vector.toList) injectWith
 
 instance Inject a => Inject (Data.Set.Set a) where
-    injectWith = fmap (contramap go) injectWith where
-        go se = Data.Vector.fromListN (Data.Set.size se) (Data.Foldable.toList se)
-
-instance Inject a => Inject (Data.Sequence.Seq a) where
-    injectWith = fmap (contramap go) injectWith where
-        go se = Data.Vector.fromListN (Data.Sequence.length se) (Data.Foldable.toList se)
+    injectWith = fmap (contramap Data.Set.toList) injectWith
 
 deriving instance (Inject a, Inject b) => Inject (a, b)
 
