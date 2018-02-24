@@ -94,6 +94,7 @@ module Dhall.Nix (
 import Control.Exception (Exception)
 import Data.Foldable (toList)
 import Data.Fix (Fix(..))
+import Data.Scientific (Scientific)
 import Data.Typeable (Typeable)
 import Dhall.Core (Chunks(..), Const(..), Expr(..), Var(..))
 import Dhall.TypeCheck (X(..))
@@ -109,6 +110,7 @@ import Nix.Expr
     , ParamSet(..)
     )
 
+import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Map
 import qualified Data.Text
 import qualified Data.Text.Buildable
@@ -124,7 +126,7 @@ import qualified NeatInterpolation
 data CompileError
     = CannotReferenceShadowedVariable Var
     -- ^ Nix does not provide a way to reference a shadowed variable
-    | NoDoubles Double
+    | NoDoubles Scientific
     -- ^ Nix does not provide a way to represent floating point values
     | UnexpectedConstructorsKeyword
     -- ^ The @constructors@ keyword is not yet supported
@@ -429,7 +431,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop (RecordLit a) = do
         a' <- traverse loop a
         let a'' = do
-                (k, v) <- Data.Map.toAscList a'
+                (k, v) <- Data.HashMap.Strict.InsOrd.toList a'
                 let k' = Data.Text.Lazy.toStrict k
                 return (NamedVar [StaticKey k'] v)
         return (Fix (NSet a''))
@@ -438,7 +440,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         v' <- loop v
         let k'   = Data.Text.Lazy.toStrict k
         let e0   = do
-                k'' <- k : toList (Data.Map.keysSet kts)
+                k'' <- k : Data.HashMap.Strict.InsOrd.keys kts
                 return (Data.Text.Lazy.toStrict k'', Nothing)
         let e1   = Data.Map.fromAscList e0
         let e2   = Fix (NApp (Fix (NSym k')) v')
