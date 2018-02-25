@@ -1,7 +1,9 @@
 {-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeOperators      #-}
 
 {-| Utility executable for pretty-printing Dhall code
@@ -31,7 +33,7 @@ import Data.Monoid ((<>))
 import Data.Version (showVersion)
 import Dhall.Parser (exprAndHeaderFromText)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr)
-import Options.Generic (Generic, ParseRecord, type (<?>)(..))
+import Options.Generic (Generic, ParseRecord, Wrapped, type (<?>)(..), (:::))
 import System.IO (stderr)
 import System.Exit (exitFailure, exitSuccess)
 
@@ -42,18 +44,17 @@ import qualified Data.Text.IO
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Options.Generic
 import qualified System.Console.ANSI
 import qualified System.IO
 
-data Options = Options
-    { version :: Bool           <?> "Display version and exit"
-    , inplace :: Maybe FilePath <?> "Modify the specified file in-place"
+data Options w = Options
+    { version :: w ::: Bool           <?> "Display version and exit"
+    , inplace :: w ::: Maybe FilePath <?> "Modify the specified file in-place"
     } deriving (Generic)
 
-instance ParseRecord Options
+instance ParseRecord (Options Wrapped)
 
 opts :: Pretty.LayoutOptions
 opts =
@@ -62,8 +63,8 @@ opts =
 
 main :: IO ()
 main = do
-    options <- Options.Generic.getRecord "Formatter for the Dhall language"
-    when (unHelpful (version options)) $ do
+    Options {..} <- Options.Generic.unwrapRecord "Formatter for the Dhall language"
+    when version $ do
       putStrLn (showVersion Meta.version)
       exitSuccess
 
@@ -74,7 +75,7 @@ main = do
             System.Exit.exitFailure
 
     Control.Exception.handle handler (do
-        case unHelpful (inplace options) of
+        case inplace of
             Just file -> do
                 strictText <- Data.Text.IO.readFile file
                 let lazyText = Data.Text.Lazy.fromStrict strictText
@@ -84,7 +85,7 @@ main = do
 
                 let doc = Pretty.pretty header <> Pretty.pretty expr
                 System.IO.withFile file System.IO.WriteMode (\handle -> do
-                    Pretty.Terminal.renderIO handle (Pretty.layoutSmart opts doc)
+                    Pretty.renderIO handle (Pretty.layoutSmart opts doc)
                     Data.Text.IO.hPutStrLn handle "" )
             Nothing -> do
                 System.IO.hSetEncoding System.IO.stdin System.IO.utf8
@@ -100,11 +101,11 @@ main = do
 
                 if supportsANSI
                   then
-                    Pretty.Terminal.renderIO
+                    Pretty.renderIO
                       System.IO.stdout
                       (fmap annToAnsiStyle (Pretty.layoutSmart opts doc))
                   else
-                    Pretty.Text.renderIO
+                    Pretty.renderIO
                       System.IO.stdout
                       (Pretty.layoutSmart opts (Pretty.unAnnotate doc))
                 Data.Text.IO.putStrLn "")

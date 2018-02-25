@@ -1,7 +1,31 @@
-HEAD
+1.10.0
 
+* Feature: Records/unions can now have fields/alternatives that are types
+    * i.e. `{ foo = Text, bar = List }` is legal now
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/273
+* Feature: New `dhall-repl` for interactively evaluating Dhall expressions
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/266
+* Feature: Syntax highlighting
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/260
+* Feature: BREAKING CHANGE TO THE API: `dhall-format` preserves field order
+    * This changes the syntax tree to use an `InsOrdHashMap` instead of a `Map`
+* BREAKING CHANGE TO THE API: Use Haskell's `Scientific` type
+    * This is fixes the interpreter to correct handle really large/small numbers
+    * This also allows marshaling into Haskell's `Scientific` type
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/256
+* BREAKING CHANGE TO THE API: Remove `system-filepath`/`system-fileio` dependencies
+    * Now the library uses `Prelude.FilePath`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/248
+* Feature: Labels can now begin with reserved names
+    * i.e. `List/map` is now a legal label
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/255
+* Fix: Rendered labels are now correctly escaped if they are numbers
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/252
 * Add the instance `Interpret String`.
     * See: https://github.com/dhall-lang/dhall-haskell/pull/247
+* Fix: Custom contexts passed to `typeWith` are now checked
+    * This prevents a custom context from triggering an infinite loop
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/259
 
 1.9.1
 
