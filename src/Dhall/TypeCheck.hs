@@ -166,7 +166,7 @@ typeWithA tpa = loop
                 return a
     loop ctx   (Lam x _A  b     ) = do
         _ <- loop ctx _A
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x _A ctx)
+        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
         _B <- loop ctx' b
         let p = Pi x _A _B
         _t <- loop ctx p
@@ -178,7 +178,7 @@ typeWithA tpa = loop
             _       -> Left (TypeError ctx e (InvalidInputType _A))
 
         _ <- loop ctx _A
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x _A ctx)
+        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
         tB <- fmap Dhall.Core.normalize (loop ctx' _B)
         kB <- case tB of
             Const k -> return k
@@ -531,7 +531,7 @@ typeWithA tpa = loop
             Just _  -> Left (TypeError ctx e (DuplicateAlternative k))
             Nothing -> return ()
         t <- loop ctx v
-        let union = Union (Data.HashMap.Strict.InsOrd.insert k t kts)
+        let union = Union (Data.HashMap.Strict.InsOrd.insert k (Dhall.Core.normalize t) kts)
         _ <- loop ctx union
         return union
     loop ctx e@(Combine kvsX kvsY) = do
