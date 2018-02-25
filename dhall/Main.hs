@@ -36,7 +36,6 @@ import qualified System.IO
 data Options w = Options
     { explain :: w ::: Bool <?> "Explain error messages in more detail"
     , version :: w ::: Bool <?> "Display version and exit"
-    , pretty  :: w ::: Bool <?> "Format output"
     } deriving (Generic)
 
 instance ParseRecord (Options Wrapped)
@@ -45,9 +44,6 @@ opts :: Pretty.LayoutOptions
 opts =
     Pretty.defaultLayoutOptions
         { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
-
-unbounded :: Pretty.LayoutOptions
-unbounded = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
 
 main :: IO ()
 main = do
@@ -96,7 +92,7 @@ main = do
         let render h e = do
                 let doc = prettyExpr e
 
-                let layoutOptions = if pretty then opts else unbounded
+                let layoutOptions = opts
                 let stream = Pretty.layoutSmart layoutOptions doc
 
                 supportsANSI <- System.Console.ANSI.hSupportsANSI h
