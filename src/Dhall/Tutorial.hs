@@ -1615,10 +1615,10 @@ import Dhall
 -- >     (List (List Integer))
 -- >     (replicate +5 (List Integer) (replicate +5 Integer 1))
 --
--- If you want to evaluate and format an expression then you can combine the
--- @dhall@ and @dhall-format@ executables:
+-- If you want to evaluate and format an expression then you can use the
+-- @--pretty@ flag of the @dhall@ executable:
 --
--- > $ dhall | dhall-format
+-- > $ dhall --pretty
 -- > let replicate = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/List/replicate 
 -- > in replicate +5 (List (List Integer)) (replicate +5 (List Integer) (replicate +5 Integer 1))
 -- > <Ctrl-D>
@@ -2662,6 +2662,27 @@ import Dhall
 --
 -- __Exercise__: Try to use a new Prelude function that has not been covered
 -- previously in this tutorial
+--
+-- You can also import the entire Prelude as a single large record for
+-- convenience:
+--
+-- > $ dhall
+-- >     let Prelude = https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/package.dhall
+-- >
+-- > in    λ(x : Text)
+-- >     → Prelude.`List`.length Text (Prelude.`List`.replicate +10 Text x)
+-- > <Ctrl-D>
+-- > ∀(x : Text) → Natural
+-- >
+-- > λ(x : Text) → +10
+--
+-- The organization of the package mirrors the layout of the Prelude, meaning
+-- that every directory is stored as a record whose children are the fields of
+-- that record.
+--
+-- __Exercise__: Browse the Prelude by running:
+--
+-- > $ dhall --pretty <<< 'https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/package.dhall'
 
 -- $conclusion
 --

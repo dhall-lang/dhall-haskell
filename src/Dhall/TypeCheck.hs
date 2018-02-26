@@ -40,6 +40,8 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.HashMap.Strict
 import qualified Data.HashMap.Strict.InsOrd
+import qualified Data.List
+import qualified Data.Ord
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text.Lazy                   as Text
@@ -72,9 +74,11 @@ match (V xL nL) (V xR nR) ((xL', xR'):xs) =
     nL' = if xL == xL' then nL - 1 else nL
     nR' = if xR == xR' then nR - 1 else nR
 
-toSortedList :: InsOrdHashMap k v -> [(k, v)]
+toSortedList :: Ord k => InsOrdHashMap k v -> [(k, v)]
 toSortedList =
-    Data.HashMap.Strict.toList . Data.HashMap.Strict.InsOrd.toHashMap
+      Data.List.sortBy (Data.Ord.comparing fst)
+    . Data.HashMap.Strict.toList
+    . Data.HashMap.Strict.InsOrd.toHashMap
 
 propEqual :: Eq a => Expr s a -> Expr t a -> Bool
 propEqual eL0 eR0 =
@@ -168,7 +172,7 @@ typeWithA tpa = loop
                 return a
     loop ctx   (Lam x _A  b     ) = do
         _ <- loop ctx _A
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x _A ctx)
+        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
         _B <- loop ctx' b
         let p = Pi x _A _B
         _t <- loop ctx p
@@ -180,7 +184,7 @@ typeWithA tpa = loop
             _       -> Left (TypeError ctx e (InvalidInputType _A))
 
         _ <- loop ctx _A
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x _A ctx)
+        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
         tB <- fmap Dhall.Core.normalize (loop ctx' _B)
         kB <- case tB of
             Const k -> return k
@@ -529,7 +533,7 @@ typeWithA tpa = loop
             Just _  -> Left (TypeError ctx e (DuplicateAlternative k))
             Nothing -> return ()
         t <- loop ctx v
-        let union = Union (Data.HashMap.Strict.InsOrd.insert k t kts)
+        let union = Union (Data.HashMap.Strict.InsOrd.insert k (Dhall.Core.normalize t) kts)
         _ <- loop ctx union
         return union
     loop ctx e@(Combine kvsX kvsY) = do
