@@ -11,7 +11,7 @@ Text
 →   λ(nil : list)
 →   cons "ABC" (cons "DEF" nil)
 )
-= [ "ABC", "DEF" ] : List Text
+= [ "ABC", "DEF" ]
 
 ./build
 Text

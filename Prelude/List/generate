@@ -5,7 +5,7 @@ up to but not including the supplied `Natural` number
 Examples:
 
 ```
-./generate +5 Bool Natural/even = [ True, False, True, False, True ] : List Bool
+./generate +5 Bool Natural/even = [ True, False, True, False, True ]
 
 ./generate +0 Bool Natural/even = [] : List Bool
 ```

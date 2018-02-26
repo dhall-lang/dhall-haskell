@@ -275,7 +275,7 @@ exampleTests =
 
 _Bool_and_0 :: TestTree
 _Bool_and_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/Bool/and ([ True, False, True ] : List Bool)"
+    e <- Util.code "./Prelude/Bool/and [ True, False, True ]"
     Util.assertNormalizesTo e "False" )
 
 _Bool_and_1 :: TestTree
@@ -297,17 +297,17 @@ _Bool_build_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _Bool_even_0 :: TestTree
 _Bool_even_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/Bool/even ([ False, True, False ] : List Bool)"
+    e <- Util.code "./Prelude/Bool/even [ False, True, False ]"
     Util.assertNormalizesTo e "True" )
 
 _Bool_even_1 :: TestTree
 _Bool_even_1 = Test.Tasty.HUnit.testCase "Example #1" (do
-    e <- Util.code "./Prelude/Bool/even ([ False, True ] : List Bool)"
+    e <- Util.code "./Prelude/Bool/even [ False, True ]"
     Util.assertNormalizesTo e "False" )
 
 _Bool_even_2 :: TestTree
 _Bool_even_2 = Test.Tasty.HUnit.testCase "Example #2" (do
-    e <- Util.code "./Prelude/Bool/even ([ False ] : List Bool)"
+    e <- Util.code "./Prelude/Bool/even [ False ]"
     Util.assertNormalizesTo e "False" )
 
 _Bool_even_3 :: TestTree
@@ -337,17 +337,17 @@ _Bool_not_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _Bool_odd_0 :: TestTree
 _Bool_odd_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/Bool/odd ([ True, False, True ] : List Bool)"
+    e <- Util.code "./Prelude/Bool/odd [ True, False, True ]"
     Util.assertNormalizesTo e "False" )
 
 _Bool_odd_1 :: TestTree
 _Bool_odd_1 = Test.Tasty.HUnit.testCase "Example #1" (do
-    e <- Util.code "./Prelude/Bool/odd ([ True, False ] : List Bool)"
+    e <- Util.code "./Prelude/Bool/odd [ True, False ]"
     Util.assertNormalizesTo e "True" )
 
 _Bool_odd_2 :: TestTree
 _Bool_odd_2 = Test.Tasty.HUnit.testCase "Example #2" (do
-    e <- Util.code "./Prelude/Bool/odd ([ True ] : List Bool)"
+    e <- Util.code "./Prelude/Bool/odd [ True ]"
     Util.assertNormalizesTo e "True" )
 
 _Bool_odd_3 :: TestTree
@@ -357,7 +357,7 @@ _Bool_odd_3 = Test.Tasty.HUnit.testCase "Example #3" (do
 
 _Bool_or_0 :: TestTree
 _Bool_or_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/Bool/or ([ True, False, True ] : List Bool)"
+    e <- Util.code "./Prelude/Bool/or [ True, False, True ]"
     Util.assertNormalizesTo e "True" )
 
 _Bool_or_1 :: TestTree
@@ -397,7 +397,7 @@ _Integer_show_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _List_all_0 :: TestTree
 _List_all_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/List/all Natural Natural/even ([ +2, +3, +5 ] : List Natural)"
+    e <- Util.code "./Prelude/List/all Natural Natural/even [ +2, +3, +5 ]"
     Util.assertNormalizesTo e "False" )
 
 _List_all_1 :: TestTree
@@ -407,7 +407,7 @@ _List_all_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _List_any_0 :: TestTree
 _List_any_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/List/any Natural Natural/even ([ +2, +3, +5 ] : List Natural)"
+    e <- Util.code "./Prelude/List/any Natural Natural/even [ +2, +3, +5 ]"
     Util.assertNormalizesTo e "True" )
 
 _List_any_1 :: TestTree
@@ -425,7 +425,7 @@ _List_build_0 = Test.Tasty.HUnit.testCase "Example #0" (do
         \→   λ(nil : list)                  \n\
         \→   cons \"ABC\" (cons \"DEF\" nil)\n\
         \)                                  \n"
-    Util.assertNormalizesTo e "[ \"ABC\", \"DEF\" ] : List Text" )
+    Util.assertNormalizesTo e "[ \"ABC\", \"DEF\" ]" )
 
 _List_build_1 :: TestTree
 _List_build_1 = Test.Tasty.HUnit.testCase "Example #1" (do
@@ -442,30 +442,28 @@ _List_build_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 _List_concat_0 :: TestTree
 _List_concat_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code
-        "./Prelude/List/concat Integer      \n\
-        \(   [   [0, 1, 2]    : List Integer\n\
-        \    ,   [3, 4]       : List Integer\n\
-        \    ,   [5, 6, 7, 8] : List Integer\n\
-        \    ]   : List (List Integer)      \n\
-        \)                                  \n"
-    Util.assertNormalizesTo e "[ 0, 1, 2, 3, 4, 5, 6, 7, 8 ] : List Integer" )
+        "./Prelude/List/concat Integer\n\
+        \[   [0, 1, 2]                \n\
+        \,   [3, 4]                   \n\
+        \,   [5, 6, 7, 8]             \n\
+        \]                            \n"
+    Util.assertNormalizesTo e "[ 0, 1, 2, 3, 4, 5, 6, 7, 8 ]" )
 
 _List_concat_1 :: TestTree
 _List_concat_1 = Test.Tasty.HUnit.testCase "Example #1" (do
     e <- Util.code
         "./Prelude/List/concat Integer\n\
-        \(   [   [] : List Integer    \n\
-        \    ,   [] : List Integer    \n\
-        \    ,   [] : List Integer    \n\
-        \    ]   : List (List Integer)\n\
-        \)                            \n"
+        \[   [] : List Integer        \n\
+        \,   [] : List Integer        \n\
+        \,   [] : List Integer        \n\
+        \]                            \n"
     Util.assertNormalizesTo e "[] : List Integer" )
 
 _List_concatMap_0 :: TestTree
 _List_concatMap_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code
         "./Prelude/List/concatMap Natural Natural (λ(n : Natural) → [n, n]) [+2, +3, +5]"
-    Util.assertNormalizesTo e "[ +2, +2, +3, +3, +5, +5 ] : List Natural" )
+    Util.assertNormalizesTo e "[ +2, +2, +3, +3, +5, +5 ]" )
 
 _List_concatMap_1 :: TestTree
 _List_concatMap_1 = Test.Tasty.HUnit.testCase "Example #1" (do
@@ -476,20 +474,20 @@ _List_concatMap_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 _List_filter_0 :: TestTree
 _List_filter_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code
-        "./Prelude/List/filter Natural Natural/even ([+2, +3, +5] : List Natural)"
-    Util.assertNormalizesTo e "[ +2 ] : List Natural" )
+        "./Prelude/List/filter Natural Natural/even [+2, +3, +5]"
+    Util.assertNormalizesTo e "[ +2 ]" )
 
 _List_filter_1 :: TestTree
 _List_filter_1 = Test.Tasty.HUnit.testCase "Example #1" (do
-    e <- Util.code "./Prelude/List/filter Natural Natural/odd ([+2, +3, +5] : List Natural)"
-    Util.assertNormalizesTo e "[ +3, +5 ] : List Natural" )
+    e <- Util.code "./Prelude/List/filter Natural Natural/odd [+2, +3, +5]"
+    Util.assertNormalizesTo e "[ +3, +5 ]" )
 
 _List_fold_0 :: TestTree
 _List_fold_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code
         "./Prelude/List/fold                      \n\
         \Natural                                  \n\
-        \([ +2, +3, +5 ] : List Natural)          \n\
+        \[ +2, +3, +5 ]                           \n\
         \Natural                                  \n\
         \(λ(x : Natural) → λ(y : Natural) → x + y)\n\
         \+0                                       \n"
@@ -501,7 +499,7 @@ _List_fold_1 = Test.Tasty.HUnit.testCase "Example #1" (do
         "    λ(nil : Natural)                         \n\
         \→   ./Prelude/List/fold                      \n\
         \    Natural                                  \n\
-        \    ([ +2, +3, +5 ] : List Natural)          \n\
+        \    [ +2, +3, +5 ]                           \n\
         \    Natural                                  \n\
         \    (λ(x : Natural) → λ(y : Natural) → x + y)\n\
         \    nil                                      \n"
@@ -513,13 +511,13 @@ _List_fold_2 = Test.Tasty.HUnit.testCase "Example #2" (do
         "    λ(list : Type)                                                         \n\
         \→   λ(cons : Natural → list → list)                                        \n\
         \→   λ(nil : list)                                                          \n\
-        \→   ./Prelude/List/fold Natural ([ +2, +3, +5 ] : List Natural) list cons nil\n"
+        \→   ./Prelude/List/fold Natural [ +2, +3, +5 ] list cons nil\n"
     Util.assertNormalizesTo e "λ(list : Type) → λ(cons : Natural → list → list) → λ(nil : list) → cons +2 (cons +3 (cons +5 nil))" )
 
 _List_generate_0 :: TestTree
 _List_generate_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code "./Prelude/List/generate +5 Bool Natural/even"
-    Util.assertNormalizesTo e "[ True, False, True, False, True ] : List Bool" )
+    Util.assertNormalizesTo e "[ True, False, True, False, True ]" )
 
 _List_generate_1 :: TestTree
 _List_generate_1 = Test.Tasty.HUnit.testCase "Example #1" (do
@@ -528,7 +526,7 @@ _List_generate_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _List_head_0 :: TestTree
 _List_head_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/List/head Integer ([ 0, 1, 2 ] : List Integer)"
+    e <- Util.code "./Prelude/List/head Integer [ 0, 1, 2 ]"
     Util.assertNormalizesTo e "[ 0 ] : Optional Integer" )
 
 _List_head_1 :: TestTree
@@ -538,7 +536,7 @@ _List_head_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _List_indexed_0 :: TestTree
 _List_indexed_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/List/indexed Bool ([ True, False, True ] : List Bool)"
+    e <- Util.code "./Prelude/List/indexed Bool [ True, False, True ]"
     Util.assertNormalizesTo e "[ { index = +0, value = True }, { index = +1, value = False }, { index = +2, value = True } ] : List { index : Natural, value : Bool }" )
 
 _List_indexed_1 :: TestTree
@@ -549,7 +547,7 @@ _List_indexed_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 _List_iterate_0 :: TestTree
 _List_iterate_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code "./Prelude/List/iterate +10 Natural (λ(x : Natural) → x * +2) +1"
-    Util.assertNormalizesTo e "[ +1, +2, +4, +8, +16, +32, +64, +128, +256, +512 ] : List Natural" )
+    Util.assertNormalizesTo e "[ +1, +2, +4, +8, +16, +32, +64, +128, +256, +512 ]" )
 
 _List_iterate_1 :: TestTree
 _List_iterate_1 = Test.Tasty.HUnit.testCase "Example #1" (do
@@ -558,7 +556,7 @@ _List_iterate_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _List_last_0 :: TestTree
 _List_last_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/List/last Integer ([ 0, 1, 2 ] : List Integer)"
+    e <- Util.code "./Prelude/List/last Integer [ 0, 1, 2 ]"
     Util.assertNormalizesTo e "[ 2 ] : Optional Integer" )
 
 _List_last_1 :: TestTree
@@ -568,7 +566,7 @@ _List_last_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _List_length_0 :: TestTree
 _List_length_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/List/length Integer ([ 0, 1, 2 ] : List Integer)"
+    e <- Util.code "./Prelude/List/length Integer [ 0, 1, 2 ]"
     Util.assertNormalizesTo e "+3" )
 
 _List_length_1 :: TestTree
@@ -579,8 +577,8 @@ _List_length_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 _List_map_0 :: TestTree
 _List_map_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code
-        "./Prelude/List/map Natural Bool Natural/even ([ +2, +3, +5 ] : List Natural)"
-    Util.assertNormalizesTo e "[ True, False, False ] : List Bool" )
+        "./Prelude/List/map Natural Bool Natural/even [ +2, +3, +5 ]"
+    Util.assertNormalizesTo e "[ True, False, False ]" )
 
 _List_map_1 :: TestTree
 _List_map_1 = Test.Tasty.HUnit.testCase "Example #1" (do
@@ -589,7 +587,7 @@ _List_map_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _List_null_0 :: TestTree
 _List_null_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/List/null Integer ([ 0, 1, 2 ] : List Integer)"
+    e <- Util.code "./Prelude/List/null Integer [ 0, 1, 2 ]"
     Util.assertNormalizesTo e "False" )
 
 _List_null_1 :: TestTree
@@ -600,7 +598,7 @@ _List_null_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 _List_replicate_0 :: TestTree
 _List_replicate_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code "./Prelude/List/replicate +9 Integer 1"
-    Util.assertNormalizesTo e "[ 1, 1, 1, 1, 1, 1, 1, 1, 1 ] : List Integer" )
+    Util.assertNormalizesTo e "[ 1, 1, 1, 1, 1, 1, 1, 1, 1 ]" )
 
 _List_replicate_1 :: TestTree
 _List_replicate_1 = Test.Tasty.HUnit.testCase "Example #1" (do
@@ -609,7 +607,7 @@ _List_replicate_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _List_reverse_0 :: TestTree
 _List_reverse_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/List/reverse Integer ([0, 1, 2] : List Integer)"
+    e <- Util.code "./Prelude/List/reverse Integer [0, 1, 2]"
     Util.assertNormalizesTo e "[ 2, 1, 0 ] : List Integer" )
 
 _List_reverse_1 :: TestTree
@@ -620,23 +618,22 @@ _List_reverse_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 _List_shifted_0 :: TestTree
 _List_shifted_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code
-        "./Prelude/List/shifted                                 \n\
-        \Bool                                                   \n\
-        \(   [   [   { index = +0, value = True  }              \n\
-        \        ,   { index = +1, value = True  }              \n\
-        \        ,   { index = +2, value = True  }              \n\
-        \        ]   : List { index : Natural, value : Bool }   \n\
-        \    ,   [   { index = +0, value = False }              \n\
-        \        ,   { index = +1, value = False }              \n\
-        \        ]   : List { index : Natural, value : Bool }   \n\
-        \    ,   [   { index = +0, value = True  }              \n\
-        \        ,   { index = +1, value = True  }              \n\
-        \        ,   { index = +2, value = True  }              \n\
-        \        ,   { index = +3, value = True  }              \n\
-        \        ]   : List { index : Natural, value : Bool }   \n\
-        \    ]   : List (List { index : Natural, value : Bool })\n\
-        \)                                                      \n"
-    Util.assertNormalizesTo e "[ { index = +0, value = True }, { index = +1, value = True }, { index = +2, value = True }, { index = +3, value = False }, { index = +4, value = False }, { index = +5, value = True }, { index = +6, value = True }, { index = +7, value = True }, { index = +8, value = True } ] : List { index : Natural, value : Bool }" )
+        "./Prelude/List/shifted               \n\
+        \Bool                                 \n\
+        \[   [   { index = +0, value = True  }\n\
+        \    ,   { index = +1, value = True  }\n\
+        \    ,   { index = +2, value = True  }\n\
+        \    ]                                \n\
+        \,   [   { index = +0, value = False }\n\
+        \    ,   { index = +1, value = False }\n\
+        \    ]                                \n\
+        \,   [   { index = +0, value = True  }\n\
+        \    ,   { index = +1, value = True  }\n\
+        \    ,   { index = +2, value = True  }\n\
+        \    ,   { index = +3, value = True  }\n\
+        \    ]                                \n\
+        \]                                    \n"
+    Util.assertNormalizesTo e "[ { index = +0, value = True }, { index = +1, value = True }, { index = +2, value = True }, { index = +3, value = False }, { index = +4, value = False }, { index = +5, value = True }, { index = +6, value = True }, { index = +7, value = True }, { index = +8, value = True } ]" )
 
 _List_shifted_1 :: TestTree
 _List_shifted_1 = Test.Tasty.HUnit.testCase "Example #1" (do
@@ -647,15 +644,14 @@ _List_shifted_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 _List_unzip_0 :: TestTree
 _List_unzip_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code
-        "./Prelude/List/unzip                   \n\
-        \Text                                   \n\
-        \Bool                                   \n\
-        \(   [   { _1 = \"ABC\", _2 = True  }   \n\
-        \    ,   { _1 = \"DEF\", _2 = False }   \n\
-        \    ,   { _1 = \"GHI\", _2 = True  }   \n\
-        \    ]   : List { _1 : Text, _2 : Bool }\n\
-        \)                                      \n"
-    Util.assertNormalizesTo e "{ _1 = [ \"ABC\", \"DEF\", \"GHI\" ] : List Text, _2 = [ True, False, True ] : List Bool }" )
+        "./Prelude/List/unzip               \n\
+        \Text                               \n\
+        \Bool                               \n\
+        \[   { _1 = \"ABC\", _2 = True  }   \n\
+        \,   { _1 = \"DEF\", _2 = False }   \n\
+        \,   { _1 = \"GHI\", _2 = True  }   \n\
+        \]                                  \n"
+    Util.assertNormalizesTo e "{ _1 = [ \"ABC\", \"DEF\", \"GHI\" ], _2 = [ True, False, True ] }" )
 
 _List_unzip_1 :: TestTree
 _List_unzip_1 = Test.Tasty.HUnit.testCase "Example #1" (do
@@ -736,7 +732,7 @@ _Natural_build_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 _Natural_enumerate_0 :: TestTree
 _Natural_enumerate_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code "./Prelude/Natural/enumerate +10"
-    Util.assertNormalizesTo e "[ +0, +1, +2, +3, +4, +5, +6, +7, +8, +9 ] : List Natural" )
+    Util.assertNormalizesTo e "[ +0, +1, +2, +3, +4, +5, +6, +7, +8, +9 ]" )
 
 _Natural_enumerate_1 :: TestTree
 _Natural_enumerate_1 = Test.Tasty.HUnit.testCase "Example #1" (do
@@ -795,7 +791,7 @@ _Natural_odd_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _Natural_product_0 :: TestTree
 _Natural_product_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/Natural/product ([ +2, +3, +5 ] : List Natural)"
+    e <- Util.code "./Prelude/Natural/product [ +2, +3, +5 ]"
     Util.assertNormalizesTo e "+30" )
 
 _Natural_product_1 :: TestTree
@@ -815,7 +811,7 @@ _Natural_show_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _Natural_sum_0 :: TestTree
 _Natural_sum_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/Natural/sum ([ +2, +3, +5 ] : List Natural)"
+    e <- Util.code "./Prelude/Natural/sum [ +2, +3, +5 ]"
     Util.assertNormalizesTo e "+10" )
 
 _Natural_sum_1 :: TestTree
@@ -920,21 +916,20 @@ _Optional_fold_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 _Optional_head_0 :: TestTree
 _Optional_head_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code
-        "./Prelude/Optional/head        \n\
-        \Integer                        \n\
-        \(   [ []    : Optional Integer \n\
-        \    , [ 1 ] : Optional Integer \n\
-        \    , [ 2 ] : Optional Integer \n\
-        \    ] : List (Optional Integer)\n\
-        \)                              \n"
+        "./Prelude/Optional/head   \n\
+        \Integer                   \n\
+        \[ []    : Optional Integer\n\
+        \, [ 1 ] : Optional Integer\n\
+        \, [ 2 ] : Optional Integer\n\
+        \]                         \n"
     Util.assertNormalizesTo e "[ 1 ] : Optional Integer" )
 
 _Optional_head_1 :: TestTree
 _Optional_head_1 = Test.Tasty.HUnit.testCase "Example #1" (do
     e <- Util.code
-        "./Prelude/Optional/head                                                     \n\
-        \Integer                                                                     \n\
-        \([ [] : Optional Integer, [] : Optional Integer ] : List (Optional Integer))\n"
+        "./Prelude/Optional/head                         \n\
+        \Integer                                         \n\
+        \[ [] : Optional Integer, [] : Optional Integer ]\n"
     Util.assertNormalizesTo e "[] : Optional Integer" )
 
 _Optional_head_2 :: TestTree
@@ -950,16 +945,16 @@ _Optional_last_0 = Test.Tasty.HUnit.testCase "Example #0" (do
         \(   [ [] : Optional Integer    \n\
         \    , [1] : Optional Integer   \n\
         \    , [2] : Optional Integer   \n\
-        \    ] : List (Optional Integer)\n\
+        \    ]                          \n\
         \)                              \n"
     Util.assertNormalizesTo e "[ 2 ] : Optional Integer" )
 
 _Optional_last_1 :: TestTree
 _Optional_last_1 = Test.Tasty.HUnit.testCase "Example #1" (do
     e <- Util.code
-        "./Prelude/Optional/last                                                     \n\
-        \Integer                                                                     \n\
-        \([ [] : Optional Integer, [] : Optional Integer ] : List (Optional Integer))\n"
+        "./Prelude/Optional/last                         \n\
+        \Integer                                         \n\
+        \[ [] : Optional Integer, [] : Optional Integer ]\n"
     Util.assertNormalizesTo e "[] : Optional Integer" )
 
 _Optional_last_2 :: TestTree
@@ -1028,7 +1023,7 @@ _Optional_unzip_1 = Test.Tasty.HUnit.testCase "Example #1" (do
 
 _Text_concat_0 :: TestTree
 _Text_concat_0 = Test.Tasty.HUnit.testCase "Example #0" (do
-    e <- Util.code "./Prelude/Text/concat ([ \"ABC\", \"DEF\", \"GHI\" ] : List Text)"
+    e <- Util.code "./Prelude/Text/concat [ \"ABC\", \"DEF\", \"GHI\" ]"
     Util.assertNormalizesTo e "\"ABCDEFGHI\"" )
 
 _Text_concat_1 :: TestTree

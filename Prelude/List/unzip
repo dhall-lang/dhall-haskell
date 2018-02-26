@@ -10,10 +10,10 @@ Bool
 (   [   { _1 = "ABC", _2 = True  }
     ,   { _1 = "DEF", _2 = False }
     ,   { _1 = "GHI", _2 = True  }
-    ]   : List { _1 : Text, _2 : Bool }
+    ]
 )
-=   { _1 = [ "ABC", "DEF", "GHI" ] : List Text
-    , _2 = [ True, False, True ] : List Bool
+=   { _1 = [ "ABC", "DEF", "GHI" ]
+    , _2 = [ True, False, True ]
     }
 
 ./unzip Text Bool ([] : List { _1 : Text, _2 : Bool })

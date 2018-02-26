@@ -19,4 +19,14 @@
         → λ(nothing : optional)
         → id optional (just True)
       )
+, example3 =
+      λ(a : Type)
+    → λ(x : a)
+    → Optional/build
+      a
+      (   λ(optional : Type)
+        → λ(just : a → optional)
+        → λ(nothing : optional)
+        → just x
+      )
 }

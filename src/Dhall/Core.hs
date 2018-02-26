@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE UnicodeSyntax     #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| This module contains the core calculus for the Dhall language.
@@ -57,12 +58,12 @@ import Data.HashSet (HashSet)
 import Data.Monoid ((<>))
 import Data.String (IsString(..))
 import Data.Scientific (Scientific)
+import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Traversable
-import Data.Vector (Vector)
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
@@ -73,13 +74,11 @@ import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Base16
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
-import qualified Data.Maybe
+import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Lazy                        as Text
 import qualified Data.Text.Lazy.Builder                as Builder
 import qualified Data.Text.Prettyprint.Doc             as Pretty
-import qualified Data.Vector
-import qualified Data.Vector.Mutable
 
 {-| Constants for a pure type system
 
@@ -283,7 +282,7 @@ data Expr s a
     | List
     -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : List t
     --   > ListLit  Nothing  [x, y, z]              ~  [x, y, z]
-    | ListLit (Maybe (Expr s a)) (Vector (Expr s a))
+    | ListLit (Maybe (Expr s a)) (Seq (Expr s a))
     -- | > ListAppend x y                           ~  x # y
     | ListAppend (Expr s a) (Expr s a)
     -- | > ListBuild                                ~  List/build
@@ -302,9 +301,9 @@ data Expr s a
     | ListReverse
     -- | > Optional                                 ~  Optional
     | Optional
-    -- | > OptionalLit t [e]                        ~  [e] : Optional t
-    --   > OptionalLit t []                         ~  []  : Optional t
-    | OptionalLit (Expr s a) (Vector (Expr s a))
+    -- | > OptionalLit t (Just e)                   ~  [e] : Optional t
+    --   > OptionalLit t Nothing                    ~  []  : Optional t
+    | OptionalLit (Expr s a) (Maybe (Expr s a))
     -- | > OptionalFold                             ~  Optional/fold
     | OptionalFold
     -- | > OptionalBuild                            ~  Optional/build
@@ -965,14 +964,6 @@ denote (Embed a             ) = Embed a
 normalizeWith :: Normalizer a -> Expr s a -> Expr t a
 normalizeWith ctx e0 = loop (denote e0)
  where
-    -- This is to avoid a `Show` constraint on the @a@ and @s@ in the type of
-    -- `loop`.  In theory, this might change a failing repro case into
-    -- a successful one, but the risk of that is low enough to not warrant
-    -- the `Show` constraint.  I care more about proving at the type level
-    -- that the @a@ and @s@ type parameters are never used
- e'' = bimap (\_ -> ()) (\_ -> ()) e0
-
- text = "NormalizeWith.loop (" <> Data.Text.pack (show e'') <> ")"
  loop e =  case e of
     Const k -> Const k
     Var v -> Var v
@@ -991,16 +982,14 @@ normalizeWith ctx e0 = loop (denote e0)
             b'  = subst (V x 0) a' b
             b'' = shift (-1) (V x 0) b'
         f' -> case App f' a' of
-            -- fold/build fusion for `List`
+            -- build/fold fusion for `List`
             App (App ListBuild _) (App (App ListFold _) e') -> loop e'
-            App (App ListFold _) (App (App ListBuild _) e') -> loop e'
-            -- fold/build fusion for `Natural`
-            App NaturalBuild (App NaturalFold e') -> loop e'
-            App NaturalFold (App NaturalBuild e') -> loop e'
 
-            -- fold/build fusion for `Optional`
+            -- build/fold fusion for `Natural`
+            App NaturalBuild (App NaturalFold e') -> loop e'
+
+            -- build/fold fusion for `Optional`
             App (App OptionalBuild _) (App (App OptionalFold _) e') -> loop e'
-            App (App OptionalFold _) (App (App OptionalBuild _) e') -> loop e'
 
             App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero ->
                 if boundedType (loop t) then strict else lazy
@@ -1013,23 +1002,11 @@ normalizeWith ctx e0 = loop (denote e0)
 
                 lazyLoop !0 = zero
                 lazyLoop !n = App succ' (lazyLoop (n - 1))
-            App NaturalBuild k
-                | check     -> NaturalLit n
-                | otherwise -> App f' a'
+            App NaturalBuild g -> loop (App (App (App g Natural) succ) zero)
               where
-                labeled =
-                    loop (App (App (App k Natural) "Succ") "Zero")
+                succ = Lam "x" Natural (NaturalPlus "x" (NaturalLit 1))
 
-                n = go 0 labeled
-                  where
-                    go !m (App (Var "Succ") e') = go (m + 1) e'
-                    go !m (Var "Zero")          = m
-                    go !_  _                    = internalError text
-                check = go labeled
-                  where
-                    go (App (Var "Succ") e') = go e'
-                    go (Var "Zero")          = True
-                    go  _                    = False
+                zero = NaturalLit 0
             App NaturalIsZero (NaturalLit n) -> BoolLit (n == 0)
             App NaturalEven (NaturalLit n) -> BoolLit (even n)
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
@@ -1040,44 +1017,35 @@ normalizeWith ctx e0 = loop (denote e0)
                 TextLit (Chunks [] (buildNumber n))
             App DoubleShow (DoubleLit n) ->
                 TextLit (Chunks [] (buildScientific n))
-            App (App OptionalBuild t) k
-                | check     -> OptionalLit t k'
-                | otherwise -> App f' a'
+            App (App OptionalBuild _A₀) g ->
+                loop (App (App (App g optional) just) nothing)
               where
-                labeled = loop (App (App (App k (App Optional t)) "Just") "Nothing")
+                _A₁ = shift 1 "a" _A₀
 
-                k' = go labeled
-                  where
-                    go (App (Var "Just") e') = pure e'
-                    go (Var "Nothing")       = empty
-                    go  _                    = internalError text
-                check = go labeled
-                  where
-                    go (App (Var "Just") _) = True
-                    go (Var "Nothing")      = True
-                    go  _                   = False
-            App (App ListBuild t) k
-                | check     -> ListLit (Just t) (buildVector k')
-                | otherwise -> App f' a'
+                optional = App Optional _A₀
+
+                just = Lam "a" _A₀ (OptionalLit _A₁ (pure "a"))
+
+                nothing = OptionalLit _A₀ empty
+            App (App ListBuild _A₀) g -> loop (App (App (App g list) cons) nil)
               where
-                labeled =
-                    loop (App (App (App k (App List t)) "Cons") "Nil")
+                _A₁ = shift 1 "a" _A₀
 
-                k' cons nil = go labeled
-                  where
-                    go (App (App (Var "Cons") x) e') = cons x (go e')
-                    go (Var "Nil")                   = nil
-                    go  _                            = internalError text
-                check = go labeled
-                  where
-                    go (App (App (Var "Cons") _) e') = go e'
-                    go (Var "Nil")                   = True
-                    go  _                            = False
+                list = App List _A₀
+
+                cons =
+                    Lam "a" _A₀
+                        (Lam "as"
+                            (App List _A₁)
+                            (ListAppend (ListLit Nothing (pure "a")) "as")
+                        )
+
+                nil = ListLit (Just _A₀) empty
             App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil ->
                 if boundedType (loop t) then strict else lazy
               where
-                strict =       Data.Vector.foldr strictCons strictNil xs
-                lazy   = loop (Data.Vector.foldr   lazyCons   lazyNil xs)
+                strict =       foldr strictCons strictNil xs
+                lazy   = loop (foldr   lazyCons   lazyNil xs)
 
                 strictNil = loop nil
                 lazyNil   =      nil
@@ -1085,35 +1053,40 @@ normalizeWith ctx e0 = loop (denote e0)
                 strictCons y ys = loop (App (App cons y) ys)
                 lazyCons   y ys =       App (App cons y) ys
             App (App ListLength _) (ListLit _ ys) ->
-                NaturalLit (fromIntegral (Data.Vector.length ys))
-            App (App ListHead t) (ListLit _ ys) ->
-                loop (OptionalLit t (Data.Vector.take 1 ys))
-            App (App ListLast t) (ListLit _ ys) ->
-                loop (OptionalLit t y)
+                NaturalLit (fromIntegral (Data.Sequence.length ys))
+            App (App ListHead t) (ListLit _ ys) -> loop (OptionalLit t m)
               where
-                y = if Data.Vector.null ys
-                    then Data.Vector.empty
-                    else Data.Vector.singleton (Data.Vector.last ys)
-            App (App ListIndexed t) (ListLit _ xs) ->
-                loop (ListLit (Just t') (fmap adapt (Data.Vector.indexed xs)))
+                m = case Data.Sequence.viewl ys of
+                        y :< _ -> Just y
+                        _      -> Nothing
+            App (App ListLast t) (ListLit _ ys) -> loop (OptionalLit t m)
               where
-                t' = Record (Data.HashMap.Strict.InsOrd.fromList kts)
+                m = case Data.Sequence.viewr ys of
+                        _ :> y -> Just y
+                        _      -> Nothing
+            App (App ListIndexed _A₀) (ListLit _A₁ as₀) ->
+                loop (ListLit (Just _A₂) as₁)
+              where
+                as₁ = Data.Sequence.mapWithIndex adapt as₀
+
+                _A₂ = Record (Data.HashMap.Strict.InsOrd.fromList kts)
                   where
                     kts = [ ("index", Natural)
-                          , ("value", t)
+                          , ("value", _A₀)
                           ]
-                adapt (n, x) = RecordLit (Data.HashMap.Strict.InsOrd.fromList kvs)
+
+                adapt n a_ =
+                    RecordLit (Data.HashMap.Strict.InsOrd.fromList kvs)
                   where
                     kvs = [ ("index", NaturalLit (fromIntegral n))
-                          , ("value", x)
+                          , ("value", a_)
                           ]
             App (App ListReverse t) (ListLit _ xs) ->
-                loop (ListLit (Just t) (Data.Vector.reverse xs))
+                loop (ListLit (Just t) (Data.Sequence.reverse xs))
             App (App (App (App (App OptionalFold _) (OptionalLit _ xs)) _) just) nothing ->
-                loop (maybe nothing just' (toMaybe xs))
+                loop (maybe nothing just' xs)
               where
-                just' y = App just y
-                toMaybe = Data.Maybe.listToMaybe . Data.Vector.toList
+                just' = App just
             _ ->  case ctx (App f' a') of
                     Nothing -> App f' a'
                     Just app' -> loop app'
@@ -1350,28 +1323,17 @@ isNormalized e = case denote e of
     App f a -> isNormalized f && isNormalized a && case App f a of
         App (Lam _ _ _) _ -> False
 
-        -- fold/build fusion for `List`
+        -- build/fold fusion for `List`
         App (App ListBuild _) (App (App ListFold _) _) -> False
-        App (App ListFold _) (App (App ListBuild _) _) -> False
 
-        -- fold/build fusion for `Natural`
+        -- build/fold fusion for `Natural`
         App NaturalBuild (App NaturalFold _) -> False
-        App NaturalFold (App NaturalBuild _) -> False
 
-        -- fold/build fusion for `Optional`
+        -- build/fold fusion for `Optional`
         App (App OptionalBuild _) (App (App OptionalFold _) _) -> False
-        App (App OptionalFold _) (App (App OptionalBuild _) _) -> False
 
         App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
-        App NaturalBuild k0 -> isNormalized k0 && not (check0 k0)
-          where
-            check0 (Lam _ _ (Lam succ _ (Lam zero _ k))) = check1 succ zero k
-            check0 _ = False
-
-            check1 succ zero (App (Var (V succ' n)) k) =
-                succ == succ' && n == (if succ == zero then 1 else 0) && check1 succ zero k
-            check1 _ zero (Var (V zero' 0)) = zero == zero'
-            check1 _ _ _ = False
+        App NaturalBuild _ -> False
         App NaturalIsZero (NaturalLit _) -> False
         App NaturalEven (NaturalLit _) -> False
         App NaturalOdd (NaturalLit _) -> False
@@ -1379,24 +1341,8 @@ isNormalized e = case denote e of
         App NaturalToInteger (NaturalLit _) -> False
         App IntegerShow (IntegerLit _) -> False
         App DoubleShow (DoubleLit _) -> False
-        App (App OptionalBuild t) k0 -> isNormalized t && isNormalized k0 && not (check0 k0)
-          where
-            check0 (Lam _ _ (Lam just _ (Lam nothing _ k))) = check1 just nothing k
-            check0 _ = False
-
-            check1 just nothing (App (Var (V just' n)) _) =
-                just == just' && n == (if just == nothing then 1 else 0)
-            check1 _ nothing (Var (V nothing' 0)) = nothing == nothing'
-            check1 _ _ _ = False
-        App (App ListBuild t) k0 -> isNormalized t && isNormalized k0 && not (check0 k0)
-          where
-            check0 (Lam _ _ (Lam cons _ (Lam nil _ k))) = check1 cons nil k
-            check0 _ = False
-
-            check1 cons nil (App (Var (V cons' n)) k) =
-                cons == cons' && n == (if cons == nil then 1 else 0) && check1 cons nil k
-            check1 _ nil (Var (V nil' 0)) = nil == nil'
-            check1 _ _ _ = False
+        App (App OptionalBuild _) _ -> False
+        App (App ListBuild _) _ -> False
         App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _ ->
             False
         App (App ListLength _) (ListLit _ _) -> False
@@ -1564,25 +1510,6 @@ internalError text = error (unlines
     , Data.Text.unpack text <> "                                                       "
     , "```                                                                             "
     ] )
-
-buildVector :: (forall x . (a -> x -> x) -> x -> x) -> Vector a
-buildVector f = Data.Vector.reverse (Data.Vector.create (do
-    let cons a st = do
-            (len, cap, mv) <- st
-            if len < cap
-                then do
-                    Data.Vector.Mutable.write mv len a
-                    return (len + 1, cap, mv)
-                else do
-                    let cap' = 2 * cap
-                    mv' <- Data.Vector.Mutable.unsafeGrow mv cap'
-                    Data.Vector.Mutable.write mv' len a
-                    return (len + 1, cap', mv')
-    let nil = do
-            mv <- Data.Vector.Mutable.unsafeNew 1
-            return (0, 1, mv)
-    (len, _, mv) <- f cons nil
-    return (Data.Vector.Mutable.slice 0 len mv) ))
 
 -- | The set of reserved identifiers for the Dhall language
 reservedIdentifiers :: HashSet Text

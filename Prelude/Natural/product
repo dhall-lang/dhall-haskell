@@ -4,7 +4,7 @@ Multiply all the numbers in a `List`
 Examples:
 
 ```
-./product ([ +2, +3, +5 ] : List Natural) = +30
+./product [ +2, +3, +5 ] = +30
 
 ./product ([] : List Natural) = +1
 ```
