@@ -83,10 +83,67 @@ Extra-Source-Files:
     Prelude/Text/concatSep
     tests/format/*.dhall
     tests/normalization/*.dhall
+    tests/normalization/examples/Bool/and/*.dhall
+    tests/normalization/examples/Bool/build/*.dhall
+    tests/normalization/examples/Bool/even/*.dhall
+    tests/normalization/examples/Bool/fold/*.dhall
+    tests/normalization/examples/Bool/not/*.dhall
+    tests/normalization/examples/Bool/odd/*.dhall
+    tests/normalization/examples/Bool/or/*.dhall
+    tests/normalization/examples/Bool/show/*.dhall
+    tests/normalization/examples/Double/show/*.dhall
+    tests/normalization/examples/Integer/show/*.dhall
+    tests/normalization/examples/List/all/*.dhall
+    tests/normalization/examples/List/any/*.dhall
+    tests/normalization/examples/List/build/*.dhall
+    tests/normalization/examples/List/concat/*.dhall
+    tests/normalization/examples/List/concatMap/*.dhall
+    tests/normalization/examples/List/filter/*.dhall
+    tests/normalization/examples/List/fold/*.dhall
+    tests/normalization/examples/List/generate/*.dhall
+    tests/normalization/examples/List/head/*.dhall
+    tests/normalization/examples/List/indexed/*.dhall
+    tests/normalization/examples/List/iterate/*.dhall
+    tests/normalization/examples/List/last/*.dhall
+    tests/normalization/examples/List/length/*.dhall
+    tests/normalization/examples/List/map/*.dhall
+    tests/normalization/examples/List/null/*.dhall
+    tests/normalization/examples/List/replicate/*.dhall
+    tests/normalization/examples/List/reverse/*.dhall
+    tests/normalization/examples/List/shifted/*.dhall
+    tests/normalization/examples/List/unzip/*.dhall
+    tests/normalization/examples/Natural/build/*.dhall
+    tests/normalization/examples/Natural/enumerate/*.dhall
+    tests/normalization/examples/Natural/even/*.dhall
+    tests/normalization/examples/Natural/fold/*.dhall
+    tests/normalization/examples/Natural/isZero/*.dhall
+    tests/normalization/examples/Natural/odd/*.dhall
+    tests/normalization/examples/Natural/product/*.dhall
+    tests/normalization/examples/Natural/show/*.dhall
+    tests/normalization/examples/Natural/sum/*.dhall
+    tests/normalization/examples/Natural/toInteger/*.dhall
+    tests/normalization/examples/Optional/all/*.dhall
+    tests/normalization/examples/Optional/any/*.dhall
+    tests/normalization/examples/Optional/build/*.dhall
+    tests/normalization/examples/Optional/concat/*.dhall
+    tests/normalization/examples/Optional/filter/*.dhall
+    tests/normalization/examples/Optional/fold/*.dhall
+    tests/normalization/examples/Optional/head/*.dhall
+    tests/normalization/examples/Optional/last/*.dhall
+    tests/normalization/examples/Optional/length/*.dhall
+    tests/normalization/examples/Optional/map/*.dhall
+    tests/normalization/examples/Optional/null/*.dhall
+    tests/normalization/examples/Optional/toList/*.dhall
+    tests/normalization/examples/Optional/unzip/*.dhall
+    tests/normalization/examples/Text/concat/*.dhall
+    tests/normalization/examples/Text/concatMap/*.dhall
+    tests/normalization/examples/Text/concatMapSep/*.dhall
+    tests/normalization/examples/Text/concatSep/*.dhall
     tests/parser/*.dhall
     tests/regression/*.dhall
     tests/tutorial/*.dhall
     tests/typecheck/*.dhall
+    tests/typecheck/examples/Monoid/*.dhall
 
 Source-Repository head
     Type: git
@@ -154,6 +211,7 @@ Executable dhall-repl
     Main-Is: Main.hs
     Build-Depends:
         base             >= 4        && < 5   ,
+        ansi-terminal                         ,
         dhall                                 ,
         haskeline        >= 0.7.3.0  && < 0.8 ,
         mtl              >= 2.2.1    && < 2.3 ,
@@ -198,7 +256,6 @@ Test-Suite test
     Main-Is: Tests.hs
     GHC-Options: -Wall
     Other-Modules:
-        Examples
         Format
         Normalization
         Parser
