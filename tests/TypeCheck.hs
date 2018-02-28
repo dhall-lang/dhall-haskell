@@ -26,6 +26,9 @@ typecheckTests =
         , should
             "allow type-valued alternatives in a union"
             "alternativesAreTypes"
+        , should
+            "allow anonymous functions in types to be judgmentally equal"
+            "anonymousFunctionsInTypes"
         ]
 
 should :: Text -> Text -> TestTree
