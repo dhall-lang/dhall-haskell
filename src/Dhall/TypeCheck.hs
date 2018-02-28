@@ -23,7 +23,6 @@ module Dhall.TypeCheck (
 
 import Control.Exception (Exception)
 import Data.Foldable (forM_, toList)
-import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
@@ -36,12 +35,8 @@ import Data.Typeable (Typeable)
 import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 
-import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
-import qualified Data.HashMap.Strict
 import qualified Data.HashMap.Strict.InsOrd
-import qualified Data.List
-import qualified Data.Ord
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text.Lazy                   as Text
@@ -63,76 +58,13 @@ rule Type Type = return Type
 rule Kind Kind = return Kind
 rule Kind Type = return Type
 
-match :: Var -> Var -> [(Text, Text)] -> Bool
-match (V xL nL) (V xR nR)             []  =
-    xL == xR  && nL == nR
-match (V xL 0 ) (V xR 0 ) ((xL', xR'):_ )
-    | xL == xL' && xR == xR' = True
-match (V xL nL) (V xR nR) ((xL', xR'):xs) =
-    match (V xL nL') (V xR nR') xs
+judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
+judgmentallyEqual eL0 eR0 = alphaBetaNormalize eL0 == alphaBetaNormalize eR0
   where
-    nL' = if xL == xL' then nL - 1 else nL
-    nR' = if xR == xR' then nR - 1 else nR
-
-toSortedList :: Ord k => InsOrdHashMap k v -> [(k, v)]
-toSortedList =
-      Data.List.sortBy (Data.Ord.comparing fst)
-    . Data.HashMap.Strict.toList
-    . Data.HashMap.Strict.InsOrd.toHashMap
-
-propEqual :: Eq a => Expr s a -> Expr t a -> Bool
-propEqual eL0 eR0 =
-    State.evalState
-        (go (Dhall.Core.normalize eL0) (Dhall.Core.normalize eR0))
-        []
-  where
-    go (Const Type) (Const Type) = return True
-    go (Const Kind) (Const Kind) = return True
-    go (Var vL) (Var vR) = do
-        ctx <- State.get
-        return (match vL vR ctx)
-    go (Pi xL tL bL) (Pi xR tR bR) = do
-        ctx <- State.get
-        eq1 <- go tL tR
-        if eq1
-            then do
-                State.put ((xL, xR):ctx)
-                eq2 <- go bL bR
-                State.put ctx
-                return eq2
-            else return False
-    go (App fL aL) (App fR aR) = do
-        b1 <- go fL fR
-        if b1 then go aL aR else return False
-    go Bool Bool = return True
-    go Natural Natural = return True
-    go Integer Integer = return True
-    go Double Double = return True
-    go Text Text = return True
-    go List List = return True
-    go Optional Optional = return True
-    go (Record ktsL0) (Record ktsR0) = do
-        let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
-                | kL == kR = do
-                    b <- go tL tR
-                    if b
-                        then loop ktsL ktsR
-                        else return False
-            loop [] [] = return True
-            loop _  _  = return False
-        loop (toSortedList ktsL0) (toSortedList ktsR0)
-    go (Union ktsL0) (Union ktsR0) = do
-        let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
-                | kL == kR = do
-                    b <- go tL tR
-                    if b
-                        then loop ktsL ktsR
-                        else return False
-            loop [] [] = return True
-            loop _  _  = return False
-        loop (toSortedList ktsL0) (toSortedList ktsR0)
-    go (Embed eL) (Embed eR) = return (eL == eR)
-    go _ _ = return False
+    alphaBetaNormalize :: Expr s a -> Expr X a
+    alphaBetaNormalize =
+            Dhall.Core.alphaNormalize
+        .   Dhall.Core.normalize
 
 {-| Type-check an expression and return the expression's type if type-checking
     succeeds or an error if type-checking fails
@@ -199,7 +131,7 @@ typeWithA tpa = loop
             Pi x _A _B -> return (x, _A, _B)
             _          -> Left (TypeError ctx e (NotAFunction f tf))
         _A' <- loop ctx a
-        if propEqual _A _A'
+        if judgmentallyEqual _A _A'
             then do
                 let a'   = Dhall.Core.shift   1  (V x 0) a
                 let _B'  = Dhall.Core.subst (V x 0) a' _B
@@ -216,7 +148,7 @@ typeWithA tpa = loop
                 _ <- loop ctx _A0
                 let nf_A0 = Dhall.Core.normalize _A0
                 let nf_A1 = Dhall.Core.normalize _A1
-                if propEqual _A0 _A1
+                if judgmentallyEqual _A0 _A1
                     then return ()
                     else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
             Nothing -> return ()
@@ -229,7 +161,7 @@ typeWithA tpa = loop
         _ <- loop ctx t
 
         t' <- loop ctx x
-        if propEqual t t'
+        if judgmentallyEqual t t'
             then do
                 return t
             else do
@@ -305,7 +237,7 @@ typeWithA tpa = loop
             Const Type -> return ()
             _          -> Left (TypeError ctx e (IfBranchMustBeTerm False z tz ttz))
 
-        if propEqual ty tz
+        if judgmentallyEqual ty tz
             then return ()
             else Left (TypeError ctx e (IfBranchMismatch y z ty tz))
         return ty
@@ -403,7 +335,7 @@ typeWithA tpa = loop
                     _ -> Left (TypeError ctx e (InvalidListType t))
                 flip traverseWithIndex_ xs (\i x -> do
                     t' <- loop ctx x
-                    if propEqual t t'
+                    if judgmentallyEqual t t'
                         then return ()
                         else do
                             let nf_t  = Dhall.Core.normalize t
@@ -419,7 +351,7 @@ typeWithA tpa = loop
             _ -> Left (TypeError ctx e (InvalidListType t))
         flip traverseWithIndex_ xs (\i x -> do
             t' <- loop ctx x
-            if propEqual t t'
+            if judgmentallyEqual t t'
                 then return ()
                 else do
                     let nf_t  = Dhall.Core.normalize t
@@ -437,7 +369,7 @@ typeWithA tpa = loop
             App List er -> return er
             _           -> Left (TypeError ctx e (CantListAppend r tr))
 
-        if propEqual el er
+        if judgmentallyEqual el er
             then return (App List el)
             else Left (TypeError ctx e (ListAppendMismatch el er))
     loop _      ListBuild         = do
@@ -478,7 +410,7 @@ typeWithA tpa = loop
             _ -> Left (TypeError ctx e (InvalidOptionalType t))
         forM_ xs (\x -> do
             t' <- loop ctx x
-            if propEqual t t'
+            if judgmentallyEqual t t'
                 then return ()
                 else do
                     let nf_t  = Dhall.Core.normalize t
@@ -606,10 +538,10 @@ typeWithA tpa = loop
                     Just tX  ->
                         case tX of
                             Pi _ tY' t' -> do
-                                if propEqual tY tY'
+                                if judgmentallyEqual tY tY'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
-                                if propEqual t t'
+                                if judgmentallyEqual t t'
                                     then return ()
                                     else Left (TypeError ctx e (InvalidHandlerOutputType kY t t'))
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
@@ -645,10 +577,10 @@ typeWithA tpa = loop
                     Just tX  ->
                         case tX of
                             Pi _ tY' t' -> do
-                                if propEqual tY tY'
+                                if judgmentallyEqual tY tY'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
-                                if propEqual t t'
+                                if judgmentallyEqual t t'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerOutputTypeMismatch kX t kY t'))
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
