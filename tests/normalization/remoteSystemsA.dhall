@@ -1,8 +1,8 @@
     let Text/concatMap =
-          https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/Text/concatMap 
+          ../../Prelude/Text/concatMap 
 
 in  let Text/concatSep =
-          https://ipfs.io/ipfs/QmQ8w5PLcsNz56dMvRtq54vbuPe9cNnCCUXAQp6xLc6Ccx/Prelude/Text/concatSep 
+          ../../Prelude/Text/concatSep 
 
 in  let Row =
           { cores :
