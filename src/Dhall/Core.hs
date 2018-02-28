@@ -1100,53 +1100,38 @@ normalizeWith ctx e0 = loop (denote e0)
     Annot x _ -> loop x
     Bool -> Bool
     BoolLit b -> BoolLit b
-    BoolAnd x y ->
-        case x' of
-            BoolLit xn ->
-                case y' of
-                    BoolLit yn -> BoolLit (xn && yn)
-                    _ -> BoolAnd x' y'
-            _ -> BoolAnd x' y'
+    BoolAnd x y -> decide (loop x) (loop y)
       where
-        x' = loop x
-        y' = loop y
-    BoolOr x y ->
-        case x' of
-            BoolLit xn ->
-                case y' of
-                    BoolLit yn -> BoolLit (xn || yn)
-                    _ -> BoolOr x' y'
-            _ -> BoolOr x' y'
+        decide (BoolLit True )  r              = r
+        decide (BoolLit False)  _              = BoolLit False
+        decide  l              (BoolLit True ) = l
+        decide  _              (BoolLit False) = BoolLit False
+        decide  l               r              = BoolAnd l r
+    BoolOr x y -> decide (loop x) (loop y)
       where
-        x' = loop x
-        y' = loop y
-    BoolEQ x y ->
-        case x' of
-            BoolLit xn ->
-                case y' of
-                    BoolLit yn -> BoolLit (xn == yn)
-                    _ -> BoolEQ x' y'
-            _ -> BoolEQ x' y'
+        decide (BoolLit False)  r              = r
+        decide (BoolLit True )  _              = BoolLit True
+        decide  l              (BoolLit False) = l
+        decide  _              (BoolLit True ) = BoolLit True
+        decide  l               r              = BoolOr l r
+    BoolEQ x y -> decide (loop x) (loop y)
       where
-        x' = loop x
-        y' = loop y
-    BoolNE x y ->
-        case x' of
-            BoolLit xn ->
-                case y' of
-                    BoolLit yn -> BoolLit (xn /= yn)
-                    _ -> BoolNE x' y'
-            _ -> BoolNE x' y'
+        decide (BoolLit True )  r              = r
+        decide  l              (BoolLit True ) = l
+        decide (BoolLit False) (BoolLit False) = BoolLit True
+        decide  l               r              = BoolEQ l r
+    BoolNE x y -> decide (loop x) (loop y)
       where
-        x' = loop x
-        y' = loop y
-    BoolIf b true false -> case loop b of
-        BoolLit True  -> true'
-        BoolLit False -> false'
-        b'            -> BoolIf b' true' false'
+        decide (BoolLit False)  r              = r
+        decide  l              (BoolLit False) = l
+        decide (BoolLit True ) (BoolLit True ) = BoolLit False
+        decide  l               r              = BoolNE l r
+    BoolIf bool true false -> decide (loop bool) (loop true) (loop false)
       where
-        true'  = loop true
-        false' = loop false
+        decide (BoolLit True )  l              _              = l
+        decide (BoolLit False)  _              r              = r
+        decide  b              (BoolLit True) (BoolLit False) = b
+        decide  b               l              r              = BoolIf b l r
     Natural -> Natural
     NaturalLit n -> NaturalLit n
     NaturalFold -> NaturalFold
@@ -1156,26 +1141,20 @@ normalizeWith ctx e0 = loop (denote e0)
     NaturalOdd -> NaturalOdd
     NaturalToInteger -> NaturalToInteger
     NaturalShow -> NaturalShow
-    NaturalPlus  x y ->
-        case x' of
-            NaturalLit xn ->
-                case y' of
-                    NaturalLit yn -> NaturalLit (xn + yn)
-                    _ -> NaturalPlus x' y'
-            _ -> NaturalPlus x' y'
+    NaturalPlus x y -> decide (loop x) (loop y)
       where
-        x' = loop x
-        y' = loop y
-    NaturalTimes x y ->
-        case x' of
-            NaturalLit xn ->
-                case y' of
-                    NaturalLit yn -> NaturalLit (xn * yn)
-                    _ -> NaturalTimes x' y'
-            _ -> NaturalTimes x' y'
+        decide (NaturalLit 0)  r             = r
+        decide  l             (NaturalLit 0) = l
+        decide (NaturalLit m) (NaturalLit n) = NaturalLit (m + n)
+        decide  l              r             = NaturalPlus l r
+    NaturalTimes x y -> decide (loop x) (loop y)
       where
-        x' = loop x
-        y' = loop y
+        decide (NaturalLit 1)  r             = r
+        decide  l             (NaturalLit 1) = l
+        decide (NaturalLit 0)  _             = NaturalLit 0
+        decide  _             (NaturalLit 0) = NaturalLit 0
+        decide (NaturalLit m) (NaturalLit n) = NaturalLit (m * n)
+        decide  l              r             = NaturalTimes l r
     Integer -> Integer
     IntegerLit n -> IntegerLit n
     IntegerShow -> IntegerShow
@@ -1193,31 +1172,26 @@ normalizeWith ctx e0 = loop (denote e0)
         process (x, y) = case loop y of
             TextLit c -> [Chunks [] x, c]
             y'        -> [Chunks [(x, y')] mempty]
-    TextAppend x y   ->
-        case x' of
-            TextLit xt ->
-                case y' of
-                    TextLit yt -> TextLit (xt <> yt)
-                    _ -> TextAppend x' y'
-            _ -> TextAppend x' y'
+    TextAppend x y -> decide (loop x) (loop y)
       where
-        x' = loop x
-        y' = loop y
+        isEmpty (Chunks [] "") = True
+        isEmpty  _             = False
+
+        decide (TextLit m)  r          | isEmpty m = r
+        decide  l          (TextLit n) | isEmpty n = l
+        decide (TextLit m) (TextLit n)             = TextLit (m <> n)
+        decide  l           r                      = TextAppend l r
     List -> List
     ListLit t es -> ListLit t' es'
       where
         t'  = fmap loop t
         es' = fmap loop es
-    ListAppend x y ->
-        case x' of
-            ListLit t xs ->
-                case y' of
-                    ListLit _ ys -> ListLit t (xs <> ys)
-                    _ -> ListAppend x' y'
-            _ -> ListAppend x' y'
+    ListAppend x y -> decide (loop x) (loop y)
       where
-        x' = loop x
-        y' = loop y
+        decide (ListLit _ m)  r            | Data.Sequence.null m = r
+        decide  l            (ListLit _ n) | Data.Sequence.null n = l
+        decide (ListLit t m) (ListLit _ n)                        = ListLit t (m <> n)
+        decide  l             r                                   = ListAppend l r
     ListBuild -> ListBuild
     ListFold -> ListFold
     ListLength -> ListLength
@@ -1245,26 +1219,26 @@ normalizeWith ctx e0 = loop (denote e0)
       where
         v'   =      loop v
         kvs' = fmap loop kvs
-    Combine x0 y0 ->
-        let combine x y = case x of
-                RecordLit kvsX -> case y of
-                    RecordLit kvsY ->
-                        let kvs = Data.HashMap.Strict.InsOrd.unionWith combine kvsX kvsY
-                        in  RecordLit (fmap loop kvs)
-                    _ -> Combine x y
-                _ -> Combine x y
-        in  combine (loop x0) (loop y0)
-    Prefer x y ->
-        case x' of
-            RecordLit kvsX ->
-                case y' of
-                    RecordLit kvsY ->
-                        RecordLit (fmap loop (Data.HashMap.Strict.InsOrd.union kvsY kvsX))
-                    _ -> Prefer x' y'
-            _ -> Prefer x' y'
+    Combine x y -> decide (loop x) (loop y)
       where
-        x' = loop x
-        y' = loop y
+        decide (RecordLit m) r | Data.HashMap.Strict.InsOrd.null m =
+            r
+        decide l (RecordLit n) | Data.HashMap.Strict.InsOrd.null n =
+            l
+        decide (RecordLit m) (RecordLit n) =
+            RecordLit (Data.HashMap.Strict.InsOrd.unionWith decide m n)
+        decide l r =
+            Combine l r
+    Prefer x y -> decide (loop x) (loop y)
+      where
+        decide (RecordLit m) r | Data.HashMap.Strict.InsOrd.null m =
+            r
+        decide l (RecordLit n) | Data.HashMap.Strict.InsOrd.null n =
+            l
+        decide (RecordLit m) (RecordLit n) =
+            RecordLit (Data.HashMap.Strict.InsOrd.union n m)
+        decide l r =
+            Prefer l r
     Merge x y t      ->
         case x' of
             RecordLit kvsX ->
