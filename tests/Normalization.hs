@@ -144,14 +144,14 @@ examples =
         , shouldNormalize "Optional/toList" "./examples/Optional/toList/1"
         , shouldNormalize "Optional/unzip" "./examples/Optional/unzip/0"
         , shouldNormalize "Optional/unzip" "./examples/Optional/unzip/1"
-        , shouldNormalize "Text/concat" "./examples/text/concat/0"
-        , shouldNormalize "Text/concat" "./examples/text/concat/1"
-        , shouldNormalize "Text/concatMap" "./examples/text/concatMap/0"
-        , shouldNormalize "Text/concatMap" "./examples/text/concatMap/1"
-        , shouldNormalize "Text/concatMapSep" "./examples/text/concatMapSep/0"
-        , shouldNormalize "Text/concatMapSep" "./examples/text/concatMapSep/1"
-        , shouldNormalize "Text/concatSep" "./examples/text/concatSep/0"
-        , shouldNormalize "Text/concatSep" "./examples/text/concatSep/1"
+        , shouldNormalize "Text/concat" "./examples/Text/concat/0"
+        , shouldNormalize "Text/concat" "./examples/Text/concat/1"
+        , shouldNormalize "Text/concatMap" "./examples/Text/concatMap/0"
+        , shouldNormalize "Text/concatMap" "./examples/Text/concatMap/1"
+        , shouldNormalize "Text/concatMapSep" "./examples/Text/concatMapSep/0"
+        , shouldNormalize "Text/concatMapSep" "./examples/Text/concatMapSep/1"
+        , shouldNormalize "Text/concatSep" "./examples/Text/concatSep/0"
+        , shouldNormalize "Text/concatSep" "./examples/Text/concatSep/1"
         ]
 
 constantFolding :: TestTree
