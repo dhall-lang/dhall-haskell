@@ -1335,7 +1335,9 @@ normalizeWith ctx e0 = loop (denote e0)
                           , ("value", a_)
                           ]
             App (App ListReverse t) (ListLit _ xs) ->
-                loop (ListLit (Just t) (Data.Sequence.reverse xs))
+                loop (ListLit m (Data.Sequence.reverse xs))
+              where
+                m = if Data.Sequence.null xs then Just t else Nothing
             App (App (App (App (App OptionalFold _) (OptionalLit _ xs)) _) just) nothing ->
                 loop (maybe nothing just' xs)
               where
@@ -1463,9 +1465,13 @@ normalizeWith ctx e0 = loop (denote e0)
         es' = fmap loop es
     ListAppend x y ->
         case x' of
-            ListLit t xs ->
+            ListLit tX xs ->
                 case y' of
                     ListLit _ ys -> ListLit t (xs <> ys)
+                      where
+                        t = if Data.Sequence.null xs && Data.Sequence.null ys
+                            then tX
+                            else Nothing
                     _ -> ListAppend x' y'
             _ -> ListAppend x' y'
       where

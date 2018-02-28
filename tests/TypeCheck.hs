@@ -4,8 +4,6 @@ module TypeCheck where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text.Lazy (Text)
-import Dhall.Core (Expr)
-import Dhall.TypeCheck (X)
 import Test.Tasty (TestTree)
 
 import qualified Control.Exception
@@ -20,7 +18,20 @@ import qualified Test.Tasty.HUnit
 typecheckTests :: TestTree
 typecheckTests =
     Test.Tasty.testGroup "typecheck tests"
-        [ should
+        [ Test.Tasty.testGroup "Prelude examples"
+            [ should "Monoid" "./examples/Monoid/00"
+            , should "Monoid" "./examples/Monoid/01"
+            , should "Monoid" "./examples/Monoid/02"
+            , should "Monoid" "./examples/Monoid/03"
+            , should "Monoid" "./examples/Monoid/04"
+            , should "Monoid" "./examples/Monoid/05"
+            , should "Monoid" "./examples/Monoid/06"
+            , should "Monoid" "./examples/Monoid/07"
+            , should "Monoid" "./examples/Monoid/08"
+            , should "Monoid" "./examples/Monoid/09"
+            , should "Monoid" "./examples/Monoid/10"
+            ]
+        , should
             "allow type-valued fields in a record"
             "fieldsAreTypes"
         , should
@@ -40,17 +51,13 @@ should name basename =
         actualExpr <- case Dhall.Parser.exprFromText mempty actualCode of
             Left  err  -> Control.Exception.throwIO err
             Right expr -> return expr
-        actualResolved <- Dhall.Import.load actualExpr
-        actualType <- case Dhall.TypeCheck.typeOf actualResolved of
-            Left  err  -> Control.Exception.throwIO err
-            Right expr -> return expr
-        let actualNormalized = Dhall.Core.normalize actualType :: Expr X X
-
         expectedExpr <- case Dhall.Parser.exprFromText mempty expectedCode of
             Left  err  -> Control.Exception.throwIO err
             Right expr -> return expr
-        expectedResolved <- Dhall.Import.load expectedExpr
-        let expectedNormalized = Dhall.Core.normalize expectedResolved
 
-        let message = "The expression's type did not match the expected type"
-        Test.Tasty.HUnit.assertEqual message expectedNormalized actualNormalized
+        let annotatedExpr = Dhall.Core.Annot actualExpr expectedExpr
+
+        resolvedExpr <- Dhall.Import.load annotatedExpr
+        case Dhall.TypeCheck.typeOf resolvedExpr of
+            Left  err -> Control.Exception.throwIO err
+            Right _   -> return ()
