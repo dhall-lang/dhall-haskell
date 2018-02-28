@@ -20,6 +20,7 @@ import qualified Dhall.Core as Expr ( Expr(..) )
 import qualified Dhall.Import as Dhall
 import qualified Dhall.Parser as Dhall
 import qualified Dhall.TypeCheck as Dhall
+import qualified System.Console.ANSI
 import qualified System.Console.Haskeline.MonadException as Haskeline
 import qualified System.Console.Repline as Repline
 import qualified System.IO
@@ -97,7 +98,7 @@ eval src = do
 
   modify ( \e -> e { envIt = Just ( Binding expr exprType ) } )
 
-  output expr
+  output System.IO.stdout expr
 
 
 
@@ -116,7 +117,7 @@ typeOf srcs = do
   exprType' <-
     normalize exprType
 
-  output ( Expr.Annot loaded exprType' )
+  output System.IO.stdout ( Expr.Annot loaded exprType' )
 
 
 
@@ -181,10 +182,24 @@ addBinding (k : "=" : srcs) = do
     )
 
   output
+    System.IO.stdout
     ( Expr.Annot ( Expr.Var ( Dhall.V varName 0 ) ) t )
 
 addBinding _ =
   liftIO ( fail ":let should be of the form `:let x = y`" )
+
+saveBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
+saveBinding (file : "=" : tokens) = do
+  loadedExpression <- parseAndLoad (unwords tokens)
+
+  _ <- typeCheck loadedExpression
+
+  normalizedExpression <- normalize loadedExpression
+
+  let handler handle = output handle normalizedExpression
+
+  liftIO (System.IO.withFile file System.IO.WriteMode handler)
+saveBinding _ = fail ":save should be of the form `:save x = y`"
 
 
 options
@@ -193,6 +208,7 @@ options
 options =
   [ ( "type", dontCrash . typeOf )
   , ( "let", dontCrash . addBinding )
+  , ( "save", dontCrash . saveBinding )
   ]
 
 
@@ -213,20 +229,21 @@ dontCrash m =
     ( \ e@SomeException{} -> liftIO ( putStrLn ( displayException e ) ) )
 
 
-output :: ( Pretty.Pretty a, MonadIO m ) => Dhall.Expr s a -> m ()
-output expr = do
-  let
-    opts =
-      Pretty.defaultLayoutOptions
-        { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
+output
+    :: (Pretty.Pretty a, MonadIO m)
+    => System.IO.Handle -> Dhall.Expr s a -> m ()
+output handle expr = do
+  let opts =
+          Pretty.defaultLayoutOptions
+              { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
 
-  liftIO
-    ( Pretty.renderIO
-        System.IO.stdout
-        ( fmap
-            Dhall.Pretty.annToAnsiStyle
-            ( Pretty.layoutSmart opts ( Dhall.Pretty.prettyExpr expr ) )
-        )
-    )
+  let stream = Pretty.layoutSmart opts (Dhall.Pretty.prettyExpr expr)
+  supportsANSI <- liftIO (System.Console.ANSI.hSupportsANSI handle)
+  let ansiStream =
+          if supportsANSI
+          then fmap Dhall.Pretty.annToAnsiStyle stream
+          else Pretty.unAnnotateS stream
 
-  liftIO ( putStrLn "" ) -- Pretty printing doesn't end with a new line
+  liftIO (Pretty.renderIO handle ansiStream)
+
+  liftIO (putStrLn "") -- Pretty printing doesn't end with a new line
