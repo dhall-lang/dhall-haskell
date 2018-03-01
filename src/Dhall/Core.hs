@@ -52,6 +52,7 @@ module Dhall.Core (
 import Control.Applicative (Applicative(..), (<$>))
 #endif
 import Control.Applicative (empty)
+import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Foldable
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
@@ -70,9 +71,7 @@ import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 
 import qualified Control.Monad
-import qualified Data.ByteString
-import qualified Data.ByteString.Char8
-import qualified Data.ByteString.Base16
+import qualified Crypto.Hash
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
 import qualified Data.Sequence
@@ -137,17 +136,13 @@ data PathMode = Code | RawText deriving (Eq, Ord, Show)
 
 -- | A `PathType` extended with an optional hash for semantic integrity checks
 data PathHashed = PathHashed
-    { hash     :: Maybe Data.ByteString.ByteString
+    { hash     :: Maybe (Crypto.Hash.Digest SHA256)
     , pathType :: PathType
     } deriving (Eq, Ord, Show)
 
 instance Buildable PathHashed where
     build (PathHashed  Nothing p) = build p
-    build (PathHashed (Just h) p) = build p <> "sha256:" <> build string <> " "
-      where
-        bytes = Data.ByteString.Base16.encode h
-
-        string = Data.ByteString.Char8.unpack bytes
+    build (PathHashed (Just h) p) = build p <> "sha256:" <> build (show h) <> " "
 
 -- | Path to an external resource
 data Path = Path
@@ -1201,18 +1196,18 @@ denote (Embed a             ) = Embed a
 
 {-| Reduce an expression to its normal form, performing beta reduction and applying
     any custom definitions.
-   
+
     `normalizeWith` is designed to be used with function `typeWith`. The `typeWith`
-    function allows typing of Dhall functions in a custom typing context whereas 
-    `normalizeWith` allows evaluating Dhall expressions in a custom context. 
+    function allows typing of Dhall functions in a custom typing context whereas
+    `normalizeWith` allows evaluating Dhall expressions in a custom context.
 
     To be more precise `normalizeWith` applies the given normalizer when it finds an
     application term that it cannot reduce by other means.
 
     Note that the context used in normalization will determine the properties of normalization.
     That is, if the functions in custom context are not total then the Dhall language, evaluated
-    with those functions is not total either.  
-   
+    with those functions is not total either.
+
 -}
 normalizeWith :: Normalizer a -> Expr s a -> Expr t a
 normalizeWith ctx e0 = loop (denote e0)
@@ -1565,8 +1560,8 @@ normalizeWith ctx e0 = loop (denote e0)
 type Normalizer a = forall s. Expr s a -> Maybe (Expr s a)
 
 -- | Check if an expression is in a normal form given a context of evaluation.
---   Unlike `isNormalized`, this will fully normalize and traverse through the expression. 
---   
+--   Unlike `isNormalized`, this will fully normalize and traverse through the expression.
+--
 --   It is much more efficient to use `isNormalized`.
 isNormalizedWith :: (Eq s, Eq a) => Normalizer a -> Expr s a -> Bool
 isNormalizedWith ctx e = e == (normalizeWith ctx e)
