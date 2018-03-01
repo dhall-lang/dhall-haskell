@@ -36,6 +36,7 @@ import qualified System.IO
 data Options w = Options
     { explain :: w ::: Bool <?> "Explain error messages in more detail"
     , version :: w ::: Bool <?> "Display version and exit"
+    , plain   :: w ::: Bool <?> "Disable syntax highlighting"
     } deriving (Generic)
 
 instance ParseRecord (Options Wrapped)
@@ -97,7 +98,7 @@ main = do
 
                 supportsANSI <- System.Console.ANSI.hSupportsANSI h
                 let ansiStream =
-                        if supportsANSI
+                        if supportsANSI && not plain
                         then fmap annToAnsiStyle stream
                         else Pretty.unAnnotateS stream
 
