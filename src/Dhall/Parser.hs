@@ -44,7 +44,7 @@ import Text.Trifecta
 import Text.Trifecta.Delta (Delta)
 
 import qualified Control.Monad
-import qualified Data.ByteString.Base16.Lazy
+import qualified Crypto.Hash
 import qualified Data.ByteString.Lazy
 import qualified Data.Char
 import qualified Data.HashMap.Strict.InsOrd
@@ -1509,10 +1509,9 @@ pathHashed_ = do
         whitespace
         let lazyText = Data.Text.Lazy.Builder.toLazyText builder
         let lazyBytes = Data.Text.Lazy.Encoding.encodeUtf8 lazyText
-        let (hash, suffix) = Data.ByteString.Base16.Lazy.decode lazyBytes
-        if Data.ByteString.Lazy.null suffix
-            then return (Data.ByteString.Lazy.toStrict hash)
-            else fail "Invalid sha256 hash"
+        case Crypto.Hash.digestFromByteString (Data.ByteString.Lazy.toStrict lazyBytes) of
+          Nothing -> fail "Invalid sha256 hash"
+          Just h -> pure h
 
 import_ :: Parser Path
 import_ = (do
