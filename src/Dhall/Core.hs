@@ -28,6 +28,7 @@ module Dhall.Core (
     , Expr(..)
 
     -- * Normalization
+    , alphaNormalize
     , normalize
     , normalizeWith
     , Normalizer
@@ -51,6 +52,7 @@ module Dhall.Core (
 import Control.Applicative (Applicative(..), (<$>))
 #endif
 import Control.Applicative (empty)
+import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Foldable
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
@@ -69,9 +71,7 @@ import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 
 import qualified Control.Monad
-import qualified Data.ByteString
-import qualified Data.ByteString.Char8
-import qualified Data.ByteString.Base16
+import qualified Crypto.Hash
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
 import qualified Data.Sequence
@@ -136,17 +136,13 @@ data PathMode = Code | RawText deriving (Eq, Ord, Show)
 
 -- | A `PathType` extended with an optional hash for semantic integrity checks
 data PathHashed = PathHashed
-    { hash     :: Maybe Data.ByteString.ByteString
+    { hash     :: Maybe (Crypto.Hash.Digest SHA256)
     , pathType :: PathType
     } deriving (Eq, Ord, Show)
 
 instance Buildable PathHashed where
     build (PathHashed  Nothing p) = build p
-    build (PathHashed (Just h) p) = build p <> "sha256:" <> build string <> " "
-      where
-        bytes = Data.ByteString.Base16.encode h
-
-        string = Data.ByteString.Char8.unpack bytes
+    build (PathHashed (Just h) p) = build p <> "sha256:" <> build (show h) <> " "
 
 -- | Path to an external resource
 data Path = Path
@@ -850,6 +846,258 @@ subst x e (Note a b) = Note a b'
 -- and `subst` does nothing to a closed expression
 subst _ _ (Embed p) = Embed p
 
+{-| α-normalize an expression by renaming all variables to @\"_\"@ and using
+    De Bruijn indices to distinguish them
+-}
+alphaNormalize :: Expr s a -> Expr s a
+alphaNormalize (Const c) =
+    Const c
+alphaNormalize (Var v) =
+    Var v
+alphaNormalize (Lam x _A₀ b₀) =
+    Lam "_" _A₁ b₃
+  where
+    _A₁ = alphaNormalize _A₀
+
+    v₀ = Var (V "_" 0)
+    v₁ = shift 1 (V x 0) v₀
+    b₁ = subst (V x 0) v₁ b₀
+    b₂ = shift (-1) (V x 0) b₁
+    b₃ = alphaNormalize b₂
+alphaNormalize (Pi x _A₀ _B₀) =
+    Pi "_" _A₁ _B₃
+  where
+    _A₁ = alphaNormalize _A₀
+
+    v₀  = Var (V "_" 0)
+    v₁  = shift 1 (V x 0) v₀
+    _B₁ = subst (V x 0) v₁ _B₀
+    _B₂ = shift (-1) (V x 0) _B₁
+    _B₃ = alphaNormalize _B₂
+alphaNormalize (App f₀ a₀) =
+    App f₁ a₁
+  where
+    f₁ = alphaNormalize f₀
+
+    a₁ = alphaNormalize a₀
+alphaNormalize (Let x (Just _A₀) a₀ b₀) =
+    Let x (Just _A₁) a₁ b₃
+  where
+    _A₁ = alphaNormalize _A₀
+
+    a₁ = alphaNormalize a₀
+
+    v₀ = Var (V "_" 0)
+    v₁ = shift 1 (V x 0) v₀
+    b₁ = subst (V x 0) v₁ b₀
+    b₂ = shift (-1) (V x 0) b₁
+    b₃ = alphaNormalize b₂
+alphaNormalize (Let x Nothing a₀ b₀) =
+    Let x Nothing a₁ b₃
+  where
+    a₁ = alphaNormalize a₀
+
+    v₀ = Var (V "_" 0)
+    v₁ = shift 1 (V x 0) v₀
+    b₁ = subst (V x 0) v₁ b₀
+    b₂ = shift (-1) (V x 0) b₁
+    b₃ = alphaNormalize b₂
+alphaNormalize (Annot t₀ _T₀) =
+    Annot t₁ _T₁
+  where
+    t₁ = alphaNormalize t₀
+
+    _T₁ = alphaNormalize _T₀
+alphaNormalize Bool =
+    Bool
+alphaNormalize (BoolLit b) =
+    BoolLit b
+alphaNormalize (BoolAnd l₀ r₀) =
+    BoolAnd l₁ r₁
+  where
+    l₁ = alphaNormalize l₀
+
+    r₁ = alphaNormalize r₀
+alphaNormalize (BoolOr l₀ r₀) =
+    BoolOr l₁ r₁
+  where
+    l₁ = alphaNormalize l₀
+
+    r₁ = alphaNormalize r₀
+alphaNormalize (BoolEQ l₀ r₀) =
+    BoolEQ l₁ r₁
+  where
+    l₁ = alphaNormalize l₀
+
+    r₁ = alphaNormalize r₀
+alphaNormalize (BoolNE l₀ r₀) =
+    BoolNE l₁ r₁
+  where
+    l₁ = alphaNormalize l₀
+
+    r₁ = alphaNormalize r₀
+alphaNormalize (BoolIf t₀ l₀ r₀) =
+    BoolIf t₁ l₁ r₁
+  where
+    t₁ = alphaNormalize t₀
+
+    l₁ = alphaNormalize l₀
+
+    r₁ = alphaNormalize r₀
+alphaNormalize Natural =
+    Natural
+alphaNormalize (NaturalLit n) =
+    NaturalLit n
+alphaNormalize NaturalFold =
+    NaturalFold
+alphaNormalize NaturalBuild =
+    NaturalBuild
+alphaNormalize NaturalIsZero =
+    NaturalIsZero
+alphaNormalize NaturalEven =
+    NaturalEven
+alphaNormalize NaturalOdd =
+    NaturalOdd
+alphaNormalize NaturalToInteger =
+    NaturalToInteger
+alphaNormalize NaturalShow =
+    NaturalShow
+alphaNormalize (NaturalPlus l₀ r₀) =
+    NaturalPlus l₁ r₁
+  where
+    l₁ = alphaNormalize l₀
+
+    r₁ = alphaNormalize r₀
+alphaNormalize (NaturalTimes l₀ r₀) =
+    NaturalTimes l₁ r₁
+  where
+    l₁ = alphaNormalize l₀
+
+    r₁ = alphaNormalize r₀
+alphaNormalize Integer =
+    Integer
+alphaNormalize (IntegerLit n) =
+    IntegerLit n
+alphaNormalize IntegerShow =
+    IntegerShow
+alphaNormalize Double =
+    Double
+alphaNormalize (DoubleLit n) =
+    DoubleLit n
+alphaNormalize DoubleShow =
+    DoubleShow
+alphaNormalize Text =
+    Text
+alphaNormalize (TextLit (Chunks xys₀ z)) =
+    TextLit (Chunks xys₁ z)
+  where
+    xys₁ = do
+        (x, y₀) <- xys₀
+        let y₁ = alphaNormalize y₀
+        return (x, y₁)
+alphaNormalize (TextAppend l₀ r₀) =
+    TextAppend l₁ r₁
+  where
+    l₁ = alphaNormalize l₀
+
+    r₁ = alphaNormalize r₀
+alphaNormalize List =
+    List
+alphaNormalize (ListLit (Just _T₀) ts₀) =
+    ListLit (Just _T₁) ts₁
+  where
+    _T₁ = alphaNormalize _T₀
+
+    ts₁ = fmap alphaNormalize ts₀
+alphaNormalize (ListLit Nothing ts₀) =
+    ListLit Nothing ts₁
+  where
+    ts₁ = fmap alphaNormalize ts₀
+alphaNormalize (ListAppend l₀ r₀) =
+    ListAppend l₁ r₁
+  where
+    l₁ = alphaNormalize l₀
+
+    r₁ = alphaNormalize r₀
+alphaNormalize ListBuild =
+    ListBuild
+alphaNormalize ListFold =
+    ListFold
+alphaNormalize ListLength =
+    ListLength
+alphaNormalize ListHead =
+    ListHead
+alphaNormalize ListLast =
+    ListLast
+alphaNormalize ListIndexed =
+    ListIndexed
+alphaNormalize ListReverse =
+    ListReverse
+alphaNormalize Optional =
+    Optional
+alphaNormalize (OptionalLit _T₀ ts₀) =
+    OptionalLit _T₁ ts₁
+  where
+    _T₁ = alphaNormalize _T₀
+
+    ts₁ = fmap alphaNormalize ts₀
+alphaNormalize OptionalFold =
+    OptionalFold
+alphaNormalize OptionalBuild =
+    OptionalBuild
+alphaNormalize (Record kts₀) =
+    Record kts₁
+  where
+    kts₁ = fmap alphaNormalize kts₀
+alphaNormalize (RecordLit kvs₀) =
+    RecordLit kvs₁
+  where
+    kvs₁ = fmap alphaNormalize kvs₀
+alphaNormalize (Union kts₀) =
+    Union kts₁
+  where
+    kts₁ = fmap alphaNormalize kts₀
+alphaNormalize (UnionLit k v₀ kts₀) =
+    UnionLit k v₁ kts₁
+  where
+    v₁ = alphaNormalize v₀
+
+    kts₁ = fmap alphaNormalize kts₀
+alphaNormalize (Combine l₀ r₀) =
+    Combine l₁ r₁
+  where
+    l₁ = alphaNormalize l₀
+
+    r₁ = alphaNormalize r₀
+alphaNormalize (Prefer l₀ r₀) =
+    Prefer l₁ r₁
+  where
+    l₁ = alphaNormalize l₀
+
+    r₁ = alphaNormalize r₀
+alphaNormalize (Merge t₀ u₀ _T₀) =
+    Merge t₁ u₁ _T₁
+  where
+    t₁ = alphaNormalize t₀
+
+    u₁ = alphaNormalize u₀
+
+    _T₁ = fmap alphaNormalize _T₀
+alphaNormalize (Constructors u₀) =
+    Constructors u₁
+  where
+    u₁ = alphaNormalize u₀
+alphaNormalize (Field e₀ a) =
+    Field e₁ a
+  where
+    e₁ = alphaNormalize e₀
+alphaNormalize (Note s e₀) =
+    Note s e₁
+  where
+    e₁ = alphaNormalize e₀
+alphaNormalize (Embed a) =
+    Embed a
+
 {-| Reduce an expression to its normal form, performing beta reduction
 
     `normalize` does not type-check the expression.  You may want to type-check
@@ -948,18 +1196,18 @@ denote (Embed a             ) = Embed a
 
 {-| Reduce an expression to its normal form, performing beta reduction and applying
     any custom definitions.
-   
+
     `normalizeWith` is designed to be used with function `typeWith`. The `typeWith`
-    function allows typing of Dhall functions in a custom typing context whereas 
-    `normalizeWith` allows evaluating Dhall expressions in a custom context. 
+    function allows typing of Dhall functions in a custom typing context whereas
+    `normalizeWith` allows evaluating Dhall expressions in a custom context.
 
     To be more precise `normalizeWith` applies the given normalizer when it finds an
     application term that it cannot reduce by other means.
 
     Note that the context used in normalization will determine the properties of normalization.
     That is, if the functions in custom context are not total then the Dhall language, evaluated
-    with those functions is not total either.  
-   
+    with those functions is not total either.
+
 -}
 normalizeWith :: Normalizer a -> Expr s a -> Expr t a
 normalizeWith ctx e0 = loop (denote e0)
@@ -1082,7 +1330,9 @@ normalizeWith ctx e0 = loop (denote e0)
                           , ("value", a_)
                           ]
             App (App ListReverse t) (ListLit _ xs) ->
-                loop (ListLit (Just t) (Data.Sequence.reverse xs))
+                loop (ListLit m (Data.Sequence.reverse xs))
+              where
+                m = if Data.Sequence.null xs then Just t else Nothing
             App (App (App (App (App OptionalFold _) (OptionalLit _ xs)) _) just) nothing ->
                 loop (maybe nothing just' xs)
               where
@@ -1280,8 +1530,8 @@ normalizeWith ctx e0 = loop (denote e0)
 type Normalizer a = forall s. Expr s a -> Maybe (Expr s a)
 
 -- | Check if an expression is in a normal form given a context of evaluation.
---   Unlike `isNormalized`, this will fully normalize and traverse through the expression. 
---   
+--   Unlike `isNormalized`, this will fully normalize and traverse through the expression.
+--
 --   It is much more efficient to use `isNormalized`.
 isNormalizedWith :: (Eq s, Eq a) => Normalizer a -> Expr s a -> Bool
 isNormalizedWith ctx e = e == (normalizeWith ctx e)
