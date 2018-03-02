@@ -71,7 +71,7 @@
     > $ export BAZ='λ(x : Bool) → x == False'
     > $ dhall <<< "{ foo = env:FOO , bar = env:BAR , baz = env:BAZ }"
     > { bar : Text, baz : ∀(x : Bool) → Bool, foo : Integer }
-    > 
+    >
     > { bar = "Hi", baz = λ(x : Bool) → x == False, foo = 1 }
 
     If you wish to import the raw contents of a path as @Text@ then add
@@ -79,19 +79,19 @@
 
     > $ dhall <<< "http://example.com as Text"
     > Text
-    > 
+    >
     > "<!doctype html>\n<html>\n<head>\n    <title>Example Domain</title>\n\n    <meta
     >  charset=\"utf-8\" />\n    <meta http-equiv=\"Content-type\" content=\"text/html
-    > ; charset=utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, 
+    > ; charset=utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width,
     > initial-scale=1\" />\n    <style type=\"text/css\">\n    body {\n        backgro
     > und-color: #f0f0f2;\n        margin: 0;\n        padding: 0;\n        font-famil
-    > y: \"Open Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n        \n 
+    > y: \"Open Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n        \n
     >    }\n    div {\n        width: 600px;\n        margin: 5em auto;\n        paddi
     > ng: 50px;\n        background-color: #fff;\n        border-radius: 1em;\n    }\n
     >     a:link, a:visited {\n        color: #38488f;\n        text-decoration: none;
     > \n    }\n    @media (max-width: 700px) {\n        body {\n            background
     > -color: #fff;\n        }\n        div {\n            width: auto;\n            m
-    > argin: 0 auto;\n            border-radius: 0;\n            padding: 1em;\n      
+    > argin: 0 auto;\n            border-radius: 0;\n            padding: 1em;\n
     >   }\n    }\n    </style>    \n</head>\n\n<body>\n<div>\n    <h1>Example Domain</
     > h1>\n    <p>This domain is established to be used for illustrative examples in d
     > ocuments. You may use this\n    domain in examples without prior coordination or
@@ -107,6 +107,8 @@ module Dhall.Import (
     , loadWithContext
     , hashExpression
     , hashExpressionToCode
+    , Status(..)
+    , emptyStatus
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -122,6 +124,7 @@ import Control.Monad (join)
 import Control.Monad.Catch (throwM, MonadCatch(catch))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
+import Crypto.Hash (SHA256)
 import Data.ByteString.Lazy (ByteString)
 import Data.CaseInsensitive (CI)
 import Data.Map (Map)
@@ -158,12 +161,13 @@ import Text.Trifecta (Result(..))
 import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Crypto.Hash.SHA256
+import qualified Crypto.Hash
+import qualified Data.ByteArray
 import qualified Data.ByteString
-import qualified Data.ByteString.Base16
 import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
+import qualified Data.Foldable
 import qualified Data.List                        as List
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Map.Strict                  as Map
@@ -173,7 +177,6 @@ import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Data.Text.Lazy.IO
-import qualified Data.Vector
 import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.Context
@@ -328,12 +331,19 @@ instance Show MissingEnvironmentVariable where
         <>  "\n"
         <>  "↳ " <> Text.unpack name
 
+-- | State threaded throughout the import process
 data Status = Status
     { _stack   :: [Path]
+    -- ^ Stack of `Path`s that we've imported along the way to get to the
+    -- current point
     , _cache   :: Map Path (Expr Src X)
+    -- ^ Cache of imported expressions in order to avoid importing the same
+    --   expression twice with different values
     , _manager :: Maybe Manager
+    -- ^ Cache for the `Manager` so that we only acquire it once
     }
 
+-- | Default starting `Status`
 emptyStatus :: Status
 emptyStatus = Status [] Map.empty Nothing
 
@@ -472,7 +482,7 @@ toHeaders
   -> Maybe [(CI Data.ByteString.ByteString, Data.ByteString.ByteString)]
 toHeaders (ListLit _ hs) = do
     hs' <- mapM toHeader hs
-    return (Data.Vector.toList hs')
+    return (Data.Foldable.toList hs')
 toHeaders  _             = do
     empty
 
@@ -525,8 +535,8 @@ instance Exception InternalError
 
 -- | Exception thrown when an integrity check fails
 data HashMismatch = HashMismatch
-    { expectedHash :: Data.ByteString.ByteString
-    , actualHash   :: Data.ByteString.ByteString
+    { expectedHash :: Crypto.Hash.Digest SHA256
+    , actualHash   :: Crypto.Hash.Digest SHA256
     } deriving (Typeable)
 
 instance Exception HashMismatch
@@ -538,14 +548,11 @@ instance Show HashMismatch where
         <>  "\n"
         <>  "Expected hash:\n"
         <>  "\n"
-        <>  "↳ " <> toString expectedHash <> "\n"
+        <>  "↳ " <> show expectedHash <> "\n"
         <>  "\n"
         <>  "Actual hash:\n"
         <>  "\n"
-        <>  "↳ " <> toString actualHash <> "\n"
-      where
-        toString =
-            Data.ByteString.Char8.unpack . Data.ByteString.Base16.encode
+        <>  "↳ " <> show actualHash <> "\n"
 
 parseFromFileEx
     :: Text.Trifecta.Parser a
@@ -840,8 +847,8 @@ load :: Expr Src Path -> IO (Expr Src X)
 load = loadWithContext Dhall.Context.empty
 
 -- | Hash a fully resolved expression
-hashExpression :: Expr s X -> Data.ByteString.ByteString
-hashExpression expr = Crypto.Hash.SHA256.hashlazy actualBytes
+hashExpression :: Expr s X -> (Crypto.Hash.Digest SHA256)
+hashExpression expr = Crypto.Hash.hashlazy actualBytes
   where
     text = Dhall.Core.pretty (Dhall.Core.normalize expr)
     actualBytes = Data.Text.Lazy.Encoding.encodeUtf8 text
@@ -857,7 +864,7 @@ hashExpressionToCode expr = "sha256:" <> lazyText
   where
     bytes = hashExpression expr
 
-    bytes16 = Data.ByteString.Base16.encode bytes
+    bytes16 = Data.ByteArray.convert bytes
 
     -- Notes that `decodeUtf8` is partial, but the base16-encoded bytestring
     -- should always successfully decode

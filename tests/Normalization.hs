@@ -4,6 +4,17 @@
 module Normalization (normalizationTests) where
 
 import Data.Monoid ((<>))
+import Data.Text.Lazy (Text)
+import Dhall.Core (Expr)
+import Dhall.TypeCheck (X)
+
+import qualified Control.Exception
+import qualified Data.Text.Lazy
+import qualified Dhall.Core
+import qualified Dhall.Import
+import qualified Dhall.Parser
+import qualified Dhall.TypeCheck
+
 import Dhall.Core
 import Dhall.Context
 import Test.Tasty
@@ -11,29 +22,161 @@ import Test.Tasty.HUnit
 import Util 
 
 normalizationTests :: TestTree
-normalizationTests = testGroup "normalization" [ constantFolding
-                                               , conversions
-                                               , fusion
-                                               , customization
-                                               ]
+normalizationTests =
+    testGroup "normalization"
+        [ examples
+        , constantFolding
+        , conversions
+        , shouldNormalize "Optional build/fold fusion" "optionalBuildFold"
+        , customization
+        , shouldNormalize "a remote-systems.conf builder" "remoteSystems"
+        ]
+
+examples :: TestTree
+examples =
+    testGroup "Prelude examples"
+        [ shouldNormalize "Bool/and" "./examples/Bool/and/0"
+        , shouldNormalize "Bool/and" "./examples/Bool/and/1"
+        , shouldNormalize "Bool/build" "./examples/Bool/build/0"
+        , shouldNormalize "Bool/build" "./examples/Bool/build/1"
+        , shouldNormalize "Bool/even" "./examples/Bool/even/0"
+        , shouldNormalize "Bool/even" "./examples/Bool/even/1"
+        , shouldNormalize "Bool/even" "./examples/Bool/even/2"
+        , shouldNormalize "Bool/even" "./examples/Bool/even/3"
+        , shouldNormalize "Bool/fold" "./examples/Bool/fold/0"
+        , shouldNormalize "Bool/fold" "./examples/Bool/fold/1"
+        , shouldNormalize "Bool/not" "./examples/Bool/not/0"
+        , shouldNormalize "Bool/not" "./examples/Bool/not/1"
+        , shouldNormalize "Bool/odd" "./examples/Bool/odd/0"
+        , shouldNormalize "Bool/odd" "./examples/Bool/odd/1"
+        , shouldNormalize "Bool/odd" "./examples/Bool/odd/2"
+        , shouldNormalize "Bool/odd" "./examples/Bool/odd/3"
+        , shouldNormalize "Bool/or" "./examples/Bool/or/0"
+        , shouldNormalize "Bool/or" "./examples/Bool/or/1"
+        , shouldNormalize "Bool/show" "./examples/Bool/show/0"
+        , shouldNormalize "Bool/show" "./examples/Bool/show/1"
+        , shouldNormalize "Double/show" "./examples/Double/show/0"
+        , shouldNormalize "Double/show" "./examples/Double/show/1"
+        , shouldNormalize "Integer/show" "./examples/Integer/show/0"
+        , shouldNormalize "Integer/show" "./examples/Integer/show/1"
+        , shouldNormalize "List/all" "./examples/List/all/0"
+        , shouldNormalize "List/all" "./examples/List/all/1"
+        , shouldNormalize "List/any" "./examples/List/any/0"
+        , shouldNormalize "List/any" "./examples/List/any/1"
+        , shouldNormalize "List/build" "./examples/List/build/0"
+        , shouldNormalize "List/build" "./examples/List/build/1"
+        , shouldNormalize "List/concat" "./examples/List/concat/0"
+        , shouldNormalize "List/concat" "./examples/List/concat/1"
+        , shouldNormalize "List/concatMap" "./examples/List/concatMap/0"
+        , shouldNormalize "List/concatMap" "./examples/List/concatMap/1"
+        , shouldNormalize "List/filter" "./examples/List/filter/0"
+        , shouldNormalize "List/filter" "./examples/List/filter/1"
+        , shouldNormalize "List/fold" "./examples/List/fold/0"
+        , shouldNormalize "List/fold" "./examples/List/fold/1"
+        , shouldNormalize "List/fold" "./examples/List/fold/2"
+        , shouldNormalize "List/generate" "./examples/List/generate/0"
+        , shouldNormalize "List/generate" "./examples/List/generate/1"
+        , shouldNormalize "List/head" "./examples/List/head/0"
+        , shouldNormalize "List/head" "./examples/List/head/1"
+        , shouldNormalize "List/iterate" "./examples/List/iterate/0"
+        , shouldNormalize "List/iterate" "./examples/List/iterate/1"
+        , shouldNormalize "List/last" "./examples/List/last/0"
+        , shouldNormalize "List/last" "./examples/List/last/1"
+        , shouldNormalize "List/length" "./examples/List/length/0"
+        , shouldNormalize "List/length" "./examples/List/length/1"
+        , shouldNormalize "List/map" "./examples/List/map/0"
+        , shouldNormalize "List/map" "./examples/List/map/1"
+        , shouldNormalize "List/null" "./examples/List/null/0"
+        , shouldNormalize "List/null" "./examples/List/null/1"
+        , shouldNormalize "List/replicate" "./examples/List/replicate/0"
+        , shouldNormalize "List/replicate" "./examples/List/replicate/1"
+        , shouldNormalize "List/reverse" "./examples/List/reverse/0"
+        , shouldNormalize "List/reverse" "./examples/List/reverse/1"
+        , shouldNormalize "List/shifted" "./examples/List/shifted/0"
+        , shouldNormalize "List/shifted" "./examples/List/shifted/1"
+        , shouldNormalize "List/unzip" "./examples/List/unzip/0"
+        , shouldNormalize "List/unzip" "./examples/List/unzip/1"
+        , shouldNormalize "Natural/build" "./examples/Natural/build/0"
+        , shouldNormalize "Natural/build" "./examples/Natural/build/1"
+        , shouldNormalize "Natural/enumerate" "./examples/Natural/enumerate/0"
+        , shouldNormalize "Natural/enumerate" "./examples/Natural/enumerate/1"
+        , shouldNormalize "Natural/even" "./examples/Natural/even/0"
+        , shouldNormalize "Natural/even" "./examples/Natural/even/1"
+        , shouldNormalize "Natural/fold" "./examples/Natural/fold/0"
+        , shouldNormalize "Natural/fold" "./examples/Natural/fold/1"
+        , shouldNormalize "Natural/fold" "./examples/Natural/fold/2"
+        , shouldNormalize "Natural/isZero" "./examples/Natural/isZero/0"
+        , shouldNormalize "Natural/isZero" "./examples/Natural/isZero/1"
+        , shouldNormalize "Natural/odd" "./examples/Natural/odd/0"
+        , shouldNormalize "Natural/odd" "./examples/Natural/odd/1"
+        , shouldNormalize "Natural/product" "./examples/Natural/product/0"
+        , shouldNormalize "Natural/product" "./examples/Natural/product/1"
+        , shouldNormalize "Natural/show" "./examples/Natural/show/0"
+        , shouldNormalize "Natural/show" "./examples/Natural/show/1"
+        , shouldNormalize "Natural/sum" "./examples/Natural/sum/0"
+        , shouldNormalize "Natural/sum" "./examples/Natural/sum/1"
+        , shouldNormalize "Natural/toInteger" "./examples/Natural/toInteger/0"
+        , shouldNormalize "Natural/toInteger" "./examples/Natural/toInteger/1"
+        , shouldNormalize "Optional/all" "./examples/Optional/all/0"
+        , shouldNormalize "Optional/all" "./examples/Optional/all/1"
+        , shouldNormalize "Optional/any" "./examples/Optional/any/0"
+        , shouldNormalize "Optional/any" "./examples/Optional/any/1"
+        , shouldNormalize "Optional/build" "./examples/Optional/build/0"
+        , shouldNormalize "Optional/build" "./examples/Optional/build/1"
+        , shouldNormalize "Optional/concat" "./examples/Optional/concat/0"
+        , shouldNormalize "Optional/concat" "./examples/Optional/concat/1"
+        , shouldNormalize "Optional/concat" "./examples/Optional/concat/2"
+        , shouldNormalize "Optional/filter" "./examples/Optional/filter/0"
+        , shouldNormalize "Optional/filter" "./examples/Optional/filter/1"
+        , shouldNormalize "Optional/fold" "./examples/Optional/fold/0"
+        , shouldNormalize "Optional/fold" "./examples/Optional/fold/1"
+        , shouldNormalize "Optional/head" "./examples/Optional/head/0"
+        , shouldNormalize "Optional/head" "./examples/Optional/head/1"
+        , shouldNormalize "Optional/last" "./examples/Optional/last/0"
+        , shouldNormalize "Optional/last" "./examples/Optional/last/1"
+        , shouldNormalize "Optional/length" "./examples/Optional/length/0"
+        , shouldNormalize "Optional/length" "./examples/Optional/length/1"
+        , shouldNormalize "Optional/map" "./examples/Optional/map/0"
+        , shouldNormalize "Optional/map" "./examples/Optional/map/1"
+        , shouldNormalize "Optional/null" "./examples/Optional/null/0"
+        , shouldNormalize "Optional/null" "./examples/Optional/null/1"
+        , shouldNormalize "Optional/toList" "./examples/Optional/toList/0"
+        , shouldNormalize "Optional/toList" "./examples/Optional/toList/1"
+        , shouldNormalize "Optional/unzip" "./examples/Optional/unzip/0"
+        , shouldNormalize "Optional/unzip" "./examples/Optional/unzip/1"
+        , shouldNormalize "Text/concat" "./examples/Text/concat/0"
+        , shouldNormalize "Text/concat" "./examples/Text/concat/1"
+        , shouldNormalize "Text/concatMap" "./examples/Text/concatMap/0"
+        , shouldNormalize "Text/concatMap" "./examples/Text/concatMap/1"
+        , shouldNormalize "Text/concatMapSep" "./examples/Text/concatMapSep/0"
+        , shouldNormalize "Text/concatMapSep" "./examples/Text/concatMapSep/1"
+        , shouldNormalize "Text/concatSep" "./examples/Text/concatSep/0"
+        , shouldNormalize "Text/concatSep" "./examples/Text/concatSep/1"
+        ]
 
 constantFolding :: TestTree
-constantFolding = testGroup "folding of constants" [ naturalPlus
-                                                   , optionalFold
-                                                   , optionalBuild
-                                                   ]
+constantFolding =
+    testGroup "folding of constants"
+        [ shouldNormalize "Natural/plus"   "naturalPlus"
+        , shouldNormalize "Optional/fold"  "optionalFold"
+        , shouldNormalize "Optional/build" "optionalBuild"
+        ]
 
 conversions :: TestTree
-conversions = testGroup "conversions" [ naturalShow
-                                      , integerShow
-                                      , doubleShow
-                                      , naturalToInteger
-                                      ]
+conversions =
+    testGroup "conversions"
+        [ shouldNormalize "Natural/show" "naturalShow"
+        , shouldNormalize "Integer/show" "integerShow"
+        , shouldNormalize "Double/show"  "doubleShow"
+        , shouldNormalize "Natural/toInteger" "naturalToInteger"
+        ]
 
 customization :: TestTree
-customization = testGroup "customization"
-                 [simpleCustomization
-                 ,nestedReduction]
+customization =
+    testGroup "customization"
+        [ simpleCustomization
+        , nestedReduction
+        ]
 
 simpleCustomization :: TestTree
 simpleCustomization = testCase "simpleCustomization" $ do
@@ -60,120 +203,35 @@ nestedReduction = testCase "doubleReduction" $ do
   e <- codeWith tyCtx "wurble +6"
   assertNormalizesToWith valCtx e "+5"
 
-naturalPlus :: TestTree
-naturalPlus = testCase "natural plus" $ do
-  e <- code "+1 + +2"
-  e `assertNormalizesTo` "+3"
+should :: Text -> Text -> TestTree
+should name basename =
+    Test.Tasty.HUnit.testCase (Data.Text.Lazy.unpack name) $ do
+        let actualCode   = "./tests/normalization/" <> basename <> "A.dhall"
+        let expectedCode = "./tests/normalization/" <> basename <> "B.dhall"
 
-naturalToInteger :: TestTree
-naturalToInteger = testCase "Natural/toInteger" $ do
-  e <- code "Natural/toInteger +1"
-  isNormalized e @?= False
-  normalize' e @?= "1"
+        actualExpr <- case Dhall.Parser.exprFromText mempty actualCode of
+            Left  err  -> Control.Exception.throwIO err
+            Right expr -> return expr
+        actualResolved <- Dhall.Import.load actualExpr
+        case Dhall.TypeCheck.typeOf actualResolved of
+            Left  err -> Control.Exception.throwIO err
+            Right _   -> return ()
+        let actualNormalized = Dhall.Core.normalize actualResolved :: Expr X X
 
-naturalShow :: TestTree
-naturalShow = testCase "Natural/show" $ do
-  e <- code "Natural/show +42"
-  e `assertNormalizesTo` "\"+42\""
+        expectedExpr <- case Dhall.Parser.exprFromText mempty expectedCode of
+            Left  err  -> Control.Exception.throwIO err
+            Right expr -> return expr
+        expectedResolved <- Dhall.Import.load expectedExpr
+        case Dhall.TypeCheck.typeOf expectedResolved of
+            Left  err -> Control.Exception.throwIO err
+            Right _   -> return ()
+        -- Use `denote` instead of `normalize` to enforce that the expected
+        -- expression is already in normal form
+        let expectedNormalized = Dhall.Core.denote expectedResolved
 
-integerShow :: TestTree
-integerShow = testCase "Integer/show" $ do
-  e <- code "[Integer/show 1337, Integer/show -42, Integer/show 0]"
-  e `assertNormalizesTo` "[ \"1337\", \"-42\", \"0\" ]"
+        let message =
+                "The normalized expression did not match the expected output"
+        Test.Tasty.HUnit.assertEqual message expectedNormalized actualNormalized
 
-doubleShow :: TestTree
-doubleShow = testCase "Double/show" $ do
-  e <- code "[Double/show -0.42, Double/show 13.37]"
-  e `assertNormalizesTo` "[ \"-0.42\", \"13.37\" ]"
-
-optionalFold :: TestTree
-optionalFold = testGroup "Optional/fold" [ just, nothing ]
-  where test label inp out = testCase label $ do
-             e <- code ("Optional/fold Text ([" <> inp <> "] : Optional Text) Natural (λ(j : Text) → +1) +2")
-             e `assertNormalizesTo` out
-        just = test "just" "\"foo\"" "+1"
-        nothing = test "nothing" "" "+2"
-
-optionalBuild :: TestTree
-optionalBuild = testGroup "Optional/build" [ optionalBuild1
-                                           , optionalBuildShadowing
-                                           , optionalBuildIrreducible
-                                           ]
-
-optionalBuild1 :: TestTree
-optionalBuild1 = testCase "reducible" $ do
-  e <- code
-    "Optional/build                  \n\
-    \Natural                         \n\
-    \(   λ(optional : Type)          \n\
-    \→   λ(just : Natural → optional)\n\
-    \→   λ(nothing : optional)       \n\
-    \→   just +1                     \n\
-    \)                               \n"
-  e `assertNormalizesTo` "[ +1 ] : Optional Natural"
-
-optionalBuildShadowing :: TestTree
-optionalBuildShadowing = testCase "handles shadowing" $ do
-  e <- code
-    "Optional/build               \n\
-    \Integer                      \n\
-    \(   λ(optional : Type)       \n\
-    \→   λ(x : Integer → optional)\n\
-    \→   λ(x : optional)          \n\
-    \→   x@1 1                    \n\
-    \)                            \n"
-  e `assertNormalizesTo` "[ 1 ] : Optional Integer"
-
-optionalBuildIrreducible :: TestTree
-optionalBuildIrreducible = testCase "irreducible" $ do
-  e <- code
-    "    λ(id : ∀(a : Type) → a → a)  \n\
-    \→   Optional/build               \n\
-    \    Bool                         \n\
-    \    (   λ(optional : Type)       \n\
-    \    →   λ(just : Bool → optional)\n\
-    \    →   λ(nothing : optional)    \n\
-    \    →   id optional (just True)  \n\
-    \    )                            \n"
-  assertNormalized e
-
-fusion :: TestTree
-fusion = testGroup "Optional build/fold fusion" [ fuseOptionalBF
-                                                , fuseOptionalFB
-                                                ]
-
-fuseOptionalBF :: TestTree
-fuseOptionalBF = testCase "fold . build" $ do
-  e0 <- code
-    "    λ(  f                        \n\
-    \    :   ∀(optional : Type)       \n\
-    \    →   ∀(just : Text → optional)\n\
-    \    →   ∀(nothing : optional)    \n\
-    \    →   optional                 \n\
-    \    )                            \n\
-    \→   Optional/fold                \n\
-    \    Text                         \n\
-    \    (   Optional/build           \n\
-    \        Text                     \n\
-    \        f                        \n\
-    \    )                            \n"
-  e1 <- code
-    "    λ(  f                        \n\
-    \    :   ∀(optional : Type)       \n\
-    \    →   ∀(just : Text → optional)\n\
-    \    →   ∀(nothing : optional)    \n\
-    \    →   optional                 \n\
-    \    )                            \n\
-    \→   f                            \n"
-  e0 `assertNormalizesTo` (Dhall.Core.pretty e1)
-
-fuseOptionalFB :: TestTree
-fuseOptionalFB = testCase "build . fold" $ do
-  test <- code
-    "Optional/build                 \n\
-    \Text                           \n\
-    \(   Optional/fold              \n\
-    \    Text                       \n\
-    \    ([\"foo\"] : Optional Text)\n\
-    \)                              \n"
-  test `assertNormalizesTo` "[ \"foo\" ] : Optional Text"
+shouldNormalize :: Text -> Text -> TestTree
+shouldNormalize name = should ("normalize " <> name <> " correctly")

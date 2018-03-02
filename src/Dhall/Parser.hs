@@ -44,7 +44,7 @@ import Text.Trifecta
 import Text.Trifecta.Delta (Delta)
 
 import qualified Control.Monad
-import qualified Data.ByteString.Base16.Lazy
+import qualified Crypto.Hash
 import qualified Data.ByteString.Lazy
 import qualified Data.Char
 import qualified Data.HashMap.Strict.InsOrd
@@ -56,7 +56,6 @@ import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
-import qualified Data.Vector
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
@@ -1070,15 +1069,15 @@ emptyCollection embedded = do
     _colon
     a <- alternative0 <|> alternative1
     b <- selectorExpression embedded
-    return (a b empty)
+    return (a b)
   where
     alternative0 = do
         _List
-        return (\a b -> ListLit (Just a) b)
+        return (\a -> ListLit (Just a) empty)
 
     alternative1 = do
         _Optional
-        return OptionalLit
+        return (\a -> OptionalLit a empty)
 
 nonEmptyOptional :: Parser a -> Parser (Expr Src a)
 nonEmptyOptional embedded = do
@@ -1459,7 +1458,7 @@ nonEmptyListLiteral embedded = (do
     a <- expression embedded
     b <- many (do _comma; expression embedded)
     _closeBracket
-    return (ListLit Nothing (Data.Vector.fromList (a:b))) ) <?> "list literal"
+    return (ListLit Nothing (Data.Sequence.fromList (a:b))) ) <?> "list literal"
 
 completeExpression :: Parser a -> Parser (Expr Src a)
 completeExpression embedded = do
@@ -1510,10 +1509,9 @@ pathHashed_ = do
         whitespace
         let lazyText = Data.Text.Lazy.Builder.toLazyText builder
         let lazyBytes = Data.Text.Lazy.Encoding.encodeUtf8 lazyText
-        let (hash, suffix) = Data.ByteString.Base16.Lazy.decode lazyBytes
-        if Data.ByteString.Lazy.null suffix
-            then return (Data.ByteString.Lazy.toStrict hash)
-            else fail "Invalid sha256 hash"
+        case Crypto.Hash.digestFromByteString (Data.ByteString.Lazy.toStrict lazyBytes) of
+          Nothing -> fail "Invalid sha256 hash"
+          Just h -> pure h
 
 import_ :: Parser Path
 import_ = (do

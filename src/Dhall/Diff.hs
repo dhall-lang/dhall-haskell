@@ -25,8 +25,6 @@ diff :: (Eq a, Eq s, Pretty a) => Expr s a -> Expr s a -> Doc Ann
 diff l r = Pretty.align (go (Dhall.Core.denote l) (Dhall.Core.denote r))
   where
     go :: (Eq a, Pretty a) => Expr () a -> Expr () a -> Doc Ann
-    go (Pi aL bL cL) (Pi aR bR cR)
-        | aL == aR
     go (Record kvsL) (Record kvsR) =
         braced (diffKeyVals Internal.colon kvsL kvsR)
     go (RecordLit kvsL) (RecordLit kvsR) =

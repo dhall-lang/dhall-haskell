@@ -23,8 +23,8 @@ module Dhall.TypeCheck (
 
 import Control.Exception (Exception)
 import Data.Foldable (forM_, toList)
-import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
+import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
@@ -35,19 +35,22 @@ import Data.Typeable (Typeable)
 import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 
-import qualified Control.Monad.Trans.State.Strict          as State
-import qualified Data.HashMap.Strict
+import qualified Data.Foldable
 import qualified Data.HashMap.Strict.InsOrd
+import qualified Data.Sequence
 import qualified Data.Set
-import qualified Data.Text.Lazy                            as Text
-import qualified Data.Text.Lazy.Builder                    as Builder
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
-import qualified Data.Vector
+import qualified Data.Text.Lazy                        as Text
+import qualified Data.Text.Lazy.Builder                as Builder
+import qualified Data.Text.Prettyprint.Doc             as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Pretty
+
+traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
+traverseWithIndex_ k xs =
+    Data.Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
 
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
@@ -59,74 +62,13 @@ rule Type Type = return Type
 rule Kind Kind = return Kind
 rule Kind Type = return Type
 
-match :: Var -> Var -> [(Text, Text)] -> Bool
-match (V xL nL) (V xR nR)             []  =
-    xL == xR  && nL == nR
-match (V xL 0 ) (V xR 0 ) ((xL', xR'):_ )
-    | xL == xL' && xR == xR' = True
-match (V xL nL) (V xR nR) ((xL', xR'):xs) =
-    match (V xL nL') (V xR nR') xs
+judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
+judgmentallyEqual eL0 eR0 = alphaBetaNormalize eL0 == alphaBetaNormalize eR0
   where
-    nL' = if xL == xL' then nL - 1 else nL
-    nR' = if xR == xR' then nR - 1 else nR
-
-toSortedList :: InsOrdHashMap k v -> [(k, v)]
-toSortedList =
-    Data.HashMap.Strict.toList . Data.HashMap.Strict.InsOrd.toHashMap
-
-propEqual :: Eq a => Expr s a -> Expr t a -> Bool
-propEqual eL0 eR0 =
-    State.evalState
-        (go (Dhall.Core.normalize eL0) (Dhall.Core.normalize eR0))
-        []
-  where
-    go (Const Type) (Const Type) = return True
-    go (Const Kind) (Const Kind) = return True
-    go (Var vL) (Var vR) = do
-        ctx <- State.get
-        return (match vL vR ctx)
-    go (Pi xL tL bL) (Pi xR tR bR) = do
-        ctx <- State.get
-        eq1 <- go tL tR
-        if eq1
-            then do
-                State.put ((xL, xR):ctx)
-                eq2 <- go bL bR
-                State.put ctx
-                return eq2
-            else return False
-    go (App fL aL) (App fR aR) = do
-        b1 <- go fL fR
-        if b1 then go aL aR else return False
-    go Bool Bool = return True
-    go Natural Natural = return True
-    go Integer Integer = return True
-    go Double Double = return True
-    go Text Text = return True
-    go List List = return True
-    go Optional Optional = return True
-    go (Record ktsL0) (Record ktsR0) = do
-        let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
-                | kL == kR = do
-                    b <- go tL tR
-                    if b
-                        then loop ktsL ktsR
-                        else return False
-            loop [] [] = return True
-            loop _  _  = return False
-        loop (toSortedList ktsL0) (toSortedList ktsR0)
-    go (Union ktsL0) (Union ktsR0) = do
-        let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
-                | kL == kR = do
-                    b <- go tL tR
-                    if b
-                        then loop ktsL ktsR
-                        else return False
-            loop [] [] = return True
-            loop _  _  = return False
-        loop (toSortedList ktsL0) (toSortedList ktsR0)
-    go (Embed eL) (Embed eR) = return (eL == eR)
-    go _ _ = return False
+    alphaBetaNormalize :: Expr s a -> Expr X a
+    alphaBetaNormalize =
+            Dhall.Core.alphaNormalize
+        .   Dhall.Core.normalize
 
 {-| Type-check an expression and return the expression's type if type-checking
     succeeds or an error if type-checking fails
@@ -140,9 +82,20 @@ typeWith ctx expr = do
     checkContext ctx
     typeWithA absurd ctx expr
 
+{-| Function that converts the value inside an `Embed` constructor into a new
+    expression
+-}
 type Typer a = forall s. a -> Expr s a
 
-typeWithA :: Eq a => Typer a -> Context (Expr s a) -> Expr s a -> Either (TypeError s a) (Expr s a)
+{-| Generalization of `typeWith` that allows type-checking the `Embed`
+    constructor with custom logic
+-}
+typeWithA
+    :: Eq a
+    => Typer a
+    -> Context (Expr s a)
+    -> Expr s a
+    -> Either (TypeError s a) (Expr s a)
 typeWithA tpa = loop
   where
     loop _     (Const c         ) = do
@@ -155,7 +108,7 @@ typeWithA tpa = loop
                 return a
     loop ctx   (Lam x _A  b     ) = do
         _ <- loop ctx _A
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x _A ctx)
+        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
         _B <- loop ctx' b
         let p = Pi x _A _B
         _t <- loop ctx p
@@ -167,7 +120,7 @@ typeWithA tpa = loop
             _       -> Left (TypeError ctx e (InvalidInputType _A))
 
         _ <- loop ctx _A
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x _A ctx)
+        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
         tB <- fmap Dhall.Core.normalize (loop ctx' _B)
         kB <- case tB of
             Const k -> return k
@@ -182,7 +135,7 @@ typeWithA tpa = loop
             Pi x _A _B -> return (x, _A, _B)
             _          -> Left (TypeError ctx e (NotAFunction f tf))
         _A' <- loop ctx a
-        if propEqual _A _A'
+        if judgmentallyEqual _A _A'
             then do
                 let a'   = Dhall.Core.shift   1  (V x 0) a
                 let _B'  = Dhall.Core.subst (V x 0) a' _B
@@ -199,7 +152,7 @@ typeWithA tpa = loop
                 _ <- loop ctx _A0
                 let nf_A0 = Dhall.Core.normalize _A0
                 let nf_A1 = Dhall.Core.normalize _A1
-                if propEqual _A0 _A1
+                if judgmentallyEqual _A0 _A1
                     then return ()
                     else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
             Nothing -> return ()
@@ -212,7 +165,7 @@ typeWithA tpa = loop
         _ <- loop ctx t
 
         t' <- loop ctx x
-        if propEqual t t'
+        if judgmentallyEqual t t'
             then do
                 return t
             else do
@@ -288,7 +241,7 @@ typeWithA tpa = loop
             Const Type -> return ()
             _          -> Left (TypeError ctx e (IfBranchMustBeTerm False z tz ttz))
 
-        if propEqual ty tz
+        if judgmentallyEqual ty tz
             then return ()
             else Left (TypeError ctx e (IfBranchMismatch y z ty tz))
         return ty
@@ -377,17 +330,16 @@ typeWithA tpa = loop
     loop _      List              = do
         return (Pi "_" (Const Type) (Const Type))
     loop ctx e@(ListLit  Nothing  xs) = do
-        if Data.Vector.null xs
-            then Left (TypeError ctx e MissingListType)
-            else do
-                t <- loop ctx (Data.Vector.head xs)
+        case Data.Sequence.viewl xs of
+            x0 :< _ -> do
+                t <- loop ctx x0
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
                     _ -> Left (TypeError ctx e (InvalidListType t))
-                flip Data.Vector.imapM_ xs (\i x -> do
+                flip traverseWithIndex_ xs (\i x -> do
                     t' <- loop ctx x
-                    if propEqual t t'
+                    if judgmentallyEqual t t'
                         then return ()
                         else do
                             let nf_t  = Dhall.Core.normalize t
@@ -395,14 +347,15 @@ typeWithA tpa = loop
                             let err   = MismatchedListElements i nf_t x nf_t'
                             Left (TypeError ctx x err) )
                 return (App List t)
+            _ -> Left (TypeError ctx e MissingListType)
     loop ctx e@(ListLit (Just t ) xs) = do
         s <- fmap Dhall.Core.normalize (loop ctx t)
         case s of
             Const Type -> return ()
             _ -> Left (TypeError ctx e (InvalidListType t))
-        flip Data.Vector.imapM_ xs (\i x -> do
+        flip traverseWithIndex_ xs (\i x -> do
             t' <- loop ctx x
-            if propEqual t t'
+            if judgmentallyEqual t t'
                 then return ()
                 else do
                     let nf_t  = Dhall.Core.normalize t
@@ -420,7 +373,7 @@ typeWithA tpa = loop
             App List er -> return er
             _           -> Left (TypeError ctx e (CantListAppend r tr))
 
-        if propEqual el er
+        if judgmentallyEqual el er
             then return (App List el)
             else Left (TypeError ctx e (ListAppendMismatch el er))
     loop _      ListBuild         = do
@@ -459,13 +412,9 @@ typeWithA tpa = loop
         case s of
             Const Type -> return ()
             _ -> Left (TypeError ctx e (InvalidOptionalType t))
-        let n = Data.Vector.length xs
-        if 2 <= n
-            then Left (TypeError ctx e (InvalidOptionalLiteral n))
-            else return ()
         forM_ xs (\x -> do
             t' <- loop ctx x
-            if propEqual t t'
+            if judgmentallyEqual t t'
                 then return ()
                 else do
                     let nf_t  = Dhall.Core.normalize t
@@ -491,6 +440,7 @@ typeWithA tpa = loop
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
+                    Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidFieldType k t))
         mapM_ process (Data.HashMap.Strict.InsOrd.toList kts)
         return (Const Type)
@@ -500,6 +450,7 @@ typeWithA tpa = loop
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
+                    Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidField k v))
                 return t
         kts <- Data.HashMap.Strict.InsOrd.traverseWithKey process kvs
@@ -509,6 +460,7 @@ typeWithA tpa = loop
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
+                    Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
         mapM_ process (Data.HashMap.Strict.InsOrd.toList kts)
         return (Const Type)
@@ -517,7 +469,7 @@ typeWithA tpa = loop
             Just _  -> Left (TypeError ctx e (DuplicateAlternative k))
             Nothing -> return ()
         t <- loop ctx v
-        let union = Union (Data.HashMap.Strict.InsOrd.insert k t kts)
+        let union = Union (Data.HashMap.Strict.InsOrd.insert k (Dhall.Core.normalize t) kts)
         _ <- loop ctx union
         return union
     loop ctx e@(Combine kvsX kvsY) = do
@@ -590,10 +542,10 @@ typeWithA tpa = loop
                     Just tX  ->
                         case tX of
                             Pi _ tY' t' -> do
-                                if propEqual tY tY'
+                                if judgmentallyEqual tY tY'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
-                                if propEqual t t'
+                                if judgmentallyEqual t t'
                                     then return ()
                                     else Left (TypeError ctx e (InvalidHandlerOutputType kY t t'))
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
@@ -629,10 +581,10 @@ typeWithA tpa = loop
                     Just tX  ->
                         case tX of
                             Pi _ tY' t' -> do
-                                if propEqual tY tY'
+                                if judgmentallyEqual tY tY'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
-                                if propEqual t t'
+                                if judgmentallyEqual t t'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerOutputTypeMismatch kX t kY t'))
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
@@ -700,7 +652,6 @@ data TypeMessage s a
     | InvalidListElement Int (Expr s a) (Expr s a) (Expr s a)
     | InvalidListType (Expr s a)
     | InvalidOptionalElement (Expr s a) (Expr s a) (Expr s a)
-    | InvalidOptionalLiteral Int
     | InvalidOptionalType (Expr s a)
     | InvalidPredicate (Expr s a) (Expr s a)
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
@@ -1899,70 +1850,6 @@ prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..
         txt0 = build expr0
         txt1 = build expr1
         txt2 = build expr2
-
-prettyTypeMessage (InvalidOptionalLiteral n) = ErrorMessages {..}
-  where
-    short = "Multiple ❰Optional❱ elements not allowed"
-
-    long =
-        "Explanation: The syntax for ❰Optional❱ values resembles the syntax for ❰List❱s: \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────┐                                                   \n\
-        \    │ [] : Optional Integer │  An ❰Optional❱ value which is absent              \n\
-        \    └───────────────────────┘                                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────┐                                                   \n\
-        \    │ [] : List     Integer │  An empty (0-element) ❰List❱                      \n\
-        \    └───────────────────────┘                                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────┐                                                  \n\
-        \    │ [1] : Optional Integer │  An ❰Optional❱ value which is present            \n\
-        \    └────────────────────────┘                                                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────┐                                                  \n\
-        \    │ [1] : List     Integer │  A singleton (1-element) ❰List❱                  \n\
-        \    └────────────────────────┘                                                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, an ❰Optional❱ value can " <> _NOT <> " have more than one element, whereas a\n\
-        \❰List❱ can have multiple elements:                                              \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ [1, 2] : Optional Integer │  Invalid: multiple elements " <> _NOT <> " allowed\n\
-        \    └───────────────────────────┘                                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ [1, 2] : List     Integer │  Valid: multiple elements allowed             \n\
-        \    └───────────────────────────┘                                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Some common reasons why you might get this error:                               \n\
-        \                                                                                \n\
-        \● You accidentally typed ❰Optional❱ when you meant ❰List❱, like this:           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────────────────────────┐                      \n\
-        \    │ List/length Integer ([1, 2, 3] : Optional Integer) │                      \n\
-        \    └────────────────────────────────────────────────────┘                      \n\
-        \                                       ⇧                                        \n\
-        \                                       This should be ❰List❱ instead            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \────────────────────────────────────────────────────────────────────────────────\n\
-        \                                                                                \n\
-        \Your ❰Optional❱ value had this many elements:                                   \n\
-        \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
-        \                                                                                \n\
-        \... when an ❰Optional❱ value can only have at most one element                  \n"
-      where
-        txt0 = build n
 
 prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
   where

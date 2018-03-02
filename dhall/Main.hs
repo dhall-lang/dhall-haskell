@@ -1,21 +1,23 @@
 {-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeOperators      #-}
 
 module Main where
 
 import Control.Exception (SomeException)
 import Control.Monad (when)
-import Data.Monoid (mempty, (<>))
+import Data.Monoid (mempty)
 import Data.Version (showVersion)
 import Dhall.Core (normalize)
 import Dhall.Import (Imported(..), load)
-import Dhall.Parser (Src, exprAndHeaderFromText)
+import Dhall.Parser (Src)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
-import Options.Generic (Generic, ParseRecord, type (<?>)(..))
+import Options.Generic (Generic, ParseRecord, Wrapped, type (<?>)(..), (:::))
 import System.Exit (exitFailure, exitSuccess)
 import Text.Trifecta.Delta (Delta(..))
 
@@ -24,20 +26,20 @@ import qualified Paths_dhall as Meta
 import qualified Control.Exception
 import qualified Data.Text.Lazy.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty (renderIO)
-import qualified Dhall.Core
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Options.Generic
 import qualified System.Console.ANSI
 import qualified System.IO
 
-data Options = Options
-    { explain :: Bool <?> "Explain error messages in more detail"
-    , version :: Bool <?> "Display version and exit"
-    , pretty  :: Bool <?> "Format output"
+data Options w = Options
+    { explain :: w ::: Bool <?> "Explain error messages in more detail"
+    , version :: w ::: Bool <?> "Display version and exit"
+    , plain   :: w ::: Bool <?> "Disable syntax highlighting"
     } deriving (Generic)
 
-instance ParseRecord Options
+instance ParseRecord (Options Wrapped)
 
 opts :: Pretty.LayoutOptions
 opts =
@@ -46,8 +48,8 @@ opts =
 
 main :: IO ()
 main = do
-    options <- Options.Generic.getRecord "Compiler for the Dhall language"
-    when (unHelpful (version options)) $ do
+    Options {..} <- Options.Generic.unwrapRecord "Compiler for the Dhall language"
+    when version $ do
       putStrLn (showVersion Meta.version)
       exitSuccess
 
@@ -59,7 +61,7 @@ main = do
             handler0 e = do
                 let _ = e :: TypeError Src X
                 System.IO.hPutStrLn System.IO.stderr ""
-                if unHelpful (explain options)
+                if explain
                     then Control.Exception.throwIO (DetailedTypeError e)
                     else do
                         Data.Text.Lazy.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
@@ -68,7 +70,7 @@ main = do
             handler1 (Imported ps e) = do
                 let _ = e :: TypeError Src X
                 System.IO.hPutStrLn System.IO.stderr ""
-                if unHelpful (explain options)
+                if explain
                     then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
                     else do
                         Data.Text.Lazy.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
@@ -84,11 +86,26 @@ main = do
         System.IO.hSetEncoding System.IO.stdin System.IO.utf8
         inText <- Data.Text.Lazy.IO.getContents
 
-        (header, expr) <- case exprAndHeaderFromText (Directed "(stdin)" 0 0 0 0) inText of
+        expr <- case Dhall.Parser.exprFromText (Directed "(stdin)" 0 0 0 0) inText of
             Left  err -> Control.Exception.throwIO err
             Right x   -> return x
 
-        render <- makeRender options header
+        let render h e = do
+                let doc = prettyExpr e
+
+                let layoutOptions = opts
+                let stream = Pretty.layoutSmart layoutOptions doc
+
+                supportsANSI <- System.Console.ANSI.hSupportsANSI h
+                let ansiStream =
+                        if supportsANSI && not plain
+                        then fmap annToAnsiStyle stream
+                        else Pretty.unAnnotateS stream
+
+                Pretty.renderIO h ansiStream
+                Data.Text.Lazy.IO.hPutStrLn h ""
+
+
         expr' <- load expr
 
         typeExpr <- case Dhall.TypeCheck.typeOf expr' of
@@ -98,25 +115,3 @@ main = do
         render System.IO.stderr (normalize typeExpr)
         Data.Text.Lazy.IO.hPutStrLn System.IO.stderr mempty
         render System.IO.stdout (normalize expr') )
-
-makeRender :: (Pretty.Pretty t, Pretty.Pretty a) => Options -> t -> IO (System.IO.Handle -> Dhall.Core.Expr s a -> IO ())
-makeRender options header = do
-    supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
-
-    let render h doc =
-            if supportsANSI
-                then Pretty.renderIO h (fmap annToAnsiStyle doc)
-                else Pretty.renderIO h (Pretty.unAnnotateS doc)
-
-    return $ \h e -> do
-        if unHelpful (pretty options)
-            then do
-                let doc = Pretty.pretty header <> prettyExpr e
-                render h (Pretty.layoutSmart opts doc)
-            else do
-                render h (Pretty.layoutPretty unbounded (prettyExpr e))
-        Data.Text.Lazy.IO.hPutStrLn h ""
-
-    where
-
-        unbounded = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
