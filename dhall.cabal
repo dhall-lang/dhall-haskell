@@ -139,6 +139,7 @@ Extra-Source-Files:
     tests/normalization/examples/Text/concatMap/*.dhall
     tests/normalization/examples/Text/concatMapSep/*.dhall
     tests/normalization/examples/Text/concatSep/*.dhall
+    tests/normalization/simplifications/*.dhall
     tests/parser/*.dhall
     tests/regression/*.dhall
     tests/tutorial/*.dhall
