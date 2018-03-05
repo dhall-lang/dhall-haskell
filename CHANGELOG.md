@@ -1,3 +1,40 @@
+1.11.0
+
+* BREAKING CHANGE TO THE API: Fix `{Natural,Optional,List}/build` semantics to
+  match standard
+    * This is a breaking change because the `OptionalLit` and `ListLit`
+      constructors changed their representations to efficiently support the
+      standard semantics
+    * `ListLit` now stores a `Data.Sequence.Seq` instead of a
+      `Data.Vector.Vector`
+    * `OptionalLit` now stores a `Maybe` instead of a `Data.Vector.Vector`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/300
+* BREAKING CHANGE TO THE COMMAND LINE: `dhall` executable always formats output
+    * Previously you had to opt into formatting using `--pretty`
+    * Now formatting is obligatory and the `--pretty` flag is gone
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/303
+* Feature: New `:save` command for `dhall-repl`
+    * Now you can save an expression to a file: `./yourFile = someExpression`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/309
+* Improvement: Add new simplifications to match standard
+    * See: https://github.com/dhall-lang/dhall-haskell/commit/00c79f5d654ae151f7171456c1786d89caa512d3
+* Improvement: Fix equivalence check to match standard
+    * Practically this means that more corner cases of the language correctly
+      type-check than before
+* Improvement: New `--plain` flag to disable syntax highlighting
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/310
+* Improvement: Prelude now provides an umbrella `package.dhall` import
+    * This is primarily for convenience
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/298
+* Improvement: Context is now normalized
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/302
+* Replace `cryptohash` dependency with `cryptonite`
+    * See: https://github.com/dhall-lang/dhall-haskell/commit/5d2012927a062ec8bdf2bbaba77150344f38db77
+* Increase upper bound on exceptions
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/306
+* Fix type error in tutorial
+    * See: https://github.com/dhall-lang/dhall-haskell/commit/5a9126b2f684d3236fc1e8e20e206cfaf47d97db
+
 1.10.0
 
 * Feature: Records/unions can now have fields/alternatives that are types
