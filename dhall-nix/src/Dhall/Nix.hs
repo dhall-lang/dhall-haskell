@@ -91,6 +91,7 @@ module Dhall.Nix (
     , CompileError(..)
     ) where
 
+import Control.Applicative (empty)
 import Control.Exception (Exception)
 import Data.Foldable (toList)
 import Data.Fix (Fix(..))
@@ -116,7 +117,6 @@ import qualified Data.Text
 import qualified Data.Text.Buildable
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
-import qualified Data.Vector
 import qualified Dhall.Core
 import qualified NeatInterpolation
 
@@ -411,9 +411,9 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return (Fix (NAbs "t" e6))
     loop Optional = return (Fix (NAbs "t" (Fix (NSet []))))
     loop (OptionalLit _ b) =
-        if Data.Vector.null b
-            then return (Fix (NConstant NNull))
-            else loop (Data.Vector.head b)
+        case b of
+            Nothing -> return (Fix (NConstant NNull))
+            Just c  -> loop c
     loop OptionalFold = do
         let e0 = Fix (NBinary NEq "x" (Fix (NConstant NNull)))
         let e1 = Fix (NIf e0 "nothing" (Fix (NApp "just" "x")))
@@ -423,8 +423,8 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e0 = Pi "nothing" "optional" "optional"
         let e1 = Pi "just" (Pi "_" "a" "optional") e0
         let e2 = Pi "optional" (Const Type) e1
-        let e3 = OptionalLit "a" Data.Vector.empty
-        let e4 = Lam "x" "a" (OptionalLit "a" (Data.Vector.singleton "x"))
+        let e3 = OptionalLit "a" empty
+        let e4 = Lam "x" "a" (OptionalLit "a" (pure "x"))
         let e5 = App (App (App "f" (App Optional "a")) e4) e3
         loop (Lam "a" (Const Type) (Lam "f" e2 e5))
     loop (Record _) = return (Fix (NSet []))
@@ -457,7 +457,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let valL = Fix (NApp (Fix (NApp "builtins.getAttr" "k")) "kvsL")
         let valR = Fix (NApp (Fix (NApp "builtins.getAttr" "k")) "kvsR")
 
-        let empty = Fix (NList [])
+        let empty_ = Fix (NList [])
         let toNameValue v =
                 let bindings =
                         [ NamedVar ["name" ] "k"
@@ -471,7 +471,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e6 = Fix (NBinary NAnd e4 e5)
         let e7 = Fix (NIf e6 (toNameValue e3) (toNameValue valR))
         let e8 = Fix (NIf defR e7 (toNameValue valL))
-        let e9 = Fix (NIf defR (toNameValue valR) empty)
+        let e9 = Fix (NIf defR (toNameValue valR) empty_)
         let toKeyVals = Fix (NAbs "k" (Fix (NIf defL e8 e9)))
 
         let ksL = Fix (NApp "builtins.attrNames" "kvsL")

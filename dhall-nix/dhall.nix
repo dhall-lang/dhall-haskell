@@ -1,8 +1,8 @@
 { mkDerivation, ansi-terminal, ansi-wl-pprint, base
 , base16-bytestring, bytestring, case-insensitive, containers
-, contravariant, cryptohash, deepseq, directory, exceptions
+, contravariant, cryptonite, deepseq, directory, exceptions
 , filepath, haskeline, http-client, http-client-tls
-, insert-ordered-containers, lens-family-core, mtl
+, insert-ordered-containers, lens-family-core, memory, mtl
 , optparse-generic, parsers, prettyprinter
 , prettyprinter-ansi-terminal, repline, scientific, stdenv, tasty
 , tasty-hunit, text, text-format, transformers, trifecta
@@ -10,17 +10,17 @@
 }:
 mkDerivation {
   pname = "dhall";
-  version = "1.10.0";
-  sha256 = "8e074c5db6906f927edc1ade0cf584330e38be7bb3aa77b9b7e7028e814b3ffd";
+  version = "1.11.0";
+  sha256 = "cec6e5f28d9329b5cddd54f271013e2d73d8d48a5b8faf7d62d2c87d9254d9ed";
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
     ansi-wl-pprint base base16-bytestring bytestring case-insensitive
-    containers contravariant cryptohash directory exceptions filepath
+    containers contravariant cryptonite directory exceptions filepath
     http-client http-client-tls insert-ordered-containers
-    lens-family-core parsers prettyprinter prettyprinter-ansi-terminal
-    scientific text text-format transformers trifecta
-    unordered-containers vector
+    lens-family-core memory parsers prettyprinter
+    prettyprinter-ansi-terminal scientific text text-format
+    transformers trifecta unordered-containers vector
   ];
   executableHaskellDepends = [
     ansi-terminal base haskeline mtl optparse-generic prettyprinter
