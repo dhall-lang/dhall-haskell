@@ -32,6 +32,7 @@ module Dhall.Core (
     , normalize
     , normalizeWith
     , Normalizer
+    , judgmentallyEqual
     , subst
     , shift
     , isNormalized
@@ -1107,7 +1108,7 @@ alphaNormalize (Embed a) =
     However, `normalize` will not fail if the expression is ill-typed and will
     leave ill-typed sub-expressions unevaluated.
 -}
-normalize ::  Expr s a -> Expr t a
+normalize :: Eq a => Expr s a -> Expr t a
 normalize = normalizeWith (const Nothing)
 
 {-| This function is used to determine whether folds like @Natural/fold@ or
@@ -1209,7 +1210,7 @@ denote (Embed a             ) = Embed a
     with those functions is not total either.
 
 -}
-normalizeWith :: Normalizer a -> Expr s a -> Expr t a
+normalizeWith :: Eq a => Normalizer a -> Expr s a -> Expr t a
 normalizeWith ctx e0 = loop (denote e0)
  where
  loop e =  case e of
@@ -1356,32 +1357,40 @@ normalizeWith ctx e0 = loop (denote e0)
         decide (BoolLit False)  _              = BoolLit False
         decide  l              (BoolLit True ) = l
         decide  _              (BoolLit False) = BoolLit False
-        decide  l               r              = BoolAnd l r
+        decide  l               r
+            | judgmentallyEqual l r = l
+            | otherwise             = BoolAnd l r
     BoolOr x y -> decide (loop x) (loop y)
       where
         decide (BoolLit False)  r              = r
         decide (BoolLit True )  _              = BoolLit True
         decide  l              (BoolLit False) = l
         decide  _              (BoolLit True ) = BoolLit True
-        decide  l               r              = BoolOr l r
+        decide  l               r
+            | judgmentallyEqual l r = l
+            | otherwise             = BoolOr l r
     BoolEQ x y -> decide (loop x) (loop y)
       where
         decide (BoolLit True )  r              = r
         decide  l              (BoolLit True ) = l
-        decide (BoolLit False) (BoolLit False) = BoolLit True
-        decide  l               r              = BoolEQ l r
+        decide  l               r
+            | judgmentallyEqual l r = BoolLit True
+            | otherwise             = BoolEQ l r
     BoolNE x y -> decide (loop x) (loop y)
       where
         decide (BoolLit False)  r              = r
         decide  l              (BoolLit False) = l
-        decide (BoolLit True ) (BoolLit True ) = BoolLit False
-        decide  l               r              = BoolNE l r
+        decide  l               r
+            | judgmentallyEqual l r = BoolLit False
+            | otherwise             = BoolNE l r
     BoolIf bool true false -> decide (loop bool) (loop true) (loop false)
       where
         decide (BoolLit True )  l              _              = l
         decide (BoolLit False)  _              r              = r
         decide  b              (BoolLit True) (BoolLit False) = b
-        decide  b               l              r              = BoolIf b l r
+        decide  b               l              r
+            | judgmentallyEqual l r = l
+            | otherwise             = BoolIf b l r
     Natural -> Natural
     NaturalLit n -> NaturalLit n
     NaturalFold -> NaturalFold
@@ -1524,6 +1533,15 @@ normalizeWith ctx e0 = loop (denote e0)
             r' -> Field r' x
     Note _ e' -> loop e'
     Embed a -> Embed a
+
+{-| Returns `True` if two expressions are α-equivalent and β-equivalent and
+    `False` otherwise
+-}
+judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
+judgmentallyEqual eL0 eR0 = alphaBetaNormalize eL0 == alphaBetaNormalize eR0
+  where
+    alphaBetaNormalize :: Eq a => Expr s a -> Expr () a
+    alphaBetaNormalize = alphaNormalize . normalize
 
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
 --   polymorphic enough to be used.
