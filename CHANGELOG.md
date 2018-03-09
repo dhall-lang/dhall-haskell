@@ -17,7 +17,8 @@
     * Now you can save an expression to a file: `./yourFile = someExpression`
     * See: https://github.com/dhall-lang/dhall-haskell/pull/309
 * Improvement: Add new simplifications to match standard
-    * See: https://github.com/dhall-lang/dhall-haskell/commit/00c79f5d654ae151f7171456c1786d89caa512d3
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/312
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/316
 * Improvement: Fix equivalence check to match standard
     * Practically this means that more corner cases of the language correctly
       type-check than before
