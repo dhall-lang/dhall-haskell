@@ -882,7 +882,7 @@ alphaNormalize (App f₀ a₀) =
 
     a₁ = alphaNormalize a₀
 alphaNormalize (Let x (Just _A₀) a₀ b₀) =
-    Let x (Just _A₁) a₁ b₃
+    Let "_" (Just _A₁) a₁ b₃
   where
     _A₁ = alphaNormalize _A₀
 
@@ -894,7 +894,7 @@ alphaNormalize (Let x (Just _A₀) a₀ b₀) =
     b₂ = shift (-1) (V x 0) b₁
     b₃ = alphaNormalize b₂
 alphaNormalize (Let x Nothing a₀ b₀) =
-    Let x Nothing a₁ b₃
+    Let "_" Nothing a₁ b₃
   where
     a₁ = alphaNormalize a₀
 
