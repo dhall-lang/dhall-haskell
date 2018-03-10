@@ -22,8 +22,11 @@ plus :: Doc ann -> Doc ann
 plus doc = "+ " <> doc
 
 diff :: (Eq a, Eq s, Pretty a) => Expr s a -> Expr s a -> Doc Ann
-diff l r = Pretty.align (go (Dhall.Core.denote l) (Dhall.Core.denote r))
+diff l0 r0 = Pretty.align (go l1 r1)
   where
+    l1 = Dhall.Core.alphaNormalize (Dhall.Core.normalize l0)
+    r1 = Dhall.Core.alphaNormalize (Dhall.Core.normalize r0)
+
     go :: (Eq a, Pretty a) => Expr () a -> Expr () a -> Doc Ann
     go (Record kvsL) (Record kvsR) =
         braced (diffKeyVals Internal.colon kvsL kvsR)
@@ -45,6 +48,38 @@ diff l r = Pretty.align (go (Dhall.Core.denote l) (Dhall.Core.denote r))
 
         enclosure0 = enclosed Internal.langle mempty mempty
         enclosure  = enclosed middle Internal.pipe Internal.rangle
+    go (Pi xL _AL _BL) (Pi xR _AR _BR) =
+        enclosure0
+            [   enclosure1 (diffKeyVals Internal.colon kvsL0 kvsR0)
+            ,   go _BL _BR
+            ]
+      where
+        kvsL0 = HashMap.singleton xL _AL
+        kvsR0 = HashMap.singleton xR _AR
+
+        enclosure0 = enclosed "  " (Internal.rarrow <> " ") mempty
+
+        enclosure1 =
+            enclosed
+                (Internal.forall <> Internal.lparen)
+                mempty
+                (" " <> Internal.rparen)
+    go (Lam xL _AL _BL) (Lam xR _AR _BR) =
+        enclosure0
+            [   enclosure1 (diffKeyVals Internal.colon kvsL0 kvsR0)
+            ,   go _BL _BR
+            ]
+      where
+        kvsL0 = HashMap.singleton xL _AL
+        kvsR0 = HashMap.singleton xR _AR
+
+        enclosure0 = enclosed "  " (Internal.rarrow <> " ") mempty
+
+        enclosure1 =
+            enclosed
+                (Internal.lambda <> Internal.lparen)
+                mempty
+                (" " <> Internal.rparen)
     go exprL exprR =
             minus (Internal.prettyExpr exprL)
         <>  Pretty.hardline
@@ -52,7 +87,8 @@ diff l r = Pretty.align (go (Dhall.Core.denote l) (Dhall.Core.denote r))
 
 enclosed :: Doc Ann -> Doc Ann -> Doc Ann -> [Doc Ann] -> Doc Ann
 enclosed l _ r [] = l <> r
-enclosed l m r docs = mconcat (zipWith (<>) prefixes docs) <> suffix
+enclosed l m r docs =
+    Pretty.align (mconcat (zipWith (<>) prefixes docs) <> suffix)
   where
     prefixes = (l <> " ") : repeat (Pretty.hardline <> m <> " ")
 

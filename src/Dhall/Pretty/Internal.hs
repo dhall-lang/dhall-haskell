@@ -18,15 +18,20 @@ module Dhall.Pretty.Internal (
     , buildScientific
     , pretty
     , escapeText
-    , label
-    , lbrace
-    , rbrace
+    , rarrow
+    , colon
     , comma
     , equals
-    , colon
+    , forall
+    , label
+    , lambda
     , langle
-    , rangle
+    , lbrace
+    , lparen
     , pipe
+    , rangle
+    , rparen
+    , rbrace
     ) where
 
 import {-# SOURCE #-} Dhall.Core
