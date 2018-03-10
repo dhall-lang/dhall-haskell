@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -97,7 +98,12 @@ newtype Parser a = Parser { unParser :: Text.Trifecta.Parser a }
 instance Monoid a => Monoid (Parser a) where
     mempty = pure mempty
 
+#if MIN_VERSION_base(4,11,0)
+instance Semigroup a => Semigroup (Parser a) where
+    (<>) = liftA2 (<>)
+#else
     mappend = liftA2 mappend
+#endif
 
 instance IsString a => IsString (Parser a) where
     fromString x = fmap fromString (Text.Parser.Char.string x)

@@ -471,10 +471,18 @@ data Chunks s a = Chunks [(Builder, Expr s a)] Builder
 instance Monoid (Chunks s a) where
     mempty = Chunks [] mempty
 
+#if MIN_VERSION_base(4,11,0)
+instance Semigroup (Chunks s a) where
+    (<>) (Chunks xysL zL) (Chunks         []    zR) =
+        Chunks xysL (zL <> zR)
+    (<>) (Chunks xysL zL) (Chunks ((x, y):xysR) zR) =
+        Chunks (xysL ++ (zL <> x, y):xysR) zR
+#else
     mappend (Chunks xysL zL) (Chunks         []    zR) =
         Chunks xysL (zL <> zR)
     mappend (Chunks xysL zL) (Chunks ((x, y):xysR) zR) =
         Chunks (xysL ++ (zL <> x, y):xysR) zR
+#endif
 
 instance IsString (Chunks s a) where
     fromString str = Chunks [] (fromString str)
