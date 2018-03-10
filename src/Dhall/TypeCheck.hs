@@ -62,14 +62,6 @@ rule Type Type = return Type
 rule Kind Kind = return Kind
 rule Kind Type = return Type
 
-judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
-judgmentallyEqual eL0 eR0 = alphaBetaNormalize eL0 == alphaBetaNormalize eR0
-  where
-    alphaBetaNormalize :: Expr s a -> Expr X a
-    alphaBetaNormalize =
-            Dhall.Core.alphaNormalize
-        .   Dhall.Core.normalize
-
 {-| Type-check an expression and return the expression's type if type-checking
     succeeds or an error if type-checking fails
 
@@ -135,7 +127,7 @@ typeWithA tpa = loop
             Pi x _A _B -> return (x, _A, _B)
             _          -> Left (TypeError ctx e (NotAFunction f tf))
         _A' <- loop ctx a
-        if judgmentallyEqual _A _A'
+        if Dhall.Core.judgmentallyEqual _A _A'
             then do
                 let a'   = Dhall.Core.shift   1  (V x 0) a
                 let _B'  = Dhall.Core.subst (V x 0) a' _B
@@ -152,7 +144,7 @@ typeWithA tpa = loop
                 _ <- loop ctx _A0
                 let nf_A0 = Dhall.Core.normalize _A0
                 let nf_A1 = Dhall.Core.normalize _A1
-                if judgmentallyEqual _A0 _A1
+                if Dhall.Core.judgmentallyEqual _A0 _A1
                     then return ()
                     else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
             Nothing -> return ()
@@ -165,7 +157,7 @@ typeWithA tpa = loop
         _ <- loop ctx t
 
         t' <- loop ctx x
-        if judgmentallyEqual t t'
+        if Dhall.Core.judgmentallyEqual t t'
             then do
                 return t
             else do
@@ -241,7 +233,7 @@ typeWithA tpa = loop
             Const Type -> return ()
             _          -> Left (TypeError ctx e (IfBranchMustBeTerm False z tz ttz))
 
-        if judgmentallyEqual ty tz
+        if Dhall.Core.judgmentallyEqual ty tz
             then return ()
             else Left (TypeError ctx e (IfBranchMismatch y z ty tz))
         return ty
@@ -339,7 +331,7 @@ typeWithA tpa = loop
                     _ -> Left (TypeError ctx e (InvalidListType t))
                 flip traverseWithIndex_ xs (\i x -> do
                     t' <- loop ctx x
-                    if judgmentallyEqual t t'
+                    if Dhall.Core.judgmentallyEqual t t'
                         then return ()
                         else do
                             let nf_t  = Dhall.Core.normalize t
@@ -355,7 +347,7 @@ typeWithA tpa = loop
             _ -> Left (TypeError ctx e (InvalidListType t))
         flip traverseWithIndex_ xs (\i x -> do
             t' <- loop ctx x
-            if judgmentallyEqual t t'
+            if Dhall.Core.judgmentallyEqual t t'
                 then return ()
                 else do
                     let nf_t  = Dhall.Core.normalize t
@@ -373,7 +365,7 @@ typeWithA tpa = loop
             App List er -> return er
             _           -> Left (TypeError ctx e (CantListAppend r tr))
 
-        if judgmentallyEqual el er
+        if Dhall.Core.judgmentallyEqual el er
             then return (App List el)
             else Left (TypeError ctx e (ListAppendMismatch el er))
     loop _      ListBuild         = do
@@ -414,7 +406,7 @@ typeWithA tpa = loop
             _ -> Left (TypeError ctx e (InvalidOptionalType t))
         forM_ xs (\x -> do
             t' <- loop ctx x
-            if judgmentallyEqual t t'
+            if Dhall.Core.judgmentallyEqual t t'
                 then return ()
                 else do
                     let nf_t  = Dhall.Core.normalize t
@@ -542,10 +534,10 @@ typeWithA tpa = loop
                     Just tX  ->
                         case tX of
                             Pi _ tY' t' -> do
-                                if judgmentallyEqual tY tY'
+                                if Dhall.Core.judgmentallyEqual tY tY'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
-                                if judgmentallyEqual t t'
+                                if Dhall.Core.judgmentallyEqual t t'
                                     then return ()
                                     else Left (TypeError ctx e (InvalidHandlerOutputType kY t t'))
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
@@ -581,10 +573,10 @@ typeWithA tpa = loop
                     Just tX  ->
                         case tX of
                             Pi _ tY' t' -> do
-                                if judgmentallyEqual tY tY'
+                                if Dhall.Core.judgmentallyEqual tY tY'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
-                                if judgmentallyEqual t t'
+                                if Dhall.Core.judgmentallyEqual t t'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerOutputTypeMismatch kX t kY t'))
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))

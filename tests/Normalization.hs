@@ -25,6 +25,7 @@ normalizationTests :: TestTree
 normalizationTests =
     testGroup "normalization"
         [ examples
+        , simplifications
         , constantFolding
         , conversions
         , shouldNormalize "Optional build/fold fusion" "optionalBuildFold"
@@ -152,6 +153,16 @@ examples =
         , shouldNormalize "Text/concatMapSep" "./examples/Text/concatMapSep/1"
         , shouldNormalize "Text/concatSep" "./examples/Text/concatSep/0"
         , shouldNormalize "Text/concatSep" "./examples/Text/concatSep/1"
+        ]
+
+simplifications :: TestTree
+simplifications =
+    testGroup "Simplifications"
+        [ shouldNormalize "if/then/else" "./simplifications/ifThenElse"
+        , shouldNormalize "||" "./simplifications/or"
+        , shouldNormalize "&&" "./simplifications/and"
+        , shouldNormalize "==" "./simplifications/eq"
+        , shouldNormalize "!=" "./simplifications/ne"
         ]
 
 constantFolding :: TestTree

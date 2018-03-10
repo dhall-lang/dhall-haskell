@@ -1,5 +1,5 @@
 Name: dhall
-Version: 1.10.0
+Version: 1.11.0
 Cabal-Version: >=1.8.0.2
 Build-Type: Simple
 Tested-With: GHC == 8.0.1
@@ -139,6 +139,7 @@ Extra-Source-Files:
     tests/normalization/examples/Text/concatMap/*.dhall
     tests/normalization/examples/Text/concatMapSep/*.dhall
     tests/normalization/examples/Text/concatSep/*.dhall
+    tests/normalization/simplifications/*.dhall
     tests/parser/*.dhall
     tests/regression/*.dhall
     tests/tutorial/*.dhall
