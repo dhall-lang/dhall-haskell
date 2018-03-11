@@ -196,7 +196,7 @@ Executable dhall
     Hs-Source-Dirs: dhall
     Main-Is: Main.hs
     Build-Depends:
-        ansi-terminal               >= 0.6.3.1  && < 0.8 ,
+        ansi-terminal               >= 0.6.3.1  && < 0.9 ,
         base                        >= 4        && < 5   ,
         dhall                                            ,
         optparse-generic            >= 1.1.1    && < 1.4 ,
@@ -229,7 +229,7 @@ Executable dhall-format
     Main-Is: Main.hs
     Build-Depends:
         base                        >= 4        && < 5   ,
-        ansi-terminal               >= 0.6.3.1  && < 0.8 ,
+        ansi-terminal               >= 0.6.3.1  && < 0.9 ,
         dhall                                ,
         optparse-generic            >= 1.1.1    && < 1.4 ,
         prettyprinter               >= 1.2.0.1  && < 1.3 ,
