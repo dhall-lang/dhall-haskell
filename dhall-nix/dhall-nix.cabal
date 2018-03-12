@@ -31,7 +31,7 @@ Library
         containers                              < 0.6 ,
         data-fix                                < 0.3 ,
         dhall                     >= 1.11.0  && < 1.12,
-        hnix                      >= 0.3.4   && < 0.4 ,
+        hnix                      >= 0.3.4   && < 0.5 ,
         insert-ordered-containers >= 0.1.0.1 && < 0.3 ,
         neat-interpolation                      < 0.4 ,
         scientific                              < 0.4 ,
