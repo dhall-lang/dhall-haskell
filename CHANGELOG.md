@@ -7,8 +7,11 @@
       were directly using the `alphaNormalize` function from the Haskell API
       because `let` expressions were not correctly α-normalized
     * See: https://github.com/dhall-lang/dhall-haskell/pull/319
-* Increase upper bound on `ansi-terminal`
-    * https://github.com/dhall-lang/dhall-haskell/pull/322
+* Slight tweak to syntax highlighting
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/324
+* Increase upper bound on `ansi-terminal` and `exceptions`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/322
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/325
 
 1.11.0
 
