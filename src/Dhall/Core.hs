@@ -315,6 +315,8 @@ data Expr s a
     | UnionLit Text (Expr s a) (InsOrdHashMap Text (Expr s a))
     -- | > Combine x y                              ~  x ∧ y
     | Combine (Expr s a) (Expr s a)
+    -- | > CombineTypes x y                         ~  x ⩓ y
+    | CombineTypes (Expr s a) (Expr s a)
     -- | > CombineRight x y                         ~  x ⫽ y
     | Prefer (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
@@ -391,6 +393,7 @@ instance Monad (Expr s) where
     Union     a          >>= k = Union (fmap (>>= k) a)
     UnionLit a b c       >>= k = UnionLit a (b >>= k) (fmap (>>= k) c)
     Combine a b          >>= k = Combine (a >>= k) (b >>= k)
+    CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
     Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
     Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
     Constructors a       >>= k = Constructors (a >>= k)
@@ -452,6 +455,7 @@ instance Bifunctor Expr where
     first k (Union a             ) = Union (fmap (first k) a)
     first k (UnionLit a b c      ) = UnionLit a (first k b) (fmap (first k) c)
     first k (Combine a b         ) = Combine (first k a) (first k b)
+    first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
     first k (Prefer a b          ) = Prefer (first k a) (first k b)
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
     first k (Constructors a      ) = Constructors (first k a)
@@ -693,6 +697,10 @@ shift d v (Combine a b) = Combine a' b'
   where
     a' = shift d v a
     b' = shift d v b
+shift d v (CombineTypes a b) = CombineTypes a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
 shift d v (Prefer a b) = Prefer a' b'
   where
     a' = shift d v a
@@ -830,6 +838,10 @@ subst x e (RecordLit    kvs) = RecordLit                (fmap (subst x e) kvs)
 subst x e (Union        kts) = Union                    (fmap (subst x e) kts)
 subst x e (UnionLit a b kts) = UnionLit a (subst x e b) (fmap (subst x e) kts)
 subst x e (Combine a b) = Combine a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
+subst x e (CombineTypes a b) = CombineTypes a' b'
   where
     a' = subst x e a
     b' = subst x e b
@@ -1078,6 +1090,12 @@ alphaNormalize (Combine l₀ r₀) =
     l₁ = alphaNormalize l₀
 
     r₁ = alphaNormalize r₀
+alphaNormalize (CombineTypes l₀ r₀) =
+    CombineTypes l₁ r₁
+  where
+    l₁ = alphaNormalize l₀
+
+    r₁ = alphaNormalize r₀
 alphaNormalize (Prefer l₀ r₀) =
     Prefer l₁ r₁
   where
@@ -1197,6 +1215,7 @@ denote (RecordLit a         ) = RecordLit (fmap denote a)
 denote (Union a             ) = Union (fmap denote a)
 denote (UnionLit a b c      ) = UnionLit a (denote b) (fmap denote c)
 denote (Combine a b         ) = Combine (denote a) (denote b)
+denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
 denote (Prefer a b          ) = Prefer (denote a) (denote b)
 denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (Constructors a      ) = Constructors (denote a)
@@ -1496,6 +1515,17 @@ normalizeWith ctx e0 = loop (denote e0)
             RecordLit (Data.HashMap.Strict.InsOrd.unionWith decide m n)
         decide l r =
             Combine l r
+    CombineTypes x y -> decide (loop x) (loop y)
+      where
+        decide (Record m) r | Data.HashMap.Strict.InsOrd.null m =
+            r
+        decide l (Record n) | Data.HashMap.Strict.InsOrd.null n =
+            l
+        decide (Record m) (Record n) =
+            Record (Data.HashMap.Strict.InsOrd.unionWith decide m n)
+        decide l r =
+            CombineTypes l r
+
     Prefer x y -> decide (loop x) (loop y)
       where
         decide (RecordLit m) r | Data.HashMap.Strict.InsOrd.null m =
@@ -1705,6 +1735,13 @@ isNormalized e = case denote e of
         combine = case x of
             RecordLit _ -> case y of
                 RecordLit _ -> False
+                _ -> True
+            _ -> True
+    CombineTypes x y -> isNormalized x && isNormalized y && combine
+      where
+        combine = case x of
+            Record _ -> case y of
+                Record _ -> False
                 _ -> True
             _ -> True
     Prefer x y -> isNormalized x && isNormalized y && combine
