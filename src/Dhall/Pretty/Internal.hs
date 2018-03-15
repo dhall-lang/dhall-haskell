@@ -18,7 +18,16 @@ module Dhall.Pretty.Internal (
     , buildScientific
     , pretty
     , escapeText
-    , rarrow
+
+    , prettyConst
+    , prettyLabel
+    , prettyNatural
+    , prettyNumber
+    , prettyScientific
+
+    , builtin
+    , literal
+
     , colon
     , comma
     , equals
@@ -30,8 +39,9 @@ module Dhall.Pretty.Internal (
     , lparen
     , pipe
     , rangle
-    , rparen
+    , rarrow
     , rbrace
+    , rparen
     ) where
 
 import {-# SOURCE #-} Dhall.Core
