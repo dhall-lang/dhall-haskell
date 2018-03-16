@@ -33,6 +33,7 @@ module Dhall.Core (
     , normalizeWith
     , Normalizer
     , judgmentallyEqual
+    , judgmentallyEqualWith
     , subst
     , shift
     , isNormalized
@@ -98,7 +99,7 @@ import qualified Data.Text.Prettyprint.Doc             as Pretty
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
 -}
-data Const = Type | Kind deriving (Show, Eq, Bounded, Enum)
+data Const = Type | Kind deriving (Show, Eq, Ord, Bounded, Enum)
 
 instance Buildable Const where
     build = buildConst
@@ -194,7 +195,7 @@ instance Pretty Path where
     appear as a numeric suffix.
 -}
 data Var = V Text !Integer
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -1546,10 +1547,15 @@ normalizeWith ctx e0 = loop (denote e0)
     `False` otherwise
 -}
 judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
-judgmentallyEqual eL0 eR0 = alphaBetaNormalize eL0 == alphaBetaNormalize eR0
+judgmentallyEqual = judgmentallyEqualWith (const Nothing)
+
+{-| Like 'judgmentallyEqual', but uses a custom 'Normalizer' before comparison
+-}
+judgmentallyEqualWith :: Eq a => Normalizer a -> Expr s a -> Expr t a -> Bool
+judgmentallyEqualWith nrm eL0 eR0 = alphaBetaNormalize nrm eL0 == alphaBetaNormalize nrm eR0
   where
-    alphaBetaNormalize :: Eq a => Expr s a -> Expr () a
-    alphaBetaNormalize = alphaNormalize . normalize
+    alphaBetaNormalize :: Eq a => Normalizer a -> Expr s a -> Expr () a
+    alphaBetaNormalize n = alphaNormalize . normalizeWith n
 
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
 --   polymorphic enough to be used.
