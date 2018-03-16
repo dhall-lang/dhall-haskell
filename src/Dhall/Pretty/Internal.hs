@@ -26,10 +26,12 @@ module Dhall.Pretty.Internal (
     , prettyScientific
 
     , builtin
+    , keyword
     , literal
 
     , colon
     , comma
+    , dot
     , equals
     , forall
     , label

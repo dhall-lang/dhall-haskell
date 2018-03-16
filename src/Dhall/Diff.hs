@@ -77,6 +77,18 @@ colon = token Internal.colon
 comma :: Diff
 comma = token Internal.comma
 
+dot :: Diff
+dot = token Internal.dot
+
+if_ :: Diff
+if_ = token (Internal.keyword "if")
+
+then_ :: Diff
+then_ = token (Internal.keyword "then")
+
+else_ :: Diff
+else_ = token (Internal.keyword "else")
+
 forall :: Diff
 forall = token Internal.forall
 
@@ -235,10 +247,10 @@ diffKeyVals assign kvsL kvsR =
     anyEqual = getAny (foldMap (Any . same) shared)
 
 braced :: [Diff] -> Diff
-braced = enclosed lbrace comma rbrace
+braced = enclosed (lbrace <> " ") (comma <> " ") (rbrace <> " ")
 
 angled :: [Diff] -> Diff
-angled = enclosed langle pipe rangle
+angled = enclosed (langle <> " ") (pipe <> " ") (rangle <> " ")
 
 diffRecord
     :: Pretty a
@@ -318,6 +330,37 @@ diffExprB l@(Lam _ _ _) r@(Lam _ _ _) =
 diffExprB l@(Lam _ _ _) r =
     mismatch l r
 diffExprB l r@(Lam _ _ _) =
+    mismatch l r
+diffExprB l@(BoolIf _ _ _) r@(BoolIf _ _ _) =
+    enclosed' "      " (else_ <> "  ") (docs l r)
+  where
+    docs (BoolIf aL bL cL) (BoolIf aR bR cR) =
+        Data.List.NonEmpty.cons (decide (same predicate)) (docs cL cR)
+      where
+        predicate = diffExprA aL aR
+
+        branch = diffExprA bL bR
+
+        decide True =
+                if_
+            <>  " "
+            <>  predicate
+            <>  " "
+            <>  then_
+            <>  " "
+            <>  branch
+        decide False =
+                if_
+            <>  predicate
+            <>  hardline
+            <>  then_
+            <>  " "
+            <>  branch
+    docs aL aR =
+        pure (diffExprB aL aR)
+diffExprB l@(BoolIf _ _ _) r =
+    mismatch l r
+diffExprB l r@(BoolIf _ _ _) =
     mismatch l r
 diffExprB l@(Pi _ _ _) r@(Pi _ _ _) =
     enclosed' "  " (rarrow <> " ") (docs l r)
@@ -399,8 +442,18 @@ diffExprD l r@(App _ _) =
 diffExprD l r =
     diffExprE l r
 
--- TODO
 diffExprE :: Pretty a => Expr s a -> Expr s a -> Diff
+diffExprE l@(Field _ _) r@(Field _ _) =
+    enclosed' "  " (dot <> " ") (Data.List.NonEmpty.reverse (docs l r))
+  where
+    docs (Field aL bL) (Field aR bR) =
+        Data.List.NonEmpty.cons (diffLabel bL bR) (docs aL aR)
+    docs aL aR =
+        pure (diffExprF aL aR)
+diffExprE l@(Field _ _) r =
+    mismatch l r
+diffExprE l r@(Field _ _) =
+    mismatch l r
 diffExprE l r =
     diffExprF l r
 
