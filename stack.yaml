@@ -1,1 +1,4 @@
-resolver: lts-11.1
+resolver: lts-9.6
+extra-deps:
+- prettyprinter-1.2.0.1
+- formatting-6.3.1
