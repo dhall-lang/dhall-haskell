@@ -19,8 +19,9 @@ mkDerivation {
     containers contravariant cryptonite directory exceptions filepath
     formatting http-client http-client-tls insert-ordered-containers
     lens-family-core memory parsers prettyprinter
-    prettyprinter-ansi-terminal scientific text transformers
-    trifecta unordered-containers vector
+    prettyprinter-ansi-terminal scientific text transformers trifecta
+    unordered-containers vector
+
   ];
   executableHaskellDepends = [
     ansi-terminal base haskeline mtl optparse-generic prettyprinter
