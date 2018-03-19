@@ -58,10 +58,10 @@ import Data.Bifunctor (Bifunctor(..))
 import Data.Foldable
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.HashSet (HashSet)
-import Data.Monoid ((<>))
 import Data.String (IsString(..))
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
+import Data.Semigroup (Semigroup(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Pretty)
@@ -468,20 +468,17 @@ instance IsString (Expr s a) where
 data Chunks s a = Chunks [(Builder, Expr s a)] Builder
     deriving (Functor, Foldable, Traversable, Show, Eq)
 
+instance Data.Semigroup.Semigroup (Chunks s a) where
+    Chunks xysL zL <> Chunks         []    zR =
+        Chunks xysL (zL <> zR)
+    Chunks xysL zL <> Chunks ((x, y):xysR) zR =
+        Chunks (xysL ++ (zL <> x, y):xysR) zR
+
 instance Monoid (Chunks s a) where
     mempty = Chunks [] mempty
 
-#if MIN_VERSION_base(4,11,0)
-instance Semigroup (Chunks s a) where
-    (<>) (Chunks xysL zL) (Chunks         []    zR) =
-        Chunks xysL (zL <> zR)
-    (<>) (Chunks xysL zL) (Chunks ((x, y):xysR) zR) =
-        Chunks (xysL ++ (zL <> x, y):xysR) zR
-#else
-    mappend (Chunks xysL zL) (Chunks         []    zR) =
-        Chunks xysL (zL <> zR)
-    mappend (Chunks xysL zL) (Chunks ((x, y):xysR) zR) =
-        Chunks (xysL ++ (zL <> x, y):xysR) zR
+#if !(MIN_VERSION_base(4,11,0))
+    mappend = (<>)
 #endif
 
 instance IsString (Chunks s a) where
