@@ -30,10 +30,10 @@ import Data.Foldable
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
-import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
+import Formatting.Buildable (Buildable(..))
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal

@@ -16,6 +16,9 @@ let
                   (haskellPackagesNew.callPackage ./default.nix { })
                 );
 
+          formatting =
+            haskellPackagesNew.callPackage ./nix/formatting.nix { };
+
           prettyprinter =
             haskellPackagesNew.callPackage ./nix/prettyprinter.nix { };
         };
