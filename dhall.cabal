@@ -211,6 +211,7 @@ Executable dhall
 Executable dhall-repl
     Hs-Source-Dirs: dhall-repl
     Main-Is: Main.hs
+    ghc-options: -threaded
     Build-Depends:
         base             >= 4        && < 5   ,
         ansi-terminal                         ,
@@ -221,7 +222,10 @@ Executable dhall-repl
         prettyprinter                         ,
         prettyprinter-ansi-terminal           ,
         text                                  ,
-        trifecta
+        trifecta                              ,
+        deepseq                               ,
+        directory                             ,
+        typed-process
     GHC-Options: -Wall
 
 Executable dhall-format
