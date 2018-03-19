@@ -26,7 +26,6 @@ import Data.Foldable (forM_, toList)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
-import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Pretty(..))
@@ -34,6 +33,7 @@ import Data.Traversable (forM)
 import Data.Typeable (Typeable)
 import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
+import Formatting.Buildable (Buildable(..))
 
 import qualified Data.Foldable
 import qualified Data.HashMap.Strict.InsOrd
