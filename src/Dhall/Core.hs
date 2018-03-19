@@ -62,12 +62,12 @@ import Data.Monoid ((<>))
 import Data.String (IsString(..))
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
-import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Traversable
 import {-# SOURCE #-} Dhall.Pretty.Internal
+import Formatting.Buildable (Buildable(..))
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 
