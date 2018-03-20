@@ -1,3 +1,14 @@
+1.12.0
+
+* Additional changes to support GHC 8.4
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/331
+* BREAKING CHANGE TO API: Replace dependency on `text-format` with `formatting`
+    * This replace the `Data.Text.Buildable.Buildable` instances with
+      `Formatting.Buildable.Buildable` instances, which is why this is a
+       breaking change
+    * `text-format` is no longer maintained and blocking GHC 8.4 support
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/330
+
 1.11.1
 
 * Support GHC 8.4
