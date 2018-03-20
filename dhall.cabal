@@ -190,7 +190,7 @@ Library
         Dhall.TypeCheck
     Other-Modules:
         Dhall.Pretty.Internal
-    GHC-Options: -Wall
+    GHC-Options: -Wall -Wcompat
 
 Executable dhall
     Hs-Source-Dirs: dhall
@@ -204,7 +204,7 @@ Executable dhall
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
         trifecta                    >= 1.6      && < 1.8 ,
         text                        >= 0.11.1.0 && < 1.3
-    GHC-Options: -Wall
+    GHC-Options: -Wall -Wcompat
     Other-Modules:
         Paths_dhall
 
@@ -222,7 +222,7 @@ Executable dhall-repl
         prettyprinter-ansi-terminal           ,
         text                                  ,
         trifecta
-    GHC-Options: -Wall
+    GHC-Options: -Wall -Wcompat
 
 Executable dhall-format
     Hs-Source-Dirs: dhall-format
@@ -236,7 +236,7 @@ Executable dhall-format
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
         trifecta                    >= 1.6      && < 1.8 ,
         text                        >= 0.11.1.0 && < 1.3
-    GHC-Options: -Wall
+    GHC-Options: -Wall -Wcompat
     Other-Modules:
         Paths_dhall
 
@@ -256,7 +256,7 @@ Test-Suite test
     Type: exitcode-stdio-1.0
     Hs-Source-Dirs: tests
     Main-Is: Tests.hs
-    GHC-Options: -Wall
+    GHC-Options: -Wall -Wcompat
     Other-Modules:
         Format
         Normalization

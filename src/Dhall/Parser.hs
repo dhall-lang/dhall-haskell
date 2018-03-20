@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP               #-}
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -26,8 +26,8 @@ import Control.Monad (MonadPlus)
 import Data.ByteString (ByteString)
 import Data.Functor (void)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
-import Data.Monoid ((<>))
 import Data.Sequence (ViewL(..))
+import Data.Semigroup (Semigroup(..))
 import Data.Scientific (Scientific)
 import Data.String (IsString(..))
 import Data.Text.Lazy (Text)
@@ -95,14 +95,14 @@ newtype Parser a = Parser { unParser :: Text.Trifecta.Parser a }
     ,   MarkParsing Delta
     )
 
-instance Monoid a => Monoid (Parser a) where
+instance Data.Semigroup.Semigroup a => Data.Semigroup.Semigroup (Parser a) where
+    (<>) = liftA2 (<>)
+
+instance (Data.Semigroup.Semigroup a, Monoid a) => Monoid (Parser a) where
     mempty = pure mempty
 
-#if MIN_VERSION_base(4,11,0)
-instance Semigroup a => Semigroup (Parser a) where
-    (<>) = liftA2 (<>)
-#else
-    mappend = liftA2 mappend
+#if !(MIN_VERSION_base(4,11,0))
+    mappend = (<>)
 #endif
 
 instance IsString a => IsString (Parser a) where
@@ -127,10 +127,10 @@ noted parser = do
     after      <- Text.Trifecta.position
     return (Note (Src before after bytes) e)
 
-count :: Monoid a => Int -> Parser a -> Parser a
+count :: (Semigroup a, Monoid a) => Int -> Parser a -> Parser a
 count n parser = mconcat (replicate n parser)
 
-range :: Monoid a => Int -> Int -> Parser a -> Parser a
+range :: (Semigroup a, Monoid a) => Int -> Int -> Parser a -> Parser a
 range minimumBound maximumMatches parser =
     count minimumBound parser <> loop maximumMatches
   where
