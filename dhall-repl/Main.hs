@@ -189,6 +189,18 @@ addBinding _ =
   liftIO ( fail ":let should be of the form `:let x = y`" )
 
 saveBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
+
+saveBinding (file : []) = do
+  loadedExpression <- parseAndLoad "it"
+
+  _ <- typeCheck loadedExpression
+
+  normalizedExpression <- normalize loadedExpression
+
+  let handler handle = output handle normalizedExpression
+
+  liftIO (System.IO.withFile file System.IO.WriteMode handler)
+
 saveBinding (file : "=" : tokens) = do
   loadedExpression <- parseAndLoad (unwords tokens)
 
@@ -199,7 +211,8 @@ saveBinding (file : "=" : tokens) = do
   let handler handle = output handle normalizedExpression
 
   liftIO (System.IO.withFile file System.IO.WriteMode handler)
-saveBinding _ = fail ":save should be of the form `:save x = y`"
+
+saveBinding _ = fail ":save should be of the form `:save x = y` or `:save x` to save the result of previous expression"
 
 
 options
