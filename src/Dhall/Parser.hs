@@ -65,7 +65,7 @@ import qualified Text.PrettyPrint.ANSI.Leijen
 import qualified Text.Trifecta
 
 -- | Source code extract
-data Src = Src Delta Delta ByteString deriving (Eq, Show)
+data Src = Src Delta Delta ByteString deriving (Eq, Ord, Show)
 
 instance Buildable Src where
     build (Src begin _ bytes) =
