@@ -114,10 +114,10 @@ import Nix.Expr
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Map
 import qualified Data.Text
-import qualified Data.Text.Buildable
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Dhall.Core
+import qualified Formatting.Buildable
 import qualified NeatInterpolation
 
 {-| This is the exception type for all possible errors that might arise when
@@ -183,7 +183,7 @@ Your code contains the following expression:
 Nix
 |]
       where
-        builder = Data.Text.Buildable.build v
+        builder = Formatting.Buildable.build v
 
         txt =
             Data.Text.Lazy.toStrict (Data.Text.Lazy.Builder.toLazyText builder)

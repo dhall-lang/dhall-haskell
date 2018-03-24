@@ -20,6 +20,8 @@ let
               (haskellPackagesNew.callPackage ./default.nix { });
 
           prettyprinter = haskellPackagesNew.callPackage ./prettyprinter.nix { };
+
+          formatting = haskellPackagesNew.callPackage ./formatting.nix { };
         };
       };
     };
