@@ -10,7 +10,7 @@
 }:
 mkDerivation {
   pname = "dhall";
-  version = "1.11.1";
+  version = "1.12.0";
   src = ./.;
   isLibrary = true;
   isExecutable = true;
@@ -21,7 +21,6 @@ mkDerivation {
     lens-family-core memory parsers prettyprinter
     prettyprinter-ansi-terminal scientific text transformers trifecta
     unordered-containers vector
-
   ];
   executableHaskellDepends = [
     ansi-terminal base haskeline mtl optparse-generic prettyprinter
