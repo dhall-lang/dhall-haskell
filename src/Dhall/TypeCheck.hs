@@ -680,17 +680,13 @@ data TypeMessage s a
     | NoDependentTypes (Expr s a) (Expr s a)
     deriving (Show)
 
-shortTypeMessage
-    :: (Buildable a, Eq a, Eq s, Pretty a)
-    => TypeMessage s a -> Builder
+shortTypeMessage :: (Buildable a, Eq a, Pretty a) => TypeMessage s a -> Builder
 shortTypeMessage msg =
     "\ESC[1;31mError\ESC[0m: " <> build short <> "\n"
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
-longTypeMessage
-    :: (Buildable a, Eq a, Eq s, Pretty a)
-    => TypeMessage s a -> Builder
+longTypeMessage :: (Buildable a, Eq a, Pretty a) => TypeMessage s a -> Builder
 longTypeMessage msg =
         "\ESC[1;31mError\ESC[0m: " <> build short <> "\n"
     <>  "\n"
@@ -708,7 +704,7 @@ data ErrorMessages = ErrorMessages
 _NOT :: Builder
 _NOT = "\ESC[1mnot\ESC[0m"
 
-prettyDiff :: (Eq a, Eq s, Pretty a) => Expr s a -> Expr s a -> Builder
+prettyDiff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Builder
 prettyDiff exprL exprR = builder
   where
     doc =
@@ -723,7 +719,7 @@ prettyDiff exprL exprR = builder
     builder = Builder.fromLazyText lazyText
 
 prettyTypeMessage
-    :: (Buildable a, Eq a, Eq s, Pretty a) => TypeMessage s a -> ErrorMessages
+    :: (Buildable a, Eq a, Pretty a) => TypeMessage s a -> ErrorMessages
 prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
   -- https://github.com/dhall-lang/dhall-haskell/pull/116
@@ -3115,12 +3111,12 @@ data TypeError s a = TypeError
     , typeMessage :: TypeMessage s a
     } deriving (Typeable)
 
-instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a) => Show (TypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Pretty a) => Show (TypeError s a) where
     show = Text.unpack . Builder.toLazyText . build
 
-instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a, Typeable a, Typeable s) => Exception (TypeError s a)
+instance (Buildable a, Buildable s, Eq a, Pretty a, Typeable a, Typeable s) => Exception (TypeError s a)
 
-instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a) => Buildable (TypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (TypeError s a) where
     build (TypeError ctx expr msg)
         =   "\n"
         <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
@@ -3149,12 +3145,12 @@ instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a) => Buildable (TypeErro
 newtype DetailedTypeError s a = DetailedTypeError (TypeError s a)
     deriving (Typeable)
 
-instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a) => Show (DetailedTypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Pretty a) => Show (DetailedTypeError s a) where
     show = Text.unpack . Builder.toLazyText . build
 
-instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a, Typeable a, Typeable s) => Exception (DetailedTypeError s a)
+instance (Buildable a, Buildable s, Eq a, Pretty a, Typeable a, Typeable s) => Exception (DetailedTypeError s a)
 
-instance (Buildable a, Buildable s, Eq a, Eq s, Pretty a) => Buildable (DetailedTypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (DetailedTypeError s a) where
     build (DetailedTypeError (TypeError ctx expr msg))
         =   "\n"
         <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
