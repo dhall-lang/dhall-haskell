@@ -424,25 +424,69 @@ typeWithA tpa = loop
                       (Pi "just" (Pi "_" "a" "optional")
                           (Pi "nothing" "optional" "optional") )
     loop ctx e@(Record    kts   ) = do
-        let process (k, t) = do
-                s <- fmap Dhall.Core.normalize (loop ctx t)
-                case s of
-                    Const Type -> return ()
-                    Const Kind -> return ()
-                    _          -> Left (TypeError ctx e (InvalidFieldType k t))
-        mapM_ process (Data.HashMap.Strict.InsOrd.toList kts)
-        return (Const Type)
+        case Data.HashMap.Strict.InsOrd.toList kts of
+            []            -> return (Const Type)
+            (k0, t0):rest -> do
+                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
+                c <- case s0 of
+                    Const Type ->
+                        return Type
+                    Const Kind
+                        | Dhall.Core.judgmentallyEqual t0 (Const Type) ->
+                            return Kind
+                    _ -> Left (TypeError ctx e (InvalidFieldType k0 t0))
+                let process (k, t) = do
+                        s <- fmap Dhall.Core.normalize (loop ctx t)
+                        case s of
+                            Const Type ->
+                                if c == Type
+                                then return ()
+                                else Left (TypeError ctx e (FieldAnnotationMismatch k t k0 t0 Type))
+                            Const Kind ->
+                                if c == Kind
+                                then
+                                    if Dhall.Core.judgmentallyEqual t (Const Type)
+                                    then return ()
+                                    else Left (TypeError ctx e (InvalidFieldType k t))
+                                else Left (TypeError ctx e (FieldAnnotationMismatch k t k0 t0 Kind))
+                            _ ->
+                                Left (TypeError ctx e (InvalidFieldType k t))
+                mapM_ process rest
+                return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
-        let process k v = do
-                t <- loop ctx v
-                s <- fmap Dhall.Core.normalize (loop ctx t)
-                case s of
-                    Const Type -> return ()
-                    Const Kind -> return ()
-                    _          -> Left (TypeError ctx e (InvalidField k v))
-                return t
-        kts <- Data.HashMap.Strict.InsOrd.traverseWithKey process kvs
-        return (Record kts)
+        case Data.HashMap.Strict.InsOrd.toList kvs of
+            []         -> return (Record Data.HashMap.Strict.InsOrd.empty)
+            (k0, v0):_ -> do
+                t0 <- loop ctx v0
+                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
+                c <- case s0 of
+                    Const Type ->
+                        return Type
+                    Const Kind
+                        | Dhall.Core.judgmentallyEqual t0 (Const Type) ->
+                            return Kind
+                    _       -> Left (TypeError ctx e (InvalidField k0 v0))
+                let process k v = do
+                        t <- loop ctx v
+                        s <- fmap Dhall.Core.normalize (loop ctx t)
+                        case s of
+                            Const Type ->
+                                if c == Type
+                                then return ()
+                                else Left (TypeError ctx e (FieldMismatch k v k0 v0 Type))
+                            Const Kind ->
+                                if c == Kind
+                                then
+                                    if Dhall.Core.judgmentallyEqual t (Const Type)
+                                    then return ()
+                                    else Left (TypeError ctx e (InvalidFieldType k t))
+                                else Left (TypeError ctx e (FieldMismatch k v k0 v0 Kind))
+                            _ ->
+                                Left (TypeError ctx e (InvalidField k t))
+
+                        return t
+                kts <- Data.HashMap.Strict.InsOrd.traverseWithKey process kvs
+                return (Record kts)
     loop ctx e@(Union     kts   ) = do
         let process (k, t) = do
                 s <- fmap Dhall.Core.normalize (loop ctx t)
@@ -646,6 +690,8 @@ data TypeMessage s a
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
     | InvalidField Text (Expr s a)
     | InvalidFieldType Text (Expr s a)
+    | FieldAnnotationMismatch Text (Expr s a) Text (Expr s a) Const
+    | FieldMismatch Text (Expr s a) Text (Expr s a) Const
     | InvalidAlternative Text (Expr s a)
     | InvalidAlternativeType Text (Expr s a)
     | ListAppendMismatch (Expr s a) (Expr s a)
@@ -1825,32 +1871,31 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
     short = "Invalid field type"
 
     long =
-        "Explanation: Every record type documents the type of each field, like this:     \n\
+        "Explanation: Every record type annotates each field with a ❰Type❱ or a ❰Kind❱,  \n\
+        \like this:                                                                      \n\
+        \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────────────────────────┐                            \n\
-        \    │ { foo : Integer, bar : Integer, baz : Text } │                            \n\
-        \    └──────────────────────────────────────────────┘                            \n\
-        \                                                                                \n\
-        \However, fields cannot be annotated with expressions other than types           \n\
-        \                                                                                \n\
-        \For example, these record types are " <> _NOT <> " valid:                       \n\
+        \    │ { foo : Integer, bar : Integer, baz : Text } │  Every field is annotated  \n\
+        \    └──────────────────────────────────────────────┘  with a ❰Type❱             \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────┐                                              \n\
-        \    │ { foo : Integer, bar : 1 } │                                              \n\
+        \    │ { foo : Type, bar : Type } │  Every field is annotated                    \n\
+        \    └────────────────────────────┘  with a ❰Kind❱                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, the types of fields may " <> _NOT <> " be term-level values:           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ { foo : Integer, bar : 1 } │  Invalid record type                         \n\
         \    └────────────────────────────┘                                              \n\
         \                             ⇧                                                  \n\
-        \                             ❰1❱ is an ❰Integer❱ and not a ❰Type❱               \n\
+        \                             ❰1❱ is an ❰Integer❱ and not a ❰Type❱ or ❰Kind❱     \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌───────────────────────────────┐                                           \n\
-        \    │ { foo : Integer, bar : Type } │                                           \n\
-        \    └───────────────────────────────┘                                           \n\
-        \                             ⇧                                                  \n\
-        \                             ❰Type❱ is a ❰Kind❱ and not a ❰Type❱                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a record type with a key named:                                    \n\
+        \You provided a record type with a field named:                                  \n\
         \                                                                                \n\
         \↳ " <> txt0 <> "                                                                \n\
         \                                                                                \n\
@@ -1858,10 +1903,134 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \↳ " <> txt1 <> "                                                                \n\
         \                                                                                \n\
-        \... which is not a type                                                         \n"
+        \... which is neither a ❰Type❱ nor a ❰Kind❱                                      \n"
       where
         txt0 = build k
         txt1 = build expr0
+
+prettyTypeMessage (FieldAnnotationMismatch k0 expr0 k1 expr1 c) = ErrorMessages {..}
+  where
+    short = "Field annotation mismatch"
+
+    long =
+        "Explanation: Every record type annotates each field with a ❰Type❱ or a ❰Kind❱,  \n\
+        \like this:                                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────────┐                            \n\
+        \    │ { foo : Integer, bar : Integer, baz : Text } │  Every field is annotated  \n\
+        \    └──────────────────────────────────────────────┘  with a ❰Type❱             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ { foo : Type, bar : Type } │  Every field is annotated                    \n\
+        \    └────────────────────────────┘  with a ❰Kind❱                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, you cannot have a record type with both a ❰Type❱ and ❰Kind❱ annotation:\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \              This is a ❰Type❱ annotation                                       \n\
+        \              ⇩                                                                 \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ { foo : Integer, bar : Type } │  Invalid record type                      \n\
+        \    └───────────────────────────────┘                                           \n\
+        \                             ⇧                                                  \n\
+        \                             ... but this is a ❰Kind❱ annotation                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You provided a record type with a field named:                                  \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... annotated with the following expression:                                    \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is a " <> here <> " whereas another field named:                      \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n\
+        \                                                                                \n\
+        \... annotated with the following expression:                                    \n\
+        \                                                                                \n\
+        \↳ " <> txt3 <> "                                                                \n\
+        \                                                                                \n\
+        \... is a " <> there <> ", which does not match                                  \n"
+      where
+        txt0 = build k0
+        txt1 = build expr0
+        txt2 = build k1
+        txt3 = build expr1
+
+        here = case c of
+            Type -> "❰Type❱"
+            Kind -> "❰Kind❱"
+
+        there = case c of
+            Type -> "❰Kind❱"
+            Kind -> "❰Type❱"
+
+prettyTypeMessage (FieldMismatch k0 expr0 k1 expr1 c) = ErrorMessages {..}
+  where
+    short = "Field mismatch"
+
+    long =
+        "Explanation: Every record has fields that can be either terms or types, like    \n\
+        \this:                                                                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────┐                                    \n\
+        \    │ { foo = 1, bar = True, baz = \"ABC\" } │  Every field is a term           \n\
+        \    └──────────────────────────────────────┘                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ { foo = Integer, bar = Text } │  Every field is a type                    \n\
+        \    └───────────────────────────────┘                                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, you cannot have a record that stores both terms and types:             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \              This is a term                                                    \n\
+        \              ⇩                                                                 \n\
+        \    ┌─────────────────────────┐                                                 \n\
+        \    │ { foo = 1, bar = Bool } │  Invalid record                                 \n\
+        \    └─────────────────────────┘                                                 \n\
+        \                       ⇧                                                        \n\
+        \                       ... but this is a type                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You provided a record with a field named:                                       \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... whose value was:                                                            \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is a " <> here <> " whereas another field named:                      \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n\
+        \                                                                                \n\
+        \... whose value was:                                                            \n\
+        \                                                                                \n\
+        \↳ " <> txt3 <> "                                                                \n\
+        \                                                                                \n\
+        \... is a " <> there <> ", which does not match                                  \n"
+      where
+        txt0 = build k0
+        txt1 = build expr0
+        txt2 = build k1
+        txt3 = build expr1
+
+        here = case c of
+            Type -> "term"
+            Kind -> "type"
+
+        there = case c of
+            Type -> "type"
+            Kind -> "term"
 
 prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
   where
@@ -1875,26 +2044,19 @@ prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
         \    │ { foo = 100, bar = True, baz = \"ABC\" } │                                \n\
         \    └────────────────────────────────────────┘                                  \n\
         \                                                                                \n\
-        \However, fields can only be terms and cannot be types or kinds                  \n\
+        \However, fields can only be terms and or ❰Type❱s and not ❰Kind❱s                \n\
         \                                                                                \n\
-        \For example, these record literals are " <> _NOT <> " valid:                    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ { foo = 100, bar = Text } │                                               \n\
-        \    └───────────────────────────┘                                               \n\
-        \                         ⇧                                                      \n\
-        \                         ❰Text❱ is a type and not a term                        \n\
+        \For example, the following record literal is " <> _NOT <> " valid:              \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ { foo = 100, bar = Type } │                                               \n\
-        \    └───────────────────────────┘                                               \n\
-        \                         ⇧                                                      \n\
-        \                         ❰Type❱ is a kind and not a term                        \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ { foo = Type } │                                                          \n\
+        \    └────────────────┘                                                          \n\
+        \              ⇧                                                                 \n\
+        \              ❰Type❱ is a ❰Kind❱, which is not allowed                          \n\
         \                                                                                \n\
         \                                                                                \n\
-        \You provided a record literal with a key named:                                 \n\
+        \You provided a record literal with a field named:                               \n\
         \                                                                                \n\
         \↳ " <> txt0 <> "                                                                \n\
         \                                                                                \n\
@@ -1902,7 +2064,7 @@ prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \↳ " <> txt1 <> "                                                                \n\
         \                                                                                \n\
-        \... which is not a term                                                         \n"
+        \... which is not a term or ❰Type❱                                               \n"
       where
         txt0 = build k
         txt1 = build expr0
