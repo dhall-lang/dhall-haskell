@@ -18,6 +18,35 @@ module Dhall.Pretty.Internal (
     , buildScientific
     , pretty
     , escapeText
+
+    , prettyConst
+    , prettyLabel
+    , prettyNatural
+    , prettyNumber
+    , prettyScientific
+
+    , builtin
+    , keyword
+    , literal
+    , operator
+
+    , colon
+    , comma
+    , dot
+    , equals
+    , forall
+    , label
+    , lambda
+    , langle
+    , lbrace
+    , lbracket
+    , lparen
+    , pipe
+    , rangle
+    , rarrow
+    , rbrace
+    , rbracket
+    , rparen
     ) where
 
 import {-# SOURCE #-} Dhall.Core
