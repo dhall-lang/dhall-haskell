@@ -1,3 +1,29 @@
+1.12.0
+
+* Additional changes to support GHC 8.4
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/331
+* BREAKING CHANGE TO API: Replace dependency on `text-format` with `formatting`
+    * This replace the `Data.Text.Buildable.Buildable` instances with
+      `Formatting.Buildable.Buildable` instances, which is why this is a
+       breaking change
+    * `text-format` is no longer maintained and blocking GHC 8.4 support
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/330
+
+1.11.1
+
+* Support GHC 8.4
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/321
+* Fix α-normalization bug
+    * Note that this is not a type-checking bug.  This only affects users who
+      were directly using the `alphaNormalize` function from the Haskell API
+      because `let` expressions were not correctly α-normalized
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/319
+* Slight tweak to syntax highlighting
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/324
+* Increase upper bound on `ansi-terminal` and `exceptions`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/322
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/325
+
 1.11.0
 
 * BREAKING CHANGE TO THE API: Fix `{Natural,Optional,List}/build` semantics to

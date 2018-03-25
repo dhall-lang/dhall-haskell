@@ -56,10 +56,10 @@ import Data.Foldable
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
-import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
+import Formatting.Buildable (Buildable(..))
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
@@ -88,12 +88,12 @@ data Ann
     purposes
 -}
 annToAnsiStyle :: Ann -> Terminal.AnsiStyle
-annToAnsiStyle Keyword  = Terminal.colorDull Terminal.Green
-annToAnsiStyle Syntax   = Terminal.colorDull Terminal.Green
+annToAnsiStyle Keyword  = Terminal.bold <> Terminal.colorDull Terminal.Green
+annToAnsiStyle Syntax   = Terminal.bold <> Terminal.colorDull Terminal.Green
 annToAnsiStyle Label    = mempty
 annToAnsiStyle Literal  = Terminal.colorDull Terminal.Magenta
 annToAnsiStyle Builtin  = Terminal.underlined
-annToAnsiStyle Operator = Terminal.colorDull Terminal.Green
+annToAnsiStyle Operator = Terminal.bold <> Terminal.colorDull Terminal.Green
 
 -- | Pretty print an expression
 prettyExpr :: Pretty a => Expr s a -> Doc Ann
