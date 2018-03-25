@@ -28,6 +28,7 @@ module Dhall.Pretty.Internal (
     , builtin
     , keyword
     , literal
+    , operator
 
     , colon
     , comma
@@ -38,11 +39,13 @@ module Dhall.Pretty.Internal (
     , lambda
     , langle
     , lbrace
+    , lbracket
     , lparen
     , pipe
     , rangle
     , rarrow
     , rbrace
+    , rbracket
     , rparen
     ) where
 

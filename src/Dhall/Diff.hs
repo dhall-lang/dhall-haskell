@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -5,8 +6,9 @@ module Dhall.Diff where
 
 import Data.Foldable (fold)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
-import Data.Monoid (Any(..), (<>))
+import Data.Monoid (Any(..))
 import Data.Scientific (Scientific)
+import Data.Semigroup
 import Data.String (IsString(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
@@ -28,6 +30,9 @@ data Diff =
         , doc  :: Doc Ann
         }
 
+instance Data.Semigroup.Semigroup Diff where
+    Diff sameL docL <> Diff sameR docR = Diff (sameL && sameR) (docL <> docR)
+
 instance Monoid (Diff) where
     mempty = Diff {..}
       where
@@ -35,8 +40,9 @@ instance Monoid (Diff) where
 
         doc = mempty
 
-    mappend (Diff sameL docL) (Diff sameR docR) =
-        Diff (sameL && sameR) (docL <> docR)
+#if !(MIN_VERSION_base(4,11,0))
+    mappend = (<>)
+#endif
 
 instance IsString (Diff) where
     fromString string = Diff {..}
@@ -71,6 +77,15 @@ token doc = Diff {..}
   where
     same = True
 
+format :: Diff -> Diff -> Diff
+format suffix doc = doc <> (if same doc then suffix else hardline)
+
+keyword :: Doc Ann -> Diff
+keyword doc = token (Internal.keyword doc)
+
+operator :: Doc Ann -> Diff
+operator doc = token (Internal.operator doc)
+
 colon :: Diff
 colon = token Internal.colon
 
@@ -80,14 +95,8 @@ comma = token Internal.comma
 dot :: Diff
 dot = token Internal.dot
 
-if_ :: Diff
-if_ = token (Internal.keyword "if")
-
-then_ :: Diff
-then_ = token (Internal.keyword "then")
-
-else_ :: Diff
-else_ = token (Internal.keyword "else")
+equals :: Diff
+equals = token Internal.equals
 
 forall :: Diff
 forall = token Internal.forall
@@ -100,6 +109,9 @@ langle = token Internal.langle
 
 lbrace :: Diff
 lbrace = token Internal.lbrace
+
+lbracket :: Diff
+lbracket = token Internal.lbracket
 
 lparen :: Diff
 lparen = token Internal.lparen
@@ -115,6 +127,9 @@ rarrow = token Internal.rarrow
 
 rbrace :: Diff
 rbrace = token Internal.rbrace
+
+rbracket :: Diff
+rbracket = token Internal.rbracket
 
 rparen :: Diff
 rparen = token Internal.rparen
@@ -154,33 +169,21 @@ diffInteger :: Integer -> Integer -> Diff
 diffInteger = diffPrimitive (token . Internal.prettyNumber)
 
 diffVar :: Var -> Var -> Diff
-diffVar (V xL nL) (V xR nR) =
-    decide (same label) (same natural)
+diffVar (V xL nL) (V xR nR) = format mempty label <> "@" <> natural
   where
     label = diffLabel xL xR
 
     natural = diffInteger nL nR
 
-    decide True  True  =
-        label <> "@" <> natural
-    decide True  False =
-        label <> "@" <> natural
-    decide False True  =
-        align
-            (   "  "
-            <>  label
-            <>  hardline
-            <>  "@ "
-            <>  natural
-            )
-    decide False False =
-        align
-            (   "  "
-            <>  label
-            <>  hardline
-            <>  "@ "
-            <>  natural
-            )
+diffMaybe :: Diff -> (a -> a -> Diff) -> (Maybe a -> Maybe a -> Diff)
+diffMaybe _ _ Nothing Nothing =
+    mempty
+diffMaybe prefix _ Nothing (Just _) =
+    difference mempty (prefix <> ignore)
+diffMaybe prefix _ (Just _) Nothing =
+    difference (prefix <> ignore) mempty
+diffMaybe prefix f (Just l) (Just r) =
+    prefix <> f l r
 
 enclosed
     :: Diff
@@ -257,173 +260,286 @@ diffRecord
     => InsOrdHashMap Text (Expr s a) -> InsOrdHashMap Text (Expr s a) -> Diff
 diffRecord kvsL kvsR = braced (diffKeyVals colon kvsL kvsR)
 
+diffUnion
+    :: Pretty a
+    => InsOrdHashMap Text (Expr s a) -> InsOrdHashMap Text (Expr s a) -> Diff
+diffUnion kvsL kvsR = angled (diffKeyVals colon kvsL kvsR)
+
 mismatch :: Pretty a => Expr s a -> Expr s a -> Diff
 mismatch l r = difference (token (Pretty.pretty l)) (token (Pretty.pretty r))
 
 diffExprA :: Pretty a => Expr s a -> Expr s a -> Diff
-diffExprA l@(Annot _ _) r@(Annot _ _) =
+diffExprA l@(Annot {}) r@(Annot {}) =
     enclosed' "  " (colon <> " ") (docs l r)
   where
     docs (Annot aL bL) (Annot aR bR) =
-        Data.List.NonEmpty.cons (diffExprB aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (align doc) (docs bL bR)
+      where
+        doc = diffExprB aL aR
     docs aL aR =
         diffExprB aL aR :| []
-diffExprA l@(Annot _ _) r =
+diffExprA l@(Annot {}) r =
     mismatch l r
-diffExprA l r@(Annot _ _) =
+diffExprA l r@(Annot {}) =
     mismatch l r
 diffExprA l r =
     diffExprB l r
 
 diffExprB :: Pretty a => Expr s a -> Expr s a -> Diff
-diffExprB l@(Lam _ _ _) r@(Lam _ _ _) =
+diffExprB l@(Lam {}) r@(Lam {}) =
     enclosed' "  " (rarrow <> " ") (docs l r)
   where
     docs (Lam aL bL cL) (Lam aR bR cR) =
-        Data.List.NonEmpty.cons doc (docs cL cR)
+        Data.List.NonEmpty.cons (align doc) (docs cL cR)
       where
-        label = diffLabel aL aR
+        doc =   lambda
+            <>  lparen
+            <>  format " " (diffLabel aL aR)
+            <>  colon
+            <>  " "
+            <>  format mempty (diffExprA bL bR)
+            <>  rparen
 
-        type_ = diffExprA bL bR
-
-        doc = align (decide (same label) (same type_))
-
-        decide True True =
-                lambda
-            <>  lparen
-            <>  label
-            <>  " "
-            <>  colon
-            <>  " "
-            <>  type_
-            <>  rparen
-        decide True False =
-                lambda
-            <>  lparen
-            <>  label
-            <>  " "
-            <>  colon
-            <>  " "
-            <>  type_
-            <>  hardline
-            <>  rparen
-        decide False True =
-                lambda
-            <>  lparen
-            <>  label
-            <>  hardline
-            <>  colon
-            <>  " "
-            <>  type_
-            <>  rparen
-        decide False False =
-                lambda
-            <>  lparen
-            <>  label
-            <>  hardline
-            <>  colon
-            <>  " "
-            <>  type_
-            <>  hardline
-            <>  rparen
-    docs aL aR = pure (diffExprC aL aR)
-diffExprB l@(Lam _ _ _) r =
+    docs aL aR =
+        pure (diffExprC aL aR)
+diffExprB l@(Lam {}) r =
     mismatch l r
-diffExprB l r@(Lam _ _ _) =
+diffExprB l r@(Lam {}) =
     mismatch l r
-diffExprB l@(BoolIf _ _ _) r@(BoolIf _ _ _) =
-    enclosed' "      " (else_ <> "  ") (docs l r)
+diffExprB l@(BoolIf {}) r@(BoolIf {}) =
+    enclosed' "      " (keyword "else" <> "  ") (docs l r)
   where
     docs (BoolIf aL bL cL) (BoolIf aR bR cR) =
-        Data.List.NonEmpty.cons (decide (same predicate)) (docs cL cR)
+        Data.List.NonEmpty.cons (align doc) (docs cL cR)
       where
-        predicate = diffExprA aL aR
-
-        branch = diffExprA bL bR
-
-        decide True =
-                if_
+        doc =   keyword "if"
             <>  " "
-            <>  predicate
+            <>  format " " (diffExprA aL aR)
+            <>  keyword "then"
             <>  " "
-            <>  then_
-            <>  " "
-            <>  branch
-        decide False =
-                if_
-            <>  predicate
-            <>  hardline
-            <>  then_
-            <>  " "
-            <>  branch
+            <>  diffExprA bL bR
     docs aL aR =
         pure (diffExprB aL aR)
-diffExprB l@(BoolIf _ _ _) r =
+diffExprB l@(BoolIf {}) r =
     mismatch l r
-diffExprB l r@(BoolIf _ _ _) =
+diffExprB l r@(BoolIf {}) =
     mismatch l r
-diffExprB l@(Pi _ _ _) r@(Pi _ _ _) =
+diffExprB l@(Pi {}) r@(Pi {}) =
     enclosed' "  " (rarrow <> " ") (docs l r)
   where
     docs (Pi aL bL cL) (Pi aR bR cR) =
-        Data.List.NonEmpty.cons doc (docs cL cR)
+        Data.List.NonEmpty.cons (align doc) (docs cL cR)
       where
-        label = diffLabel aL aR
-
-        type_ = diffExprA bL bR
-
-        doc = align (decide (same label) (same type_))
-
-        decide True True =
-                forall
+        doc =   forall
             <>  lparen
-            <>  label
-            <>  " "
+            <>  format " " (diffLabel aL aR)
             <>  colon
             <>  " "
-            <>  type_
-            <>  rparen
-        decide True False =
-                forall
-            <>  lparen
-            <>  label
-            <>  " "
-            <>  colon
-            <>  " "
-            <>  type_
-            <>  hardline
-            <>  rparen
-        decide False True =
-                forall
-            <>  lparen
-            <>  label
-            <>  hardline
-            <>  colon
-            <>  " "
-            <>  type_
-            <>  rparen
-        decide False False =
-                forall
-            <>  lparen
-            <>  label
-            <>  hardline
-            <>  colon
-            <>  " "
-            <>  type_
-            <>  hardline
+            <>  format mempty (diffExprA bL bR)
             <>  rparen
     docs aL aR = pure (diffExprB aL aR)
-diffExprB l@(Pi _ _ _) r =
+diffExprB l@(Pi {}) r =
     mismatch l r
-diffExprB l r@(Pi _ _ _) =
+diffExprB l r@(Pi {}) =
     mismatch l r
--- TODO
+diffExprB l@(Let {}) r@(Let {}) =
+    enclosed' "    " (keyword "in" <> "  ") (docs l r)
+  where
+    docs (Let aL bL cL dL) (Let aR bR cR dR) =
+        Data.List.NonEmpty.cons (align doc) (docs dL dR)
+      where
+        doc =   keyword "let"
+            <>  " "
+            <>  format " " (diffLabel aL aR)
+            <>  format " " (diffMaybe (colon <> " ") diffExprA bL bR)
+            <>  equals
+            <>  " "
+            <>  diffExprA cL cR
+    docs aL aR = pure (diffExprB aL aR)
+diffExprB l@(Let {}) r =
+    mismatch l r
+diffExprB l r@(Let {}) =
+    mismatch l r
+-- TODO: ListLit
+diffExprB (OptionalLit aL bL) (OptionalLit aR bR) = align doc
+  where
+    doc =   lbracket
+        <>  " "
+        <>  format " " (diffMaybe mempty diffExprA bL bR)
+        <>  rbracket
+        <>  " "
+        <>  colon
+        <>  " "
+        <>  diffExprD (App Optional aL) (App Optional aR)
+diffExprB l@(OptionalLit {}) r =
+    mismatch l r
+diffExprB l r@(OptionalLit {}) =
+    mismatch l r
+diffExprB (Merge aL bL cL) (Merge aR bR cR) = align doc
+  where
+    doc =   keyword "merge"
+        <>  " "
+        <>  format " " (diffExprE aL aR)
+        <>  format " " (diffExprE bL bR)
+        <>  diffMaybe (colon <> " ") diffExprE cL cR
+diffExprB l@(Merge {}) r =
+    mismatch l r
+diffExprB l r@(Merge {}) =
+    mismatch l r
 diffExprB l r =
     diffExprC l r
 
--- TODO:
 diffExprC :: Pretty a => Expr s a -> Expr s a -> Diff
-diffExprC l r =
+diffExprC = diffBoolOr
+
+diffBoolOr :: Pretty a => Expr s a -> Expr s a -> Diff
+diffBoolOr l@(BoolOr {}) r@(BoolOr {}) =
+    enclosed' "    " (operator "||" <> "  ") (docs l r)
+  where
+    docs (BoolOr aL bL) (BoolOr aR bR) =
+        Data.List.NonEmpty.cons (diffTextAppend aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffTextAppend aL aR)
+diffBoolOr l@(BoolOr {}) r =
+    mismatch l r
+diffBoolOr l r@(BoolOr {}) =
+    mismatch l r
+diffBoolOr l r =
+    diffTextAppend l r
+
+diffTextAppend :: Pretty a => Expr s a -> Expr s a -> Diff
+diffTextAppend l@(TextAppend {}) r@(TextAppend {}) =
+    enclosed' "    " (operator "++" <> "  ") (docs l r)
+  where
+    docs (TextAppend aL bL) (TextAppend aR bR) =
+        Data.List.NonEmpty.cons (diffNaturalPlus aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffNaturalPlus aL aR)
+diffTextAppend l@(TextAppend {}) r =
+    mismatch l r
+diffTextAppend l r@(TextAppend {}) =
+    mismatch l r
+diffTextAppend l r =
+    diffNaturalPlus l r
+
+diffNaturalPlus :: Pretty a => Expr s a -> Expr s a -> Diff
+diffNaturalPlus l@(NaturalPlus {}) r@(NaturalPlus {}) =
+    enclosed' "  " (operator "+" <> " ") (docs l r)
+  where
+    docs (NaturalPlus aL bL) (NaturalPlus aR bR) =
+        Data.List.NonEmpty.cons (diffListAppend aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffListAppend aL aR)
+diffNaturalPlus l@(NaturalPlus {}) r =
+    mismatch l r
+diffNaturalPlus l r@(NaturalPlus {}) =
+    mismatch l r
+diffNaturalPlus l r =
+    diffListAppend l r
+
+diffListAppend :: Pretty a => Expr s a -> Expr s a -> Diff
+diffListAppend l@(ListAppend {}) r@(ListAppend {}) =
+    enclosed' "  " (operator "#" <> " ") (docs l r)
+  where
+    docs (ListAppend aL bL) (ListAppend aR bR) =
+        Data.List.NonEmpty.cons (diffBoolAnd aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffBoolAnd aL aR)
+diffListAppend l@(ListAppend {}) r =
+    mismatch l r
+diffListAppend l r@(ListAppend {}) =
+    mismatch l r
+diffListAppend l r =
+    diffBoolAnd l r
+
+diffBoolAnd :: Pretty a => Expr s a -> Expr s a -> Diff
+diffBoolAnd l@(BoolAnd {}) r@(BoolAnd {}) =
+    enclosed' "    " (operator "&&" <> "  ") (docs l r)
+  where
+    docs (BoolAnd aL bL) (BoolAnd aR bR) =
+        Data.List.NonEmpty.cons (diffCombine aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffCombine aL aR)
+diffBoolAnd l@(BoolAnd {}) r =
+    mismatch l r
+diffBoolAnd l r@(BoolAnd {}) =
+    mismatch l r
+diffBoolAnd l r =
+    diffCombine l r
+
+diffCombine :: Pretty a => Expr s a -> Expr s a -> Diff
+diffCombine l@(Combine {}) r@(Combine {}) =
+    enclosed' "  " (operator "∧" <> " ") (docs l r)
+  where
+    docs (Combine aL bL) (Combine aR bR) =
+        Data.List.NonEmpty.cons (diffPrefer aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffPrefer aL aR)
+diffCombine l@(Combine {}) r =
+    mismatch l r
+diffCombine l r@(Combine {}) =
+    mismatch l r
+diffCombine l r =
+    diffPrefer l r
+
+diffPrefer :: Pretty a => Expr s a -> Expr s a -> Diff
+diffPrefer l@(Prefer {}) r@(Prefer {}) =
+    enclosed' "  " (operator "⫽" <> " ") (docs l r)
+  where
+    docs (Prefer aL bL) (Prefer aR bR) =
+        Data.List.NonEmpty.cons (diffNaturalTimes aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffNaturalTimes aL aR)
+diffPrefer l@(Prefer {}) r =
+    mismatch l r
+diffPrefer l r@(Prefer {}) =
+    mismatch l r
+diffPrefer l r =
+    diffNaturalTimes l r
+
+diffNaturalTimes :: Pretty a => Expr s a -> Expr s a -> Diff
+diffNaturalTimes l@(NaturalTimes {}) r@(NaturalTimes {}) =
+    enclosed' "  " (operator "*" <> " ") (docs l r)
+  where
+    docs (NaturalTimes aL bL) (NaturalTimes aR bR) =
+        Data.List.NonEmpty.cons (diffBoolEQ aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffBoolEQ aL aR)
+diffNaturalTimes l@(NaturalTimes {}) r =
+    mismatch l r
+diffNaturalTimes l r@(NaturalTimes {}) =
+    mismatch l r
+diffNaturalTimes l r =
+    diffBoolEQ l r
+
+diffBoolEQ :: Pretty a => Expr s a -> Expr s a -> Diff
+diffBoolEQ l@(BoolEQ {}) r@(BoolEQ {}) =
+    enclosed' "    " (operator "==" <> "  ") (docs l r)
+  where
+    docs (BoolEQ aL bL) (BoolEQ aR bR) =
+        Data.List.NonEmpty.cons (diffBoolNE aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffBoolNE aL aR)
+diffBoolEQ l@(BoolEQ {}) r =
+    mismatch l r
+diffBoolEQ l r@(BoolEQ {}) =
+    mismatch l r
+diffBoolEQ l r =
+    diffBoolNE l r
+
+diffBoolNE :: Pretty a => Expr s a -> Expr s a -> Diff
+diffBoolNE l@(BoolNE {}) r@(BoolNE {}) =
+    enclosed' "    " (operator "==" <> "  ") (docs l r)
+  where
+    docs (BoolNE aL bL) (BoolNE aR bR) =
+        Data.List.NonEmpty.cons (diffExprD aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffExprD aL aR)
+diffBoolNE l@(BoolNE {}) r =
+    mismatch l r
+diffBoolNE l r@(BoolNE {}) =
+    mismatch l r
+diffBoolNE l r =
     diffExprD l r
 
 -- TODO: Support `constructors`
@@ -651,6 +767,12 @@ diffExprF (Record aL) (Record aR) =
 diffExprF l@(Record _) r =
     mismatch l r
 diffExprF l r@(Record _) =
+    mismatch l r
+diffExprF (Union aL) (Union aR) =
+    diffUnion aL aR
+diffExprF l@(Union {}) r =
+    mismatch l r
+diffExprF l r@(Union {}) =
     mismatch l r
 diffExprF aL aR =
     if same doc
