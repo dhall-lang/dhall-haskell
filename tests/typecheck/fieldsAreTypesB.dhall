@@ -1,1 +1,1 @@
-{ x : Type, y : Type → Type }
+{ x : Type, y : Type }

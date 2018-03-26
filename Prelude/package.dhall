@@ -6,8 +6,6 @@
     ./Integer/package.dhall 
 , `List` =
     ./List/package.dhall 
-, Monoid =
-    ./Monoid 
 , `Natural` =
     ./Natural/package.dhall 
 , `Optional` =
