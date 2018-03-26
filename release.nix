@@ -23,17 +23,13 @@ let
             haskellPackagesNew.callPackage ./nix/prettyprinter.nix { };
 
           parser-combinators =
-            haskellPackagesOld.callPackage ./nix/parser-combinators.nix {};
+            haskellPackagesNew.callPackage ./nix/parser-combinators.nix { };
 
           megaparsec =
-            pkgs.haskell.lib.overrideCabal haskellPackagesNew.megaparsec_6_1_1 (drv: {
-              version = "6.4.0";
-              src = pkgs.fetchurl {
-                url = https://hackage.haskell.org/package/megaparsec-6.4.0/megaparsec-6.4.0.tar.gz;
-                sha256 = "0h9azhs0dfrc359vrbd1jljrg3yfdbwd4p62cxqkn7mnh8913jpd";
-              };
-            });
+            haskellPackagesNew.callPackage ./nix/megaparsec.nix { };
         };
+      };
+    };
   };
 
   pkgs =
