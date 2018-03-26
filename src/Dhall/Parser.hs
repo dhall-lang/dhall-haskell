@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -24,22 +25,22 @@ import Control.Exception (Exception)
 import Control.Monad (MonadPlus)
 import Data.Functor (void)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
-import Data.Monoid ((<>))
 import Data.Sequence (ViewL(..))
+import Data.Semigroup (Semigroup(..))
 import Data.Scientific (Scientific)
 import Data.String (IsString(..))
-import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Void (Void)
 import Dhall.Core
+import Formatting.Buildable (Buildable(..))
 import Numeric.Natural (Natural)
 import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 import Text.Parser.Token (TokenParsing(..))
 
 import qualified Control.Monad
-import qualified Data.ByteString.Base16.Lazy
+import qualified Crypto.Hash
 import qualified Data.ByteString.Lazy
 import qualified Data.Char
 import qualified Data.HashMap.Strict.InsOrd
@@ -83,10 +84,15 @@ newtype Parser a = Parser { unParser :: Text.Megaparsec.Parsec Void Text a }
     ,   Text.Megaparsec.MonadParsec Void Text
     )
 
-instance Monoid a => Monoid (Parser a) where
+instance Data.Semigroup.Semigroup a => Data.Semigroup.Semigroup (Parser a) where
+    (<>) = liftA2 (<>)
+
+instance (Data.Semigroup.Semigroup a, Monoid a) => Monoid (Parser a) where
     mempty = pure mempty
 
-    mappend = liftA2 mappend
+#if !(MIN_VERSION_base(4,11,0))
+    mappend = (<>)
+#endif
 
 instance IsString a => IsString (Parser a) where
     fromString x = fromString x <$ Text.Megaparsec.Char.string (fromString x)
@@ -136,10 +142,10 @@ noted parser = do
     after       <- Text.Megaparsec.getPosition
     return (Note (Src before after tokens) e)
 
-count :: Monoid a => Int -> Parser a -> Parser a
+count :: (Semigroup a, Monoid a) => Int -> Parser a -> Parser a
 count n parser = mconcat (replicate n parser)
 
-range :: Monoid a => Int -> Int -> Parser a -> Parser a
+range :: (Semigroup a, Monoid a) => Int -> Int -> Parser a -> Parser a
 range minimumBound maximumMatches parser =
     count minimumBound parser <> loop maximumMatches
   where
@@ -1084,15 +1090,15 @@ emptyCollection embedded = do
     _colon
     a <- alternative0 <|> alternative1
     b <- selectorExpression embedded
-    return (a b empty)
+    return (a b)
   where
     alternative0 = do
         _List
-        return (\a b -> ListLit (Just a) b)
+        return (\a -> ListLit (Just a) empty)
 
     alternative1 = do
         _Optional
-        return OptionalLit
+        return (\a -> OptionalLit a empty)
 
 nonEmptyOptional :: Parser a -> Parser (Expr Src a)
 nonEmptyOptional embedded = do
@@ -1473,7 +1479,7 @@ nonEmptyListLiteral embedded = (do
     a <- expression embedded
     b <- many (do _comma; expression embedded)
     _closeBracket
-    return (ListLit Nothing (Data.Vector.fromList (a:b))) ) <?> "list literal"
+    return (ListLit Nothing (Data.Sequence.fromList (a:b))) ) <?> "list literal"
 
 completeExpression :: Parser a -> Parser (Expr Src a)
 completeExpression embedded = do
@@ -1524,10 +1530,9 @@ pathHashed_ = do
         whitespace
         let lazyText = Data.Text.Lazy.Builder.toLazyText builder
         let lazyBytes = Data.Text.Lazy.Encoding.encodeUtf8 lazyText
-        let (hash, suffix) = Data.ByteString.Base16.Lazy.decode lazyBytes
-        if Data.ByteString.Lazy.null suffix
-            then return (Data.ByteString.Lazy.toStrict hash)
-            else fail "Invalid sha256 hash"
+        case Crypto.Hash.digestFromByteString (Data.ByteString.Lazy.toStrict lazyBytes) of
+          Nothing -> fail "Invalid sha256 hash"
+          Just h -> pure h
 
 import_ :: Parser Path
 import_ = (do

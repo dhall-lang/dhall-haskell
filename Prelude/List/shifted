@@ -7,20 +7,19 @@ Examples:
 ```
 ./shifted
 Bool
-(   [   [   { index = +0, value = True  }
-        ,   { index = +1, value = True  }
-        ,   { index = +2, value = True  }
-        ]   : List { index : Natural, value : Bool }
-    ,   [   { index = +0, value = False }
-        ,   { index = +1, value = False }
-        ]   : List { index : Natural, value : Bool }
-    ,   [   { index = +0, value = True  }
-        ,   { index = +1, value = True  }
-        ,   { index = +2, value = True  }
-        ,   { index = +3, value = True  }
-        ]   : List { index : Natural, value : Bool }
-    ]   : List (List { index : Natural, value : Bool })
-)
+[   [   { index = +0, value = True  }
+    ,   { index = +1, value = True  }
+    ,   { index = +2, value = True  }
+    ]
+,   [   { index = +0, value = False }
+    ,   { index = +1, value = False }
+    ]
+,   [   { index = +0, value = True  }
+    ,   { index = +1, value = True  }
+    ,   { index = +2, value = True  }
+    ,   { index = +3, value = True  }
+    ]
+]
 =   [   { index = +0, value = True  }
     ,   { index = +1, value = True  }
     ,   { index = +2, value = True  }
@@ -30,7 +29,7 @@ Bool
     ,   { index = +6, value = True  }
     ,   { index = +7, value = True  }
     ,   { index = +8, value = True  }
-    ]   : List { index : Natural, value : Bool }
+    ]
 
 ./shifted Bool ([] : List (List { index : Natural, value : Bool }))
 = [] : List { index : Natural, value : Bool }

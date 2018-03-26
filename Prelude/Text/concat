@@ -4,7 +4,7 @@ Concatenate all the `Text` values in a `List`
 Examples:
 
 ```
-./concat ([ "ABC", "DEF", "GHI" ] : List Text) = "ABCDEFGHI"
+./concat [ "ABC", "DEF", "GHI" ] = "ABCDEFGHI"
 
 ./concat ([] : List Text) = ""
 ```

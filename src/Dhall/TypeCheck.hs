@@ -23,10 +23,9 @@ module Dhall.TypeCheck (
 
 import Control.Exception (Exception)
 import Data.Foldable (forM_, toList)
-import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
+import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
-import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Pretty(..))
@@ -34,16 +33,20 @@ import Data.Traversable (forM)
 import Data.Typeable (Typeable)
 import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
+import Formatting.Buildable (Buildable(..))
 
-import qualified Control.Monad.Trans.State.Strict as State
-import qualified Data.HashMap.Strict
+import qualified Data.Foldable
 import qualified Data.HashMap.Strict.InsOrd
+import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
-import qualified Data.Vector
 import qualified Dhall.Context
 import qualified Dhall.Core
+
+traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
+traverseWithIndex_ k xs =
+    Data.Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
 
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
@@ -54,75 +57,6 @@ rule Type Kind = Left ()
 rule Type Type = return Type
 rule Kind Kind = return Kind
 rule Kind Type = return Type
-
-match :: Var -> Var -> [(Text, Text)] -> Bool
-match (V xL nL) (V xR nR)             []  =
-    xL == xR  && nL == nR
-match (V xL 0 ) (V xR 0 ) ((xL', xR'):_ )
-    | xL == xL' && xR == xR' = True
-match (V xL nL) (V xR nR) ((xL', xR'):xs) =
-    match (V xL nL') (V xR nR') xs
-  where
-    nL' = if xL == xL' then nL - 1 else nL
-    nR' = if xR == xR' then nR - 1 else nR
-
-toSortedList :: InsOrdHashMap k v -> [(k, v)]
-toSortedList =
-    Data.HashMap.Strict.toList . Data.HashMap.Strict.InsOrd.toHashMap
-
-propEqual :: Eq a => Expr s a -> Expr t a -> Bool
-propEqual eL0 eR0 =
-    State.evalState
-        (go (Dhall.Core.normalize eL0) (Dhall.Core.normalize eR0))
-        []
-  where
-    go (Const Type) (Const Type) = return True
-    go (Const Kind) (Const Kind) = return True
-    go (Var vL) (Var vR) = do
-        ctx <- State.get
-        return (match vL vR ctx)
-    go (Pi xL tL bL) (Pi xR tR bR) = do
-        ctx <- State.get
-        eq1 <- go tL tR
-        if eq1
-            then do
-                State.put ((xL, xR):ctx)
-                eq2 <- go bL bR
-                State.put ctx
-                return eq2
-            else return False
-    go (App fL aL) (App fR aR) = do
-        b1 <- go fL fR
-        if b1 then go aL aR else return False
-    go Bool Bool = return True
-    go Natural Natural = return True
-    go Integer Integer = return True
-    go Double Double = return True
-    go Text Text = return True
-    go List List = return True
-    go Optional Optional = return True
-    go (Record ktsL0) (Record ktsR0) = do
-        let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
-                | kL == kR = do
-                    b <- go tL tR
-                    if b
-                        then loop ktsL ktsR
-                        else return False
-            loop [] [] = return True
-            loop _  _  = return False
-        loop (toSortedList ktsL0) (toSortedList ktsR0)
-    go (Union ktsL0) (Union ktsR0) = do
-        let loop ((kL, tL):ktsL) ((kR, tR):ktsR)
-                | kL == kR = do
-                    b <- go tL tR
-                    if b
-                        then loop ktsL ktsR
-                        else return False
-            loop [] [] = return True
-            loop _  _  = return False
-        loop (toSortedList ktsL0) (toSortedList ktsR0)
-    go (Embed eL) (Embed eR) = return (eL == eR)
-    go _ _ = return False
 
 {-| Type-check an expression and return the expression's type if type-checking
     succeeds or an error if type-checking fails
@@ -162,7 +96,7 @@ typeWithA tpa = loop
                 return a
     loop ctx   (Lam x _A  b     ) = do
         _ <- loop ctx _A
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x _A ctx)
+        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
         _B <- loop ctx' b
         let p = Pi x _A _B
         _t <- loop ctx p
@@ -174,7 +108,7 @@ typeWithA tpa = loop
             _       -> Left (TypeError ctx e (InvalidInputType _A))
 
         _ <- loop ctx _A
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x _A ctx)
+        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
         tB <- fmap Dhall.Core.normalize (loop ctx' _B)
         kB <- case tB of
             Const k -> return k
@@ -189,7 +123,7 @@ typeWithA tpa = loop
             Pi x _A _B -> return (x, _A, _B)
             _          -> Left (TypeError ctx e (NotAFunction f tf))
         _A' <- loop ctx a
-        if propEqual _A _A'
+        if Dhall.Core.judgmentallyEqual _A _A'
             then do
                 let a'   = Dhall.Core.shift   1  (V x 0) a
                 let _B'  = Dhall.Core.subst (V x 0) a' _B
@@ -206,7 +140,7 @@ typeWithA tpa = loop
                 _ <- loop ctx _A0
                 let nf_A0 = Dhall.Core.normalize _A0
                 let nf_A1 = Dhall.Core.normalize _A1
-                if propEqual _A0 _A1
+                if Dhall.Core.judgmentallyEqual _A0 _A1
                     then return ()
                     else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
             Nothing -> return ()
@@ -219,7 +153,7 @@ typeWithA tpa = loop
         _ <- loop ctx t
 
         t' <- loop ctx x
-        if propEqual t t'
+        if Dhall.Core.judgmentallyEqual t t'
             then do
                 return t
             else do
@@ -295,7 +229,7 @@ typeWithA tpa = loop
             Const Type -> return ()
             _          -> Left (TypeError ctx e (IfBranchMustBeTerm False z tz ttz))
 
-        if propEqual ty tz
+        if Dhall.Core.judgmentallyEqual ty tz
             then return ()
             else Left (TypeError ctx e (IfBranchMismatch y z ty tz))
         return ty
@@ -384,17 +318,16 @@ typeWithA tpa = loop
     loop _      List              = do
         return (Pi "_" (Const Type) (Const Type))
     loop ctx e@(ListLit  Nothing  xs) = do
-        if Data.Vector.null xs
-            then Left (TypeError ctx e MissingListType)
-            else do
-                t <- loop ctx (Data.Vector.head xs)
+        case Data.Sequence.viewl xs of
+            x0 :< _ -> do
+                t <- loop ctx x0
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
                     _ -> Left (TypeError ctx e (InvalidListType t))
-                flip Data.Vector.imapM_ xs (\i x -> do
+                flip traverseWithIndex_ xs (\i x -> do
                     t' <- loop ctx x
-                    if propEqual t t'
+                    if Dhall.Core.judgmentallyEqual t t'
                         then return ()
                         else do
                             let nf_t  = Dhall.Core.normalize t
@@ -402,14 +335,15 @@ typeWithA tpa = loop
                             let err   = MismatchedListElements i nf_t x nf_t'
                             Left (TypeError ctx x err) )
                 return (App List t)
+            _ -> Left (TypeError ctx e MissingListType)
     loop ctx e@(ListLit (Just t ) xs) = do
         s <- fmap Dhall.Core.normalize (loop ctx t)
         case s of
             Const Type -> return ()
             _ -> Left (TypeError ctx e (InvalidListType t))
-        flip Data.Vector.imapM_ xs (\i x -> do
+        flip traverseWithIndex_ xs (\i x -> do
             t' <- loop ctx x
-            if propEqual t t'
+            if Dhall.Core.judgmentallyEqual t t'
                 then return ()
                 else do
                     let nf_t  = Dhall.Core.normalize t
@@ -427,7 +361,7 @@ typeWithA tpa = loop
             App List er -> return er
             _           -> Left (TypeError ctx e (CantListAppend r tr))
 
-        if propEqual el er
+        if Dhall.Core.judgmentallyEqual el er
             then return (App List el)
             else Left (TypeError ctx e (ListAppendMismatch el er))
     loop _      ListBuild         = do
@@ -466,13 +400,9 @@ typeWithA tpa = loop
         case s of
             Const Type -> return ()
             _ -> Left (TypeError ctx e (InvalidOptionalType t))
-        let n = Data.Vector.length xs
-        if 2 <= n
-            then Left (TypeError ctx e (InvalidOptionalLiteral n))
-            else return ()
         forM_ xs (\x -> do
             t' <- loop ctx x
-            if propEqual t t'
+            if Dhall.Core.judgmentallyEqual t t'
                 then return ()
                 else do
                     let nf_t  = Dhall.Core.normalize t
@@ -494,25 +424,69 @@ typeWithA tpa = loop
                       (Pi "just" (Pi "_" "a" "optional")
                           (Pi "nothing" "optional" "optional") )
     loop ctx e@(Record    kts   ) = do
-        let process (k, t) = do
-                s <- fmap Dhall.Core.normalize (loop ctx t)
-                case s of
-                    Const Type -> return ()
-                    Const Kind -> return ()
-                    _          -> Left (TypeError ctx e (InvalidFieldType k t))
-        mapM_ process (Data.HashMap.Strict.InsOrd.toList kts)
-        return (Const Type)
+        case Data.HashMap.Strict.InsOrd.toList kts of
+            []            -> return (Const Type)
+            (k0, t0):rest -> do
+                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
+                c <- case s0 of
+                    Const Type ->
+                        return Type
+                    Const Kind
+                        | Dhall.Core.judgmentallyEqual t0 (Const Type) ->
+                            return Kind
+                    _ -> Left (TypeError ctx e (InvalidFieldType k0 t0))
+                let process (k, t) = do
+                        s <- fmap Dhall.Core.normalize (loop ctx t)
+                        case s of
+                            Const Type ->
+                                if c == Type
+                                then return ()
+                                else Left (TypeError ctx e (FieldAnnotationMismatch k t k0 t0 Type))
+                            Const Kind ->
+                                if c == Kind
+                                then
+                                    if Dhall.Core.judgmentallyEqual t (Const Type)
+                                    then return ()
+                                    else Left (TypeError ctx e (InvalidFieldType k t))
+                                else Left (TypeError ctx e (FieldAnnotationMismatch k t k0 t0 Kind))
+                            _ ->
+                                Left (TypeError ctx e (InvalidFieldType k t))
+                mapM_ process rest
+                return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
-        let process k v = do
-                t <- loop ctx v
-                s <- fmap Dhall.Core.normalize (loop ctx t)
-                case s of
-                    Const Type -> return ()
-                    Const Kind -> return ()
-                    _          -> Left (TypeError ctx e (InvalidField k v))
-                return t
-        kts <- Data.HashMap.Strict.InsOrd.traverseWithKey process kvs
-        return (Record kts)
+        case Data.HashMap.Strict.InsOrd.toList kvs of
+            []         -> return (Record Data.HashMap.Strict.InsOrd.empty)
+            (k0, v0):_ -> do
+                t0 <- loop ctx v0
+                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
+                c <- case s0 of
+                    Const Type ->
+                        return Type
+                    Const Kind
+                        | Dhall.Core.judgmentallyEqual t0 (Const Type) ->
+                            return Kind
+                    _       -> Left (TypeError ctx e (InvalidField k0 v0))
+                let process k v = do
+                        t <- loop ctx v
+                        s <- fmap Dhall.Core.normalize (loop ctx t)
+                        case s of
+                            Const Type ->
+                                if c == Type
+                                then return ()
+                                else Left (TypeError ctx e (FieldMismatch k v k0 v0 Type))
+                            Const Kind ->
+                                if c == Kind
+                                then
+                                    if Dhall.Core.judgmentallyEqual t (Const Type)
+                                    then return ()
+                                    else Left (TypeError ctx e (InvalidFieldType k t))
+                                else Left (TypeError ctx e (FieldMismatch k v k0 v0 Kind))
+                            _ ->
+                                Left (TypeError ctx e (InvalidField k t))
+
+                        return t
+                kts <- Data.HashMap.Strict.InsOrd.traverseWithKey process kvs
+                return (Record kts)
     loop ctx e@(Union     kts   ) = do
         let process (k, t) = do
                 s <- fmap Dhall.Core.normalize (loop ctx t)
@@ -527,7 +501,7 @@ typeWithA tpa = loop
             Just _  -> Left (TypeError ctx e (DuplicateAlternative k))
             Nothing -> return ()
         t <- loop ctx v
-        let union = Union (Data.HashMap.Strict.InsOrd.insert k t kts)
+        let union = Union (Data.HashMap.Strict.InsOrd.insert k (Dhall.Core.normalize t) kts)
         _ <- loop ctx union
         return union
     loop ctx e@(Combine kvsX kvsY) = do
@@ -600,10 +574,10 @@ typeWithA tpa = loop
                     Just tX  ->
                         case tX of
                             Pi _ tY' t' -> do
-                                if propEqual tY tY'
+                                if Dhall.Core.judgmentallyEqual tY tY'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
-                                if propEqual t t'
+                                if Dhall.Core.judgmentallyEqual t t'
                                     then return ()
                                     else Left (TypeError ctx e (InvalidHandlerOutputType kY t t'))
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
@@ -639,10 +613,10 @@ typeWithA tpa = loop
                     Just tX  ->
                         case tX of
                             Pi _ tY' t' -> do
-                                if propEqual tY tY'
+                                if Dhall.Core.judgmentallyEqual tY tY'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
-                                if propEqual t t'
+                                if Dhall.Core.judgmentallyEqual t t'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerOutputTypeMismatch kX t kY t'))
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
@@ -710,13 +684,14 @@ data TypeMessage s a
     | InvalidListElement Int (Expr s a) (Expr s a) (Expr s a)
     | InvalidListType (Expr s a)
     | InvalidOptionalElement (Expr s a) (Expr s a) (Expr s a)
-    | InvalidOptionalLiteral Int
     | InvalidOptionalType (Expr s a)
     | InvalidPredicate (Expr s a) (Expr s a)
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
     | InvalidField Text (Expr s a)
     | InvalidFieldType Text (Expr s a)
+    | FieldAnnotationMismatch Text (Expr s a) Text (Expr s a) Const
+    | FieldMismatch Text (Expr s a) Text (Expr s a) Const
     | InvalidAlternative Text (Expr s a)
     | InvalidAlternativeType Text (Expr s a)
     | ListAppendMismatch (Expr s a) (Expr s a)
@@ -1891,101 +1866,36 @@ prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..
         txt1 = build expr1
         txt2 = build expr2
 
-prettyTypeMessage (InvalidOptionalLiteral n) = ErrorMessages {..}
-  where
-    short = "Multiple ❰Optional❱ elements not allowed"
-
-    long =
-        "Explanation: The syntax for ❰Optional❱ values resembles the syntax for ❰List❱s: \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────┐                                                   \n\
-        \    │ [] : Optional Integer │  An ❰Optional❱ value which is absent              \n\
-        \    └───────────────────────┘                                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────┐                                                   \n\
-        \    │ [] : List     Integer │  An empty (0-element) ❰List❱                      \n\
-        \    └───────────────────────┘                                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────┐                                                  \n\
-        \    │ [1] : Optional Integer │  An ❰Optional❱ value which is present            \n\
-        \    └────────────────────────┘                                                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────┐                                                  \n\
-        \    │ [1] : List     Integer │  A singleton (1-element) ❰List❱                  \n\
-        \    └────────────────────────┘                                                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, an ❰Optional❱ value can " <> _NOT <> " have more than one element, whereas a\n\
-        \❰List❱ can have multiple elements:                                              \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ [1, 2] : Optional Integer │  Invalid: multiple elements " <> _NOT <> " allowed\n\
-        \    └───────────────────────────┘                                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ [1, 2] : List     Integer │  Valid: multiple elements allowed             \n\
-        \    └───────────────────────────┘                                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Some common reasons why you might get this error:                               \n\
-        \                                                                                \n\
-        \● You accidentally typed ❰Optional❱ when you meant ❰List❱, like this:           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────────────────────────┐                      \n\
-        \    │ List/length Integer ([1, 2, 3] : Optional Integer) │                      \n\
-        \    └────────────────────────────────────────────────────┘                      \n\
-        \                                       ⇧                                        \n\
-        \                                       This should be ❰List❱ instead            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \────────────────────────────────────────────────────────────────────────────────\n\
-        \                                                                                \n\
-        \Your ❰Optional❱ value had this many elements:                                   \n\
-        \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
-        \                                                                                \n\
-        \... when an ❰Optional❱ value can only have at most one element                  \n"
-      where
-        txt0 = build n
-
 prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
   where
     short = "Invalid field type"
 
     long =
-        "Explanation: Every record type documents the type of each field, like this:     \n\
+        "Explanation: Every record type annotates each field with a ❰Type❱ or a ❰Kind❱,  \n\
+        \like this:                                                                      \n\
+        \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────────────────────────┐                            \n\
-        \    │ { foo : Integer, bar : Integer, baz : Text } │                            \n\
-        \    └──────────────────────────────────────────────┘                            \n\
-        \                                                                                \n\
-        \However, fields cannot be annotated with expressions other than types           \n\
-        \                                                                                \n\
-        \For example, these record types are " <> _NOT <> " valid:                       \n\
+        \    │ { foo : Integer, bar : Integer, baz : Text } │  Every field is annotated  \n\
+        \    └──────────────────────────────────────────────┘  with a ❰Type❱             \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────┐                                              \n\
-        \    │ { foo : Integer, bar : 1 } │                                              \n\
+        \    │ { foo : Type, bar : Type } │  Every field is annotated                    \n\
+        \    └────────────────────────────┘  with a ❰Kind❱                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, the types of fields may " <> _NOT <> " be term-level values:           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ { foo : Integer, bar : 1 } │  Invalid record type                         \n\
         \    └────────────────────────────┘                                              \n\
         \                             ⇧                                                  \n\
-        \                             ❰1❱ is an ❰Integer❱ and not a ❰Type❱               \n\
+        \                             ❰1❱ is an ❰Integer❱ and not a ❰Type❱ or ❰Kind❱     \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌───────────────────────────────┐                                           \n\
-        \    │ { foo : Integer, bar : Type } │                                           \n\
-        \    └───────────────────────────────┘                                           \n\
-        \                             ⇧                                                  \n\
-        \                             ❰Type❱ is a ❰Kind❱ and not a ❰Type❱                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a record type with a key named:                                    \n\
+        \You provided a record type with a field named:                                  \n\
         \                                                                                \n\
         \↳ " <> txt0 <> "                                                                \n\
         \                                                                                \n\
@@ -1993,10 +1903,134 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \↳ " <> txt1 <> "                                                                \n\
         \                                                                                \n\
-        \... which is not a type                                                         \n"
+        \... which is neither a ❰Type❱ nor a ❰Kind❱                                      \n"
       where
         txt0 = build k
         txt1 = build expr0
+
+prettyTypeMessage (FieldAnnotationMismatch k0 expr0 k1 expr1 c) = ErrorMessages {..}
+  where
+    short = "Field annotation mismatch"
+
+    long =
+        "Explanation: Every record type annotates each field with a ❰Type❱ or a ❰Kind❱,  \n\
+        \like this:                                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────────┐                            \n\
+        \    │ { foo : Integer, bar : Integer, baz : Text } │  Every field is annotated  \n\
+        \    └──────────────────────────────────────────────┘  with a ❰Type❱             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ { foo : Type, bar : Type } │  Every field is annotated                    \n\
+        \    └────────────────────────────┘  with a ❰Kind❱                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, you cannot have a record type with both a ❰Type❱ and ❰Kind❱ annotation:\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \              This is a ❰Type❱ annotation                                       \n\
+        \              ⇩                                                                 \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ { foo : Integer, bar : Type } │  Invalid record type                      \n\
+        \    └───────────────────────────────┘                                           \n\
+        \                             ⇧                                                  \n\
+        \                             ... but this is a ❰Kind❱ annotation                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You provided a record type with a field named:                                  \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... annotated with the following expression:                                    \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is a " <> here <> " whereas another field named:                      \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n\
+        \                                                                                \n\
+        \... annotated with the following expression:                                    \n\
+        \                                                                                \n\
+        \↳ " <> txt3 <> "                                                                \n\
+        \                                                                                \n\
+        \... is a " <> there <> ", which does not match                                  \n"
+      where
+        txt0 = build k0
+        txt1 = build expr0
+        txt2 = build k1
+        txt3 = build expr1
+
+        here = case c of
+            Type -> "❰Type❱"
+            Kind -> "❰Kind❱"
+
+        there = case c of
+            Type -> "❰Kind❱"
+            Kind -> "❰Type❱"
+
+prettyTypeMessage (FieldMismatch k0 expr0 k1 expr1 c) = ErrorMessages {..}
+  where
+    short = "Field mismatch"
+
+    long =
+        "Explanation: Every record has fields that can be either terms or types, like    \n\
+        \this:                                                                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────┐                                    \n\
+        \    │ { foo = 1, bar = True, baz = \"ABC\" } │  Every field is a term           \n\
+        \    └──────────────────────────────────────┘                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ { foo = Integer, bar = Text } │  Every field is a type                    \n\
+        \    └───────────────────────────────┘                                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, you cannot have a record that stores both terms and types:             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \              This is a term                                                    \n\
+        \              ⇩                                                                 \n\
+        \    ┌─────────────────────────┐                                                 \n\
+        \    │ { foo = 1, bar = Bool } │  Invalid record                                 \n\
+        \    └─────────────────────────┘                                                 \n\
+        \                       ⇧                                                        \n\
+        \                       ... but this is a type                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You provided a record with a field named:                                       \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... whose value was:                                                            \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is a " <> here <> " whereas another field named:                      \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n\
+        \                                                                                \n\
+        \... whose value was:                                                            \n\
+        \                                                                                \n\
+        \↳ " <> txt3 <> "                                                                \n\
+        \                                                                                \n\
+        \... is a " <> there <> ", which does not match                                  \n"
+      where
+        txt0 = build k0
+        txt1 = build expr0
+        txt2 = build k1
+        txt3 = build expr1
+
+        here = case c of
+            Type -> "term"
+            Kind -> "type"
+
+        there = case c of
+            Type -> "type"
+            Kind -> "term"
 
 prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
   where
@@ -2010,26 +2044,19 @@ prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
         \    │ { foo = 100, bar = True, baz = \"ABC\" } │                                \n\
         \    └────────────────────────────────────────┘                                  \n\
         \                                                                                \n\
-        \However, fields can only be terms and cannot be types or kinds                  \n\
+        \However, fields can only be terms and or ❰Type❱s and not ❰Kind❱s                \n\
         \                                                                                \n\
-        \For example, these record literals are " <> _NOT <> " valid:                    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ { foo = 100, bar = Text } │                                               \n\
-        \    └───────────────────────────┘                                               \n\
-        \                         ⇧                                                      \n\
-        \                         ❰Text❱ is a type and not a term                        \n\
+        \For example, the following record literal is " <> _NOT <> " valid:              \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ { foo = 100, bar = Type } │                                               \n\
-        \    └───────────────────────────┘                                               \n\
-        \                         ⇧                                                      \n\
-        \                         ❰Type❱ is a kind and not a term                        \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ { foo = Type } │                                                          \n\
+        \    └────────────────┘                                                          \n\
+        \              ⇧                                                                 \n\
+        \              ❰Type❱ is a ❰Kind❱, which is not allowed                          \n\
         \                                                                                \n\
         \                                                                                \n\
-        \You provided a record literal with a key named:                                 \n\
+        \You provided a record literal with a field named:                               \n\
         \                                                                                \n\
         \↳ " <> txt0 <> "                                                                \n\
         \                                                                                \n\
@@ -2037,7 +2064,7 @@ prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \↳ " <> txt1 <> "                                                                \n\
         \                                                                                \n\
-        \... which is not a term                                                         \n"
+        \... which is not a term or ❰Type❱                                               \n"
       where
         txt0 = build k
         txt1 = build expr0

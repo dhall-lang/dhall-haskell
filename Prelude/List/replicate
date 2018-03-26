@@ -4,7 +4,7 @@ Build a list by copying the given element the specified number of times
 Examples:
 
 ```
-./replicate +9 Integer 1 = [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ] : List Integer
+./replicate +9 Integer 1 = [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ]
 
 ./replicate +0 Integer 1 = [] : List Integer
 ```

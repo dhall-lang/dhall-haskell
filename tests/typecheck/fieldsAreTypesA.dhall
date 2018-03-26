@@ -1,1 +1,1 @@
-{ x = Bool, y = List }
+{ x = Bool, y = Text }

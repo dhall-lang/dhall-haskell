@@ -1,7 +1,95 @@
-HEAD
+1.12.0
 
+* Additional changes to support GHC 8.4
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/331
+* BREAKING CHANGE TO API: Replace dependency on `text-format` with `formatting`
+    * This replace the `Data.Text.Buildable.Buildable` instances with
+      `Formatting.Buildable.Buildable` instances, which is why this is a
+       breaking change
+    * `text-format` is no longer maintained and blocking GHC 8.4 support
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/330
+
+1.11.1
+
+* Support GHC 8.4
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/321
+* Fix α-normalization bug
+    * Note that this is not a type-checking bug.  This only affects users who
+      were directly using the `alphaNormalize` function from the Haskell API
+      because `let` expressions were not correctly α-normalized
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/319
+* Slight tweak to syntax highlighting
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/324
+* Increase upper bound on `ansi-terminal` and `exceptions`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/322
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/325
+
+1.11.0
+
+* BREAKING CHANGE TO THE API: Fix `{Natural,Optional,List}/build` semantics to
+  match standard
+    * This is a breaking change because the `OptionalLit` and `ListLit`
+      constructors changed their representations to efficiently support the
+      standard semantics
+    * `ListLit` now stores a `Data.Sequence.Seq` instead of a
+      `Data.Vector.Vector`
+    * `OptionalLit` now stores a `Maybe` instead of a `Data.Vector.Vector`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/300
+* BREAKING CHANGE TO THE COMMAND LINE: `dhall` executable always formats output
+    * Previously you had to opt into formatting using `--pretty`
+    * Now formatting is obligatory and the `--pretty` flag is gone
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/303
+* Feature: New `:save` command for `dhall-repl`
+    * Now you can save an expression to a file: `./yourFile = someExpression`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/309
+* Improvement: Add new simplifications to match standard
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/312
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/316
+* Improvement: Fix equivalence check to match standard
+    * Practically this means that more corner cases of the language correctly
+      type-check than before
+* Improvement: New `--plain` flag to disable syntax highlighting
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/310
+* Improvement: Prelude now provides an umbrella `package.dhall` import
+    * This is primarily for convenience
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/298
+* Improvement: Context is now normalized
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/302
+* Replace `cryptohash` dependency with `cryptonite`
+    * See: https://github.com/dhall-lang/dhall-haskell/commit/5d2012927a062ec8bdf2bbaba77150344f38db77
+* Increase upper bound on exceptions
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/306
+* Fix type error in tutorial
+    * See: https://github.com/dhall-lang/dhall-haskell/commit/5a9126b2f684d3236fc1e8e20e206cfaf47d97db
+
+1.10.0
+
+* Feature: Records/unions can now have fields/alternatives that are types
+    * i.e. `{ foo = Text, bar = List }` is legal now
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/273
+* Feature: New `dhall-repl` for interactively evaluating Dhall expressions
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/266
+* Feature: Syntax highlighting
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/260
+* Feature: BREAKING CHANGE TO THE API: `dhall-format` preserves field order
+    * This changes the syntax tree to use an `InsOrdHashMap` instead of a `Map`
+* BREAKING CHANGE TO THE API: Use Haskell's `Scientific` type
+    * This is fixes the interpreter to correct handle really large/small numbers
+    * This also allows marshaling into Haskell's `Scientific` type
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/256
+* BREAKING CHANGE TO THE API: Remove `system-filepath`/`system-fileio` dependencies
+    * Now the library uses `Prelude.FilePath`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/248
+* Feature: Labels can now begin with reserved names
+    * i.e. `List/map` is now a legal label
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/255
+* Fix: Rendered labels are now correctly escaped if they are numbers
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/252
 * Add the instance `Interpret String`.
     * See: https://github.com/dhall-lang/dhall-haskell/pull/247
+* Fix: Custom contexts passed to `typeWith` are now checked
+    * This prevents a custom context from triggering an infinite loop
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/259
 
 1.9.1
 

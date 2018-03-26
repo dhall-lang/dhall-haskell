@@ -1,7 +1,9 @@
 {-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeOperators      #-}
 
 module Main where
@@ -13,7 +15,7 @@ import Dhall.Core (normalize)
 import Dhall.Import (Imported(..), hashExpressionToCode, load)
 import Dhall.Parser (Src, exprFromText)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
-import Options.Generic (Generic, ParseRecord, type (<?>)(..))
+import Options.Generic (Generic, ParseRecord, Wrapped, type (<?>)(..), (:::))
 import System.IO (stderr)
 import System.Exit (exitFailure, exitSuccess)
 
@@ -25,17 +27,17 @@ import qualified Dhall.TypeCheck
 import qualified Options.Generic
 import qualified System.IO
 
-data Options = Options
-    { explain :: Bool <?> "Explain error messages in more detail"
-    , version :: Bool <?> "Display version and exit"
+data Options w = Options
+    { explain :: w ::: Bool <?> "Explain error messages in more detail"
+    , version :: w ::: Bool <?> "Display version and exit"
     } deriving (Generic)
 
-instance ParseRecord Options
+instance ParseRecord (Options Wrapped)
 
 main :: IO ()
 main = do
-    options <- Options.Generic.getRecord "Compiler for the Dhall language"
-    when (unHelpful (version options)) $ do
+    Options {..} <- Options.Generic.unwrapRecord "Compiler for the Dhall language"
+    when version $ do
       putStrLn (showVersion Meta.version)
       exitSuccess
     let handle =
@@ -46,7 +48,7 @@ main = do
             handler0 e = do
                 let _ = e :: TypeError Src X
                 System.IO.hPutStrLn stderr ""
-                if unHelpful (explain options)
+                if explain
                     then Control.Exception.throwIO (DetailedTypeError e)
                     else do
                         Data.Text.Lazy.IO.hPutStrLn stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
@@ -55,7 +57,7 @@ main = do
             handler1 (Imported ps e) = do
                 let _ = e :: TypeError Src X
                 System.IO.hPutStrLn stderr ""
-                if unHelpful (explain options)
+                if explain
                     then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
                     else do
                         Data.Text.Lazy.IO.hPutStrLn stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"

@@ -4,11 +4,11 @@ Only keep elements of the list where the supplied function returns `True`
 Examples:
 
 ```
-./filter Natural Natural/even ([+2, +3, +5] : List Natural)
-= [ +2 ] : List Natural
+./filter Natural Natural/even [+2, +3, +5]
+= [ +2 ]
 
-./filter Natural Natural/odd ([+2, +3, +5] : List Natural)
-= [ +3, +5 ] : List Natural
+./filter Natural Natural/odd [+2, +3, +5]
+= [ +3, +5 ]
 ```
 -}
     let filter
