@@ -1,16 +1,17 @@
-{-# LANGUAGE DefaultSignatures   #-}
-{-# LANGUAGE DeriveAnyClass      #-}
-{-# LANGUAGE DeriveFunctor       #-}
-{-# LANGUAGE DeriveGeneric       #-}
-{-# LANGUAGE FlexibleInstances   #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving  #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE DefaultSignatures          #-}
+{-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeOperators              #-}
 
 {-| Please read the "Dhall.Tutorial" module, which contains a tutorial explaining
     how to use the language, the compiler, and this library
@@ -25,6 +26,7 @@ module Dhall
 
     -- * Types
     , Type(..)
+    , RecordType(..)
     , InputType(..)
     , Interpret(..)
     , InvalidType(..)
@@ -46,6 +48,8 @@ module Dhall
     , unit
     , string
     , pair
+    , record
+    , field
     , GenericInterpret(..)
     , GenericInject(..)
 
@@ -84,9 +88,12 @@ import Numeric.Natural (Natural)
 import Prelude hiding (maybe, sequence)
 import Text.Trifecta.Delta (Delta(..))
 
+import qualified Control.Applicative
 import qualified Control.Exception
 import qualified Data.ByteString.Lazy
 import qualified Data.Foldable
+import qualified Data.Functor.Compose
+import qualified Data.Functor.Product
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Scientific
 import qualified Data.Sequence
@@ -1058,3 +1065,91 @@ instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
         n = undefined
 
         InputType embedIn declaredIn = injectWith opts
+
+{-| The 'RecordType' applicative functor allows you to build a 'Type' parser
+    from a Dhall record.
+
+    For example, let's take the following Haskell data type:
+
+> data Project = Project
+>   { projectName :: Text
+>   , projectDescription :: Text
+>   , projectStars :: Natural
+>   }
+
+    And assume that we have the following Dhall record that we would like to
+    parse as a @Project@:
+
+> { name =
+>     "dhall-haskell"
+> , description =
+>     "A configuration language guaranteed to terminate"
+> , stars =
+>     +289
+> }
+
+    Our parser has type 'Type' @Project@, but we can't build that out of any
+    smaller parsers, as 'Type's cannot be combined (they are only 'Functor's).
+    However, we can use a 'RecordType' to build a 'Type' for @Project@:
+
+> project :: Type Project
+> project =
+>   record
+>     ( Project <$> field "name" string
+>               <*> field "description" string
+>               <*> field "stars" natural
+>     )
+
+-}
+
+newtype RecordType a =
+  RecordType
+    ( Data.Functor.Product.Product
+        ( Control.Applicative.Const
+            ( Data.HashMap.Strict.InsOrd.InsOrdHashMap
+                Data.Text.Lazy.Text
+                ( Expr Src X )
+            )
+        )
+        ( Data.Functor.Compose.Compose
+            ( (->) ( Expr Src X ) )
+            Maybe
+        )
+        a
+    )
+  deriving (Functor, Applicative)
+
+
+-- | Run a 'RecordType' parser to build a 'Type' parser.
+record :: RecordType a -> Dhall.Type a
+record ( RecordType ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Data.Functor.Compose.Compose extractF ) ) ) =
+  Type
+    { extract =
+        extractF
+    , expected =
+        Record fields
+    }
+
+
+-- | Parse a single field of a record.
+field :: Data.Text.Lazy.Text -> Type a -> RecordType a
+field key valueType =
+  let
+    extractBody expr = do
+      RecordLit fields <-
+        return expr
+
+      Data.HashMap.Strict.InsOrd.lookup key fields
+        >>= extract valueType
+
+  in
+    RecordType
+      ( Data.Functor.Product.Pair
+          ( Control.Applicative.Const
+              ( Data.HashMap.Strict.InsOrd.singleton
+                  key
+                  ( Dhall.expected valueType )
+              )
+          )
+          ( Data.Functor.Compose.Compose extractBody )
+      )
