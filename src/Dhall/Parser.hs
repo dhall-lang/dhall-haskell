@@ -51,7 +51,6 @@ import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
-import qualified Data.Vector
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
@@ -1546,11 +1545,14 @@ import_ = (do
         return RawText
 
 -- | A parsing error
-newtype ParseError = ParseError{ unwrap :: Text.Megaparsec.ParseError Char Void}
+data ParseError = ParseError
+    { unwrap :: Text.Megaparsec.ParseError Char Void
+    , input  :: Text
+    }
 
 instance Show ParseError where
-    show (err) =
-      "\n\ESC[1;31mError\ESC[0m: Invalid input\n\n" <> Text.Megaparsec.parseErrorPretty (unwrap err)
+    show (ParseError {..}) =
+      "\n\ESC[1;31mError\ESC[0m: Invalid input\n\n" <> Text.Megaparsec.parseErrorPretty' input unwrap
 
 instance Exception ParseError
 
@@ -1575,7 +1577,7 @@ exprAndHeaderFromText
     -> Text
     -> Either ParseError (Text, Expr Src Path)
 exprAndHeaderFromText delta text = case result of
-    Left errInfo   -> Left (ParseError errInfo)
+    Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
     Right (txt, r) -> Right (Data.Text.Lazy.dropWhileEnd (/= '\n') txt, r)
   where
     parser = do

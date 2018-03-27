@@ -117,7 +117,6 @@ module Dhall.Import (
     , MissingEnvironmentVariable(..)
     ) where
 
-import Data.Void (Void)
 import Control.Applicative (empty)
 import Control.Exception
     (Exception, IOException, SomeException, onException, throwIO)
@@ -163,7 +162,6 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Crypto.Hash
 import qualified Data.ByteArray
 import qualified Data.ByteString
-import qualified Data.ByteString.Char8
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
 import qualified Data.List                        as List
@@ -552,15 +550,6 @@ instance Show HashMismatch where
         <>  "\n"
         <>  "↳ " <> show actualHash <> "\n"
 
-parseFromFileEx
-    :: Text.Megaparsec.Parsec Void Text a
-    -> FilePath
-    -> IO (Either (Text.Megaparsec.ParseError Char Void) a)
-parseFromFileEx parser path = do
-    text <- Data.Text.Lazy.IO.readFile path
-
-    return (Text.Megaparsec.parse parser path text)
-
 -- | Parse an expression from a `Path` containing a Dhall program
 exprFromPath :: Path -> StateT Status IO (Expr Src Path)
 exprFromPath (Path {..}) = case pathType of
@@ -582,17 +571,17 @@ exprFromPath (Path {..}) = case pathType of
                 -- Unfortunately, GHC throws an `InappropriateType` exception
                 -- when trying to read a directory, but does not export the
                 -- exception, so I must resort to a more heavy-handed `catch`
-                let handler :: IOException -> IO (Either (Text.Megaparsec.ParseError Char Void) (Expr Src Path))
+                let handler :: IOException -> IO Text
                     handler e = do
                         -- If the fallback fails, reuse the original exception
                         -- to avoid user confusion
-                        parseFromFileEx parser (path </> "@")
+                        Data.Text.Lazy.IO.readFile (path </> "@")
                             `onException` throwIO e
 
-                x <- parseFromFileEx parser path `catch` handler
-                case x of
+                text <- Data.Text.Lazy.IO.readFile path `catch` handler
+                case Text.Megaparsec.parse parser path text of
                     Left errInfo -> do
-                        throwIO (ParseError errInfo)
+                        throwIO (ParseError errInfo text)
                     Right expr -> do
                         return expr
             RawText -> do
@@ -665,7 +654,7 @@ exprFromPath (Path {..}) = case pathType of
                         -- Also try the fallback in case of a parse error, since
                         -- the parse error might signify that this URL points to
                         -- a directory list
-                        let err' = ParseError err
+                        let err' = ParseError err text
 
                         request' <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
 
@@ -690,11 +679,12 @@ exprFromPath (Path {..}) = case pathType of
         x <- System.Environment.lookupEnv (Text.unpack env)
         case x of
             Just str -> do
+                let text = Text.pack str
                 case pathMode of
                     Code ->
-                        case Text.Megaparsec.parse parser (Text.unpack env) (Text.pack str) of
+                        case Text.Megaparsec.parse parser (Text.unpack env) text of
                             Left errInfo -> do
-                                throwIO (ParseError errInfo)
+                                throwIO (ParseError errInfo text)
                             Right expr   -> do
                                 return expr
                     RawText -> return (TextLit (Chunks [] (build str)))
