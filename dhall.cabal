@@ -154,7 +154,7 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                        >= 4.9.0.0  && < 5   ,
-        ansi-wl-pprint                           < 0.7 ,
+        ansi-terminal               >= 0.6.3.1  && < 0.8 ,
         base16-bytestring                        < 0.2 ,
         bytestring                               < 0.11,
         case-insensitive                         < 1.3 ,
@@ -169,6 +169,7 @@ Library
         http-client-tls             >= 0.2.0    && < 0.4 ,
         insert-ordered-containers   >= 0.1.0.1  && < 0.3 ,
         lens-family-core            >= 1.0.0    && < 1.3 ,
+        megaparsec                  >= 6.1.1    && < 6.5 ,
         memory                      >= 0.14     && < 0.15,
         parsers                     >= 0.12.4   && < 0.13,
         prettyprinter               >= 1.2.0.1  && < 1.3 ,
@@ -176,7 +177,6 @@ Library
         scientific                  >= 0.3.0.0  && < 0.4 ,
         text                        >= 0.11.1.0 && < 1.3 ,
         transformers                >= 0.2.0.0  && < 0.6 ,
-        trifecta                    >= 1.6      && < 1.8 ,
         unordered-containers        >= 0.1.3.0  && < 0.3 ,
         vector                      >= 0.11.0.0 && < 0.13
     Exposed-Modules:
@@ -202,7 +202,7 @@ Executable dhall
         optparse-generic            >= 1.1.1    && < 1.4 ,
         prettyprinter                                    ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
-        trifecta                    >= 1.6      && < 1.8 ,
+        megaparsec                  >= 6.4.0    && < 6.5 ,
         text                        >= 0.11.1.0 && < 1.3
     GHC-Options: -Wall -Wcompat
     Other-Modules:
@@ -220,8 +220,7 @@ Executable dhall-repl
         repline          >= 0.1.6.0  && < 0.2 ,
         prettyprinter                         ,
         prettyprinter-ansi-terminal           ,
-        text                                  ,
-        trifecta
+        text
     GHC-Options: -Wall -Wcompat
 
 Executable dhall-format
@@ -231,10 +230,10 @@ Executable dhall-format
         base                        >= 4        && < 5   ,
         ansi-terminal               >= 0.6.3.1  && < 0.9 ,
         dhall                                ,
+        megaparsec                  >= 6.4.0    && < 6.5 ,
         optparse-generic            >= 1.1.1    && < 1.4 ,
         prettyprinter               >= 1.2.0.1  && < 1.3 ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
-        trifecta                    >= 1.6      && < 1.8 ,
         text                        >= 0.11.1.0 && < 1.3
     GHC-Options: -Wall -Wcompat
     Other-Modules:
@@ -247,7 +246,7 @@ Executable dhall-hash
         base             >= 4        && < 5  ,
         dhall                                ,
         optparse-generic >= 1.1.1    && < 1.4,
-        trifecta         >= 1.6      && < 1.8,
+        megaparsec       >= 6.4.0    && < 6.5 ,
         text             >= 0.11.1.0 && < 1.3
     Other-Modules:
         Paths_dhall

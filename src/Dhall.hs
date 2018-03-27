@@ -82,10 +82,8 @@ import Formatting.Buildable (Buildable(..))
 import GHC.Generics
 import Numeric.Natural (Natural)
 import Prelude hiding (maybe, sequence)
-import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Exception
-import qualified Data.ByteString.Lazy
 import qualified Data.Foldable
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Scientific
@@ -94,7 +92,6 @@ import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
-import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
 import qualified Dhall.Context
 import qualified Dhall.Core
@@ -166,13 +163,10 @@ inputWith
     -> IO a
     -- ^ The decoded value in Haskell
 inputWith (Type {..}) ctx n txt = do
-    let delta = Directed "(input)" 0 0 0 0
-    expr  <- throws (Dhall.Parser.exprFromText delta txt)
+    expr  <- throws (Dhall.Parser.exprFromText "(input)" txt)
     expr' <- Dhall.Import.loadWithContext ctx expr
     let suffix =
-            ( Data.ByteString.Lazy.toStrict
-            . Data.Text.Lazy.Encoding.encodeUtf8
-            . Data.Text.Lazy.Builder.toLazyText
+            ( Data.Text.Lazy.Builder.toLazyText
             . build
             ) expected
     let annot = case expr' of

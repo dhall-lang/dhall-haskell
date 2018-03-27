@@ -157,15 +157,11 @@ import Network.HTTP.Client
 #else
 import Network.HTTP.Client (HttpException(..), Manager)
 #endif
-import Text.Trifecta (Result(..))
-import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Crypto.Hash
 import qualified Data.ByteArray
 import qualified Data.ByteString
-import qualified Data.ByteString.Char8
-import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
 import qualified Data.List                        as List
@@ -186,9 +182,9 @@ import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified System.Environment
 import qualified System.Directory
 import qualified System.FilePath                  as FilePath
+import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
-import qualified Text.Trifecta
 
 builderToString :: Builder -> String
 builderToString = Text.unpack . Builder.toLazyText
@@ -554,23 +550,6 @@ instance Show HashMismatch where
         <>  "\n"
         <>  "↳ " <> show actualHash <> "\n"
 
-parseFromFileEx
-    :: Text.Trifecta.Parser a
-    -> FilePath
-    -> IO (Text.Trifecta.Result a)
-parseFromFileEx parser path = do
-    text <- Data.Text.Lazy.IO.readFile path
-
-    let lazyBytes = Data.Text.Lazy.Encoding.encodeUtf8 text
-
-    let strictBytes = Data.ByteString.Lazy.toStrict lazyBytes
-
-    let delta = Directed bytesPath 0 0 0 0
-
-    return (Text.Trifecta.parseByteString parser delta strictBytes)
-  where
-    bytesPath = Data.ByteString.Char8.pack path
-
 -- | Parse an expression from a `Path` containing a Dhall program
 exprFromPath :: Path -> StateT Status IO (Expr Src Path)
 exprFromPath (Path {..}) = case pathType of
@@ -592,18 +571,18 @@ exprFromPath (Path {..}) = case pathType of
                 -- Unfortunately, GHC throws an `InappropriateType` exception
                 -- when trying to read a directory, but does not export the
                 -- exception, so I must resort to a more heavy-handed `catch`
-                let handler :: IOException -> IO (Result (Expr Src Path))
+                let handler :: IOException -> IO Text
                     handler e = do
                         -- If the fallback fails, reuse the original exception
                         -- to avoid user confusion
-                        parseFromFileEx parser (path </> "@")
+                        Data.Text.Lazy.IO.readFile (path </> "@")
                             `onException` throwIO e
 
-                x <- parseFromFileEx parser path `catch` handler
-                case x of
-                    Failure errInfo -> do
-                        throwIO (ParseError (Text.Trifecta._errDoc errInfo))
-                    Success expr -> do
+                text <- Data.Text.Lazy.IO.readFile path `catch` handler
+                case Text.Megaparsec.parse parser path text of
+                    Left errInfo -> do
+                        throwIO (ParseError errInfo text)
+                    Right expr -> do
                         return expr
             RawText -> do
                 text <- Data.Text.IO.readFile path
@@ -637,9 +616,7 @@ exprFromPath (Path {..}) = case pathType of
                                 )
                             )
                 let suffix =
-                        ( Data.ByteString.Lazy.toStrict
-                        . Data.Text.Lazy.Encoding.encodeUtf8
-                        . Builder.toLazyText
+                        ( Builder.toLazyText
                         . build
                         ) expected
                 let annot = case expr of
@@ -671,16 +648,13 @@ exprFromPath (Path {..}) = case pathType of
             Right text -> return text
 
         case pathMode of
-            Code -> do
-                let urlBytes = Data.Text.Lazy.Encoding.encodeUtf8 url
-                let delta =
-                        Directed (Data.ByteString.Lazy.toStrict urlBytes) 0 0 0 0
-                case Text.Trifecta.parseString parser delta (Text.unpack text) of
-                    Failure err -> do
+            Code ->
+                case Text.Megaparsec.parse parser (Text.unpack url) text of
+                    Left err -> do
                         -- Also try the fallback in case of a parse error, since
                         -- the parse error might signify that this URL points to
                         -- a directory list
-                        let err' = ParseError (Text.Trifecta._errDoc err)
+                        let err' = ParseError err text
 
                         request' <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
 
@@ -695,25 +669,23 @@ exprFromPath (Path {..}) = case pathType of
                             Left  _     -> liftIO (throwIO err')
                             Right text' -> return text'
 
-                        case Text.Trifecta.parseString parser delta (Text.unpack text') of
-                            Failure _    -> liftIO (throwIO err')
-                            Success expr -> return expr
-                    Success expr -> return expr
+                        case Text.Megaparsec.parse parser (Text.unpack url) text' of
+                            Left _     -> liftIO (throwIO err')
+                            Right expr -> return expr
+                    Right expr -> return expr
             RawText -> do
                 return (TextLit (Chunks [] (build text)))
     Env env -> liftIO (do
         x <- System.Environment.lookupEnv (Text.unpack env)
         case x of
             Just str -> do
+                let text = Text.pack str
                 case pathMode of
-                    Code -> do
-                        let envBytes = Data.Text.Lazy.Encoding.encodeUtf8 env
-                        let delta =
-                                Directed (Data.ByteString.Lazy.toStrict envBytes) 0 0 0 0
-                        case Text.Trifecta.parseString parser delta str of
-                            Failure errInfo -> do
-                                throwIO (ParseError (Text.Trifecta._errDoc errInfo))
-                            Success expr    -> do
+                    Code ->
+                        case Text.Megaparsec.parse parser (Text.unpack env) text of
+                            Left errInfo -> do
+                                throwIO (ParseError errInfo text)
+                            Right expr   -> do
                                 return expr
                     RawText -> return (TextLit (Chunks [] (build str)))
             Nothing  -> throwIO (MissingEnvironmentVariable env) )
