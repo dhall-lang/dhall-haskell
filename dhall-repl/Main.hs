@@ -24,7 +24,6 @@ import qualified System.Console.ANSI
 import qualified System.Console.Haskeline.MonadException as Haskeline
 import qualified System.Console.Repline as Repline
 import qualified System.IO
-import qualified Text.Trifecta.Delta as Trifecta
 
 
 main :: IO ()
@@ -75,7 +74,7 @@ parseAndLoad
   => String -> m ( Dhall.Expr Dhall.Src Dhall.X )
 parseAndLoad src = do
   parsed <-
-    case Dhall.exprFromText ( Trifecta.Columns 0 0 ) ( LazyText.pack src ) of
+    case Dhall.exprFromText "(stdin)" ( LazyText.pack src ) of
       Left e ->
         liftIO ( throwIO e )
 

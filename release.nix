@@ -21,6 +21,12 @@ let
 
           prettyprinter =
             haskellPackagesNew.callPackage ./nix/prettyprinter.nix { };
+
+          parser-combinators =
+            haskellPackagesNew.callPackage ./nix/parser-combinators.nix { };
+
+          megaparsec =
+            haskellPackagesNew.callPackage ./nix/megaparsec.nix { };
         };
       };
     };
