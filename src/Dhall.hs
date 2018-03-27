@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
@@ -9,7 +10,6 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeOperators              #-}
 
 {-| Please read the "Dhall.Tutorial" module, which contains a tutorial explaining
@@ -884,7 +884,7 @@ instance Inject Scientific where
 
 instance Inject Double where
     injectWith =
-        fmap (contramap (Data.Scientific.fromFloatDigits @Double)) injectWith
+        fmap (contramap (Data.Scientific.fromFloatDigits :: Double -> Scientific)) injectWith
 
 instance Inject () where
     injectWith _ = InputType {..}
