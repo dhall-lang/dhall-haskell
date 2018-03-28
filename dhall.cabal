@@ -183,6 +183,7 @@ Library
         Dhall,
         Dhall.Context,
         Dhall.Core,
+        Dhall.Diff
         Dhall.Import,
         Dhall.Parser,
         Dhall.Pretty,

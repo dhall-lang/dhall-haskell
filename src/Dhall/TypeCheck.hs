@@ -39,10 +39,14 @@ import qualified Data.Foldable
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
 import qualified Data.Set
-import qualified Data.Text.Lazy                   as Text
-import qualified Data.Text.Lazy.Builder           as Builder
+import qualified Data.Text.Lazy                        as Text
+import qualified Data.Text.Lazy.Builder                as Builder
+import qualified Data.Text.Prettyprint.Doc             as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Dhall.Context
 import qualified Dhall.Core
+import qualified Dhall.Diff
+import qualified Dhall.Pretty
 
 traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
 traverseWithIndex_ k xs =
@@ -722,13 +726,13 @@ data TypeMessage s a
     | NoDependentTypes (Expr s a) (Expr s a)
     deriving (Show)
 
-shortTypeMessage :: Buildable a => TypeMessage s a -> Builder
+shortTypeMessage :: (Buildable a, Eq a, Pretty a) => TypeMessage s a -> Builder
 shortTypeMessage msg =
     "\ESC[1;31mError\ESC[0m: " <> build short <> "\n"
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
-longTypeMessage :: Buildable a => TypeMessage s a -> Builder
+longTypeMessage :: (Buildable a, Eq a, Pretty a) => TypeMessage s a -> Builder
 longTypeMessage msg =
         "\ESC[1;31mError\ESC[0m: " <> build short <> "\n"
     <>  "\n"
@@ -746,7 +750,22 @@ data ErrorMessages = ErrorMessages
 _NOT :: Builder
 _NOT = "\ESC[1mnot\ESC[0m"
 
-prettyTypeMessage :: Buildable a => TypeMessage s a -> ErrorMessages
+prettyDiff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Builder
+prettyDiff exprL exprR = builder
+  where
+    doc =
+        fmap Dhall.Pretty.annToAnsiStyle (Dhall.Diff.diffNormalized exprL exprR)
+
+    opts = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
+
+    stream = Pretty.layoutPretty opts doc
+
+    lazyText = Pretty.renderLazy stream
+
+    builder = Builder.fromLazyText lazyText
+
+prettyTypeMessage
+    :: (Buildable a, Eq a, Pretty a) => TypeMessage s a -> ErrorMessages
 prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
   -- https://github.com/dhall-lang/dhall-haskell/pull/116
@@ -1144,7 +1163,9 @@ prettyTypeMessage (NotAFunction expr0 expr1) = ErrorMessages {..}
 
 prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
-    short = "Wrong type of function argument"
+    short = "Wrong type of function argument\n"
+        <>  "\n"
+        <>  prettyDiff expr1 expr3
 
     long =
         "Explanation: Every function declares what type or kind of argument to accept    \n\
@@ -1276,8 +1297,9 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
 
 prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
-    short = "Expression doesn't match annotation"
-
+    short = "Expression doesn't match annotation\n"
+        <>  "\n"
+        <>  prettyDiff expr1 expr2
     long =
         "Explanation: You can annotate an expression with its type or kind using the     \n\
         \❰:❱ symbol, like this:                                                          \n\
@@ -1557,7 +1579,9 @@ prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
 prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     ErrorMessages {..}
   where
-    short = "❰if❱ branches must have matching types"
+    short = "❰if❱ branches must have matching types\n"
+        <>  "\n"
+        <>  prettyDiff expr1 expr3
 
     long =
         "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
@@ -1706,7 +1730,9 @@ prettyTypeMessage MissingListType = do
 prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "List elements should all have the same type"
+    short = "List elements should all have the same type\n"
+        <>  "\n"
+        <>  prettyDiff expr0 expr2
 
     long =
         "Explanation: Every element in a list must have the same type                    \n\
@@ -1742,7 +1768,9 @@ prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
 prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "List element has the wrong type"
+    short = "List element has the wrong type\n"
+        <>  "\n"
+        <>  prettyDiff expr0 expr2
 
     long =
         "Explanation: Every element in the list must have a type matching the type       \n\
@@ -1829,7 +1857,9 @@ prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
 
 prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..}
   where
-    short = "❰Optional❱ element has the wrong type"
+    short = "❰Optional❱ element has the wrong type\n"
+        <>  "\n"
+        <>  prettyDiff expr0 expr2
 
     long =
         "Explanation: An ❰Optional❱ element must have a type matching the type annotation\n\
@@ -2193,7 +2223,9 @@ prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
 
 prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
   where
-    short = "You can only append ❰List❱s with matching element types"
+    short = "You can only append ❰List❱s with matching element types\n"
+        <>  "\n"
+        <>  prettyDiff expr0 expr1
 
     long =
         "Explanation: You can append two ❰List❱s using the ❰#❱ operator, like this:      \n\
@@ -2575,7 +2607,9 @@ prettyTypeMessage MissingMergeType =
 prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "Wrong handler input type"
+    short = "Wrong handler input type\n"
+        <>  "\n"
+        <>  prettyDiff expr1 expr2
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -2635,7 +2669,9 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
 prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "Wrong handler output type"
+    short = "Wrong handler output type\n"
+        <>  "\n"
+        <>  prettyDiff expr1 expr2
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -2697,7 +2733,9 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
 prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
     ErrorMessages {..}
   where
-    short = "Handlers should have the same output type"
+    short = "Handlers should have the same output type\n"
+        <>  "\n"
+        <>  prettyDiff expr0 expr1
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -3235,12 +3273,12 @@ data TypeError s a = TypeError
     , typeMessage :: TypeMessage s a
     } deriving (Typeable)
 
-instance (Buildable a, Buildable s) => Show (TypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Pretty a) => Show (TypeError s a) where
     show = Text.unpack . Builder.toLazyText . build
 
-instance (Buildable a, Buildable s, Typeable a, Typeable s) => Exception (TypeError s a)
+instance (Buildable a, Buildable s, Eq a, Pretty a, Typeable a, Typeable s) => Exception (TypeError s a)
 
-instance (Buildable a, Buildable s) => Buildable (TypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (TypeError s a) where
     build (TypeError ctx expr msg)
         =   "\n"
         <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
@@ -3269,12 +3307,12 @@ instance (Buildable a, Buildable s) => Buildable (TypeError s a) where
 newtype DetailedTypeError s a = DetailedTypeError (TypeError s a)
     deriving (Typeable)
 
-instance (Buildable a, Buildable s) => Show (DetailedTypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Pretty a) => Show (DetailedTypeError s a) where
     show = Text.unpack . Builder.toLazyText . build
 
-instance (Buildable a, Buildable s, Typeable a, Typeable s) => Exception (DetailedTypeError s a)
+instance (Buildable a, Buildable s, Eq a, Pretty a, Typeable a, Typeable s) => Exception (DetailedTypeError s a)
 
-instance (Buildable a, Buildable s) => Buildable (DetailedTypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (DetailedTypeError s a) where
     build (DetailedTypeError (TypeError ctx expr msg))
         =   "\n"
         <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
