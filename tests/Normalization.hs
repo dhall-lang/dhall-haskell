@@ -24,7 +24,8 @@ import Util
 normalizationTests :: TestTree
 normalizationTests =
     testGroup "normalization"
-        [ examples
+        [ tutorialExamples
+        , preludeExamples
         , simplifications
         , constantFolding
         , conversions
@@ -33,8 +34,14 @@ normalizationTests =
         , shouldNormalize "a remote-systems.conf builder" "remoteSystems"
         ]
 
-examples :: TestTree
-examples =
+tutorialExamples :: TestTree
+tutorialExamples =
+    testGroup "Tutorial examples"
+        [ shouldNormalize "⩓" "./tutorial/combineTypes/0"
+        ]
+
+preludeExamples :: TestTree
+preludeExamples =
     testGroup "Prelude examples"
         [ shouldNormalize "Bool/and" "./examples/Bool/and/0"
         , shouldNormalize "Bool/and" "./examples/Bool/and/1"

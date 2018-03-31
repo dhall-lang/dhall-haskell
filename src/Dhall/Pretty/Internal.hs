@@ -600,10 +600,10 @@ prettyExprC6 a0 =
     prettyExprC7 a0
 
 prettyExprC7 :: Pretty a => Expr s a -> Doc Ann
-prettyExprC7 a0@(NaturalTimes _ _) =
-    enclose' "" "  " (" " <> operator "*" <> " ") (operator "*" <> " ") (fmap duplicate (docs a0))
+prettyExprC7 a0@(CombineTypes _ _) =
+    enclose' "" "  " (" " <> operator "⩓" <> " ") (operator "⩓" <> " ") (fmap duplicate (docs a0))
   where
-    docs (NaturalTimes a b) = prettyExprC8 a : docs b
+    docs (CombineTypes a b) = prettyExprC8 a : docs b
     docs (Note         _ b) = docs b
     docs                 b  = [ prettyExprC8 b ]
 prettyExprC7 (Note _ a) =
@@ -612,27 +612,39 @@ prettyExprC7 a0 =
     prettyExprC8 a0
 
 prettyExprC8 :: Pretty a => Expr s a -> Doc Ann
-prettyExprC8 a0@(BoolEQ _ _) =
-    enclose' "" "    " (" " <> operator "==" <> " ") (operator "==" <> "  ") (fmap duplicate (docs a0))
+prettyExprC8 a0@(NaturalTimes _ _) =
+    enclose' "" "  " (" " <> operator "*" <> " ") (operator "*" <> " ") (fmap duplicate (docs a0))
   where
-    docs (BoolEQ a b) = prettyExprC9 a : docs b
-    docs (Note   _ b) = docs b
-    docs           b  = [ prettyExprC9 b ]
+    docs (NaturalTimes a b) = prettyExprC9 a : docs b
+    docs (Note         _ b) = docs b
+    docs                 b  = [ prettyExprC9 b ]
 prettyExprC8 (Note _ a) =
     prettyExprC8 a
 prettyExprC8 a0 =
     prettyExprC9 a0
 
 prettyExprC9 :: Pretty a => Expr s a -> Doc Ann
-prettyExprC9 a0@(BoolNE _ _) =
+prettyExprC9 a0@(BoolEQ _ _) =
+    enclose' "" "    " (" " <> operator "==" <> " ") (operator "==" <> "  ") (fmap duplicate (docs a0))
+  where
+    docs (BoolEQ a b) = prettyExprC10 a : docs b
+    docs (Note   _ b) = docs b
+    docs           b  = [ prettyExprC10 b ]
+prettyExprC9 (Note _ a) =
+    prettyExprC9 a
+prettyExprC9 a0 =
+    prettyExprC10 a0
+
+prettyExprC10 :: Pretty a => Expr s a -> Doc Ann
+prettyExprC10 a0@(BoolNE _ _) =
     enclose' "" "    " (" " <> operator "!=" <> " ") (operator "!=" <> "  ") (fmap duplicate (docs a0))
   where
     docs (BoolNE a b) = prettyExprD a : docs b
     docs (Note   _ b) = docs b
     docs           b  = [ prettyExprD b ]
-prettyExprC9 (Note _ a) =
-    prettyExprC9 a
-prettyExprC9 a0 =
+prettyExprC10 (Note _ a) =
+    prettyExprC10 a
+prettyExprC10 a0 =
     prettyExprD a0
 
 prettyExprD :: Pretty a => Expr s a -> Doc Ann
@@ -976,21 +988,27 @@ buildExprC6  a           = buildExprC7 a
 
 -- | Builder corresponding to the @exprC7@ parser in "Dhall.Parser"
 buildExprC7 :: Buildable a => Expr s a -> Builder
-buildExprC7 (NaturalTimes a b) = buildExprC8 a <> " * " <> buildExprC7 b
+buildExprC7 (CombineTypes a b) = buildExprC8 a <> " ⩓ " <> buildExprC7 b
 buildExprC7 (Note         _ b) = buildExprC7 b
 buildExprC7  a                 = buildExprC8 a
 
 -- | Builder corresponding to the @exprC8@ parser in "Dhall.Parser"
 buildExprC8 :: Buildable a => Expr s a -> Builder
-buildExprC8 (BoolEQ a b) = buildExprC9 a <> " == " <> buildExprC8 b
-buildExprC8 (Note   _ b) = buildExprC8 b
-buildExprC8  a           = buildExprC9 a
+buildExprC8 (NaturalTimes a b) = buildExprC9 a <> " * " <> buildExprC8 b
+buildExprC8 (Note         _ b) = buildExprC8 b
+buildExprC8  a                 = buildExprC9 a
 
 -- | Builder corresponding to the @exprC9@ parser in "Dhall.Parser"
 buildExprC9 :: Buildable a => Expr s a -> Builder
-buildExprC9 (BoolNE a b) = buildExprD  a <> " != " <> buildExprC9 b
+buildExprC9 (BoolEQ a b) = buildExprC10 a <> " == " <> buildExprC9 b
 buildExprC9 (Note   _ b) = buildExprC9 b
-buildExprC9  a           = buildExprD  a
+buildExprC9  a           = buildExprC10 a
+
+-- | Builder corresponding to the @exprC10@ parser in "Dhall.Parser"
+buildExprC10 :: Buildable a => Expr s a -> Builder
+buildExprC10 (BoolNE a b) = buildExprD  a <> " != " <> buildExprC10 b
+buildExprC10 (Note   _ b) = buildExprC10 b
+buildExprC10  a           = buildExprD  a
 
 -- | Builder corresponding to the @exprD@ parser in "Dhall.Parser"
 buildExprD :: Buildable a => Expr s a -> Builder

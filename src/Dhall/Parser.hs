@@ -683,6 +683,11 @@ _combine = do
     void (Text.Parser.Char.char '∧' <?> "\"∧\"") <|> void (Text.Parser.Char.text "/\\")
     whitespace
 
+_combineTypes :: Parser ()
+_combineTypes = do
+    void (Text.Parser.Char.char '⩓' <?> "\"⩓\"") <|> void (Text.Parser.Char.text "//\\\\")
+    whitespace
+
 _prefer :: Parser ()
 _prefer = do
     void (Text.Parser.Char.char '⫽' <?> "\"⫽\"") <|> void (Text.Parser.Char.text "//")
@@ -1149,7 +1154,11 @@ combineExpression =
 
 preferExpression :: Parser a -> Parser (Expr Src a)
 preferExpression =
-    makeOperatorExpression timesExpression _prefer Prefer
+    makeOperatorExpression combineTypesExpression _prefer Prefer
+
+combineTypesExpression :: Parser a -> Parser (Expr Src a)
+combineTypesExpression =
+    makeOperatorExpression timesExpression _combineTypes CombineTypes
 
 timesExpression :: Parser a -> Parser (Expr Src a)
 timesExpression =

@@ -539,6 +539,52 @@ typeWithA tpa = loop
                 return (Record (Data.HashMap.Strict.InsOrd.fromList kts))
 
         combineTypes ktsX ktsY
+    loop ctx e@(CombineTypes l r) = do
+        tL <- loop ctx l
+        let l' = Dhall.Core.normalize l
+        cL <- case tL of
+            Const cL -> return cL
+            _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType l l'))
+        tR <- loop ctx r
+        let r' = Dhall.Core.normalize r
+        cR <- case tR of
+            Const cR -> return cR
+            _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
+        let decide Type Type =
+                return Type
+            decide Kind Kind =
+                return Kind
+            decide x y =
+                Left (TypeError ctx e (RecordTypeMismatch x y l r))
+        c <- decide cL cR
+
+        ktsL0 <- case l' of
+            Record kts -> return kts
+            _          -> Left (TypeError ctx e (CombineTypesRequiresRecordType l l'))
+        ktsR0 <- case r' of
+            Record kts -> return kts
+            _          -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
+
+        let combineTypes ktsL ktsR = do
+                let ksL =
+                        Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsL)
+                let ksR =
+                        Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsR)
+                let ks = Data.Set.union ksL ksR
+                forM_ (toList ks) (\k -> do
+                    case (Data.HashMap.Strict.InsOrd.lookup k ktsL, Data.HashMap.Strict.InsOrd.lookup k ktsR) of
+                        (Just (Record ktsL'), Just (Record ktsR')) -> do
+                            combineTypes ktsL' ktsR'
+                        (Nothing, Just _) -> do
+                            return ()
+                        (Just _, Nothing) -> do
+                            return ()
+                        _ -> do
+                            Left (TypeError ctx e (FieldCollision k)) )
+
+        combineTypes ktsL0 ktsR0
+
+        return (Const c)
     loop ctx e@(Prefer kvsX kvsY) = do
         tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
         ktsX  <- case tKvsX of
@@ -701,6 +747,8 @@ data TypeMessage s a
     | ListAppendMismatch (Expr s a) (Expr s a)
     | DuplicateAlternative Text
     | MustCombineARecord Char (Expr s a) (Expr s a)
+    | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
+    | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
     | FieldCollision Text
     | MustMergeARecord (Expr s a) (Expr s a)
     | MustMergeUnion (Expr s a) (Expr s a)
@@ -2346,13 +2394,103 @@ prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
         txt0 = build expr0
         txt1 = build expr1
 
+prettyTypeMessage (CombineTypesRequiresRecordType expr0 expr1) =
+    ErrorMessages {..}
+  where
+    short = "❰⩓❱ requires arguments that are record types"
+
+    long =
+        "Explanation: You can only use the ❰⩓❱ operator on arguments that are record type\n\
+        \literals, like this:                                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────┐                                     \n\
+        \    │ { age : Natural } ⩓ { name : Text } │                                     \n\
+        \    └─────────────────────────────────────┘                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot use the ❰⩓❱ operator on any other type of arguments.  For    \n\
+        \example, you cannot use variable arguments:                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────┐                                       \n\
+        \    │ λ(t : Type) → t ⩓ { name : Text } │  Invalid: ❰t❱ might not be a record   \n\
+        \    └───────────────────────────────────┘  type                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to supply the following argument:                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which normalized to:                                                        \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a record type literal                                          \n"
+      where
+        txt0 = build expr0
+        txt1 = build expr1
+
+prettyTypeMessage (RecordTypeMismatch const0 const1 expr0 expr1) =
+    ErrorMessages {..}
+  where
+    short = "Record type mismatch"
+
+    long =
+        "Explanation: You can only use the ❰⩓❱ operator on record types if they are both \n\
+        \ ❰Type❱s or ❰Kind❱s:                                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────┐                                     \n\
+        \    │ { age : Natural } ⩓ { name : Text } │  Valid: Both arguments are ❰Type❱s  \n\
+        \    └─────────────────────────────────────┘                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────┐                                    \n\
+        \    │ { Input : Type } ⩓ { Output : Type } │  Valid: Both arguments are ❰Kind❱s \n\
+        \    └──────────────────────────────────────┘                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot combine a ❰Type❱ and a ❰Kind❱:                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────┐                                      \n\
+        \    │ { Input : Type } ⩓ { name : Text } │  Invalid: The arguments do not match \n\
+        \    └────────────────────────────────────┘                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to combine the following record type:                                 \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... with this record types:                                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... but the former record type is a:                                            \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n\
+        \                                                                                \n\
+        \... but the latter record type is a:                                            \n\
+        \                                                                                \n\
+        \↳ " <> txt3 <> "                                                                \n"
+      where
+        txt0 = build expr0
+        txt1 = build expr1
+        txt2 = build const0
+        txt3 = build const1
+
 prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
   where
     short = "Field collision"
 
     long =
-        "Explanation: You can combine records if they don't share any fields in common,  \n\
-        \like this:                                                                      \n\
+        "Explanation: You can combine records or record types if they don't share any    \n\
+        \fields in common, like this:                                                    \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────────┐                               \n\
@@ -2360,19 +2498,43 @@ prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
         \    └───────────────────────────────────────────┘                               \n\
         \                                                                                \n\
         \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ { foo : Text } ⩓ { bar : Bool } │                                         \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
         \    ┌────────────────────────────────────────┐                                  \n\
         \    │ λ(r : { baz : Bool}) → { foo = 1 } ∧ r │                                  \n\
         \    └────────────────────────────────────────┘                                  \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... but you cannot merge two records that share the same field                  \n\
+        \... but you cannot merge two records that share the same field unless the field \n\
+        \is a record on both sides.                                                      \n\
         \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \For example, the following expressions are " <> _NOT <> " valid:                \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────────┐                               \n\
-        \    │ { foo = 1, bar = \"ABC\" } ∧ { foo = True } │  Invalid: Colliding ❰foo❱ fields\n\
-        \    └───────────────────────────────────────────┘                               \n\
+        \    │ { foo = 1, bar = \"ABC\" } ∧ { foo = True } │  Invalid: Colliding ❰foo❱   \n\
+        \    └───────────────────────────────────────────┘  fields                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ { foo : Bool } ∧ { foo : Text } │  Invalid: Colliding ❰foo❱ fields        \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the following expressions are valid:                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────────────┐                        \n\
+        \    │ { foo = { bar = True } } ∧ { foo = { baz = 1 } } │  Valid: Both ❰foo❱     \n\
+        \    └──────────────────────────────────────────────────┘  fields are records    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────┐                     \n\
+        \    │ { foo : { bar : Bool } } ⩓ { foo : { baz : Text } } │  Valid: Both ❰foo❱  \n\
+        \    └─────────────────────────────────────────────────────┘  fields are records \n\
         \                                                                                \n\
         \                                                                                \n\
         \Some common reasons why you might get this error:                               \n\
