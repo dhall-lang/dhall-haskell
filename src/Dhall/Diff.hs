@@ -489,6 +489,12 @@ skeleton (Combine {}) =
     <>  operator "∧"
     <>  " "
     <>  ignore
+skeleton (CombineTypes {}) =
+        ignore
+    <>  " "
+    <>  operator "⩓"
+    <>  " "
+    <>  ignore
 skeleton (Prefer {}) =
         ignore
     <>  " "
@@ -739,14 +745,29 @@ diffPrefer l@(Prefer {}) r@(Prefer {}) =
     enclosed' "  " (operator "⫽" <> " ") (docs l r)
   where
     docs (Prefer aL bL) (Prefer aR bR) =
-        Data.List.NonEmpty.cons (diffNaturalTimes aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffCombineTypes aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffNaturalTimes aL aR)
+        pure (diffCombineTypes aL aR)
 diffPrefer l@(Prefer {}) r =
     mismatch l r
 diffPrefer l r@(Prefer {}) =
     mismatch l r
 diffPrefer l r =
+    diffCombineTypes l r
+
+diffCombineTypes :: Pretty a => Expr s a -> Expr s a -> Diff
+diffCombineTypes l@(CombineTypes {}) r@(CombineTypes {}) =
+    enclosed' "  " (operator "*" <> " ") (docs l r)
+  where
+    docs (CombineTypes aL bL) (CombineTypes aR bR) =
+        Data.List.NonEmpty.cons (diffNaturalTimes aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffNaturalTimes aL aR)
+diffCombineTypes l@(CombineTypes {}) r =
+    mismatch l r
+diffCombineTypes l r@(CombineTypes {}) =
+    mismatch l r
+diffCombineTypes l r =
     diffNaturalTimes l r
 
 diffNaturalTimes :: Pretty a => Expr s a -> Expr s a -> Diff
