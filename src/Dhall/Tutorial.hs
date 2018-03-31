@@ -900,6 +900,21 @@ import Dhall
 --
 -- __Exercise__: Combine any record with the empty record.  What do you expect
 -- to happen?
+--
+-- You can analogously combine record types using the @//\\\\@ operator (or @(⩓)@ U+2A53):
+--
+-- > $ dhall
+-- > { foo : Natural } ⩓ { bar : Text }
+-- > <Ctrl-D>
+-- > { foo : Natural, bar : Text }
+--
+-- ... which behaves the exact same, except at the type level, meaning that the
+-- operator descends recursively into record types:
+--
+-- > $ dhall
+-- > { foo : { bar : Text } } ⩓ { foo : { baz : Bool }, qux : Integer }
+-- > <Ctrl-D>
+-- > { foo : { bar : Text, baz : Bool }, qux : Integer }
 
 -- $let
 --
