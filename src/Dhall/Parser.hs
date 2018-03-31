@@ -66,7 +66,7 @@ instance Buildable Src where
     build (Src begin _ text) =
             build text <> "\n"
         <>  "\n"
-        <>  build (show begin)
+        <>  build (Text.Megaparsec.sourcePosPretty begin)
         <>  "\n"
 
 {-| A `Parser` that is almost identical to
