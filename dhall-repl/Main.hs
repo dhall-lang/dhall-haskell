@@ -116,7 +116,7 @@ typeOf srcs = do
   exprType' <-
     normalize exprType
 
-  output System.IO.stdout ( Expr.Annot loaded exprType' )
+  output System.IO.stdout exprType'
 
 
 
