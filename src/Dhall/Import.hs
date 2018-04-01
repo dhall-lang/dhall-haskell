@@ -160,7 +160,6 @@ import Network.HTTP.Client (HttpException(..), Manager)
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Crypto.Hash
-import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
@@ -832,14 +831,4 @@ hashExpression expr = Crypto.Hash.hashlazy actualBytes
     source code to add an integrity check to an import
 -}
 hashExpressionToCode :: Expr s X -> Text
-hashExpressionToCode expr = "sha256:" <> lazyText
-  where
-    bytes = hashExpression expr
-
-    bytes16 = Data.ByteArray.convert bytes
-
-    -- Notes that `decodeUtf8` is partial, but the base16-encoded bytestring
-    -- should always successfully decode
-    text = Data.Text.Encoding.decodeUtf8 bytes16
-
-    lazyText = Text.fromStrict text
+hashExpressionToCode expr = "sha256:" <> Text.pack (show (hashExpression expr))

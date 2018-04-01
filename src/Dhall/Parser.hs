@@ -23,6 +23,7 @@ module Dhall.Parser (
 import Control.Applicative (Alternative(..), liftA2, optional)
 import Control.Exception (Exception)
 import Control.Monad (MonadPlus)
+import Data.ByteArray.Encoding (Base(..))
 import Data.Functor (void)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Sequence (ViewL(..))
@@ -41,6 +42,8 @@ import Text.Parser.Token (TokenParsing(..))
 
 import qualified Control.Monad
 import qualified Crypto.Hash
+import qualified Data.ByteArray.Encoding
+import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.Char
 import qualified Data.HashMap.Strict.InsOrd
@@ -1536,9 +1539,13 @@ pathHashed_ = do
         _ <- Text.Parser.Char.text "sha256:"
         builder <- count 64 (satisfy hexdig <?> "hex digit")
         whitespace
-        let lazyText = Data.Text.Lazy.Builder.toLazyText builder
-        let lazyBytes = Data.Text.Lazy.Encoding.encodeUtf8 lazyText
-        case Crypto.Hash.digestFromByteString (Data.ByteString.Lazy.toStrict lazyBytes) of
+        let lazyText    = Data.Text.Lazy.Builder.toLazyText builder
+        let lazyBytes16 = Data.Text.Lazy.Encoding.encodeUtf8 lazyText
+        let strictBytes16 = Data.ByteString.Lazy.toStrict lazyBytes16
+        strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
+            Left  string      -> fail string
+            Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
+        case Crypto.Hash.digestFromByteString strictBytes of
           Nothing -> fail "Invalid sha256 hash"
           Just h -> pure h
 
