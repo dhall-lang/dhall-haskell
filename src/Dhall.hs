@@ -939,10 +939,10 @@ instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) =>
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 (M1 l)) =
-            UnionLit keyL (embedL l) Data.HashMap.Strict.InsOrd.empty
+            UnionLit keyL (embedL l) (Data.HashMap.Strict.InsOrd.singleton keyR declaredR)
 
         embed (R1 (M1 r)) =
-            UnionLit keyR (embedR r) Data.HashMap.Strict.InsOrd.empty
+            UnionLit keyR (embedR r) (Data.HashMap.Strict.InsOrd.singleton keyL declaredL)
 
         declared =
             Union (Data.HashMap.Strict.InsOrd.fromList [(keyL, declaredL), (keyR, declaredR)])
