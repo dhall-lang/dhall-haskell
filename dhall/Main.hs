@@ -1,23 +1,18 @@
-{-# LANGUAGE DataKinds          #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TypeOperators      #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Main where
 
 import Control.Exception (SomeException)
 import Control.Monad (when)
-import Data.Monoid (mempty)
+import Data.Monoid (mempty, (<>))
 import Data.Version (showVersion)
 import Dhall.Core (normalize)
 import Dhall.Import (Imported(..), load)
 import Dhall.Parser (Src)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
-import Options.Generic (Generic, ParseRecord, Wrapped, type (<?>)(..), (:::))
+import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure, exitSuccess)
 
 import qualified Paths_dhall as Meta
@@ -28,26 +23,53 @@ import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
-import qualified Options.Generic
+import qualified Options.Applicative
 import qualified System.Console.ANSI
 import qualified System.IO
 
-data Options w = Options
-    { explain :: w ::: Bool <?> "Explain error messages in more detail"
-    , version :: w ::: Bool <?> "Display version and exit"
-    , plain   :: w ::: Bool <?> "Disable syntax highlighting"
-    } deriving (Generic)
+data Options = Options
+    { explain :: Bool
+    , version :: Bool
+    , plain   :: Bool
+    }
 
-instance ParseRecord (Options Wrapped)
+parseOptions :: Parser Options
+parseOptions = Options <$> parseExplain <*> parseVersion <*> parsePlain
+  where
+    parseExplain =
+        Options.Applicative.switch
+            (   Options.Applicative.long "explain"
+            <>  Options.Applicative.help "Explain error messages in more detail"
+            )
+
+    parseVersion =
+        Options.Applicative.switch
+            (   Options.Applicative.long "version"
+            <>  Options.Applicative.help "Display version and exit"
+            )
+
+    parsePlain =
+        Options.Applicative.switch
+            (   Options.Applicative.long "plain"
+            <>  Options.Applicative.help "Disable syntax highlighting"
+            )
 
 opts :: Pretty.LayoutOptions
 opts =
     Pretty.defaultLayoutOptions
         { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
 
+parserInfo :: ParserInfo Options
+parserInfo =
+    Options.Applicative.info
+        (Options.Applicative.helper <*> parseOptions)
+        (   Options.Applicative.progDesc "Interpreter for the Dhall language"
+        <>  Options.Applicative.fullDesc
+        )
+
 main :: IO ()
 main = do
-    Options {..} <- Options.Generic.unwrapRecord "Compiler for the Dhall language"
+    Options {..} <- Options.Applicative.execParser parserInfo
     when version $ do
       putStrLn (showVersion Meta.version)
       exitSuccess

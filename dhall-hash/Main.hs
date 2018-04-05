@@ -1,21 +1,17 @@
-{-# LANGUAGE DataKinds          #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TypeOperators      #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Main where
 
 import Control.Exception (SomeException)
 import Control.Monad (when)
+import Data.Monoid ((<>))
 import Data.Version (showVersion)
 import Dhall.Core (normalize)
 import Dhall.Import (Imported(..), hashExpressionToCode, load)
 import Dhall.Parser (Src, exprFromText)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
-import Options.Generic (Generic, ParseRecord, Wrapped, type (<?>)(..), (:::))
+import Options.Applicative (Parser, ParserInfo)
 import System.IO (stderr)
 import System.Exit (exitFailure, exitSuccess)
 
@@ -24,19 +20,41 @@ import qualified Paths_dhall as Meta
 import qualified Control.Exception
 import qualified Data.Text.Lazy.IO
 import qualified Dhall.TypeCheck
-import qualified Options.Generic
+import qualified Options.Applicative
 import qualified System.IO
 
-data Options w = Options
-    { explain :: w ::: Bool <?> "Explain error messages in more detail"
-    , version :: w ::: Bool <?> "Display version and exit"
-    } deriving (Generic)
+data Options = Options
+    { explain :: Bool
+    , version :: Bool
+    }
 
-instance ParseRecord (Options Wrapped)
+parseOptions :: Parser Options
+parseOptions = Options <$> parseExplain <*> parseVersion
+  where
+    parseExplain =
+        Options.Applicative.switch
+            (   Options.Applicative.long "explain"
+            <>  Options.Applicative.help "Explain error messages in more detail"
+            )
+
+    parseVersion =
+        Options.Applicative.switch
+            (   Options.Applicative.long "version"
+            <>  Options.Applicative.help "Display version and exit"
+            )
+
+parserInfo :: ParserInfo Options
+parserInfo =
+    Options.Applicative.info
+        (Options.Applicative.helper <*> parseOptions)
+        (   Options.Applicative.progDesc "Compute semantic hashes for Dhall expressions"
+        <>  Options.Applicative.fullDesc
+        )
 
 main :: IO ()
 main = do
-    Options {..} <- Options.Generic.unwrapRecord "Compiler for the Dhall language"
+    Options {..} <- Options.Applicative.execParser parserInfo
+
     when version $ do
       putStrLn (showVersion Meta.version)
       exitSuccess
