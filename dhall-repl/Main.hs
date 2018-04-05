@@ -232,6 +232,8 @@ output
     :: (Pretty.Pretty a, MonadIO m)
     => System.IO.Handle -> Dhall.Expr s a -> m ()
 output handle expr = do
+  liftIO (System.IO.hPutStrLn handle "")  -- Visual spacing
+
   let opts =
           Pretty.defaultLayoutOptions
               { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
@@ -244,5 +246,6 @@ output handle expr = do
           else Pretty.unAnnotateS stream
 
   liftIO (Pretty.renderIO handle ansiStream)
+  liftIO (System.IO.hPutStrLn handle "") -- Pretty printing doesn't end with a new line
 
-  liftIO (putStrLn "") -- Pretty printing doesn't end with a new line
+  liftIO (System.IO.hPutStrLn handle "")  -- Visual spacing
