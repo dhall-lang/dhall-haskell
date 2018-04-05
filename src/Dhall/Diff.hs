@@ -20,6 +20,7 @@ import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid (Any(..))
 import Data.Scientific (Scientific)
 import Data.Semigroup
+import Data.Set (Set)
 import Data.String (IsString(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
@@ -165,6 +166,19 @@ diffPrimitive f l r
 
 diffLabel :: Text -> Text -> Diff
 diffLabel = diffPrimitive (token . Internal.prettyLabel)
+
+diffLabels :: Set Text -> Set Text -> Diff
+diffLabels ksL ksR =
+    braced (diffFieldNames <> (if anyEqual then [ ignore ] else []))
+  where
+    extraL = Data.Set.difference ksL ksR
+    extraR = Data.Set.difference ksR ksL
+
+    diffFieldNames = foldMap (adapt minus) extraL <> foldMap (adapt plus) extraR
+      where
+        adapt sign key = [ sign (token (Internal.prettyLabel key)) ]
+
+    anyEqual = not (Data.Set.null (Data.Set.intersection ksL ksR))
 
 diffNatural :: Natural -> Natural -> Diff
 diffNatural = diffPrimitive (token . Internal.prettyNatural)
@@ -515,6 +529,14 @@ skeleton (Field {}) =
         ignore
     <>  dot
     <>  ignore
+skeleton (Project {}) =
+        ignore
+    <>  dot
+    <>  lbrace
+    <>  " "
+    <>  ignore
+    <>  " "
+    <>  rbrace
 skeleton x = token (Pretty.pretty x)
 
 mismatch :: Pretty a => Expr s a -> Expr s a -> Diff
@@ -848,11 +870,26 @@ diffExprE l@(Field {}) r@(Field {}) =
   where
     docs (Field aL bL) (Field aR bR) =
         Data.List.NonEmpty.cons (diffLabel bL bR) (docs aL aR)
+    docs (Project aL bL) (Project aR bR) =
+        Data.List.NonEmpty.cons (diffLabels bL bR) (docs aL aR)
     docs aL aR =
         pure (diffExprF aL aR)
 diffExprE l@(Field {}) r =
     mismatch l r
 diffExprE l r@(Field {}) =
+    mismatch l r
+diffExprE l@(Project {}) r@(Project {}) =
+    enclosed' "  " (dot <> " ") (Data.List.NonEmpty.reverse (docs l r))
+  where
+    docs (Field aL bL) (Field aR bR) =
+        Data.List.NonEmpty.cons (diffLabel bL bR) (docs aL aR)
+    docs (Project aL bL) (Project aR bR) =
+        Data.List.NonEmpty.cons (diffLabels bL bR) (docs aL aR)
+    docs aL aR =
+        pure (diffExprF aL aR)
+diffExprE l@(Project {}) r =
+    mismatch l r
+diffExprE l r@(Project {}) =
     mismatch l r
 diffExprE l r =
     diffExprF l r

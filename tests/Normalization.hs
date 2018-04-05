@@ -38,6 +38,7 @@ tutorialExamples :: TestTree
 tutorialExamples =
     testGroup "Tutorial examples"
         [ shouldNormalize "⩓" "./tutorial/combineTypes/0"
+        , shouldNormalize "projection" "./tutorial/projection/0"
         ]
 
 preludeExamples :: TestTree

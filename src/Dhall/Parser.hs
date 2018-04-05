@@ -26,9 +26,10 @@ import Control.Monad (MonadPlus)
 import Data.ByteArray.Encoding (Base(..))
 import Data.Functor (void)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
-import Data.Sequence (ViewL(..))
-import Data.Semigroup (Semigroup(..))
 import Data.Scientific (Scientific)
+import Data.Semigroup (Semigroup(..))
+import Data.Sequence (ViewL(..))
+import Data.Set (Set)
 import Data.String (IsString(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
@@ -50,6 +51,7 @@ import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.Sequence
+import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
@@ -285,6 +287,29 @@ label = (do
     t <- backtickLabel <|> simpleLabel
     whitespace
     return t ) <?> "label"
+
+noDuplicates :: Ord a => [a] -> Parser (Set a)
+noDuplicates = go Data.Set.empty
+  where
+    go found    []  = return found
+    go found (x:xs) =
+        if Data.Set.member x found
+        then fail "Duplicate key"
+        else go (Data.Set.insert x found) xs
+
+labels :: Parser (Set Text)
+labels = do
+    _openBrace
+    xs <- nonEmptyLabels <|> emptyLabels
+    _closeBrace
+    return xs
+  where
+    emptyLabels = pure Data.Set.empty
+
+    nonEmptyLabels = do
+        x  <- label
+        xs <- many (do _ <- _comma; label)
+        noDuplicates (x : xs)
 
 doubleQuotedChunk :: Parser a -> Parser (Chunks Src a)
 doubleQuotedChunk embedded =
@@ -1190,8 +1215,11 @@ applicationExpression embedded = do
 selectorExpression :: Parser a -> Parser (Expr Src a)
 selectorExpression embedded = noted (do
     a <- primitiveExpression embedded
-    b <- many (try (do _dot; label))
-    return (foldl Field a b) )
+
+    let left  x  e = Field   e x
+    let right xs e = Project e xs
+    b <- many (try (do _dot; fmap left label <|> fmap right labels))
+    return (foldl (\e k -> k e) a b) )
 
 primitiveExpression :: Parser a -> Parser (Expr Src a)
 primitiveExpression embedded =

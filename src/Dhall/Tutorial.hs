@@ -602,6 +602,20 @@ import Dhall
 -- > >>> input auto "{ foo = True, bar = 2, baz = 4.2 }.baz" :: IO Double
 -- > 4.2
 --
+-- ... and you can project out multiple fields into a new record using this
+-- syntax:
+--
+-- > someRecord.{ field₀, field₁, … }
+--
+-- For example:
+--
+-- > $ dhall
+-- > { x = 1, y = True, z = "ABC" }.{ x, y }
+-- > <Ctrl-D>
+-- > { x : Integer, y : Bool }
+-- > 
+-- > { x = 1, y = True }
+--
 -- __Exercise__: What is the type of this record:
 --
 -- > { foo = 1
