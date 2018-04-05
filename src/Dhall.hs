@@ -1,5 +1,4 @@
 {-# LANGUAGE DefaultSignatures          #-}
-{-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleInstances          #-}
@@ -581,7 +580,7 @@ instance (Inject a, Interpret b) => Interpret (a -> b) where
 
         Type extractIn expectedIn = autoWith opts
 
-deriving instance (Interpret a, Interpret b) => Interpret (a, b)
+instance (Interpret a, Interpret b) => Interpret (a, b)
 
 {-| Use the default options for interpreting a configuration file
 
@@ -924,7 +923,7 @@ instance Inject a => Inject (Vector a) where
 instance Inject a => Inject (Data.Set.Set a) where
     injectWith = fmap (contramap Data.Set.toList) injectWith
 
-deriving instance (Inject a, Inject b) => Inject (a, b)
+instance (Inject a, Inject b) => Inject (a, b)
 
 {-| This is the underlying class that powers the `Interpret` class's support
     for automatically deriving a generic implementation
