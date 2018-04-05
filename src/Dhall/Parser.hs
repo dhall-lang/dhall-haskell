@@ -23,7 +23,7 @@ module Dhall.Parser (
 import Control.Applicative (Alternative(..), liftA2, optional)
 import Control.Exception (Exception)
 import Control.Monad (MonadPlus)
-import Data.ByteString (ByteString)
+import Data.ByteArray.Encoding (Base(..))
 import Data.Functor (void)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Sequence (ViewL(..))
@@ -32,20 +32,18 @@ import Data.Scientific (Scientific)
 import Data.String (IsString(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
-import Data.Typeable (Typeable)
+import Data.Void (Void)
 import Dhall.Core
 import Formatting.Buildable (Buildable(..))
 import Numeric.Natural (Natural)
 import Prelude hiding (const, pi)
-import Text.PrettyPrint.ANSI.Leijen (Doc)
 import Text.Parser.Combinators (choice, try, (<?>))
 import Text.Parser.Token (TokenParsing(..))
-import Text.Trifecta
-    (CharParsing, DeltaParsing, MarkParsing, Parsing, Result(..))
-import Text.Trifecta.Delta (Delta)
 
 import qualified Control.Monad
 import qualified Crypto.Hash
+import qualified Data.ByteArray.Encoding
+import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.Char
 import qualified Data.HashMap.Strict.InsOrd
@@ -53,46 +51,39 @@ import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.Text
-import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
+import qualified Text.Megaparsec
+import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 import qualified Text.Parser.Token.Style
-import qualified Text.PrettyPrint.ANSI.Leijen
-import qualified Text.Trifecta
 
 -- | Source code extract
-data Src = Src Delta Delta ByteString deriving (Eq, Show)
+data Src = Src Text.Megaparsec.SourcePos Text.Megaparsec.SourcePos Text
+  deriving (Eq, Show)
 
 instance Buildable Src where
-    build (Src begin _ bytes) =
+    build (Src begin _ text) =
             build text <> "\n"
         <>  "\n"
-        <>  build (show (Text.PrettyPrint.ANSI.Leijen.pretty begin))
+        <>  build (Text.Megaparsec.sourcePosPretty begin)
         <>  "\n"
-      where
-        bytes' = Data.ByteString.Lazy.fromStrict bytes
-
-        text = Data.Text.Lazy.strip (Data.Text.Lazy.Encoding.decodeUtf8 bytes')
 
 {-| A `Parser` that is almost identical to
-    @"Text.Trifecta".`Text.Trifecta.Parser`@ except treating Haskell-style
+    @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
     comments as whitespace
 -}
-newtype Parser a = Parser { unParser :: Text.Trifecta.Parser a }
+newtype Parser a = Parser { unParser :: Text.Megaparsec.Parsec Void Text a }
     deriving
     (   Functor
     ,   Applicative
     ,   Monad
     ,   Alternative
     ,   MonadPlus
-    ,   Parsing
-    ,   CharParsing
-    ,   DeltaParsing
-    ,   MarkParsing Delta
+    ,   Text.Megaparsec.MonadParsec Void Text
     )
 
 instance Data.Semigroup.Semigroup a => Data.Semigroup.Semigroup (Parser a) where
@@ -106,26 +97,52 @@ instance (Data.Semigroup.Semigroup a, Monoid a) => Monoid (Parser a) where
 #endif
 
 instance IsString a => IsString (Parser a) where
-    fromString x = fmap fromString (Text.Parser.Char.string x)
+    fromString x = fromString x <$ Text.Megaparsec.Char.string (fromString x)
+
+instance Text.Parser.Combinators.Parsing Parser where
+  try = Text.Megaparsec.try
+
+  (<?>) = (Text.Megaparsec.<?>)
+
+  skipMany = Text.Megaparsec.skipMany
+
+  skipSome = Text.Megaparsec.skipSome
+
+  unexpected = fail
+
+  eof = Parser Text.Megaparsec.eof
+
+  notFollowedBy = Text.Megaparsec.notFollowedBy
+
+instance Text.Parser.Char.CharParsing Parser where
+  satisfy = Parser . Text.Megaparsec.Char.satisfy
+
+  char = Text.Megaparsec.Char.char
+
+  notChar = Text.Megaparsec.Char.char
+
+  anyChar = Text.Megaparsec.Char.anyChar
+
+  string = fmap Data.Text.Lazy.unpack . Text.Megaparsec.Char.string . fromString
+
+  text = fmap Data.Text.Lazy.toStrict . Text.Megaparsec.Char.string . Data.Text.Lazy.fromStrict
 
 instance TokenParsing Parser where
     someSpace =
         Text.Parser.Token.Style.buildSomeSpaceParser
-            (Parser someSpace)
+            (Parser (Text.Megaparsec.skipSome (Text.Megaparsec.Char.satisfy Data.Char.isSpace)))
             Text.Parser.Token.Style.haskellCommentStyle
 
-    nesting (Parser m) = Parser (nesting m)
+    highlight _ = id
 
-    semi = Parser semi
-
-    highlight h (Parser m) = Parser (highlight h m)
+    semi = token (Text.Megaparsec.Char.char ';' <?> ";")
 
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
-    before     <- Text.Trifecta.position
-    (e, bytes) <- Text.Trifecta.slicedWith (,) parser
-    after      <- Text.Trifecta.position
-    return (Note (Src before after bytes) e)
+    before      <- Text.Megaparsec.getPosition
+    (tokens, e) <- Text.Megaparsec.match parser
+    after       <- Text.Megaparsec.getPosition
+    return (Note (Src before after tokens) e)
 
 count :: (Semigroup a, Monoid a) => Int -> Parser a -> Parser a
 count n parser = mconcat (replicate n parser)
@@ -669,6 +686,11 @@ _combine = do
     void (Text.Parser.Char.char '∧' <?> "\"∧\"") <|> void (Text.Parser.Char.text "/\\")
     whitespace
 
+_combineTypes :: Parser ()
+_combineTypes = do
+    void (Text.Parser.Char.char '⩓' <?> "\"⩓\"") <|> void (Text.Parser.Char.text "//\\\\")
+    whitespace
+
 _prefer :: Parser ()
 _prefer = do
     void (Text.Parser.Char.char '⫽' <?> "\"⫽\"") <|> void (Text.Parser.Char.text "//")
@@ -1135,7 +1157,11 @@ combineExpression =
 
 preferExpression :: Parser a -> Parser (Expr Src a)
 preferExpression =
-    makeOperatorExpression timesExpression _prefer Prefer
+    makeOperatorExpression combineTypesExpression _prefer Prefer
+
+combineTypesExpression :: Parser a -> Parser (Expr Src a)
+combineTypesExpression =
+    makeOperatorExpression timesExpression _combineTypes CombineTypes
 
 timesExpression :: Parser a -> Parser (Expr Src a)
 timesExpression =
@@ -1513,9 +1539,13 @@ pathHashed_ = do
         _ <- Text.Parser.Char.text "sha256:"
         builder <- count 64 (satisfy hexdig <?> "hex digit")
         whitespace
-        let lazyText = Data.Text.Lazy.Builder.toLazyText builder
-        let lazyBytes = Data.Text.Lazy.Encoding.encodeUtf8 lazyText
-        case Crypto.Hash.digestFromByteString (Data.ByteString.Lazy.toStrict lazyBytes) of
+        let lazyText    = Data.Text.Lazy.Builder.toLazyText builder
+        let lazyBytes16 = Data.Text.Lazy.Encoding.encodeUtf8 lazyText
+        let strictBytes16 = Data.ByteString.Lazy.toStrict lazyBytes16
+        strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
+            Left  string      -> fail string
+            Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
+        case Crypto.Hash.digestFromByteString strictBytes of
           Nothing -> fail "Invalid sha256 hash"
           Just h -> pure h
 
@@ -1531,16 +1561,19 @@ import_ = (do
         return RawText
 
 -- | A parsing error
-newtype ParseError = ParseError Doc deriving (Typeable)
+data ParseError = ParseError
+    { unwrap :: Text.Megaparsec.ParseError Char Void
+    , input  :: Text
+    }
 
 instance Show ParseError where
-    show (ParseError doc) =
-      "\n\ESC[1;31mError\ESC[0m: Invalid input\n\n" <> show doc
+    show (ParseError {..}) =
+      "\n\ESC[1;31mError\ESC[0m: Invalid input\n\n" <> Text.Megaparsec.parseErrorPretty' input unwrap
 
 instance Exception ParseError
 
 -- | Parse an expression from `Text` containing a Dhall program
-exprFromText :: Delta -> Text -> Either ParseError (Expr Src Path)
+exprFromText :: String -> Text -> Either ParseError (Expr Src Path)
 exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
 
 {-| Like `exprFromText` but also returns the leading comments and whitespace
@@ -1556,24 +1589,17 @@ exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
     This is used by @dhall-format@ to preserve leading comments and whitespace
 -}
 exprAndHeaderFromText
-    :: Delta
+    :: String
     -> Text
     -> Either ParseError (Text, Expr Src Path)
 exprAndHeaderFromText delta text = case result of
-    Failure errInfo    -> Left (ParseError (Text.Trifecta._errDoc errInfo))
-    Success (bytes, r) -> case Data.Text.Encoding.decodeUtf8' bytes of
-        Left  errInfo -> Left (ParseError (fromString (show errInfo)))
-        Right txt     -> do
-            let stripped = Data.Text.dropWhileEnd (/= '\n') txt
-            let lazyText = Data.Text.Lazy.fromStrict stripped
-            Right (lazyText, r)
+    Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
+    Right (txt, r) -> Right (Data.Text.Lazy.dropWhileEnd (/= '\n') txt, r)
   where
-    string = Data.Text.Lazy.unpack text
-
-    parser = unParser (do
-        bytes <- Text.Trifecta.slicedWith (\_ x -> x) whitespace
+    parser = do
+        (bytes, _) <- Text.Megaparsec.match whitespace
         r <- expr
-        Text.Parser.Combinators.eof
-        return (bytes, r) )
+        Text.Megaparsec.eof
+        return (bytes, r)
 
-    result = Text.Trifecta.parseString parser delta string
+    result = Text.Megaparsec.parse (unParser parser) delta text

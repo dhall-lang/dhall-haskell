@@ -24,7 +24,6 @@ import qualified System.Console.ANSI
 import qualified System.Console.Haskeline.MonadException as Haskeline
 import qualified System.Console.Repline as Repline
 import qualified System.IO
-import qualified Text.Trifecta.Delta as Trifecta
 
 
 main :: IO ()
@@ -75,7 +74,7 @@ parseAndLoad
   => String -> m ( Dhall.Expr Dhall.Src Dhall.X )
 parseAndLoad src = do
   parsed <-
-    case Dhall.exprFromText ( Trifecta.Columns 0 0 ) ( LazyText.pack src ) of
+    case Dhall.exprFromText "(stdin)" ( LazyText.pack src ) of
       Left e ->
         liftIO ( throwIO e )
 
@@ -117,7 +116,7 @@ typeOf srcs = do
   exprType' <-
     normalize exprType
 
-  output System.IO.stdout ( Expr.Annot loaded exprType' )
+  output System.IO.stdout exprType'
 
 
 
@@ -233,6 +232,8 @@ output
     :: (Pretty.Pretty a, MonadIO m)
     => System.IO.Handle -> Dhall.Expr s a -> m ()
 output handle expr = do
+  liftIO (System.IO.hPutStrLn handle "")  -- Visual spacing
+
   let opts =
           Pretty.defaultLayoutOptions
               { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
@@ -245,5 +246,6 @@ output handle expr = do
           else Pretty.unAnnotateS stream
 
   liftIO (Pretty.renderIO handle ansiStream)
+  liftIO (System.IO.hPutStrLn handle "") -- Pretty printing doesn't end with a new line
 
-  liftIO (putStrLn "") -- Pretty printing doesn't end with a new line
+  liftIO (System.IO.hPutStrLn handle "")  -- Visual spacing

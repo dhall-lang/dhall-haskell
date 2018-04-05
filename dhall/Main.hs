@@ -19,7 +19,6 @@ import Dhall.Pretty (annToAnsiStyle, prettyExpr)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import Options.Generic (Generic, ParseRecord, Wrapped, type (<?>)(..), (:::))
 import System.Exit (exitFailure, exitSuccess)
-import Text.Trifecta.Delta (Delta(..))
 
 import qualified Paths_dhall as Meta
 
@@ -86,7 +85,7 @@ main = do
         System.IO.hSetEncoding System.IO.stdin System.IO.utf8
         inText <- Data.Text.Lazy.IO.getContents
 
-        expr <- case Dhall.Parser.exprFromText (Directed "(stdin)" 0 0 0 0) inText of
+        expr <- case Dhall.Parser.exprFromText "(stdin)" inText of
             Left  err -> Control.Exception.throwIO err
             Right x   -> return x
 

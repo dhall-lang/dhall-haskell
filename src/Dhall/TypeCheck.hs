@@ -39,10 +39,14 @@ import qualified Data.Foldable
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
 import qualified Data.Set
-import qualified Data.Text.Lazy                   as Text
-import qualified Data.Text.Lazy.Builder           as Builder
+import qualified Data.Text.Lazy                        as Text
+import qualified Data.Text.Lazy.Builder                as Builder
+import qualified Data.Text.Prettyprint.Doc             as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Dhall.Context
 import qualified Dhall.Core
+import qualified Dhall.Diff
+import qualified Dhall.Pretty
 
 traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
 traverseWithIndex_ k xs =
@@ -535,6 +539,52 @@ typeWithA tpa = loop
                 return (Record (Data.HashMap.Strict.InsOrd.fromList kts))
 
         combineTypes ktsX ktsY
+    loop ctx e@(CombineTypes l r) = do
+        tL <- loop ctx l
+        let l' = Dhall.Core.normalize l
+        cL <- case tL of
+            Const cL -> return cL
+            _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType l l'))
+        tR <- loop ctx r
+        let r' = Dhall.Core.normalize r
+        cR <- case tR of
+            Const cR -> return cR
+            _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
+        let decide Type Type =
+                return Type
+            decide Kind Kind =
+                return Kind
+            decide x y =
+                Left (TypeError ctx e (RecordTypeMismatch x y l r))
+        c <- decide cL cR
+
+        ktsL0 <- case l' of
+            Record kts -> return kts
+            _          -> Left (TypeError ctx e (CombineTypesRequiresRecordType l l'))
+        ktsR0 <- case r' of
+            Record kts -> return kts
+            _          -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
+
+        let combineTypes ktsL ktsR = do
+                let ksL =
+                        Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsL)
+                let ksR =
+                        Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsR)
+                let ks = Data.Set.union ksL ksR
+                forM_ (toList ks) (\k -> do
+                    case (Data.HashMap.Strict.InsOrd.lookup k ktsL, Data.HashMap.Strict.InsOrd.lookup k ktsR) of
+                        (Just (Record ktsL'), Just (Record ktsR')) -> do
+                            combineTypes ktsL' ktsR'
+                        (Nothing, Just _) -> do
+                            return ()
+                        (Just _, Nothing) -> do
+                            return ()
+                        _ -> do
+                            Left (TypeError ctx e (FieldCollision k)) )
+
+        combineTypes ktsL0 ktsR0
+
+        return (Const c)
     loop ctx e@(Prefer kvsX kvsY) = do
         tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
         ktsX  <- case tKvsX of
@@ -697,6 +747,8 @@ data TypeMessage s a
     | ListAppendMismatch (Expr s a) (Expr s a)
     | DuplicateAlternative Text
     | MustCombineARecord Char (Expr s a) (Expr s a)
+    | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
+    | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
     | FieldCollision Text
     | MustMergeARecord (Expr s a) (Expr s a)
     | MustMergeUnion (Expr s a) (Expr s a)
@@ -722,13 +774,13 @@ data TypeMessage s a
     | NoDependentTypes (Expr s a) (Expr s a)
     deriving (Show)
 
-shortTypeMessage :: Buildable a => TypeMessage s a -> Builder
+shortTypeMessage :: (Buildable a, Eq a, Pretty a) => TypeMessage s a -> Builder
 shortTypeMessage msg =
     "\ESC[1;31mError\ESC[0m: " <> build short <> "\n"
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
-longTypeMessage :: Buildable a => TypeMessage s a -> Builder
+longTypeMessage :: (Buildable a, Eq a, Pretty a) => TypeMessage s a -> Builder
 longTypeMessage msg =
         "\ESC[1;31mError\ESC[0m: " <> build short <> "\n"
     <>  "\n"
@@ -746,7 +798,22 @@ data ErrorMessages = ErrorMessages
 _NOT :: Builder
 _NOT = "\ESC[1mnot\ESC[0m"
 
-prettyTypeMessage :: Buildable a => TypeMessage s a -> ErrorMessages
+prettyDiff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Builder
+prettyDiff exprL exprR = builder
+  where
+    doc =
+        fmap Dhall.Pretty.annToAnsiStyle (Dhall.Diff.diffNormalized exprL exprR)
+
+    opts = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
+
+    stream = Pretty.layoutPretty opts doc
+
+    lazyText = Pretty.renderLazy stream
+
+    builder = Builder.fromLazyText lazyText
+
+prettyTypeMessage
+    :: (Buildable a, Eq a, Pretty a) => TypeMessage s a -> ErrorMessages
 prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
   -- https://github.com/dhall-lang/dhall-haskell/pull/116
@@ -1144,7 +1211,9 @@ prettyTypeMessage (NotAFunction expr0 expr1) = ErrorMessages {..}
 
 prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
-    short = "Wrong type of function argument"
+    short = "Wrong type of function argument\n"
+        <>  "\n"
+        <>  prettyDiff expr1 expr3
 
     long =
         "Explanation: Every function declares what type or kind of argument to accept    \n\
@@ -1276,8 +1345,9 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
 
 prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
-    short = "Expression doesn't match annotation"
-
+    short = "Expression doesn't match annotation\n"
+        <>  "\n"
+        <>  prettyDiff expr1 expr2
     long =
         "Explanation: You can annotate an expression with its type or kind using the     \n\
         \❰:❱ symbol, like this:                                                          \n\
@@ -1557,7 +1627,9 @@ prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
 prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     ErrorMessages {..}
   where
-    short = "❰if❱ branches must have matching types"
+    short = "❰if❱ branches must have matching types\n"
+        <>  "\n"
+        <>  prettyDiff expr1 expr3
 
     long =
         "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
@@ -1706,7 +1778,9 @@ prettyTypeMessage MissingListType = do
 prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "List elements should all have the same type"
+    short = "List elements should all have the same type\n"
+        <>  "\n"
+        <>  prettyDiff expr0 expr2
 
     long =
         "Explanation: Every element in a list must have the same type                    \n\
@@ -1742,7 +1816,9 @@ prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
 prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "List element has the wrong type"
+    short = "List element has the wrong type\n"
+        <>  "\n"
+        <>  prettyDiff expr0 expr2
 
     long =
         "Explanation: Every element in the list must have a type matching the type       \n\
@@ -1829,7 +1905,9 @@ prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
 
 prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..}
   where
-    short = "❰Optional❱ element has the wrong type"
+    short = "❰Optional❱ element has the wrong type\n"
+        <>  "\n"
+        <>  prettyDiff expr0 expr2
 
     long =
         "Explanation: An ❰Optional❱ element must have a type matching the type annotation\n\
@@ -2193,7 +2271,9 @@ prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
 
 prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
   where
-    short = "You can only append ❰List❱s with matching element types"
+    short = "You can only append ❰List❱s with matching element types\n"
+        <>  "\n"
+        <>  prettyDiff expr0 expr1
 
     long =
         "Explanation: You can append two ❰List❱s using the ❰#❱ operator, like this:      \n\
@@ -2314,13 +2394,103 @@ prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
         txt0 = build expr0
         txt1 = build expr1
 
+prettyTypeMessage (CombineTypesRequiresRecordType expr0 expr1) =
+    ErrorMessages {..}
+  where
+    short = "❰⩓❱ requires arguments that are record types"
+
+    long =
+        "Explanation: You can only use the ❰⩓❱ operator on arguments that are record type\n\
+        \literals, like this:                                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────┐                                     \n\
+        \    │ { age : Natural } ⩓ { name : Text } │                                     \n\
+        \    └─────────────────────────────────────┘                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot use the ❰⩓❱ operator on any other type of arguments.  For    \n\
+        \example, you cannot use variable arguments:                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────┐                                       \n\
+        \    │ λ(t : Type) → t ⩓ { name : Text } │  Invalid: ❰t❱ might not be a record   \n\
+        \    └───────────────────────────────────┘  type                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to supply the following argument:                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... which normalized to:                                                        \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... which is not a record type literal                                          \n"
+      where
+        txt0 = build expr0
+        txt1 = build expr1
+
+prettyTypeMessage (RecordTypeMismatch const0 const1 expr0 expr1) =
+    ErrorMessages {..}
+  where
+    short = "Record type mismatch"
+
+    long =
+        "Explanation: You can only use the ❰⩓❱ operator on record types if they are both \n\
+        \ ❰Type❱s or ❰Kind❱s:                                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────┐                                     \n\
+        \    │ { age : Natural } ⩓ { name : Text } │  Valid: Both arguments are ❰Type❱s  \n\
+        \    └─────────────────────────────────────┘                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────┐                                    \n\
+        \    │ { Input : Type } ⩓ { Output : Type } │  Valid: Both arguments are ❰Kind❱s \n\
+        \    └──────────────────────────────────────┘                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot combine a ❰Type❱ and a ❰Kind❱:                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────┐                                      \n\
+        \    │ { Input : Type } ⩓ { name : Text } │  Invalid: The arguments do not match \n\
+        \    └────────────────────────────────────┘                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to combine the following record type:                                 \n\
+        \                                                                                \n\
+        \↳ " <> txt0 <> "                                                                \n\
+        \                                                                                \n\
+        \... with this record types:                                                     \n\
+        \                                                                                \n\
+        \↳ " <> txt1 <> "                                                                \n\
+        \                                                                                \n\
+        \... but the former record type is a:                                            \n\
+        \                                                                                \n\
+        \↳ " <> txt2 <> "                                                                \n\
+        \                                                                                \n\
+        \... but the latter record type is a:                                            \n\
+        \                                                                                \n\
+        \↳ " <> txt3 <> "                                                                \n"
+      where
+        txt0 = build expr0
+        txt1 = build expr1
+        txt2 = build const0
+        txt3 = build const1
+
 prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
   where
     short = "Field collision"
 
     long =
-        "Explanation: You can combine records if they don't share any fields in common,  \n\
-        \like this:                                                                      \n\
+        "Explanation: You can combine records or record types if they don't share any    \n\
+        \fields in common, like this:                                                    \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────────┐                               \n\
@@ -2328,19 +2498,43 @@ prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
         \    └───────────────────────────────────────────┘                               \n\
         \                                                                                \n\
         \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ { foo : Text } ⩓ { bar : Bool } │                                         \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
         \    ┌────────────────────────────────────────┐                                  \n\
         \    │ λ(r : { baz : Bool}) → { foo = 1 } ∧ r │                                  \n\
         \    └────────────────────────────────────────┘                                  \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... but you cannot merge two records that share the same field                  \n\
+        \... but you cannot merge two records that share the same field unless the field \n\
+        \is a record on both sides.                                                      \n\
         \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \For example, the following expressions are " <> _NOT <> " valid:                \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────────┐                               \n\
-        \    │ { foo = 1, bar = \"ABC\" } ∧ { foo = True } │  Invalid: Colliding ❰foo❱ fields\n\
-        \    └───────────────────────────────────────────┘                               \n\
+        \    │ { foo = 1, bar = \"ABC\" } ∧ { foo = True } │  Invalid: Colliding ❰foo❱   \n\
+        \    └───────────────────────────────────────────┘  fields                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ { foo : Bool } ∧ { foo : Text } │  Invalid: Colliding ❰foo❱ fields        \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the following expressions are valid:                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────────────┐                        \n\
+        \    │ { foo = { bar = True } } ∧ { foo = { baz = 1 } } │  Valid: Both ❰foo❱     \n\
+        \    └──────────────────────────────────────────────────┘  fields are records    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────┐                     \n\
+        \    │ { foo : { bar : Bool } } ⩓ { foo : { baz : Text } } │  Valid: Both ❰foo❱  \n\
+        \    └─────────────────────────────────────────────────────┘  fields are records \n\
         \                                                                                \n\
         \                                                                                \n\
         \Some common reasons why you might get this error:                               \n\
@@ -2575,7 +2769,9 @@ prettyTypeMessage MissingMergeType =
 prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "Wrong handler input type"
+    short = "Wrong handler input type\n"
+        <>  "\n"
+        <>  prettyDiff expr1 expr2
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -2635,7 +2831,9 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
 prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "Wrong handler output type"
+    short = "Wrong handler output type\n"
+        <>  "\n"
+        <>  prettyDiff expr1 expr2
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -2697,7 +2895,9 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
 prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
     ErrorMessages {..}
   where
-    short = "Handlers should have the same output type"
+    short = "Handlers should have the same output type\n"
+        <>  "\n"
+        <>  prettyDiff expr0 expr1
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -3235,12 +3435,12 @@ data TypeError s a = TypeError
     , typeMessage :: TypeMessage s a
     } deriving (Typeable)
 
-instance (Buildable a, Buildable s) => Show (TypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Pretty a) => Show (TypeError s a) where
     show = Text.unpack . Builder.toLazyText . build
 
-instance (Buildable a, Buildable s, Typeable a, Typeable s) => Exception (TypeError s a)
+instance (Buildable a, Buildable s, Eq a, Pretty a, Typeable a, Typeable s) => Exception (TypeError s a)
 
-instance (Buildable a, Buildable s) => Buildable (TypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (TypeError s a) where
     build (TypeError ctx expr msg)
         =   "\n"
         <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
@@ -3269,12 +3469,12 @@ instance (Buildable a, Buildable s) => Buildable (TypeError s a) where
 newtype DetailedTypeError s a = DetailedTypeError (TypeError s a)
     deriving (Typeable)
 
-instance (Buildable a, Buildable s) => Show (DetailedTypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Pretty a) => Show (DetailedTypeError s a) where
     show = Text.unpack . Builder.toLazyText . build
 
-instance (Buildable a, Buildable s, Typeable a, Typeable s) => Exception (DetailedTypeError s a)
+instance (Buildable a, Buildable s, Eq a, Pretty a, Typeable a, Typeable s) => Exception (DetailedTypeError s a)
 
-instance (Buildable a, Buildable s) => Buildable (DetailedTypeError s a) where
+instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (DetailedTypeError s a) where
     build (DetailedTypeError (TypeError ctx expr msg))
         =   "\n"
         <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))

@@ -86,11 +86,9 @@ import Formatting.Buildable (Buildable(..))
 import GHC.Generics
 import Numeric.Natural (Natural)
 import Prelude hiding (maybe, sequence)
-import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Applicative
 import qualified Control.Exception
-import qualified Data.ByteString.Lazy
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
@@ -101,7 +99,6 @@ import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder
-import qualified Data.Text.Lazy.Encoding
 import qualified Data.Vector
 import qualified Dhall.Context
 import qualified Dhall.Core
@@ -173,13 +170,10 @@ inputWith
     -> IO a
     -- ^ The decoded value in Haskell
 inputWith (Type {..}) ctx n txt = do
-    let delta = Directed "(input)" 0 0 0 0
-    expr  <- throws (Dhall.Parser.exprFromText delta txt)
+    expr  <- throws (Dhall.Parser.exprFromText "(input)" txt)
     expr' <- Dhall.Import.loadWithContext ctx expr
     let suffix =
-            ( Data.ByteString.Lazy.toStrict
-            . Data.Text.Lazy.Encoding.encodeUtf8
-            . Data.Text.Lazy.Builder.toLazyText
+            ( Data.Text.Lazy.Builder.toLazyText
             . build
             ) expected
     let annot = case expr' of
@@ -952,10 +946,10 @@ instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) =>
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 (M1 l)) =
-            UnionLit keyL (embedL l) Data.HashMap.Strict.InsOrd.empty
+            UnionLit keyL (embedL l) (Data.HashMap.Strict.InsOrd.singleton keyR declaredR)
 
         embed (R1 (M1 r)) =
-            UnionLit keyR (embedR r) Data.HashMap.Strict.InsOrd.empty
+            UnionLit keyR (embedR r) (Data.HashMap.Strict.InsOrd.singleton keyL declaredL)
 
         declared =
             Union (Data.HashMap.Strict.InsOrd.fromList [(keyL, declaredL), (keyR, declaredR)])
