@@ -1,10 +1,5 @@
-{-# LANGUAGE DataKinds          #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TypeOperators      #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 {-| Utility executable for pretty-printing Dhall code
 
@@ -27,13 +22,14 @@
 -}
 module Main where
 
+import Control.Applicative (optional)
 import Control.Exception (SomeException)
 import Control.Monad (when)
 import Data.Monoid ((<>))
 import Data.Version (showVersion)
 import Dhall.Parser (exprAndHeaderFromText)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr)
-import Options.Generic (Generic, ParseRecord, Wrapped, type (<?>)(..), (:::))
+import Options.Applicative (Parser, ParserInfo)
 import System.IO (stderr)
 import System.Exit (exitFailure, exitSuccess)
 
@@ -45,25 +41,48 @@ import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
-import qualified Options.Generic
+import qualified Options.Applicative
 import qualified System.Console.ANSI
 import qualified System.IO
 
-data Options w = Options
-    { version :: w ::: Bool           <?> "Display version and exit"
-    , inplace :: w ::: Maybe FilePath <?> "Modify the specified file in-place"
-    } deriving (Generic)
+data Options = Options
+    { version :: Bool
+    , inplace :: Maybe FilePath
+    }
 
-instance ParseRecord (Options Wrapped)
+parseOptions :: Parser Options
+parseOptions = Options <$> parseVersion <*> optional parseInplace
+  where
+    parseVersion =
+        Options.Applicative.switch
+        (   Options.Applicative.long "version"
+        <>  Options.Applicative.help "Display version and exit"
+        )
+
+    parseInplace =
+        Options.Applicative.strOption
+        (   Options.Applicative.long "inplace"
+        <>  Options.Applicative.help "Modify the specified file in-place"
+        <>  Options.Applicative.metavar "FILE"
+        )
 
 opts :: Pretty.LayoutOptions
 opts =
     Pretty.defaultLayoutOptions
         { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
 
+parserInfo :: ParserInfo Options
+parserInfo =
+    Options.Applicative.info
+        (Options.Applicative.helper <*> parseOptions)
+        (   Options.Applicative.progDesc "Formatter for the Dhall language"
+        <>  Options.Applicative.fullDesc
+        )
+
 main :: IO ()
 main = do
-    Options {..} <- Options.Generic.unwrapRecord "Formatter for the Dhall language"
+    Options {..} <- Options.Applicative.execParser parserInfo
+
     when version $ do
       putStrLn (showVersion Meta.version)
       exitSuccess
