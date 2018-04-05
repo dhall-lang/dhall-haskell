@@ -28,7 +28,7 @@ import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
-import Data.Text.Prettyprint.Doc (Pretty(..))
+import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Traversable (forM)
 import Data.Typeable (Typeable)
 import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
@@ -47,10 +47,16 @@ import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Pretty
+import qualified Dhall.Pretty.Internal
 
 traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
 traverseWithIndex_ k xs =
     Data.Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
+
+docToLazyText :: Doc a -> Text
+docToLazyText = Pretty.renderLazy . Pretty.layoutPretty opts
+  where
+    opts = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
 
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
@@ -691,7 +697,24 @@ typeWithA tpa = loop
                 case Data.HashMap.Strict.InsOrd.lookup x kts of
                     Just t' -> return t'
                     Nothing -> Left (TypeError ctx e (MissingField x t))
-            _          -> Left (TypeError ctx e (NotARecord x r t))
+            _ -> do
+                let text = docToLazyText (Dhall.Pretty.Internal.prettyLabel x)
+                Left (TypeError ctx e (NotARecord text r t))
+    loop ctx e@(Project r xs    ) = do
+        t <- fmap Dhall.Core.normalize (loop ctx r)
+        case t of
+            Record kts -> do
+                _ <- loop ctx t
+
+                let process k =
+                        case Data.HashMap.Strict.InsOrd.lookup k kts of
+                            Just t' -> return (k, t')
+                            Nothing -> Left (TypeError ctx e (MissingField k t))
+                let adapt = Record . Data.HashMap.Strict.InsOrd.fromList
+                fmap adapt (traverse process (Data.Set.toList xs))
+            _ -> do
+                let text = docToLazyText (Dhall.Pretty.Internal.prettyLabels xs)
+                Left (TypeError ctx e (NotARecord text r t))
     loop ctx   (Note s e'       ) = case loop ctx e' of
         Left (TypeError ctx' (Note s' e'') m) -> Left (TypeError ctx' (Note s' e'') m)
         Left (TypeError ctx'          e''  m) -> Left (TypeError ctx' (Note s  e'') m)
@@ -3042,7 +3065,7 @@ prettyTypeMessage (ConstructorsRequiresAUnionType expr0 expr1) = ErrorMessages {
         txt0 = build expr0
         txt1 = build expr1
  
-prettyTypeMessage (NotARecord k expr0 expr1) = ErrorMessages {..}
+prettyTypeMessage (NotARecord lazyText0 expr0 expr1) = ErrorMessages {..}
   where
     short = "Not a record"
 
@@ -3087,7 +3110,7 @@ prettyTypeMessage (NotARecord k expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
-        \You tried to access a field named:                                              \n\
+        \You tried to access the field(s):                                               \n\
         \                                                                                \n\
         \↳ " <> txt0 <> "                                                                \n\
         \                                                                                \n\
@@ -3099,7 +3122,7 @@ prettyTypeMessage (NotARecord k expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \↳ " <> txt2 <> "                                                                \n"
       where
-        txt0 = build k
+        txt0 = build lazyText0
         txt1 = build expr0
         txt2 = build expr1
 

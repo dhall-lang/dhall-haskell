@@ -60,8 +60,9 @@ import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.HashSet (HashSet)
 import Data.String (IsString(..))
 import Data.Scientific (Scientific)
-import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Semigroup (Semigroup(..))
+import Data.Sequence (Seq, ViewL(..), ViewR(..))
+import Data.Set (Set)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Pretty)
@@ -76,6 +77,7 @@ import qualified Crypto.Hash
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
 import qualified Data.Sequence
+import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy                        as Text
 import qualified Data.Text.Lazy.Builder                as Builder
@@ -326,6 +328,8 @@ data Expr s a
     | Constructors (Expr s a)
     -- | > Field e x                                ~  e.x
     | Field (Expr s a) Text
+    -- | > Project e xs                             ~  e.{ xs }
+    | Project (Expr s a) (Set Text)
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
     -- | > Embed path                               ~  path
@@ -398,6 +402,7 @@ instance Monad (Expr s) where
     Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
     Constructors a       >>= k = Constructors (a >>= k)
     Field a b            >>= k = Field (a >>= k) b
+    Project a b          >>= k = Project (a >>= k) b
     Note a b             >>= k = Note a (b >>= k)
     Embed a              >>= k = k a
 
@@ -460,6 +465,7 @@ instance Bifunctor Expr where
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
     first k (Constructors a      ) = Constructors (first k a)
     first k (Field a b           ) = Field (first k a) b
+    first k (Project a b         ) = Project (first k a) b
     first k (Note a b            ) = Note (k a) (first k b)
     first _ (Embed a             ) = Embed a
 
@@ -713,6 +719,9 @@ shift d v (Constructors a) = Constructors a'
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
+shift d v (Project a b) = Project a' b
+  where
+    a' = shift d v a
 shift d v (Note a b) = Note a b'
   where
     b' = shift d v b
@@ -855,6 +864,9 @@ subst x e (Constructors a) = Constructors a'
   where
     a' = subst x e  a
 subst x e (Field a b) = Field a' b
+  where
+    a' = subst x e a
+subst x e (Project a b) = Project a' b
   where
     a' = subst x e a
 subst x e (Note a b) = Note a b'
@@ -1115,6 +1127,10 @@ alphaNormalize (Field e₀ a) =
     Field e₁ a
   where
     e₁ = alphaNormalize e₀
+alphaNormalize (Project e₀ a) =
+    Project e₁ a
+  where
+    e₁ = alphaNormalize e₀
 alphaNormalize (Note s e₀) =
     Note s e₁
   where
@@ -1217,6 +1233,7 @@ denote (Prefer a b          ) = Prefer (denote a) (denote b)
 denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (Constructors a      ) = Constructors (denote a)
 denote (Field a b           ) = Field (denote a) b
+denote (Project a b         ) = Project (denote a) b
 denote (Embed a             ) = Embed a
 
 {-| Reduce an expression to its normal form, performing beta reduction and applying
@@ -1566,6 +1583,21 @@ normalizeWith ctx e0 = loop (denote e0)
                     Just v  -> loop v
                     Nothing -> Field (RecordLit (fmap loop kvs)) x
             r' -> Field r' x
+    Project r xs     ->
+        case loop r of
+            RecordLit kvs ->
+                case traverse adapt (Data.Set.toList xs) of
+                    Just s  ->
+                        loop (RecordLit kvs')
+                      where
+                        kvs' = Data.HashMap.Strict.InsOrd.fromList s
+                    Nothing ->
+                        Project (RecordLit (fmap loop kvs)) xs
+              where
+                adapt x = do
+                    v <- Data.HashMap.Strict.InsOrd.lookup x kvs
+                    return (x, v)
+            r' -> Project r' xs
     Note _ e' -> loop e'
     Embed a -> Embed a
 
@@ -1762,12 +1794,20 @@ isNormalized e = case denote e of
         case t of
             Union _ -> False
             _       -> True
+
     Field r x -> isNormalized r &&
         case r of
             RecordLit kvs ->
                 case Data.HashMap.Strict.InsOrd.lookup x kvs of
                     Just _  -> False
                     Nothing -> True
+            _ -> True
+    Project r xs -> isNormalized r &&
+        case r of
+            RecordLit kvs ->
+                if all (flip Data.HashMap.Strict.InsOrd.member kvs) xs
+                    then False
+                    else True
             _ -> True
     Note _ e' -> isNormalized e'
     Embed _ -> True

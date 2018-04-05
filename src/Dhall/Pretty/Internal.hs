@@ -21,6 +21,7 @@ module Dhall.Pretty.Internal (
 
     , prettyConst
     , prettyLabel
+    , prettyLabels
     , prettyNatural
     , prettyNumber
     , prettyScientific
@@ -59,6 +60,7 @@ import Data.Foldable
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
+import Data.Set (Set)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
@@ -71,6 +73,7 @@ import qualified Data.Char
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
 import qualified Data.List
+import qualified Data.Set
 import qualified Data.Text.Lazy                        as Text
 import qualified Data.Text.Lazy.Builder                as Builder
 import qualified Data.Text.Prettyprint.Doc             as Pretty
@@ -276,6 +279,13 @@ prettyLabel a = label doc
                     | headCharacter h && Text.all tailCharacter t && not (Data.HashSet.member a reservedIdentifiers)
                         -> Pretty.pretty a
                 _       -> backtick <> Pretty.pretty a <> backtick
+
+prettyLabels :: Set Text -> Doc Ann
+prettyLabels a
+    | Data.Set.null a =
+        lbrace <> rbrace
+    | otherwise =
+        braces (map (duplicate . prettyLabel) (Data.Set.toList a))
 
 prettyNumber :: Integer -> Doc Ann
 prettyNumber = literal . Pretty.pretty
@@ -662,9 +672,10 @@ prettyExprD a0 = case a0 of
     docs               b  = [ prettyExprE b ]
 
 prettyExprE :: Pretty a => Expr s a -> Doc Ann
-prettyExprE (Field a b) = prettyExprE a <> dot <> prettyLabel b
-prettyExprE (Note  _ b) = prettyExprE b
-prettyExprE  a          = prettyExprF a
+prettyExprE (Field   a b) = prettyExprE a <> dot <> prettyLabel b
+prettyExprE (Project a b) = prettyExprE a <> dot <> prettyLabels b
+prettyExprE (Note    _ b) = prettyExprE b
+prettyExprE  a            = prettyExprF a
 
 prettyExprF :: Pretty a => Expr s a -> Doc Ann
 prettyExprF (Var a) =
