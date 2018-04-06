@@ -227,6 +227,8 @@ Executable dhall-repl
         prettyprinter                         ,
         prettyprinter-ansi-terminal           ,
         text
+    if !impl(ghc >= 8.0)
+      Build-Depends: transformers == 0.4.2.*
     GHC-Options: -Wall
 
 Executable dhall-format
