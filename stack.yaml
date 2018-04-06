@@ -2,3 +2,5 @@ resolver: lts-9.6
 extra-deps:
 - prettyprinter-1.2.0.1
 - formatting-6.3.1
+- megaparsec-6.4.1
+- parser-combinators-0.4.0
