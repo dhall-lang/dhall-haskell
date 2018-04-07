@@ -1,19 +1,24 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
 
 module Main where
 
-import Control.Exception (SomeException)
-import Control.Monad (when)
+import Control.Applicative ((<|>))
+import Control.Exception (Exception, SomeException)
 import Data.Monoid (mempty, (<>))
+import Data.Text.Prettyprint.Doc (Pretty)
+import Data.Typeable (Typeable)
 import Data.Version (showVersion)
-import Dhall.Core (normalize)
+import Dhall.Core (Expr, Path)
 import Dhall.Import (Imported(..), load)
 import Dhall.Parser (Src)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
-import Options.Applicative (Parser, ParserInfo)
-import System.Exit (exitFailure, exitSuccess)
+import Options.Applicative (Parser)
+import System.Exit (exitFailure)
+import System.IO (Handle)
 
 import qualified Paths_dhall as Meta
 
@@ -21,6 +26,7 @@ import qualified Control.Exception
 import qualified Data.Text.Lazy.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
@@ -28,24 +34,20 @@ import qualified System.Console.ANSI
 import qualified System.IO
 
 data Options = Options
-    { explain :: Bool
-    , version :: Bool
+    { mode    :: Mode
+    , explain :: Bool
     , plain   :: Bool
     }
 
+data Mode = Default | Version | Resolve | Type | Normalize
+
 parseOptions :: Parser Options
-parseOptions = Options <$> parseExplain <*> parseVersion <*> parsePlain
+parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
   where
     parseExplain =
         Options.Applicative.switch
             (   Options.Applicative.long "explain"
             <>  Options.Applicative.help "Explain error messages in more detail"
-            )
-
-    parseVersion =
-        Options.Applicative.switch
-            (   Options.Applicative.long "version"
-            <>  Options.Applicative.help "Display version and exit"
             )
 
     parsePlain =
@@ -54,25 +56,66 @@ parseOptions = Options <$> parseExplain <*> parseVersion <*> parsePlain
             <>  Options.Applicative.help "Disable syntax highlighting"
             )
 
+parseMode :: Parser Mode
+parseMode =
+        subcommand "version"   "Display version"                 Version
+    <|> subcommand "resolve"   "Resolve an expression's imports" Resolve
+    <|> subcommand "type"      "Infer an expression's type"      Type
+    <|> subcommand "normalize" "Normalize an expression"         Normalize
+    <|> pure Default
+  where
+    subcommand name description mode =
+        Options.Applicative.subparser
+            (   Options.Applicative.command name parserInfo
+            <>  Options.Applicative.metavar name
+            )
+      where
+        parserInfo =
+            Options.Applicative.info parser
+                (   Options.Applicative.fullDesc
+                <>  Options.Applicative.progDesc description
+                )
+
+        parser =
+            Options.Applicative.helper <*> pure mode
+
 opts :: Pretty.LayoutOptions
 opts =
     Pretty.defaultLayoutOptions
         { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
 
-parserInfo :: ParserInfo Options
-parserInfo =
-    Options.Applicative.info
-        (Options.Applicative.helper <*> parseOptions)
-        (   Options.Applicative.progDesc "Interpreter for the Dhall language"
-        <>  Options.Applicative.fullDesc
-        )
+data ImportResolutionDisabled =
+    ImportResolutionDisabled deriving (Exception, Typeable)
+
+instance Show ImportResolutionDisabled where
+    show _ = "\nImport resolution is disabled"
+
+throws :: Exception e => Either e a -> IO a
+throws (Left  e) = Control.Exception.throwIO e
+throws (Right a) = return a
+
+getExpression :: IO (Expr Src Path)
+getExpression = do
+    inText <- Data.Text.Lazy.IO.getContents
+
+    throws (Dhall.Parser.exprFromText "(stdin)" inText)
+
+assertNoImports :: Expr Src Path -> IO (Expr Src X)
+assertNoImports expression =
+    throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
 
 main :: IO ()
 main = do
+    let parserInfo =
+            Options.Applicative.info
+                (Options.Applicative.helper <*> parseOptions)
+                (   Options.Applicative.progDesc "Interpreter for the Dhall language"
+                <>  Options.Applicative.fullDesc
+                )
+
     Options {..} <- Options.Applicative.execParser parserInfo
-    when version $ do
-      putStrLn (showVersion Meta.version)
-      exitSuccess
+
+    System.IO.hSetEncoding System.IO.stdin System.IO.utf8
 
     let handle =
                 Control.Exception.handle handler2
@@ -103,36 +146,61 @@ main = do
                 System.IO.hPrint System.IO.stderr e
                 System.Exit.exitFailure
 
-    handle (do
-        System.IO.hSetEncoding System.IO.stdin System.IO.utf8
-        inText <- Data.Text.Lazy.IO.getContents
+    let render :: Pretty a => Handle -> Expr s a -> IO ()
+        render h e = do
+            let doc = prettyExpr e
 
-        expr <- case Dhall.Parser.exprFromText "(stdin)" inText of
-            Left  err -> Control.Exception.throwIO err
-            Right x   -> return x
+            let layoutOptions = opts
 
-        let render h e = do
-                let doc = prettyExpr e
+            let stream = Pretty.layoutSmart layoutOptions doc
 
-                let layoutOptions = opts
-                let stream = Pretty.layoutSmart layoutOptions doc
+            supportsANSI <- System.Console.ANSI.hSupportsANSI h
+            let ansiStream =
+                    if supportsANSI && not plain
+                    then fmap annToAnsiStyle stream
+                    else Pretty.unAnnotateS stream
 
-                supportsANSI <- System.Console.ANSI.hSupportsANSI h
-                let ansiStream =
-                        if supportsANSI && not plain
-                        then fmap annToAnsiStyle stream
-                        else Pretty.unAnnotateS stream
+            Pretty.renderIO h ansiStream
+            Data.Text.Lazy.IO.hPutStrLn h ""
 
-                Pretty.renderIO h ansiStream
-                Data.Text.Lazy.IO.hPutStrLn h ""
+    handle $ case mode of
+        Version -> do
+            putStrLn (showVersion Meta.version)
 
+        Default -> do
+            expression <- getExpression
 
-        expr' <- load expr
+            resolvedExpression <- load expression
 
-        typeExpr <- case Dhall.TypeCheck.typeOf expr' of
-            Left  err      -> Control.Exception.throwIO err
-            Right typeExpr -> return typeExpr
+            inferredType <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-        render System.IO.stderr (normalize typeExpr)
-        Data.Text.Lazy.IO.hPutStrLn System.IO.stderr mempty
-        render System.IO.stdout (normalize expr') )
+            render System.IO.stderr (Dhall.Core.normalize inferredType)
+
+            Data.Text.Lazy.IO.hPutStrLn System.IO.stderr mempty
+
+            render System.IO.stdout (Dhall.Core.normalize resolvedExpression)
+
+        Resolve -> do
+            expression <- getExpression
+
+            resolvedExpression <- load expression
+
+            render System.IO.stdout resolvedExpression
+
+        Normalize -> do
+            expression <- getExpression
+
+            resolvedExpression <- assertNoImports expression
+
+            _ <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
+
+            render System.IO.stdout (Dhall.Core.normalize resolvedExpression)
+
+        Type -> do
+            expression <- getExpression
+
+            resolvedExpression <- assertNoImports expression
+
+            inferredType <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
+
+            render System.IO.stdout (Dhall.Core.normalize inferredType)
