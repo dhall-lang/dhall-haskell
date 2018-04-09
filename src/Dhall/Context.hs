@@ -1,6 +1,4 @@
-{-# LANGUAGE BangPatterns               #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 -- | This is a utility module that consolidates all `Context`-related operations
 
@@ -50,7 +48,6 @@ insert k v (Context kvs) = Context ((k, v) : kvs)
 match :: Context a -> Maybe (Text, a, Context a)
 match (Context ((k, v) : kvs)) = Just (k, v, Context kvs)
 match (Context           []  ) = Nothing
-
 {-# INLINABLE match #-}
 
 {-| Look up a key by name and index
@@ -61,9 +58,9 @@ match (Context           []  ) = Nothing
 > lookup k n (insert j v c) = lookup k  n      c  -- k /= j
 -}
 lookup :: Text -> Integer -> Context a -> Maybe a
-lookup _ !_ (Context         []  ) =
+lookup _ _ (Context         []  ) =
     Nothing
-lookup x !n (Context ((k, v):kvs)) =
+lookup x n (Context ((k, v):kvs)) =
     if x == k
     then if n == 0
          then Just v
