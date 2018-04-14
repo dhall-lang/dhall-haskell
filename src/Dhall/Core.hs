@@ -113,7 +113,7 @@ data PathType
     = File HasHome FilePath
     -- ^ Local path
     | URL  Text (Maybe PathHashed)
-    -- ^ URL of emote resource and optional headers stored in a path
+    -- ^ URL of remote resource and optional headers stored in a path
     | Env  Text
     -- ^ Environment variable
     deriving (Eq, Ord, Show)
