@@ -30,6 +30,7 @@ normalizationTests =
         , constantFolding
         , conversions
         , shouldNormalize "Optional build/fold fusion" "optionalBuildFold"
+        , shouldNormalize "Natural fold/build fusion" "naturalFoldBuild"
         , customization
         , shouldNormalize "a remote-systems.conf builder" "remoteSystems"
         ]
