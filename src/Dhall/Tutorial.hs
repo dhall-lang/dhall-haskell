@@ -1152,7 +1152,7 @@ import Dhall
 -- The @constructors@ keyword takes a union type argument and returns a record
 -- with one field per union type constructor:
 --
--- > $ dhall --pretty
+-- > $ dhall
 -- > constructors < Empty : {} | Person : { name : Text, age : Natural } >
 -- > <Ctrl-D>
 -- >
@@ -1644,55 +1644,8 @@ import Dhall
 -- >     (List (List Integer))
 -- >     (replicate +5 (List Integer) (replicate +5 Integer 1))
 --
--- If you want to evaluate and format an expression then you can use the
--- @--pretty@ flag of the @dhall@ executable:
---
--- > $ dhall --pretty
--- > let replicate = https://ipfs.io/ipfs/QmdtKd5Q7tebdo6rXfZed4kN6DXmErRQHJ4PsNCtca9GbB/Prelude/List/replicate 
--- > in replicate +5 (List (List Integer)) (replicate +5 (List Integer) (replicate +5 Integer 1))
--- > <Ctrl-D>
--- > List (List (List Integer))
--- > 
--- >   [   [ [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       ]
--- >     : List (List Integer)
--- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       ]
--- >     : List (List Integer)
--- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       ]
--- >     : List (List Integer)
--- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       ]
--- >     : List (List Integer)
--- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       ]
--- >     : List (List Integer)
--- >   ]
--- > : List (List (List Integer))
---
 -- You can also use the formatter to modify files in place using the
--- @--inplace@ flag:
+-- @--inplace@ flag (i.e. for formatting source code):
 --
 -- > $ dhall-format --inplace ./unformatted
 -- > $ cat ./unformatted
@@ -1741,6 +1694,54 @@ import Dhall
 -- > {- This comment will be preserved by the formatter -}
 -- > -- ... and this comment will be preserved, too
 -- > 1
+--
+-- Note that you do not need to use @dhall-format@ to format the output of the
+-- @dhall@ interpreter.  The interpreter already automatically formats
+-- multi-line expressions, too:
+--
+-- > $ dhall
+-- > let replicate = https://ipfs.io/ipfs/QmdtKd5Q7tebdo6rXfZed4kN6DXmErRQHJ4PsNCtca9GbB/Prelude/List/replicate 
+-- > in replicate +5 (List (List Integer)) (replicate +5 (List Integer) (replicate +5 Integer 1))
+-- > <Ctrl-D>
+-- > List (List (List Integer))
+-- > 
+-- >   [   [ [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       ]
+-- >     : List (List Integer)
+-- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       ]
+-- >     : List (List Integer)
+-- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       ]
+-- >     : List (List Integer)
+-- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       ]
+-- >     : List (List Integer)
+-- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >       ]
+-- >     : List (List Integer)
+-- >   ]
+-- > : List (List (List Integer))
 
 -- $builtins
 --
@@ -2711,7 +2712,7 @@ import Dhall
 --
 -- __Exercise__: Browse the Prelude by running:
 --
--- > $ dhall --pretty <<< 'https://ipfs.io/ipfs/QmdtKd5Q7tebdo6rXfZed4kN6DXmErRQHJ4PsNCtca9GbB/Prelude/package.dhall'
+-- > $ dhall <<< 'https://ipfs.io/ipfs/QmdtKd5Q7tebdo6rXfZed4kN6DXmErRQHJ4PsNCtca9GbB/Prelude/package.dhall'
 
 -- $conclusion
 --
