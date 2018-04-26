@@ -130,6 +130,9 @@ parserTests =
             , shouldParse
                 "names that begin with reserved identifiers"
                 "./tests/parser/reservedPrefix.dhall"
+            , shouldParse
+                "interpolated expressions with leading whitespace"
+                "./tests/parser/template.dhall"
             ]
         ]
 
