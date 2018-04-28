@@ -152,7 +152,7 @@ input
     -> IO a
     -- ^ The decoded value in Haskell
 input ty txt =
-  inputWith ty Dhall.Context.empty (const Nothing) txt
+  inputWith ty Dhall.Context.empty (const (pure Nothing)) txt
 
 {-| Extend 'input' with a custom typing context and normalization process.
 

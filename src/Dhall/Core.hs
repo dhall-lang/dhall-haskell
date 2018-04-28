@@ -56,6 +56,7 @@ import Control.Applicative (empty)
 import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Foldable
+import Data.Functor.Identity (Identity(..))
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.HashSet (HashSet)
 import Data.String (IsString(..))
@@ -1148,7 +1149,7 @@ alphaNormalize (Embed a) =
     leave ill-typed sub-expressions unevaluated.
 -}
 normalize :: Eq a => Expr s a -> Expr t a
-normalize = normalizeWith (const Nothing)
+normalize = normalizeWith (const (pure Nothing))
 
 {-| This function is used to determine whether folds like @Natural/fold@ or
     @List/fold@ should be lazy or strict in their accumulator based on the type
@@ -1252,26 +1253,33 @@ denote (Embed a             ) = Embed a
 
 -}
 normalizeWith :: Eq a => Normalizer a -> Expr s a -> Expr t a
-normalizeWith ctx e0 = loop (denote e0)
+normalizeWith ctx = runIdentity . normalizeWithM ctx
+
+normalizeWithM :: (Eq a, Monad m) => NormalizerM m a -> Expr s a -> m (Expr t a)
+normalizeWithM ctx e0 = loop (denote e0)
  where
  loop e =  case e of
-    Const k -> Const k
-    Var v -> Var v
-    Lam x _A b -> Lam x _A' b'
+    Const k -> pure (Const k)
+    Var v -> pure (Var v)
+    Lam x _A b -> Lam x <$> _A' <*> b'
       where
         _A' = loop _A
         b'  = loop b
-    Pi  x _A _B -> Pi  x _A' _B'
+    Pi x _A _B -> Pi x <$> _A' <*> _B'
       where
         _A' = loop _A
         _B' = loop _B
-    App f a -> case loop f of
-        Lam x _A b -> loop b''  -- Beta reduce
+    App f a -> do
+      f' <- loop f
+      case f' of
+        Lam x _A b -> loop b''
           where
             a'  = shift   1  (V x 0) a
             b'  = subst (V x 0) a' b
             b'' = shift (-1) (V x 0) b'
-        f' -> case App f' a' of
+        _ -> do
+          a' <- loop a
+          case App f' a' of
             -- build/fold fusion for `List`
             App (App ListBuild _) (App (App ListFold _) e') -> loop e'
 
@@ -1281,14 +1289,15 @@ normalizeWith ctx e0 = loop (denote e0)
             -- build/fold fusion for `Optional`
             App (App OptionalBuild _) (App (App OptionalFold _) e') -> loop e'
 
-            App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero ->
-                if boundedType (loop t) then strict else lazy
+            App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
+              t' <- loop t
+              if boundedType t' then strict else lazy
               where
                 strict =       strictLoop n0
                 lazy   = loop (  lazyLoop n0)
 
                 strictLoop !0 = loop zero
-                strictLoop !n = loop (App succ' (strictLoop (n - 1)))
+                strictLoop !n = App succ' <$> strictLoop (n - 1) >>= loop
 
                 lazyLoop !0 = zero
                 lazyLoop !n = App succ' (lazyLoop (n - 1))
@@ -1297,16 +1306,16 @@ normalizeWith ctx e0 = loop (denote e0)
                 succ = Lam "x" Natural (NaturalPlus "x" (NaturalLit 1))
 
                 zero = NaturalLit 0
-            App NaturalIsZero (NaturalLit n) -> BoolLit (n == 0)
-            App NaturalEven (NaturalLit n) -> BoolLit (even n)
-            App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
-            App NaturalToInteger (NaturalLit n) -> IntegerLit (toInteger n)
+            App NaturalIsZero (NaturalLit n) -> pure (BoolLit (n == 0))
+            App NaturalEven (NaturalLit n) -> pure (BoolLit (even n))
+            App NaturalOdd (NaturalLit n) -> pure (BoolLit (odd n))
+            App NaturalToInteger (NaturalLit n) -> pure (IntegerLit (toInteger n))
             App NaturalShow (NaturalLit n) ->
-                TextLit (Chunks [] ("+" <> buildNatural n))
+                pure (TextLit (Chunks [] ("+" <> buildNatural n)))
             App IntegerShow (IntegerLit n) ->
-                TextLit (Chunks [] (buildNumber n))
+                pure (TextLit (Chunks [] (buildNumber n)))
             App DoubleShow (DoubleLit n) ->
-                TextLit (Chunks [] (buildScientific n))
+                pure (TextLit (Chunks [] (buildScientific n)))
             App (App OptionalBuild _A₀) g ->
                 loop (App (App (App g optional) just) nothing)
               where
@@ -1331,8 +1340,9 @@ normalizeWith ctx e0 = loop (denote e0)
                         )
 
                 nil = ListLit (Just _A₀) empty
-            App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil ->
-                if boundedType (loop t) then strict else lazy
+            App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil -> do
+              t' <- loop t
+              if boundedType t' then strict else lazy
               where
                 strict =       foldr strictCons strictNil xs
                 lazy   = loop (foldr   lazyCons   lazyNil xs)
@@ -1340,10 +1350,11 @@ normalizeWith ctx e0 = loop (denote e0)
                 strictNil = loop nil
                 lazyNil   =      nil
 
-                strictCons y ys = loop (App (App cons y) ys)
+                strictCons y ys = do
+                  App (App cons y) <$> ys >>= loop
                 lazyCons   y ys =       App (App cons y) ys
             App (App ListLength _) (ListLit _ ys) ->
-                NaturalLit (fromIntegral (Data.Sequence.length ys))
+                pure (NaturalLit (fromIntegral (Data.Sequence.length ys)))
             App (App ListHead t) (ListLit _ ys) -> loop (OptionalLit t m)
               where
                 m = case Data.Sequence.viewl ys of
@@ -1379,20 +1390,20 @@ normalizeWith ctx e0 = loop (denote e0)
                 loop (maybe nothing just' xs)
               where
                 just' = App just
-            _ ->  case ctx (App f' a') of
-                    Nothing -> App f' a'
-                    Just app' -> loop app'
-          where
-            a' = loop a
+            _ ->  do
+              mapp <- ctx (App f' a')
+              case mapp of
+                Nothing -> pure (App f' a')
+                Just app' -> loop app'
     Let f _ r b -> loop b''
       where
         r'  = shift   1  (V f 0) r
         b'  = subst (V f 0) r' b
         b'' = shift (-1) (V f 0) b'
     Annot x _ -> loop x
-    Bool -> Bool
-    BoolLit b -> BoolLit b
-    BoolAnd x y -> decide (loop x) (loop y)
+    Bool -> pure Bool
+    BoolLit b -> pure (BoolLit b)
+    BoolAnd x y -> decide <$> loop x <*> loop y
       where
         decide (BoolLit True )  r              = r
         decide (BoolLit False)  _              = BoolLit False
@@ -1401,7 +1412,7 @@ normalizeWith ctx e0 = loop (denote e0)
         decide  l               r
             | judgmentallyEqual l r = l
             | otherwise             = BoolAnd l r
-    BoolOr x y -> decide (loop x) (loop y)
+    BoolOr x y -> decide <$> loop x <*> loop y
       where
         decide (BoolLit False)  r              = r
         decide (BoolLit True )  _              = BoolLit True
@@ -1410,21 +1421,21 @@ normalizeWith ctx e0 = loop (denote e0)
         decide  l               r
             | judgmentallyEqual l r = l
             | otherwise             = BoolOr l r
-    BoolEQ x y -> decide (loop x) (loop y)
+    BoolEQ x y -> decide <$> loop x <*> loop y
       where
         decide (BoolLit True )  r              = r
         decide  l              (BoolLit True ) = l
         decide  l               r
             | judgmentallyEqual l r = BoolLit True
             | otherwise             = BoolEQ l r
-    BoolNE x y -> decide (loop x) (loop y)
+    BoolNE x y -> decide <$> loop x <*> loop y
       where
         decide (BoolLit False)  r              = r
         decide  l              (BoolLit False) = l
         decide  l               r
             | judgmentallyEqual l r = BoolLit False
             | otherwise             = BoolNE l r
-    BoolIf bool true false -> decide (loop bool) (loop true) (loop false)
+    BoolIf bool true false -> decide <$> loop bool <*> loop true <*> loop false
       where
         decide (BoolLit True )  l              _              = l
         decide (BoolLit False)  _              r              = r
@@ -1432,22 +1443,22 @@ normalizeWith ctx e0 = loop (denote e0)
         decide  b               l              r
             | judgmentallyEqual l r = l
             | otherwise             = BoolIf b l r
-    Natural -> Natural
-    NaturalLit n -> NaturalLit n
-    NaturalFold -> NaturalFold
-    NaturalBuild -> NaturalBuild
-    NaturalIsZero -> NaturalIsZero
-    NaturalEven -> NaturalEven
-    NaturalOdd -> NaturalOdd
-    NaturalToInteger -> NaturalToInteger
-    NaturalShow -> NaturalShow
-    NaturalPlus x y -> decide (loop x) (loop y)
+    Natural -> pure Natural
+    NaturalLit n -> pure (NaturalLit n)
+    NaturalFold -> pure NaturalFold
+    NaturalBuild -> pure NaturalBuild
+    NaturalIsZero -> pure NaturalIsZero
+    NaturalEven -> pure NaturalEven
+    NaturalOdd -> pure NaturalOdd
+    NaturalToInteger -> pure NaturalToInteger
+    NaturalShow -> pure NaturalShow
+    NaturalPlus x y -> decide <$> loop x <*> loop y
       where
         decide (NaturalLit 0)  r             = r
         decide  l             (NaturalLit 0) = l
         decide (NaturalLit m) (NaturalLit n) = NaturalLit (m + n)
         decide  l              r             = NaturalPlus l r
-    NaturalTimes x y -> decide (loop x) (loop y)
+    NaturalTimes x y -> decide <$> loop x <*> loop y
       where
         decide (NaturalLit 1)  r             = r
         decide  l             (NaturalLit 1) = l
@@ -1455,24 +1466,28 @@ normalizeWith ctx e0 = loop (denote e0)
         decide  _             (NaturalLit 0) = NaturalLit 0
         decide (NaturalLit m) (NaturalLit n) = NaturalLit (m * n)
         decide  l              r             = NaturalTimes l r
-    Integer -> Integer
-    IntegerLit n -> IntegerLit n
-    IntegerShow -> IntegerShow
-    Double -> Double
-    DoubleLit n -> DoubleLit n
-    DoubleShow -> DoubleShow
-    Text -> Text
-    TextLit (Chunks xys z) ->
-        case mconcat chunks of
-            Chunks [("", x)] "" -> x
-            c                   -> TextLit c
+    Integer -> pure Integer
+    IntegerLit n -> pure (IntegerLit n)
+    IntegerShow -> pure IntegerShow
+    Double -> pure Double
+    DoubleLit n -> pure (DoubleLit n)
+    DoubleShow -> pure (DoubleShow)
+    Text -> pure Text
+    TextLit (Chunks xys z) -> do
+      chunks' <- mconcat <$> chunks
+      case chunks' of
+        Chunks [("", x)] "" -> pure x
+        c                   -> pure (TextLit c)
       where
-        chunks = concatMap process xys ++ [Chunks [] z]
+        chunks =
+          ((++ [Chunks [] z]) . concat) <$> traverse process xys
 
-        process (x, y) = case loop y of
-            TextLit c -> [Chunks [] x, c]
-            y'        -> [Chunks [(x, y')] mempty]
-    TextAppend x y -> decide (loop x) (loop y)
+        process (x, y) = do
+          y' <- loop y
+          case y' of
+            TextLit c -> pure [Chunks [] x, c]
+            _         -> pure [Chunks [(x, y')] mempty]
+    TextAppend x y -> decide <$> loop x <*> loop y
       where
         isEmpty (Chunks [] "") = True
         isEmpty  _             = False
@@ -1481,45 +1496,45 @@ normalizeWith ctx e0 = loop (denote e0)
         decide  l          (TextLit n) | isEmpty n = l
         decide (TextLit m) (TextLit n)             = TextLit (m <> n)
         decide  l           r                      = TextAppend l r
-    List -> List
-    ListLit t es -> ListLit t' es'
+    List -> pure List
+    ListLit t es -> ListLit <$> t' <*> es'
       where
-        t'  = fmap loop t
-        es' = fmap loop es
-    ListAppend x y -> decide (loop x) (loop y)
+        t'  = traverse loop t
+        es' = traverse loop es
+    ListAppend x y -> decide <$> loop x <*> loop y
       where
         decide (ListLit _ m)  r            | Data.Sequence.null m = r
         decide  l            (ListLit _ n) | Data.Sequence.null n = l
         decide (ListLit t m) (ListLit _ n)                        = ListLit t (m <> n)
         decide  l             r                                   = ListAppend l r
-    ListBuild -> ListBuild
-    ListFold -> ListFold
-    ListLength -> ListLength
-    ListHead -> ListHead
-    ListLast -> ListLast
-    ListIndexed -> ListIndexed
-    ListReverse -> ListReverse
-    Optional -> Optional
-    OptionalLit t es -> OptionalLit t' es'
+    ListBuild -> pure ListBuild
+    ListFold -> pure ListFold
+    ListLength -> pure ListLength
+    ListHead -> pure ListHead
+    ListLast -> pure ListLast
+    ListIndexed -> pure ListIndexed
+    ListReverse -> pure ListReverse
+    Optional -> pure Optional
+    OptionalLit t es -> OptionalLit <$> t' <*> es'
       where
-        t'  =      loop t
-        es' = fmap loop es
-    OptionalFold -> OptionalFold
-    OptionalBuild -> OptionalBuild
-    Record kts -> Record kts'
+        t'  =          loop t
+        es' = traverse loop es
+    OptionalFold -> pure OptionalFold
+    OptionalBuild -> pure OptionalBuild
+    Record kts -> Record <$> kts'
       where
-        kts' = fmap loop kts
-    RecordLit kvs -> RecordLit kvs'
+        kts' = traverse loop kts
+    RecordLit kvs -> RecordLit <$> kvs'
       where
-        kvs' = fmap loop kvs
-    Union kts -> Union kts'
+        kvs' = traverse loop kvs
+    Union kts -> Union <$> kts'
       where
-        kts' = fmap loop kts
-    UnionLit k v kvs -> UnionLit k v' kvs'
+        kts' = traverse loop kts
+    UnionLit k v kvs -> UnionLit k <$> v' <*> kvs'
       where
-        v'   =      loop v
-        kvs' = fmap loop kvs
-    Combine x y -> decide (loop x) (loop y)
+        v'   =          loop v
+        kvs' = traverse loop kvs
+    Combine x y -> decide <$> loop x <*> loop y
       where
         decide (RecordLit m) r | Data.HashMap.Strict.InsOrd.null m =
             r
@@ -1529,7 +1544,7 @@ normalizeWith ctx e0 = loop (denote e0)
             RecordLit (Data.HashMap.Strict.InsOrd.unionWith decide m n)
         decide l r =
             Combine l r
-    CombineTypes x y -> decide (loop x) (loop y)
+    CombineTypes x y -> decide <$> loop x <*> loop y
       where
         decide (Record m) r | Data.HashMap.Strict.InsOrd.null m =
             r
@@ -1539,8 +1554,7 @@ normalizeWith ctx e0 = loop (denote e0)
             Record (Data.HashMap.Strict.InsOrd.unionWith decide m n)
         decide l r =
             CombineTypes l r
-
-    Prefer x y -> decide (loop x) (loop y)
+    Prefer x y -> decide <$> loop x <*> loop y
       where
         decide (RecordLit m) r | Data.HashMap.Strict.InsOrd.null m =
             r
@@ -1550,56 +1564,60 @@ normalizeWith ctx e0 = loop (denote e0)
             RecordLit (Data.HashMap.Strict.InsOrd.union n m)
         decide l r =
             Prefer l r
-    Merge x y t      ->
-        case x' of
-            RecordLit kvsX ->
-                case y' of
-                    UnionLit kY vY _ ->
-                        case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
-                            Just vX -> loop (App vX vY)
-                            Nothing -> Merge x' y' t'
-                    _ -> Merge x' y' t'
-            _ -> Merge x' y' t'
+    Merge x y t      -> do
+      x' <- loop x
+      y' <- loop y
+      case x' of
+        RecordLit kvsX -> do
+          case y' of
+            UnionLit kY vY _ ->
+              case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
+                Just vX -> loop (App vX vY)
+                Nothing -> Merge x' y' <$> t'
+            _ -> Merge x' y' <$> t'
+        _ -> Merge x' y' <$> t'
       where
-        x' =      loop x
-        y' =      loop y
-        t' = fmap loop t
-    Constructors t   ->
-        case t' of
-            Union kts -> RecordLit kvs
-              where
-                kvs = Data.HashMap.Strict.InsOrd.mapWithKey adapt kts
+        t' = traverse loop t
+    Constructors t   -> do
+      t' <- loop t
+      case t' of
+        Union kts -> pure (RecordLit kvs)
+          where
+            kvs = Data.HashMap.Strict.InsOrd.mapWithKey adapt kts
 
-                adapt k t_ = Lam k t_ (UnionLit k (Var (V k 0)) rest)
-                  where
-                    rest = Data.HashMap.Strict.InsOrd.delete k kts
-            _ -> Constructors t'
-      where
-        t' = loop t
-    Field r x        ->
-        case loop r of
+            adapt k t_ = Lam k t_ (UnionLit k (Var (V k 0)) rest)
+              where
+                rest = Data.HashMap.Strict.InsOrd.delete k kts
+        _ -> pure (Constructors t')
+    Field r x        -> do
+        r' <- loop r
+        case r' of
             RecordLit kvs ->
                 case Data.HashMap.Strict.InsOrd.lookup x kvs of
                     Just v  -> loop v
-                    Nothing -> Field (RecordLit (fmap loop kvs)) x
-            r' -> Field r' x
-    Project r xs     ->
-        case loop r of
+                    Nothing -> do
+                      kvs' <- traverse loop kvs
+                      pure (Field (RecordLit kvs') x)
+            _ -> pure (Field r' x)
+    Project r xs     -> do
+        r' <- loop r
+        case r' of
             RecordLit kvs ->
                 case traverse adapt (Data.Set.toList xs) of
                     Just s  ->
                         loop (RecordLit kvs')
                       where
                         kvs' = Data.HashMap.Strict.InsOrd.fromList s
-                    Nothing ->
-                        Project (RecordLit (fmap loop kvs)) xs
+                    Nothing -> do
+                        kvs' <- traverse loop kvs
+                        pure (Project (RecordLit kvs') xs)
               where
                 adapt x = do
                     v <- Data.HashMap.Strict.InsOrd.lookup x kvs
                     return (x, v)
-            r' -> Project r' xs
+            _ -> pure (Project r' xs)
     Note _ e' -> loop e'
-    Embed a -> Embed a
+    Embed a -> pure (Embed a)
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise
@@ -1612,15 +1630,16 @@ judgmentallyEqual eL0 eR0 = alphaBetaNormalize eL0 == alphaBetaNormalize eR0
 
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
 --   polymorphic enough to be used.
-type Normalizer a = forall s. Expr s a -> Maybe (Expr s a)
+type NormalizerM m a = forall s. Expr s a -> m (Maybe (Expr s a))
+
+type Normalizer a = NormalizerM Identity a
 
 -- | Check if an expression is in a normal form given a context of evaluation.
 --   Unlike `isNormalized`, this will fully normalize and traverse through the expression.
 --
 --   It is much more efficient to use `isNormalized`.
 isNormalizedWith :: (Eq s, Eq a) => Normalizer a -> Expr s a -> Bool
-isNormalizedWith ctx e = e == (normalizeWith ctx e)
-
+isNormalizedWith ctx e = e == normalizeWith ctx e
 
 -- | Quickly check if an expression is in normal form
 isNormalized :: Expr s a -> Bool
