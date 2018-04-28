@@ -321,7 +321,7 @@ doubleQuotedChunk embedded =
   where
     interpolation = do
         _ <- Text.Parser.Char.text "${"
-        e <- expression embedded
+        e <- completeExpression embedded
         _ <- Text.Parser.Char.char '}'
         return (Chunks [(mempty, e)] mempty)
 
@@ -469,7 +469,7 @@ singleQuoteContinue embedded =
 
         interpolation = do
             _ <- Text.Parser.Char.text "${"
-            a <- expression embedded
+            a <- completeExpression embedded
             _ <- Text.Parser.Char.char '}'
             b <- singleQuoteContinue embedded
             return (Chunks [(mempty, a)] mempty <> b)
