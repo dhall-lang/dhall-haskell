@@ -1,3 +1,56 @@
+1.13.0
+
+* BUG FIX: Fix semantic integrity hashing support
+    * Both parsing and pretty-printing semantic hashes were broken since version
+      1.11.0
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/345
+* BUG FIX: Allow leading whitespace in interpolated expresssions
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/369
+* BUG FIX: Fix `deriving (Interpret)` for sum types
+    * The types of alternatives were not correctly included in the corresponding
+      Dhall type
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/348
+* BREAKING CHANGE TO LANGUAGE: Records cannot store both types and terms
+    * Records can also not store type-level functions (like `List`)
+        * Records might be allowed to store type-level functions again in the
+          future
+    * This fixes a potential soundness bug
+    * The primarily practical consequence of this change is that if you are
+      hosting a "package" then you will need to split terms and types from your
+      package into different records for your users to import
+    * This also implies removing the `./Monoid` type-level function from the
+      `./Prelude/package.dhall` record
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/335
+* BREAKING CHANGE TO THE API: Replace `trifecta` with `megaparsec`
+    * This change the API to use the `Parser` type from `megaparsec`
+    * This also slightly changes the type of `exprFromText`
+    * If you program using the type classes provided by the `parsers` library
+      then this is not a breaking change as that interface is preserved
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/268
+* BREAKING CHANGE TO THE API: New `⩓` operator for merging record types
+    * Example: `{ foo : Text } ⩓ { bar : Bool } = { foo : Text, bar : Bool }`
+    * This is breaking because it adds a new constructor to the `Expr` type
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/342
+* BREAKING CHANGE TO THE API: New support for projecting a subset of fields
+    * Example: `{ x = 1, y = 2, z = 3 }.{ x, y } = { x = 1, y = 2 }`
+    * This is breaking because it adds a new constructor to the `Expr` type
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/350
+* API+UX feature: New support for pretty-printing diffs of Dhall expressions
+    * Error messages also use this feature to simplify large type mismatches
+    * There is also a new `Dhall.Diff` module
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/336
+* Add `version`, `resolve`, `type`, and `normalize` sub-commands to interpreter
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/352
+* Support GHC 7.10.3
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/340
+* `:type` command in `dhall-repl` now only displays the type
+    * Before it would also display the original expression
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/344
+* Trim dependency tree
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/351
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/268
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/355
+
 1.12.0
 
 * Additional changes to support GHC 8.4
