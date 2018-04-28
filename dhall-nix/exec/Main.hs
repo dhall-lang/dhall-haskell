@@ -4,7 +4,6 @@ module Main where
 
 import Control.Exception (SomeException)
 import System.Exit (ExitCode(..))
-import Text.Trifecta.Delta (Delta(..))
 
 import qualified Control.Exception
 import qualified Data.Text.Lazy.IO
@@ -26,7 +25,7 @@ main = handle (Dhall.detailed (do
 
     inText <- Data.Text.Lazy.IO.getContents
 
-    expr <- case Dhall.Parser.exprFromText (Directed "(stdin)" 0 0 0 0) inText of
+    expr <- case Dhall.Parser.exprFromText "(stdin)" inText of
         Left  err  -> Control.Exception.throwIO err
         Right expr -> return expr
 

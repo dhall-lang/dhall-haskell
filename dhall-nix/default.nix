@@ -1,6 +1,6 @@
 { mkDerivation, base, containers, data-fix, dhall, formatting, hnix
 , insert-ordered-containers, neat-interpolation, optparse-generic
-, scientific, stdenv, text, trifecta
+, scientific, stdenv, text
 }:
 mkDerivation {
   pname = "dhall-nix";
@@ -13,7 +13,7 @@ mkDerivation {
     insert-ordered-containers neat-interpolation scientific text
   ];
   executableHaskellDepends = [
-    base dhall hnix optparse-generic text trifecta
+    base dhall hnix optparse-generic text
   ];
   description = "Dhall to Nix compiler";
   license = stdenv.lib.licenses.bsd3;

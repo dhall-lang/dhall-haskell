@@ -486,6 +486,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
 
         let e11 = Fix (NApp (Fix (NApp "combine" a')) b')
         return (Fix (NLet [NamedVar ["combine"] combine] e11))
+    loop (CombineTypes _ _) = return (Fix (NSet []))
     loop (Merge a b _) = do
         a' <- loop a
         b' <- loop b
@@ -500,5 +501,9 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- loop a
         let b' = Data.Text.Lazy.toStrict b
         return (Fix (NSelect a' [StaticKey b'] Nothing))
+    loop (Project a b) = do
+        a' <- loop a
+        let b' = fmap (StaticKey . Data.Text.Lazy.toStrict) (toList b)
+        return (Fix (NSet [Inherit (Just a') b']))
     loop (Note _ b) = loop b
     loop (Embed (X x)) = x

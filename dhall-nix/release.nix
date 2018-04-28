@@ -85,16 +85,22 @@ in
         testNaturalIsZero = dhallToNix "Natural/isZero";
         testNaturalEven = dhallToNix "Natural/even";
         testNaturalOdd = dhallToNix "Natural/odd";
+        testNaturalToInteger = dhallToNix "Natural/toInteger";
+        testNaturalShow = dhallToNix "Natural/show";
         testNaturalPlus = dhallToNix "λ(x : Natural) → λ(y : Natural) → x + y";
         testNaturalTimes = dhallToNix "λ(x : Natural) → λ(y : Natural) → x * y";
         testInteger = dhallToNix "Integer";
         testIntegerLit = dhallToNix "123";
+        testIntegerShow = dhallToNix "Integer/show";
         testDouble = dhallToNix "Double";
         testTextLit = dhallToNix ''"ABC"'';
         testInterpolation = dhallToNix ''λ(x : Text) → "ABC''${x}GHI"'' "DEF";
         testTextAppend = dhallToNix "λ(x : Text) → λ(y : Text) → x ++ y";
         testList = dhallToNix "List Integer";
         testListLit = dhallToNix "[1, 2, 3] : List Integer";
+        testListAppend = dhallToNix ''
+          λ(xs : List Integer) → λ(ys : List Integer) → xs # ys
+        '';
         testListBuild = dhallToNix ''
             λ(b : Bool)
           → List/build
@@ -129,6 +135,16 @@ in
           ([1] : Optional Integer)
           Integer
         '';
+        testOptionalBuild = dhallToNix ''
+            λ(b : Bool)
+          → Optional/build
+            Integer
+            ( λ(optional : Type)
+            → λ(just : Integer → optional)
+            → λ(nothing : optional)
+            → if b then just 1 else nothing
+            )
+        '';
         testRecord = dhallToNix "{}";
         testRecordLit = dhallToNix "{ foo = 1, bar = True}";
         testUnion = dhallToNix "< Left : Natural | Right : Bool >";
@@ -138,6 +154,9 @@ in
           → λ(y : { foo : { baz : Bool } })
           → x ∧ y
         '';
+        testCombineTypes = dhallToNix ''
+          { foo : Text } ⩓ { bar : Bool, baz : Integer }
+        '';
         testMerge = dhallToNix ''
             λ(r : < Left : Natural | Right : Bool >)
           → merge
@@ -145,6 +164,9 @@ in
             r : Bool
         '';
         testField = dhallToNix "λ(r : { foo : Bool, bar : Text }) → r.foo";
+        testProject = dhallToNix ''
+          λ(r : { foo : Bool, bar : Text, baz : Integer }) → r.{ foo, bar }
+        '';
       in
         assert (testConst == {});
         assert (testLam true == true);
@@ -169,17 +191,22 @@ in
         assert (testNaturalEven 2 == true);
         assert (testNaturalEven 3 == false);
         assert (testNaturalOdd 2 == false);
+        assert (testNaturalToInteger 2 == 2);
+        assert (testNaturalShow 2 == "+2");
         assert (testNaturalOdd 3 == true);
         assert (testNaturalPlus 2 3 == 5);
         assert (testNaturalTimes 2 3 == 6);
         assert (testInteger == {});
         assert (testIntegerLit == 123);
+        assert (testIntegerShow 2 == "2");
         assert (testDouble == {});
         assert (testTextLit == "ABC");
         assert (testInterpolation == "ABCDEFGHI");
         assert (testTextAppend "ABC" "DEF" == "ABCDEF");
         assert (testList == {});
         assert (testListLit == [1 2 3]);
+        assert (testListAppend [1 2 3] [4 5 6] == [1 2 3 4 5 6]);
+        assert (testListBuild false == []);
         assert (testListBuild true == [1 2 3]);
         assert (testListFold (x : y: x + y) 0 == 6);
         assert (testListLength [1 2 3] == 3);
@@ -198,6 +225,8 @@ in
         assert (testOptionalLit true == 0);
         assert (testOptionalLit false == null);
         assert (testOptionalFold (n : n) 0 == 1);
+        assert (testOptionalBuild true == 1);
+        assert (testOptionalBuild false == null);
         assert (testRecord == {});
         assert (testRecordLit == { foo = 1; bar = true; });
         assert (testUnion == {});
@@ -208,8 +237,13 @@ in
             bar = "ABC";
           };
         });
+        assert (testCombineTypes == {});
         assert (testMerge ({ Left, Right }: Left 2) == false);
         assert (testField { foo = true; bar = "ABC"; } == true);
+        assert (testProject { foo = true; bar = "ABC"; baz = 1; } == {
+          foo = true;
+          bar = "ABC";
+        });
         pkgs.stdenv.mkDerivation {
           name = "tests-pass";
 
