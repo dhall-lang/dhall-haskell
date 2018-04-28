@@ -4,6 +4,8 @@
     * Both parsing and pretty-printing semantic hashes were broken since version
       1.11.0
     * See: https://github.com/dhall-lang/dhall-haskell/pull/345
+* BUG FIX: Allow leading whitespace in interpolated expresssions
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/369
 * BUG FIX: Fix `deriving (Interpret)` for sum types
     * The types of alternatives were not correctly included in the corresponding
       Dhall type
