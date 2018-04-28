@@ -22,7 +22,8 @@
       `./Prelude/package.dhall` record
     * See: https://github.com/dhall-lang/dhall-haskell/pull/335
 * BREAKING CHANGE TO THE API: Replace `trifecta` with `megaparsec`
-    * This the API to use the `Parser` type from `megaparsec`
+    * This change the API to use the `Parser` type from `megaparsec`
+    * This also slightly changes the type of `exprFromText`
     * If you program using the type classes provided by the `parsers` library
       then this is not a breaking change as that interface is preserved
     * See: https://github.com/dhall-lang/dhall-haskell/pull/268
