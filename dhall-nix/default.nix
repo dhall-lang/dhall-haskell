@@ -4,7 +4,7 @@
 }:
 mkDerivation {
   pname = "dhall-nix";
-  version = "1.1.2";
+  version = "1.1.3";
   src = ./.;
   isLibrary = true;
   isExecutable = true;
