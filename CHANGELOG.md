@@ -27,11 +27,13 @@
     * If you program using the type classes provided by the `parsers` library
       then this is not a breaking change as that interface is preserved
     * See: https://github.com/dhall-lang/dhall-haskell/pull/268
-* Language feature: New `⩓` operator for merging record types
+* BREAKING CHANGE TO THE API: New `⩓` operator for merging record types
     * Example: `{ foo : Text } ⩓ { bar : Bool } = { foo : Text, bar : Bool }`
+    * This is breaking because it adds a new constructor to the `Expr` type
     * See: https://github.com/dhall-lang/dhall-haskell/pull/342
-* Language feature: New support for projecting a subset of fields from a record
+* BREAKING CHANGE TO THE API: New support for projecting a subset of fields
     * Example: `{ x = 1, y = 2, z = 3 }.{ x, y } = { x = 1, y = 2 }`
+    * This is breaking because it adds a new constructor to the `Expr` type
     * See: https://github.com/dhall-lang/dhall-haskell/pull/350
 * API+UX feature: New support for pretty-printing diffs of Dhall expressions
     * Error messages also use this feature to simplify large type mismatches
