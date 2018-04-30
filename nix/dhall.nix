@@ -10,7 +10,7 @@
 mkDerivation {
   pname = "dhall";
   version = "1.13.0";
-  src = ./.;
+  src = ./..;
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
