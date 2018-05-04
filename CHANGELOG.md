@@ -1,3 +1,7 @@
+1.13.1
+
+* Increase upper bound on `ansi-terminal` and `megaparsec`
+
 1.13.0
 
 * BUG FIX: Fix semantic integrity hashing support
