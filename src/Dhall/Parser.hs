@@ -785,7 +785,7 @@ pathCharacter c =
     ||  c == '\\'
     ||  c == '/'
 
-fileRaw :: Parser PathType
+fileRaw :: Parser ImportType
 fileRaw =
     choice
         [ try absolutePath
@@ -818,7 +818,7 @@ fileRaw =
         as <- many (Text.Parser.Char.satisfy pathCharacter)
         return (File Home as)
 
-file :: Parser PathType
+file :: Parser ImportType
 file = do
     a <- fileRaw
     whitespace
@@ -973,16 +973,16 @@ unreserved c =
 subDelims :: Char -> Bool
 subDelims c = c `elem` ("!$&'()*+,;=" :: String)
 
-http :: Parser PathType
+http :: Parser ImportType
 http = do
     a <- httpRaw
     whitespace
     b <- optional (do
         _using
-        pathHashed_ )
+        importHashed_ )
     return (URL (Data.Text.Lazy.Builder.toLazyText a) b)
 
-env :: Parser PathType
+env :: Parser ImportType
 env = do
     _ <- Text.Parser.Char.text "env:"
     a <- (alternative0 <|> alternative1)
@@ -1546,7 +1546,7 @@ toMap kvs = do
         snoc m (k, v) = Data.HashMap.Strict.InsOrd.insertWith combine k v m
 
 -- | Parser for a top-level Dhall expression
-expr :: Parser (Expr Src Path)
+expr :: Parser (Expr Src Import)
 expr = exprA import_
 
 -- | Parser for a top-level Dhall expression. The expression is parameterized
@@ -1554,16 +1554,16 @@ expr = exprA import_
 exprA :: Parser a -> Parser (Expr Src a)
 exprA = completeExpression
 
-pathType_ :: Parser PathType
-pathType_ = choice [ file, http, env ]
+importType_ :: Parser ImportType
+importType_ = choice [ file, http, env ]
 
-pathHashed_ :: Parser PathHashed
-pathHashed_ = do
-    pathType <- pathType_
-    hash     <- optional pathHash_
-    return (PathHashed {..})
+importHashed_ :: Parser ImportHashed
+importHashed_ = do
+    importType <- importType_
+    hash       <- optional importHash_
+    return (ImportHashed {..})
   where
-    pathHash_ = do
+    importHash_ = do
         _ <- Text.Parser.Char.text "sha256:"
         builder <- count 64 (satisfy hexdig <?> "hex digit")
         whitespace
@@ -1577,11 +1577,11 @@ pathHashed_ = do
           Nothing -> fail "Invalid sha256 hash"
           Just h -> pure h
 
-import_ :: Parser Path
+import_ :: Parser Import
 import_ = (do
-    pathHashed <- pathHashed_
-    pathMode   <- alternative <|> pure Code
-    return (Path {..}) ) <?> "import"
+    importHashed <- importHashed_
+    importMode   <- alternative <|> pure Code
+    return (Import {..}) ) <?> "import"
   where
     alternative = do
         _as
@@ -1601,7 +1601,7 @@ instance Show ParseError where
 instance Exception ParseError
 
 -- | Parse an expression from `Text` containing a Dhall program
-exprFromText :: String -> Text -> Either ParseError (Expr Src Path)
+exprFromText :: String -> Text -> Either ParseError (Expr Src Import)
 exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
 
 {-| Like `exprFromText` but also returns the leading comments and whitespace
@@ -1619,7 +1619,7 @@ exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
 exprAndHeaderFromText
     :: String
     -> Text
-    -> Either ParseError (Text, Expr Src Path)
+    -> Either ParseError (Text, Expr Src Import)
 exprAndHeaderFromText delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
     Right (txt, r) -> Right (Data.Text.Lazy.dropWhileEnd (/= '\n') txt, r)
