@@ -9,8 +9,8 @@
 }:
 mkDerivation {
   pname = "dhall";
-  version = "1.12.0";
-  src = ./.;
+  version = "1.13.1";
+  src = ./..;
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
