@@ -168,7 +168,7 @@ Library
         formatting                  >= 6.3      && < 6.4 ,
         http-client                 >= 0.4.30   && < 0.6 ,
         http-client-tls             >= 0.2.0    && < 0.4 ,
-        insert-ordered-containers   >= 0.1.0.1  && < 0.3 ,
+        insert-ordered-containers   >= 0.2.1.0  && < 0.3 ,
         lens-family-core            >= 1.0.0    && < 1.3 ,
         megaparsec                  >= 6.1.1    && < 6.6 ,
         memory                      >= 0.14     && < 0.15,
