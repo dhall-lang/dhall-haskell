@@ -19,10 +19,11 @@ module Dhall.Core (
     -- * Syntax
       Const(..)
     , HasHome(..)
-    , PathType(..)
-    , PathHashed(..)
-    , PathMode(..)
-    , Path(..)
+    , Import(..)
+    , ImportHashed(..)
+    , ImportMode(..)
+    , ImportType(..)
+    , Path
     , Var(..)
     , Chunks(..)
     , Expr(..)
@@ -105,20 +106,20 @@ data Const = Type | Kind deriving (Show, Eq, Bounded, Enum)
 instance Buildable Const where
     build = buildConst
 
--- | Whether or not a path is relative to the user's home directory
+-- | Whether or not an import is relative to the user's home directory
 data HasHome = Home | Homeless deriving (Eq, Ord, Show)
 
--- | The type of path to import (i.e. local vs. remote vs. environment)
-data PathType
+-- | The type of import (i.e. local vs. remote vs. environment)
+data ImportType
     = File HasHome FilePath
     -- ^ Local path
-    | URL  Text (Maybe PathHashed)
-    -- ^ URL of remote resource and optional headers stored in a path
+    | URL  Text (Maybe ImportHashed)
+    -- ^ URL of remote resource and optional headers stored in an import
     | Env  Text
     -- ^ Environment variable
     deriving (Eq, Ord, Show)
 
-instance Buildable PathType where
+instance Buildable ImportType where
     build (File Home     file)
         = "~/" <> build (Text.pack file)
     build (File Homeless file)
@@ -134,34 +135,41 @@ instance Buildable PathType where
     build (URL str (Just headers)) = build str <> " using " <> build headers <> " "
     build (Env env) = "env:" <> build env
 
--- | How to interpret the path's contents (i.e. as Dhall code or raw text)
-data PathMode = Code | RawText deriving (Eq, Ord, Show)
+-- | How to interpret the import's contents (i.e. as Dhall code or raw text)
+data ImportMode = Code | RawText deriving (Eq, Ord, Show)
 
--- | A `PathType` extended with an optional hash for semantic integrity checks
-data PathHashed = PathHashed
-    { hash     :: Maybe (Crypto.Hash.Digest SHA256)
-    , pathType :: PathType
+-- | A `ImportType` extended with an optional hash for semantic integrity checks
+data ImportHashed = ImportHashed
+    { hash       :: Maybe (Crypto.Hash.Digest SHA256)
+    , importType :: ImportType
     } deriving (Eq, Ord, Show)
 
-instance Buildable PathHashed where
-    build (PathHashed  Nothing p) = build p
-    build (PathHashed (Just h) p) = build p <> "sha256:" <> build (show h) <> " "
+instance Buildable ImportHashed where
+    build (ImportHashed  Nothing p) =
+      build p
+    build (ImportHashed (Just h) p) =
+      build p <> "sha256:" <> build (show h) <> " "
 
--- | Path to an external resource
-data Path = Path
-    { pathHashed :: PathHashed
-    , pathMode   :: PathMode
+-- | Reference to an external resource
+data Import = Import
+    { importHashed :: ImportHashed
+    , importMode   :: ImportMode
     } deriving (Eq, Ord, Show)
 
-instance Buildable Path where
-    build (Path {..}) = build pathHashed <> suffix
+instance Buildable Import where
+    build (Import {..}) = build importHashed <> suffix
       where
-        suffix = case pathMode of
+        suffix = case importMode of
             RawText -> "as Text"
             Code    -> ""
 
-instance Pretty Path where
-    pretty path = Pretty.pretty (Builder.toLazyText (build path))
+instance Pretty Import where
+    pretty import_ = Pretty.pretty (Builder.toLazyText (build import_))
+
+-- | Type synonym for `Import`, provided for backwards compatibility
+type Path = Import
+
+{-# DEPRECATED Path "Use Dhall.Core.Import instead" #-}
 
 {-| Label for a bound variable
 
@@ -332,7 +340,7 @@ data Expr s a
     | Project (Expr s a) (Set Text)
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
-    -- | > Embed path                               ~  path
+    -- | > Embed import                             ~  import
     | Embed a
     deriving (Functor, Foldable, Traversable, Show, Eq)
 

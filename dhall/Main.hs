@@ -11,7 +11,7 @@ import Data.Monoid (mempty, (<>))
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Typeable (Typeable)
 import Data.Version (showVersion)
-import Dhall.Core (Expr, Path)
+import Dhall.Core (Expr, Import)
 import Dhall.Import (Imported(..), load)
 import Dhall.Parser (Src)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr)
@@ -94,13 +94,13 @@ throws :: Exception e => Either e a -> IO a
 throws (Left  e) = Control.Exception.throwIO e
 throws (Right a) = return a
 
-getExpression :: IO (Expr Src Path)
+getExpression :: IO (Expr Src Import)
 getExpression = do
     inText <- Data.Text.Lazy.IO.getContents
 
     throws (Dhall.Parser.exprFromText "(stdin)" inText)
 
-assertNoImports :: Expr Src Path -> IO (Expr Src X)
+assertNoImports :: Expr Src Import -> IO (Expr Src X)
 assertNoImports expression =
     throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
 

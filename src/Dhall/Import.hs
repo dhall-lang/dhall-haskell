@@ -74,7 +74,7 @@
     >
     > { bar = "Hi", baz = λ(x : Bool) → x == False, foo = 1 }
 
-    If you wish to import the raw contents of a path as @Text@ then add
+    If you wish to import the raw contents of an impoert as @Text@ then add
     @as Text@ to the end of the import:
 
     > $ dhall <<< "http://example.com as Text"
@@ -101,7 +101,7 @@
 
 module Dhall.Import (
     -- * Import
-      exprFromPath
+      exprFromImport
     , load
     , loadWith
     , loadWithContext
@@ -142,10 +142,10 @@ import Dhall.Core
     ( Expr(..)
     , Chunks(..)
     , HasHome(..)
-    , PathHashed(..)
-    , PathMode(..)
-    , PathType(..)
-    , Path(..)
+    , ImportHashed(..)
+    , ImportType(..)
+    , ImportMode(..)
+    , Import(..)
     )
 import Dhall.Parser (Parser(..), ParseError(..), Src(..))
 import Dhall.TypeCheck (X(..))
@@ -190,14 +190,15 @@ builderToString = Text.unpack . Builder.toLazyText
 
 -- | An import failed because of a cycle in the import graph
 newtype Cycle = Cycle
-    { cyclicImport :: Path  -- ^ The offending cyclic import
+    { cyclicImport :: Import  -- ^ The offending cyclic import
     }
   deriving (Typeable)
 
 instance Exception Cycle
 
 instance Show Cycle where
-    show (Cycle path) = "\nCyclic import: " ++ builderToString (build path)
+    show (Cycle import_) =
+        "\nCyclic import: " ++ builderToString (build import_)
 
 {-| Dhall tries to ensure that all expressions hosted on network endpoints are
     weakly referentially transparent, meaning roughly that any two clients will
@@ -226,33 +227,33 @@ instance Show Cycle where
     All other imports are defined to be non-local
 -}
 newtype ReferentiallyOpaque = ReferentiallyOpaque
-    { opaqueImport :: Path  -- ^ The offending opaque import
+    { opaqueImport :: Import  -- ^ The offending opaque import
     } deriving (Typeable)
 
 instance Exception ReferentiallyOpaque
 
 instance Show ReferentiallyOpaque where
-    show (ReferentiallyOpaque path) =
-        "\nReferentially opaque import: " ++ builderToString (build path)
+    show (ReferentiallyOpaque import_) =
+        "\nReferentially opaque import: " ++ builderToString (build import_)
 
 -- | Extend another exception with the current import stack
 data Imported e = Imported
-    { importStack :: [Path] -- ^ Imports resolved so far, in reverse order
-    , nested      :: e      -- ^ The nested exception
+    { importStack :: [Import] -- ^ Imports resolved so far, in reverse order
+    , nested      :: e        -- ^ The nested exception
     } deriving (Typeable)
 
 instance Exception e => Exception (Imported e)
 
 instance Show e => Show (Imported e) where
-    show (Imported paths e) =
-            (case paths of [] -> ""; _ -> "\n")
-        ++  unlines (map indent paths')
+    show (Imported imports e) =
+            (case imports of [] -> ""; _ -> "\n")
+        ++  unlines (map indent imports')
         ++  show e
       where
-        indent (n, path) =
-            take (2 * n) (repeat ' ') ++ "↳ " ++ builderToString (build path)
-        -- Canonicalize all paths
-        paths' = zip [0..] (drop 1 (reverse (canonicalizeAll paths)))
+        indent (n, import_) =
+            take (2 * n) (repeat ' ') ++ "↳ " ++ builderToString (build import_)
+        -- Canonicalize all imports
+        imports' = zip [0..] (drop 1 (reverse (canonicalizeAll imports)))
 
 -- | Newtype used to wrap `HttpException`s with a prettier `Show` instance
 newtype PrettyHttpException = PrettyHttpException HttpException
@@ -328,10 +329,10 @@ instance Show MissingEnvironmentVariable where
 
 -- | State threaded throughout the import process
 data Status = Status
-    { _stack   :: [Path]
-    -- ^ Stack of `Path`s that we've imported along the way to get to the
+    { _stack   :: [Import]
+    -- ^ Stack of `Import`s that we've imported along the way to get to the
     -- current point
-    , _cache   :: Map Path (Expr Src X)
+    , _cache   :: Map Import (Expr Src X)
     -- ^ Cache of imported expressions in order to avoid importing the same
     --   expression twice with different values
     , _manager :: Maybe Manager
@@ -342,13 +343,13 @@ data Status = Status
 emptyStatus :: Status
 emptyStatus = Status [] Map.empty Nothing
 
-canonicalizeAll :: [Path] -> [Path]
-canonicalizeAll = map canonicalizePath . List.tails
+canonicalizeAll :: [Import] -> [Import]
+canonicalizeAll = map canonicalizeImport . List.tails
 
-stack :: Functor f => LensLike' f Status [Path]
+stack :: Functor f => LensLike' f Status [Import]
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
 
-cache :: Functor f => LensLike' f Status (Map Path (Expr Src X))
+cache :: Functor f => LensLike' f Status (Map Import (Expr Src X))
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
 manager :: Functor f => LensLike' f Status (Maybe Manager)
@@ -370,9 +371,9 @@ needManager = do
             zoom manager (State.put (Just m))
             return m
 
-{-| This function computes the current path by taking the last absolute path
+{-| This function computes the current import by taking the last absolute import
     (either an absolute `FilePath` or `URL`) and combining it with all following
-    relative paths
+    relative imports
 
     For example, if the file `./foo/bar` imports `./baz`, that will resolve to
     `./foo/baz`.  Relative imports are relative to a file's parent directory.
@@ -381,34 +382,34 @@ needManager = do
     This code is full of all sorts of edge cases so it wouldn't surprise me at
     all if you find something broken in here.  Most of the ugliness is due to:
 
-    * Handling paths ending with @/\@@ by stripping the @/\@@ suffix if and only
-      if you navigate to any downstream relative paths
-    * Removing spurious @.@s and @..@s from the path
+    * Handling imports ending with @/\@@ by stripping the @/\@@ suffix if and
+      only if you navigate to any downstream relative imports
+    * Removing spurious @.@s and @..@s from the import
 
     Also, there are way too many `reverse`s in the URL-handling code For now I
     don't mind, but if were to really do this correctly we'd store the URLs as
     `Text` for O(1) access to the end of the string.  The only reason we use
     `String` at all is for consistency with the @http-client@ library.
 -}
-canonicalize :: [PathType] -> PathType
+canonicalize :: [ImportType] -> ImportType
 canonicalize  []                          = File Homeless "."
-canonicalize (File hasHome0 file0:paths0) =
+canonicalize (File hasHome0 file0:imports0) =
     if FilePath.isRelative file0 && hasHome0 == Homeless
-    then go file0 paths0
+    then go file0 imports0
     else File hasHome0 (FilePath.normalise file0)
   where
-    go currPath  []                       = File Homeless (FilePath.normalise currPath)
-    go currPath (Env  _           :_    ) = File Homeless (FilePath.normalise currPath)
-    go currPath (URL  url0 headers:rest ) = combine prefix suffix
+    go currImport  []                       = File Homeless (FilePath.normalise currImport)
+    go currImport (Env  _           :_    ) = File Homeless (FilePath.normalise currImport)
+    go currImport (URL  url0 headers:rest ) = combine prefix suffix
       where
-        headers' = fmap (onPathType (\h -> canonicalize (h:rest))) headers
+        headers' = fmap (onImportType (\h -> canonicalize (h:rest))) headers
 
         prefix = parentURL (removeAtFromURL url0)
 
-        suffix = FilePath.normalise currPath
+        suffix = FilePath.normalise currImport
 
-        -- `clean` will resolve internal @.@/@..@'s in @currPath@, but we still
-        -- need to manually handle @.@/@..@'s at the beginning of the path
+        -- `clean` will resolve internal @.@/@..@'s in @currImport@, but we
+        -- still need to manually handle @.@/@..@'s at the beginning of the path
         combine url path = case List.stripPrefix "../" path of
             Just path' -> combine url' path'
               where
@@ -424,36 +425,37 @@ canonicalize (File hasHome0 file0:paths0) =
                         _   -> URL (url <> "/" <> path') headers'
                   where
                     path' = Text.pack path
-    go currPath (File hasHome file:paths) =
+    go currImport (File hasHome file:imports) =
         if FilePath.isRelative file && hasHome == Homeless
-        then go file' paths
+        then go file' imports
         else File hasHome (FilePath.normalise file')
       where
-        file' = FilePath.takeDirectory (removeAtFromFilename file) </> currPath
+        file' =
+            FilePath.takeDirectory (removeAtFromFilename file) </> currImport
 canonicalize (URL path headers:rest) = URL path headers'
   where
-    headers' = fmap (onPathType (\h -> canonicalize (h:rest))) headers
+    headers' = fmap (onImportType (\h -> canonicalize (h:rest))) headers
 canonicalize (Env env         :_   ) = Env env
 
-onPathType :: (PathType -> PathType) -> PathHashed -> PathHashed
-onPathType f (PathHashed a b) = PathHashed a (f b)
+onImportType :: (ImportType -> ImportType) -> ImportHashed -> ImportHashed
+onImportType f (ImportHashed a b) = ImportHashed a (f b)
 
-canonicalizePath :: [Path] -> Path
-canonicalizePath [] =
-    Path
-        { pathMode   = Code
-        , pathHashed = PathHashed
-            { hash = Nothing
-            , pathType = canonicalize []
+canonicalizeImport :: [Import] -> Import
+canonicalizeImport [] =
+    Import
+        { importMode   = Code
+        , importHashed = ImportHashed
+            { hash       = Nothing
+            , importType = canonicalize []
             }
         }
-canonicalizePath (path:paths) =
-    Path
-        { pathMode   = pathMode path
-        , pathHashed = (pathHashed path)
-             { hash     = hash (pathHashed path)
-             , pathType =
-                 canonicalize (map (pathType . pathHashed) (path:paths))
+canonicalizeImport (import_:imports) =
+    Import
+        { importMode   = importMode import_
+        , importHashed = (importHashed import_)
+             { hash       = hash (importHashed import_)
+             , importType =
+                 canonicalize (map (importType . importHashed) (import_:imports))
              }
         }
 
@@ -549,9 +551,9 @@ instance Show HashMismatch where
         <>  "\n"
         <>  "↳ " <> show actualHash <> "\n"
 
--- | Parse an expression from a `Path` containing a Dhall program
-exprFromPath :: Path -> StateT Status IO (Expr Src Path)
-exprFromPath (Path {..}) = case pathType of
+-- | Parse an expression from a `Import` containing a Dhall program
+exprFromImport :: Import -> StateT Status IO (Expr Src Import)
+exprFromImport (Import {..}) = case importType of
     File hasHome file -> liftIO (do
         path <- case hasHome of
             Home -> do
@@ -560,7 +562,7 @@ exprFromPath (Path {..}) = case pathType of
             Homeless -> do
                 return file
 
-        case pathMode of
+        case importMode of
             Code -> do
                 exists <- System.Directory.doesFileExist path
                 if exists
@@ -586,7 +588,7 @@ exprFromPath (Path {..}) = case pathType of
             RawText -> do
                 text <- Data.Text.IO.readFile path
                 return (TextLit (Chunks [] (build text))) )
-    URL url headerPath -> do
+    URL url headerImport -> do
         m       <- needManager
         request <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
 
@@ -602,10 +604,10 @@ exprFromPath (Path {..}) = case pathType of
                 HTTP.httpLbs request' m `onException` throwIO (PrettyHttpException err)
             handler err = throwIO (PrettyHttpException err)
 
-        requestWithHeaders <- case headerPath of
-            Nothing   -> return request
-            Just path -> do
-                expr <- loadStaticIO Dhall.Context.empty (Path path Code)
+        requestWithHeaders <- case headerImport of
+            Nothing           -> return request
+            Just importHashed_ -> do
+                expr <- loadStaticIO Dhall.Context.empty (Import importHashed_ Code)
                 let expected :: Expr Src X
                     expected =
                         App List
@@ -646,7 +648,7 @@ exprFromPath (Path {..}) = case pathType of
             Left  err  -> liftIO (throwIO err)
             Right text -> return text
 
-        case pathMode of
+        case importMode of
             Code ->
                 case Text.Megaparsec.parse parser (Text.unpack url) text of
                     Left err -> do
@@ -679,7 +681,7 @@ exprFromPath (Path {..}) = case pathType of
         case x of
             Just str -> do
                 let text = Text.pack str
-                case pathMode of
+                case importMode of
                     Code ->
                         case Text.Megaparsec.parse parser (Text.unpack env) text of
                             Left errInfo -> do
@@ -689,7 +691,7 @@ exprFromPath (Path {..}) = case pathType of
                     RawText -> return (TextLit (Chunks [] (build str)))
             Nothing  -> throwIO (MissingEnvironmentVariable env) )
   where
-    PathHashed {..} = pathHashed
+    ImportHashed {..} = importHashed
 
     parser = unParser (do
         Text.Parser.Token.whiteSpace
@@ -697,77 +699,77 @@ exprFromPath (Path {..}) = case pathType of
         Text.Parser.Combinators.eof
         return r )
 
-{-| Load a `Path` as a \"dynamic\" expression (without resolving any imports)
+{-| Load an `Import` as a \"dynamic\" expression (without resolving any imports)
 
-    This also returns the true final path (i.e. explicit "/@" at the end for
+    This also returns the true final import (i.e. explicit "/@" at the end for
     directories)
 -}
 loadDynamic
     :: forall m . MonadCatch m
-    => (Path -> StateT Status m (Expr Src Path))
-    -> Path
-    -> StateT Status m (Expr Src Path)
-loadDynamic from_path p = do
-    paths <- zoom stack State.get
+    => (Import -> StateT Status m (Expr Src Import))
+    -> Import
+    -> StateT Status m (Expr Src Import)
+loadDynamic from_import import_ = do
+    imports <- zoom stack State.get
 
-    let handler :: SomeException -> StateT Status m (Expr Src Path)
-        handler e = throwM (Imported (p:paths) e)
+    let handler :: SomeException -> StateT Status m (Expr Src Import)
+        handler e = throwM (Imported (import_:imports) e)
 
-    from_path (canonicalizePath (p:paths)) `catch` handler
+    from_import (canonicalizeImport (import_:imports)) `catch` handler
 
 loadStaticIO
     :: Dhall.Context.Context (Expr Src X)
-    -> Path
+    -> Import
     -> StateT Status IO (Expr Src X)
-loadStaticIO = loadStaticWith exprFromPath
+loadStaticIO = loadStaticWith exprFromImport
 
--- | Resolve all imports within an expression using a custom typing context and Path
--- resolving callback in arbitrary `MonadCatch` monad.
+-- | Resolve all imports within an expression using a custom typing context and
+-- `Import`-resolving callback in arbitrary `MonadCatch` monad.
 loadWith
     :: MonadCatch m
-    => (Path -> StateT Status m (Expr Src Path))
+    => (Import -> StateT Status m (Expr Src Import))
     -> Dhall.Context.Context (Expr Src X)
-    -> Expr Src Path
+    -> Expr Src Import
     -> m (Expr Src X)
-loadWith from_path ctx = evalStatus (loadStaticWith from_path ctx)
+loadWith from_import ctx = evalStatus (loadStaticWith from_import ctx)
 
 -- | Resolve all imports within an expression using a custom typing context.
 --
 -- @load = loadWithContext Dhall.Context.empty@
 loadWithContext
     :: Dhall.Context.Context (Expr Src X)
-    -> Expr Src Path
+    -> Expr Src Import
     -> IO (Expr Src X)
 loadWithContext ctx = evalStatus (loadStaticIO ctx)
 
 loadStaticWith
     :: MonadCatch m
-    => (Path -> StateT Status m (Expr Src Path))
+    => (Import -> StateT Status m (Expr Src Import))
     -> Dhall.Context.Context (Expr Src X)
-    -> Path
+    -> Import
     -> StateT Status m (Expr Src X)
-loadStaticWith from_path ctx path = do
-    paths <- zoom stack State.get
+loadStaticWith from_import ctx import_ = do
+    imports <- zoom stack State.get
 
-    let local (Path (PathHashed _ (URL _ _ )) _) = False
-        local (Path (PathHashed _ (File _ _)) _) = True
-        local (Path (PathHashed _ (Env  _  )) _) = True
+    let local (Import (ImportHashed _ (URL _ _ )) _) = False
+        local (Import (ImportHashed _ (File _ _)) _) = True
+        local (Import (ImportHashed _ (Env  _  )) _) = True
 
-    let parent = canonicalizePath paths
-    let here   = canonicalizePath (path:paths)
+    let parent = canonicalizeImport imports
+    let here   = canonicalizeImport (import_:imports)
 
     if local here && not (local parent)
-        then throwM (Imported paths (ReferentiallyOpaque path))
+        then throwM (Imported imports (ReferentiallyOpaque import_))
         else return ()
 
-    (expr, cached) <- if here `elem` canonicalizeAll paths
-        then throwM (Imported paths (Cycle path))
+    (expr, cached) <- if here `elem` canonicalizeAll imports
+        then throwM (Imported imports (Cycle import_))
         else do
             m <- zoom cache State.get
             case Map.lookup here m of
                 Just expr -> return (expr, True)
                 Nothing   -> do
-                    expr'  <- loadDynamic from_path path
+                    expr'  <- loadDynamic from_import import_
                     expr'' <- case traverse (\_ -> Nothing) expr' of
                         -- No imports left
                         Just expr -> do
@@ -775,11 +777,11 @@ loadStaticWith from_path ctx path = do
                             return expr
                         -- Some imports left, so recurse
                         Nothing   -> do
-                            let paths' = path:paths
-                            zoom stack (State.put paths')
-                            expr'' <- fmap join (traverse (loadStaticWith from_path ctx)
+                            let imports' = import_:imports
+                            zoom stack (State.put imports')
+                            expr'' <- fmap join (traverse (loadStaticWith from_import ctx)
                                                            expr')
-                            zoom stack (State.put paths)
+                            zoom stack (State.put imports)
                             return expr''
                     return (expr'', False)
 
@@ -794,10 +796,10 @@ loadStaticWith from_path ctx path = do
     if cached
         then return ()
         else case Dhall.TypeCheck.typeWith ctx expr of
-            Left  err -> throwM (Imported (path:paths) err)
+            Left  err -> throwM (Imported (import_:imports) err)
             Right _   -> return ()
 
-    case hash (pathHashed path) of
+    case hash (importHashed import_) of
         Nothing -> do
             return ()
         Just expectedHash -> do
@@ -814,7 +816,7 @@ evalStatus
 evalStatus cb expr = State.evalStateT (fmap join (traverse cb expr)) emptyStatus
 
 -- | Resolve all imports within an expression
-load :: Expr Src Path -> IO (Expr Src X)
+load :: Expr Src Import -> IO (Expr Src X)
 load = loadWithContext Dhall.Context.empty
 
 -- | Hash a fully resolved expression
