@@ -1,1 +1,1 @@
-../../../../../Prelude/List/replicate +0 Integer 1
+../../../../../Prelude/List/replicate 0 Natural 1

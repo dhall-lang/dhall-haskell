@@ -1,1 +1,1 @@
-../../../../../Prelude/Text/concatMap Integer (λ(n : Integer) → "${Integer/show n} ") ([] : List Integer)
+../../../../../Prelude/Text/concatMap Natural (λ(n : Natural) → "${Natural/show n} ") ([] : List Natural)

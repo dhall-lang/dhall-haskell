@@ -1,1 +1,1 @@
-../../../../../Prelude/Optional/length Integer ([] : Optional Integer)
+../../../../../Prelude/Optional/length Natural ([] : Optional Natural)

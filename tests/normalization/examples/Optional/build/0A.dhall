@@ -1,7 +1,7 @@
 ../../../../../Prelude/Optional/build
-Integer
+Natural
 ( λ(optional : Type)
-→ λ(just : Integer → optional)
+→ λ(just : Natural → optional)
 → λ(nothing : optional)
 → just 1
 )

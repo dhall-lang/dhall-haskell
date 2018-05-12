@@ -4,9 +4,9 @@ Returns `True` if a number is odd and returns `False` otherwise
 Examples:
 
 ```
-./odd +3 = True
+./odd 3 = True
 
-./odd +0 = False
+./odd 0 = False
 ```
 -}
 let odd : Natural → Bool = Natural/odd in odd

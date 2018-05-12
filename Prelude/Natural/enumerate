@@ -1,13 +1,13 @@
 {-
-Generate a list of numbers from `+0` up to but not including the specified
+Generate a list of numbers from `0` up to but not including the specified
 number
 
 Examples:
 
 ```
-./enumerate +10 = [ +0, +1, +2, +3, +4, +5, +6, +7, +8, +9 ]
+./enumerate 10 = [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]
 
-./enumerate +0 = [] : List Natural
+./enumerate 0 = [] : List Natural
 ```
 -}
     let enumerate

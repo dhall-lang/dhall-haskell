@@ -1,18 +1,18 @@
 {-
-Returns `+1` if the `Optional` value is present and `+0` if the value is absent
+Returns `1` if the `Optional` value is present and `0` if the value is absent
 
 Examples:
 
 ```
-./length Integer ([ 2 ] : Optional Integer) = +1
+./length Natural ([ 2 ] : Optional Natural) = 1
 
-./length Integer ([] : Optional Integer) = +0
+./length Natural ([] : Optional Natural) = 0
 ```
 -}
     let length
         : ∀(a : Type) → Optional a → Natural
         =   λ(a : Type)
           → λ(xs : Optional a)
-          → Optional/fold a xs Natural (λ(_ : a) → +1) +0
+          → Optional/fold a xs Natural (λ(_ : a) → 1) 0
 
 in  length

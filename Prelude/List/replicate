@@ -4,9 +4,9 @@ Build a list by copying the given element the specified number of times
 Examples:
 
 ```
-./replicate +9 Integer 1 = [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ]
+./replicate 9 Natural 1 = [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ]
 
-./replicate +0 Integer 1 = [] : List Integer
+./replicate 0 Natural 1 = [] : List Natural
 ```
 -}
     let replicate

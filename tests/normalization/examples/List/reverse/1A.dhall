@@ -1,1 +1,1 @@
-../../../../../Prelude/List/reverse Integer ([] : List Integer)
+../../../../../Prelude/List/reverse Natural ([] : List Natural)

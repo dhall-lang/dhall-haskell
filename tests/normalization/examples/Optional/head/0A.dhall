@@ -1,6 +1,6 @@
 ../../../../../Prelude/Optional/head
-Integer
-[ []    : Optional Integer
-, [ 1 ] : Optional Integer
-, [ 2 ] : Optional Integer
+Natural
+[ []    : Optional Natural
+, [ 1 ] : Optional Natural
+, [ 2 ] : Optional Natural
 ]

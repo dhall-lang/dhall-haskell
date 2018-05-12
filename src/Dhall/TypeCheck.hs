@@ -915,9 +915,9 @@ prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
         \● You tried to define a recursive value, like this:                             \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌─────────────────────┐                                                     \n\
-        \    │ let x = x + +1 in x │                                                     \n\
-        \    └─────────────────────┘                                                     \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ let x = x + 1 in x │                                                      \n\
+        \    └────────────────────┘                                                      \n\
         \              ⇧                                                                 \n\
         \              Recursive definitions are not allowed                             \n\
         \                                                                                \n\
@@ -961,7 +961,7 @@ prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────┐                                                          \n\
-        \    │ Bool → Integer │  This is the type of a function that accepts an anonymous\n\
+        \    │ Bool → Natural │  This is the type of a function that accepts an anonymous\n\
         \    └────────────────┘  input term that has type ❰Bool❱                         \n\
         \      ⇧                                                                         \n\
         \      This is the type of the input term                                        \n\
@@ -1028,8 +1028,8 @@ prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────┐                                                          \n\
-        \    │ Bool → Integer │  This is the type of a function that returns an output   \n\
-        \    └────────────────┘  term that has type ❰Int❱                                \n\
+        \    │ Bool → Natural │  This is the type of a function that returns an output   \n\
+        \    └────────────────┘  term that has type ❰Natural❱                            \n\
         \             ⇧                                                                  \n\
         \             This is the type of the output term                                \n\
         \                                                                                \n\
@@ -1167,13 +1167,13 @@ prettyTypeMessage (NotAFunction expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────┐                                                             \n\
-        \    │ 1 : Integer │  ❰1❱ is not a function because ❰Integer❱ is not the type of \n\
+        \    │ 1 : Natural │  ❰1❱ is not a function because ❰Natural❱ is not the type of \n\
         \    └─────────────┘  a function                                                 \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌────────────────────────┐                                                  \n\
-        \    │ Natural/even +2 : Bool │  ❰Natural/even +2❱ is not a function because     \n\
-        \    └────────────────────────┘  ❰Bool❱ is not the type of a function            \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ Natural/even 2 : Bool │  ❰Natural/even 2❱ is not a function because       \n\
+        \    └───────────────────────┘  ❰Bool❱ is not the type of a function             \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────┐                                                        \n\
@@ -1183,7 +1183,7 @@ prettyTypeMessage (NotAFunction expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \Some common reasons why you might get this error:                               \n\
         \                                                                                \n\
-        \● You tried to add two ❰Integer❱s without a space around the ❰+❱, like this:    \n\
+        \● You tried to add two ❰Natural❱s without a space around the ❰+❱, like this:    \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────┐                                                                     \n\
@@ -1202,20 +1202,16 @@ prettyTypeMessage (NotAFunction expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \  This is because the ❰+❱ symbol has two meanings: you use ❰+❱ to add two       \n\
-        \  numbers, but you also can prefix ❰Integer❱ literals with a ❰+❱ to turn them   \n\
-        \  into ❰Natural❱ literals (like ❰+2❱)                                           \n\
+        \  numbers, but you also can prefix ❰Natural❱ literals with a ❰+❱ to turn them   \n\
+        \  into ❰Integer❱ literals (like ❰+2❱)                                           \n\
         \                                                                                \n\
-        \  To fix the code, you need to put spaces around the ❰+❱ and also prefix each   \n\
-        \  ❰2❱ with a ❰+❱, like this:                                                    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────┐                                                                 \n\
-        \    │ +2 + +2 │                                                                 \n\
-        \    └─────────┘                                                                 \n\
+        \  To fix the code, you need to put spaces around the ❰+❱, like this:            \n\
         \                                                                                \n\
         \                                                                                \n\
-        \  You can only add ❰Natural❱ numbers, which is why you must also change each    \n\
-        \  ❰2❱ to ❰+2❱                                                                   \n\
+        \    ┌───────┐                                                                   \n\
+        \    │ 2 + 2 │                                                                   \n\
+        \    └───────┘                                                                   \n\
+        \                                                                                \n\
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
@@ -1280,9 +1276,9 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
         \    └────────────────────────┘  of argument that the anonymous function accepts \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌─────────────────┐                                                         \n\
-        \    │ Natural/even +2 │  ❰+2❱ has type ❰Natural❱, which matches the type of     \n\
-        \    └─────────────────┘  argument that the ❰Natural/even❱ function accepts,     \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ Natural/even 2 │  ❰2❱ has type ❰Natural❱, which matches the type of       \n\
+        \    └────────────────┘  argument that the ❰Natural/even❱ function accepts,      \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────┐                                                  \n\
@@ -1316,7 +1312,7 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────┐                                                                  \n\
-        \    │ List 1 │  ❰1❱ has type ❰Integer❱, but the ❰List❱ function expects an      \n\
+        \    │ List 1 │  ❰1❱ has type ❰Natural❱, but the ❰List❱ function expects an      \n\
         \    └────────┘  argument that has kind ❰Type❱                                   \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1330,17 +1326,17 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
         \    └───────────────────────┘                                                   \n\
         \                ⇧                                                               \n\
         \                ❰List/head❱ is missing the first argument,                      \n\
-        \                which should be: ❰Integer❱                                      \n\
+        \                which should be: ❰Natural❱                                      \n\
         \                                                                                \n\
         \                                                                                \n\
         \● You supply an ❰Integer❱ literal to a function that expects a ❰Natural❱        \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌────────────────┐                                                          \n\
-        \    │ Natural/even 2 │                                                          \n\
-        \    └────────────────┘                                                          \n\
+        \    ┌─────────────────┐                                                         \n\
+        \    │ Natural/even +2 │                                                         \n\
+        \    └─────────────────┘                                                         \n\
         \                   ⇧                                                            \n\
-        \                   This should be ❰+2❱                                          \n\
+        \                   This should be ❰2❱                                           \n\
         \                                                                                \n\
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
@@ -1388,13 +1384,13 @@ prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────┐                                                             \n\
-        \    │ 1 : Integer │  ❰1❱ is an expression that has type ❰Integer❱, so the type  \n\
+        \    │ 1 : Natural │  ❰1❱ is an expression that has type ❰Natural❱, so the type  \n\
         \    └─────────────┘  checker accepts the annotation                             \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌────────────────────────┐                                                  \n\
-        \    │ Natural/even +2 : Bool │  ❰Natural/even +2❱ has type ❰Bool❱, so the type  \n\
-        \    └────────────────────────┘  checker accepts the annotation                  \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ Natural/even 2 : Bool │  ❰Natural/even 2❱ has type ❰Bool❱, so the type    \n\
+        \    └───────────────────────┘  checker accepts the annotation                   \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────┐                                                      \n\
@@ -1587,7 +1583,7 @@ prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────┐                                                      \n\
-        \    │ 1 : Integer : Type │  ❰1❱ is a term with a type (❰Integer❱) of kind ❰Type❱\n\
+        \    │ 1 : Natural : Type │  ❰1❱ is a term with a type (❰Natural❱) of kind ❰Type❱\n\
         \    └────────────────────┘                                                      \n\
         \      ⇧                                                                         \n\
         \      term                                                                      \n\
@@ -1674,7 +1670,7 @@ prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────────────┐                                        \n\
-        \    │ λ(b : Bool) → if b then 0 else 1 │ Both branches have type ❰Integer❱      \n\
+        \    │ λ(b : Bool) → if b then 0 else 1 │ Both branches have type ❰Natural❱      \n\
         \    └──────────────────────────────────┘                                        \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1688,7 +1684,7 @@ prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
         \However, the following expression is " <> _NOT <> " valid:                      \n\
         \                                                                                \n\
         \                                                                                \n\
-        \                   This branch has type ❰Integer❱                               \n\
+        \                   This branch has type ❰Natural❱                               \n\
         \                   ⇩                                                            \n\
         \    ┌────────────────────────┐                                                  \n\
         \    │ if True then 0         │                                                  \n\
@@ -1734,14 +1730,15 @@ prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────┐                                                \n\
-        \    │ [1, 2, 3] : List Integer │  A ❰List❱ of three ❰Integer❱s                  \n\
+        \    │ [1, 2, 3] : List Natural │  A ❰List❱ of three ❰Natural❱ numbers           \n\
         \    └──────────────────────────┘                                                \n\
         \                       ⇧                                                        \n\
-        \                       The type of the ❰List❱'s elements, which are ❰Integer❱s  \n\
+        \                       The type of the ❰List❱'s elements, which are ❰Natural❱   \n\
+        \                       numbers                                                  \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────┐                                                       \n\
-        \    │ [] : List Integer │  An empty ❰List❱                                      \n\
+        \    │ [] : List Natural │  An empty ❰List❱                                      \n\
         \    └───────────────────┘                                                       \n\
         \                ⇧                                                               \n\
         \                You must specify the type when the ❰List❱ is empty              \n\
@@ -1755,7 +1752,7 @@ prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
         \    │ ... : List 1 │                                                            \n\
         \    └──────────────┘                                                            \n\
         \                 ⇧                                                              \n\
-        \                 This is an ❰Integer❱ and not a ❰Type❱                          \n\
+        \                 This is a ❰Natural❱ number and not a ❰Type❱                    \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────┐                                                         \n\
@@ -1784,7 +1781,7 @@ prettyTypeMessage MissingListType = do
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────┐                                                               \n\
-        \    │ [1, 2, 3] │  The compiler can infer that this list has type ❰List Integer❱\n\
+        \    │ [1, 2, 3] │  The compiler can infer that this list has type ❰List Natural❱\n\
         \    └───────────┘                                                               \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1792,7 +1789,7 @@ prettyTypeMessage MissingListType = do
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────┐                                                       \n\
-        \    │ [] : List Integer │  This type annotation is mandatory                    \n\
+        \    │ [] : List Natural │  This type annotation is mandatory                    \n\
         \    └───────────────────┘                                                       \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1812,7 +1809,7 @@ prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────┐                                                               \n\
-        \    │ [1, 2, 3] │  Every element in this ❰List❱ is an ❰Integer❱                 \n\
+        \    │ [1, 2, 3] │  Every element in this ❰List❱ is a ❰Natural❱ number           \n\
         \    └───────────┘                                                               \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1851,7 +1848,7 @@ prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────┐                                                \n\
-        \    │ [1, 2, 3] : List Integer │  Every element in this ❰List❱ is an ❰Integer❱  \n\
+        \    │ [1, 2, 3] : List Natural │  Every element in this ❰List❱ is an ❰Natural❱  \n\
         \    └──────────────────────────┘                                                \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1859,7 +1856,7 @@ prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────────┐                                            \n\
-        \    │ [1, \"ABC\", 3] : List Integer │  The second element is not an ❰Integer❱  \n\
+        \    │ [1, \"ABC\", 3] : List Natural │  The second element is not an ❰Natural❱  \n\
         \    └──────────────────────────────┘                                            \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1885,14 +1882,15 @@ prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────┐                                                  \n\
-        \    │ [1] : Optional Integer │  An optional element that's present              \n\
+        \    │ [1] : Optional Natural │  An optional element that's present              \n\
         \    └────────────────────────┘                                                  \n\
         \                     ⇧                                                          \n\
-        \                     The type of the ❰Optional❱ element, which is an ❰Integer❱  \n\
+        \                     The type of the ❰Optional❱ element, which is an ❰Natural❱  \n\
+        \                     number                                                     \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────┐                                                  \n\
-        \    │ [] : Optional Integer  │  An optional element that's absent               \n\
+        \    │ [] : Optional Natural  │  An optional element that's absent               \n\
         \    └────────────────────────┘                                                  \n\
         \                    ⇧                                                           \n\
         \                    You still specify the type even when the element is absent  \n\
@@ -1906,7 +1904,7 @@ prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
         \    │ ... : Optional 1 │                                                        \n\
         \    └──────────────────┘                                                        \n\
         \                     ⇧                                                          \n\
-        \                     This is an ❰Integer❱ and not a ❰Type❱                      \n\
+        \                     This is a ❰Natural❱ number and not a ❰Type❱                \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────┐                                                     \n\
@@ -1939,15 +1937,15 @@ prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────┐                                                  \n\
-        \    │ [1] : Optional Integer │  ❰1❱ is an ❰Integer❱, which matches the type     \n\
-        \    └────────────────────────┘                                                  \n\
+        \    │ [1] : Optional Natural │  ❰1❱ is a ❰Natural❱ number, which matches the    \n\
+        \    └────────────────────────┘  number                                          \n\
         \                                                                                \n\
         \                                                                                \n\
         \... but this is " <> _NOT <> " a valid ❰Optional❱ value:                        \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────┐                                              \n\
-        \    │ [\"ABC\"] : Optional Integer │  ❰\"ABC\"❱ is not an ❰Integer❱             \n\
+        \    │ [\"ABC\"] : Optional Natural │  ❰\"ABC\"❱ is not a ❰Natural❱ number       \n\
         \    └────────────────────────────┘                                              \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1977,7 +1975,7 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────────────────────────┐                            \n\
-        \    │ { foo : Integer, bar : Integer, baz : Text } │  Every field is annotated  \n\
+        \    │ { foo : Natural, bar : Integer, baz : Text } │  Every field is annotated  \n\
         \    └──────────────────────────────────────────────┘  with a ❰Type❱             \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1990,10 +1988,11 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────┐                                              \n\
-        \    │ { foo : Integer, bar : 1 } │  Invalid record type                         \n\
+        \    │ { foo : Natural, bar : 1 } │  Invalid record type                         \n\
         \    └────────────────────────────┘                                              \n\
         \                             ⇧                                                  \n\
-        \                             ❰1❱ is an ❰Integer❱ and not a ❰Type❱ or ❰Kind❱     \n\
+        \                             ❰1❱ is a ❰Natural❱ number and not a ❰Type❱ or      \n\
+        \                             ❰Kind❱                                             \n\
         \                                                                                \n\
         \                                                                                \n\
         \You provided a record type with a field named:                                  \n\
@@ -2019,7 +2018,7 @@ prettyTypeMessage (FieldAnnotationMismatch k0 expr0 k1 expr1 c) = ErrorMessages 
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────────────────────────┐                            \n\
-        \    │ { foo : Integer, bar : Integer, baz : Text } │  Every field is annotated  \n\
+        \    │ { foo : Natural, bar : Integer, baz : Text } │  Every field is annotated  \n\
         \    └──────────────────────────────────────────────┘  with a ❰Type❱             \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -2034,7 +2033,7 @@ prettyTypeMessage (FieldAnnotationMismatch k0 expr0 k1 expr1 c) = ErrorMessages 
         \              This is a ❰Type❱ annotation                                       \n\
         \              ⇩                                                                 \n\
         \    ┌───────────────────────────────┐                                           \n\
-        \    │ { foo : Integer, bar : Type } │  Invalid record type                      \n\
+        \    │ { foo : Natural, bar : Type } │  Invalid record type                      \n\
         \    └───────────────────────────────┘                                           \n\
         \                             ⇧                                                  \n\
         \                             ... but this is a ❰Kind❱ annotation                \n\
@@ -2086,7 +2085,7 @@ prettyTypeMessage (FieldMismatch k0 expr0 k1 expr1 c) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────┐                                           \n\
-        \    │ { foo = Integer, bar = Text } │  Every field is a type                    \n\
+        \    │ { foo = Natural, bar = Text } │  Every field is a type                    \n\
         \    └───────────────────────────────┘                                           \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -2311,7 +2310,7 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
         \For example, the following expression is " <> _NOT <> " valid:                  \n\
         \                                                                                \n\
         \                                                                                \n\
-        \       These elements have type ❰Integer❱                                       \n\
+        \       These elements have type ❰Natural❱                                       \n\
         \       ⇩                                                                        \n\
         \    ┌───────────────────────────┐                                               \n\
         \    │ [1, 2, 3] # [True, False] │  Invalid: the element types don't match       \n\
@@ -2594,7 +2593,7 @@ prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
         \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
         \    │ in  merge handlers union : Bool                                     │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
@@ -2649,7 +2648,7 @@ prettyTypeMessage (MustMergeUnion expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
         \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
         \    │ in  merge handlers union : Bool                                     │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
@@ -2689,7 +2688,7 @@ prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
         \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
         \    │ in  merge handlers union : Bool                                     │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
@@ -2702,11 +2701,11 @@ prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────┐                                   \n\
-        \    │     let union    = < Left = +2 >      │  The ❰Right❱ alternative is missing\n\
-        \    │ in  let handlers =                    │                                   \n\
+        \    │     let union    = < Left = 2 >       │  The ❰Right❱ alternative is       \n\
+        \    │ in  let handlers =                    │  missing                          \n\
         \    │             { Left  = Natural/even    │                                   \n\
-        \    │             , Right = λ(x : Bool) → x │  Invalid: ❰Right❱ handler isn't used\n\
-        \    │             }                         │                                   \n\
+        \    │             , Right = λ(x : Bool) → x │  Invalid: ❰Right❱ handler isn't   \n\
+        \    │             }                         │           used                    \n\
         \    │ in  merge handlers union : Bool       │                                   \n\
         \    └───────────────────────────────────────┘                                   \n\
         \                                                                                \n\
@@ -2729,7 +2728,7 @@ prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
         \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
         \    │ in  merge handlers union : Bool                                     │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
@@ -2745,7 +2744,7 @@ prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
         \                                              ⇩                                 \n\
         \    ┌─────────────────────────────────────────────────┐                         \n\
         \    │     let handlers = { Left = Natural/even }      │                         \n\
-        \    │ in  let union    = < Left = +2 | Right : Bool > │                         \n\
+        \    │ in  let union    = < Left = 2 | Right : Bool >  │                         \n\
         \    │ in  merge handlers union : Bool                 │                         \n\
         \    └─────────────────────────────────────────────────┘                         \n\
         \                                                                                \n\
@@ -2770,7 +2769,7 @@ prettyTypeMessage MissingMergeType =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
         \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
         \    │ in  merge handlers union                                            │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
@@ -2802,7 +2801,7 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
         \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
         \    │ in  merge handlers union : Bool                                     │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
@@ -2830,7 +2829,7 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
         \                                                               ⇩                \n\
         \    ┌──────────────────────────────────────────────────────────────────────┐    \n\
         \    │     let handlers = { Left = Natural/even | Right = λ(x : Text) → x } │    \n\
-        \    │ in  let union    = < Left = +2 | Right : Bool >                      │    \n\
+        \    │ in  let union    = < Left = 2 | Right : Bool >                       │    \n\
         \    │ in  merge handlers union : Bool                                      │    \n\
         \    └──────────────────────────────────────────────────────────────────────┘    \n\
         \                                                                                \n\
@@ -2864,7 +2863,7 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
         \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
         \    │ in  merge handlers union : Bool                                     │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
@@ -2891,7 +2890,7 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────────────────────────────────────────────────┐    \n\
-        \    │     let union    = < Left = +2 | Right : Bool >                      │    \n\
+        \    │     let union    = < Left = 2 | Right : Bool >                       │    \n\
         \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }  │    \n\
         \    │ in  merge handlers union : Text                                      │    \n\
         \    └──────────────────────────────────────────────────────────────────────┘    \n\
@@ -2928,7 +2927,7 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
         \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
         \    │ in  merge handlers union                                            │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
@@ -2948,7 +2947,7 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────┐                         \n\
-        \    │     let union    = < Left = +2 | Right : Bool > │                         \n\
+        \    │     let union    = < Left = 2 | Right : Bool >  │                         \n\
         \    │ in  let handlers =                              │                         \n\
         \    │              { Left  = λ(x : Natural) → x       │  This outputs ❰Natural❱ \n\
         \    │              , Right = λ(x : Bool   ) → x       │  This outputs ❰Bool❱    \n\
@@ -2982,7 +2981,7 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = +2 | Right : Bool >                     │     \n\
+        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
         \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
         \    │ in  merge handlers union : Bool                                     │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
@@ -3197,9 +3196,9 @@ prettyTypeMessage (CantInterpolate expr0 expr1) = ErrorMessages {..}
         \    └────────────────────────────┘                                              \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌───────────────────────────────────────────────────────────────────┐       \n\
-        \    │ λ(age : Natural) → \"Age: ${Integer/show (Natural/toInteger age)}\" │     \n\
-        \    └───────────────────────────────────────────────────────────────────┘       \n\
+        \    ┌───────────────────────────────────────────────┐                           \n\
+        \    │ λ(age : Natural) → \"Age: ${Natural/show age}\" │                         \n\
+        \    └───────────────────────────────────────────────┘                           \n\
         \                                                                                \n\
         \                                                                                \n\
         \Some common reasons why you might get this error:                               \n\
@@ -3341,9 +3340,9 @@ prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
         \Similarly, this is " <> _NOT <> " legal code:                                   \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌────────────────────────────────────────────────────┐                      \n\
-        \    │ λ(Vector : Natural → Type → Type) → Vector +0 Text │                      \n\
-        \    └────────────────────────────────────────────────────┘                      \n\
+        \    ┌───────────────────────────────────────────────────┐                       \n\
+        \    │ λ(Vector : Natural → Type → Type) → Vector 0 Text │                       \n\
+        \    └───────────────────────────────────────────────────┘                       \n\
         \                 ⇧                                                              \n\
         \                 Invalid dependent type                                         \n\
         \                                                                                \n\
@@ -3401,9 +3400,9 @@ buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
         \For example, this is a valid use of ❰" <> txt2 <> "❱:                           \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌─────────┐                                                                 \n\
-        \    │ +3 " <> txt2 <> " +5 │                                                    \n\
-        \    └─────────┘                                                                 \n\
+        \    ┌───────┐                                                                   \n\
+        \    │ 3 " <> txt2 <> " 5 │                                                      \n\
+        \    └───────┘                                                                   \n\
         \                                                                                \n\
         \                                                                                \n\
         \Some common reasons why you might get this error:                               \n\
@@ -3422,18 +3421,18 @@ buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
         \● You might have mistakenly used an ❰Integer❱ literal, which is " <> _NOT <> " allowed:\n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌───────┐                                                                   \n\
-        \    │ 2 " <> txt2 <> " 2 │  Not valid                                           \n\
-        \    └───────┘                                                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \  You need to prefix each literal with a ❰+❱ to transform them into ❰Natural❱   \n\
-        \  literals, like this:                                                          \n\
-        \                                                                                \n\
-        \                                                                                \n\
         \    ┌─────────┐                                                                 \n\
-        \    │ +2 " <> txt2 <> " +2 │  Valid                                             \n\
+        \    │ +2 " <> txt2 <> " +2 │  Not valid                                         \n\
         \    └─────────┘                                                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \  You need to remove the leading ❰+❱ to transform them into ❰Natural❱ literals, \n\
+        \  like this:                                                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────┐                                                                   \n\
+        \    │ 2 " <> txt2 <> " 2 │  Valid                                               \n\
+        \    └───────┘                                                                   \n\
         \                                                                                \n\
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\

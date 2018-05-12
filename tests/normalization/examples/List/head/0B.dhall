@@ -1,1 +1,1 @@
-[ 0 ] : Optional Integer
+[ 0 ] : Optional Natural

@@ -5,7 +5,7 @@ and `True` otherwise:
 Examples:
 
 ```
-./all Natural Natural/even ([ +3 ] : Optional Natural) = False
+./all Natural Natural/even ([ 3 ] : Optional Natural) = False
 
 ./all Natural Natural/even ([] : Optional Natural) = True
 ```

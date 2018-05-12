@@ -1,1 +1,1 @@
-../../../../../Prelude/Bool/fold False Integer 0 1
+../../../../../Prelude/Bool/fold False Natural 0 1

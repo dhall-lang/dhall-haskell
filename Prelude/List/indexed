@@ -5,9 +5,9 @@ Examples:
 
 ```
 ./indexed Bool [ True, False, True ]
-=   [   { index = +0, value = True  }
-    ,   { index = +1, value = False }
-    ,   { index = +2, value = True  }
+=   [   { index = 0, value = True  }
+    ,   { index = 1, value = False }
+    ,   { index = 2, value = True  }
     ] : List { index : Natural, value : Bool }
 
 ./indexed Bool ([] : List Bool)

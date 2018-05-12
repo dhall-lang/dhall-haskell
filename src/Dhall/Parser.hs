@@ -748,11 +748,15 @@ doubleLiteral = (do
     return (sign a) ) <?> "double literal"
 
 integerLiteral :: Parser Integer
-integerLiteral = Text.Parser.Token.integer <?> "integer literal"
+integerLiteral = (do
+    let positive = fmap (\_ -> id    ) (Text.Parser.Char.char '+')
+    let negative = fmap (\_ -> negate) (Text.Parser.Char.char '-')
+    sign <- positive <|> negative
+    a <- Text.Parser.Token.natural
+    return (sign a) ) <?> "integer literal"
 
 naturalLiteral :: Parser Natural
 naturalLiteral = (do
-    _ <- Text.Parser.Char.char '+'
     a <- Text.Parser.Token.natural
     return (fromIntegral a) ) <?> "natural literal"
 

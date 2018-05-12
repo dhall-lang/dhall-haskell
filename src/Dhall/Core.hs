@@ -1310,9 +1310,10 @@ normalizeWith ctx e0 = loop (denote e0)
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
             App NaturalToInteger (NaturalLit n) -> IntegerLit (toInteger n)
             App NaturalShow (NaturalLit n) ->
-                TextLit (Chunks [] ("+" <> buildNatural n))
-            App IntegerShow (IntegerLit n) ->
-                TextLit (Chunks [] (buildNumber n))
+                TextLit (Chunks [] (buildNatural n))
+            App IntegerShow (IntegerLit n)
+                | 0 <= n    -> TextLit (Chunks [] ("+" <> buildNumber n))
+                | otherwise -> TextLit (Chunks [] (buildNumber n))
             App DoubleShow (DoubleLit n) ->
                 TextLit (Chunks [] (buildScientific n))
             App (App OptionalBuild _A₀) g ->

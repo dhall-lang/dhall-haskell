@@ -1,1 +1,1 @@
-../../../../../Prelude/Optional/last Integer ([] : List (Optional Integer))
+../../../../../Prelude/Optional/last Natural ([] : List (Optional Natural))

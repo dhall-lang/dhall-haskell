@@ -1,21 +1,21 @@
 {-
 `fold` is the primitive function for consuming `Natural` numbers
 
-If you treat the number `+3` as `succ (succ (succ zero))` then a `fold` just
+If you treat the number `3` as `succ (succ (succ zero))` then a `fold` just
 replaces each `succ` and `zero` with something else
 
 Examples:
 
 ```
-./fold +3 Natural (λ(x : Natural) → +5 * x) +1 = +125
+./fold 3 Natural (λ(x : Natural) → 5 * x) 1 = 125
 
-λ(zero : Natural) → ./fold +3 Natural (λ(x : Natural) → +5 * x) zero
-= λ(zero : Natural) → +5 * +5 * +5 * zero
+λ(zero : Natural) → ./fold 3 Natural (λ(x : Natural) → 5 * x) zero
+= λ(zero : Natural) → 5 * 5 * 5 * zero
 
     λ(natural : Type)
 →   λ(succ : natural → natural)
 →   λ(zero : natural)
-→   ./fold +3 natural succ zero
+→   ./fold 3 natural succ zero
 =   λ(natural : Type)
 →   λ(succ : natural → natural)
 →   λ(zero : natural)

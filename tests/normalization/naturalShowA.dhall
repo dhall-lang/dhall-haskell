@@ -1,1 +1,1 @@
-Natural/show +42
+Natural/show 42
