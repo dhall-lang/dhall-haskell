@@ -58,10 +58,6 @@
 
     > http://example.com/id
 
-    You can also reuse directory names as expressions.  If you provide a path
-    to a local or remote directory then the compiler will look for a file named
-    @\@@ within that directory and use that file to represent the directory.
-
     You can also import expressions stored within environment variables using
     @env:NAME@, where @NAME@ is the name of the environment variable.  For
     example:
@@ -118,14 +114,12 @@ module Dhall.Import (
     ) where
 
 import Control.Applicative (empty)
-import Control.Exception
-    (Exception, IOException, SomeException, onException, throwIO)
+import Control.Exception (Exception, SomeException, throwIO)
 import Control.Monad (join)
 import Control.Monad.Catch (throwM, MonadCatch(catch))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
-import Data.ByteString.Lazy (ByteString)
 import Data.CaseInsensitive (CI)
 import Data.Map (Map)
 import Data.Monoid ((<>))
@@ -380,11 +374,8 @@ needManager = do
     This also works for URLs, too.
 
     This code is full of all sorts of edge cases so it wouldn't surprise me at
-    all if you find something broken in here.  Most of the ugliness is due to:
-
-    * Handling imports ending with @/\@@ by stripping the @/\@@ suffix if and
-      only if you navigate to any downstream relative imports
-    * Removing spurious @.@s and @..@s from the import
+    all if you find something broken in here.  Most of the ugliness is due to
+    removing spurious @.@s and @..@s from the import.
 
     Also, there are way too many `reverse`s in the URL-handling code For now I
     don't mind, but if were to really do this correctly we'd store the URLs as
@@ -404,7 +395,7 @@ canonicalize (File hasHome0 file0:imports0) =
       where
         headers' = fmap (onImportType (\h -> canonicalize (h:rest))) headers
 
-        prefix = parentURL (removeAtFromURL url0)
+        prefix = parentURL url0
 
         suffix = FilePath.normalise currImport
 
@@ -413,7 +404,7 @@ canonicalize (File hasHome0 file0:imports0) =
         combine url path = case List.stripPrefix "../" path of
             Just path' -> combine url' path'
               where
-                url' = parentURL (removeAtFromURL url)
+                url' = parentURL url
             Nothing    -> case List.stripPrefix "./" path of
                 Just path' -> combine url path'
                 Nothing    ->
@@ -431,7 +422,7 @@ canonicalize (File hasHome0 file0:imports0) =
         else File hasHome (FilePath.normalise file')
       where
         file' =
-            FilePath.takeDirectory (removeAtFromFilename file) </> currImport
+            FilePath.takeDirectory file </> currImport
 canonicalize (URL path headers:rest) = URL path headers'
   where
     headers' = fmap (onImportType (\h -> canonicalize (h:rest))) headers
@@ -461,18 +452,6 @@ canonicalizeImport (import_:imports) =
 
 parentURL :: Text -> Text
 parentURL = Text.dropWhileEnd (/= '/')
-
-removeAtFromURL:: Text -> Text
-removeAtFromURL url
-    | Text.isSuffixOf "/@" url = Text.dropEnd 2 url
-    | Text.isSuffixOf "/"  url = Text.dropEnd 1 url
-    | otherwise                =                url
-
-removeAtFromFilename :: FilePath -> FilePath
-removeAtFromFilename fp =
-    if FilePath.takeFileName fp == "@"
-    then FilePath.takeDirectory fp
-    else fp
 
 toHeaders
   :: Expr s a
@@ -569,17 +548,7 @@ exprFromImport (Import {..}) = case importType of
                     then return ()
                     else throwIO (MissingFile path)
 
-                -- Unfortunately, GHC throws an `InappropriateType` exception
-                -- when trying to read a directory, but does not export the
-                -- exception, so I must resort to a more heavy-handed `catch`
-                let handler :: IOException -> IO Text
-                    handler e = do
-                        -- If the fallback fails, reuse the original exception
-                        -- to avoid user confusion
-                        Data.Text.Lazy.IO.readFile (path </> "@")
-                            `onException` throwIO e
-
-                text <- Data.Text.Lazy.IO.readFile path `catch` handler
+                text <- Data.Text.Lazy.IO.readFile path
                 case Text.Megaparsec.parse parser path text of
                     Left errInfo -> do
                         throwIO (ParseError errInfo text)
@@ -591,18 +560,6 @@ exprFromImport (Import {..}) = case importType of
     URL url headerImport -> do
         m       <- needManager
         request <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
-
-        let handler :: HTTP.HttpException -> IO (HTTP.Response ByteString)
-#if MIN_VERSION_http_client(0,5,0)
-            handler err@(HttpExceptionRequest _ (StatusCodeException _ _)) = do
-#else
-            handler err@(StatusCodeException _ _ _) = do
-#endif
-                let request' = request { HTTP.path = HTTP.path request <> "/@" }
-                -- If the fallback fails, reuse the original exception to avoid
-                -- user confusion
-                HTTP.httpLbs request' m `onException` throwIO (PrettyHttpException err)
-            handler err = throwIO (PrettyHttpException err)
 
         requestWithHeaders <- case headerImport of
             Nothing           -> return request
@@ -640,7 +597,7 @@ exprFromImport (Import {..}) = case importType of
                         { HTTP.requestHeaders = headers
                         }
                 return requestWithHeaders
-        response <- liftIO (HTTP.httpLbs requestWithHeaders m `catch` handler)
+        response <- liftIO (HTTP.httpLbs requestWithHeaders m)
 
         let bytes = HTTP.responseBody response
 
@@ -651,28 +608,7 @@ exprFromImport (Import {..}) = case importType of
         case importMode of
             Code ->
                 case Text.Megaparsec.parse parser (Text.unpack url) text of
-                    Left err -> do
-                        -- Also try the fallback in case of a parse error, since
-                        -- the parse error might signify that this URL points to
-                        -- a directory list
-                        let err' = ParseError err text
-
-                        request' <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
-
-                        let request'' =
-                                request'
-                                    { HTTP.path = HTTP.path request' <> "/@" }
-                        response' <- liftIO (HTTP.httpLbs request'' m `onException` throwIO err' )
-
-                        let bytes' = HTTP.responseBody response'
-
-                        text' <- case Data.Text.Lazy.Encoding.decodeUtf8' bytes' of
-                            Left  _     -> liftIO (throwIO err')
-                            Right text' -> return text'
-
-                        case Text.Megaparsec.parse parser (Text.unpack url) text' of
-                            Left _     -> liftIO (throwIO err')
-                            Right expr -> return expr
+                    Left  err  -> liftIO (throwIO err)
                     Right expr -> return expr
             RawText -> do
                 return (TextLit (Chunks [] (build text)))
@@ -700,9 +636,6 @@ exprFromImport (Import {..}) = case importType of
         return r )
 
 {-| Load an `Import` as a \"dynamic\" expression (without resolving any imports)
-
-    This also returns the true final import (i.e. explicit "/@" at the end for
-    directories)
 -}
 loadDynamic
     :: forall m . MonadCatch m
