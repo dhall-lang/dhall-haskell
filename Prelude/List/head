@@ -4,9 +4,9 @@ Retrieve the first element of the list
 Examples:
 
 ```
-./head Integer [ 0, 1, 2 ] = [ 0 ] : Optional Integer
+./head Natural [ 0, 1, 2 ] = [ 0 ] : Optional Natural
 
-./head Integer ([] : List Integer) = [] : Optional Integer
+./head Natural ([] : List Natural) = [] : Optional Natural
 ```
 -}
 let head : ∀(a : Type) → List a → Optional a = List/head in head

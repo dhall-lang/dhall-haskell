@@ -44,7 +44,7 @@ _Interpolation_0 = Test.Tasty.HUnit.testCase "Example #0" (do
     e <- Util.code
         "    let name = \"John Doe\"                                 \n\
         \in  let age  = 21                                           \n\
-        \in  \"My name is ${name} and my age is ${Integer/show age}\"\n"
+        \in  \"My name is ${name} and my age is ${Natural/show age}\"\n"
     Util.assertNormalizesTo e "\"My name is John Doe and my age is 21\"" )
 
 _Interpolation_1 :: TestTree

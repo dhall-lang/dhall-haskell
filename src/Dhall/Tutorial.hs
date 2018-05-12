@@ -189,7 +189,7 @@ import Dhall
 -- > 
 -- > import Dhall
 -- > 
--- > data Example = Example { foo :: Integer, bar :: Vector Double }
+-- > data Example = Example { foo :: Natural, bar :: Vector Double }
 -- >     deriving (Generic, Show)
 -- > 
 -- > instance Interpret Example
@@ -275,7 +275,7 @@ import Dhall
 -- > 
 -- > import Dhall
 -- > 
--- > data Person = Person { age :: Integer, name :: Text }
+-- > data Person = Person { age :: Natural, name :: Text }
 -- >     deriving (Generic, Show)
 -- > 
 -- > instance Interpret Person
@@ -304,15 +304,24 @@ import Dhall
 -- Suppose that we try to decode a value of the wrong type, like this:
 --
 -- > >>> input auto "1" :: IO Bool
--- > *** Exception: 
+-- > *** Exception:
 -- > Error: Expression doesn't match annotation
+-- > 
+-- > - Bool
+-- > + Natural
 -- > 
 -- > 1 : Bool
 -- > 
 -- > (input):1:1
 --
 -- The interpreter complains because the string @\"1\"@ cannot be decoded into a
--- Haskell value of type `Bool`.
+-- Haskell value of type `Bool`.  This part of the type error:
+--
+-- > - Bool
+-- > + Natural
+--
+-- ... means that the expected type was @Bool@ but the inferred type of the
+-- expression @1@ was @Natural@.
 --
 -- The code excerpt from the above error message has two components:
 --
@@ -406,7 +415,7 @@ import Dhall
 --
 -- ... then the interpreter will reject the import:
 --
--- > >>> input auto "./file1" :: IO Integer
+-- > >>> input auto "./file1" :: IO Natural
 -- > *** Exception: 
 -- > ↳ ./file1
 -- >   ↳ ./file2
@@ -438,7 +447,7 @@ import Dhall
 -- You can also import Dhall expressions from environment variables, too:
 --
 -- > >>> System.Environment.setEnv "FOO" "1"
--- > >>> input auto "env:FOO" :: IO Integer
+-- > >>> input auto "env:FOO" :: IO Natural
 -- > 1
 --
 -- You can import types, too.  For example, we can change our @./bar@ file to:
@@ -494,31 +503,35 @@ import Dhall
 -- required for empty lists but optional for non-empty lists.  You will get a
 -- type error if you provide an empty list without a type annotation:
 --
--- > >>> input auto "[]" :: IO (Vector Integer)
--- > *** Exception: 
--- > Error: Empty lists need a type annotation
+-- > >>> input auto "[]" :: IO (Vector Natural)
+-- > *** Exception:
+-- > Error: Invalid input
 -- > 
--- > []
--- > 
--- > (input):1:1
--- > >>> input auto "[] : List Integer" :: IO (Vector Integer)
--- > []
+-- > (input):1:3:
+-- >   |
+-- > 1 | []
+-- >   |   ^
+-- > unexpected end of input
+-- > expecting ':' or whitespace
 --
 -- Also, list elements must all have the same type.  You will get an error if
 -- you try to store elements of different types in a list:
 --
--- > >>> input auto "[1, True, 3]" :: IO (Vector Integer)
--- > *** Exception: 
--- > Error: List elements should have the same type
+-- > >>> input auto "[1, True, 3]" :: IO (Vector Natural)
+-- > *** Exception:
+-- > Error: List elements should all have the same type
 -- > 
--- > [1, True, 3]
+-- > - Natural
+-- > + Bool
 -- > 
--- > (input):1:1
+-- > True
+-- > 
+-- > (input):1:5
 --
 -- __Exercise:__ What is the shortest @./config@ file that you can decode using
 -- this command:
 --
--- > >>> input auto "./config" :: IO (Vector (Vector Integer))
+-- > >>> input auto "./config" :: IO (Vector (Vector Natural))
 
 -- $optional0
 --
@@ -527,19 +540,19 @@ import Dhall
 --
 -- For example, these are valid @Optional@ values:
 --
--- > [1] : Optional Integer
+-- > [1] : Optional Natural
 -- >
--- > []  : Optional Integer
+-- > []  : Optional Natural
 --
 -- ... but this is /not/ valid:
 --
--- > [1, 2] : Optional Integer  -- NOT valid
+-- > [1, 2] : Optional Natural  -- NOT valid
 --
 -- An @Optional@ corresponds to Haskell's `Maybe` type for decoding purposes:
 --
--- > >>> input auto "[1] : Optional Integer" :: IO (Maybe Integer)
+-- > >>> input auto "[1] : Optional Natural" :: IO (Maybe Natural)
 -- > Just 1
--- > >>> input auto "[] : Optional Integer" :: IO (Maybe Integer)
+-- > >>> input auto "[] : Optional Natural" :: IO (Maybe Natural)
 -- > Nothing
 --
 -- You cannot omit the type annotation for @Optional@ values.  The type
@@ -548,7 +561,7 @@ import Dhall
 -- __Exercise:__ What is the shortest possible @./config@ file that you can decode
 -- like this:
 --
--- > >>> input auto "./config" :: IO (Maybe (Maybe (Maybe Integer)))
+-- > >>> input auto "./config" :: IO (Maybe (Maybe (Maybe Natural)))
 -- > ???
 --
 -- __Exercise:__ Try to decode an @Optional@ value with more than one element and
@@ -569,7 +582,7 @@ import Dhall
 -- record literal has the following record type:
 --
 -- > { foo : Bool
--- > , bar : Integer
+-- > , bar : Natural
 -- > , baz : Double
 -- > }
 --
@@ -612,7 +625,7 @@ import Dhall
 -- > $ dhall
 -- > { x = 1, y = True, z = "ABC" }.{ x, y }
 -- > <Ctrl-D>
--- > { x : Integer, y : Bool }
+-- > { x : Natural, y : Bool }
 -- > 
 -- > { x = 1, y = True }
 --
@@ -714,7 +727,7 @@ import Dhall
 -- > <Ctrl-D>
 -- > ∀(n : Bool) → List Bool
 -- > 
--- > λ(n : Bool) → [n && True, n && False, n || True, n || False]
+-- > λ(n : Bool) → [ n, False, True, n ]
 --
 -- The first line says that @makeBools@ is a function of one argument named @n@
 -- that has type @Bool@ and the function returns a @List@ of @Bool@s.  The @∀@
@@ -737,9 +750,14 @@ import Dhall
 --
 -- The second line of Dhall's output is our program's normal form:
 --
--- > λ(n : Bool) → [n && True, n && False, n || True, n || False]
+-- > λ(n : Bool) → [ n, False, True, n ]
 --
--- ... which in this case happens to be identical to our original program.
+-- ... and the interpreter was able to simplify our expression by noting that:
+--
+-- * @n && True  = n@
+-- * @n && False = False@
+-- * @n || True  = True@
+-- * @n || False = n@
 --
 -- To apply a function to an argument you separate the function and argument by
 -- whitespace (just like Haskell):
@@ -847,7 +865,7 @@ import Dhall
 -- > $ dhall
 -- >     let name = "John Doe"
 -- > in  let age  = 21
--- > in  "My name is ${name} and my age is ${Integer/show age}"
+-- > in  "My name is ${name} and my age is ${Natural/show age}"
 -- > <Ctrl-D>
 -- > Text
 -- >
@@ -875,13 +893,13 @@ import Dhall
 -- > $ dhall
 -- > { foo = 1, bar = "ABC" } // { baz = True }
 -- > <Ctrl-D>
--- > { bar : Text, baz : Bool, foo : Integer }
+-- > { bar : Text, baz : Bool, foo : Natural }
 -- > 
 -- > { bar = "ABC", baz = True, foo = 1 }
 -- > $ dhall
 -- > { foo = 1, bar = "ABC" } ⫽ { bar = True }  -- Fancy unicode
 -- > <Ctrl-D>
--- > { bar : Bool, foo : Integer }
+-- > { bar : Bool, foo : Natural }
 -- > 
 -- > { bar = True, foo = 1 }
 --
@@ -926,9 +944,9 @@ import Dhall
 -- operator descends recursively into record types:
 --
 -- > $ dhall
--- > { foo : { bar : Text } } ⩓ { foo : { baz : Bool }, qux : Integer }
+-- > { foo : { bar : Text } } ⩓ { foo : { baz : Bool }, qux : Natural }
 -- > <Ctrl-D>
--- > { foo : { bar : Text, baz : Bool }, qux : Integer }
+-- > { foo : { bar : Text, baz : Bool }, qux : Natural }
 
 -- $let
 --
@@ -983,10 +1001,14 @@ import Dhall
 -- > $ dhall
 -- > let twice (x : Text) = x ++ x in twice "ha"
 -- > <Ctrl-D>
--- > (stdin):1:11: error: expected: ":",
--- >     "="
--- > let twice (x : Text) = x ++ x in twice "ha" 
--- >           ^
+-- > Error: Invalid input
+-- > 
+-- > (stdin):1:11:
+-- >   |
+-- > 1 | let twice (x : Text) = x ++ x in twice "ha"
+-- >   |           ^
+-- > unexpected '('
+-- > expecting ':', '=', or the rest of label
 --
 -- The error message says that Dhall expected either a @(:)@ (i.e. the beginning
 -- of a type annotation) or a @(=)@ (the beginning of the assignment) and not a
@@ -1048,7 +1070,7 @@ import Dhall
 -- remaining alternatives.  For example, both of the following union literals
 -- have the same type, which is the above union type:
 --
--- > < Left  = +0   | Right : Bool    >
+-- > < Left  = 0    | Right : Bool    >
 --
 -- > < Right = True | Left  : Natural >
 --
@@ -1070,7 +1092,7 @@ import Dhall
 -- Now our @./process@ function can handle both alternatives:
 --
 -- > $ dhall
--- > ./process < Left = +3 | Right : Bool >
+-- > ./process < Left = 3 | Right : Bool >
 -- > <Ctrl-D>
 -- > Bool
 -- > 
@@ -1100,8 +1122,8 @@ import Dhall
 --
 -- So, for example:
 --
--- > merge { Left = Natural/even, Right = λ(b : Bool) → b } < Left = +3 | Right : Bool > : Bool
--- >     = Natural/even +3 : Bool
+-- > merge { Left = Natural/even, Right = λ(b : Bool) → b } < Left = 3 | Right : Bool > : Bool
+-- >     = Natural/even 3 : Bool
 -- >     = False
 --
 -- ... and similarly:
@@ -1135,8 +1157,8 @@ import Dhall
 -- > in  let Person =
 -- >         λ(p : { name : Text, age : Natural }) → < Person = p | Empty : {} >
 -- > in  [   Empty
--- >     ,   Person { name = "John", age = +23 }
--- >     ,   Person { name = "Amy" , age = +25 }
+-- >     ,   Person { name = "John", age = 23 }
+-- >     ,   Person { name = "Amy" , age = 25 }
 -- >     ,   Empty
 -- >     ]
 --
@@ -1145,8 +1167,8 @@ import Dhall
 --
 -- >     let MyType = constructors < Empty : {} | Person : { name : Text, age : Natural } >
 -- > in  [   MyType.Empty {=}
--- >     ,   MyType.Person { name = "John", age = +23 }
--- >     ,   MyType.Person { name = "Amy" , age = +25 }
+-- >     ,   MyType.Person { name = "John", age = 23 }
+-- >     ,   MyType.Person { name = "Amy" , age = 25 }
 -- >     ]
 --
 -- The @constructors@ keyword takes a union type argument and returns a record
@@ -1186,7 +1208,7 @@ import Dhall
 -- __Exercise__: Create a list of the following type with at least one element
 -- per alternative:
 --
--- > List < Left : Integer | Right : Double >
+-- > List < Left : Natural | Right : Double >
 
 -- $polymorphic
 --
@@ -1236,15 +1258,15 @@ import Dhall
 -- argument).  The result also has type @a@.\"
 --
 -- This means that the type of the second argument changes depending on what
--- type we provide for the first argument.  When we apply @./id@ to @Integer@, we
--- create a function that expects an @Integer@ argument:
+-- type we provide for the first argument.  When we apply @./id@ to @Natural@,
+-- we create a function that expects an @Natural@ argument:
 --
 -- > $ dhall
--- > ./id Integer
+-- > ./id Natural
 -- > <Ctrl-D>
--- > ∀(x : Integer) → Integer
+-- > ∀(x : Natural) → Natural
 -- > 
--- > λ(x : Integer) → x
+-- > λ(x : Natural) → x
 --
 -- Similarly, when we apply @./id@ to @Bool@, we create a function that expects a
 -- @Bool@ argument:
@@ -1260,9 +1282,9 @@ import Dhall
 -- that they both work on their respective types:
 --
 -- > $ dhall
--- > ./id Integer 4
+-- > ./id Natural 4
 -- > <Ctrl-D>
--- > Integer
+-- > Natural
 -- > 
 -- > 4
 --
@@ -1317,11 +1339,11 @@ import Dhall
 -- > $ dhall
 -- > λ(_ : Text) → 1
 -- > <Ctrl-D>
--- > Text → Integer
+-- > Text → Natural
 -- > 
 -- > λ(_ : Text) → 1
 --
--- The type @(Text → Integer)@ is the same as @(∀(_ : Text) → Integer)@
+-- The type @(Text → Natural)@ is the same as @(∀(_ : Text) → Natural)@
 --
 -- __Exercise__ : Translate Haskell's `flip` function to Dhall
 
@@ -1339,11 +1361,11 @@ import Dhall
 -- applied.  For example, the following program is an anonymous function:
 --
 -- > $ dhall
--- > \(n : Bool) -> +10 * +10
+-- > \(n : Bool) -> 10 * 10
 -- > <Ctrl-D>
 -- > ∀(n : Bool) → Natural
 -- > 
--- > λ(n : Bool) → +100
+-- > λ(n : Bool) → 100
 --
 -- ... and even though the function is still missing the first argument named
 -- @n@ the compiler is smart enough to evaluate the body of the anonymous
@@ -1354,11 +1376,11 @@ import Dhall
 --
 -- > $ dhall
 -- >     let Prelude/List/map = https://ipfs.io/ipfs/QmdtKd5Q7tebdo6rXfZed4kN6DXmErRQHJ4PsNCtca9GbB/Prelude/List/map
--- > in  λ(f : Integer → Integer) → Prelude/List/map Integer Integer f [1, 2, 3]
+-- > in  λ(f : Natural → Natural) → Prelude/List/map Natural Natural f [1, 2, 3]
 -- > <Ctrl-D>
--- > ∀(f : Integer → Integer) → List Integer
+-- > ∀(f : Natural → Natural) → List Natural
 -- > 
--- > λ(f : Integer → Integer) → [f 1, f 2, f 3] : List Integer
+-- > λ(f : Natural → Natural) → [f 1, f 2, f 3] : List Natural
 --
 -- Dhall can apply our function to each element of the list even before we specify
 -- which function to apply.
@@ -1368,11 +1390,11 @@ import Dhall
 -- an @Optional@ value:
 --
 -- > $ dhall
--- > List/head Integer ([] : List Integer)
+-- > List/head Natural ([] : List Natural)
 -- > <Ctrl-D>
--- > Optional Integer
+-- > Optional Natural
 -- > 
--- > [] : Optional Integer
+-- > [] : Optional Natural
 --
 -- __Exercise__: The Dhall Prelude provides a @replicate@ function which you can
 -- find here:
@@ -1382,7 +1404,7 @@ import Dhall
 -- Test what the following Dhall expression normalizes to:
 --
 -- > let replicate = https://ipfs.io/ipfs/QmdtKd5Q7tebdo6rXfZed4kN6DXmErRQHJ4PsNCtca9GbB/Prelude/List/replicate
--- > in  replicate +10
+-- > in  replicate 10
 --
 -- __Exercise__: If you have a lot of spare time, try to \"break the compiler\" by
 -- finding an input expression that crashes or loops forever (and file a bug
@@ -1461,7 +1483,7 @@ import Dhall
 -- imported Dhall value and reject the import if there is a hash mismatch:
 --
 -- > $ dhall <<< './foo'
--- > Integer
+-- > Natural
 -- > 
 -- > 1
 --
@@ -1477,7 +1499,7 @@ import Dhall
 -- changes to whitespace or comments:
 --
 -- > $ dhall <<< './foo'  # This still succeeds
--- > Integer
+-- > Natural
 -- > 
 -- > 1
 --
@@ -1592,7 +1614,7 @@ import Dhall
 -- > index : Natural, value : a } kvs list (λ(kvOld : { index : Natural, value : a 
 -- > }) → λ(z : list) → cons { index = kvOld.index + n, value = kvOld.value } 
 -- > z) (y.diff (n + List/length { index : Natural, value : a } kvs)) }) { count = 
--- > +0, diff = λ(_ : Natural) → nil }).diff +0)
+-- > 0, diff = λ(_ : Natural) → nil }).diff 0)
 --
 -- ... and run the expression through the @dhall-format@ executable:
 --
@@ -1624,9 +1646,9 @@ import Dhall
 -- >                   (y.diff (n + List/length { index : Natural, value : a } kvs))
 -- >             }
 -- >         )
--- >         { count = +0, diff = λ(_ : Natural) → nil }
+-- >         { count = 0, diff = λ(_ : Natural) → nil }
 -- >       ).diff
--- >       +0
+-- >       0
 -- >   )
 --
 -- The executable formats expressions without resolving, type-checking, or
@@ -1634,15 +1656,15 @@ import Dhall
 --
 -- > $ dhall-format
 -- > let replicate = https://ipfs.io/ipfs/QmdtKd5Q7tebdo6rXfZed4kN6DXmErRQHJ4PsNCtca9GbB/Prelude/List/replicate 
--- > in replicate +5 (List (List Integer)) (replicate +5 (List Integer) (replicate +5 Integer 1))
+-- > in replicate 5 (List (List Natural)) (replicate 5 (List Natural) (replicate 5 Natural 1))
 -- > <Ctrl-D>
 -- >     let replicate =
 -- >           https://ipfs.io/ipfs/QmdtKd5Q7tebdo6rXfZed4kN6DXmErRQHJ4PsNCtca9GbB/Prelude/List/replicate 
 -- > 
 -- > in  replicate
--- >     +5
--- >     (List (List Integer))
--- >     (replicate +5 (List Integer) (replicate +5 Integer 1))
+-- >     5
+-- >     (List (List Natural))
+-- >     (replicate 5 (List Natural) (replicate 5 Natural 1))
 --
 -- You can also use the formatter to modify files in place using the
 -- @--inplace@ flag (i.e. for formatting source code):
@@ -1676,9 +1698,9 @@ import Dhall
 -- >                   (y.diff (n + List/length { index : Natural, value : a } kvs))
 -- >             }
 -- >         )
--- >         { count = +0, diff = λ(_ : Natural) → nil }
+-- >         { count = 0, diff = λ(_ : Natural) → nil }
 -- >       ).diff
--- >       +0
+-- >       0
 -- >   )
 --
 -- Carefully note that the code formatter does not preserve all comments.
@@ -1701,47 +1723,47 @@ import Dhall
 --
 -- > $ dhall
 -- > let replicate = https://ipfs.io/ipfs/QmdtKd5Q7tebdo6rXfZed4kN6DXmErRQHJ4PsNCtca9GbB/Prelude/List/replicate 
--- > in replicate +5 (List (List Integer)) (replicate +5 (List Integer) (replicate +5 Integer 1))
+-- > in replicate 5 (List (List Natural)) (replicate 5 (List Natural) (replicate 5 Natural 1))
 -- > <Ctrl-D>
--- > List (List (List Integer))
+-- > List (List (List Natural))
 -- > 
--- >   [   [ [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >   [   [ [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
 -- >       ]
--- >     : List (List Integer)
--- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >     : List (List Natural)
+-- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
 -- >       ]
--- >     : List (List Integer)
--- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >     : List (List Natural)
+-- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
 -- >       ]
--- >     : List (List Integer)
--- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >     : List (List Natural)
+-- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
 -- >       ]
--- >     : List (List Integer)
--- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
--- >       , [ 1, 1, 1, 1, 1 ] : List Integer
+-- >     : List (List Natural)
+-- >   ,   [ [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
+-- >       , [ 1, 1, 1, 1, 1 ] : List Natural
 -- >       ]
--- >     : List (List Integer)
+-- >     : List (List Natural)
 -- >   ]
--- > : List (List (List Integer))
+-- > : List (List (List Natural))
 
 -- $builtins
 --
@@ -1782,18 +1804,19 @@ import Dhall
 --
 -- First, Dhall only supports addition and multiplication on @Natural@ numbers
 -- (i.e. non-negative integers), which are not the same type of number as
--- @Integer@s (which can be negative).  A @Natural@ number is a number prefixed
--- with the @+@ symbol.  If you try to add or multiply two @Integer@s (without
--- the @+@ prefix) you will get a type error:
+-- @Integer@s (which can be negative).  An @Integer@ number is a number prefixed
+-- with either a @+@ or @-@ symbol whereas a @Natural@ number has no leading
+-- sign.  If you try to add or multiply two @Integer@s you will get a type
+-- error:
 --
 -- > $ dhall
--- > 2 + 2
+-- > +2 + +2
 -- > <Ctrl-D>
 -- > Use "dhall --explain" for detailed errors
 -- > 
 -- > Error: ❰+❱ only works on ❰Natural❱s
 -- > 
--- > 2 + 2
+-- > +2 + +2
 -- > 
 -- > (stdin):1:1
 --
@@ -1983,7 +2006,7 @@ import Dhall
 -- > $ dhall
 -- > if True then 3 else 5
 -- > <Ctrl-D>
--- > Integer
+-- > Natural
 -- > 
 -- > 3
 --
@@ -2005,11 +2028,12 @@ import Dhall
 
 -- $natural
 --
--- @Natural@ literals are numbers prefixed by a @+@ sign, like this:
+-- @Natural@ literals are non-negative numbers without any leading sign, like
+-- this:
 --
--- > +4 : Natural
+-- > 4 : Natural
 --
--- If you omit the @+@ sign then you get an @Integer@ literal, which is a
+-- If you add a @+@ or @-@ sign then you get an @Integer@ literal, which is a
 -- different type of value
 
 -- $plus
@@ -2017,11 +2041,11 @@ import Dhall
 -- Example:
 --
 -- > $ dhall
--- > +2 + +3
+-- > 2 + 3
 -- > <Ctrl-D>
 -- > Natural
 -- > 
--- > +5
+-- > 5
 --
 -- Type:
 --
@@ -2033,20 +2057,20 @@ import Dhall
 --
 -- > (x + y) + z = x + (y + z)
 -- >
--- > x + +0 = x
+-- > x + 0 = x
 -- >
--- > +0 + x = x
+-- > 0 + x = x
 
 -- $times
 --
 -- Example:
 --
 -- > $ dhall
--- > +2 * +3
+-- > 2 * 3
 -- > <Ctrl-D>
 -- > Natural
 -- > 
--- > +6
+-- > 6
 --
 -- Type:
 --
@@ -2058,24 +2082,24 @@ import Dhall
 --
 -- > (x * y) * z = x * (y * z)
 -- >
--- > x * +1 = x
+-- > x * 1 = x
 -- >
--- > +1 * x = x
+-- > 1 * x = x
 -- >
 -- > (x + y) * z = (x * z) + (y * z)
 -- >
 -- > x * (y + z) = (x * y) + (x * z)
 -- >
--- > x * +0 = +0
+-- > x * 0 = 0
 -- >
--- > +0 * x = +0
+-- > 0 * x = 0
 
 -- $even
 --
 -- Example:
 --
 -- > $ dhall
--- > Natural/even +6
+-- > Natural/even 6
 -- > <Ctrl-D>
 -- > Bool
 -- > 
@@ -2090,18 +2114,18 @@ import Dhall
 --
 -- > Natural/even (x + y) = Natural/even x == Natural/even y
 -- >
--- > Natural/even +0 = True
+-- > Natural/even 0 = True
 -- >
 -- > Natural/even (x * y) = Natural/even x || Natural/even y
 -- >
--- > Natural/even +1 = False
+-- > Natural/even 1 = False
 
 -- $odd
 --
 -- Example:
 --
 -- > $ dhall
--- > Natural/odd +6
+-- > Natural/odd 6
 -- > <Ctrl-D>
 -- > Bool
 -- > 
@@ -2116,18 +2140,18 @@ import Dhall
 --
 -- > Natural/odd (x + y) = Natural/odd x != Natural/odd y
 -- >
--- > Natural/odd +0 = False
+-- > Natural/odd 0 = False
 -- >
 -- > Natural/odd (x * y) = Natural/odd x && Natural/odd y
 -- >
--- > Natural/odd +1 = True
+-- > Natural/odd 1 = True
 
 -- $isZero
 --
 -- Example:
 --
 -- > $ dhall
--- > Natural/isZero +6
+-- > Natural/isZero 6
 -- > <Ctrl-D>
 -- > Bool
 -- > 
@@ -2142,18 +2166,18 @@ import Dhall
 --
 -- > Natural/isZero (x + y) = Natural/isZero x && Natural/isZero y
 -- >
--- > Natural/isZero +0 = True
+-- > Natural/isZero 0 = True
 -- >
 -- > Natural/isZero (x * y) = Natural/isZero x || Natural/isZero y
 -- >
--- > Natural/isZero +1 = False
+-- > Natural/isZero 1 = False
 
 -- $naturalFold
 --
 -- Example:
 --
 -- > $ dhall
--- > Natural/fold +40 Text (λ(t : Text) → t ++ "!") "You're welcome"
+-- > Natural/fold 40 Text (λ(t : Text) → t ++ "!") "You're welcome"
 -- > <Ctrl-D>
 -- > Text
 -- > 
@@ -2168,11 +2192,11 @@ import Dhall
 -- 
 -- > Natural/fold (x + y) n s z = Natural/fold x n s (Natural/fold y n s z)
 -- > 
--- > Natural/fold +0 n s z = z
+-- > Natural/fold 0 n s z = z
 -- > 
 -- > Natural/fold (x * y) n s = Natural/fold x n (Natural/fold y n s)
 -- > 
--- > Natural/fold +1 n s = s
+-- > Natural/fold 1 n s = s
 
 -- $naturalBuild
 --
@@ -2183,7 +2207,7 @@ import Dhall
 -- > <Ctrl-D>
 -- > Natural
 -- > 
--- > +2
+-- > 2
 --
 -- Type:
 --
@@ -2198,14 +2222,13 @@ import Dhall
 
 -- $integer
 --
--- @Integer@ literals are either prefixed with a @-@ sign (if they are negative)
--- or no sign (if they are positive), like this:
+-- @Integer@ literals are prefixed with a @+@ (if they are non-negative) or a
+-- @-@ sign (if they are negative), like this:
 --
--- >  3 : Integer
+-- > +3 : Integer
 -- > -2 : Integer
 --
--- If you prefix them with a @+@ sign then they are @Natural@ literals and not
--- @Integer@s
+-- If you omit the sign then they are @Natural@ literals and not @Integer@s
 --
 -- There are no built-in operations on @Integer@s.  For all practical purposes
 -- they are opaque values within the Dhall language
@@ -2266,7 +2289,7 @@ import Dhall
 --
 -- Also, every empty @List@ must end with a mandatory type annotation, for example:
 --
--- > [] : List Integer
+-- > [] : List Natural
 --
 -- The built-in operations on @List@s are:
 
@@ -2277,7 +2300,7 @@ import Dhall
 -- > $ dhall
 -- > [1, 2, 3] # [4, 5, 6]
 -- > <Ctrl-D>
--- > List Integer
+-- > List Natural
 -- >
 -- > [1, 2, 3, 4, 5, 6]
 --
@@ -2327,11 +2350,11 @@ import Dhall
 -- Example:
 --
 -- > $ dhall
--- > List/build Integer (λ(list : Type) → λ(cons : Integer → list → list) → λ(nil : list) → cons 1 (cons 2 (cons 3 nil)))
+-- > List/build Natural (λ(list : Type) → λ(cons : Natural → list → list) → λ(nil : list) → cons 1 (cons 2 (cons 3 nil)))
 -- > <Ctrl-D>
--- > List Integer
+-- > List Natural
 -- > 
--- > [1, 2, 3] : List Integer
+-- > [1, 2, 3] : List Natural
 --
 -- Type:
 --
@@ -2349,11 +2372,11 @@ import Dhall
 -- Example:
 --
 -- > $ dhall
--- > List/length Integer [1, 2, 3]
+-- > List/length Natural [1, 2, 3]
 -- > <Ctrl-D>
 -- > Natural
 -- > 
--- > +3
+-- > 3
 --
 -- Type:
 --
@@ -2362,18 +2385,18 @@ import Dhall
 --
 -- Rules:
 --
--- > List/length t xs = List/fold t xs Natural (λ(_ : t) → λ(n : Natural) → n + +1) +0
+-- > List/length t xs = List/fold t xs Natural (λ(_ : t) → λ(n : Natural) → n + 1) 0
 
 -- $listHead
 --
 -- Example:
 --
 -- > $ dhall
--- > List/head Integer [1, 2, 3]
+-- > List/head Natural [1, 2, 3]
 -- > <Ctrl-D>
--- > Optional Integer
+-- > Optional Natural
 -- > 
--- > [1] : Optional Integer
+-- > [1] : Optional Natural
 --
 -- Type:
 --
@@ -2400,11 +2423,11 @@ import Dhall
 -- Example:
 --
 -- > $ dhall
--- > List/last Integer [1, 2, 3]
+-- > List/last Natural [1, 2, 3]
 -- > <Ctrl-D>
--- > Optional Integer
+-- > Optional Natural
 -- > 
--- > [1] : Optional Integer
+-- > [1] : Optional Natural
 --
 -- Type:
 --
@@ -2435,7 +2458,7 @@ import Dhall
 -- > <Ctrl-D>
 -- > List { index : Natural, value : Text }
 -- > 
--- > [{ index = +0, value = "ABC" }, { index = +1, value = "DEF" }, { index = +2, value = "GHI" }] : List { index : Natural, value : Text }
+-- > [{ index = 0, value = "ABC" }, { index = 1, value = "DEF" }, { index = 2, value = "GHI" }] : List { index : Natural, value : Text }
 --
 -- Type:
 --
@@ -2456,11 +2479,11 @@ import Dhall
 -- Example:
 --
 -- > $ dhall
--- > List/reverse Integer [1, 2, 3]
+-- > List/reverse Natural [1, 2, 3]
 -- > <Ctrl-D>
--- > List Integer
+-- > List Natural
 -- > 
--- > [3, 2, 1] : List Integer
+-- > [3, 2, 1] : List Natural
 --
 -- Type:
 --
@@ -2605,9 +2628,9 @@ import Dhall
 -- > Examples:
 -- > 
 -- > ```
--- > ./even +3 = False
+-- > ./even 3 = False
 -- > 
--- > ./even +0 = True
+-- > ./even 0 = True
 -- > ```
 -- > -}
 -- > let even : Natural → Bool
@@ -2700,11 +2723,11 @@ import Dhall
 -- >     let Prelude = https://ipfs.io/ipfs/QmdtKd5Q7tebdo6rXfZed4kN6DXmErRQHJ4PsNCtca9GbB/Prelude/package.dhall
 -- >
 -- > in    λ(x : Text)
--- >     → Prelude.`List`.length Text (Prelude.`List`.replicate +10 Text x)
+-- >     → Prelude.`List`.length Text (Prelude.`List`.replicate 10 Text x)
 -- > <Ctrl-D>
 -- > ∀(x : Text) → Natural
 -- >
--- > λ(x : Text) → +10
+-- > λ(x : Text) → 10
 --
 -- The organization of the package mirrors the layout of the Prelude, meaning
 -- that every directory is stored as a record whose children are the fields of

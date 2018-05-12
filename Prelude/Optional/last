@@ -5,20 +5,20 @@ Examples:
 
 ```
 ./last
-Integer
-[ [   ] : Optional Integer
-, [ 1 ] : Optional Integer
-, [ 2 ] : Optional Integer
+Natural
+[ [   ] : Optional Natural
+, [ 1 ] : Optional Natural
+, [ 2 ] : Optional Natural
 ]
-= [ 2 ] : Optional Integer
+= [ 2 ] : Optional Natural
 
 ./last
-Integer
-[ [] : Optional Integer, [] : Optional Integer ]
-= [] : Optional Integer
+Natural
+[ [] : Optional Natural, [] : Optional Natural ]
+= [] : Optional Natural
 
-./last Integer ([] : List (Optional Integer))
-= [] : Optional Integer
+./last Natural ([] : List (Optional Natural))
+= [] : Optional Natural
 ```
 -}
     let last

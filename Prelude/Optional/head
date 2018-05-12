@@ -5,20 +5,20 @@ Examples:
 
 ```
 ./head
-Integer
-[ [   ] : Optional Integer
-, [ 1 ] : Optional Integer
-, [ 2 ] : Optional Integer
+Natural
+[ [   ] : Optional Natural
+, [ 1 ] : Optional Natural
+, [ 2 ] : Optional Natural
 ]
-= [ 1 ] : Optional Integer
+= [ 1 ] : Optional Natural
 
 ./head
-Integer
-[ [] : Optional Integer, [] : Optional Integer ]
-= [] : Optional Integer
+Natural
+[ [] : Optional Natural, [] : Optional Natural ]
+= [] : Optional Natural
 
-./head Integer ([] : List (Optional Integer))
-= [] : Optional Integer
+./head Natural ([] : List (Optional Natural))
+= [] : Optional Natural
 ```
 -}
     let head

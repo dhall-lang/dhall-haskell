@@ -1,5 +1,5 @@
-../../../../../Prelude/List/concat Integer
-[ [] : List Integer
-, [] : List Integer
-, [] : List Integer
+../../../../../Prelude/List/concat Natural
+[ [] : List Natural
+, [] : List Natural
+, [] : List Natural
 ]

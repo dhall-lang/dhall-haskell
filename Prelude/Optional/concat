@@ -4,14 +4,14 @@ Flatten two `Optional` layers into a single `Optional` layer
 Examples:
 
 ```
-./concat Integer ([ [ 1 ] : Optional Integer ] : Optional (Optional Integer))
-= [ 1 ] : Optional Integer
+./concat Natural ([ [ 1 ] : Optional Natural ] : Optional (Optional Natural))
+= [ 1 ] : Optional Natural
 
-./concat Integer ([ [] : Optional Integer ] : Optional (Optional Integer))
-= [] : Optional Integer
+./concat Natural ([ [] : Optional Natural ] : Optional (Optional Natural))
+= [] : Optional Natural
 
-./concat Integer ([] : Optional (Optional Integer))
-= [] : Optional Integer
+./concat Natural ([] : Optional (Optional Natural))
+= [] : Optional Natural
 ```
 -}
     let concat

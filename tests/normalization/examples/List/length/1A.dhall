@@ -1,1 +1,1 @@
-../../../../../Prelude/List/length Integer ([] : List Integer)
+../../../../../Prelude/List/length Natural ([] : List Natural)

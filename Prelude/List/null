@@ -4,9 +4,9 @@ Returns `True` if the `List` is empty and `False` otherwise
 Examples:
 
 ```
-./null Integer [ 0, 1, 2 ] = False
+./null Natural [ 0, 1, 2 ] = False
 
-./null Integer ([] : List Integer) = True
+./null Natural ([] : List Natural) = True
 ```
 -}
     let null

@@ -1,1 +1,1 @@
-[] : List Integer
+[] : List Natural

@@ -4,10 +4,10 @@ Transform each value in a `List` into `Text` and concatenate the result
 Examples:
 
 ```
-./concatMap Integer (λ(n : Integer) → "${Integer/show n} ") [ 0, 1, 2 ]
+./concatMap Natural (λ(n : Natural) → "${Natural/show n} ") [ 0, 1, 2 ]
 = "0 1 2 "
 
-./concatMap Integer (λ(n : Integer) → "${Integer/show n} ") ([] : List Integer)
+./concatMap Natural (λ(n : Natural) → "${Natural/show n} ") ([] : List Natural)
 = ""
 ```
 -}

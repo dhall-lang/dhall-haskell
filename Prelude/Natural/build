@@ -10,7 +10,7 @@ Examples:
 →   λ(zero : natural)
 →   succ (succ (succ zero))
 )
-= +3
+= 3
 
 ./build
 (   λ(natural : Type)
@@ -18,7 +18,7 @@ Examples:
 →   λ(zero : natural)
 →   zero
 )
-= +0
+= 0
 ```
 -}
     let build

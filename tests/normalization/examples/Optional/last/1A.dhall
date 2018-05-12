@@ -1,3 +1,3 @@
 ../../../../../Prelude/Optional/last
-Integer
-[ [] : Optional Integer, [] : Optional Integer ]
+Natural
+[ [] : Optional Natural, [] : Optional Natural ]

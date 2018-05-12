@@ -1,6 +1,6 @@
 { mkDerivation, ansi-terminal, base, bytestring, case-insensitive
 , containers, contravariant, cryptonite, deepseq, directory
-, exceptions, filepath, formatting, haskeline, http-client
+, doctest, exceptions, filepath, formatting, haskeline, http-client
 , http-client-tls, insert-ordered-containers, lens-family-core
 , megaparsec, memory, mtl, optparse-applicative, parsers
 , prettyprinter, prettyprinter-ansi-terminal, repline, scientific
@@ -26,7 +26,7 @@ mkDerivation {
     prettyprinter prettyprinter-ansi-terminal repline text
   ];
   testHaskellDepends = [
-    base deepseq insert-ordered-containers prettyprinter tasty
+    base deepseq doctest insert-ordered-containers prettyprinter tasty
     tasty-hunit text vector
   ];
   description = "A configuration language guaranteed to terminate";
