@@ -247,7 +247,7 @@ data Expr s a
     | BoolIf (Expr s a) (Expr s a) (Expr s a)
     -- | > Natural                                  ~  Natural
     | Natural
-    -- | > NaturalLit n                             ~  +n
+    -- | > NaturalLit n                             ~  n
     | NaturalLit Natural
     -- | > NaturalFold                              ~  Natural/fold
     | NaturalFold
@@ -269,7 +269,7 @@ data Expr s a
     | NaturalTimes (Expr s a) (Expr s a)
     -- | > Integer                                  ~  Integer
     | Integer
-    -- | > IntegerLit n                             ~  n
+    -- | > IntegerLit n                             ~  ±n
     | IntegerLit Integer
     -- | > IntegerShow                              ~  Integer/show
     | IntegerShow

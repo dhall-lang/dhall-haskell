@@ -104,6 +104,9 @@ import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+
 throws :: Exception e => Either e a -> IO a
 throws (Left  e) = Control.Exception.throwIO e
 throws (Right r) = return r
@@ -133,7 +136,7 @@ instance Exception InvalidType
 
     The first argument determines the type of value that you decode:
 
->>> input integer "2"
+>>> input integer "+2"
 2
 >>> input (vector double) "[1.0, 2.0]"
 [1.0,2.0]
@@ -235,13 +238,13 @@ rawInput (Type {..}) expr = do
 >
 >
 >     ┌─────────────┐
->     │ 1 : Integer │  ❰1❱ is an expression that has type ❰Integer❱, so the type
+>     │ 1 : Natural │  ❰1❱ is an expression that has type ❰Natural❱, so the type
 >     └─────────────┘  checker accepts the annotation
 >
 >
->     ┌────────────────────────┐
->     │ Natural/even +2 : Bool │  ❰Natural/even +2❱ has type ❰Bool❱, so the type
->     └────────────────────────┘  checker accepts the annotation
+>     ┌───────────────────────┐
+>     │ Natural/even 2 : Bool │  ❰Natural/even 2❱ has type ❰Bool❱, so the type
+>     └───────────────────────┘  checker accepts the annotation
 >
 >
 >     ┌────────────────────┐
@@ -362,7 +365,7 @@ bool = Type {..}
 
 {-| Decode a `Natural`
 
->>> input natural "+42"
+>>> input natural "42"
 42
 -}
 natural :: Type Natural
@@ -375,7 +378,7 @@ natural = Type {..}
 
 {-| Decode an `Integer`
 
->>> input integer "42"
+>>> input integer "+42"
 42
 -}
 integer :: Type Integer
@@ -430,7 +433,7 @@ strictText = fmap Data.Text.Lazy.toStrict lazyText
 
 {-| Decode a `Maybe`
 
->>> input (maybe integer) "[1] : Optional Integer"
+>>> input (maybe natural) "[1] : Optional Natural"
 Just 1
 -}
 maybe :: Type a -> Type (Maybe a)
@@ -443,8 +446,8 @@ maybe (Type extractIn expectedIn) = Type extractOut expectedOut
 
 {-| Decode a `Seq`
  -
->>> input (sequence integer) "[1, 2, 3]"
-[1,2,3]
+>>> input (sequence natural) "[1, 2, 3]"
+fromList [1,2,3]
 -}
 sequence :: Type a -> Type (Seq a)
 sequence (Type extractIn expectedIn) = Type extractOut expectedOut
@@ -456,7 +459,7 @@ sequence (Type extractIn expectedIn) = Type extractOut expectedOut
 
 {-| Decode a list
 
->>> input (list integer) "[1, 2, 3]"
+>>> input (list natural) "[1, 2, 3]"
 [1,2,3]
 -}
 list :: Type a -> Type [a]
@@ -464,7 +467,7 @@ list = fmap Data.Foldable.toList . sequence
 
 {-| Decode a `Vector`
 
->>> input (vector integer) "[1, 2, 3]"
+>>> input (vector natural) "[1, 2, 3]"
 [1,2,3]
 -}
 vector :: Type a -> Type (Vector a)
@@ -472,8 +475,8 @@ vector = fmap Data.Vector.fromList . list
 
 {-| Decode `()` from an empty record.
 
->>> input unit "{=}"
-()
+>>> input unit "{=}"  -- GHC doesn't print the result if it is @()@
+
 -}
 unit :: Type ()
 unit = Type extractOut expectedOut
@@ -495,8 +498,8 @@ string = Data.Text.Lazy.unpack <$> lazyText
 
 {-| Given a pair of `Type`s, decode a tuple-record into their pairing.
 
->>> input (pair natural bool) "{ _1 = +42, _2 = False }"
-(42, False)
+>>> input (pair natural bool) "{ _1 = 42, _2 = False }"
+(42,False)
 -}
 pair :: Type a -> Type b -> Type (a, b)
 pair l r = Type extractOut expectedOut
@@ -517,7 +520,7 @@ pair l r = Type extractOut expectedOut
 {-| Any value that implements `Interpret` can be automatically decoded based on
     the inferred return type of `input`
 
->>> input auto "[1, 2, 3]" :: IO (Vector Integer)
+>>> input auto "[1, 2, 3]" :: IO (Vector Natural)
 [1,2,3]
 
     This class auto-generates a default implementation for records that
@@ -1077,7 +1080,7 @@ instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
 > , description =
 >     "A configuration language guaranteed to terminate"
 > , stars =
->     +289
+>     289
 > }
 
     Our parser has type 'Type' @Project@, but we can't build that out of any
