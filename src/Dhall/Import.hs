@@ -806,7 +806,7 @@ loadStaticWith from_import ctx import_ = do
             let actualHash = hashExpression expr
             if expectedHash == actualHash
                 then return ()
-                else throwM (HashMismatch {..})
+                else throwM (Imported (import_:imports) (HashMismatch {..}))
 
     return expr
 
