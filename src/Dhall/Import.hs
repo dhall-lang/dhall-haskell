@@ -769,13 +769,13 @@ loadStaticWith from_import ctx import_ = do
             case Map.lookup here m of
                 Just expr -> return expr
                 Nothing   -> do
-                    expr'  <- loadDynamic from_import here
+                    expr'  <- loadDynamic from_import import_
                     expr'' <- case traverse (\_ -> Nothing) expr' of
                         -- No imports left
                         Just expr -> return expr
                         -- Some imports left, so recurse
                         Nothing   -> do
-                            let imports' = here:imports
+                            let imports' = import_:imports
                             zoom stack (State.put imports')
                             expr'' <- fmap join (traverse (loadStaticWith from_import ctx)
                                                            expr')
@@ -792,7 +792,7 @@ loadStaticWith from_import ctx import_ = do
                     -- There is no need to check expressions that have been
                     -- cached, since they have already been checked
                     case Dhall.TypeCheck.typeWith ctx expr'' of
-                        Left  err -> throwM (Imported (here:imports) err)
+                        Left  err -> throwM (Imported (import_:imports) err)
                         Right _   -> return ()
                     zoom cache (State.put $! Map.insert here expr'' m)
                     return expr''
