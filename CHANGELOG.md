@@ -7,11 +7,16 @@
       was unanimously agreed upon here:
       https://github.com/dhall-lang/dhall-lang/issues/138
     * See also: https://github.com/dhall-lang/dhall-haskell/pull/381
+* BREAKING CHANGE TO THE LANGUAGE: Drop support for importing directories
+    * Importing `dir/` used to resolve to `dir/@`, which is no longer supported
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/384
 * BREAKING CHANGE TO THE API: Rename `Path{,Mode,Hashed,Type}` to
   `Import{,Mode,Hashed,Type}`
     * In practice this change is not breaking for the most common use cases
       since this also provides a `Path` type synonym for backwards compatibility
     * See: https://github.com/dhall-lang/dhall-haskell/pull/376
+* Improve import caching
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/388
 * Increase upper bound on `tasty`
     * See: https://github.com/dhall-lang/dhall-haskell/pull/382
 * Fix lower bound on `insert-ordered-containers`
