@@ -18,7 +18,9 @@
 module Dhall.Core (
     -- * Syntax
       Const(..)
-    , HasHome(..)
+    , Directory(..)
+    , File(..)
+    , FilePrefix(..)
     , Import(..)
     , ImportHashed(..)
     , ImportMode(..)
@@ -80,9 +82,8 @@ import qualified Data.HashSet
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
-import qualified Data.Text.Lazy                        as Text
-import qualified Data.Text.Lazy.Builder                as Builder
-import qualified Data.Text.Prettyprint.Doc             as Pretty
+import qualified Data.Text.Lazy.Builder     as Builder
+import qualified Data.Text.Prettyprint.Doc  as Pretty
 
 {-| Constants for a pure type system
 
@@ -106,34 +107,100 @@ data Const = Type | Kind deriving (Show, Eq, Bounded, Enum)
 instance Buildable Const where
     build = buildConst
 
--- | Whether or not an import is relative to the user's home directory
-data HasHome = Home | Homeless deriving (Eq, Ord, Show)
+{-| Internal representation of a directory that stores the path components in
+    reverse order
+
+    In other words, the directory @/foo/bar/baz@ is encoded as
+    @Directory { components = [ "baz", "bar", "foo" ] }@
+-}
+newtype Directory = Directory { components :: [Text] }
+    deriving (Eq, Ord, Show)
+
+instance Semigroup Directory where
+    Directory components₀ <> Directory components₁ =
+        Directory (components₁ <> components₀)
+
+instance Buildable Directory where
+    build (Directory {..}) =
+        foldMap buildComponent (reverse components)
+      where
+        buildComponent text = "/" <> build text
+
+{-| A `File` is a `directory` followed by one additional path component
+    representing the `file` name
+-}
+data File = File
+    { directory :: Directory
+    , file      :: Text
+    } deriving (Eq, Ord, Show)
+
+instance Buildable File where
+    build (File {..}) = build directory <> "/" <> build file
+
+instance Semigroup File where
+    File directory₀ _ <> File directory₁ file =
+        File (directory₀ <> directory₁) file
+
+data FilePrefix
+    = Absolute
+    -- ^ Absolute path
+    | Here
+    -- ^ Path relative to @.@
+    | Parent
+    -- ^ Path relative to @..@
+    | Home
+    -- ^ Path relative to @~@
+    deriving (Eq, Ord, Show)
+
+instance Buildable FilePrefix where
+    build Absolute = ""
+    build Here     = "."
+    build Parent   = ".."
+    build Home     = "~"
 
 -- | The type of import (i.e. local vs. remote vs. environment)
 data ImportType
-    = File HasHome FilePath
+    = Local FilePrefix File
     -- ^ Local path
-    | URL  Text (Maybe ImportHashed)
+    | URL Text File Text (Maybe ImportHashed)
     -- ^ URL of remote resource and optional headers stored in an import
     | Env  Text
     -- ^ Environment variable
     deriving (Eq, Ord, Show)
 
+parent :: File
+parent = File { directory = Directory { components = [ ".." ] }, file = "" }
+
+instance Semigroup ImportType where
+    Local prefix file₀ <> Local Here file₁ = Local prefix (file₀ <> file₁)
+
+    URL prefix file₀ suffix headers <> Local Here file₁ =
+        URL prefix (file₀ <> file₁) suffix headers
+
+    Local prefix file₀ <> Local Parent file₁ =
+        Local prefix (file₀ <> parent <> file₁)
+
+    URL prefix file₀ suffix headers <> Local Parent file₁ =
+        URL prefix (file₀ <> parent <> file₁) suffix headers
+
+    _ <> import₁ =
+        import₁
+
 instance Buildable ImportType where
-    build (File Home     file)
-        = "~/" <> build (Text.pack file)
-    build (File Homeless file)
-        |  Text.isPrefixOf  "./" txt
-        || Text.isPrefixOf   "/" txt
-        || Text.isPrefixOf "../" txt
-        = build txt <> " "
-        | otherwise
-        = "./" <> build txt <> " "
+    build (Local prefix file) =
+        build prefix <> build file <> " "
+
+    build (URL prefix file suffix headers) =
+            build prefix
+        <>  build file
+        <>  build suffix
+        <>  foldMap buildHeaders headers
+        <>  " "
       where
-        txt = Text.pack file
-    build (URL str  Nothing      ) = build str <> " "
-    build (URL str (Just headers)) = build str <> " using " <> build headers <> " "
-    build (Env env) = "env:" <> build env
+        buildHeaders h = " using " <> build h
+
+    build (Env env) =
+        "env:" <> build env <> " "
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
 data ImportMode = Code | RawText deriving (Eq, Ord, Show)
@@ -143,6 +210,10 @@ data ImportHashed = ImportHashed
     { hash       :: Maybe (Crypto.Hash.Digest SHA256)
     , importType :: ImportType
     } deriving (Eq, Ord, Show)
+
+instance Semigroup ImportHashed where
+    ImportHashed _ importType₀ <> ImportHashed hash importType₁ =
+        ImportHashed hash (importType₀ <> importType₁)
 
 instance Buildable ImportHashed where
     build (ImportHashed  Nothing p) =
@@ -155,6 +226,10 @@ data Import = Import
     { importHashed :: ImportHashed
     , importMode   :: ImportMode
     } deriving (Eq, Ord, Show)
+
+instance Semigroup Import where
+    Import importHashed₀ _ <> Import importHashed₁ code =
+        Import (importHashed₀ <> importHashed₁) code
 
 instance Buildable Import where
     build (Import {..}) = build importHashed <> suffix
