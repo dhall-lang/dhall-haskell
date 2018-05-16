@@ -40,6 +40,9 @@ typecheckTests =
         , should
             "allow anonymous functions in types to be judgmentally equal"
             "anonymousFunctionsInTypes"
+        , should
+            "correctly handle α-equivalent merge alternatives"
+            "mergeEquivalence"
         ]
 
 should :: Text -> Text -> TestTree
