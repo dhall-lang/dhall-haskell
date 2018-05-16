@@ -1,4 +1,10 @@
 resolver: lts-9.6
+
+nix:
+  packages:
+    - ncurses
+    - zlib
+
 extra-deps:
 - prettyprinter-1.2.0.1
 - formatting-6.3.1
