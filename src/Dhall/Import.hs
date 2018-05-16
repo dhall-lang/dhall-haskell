@@ -695,19 +695,17 @@ loadStaticWith from_import ctx import_ = do
         then throwM (Imported imports (ReferentiallyOpaque import_))
         else return ()
 
-    (expr, cached) <- if here `elem` canonicalizeAll imports
+    expr <- if here `elem` canonicalizeAll imports
         then throwM (Imported imports (Cycle import_))
         else do
             m <- zoom cache State.get
             case Map.lookup here m of
-                Just expr -> return (expr, True)
+                Just expr -> return expr
                 Nothing   -> do
                     expr'  <- loadDynamic from_import import_
                     expr'' <- case traverse (\_ -> Nothing) expr' of
                         -- No imports left
-                        Just expr -> do
-                            zoom cache (State.put $! Map.insert here expr m)
-                            return expr
+                        Just expr -> return expr
                         -- Some imports left, so recurse
                         Nothing   -> do
                             let imports' = import_:imports
@@ -716,21 +714,21 @@ loadStaticWith from_import ctx import_ = do
                                                            expr')
                             zoom stack (State.put imports)
                             return expr''
-                    return (expr'', False)
-
-    -- Type-check expressions here for three separate reasons:
-    --
-    --  * to verify that they are closed
-    --  * to catch type errors as early in the import process as possible
-    --  * to avoid normalizing ill-typed expressions that need to be hashed
-    --
-    -- There is no need to check expressions that have been cached, since they
-    -- have already been checked
-    if cached
-        then return ()
-        else case Dhall.TypeCheck.typeWith ctx expr of
-            Left  err -> throwM (Imported (import_:imports) err)
-            Right _   -> return ()
+                    -- Type-check expressions here for three separate reasons:
+                    --
+                    --  * to verify that they are closed
+                    --  * to catch type errors as early in the import process
+                    --    as possible
+                    --  * to avoid normalizing ill-typed expressions that need
+                    --    to be hashed
+                    --
+                    -- There is no need to check expressions that have been
+                    -- cached, since they have already been checked
+                    case Dhall.TypeCheck.typeWith ctx expr'' of
+                        Left  err -> throwM (Imported (import_:imports) err)
+                        Right _   -> return ()
+                    zoom cache (State.put $! Map.insert here expr'' m)
+                    return expr''
 
     case hash (importHashed import_) of
         Nothing -> do
