@@ -4,9 +4,9 @@
 Examples:
 
 ```
-./fold True Integer 0 1 = 0
+./fold True Natural 0 1 = 0
 
-./fold False Integer 0 1 = 1
+./fold False Natural 0 1 = 1
 ```
 -}
     let fold

@@ -247,7 +247,7 @@ data Expr s a
     | BoolIf (Expr s a) (Expr s a) (Expr s a)
     -- | > Natural                                  ~  Natural
     | Natural
-    -- | > NaturalLit n                             ~  +n
+    -- | > NaturalLit n                             ~  n
     | NaturalLit Natural
     -- | > NaturalFold                              ~  Natural/fold
     | NaturalFold
@@ -269,7 +269,7 @@ data Expr s a
     | NaturalTimes (Expr s a) (Expr s a)
     -- | > Integer                                  ~  Integer
     | Integer
-    -- | > IntegerLit n                             ~  n
+    -- | > IntegerLit n                             ~  ±n
     | IntegerLit Integer
     -- | > IntegerShow                              ~  Integer/show
     | IntegerShow
@@ -1310,9 +1310,10 @@ normalizeWith ctx e0 = loop (denote e0)
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
             App NaturalToInteger (NaturalLit n) -> IntegerLit (toInteger n)
             App NaturalShow (NaturalLit n) ->
-                TextLit (Chunks [] ("+" <> buildNatural n))
-            App IntegerShow (IntegerLit n) ->
-                TextLit (Chunks [] (buildNumber n))
+                TextLit (Chunks [] (buildNatural n))
+            App IntegerShow (IntegerLit n)
+                | 0 <= n    -> TextLit (Chunks [] ("+" <> buildNumber n))
+                | otherwise -> TextLit (Chunks [] (buildNumber n))
             App DoubleShow (DoubleLit n) ->
                 TextLit (Chunks [] (buildScientific n))
             App (App OptionalBuild _A₀) g ->

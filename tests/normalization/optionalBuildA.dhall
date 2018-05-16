@@ -4,12 +4,12 @@
     (   λ(optional : Type)
       → λ(just : Natural → optional)
       → λ(nothing : optional)
-      → just +1
+      → just 1
     )
 , example1 =
     Optional/build
     Integer
-    (λ(optional : Type) → λ(x : Integer → optional) → λ(x : optional) → x@1 1)
+    (λ(optional : Type) → λ(x : Integer → optional) → λ(x : optional) → x@1 +1)
 , example2 =
       λ(id : ∀(a : Type) → a → a)
     → Optional/build

@@ -4,9 +4,9 @@ Retrieve the last element of the list
 Examples:
 
 ```
-./last Integer [ 0, 1, 2 ] = [ 2 ] : Optional Integer
+./last Natural [ 0, 1, 2 ] = [ 2 ] : Optional Natural
 
-./last Integer ([] : List Integer) = [] : Optional Integer
+./last Natural ([] : List Natural) = [] : Optional Natural
 ```
 -}
 let last : ∀(a : Type) → List a → Optional a = List/last in last

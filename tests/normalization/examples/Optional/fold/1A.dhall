@@ -1,1 +1,1 @@
-../../../../../Prelude/Optional/fold Integer ([] : Optional Integer) Integer (λ(x : Integer) → x) 0
+../../../../../Prelude/Optional/fold Natural ([] : Optional Natural) Natural (λ(x : Natural) → x) 0

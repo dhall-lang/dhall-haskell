@@ -203,8 +203,8 @@ simpleCustomization = testCase "simpleCustomization" $ do
       valCtx e = case e of
                     (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalLit y)) -> Just (NaturalLit (min x y))
                     _ -> Nothing
-  e <- codeWith tyCtx "min (min +11 +12) +8 + +1" 
-  assertNormalizesToWith valCtx e "+9"
+  e <- codeWith tyCtx "min (min 11 12) 8 + 1" 
+  assertNormalizesToWith valCtx e "9"
 
 nestedReduction :: TestTree
 nestedReduction = testCase "doubleReduction" $ do
@@ -219,8 +219,8 @@ nestedReduction = testCase "doubleReduction" $ do
                     (App (Var (V "fiveorless" 0)) (NaturalLit x)) -> Just
                         (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalPlus (NaturalLit 3) (NaturalLit 2)))
                     _ -> Nothing
-  e <- codeWith tyCtx "wurble +6"
-  assertNormalizesToWith valCtx e "+5"
+  e <- codeWith tyCtx "wurble 6"
+  assertNormalizesToWith valCtx e "5"
 
 should :: Text -> Text -> TestTree
 should name basename =

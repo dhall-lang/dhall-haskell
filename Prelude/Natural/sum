@@ -4,9 +4,9 @@ Add all the numbers in a `List`
 Examples:
 
 ```
-./sum [ +2, +3, +5 ] = +10
+./sum [ 2, 3, 5 ] = 10
 
-./sum ([] : List Natural) = +0
+./sum ([] : List Natural) = 0
 ```
 -}
     let sum
@@ -17,6 +17,6 @@ Examples:
             xs
             Natural
             (λ(l : Natural) → λ(r : Natural) → l + r)
-            +0
+            0
 
 in  sum

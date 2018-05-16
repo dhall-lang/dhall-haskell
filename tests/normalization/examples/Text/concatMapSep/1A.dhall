@@ -1,1 +1,1 @@
-../../../../../Prelude/Text/concatMapSep ", " Integer Integer/show ([] : List Integer)
+../../../../../Prelude/Text/concatMapSep ", " Natural Natural/show ([] : List Natural)

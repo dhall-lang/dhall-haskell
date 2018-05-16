@@ -1,1 +1,1 @@
-../../../../../Prelude/Optional/concat Integer ([ [] : Optional Integer ] : Optional (Optional Integer))
+../../../../../Prelude/Optional/concat Natural ([ [] : Optional Natural ] : Optional (Optional Natural))

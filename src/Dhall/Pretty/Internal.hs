@@ -736,10 +736,11 @@ prettyExprF (BoolLit True) =
     builtin "True"
 prettyExprF (BoolLit False) =
     builtin "False"
-prettyExprF (IntegerLit a) =
-    prettyNumber a
+prettyExprF (IntegerLit a)
+    | 0 <= a    = literal "+" <> prettyNumber a
+    | otherwise = prettyNumber a
 prettyExprF (NaturalLit a) =
-    literal "+" <> prettyNatural a
+    prettyNatural a
 prettyExprF (DoubleLit a) =
     prettyScientific a
 prettyExprF (TextLit a) =
@@ -1094,10 +1095,11 @@ buildExprF (BoolLit True) =
     "True"
 buildExprF (BoolLit False) =
     "False"
-buildExprF (IntegerLit a) =
-    buildNumber a
+buildExprF (IntegerLit a)
+    | 0 <= a    = "+" <> buildNumber a
+    | otherwise = buildNumber a
 buildExprF (NaturalLit a) =
-    "+" <> buildNatural a
+    buildNatural a
 buildExprF (DoubleLit a) =
     buildScientific a
 buildExprF (TextLit a) =

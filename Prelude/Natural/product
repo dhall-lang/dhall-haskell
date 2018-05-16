@@ -4,9 +4,9 @@ Multiply all the numbers in a `List`
 Examples:
 
 ```
-./product [ +2, +3, +5 ] = +30
+./product [ 2, 3, 5 ] = 30
 
-./product ([] : List Natural) = +1
+./product ([] : List Natural) = 1
 ```
 -}
     let product
@@ -17,6 +17,6 @@ Examples:
             xs
             Natural
             (λ(l : Natural) → λ(r : Natural) → l * r)
-            +1
+            1
 
 in  product

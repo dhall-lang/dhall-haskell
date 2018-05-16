@@ -5,9 +5,9 @@ separator in between each value
 Examples:
 
 ```
-./concatMapSep ", " Integer Integer/show [ 0, 1, 2 ] = "0, 1, 2"
+./concatMapSep ", " Natural Natural/show [ 0, 1, 2 ] = "0, 1, 2"
 
-./concatMapSep ", " Integer Integer/show ([] : List Integer) = ""
+./concatMapSep ", " Natural Natural/show ([] : List Natural) = ""
 ```
 -}
     let concatMapSep

@@ -4,9 +4,9 @@ Returns `True` if the `Optional` value is absent and `False` if present
 Examples:
 
 ```
-./null Integer ([ 2 ] : Optional Integer) = False
+./null Natural ([ 2 ] : Optional Natural) = False
 
-./null Integer ([] : Optional Integer) = True
+./null Natural ([] : Optional Natural) = True
 ```
 -}
     let null
