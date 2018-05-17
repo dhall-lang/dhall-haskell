@@ -629,13 +629,14 @@ typeWithA tpa = loop
                     Nothing  -> Left (TypeError ctx e (MissingHandler diffY))
                     Just tX  ->
                         case tX of
-                            Pi _ tY' t' -> do
+                            Pi y tY' t' -> do
                                 if Dhall.Core.judgmentallyEqual tY tY'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
-                                if Dhall.Core.judgmentallyEqual t t'
+                                let t'' = Dhall.Core.shift (-1) (V y 0) t'
+                                if Dhall.Core.judgmentallyEqual t t''
                                     then return ()
-                                    else Left (TypeError ctx e (InvalidHandlerOutputType kY t t'))
+                                    else Left (TypeError ctx e (InvalidHandlerOutputType kY t t''))
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
         mapM_ process (Data.HashMap.Strict.InsOrd.toList ktsY)
         return t
@@ -661,20 +662,21 @@ typeWithA tpa = loop
 
         (kX, t) <- case Data.HashMap.Strict.InsOrd.toList ktsX of
             []               -> Left (TypeError ctx e MissingMergeType)
-            (kX, Pi _ _ t):_ -> return (kX, t)
+            (kX, Pi y _ t):_ -> return (kX, Dhall.Core.shift (-1) (V y 0) t)
             (kX, tX      ):_ -> Left (TypeError ctx e (HandlerNotAFunction kX tX))
         let process (kY, tY) = do
                 case Data.HashMap.Strict.InsOrd.lookup kY ktsX of
                     Nothing  -> Left (TypeError ctx e (MissingHandler diffY))
                     Just tX  ->
                         case tX of
-                            Pi _ tY' t' -> do
+                            Pi y tY' t' -> do
                                 if Dhall.Core.judgmentallyEqual tY tY'
                                     then return ()
                                     else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
-                                if Dhall.Core.judgmentallyEqual t t'
+                                let t'' = Dhall.Core.shift (-1) (V y 0) t'
+                                if Dhall.Core.judgmentallyEqual t t''
                                     then return ()
-                                    else Left (TypeError ctx e (HandlerOutputTypeMismatch kX t kY t'))
+                                    else Left (TypeError ctx e (HandlerOutputTypeMismatch kX t kY t''))
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
         mapM_ process (Data.HashMap.Strict.InsOrd.toList ktsY)
         return t
