@@ -50,6 +50,7 @@ import qualified Data.Char
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
 import qualified Data.List
+import qualified Data.List.NonEmpty
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
@@ -771,74 +772,86 @@ identifier = do
     n <- indexed <|> pure 0
     return (V x n)
 
-headPathCharacter :: Char -> Bool
-headPathCharacter c =
-        ('\x21' <= c && c <= '\x27')
+pathCharacter :: Char -> Bool
+pathCharacter c =
+        ('\x21' <= c && c <= '\x22')
+    ||  ('\x24' <= c && c <= '\x27')
     ||  ('\x2A' <= c && c <= '\x2B')
     ||  ('\x2D' <= c && c <= '\x2E')
     ||  ('\x30' <= c && c <= '\x3B')
     ||  c == '\x3D'
-    ||  ('\x3F' <= c && c <= '\x5A')
+    ||  ('\x40' <= c && c <= '\x5A')
     ||  ('\x5E' <= c && c <= '\x7A')
     ||  c == '\x7C'
     ||  c == '\x7E'
 
-pathCharacter :: Char -> Bool
-pathCharacter c =
-        headPathCharacter c
-    ||  c == '\\'
-    ||  c == '/'
+pathComponent :: Parser Text
+pathComponent = do
+    _      <- "/" :: Parser Builder
+    string <- some (Text.Parser.Char.satisfy pathCharacter)
 
-fileRaw :: Parser ImportType
-fileRaw =
+    return (Data.Text.Lazy.pack string)
+
+file_ :: Parser File
+file_ = do
+    path <- Data.List.NonEmpty.some1 pathComponent
+
+    let directory = Directory (reverse (Data.List.NonEmpty.init path))
+    let file      = Data.List.NonEmpty.last path
+
+    return (File {..})
+
+localRaw :: Parser ImportType
+localRaw =
     choice
-        [ try absolutePath
-        , relativePath
-        , parentPath
+        [ parentPath
+        , herePath
         , homePath
+        , try absolutePath
         ]
   where
-    absolutePath = do
-        _  <- Text.Parser.Char.char '/'
-        a  <- Text.Parser.Char.satisfy headPathCharacter
-        bs <- many (Text.Parser.Char.satisfy pathCharacter)
-        let filepath = '/':a:bs
-        return (File Homeless filepath)
-
-    relativePath = do
-        _  <- Text.Parser.Char.text "./"
-        as <- many (Text.Parser.Char.satisfy pathCharacter)
-        let filepath = "./" <> as
-        return (File Homeless filepath)
-
     parentPath = do
-        _  <- Text.Parser.Char.text "../"
-        as <- many (Text.Parser.Char.satisfy pathCharacter)
-        let filepath = "../" <> as
-        return (File Homeless filepath)
+        _    <- ".." :: Parser Builder
+        file <- file_
+
+        return (Local Parent file)
+
+    herePath = do
+        _    <- "." :: Parser Builder
+        file <- file_
+
+        return (Local Here file)
 
     homePath = do
-        _  <- Text.Parser.Char.text "~/"
-        as <- many (Text.Parser.Char.satisfy pathCharacter)
-        return (File Home as)
+        _    <- "~" :: Parser Builder
+        file <- file_
 
-file :: Parser ImportType
-file = do
-    a <- fileRaw
+        return (Local Home file)
+
+    absolutePath = do
+        file <- file_
+
+        return (Local Absolute file)
+
+local :: Parser ImportType
+local = do
+    a <- localRaw
     whitespace
     return a
 
 scheme :: Parser Builder
 scheme = "http" <> option "s"
 
-httpRaw :: Parser Builder
-httpRaw =
-        scheme
-    <>  "://"
-    <>  authority
-    <>  pathAbempty
-    <>  option ("?" <> query)
-    <>  option ("#" <> fragment)
+httpRaw :: Parser (Text, File, Text)
+httpRaw = do
+    prefix <- scheme <> "://" <> authority
+    file   <- file_
+    suffix <- option ("?" <> query) <> option ("#" <> fragment)
+
+    let prefixText = Data.Text.Lazy.Builder.toLazyText prefix
+    let suffixText = Data.Text.Lazy.Builder.toLazyText suffix
+
+    return (prefixText, file, suffixText)
 
 authority :: Parser Builder
 authority = option (try (userinfo <> "@")) <> host <> option (":" <> port)
@@ -946,12 +959,6 @@ regName = star (satisfy predicate <|> pctEncoded)
   where
     predicate c = unreserved c || subDelims c
 
-pathAbempty :: Parser Builder
-pathAbempty = star ("/" <> segment)
-
-segment :: Parser Builder
-segment = star pchar
-
 pchar :: Parser Builder
 pchar = satisfy predicate <|> pctEncoded
   where
@@ -979,12 +986,12 @@ subDelims c = c `elem` ("!$&'()*+,;=" :: String)
 
 http :: Parser ImportType
 http = do
-    a <- httpRaw
+    (prefix, path, suffix) <- httpRaw
     whitespace
-    b <- optional (do
+    headers <- optional (do
         _using
         importHashed_ )
-    return (URL (Data.Text.Lazy.Builder.toLazyText a) b)
+    return (URL prefix path suffix headers)
 
 env :: Parser ImportType
 env = do
@@ -1559,7 +1566,7 @@ exprA :: Parser a -> Parser (Expr Src a)
 exprA = completeExpression
 
 importType_ :: Parser ImportType
-importType_ = choice [ file, http, env ]
+importType_ = choice [ local, http, env ]
 
 importHashed_ :: Parser ImportHashed
 importHashed_ = do
