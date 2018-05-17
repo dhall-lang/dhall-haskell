@@ -3,6 +3,7 @@
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -552,7 +553,9 @@ exprFromImport (Import {..}) = do
             requestWithHeaders <- case maybeHeaders of
                 Nothing           -> return request
                 Just importHashed_ -> do
-                    expr <- loadStaticIO Dhall.Context.empty (Import importHashed_ Code)
+                    expr <- loadStaticIO Dhall.Context.empty
+                                         (const Nothing)
+                                         (Import importHashed_ Code)
                     let expected :: Expr Src X
                         expected =
                             App List
@@ -639,6 +642,7 @@ loadDynamic from_import import_ = do
 
 loadStaticIO
     :: Dhall.Context.Context (Expr Src X)
+    -> Dhall.Core.Normalizer X
     -> Import
     -> StateT Status IO (Expr Src X)
 loadStaticIO = loadStaticWith exprFromImport
@@ -649,26 +653,29 @@ loadWith
     :: MonadCatch m
     => (Import -> StateT Status m (Expr Src Import))
     -> Dhall.Context.Context (Expr Src X)
+    -> Dhall.Core.Normalizer X
     -> Expr Src Import
     -> m (Expr Src X)
-loadWith from_import ctx = evalStatus (loadStaticWith from_import ctx)
+loadWith from_import ctx n = evalStatus (loadStaticWith from_import ctx n)
 
 -- | Resolve all imports within an expression using a custom typing context.
 --
 -- @load = loadWithContext Dhall.Context.empty@
 loadWithContext
     :: Dhall.Context.Context (Expr Src X)
+    -> Dhall.Core.Normalizer X
     -> Expr Src Import
     -> IO (Expr Src X)
-loadWithContext ctx = evalStatus (loadStaticIO ctx)
+loadWithContext ctx n = evalStatus (loadStaticIO ctx n)
 
 loadStaticWith
     :: MonadCatch m
     => (Import -> StateT Status m (Expr Src Import))
     -> Dhall.Context.Context (Expr Src X)
+    -> Dhall.Core.Normalizer X
     -> Import
     -> StateT Status m (Expr Src X)
-loadStaticWith from_import ctx import_ = do
+loadStaticWith from_import ctx n import_ = do
     imports <- zoom stack State.get
 
     let local (Import (ImportHashed _ (URL   {})) _) = False
@@ -697,7 +704,7 @@ loadStaticWith from_import ctx import_ = do
                         Nothing   -> do
                             let imports' = import_:imports
                             zoom stack (State.put imports')
-                            expr'' <- fmap join (traverse (loadStaticWith from_import ctx)
+                            expr'' <- fmap join (traverse (loadStaticWith from_import ctx n)
                                                            expr')
                             zoom stack (State.put imports)
                             return expr''
@@ -711,11 +718,11 @@ loadStaticWith from_import ctx import_ = do
                     --
                     -- There is no need to check expressions that have been
                     -- cached, since they have already been checked
-                    case Dhall.TypeCheck.typeWith ctx expr'' of
+                    expr''' <- case Dhall.TypeCheck.typeWith ctx expr'' of
                         Left  err -> throwM (Imported (import_:imports) err)
-                        Right _   -> return ()
-                    zoom cache (State.put $! Map.insert here expr'' m)
-                    return expr''
+                        Right _   -> return (Dhall.Core.normalizeWith n expr'')
+                    zoom cache (State.put $! Map.insert here expr''' m)
+                    return expr'''
 
     case hash (importHashed import_) of
         Nothing -> do
@@ -735,7 +742,7 @@ evalStatus cb expr = State.evalStateT (fmap join (traverse cb expr)) emptyStatus
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
-load = loadWithContext Dhall.Context.empty
+load = loadWithContext Dhall.Context.empty (const Nothing)
 
 -- | Hash a fully resolved expression
 hashExpression :: Expr s X -> (Crypto.Hash.Digest SHA256)

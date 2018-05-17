@@ -172,7 +172,7 @@ inputWith
     -- ^ The decoded value in Haskell
 inputWith (Type {..}) ctx n txt = do
     expr  <- throws (Dhall.Parser.exprFromText "(input)" txt)
-    expr' <- Dhall.Import.loadWithContext ctx expr
+    expr' <- Dhall.Import.loadWithContext ctx n expr
     let suffix =
             ( Data.Text.Lazy.Builder.toLazyText
             . build
