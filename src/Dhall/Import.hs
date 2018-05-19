@@ -1,7 +1,9 @@
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -121,8 +123,9 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
 import Data.CaseInsensitive (CI)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
-import Data.Monoid ((<>))
+import Data.Semigroup (sconcat, (<>))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 #if MIN_VERSION_base(4,8,0)
@@ -135,7 +138,9 @@ import System.FilePath ((</>))
 import Dhall.Core
     ( Expr(..)
     , Chunks(..)
-    , HasHome(..)
+    , Directory(..)
+    , File(..)
+    , FilePrefix(..)
     , ImportHashed(..)
     , ImportType(..)
     , ImportMode(..)
@@ -161,7 +166,6 @@ import qualified Data.List                        as List
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Encoding
-import qualified Data.Text.IO
 import qualified Data.Text.Lazy                   as Text
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
@@ -365,93 +369,62 @@ needManager = do
             zoom manager (State.put (Just m))
             return m
 
-{-| This function computes the current import by taking the last absolute import
-    (either an absolute `FilePath` or `URL`) and combining it with all following
-    relative imports
-
-    For example, if the file `./foo/bar` imports `./baz`, that will resolve to
-    `./foo/baz`.  Relative imports are relative to a file's parent directory.
-    This also works for URLs, too.
-
-    This code is full of all sorts of edge cases so it wouldn't surprise me at
-    all if you find something broken in here.  Most of the ugliness is due to
-    removing spurious @.@s and @..@s from the import.
-
-    Also, there are way too many `reverse`s in the URL-handling code For now I
-    don't mind, but if were to really do this correctly we'd store the URLs as
-    `Text` for O(1) access to the end of the string.  The only reason we use
-    `String` at all is for consistency with the @http-client@ library.
+{-|
+> canonicalize (canonicalize x) = canonicalize x
 -}
-canonicalize :: [ImportType] -> ImportType
-canonicalize  []                          = File Homeless "."
-canonicalize (File hasHome0 file0:imports0) =
-    if FilePath.isRelative file0 && hasHome0 == Homeless
-    then go file0 imports0
-    else File hasHome0 (FilePath.normalise file0)
-  where
-    go currImport  []                       = File Homeless (FilePath.normalise currImport)
-    go currImport (Env  _           :_    ) = File Homeless (FilePath.normalise currImport)
-    go currImport (URL  url0 headers:rest ) = combine prefix suffix
+class Canonicalize path where
+    canonicalize :: path -> path
+
+instance Canonicalize Directory where
+    canonicalize (Directory []) = Directory []
+
+    canonicalize (Directory ("." : components₀)) =
+        canonicalize (Directory components₀)
+
+    canonicalize (Directory (".." : components₀)) =
+        case canonicalize (Directory components₀) of
+            Directory      []           -> Directory [ ".." ]
+            Directory (_ : components₁) -> Directory components₁
+
+    canonicalize (Directory (component : components₀)) =
+        Directory (component : components₁)
       where
-        headers' = fmap (onImportType (\h -> canonicalize (h:rest))) headers
+        Directory components₁ = canonicalize (Directory components₀)
 
-        prefix = parentURL url0
+instance Canonicalize File where
+    canonicalize (File { directory, .. }) =
+        File { directory = canonicalize directory, .. }
 
-        suffix = FilePath.normalise currImport
+instance Canonicalize ImportType where
+    canonicalize (Local prefix file) =
+        Local prefix (canonicalize file)
 
-        -- `clean` will resolve internal @.@/@..@'s in @currImport@, but we
-        -- still need to manually handle @.@/@..@'s at the beginning of the path
-        combine url path = case List.stripPrefix "../" path of
-            Just path' -> combine url' path'
-              where
-                url' = parentURL url
-            Nothing    -> case List.stripPrefix "./" path of
-                Just path' -> combine url path'
-                Nothing    ->
-                    -- This `last` is safe because the lexer constrains all
-                    -- URLs to be non-empty.  I couldn't find a simple and safe
-                    -- equivalent in the `text` API
-                    case Text.last url of
-                        '/' -> URL (url <>        path') headers'
-                        _   -> URL (url <> "/" <> path') headers'
-                  where
-                    path' = Text.pack path
-    go currImport (File hasHome file:imports) =
-        if FilePath.isRelative file && hasHome == Homeless
-        then go file' imports
-        else File hasHome (FilePath.normalise file')
-      where
-        file' =
-            FilePath.takeDirectory file </> currImport
-canonicalize (URL path headers:rest) = URL path headers'
-  where
-    headers' = fmap (onImportType (\h -> canonicalize (h:rest))) headers
-canonicalize (Env env         :_   ) = Env env
+    canonicalize (URL prefix file suffix header) =
+        URL prefix (canonicalize file) suffix header
 
-onImportType :: (ImportType -> ImportType) -> ImportHashed -> ImportHashed
-onImportType f (ImportHashed a b) = ImportHashed a (f b)
+    canonicalize (Env name) =
+        Env name
+
+instance Canonicalize ImportHashed where
+    canonicalize (ImportHashed hash importType) =
+        ImportHashed hash (canonicalize importType)
+
+instance Canonicalize Import where
+    canonicalize (Import importHashed importMode) =
+        Import (canonicalize importHashed) importMode
 
 canonicalizeImport :: [Import] -> Import
-canonicalizeImport [] =
-    Import
-        { importMode   = Code
-        , importHashed = ImportHashed
-            { hash       = Nothing
-            , importType = canonicalize []
+canonicalizeImport imports =
+    canonicalize (sconcat (defaultImport :| reverse imports))
+  where
+    defaultImport =
+        Import
+            { importMode   = Code
+            , importHashed = ImportHashed
+                { hash       = Nothing
+                , importType = Local Here (File (Directory []) ".")
+                }
             }
-        }
-canonicalizeImport (import_:imports) =
-    Import
-        { importMode   = importMode import_
-        , importHashed = (importHashed import_)
-             { hash       = hash (importHashed import_)
-             , importType =
-                 canonicalize (map (importType . importHashed) (import_:imports))
-             }
-        }
-
-parentURL :: Text -> Text
-parentURL = Text.dropWhileEnd (/= '/')
 
 toHeaders
   :: Expr s a
@@ -532,108 +505,125 @@ instance Show HashMismatch where
 
 -- | Parse an expression from a `Import` containing a Dhall program
 exprFromImport :: Import -> StateT Status IO (Expr Src Import)
-exprFromImport (Import {..}) = case importType of
-    File hasHome file -> liftIO (do
-        path <- case hasHome of
-            Home -> do
-                home <- System.Directory.getHomeDirectory
-                return (home </> file)
-            Homeless -> do
-                return file
+exprFromImport (Import {..}) = do
+    let ImportHashed {..} = importHashed
 
-        case importMode of
-            Code -> do
-                exists <- System.Directory.doesFileExist path
-                if exists
-                    then return ()
-                    else throwIO (MissingFile path)
+    (path, text) <- case importType of
+        Local prefix (File {..}) -> liftIO $ do
+            let Directory {..} = directory
 
-                text <- Data.Text.Lazy.IO.readFile path
-                case Text.Megaparsec.parse parser path text of
-                    Left errInfo -> do
-                        throwIO (ParseError errInfo text)
-                    Right expr -> do
-                        return expr
-            RawText -> do
-                text <- Data.Text.IO.readFile path
-                return (TextLit (Chunks [] (build text))) )
-    URL url headerImport -> do
-        m       <- needManager
-        request <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
+            prefixPath <- case prefix of
+                Home -> do
+                    System.Directory.getHomeDirectory
 
-        requestWithHeaders <- case headerImport of
-            Nothing           -> return request
-            Just importHashed_ -> do
-                expr <- loadStaticIO Dhall.Context.empty (Import importHashed_ Code)
-                let expected :: Expr Src X
-                    expected =
-                        App List
-                            ( Record
-                                ( Data.HashMap.Strict.InsOrd.fromList
-                                    [("header", Text), ("value", Text)]
+                Absolute -> do
+                    return "/"
+
+                Parent -> do
+                    pwd <- System.Directory.getCurrentDirectory
+                    return (FilePath.takeDirectory pwd)
+
+                Here -> do
+                    System.Directory.getCurrentDirectory
+
+            let cs = map Text.unpack (file : components)
+
+            let cons component dir = dir </> component
+
+            let path = foldr cons prefixPath cs
+
+            exists <- System.Directory.doesFileExist path
+
+            if exists
+                then return ()
+                else throwIO (MissingFile path)
+
+            text <- Data.Text.Lazy.IO.readFile path
+
+            return (path, text)
+
+        URL prefix file suffix maybeHeaders -> do
+            m <- needManager
+
+            let fileText = Builder.toLazyText (build file)
+            let url      = Text.unpack (prefix <> fileText <> suffix)
+
+            request <- liftIO (HTTP.parseUrlThrow url)
+
+            requestWithHeaders <- case maybeHeaders of
+                Nothing           -> return request
+                Just importHashed_ -> do
+                    expr <- loadStaticIO Dhall.Context.empty
+                                         (const Nothing)
+                                         (Import importHashed_ Code)
+                    let expected :: Expr Src X
+                        expected =
+                            App List
+                                ( Record
+                                    ( Data.HashMap.Strict.InsOrd.fromList
+                                        [("header", Text), ("value", Text)]
+                                    )
                                 )
-                            )
-                let suffix =
-                        ( Builder.toLazyText
-                        . build
-                        ) expected
-                let annot = case expr of
-                        Note (Src begin end bytes) _ ->
-                            Note (Src begin end bytes') (Annot expr expected)
-                          where
-                            bytes' = bytes <> " : " <> suffix
-                        _ ->
-                            Annot expr expected
-                case Dhall.TypeCheck.typeOf annot of
-                    Left err -> liftIO (throwIO err)
-                    Right _  -> return ()
-                let expr' = Dhall.Core.normalize expr
-                headers <- case toHeaders expr' of
-                    Just headers -> do
-                        return headers
-                    Nothing      -> do
-                        liftIO (throwIO InternalError)
-                let requestWithHeaders = request
-                        { HTTP.requestHeaders = headers
-                        }
-                return requestWithHeaders
-        response <- liftIO (HTTP.httpLbs requestWithHeaders m)
+                    let suffix_ =
+                            ( Builder.toLazyText
+                            . build
+                            ) expected
+                    let annot = case expr of
+                            Note (Src begin end bytes) _ ->
+                                Note (Src begin end bytes') (Annot expr expected)
+                              where
+                                bytes' = bytes <> " : " <> suffix_
+                            _ ->
+                                Annot expr expected
 
-        let bytes = HTTP.responseBody response
+                    case Dhall.TypeCheck.typeOf annot of
+                        Left err -> liftIO (throwIO err)
+                        Right _  -> return ()
 
-        text <- case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
-            Left  err  -> liftIO (throwIO err)
-            Right text -> return text
+                    let expr' = Dhall.Core.normalize expr
 
-        case importMode of
-            Code ->
-                case Text.Megaparsec.parse parser (Text.unpack url) text of
-                    Left  err  -> liftIO (throwIO err)
-                    Right expr -> return expr
-            RawText -> do
-                return (TextLit (Chunks [] (build text)))
-    Env env -> liftIO (do
-        x <- System.Environment.lookupEnv (Text.unpack env)
-        case x of
-            Just str -> do
-                let text = Text.pack str
-                case importMode of
-                    Code ->
-                        case Text.Megaparsec.parse parser (Text.unpack env) text of
-                            Left errInfo -> do
-                                throwIO (ParseError errInfo text)
-                            Right expr   -> do
-                                return expr
-                    RawText -> return (TextLit (Chunks [] (build str)))
-            Nothing  -> throwIO (MissingEnvironmentVariable env) )
-  where
-    ImportHashed {..} = importHashed
+                    headers <- case toHeaders expr' of
+                        Just headers -> do
+                            return headers
+                        Nothing      -> do
+                            liftIO (throwIO InternalError)
 
-    parser = unParser (do
-        Text.Parser.Token.whiteSpace
-        r <- Dhall.Parser.expr
-        Text.Parser.Combinators.eof
-        return r )
+                    let requestWithHeaders = request
+                            { HTTP.requestHeaders = headers
+                            }
+
+                    return requestWithHeaders
+
+            response <- liftIO (HTTP.httpLbs requestWithHeaders m)
+
+            let bytes = HTTP.responseBody response
+
+            case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
+                Left  err  -> liftIO (throwIO err)
+                Right text -> return (url, text)
+
+        Env env -> liftIO $ do
+            x <- System.Environment.lookupEnv (Text.unpack env)
+            case x of
+                Just string -> return (Text.unpack env, Text.pack string)
+                Nothing     -> throwIO (MissingEnvironmentVariable env)
+
+    case importMode of
+        Code -> do
+            let parser = unParser $ do
+                    Text.Parser.Token.whiteSpace
+                    r <- Dhall.Parser.expr
+                    Text.Parser.Combinators.eof
+                    return r
+
+            case Text.Megaparsec.parse parser path text of
+                Left errInfo -> do
+                    liftIO (throwIO (ParseError errInfo text))
+                Right expr -> do
+                    return expr
+
+        RawText -> do
+            return (TextLit (Chunks [] (build text)))
 
 {-| Load an `Import` as a \"dynamic\" expression (without resolving any imports)
 -}
@@ -652,6 +642,7 @@ loadDynamic from_import import_ = do
 
 loadStaticIO
     :: Dhall.Context.Context (Expr Src X)
+    -> Dhall.Core.Normalizer X
     -> Import
     -> StateT Status IO (Expr Src X)
 loadStaticIO = loadStaticWith exprFromImport
@@ -662,31 +653,34 @@ loadWith
     :: MonadCatch m
     => (Import -> StateT Status m (Expr Src Import))
     -> Dhall.Context.Context (Expr Src X)
+    -> Dhall.Core.Normalizer X
     -> Expr Src Import
     -> m (Expr Src X)
-loadWith from_import ctx = evalStatus (loadStaticWith from_import ctx)
+loadWith from_import ctx n = evalStatus (loadStaticWith from_import ctx n)
 
 -- | Resolve all imports within an expression using a custom typing context.
 --
 -- @load = loadWithContext Dhall.Context.empty@
 loadWithContext
     :: Dhall.Context.Context (Expr Src X)
+    -> Dhall.Core.Normalizer X
     -> Expr Src Import
     -> IO (Expr Src X)
-loadWithContext ctx = evalStatus (loadStaticIO ctx)
+loadWithContext ctx n = evalStatus (loadStaticIO ctx n)
 
 loadStaticWith
     :: MonadCatch m
     => (Import -> StateT Status m (Expr Src Import))
     -> Dhall.Context.Context (Expr Src X)
+    -> Dhall.Core.Normalizer X
     -> Import
     -> StateT Status m (Expr Src X)
-loadStaticWith from_import ctx import_ = do
+loadStaticWith from_import ctx n import_ = do
     imports <- zoom stack State.get
 
-    let local (Import (ImportHashed _ (URL _ _ )) _) = False
-        local (Import (ImportHashed _ (File _ _)) _) = True
-        local (Import (ImportHashed _ (Env  _  )) _) = True
+    let local (Import (ImportHashed _ (URL   {})) _) = False
+        local (Import (ImportHashed _ (Local {})) _) = True
+        local (Import (ImportHashed _ (Env   {})) _) = True
 
     let parent = canonicalizeImport imports
     let here   = canonicalizeImport (import_:imports)
@@ -710,7 +704,7 @@ loadStaticWith from_import ctx import_ = do
                         Nothing   -> do
                             let imports' = import_:imports
                             zoom stack (State.put imports')
-                            expr'' <- fmap join (traverse (loadStaticWith from_import ctx)
+                            expr'' <- fmap join (traverse (loadStaticWith from_import ctx n)
                                                            expr')
                             zoom stack (State.put imports)
                             return expr''
@@ -724,11 +718,11 @@ loadStaticWith from_import ctx import_ = do
                     --
                     -- There is no need to check expressions that have been
                     -- cached, since they have already been checked
-                    case Dhall.TypeCheck.typeWith ctx expr'' of
+                    expr''' <- case Dhall.TypeCheck.typeWith ctx expr'' of
                         Left  err -> throwM (Imported (import_:imports) err)
-                        Right _   -> return ()
-                    zoom cache (State.put $! Map.insert here expr'' m)
-                    return expr''
+                        Right _   -> return (Dhall.Core.normalizeWith n expr'')
+                    zoom cache (State.put $! Map.insert here expr''' m)
+                    return expr'''
 
     case hash (importHashed import_) of
         Nothing -> do
@@ -748,7 +742,7 @@ evalStatus cb expr = State.evalStateT (fmap join (traverse cb expr)) emptyStatus
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
-load = loadWithContext Dhall.Context.empty
+load = loadWithContext Dhall.Context.empty (const Nothing)
 
 -- | Hash a fully resolved expression
 hashExpression :: Expr s X -> (Crypto.Hash.Digest SHA256)
