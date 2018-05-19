@@ -30,6 +30,12 @@ let
   pkgs =
     import nixpkgs { inherit config; };
 
+  # Derivation that trivially depends on the current directory so that Hydra's
+  # pull request builder always posts a GitHub status on each revision
+  pwd = pkgs.runCommand "pwd" { here = ./.; } "touch $out";
+
 in
-  { inherit (pkgs.haskellPackages) dhall;
+  { inherit pwd;
+
+    inherit (pkgs.haskellPackages) dhall;
   }
