@@ -15,8 +15,13 @@
     * In practice this change is not breaking for the most common use cases
       since this also provides a `Path` type synonym for backwards compatibility
     * See: https://github.com/dhall-lang/dhall-haskell/pull/376
+* BUG FIX: Fix α-equivalence bug when type-checking `merge`
+    * `merge` expressions would sometimes reject valid code due to a
+       type-checking bug
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/394
 * Improve import caching
     * See: https://github.com/dhall-lang/dhall-haskell/pull/388
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/392
 * Increase upper bound on `tasty`
     * See: https://github.com/dhall-lang/dhall-haskell/pull/382
 * Fix lower bound on `insert-ordered-containers`
