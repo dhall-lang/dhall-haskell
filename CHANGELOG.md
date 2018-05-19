@@ -10,6 +10,11 @@
 * BREAKING CHANGE TO THE LANGUAGE: Drop support for importing directories
     * Importing `dir/` used to resolve to `dir/@`, which is no longer supported
     * See: https://github.com/dhall-lang/dhall-haskell/pull/384
+* BREAKING CHANGE TO THE LANGUAGE: Change to the grammar for imports
+    * File path components can no longer contain `#` or `?` characters
+    * URL imports must now contain at least one path component
+    * URL path components must match the grammar for file path components
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/390
 * BREAKING CHANGE TO THE API: Rename `Path{,Mode,Hashed,Type}` to
   `Import{,Mode,Hashed,Type}`
     * In practice this change is not breaking for the most common use cases
