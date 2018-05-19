@@ -319,8 +319,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e8 = Fix (NAbs "n" (Fix (NApp "naturalOdd" (Fix (NIf e7 e6 "n")))))
         return (Fix (NLet [e5] e8))
     loop NaturalShow = do
-        let e0 = Fix (NApp "toString" "x")
-        return (Fix (NAbs "x" (Fix (NBinary NPlus (Fix (NStr "+")) e0))))
+        return "toString"
     loop NaturalToInteger = do
         return (Fix (NAbs "n" "n"))
     loop (NaturalPlus a b) = do
@@ -334,7 +333,11 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop Integer = return (Fix (NSet []))
     loop (IntegerLit n) = return (Fix (NConstant (NInt (fromIntegral n))))
     loop IntegerShow = do
-        return "toString"
+        let e0 = Fix (NApp "toString" "x")
+        let e1 = Fix (NBinary NPlus (Fix (NStr "+")) e0)
+        let e2 = Fix (NBinary NLte (Fix (NConstant (NInt 0))) "x")
+        let e3 = Fix (NAbs "x" (Fix (NIf e2 e1 e0)))
+        return e3
     loop Double = return (Fix (NSet []))
     loop (DoubleLit n) = Left (NoDoubles n)
     loop DoubleShow = do

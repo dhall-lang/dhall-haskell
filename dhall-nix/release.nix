@@ -54,10 +54,10 @@ in
         testBoolNE = dhallToNix "λ(l : Bool) → λ(r : Bool) → l != r";
         testBoolIf = dhallToNix "λ(x : Bool) → if x then True else False";
         testNatural = dhallToNix "Natural";
-        testNaturalLit = dhallToNix "+123";
+        testNaturalLit = dhallToNix "123";
         testNaturalFold = dhallToNix ''
             λ(x : Natural)
-          → Natural/fold x Natural (λ(n : Natural) → +2 + n) +0
+          → Natural/fold x Natural (λ(n : Natural) → 2 + n) 0
         '';
         testNaturalBuild = dhallToNix ''
             λ(b : Bool)
@@ -76,23 +76,23 @@ in
         testNaturalPlus = dhallToNix "λ(x : Natural) → λ(y : Natural) → x + y";
         testNaturalTimes = dhallToNix "λ(x : Natural) → λ(y : Natural) → x * y";
         testInteger = dhallToNix "Integer";
-        testIntegerLit = dhallToNix "123";
+        testIntegerLit = dhallToNix "+123";
         testIntegerShow = dhallToNix "Integer/show";
         testDouble = dhallToNix "Double";
         testTextLit = dhallToNix ''"ABC"'';
         testInterpolation = dhallToNix ''λ(x : Text) → "ABC''${x}GHI"'' "DEF";
         testTextAppend = dhallToNix "λ(x : Text) → λ(y : Text) → x ++ y";
-        testList = dhallToNix "List Integer";
-        testListLit = dhallToNix "[1, 2, 3] : List Integer";
+        testList = dhallToNix "List Natural";
+        testListLit = dhallToNix "[1, 2, 3] : List Natural";
         testListAppend = dhallToNix ''
-          λ(xs : List Integer) → λ(ys : List Integer) → xs # ys
+          λ(xs : List Natural) → λ(ys : List Natural) → xs # ys
         '';
         testListBuild = dhallToNix ''
             λ(b : Bool)
           → List/build
-            Integer
+            Natural
             ( λ(list : Type)
-            → λ(cons : Integer → list → list)
+            → λ(cons : Natural → list → list)
             → λ(nil : list)
             → if b then cons 1 (cons 2 (cons 3 nil)) else nil
             )
@@ -100,33 +100,33 @@ in
         testListFold = dhallToNix ''
             List/fold
             Natural
-            ([+1, +2, +3] : List Natural)
+            ([1, 2, 3] : List Natural)
             Natural
         '';
-        testListLength = dhallToNix "List/length Integer";
-        testListHead = dhallToNix "List/head Integer";
-        testListLast = dhallToNix "List/last Integer";
-        testListIndexed = dhallToNix "List/indexed Integer";
-        testListReverse = dhallToNix "List/reverse Integer";
+        testListLength = dhallToNix "List/length Natural";
+        testListHead = dhallToNix "List/head Natural";
+        testListLast = dhallToNix "List/last Natural";
+        testListIndexed = dhallToNix "List/indexed Natural";
+        testListReverse = dhallToNix "List/reverse Natural";
         testOptional = dhallToNix "Optional";
         testOptionalLit = dhallToNix ''
             λ(b : Bool)
           → if b
-            then ([0] : Optional Integer)
-            else ([]  : Optional Integer)
+            then ([0] : Optional Natural)
+            else ([]  : Optional Natural)
         '';
         testOptionalFold = dhallToNix ''
           Optional/fold
-          Integer
-          ([1] : Optional Integer)
-          Integer
+          Natural
+          ([1] : Optional Natural)
+          Natural
         '';
         testOptionalBuild = dhallToNix ''
             λ(b : Bool)
           → Optional/build
-            Integer
+            Natural
             ( λ(optional : Type)
-            → λ(just : Integer → optional)
+            → λ(just : Natural → optional)
             → λ(nothing : optional)
             → if b then just 1 else nothing
             )
@@ -134,14 +134,14 @@ in
         testRecord = dhallToNix "{}";
         testRecordLit = dhallToNix "{ foo = 1, bar = True}";
         testUnion = dhallToNix "< Left : Natural | Right : Bool >";
-        testUnionLit = dhallToNix "< Left = +2 | Right : Bool >";
+        testUnionLit = dhallToNix "< Left = 2 | Right : Bool >";
         testCombine = dhallToNix ''
             λ(x : { foo : { bar : Text } })
           → λ(y : { foo : { baz : Bool } })
           → x ∧ y
         '';
         testCombineTypes = dhallToNix ''
-          { foo : Text } ⩓ { bar : Bool, baz : Integer }
+          { foo : Text } ⩓ { bar : Bool, baz : Natural }
         '';
         testMerge = dhallToNix ''
             λ(r : < Left : Natural | Right : Bool >)
@@ -151,7 +151,7 @@ in
         '';
         testField = dhallToNix "λ(r : { foo : Bool, bar : Text }) → r.foo";
         testProject = dhallToNix ''
-          λ(r : { foo : Bool, bar : Text, baz : Integer }) → r.{ foo, bar }
+          λ(r : { foo : Bool, bar : Text, baz : Natural }) → r.{ foo, bar }
         '';
       in
         assert (testConst == {});
@@ -178,13 +178,14 @@ in
         assert (testNaturalEven 3 == false);
         assert (testNaturalOdd 2 == false);
         assert (testNaturalToInteger 2 == 2);
-        assert (testNaturalShow 2 == "+2");
+        assert (testNaturalShow 2 == "2");
         assert (testNaturalOdd 3 == true);
         assert (testNaturalPlus 2 3 == 5);
         assert (testNaturalTimes 2 3 == 6);
         assert (testInteger == {});
         assert (testIntegerLit == 123);
-        assert (testIntegerShow 2 == "2");
+        assert (testIntegerShow 2 == "+2");
+        assert (testIntegerShow (-3) == "-3");
         assert (testDouble == {});
         assert (testTextLit == "ABC");
         assert (testInterpolation == "ABCDEFGHI");
