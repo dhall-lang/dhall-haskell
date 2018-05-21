@@ -382,26 +382,49 @@ prettyExprB a0@(Lam _ _ _) = arrows (fmap duplicate (docs a0))
     docs (Note  _ c) = docs c
     docs          c  = [ prettyExprB c ]
 prettyExprB a0@(BoolIf _ _ _) =
-    enclose' "" "      " (space <> keyword "else" <> space) (Pretty.hardline <> keyword "else" <> "  ") (fmap duplicate (docs a0))
+    Pretty.group (Pretty.flatAlt long short)
   where
-    docs (BoolIf a b c) =
-        Pretty.group (Pretty.flatAlt long short) : docs c
-      where
-        long =
-             Pretty.align
-                (   (keyword "if" <> "    ")
-                <>  prettyExprA a
-                <>  Pretty.hardline
-                <>  (keyword "then" <> "  ")
-                <>  prettyExprA b
-                )
+    prefixesLong =
+            "      "
+        :   cycle
+                [ Pretty.hardline <> keyword "then" <> "  "
+                , Pretty.hardline <> keyword "else" <> "  "
+                ]
 
-        short = (keyword "if" <> " ")
-            <>  prettyExprA a
-            <>  (space <> keyword "then" <> space)
-            <>  prettyExprA b
-    docs (Note  _    c) = docs c
-    docs             c  = [ prettyExprB c ]
+    prefixesShort =
+            ""
+        :   cycle
+                [ space <> keyword "then" <> space
+                , space <> keyword "else" <> space
+                ]
+
+    longLines = zipWith (<>) prefixesLong (docsLong a0)
+
+    long =
+        Pretty.align (mconcat (Data.List.intersperse Pretty.hardline longLines))
+
+    short = mconcat (zipWith (<>) prefixesShort (docsShort a0))
+
+    docsLong (BoolIf a b c) =
+        docLong ++ docsLong c
+      where
+        docLong =
+            [   keyword "if" <> " " <> prettyExprA a
+            ,   prettyExprA b
+            ]
+    docsLong (Note  _    c) = docsLong c
+    docsLong             c  = [ prettyExprB c ]
+
+    docsShort (BoolIf a b c) =
+        docShort ++ docsShort c
+      where
+        docShort =
+            [   keyword "if" <> " " <> prettyExprA a
+            ,   prettyExprA b
+            ]
+    docsShort (Note  _    c) = docsShort c
+    docsShort             c  = [ prettyExprB c ]
+
 prettyExprB a0@(Pi _ _ _) =
     arrows (fmap duplicate (docs a0))
   where

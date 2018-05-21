@@ -36,6 +36,9 @@ formatTests =
         , should
             "correctly format the empty record literal"
             "emptyRecord"
+        , should
+            "indent then/else to the same column"
+            "ifThenElse"
         ]
 
 opts :: Data.Text.Prettyprint.Doc.LayoutOptions
