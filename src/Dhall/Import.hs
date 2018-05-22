@@ -375,6 +375,9 @@ needManager = do
 class Canonicalize path where
     canonicalize :: path -> path
 
+-- |
+-- >>> canonicalize (Directory {components = ["..",".."]})
+-- Directory {components = ["..",".."]}
 instance Canonicalize Directory where
     canonicalize (Directory []) = Directory []
 
@@ -383,8 +386,12 @@ instance Canonicalize Directory where
 
     canonicalize (Directory (".." : components₀)) =
         case canonicalize (Directory components₀) of
-            Directory      []           -> Directory [ ".." ]
-            Directory (_ : components₁) -> Directory components₁
+            Directory [] ->
+                Directory [ ".." ]
+            Directory (".." : components₁) ->
+                Directory (".." : ".." : components₁)
+            Directory (_    : components₁) ->
+                Directory components₁
 
     canonicalize (Directory (component : components₀)) =
         Directory (component : components₁)
