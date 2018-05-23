@@ -110,7 +110,7 @@ instance Buildable Const where
 {-| Internal representation of a directory that stores the path components in
     reverse order
 
-    In other words, the directory @/foo\/bar\/baz@ is encoded as
+    In other words, the directory @\/foo\/bar\/baz@ is encoded as
     @Directory { components = [ "baz", "bar", "foo" ] }@
 -}
 newtype Directory = Directory { components :: [Text] }
