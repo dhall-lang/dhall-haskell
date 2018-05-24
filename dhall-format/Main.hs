@@ -24,12 +24,12 @@ module Main where
 
 import Control.Applicative (optional)
 import Control.Exception (SomeException)
-import Control.Monad (when)
+import Control.Monad (when, forM_)
 import Data.Monoid ((<>))
 import Data.Version (showVersion)
 import Dhall.Parser (exprAndHeaderFromText)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr)
-import Options.Applicative (Parser, ParserInfo)
+import Options.Applicative (Parser, ParserInfo, (<|>))
 import System.IO (stderr)
 import System.Exit (exitFailure, exitSuccess)
 
@@ -43,15 +43,24 @@ import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Options.Applicative
 import qualified System.Console.ANSI
+import qualified System.Directory          as File
+import qualified System.FilePath.Posix     as File
 import qualified System.IO
 
+newtype Ext = Ext String deriving Eq
+
+data InplaceOption
+    = File      FilePath
+    | Directory FilePath [Ext]
+
 data Options = Options
-    { version :: Bool
-    , inplace :: Maybe FilePath
+    { version   :: Bool
+    , inplace   :: Maybe InplaceOption
     }
 
 parseOptions :: Parser Options
-parseOptions = Options <$> parseVersion <*> optional parseInplace
+parseOptions = Options <$> parseVersion
+                       <*> optional (parseInplace <|> parseDirectory)
   where
     parseVersion =
         Options.Applicative.switch
@@ -60,11 +69,25 @@ parseOptions = Options <$> parseVersion <*> optional parseInplace
         )
 
     parseInplace =
-        Options.Applicative.strOption
+        File <$> Options.Applicative.strOption
         (   Options.Applicative.long "inplace"
         <>  Options.Applicative.help "Modify the specified file in-place"
         <>  Options.Applicative.metavar "FILE"
         )
+
+    parseDirectory =
+        Directory
+        <$> Options.Applicative.strOption
+        (   Options.Applicative.long "directory"
+        <>  Options.Applicative.help "Modify the specified directory in-place"
+        <>  Options.Applicative.metavar "DIRECTORY"
+        )
+        <*> (Options.Applicative.many $ Ext <$> Options.Applicative.strOption
+        (   Options.Applicative.long "ext"
+        <>   Options.Applicative.help "Modify files with the specified extension"
+        <>   Options.Applicative.metavar "EXT"
+        ))
+
 
 opts :: Pretty.LayoutOptions
 opts =
@@ -93,19 +116,39 @@ main = do
             System.IO.hPrint stderr e
             System.Exit.exitFailure
 
+    let inplaceFile :: FilePath -> IO ()
+        inplaceFile file = do
+            strictText <- Data.Text.IO.readFile file
+            let lazyText = Data.Text.Lazy.fromStrict strictText
+            (header, expr) <- case exprAndHeaderFromText "(stdin)" lazyText of
+                Left  err -> Control.Exception.throwIO err
+                Right x   -> return x
+
+            let doc = Pretty.pretty header <> Pretty.pretty expr
+            System.IO.withFile file System.IO.WriteMode (\handle -> do
+                Pretty.renderIO handle (Pretty.layoutSmart opts doc)
+                Data.Text.IO.hPutStrLn handle "" )
+
+        inplaceDirectory :: FilePath -> [Ext] -> IO ()
+        inplaceDirectory directory exts = do
+            absDir <- File.canonicalizePath directory
+            entries <- File.listDirectory absDir
+            forM_ entries $ \e -> do
+                File.withCurrentDirectory absDir $ do
+                    file <- File.makeRelativeToCurrentDirectory e
+                    let ext = Ext $ File.takeExtension file
+                    when (ext `elem` exts) $ do
+                        isFile <- File.doesFileExist file
+                        if isFile
+                           then inplaceFile file
+                           else inplaceDirectory file exts
+
     Control.Exception.handle handler (do
         case inplace of
-            Just file -> do
-                strictText <- Data.Text.IO.readFile file
-                let lazyText = Data.Text.Lazy.fromStrict strictText
-                (header, expr) <- case exprAndHeaderFromText "(stdin)" lazyText of
-                    Left  err -> Control.Exception.throwIO err
-                    Right x   -> return x
+            Just (File file) -> inplaceFile file
 
-                let doc = Pretty.pretty header <> Pretty.pretty expr
-                System.IO.withFile file System.IO.WriteMode (\handle -> do
-                    Pretty.renderIO handle (Pretty.layoutSmart opts doc)
-                    Data.Text.IO.hPutStrLn handle "" )
+            Just (Directory directory exts) -> inplaceDirectory directory exts
+
             Nothing -> do
                 System.IO.hSetEncoding System.IO.stdin System.IO.utf8
                 inText <- Data.Text.Lazy.IO.getContents
