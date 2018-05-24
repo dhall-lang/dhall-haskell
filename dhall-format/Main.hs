@@ -43,19 +43,26 @@ import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Options.Applicative
 import qualified System.Console.ANSI
-import qualified System.Directory          as File
-import qualified System.FilePath.Posix     as File
+import qualified System.Directory      as File
+import qualified System.FilePath.Posix as File
 import qualified System.IO
 
+-- | Extinguish an extension from a plain 'String'
 newtype Ext = Ext String deriving Eq
 
+-- | Options for inplace formatting.
+--
+--   'File' applies the formatting to a single specified file.
+--
+--   'Directory' applies the formatting to a directory recursively.
+--   It will only format files with the specified extensions ('Ext').
 data InplaceOption
-    = File      FilePath
-    | Directory FilePath [Ext]
+    = File      FilePath       -- ^ Option to format a file inplace
+    | Directory FilePath [Ext] -- ^ Option to format a directory in place
 
 data Options = Options
-    { version   :: Bool
-    , inplace   :: Maybe InplaceOption
+    { version :: Bool
+    , inplace :: Maybe InplaceOption
     }
 
 parseOptions :: Parser Options
