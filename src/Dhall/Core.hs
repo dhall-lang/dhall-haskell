@@ -1438,8 +1438,7 @@ normalizeWith ctx e0 = loop (denote e0)
                 m = case Data.Sequence.viewr ys of
                         _ :> y -> Just y
                         _      -> Nothing
-            App (App ListIndexed _A₀) (ListLit _A₁ as₀) ->
-                loop (ListLit (Just _A₂) as₁)
+            App (App ListIndexed _A₀) (ListLit _A₁ as₀) -> loop (ListLit t as₁)
               where
                 as₁ = Data.Sequence.mapWithIndex adapt as₀
 
@@ -1448,6 +1447,9 @@ normalizeWith ctx e0 = loop (denote e0)
                     kts = [ ("index", Natural)
                           , ("value", _A₀)
                           ]
+
+                t | null as₀  = Just _A₂
+                  | otherwise = Nothing
 
                 adapt n a_ =
                     RecordLit (Data.HashMap.Strict.InsOrd.fromList kvs)
