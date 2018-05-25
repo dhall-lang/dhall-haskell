@@ -558,11 +558,14 @@ exprFromImport (Import {..}) = do
             request <- liftIO (HTTP.parseUrlThrow url)
 
             requestWithHeaders <- case maybeHeaders of
-                Nothing           -> return request
+                Nothing            -> return request
                 Just importHashed_ -> do
-                    expr <- loadStaticIO Dhall.Context.empty
-                                         (const Nothing)
-                                         (Import importHashed_ Code)
+                    expr <- loadStaticWith
+                        exprFromImport
+                        Dhall.Context.empty
+                        (const Nothing)
+                        (Embed (Import importHashed_ Code))
+
                     let expected :: Expr Src X
                         expected =
                             App List
@@ -632,28 +635,6 @@ exprFromImport (Import {..}) = do
         RawText -> do
             return (TextLit (Chunks [] (build text)))
 
-{-| Load an `Import` as a \"dynamic\" expression (without resolving any imports)
--}
-loadDynamic
-    :: forall m . MonadCatch m
-    => (Import -> StateT Status m (Expr Src Import))
-    -> Import
-    -> StateT Status m (Expr Src Import)
-loadDynamic from_import import_ = do
-    imports <- zoom stack State.get
-
-    let handler :: SomeException -> StateT Status m (Expr Src Import)
-        handler e = throwM (Imported (import_:imports) e)
-
-    from_import (canonicalizeImport (import_:imports)) `catch` handler
-
-loadStaticIO
-    :: Dhall.Context.Context (Expr Src X)
-    -> Dhall.Core.Normalizer X
-    -> Import
-    -> StateT Status IO (Expr Src X)
-loadStaticIO = loadStaticWith exprFromImport
-
 -- | Resolve all imports within an expression using a custom typing context and
 -- `Import`-resolving callback in arbitrary `MonadCatch` monad.
 loadWith
@@ -663,7 +644,8 @@ loadWith
     -> Dhall.Core.Normalizer X
     -> Expr Src Import
     -> m (Expr Src X)
-loadWith from_import ctx n = evalStatus (loadStaticWith from_import ctx n)
+loadWith from_import ctx n expr =
+    State.evalStateT (loadStaticWith from_import ctx n expr) emptyStatus
 
 -- | Resolve all imports within an expression using a custom typing context.
 --
@@ -673,16 +655,18 @@ loadWithContext
     -> Dhall.Core.Normalizer X
     -> Expr Src Import
     -> IO (Expr Src X)
-loadWithContext ctx n = evalStatus (loadStaticIO ctx n)
+loadWithContext ctx n expr =
+    State.evalStateT (loadStaticWith exprFromImport ctx n expr) emptyStatus
 
+-- | This loads a \"static\" expression (i.e. an expression free of imports)
 loadStaticWith
     :: MonadCatch m
     => (Import -> StateT Status m (Expr Src Import))
     -> Dhall.Context.Context (Expr Src X)
     -> Dhall.Core.Normalizer X
-    -> Import
+    -> Expr Src Import
     -> StateT Status m (Expr Src X)
-loadStaticWith from_import ctx n import_ = do
+loadStaticWith from_import ctx n (Embed import_) = do
     imports <- zoom stack State.get
 
     let local (Import (ImportHashed _ (URL   {})) _) = False
@@ -703,18 +687,24 @@ loadStaticWith from_import ctx n import_ = do
             case Map.lookup here m of
                 Just expr -> return expr
                 Nothing   -> do
-                    expr'  <- loadDynamic from_import import_
-                    expr'' <- case traverse (\_ -> Nothing) expr' of
-                        -- No imports left
-                        Just expr -> return expr
-                        -- Some imports left, so recurse
-                        Nothing   -> do
-                            let imports' = import_:imports
-                            zoom stack (State.put imports')
-                            expr'' <- fmap join (traverse (loadStaticWith from_import ctx n)
-                                                           expr')
-                            zoom stack (State.put imports)
-                            return expr''
+                    let handler
+                            :: MonadCatch m
+                            => SomeException
+                            -> StateT Status m (Expr Src Import)
+                        handler e = throwM (Imported (import_:imports) e)
+
+                    -- This loads a \"dynamic\" expression (i.e. an expression
+                    -- that might still contain imports)
+                    let loadDynamic =
+                            from_import (canonicalizeImport (import_:imports))
+
+                    expr' <- loadDynamic `catch` handler
+
+                    let imports' = import_:imports
+                    zoom stack (State.put imports')
+                    expr'' <- loadStaticWith from_import ctx n expr'
+                    zoom stack (State.put imports)
+
                     -- Type-check expressions here for three separate reasons:
                     --
                     --  * to verify that they are closed
@@ -741,11 +731,9 @@ loadStaticWith from_import ctx n import_ = do
                 else throwM (Imported (import_:imports) (HashMismatch {..}))
 
     return expr
-
-evalStatus
-    :: (Traversable f, Monad m, Monad f)
-    => (a -> StateT Status m (f b)) -> f a -> m (f b)
-evalStatus cb expr = State.evalStateT (fmap join (traverse cb expr)) emptyStatus
+loadStaticWith from_import ctx n expr = fmap join (traverse process expr)
+  where
+    process import_ = loadStaticWith from_import ctx n (Embed import_)
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
