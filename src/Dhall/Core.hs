@@ -146,8 +146,6 @@ data FilePrefix
     -- ^ Absolute path
     | Here
     -- ^ Path relative to @.@
-    | Parent
-    -- ^ Path relative to @..@
     | Home
     -- ^ Path relative to @~@
     deriving (Eq, Ord, Show)
@@ -155,7 +153,6 @@ data FilePrefix
 instance Buildable FilePrefix where
     build Absolute = ""
     build Here     = "."
-    build Parent   = ".."
     build Home     = "~"
 
 -- | The type of import (i.e. local vs. remote vs. environment)
@@ -168,20 +165,11 @@ data ImportType
     -- ^ Environment variable
     deriving (Eq, Ord, Show)
 
-parent :: File
-parent = File { directory = Directory { components = [ ".." ] }, file = "" }
-
 instance Semigroup ImportType where
     Local prefix file₀ <> Local Here file₁ = Local prefix (file₀ <> file₁)
 
     URL prefix file₀ suffix headers <> Local Here file₁ =
         URL prefix (file₀ <> file₁) suffix headers
-
-    Local prefix file₀ <> Local Parent file₁ =
-        Local prefix (file₀ <> parent <> file₁)
-
-    URL prefix file₀ suffix headers <> Local Parent file₁ =
-        URL prefix (file₀ <> parent <> file₁) suffix headers
 
     _ <> import₁ =
         import₁
