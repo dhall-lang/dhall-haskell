@@ -290,3 +290,14 @@ Test-Suite doctest
     Build-Depends:
         base                      ,
         doctest >= 0.7.0 && < 0.16
+
+Benchmark dhall-parser
+    Type: exitcode-stdio-1.0
+    Main-Is: benchmark/parser/Main.hs
+    Build-Depends:
+        base,
+        containers,
+        criterion,
+        dhall,
+        directory,
+        text
