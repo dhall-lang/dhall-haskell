@@ -38,18 +38,18 @@ loadPreludeFiles = loadDirectory "Prelude"
 benchParser :: PreludeFiles -> Criterion.Benchmark
 benchParser =
       bgroup "exprFromText"
-    . foldrWithKey (\name expr -> (benchExpr name expr :)) []
-    where
-        benchExpr :: FilePath -> TL.Text -> Criterion.Benchmark
-        benchExpr filename expr =
-            bench filename $ whnf (Dhall.exprFromText "(input)") expr
+    . foldrWithKey (\name expr -> (benchExprFromText name expr :)) []
+
+benchExprFromText :: String -> TL.Text -> Criterion.Benchmark
+benchExprFromText name expr =
+    bench name $ whnf (Dhall.exprFromText "(input)") expr
 
 main :: IO ()
 main = do
     prelude <- loadPreludeFiles
     issue108 <- TLIO.readFile "benchmark/examples/issue108.dhall"
     defaultMain
-        [ -- benchParser prelude
-          bgroup "Issue #108" $
-            [ bench "108" $ whnf (Dhall.exprFromText "(input)") issue108 ]
+        [ benchParser prelude
+        , bgroup "Issue #108" $
+            [ benchExprFromText "108" issue108 ]
         ]
