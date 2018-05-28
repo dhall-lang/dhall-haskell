@@ -47,4 +47,9 @@ benchParser =
 main :: IO ()
 main = do
     prelude <- loadPreludeFiles
-    defaultMain [ benchParser prelude ]
+    issue108 <- TLIO.readFile "benchmark/examples/issue108.dhall"
+    defaultMain
+        [ -- benchParser prelude
+          bgroup "Issue #108" $
+            [ bench "108" $ whnf (Dhall.exprFromText "(input)") issue108 ]
+        ]
