@@ -1214,14 +1214,23 @@ notEqualExpression =
 applicationExpression :: Parser a -> Parser (Expr Src a)
 applicationExpression embedded = do
     f <- (do _constructors; return Constructors) <|> return id
-    a <- noted (selectorExpression embedded)
-    b <- many (noted (selectorExpression embedded))
+    a <- noted (importExpression embedded)
+    b <- many (noted (importExpression embedded))
     return (foldl app (f a) b)
   where
     app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
         Note (Src before after (bytesL <> bytesR)) (App nL nR)
     app nL nR =
         App nL nR
+
+importExpression :: Parser a -> Parser (Expr Src a)
+importExpression embedded = noted (choice [ alternative0, alternative1 ])
+  where
+    alternative0 = do
+        a <- embedded
+        return (Embed a)
+
+    alternative1 = selectorExpression embedded
 
 selectorExpression :: Parser a -> Parser (Expr Src a)
 selectorExpression embedded = noted (do
@@ -1243,7 +1252,6 @@ primitiveExpression embedded =
             , alternative04
             , alternative05
             , alternative06
-            , alternative07
             , alternative37
 
             , choice
@@ -1308,10 +1316,6 @@ primitiveExpression embedded =
         return a ) <?> "union type or literal"
 
     alternative06 = nonEmptyListLiteral embedded
-
-    alternative07 = do
-        a <- embedded
-        return (Embed a)
 
     alternative08 = do
         _NaturalFold
