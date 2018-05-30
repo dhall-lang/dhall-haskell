@@ -25,7 +25,6 @@ loadPreludeFiles = loadDirectory "Prelude"
                 files <- getCurrentDirectory >>= listDirectory
                 results <- forM files $ \file -> do
                     file' <- makeAbsolute file
-                    print file'
                     doesExist <- doesFileExist file'
                     if doesExist
                        then loadFile file'
