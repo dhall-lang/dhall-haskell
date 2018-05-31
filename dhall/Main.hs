@@ -23,7 +23,7 @@ import System.IO (Handle)
 import qualified Paths_dhall as Meta
 
 import qualified Control.Exception
-import qualified Data.Text.Lazy.IO
+import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Dhall.Core
@@ -96,7 +96,7 @@ throws (Right a) = return a
 
 getExpression :: IO (Expr Src Import)
 getExpression = do
-    inText <- Data.Text.Lazy.IO.getContents
+    inText <- Data.Text.IO.getContents
 
     throws (Dhall.Parser.exprFromText "(stdin)" inText)
 

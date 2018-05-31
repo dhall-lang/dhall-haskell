@@ -126,7 +126,7 @@ import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import Data.Semigroup (sconcat, (<>))
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Text.Lazy.Builder (Builder)
 #if MIN_VERSION_base(4,8,0)
 #else
@@ -166,10 +166,11 @@ import qualified Data.List                        as List
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Encoding
-import qualified Data.Text.Lazy                   as Text
+import qualified Data.Text                        as Text
+import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
-import qualified Data.Text.Lazy.IO
+import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.Context
@@ -184,7 +185,7 @@ import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 
 builderToString :: Builder -> String
-builderToString = Text.unpack . Builder.toLazyText
+builderToString = Data.Text.Lazy.unpack . Builder.toLazyText
 
 -- | An import failed because of a cycle in the import graph
 newtype Cycle = Cycle
@@ -446,10 +447,8 @@ toHeader
   :: Expr s a
   -> Maybe (CI Data.ByteString.ByteString, Data.ByteString.ByteString)
 toHeader (RecordLit m) = do
-    TextLit (Chunks [] keyBuilder  ) <- Data.HashMap.Strict.InsOrd.lookup "header" m
-    TextLit (Chunks [] valueBuilder) <- Data.HashMap.Strict.InsOrd.lookup "value"  m
-    let keyText   = Text.toStrict (Builder.toLazyText keyBuilder  )
-    let valueText = Text.toStrict (Builder.toLazyText valueBuilder)
+    TextLit (Chunks [] keyText  ) <- Data.HashMap.Strict.InsOrd.lookup "header" m
+    TextLit (Chunks [] valueText) <- Data.HashMap.Strict.InsOrd.lookup "value"  m
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
     let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
     return (Data.CaseInsensitive.mk keyBytes, valueBytes)
@@ -545,14 +544,14 @@ exprFromImport (Import {..}) = do
                 then return ()
                 else throwIO (MissingFile path)
 
-            text <- Data.Text.Lazy.IO.readFile path
+            text <- Data.Text.IO.readFile path
 
             return (path, text)
 
         URL prefix file suffix maybeHeaders -> do
             m <- needManager
 
-            let fileText = Builder.toLazyText (build file)
+            let fileText = Data.Text.Lazy.toStrict $ Builder.toLazyText (build file)
             let url      = Text.unpack (prefix <> fileText <> suffix)
 
             request <- liftIO (HTTP.parseUrlThrow url)
@@ -575,7 +574,8 @@ exprFromImport (Import {..}) = do
                                     )
                                 )
                     let suffix_ =
-                            ( Builder.toLazyText
+                            ( Data.Text.Lazy.toStrict
+                            . Builder.toLazyText
                             . build
                             ) expected
                     let annot = case expr of
@@ -610,7 +610,7 @@ exprFromImport (Import {..}) = do
 
             case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
                 Left  err  -> liftIO (throwIO err)
-                Right text -> return (url, text)
+                Right text -> return (url, Data.Text.Lazy.toStrict text)
 
         Env env -> liftIO $ do
             x <- System.Environment.lookupEnv (Text.unpack env)
@@ -633,7 +633,7 @@ exprFromImport (Import {..}) = do
                     return expr
 
         RawText -> do
-            return (TextLit (Chunks [] (build text)))
+            return (TextLit (Chunks [] text))
 
 -- | Resolve all imports within an expression using a custom typing context and
 -- `Import`-resolving callback in arbitrary `MonadCatch` monad.
@@ -741,10 +741,10 @@ load = loadWithContext Dhall.Context.empty (const Nothing)
 
 -- | Hash a fully resolved expression
 hashExpression :: Expr s X -> (Crypto.Hash.Digest SHA256)
-hashExpression expr = Crypto.Hash.hashlazy actualBytes
+hashExpression expr = Crypto.Hash.hash actualBytes
   where
     text = Dhall.Core.pretty (Dhall.Core.normalize expr)
-    actualBytes = Data.Text.Lazy.Encoding.encodeUtf8 text
+    actualBytes = Data.Text.Encoding.encodeUtf8 text
 
 {-| Convenience utility to hash a fully resolved expression and return the
     base-16 encoded hash with the @sha256:@ prefix
