@@ -38,7 +38,7 @@ import qualified Paths_dhall as Meta
 import qualified Control.Exception
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.IO
+import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Options.Applicative
@@ -97,8 +97,7 @@ main = do
         case inplace of
             Just file -> do
                 strictText <- Data.Text.IO.readFile file
-                let lazyText = Data.Text.Lazy.fromStrict strictText
-                (header, expr) <- case exprAndHeaderFromText "(stdin)" lazyText of
+                (header, expr) <- case exprAndHeaderFromText "(stdin)" strictText of
                     Left  err -> Control.Exception.throwIO err
                     Right x   -> return x
 
@@ -108,7 +107,7 @@ main = do
                     Data.Text.IO.hPutStrLn handle "" )
             Nothing -> do
                 System.IO.hSetEncoding System.IO.stdin System.IO.utf8
-                inText <- Data.Text.Lazy.IO.getContents
+                inText <- Data.Text.IO.getContents
 
                 (header, expr) <- case exprAndHeaderFromText "(stdin)" inText of
                     Left  err -> Control.Exception.throwIO err
