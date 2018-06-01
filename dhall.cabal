@@ -147,6 +147,7 @@ Extra-Source-Files:
     tests/tutorial/*.dhall
     tests/typecheck/*.dhall
     tests/typecheck/examples/Monoid/*.dhall
+    benchmark/examples/*.dhall
 
 Source-Repository head
     Type: git
