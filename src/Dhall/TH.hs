@@ -27,7 +27,7 @@ import Control.Monad
 import Data.Typeable
 import Language.Haskell.TH.Syntax
 
-import qualified Data.Text.Lazy as Text
+import qualified Data.Text as Text
 import qualified Dhall.Import
 import qualified Dhall.Parser
 

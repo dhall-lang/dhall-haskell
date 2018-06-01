@@ -72,7 +72,7 @@ import Data.Functor.Contravariant (Contravariant(..))
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Data.Word (Word8, Word16, Word32, Word64)
@@ -174,7 +174,8 @@ inputWith (Type {..}) ctx n txt = do
     expr  <- throws (Dhall.Parser.exprFromText "(input)" txt)
     expr' <- Dhall.Import.loadWithContext ctx n expr
     let suffix =
-            ( Data.Text.Lazy.Builder.toLazyText
+            ( Data.Text.Lazy.toStrict
+            . Data.Text.Lazy.Builder.toLazyText
             . build
             ) expected
     let annot = case expr' of
@@ -415,10 +416,10 @@ double = fmap Data.Scientific.toRealFloat scientific
 >>> input lazyText "\"Test\""
 "Test"
 -}
-lazyText :: Type Text
+lazyText :: Type Data.Text.Lazy.Text
 lazyText = Type {..}
   where
-    extract (TextLit (Chunks [] t)) = pure t
+    extract (TextLit (Chunks [] t)) = pure (Data.Text.Lazy.fromStrict t)
     extract  _                      = empty
 
     expected = Text
@@ -428,7 +429,7 @@ lazyText = Type {..}
 >>> input strictText "\"Test\""
 "Test"
 -}
-strictText :: Type Data.Text.Text
+strictText :: Type Text
 strictText = fmap Data.Text.Lazy.toStrict lazyText
 
 {-| Decode a `Maybe`
@@ -551,10 +552,10 @@ instance Interpret Double where
 instance {-# OVERLAPS #-} Interpret [Char] where
     autoWith _ = string
 
-instance Interpret Text where
+instance Interpret Data.Text.Lazy.Text where
     autoWith _ = lazyText
 
-instance Interpret Data.Text.Text where
+instance Interpret Text where
     autoWith _ = strictText
 
 instance Interpret a => Interpret (Maybe a) where
@@ -649,8 +650,8 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
         nR :: M1 i c2 f2 a
         nR = undefined
 
-        nameL = constructorModifier (Data.Text.Lazy.pack (conName nL))
-        nameR = constructorModifier (Data.Text.Lazy.pack (conName nR))
+        nameL = constructorModifier (Data.Text.pack (conName nL))
+        nameR = constructorModifier (Data.Text.pack (conName nR))
 
         extract (UnionLit name e _)
             | name == nameL = fmap (L1 . M1) (extractL e)
@@ -670,7 +671,7 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
         n :: M1 i c h a
         n = undefined
 
-        name = constructorModifier (Data.Text.Lazy.pack (conName n))
+        name = constructorModifier (Data.Text.pack (conName n))
 
         extract u@(UnionLit name' e _)
             | name == name' = fmap (R1 . M1) (extractR e)
@@ -689,7 +690,7 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
         n :: M1 i c f a
         n = undefined
 
-        name = constructorModifier (Data.Text.Lazy.pack (conName n))
+        name = constructorModifier (Data.Text.pack (conName n))
 
         extract u@(UnionLit name' e _)
             | name == name' = fmap (L1 . M1) (extractL e)
@@ -748,14 +749,14 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
     genericAutoWith opts@(InterpretOptions {..}) = do
         name <- getSelName n
         let extract (RecordLit m) = do
-                    let name' = fieldModifier (Data.Text.Lazy.pack name)
+                    let name' = fieldModifier (Data.Text.pack name)
                     e <- Data.HashMap.Strict.InsOrd.lookup name' m
                     fmap (M1 . K1) (extract' e)
             extract _            = Nothing
         let expected =
                 Record (Data.HashMap.Strict.InsOrd.fromList [(key, expected')])
               where
-                key = fieldModifier (Data.Text.Lazy.pack name)
+                key = fieldModifier (Data.Text.pack name)
         pure (Type {..})
       where
         n :: M1 i s f a
@@ -813,18 +814,18 @@ instance Inject Bool where
 
         declared = Bool
 
-instance Inject Text where
+instance Inject Data.Text.Lazy.Text where
     injectWith _ = InputType {..}
       where
         embed text =
-            TextLit (Chunks [] text)
+            TextLit (Chunks [] (Data.Text.Lazy.toStrict text))
 
         declared = Text
 
-instance Inject Data.Text.Text where
+instance Inject Text where
     injectWith _ = InputType {..}
       where
-        embed text = TextLit (Chunks [] (Data.Text.Lazy.fromStrict text))
+        embed text = TextLit (Chunks [] text)
 
         declared = Text
 
@@ -961,8 +962,8 @@ instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) =>
         nR :: M1 i c2 f2 a
         nR = undefined
 
-        keyL = constructorModifier (Data.Text.Lazy.pack (conName nL))
-        keyR = constructorModifier (Data.Text.Lazy.pack (conName nR))
+        keyL = constructorModifier (Data.Text.pack (conName nL))
+        keyR = constructorModifier (Data.Text.pack (conName nR))
 
         InputType embedL declaredL = evalState (genericInjectWith options) 1
         InputType embedR declaredR = evalState (genericInjectWith options) 1
@@ -979,7 +980,7 @@ instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInj
         nR :: M1 i c h a
         nR = undefined
 
-        keyR = constructorModifier (Data.Text.Lazy.pack (conName nR))
+        keyR = constructorModifier (Data.Text.pack (conName nR))
 
         declared = Union (Data.HashMap.Strict.InsOrd.insert keyR declaredR ktsL)
 
@@ -998,7 +999,7 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
         nL :: M1 i c f a
         nL = undefined
 
-        keyL = constructorModifier (Data.Text.Lazy.pack (conName nL))
+        keyL = constructorModifier (Data.Text.pack (conName nL))
 
         declared = Union (Data.HashMap.Strict.InsOrd.insert keyL declaredL ktsR)
 
@@ -1049,7 +1050,7 @@ instance GenericInject U1 where
 
 instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
     genericInjectWith opts@(InterpretOptions {..}) = do
-        name <- fieldModifier . Data.Text.Lazy.pack <$> getSelName n
+        name <- fieldModifier . Data.Text.pack <$> getSelName n
         let embed (M1 (K1 x)) =
                 RecordLit (Data.HashMap.Strict.InsOrd.singleton name (embedIn x))
         let declared =
@@ -1102,7 +1103,7 @@ newtype RecordType a =
     ( Data.Functor.Product.Product
         ( Control.Applicative.Const
             ( Data.HashMap.Strict.InsOrd.InsOrdHashMap
-                Data.Text.Lazy.Text
+                Text
                 ( Expr Src X )
             )
         )
@@ -1127,7 +1128,7 @@ record ( RecordType ( Data.Functor.Product.Pair ( Control.Applicative.Const fiel
 
 
 -- | Parse a single field of a record.
-field :: Data.Text.Lazy.Text -> Type a -> RecordType a
+field :: Text -> Type a -> RecordType a
 field key valueType =
   let
     extractBody expr = do

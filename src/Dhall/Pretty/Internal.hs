@@ -61,7 +61,7 @@ import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Set (Set)
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
 import Formatting.Buildable (Buildable(..))
 import Numeric.Natural (Natural)
@@ -73,7 +73,8 @@ import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.Set
-import qualified Data.Text.Lazy                        as Text
+import qualified Data.Text                             as Text
+import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder                as Builder
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
@@ -312,16 +313,14 @@ prettyChunks (Chunks a b) =
     short =
         literal "\"" <> foldMap prettyChunk a <> literal (prettyText b <> "\"")
 
-    hasNewLine lazyText = Text.any (== '\n') lazyText
+    hasNewLine = Text.any (== '\n')
 
     prettyMultilineChunk (c, d) =
       prettyMultilineBuilder c <> dollar <> lbrace <> prettyExprA d <> rbrace
 
     prettyMultilineBuilder builder = literal (mconcat docs)
       where
-        lazyText = escapeSingleQuotedText builder
-
-        lazyLines = Text.splitOn "\n" lazyText
+        lazyLines = Text.splitOn "\n" (escapeSingleQuotedText builder)
 
         docs =
             Data.List.intersperse Pretty.hardline (fmap Pretty.pretty lazyLines)
@@ -823,48 +822,50 @@ prettyUnionLit a b c =
 
 -- | Pretty-print a value
 pretty :: Pretty a => a -> Text
-pretty = Pretty.renderLazy . Pretty.layoutPretty options . Pretty.pretty
+pretty = Pretty.renderStrict . Pretty.layoutPretty options . Pretty.pretty
   where
    options = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
 
--- | Builder corresponding to the @label@ token in "Dhall.Parser"
+-- | Text corresponding to the @label@ token in "Dhall.Parser"
 buildLabel :: Text -> Text
 buildLabel l = case Text.uncons l of
     Just (h, t)
         | headCharacter h && Text.all tailCharacter t && not (Data.HashSet.member l reservedIdentifiers)
-            -> Builder.toLazyText (build l)
-    _       -> "`" <> Builder.toLazyText (build l) <> "`"
+            -> l
+    _       -> "`" <> l <> "`"
 
 
--- | Builder corresponding to the @number@ token in "Dhall.Parser"
+-- | Text corresponding to the @number@ token in "Dhall.Parser"
 buildNumber :: Integer -> Text
-buildNumber = Builder.toLazyText . build . show
+buildNumber = Text.pack . show
 
--- | Builder corresponding to the @natural@ token in "Dhall.Parser"
+-- | Text corresponding to the @natural@ token in "Dhall.Parser"
 buildNatural :: Natural -> Text
-buildNatural = Builder.toLazyText . build . show
+buildNatural = Text.pack . show
 
--- | Builder corresponding to the @double@ token in "Dhall.Parser"
+-- | Text corresponding to the @double@ token in "Dhall.Parser"
 buildScientific :: Scientific -> Text
-buildScientific = Builder.toLazyText . build . show
+buildScientific = Text.pack . show
 
--- | Builder corresponding to the @text@ token in "Dhall.Parser"
+-- | Text corresponding to the @text@ token in "Dhall.Parser"
 buildChunks :: Buildable a => Chunks s a -> Text
 buildChunks (Chunks a b) = "\"" <> foldMap buildChunk a <> escapeText b <> "\""
   where
     buildChunk (c, d) = escapeText c <> "${" <> buildExprA d <> "}"
 
--- | Escape a `Builder` literal using Dhall's escaping rules for single-quoted
+-- | Escape a `Text` literal using Dhall's escaping rules for single-quoted
 --   @Text@
 escapeSingleQuotedText :: Text -> Text
-escapeSingleQuotedText inputText = outputText
+escapeSingleQuotedText inputBuilder = outputBuilder
   where
-    outputText = substitute "${" "''${" (substitute "''" "'''" inputText)
+    outputText = substitute "${" "''${" (substitute "''" "'''" inputBuilder)
+
+    outputBuilder = outputText
 
     substitute before after = Text.intercalate after . Text.splitOn before
 
-{-| Escape a `Builder` literal using Dhall's escaping rules
-  
+{-| Escape a `Text` literal using Dhall's escaping rules
+
     Note that the result does not include surrounding quotes
 -}
 escapeText :: Text -> Text
@@ -898,17 +899,17 @@ escapeText text = Text.concatMap adapt text
         | n < 10    = Data.Char.chr (Data.Char.ord '0' + n)
         | otherwise = Data.Char.chr (Data.Char.ord 'A' + n - 10)
 
--- | Builder corresponding to the @expr@ parser in "Dhall.Parser"
+-- | Text corresponding to the @expr@ parser in "Dhall.Parser"
 buildExpr :: Buildable a => Expr s a -> Text
 buildExpr = buildExprA
 
--- | Builder corresponding to the @exprA@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprA@ parser in "Dhall.Parser"
 buildExprA :: Buildable a => Expr s a -> Text
 buildExprA (Annot a b) = buildExprB a <> " : " <> buildExprA b
 buildExprA (Note  _ b) = buildExprA b
 buildExprA a           = buildExprB a
 
--- | Builder corresponding to the @exprB@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprB@ parser in "Dhall.Parser"
 buildExprB :: Buildable a => Expr s a -> Text
 buildExprB (Lam a b c) =
         "λ("
@@ -966,90 +967,90 @@ buildExprB (Note _ b) =
 buildExprB a =
     buildExprC a
 
--- | Builder corresponding to the @exprC@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprC@ parser in "Dhall.Parser"
 buildExprC :: Buildable a => Expr s a -> Text
 buildExprC = buildExprC0
 
--- | Builder corresponding to the @exprC0@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprC0@ parser in "Dhall.Parser"
 buildExprC0 :: Buildable a => Expr s a -> Text
 buildExprC0 (BoolOr a b) = buildExprC1 a <> " || " <> buildExprC0 b
 buildExprC0 (Note   _ b) = buildExprC0 b
 buildExprC0  a           = buildExprC1 a
 
--- | Builder corresponding to the @exprC1@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprC1@ parser in "Dhall.Parser"
 buildExprC1 :: Buildable a => Expr s a -> Text
 buildExprC1 (TextAppend a b) = buildExprC2 a <> " ++ " <> buildExprC1 b
 buildExprC1 (Note       _ b) = buildExprC1 b
 buildExprC1  a               = buildExprC2 a
 
--- | Builder corresponding to the @exprC2@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprC2@ parser in "Dhall.Parser"
 buildExprC2 :: Buildable a => Expr s a -> Text
 buildExprC2 (NaturalPlus a b) = buildExprC3 a <> " + " <> buildExprC2 b
 buildExprC2 (Note        _ b) = buildExprC2 b
 buildExprC2  a                = buildExprC3 a
 
--- | Builder corresponding to the @exprC3@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprC3@ parser in "Dhall.Parser"
 buildExprC3 :: Buildable a => Expr s a -> Text
 buildExprC3 (ListAppend a b) = buildExprC4 a <> " # " <> buildExprC3 b
 buildExprC3 (Note       _ b) = buildExprC3 b
 buildExprC3  a               = buildExprC4 a
 
--- | Builder corresponding to the @exprC4@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprC4@ parser in "Dhall.Parser"
 buildExprC4 :: Buildable a => Expr s a -> Text
 buildExprC4 (BoolAnd a b) = buildExprC5 a <> " && " <> buildExprC4 b
 buildExprC4 (Note    _ b) = buildExprC4 b
 buildExprC4  a            = buildExprC5 a
 
--- | Builder corresponding to the @exprC5@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprC5@ parser in "Dhall.Parser"
 buildExprC5 :: Buildable a => Expr s a -> Text
 buildExprC5 (Combine   a b) = buildExprC6 a <> " ∧ " <> buildExprC5 b
 buildExprC5 (Note      _ b) = buildExprC5 b
 buildExprC5  a              = buildExprC6 a
 
--- | Builder corresponding to the @exprC6@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprC6@ parser in "Dhall.Parser"
 buildExprC6 :: Buildable a => Expr s a -> Text
 buildExprC6 (Prefer a b) = buildExprC7 a <> " ⫽ " <> buildExprC6 b
 buildExprC6 (Note   _ b) = buildExprC6 b
 buildExprC6  a           = buildExprC7 a
 
--- | Builder corresponding to the @exprC7@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprC7@ parser in "Dhall.Parser"
 buildExprC7 :: Buildable a => Expr s a -> Text
 buildExprC7 (CombineTypes a b) = buildExprC8 a <> " ⩓ " <> buildExprC7 b
 buildExprC7 (Note         _ b) = buildExprC7 b
 buildExprC7  a                 = buildExprC8 a
 
--- | Builder corresponding to the @exprC8@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprC8@ parser in "Dhall.Parser"
 buildExprC8 :: Buildable a => Expr s a -> Text
 buildExprC8 (NaturalTimes a b) = buildExprC9 a <> " * " <> buildExprC8 b
 buildExprC8 (Note         _ b) = buildExprC8 b
 buildExprC8  a                 = buildExprC9 a
 
--- | Builder corresponding to the @exprC9@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprC9@ parser in "Dhall.Parser"
 buildExprC9 :: Buildable a => Expr s a -> Text
 buildExprC9 (BoolEQ a b) = buildExprC10 a <> " == " <> buildExprC9 b
 buildExprC9 (Note   _ b) = buildExprC9 b
 buildExprC9  a           = buildExprC10 a
 
--- | Builder corresponding to the @exprC10@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprC10@ parser in "Dhall.Parser"
 buildExprC10 :: Buildable a => Expr s a -> Text
 buildExprC10 (BoolNE a b) = buildExprD  a <> " != " <> buildExprC10 b
 buildExprC10 (Note   _ b) = buildExprC10 b
 buildExprC10  a           = buildExprD  a
 
--- | Builder corresponding to the @exprD@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprD@ parser in "Dhall.Parser"
 buildExprD :: Buildable a => Expr s a -> Text
 buildExprD (App        a b) = buildExprD a <> " " <> buildExprE b
 buildExprD (Constructors b) = "constructors " <> buildExprE b
 buildExprD (Note       _ b) = buildExprD b
 buildExprD  a               = buildExprE a
 
--- | Builder corresponding to the @exprE@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprE@ parser in "Dhall.Parser"
 buildExprE :: Buildable a => Expr s a -> Text
 buildExprE (Field a b) = buildExprE a <> "." <> buildLabel b
 buildExprE (Note  _ b) = buildExprE b
 buildExprE  a          = buildExprF a
 
--- | Builder corresponding to the @exprF@ parser in "Dhall.Parser"
+-- | Text corresponding to the @exprF@ parser in "Dhall.Parser"
 buildExprF :: Buildable a => Expr s a -> Text
 buildExprF (Var a) =
     buildVar a
@@ -1129,70 +1130,70 @@ buildExprF (UnionLit a b c) =
 buildExprF (ListLit Nothing b) =
     "[" <> buildElems (Data.Foldable.toList b) <> "]"
 buildExprF (Embed a) =
-    Builder.toLazyText (build a)
+    Data.Text.Lazy.toStrict . Builder.toLazyText $ build a
 buildExprF (Note _ b) =
     buildExprF b
 buildExprF a =
     "(" <> buildExprA a <> ")"
 
--- | Builder corresponding to the @const@ parser in "Dhall.Parser"
+-- | Text corresponding to the @const@ parser in "Dhall.Parser"
 buildConst :: Const -> Text
 buildConst Type = "Type"
 buildConst Kind = "Kind"
 
--- | Builder corresponding to the @var@ parser in "Dhall.Parser"
+-- | Text corresponding to the @var@ parser in "Dhall.Parser"
 buildVar :: Var -> Text
 buildVar (V x 0) = buildLabel x
 buildVar (V x n) = buildLabel x <> "@" <> buildNumber n
 
--- | Builder corresponding to the @elems@ parser in "Dhall.Parser"
+-- | Text corresponding to the @elems@ parser in "Dhall.Parser"
 buildElems :: Buildable a => [Expr s a] -> Text
 buildElems   []   = ""
 buildElems   [a]  = buildExprA a
 buildElems (a:bs) = buildExprA a <> ", " <> buildElems bs
 
--- | Builder corresponding to the @recordLit@ parser in "Dhall.Parser"
+-- | Text corresponding to the @recordLit@ parser in "Dhall.Parser"
 buildRecordLit :: Buildable a => InsOrdHashMap Text (Expr s a) -> Text
 buildRecordLit a | Data.HashMap.Strict.InsOrd.null a =
     "{=}"
 buildRecordLit a =
     "{ " <> buildFieldValues (Data.HashMap.Strict.InsOrd.toList a) <> " }"
 
--- | Builder corresponding to the @fieldValues@ parser in "Dhall.Parser"
+-- | Text corresponding to the @fieldValues@ parser in "Dhall.Parser"
 buildFieldValues :: Buildable a => [(Text, Expr s a)] -> Text
 buildFieldValues    []  = ""
 buildFieldValues   [a]  = buildFieldValue a
 buildFieldValues (a:bs) = buildFieldValue a <> ", " <> buildFieldValues bs
 
--- | Builder corresponding to the @fieldValue@ parser in "Dhall.Parser"
+-- | Text corresponding to the @fieldValue@ parser in "Dhall.Parser"
 buildFieldValue :: Buildable a => (Text, Expr s a) -> Text
 buildFieldValue (a, b) = buildLabel a <> " = " <> buildExprA b
 
--- | Builder corresponding to the @record@ parser in "Dhall.Parser"
+-- | Text corresponding to the @record@ parser in "Dhall.Parser"
 buildRecord :: Buildable a => InsOrdHashMap Text (Expr s a) -> Text
 buildRecord a | Data.HashMap.Strict.InsOrd.null a =
     "{}"
 buildRecord a =
     "{ " <> buildFieldTypes (Data.HashMap.Strict.InsOrd.toList a) <> " }"
 
--- | Builder corresponding to the @fieldTypes@ parser in "Dhall.Parser"
+-- | Text corresponding to the @fieldTypes@ parser in "Dhall.Parser"
 buildFieldTypes :: Buildable a => [(Text, Expr s a)] -> Text
 buildFieldTypes    []  = ""
 buildFieldTypes   [a]  = buildFieldType a
 buildFieldTypes (a:bs) = buildFieldType a <> ", " <> buildFieldTypes bs
 
--- | Builder corresponding to the @fieldType@ parser in "Dhall.Parser"
+-- | Text corresponding to the @fieldType@ parser in "Dhall.Parser"
 buildFieldType :: Buildable a => (Text, Expr s a) -> Text
 buildFieldType (a, b) = buildLabel a <> " : " <> buildExprA b
 
--- | Builder corresponding to the @union@ parser in "Dhall.Parser"
+-- | Text corresponding to the @union@ parser in "Dhall.Parser"
 buildUnion :: Buildable a => InsOrdHashMap Text (Expr s a) -> Text
 buildUnion a | Data.HashMap.Strict.InsOrd.null a =
     "<>"
 buildUnion a =
     "< " <> buildAlternativeTypes (Data.HashMap.Strict.InsOrd.toList a) <> " >"
 
--- | Builder corresponding to the @alternativeTypes@ parser in "Dhall.Parser"
+-- | Text corresponding to the @alternativeTypes@ parser in "Dhall.Parser"
 buildAlternativeTypes :: Buildable a => [(Text, Expr s a)] -> Text
 buildAlternativeTypes [] =
     ""
@@ -1201,11 +1202,11 @@ buildAlternativeTypes [a] =
 buildAlternativeTypes (a:bs) =
     buildAlternativeType a <> " | " <> buildAlternativeTypes bs
 
--- | Builder corresponding to the @alternativeType@ parser in "Dhall.Parser"
+-- | Text corresponding to the @alternativeType@ parser in "Dhall.Parser"
 buildAlternativeType :: Buildable a => (Text, Expr s a) -> Text
 buildAlternativeType (a, b) = buildLabel a <> " : " <> buildExprA b
 
--- | Builder corresponding to the @unionLit@ parser in "Dhall.Parser"
+-- | Text corresponding to the @unionLit@ parser in "Dhall.Parser"
 buildUnionLit
     :: Buildable a
     => Text -> Expr s a -> InsOrdHashMap Text (Expr s a) -> Text

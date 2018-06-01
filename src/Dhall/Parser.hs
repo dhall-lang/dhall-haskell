@@ -32,8 +32,7 @@ import Data.Semigroup (Semigroup(..))
 import Data.Sequence (ViewL(..))
 import Data.Set (Set)
 import Data.String (IsString(..))
-import Data.Text.Lazy (Text)
-import Data.Text.Lazy.Builder (Builder)
+import Data.Text (Text)
 import Data.Void (Void)
 import Dhall.Core
 import Formatting.Buildable (Buildable(..))
@@ -46,7 +45,6 @@ import qualified Control.Monad
 import qualified Crypto.Hash
 import qualified Data.ByteArray.Encoding
 import qualified Data.ByteString
-import qualified Data.ByteString.Lazy
 import qualified Data.Char
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
@@ -55,8 +53,7 @@ import qualified Data.List.NonEmpty
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
-import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Encoding
+import qualified Data.Text.Encoding
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
@@ -126,9 +123,9 @@ instance Text.Parser.Char.CharParsing Parser where
 
   anyChar = Text.Megaparsec.Char.anyChar
 
-  string = fmap Data.Text.Lazy.unpack . Text.Megaparsec.Char.string . fromString
+  string = fmap Data.Text.unpack . Text.Megaparsec.Char.string . fromString
 
-  text = fmap Data.Text.Lazy.toStrict . Text.Megaparsec.Char.string . Data.Text.Lazy.fromStrict
+  text = Text.Megaparsec.Char.string
 
 instance TokenParsing Parser where
     someSpace =
@@ -167,8 +164,7 @@ plus :: (Alternative f, Monoid a) => f a -> f a
 plus p = mappend <$> p <*> star p
 
 satisfy :: (Char -> Bool) -> Parser Text
-satisfy predicate =
-    fmap Data.Text.Lazy.singleton (Text.Parser.Char.satisfy predicate)
+satisfy = fmap Data.Text.singleton . Text.Parser.Char.satisfy
 
 blockComment :: Parser ()
 blockComment = do
@@ -266,7 +262,7 @@ simpleLabel = try (do
     c  <- Text.Parser.Char.satisfy headCharacter
     cs <- many (Text.Parser.Char.satisfy tailCharacter)
     let string = c:cs
-    let text = Data.Text.Lazy.pack string
+    let text = Data.Text.pack string
     Control.Monad.guard (not (Data.HashSet.member text reservedIdentifiers))
     return text )
   where
@@ -279,7 +275,7 @@ backtickLabel = do
     _ <- Text.Parser.Char.char '`'
     t <- some (Text.Parser.Char.satisfy predicate)
     _ <- Text.Parser.Char.char '`'
-    return (Data.Text.Lazy.pack t)
+    return (Data.Text.pack t)
   where
     predicate c = alpha c || digit c || elem c ("-/_:." :: String)
 
@@ -328,7 +324,7 @@ doubleQuotedChunk embedded =
 
     unescapedCharacter = do
         c <- Text.Parser.Char.satisfy predicate
-        return (Chunks [] (Data.Text.Lazy.singleton c))
+        return (Chunks [] (Data.Text.singleton c))
       where
         predicate c =
                 ('\x20' <= c && c <= '\x21'    )
@@ -349,7 +345,7 @@ doubleQuotedChunk embedded =
             , tab
             , unicode
             ]
-        return (Chunks [] (Data.Text.Lazy.singleton c))
+        return (Chunks [] (Data.Text.singleton c))
       where
         quotationMark = Text.Parser.Char.char '"'
 
@@ -395,6 +391,7 @@ doubleQuotedLiteral embedded = do
 buildChunks :: Chunks s a -> Text
 buildChunks (Chunks a b) = foldMap buildChunk a <> escapeText b
   where
+    buildChunk :: (Text, Expr s a) -> Text
     buildChunk (c, _) = escapeText c <> "${x}"
 
 dedent :: Chunks Src a -> Chunks Src a
@@ -402,14 +399,14 @@ dedent chunks0 = process chunks0
   where
     text0 = buildChunks chunks0
 
-    lines0 = Data.Text.Lazy.lines text0
+    lines0 = Data.Text.lines text0
 
-    isEmpty = Data.Text.Lazy.all Data.Char.isSpace
+    isEmpty = Data.Text.all Data.Char.isSpace
 
     nonEmptyLines = filter (not . isEmpty) lines0
 
     indentLength line =
-        Data.Text.Lazy.length (Data.Text.Lazy.takeWhile Data.Char.isSpace line)
+        Data.Text.length (Data.Text.takeWhile Data.Char.isSpace line)
 
     shortestIndent = case nonEmptyLines of
         [] -> 0
@@ -422,18 +419,18 @@ dedent chunks0 = process chunks0
     -- This is the trim function we use up until the first variable
     -- interpolation, dedenting all lines
     trimBegin =
-          Data.Text.Lazy.intercalate "\n"
-        . map (Data.Text.Lazy.drop shortestIndent)
-        . Data.Text.Lazy.splitOn "\n"
+          Data.Text.intercalate "\n"
+        . map (Data.Text.drop shortestIndent)
+        . Data.Text.splitOn "\n"
 
     -- This is the trim function we use after each variable interpolation
     -- where we indent each line except the first line (since it's not a true
     -- beginning of a line)
-    trimContinue text = Data.Text.Lazy.intercalate "\n" lines_
+    trimContinue text = Data.Text.intercalate "\n" lines_
       where
-        lines_ = case Data.Text.Lazy.splitOn "\n" text of
+        lines_ = case Data.Text.splitOn "\n" text of
             []   -> []
-            l:ls -> l:map (Data.Text.Lazy.drop shortestIndent) ls
+            l:ls -> l:map (Data.Text.drop shortestIndent) ls
 
     -- This is the loop that drives whether or not to use `trimBegin` or
     -- `trimContinue`.  We call this function with `trimBegin`, but after the
@@ -458,7 +455,7 @@ singleQuoteContinue embedded =
         ]
   where
         escapeSingleQuotes = do
-            _ <- "'''" :: Parser Builder
+            _ <- "'''" :: Parser Text
             b <- singleQuoteContinue embedded
             return ("''" <> b)
 
@@ -781,10 +778,10 @@ pathCharacter c =
 
 pathComponent :: Parser Text
 pathComponent = do
-    _      <- "/" :: Parser Builder
+    _      <- "/" :: Parser Text
     string <- some (Text.Parser.Char.satisfy pathCharacter)
 
-    return (Data.Text.Lazy.pack string)
+    return (Data.Text.pack string)
 
 file_ :: Parser File
 file_ = do
@@ -805,19 +802,19 @@ localRaw =
         ]
   where
     parentPath = do
-        _    <- ".." :: Parser Builder
+        _    <- ".." :: Parser Text
         File (Directory segments) final <- file_
 
         return (Local Here (File (Directory (segments ++ [".."])) final))
 
     herePath = do
-        _    <- "." :: Parser Builder
+        _    <- "." :: Parser Text
         file <- file_
 
         return (Local Here file)
 
     homePath = do
-        _    <- "~" :: Parser Builder
+        _    <- "~" :: Parser Text
         file <- file_
 
         return (Local Home file)
@@ -838,11 +835,11 @@ scheme = "http" <> option "s"
 
 httpRaw :: Parser (Text, File, Text)
 httpRaw = do
-    prefix <- scheme <> "://" <> authority
+    prefixText <- scheme <> "://" <> authority
     file   <- file_
-    suffix <- option ("?" <> query) <> option ("#" <> fragment)
+    suffixText <- option ("?" <> query) <> option ("#" <> fragment)
 
-    return (prefix, file, suffix)
+    return (prefixText, file, suffixText)
 
 authority :: Parser Text
 authority = option (try (userinfo <> "@")) <> host <> option (":" <> port)
@@ -991,9 +988,7 @@ env = do
     whitespace
     return (Env a)
   where
-    alternative0 = do
-        a <- bashEnvironmentVariable
-        return a
+    alternative0 = bashEnvironmentVariable
 
     alternative1 = do
         _ <- Text.Parser.Char.char '"'
@@ -1538,7 +1533,7 @@ toMap kvs = do
                 then pure v
                 else
                     Text.Parser.Combinators.unexpected
-                        ("duplicate field: " ++ Data.Text.Lazy.unpack k)
+                        ("duplicate field: " ++ Data.Text.unpack k)
     Data.HashMap.Strict.InsOrd.traverseWithKey action m
   where
     fromListWith combine = Data.List.foldl' snoc nil
@@ -1567,10 +1562,9 @@ importHashed_ = do
   where
     importHash_ = do
         _ <- Text.Parser.Char.text "sha256:"
-        lazyText <- count 64 (satisfy hexdig <?> "hex digit")
+        text <- count 64 (satisfy hexdig <?> "hex digit")
         whitespace
-        let lazyBytes16 = Data.Text.Lazy.Encoding.encodeUtf8 lazyText
-        let strictBytes16 = Data.ByteString.Lazy.toStrict lazyBytes16
+        let strictBytes16 = Data.Text.Encoding.encodeUtf8 text
         strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
             Left  string      -> fail string
             Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
@@ -1623,7 +1617,7 @@ exprAndHeaderFromText
     -> Either ParseError (Text, Expr Src Import)
 exprAndHeaderFromText delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
-    Right (txt, r) -> Right (Data.Text.Lazy.dropWhileEnd (/= '\n') txt, r)
+    Right (txt, r) -> Right (Data.Text.dropWhileEnd (/= '\n') txt, r)
   where
     parser = do
         (bytes, _) <- Text.Megaparsec.match whitespace

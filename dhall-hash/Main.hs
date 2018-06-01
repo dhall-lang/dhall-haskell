@@ -18,7 +18,7 @@ import System.Exit (exitFailure, exitSuccess)
 import qualified Paths_dhall as Meta
 
 import qualified Control.Exception
-import qualified Data.Text.Lazy.IO
+import qualified Data.Text.IO
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
 import qualified System.IO
@@ -69,7 +69,7 @@ main = do
                 if explain
                     then Control.Exception.throwIO (DetailedTypeError e)
                     else do
-                        Data.Text.Lazy.IO.hPutStrLn stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                        Data.Text.IO.hPutStrLn stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO e
 
             handler1 (Imported ps e) = do
@@ -78,7 +78,7 @@ main = do
                 if explain
                     then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
                     else do
-                        Data.Text.Lazy.IO.hPutStrLn stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                        Data.Text.IO.hPutStrLn stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO (Imported ps e)
 
             handler2 e = do
@@ -89,7 +89,7 @@ main = do
 
     handle (do
         System.IO.hSetEncoding System.IO.stdin System.IO.utf8
-        inText <- Data.Text.Lazy.IO.getContents
+        inText <- Data.Text.IO.getContents
 
         expr <- case exprFromText "(stdin)" inText of
             Left  err  -> Control.Exception.throwIO err
@@ -101,4 +101,4 @@ main = do
             Left  err -> Control.Exception.throwIO err
             Right _   -> return ()
 
-        Data.Text.Lazy.IO.putStrLn (hashExpressionToCode (normalize expr')) )
+        Data.Text.IO.putStrLn (hashExpressionToCode (normalize expr')) )

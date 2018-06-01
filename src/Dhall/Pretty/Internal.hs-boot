@@ -1,9 +1,9 @@
 module Dhall.Pretty.Internal where
 
 import Data.Scientific (Scientific)
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty, Doc)
-import Formatting.Buildable (Buildable)
+import Formatting.Buildable (Buildable(..))
 import Numeric.Natural (Natural)
 import Prelude
 

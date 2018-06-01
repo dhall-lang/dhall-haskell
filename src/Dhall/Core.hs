@@ -68,7 +68,7 @@ import Data.Scientific (Scientific)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Set (Set)
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Traversable
 import {-# SOURCE #-} Dhall.Pretty.Internal
@@ -106,7 +106,7 @@ import qualified Data.Text.Prettyprint.Doc  as Pretty
 data Const = Type | Kind deriving (Show, Eq, Data, Bounded, Enum)
 
 instance Buildable Const where
-    build = Builder.fromLazyText . buildConst
+    build = Builder.fromText . buildConst
 
 {-| Internal representation of a directory that stores the path components in
     reverse order
@@ -274,7 +274,7 @@ instance IsString Var where
     fromString str = V (fromString str) 0
 
 instance Buildable Var where
-    build = Builder.fromLazyText . buildVar
+    build = Builder.fromText . buildVar
 
 -- | Syntax tree for expressions
 data Expr s a
@@ -579,7 +579,7 @@ instance IsString (Chunks s a) where
 
 -- | Generates a syntactically valid Dhall program
 instance Buildable a => Buildable (Expr s a) where
-    build = Builder.fromLazyText . buildExpr
+    build = Builder.fromText . buildExpr
 
 instance Pretty a => Pretty (Expr s a) where
     pretty = Pretty.unAnnotate . prettyExpr
