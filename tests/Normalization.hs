@@ -4,12 +4,12 @@
 module Normalization (normalizationTests) where
 
 import Data.Monoid ((<>))
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Dhall.Core (Expr)
 import Dhall.TypeCheck (X)
 
 import qualified Control.Exception
-import qualified Data.Text.Lazy
+import qualified Data.Text
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
@@ -19,7 +19,7 @@ import Dhall.Core
 import Dhall.Context
 import Test.Tasty
 import Test.Tasty.HUnit
-import Util 
+import Util
 
 normalizationTests :: TestTree
 normalizationTests =
@@ -199,11 +199,11 @@ customization =
 
 simpleCustomization :: TestTree
 simpleCustomization = testCase "simpleCustomization" $ do
-  let tyCtx  = insert "min" (Pi "_" Natural (Pi "_" Natural Natural)) empty 
+  let tyCtx  = insert "min" (Pi "_" Natural (Pi "_" Natural Natural)) empty
       valCtx e = case e of
                     (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalLit y)) -> Just (NaturalLit (min x y))
                     _ -> Nothing
-  e <- codeWith tyCtx "min (min 11 12) 8 + 1" 
+  e <- codeWith tyCtx "min (min 11 12) 8 + 1"
   assertNormalizesToWith valCtx e "9"
 
 nestedReduction :: TestTree
@@ -215,7 +215,7 @@ nestedReduction = testCase "doubleReduction" $ do
       valCtx e = case e of
                     (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalLit y)) -> Just (NaturalLit (min x y))
                     (App (Var (V "wurble" 0)) (NaturalLit x)) -> Just
-                        (App (Var (V "fiveorless" 0)) (NaturalPlus (NaturalLit x) (NaturalLit 2))) 
+                        (App (Var (V "fiveorless" 0)) (NaturalPlus (NaturalLit x) (NaturalLit 2)))
                     (App (Var (V "fiveorless" 0)) (NaturalLit x)) -> Just
                         (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalPlus (NaturalLit 3) (NaturalLit 2)))
                     _ -> Nothing
@@ -224,7 +224,7 @@ nestedReduction = testCase "doubleReduction" $ do
 
 should :: Text -> Text -> TestTree
 should name basename =
-    Test.Tasty.HUnit.testCase (Data.Text.Lazy.unpack name) $ do
+    Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
         let actualCode   = "./tests/normalization/" <> basename <> "A.dhall"
         let expectedCode = "./tests/normalization/" <> basename <> "B.dhall"
 

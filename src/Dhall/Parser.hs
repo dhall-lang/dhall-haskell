@@ -396,9 +396,7 @@ buildChunks (Chunks a b) = foldMap buildChunk a <> escapeText b
 dedent :: Chunks Src a -> Chunks Src a
 dedent chunks0 = process chunks0
   where
-    builder0 = buildChunks chunks0
-
-    text0 = builder0
+    text0 = buildChunks chunks0
 
     lines0 = Data.Text.lines text0
 
@@ -427,10 +425,8 @@ dedent chunks0 = process chunks0
     -- This is the trim function we use after each variable interpolation
     -- where we indent each line except the first line (since it's not a true
     -- beginning of a line)
-    trimContinue builder = Data.Text.intercalate "\n" lines_
+    trimContinue text = Data.Text.intercalate "\n" lines_
       where
-        text = builder
-
         lines_ = case Data.Text.splitOn "\n" text of
             []   -> []
             l:ls -> l:map (Data.Text.drop shortestIndent) ls
@@ -1566,10 +1562,9 @@ importHashed_ = do
   where
     importHash_ = do
         _ <- Text.Parser.Char.text "sha256:"
-        builder <- count 64 (satisfy hexdig <?> "hex digit")
+        text <- count 64 (satisfy hexdig <?> "hex digit")
         whitespace
-        let lazyText    = builder
-        let strictBytes16 = Data.Text.Encoding.encodeUtf8 lazyText
+        let strictBytes16 = Data.Text.Encoding.encodeUtf8 text
         strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
             Left  string      -> fail string
             Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)

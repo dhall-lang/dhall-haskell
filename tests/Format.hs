@@ -8,7 +8,7 @@ import Test.Tasty (TestTree)
 
 import qualified Control.Exception
 import qualified Data.Text
-import qualified Data.Text.Lazy.IO
+import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc
 import qualified Data.Text.Prettyprint.Doc.Render.Text
 import qualified Dhall.Parser
@@ -55,7 +55,7 @@ should name basename =
                 Data.Text.unpack ("./tests/format/" <> basename <> "A.dhall")
         let outputFile =
                 Data.Text.unpack ("./tests/format/" <> basename <> "B.dhall")
-        inputText <- Data.Text.Lazy.IO.readFile inputFile
+        inputText <- Data.Text.IO.readFile inputFile
 
         expr <- case Dhall.Parser.exprFromText mempty inputText of
             Left  err  -> Control.Exception.throwIO err
@@ -63,9 +63,9 @@ should name basename =
 
         let doc        = Data.Text.Prettyprint.Doc.pretty expr
         let docStream  = Data.Text.Prettyprint.Doc.layoutSmart opts doc
-        let actualText = Data.Text.Prettyprint.Doc.Render.Text.renderLazy docStream
+        let actualText = Data.Text.Prettyprint.Doc.Render.Text.renderStrict docStream
 
-        expectedText <- Data.Text.Lazy.IO.readFile outputFile
+        expectedText <- Data.Text.IO.readFile outputFile
 
         let message =
                 "The formatted expression did not match the expected output"
