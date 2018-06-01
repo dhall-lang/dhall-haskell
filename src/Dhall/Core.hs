@@ -1,12 +1,13 @@
-{-# LANGUAGE BangPatterns      #-}
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE DeriveFoldable    #-}
-{-# LANGUAGE DeriveFunctor     #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE UnicodeSyntax     #-}
+{-# LANGUAGE BangPatterns       #-}
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFoldable     #-}
+{-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE DeriveTraversable  #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE UnicodeSyntax      #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| This module contains the core calculus for the Dhall language.
@@ -58,6 +59,7 @@ import Control.Applicative (Applicative(..), (<$>))
 import Control.Applicative (empty)
 import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
+import Data.Data (Data)
 import Data.Foldable
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.HashSet (HashSet)
@@ -67,7 +69,6 @@ import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Set (Set)
 import Data.Text.Lazy (Text)
-import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Traversable
 import {-# SOURCE #-} Dhall.Pretty.Internal
@@ -102,10 +103,10 @@ import qualified Data.Text.Prettyprint.Doc  as Pretty
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
 -}
-data Const = Type | Kind deriving (Show, Eq, Bounded, Enum)
+data Const = Type | Kind deriving (Show, Eq, Data, Bounded, Enum)
 
 instance Buildable Const where
-    build = buildConst
+    build = Builder.fromLazyText . buildConst
 
 {-| Internal representation of a directory that stores the path components in
     reverse order
@@ -267,13 +268,13 @@ type Path = Import
     appear as a numeric suffix.
 -}
 data Var = V Text !Integer
-    deriving (Eq, Show)
+    deriving (Data, Eq, Show)
 
 instance IsString Var where
     fromString str = V (fromString str) 0
 
 instance Buildable Var where
-    build = buildVar
+    build = Builder.fromLazyText . buildVar
 
 -- | Syntax tree for expressions
 data Expr s a
@@ -405,7 +406,7 @@ data Expr s a
     | Note s (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Functor, Foldable, Traversable, Show, Eq)
+    deriving (Functor, Foldable, Traversable, Show, Eq, Data)
 
 instance Applicative (Expr s) where
     pure = Embed
@@ -546,8 +547,8 @@ instance IsString (Expr s a) where
     fromString str = Var (fromString str)
 
 -- | The body of an interpolated @Text@ literal
-data Chunks s a = Chunks [(Builder, Expr s a)] Builder
-    deriving (Functor, Foldable, Traversable, Show, Eq)
+data Chunks s a = Chunks [(Text, Expr s a)] Text
+    deriving (Functor, Foldable, Traversable, Show, Eq, Data)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =
@@ -578,7 +579,7 @@ instance IsString (Chunks s a) where
 
 -- | Generates a syntactically valid Dhall program
 instance Buildable a => Buildable (Expr s a) where
-    build = buildExpr
+    build = Builder.fromLazyText . buildExpr
 
 instance Pretty a => Pretty (Expr s a) where
     pretty = Pretty.unAnnotate . prettyExpr

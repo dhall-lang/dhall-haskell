@@ -418,7 +418,7 @@ double = fmap Data.Scientific.toRealFloat scientific
 lazyText :: Type Text
 lazyText = Type {..}
   where
-    extract (TextLit (Chunks [] t)) = pure (Data.Text.Lazy.Builder.toLazyText t)
+    extract (TextLit (Chunks [] t)) = pure t
     extract  _                      = empty
 
     expected = Text
@@ -817,14 +817,14 @@ instance Inject Text where
     injectWith _ = InputType {..}
       where
         embed text =
-            TextLit (Chunks [] (Data.Text.Lazy.Builder.fromLazyText text))
+            TextLit (Chunks [] text)
 
         declared = Text
 
 instance Inject Data.Text.Text where
     injectWith _ = InputType {..}
       where
-        embed text = TextLit (Chunks [] (Data.Text.Lazy.Builder.fromText text))
+        embed text = TextLit (Chunks [] (Data.Text.Lazy.fromStrict text))
 
         declared = Text
 

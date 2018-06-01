@@ -447,8 +447,8 @@ toHeader
 toHeader (RecordLit m) = do
     TextLit (Chunks [] keyBuilder  ) <- Data.HashMap.Strict.InsOrd.lookup "header" m
     TextLit (Chunks [] valueBuilder) <- Data.HashMap.Strict.InsOrd.lookup "value"  m
-    let keyText   = Text.toStrict (Builder.toLazyText keyBuilder  )
-    let valueText = Text.toStrict (Builder.toLazyText valueBuilder)
+    let keyText   = Text.toStrict keyBuilder
+    let valueText = Text.toStrict valueBuilder
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
     let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
     return (Data.CaseInsensitive.mk keyBytes, valueBytes)
@@ -628,7 +628,7 @@ exprFromImport (Import {..}) = do
                     return expr
 
         RawText -> do
-            return (TextLit (Chunks [] (build text)))
+            return (TextLit (Chunks [] (Builder.toLazyText (build text))))
 
 -- | Resolve all imports within an expression using a custom typing context and
 -- `Import`-resolving callback in arbitrary `MonadCatch` monad.

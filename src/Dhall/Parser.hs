@@ -24,6 +24,7 @@ import Control.Applicative (Alternative(..), liftA2, optional)
 import Control.Exception (Exception)
 import Control.Monad (MonadPlus)
 import Data.ByteArray.Encoding (Base(..))
+import Data.Data (Data)
 import Data.Functor (void)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Scientific (Scientific)
@@ -55,7 +56,6 @@ import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char
@@ -66,7 +66,7 @@ import qualified Text.Parser.Token.Style
 
 -- | Source code extract
 data Src = Src Text.Megaparsec.SourcePos Text.Megaparsec.SourcePos Text
-  deriving (Eq, Show)
+  deriving (Data, Eq, Show)
 
 instance Buildable Src where
     build (Src begin _ text) =
@@ -166,9 +166,9 @@ star p = plus p <|> pure mempty
 plus :: (Alternative f, Monoid a) => f a -> f a
 plus p = mappend <$> p <*> star p
 
-satisfy :: (Char -> Bool) -> Parser Builder
+satisfy :: (Char -> Bool) -> Parser Text
 satisfy predicate =
-    fmap Data.Text.Lazy.Builder.singleton (Text.Parser.Char.satisfy predicate)
+    fmap Data.Text.Lazy.singleton (Text.Parser.Char.satisfy predicate)
 
 blockComment :: Parser ()
 blockComment = do
@@ -328,7 +328,7 @@ doubleQuotedChunk embedded =
 
     unescapedCharacter = do
         c <- Text.Parser.Char.satisfy predicate
-        return (Chunks [] (Data.Text.Lazy.Builder.singleton c))
+        return (Chunks [] (Data.Text.Lazy.singleton c))
       where
         predicate c =
                 ('\x20' <= c && c <= '\x21'    )
@@ -349,7 +349,7 @@ doubleQuotedChunk embedded =
             , tab
             , unicode
             ]
-        return (Chunks [] (Data.Text.Lazy.Builder.singleton c))
+        return (Chunks [] (Data.Text.Lazy.singleton c))
       where
         quotationMark = Text.Parser.Char.char '"'
 
@@ -392,7 +392,7 @@ doubleQuotedLiteral embedded = do
 --
 -- This also doesn't include the surrounding quotes since they would interfere
 -- with the whitespace detection
-buildChunks :: Chunks s a -> Builder
+buildChunks :: Chunks s a -> Text
 buildChunks (Chunks a b) = foldMap buildChunk a <> escapeText b
   where
     buildChunk (c, _) = escapeText c <> "${x}"
@@ -400,9 +400,7 @@ buildChunks (Chunks a b) = foldMap buildChunk a <> escapeText b
 dedent :: Chunks Src a -> Chunks Src a
 dedent chunks0 = process chunks0
   where
-    builder0 = buildChunks chunks0
-
-    text0 = Data.Text.Lazy.Builder.toLazyText builder0
+    text0 = buildChunks chunks0
 
     lines0 = Data.Text.Lazy.lines text0
 
@@ -424,19 +422,15 @@ dedent chunks0 = process chunks0
     -- This is the trim function we use up until the first variable
     -- interpolation, dedenting all lines
     trimBegin =
-          build
-        . Data.Text.Lazy.intercalate "\n"
+          Data.Text.Lazy.intercalate "\n"
         . map (Data.Text.Lazy.drop shortestIndent)
         . Data.Text.Lazy.splitOn "\n"
-        . Data.Text.Lazy.Builder.toLazyText
 
     -- This is the trim function we use after each variable interpolation
     -- where we indent each line except the first line (since it's not a true
     -- beginning of a line)
-    trimContinue builder = build (Data.Text.Lazy.intercalate "\n" lines_)
+    trimContinue text = Data.Text.Lazy.intercalate "\n" lines_
       where
-        text = Data.Text.Lazy.Builder.toLazyText builder
-
         lines_ = case Data.Text.Lazy.splitOn "\n" text of
             []   -> []
             l:ls -> l:map (Data.Text.Lazy.drop shortestIndent) ls
@@ -839,7 +833,7 @@ local = do
     whitespace
     return a
 
-scheme :: Parser Builder
+scheme :: Parser Text
 scheme = "http" <> option "s"
 
 httpRaw :: Parser (Text, File, Text)
@@ -848,34 +842,31 @@ httpRaw = do
     file   <- file_
     suffix <- option ("?" <> query) <> option ("#" <> fragment)
 
-    let prefixText = Data.Text.Lazy.Builder.toLazyText prefix
-    let suffixText = Data.Text.Lazy.Builder.toLazyText suffix
+    return (prefix, file, suffix)
 
-    return (prefixText, file, suffixText)
-
-authority :: Parser Builder
+authority :: Parser Text
 authority = option (try (userinfo <> "@")) <> host <> option (":" <> port)
 
-userinfo :: Parser Builder
+userinfo :: Parser Text
 userinfo = star (satisfy predicate <|> pctEncoded)
   where
     predicate c = unreserved c || subDelims c || c == ':'
 
-host :: Parser Builder
+host :: Parser Text
 host = choice [ ipLiteral, ipV4Address, regName ]
 
-port :: Parser Builder
+port :: Parser Text
 port = star (satisfy digit)
 
-ipLiteral :: Parser Builder
+ipLiteral :: Parser Text
 ipLiteral = "[" <> (ipV6Address <|> ipVFuture) <> "]"
 
-ipVFuture :: Parser Builder
+ipVFuture :: Parser Text
 ipVFuture = "v" <> plus (satisfy hexdig) <> "." <> plus (satisfy predicate)
   where
     predicate c = unreserved c || subDelims c || c == ':'
 
-ipV6Address :: Parser Builder
+ipV6Address :: Parser Text
 ipV6Address =
     choice
         [ try alternative0
@@ -919,16 +910,16 @@ ipV6Address =
     alternative8 =
         option (range 0 6 (h16 <> ":") <> h16) <> "::"
 
-h16 :: Parser Builder
+h16 :: Parser Text
 h16 = range 1 3 (satisfy hexdig)
 
-ls32 :: Parser Builder
+ls32 :: Parser Text
 ls32 = (h16 <> ":" <> h16) <|> ipV4Address
 
-ipV4Address :: Parser Builder
+ipV4Address :: Parser Text
 ipV4Address = decOctet <> "." <> decOctet <> "." <> decOctet <> "." <> decOctet
 
-decOctet :: Parser Builder
+decOctet :: Parser Text
 decOctet =
     choice
         [ try alternative4
@@ -954,27 +945,27 @@ decOctet =
       where
         predicate c = '\x30' <= c && c <= '\x35'
 
-regName :: Parser Builder
+regName :: Parser Text
 regName = star (satisfy predicate <|> pctEncoded)
   where
     predicate c = unreserved c || subDelims c
 
-pchar :: Parser Builder
+pchar :: Parser Text
 pchar = satisfy predicate <|> pctEncoded
   where
     predicate c = unreserved c || subDelims c || c == ':' || c == '@'
 
-query :: Parser Builder
+query :: Parser Text
 query = star (pchar <|> satisfy predicate)
   where
     predicate c = c == '/' || c == '?'
 
-fragment :: Parser Builder
+fragment :: Parser Text
 fragment = star (pchar <|> satisfy predicate)
   where
     predicate c = c == '/' || c == '?'
 
-pctEncoded :: Parser Builder
+pctEncoded :: Parser Text
 pctEncoded = "%" <> count 2 (satisfy hexdig)
 
 unreserved :: Char -> Bool
@@ -1002,25 +993,25 @@ env = do
   where
     alternative0 = do
         a <- bashEnvironmentVariable
-        return (Data.Text.Lazy.Builder.toLazyText a)
+        return a
 
     alternative1 = do
         _ <- Text.Parser.Char.char '"'
         a <- posixEnvironmentVariable
         _ <- Text.Parser.Char.char '"'
-        return (Data.Text.Lazy.Builder.toLazyText a)
+        return a
 
-bashEnvironmentVariable :: Parser Builder
+bashEnvironmentVariable :: Parser Text
 bashEnvironmentVariable = satisfy predicate0 <> star (satisfy predicate1)
   where
     predicate0 c = alpha c || c == '_'
 
     predicate1 c = alpha c || digit c || c == '_'
 
-posixEnvironmentVariable :: Parser Builder
+posixEnvironmentVariable :: Parser Text
 posixEnvironmentVariable = plus posixEnvironmentVariableCharacter
 
-posixEnvironmentVariableCharacter :: Parser Builder
+posixEnvironmentVariableCharacter :: Parser Text
 posixEnvironmentVariableCharacter =
     ("\\" <> satisfy predicate0) <|> satisfy predicate1
   where
@@ -1576,9 +1567,8 @@ importHashed_ = do
   where
     importHash_ = do
         _ <- Text.Parser.Char.text "sha256:"
-        builder <- count 64 (satisfy hexdig <?> "hex digit")
+        lazyText <- count 64 (satisfy hexdig <?> "hex digit")
         whitespace
-        let lazyText    = Data.Text.Lazy.Builder.toLazyText builder
         let lazyBytes16 = Data.Text.Lazy.Encoding.encodeUtf8 lazyText
         let strictBytes16 = Data.ByteString.Lazy.toStrict lazyBytes16
         strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of

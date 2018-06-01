@@ -2,7 +2,6 @@ module Dhall.Pretty.Internal where
 
 import Data.Scientific (Scientific)
 import Data.Text.Lazy (Text)
-import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Pretty, Doc)
 import Formatting.Buildable (Buildable)
 import Numeric.Natural (Natural)
@@ -12,20 +11,20 @@ import {-# SOURCE #-} Dhall.Core
 
 data Ann
 
-buildConst :: Const -> Builder
+buildConst :: Const -> Text
 
-buildVar :: Var -> Builder
+buildVar :: Var -> Text
 
-buildExpr :: Buildable a => Expr s a -> Builder
+buildExpr :: Buildable a => Expr s a -> Text
 
 prettyExpr :: Pretty a => Expr s a -> Doc Ann
 
-buildNatural :: Natural -> Builder
+buildNatural :: Natural -> Text
 
-buildNumber :: Integer -> Builder
+buildNumber :: Integer -> Text
 
-buildScientific :: Scientific -> Builder
+buildScientific :: Scientific -> Text
 
 pretty :: Pretty a => a -> Text
 
-escapeText :: Builder -> Builder
+escapeText :: Text -> Text
