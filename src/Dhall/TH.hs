@@ -2,12 +2,12 @@
 
 {-| This module provides `staticDhallExpression` which can be used to resolve
     all of an expression’s imports at compile time, allowing one to reference
-    Dhall expression from Haskell without having a runtime dependency on the
+    Dhall expressions from Haskell without having a runtime dependency on the
     location of Dhall files.
 
     For example, given a file “Some/Type.dhall” containing
 
-        < This : Natural, Other : ../Other/Type.dhall >
+        < This : Natural | Other : ../Other/Type.dhall >
 
     rather than duplicating the AST manually in a Haskell `Type`, you can do
 
