@@ -179,7 +179,6 @@ import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified System.Environment
 import qualified System.Directory
-import qualified System.FilePath                  as FilePath
 import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
@@ -524,10 +523,6 @@ exprFromImport (Import {..}) = do
 
                 Absolute -> do
                     return "/"
-
-                Parent -> do
-                    pwd <- System.Directory.getCurrentDirectory
-                    return (FilePath.takeDirectory pwd)
 
                 Here -> do
                     System.Directory.getCurrentDirectory

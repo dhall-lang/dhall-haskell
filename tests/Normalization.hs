@@ -87,6 +87,8 @@ preludeExamples =
         , shouldNormalize "List/generate" "./examples/List/generate/1"
         , shouldNormalize "List/head" "./examples/List/head/0"
         , shouldNormalize "List/head" "./examples/List/head/1"
+        , shouldNormalize "List/indexed" "./examples/List/indexed/0"
+        , shouldNormalize "List/indexed" "./examples/List/indexed/1"
         , shouldNormalize "List/iterate" "./examples/List/iterate/0"
         , shouldNormalize "List/iterate" "./examples/List/iterate/1"
         , shouldNormalize "List/last" "./examples/List/last/0"
