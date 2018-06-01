@@ -36,6 +36,7 @@ import Dhall.Context (Context)
 import Formatting.Buildable (Buildable(..))
 
 import qualified Data.Foldable
+import qualified Data.HashMap.Strict
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
 import qualified Data.Set
@@ -525,13 +526,19 @@ typeWithA tpa = loop
                 kts <- Data.HashMap.Strict.InsOrd.traverseWithKey process kvs
                 return (Record kts)
     loop ctx e@(Union     kts   ) = do
-        let process (k, t) = do
+        let process k t = do
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
                     Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
-        mapM_ process (Data.HashMap.Strict.InsOrd.toList kts)
+        -- toList from insert-ordered-containers does some work to
+        -- ensure that the elements do follow insertion order. In this
+        -- instance, insertion order doesn't matter: we only need to
+        -- peek at each element to make sure it is well-typed. If
+        -- there are multiple type errors, it does not matter which
+        -- gets reported first here.
+        Data.HashMap.Strict.foldrWithKey (\ k t prev -> prev >> process k t) (Right ()) (Data.HashMap.Strict.InsOrd.toHashMap kts)
         return (Const Type)
     loop ctx e@(UnionLit k v kts) = do
         case Data.HashMap.Strict.InsOrd.lookup k kts of
