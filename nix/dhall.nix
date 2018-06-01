@@ -1,10 +1,10 @@
 { mkDerivation, ansi-terminal, base, bytestring, case-insensitive
-, containers, contravariant, cryptonite, deepseq, directory
-, doctest, exceptions, filepath, formatting, haskeline, http-client
-, http-client-tls, insert-ordered-containers, lens-family-core
-, megaparsec, memory, mtl, optparse-applicative, parsers
-, prettyprinter, prettyprinter-ansi-terminal, repline, scientific
-, stdenv, tasty, tasty-hunit, text, transformers
+, containers, contravariant, criterion, cryptonite, deepseq
+, directory, doctest, exceptions, filepath, formatting, haskeline
+, http-client, http-client-tls, insert-ordered-containers
+, lens-family-core, megaparsec, memory, mtl, optparse-applicative
+, parsers, prettyprinter, prettyprinter-ansi-terminal, repline
+, scientific, stdenv, tasty, tasty-hunit, text, transformers
 , unordered-containers, vector
 }:
 mkDerivation {
@@ -28,6 +28,9 @@ mkDerivation {
   testHaskellDepends = [
     base deepseq doctest insert-ordered-containers prettyprinter tasty
     tasty-hunit text vector
+  ];
+  benchmarkHaskellDepends = [
+    base containers criterion directory text
   ];
   description = "A configuration language guaranteed to terminate";
   license = stdenv.lib.licenses.bsd3;
