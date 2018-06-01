@@ -7,7 +7,7 @@ import Test.Tasty (TestTree)
 
 import qualified Control.Exception
 import qualified Data.Text
-import qualified Data.Text.Lazy.IO
+import qualified Data.Text.IO
 import qualified Dhall.Parser
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
@@ -138,7 +138,7 @@ parserTests =
 
 shouldParse :: Text -> FilePath -> TestTree
 shouldParse name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) (do
-    text <- Data.Text.Lazy.IO.readFile path
+    text <- Data.Text.IO.readFile path
     case Dhall.Parser.exprFromText mempty text of
         Left err -> Control.Exception.throwIO err
         Right _  -> return () )

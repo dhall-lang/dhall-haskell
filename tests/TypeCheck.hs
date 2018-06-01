@@ -3,11 +3,11 @@
 module TypeCheck where
 
 import Data.Monoid (mempty, (<>))
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Test.Tasty (TestTree)
 
 import qualified Control.Exception
-import qualified Data.Text.Lazy
+import qualified Data.Text
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
@@ -47,7 +47,7 @@ typecheckTests =
 
 should :: Text -> Text -> TestTree
 should name basename =
-    Test.Tasty.HUnit.testCase (Data.Text.Lazy.unpack name) $ do
+    Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
         let actualCode   = "./tests/typecheck/" <> basename <> "A.dhall"
         let expectedCode = "./tests/typecheck/" <> basename <> "B.dhall"
 
