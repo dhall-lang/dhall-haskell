@@ -865,11 +865,11 @@ escapeSingleQuotedText inputBuilder = outputBuilder
     substitute before after = Text.intercalate after . Text.splitOn before
 
 {-| Escape a `Builder` literal using Dhall's escaping rules
-  
+
     Note that the result does not include surrounding quotes
 -}
 escapeText :: Text -> Text
-escapeText a = Text.concatMap adapt text
+escapeText text = Text.concatMap adapt text
   where
     adapt c
         | '\x20' <= c && c <= '\x21' = Text.singleton c
@@ -898,8 +898,6 @@ escapeText a = Text.concatMap adapt text
     showDigit n
         | n < 10    = Data.Char.chr (Data.Char.ord '0' + n)
         | otherwise = Data.Char.chr (Data.Char.ord 'A' + n - 10)
-
-    text = a
 
 -- | Builder corresponding to the @expr@ parser in "Dhall.Parser"
 buildExpr :: Buildable a => Expr s a -> Text

@@ -94,8 +94,8 @@ main = do
     Control.Exception.handle handler (do
         case inplace of
             Just file -> do
-                strictText <- Data.Text.IO.readFile file
-                (header, expr) <- case exprAndHeaderFromText "(stdin)" strictText of
+                text <- Data.Text.IO.readFile file
+                (header, expr) <- case exprAndHeaderFromText "(stdin)" text of
                     Left  err -> Control.Exception.throwIO err
                     Right x   -> return x
 

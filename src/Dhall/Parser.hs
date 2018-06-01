@@ -987,8 +987,7 @@ env = do
     whitespace
     return (Env a)
   where
-    alternative0 = do
-        bashEnvironmentVariable
+    alternative0 = bashEnvironmentVariable
 
     alternative1 = do
         _ <- Text.Parser.Char.char '"'
