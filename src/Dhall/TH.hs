@@ -28,20 +28,14 @@ import Data.Typeable
 import Language.Haskell.TH.Syntax
 
 import qualified Data.Text as Text
-import qualified Dhall.Import
-import qualified Dhall.Parser
+import qualified Dhall
 
--- | This resolves all imports in the expression, so the resulting AST is self-
---   contained.
+-- | This fully resolves, type checks, and normalizes the expression, so the
+--   resulting AST is self-contained.
 staticDhallExpression :: Text.Text -> Q Exp
 staticDhallExpression =
-    dataToExpQ (\a -> liftText <$> cast a) <=< runIO . importDhallExpression
+    dataToExpQ (\a -> liftText <$> cast a) <=< runIO . Dhall.inputExpr
   where
-    importDhallExpression =
-      either (fail . (++ "\nin Dhall.TH.staticDhallExpression.") . show)
-             Dhall.Import.load
-      . Dhall.Parser.exprFromText "(static)"
-
     -- A workaround for a problem in TemplateHaskell (see
     -- https://stackoverflow.com/questions/38143464/cant-find-inerface-file-declaration-for-variable)
     liftText = fmap (AppE (VarE 'Text.pack)) . lift . Text.unpack
