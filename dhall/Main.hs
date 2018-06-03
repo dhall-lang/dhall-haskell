@@ -23,7 +23,7 @@ import System.IO (Handle)
 import qualified Paths_dhall as Meta
 
 import qualified Control.Exception
-import qualified Data.Text.Lazy.IO
+import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Dhall.Core
@@ -96,7 +96,7 @@ throws (Right a) = return a
 
 getExpression :: IO (Expr Src Import)
 getExpression = do
-    inText <- Data.Text.Lazy.IO.getContents
+    inText <- Data.Text.IO.getContents
 
     throws (Dhall.Parser.exprFromText "(stdin)" inText)
 
@@ -128,7 +128,7 @@ main = do
                 if explain
                     then Control.Exception.throwIO (DetailedTypeError e)
                     else do
-                        Data.Text.Lazy.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                        Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO e
 
             handler1 (Imported ps e) = do
@@ -137,7 +137,7 @@ main = do
                 if explain
                     then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
                     else do
-                        Data.Text.Lazy.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                        Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO (Imported ps e)
 
             handler2 e = do
@@ -161,7 +161,7 @@ main = do
                     else Pretty.unAnnotateS stream
 
             Pretty.renderIO h ansiStream
-            Data.Text.Lazy.IO.hPutStrLn h ""
+            Data.Text.IO.hPutStrLn h ""
 
     handle $ case mode of
         Version -> do
@@ -176,7 +176,7 @@ main = do
 
             render System.IO.stderr (Dhall.Core.normalize inferredType)
 
-            Data.Text.Lazy.IO.hPutStrLn System.IO.stderr mempty
+            Data.Text.IO.hPutStrLn System.IO.stderr mempty
 
             render System.IO.stdout (Dhall.Core.normalize resolvedExpression)
 

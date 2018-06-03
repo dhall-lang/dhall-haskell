@@ -10,7 +10,7 @@ import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
 import Data.List ( foldl' )
 
-import qualified Data.Text.Lazy as LazyText
+import qualified Data.Text as Text
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
 import qualified Dhall.Context
@@ -74,7 +74,7 @@ parseAndLoad
   => String -> m ( Dhall.Expr Dhall.Src Dhall.X )
 parseAndLoad src = do
   parsed <-
-    case Dhall.exprFromText "(stdin)" ( LazyText.pack src ) of
+    case Dhall.exprFromText "(stdin)" ( Text.pack src ) of
       Left e ->
         liftIO ( throwIO e )
 
@@ -158,7 +158,7 @@ addBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
 addBinding (k : "=" : srcs) = do
   let
     varName =
-      LazyText.pack k
+      Text.pack k
 
   loaded <-
     parseAndLoad ( unwords srcs )

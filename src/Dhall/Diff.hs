@@ -22,7 +22,7 @@ import Data.Scientific (Scientific)
 import Data.Semigroup
 import Data.Set (Set)
 import Data.String (IsString(..))
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.List.NonEmpty (NonEmpty(..))
 import Dhall.Core (Const(..), Expr(..), Var(..))

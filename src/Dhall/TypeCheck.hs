@@ -26,7 +26,7 @@ import Data.Foldable (forM_, toList)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Traversable (forM)
@@ -39,7 +39,8 @@ import qualified Data.Foldable
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
 import qualified Data.Set
-import qualified Data.Text.Lazy                        as Text
+import qualified Data.Text                             as Text
+import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Builder                as Builder
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
@@ -54,7 +55,7 @@ traverseWithIndex_ k xs =
     Data.Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
 
 docToLazyText :: Doc a -> Text
-docToLazyText = Pretty.renderLazy . Pretty.layoutPretty opts
+docToLazyText = Pretty.renderStrict . Pretty.layoutPretty opts
   where
     opts = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
 
@@ -3460,14 +3461,14 @@ data TypeError s a = TypeError
     } deriving (Typeable)
 
 instance (Buildable a, Buildable s, Eq a, Pretty a) => Show (TypeError s a) where
-    show = Text.unpack . Builder.toLazyText . build
+    show = Data.Text.Lazy.unpack . Builder.toLazyText . build
 
 instance (Buildable a, Buildable s, Eq a, Pretty a, Typeable a, Typeable s) => Exception (TypeError s a)
 
 instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (TypeError s a) where
     build (TypeError ctx expr msg)
         =   "\n"
-        <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
+        <>  (   if  Data.Text.Lazy.null (Builder.toLazyText (buildContext ctx))
                 then ""
                 else buildContext ctx <> "\n"
             )
@@ -3478,7 +3479,7 @@ instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (TypeError s a)
 
         buildContext =
                 build
-            .   Text.unlines
+            .   Data.Text.Lazy.unlines
             .   map (Builder.toLazyText . buildKV)
             .   reverse
             .   Dhall.Context.toList
@@ -3494,14 +3495,14 @@ newtype DetailedTypeError s a = DetailedTypeError (TypeError s a)
     deriving (Typeable)
 
 instance (Buildable a, Buildable s, Eq a, Pretty a) => Show (DetailedTypeError s a) where
-    show = Text.unpack . Builder.toLazyText . build
+    show = Data.Text.Lazy.unpack . Builder.toLazyText . build
 
 instance (Buildable a, Buildable s, Eq a, Pretty a, Typeable a, Typeable s) => Exception (DetailedTypeError s a)
 
 instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (DetailedTypeError s a) where
     build (DetailedTypeError (TypeError ctx expr msg))
         =   "\n"
-        <>  (   if  Text.null (Builder.toLazyText (buildContext ctx))
+        <>  (   if  Data.Text.Lazy.null (Builder.toLazyText (buildContext ctx))
                 then ""
                 else buildContext ctx <> "\n"
             )
@@ -3514,7 +3515,7 @@ instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (DetailedTypeEr
 
         buildContext =
                 build
-            .   Text.unlines
+            .   Data.Text.Lazy.unlines
             .   map (Builder.toLazyText . buildKV)
             .   reverse
             .   Dhall.Context.toList
