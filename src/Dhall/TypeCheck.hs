@@ -36,6 +36,7 @@ import Dhall.Context (Context)
 import Formatting.Buildable (Buildable(..))
 
 import qualified Data.Foldable
+import qualified Data.HashMap.Strict
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
 import qualified Data.Set
@@ -63,7 +64,10 @@ axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
 axiom Kind = Left (TypeError Dhall.Context.empty (Const Kind) Untyped)
 
+
 rule :: Const -> Const -> Either () Const
+-- This forbids dependent types. If this ever changes, then the fast
+-- path in the Let case of typeWithA will become unsound.
 rule Type Kind = Left ()
 rule Type Type = return Type
 rule Kind Kind = return Kind
@@ -75,6 +79,9 @@ rule Kind Type = return Type
     `typeWith` does not necessarily normalize the type since full normalization
     is not necessary for just type-checking.  If you actually care about the
     returned type then you may want to `Dhall.Core.normalize` it afterwards.
+
+    The supplied `Context` records the types of the names in scope. If
+    these are ill-typed, the return value may be ill-typed.
 -}
 typeWith :: Context (Expr s X) -> Expr s X -> Either (TypeError s X) (Expr s X)
 typeWith ctx expr = do
@@ -103,7 +110,8 @@ typeWithA tpa = loop
         case Dhall.Context.lookup x n ctx of
             Nothing -> Left (TypeError ctx e (UnboundVariable x))
             Just a  -> do
-                _ <- loop ctx a
+                -- Note: no need to typecheck the value we're
+                -- returning; that is done at insertion time.
                 return a
     loop ctx   (Lam x _A  b     ) = do
         _ <- loop ctx _A
@@ -155,11 +163,34 @@ typeWithA tpa = loop
                     then return ()
                     else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
             Nothing -> return ()
+
+        t <- loop ctx _A1
+
         let a1 = Dhall.Core.normalize a0
         let a2 = Dhall.Core.shift 1 (V x 0) a1
-        let b1 = Dhall.Core.subst (V x 0) a2 b0
-        let b2 = Dhall.Core.shift (-1) (V x 0) b1
-        loop ctx b2
+
+        -- The catch-all branch directly implements the Dhall
+        -- specification as written; it is necessary to substitute in
+        -- types in order to get 'dependent let' behaviour and to
+        -- allow type synonyms (see #69). However, doing a full
+        -- substitution is slow if the value is large and used many
+        -- times. If the value being substitued in is a term (i.e.,
+        -- its type is a Type), then we can get a very significant
+        -- speed-up by doing the type-checking once at binding-time,
+        -- as opposed to doing it at every use site (see #412).
+        case Dhall.Core.normalize t of
+          Const Type -> do
+            let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A1) ctx)
+            _B0 <- loop ctx' b0
+            let _B1 = Dhall.Core.subst (V x 0) a2 _B0
+            let _B2 = Dhall.Core.shift (-1) (V x 0) _B1
+            return _B2
+
+          _ -> do
+            let b1 = Dhall.Core.subst (V x 0) a2 b0
+            let b2 = Dhall.Core.shift (-1) (V x 0) b1
+            loop ctx b2
+
     loop ctx e@(Annot x t       ) = do
         _ <- loop ctx t
 
@@ -499,13 +530,19 @@ typeWithA tpa = loop
                 kts <- Data.HashMap.Strict.InsOrd.traverseWithKey process kvs
                 return (Record kts)
     loop ctx e@(Union     kts   ) = do
-        let process (k, t) = do
+        let process k t = do
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
                     Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
-        mapM_ process (Data.HashMap.Strict.InsOrd.toList kts)
+        -- toList from insert-ordered-containers does some work to
+        -- ensure that the elements do follow insertion order. In this
+        -- instance, insertion order doesn't matter: we only need to
+        -- peek at each element to make sure it is well-typed. If
+        -- there are multiple type errors, it does not matter which
+        -- gets reported first here.
+        Data.HashMap.Strict.foldrWithKey (\ k t prev -> prev >> process k t) (Right ()) (Data.HashMap.Strict.InsOrd.toHashMap kts)
         return (Const Type)
     loop ctx e@(UnionLit k v kts) = do
         case Data.HashMap.Strict.InsOrd.lookup k kts of
