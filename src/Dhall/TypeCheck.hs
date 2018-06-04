@@ -79,6 +79,9 @@ rule Kind Type = return Type
     `typeWith` does not necessarily normalize the type since full normalization
     is not necessary for just type-checking.  If you actually care about the
     returned type then you may want to `Dhall.Core.normalize` it afterwards.
+
+    The supplied `Context` records the types of the names in scope. If
+    these are ill-typed, the return value may be ill-typed.
 -}
 typeWith :: Context (Expr s X) -> Expr s X -> Either (TypeError s X) (Expr s X)
 typeWith ctx expr = do
@@ -107,7 +110,8 @@ typeWithA tpa = loop
         case Dhall.Context.lookup x n ctx of
             Nothing -> Left (TypeError ctx e (UnboundVariable x))
             Just a  -> do
-                _ <- loop ctx a
+                -- Note: no need to typecheck the value we're
+                -- returning; that is done at insertion time.
                 return a
     loop ctx   (Lam x _A  b     ) = do
         _ <- loop ctx _A
