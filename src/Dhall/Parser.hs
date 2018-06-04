@@ -1595,7 +1595,10 @@ instance Show ParseError where
 instance Exception ParseError
 
 -- | Parse an expression from `Text` containing a Dhall program
-exprFromText :: String -> Text -> Either ParseError (Expr Src Import)
+exprFromText
+  :: String -- ^ Name of source file
+  -> Text   -- ^ Input expression to parse
+  -> Either ParseError (Expr Src Import)
 exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
 
 {-| Like `exprFromText` but also returns the leading comments and whitespace
