@@ -24,6 +24,7 @@ import Control.Applicative (Alternative(..), liftA2, optional)
 import Control.Exception (Exception)
 import Control.Monad (MonadPlus)
 import Data.ByteArray.Encoding (Base(..))
+import Data.Data (Data)
 import Data.Functor (void)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Scientific (Scientific)
@@ -62,7 +63,7 @@ import qualified Text.Parser.Token.Style
 
 -- | Source code extract
 data Src = Src Text.Megaparsec.SourcePos Text.Megaparsec.SourcePos Text
-  deriving (Eq, Show)
+  deriving (Data, Eq, Show)
 
 instance Buildable Src where
     build (Src begin _ text) =

@@ -20,6 +20,8 @@ module Dhall
     -- * Input
       input
     , inputWith
+    , inputExpr
+    , inputExprWith
     , detailed
 
     -- * Types
@@ -189,6 +191,32 @@ inputWith (Type {..}) ctx n txt = do
     case extract (Dhall.Core.normalizeWith n expr') of
         Just x  -> return x
         Nothing -> Control.Exception.throwIO InvalidType
+
+{-| Similar to `input`, but without interpreting the Dhall `Expr` into a Haskell
+    type.
+-}
+inputExpr
+    :: Text
+    -- ^ The Dhall program
+    -> IO (Expr Src X)
+    -- ^ The fully normalized AST
+inputExpr = inputExprWith Dhall.Context.empty (const Nothing)
+
+{-| Extend `inputExpr` with a custom typing context and normalization process.
+-}
+inputExprWith
+    :: Dhall.Context.Context (Expr Src X)
+    -- ^ The starting context for type-checking
+    -> Dhall.Core.Normalizer X
+    -> Text
+    -- ^ The Dhall program
+    -> IO (Expr Src X)
+    -- ^ The fully normalized AST
+inputExprWith ctx n txt = do
+    expr  <- throws (Dhall.Parser.exprFromText "(input)" txt)
+    expr' <- Dhall.Import.loadWithContext ctx n expr
+    _ <- throws (Dhall.TypeCheck.typeWith ctx expr')
+    pure (Dhall.Core.normalizeWith n expr')
 
 -- | Use this function to extract Haskell values directly from Dhall AST.
 --   The intended use case is to allow easy extraction of Dhall values for
