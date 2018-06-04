@@ -1,12 +1,13 @@
-{-# LANGUAGE BangPatterns      #-}
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE DeriveFoldable    #-}
-{-# LANGUAGE DeriveFunctor     #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE UnicodeSyntax     #-}
+{-# LANGUAGE BangPatterns       #-}
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFoldable     #-}
+{-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE DeriveTraversable  #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE UnicodeSyntax      #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| This module contains the core calculus for the Dhall language.
@@ -58,6 +59,7 @@ import Control.Applicative (Applicative(..), (<$>))
 import Control.Applicative (empty)
 import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
+import Data.Data (Data)
 import Data.Foldable
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.HashSet (HashSet)
@@ -101,7 +103,7 @@ import qualified Data.Text.Prettyprint.Doc  as Pretty
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
 -}
-data Const = Type | Kind deriving (Show, Eq, Bounded, Enum)
+data Const = Type | Kind deriving (Show, Eq, Data, Bounded, Enum)
 
 instance Buildable Const where
     build = Builder.fromText . buildConst
@@ -266,7 +268,7 @@ type Path = Import
     appear as a numeric suffix.
 -}
 data Var = V Text !Integer
-    deriving (Eq, Show)
+    deriving (Data, Eq, Show)
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -404,7 +406,7 @@ data Expr s a
     | Note s (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Functor, Foldable, Traversable, Show, Eq)
+    deriving (Functor, Foldable, Traversable, Show, Eq, Data)
 
 instance Applicative (Expr s) where
     pure = Embed
@@ -546,7 +548,7 @@ instance IsString (Expr s a) where
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving (Functor, Foldable, Traversable, Show, Eq)
+    deriving (Functor, Foldable, Traversable, Show, Eq, Data)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =

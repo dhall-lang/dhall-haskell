@@ -22,6 +22,7 @@ module Dhall.TypeCheck (
     ) where
 
 import Control.Exception (Exception)
+import Data.Data (Data(..))
 import Data.Foldable (forM_, toList)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..))
@@ -779,6 +780,11 @@ instance Eq X where
 
 instance Buildable X where
     build = absurd
+
+instance Data X where
+    dataTypeOf = absurd
+    gunfold _ _ _ = undefined
+    toConstr = absurd
 
 instance Pretty X where
     pretty = absurd
