@@ -142,7 +142,10 @@ noted parser = do
     before      <- Text.Megaparsec.getPosition
     (tokens, e) <- Text.Megaparsec.match parser
     after       <- Text.Megaparsec.getPosition
-    return (Note (Src before after tokens) e)
+    let src₀ = Src before after tokens
+    case e of
+        Note src₁ _ | src₀ == src₁ -> return e
+        _                          -> return (Note src₀ e)
 
 count :: (Semigroup a, Monoid a) => Int -> Parser a -> Parser a
 count n parser = mconcat (replicate n parser)
