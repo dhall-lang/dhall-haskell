@@ -108,6 +108,9 @@ data Const = Type | Kind deriving (Show, Eq, Data, Bounded, Enum)
 instance Buildable Const where
     build = Builder.fromText . buildConst
 
+instance Pretty Const where
+    pretty = Pretty.unAnnotate . prettyConst
+
 {-| Internal representation of a directory that stores the path components in
     reverse order
 

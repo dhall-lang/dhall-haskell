@@ -867,6 +867,23 @@ data ErrorMessages = ErrorMessages
 _NOT :: Builder
 _NOT = "\ESC[1mnot\ESC[0m"
 
+insert :: Pretty a => a -> Builder
+insert expression = builder
+  where
+    doc = "↳ " <> Pretty.align (Pretty.pretty expression)
+
+    coloredDoc = fmap Dhall.Pretty.annToAnsiStyle doc
+
+    opts =
+        Pretty.LayoutOptions
+            { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
+
+    stream = Pretty.layoutPretty opts coloredDoc
+
+    lazyText = Pretty.renderLazy stream
+
+    builder = Builder.fromLazyText lazyText
+
 prettyDiff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Builder
 prettyDiff exprL exprR = builder
   where
@@ -1051,11 +1068,11 @@ prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
         \                                                                                \n\
         \You annotated a function input with the following expression:                   \n\
         \                                                                                \n\
-        \↳ " <> txt <> "                                                                 \n\
+        \" <> txt <> "\n\
         \                                                                                \n\
         \... which is neither a type nor a kind                                          \n"
       where
-        txt  = build expr
+        txt = insert expr
 
 prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
   where
@@ -1130,11 +1147,11 @@ prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
         \                                                                                \n\
         \You specified that your function outputs a:                                     \n\
         \                                                                                \n\
-        \↳ " <> txt <> "                                                                 \n\
+        \" <> txt <> "\n\
         \                                                                                \n\
         \... which is neither a type nor a kind:                                         \n"
       where
-        txt = build expr
+        txt = insert expr
 
 prettyTypeMessage (NotAFunction expr0 expr1) = ErrorMessages {..}
   where
@@ -1263,16 +1280,16 @@ prettyTypeMessage (NotAFunction expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \You tried to use the following expression as a function:                        \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... but this expression's type is:                                              \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which is not a function type                                                \n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
 
 prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
@@ -1389,24 +1406,24 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
         \                                                                                \n\
         \You tried to invoke the following function:                                     \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which expects an argument of type or kind:                                  \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... on the following argument:                                                  \n\
         \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n\
+        \" <> txt2 <> "\n\
         \                                                                                \n\
         \... which has a different type or kind:                                         \n\
         \                                                                                \n\
-        \↳ " <> txt3 <> "                                                                \n"
+        \" <> txt3 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
-        txt2 = build expr2
-        txt3 = build expr3
+        txt0 = insert expr0
+        txt1 = insert expr1
+        txt2 = insert expr2
+        txt3 = insert expr3
 
 prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
@@ -1491,19 +1508,19 @@ prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
         \                                                                                \n\
         \You or the interpreter annotated this expression:                               \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... with this type or kind:                                                     \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... but the inferred type or kind of the expression is actually:                \n\
         \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n"
+        \" <> txt2 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
-        txt2 = build expr2
+        txt0 = insert expr0
+        txt1 = insert expr1
+        txt2 = insert expr2
 
 prettyTypeMessage Untyped = ErrorMessages {..}
   where
@@ -1591,16 +1608,16 @@ prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \Your ❰if❱ expression begins with the following predicate:                       \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... that has type:                                                              \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... but the predicate must instead have type ❰Bool❱                             \n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
 
 prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -1672,22 +1689,22 @@ prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
         \                                                                                \n\
         \Your ❰" <> txt0 <> "❱ branch of your ❰if❱ expression is:                        \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which has kind:                                                             \n\
         \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n\
+        \" <> txt2 <> "\n\
         \                                                                                \n\
         \... of sort:                                                                    \n\
         \                                                                                \n\
-        \↳ " <> txt3 <> "                                                                \n\
+        \" <> txt3 <> "\n\
         \                                                                                \n\
         \... and is not a term.  Therefore your ❰if❱ expression is not valid             \n"
       where
         txt0 = if b then "then" else "else"
-        txt1 = build expr0
-        txt2 = build expr1
-        txt3 = build expr2
+        txt1 = insert expr0
+        txt2 = insert expr1
+        txt3 = insert expr2
 
 prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     ErrorMessages {..}
@@ -1745,26 +1762,26 @@ prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
         \                                                                                \n\
         \Your ❰if❱ expression has the following ❰then❱ branch:                           \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which has type:                                                             \n\
         \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n\
+        \" <> txt2 <> "\n\
         \                                                                                \n\
         \... and the following ❰else❱ branch:                                            \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which has a different type:                                                 \n\
         \                                                                                \n\
-        \↳ " <> txt3 <> "                                                                \n\
+        \" <> txt3 <> "\n\
         \                                                                                \n\
         \Fix your ❰then❱ and ❰else❱ branches to have matching types                      \n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
-        txt2 = build expr2
-        txt3 = build expr3
+        txt0 = insert expr0
+        txt1 = insert expr1
+        txt2 = insert expr2
+        txt3 = insert expr3
 
 prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
   where
@@ -1810,11 +1827,11 @@ prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
         \                                                                                \n\
         \You declared that the ❰List❱'s elements should have type:                       \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which is not a ❰Type❱                                                       \n"
       where
-        txt0 = build expr0
+        txt0 = insert expr0
 
 prettyTypeMessage MissingListType = do
     ErrorMessages {..}
@@ -1869,15 +1886,15 @@ prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
         \                                                                                \n\
         \Your first ❰List❱ element has this type:                                        \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... but the element at index #" <> txt1 <> " has this type instead:             \n\
         \                                                                                \n\
-        \↳ " <> txt3 <> "                                                                \n"
+        \" <> txt3 <> "\n"
       where
-        txt0 = build expr0
+        txt0 = insert expr0
         txt1 = build i
-        txt3 = build expr2
+        txt3 = insert expr2
 
 prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
     ErrorMessages {..}
@@ -1908,15 +1925,15 @@ prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
         \                                                                                \n\
         \Your ❰List❱ elements should have this type:                                     \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... but the element at index #" <> txt1 <> " has this type instead:             \n\
         \                                                                                \n\
-        \↳ " <> txt3 <> "                                                                \n"
+        \" <> txt3 <> "\n"
       where
-        txt0 = build expr0
+        txt0 = insert expr0
         txt1 = build i
-        txt3 = build expr2
+        txt3 = insert expr2
 
 prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
   where
@@ -1964,11 +1981,11 @@ prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
         \                                                                                \n\
         \You declared that the ❰Optional❱ element should have type:                      \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which is not a ❰Type❱                                                       \n"
       where
-        txt0 = build expr0
+        txt0 = insert expr0
 
 prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..}
   where
@@ -1997,19 +2014,19 @@ prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..
         \                                                                                \n\
         \Your ❰Optional❱ element should have this type:                                  \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... but the element you provided:                                               \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... has this type instead:                                                      \n\
         \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n"
+        \" <> txt2 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
-        txt2 = build expr2
+        txt0 = insert expr0
+        txt1 = insert expr1
+        txt2 = insert expr2
 
 prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
   where
@@ -2043,16 +2060,16 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \You provided a record type with a field named:                                  \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... annotated with the following expression:                                    \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which is neither a ❰Type❱ nor a ❰Kind❱                                      \n"
       where
-        txt0 = build k
-        txt1 = build expr0
+        txt0 = insert k
+        txt1 = insert expr0
 
 prettyTypeMessage (FieldAnnotationMismatch k0 expr0 k1 expr1 c) = ErrorMessages {..}
   where
@@ -2087,26 +2104,26 @@ prettyTypeMessage (FieldAnnotationMismatch k0 expr0 k1 expr1 c) = ErrorMessages 
         \                                                                                \n\
         \You provided a record type with a field named:                                  \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... annotated with the following expression:                                    \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which is a " <> here <> " whereas another field named:                      \n\
         \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n\
+        \" <> txt2 <> "\n\
         \                                                                                \n\
         \... annotated with the following expression:                                    \n\
         \                                                                                \n\
-        \↳ " <> txt3 <> "                                                                \n\
+        \" <> txt3 <> "\n\
         \                                                                                \n\
         \... is a " <> there <> ", which does not match                                  \n"
       where
-        txt0 = build k0
-        txt1 = build expr0
-        txt2 = build k1
-        txt3 = build expr1
+        txt0 = insert k0
+        txt1 = insert expr0
+        txt2 = insert k1
+        txt3 = insert expr1
 
         here = case c of
             Type -> "❰Type❱"
@@ -2149,26 +2166,26 @@ prettyTypeMessage (FieldMismatch k0 expr0 k1 expr1 c) = ErrorMessages {..}
         \                                                                                \n\
         \You provided a record with a field named:                                       \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... whose value was:                                                            \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which is a " <> here <> " whereas another field named:                      \n\
         \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n\
+        \" <> txt2 <> "\n\
         \                                                                                \n\
         \... whose value was:                                                            \n\
         \                                                                                \n\
-        \↳ " <> txt3 <> "                                                                \n\
+        \" <> txt3 <> "\n\
         \                                                                                \n\
         \... is a " <> there <> ", which does not match                                  \n"
       where
-        txt0 = build k0
-        txt1 = build expr0
-        txt2 = build k1
-        txt3 = build expr1
+        txt0 = insert k0
+        txt1 = insert expr0
+        txt2 = insert k1
+        txt3 = insert expr1
 
         here = case c of
             Type -> "term"
@@ -2204,16 +2221,16 @@ prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \You provided a record literal with a field named:                               \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... whose value is:                                                             \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which is not a term or ❰Type❱                                               \n"
       where
-        txt0 = build k
-        txt1 = build expr0
+        txt0 = insert k
+        txt1 = insert expr0
 
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
@@ -2266,16 +2283,16 @@ prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \You provided a union literal with an alternative named:                         \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... whose value is:                                                             \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which is not a term                                                         \n"
       where
-        txt0 = build k
-        txt1 = build expr0
+        txt0 = insert k
+        txt1 = insert expr0
 
 prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
   where
@@ -2328,14 +2345,14 @@ prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \You provided a union type with an alternative named:                            \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... annotated with the following expression which is not a type:                \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n"
+        \" <> txt1 <> "\n"
       where
-        txt0 = build k
-        txt1 = build expr0
+        txt0 = insert k
+        txt1 = insert expr0
 
 prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
   where
@@ -2369,16 +2386,16 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \You tried to append a ❰List❱ thas has elements of type:                         \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... with another ❰List❱ that has elements of type:                              \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... and those two types do not match                                            \n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
 
 prettyTypeMessage (DuplicateAlternative k) = ErrorMessages {..}
   where
@@ -2402,9 +2419,9 @@ prettyTypeMessage (DuplicateAlternative k) = ErrorMessages {..}
         \                                                                                \n\
         \You have more than one alternative named:                                       \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n"
+        \" <> txt0 <> "\n"
       where
-        txt0 = build k
+        txt0 = insert k
 
 prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
   where
@@ -2452,15 +2469,15 @@ prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \You tried to combine the following value:                                       \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which is not a record, but is actually a:                                   \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n"
+        \" <> txt1 <> "\n"
       where
         op   = build c
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
 
 prettyTypeMessage (CombineTypesRequiresRecordType expr0 expr1) =
     ErrorMessages {..}
@@ -2490,16 +2507,16 @@ prettyTypeMessage (CombineTypesRequiresRecordType expr0 expr1) =
         \                                                                                \n\
         \You tried to supply the following argument:                                     \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which normalized to:                                                        \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which is not a record type literal                                          \n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
 
 prettyTypeMessage (RecordTypeMismatch const0 const1 expr0 expr1) =
     ErrorMessages {..}
@@ -2533,24 +2550,24 @@ prettyTypeMessage (RecordTypeMismatch const0 const1 expr0 expr1) =
         \                                                                                \n\
         \You tried to combine the following record type:                                 \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... with this record types:                                                     \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... but the former record type is a:                                            \n\
         \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n\
+        \" <> txt2 <> "\n\
         \                                                                                \n\
         \... but the latter record type is a:                                            \n\
         \                                                                                \n\
-        \↳ " <> txt3 <> "                                                                \n"
+        \" <> txt3 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
-        txt2 = build const0
-        txt3 = build const1
+        txt0 = insert expr0
+        txt1 = insert expr1
+        txt2 = insert const0
+        txt3 = insert const1
 
 prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
   where
@@ -2623,11 +2640,11 @@ prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
         \                                                                                \n\
         \You combined two records that share the following field:                        \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which is not allowed                                                        \n"
       where
-        txt0 = build k
+        txt0 = insert k
 
 prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
   where
@@ -2675,14 +2692,14 @@ prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \You provided the following handler:                                             \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which is not a record, but is actually a value of type:                     \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n"
+        \" <> txt1 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
 
 prettyTypeMessage (MustMergeUnion expr0 expr1) = ErrorMessages {..}
   where
@@ -2715,14 +2732,14 @@ prettyTypeMessage (MustMergeUnion expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \You tried to ❰merge❱ this expression:                                           \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which is not a union, but is actually a value of type:                      \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n"
+        \" <> txt1 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
 
 prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
   where
@@ -2758,11 +2775,11 @@ prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
         \                                                                                \n\
         \You provided the following handlers:                                            \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which had no matching alternatives in the union you tried to ❰merge❱        \n"
       where
-        txt0 = build (Text.intercalate ", " (Data.Set.toList ks))
+        txt0 = insert (Text.intercalate ", " (Data.Set.toList ks))
 
 prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
   where
@@ -2800,9 +2817,9 @@ prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
         \                                                                                \n\
         \You need to supply the following handlers:                                      \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n"
+        \" <> txt0 <> "\n"
       where
-        txt0 = build (Text.intercalate ", " (Data.Set.toList ks))
+        txt0 = insert (Text.intercalate ", " (Data.Set.toList ks))
 
 prettyTypeMessage MissingMergeType =
     ErrorMessages {..}
@@ -2882,19 +2899,19 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
         \                                                                                \n\
         \Your handler for the following alternative:                                     \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... needs to accept an input value of type:                                     \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... but actually accepts an input value of a different type:                    \n\
         \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n"
+        \" <> txt2 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
-        txt2 = build expr2
+        txt0 = insert expr0
+        txt1 = insert expr1
+        txt2 = insert expr2
 
 prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -2946,19 +2963,19 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
         \                                                                                \n\
         \Your handler for the following alternative:                                     \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... needs to return an output value of type:                                    \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... but actually returns an output value of a different type:                   \n\
         \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n"
+        \" <> txt2 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
-        txt2 = build expr2
+        txt0 = insert expr0
+        txt1 = insert expr1
+        txt2 = insert expr2
 
 prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
     ErrorMessages {..}
@@ -3006,16 +3023,16 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
         \                                                                                \n\
         \The handler for the ❰" <> txt0 <> "❱ alternative has this output type:          \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... but the handler for the ❰" <> txt2 <> "❱ alternative has this output type instead:\n\
         \                                                                                \n\
-        \↳ " <> txt3 <> "                                                                \n"
+        \" <> txt3 <> "\n"
       where
         txt0 = build key0
-        txt1 = build expr0
+        txt1 = insert expr0
         txt2 = build key1
-        txt3 = build expr1
+        txt3 = insert expr1
 
 prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
   where
@@ -3047,16 +3064,16 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \Your handler for this alternative:                                              \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... has the following type:                                                     \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which is not the type of a function                                         \n"
       where
-        txt0 = build k
-        txt1 = build expr0
+        txt0 = insert k
+        txt1 = insert expr0
 
 prettyTypeMessage (ConstructorsRequiresAUnionType expr0 expr1) = ErrorMessages {..}
   where
@@ -3099,16 +3116,16 @@ prettyTypeMessage (ConstructorsRequiresAUnionType expr0 expr1) = ErrorMessages {
         \                                                                                \n\
         \You tried to supply the following argument:                                     \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which normalized to:                                                        \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which is not a union type literal                                           \n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
  
 prettyTypeMessage (NotARecord lazyText0 expr0 expr1) = ErrorMessages {..}
   where
@@ -3157,19 +3174,19 @@ prettyTypeMessage (NotARecord lazyText0 expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \You tried to access the field(s):                                               \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... on the following expression which is not a record:                          \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... but is actually an expression of type:                                      \n\
         \                                                                                \n\
-        \↳ " <> txt2 <> "                                                                \n"
+        \" <> txt2 <> "\n"
       where
-        txt0 = build lazyText0
-        txt1 = build expr0
-        txt2 = build expr1
+        txt0 = insert lazyText0
+        txt1 = insert expr0
+        txt2 = insert expr1
 
 prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
   where
@@ -3201,14 +3218,14 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \You tried to access a field named:                                              \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... but the field is missing because the record only defines the following fields:\n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n"
+        \" <> txt1 <> "\n"
       where
-        txt0 = build k
-        txt1 = build expr0
+        txt0 = insert k
+        txt1 = insert expr0
 
 prettyTypeMessage (CantAnd expr0 expr1) =
         buildBooleanOperator "&&" expr0 expr1
@@ -3275,16 +3292,14 @@ prettyTypeMessage (CantInterpolate expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \You interpolated this expression:                                               \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which does not have type ❰Text❱ but instead has type:                       \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n"
+        \" <> txt1 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
-
- 
+        txt0 = insert expr0
+        txt1 = insert expr1
 
 prettyTypeMessage (CantTextAppend expr0 expr1) = ErrorMessages {..}
   where
@@ -3323,14 +3338,14 @@ prettyTypeMessage (CantTextAppend expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \You provided this argument:                                                     \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which does not have type ❰Text❱ but instead has type:                       \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n"
+        \" <> txt1 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
 
 prettyTypeMessage (CantListAppend expr0 expr1) = ErrorMessages {..}
   where
@@ -3351,14 +3366,14 @@ prettyTypeMessage (CantListAppend expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \You provided this argument:                                                     \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which is not a ❰List❱ but instead has type:                                 \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n"
+        \" <> txt1 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
 
 prettyTypeMessage (CantAdd expr0 expr1) =
         buildNaturalOperator "+" expr0 expr1
@@ -3395,18 +3410,18 @@ prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \Your function type is invalid because the input has type:                       \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... and the output has kind:                                                    \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n\
+        \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which makes this a forbidden dependent function type                        \n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
 
-buildBooleanOperator :: Buildable a => Text -> Expr s a -> Expr s a -> ErrorMessages
+buildBooleanOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
 buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
   where
     short = "❰" <> txt2 <> "❱ only works on ❰Bool❱s"
@@ -3424,18 +3439,18 @@ buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
         \                                                                                \n\
         \You provided this argument:                                                     \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which does not have type ❰Bool❱ but instead has type:                       \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n"
+        \" <> txt1 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
 
     txt2 = build operator
 
-buildNaturalOperator :: Buildable a => Text -> Expr s a -> Expr s a -> ErrorMessages
+buildNaturalOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
 buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
   where
     short = "❰" <> txt2 <> "❱ only works on ❰Natural❱s"
@@ -3485,14 +3500,14 @@ buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
         \                                                                                \n\
         \You provided this argument:                                                     \n\
         \                                                                                \n\
-        \↳ " <> txt0 <> "                                                                \n\
+        \" <> txt0 <> "\n\
         \                                                                                \n\
         \... which does not have type ❰Natural❱ but instead has type:                    \n\
         \                                                                                \n\
-        \↳ " <> txt1 <> "                                                                \n"
+        \" <> txt1 <> "\n"
       where
-        txt0 = build expr0
-        txt1 = build expr1
+        txt0 = insert expr0
+        txt1 = insert expr1
 
     txt2 = build operator
 
