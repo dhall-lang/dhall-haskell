@@ -174,6 +174,7 @@ Library
         lens-family-core            >= 1.0.0    && < 1.3 ,
         megaparsec                  >= 6.1.1    && < 6.6 ,
         memory                      >= 0.14     && < 0.15,
+        optparse-applicative                       < 0.15,
         parsers                     >= 0.12.4   && < 0.13,
         prettyprinter               >= 1.2.0.1  && < 1.3 ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
@@ -192,30 +193,22 @@ Library
         Dhall.Core,
         Dhall.Diff,
         Dhall.Import,
+        Dhall.Main
         Dhall.Parser,
         Dhall.Pretty,
         Dhall.TH,
         Dhall.Tutorial,
         Dhall.TypeCheck
     Other-Modules:
-        Dhall.Pretty.Internal
+        Dhall.Pretty.Internal,
+        Paths_dhall
     GHC-Options: -Wall
 
 Executable dhall
     Hs-Source-Dirs: dhall
     Main-Is: Main.hs
-    Build-Depends:
-        ansi-terminal                                    ,
-        base                        >= 4        && < 5   ,
-        dhall                                            ,
-        optparse-applicative                       < 0.15,
-        prettyprinter                                    ,
-        prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
-        megaparsec                                       ,
-        text                        >= 0.11.1.0 && < 1.3
+    Build-Depends: base, dhall
     GHC-Options: -Wall
-    Other-Modules:
-        Paths_dhall
 
 Executable dhall-repl
     Hs-Source-Dirs: dhall-repl
@@ -242,7 +235,7 @@ Executable dhall-format
         ansi-terminal                                    ,
         dhall                                            ,
         megaparsec                                       ,
-        optparse-applicative                       < 0.15,
+        optparse-applicative                             ,
         prettyprinter               >= 1.2.0.1  && < 1.3 ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
         text                        >= 0.11.1.0 && < 1.3
@@ -256,7 +249,7 @@ Executable dhall-hash
     Build-Depends:
         base                 >= 4        && < 5   ,
         dhall                                     ,
-        optparse-applicative                < 0.15,
+        optparse-applicative                      ,
         megaparsec                                ,
         text                 >= 0.11.1.0 && < 1.3
     Other-Modules:
