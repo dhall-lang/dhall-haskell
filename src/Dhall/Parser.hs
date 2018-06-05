@@ -1597,7 +1597,8 @@ instance Exception ParseError
 
 -- | Parse an expression from `Text` containing a Dhall program
 exprFromText
-  :: String -- ^ Name of source file
+  :: String -- ^ User-friendly name describing the input expression,
+            --   used in parsing error messages
   -> Text   -- ^ Input expression to parse
   -> Either ParseError (Expr Src Import)
 exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
@@ -1615,8 +1616,9 @@ exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
     This is used by @dhall-format@ to preserve leading comments and whitespace
 -}
 exprAndHeaderFromText
-    :: String
-    -> Text
+    :: String -- ^ User-friendly name describing the input expression,
+              --   used in parsing error messages
+    -> Text   -- ^ Input expression to parse
     -> Either ParseError (Text, Expr Src Import)
 exprAndHeaderFromText delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
