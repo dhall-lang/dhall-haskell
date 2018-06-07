@@ -331,6 +331,8 @@ typeWithA tpa = loop
         return Integer
     loop _      IntegerShow  = do
         return (Pi "_" Integer Text)
+    loop _      IntegerToDouble = do
+        return (Pi "_" Integer Double)
     loop _      Double            = do
         return (Const Type)
     loop _     (DoubleLit _     ) = do

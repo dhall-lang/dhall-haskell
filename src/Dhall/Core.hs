@@ -340,6 +340,8 @@ data Expr s a
     | IntegerLit Integer
     -- | > IntegerShow                              ~  Integer/show
     | IntegerShow
+    -- | > IntegerToDouble                          ~  Integer/toDouble
+    | IntegerToDouble
     -- | > Double                                   ~  Double
     | Double
     -- | > DoubleLit n                              ~  n
@@ -447,6 +449,7 @@ instance Monad (Expr s) where
     Integer              >>= _ = Integer
     IntegerLit a         >>= _ = IntegerLit a
     IntegerShow          >>= _ = IntegerShow
+    IntegerToDouble      >>= _ = IntegerToDouble
     Double               >>= _ = Double
     DoubleLit a          >>= _ = DoubleLit a
     DoubleShow           >>= _ = DoubleShow
@@ -510,6 +513,7 @@ instance Bifunctor Expr where
     first _  Integer               = Integer
     first _ (IntegerLit a        ) = IntegerLit a
     first _  IntegerShow           = IntegerShow
+    first _  IntegerToDouble       = IntegerToDouble
     first _  Double                = Double
     first _ (DoubleLit a         ) = DoubleLit a
     first _  DoubleShow            = DoubleShow
@@ -724,6 +728,7 @@ shift d v (NaturalTimes a b) = NaturalTimes a' b'
 shift _ _ Integer = Integer
 shift _ _ (IntegerLit a) = IntegerLit a
 shift _ _ IntegerShow = IntegerShow
+shift _ _ IntegerToDouble = IntegerToDouble
 shift _ _ Double = Double
 shift _ _ (DoubleLit a) = DoubleLit a
 shift _ _ DoubleShow = DoubleShow
@@ -880,6 +885,7 @@ subst x e (NaturalTimes a b) = NaturalTimes a' b'
 subst _ _ Integer = Integer
 subst _ _ (IntegerLit a) = IntegerLit a
 subst _ _ IntegerShow = IntegerShow
+subst _ _ IntegerToDouble = IntegerToDouble
 subst _ _ Double = Double
 subst _ _ (DoubleLit a) = DoubleLit a
 subst _ _ DoubleShow = DoubleShow
@@ -1085,6 +1091,8 @@ alphaNormalize (IntegerLit n) =
     IntegerLit n
 alphaNormalize IntegerShow =
     IntegerShow
+alphaNormalize IntegerToDouble =
+    IntegerToDouble
 alphaNormalize Double =
     Double
 alphaNormalize (DoubleLit n) =
@@ -1278,6 +1286,7 @@ denote (NaturalTimes a b    ) = NaturalTimes (denote a) (denote b)
 denote  Integer               = Integer
 denote (IntegerLit a        ) = IntegerLit a
 denote  IntegerShow           = IntegerShow
+denote  IntegerToDouble       = IntegerToDouble
 denote  Double                = Double
 denote (DoubleLit a         ) = DoubleLit a
 denote  DoubleShow            = DoubleShow
@@ -1381,6 +1390,7 @@ normalizeWith ctx e0 = loop (denote e0)
             App IntegerShow (IntegerLit n)
                 | 0 <= n    -> TextLit (Chunks [] ("+" <> buildNumber n))
                 | otherwise -> TextLit (Chunks [] (buildNumber n))
+            App IntegerToDouble (IntegerLit n) -> DoubleLit (fromInteger n)
             App DoubleShow (DoubleLit n) ->
                 TextLit (Chunks [] (buildScientific n))
             App (App OptionalBuild _A₀) g ->
@@ -1536,6 +1546,7 @@ normalizeWith ctx e0 = loop (denote e0)
     Integer -> Integer
     IntegerLit n -> IntegerLit n
     IntegerShow -> IntegerShow
+    IntegerToDouble -> IntegerToDouble
     Double -> Double
     DoubleLit n -> DoubleLit n
     DoubleShow -> DoubleShow
@@ -1727,6 +1738,7 @@ isNormalized e = case denote e of
         App NaturalShow (NaturalLit _) -> False
         App NaturalToInteger (NaturalLit _) -> False
         App IntegerShow (IntegerLit _) -> False
+        App IntegerToDouble (IntegerLit _) -> False
         App DoubleShow (DoubleLit _) -> False
         App (App OptionalBuild _) _ -> False
         App (App ListBuild _) _ -> False
@@ -1801,6 +1813,7 @@ isNormalized e = case denote e of
     Integer -> True
     IntegerLit _ -> True
     IntegerShow -> True
+    IntegerToDouble -> True
     Double -> True
     DoubleLit _ -> True
     DoubleShow -> True
@@ -1942,6 +1955,7 @@ reservedIdentifiers =
         , "Natural/show"
         , "Integer"
         , "Integer/show"
+        , "Integer/toDouble"
         , "Double"
         , "Double/show"
         , "Text"

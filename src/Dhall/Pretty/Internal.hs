@@ -723,6 +723,8 @@ prettyExprF Integer =
     builtin "Integer"
 prettyExprF IntegerShow =
     builtin "Integer/show"
+prettyExprF IntegerToDouble =
+    builtin "Integer/toDouble"
 prettyExprF Double =
     builtin "Double"
 prettyExprF DoubleShow =
@@ -1078,6 +1080,8 @@ buildExprF Integer =
     "Integer"
 buildExprF IntegerShow =
     "Integer/show"
+buildExprF IntegerToDouble =
+    "Integer/toDouble"
 buildExprF Double =
     "Double"
 buildExprF DoubleShow =

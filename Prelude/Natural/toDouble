@@ -1,0 +1,16 @@
+{-
+Convert a `Natural` number to the corresponding `Double`
+
+Examples:
+
+```
+./toInteger 3 = 3.0
+
+./toInteger 0 = 0.0
+```
+-}
+    let toInteger
+        : Natural → Double
+        = λ(n : Natural) → Integer/toDouble (Natural/toInteger n)
+
+in  toInteger

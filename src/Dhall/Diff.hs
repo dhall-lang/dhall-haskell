@@ -973,6 +973,12 @@ diffExprF l@IntegerShow r =
     mismatch l r
 diffExprF l r@IntegerShow =
     mismatch l r
+diffExprF IntegerToDouble IntegerToDouble =
+    "…"
+diffExprF l@IntegerToDouble r =
+    mismatch l r
+diffExprF l r@IntegerToDouble =
+    mismatch l r
 diffExprF Double Double =
     "…"
 diffExprF l@Double r =
