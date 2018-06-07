@@ -143,6 +143,7 @@ Extra-Source-Files:
     tests/normalization/examples/Text/concatSep/*.dhall
     tests/normalization/simplifications/*.dhall
     tests/parser/*.dhall
+    tests/parser/failure/*.dhall
     tests/regression/*.dhall
     tests/tutorial/*.dhall
     tests/typecheck/*.dhall

@@ -142,7 +142,10 @@ noted parser = do
     before      <- Text.Megaparsec.getPosition
     (tokens, e) <- Text.Megaparsec.match parser
     after       <- Text.Megaparsec.getPosition
-    return (Note (Src before after tokens) e)
+    let src₀ = Src before after tokens
+    case e of
+        Note src₁ _ | src₀ == src₁ -> return e
+        _                          -> return (Note src₀ e)
 
 count :: (Semigroup a, Monoid a) => Int -> Parser a -> Parser a
 count n parser = mconcat (replicate n parser)
@@ -1458,7 +1461,8 @@ nonEmptyRecordTypeOrLiteral embedded = do
                 _colon
                 d <- expression embedded
                 return (c, d) )
-            return (Record (Data.HashMap.Strict.InsOrd.fromList ((a, b):e)))
+            m <- toMap ((a, b) : e)
+            return (Record m)
 
     let nonEmptyRecordLiteral = do
             _equal
@@ -1469,7 +1473,8 @@ nonEmptyRecordTypeOrLiteral embedded = do
                 _equal
                 d <- expression embedded
                 return (c, d) )
-            return (RecordLit (Data.HashMap.Strict.InsOrd.fromList ((a, b):e)))
+            m <- toMap ((a, b) : e)
+            return (RecordLit m)
 
     nonEmptyRecordType <|> nonEmptyRecordLiteral
 
@@ -1600,7 +1605,11 @@ instance Show ParseError where
 instance Exception ParseError
 
 -- | Parse an expression from `Text` containing a Dhall program
-exprFromText :: String -> Text -> Either ParseError (Expr Src Import)
+exprFromText
+  :: String -- ^ User-friendly name describing the input expression,
+            --   used in parsing error messages
+  -> Text   -- ^ Input expression to parse
+  -> Either ParseError (Expr Src Import)
 exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
 
 {-| Like `exprFromText` but also returns the leading comments and whitespace
@@ -1616,8 +1625,9 @@ exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
     This is used by @dhall-format@ to preserve leading comments and whitespace
 -}
 exprAndHeaderFromText
-    :: String
-    -> Text
+    :: String -- ^ User-friendly name describing the input expression,
+              --   used in parsing error messages
+    -> Text   -- ^ Input expression to parse
     -> Either ParseError (Text, Expr Src Import)
 exprAndHeaderFromText delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })

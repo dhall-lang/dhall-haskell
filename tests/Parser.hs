@@ -133,6 +133,9 @@ parserTests =
             , shouldParse
                 "interpolated expressions with leading whitespace"
                 "./tests/parser/template.dhall"
+            , shouldNotParse
+                "records with duplicate fields"
+                "./tests/parser/failure/duplicateFields.dhall"
             ]
         ]
 
@@ -142,3 +145,10 @@ shouldParse name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) (do
     case Dhall.Parser.exprFromText mempty text of
         Left err -> Control.Exception.throwIO err
         Right _  -> return () )
+
+shouldNotParse :: Text -> FilePath -> TestTree
+shouldNotParse name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) (do
+    text <- Data.Text.IO.readFile path
+    case Dhall.Parser.exprFromText mempty text of
+        Left  _ -> return ()
+        Right _ -> fail "Unexpected successful parser" )
