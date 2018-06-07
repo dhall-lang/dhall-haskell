@@ -169,16 +169,19 @@ Library
         directory                   >= 1.3      && < 1.4 ,
         filepath                    >= 1.4      && < 1.5 ,
         formatting                  >= 6.3      && < 6.4 ,
+        haskeline                   >= 0.7.3.0  && < 0.8 ,
         http-client                 >= 0.4.30   && < 0.6 ,
         http-client-tls             >= 0.2.0    && < 0.4 ,
         insert-ordered-containers   >= 0.2.1.0  && < 0.3 ,
         lens-family-core            >= 1.0.0    && < 1.3 ,
         megaparsec                  >= 6.1.1    && < 6.6 ,
         memory                      >= 0.14     && < 0.15,
+        mtl                         >= 2.2.1    && < 2.3 ,
         optparse-applicative                       < 0.15,
         parsers                     >= 0.12.4   && < 0.13,
         prettyprinter               >= 1.2.0.1  && < 1.3 ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
+        repline                     >= 0.1.6.0  && < 0.2 ,
         scientific                  >= 0.3.0.0  && < 0.4 ,
         template-haskell                           < 2.14,
         text                        >= 0.11.1.0 && < 1.3 ,
@@ -187,6 +190,7 @@ Library
         vector                      >= 0.11.0.0 && < 0.13
     if !impl(ghc >= 8.0)
       Build-Depends: semigroups == 0.18.*
+      Build-Depends: transformers == 0.4.2.*
 
     Exposed-Modules:
         Dhall,
@@ -197,6 +201,7 @@ Library
         Dhall.Main
         Dhall.Parser,
         Dhall.Pretty,
+        Dhall.Repl
         Dhall.TH,
         Dhall.Tutorial,
         Dhall.TypeCheck
@@ -209,23 +214,6 @@ Executable dhall
     Hs-Source-Dirs: dhall
     Main-Is: Main.hs
     Build-Depends: base, dhall
-    GHC-Options: -Wall
-
-Executable dhall-repl
-    Hs-Source-Dirs: dhall-repl
-    Main-Is: Main.hs
-    Build-Depends:
-        base             >= 4        && < 5   ,
-        ansi-terminal                         ,
-        dhall                                 ,
-        haskeline        >= 0.7.3.0  && < 0.8 ,
-        mtl              >= 2.2.1    && < 2.3 ,
-        repline          >= 0.1.6.0  && < 0.2 ,
-        prettyprinter                         ,
-        prettyprinter-ansi-terminal           ,
-        text
-    if !impl(ghc >= 8.0)
-      Build-Depends: transformers == 0.4.2.*
     GHC-Options: -Wall
 
 Executable dhall-format

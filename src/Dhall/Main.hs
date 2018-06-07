@@ -32,6 +32,7 @@ import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Dhall.Core
 import qualified Dhall.Parser
+import qualified Dhall.Repl
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
 import qualified System.Console.ANSI
@@ -43,7 +44,7 @@ data Options = Options
     , plain   :: Bool
     }
 
-data Mode = Default | Version | Resolve | Type | Normalize
+data Mode = Default | Version | Resolve | Type | Normalize | Repl
 
 parseOptions :: Parser Options
 parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
@@ -66,6 +67,7 @@ parseMode =
     <|> subcommand "resolve"   "Resolve an expression's imports" Resolve
     <|> subcommand "type"      "Infer an expression's type"      Type
     <|> subcommand "normalize" "Normalize an expression"         Normalize
+    <|> subcommand "repl"      "Interpret expressions in a REPL" Repl
     <|> pure Default
   where
     subcommand name description mode =
@@ -206,6 +208,9 @@ command (Options {..}) = do
             inferredType <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
             render System.IO.stdout (Dhall.Core.normalize inferredType)
+
+        Repl -> do
+            Dhall.Repl.repl explain
 
 main :: IO ()
 main = do
