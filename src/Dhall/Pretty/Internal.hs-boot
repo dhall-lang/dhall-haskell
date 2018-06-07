@@ -17,6 +17,8 @@ buildVar :: Var -> Text
 
 buildExpr :: Buildable a => Expr s a -> Text
 
+prettyConst :: Const -> Doc Ann
+
 prettyExpr :: Pretty a => Expr s a -> Doc Ann
 
 buildNatural :: Natural -> Text
