@@ -1461,7 +1461,8 @@ nonEmptyRecordTypeOrLiteral embedded = do
                 _colon
                 d <- expression embedded
                 return (c, d) )
-            return (Record (Data.HashMap.Strict.InsOrd.fromList ((a, b):e)))
+            m <- toMap ((a, b) : e)
+            return (Record m)
 
     let nonEmptyRecordLiteral = do
             _equal
@@ -1472,7 +1473,8 @@ nonEmptyRecordTypeOrLiteral embedded = do
                 _equal
                 d <- expression embedded
                 return (c, d) )
-            return (RecordLit (Data.HashMap.Strict.InsOrd.fromList ((a, b):e)))
+            m <- toMap ((a, b) : e)
+            return (RecordLit m)
 
     nonEmptyRecordType <|> nonEmptyRecordLiteral
 
