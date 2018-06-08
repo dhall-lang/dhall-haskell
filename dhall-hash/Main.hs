@@ -7,7 +7,6 @@ import Control.Exception (SomeException)
 import Control.Monad (when)
 import Data.Monoid ((<>))
 import Data.Version (showVersion)
-import Dhall.Core (normalize)
 import Dhall.Import (Imported(..), hashExpressionToCode, load)
 import Dhall.Parser (Src, exprFromText)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
@@ -101,4 +100,4 @@ main = do
             Left  err -> Control.Exception.throwIO err
             Right _   -> return ()
 
-        Data.Text.IO.putStrLn (hashExpressionToCode (normalize expr')) )
+        Data.Text.IO.putStrLn (hashExpressionToCode expr') )
