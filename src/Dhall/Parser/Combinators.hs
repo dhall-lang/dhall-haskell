@@ -123,3 +123,34 @@ instance TokenParsing Parser where
 
     semi = token (Text.Megaparsec.Char.char ';' <?> ";")
 
+count :: (Semigroup a, Monoid a) => Int -> Parser a -> Parser a
+count n parser = mconcat (replicate n parser)
+
+range :: (Semigroup a, Monoid a) => Int -> Int -> Parser a -> Parser a
+range minimumBound maximumMatches parser =
+    count minimumBound parser <> loop maximumMatches
+  where
+    loop 0 = mempty
+    loop n = (parser <> loop (n - 1)) <|> mempty
+
+option :: (Alternative f, Monoid a) => f a -> f a
+option p = p <|> pure mempty
+
+star :: (Alternative f, Monoid a) => f a -> f a
+star p = plus p <|> pure mempty
+
+plus :: (Alternative f, Monoid a) => f a -> f a
+plus p = mappend <$> p <*> star p
+
+satisfy :: (Char -> Bool) -> Parser Text
+satisfy = fmap Data.Text.singleton . Text.Parser.Char.satisfy
+
+noDuplicates :: Ord a => [a] -> Parser (Set a)
+noDuplicates = go Data.Set.empty
+  where
+    go found    []  = return found
+    go found (x:xs) =
+        if Data.Set.member x found
+        then fail "Duplicate key"
+        else go (Data.Set.insert x found) xs
+
