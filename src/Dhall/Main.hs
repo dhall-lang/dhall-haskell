@@ -10,7 +10,7 @@ module Dhall.Main
     , main
     ) where
 
-import Control.Applicative ((<|>))
+import Control.Applicative (optional, (<|>))
 import Control.Exception (Exception, SomeException)
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
@@ -37,6 +37,7 @@ import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Parser
 import qualified Dhall.Repl
+import qualified Dhall.Format
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
 import qualified System.Console.ANSI
@@ -46,12 +47,13 @@ data Options = Options
     { mode    :: Mode
     , explain :: Bool
     , plain   :: Bool
+    , inplace :: Maybe FilePath
     }
 
-data Mode = Default | Version | Resolve | Type | Normalize | Repl | Diff Text Text
+data Mode = Default | Version | Resolve | Type | Normalize | Repl | Format | Diff Text Text
 
 parseOptions :: Parser Options
-parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
+parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain <*> optional parseInplace
   where
     parseExplain =
         Options.Applicative.switch
@@ -65,14 +67,30 @@ parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
             <>  Options.Applicative.help "Disable syntax highlighting"
             )
 
+    parseInplace =
+        Options.Applicative.strOption
+        (   Options.Applicative.long "inplace"
+        <>  Options.Applicative.help "Modify the specified file in-place"
+        <>  Options.Applicative.metavar "FILE"
+        )
+
 parseMode :: Parser Mode
 parseMode =
+<<<<<<< HEAD
         subcommand "version"   "Display version"                 (pure Version)
     <|> subcommand "resolve"   "Resolve an expression's imports" (pure Resolve)
     <|> subcommand "type"      "Infer an expression's type"      (pure Type)
     <|> subcommand "normalize" "Normalize an expression"         (pure Normalize)
     <|> subcommand "repl"      "Interpret expressions in a REPL" (pure Repl)
     <|> subcommand "diff"      "Render the difference between the normal form of two expressions" diffParser
+=======
+        subcommand "version"   "Display version"                 Version
+    <|> subcommand "resolve"   "Resolve an expression's imports" Resolve
+    <|> subcommand "type"      "Infer an expression's type"      Type
+    <|> subcommand "normalize" "Normalize an expression"         Normalize
+    <|> subcommand "repl"      "Interpret expressions in a REPL" Repl
+    <|> subcommand "format"    "Format a dhall expression"       Format
+>>>>>>> Incorporate dhall-format in dhall (#436)
     <|> pure Default
   where
     subcommand name description modeParser =
@@ -225,6 +243,7 @@ command (Options {..}) = do
         Repl -> do
             Dhall.Repl.repl explain
 
+<<<<<<< HEAD
         Diff expr1 expr2 -> do
             expression1 <- Dhall.inputExpr expr1
 
@@ -234,6 +253,10 @@ command (Options {..}) = do
                 prettyDiff = fmap annToAnsiStyle diff
 
             Pretty.hPutDoc System.IO.stdout prettyDiff
+=======
+        Format -> do
+            Dhall.Format.format inplace
+>>>>>>> Incorporate dhall-format in dhall (#436)
 
 main :: IO ()
 main = do
