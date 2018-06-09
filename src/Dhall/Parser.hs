@@ -25,7 +25,7 @@ import Control.Exception (Exception)
 import Control.Monad (MonadPlus)
 import Data.ByteArray.Encoding (Base(..))
 import Data.Data (Data)
-import Data.Functor (void)
+import Data.Functor (void, ($>))
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Scientific (Scientific)
 import Data.Semigroup (Semigroup(..))
@@ -619,6 +619,9 @@ _Double = reserved "Double"
 
 _Text :: Parser ()
 _Text = reserved "Text"
+
+_Location :: Parser ()
+_Location = reserved "Location"
 
 _List :: Parser ()
 _List = reserved "List"
@@ -1584,13 +1587,11 @@ importHashed_ = do
 import_ :: Parser Import
 import_ = (do
     importHashed <- importHashed_
-    importMode   <- alternative <|> pure Code
+    importMode   <- _as *> mode <|> pure Code
     return (Import {..}) ) <?> "import"
   where
-    alternative = do
-        _as
-        _Text
-        return RawText
+    mode =  _Text $> RawText
+        <|> _Location $> RawLocation
 
 -- | A parsing error
 data ParseError = ParseError

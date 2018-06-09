@@ -32,6 +32,7 @@ import Numeric.Natural (Natural)
 import qualified Data.HashMap.Strict.InsOrd as HashMap
 import qualified Data.List.NonEmpty
 import qualified Data.Set
+import qualified Data.Text                  as Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Core
 import qualified Dhall.Pretty.Internal      as Internal
@@ -687,6 +688,9 @@ diffBoolOr l r@(BoolOr {}) =
 diffBoolOr l r =
     diffTextAppend l r
 
+diffText :: Text -> Text -> Diff
+diffText = diffPrimitive (token . Internal.prettyText)
+
 diffTextAppend :: Pretty a => Expr s a -> Expr s a -> Diff
 diffTextAppend l@(TextAppend {}) r@(TextAppend {}) =
     enclosed' "    " (operator "++" <> "  ") (docs l r)
@@ -991,6 +995,18 @@ diffExprF l@Text r =
     mismatch l r
 diffExprF l r@Text =
     mismatch l r
+diffExprF FilePath FilePath =
+    "…"
+diffExprF l@FilePath r =
+    mismatch l r
+diffExprF l r@FilePath =
+    mismatch l r
+diffExprF Url Url =
+    "…"
+diffExprF l@Url r =
+    mismatch l r
+diffExprF l r@Url =
+    mismatch l r
 diffExprF List List =
     "…"
 diffExprF l@List r =
@@ -1087,6 +1103,19 @@ diffExprF l@(TextLit {}) r@(TextLit {}) =
 diffExprF l@(TextLit {}) r =
     mismatch l r
 diffExprF l r@(TextLit {}) =
+    mismatch l r
+diffExprF (FilePathLit aL) (FilePathLit aR) =
+    diffText (Text.pack aL) (Text.pack aR)
+diffExprF l@(FilePathLit _) r =
+    mismatch l r
+diffExprF l r@(FilePathLit _) =
+    mismatch l r
+-- TODO: Diff maybeHeaders?
+diffExprF (UrlLit aL) (UrlLit aR) =
+    diffText aL aR
+diffExprF l@(UrlLit _) r =
+    mismatch l r
+diffExprF l r@(UrlLit _) =
     mismatch l r
 diffExprF (Record aL) (Record aR) =
     diffRecord aL aR

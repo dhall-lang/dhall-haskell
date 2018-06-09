@@ -25,6 +25,7 @@ module Dhall.Pretty.Internal (
     , prettyNatural
     , prettyNumber
     , prettyScientific
+    , prettyText
 
     , builtin
     , keyword
@@ -327,7 +328,8 @@ prettyChunks (Chunks a b) =
 
     prettyChunk (c, d) = prettyText c <> syntax "${" <> prettyExprA d <> syntax rbrace
 
-    prettyText t = literal (Pretty.pretty (escapeText t))
+prettyText :: Text -> Doc Ann
+prettyText t = literal (Pretty.pretty (escapeText t))
 
 prettyConst :: Const -> Doc Ann
 prettyConst Type = builtin "Type"
@@ -729,6 +731,10 @@ prettyExprF DoubleShow =
     builtin "Double/show"
 prettyExprF Text =
     builtin "Text"
+prettyExprF FilePath =
+    builtin "FilePath"
+prettyExprF Url =
+    builtin "Url"
 prettyExprF List =
     builtin "List"
 prettyExprF ListBuild =
@@ -764,6 +770,10 @@ prettyExprF (DoubleLit a) =
     prettyScientific a
 prettyExprF (TextLit a) =
     prettyChunks a
+prettyExprF (FilePathLit a) =
+    prettyText (Text.pack a)
+prettyExprF (UrlLit a) =
+    prettyText a
 prettyExprF (Record a) =
     prettyRecord a
 prettyExprF (RecordLit a) =
@@ -1084,6 +1094,10 @@ buildExprF DoubleShow =
     "Double/show"
 buildExprF Text =
     "Text"
+buildExprF FilePath =
+    "FilePath"
+buildExprF Url =
+    "Url"
 buildExprF List =
     "List"
 buildExprF ListBuild =
@@ -1119,6 +1133,10 @@ buildExprF (DoubleLit a) =
     buildScientific a
 buildExprF (TextLit a) =
     buildChunks a
+buildExprF (FilePathLit a) =
+    Text.pack a
+buildExprF (UrlLit a) =
+    a
 buildExprF (Record a) =
     buildRecord a
 buildExprF (RecordLit a) =

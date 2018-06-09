@@ -195,7 +195,11 @@ instance Buildable ImportType where
         "env:" <> build env <> " "
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
-data ImportMode = Code | RawText deriving (Eq, Ord, Show)
+data ImportMode
+    = Code
+    | RawText
+    | RawLocation
+    deriving (Eq, Ord, Show)
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
@@ -227,8 +231,9 @@ instance Buildable Import where
     build (Import {..}) = build importHashed <> suffix
       where
         suffix = case importMode of
-            RawText -> "as Text"
-            Code    -> ""
+            Code        -> ""
+            RawText     -> "as Text"
+            RawLocation -> "as Location"
 
 instance Pretty Import where
     pretty import_ = Pretty.pretty (Builder.toLazyText (build import_))
@@ -352,6 +357,14 @@ data Expr s a
     | TextLit (Chunks s a)
     -- | > TextAppend x y                           ~  x ++ y
     | TextAppend (Expr s a) (Expr s a)
+    -- | >  FilePath                                ~  FilePath
+    | FilePath
+    -- | >  FilePathLit p                           ~  p
+    | FilePathLit FilePath
+    -- | >  Url                                     ~  Url
+    | Url
+    -- | >  UrlLit u                                ~  u
+    | UrlLit Text
     -- | > List                                     ~  List
     | List
     -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : List t
@@ -453,6 +466,10 @@ instance Monad (Expr s) where
     Text                 >>= _ = Text
     TextLit (Chunks a b) >>= k = TextLit (Chunks (fmap (fmap (>>= k)) a) b)
     TextAppend a b       >>= k = TextAppend (a >>= k) (b >>= k)
+    FilePath             >>= _ = FilePath
+    FilePathLit p        >>= _ = FilePathLit p
+    Url                  >>= _ = Url
+    UrlLit u             >>= _ = UrlLit u
     List                 >>= _ = List
     ListLit a b          >>= k = ListLit (fmap (>>= k) a) (fmap (>>= k) b)
     ListAppend a b       >>= k = ListAppend (a >>= k) (b >>= k)
@@ -516,6 +533,10 @@ instance Bifunctor Expr where
     first _  Text                  = Text
     first k (TextLit (Chunks a b)) = TextLit (Chunks (fmap (fmap (first k)) a) b)
     first k (TextAppend a b      ) = TextAppend (first k a) (first k b)
+    first _  FilePath              = FilePath
+    first _  (FilePathLit p      ) = FilePathLit p
+    first _  Url                   = Url
+    first _  (UrlLit u           ) = UrlLit u
     first _  List                  = List
     first k (ListLit a b         ) = ListLit (fmap (first k) a) (fmap (first k) b)
     first k (ListAppend a b      ) = ListAppend (first k a) (first k b)
@@ -735,6 +756,10 @@ shift d v (TextAppend a b) = TextAppend a' b'
   where
     a' = shift d v a
     b' = shift d v b
+shift _ _ FilePath = FilePath
+shift _ _ (FilePathLit p) = FilePathLit p
+shift _ _ Url = Url
+shift _ _ (UrlLit u) = UrlLit u
 shift _ _ List = List
 shift d v (ListLit a b) = ListLit a' b'
   where
@@ -891,6 +916,10 @@ subst x e (TextAppend a b) = TextAppend a' b'
   where
     a' = subst x e a
     b' = subst x e b
+subst _ _ FilePath = FilePath
+subst _ _ (FilePathLit p) = FilePathLit p
+subst _ _ Url = Url
+subst _ _ (UrlLit u) = UrlLit u
 subst _ _ List = List
 subst x e (ListLit a b) = ListLit a' b'
   where
@@ -1106,6 +1135,14 @@ alphaNormalize (TextAppend l₀ r₀) =
     l₁ = alphaNormalize l₀
 
     r₁ = alphaNormalize r₀
+alphaNormalize FilePath =
+    FilePath
+alphaNormalize (FilePathLit p) =
+    FilePathLit p
+alphaNormalize Url =
+    Url
+alphaNormalize (UrlLit u) =
+    UrlLit u
 alphaNormalize List =
     List
 alphaNormalize (ListLit (Just _T₀) ts₀) =
@@ -1241,6 +1278,8 @@ boundedType Natural          = True
 boundedType Integer          = True
 boundedType Double           = True
 boundedType Text             = True
+boundedType FilePath         = True
+boundedType Url              = True
 boundedType (App List _)     = False
 boundedType (App Optional t) = boundedType t
 boundedType (Record kvs)     = all boundedType kvs
@@ -1284,6 +1323,10 @@ denote  DoubleShow            = DoubleShow
 denote  Text                  = Text
 denote (TextLit (Chunks a b)) = TextLit (Chunks (fmap (fmap denote) a) b)
 denote (TextAppend a b      ) = TextAppend (denote a) (denote b)
+denote  FilePath              = FilePath
+denote (FilePathLit p       ) = FilePathLit p
+denote  Url                   = Url
+denote (UrlLit u            ) = UrlLit u
 denote  List                  = List
 denote (ListLit a b         ) = ListLit (fmap denote a) (fmap denote b)
 denote (ListAppend a b      ) = ListAppend (denote a) (denote b)
@@ -1559,6 +1602,10 @@ normalizeWith ctx e0 = loop (denote e0)
         decide  l          (TextLit n) | isEmpty n = l
         decide (TextLit m) (TextLit n)             = TextLit (m <> n)
         decide  l           r                      = TextAppend l r
+    FilePath -> FilePath
+    FilePathLit p -> FilePathLit p
+    Url -> Url
+    UrlLit u -> UrlLit u
     List -> List
     ListLit t es -> ListLit t' es'
       where
@@ -1813,6 +1860,10 @@ isNormalized e = case denote e of
                     TextLit _ -> False
                     _ -> True
             _ -> True
+    FilePath -> True
+    FilePathLit _ -> True
+    Url -> True
+    UrlLit _ -> True
     List -> True
     ListLit t es -> all isNormalized t && all isNormalized es
     ListAppend x y -> isNormalized x && isNormalized y &&
@@ -1945,6 +1996,8 @@ reservedIdentifiers =
         , "Double"
         , "Double/show"
         , "Text"
+        , "FilePath"
+        , "Url"
         , "List"
         , "List/build"
         , "List/fold"

@@ -358,6 +358,14 @@ typeWithA tpa = loop
             Text -> return ()
             _    -> Left (TypeError ctx e (CantTextAppend r tr))
         return Text
+    loop _      FilePath          = do
+        return (Const Type)
+    loop _     (FilePathLit _   ) = do
+        return FilePath
+    loop _      Url               = do
+        return (Const Type)
+    loop _     (UrlLit _        ) = do
+        return Url
     loop _      List              = do
         return (Pi "_" (Const Type) (Const Type))
     loop ctx e@(ListLit  Nothing  xs) = do

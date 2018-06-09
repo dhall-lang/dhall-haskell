@@ -508,127 +508,153 @@ instance Show HashMismatch where
         <>  "\n"
         <>  "↳ " <> show actualHash <> "\n"
 
+-- | A path made absolute
+data ResolvedPath
+    = LocalPath FilePath
+    | UrlPath Text (Maybe ImportHashed)
+    | EnvPath Text
+
+instance Show ResolvedPath where
+    show (LocalPath file) = file
+    show (UrlPath url _) = Text.unpack url
+    show (EnvPath env) = Text.unpack env
+
+-- | Exception thrown when @importType@ and @importMode@ are incompatible
+data IllegalImportType = EnvAsLocation deriving (Typeable)
+
+instance Exception IllegalImportType
+
+instance Show IllegalImportType where
+    show EnvAsLocation = _ERROR <> ": env cannot be imported as a location"
+
 -- | Parse an expression from a `Import` containing a Dhall program
 exprFromImport :: Import -> StateT Status IO (Expr Src Import)
 exprFromImport (Import {..}) = do
     let ImportHashed {..} = importHashed
 
-    (path, text) <- case importType of
-        Local prefix (File {..}) -> liftIO $ do
-            let Directory {..} = directory
-
-            prefixPath <- case prefix of
-                Home -> do
-                    System.Directory.getHomeDirectory
-
-                Absolute -> do
-                    return "/"
-
-                Here -> do
-                    System.Directory.getCurrentDirectory
-
-            let cs = map Text.unpack (file : components)
-
-            let cons component dir = dir </> component
-
-            let path = foldr cons prefixPath cs
-
-            exists <- System.Directory.doesFileExist path
-
-            if exists
-                then return ()
-                else throwIO (MissingFile path)
-
-            text <- Data.Text.IO.readFile path
-
-            return (path, text)
-
-        URL prefix file suffix maybeHeaders -> do
-            m <- needManager
-
-            let fileText = Data.Text.Lazy.toStrict $ Builder.toLazyText (build file)
-            let url      = Text.unpack (prefix <> fileText <> suffix)
-
-            request <- liftIO (HTTP.parseUrlThrow url)
-
-            requestWithHeaders <- case maybeHeaders of
-                Nothing            -> return request
-                Just importHashed_ -> do
-                    expr <- loadStaticWith
-                        exprFromImport
-                        Dhall.Context.empty
-                        (const Nothing)
-                        (Embed (Import importHashed_ Code))
-
-                    let expected :: Expr Src X
-                        expected =
-                            App List
-                                ( Record
-                                    ( Data.HashMap.Strict.InsOrd.fromList
-                                        [("header", Text), ("value", Text)]
-                                    )
-                                )
-                    let suffix_ =
-                            ( Data.Text.Lazy.toStrict
-                            . Builder.toLazyText
-                            . build
-                            ) expected
-                    let annot = case expr of
-                            Note (Src begin end bytes) _ ->
-                                Note (Src begin end bytes') (Annot expr expected)
-                              where
-                                bytes' = bytes <> " : " <> suffix_
-                            _ ->
-                                Annot expr expected
-
-                    case Dhall.TypeCheck.typeOf annot of
-                        Left err -> liftIO (throwIO err)
-                        Right _  -> return ()
-
-                    let expr' = Dhall.Core.normalize expr
-
-                    headers <- case toHeaders expr' of
-                        Just headers -> do
-                            return headers
-                        Nothing      -> do
-                            liftIO (throwIO InternalError)
-
-                    let requestWithHeaders = request
-                            { HTTP.requestHeaders = headers
-                            }
-
-                    return requestWithHeaders
-
-            response <- liftIO (HTTP.httpLbs requestWithHeaders m)
-
-            let bytes = HTTP.responseBody response
-
-            case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
-                Left  err  -> liftIO (throwIO err)
-                Right text -> return (url, Data.Text.Lazy.toStrict text)
-
-        Env env -> liftIO $ do
-            x <- System.Environment.lookupEnv (Text.unpack env)
-            case x of
-                Just string -> return (Text.unpack env, Text.pack string)
-                Nothing     -> throwIO (MissingEnvironmentVariable env)
+    path <- resolvePath importType
 
     case importMode of
+        RawLocation -> case path of
+            LocalPath p -> pure $ FilePathLit p
+            UrlPath u _ -> pure $ UrlLit u
+            EnvPath _   -> liftIO $ throwIO EnvAsLocation
+
         Code -> do
+            text <- fetchText path
+
             let parser = unParser $ do
                     Text.Parser.Token.whiteSpace
                     r <- Dhall.Parser.expr
                     Text.Parser.Combinators.eof
                     return r
 
-            case Text.Megaparsec.parse parser path text of
+            case Text.Megaparsec.parse parser (show path) text of
                 Left errInfo -> do
                     liftIO (throwIO (ParseError errInfo text))
                 Right expr -> do
                     return expr
 
         RawText -> do
+            text <- fetchText path
             return (TextLit (Chunks [] text))
+
+  where
+    resolvePath (Local prefix (File {..})) = liftIO $ do
+        let Directory {..} = directory
+
+        prefixPath <- case prefix of
+            Home -> System.Directory.getHomeDirectory
+            Absolute -> return "/"
+            Here -> System.Directory.getCurrentDirectory
+
+        let cs = map Text.unpack (file : components)
+        let cons component dir = dir </> component
+        let path = foldr cons prefixPath cs
+        pure $ LocalPath path
+
+    resolvePath (URL prefix file suffix maybeHeaders) = liftIO $ do
+        let fileText = Data.Text.Lazy.toStrict $ Builder.toLazyText (build file)
+        let url      = prefix <> fileText <> suffix
+        pure $ UrlPath url maybeHeaders
+
+    resolvePath (Env env) = pure $ EnvPath env
+
+
+    fetchText (LocalPath file) = liftIO $ do
+        exists <- System.Directory.doesFileExist file
+
+        if exists
+            then return ()
+            else throwIO (MissingFile file)
+
+        Data.Text.IO.readFile file
+
+    fetchText (UrlPath url maybeHeaders) = do
+        m <- needManager
+        request <- liftIO (HTTP.parseUrlThrow . Text.unpack $ url)
+
+        requestWithHeaders <- case maybeHeaders of
+            Nothing            -> return request
+            Just importHashed_ -> do
+                expr <- loadStaticWith
+                    exprFromImport
+                    Dhall.Context.empty
+                    (const Nothing)
+                    (Embed (Import importHashed_ Code))
+
+                let expected :: Expr Src X
+                    expected =
+                        App List
+                            ( Record
+                                ( Data.HashMap.Strict.InsOrd.fromList
+                                    [("header", Text), ("value", Text)]
+                                )
+                            )
+                let suffix_ =
+                        ( Data.Text.Lazy.toStrict
+                        . Builder.toLazyText
+                        . build
+                        ) expected
+                let annot = case expr of
+                        Note (Src begin end bytes) _ ->
+                            Note (Src begin end bytes') (Annot expr expected)
+                          where
+                            bytes' = bytes <> " : " <> suffix_
+                        _ ->
+                            Annot expr expected
+
+                case Dhall.TypeCheck.typeOf annot of
+                    Left err -> liftIO (throwIO err)
+                    Right _  -> return ()
+
+                let expr' = Dhall.Core.normalize expr
+
+                headers <- case toHeaders expr' of
+                    Just headers -> do
+                        return headers
+                    Nothing      -> do
+                        liftIO (throwIO InternalError)
+
+                let requestWithHeaders = request
+                        { HTTP.requestHeaders = headers
+                        }
+
+                return requestWithHeaders
+
+        response <- liftIO (HTTP.httpLbs requestWithHeaders m)
+
+        let bytes = HTTP.responseBody response
+
+        case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
+            Left  err  -> liftIO (throwIO err)
+            Right text -> return (Data.Text.Lazy.toStrict text)
+
+    fetchText (EnvPath env) = liftIO $ do
+        x <- System.Environment.lookupEnv (Text.unpack env)
+        case x of
+            Just string -> return (Text.pack string)
+            Nothing     -> throwIO (MissingEnvironmentVariable env)
 
 -- | Resolve all imports within an expression using a custom typing context and
 -- `Import`-resolving callback in arbitrary `MonadCatch` monad.
