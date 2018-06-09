@@ -63,6 +63,7 @@ import qualified Text.Parser.Token
 import qualified Text.Parser.Token.Style
 
 import Dhall.Parser.Combinators
+import Dhall.Parser.Token
 
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
@@ -74,97 +75,6 @@ noted parser = do
         Note src₁ _ | src₀ == src₁ -> return e
         _                          -> return (Note src₀ e)
 
-
-blockComment :: Parser ()
-blockComment = do
-    _ <- Text.Parser.Char.text "{-"
-    blockCommentContinue
-
-blockCommentChunk :: Parser ()
-blockCommentChunk =
-    choice
-        [ blockComment  -- Nested block comment
-        , character
-        , endOfLine
-        ]
-  where
-    character = void (Text.Parser.Char.satisfy predicate)
-      where
-        predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
-
-    endOfLine = void (Text.Parser.Char.text "\r\n")
-
-blockCommentContinue :: Parser ()
-blockCommentContinue = endOfComment <|> continue
-  where
-    endOfComment = void (Text.Parser.Char.text "-}")
-
-    continue = do
-        blockCommentChunk
-        blockCommentContinue
-
-lineComment :: Parser ()
-lineComment = do
-    _ <- Text.Parser.Char.text "--"
-    Text.Parser.Combinators.skipMany notEndOfLine
-    endOfLine
-    return ()
-  where
-    endOfLine =
-            void (Text.Parser.Char.char '\n'  )
-        <|> void (Text.Parser.Char.text "\r\n")
-
-    notEndOfLine = void (Text.Parser.Char.satisfy predicate)
-      where
-        predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
-
-
-whitespaceChunk :: Parser ()
-whitespaceChunk =
-    choice
-        [ void (Text.Parser.Char.satisfy predicate)
-        , void (Text.Parser.Char.text "\r\n")
-        , lineComment
-        , blockComment
-        ] <?> "whitespace"
-  where
-    predicate c = c == ' ' || c == '\t' || c == '\n'
-
-whitespace :: Parser ()
-whitespace = Text.Parser.Combinators.skipMany whitespaceChunk
-
-alpha :: Char -> Bool
-alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
-
-digit :: Char -> Bool
-digit c = '\x30' <= c && c <= '\x39'
-
-hexdig :: Char -> Bool
-hexdig c =
-        ('0' <= c && c <= '9')
-    ||  ('A' <= c && c <= 'F')
-    ||  ('a' <= c && c <= 'f')
-
-hexNumber :: Parser Int
-hexNumber = choice [ hexDigit, hexUpper, hexLower ]
-  where
-    hexDigit = do
-        c <- Text.Parser.Char.satisfy predicate
-        return (Data.Char.ord c - Data.Char.ord '0')
-      where
-        predicate c = '0' <= c && c <= '9'
-
-    hexUpper = do
-        c <- Text.Parser.Char.satisfy predicate
-        return (10 + Data.Char.ord c - Data.Char.ord 'A')
-      where
-        predicate c = 'A' <= c && c <= 'F'
-
-    hexLower = do
-        c <- Text.Parser.Char.satisfy predicate
-        return (10 + Data.Char.ord c - Data.Char.ord 'a')
-      where
-        predicate c = 'a' <= c && c <= 'f'
 
 simpleLabel :: Parser Text
 simpleLabel = try (do
