@@ -1110,7 +1110,6 @@ diffExprF l@(FilePathLit _) r =
     mismatch l r
 diffExprF l r@(FilePathLit _) =
     mismatch l r
--- TODO: Diff maybeHeaders?
 diffExprF (UrlLit aL) (UrlLit aR) =
     diffText aL aR
 diffExprF l@(UrlLit _) r =

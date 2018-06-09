@@ -125,6 +125,7 @@ import Crypto.Hash (SHA256)
 import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
+import Data.Maybe (isJust)
 import Data.Semigroup (sconcat, (<>))
 import Data.Text (Text)
 import Data.Text.Lazy.Builder (Builder)
@@ -520,12 +521,18 @@ instance Show ResolvedPath where
     show (EnvPath env) = Text.unpack env
 
 -- | Exception thrown when @importType@ and @importMode@ are incompatible
-data IllegalImportType = EnvAsLocation deriving (Typeable)
+data IllegalImportType
+    = EnvAsLocation
+    | LocationWithHash
+    | LocationUrlWithHeaders
+    deriving (Typeable)
 
 instance Exception IllegalImportType
 
 instance Show IllegalImportType where
-    show EnvAsLocation = _ERROR <> ": env cannot be imported as a location"
+    show EnvAsLocation          = _ERROR <> ": env cannot be imported as a location"
+    show LocationWithHash       = _ERROR <> ": location literal cannot have a hash"
+    show LocationUrlWithHeaders = _ERROR <> ": url literal cannot have headers"
 
 -- | Parse an expression from a `Import` containing a Dhall program
 exprFromImport :: Import -> StateT Status IO (Expr Src Import)
@@ -535,10 +542,13 @@ exprFromImport (Import {..}) = do
     path <- resolvePath importType
 
     case importMode of
-        RawLocation -> case path of
-            LocalPath p -> pure $ FilePathLit p
-            UrlPath u _ -> pure $ UrlLit u
-            EnvPath _   -> liftIO $ throwIO EnvAsLocation
+        RawLocation -> if isJust hash
+            then liftIO $ throwIO LocationWithHash
+            else case path of
+                LocalPath p -> pure $ FilePathLit p
+                UrlPath u Nothing -> pure $ UrlLit u
+                UrlPath _ (Just _) -> liftIO $ throwIO LocationUrlWithHeaders
+                EnvPath _ -> liftIO $ throwIO EnvAsLocation
 
         Code -> do
             text <- fetchText path
