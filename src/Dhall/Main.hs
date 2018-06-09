@@ -16,7 +16,7 @@ import Data.Monoid (mempty, (<>))
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Version (showVersion)
 import Dhall.Core (Expr, Import)
-import Dhall.Import (Imported(..), load)
+import Dhall.Import (Imported(..), load, hashExpressionToCode)
 import Dhall.Parser (Src)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
@@ -43,7 +43,7 @@ data Options = Options
     , plain   :: Bool
     }
 
-data Mode = Default | Version | Resolve | Type | Normalize
+data Mode = Default | Version | Resolve | Type | Normalize | Hash
 
 parseOptions :: Parser Options
 parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
@@ -62,10 +62,11 @@ parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
 
 parseMode :: Parser Mode
 parseMode =
-        subcommand "version"   "Display version"                 Version
-    <|> subcommand "resolve"   "Resolve an expression's imports" Resolve
-    <|> subcommand "type"      "Infer an expression's type"      Type
-    <|> subcommand "normalize" "Normalize an expression"         Normalize
+        subcommand "version"   "Display version"                       Version
+    <|> subcommand "resolve"   "Resolve an expression's imports"       Resolve
+    <|> subcommand "type"      "Infer an expression's type"            Type
+    <|> subcommand "normalize" "Normalize an expression"               Normalize
+    <|> subcommand "hash"      "Compute an expression's semantic hash" Hash
     <|> pure Default
   where
     subcommand name description mode =
@@ -206,6 +207,20 @@ command (Options {..}) = do
             inferredType <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
             render System.IO.stdout (Dhall.Core.normalize inferredType)
+        Hash -> do
+            inText <- Data.Text.IO.getContents
+
+            expr <- case Dhall.Parser.exprFromText "(stdin)" inText of
+                Left  err  -> Control.Exception.throwIO err
+                Right expr -> return expr
+
+            expr' <- load expr
+
+            _ <- case Dhall.TypeCheck.typeOf expr' of
+                Left  err -> Control.Exception.throwIO err
+                Right _   -> return ()
+
+            Data.Text.IO.putStrLn (hashExpressionToCode (Dhall.Core.normalize expr'))
 
 main :: IO ()
 main = do
