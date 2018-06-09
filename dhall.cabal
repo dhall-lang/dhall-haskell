@@ -200,6 +200,10 @@ Library
         Dhall.Import,
         Dhall.Main
         Dhall.Parser,
+        Dhall.Parser.Expression,
+        Dhall.Parser.Combinators,
+        Dhall.Parser.Token,
+        Dhall.Parser.Literal,
         Dhall.Pretty,
         Dhall.Repl
         Dhall.TH,
