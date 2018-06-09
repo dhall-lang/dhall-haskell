@@ -981,7 +981,7 @@ http = do
     whitespace
     headers <- optional (do
         _using
-        importHashed_ )
+        (importHashed_ <|> (_openParens *> importHashed_ <* _closeParens)))
     return (URL prefix path suffix headers)
 
 env :: Parser ImportType
