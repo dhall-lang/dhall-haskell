@@ -13,6 +13,7 @@ module Dhall.Main
 import Control.Applicative ((<|>))
 import Control.Exception (Exception, SomeException)
 import Data.Monoid (mempty, (<>))
+import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Version (showVersion)
 import Dhall.Core (Expr, Import)
@@ -27,10 +28,13 @@ import System.IO (Handle)
 import qualified Paths_dhall as Meta
 
 import qualified Control.Exception
+import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import qualified Dhall
 import qualified Dhall.Core
+import qualified Dhall.Diff
 import qualified Dhall.Parser
 import qualified Dhall.Repl
 import qualified Dhall.TypeCheck
@@ -44,7 +48,7 @@ data Options = Options
     , plain   :: Bool
     }
 
-data Mode = Default | Version | Resolve | Type | Normalize | Repl
+data Mode = Default | Version | Resolve | Type | Normalize | Repl | Diff Text Text
 
 parseOptions :: Parser Options
 parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
@@ -63,14 +67,15 @@ parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
 
 parseMode :: Parser Mode
 parseMode =
-        subcommand "version"   "Display version"                 Version
-    <|> subcommand "resolve"   "Resolve an expression's imports" Resolve
-    <|> subcommand "type"      "Infer an expression's type"      Type
-    <|> subcommand "normalize" "Normalize an expression"         Normalize
-    <|> subcommand "repl"      "Interpret expressions in a REPL" Repl
+        subcommand "version"   "Display version"                 (pure Version)
+    <|> subcommand "resolve"   "Resolve an expression's imports" (pure Resolve)
+    <|> subcommand "type"      "Infer an expression's type"      (pure Type)
+    <|> subcommand "normalize" "Normalize an expression"         (pure Normalize)
+    <|> subcommand "repl"      "Interpret expressions in a REPL" (pure Repl)
+    <|> subcommand "diff"      "Render the difference between the normal form of two expressions" diffParser
     <|> pure Default
   where
-    subcommand name description mode =
+    subcommand name description modeParser =
         Options.Applicative.subparser
             (   Options.Applicative.command name parserInfo
             <>  Options.Applicative.metavar name
@@ -83,7 +88,15 @@ parseMode =
                 )
 
         parser =
-            Options.Applicative.helper <*> pure mode
+            Options.Applicative.helper <*> modeParser
+
+    diffParser =
+        Diff <$> argument "expr1" <*> argument "expr2"
+      where
+        argument =
+                fmap Data.Text.pack
+            .   Options.Applicative.strArgument
+            .   Options.Applicative.metavar
 
 opts :: Pretty.LayoutOptions
 opts =
@@ -211,6 +224,16 @@ command (Options {..}) = do
 
         Repl -> do
             Dhall.Repl.repl explain
+
+        Diff expr1 expr2 -> do
+            expression1 <- Dhall.inputExpr expr1
+
+            expression2 <- Dhall.inputExpr expr2
+
+            let diff = Dhall.Diff.diffNormalized expression1 expression2
+                prettyDiff = fmap annToAnsiStyle diff
+
+            Pretty.hPutDoc System.IO.stdout prettyDiff
 
 main :: IO ()
 main = do
