@@ -530,9 +530,15 @@ data IllegalImportType
 instance Exception IllegalImportType
 
 instance Show IllegalImportType where
-    show EnvAsLocation          = _ERROR <> ": env cannot be imported as a location"
-    show LocationWithHash       = _ERROR <> ": location literal cannot have a hash"
-    show LocationUrlWithHeaders = _ERROR <> ": url literal cannot have headers"
+    show EnvAsLocation =
+        _ERROR
+      <> ": an environment variable cannot be used ❰as Location❱"
+    show LocationWithHash =
+        _ERROR
+      <> ": location literal cannot have a hash"
+    show LocationUrlWithHeaders =
+        _ERROR
+      <> ": url literal cannot have headers"
 
 -- | Parse an expression from a `Import` containing a Dhall program
 exprFromImport :: Import -> StateT Status IO (Expr Src Import)
