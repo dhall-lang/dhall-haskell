@@ -18,6 +18,7 @@ module Dhall.Parser (
     , Src(..)
     , ParseError(..)
     , Parser(..)
+    , module Dhall.Parser.Combinators
     ) where
 
 import Control.Applicative (Alternative(..), liftA2, optional)
@@ -60,6 +61,8 @@ import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 import qualified Text.Parser.Token.Style
+
+import Dhall.Parser.Combinators
 
 -- | Source code extract
 data Src = Src Text.Megaparsec.SourcePos Text.Megaparsec.SourcePos Text
