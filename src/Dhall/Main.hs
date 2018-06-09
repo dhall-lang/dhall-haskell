@@ -32,6 +32,7 @@ import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import qualified Dhall
 import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Parser
@@ -225,13 +226,9 @@ command (Options {..}) = do
             Dhall.Repl.repl explain
 
         Diff expr1 expr2 -> do
-            let parseAndResolve inputName exprRaw = do
-                    expr <- throws (Dhall.Parser.exprFromText inputName exprRaw)
-                    load expr
+            expression1 <- Dhall.inputExpr expr1
 
-            expression1 <- parseAndResolve "(expr1)" expr1
-
-            expression2 <- parseAndResolve "(expr2)" expr2
+            expression2 <- Dhall.inputExpr expr2
 
             let diff = Dhall.Diff.diffNormalized expression1 expression2
                 prettyDiff = fmap annToAnsiStyle diff
