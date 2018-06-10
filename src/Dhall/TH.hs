@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP             #-}
 
 {-| This module provides `staticDhallExpression` which can be used to resolve
     all of an expression’s imports at compile time, allowing one to reference
@@ -25,6 +26,10 @@ module Dhall.TH where
 
 import Control.Monad
 import Data.Typeable
+#if MIN_VERSION_template_haskell(2,11,0)
+#else
+import Language.Haskell.TH.Quote
+#endif
 import Language.Haskell.TH.Syntax
 
 import qualified Data.Text as Text
