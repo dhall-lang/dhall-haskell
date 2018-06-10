@@ -311,8 +311,8 @@ diffList l r
           | Algo.Diff.Both _ _ <- p = True
           | otherwise               = False
 
-    -- Render a single element of a list using an extra rendering function
-    prettyElems f = foldMap (pure . f . token . Internal.prettyExpr)
+    -- Render a each element of a list using an extra rendering function
+    prettyElems f = map (f . token . Internal.prettyExpr)
 
     diffPart part =
       case part of
