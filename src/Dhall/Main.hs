@@ -37,6 +37,7 @@ import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Parser
 import qualified Dhall.Repl
+import qualified Dhall.Hash
 import qualified Dhall.Format
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
@@ -50,7 +51,7 @@ data Options = Options
     , inplace :: Maybe FilePath
     }
 
-data Mode = Default | Version | Resolve | Type | Normalize | Repl | Format | Diff Text Text
+data Mode = Default | Version | Resolve | Type | Normalize | Repl | Format | Hash | Diff Text Text
 
 parseOptions :: Parser Options
 parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain <*> optional parseInplace
@@ -76,21 +77,14 @@ parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain <*> optiona
 
 parseMode :: Parser Mode
 parseMode =
-<<<<<<< HEAD
         subcommand "version"   "Display version"                 (pure Version)
     <|> subcommand "resolve"   "Resolve an expression's imports" (pure Resolve)
     <|> subcommand "type"      "Infer an expression's type"      (pure Type)
     <|> subcommand "normalize" "Normalize an expression"         (pure Normalize)
     <|> subcommand "repl"      "Interpret expressions in a REPL" (pure Repl)
     <|> subcommand "diff"      "Render the difference between the normal form of two expressions" diffParser
-=======
-        subcommand "version"   "Display version"                 Version
-    <|> subcommand "resolve"   "Resolve an expression's imports" Resolve
-    <|> subcommand "type"      "Infer an expression's type"      Type
-    <|> subcommand "normalize" "Normalize an expression"         Normalize
-    <|> subcommand "repl"      "Interpret expressions in a REPL" Repl
-    <|> subcommand "format"    "Format a dhall expression"       Format
->>>>>>> Incorporate dhall-format in dhall (#436)
+    <|> subcommand "format"    "Format a dhall expression"       (pure Format)
+    <|> subcommand "hash"      "Compute semantic hashes for Dhall expressions" (pure Hash)
     <|> pure Default
   where
     subcommand name description modeParser =
@@ -243,7 +237,6 @@ command (Options {..}) = do
         Repl -> do
             Dhall.Repl.repl explain
 
-<<<<<<< HEAD
         Diff expr1 expr2 -> do
             expression1 <- Dhall.inputExpr expr1
 
@@ -253,10 +246,12 @@ command (Options {..}) = do
                 prettyDiff = fmap annToAnsiStyle diff
 
             Pretty.hPutDoc System.IO.stdout prettyDiff
-=======
+
         Format -> do
             Dhall.Format.format inplace
->>>>>>> Incorporate dhall-format in dhall (#436)
+
+        Hash -> do
+            Dhall.Hash.hash 
 
 main :: IO ()
 main = do
