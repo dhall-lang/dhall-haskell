@@ -715,26 +715,6 @@ completeExpression embedded = do
     whitespace
     expression embedded
 
-toMap :: [(Text, a)] -> Parser (InsOrdHashMap Text a)
-toMap kvs = do
-    let adapt (k, v) = (k, pure v)
-    let m = fromListWith (<|>) (fmap adapt kvs)
-    let action k vs = case Data.Sequence.viewl vs of
-            EmptyL  -> empty
-            v :< vs' ->
-                if null vs'
-                then pure v
-                else
-                    Text.Parser.Combinators.unexpected
-                        ("duplicate field: " ++ Data.Text.unpack k)
-    Data.HashMap.Strict.InsOrd.traverseWithKey action m
-  where
-    fromListWith combine = Data.List.foldl' snoc nil
-      where
-        nil = Data.HashMap.Strict.InsOrd.empty
-
-        snoc m (k, v) = Data.HashMap.Strict.InsOrd.insertWith combine k v m
-
 env :: Parser ImportType
 env = do
     _ <- Text.Parser.Char.text "env:"
