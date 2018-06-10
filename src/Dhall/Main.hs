@@ -10,7 +10,7 @@ module Dhall.Main
     , main
     ) where
 
-import Control.Applicative ((<|>))
+import Control.Applicative (optional, (<|>))
 import Control.Exception (Exception, SomeException)
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
@@ -37,6 +37,8 @@ import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Parser
 import qualified Dhall.Repl
+import qualified Dhall.Hash
+import qualified Dhall.Format
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
 import qualified System.Console.ANSI
@@ -48,7 +50,15 @@ data Options = Options
     , plain   :: Bool
     }
 
-data Mode = Default | Version | Resolve | Type | Normalize | Repl | Diff Text Text
+data Mode = Default | Version | Resolve | Type | Normalize | Repl | Format (Maybe FilePath) | Hash | Diff Text Text
+
+parseInplace :: Parser String
+parseInplace =
+        Options.Applicative.strOption
+        (   Options.Applicative.long "inplace"
+        <>  Options.Applicative.help "Modify the specified file in-place"
+        <>  Options.Applicative.metavar "FILE"
+        )
 
 parseOptions :: Parser Options
 parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
@@ -65,6 +75,7 @@ parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
             <>  Options.Applicative.help "Disable syntax highlighting"
             )
 
+
 parseMode :: Parser Mode
 parseMode =
         subcommand "version"   "Display version"                 (pure Version)
@@ -73,6 +84,8 @@ parseMode =
     <|> subcommand "normalize" "Normalize an expression"         (pure Normalize)
     <|> subcommand "repl"      "Interpret expressions in a REPL" (pure Repl)
     <|> subcommand "diff"      "Render the difference between the normal form of two expressions" diffParser
+    <|> subcommand "hash"      "Compute semantic hashes for Dhall expressions" (pure Hash)
+    <|> formatSubcommand
     <|> pure Default
   where
     subcommand name description modeParser =
@@ -97,6 +110,19 @@ parseMode =
                 fmap Data.Text.pack
             .   Options.Applicative.strArgument
             .   Options.Applicative.metavar
+
+    formatSubcommand =
+        Options.Applicative.hsubparser
+            (   Options.Applicative.command "format" parserInfo
+            <>  Options.Applicative.metavar "format"
+            )
+      where parserInfo =
+                Options.Applicative.info parserWithHelper
+                    (   Options.Applicative.fullDesc
+                    <>  Options.Applicative.progDesc "Formatter for the Dhall language"
+                    )
+            parserWithHelper = Options.Applicative.helper <*> parser
+            parser = Format <$> optional parseInplace
 
 opts :: Pretty.LayoutOptions
 opts =
@@ -234,6 +260,12 @@ command (Options {..}) = do
                 prettyDiff = fmap annToAnsiStyle diff
 
             Pretty.hPutDoc System.IO.stdout prettyDiff
+
+        Format inplace -> do
+            Dhall.Format.format inplace
+
+        Hash -> do
+            Dhall.Hash.hash 
 
 main :: IO ()
 main = do
