@@ -56,6 +56,9 @@ module Dhall.Tutorial (
     -- * Raw text
     -- $rawText
 
+    -- * File paths and URLs
+    -- $locations
+
     -- * Formatting code
     -- $format
 
@@ -1596,6 +1599,50 @@ import Dhall
 -- > ...
 -- > (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 -- > SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-- $locations
+--
+-- Configuration files often contain paths to other files (for example, a database
+-- or some resource), and it is often convenient to specify those paths
+-- relative to the configuration file itself.
+--
+-- > $ pwd
+-- > /tmp
+-- > $ cat start.dhall
+-- > ./sub/foo.dhall
+--
+-- Suppose that you would like to have a relative path in @foo.dhall@. It cannot
+-- be a simple string, because it would not contain any information about
+-- the directory, relative to which this path should be resolved.
+-- The following does not work as expected:
+--
+-- > $ cat sub/foo.dhall
+-- > "./bar"
+--
+-- > $ dhall <<< './start.dhall'
+-- > Text
+-- > 
+-- > "./bar"  # There is no 'bar' in current directory
+--
+-- When the Dhall file is evaluated you end up with a simple string and no
+-- way to know which file it came from. Instead, you should use the same syntax
+-- as for imports (without quotation marks) but add `as Location`:
+--
+-- > $ cat sub/foo.dhall
+-- > ./bar as Location
+--
+-- > $ dhall <<< './start.dhall'
+-- > FilePath
+-- > 
+-- > /tmp/sub/bar  # The path was resolved relative to the file that contains it
+--
+-- A Dhall file can also contain URLs and just like file paths they are given by
+-- the include syntax with `as Location`:
+-- 
+-- > $ dhall <<< 'https://github.com/dhall-lang/dhall-lang as Location'
+-- > Url
+-- > 
+-- > https://github.com/dhall-lang/dhall-lang
 
 -- $format
 --
