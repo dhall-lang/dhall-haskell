@@ -86,8 +86,6 @@ script:
 before_deploy:
   - tar --create --file "$TRAVIS_OS_NAME.tar" --files-from /dev/null
   - tar --append --file "$TRAVIS_OS_NAME.tar" --directory dist/build/dhall dhall
-  - tar --append --file "$TRAVIS_OS_NAME.tar" --directory dist/build/dhall-format dhall-format
-  - tar --append --file "$TRAVIS_OS_NAME.tar" --directory dist/build/dhall-hash dhall-hash
   - gzip "$TRAVIS_OS_NAME.tar"
 
 deploy:
