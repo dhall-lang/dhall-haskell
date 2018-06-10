@@ -200,9 +200,6 @@ Library
         Dhall.Import,
         Dhall.Main
         Dhall.Parser,
-        Dhall.Parser.Expression,
-        Dhall.Parser.Combinators,
-        Dhall.Parser.Token,
         Dhall.Pretty,
         Dhall.Repl
         Dhall.TH,
@@ -210,6 +207,9 @@ Library
         Dhall.TypeCheck
     Other-Modules:
         Dhall.Pretty.Internal,
+        Dhall.Parser.Expression,
+        Dhall.Parser.Combinators,
+        Dhall.Parser.Token,
         Paths_dhall
     GHC-Options: -Wall
 
