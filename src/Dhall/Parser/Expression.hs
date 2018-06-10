@@ -25,7 +25,6 @@ import qualified Text.Parser.Char
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
-import Dhall.Parser.Literal
 
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
@@ -787,3 +786,64 @@ import_ = (do
         _as
         _Text
         return RawText
+
+-- | Similar to `Dhall.Core.buildChunks` except that this doesn't bother to
+-- render interpolated expressions to avoid a `Buildable a` constraint.  The
+-- interpolated contents are not necessary for computing how much to dedent a
+-- multi-line string
+--
+-- This also doesn't include the surrounding quotes since they would interfere
+-- with the whitespace detection
+buildChunks :: Chunks s a -> Text
+buildChunks (Chunks a b) = foldMap buildChunk a <> escapeText b
+  where
+    buildChunk :: (Text, Expr s a) -> Text
+    buildChunk (c, _) = escapeText c <> "${x}"
+
+dedent :: Chunks Src a -> Chunks Src a
+dedent chunks0 = process chunks0
+  where
+    text0 = buildChunks chunks0
+
+    lines0 = Data.Text.lines text0
+
+    isEmpty = Data.Text.all Data.Char.isSpace
+
+    nonEmptyLines = filter (not . isEmpty) lines0
+
+    indentLength line =
+        Data.Text.length (Data.Text.takeWhile Data.Char.isSpace line)
+
+    shortestIndent = case nonEmptyLines of
+        [] -> 0
+        _  -> minimum (map indentLength nonEmptyLines)
+
+    -- The purpose of this complicated `trimBegin`/`trimContinue` is to ensure
+    -- that we strip leading whitespace without stripping whitespace after
+    -- variable interpolation
+
+    -- This is the trim function we use up until the first variable
+    -- interpolation, dedenting all lines
+    trimBegin =
+          Data.Text.intercalate "\n"
+        . map (Data.Text.drop shortestIndent)
+        . Data.Text.splitOn "\n"
+
+    -- This is the trim function we use after each variable interpolation
+    -- where we indent each line except the first line (since it's not a true
+    -- beginning of a line)
+    trimContinue text = Data.Text.intercalate "\n" lines_
+      where
+        lines_ = case Data.Text.splitOn "\n" text of
+            []   -> []
+            l:ls -> l:map (Data.Text.drop shortestIndent) ls
+
+    -- This is the loop that drives whether or not to use `trimBegin` or
+    -- `trimContinue`.  We call this function with `trimBegin`, but after the
+    -- first interpolation we switch permanently to `trimContinue`
+    process (Chunks ((x0, y0):xys) z) =
+        Chunks ((trimBegin x0, y0):xys') (trimContinue z)
+      where
+        xys' = [ (trimContinue x, y) | (x, y) <- xys ]
+    process (Chunks [] z) =
+        Chunks [] (trimBegin z)

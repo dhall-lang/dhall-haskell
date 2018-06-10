@@ -24,6 +24,13 @@ import qualified Data.Text
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 
+import Data.Scientific (Scientific)
+import Numeric.Natural (Natural)
+import Prelude hiding (const, pi)
+
+import qualified Text.Parser.Token
+
+
 whitespace :: Parser ()
 whitespace = Text.Parser.Combinators.skipMany whitespaceChunk
 
@@ -38,6 +45,37 @@ hexdig c =
         ('0' <= c && c <= '9')
     ||  ('A' <= c && c <= 'F')
     ||  ('a' <= c && c <= 'f')
+
+doubleLiteral :: Parser Scientific
+doubleLiteral = (do
+    sign <-  fmap (\_ -> negate) (Text.Parser.Char.char '-')
+         <|> pure id
+    a    <-  Text.Parser.Token.scientific
+    return (sign a) ) <?> "double literal"
+
+integerLiteral :: Parser Integer
+integerLiteral = (do
+    let positive = fmap (\_ -> id    ) (Text.Parser.Char.char '+')
+    let negative = fmap (\_ -> negate) (Text.Parser.Char.char '-')
+    sign <- positive <|> negative
+    a <- Text.Parser.Token.natural
+    return (sign a) ) <?> "integer literal"
+
+naturalLiteral :: Parser Natural
+naturalLiteral = (do
+    a <- Text.Parser.Token.natural
+    return (fromIntegral a) ) <?> "natural literal"
+
+identifier :: Parser Var
+identifier = do
+    x <- label
+
+    let indexed = do
+            _ <- Text.Parser.Char.char '@'
+            Text.Parser.Token.natural
+
+    n <- indexed <|> pure 0
+    return (V x n)
 
 whitespaceChunk :: Parser ()
 whitespaceChunk =
