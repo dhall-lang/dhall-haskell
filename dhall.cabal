@@ -210,6 +210,9 @@ Library
         Dhall.TypeCheck
     Other-Modules:
         Dhall.Pretty.Internal,
+        Dhall.Parser.Expression,
+        Dhall.Parser.Combinators,
+        Dhall.Parser.Token,
         Paths_dhall
     GHC-Options: -Wall
     Default-Language: Haskell2010
