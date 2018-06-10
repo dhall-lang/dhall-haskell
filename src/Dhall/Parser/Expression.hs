@@ -733,3 +733,19 @@ toMap kvs = do
         nil = Data.HashMap.Strict.InsOrd.empty
 
         snoc m (k, v) = Data.HashMap.Strict.InsOrd.insertWith combine k v m
+
+env :: Parser ImportType
+env = do
+    _ <- Text.Parser.Char.text "env:"
+    a <- (alternative0 <|> alternative1)
+    whitespace
+    return (Env a)
+  where
+    alternative0 = bashEnvironmentVariable
+
+    alternative1 = do
+        _ <- Text.Parser.Char.char '"'
+        a <- posixEnvironmentVariable
+        _ <- Text.Parser.Char.char '"'
+        return a
+

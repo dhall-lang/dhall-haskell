@@ -284,43 +284,6 @@ http = do
         importHashed_ )
     return (URL prefix path suffix headers)
 
-env :: Parser ImportType
-env = do
-    _ <- Text.Parser.Char.text "env:"
-    a <- (alternative0 <|> alternative1)
-    whitespace
-    return (Env a)
-  where
-    alternative0 = bashEnvironmentVariable
-
-    alternative1 = do
-        _ <- Text.Parser.Char.char '"'
-        a <- posixEnvironmentVariable
-        _ <- Text.Parser.Char.char '"'
-        return a
-
-bashEnvironmentVariable :: Parser Text
-bashEnvironmentVariable = satisfy predicate0 <> star (satisfy predicate1)
-  where
-    predicate0 c = alpha c || c == '_'
-
-    predicate1 c = alpha c || digit c || c == '_'
-
-posixEnvironmentVariable :: Parser Text
-posixEnvironmentVariable = plus posixEnvironmentVariableCharacter
-
-posixEnvironmentVariableCharacter :: Parser Text
-posixEnvironmentVariableCharacter =
-    ("\\" <> satisfy predicate0) <|> satisfy predicate1
-  where
-    predicate0 c = c `elem` ("\"\\abfnrtv" :: String)
-
-    predicate1 c =
-            ('\x20' <= c && c <= '\x21')
-        ||  ('\x23' <= c && c <= '\x3C')
-        ||  ('\x3E' <= c && c <= '\x5B')
-        ||  ('\x5D' <= c && c <= '\x7E')
-
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Import)
 expr = exprA import_
@@ -349,7 +312,7 @@ importHashed_ = do
             Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
         case Crypto.Hash.digestFromByteString strictBytes of
           Nothing -> fail "Invalid sha256 hash"
-          Just h -> pure h
+          Just h  -> pure h
 
 import_ :: Parser Import
 import_ = (do

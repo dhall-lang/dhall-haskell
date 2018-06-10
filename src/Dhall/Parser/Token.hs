@@ -181,6 +181,28 @@ label = (do
     whitespace
     return t ) <?> "label"
 
+bashEnvironmentVariable :: Parser Text
+bashEnvironmentVariable = satisfy predicate0 <> star (satisfy predicate1)
+  where
+    predicate0 c = alpha c || c == '_'
+
+    predicate1 c = alpha c || digit c || c == '_'
+
+posixEnvironmentVariable :: Parser Text
+posixEnvironmentVariable = plus posixEnvironmentVariableCharacter
+
+posixEnvironmentVariableCharacter :: Parser Text
+posixEnvironmentVariableCharacter =
+    ("\\" <> satisfy predicate0) <|> satisfy predicate1
+  where
+    predicate0 c = c `elem` ("\"\\abfnrtv" :: String)
+
+    predicate1 c =
+            ('\x20' <= c && c <= '\x21')
+        ||  ('\x23' <= c && c <= '\x3C')
+        ||  ('\x3E' <= c && c <= '\x5B')
+        ||  ('\x5D' <= c && c <= '\x7E')
+
 reserved :: Data.Text.Text -> Parser ()
 reserved x = do _ <- Text.Parser.Char.text x; whitespace
 
