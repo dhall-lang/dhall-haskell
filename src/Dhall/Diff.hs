@@ -1110,7 +1110,7 @@ diffExprF l@(IntegerLit {}) r =
 diffExprF l r@(IntegerLit {}) =
     mismatch l r
 diffExprF (NaturalLit aL) (NaturalLit aR) =
-    token (Internal.literal "+") <> diffNatural aL aR
+    diffNatural aL aR
 diffExprF l@(NaturalLit {}) r =
     mismatch l r
 diffExprF l r@(NaturalLit {}) =
