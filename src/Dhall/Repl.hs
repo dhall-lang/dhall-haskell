@@ -2,7 +2,7 @@
 {-# language NamedFieldPuns #-}
 {-# language OverloadedStrings #-}
 
-module Main ( main ) where
+module Dhall.Repl ( repl ) where
 
 import Control.Exception ( SomeException(SomeException), displayException, throwIO )
 import Control.Monad.IO.Class ( MonadIO, liftIO )
@@ -13,6 +13,7 @@ import Data.List ( foldl' )
 import qualified Data.Text as Text
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
+import qualified Dhall
 import qualified Dhall.Context
 import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize )
 import qualified Dhall.Pretty
@@ -26,22 +27,25 @@ import qualified System.Console.Repline as Repline
 import qualified System.IO
 
 
-main :: IO ()
-main =
-  evalStateT
-    ( Repline.evalRepl
-        "⊢ "
-        ( dontCrash . eval )
-        options
+repl :: Bool -> IO ()
+repl explain = if explain then Dhall.detailed io else io
+  where
+    io =
+      evalStateT
+        ( Repline.evalRepl
+            "⊢ "
+            ( dontCrash . eval )
+            options
         ( Repline.Word completer )
-        greeter
-    )
-    emptyEnv
+            greeter
+        )
+        (emptyEnv { explain })
 
 
 data Env = Env
   { envBindings :: Dhall.Context.Context Binding
   , envIt :: Maybe Binding
+  , explain :: Bool
   }
 
 
@@ -50,6 +54,7 @@ emptyEnv =
   Env
     { envBindings = Dhall.Context.empty
     , envIt = Nothing
+    , explain = False
     }
 
 
@@ -146,9 +151,11 @@ typeCheck expr = do
   env <-
     get
 
+  let wrap = if explain env then Dhall.detailed else id
+
   case Dhall.typeWith ( bindingType <$> envToContext env ) expr of
     Left e ->
-      liftIO ( throwIO e )
+      liftIO ( wrap (throwIO e) )
 
     Right a ->
       return a
