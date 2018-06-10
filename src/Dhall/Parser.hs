@@ -66,53 +66,6 @@ import Dhall.Parser.Combinators
 import Dhall.Parser.Token
 import Dhall.Parser.Expression
 
-localRaw :: Parser ImportType
-localRaw =
-    choice
-        [ parentPath
-        , herePath
-        , homePath
-        , try absolutePath
-        ]
-  where
-    parentPath = do
-        _    <- ".." :: Parser Text
-        File (Directory segments) final <- file_
-
-        return (Local Here (File (Directory (segments ++ [".."])) final))
-
-    herePath = do
-        _    <- "." :: Parser Text
-        file <- file_
-
-        return (Local Here file)
-
-    homePath = do
-        _    <- "~" :: Parser Text
-        file <- file_
-
-        return (Local Home file)
-
-    absolutePath = do
-        file <- file_
-
-        return (Local Absolute file)
-
-local :: Parser ImportType
-local = do
-    a <- localRaw
-    whitespace
-    return a
-
-http :: Parser ImportType
-http = do
-    (prefix, path, suffix) <- httpRaw
-    whitespace
-    headers <- optional (do
-        _using
-        importHashed_ )
-    return (URL prefix path suffix headers)
-
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Import)
 expr = exprA import_
@@ -121,38 +74,6 @@ expr = exprA import_
 -- over any parseable type, allowing the language to be extended as needed.
 exprA :: Parser a -> Parser (Expr Src a)
 exprA = completeExpression
-
-importType_ :: Parser ImportType
-importType_ = choice [ local, http, env ]
-
-importHashed_ :: Parser ImportHashed
-importHashed_ = do
-    importType <- importType_
-    hash       <- optional importHash_
-    return (ImportHashed {..})
-  where
-    importHash_ = do
-        _ <- Text.Parser.Char.text "sha256:"
-        text <- count 64 (satisfy hexdig <?> "hex digit")
-        whitespace
-        let strictBytes16 = Data.Text.Encoding.encodeUtf8 text
-        strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
-            Left  string      -> fail string
-            Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
-        case Crypto.Hash.digestFromByteString strictBytes of
-          Nothing -> fail "Invalid sha256 hash"
-          Just h  -> pure h
-
-import_ :: Parser Import
-import_ = (do
-    importHashed <- importHashed_
-    importMode   <- alternative <|> pure Code
-    return (Import {..}) ) <?> "import"
-  where
-    alternative = do
-        _as
-        _Text
-        return RawText
 
 -- | A parsing error
 data ParseError = ParseError
