@@ -15,20 +15,23 @@ module Dhall.Diff (
     , Dhall.Diff.diff
     ) where
 
-import Data.Foldable (fold)
+import Data.Foldable (fold, toList)
+import Data.Function (on)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (Any(..))
 import Data.Scientific (Scientific)
 import Data.Semigroup
+import Data.Sequence (Seq)
 import Data.Set (Set)
 import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Data.List.NonEmpty (NonEmpty(..))
 import Dhall.Core (Const(..), Expr(..), Var(..))
 import Dhall.Pretty.Internal (Ann)
 import Numeric.Natural (Natural)
 
+import qualified Data.Algorithm.Diff        as Algo.Diff
 import qualified Data.HashMap.Strict.InsOrd as HashMap
 import qualified Data.List.NonEmpty
 import qualified Data.Set
@@ -157,7 +160,7 @@ diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
 diff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
 diff l0 r0 = doc
   where
-    Diff {..} = diffExprA l0 r0
+    Diff {..} = diffExprA l0 r0 <> hardline
 
 diffPrimitive :: Eq a => (a -> Diff) -> a -> a -> Diff
 diffPrimitive f l r
@@ -284,6 +287,41 @@ braced = enclosed (lbrace <> " ") (comma <> " ") rbrace
 
 angled :: [Diff] -> Diff
 angled = enclosed (langle <> " ") (pipe <> " ") rangle
+
+bracketed :: [Diff] -> Diff
+bracketed = enclosed (lbracket <> " ") (comma <> " ") rbracket
+
+diffList
+    :: Pretty a
+    => Seq (Expr s a) -> Seq (Expr s a) -> Diff
+diffList l r
+  | allDifferent = difference listSkeleton listSkeleton
+  | otherwise    = bracketed (foldMap diffPart parts)
+  where
+    -- Sections of the list that are only in left, only in right, or in both
+    parts =
+        Algo.Diff.getGroupedDiffBy ((same .) . diffExprA) (toList l) (toList r)
+
+    listSkeleton = lbracket <> " " <> ignore <> " " <> rbracket
+
+    -- All the elements of the two lists are different
+    allDifferent = not $ any isBoth parts
+      where
+        isBoth p
+          | Algo.Diff.Both _ _ <- p = True
+          | otherwise               = False
+
+    -- Render a each element of a list using an extra rendering function
+    prettyElems f = map (f . token . Internal.prettyExpr)
+
+    diffPart part =
+      case part of
+        -- Only present in left
+        Algo.Diff.First  elements -> prettyElems minus elements
+        -- Only present in right
+        Algo.Diff.Second elements -> prettyElems plus  elements
+        -- Present in both
+        Algo.Diff.Both _ _        -> pure ignore
 
 diffRecord
     :: Pretty a
@@ -634,9 +672,11 @@ diffExprB l@(Let {}) r =
     mismatch l r
 diffExprB l r@(Let {}) =
     mismatch l r
--- TODO: Implement proper list diff
-diffExprB l@(ListLit {}) r@(ListLit {}) =
-    mismatch l r
+diffExprB (ListLit aL bL) (ListLit aR bR) = align doc
+  where
+    doc =   format " " (diffList bL bR)
+        <>  format " " (diffMaybe (colon <> " ") (diffExprA `on` App List) aL aR)
+
 diffExprB l@(ListLit {}) r =
     mismatch l r
 diffExprB l r@(ListLit {}) =
@@ -1070,7 +1110,7 @@ diffExprF l@(IntegerLit {}) r =
 diffExprF l r@(IntegerLit {}) =
     mismatch l r
 diffExprF (NaturalLit aL) (NaturalLit aR) =
-    token (Internal.literal "+") <> diffNatural aL aR
+    diffNatural aL aR
 diffExprF l@(NaturalLit {}) r =
     mismatch l r
 diffExprF l r@(NaturalLit {}) =

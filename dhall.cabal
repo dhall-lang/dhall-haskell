@@ -165,8 +165,9 @@ Library
         containers                  >= 0.5.0.0  && < 0.6 ,
         contravariant                              < 1.5 ,
         cryptonite                  >= 0.23     && < 1.0 ,
-        exceptions                  >= 0.8.3    && < 0.11,
+        Diff                        >= 0.2      && < 0.4 ,
         directory                   >= 1.3      && < 1.4 ,
+        exceptions                  >= 0.8.3    && < 0.11,
         filepath                    >= 1.4      && < 1.5 ,
         formatting                  >= 6.3      && < 6.4 ,
         haskeline                   >= 0.7.3.0  && < 0.8 ,
@@ -209,12 +210,14 @@ Library
         Dhall.Pretty.Internal,
         Paths_dhall
     GHC-Options: -Wall
+    Default-Language: Haskell2010
 
 Executable dhall
     Hs-Source-Dirs: dhall
     Main-Is: Main.hs
     Build-Depends: base, dhall
     GHC-Options: -Wall
+    Default-Language: Haskell2010
 
 Executable dhall-format
     Hs-Source-Dirs: dhall-format
@@ -229,6 +232,7 @@ Executable dhall-format
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
         text                        >= 0.11.1.0 && < 1.3
     GHC-Options: -Wall
+    Default-Language: Haskell2010
     Other-Modules:
         Paths_dhall
 
@@ -242,6 +246,7 @@ Executable dhall-hash
         text                 >= 0.11.1.0 && < 1.3
     Other-Modules:
         Paths_dhall
+    Default-Language: Haskell2010
 
 Test-Suite tasty
     Type: exitcode-stdio-1.0
@@ -266,6 +271,7 @@ Test-Suite tasty
         tasty-hunit               >= 0.9.2    && < 0.11,
         text                      >= 0.11.1.0 && < 1.3 ,
         vector                    >= 0.11.0.0 && < 0.13
+    Default-Language: Haskell2010
 
 Test-Suite doctest
     Type: exitcode-stdio-1.0
@@ -275,6 +281,7 @@ Test-Suite doctest
     Build-Depends:
         base                      ,
         doctest >= 0.7.0 && < 0.16
+    Default-Language: Haskell2010
 
 Benchmark dhall-parser
     Type: exitcode-stdio-1.0
@@ -286,6 +293,7 @@ Benchmark dhall-parser
         dhall                                         ,
         directory                 >= 1.3      && < 1.4,
         text                      >= 0.11.1.0 && < 1.3
+    Default-Language: Haskell2010
 
 Benchmark deep-nested-large-record
     Type: exitcode-stdio-1.0
@@ -295,3 +303,4 @@ Benchmark deep-nested-large-record
         containers                >= 0.5.0.0  && < 0.6,
         criterion                 >= 1.1      && < 1.5,
         dhall
+    Default-Language: Haskell2010
