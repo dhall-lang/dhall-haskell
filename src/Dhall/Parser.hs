@@ -18,6 +18,8 @@ module Dhall.Parser (
     , Src(..)
     , ParseError(..)
     , Parser(..)
+    , module Dhall.Parser.Expression
+    , module Dhall.Parser.Token
     , module Dhall.Parser.Combinators
     ) where
 
