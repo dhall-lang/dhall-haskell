@@ -10,7 +10,7 @@ module Dhall.Main
     , main
     ) where
 
-import Control.Applicative ((<|>))
+import Control.Applicative ((<|>), optional)
 import Control.Exception (Exception, SomeException)
 import Data.Monoid (mempty, (<>))
 import Data.Text.Prettyprint.Doc (Pretty)
@@ -43,7 +43,7 @@ data Options = Options
     , plain   :: Bool
     }
 
-data Mode = Default | Version | Resolve | Type | Normalize | Hash
+data Mode = Default | Version | Resolve | Type | Normalize | Hash | Format (Maybe FilePath)
 
 parseOptions :: Parser Options
 parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
@@ -67,8 +67,27 @@ parseMode =
     <|> subcommand "type"      "Infer an expression's type"            Type
     <|> subcommand "normalize" "Normalize an expression"               Normalize
     <|> subcommand "hash"      "Compute an expression's semantic hash" Hash
+    <|> formatSubcommand
     <|> pure Default
   where
+    formatSubcommand =
+        Options.Applicative.hsubparser
+            (   Options.Applicative.command "format" parserInfo
+            <>  Options.Applicative.metavar "format"
+            )
+      where parserInfo =
+                Options.Applicative.info parserWithHelper
+                    (   Options.Applicative.fullDesc
+                    <>  Options.Applicative.progDesc "Formatter for the Dhall language"
+                    )
+            parserWithHelper = Options.Applicative.helper <*> parser
+            parser = Format <$> optional parseInplace
+            parseInplace =
+                Options.Applicative.strOption
+                    (   Options.Applicative.long "inplace"
+                    <>  Options.Applicative.help "Modify FILE in-place"
+                    <>  Options.Applicative.metavar "FILE"
+                    )
     subcommand name description mode =
         Options.Applicative.subparser
             (   Options.Applicative.command name parserInfo
@@ -221,6 +240,40 @@ command (Options {..}) = do
                 Right _   -> return ()
 
             Data.Text.IO.putStrLn (hashExpressionToCode (Dhall.Core.normalize expr'))
+        Format inplace -> do
+            case inplace of
+                Just file -> do
+                    text <- Data.Text.IO.readFile file
+                    (header, expr) <- case Dhall.Parser.exprAndHeaderFromText "(stdin)" text of
+                        Left  err -> Control.Exception.throwIO err
+                        Right x   -> return x
+
+                    let doc = Pretty.pretty header <> Pretty.pretty expr
+                    System.IO.withFile file System.IO.WriteMode (\fileHandle -> do
+                        Pretty.renderIO fileHandle (Pretty.layoutSmart opts doc)
+                        Data.Text.IO.hPutStrLn fileHandle "" )
+                Nothing -> do
+                    System.IO.hSetEncoding System.IO.stdin System.IO.utf8
+                    inText <- Data.Text.IO.getContents
+
+                    (header, expr) <- case Dhall.Parser.exprAndHeaderFromText "(stdin)" inText of
+                        Left  err -> Control.Exception.throwIO err
+                        Right x   -> return x
+
+                    let doc = Pretty.pretty header <> prettyExpr expr
+
+                    supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
+
+                    if supportsANSI
+                      then
+                        Pretty.renderIO
+                          System.IO.stdout
+                          (fmap annToAnsiStyle (Pretty.layoutSmart opts doc))
+                      else
+                        Pretty.renderIO
+                          System.IO.stdout
+                          (Pretty.layoutSmart opts (Pretty.unAnnotate doc))
+                    Data.Text.IO.putStrLn ""
 
 main :: IO ()
 main = do
