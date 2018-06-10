@@ -48,13 +48,20 @@ data Options = Options
     { mode    :: Mode
     , explain :: Bool
     , plain   :: Bool
-    , inplace :: Maybe FilePath
     }
 
-data Mode = Default | Version | Resolve | Type | Normalize | Repl | Format | Hash | Diff Text Text
+data Mode = Default | Version | Resolve | Type | Normalize | Repl | Format (Maybe FilePath) | Hash | Diff Text Text
+
+parseInplace :: Parser String
+parseInplace =
+        Options.Applicative.strOption
+        (   Options.Applicative.long "inplace"
+        <>  Options.Applicative.help "Modify the specified file in-place"
+        <>  Options.Applicative.metavar "FILE"
+        )
 
 parseOptions :: Parser Options
-parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain <*> optional parseInplace
+parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
   where
     parseExplain =
         Options.Applicative.switch
@@ -68,12 +75,6 @@ parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain <*> optiona
             <>  Options.Applicative.help "Disable syntax highlighting"
             )
 
-    parseInplace =
-        Options.Applicative.strOption
-        (   Options.Applicative.long "inplace"
-        <>  Options.Applicative.help "Modify the specified file in-place"
-        <>  Options.Applicative.metavar "FILE"
-        )
 
 parseMode :: Parser Mode
 parseMode =
@@ -83,8 +84,8 @@ parseMode =
     <|> subcommand "normalize" "Normalize an expression"         (pure Normalize)
     <|> subcommand "repl"      "Interpret expressions in a REPL" (pure Repl)
     <|> subcommand "diff"      "Render the difference between the normal form of two expressions" diffParser
-    <|> subcommand "format"    "Format a dhall expression"       (pure Format)
     <|> subcommand "hash"      "Compute semantic hashes for Dhall expressions" (pure Hash)
+    <|> formatSubcommand
     <|> pure Default
   where
     subcommand name description modeParser =
@@ -109,6 +110,19 @@ parseMode =
                 fmap Data.Text.pack
             .   Options.Applicative.strArgument
             .   Options.Applicative.metavar
+
+    formatSubcommand =
+        Options.Applicative.hsubparser
+            (   Options.Applicative.command "format" parserInfo
+            <>  Options.Applicative.metavar "format"
+            )
+      where parserInfo =
+                Options.Applicative.info parserWithHelper
+                    (   Options.Applicative.fullDesc
+                    <>  Options.Applicative.progDesc "Formatter for the Dhall language"
+                    )
+            parserWithHelper = Options.Applicative.helper <*> parser
+            parser = Format <$> optional parseInplace
 
 opts :: Pretty.LayoutOptions
 opts =
@@ -247,7 +261,7 @@ command (Options {..}) = do
 
             Pretty.hPutDoc System.IO.stdout prettyDiff
 
-        Format -> do
+        Format inplace -> do
             Dhall.Format.format inplace
 
         Hash -> do
