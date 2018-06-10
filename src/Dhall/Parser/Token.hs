@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Parse Dhall tokens. Even though we don't have a tokenizer per-se this
 ---  module is useful for keeping some small parsing utilities.
@@ -202,6 +203,35 @@ posixEnvironmentVariableCharacter =
         ||  ('\x23' <= c && c <= '\x3C')
         ||  ('\x3E' <= c && c <= '\x5B')
         ||  ('\x5D' <= c && c <= '\x7E')
+
+pathCharacter :: Char -> Bool
+pathCharacter c =
+        ('\x21' <= c && c <= '\x22')
+    ||  ('\x24' <= c && c <= '\x27')
+    ||  ('\x2A' <= c && c <= '\x2B')
+    ||  ('\x2D' <= c && c <= '\x2E')
+    ||  ('\x30' <= c && c <= '\x3B')
+    ||  c == '\x3D'
+    ||  ('\x40' <= c && c <= '\x5A')
+    ||  ('\x5E' <= c && c <= '\x7A')
+    ||  c == '\x7C'
+    ||  c == '\x7E'
+
+pathComponent :: Parser Text
+pathComponent = do
+    _      <- "/" :: Parser Text
+    string <- some (Text.Parser.Char.satisfy pathCharacter)
+
+    return (Data.Text.pack string)
+
+file_ :: Parser File
+file_ = do
+    path <- Data.List.NonEmpty.some1 pathComponent
+
+    let directory = Directory (reverse (Data.List.NonEmpty.init path))
+    let file      = Data.List.NonEmpty.last path
+
+    return (File {..})
 
 reserved :: Data.Text.Text -> Parser ()
 reserved x = do _ <- Text.Parser.Char.text x; whitespace
