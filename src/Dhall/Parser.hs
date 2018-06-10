@@ -1,9 +1,4 @@
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DeriveDataTypeable         #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecordWildCards            #-}
-
 -- | This module contains Dhall's parsing logic
 
 module Dhall.Parser (
