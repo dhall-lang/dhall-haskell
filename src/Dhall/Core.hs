@@ -180,19 +180,18 @@ instance Semigroup ImportType where
 
 instance Buildable ImportType where
     build (Local prefix file) =
-        build prefix <> build file <> " "
+        build prefix <> build file
 
     build (URL prefix file suffix headers) =
             build prefix
         <>  build file
         <>  build suffix
         <>  foldMap buildHeaders headers
-        <>  " "
       where
         buildHeaders h = " using " <> build h
 
     build (Env env) =
-        "env:" <> build env <> " "
+        "env:" <> build env
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
 data ImportMode = Code | RawText deriving (Eq, Ord, Show)
