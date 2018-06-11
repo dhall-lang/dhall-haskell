@@ -25,6 +25,7 @@ module Dhall.TH where
 
 import Control.Monad
 import Data.Typeable
+import Language.Haskell.TH.Quote (dataToExpQ) -- 7.10 compatibility.
 import Language.Haskell.TH.Syntax
 
 import qualified Data.Text as Text
