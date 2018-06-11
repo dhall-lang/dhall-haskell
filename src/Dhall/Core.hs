@@ -72,7 +72,6 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Traversable
 import {-# SOURCE #-} Dhall.Pretty.Internal
-import Formatting.Buildable (Buildable(..))
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 
@@ -83,7 +82,6 @@ import qualified Data.HashSet
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
-import qualified Data.Text.Lazy.Builder     as Builder
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 
 {-| Constants for a pure type system
@@ -105,9 +103,6 @@ import qualified Data.Text.Prettyprint.Doc  as Pretty
 -}
 data Const = Type | Kind deriving (Show, Eq, Data, Bounded, Enum)
 
-instance Buildable Const where
-    build = Builder.fromText . buildConst
-
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
 
@@ -124,11 +119,11 @@ instance Semigroup Directory where
     Directory components₀ <> Directory components₁ =
         Directory (components₁ <> components₀)
 
-instance Buildable Directory where
-    build (Directory {..}) =
-        foldMap buildComponent (reverse components)
+instance Pretty Directory where
+    pretty (Directory {..}) =
+        foldMap prettyComponent (reverse components)
       where
-        buildComponent text = "/" <> build text
+        prettyComponent text = "/" <> Pretty.pretty text
 
 {-| A `File` is a `directory` followed by one additional path component
     representing the `file` name
@@ -138,8 +133,8 @@ data File = File
     , file      :: Text
     } deriving (Eq, Ord, Show)
 
-instance Buildable File where
-    build (File {..}) = build directory <> "/" <> build file
+instance Pretty File where
+    pretty (File {..}) = Pretty.pretty directory <> "/" <> Pretty.pretty file
 
 instance Semigroup File where
     File directory₀ _ <> File directory₁ file =
@@ -154,10 +149,10 @@ data FilePrefix
     -- ^ Path relative to @~@
     deriving (Eq, Ord, Show)
 
-instance Buildable FilePrefix where
-    build Absolute = ""
-    build Here     = "."
-    build Home     = "~"
+instance Pretty FilePrefix where
+    pretty Absolute = ""
+    pretty Here     = "."
+    pretty Home     = "~"
 
 -- | The type of import (i.e. local vs. remote vs. environment)
 data ImportType
@@ -178,20 +173,19 @@ instance Semigroup ImportType where
     _ <> import₁ =
         import₁
 
-instance Buildable ImportType where
-    build (Local prefix file) =
-        build prefix <> build file
+instance Pretty ImportType where
+    pretty (Local prefix file) =
+        Pretty.pretty prefix <> Pretty.pretty file
 
-    build (URL prefix file suffix headers) =
-            build prefix
-        <>  build file
-        <>  build suffix
-        <>  foldMap buildHeaders headers
+    pretty (URL prefix file suffix headers) =
+            Pretty.pretty prefix
+        <>  Pretty.pretty file
+        <>  Pretty.pretty suffix
+        <>  foldMap prettyHeaders headers
       where
-        buildHeaders h = " using " <> build h
+        prettyHeaders h = " using " <> Pretty.pretty h
 
-    build (Env env) =
-        "env:" <> build env
+    pretty (Env env) = "env:" <> Pretty.pretty env
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
 data ImportMode = Code | RawText deriving (Eq, Ord, Show)
@@ -206,11 +200,11 @@ instance Semigroup ImportHashed where
     ImportHashed _ importType₀ <> ImportHashed hash importType₁ =
         ImportHashed hash (importType₀ <> importType₁)
 
-instance Buildable ImportHashed where
-    build (ImportHashed  Nothing p) =
-      build p
-    build (ImportHashed (Just h) p) =
-      build p <> "sha256:" <> build (show h) <> " "
+instance Pretty ImportHashed where
+    pretty (ImportHashed  Nothing p) =
+      Pretty.pretty p
+    pretty (ImportHashed (Just h) p) =
+      Pretty.pretty p <> "sha256:" <> Pretty.pretty (show h) <> " "
 
 -- | Reference to an external resource
 data Import = Import
@@ -222,15 +216,13 @@ instance Semigroup Import where
     Import importHashed₀ _ <> Import importHashed₁ code =
         Import (importHashed₀ <> importHashed₁) code
 
-instance Buildable Import where
-    build (Import {..}) = build importHashed <> suffix
+instance Pretty Import where
+    pretty (Import {..}) = Pretty.pretty importHashed <> Pretty.pretty suffix
       where
+        suffix :: Text
         suffix = case importMode of
             RawText -> "as Text"
             Code    -> ""
-
-instance Pretty Import where
-    pretty import_ = Pretty.pretty (Builder.toLazyText (build import_))
 
 -- | Type synonym for `Import`, provided for backwards compatibility
 type Path = Import
@@ -275,8 +267,8 @@ data Var = V Text !Integer
 instance IsString Var where
     fromString str = V (fromString str) 0
 
-instance Buildable Var where
-    build = Builder.fromText . buildVar
+instance Pretty Var where
+    pretty = Pretty.unAnnotate . prettyVar
 
 -- | Syntax tree for expressions
 data Expr s a
@@ -580,9 +572,6 @@ instance IsString (Chunks s a) where
 -}
 
 -- | Generates a syntactically valid Dhall program
-instance Buildable a => Buildable (Expr s a) where
-    build = Builder.fromText . buildExpr
-
 instance Pretty a => Pretty (Expr s a) where
     pretty = Pretty.unAnnotate . prettyExpr
 
@@ -1376,12 +1365,12 @@ normalizeWith ctx e0 = loop (denote e0)
             App NaturalOdd (NaturalLit n) -> BoolLit (odd n)
             App NaturalToInteger (NaturalLit n) -> IntegerLit (toInteger n)
             App NaturalShow (NaturalLit n) ->
-                TextLit (Chunks [] (buildNatural n))
+                TextLit (Chunks [] (Data.Text.pack (show n)))
             App IntegerShow (IntegerLit n)
-                | 0 <= n    -> TextLit (Chunks [] ("+" <> buildNumber n))
-                | otherwise -> TextLit (Chunks [] (buildNumber n))
+                | 0 <= n    -> TextLit (Chunks [] ("+" <> Data.Text.pack (show n)))
+                | otherwise -> TextLit (Chunks [] (Data.Text.pack (show n)))
             App DoubleShow (DoubleLit n) ->
-                TextLit (Chunks [] (buildScientific n))
+                TextLit (Chunks [] (Data.Text.pack (show n)))
             App (App OptionalBuild _A₀) g ->
                 loop (App (App (App g optional) just) nothing)
               where

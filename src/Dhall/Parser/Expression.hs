@@ -787,23 +787,23 @@ import_ = (do
         _Text
         return RawText
 
--- | Similar to `Dhall.Core.buildChunks` except that this doesn't bother to
+-- | Similar to `Dhall.Core.renderChunks` except that this doesn't bother to
 -- render interpolated expressions to avoid a `Buildable a` constraint.  The
 -- interpolated contents are not necessary for computing how much to dedent a
 -- multi-line string
 --
 -- This also doesn't include the surrounding quotes since they would interfere
 -- with the whitespace detection
-buildChunks :: Chunks s a -> Text
-buildChunks (Chunks a b) = foldMap buildChunk a <> escapeText b
+renderChunks :: Chunks s a -> Text
+renderChunks (Chunks a b) = foldMap renderChunk a <> escapeText b
   where
-    buildChunk :: (Text, Expr s a) -> Text
-    buildChunk (c, _) = escapeText c <> "${x}"
+    renderChunk :: (Text, Expr s a) -> Text
+    renderChunk (c, _) = escapeText c <> "${x}"
 
 dedent :: Chunks Src a -> Chunks Src a
 dedent chunks0 = process chunks0
   where
-    text0 = buildChunks chunks0
+    text0 = renderChunks chunks0
 
     lines0 = Data.Text.lines text0
 

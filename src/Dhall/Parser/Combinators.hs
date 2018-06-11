@@ -15,8 +15,8 @@ import           Data.Sequence              (ViewL (..))
 import           Data.Set                   (Set)
 import           Data.String                (IsString (..))
 import           Data.Text                  (Text)
+import           Data.Text.Prettyprint.Doc  (Pretty (..))
 import           Data.Void                  (Void)
-import           Formatting.Buildable       (Buildable (..))
 import           Prelude                    hiding (const, pi)
 import           Text.Parser.Combinators    (try, (<?>))
 import           Text.Parser.Token          (TokenParsing (..))
@@ -37,11 +37,11 @@ import qualified Text.Parser.Token.Style
 data Src = Src Text.Megaparsec.SourcePos Text.Megaparsec.SourcePos Text
   deriving (Data, Eq, Show)
 
-instance Buildable Src where
-    build (Src begin _ text) =
-            build text <> "\n"
+instance Pretty Src where
+    pretty (Src begin _ text) =
+            pretty text <> "\n"
         <>  "\n"
-        <>  build (Text.Megaparsec.sourcePosPretty begin)
+        <>  pretty (Text.Megaparsec.sourcePosPretty begin)
         <>  "\n"
 
 {-| A `Parser` that is almost identical to
