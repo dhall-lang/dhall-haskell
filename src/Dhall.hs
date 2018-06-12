@@ -82,7 +82,6 @@ import Dhall.Core (Expr(..), Chunks(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
-import Formatting.Buildable (Buildable(..))
 import GHC.Generics
 import Numeric.Natural (Natural)
 import Prelude hiding (maybe, sequence)
@@ -98,12 +97,12 @@ import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Builder
 import qualified Data.Vector
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
+import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 
 -- $setup
@@ -175,11 +174,7 @@ inputWith
 inputWith (Type {..}) ctx n txt = do
     expr  <- throws (Dhall.Parser.exprFromText "(input)" txt)
     expr' <- Dhall.Import.loadWithContext ctx n expr
-    let suffix =
-            ( Data.Text.Lazy.toStrict
-            . Data.Text.Lazy.Builder.toLazyText
-            . build
-            ) expected
+    let suffix = Dhall.Pretty.Internal.prettyToStrictText expected
     let annot = case expr' of
             Note (Src begin end bytes) _ ->
                 Note (Src begin end bytes') (Annot expr' expected)
