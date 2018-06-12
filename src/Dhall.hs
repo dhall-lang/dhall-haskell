@@ -19,8 +19,10 @@ module Dhall
     (
     -- * Input
       input
+    , inputFromFile
     , inputWith
     , inputExpr
+    , inputExprFromFile
     , inputExprWith
     , detailed
 
@@ -96,6 +98,7 @@ import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
+import qualified Data.Text.IO as TIO
 import qualified Data.Text.Lazy
 import qualified Data.Vector
 import qualified Dhall.Context
@@ -158,6 +161,15 @@ input
 input ty txt =
   inputWith ty Dhall.Context.empty (const Nothing) txt
 
+inputFromFile
+    :: Type a
+    -- ^ The type of the value to decode from Dhall to Haskell
+    -> FilePath
+    -- ^ The path to the file containing the Dhall program
+    -> IO a
+    -- ^ The decoded value in Haskell
+inputFromFile ty path = TIO.readFile path >>= input ty
+
 {-| Extend 'input' with a custom typing context and normalization process.
 
 -}
@@ -197,7 +209,17 @@ inputExpr
     -- ^ The fully normalized AST
 inputExpr = inputExprWith Dhall.Context.empty (const Nothing)
 
-{-| Extend `inputExpr` with a custom typing context and normalization process.
+{-| `inputExpr` but read the Dhall expression from a file.
+-}
+inputExprFromFile
+    :: FilePath
+    -- ^ The path to the file containing the Dhall program
+    -> IO (Expr Src X)
+    -- ^ The fully normalized AST
+inputExprFromFile path = TIO.readFile path >>= inputExpr
+
+
+{-| `inputExpr` with a custom typing context and normalization process.
 -}
 inputExprWith
     :: Dhall.Context.Context (Expr Src X)
