@@ -255,6 +255,7 @@ Test-Suite doctest
     GHC-Options: -Wall
     Build-Depends:
         base                      ,
+        Diff    >= 0.2   && < 0.4 ,
         doctest >= 0.7.0 && < 0.16
     Default-Language: Haskell2010
 
