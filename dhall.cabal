@@ -209,6 +209,7 @@ Library
         Dhall.Core,
         Dhall.Diff,
         Dhall.Format,
+        Dhall.Freeze,
         Dhall.Hash,
         Dhall.Import,
         Dhall.Lint,

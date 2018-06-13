@@ -36,6 +36,7 @@ import qualified Dhall
 import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Format
+import qualified Dhall.Freeze
 import qualified Dhall.Hash
 import qualified Dhall.Lint
 import qualified Dhall.Parser
@@ -59,6 +60,7 @@ data Mode
     | Normalize
     | Repl
     | Format (Maybe FilePath)
+    | Freeze (Maybe FilePath)
     | Hash
     | Diff Text Text
     | Lint (Maybe FilePath)
@@ -98,6 +100,7 @@ parseMode =
     <|> subcommand "hash"      "Compute semantic hashes for Dhall expressions" (pure Hash)
     <|> subcommand "lint"      "Improve Dhall code"              parseLint
     <|> formatSubcommand
+    <|> freezeSubcommand
     <|> pure Default
   where
     subcommand name description modeParser =
@@ -138,6 +141,19 @@ parseMode =
                     )
             parserWithHelper = Options.Applicative.helper <*> parser
             parser = Format <$> optional parseInplace
+
+    freezeSubcommand =
+        Options.Applicative.hsubparser
+            (   Options.Applicative.command "freeze" parserInfo
+            <>  Options.Applicative.metavar "freeze"
+            )
+      where parserInfo =
+                Options.Applicative.info parserWithHelper
+                    (   Options.Applicative.fullDesc
+                    <>  Options.Applicative.progDesc "Add hashes to all import statements of an expression"
+                    )
+            parserWithHelper = Options.Applicative.helper <*> parser
+            parser = Freeze <$> optional parseInplace
 
 opts :: Pretty.LayoutOptions
 opts =
@@ -278,6 +294,9 @@ command (Options {..}) = do
 
         Format inplace -> do
             Dhall.Format.format inplace
+
+        Freeze inplace -> do
+            Dhall.Freeze.freeze inplace
 
         Hash -> do
             Dhall.Hash.hash 
