@@ -139,6 +139,9 @@ parserTests =
             , shouldParse
                 "a parenthesized custom header import"
                 "./tests/parser/parenthesizeUsing.dhall"
+            , shouldNotParse
+                "accessing a field of an import without parentheses"
+                "./tests/parser/failure/importAccess.dhall"
             ]
         ]
 
