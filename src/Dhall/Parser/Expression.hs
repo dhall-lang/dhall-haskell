@@ -267,6 +267,7 @@ primitiveExpression embedded =
                 , alternative13
                 , alternative14
                 , alternative15
+                , alternativeIntegerToDouble
                 , alternative16
                 , alternative17
                 , alternative18
@@ -352,6 +353,10 @@ primitiveExpression embedded =
     alternative15 = do
         _IntegerShow
         return IntegerShow
+
+    alternativeIntegerToDouble = do
+        _IntegerToDouble
+        return IntegerToDouble
 
     alternative16 = do
         _DoubleShow
@@ -752,7 +757,7 @@ http = do
     whitespace
     headers <- optional (do
         _using
-        importHashed_ )
+        (importHashed_ <|> (_openParens *> importHashed_ <* _closeParens)) )
     return (URL prefix path suffix headers)
 
 importType_ :: Parser ImportType
