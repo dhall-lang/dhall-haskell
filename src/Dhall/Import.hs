@@ -127,13 +127,11 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import Data.Semigroup (sconcat, (<>))
 import Data.Text (Text)
-import Data.Text.Lazy.Builder (Builder)
 #if MIN_VERSION_base(4,8,0)
 #else
 import Data.Traversable (traverse)
 #endif
 import Data.Typeable (Typeable)
-import Formatting.Buildable (build)
 import System.FilePath ((</>))
 import Dhall.Core
     ( Expr(..)
@@ -146,6 +144,7 @@ import Dhall.Core
     , ImportMode(..)
     , Import(..)
     )
+
 import Dhall.Parser (Parser(..), ParseError(..), Src(..))
 import Dhall.TypeCheck (X(..))
 import Lens.Family (LensLike')
@@ -157,34 +156,31 @@ import Network.HTTP.Client
 import Network.HTTP.Client (HttpException(..), Manager)
 #endif
 
-import qualified Control.Monad.Trans.State.Strict as State
+import qualified Control.Monad.Trans.State.Strict        as State
 import qualified Crypto.Hash
 import qualified Data.ByteString
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
-import qualified Data.List                        as List
+import qualified Data.List                               as List
 import qualified Data.HashMap.Strict.InsOrd
-import qualified Data.Map.Strict                  as Map
+import qualified Data.Map.Strict                         as Map
 import qualified Data.Text.Encoding
-import qualified Data.Text                        as Text
+import qualified Data.Text                               as Text
 import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Builder           as Builder
 import qualified Data.Text.Lazy.Encoding
 import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.Context
+import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
-import qualified Network.HTTP.Client              as HTTP
-import qualified Network.HTTP.Client.TLS          as HTTP
+import qualified Network.HTTP.Client                     as HTTP
+import qualified Network.HTTP.Client.TLS                 as HTTP
 import qualified System.Environment
 import qualified System.Directory
 import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
-
-builderToString :: Builder -> String
-builderToString = Data.Text.Lazy.unpack . Builder.toLazyText
 
 -- | An import failed because of a cycle in the import graph
 newtype Cycle = Cycle
@@ -196,7 +192,7 @@ instance Exception Cycle
 
 instance Show Cycle where
     show (Cycle import_) =
-        "\nCyclic import: " ++ builderToString (build import_)
+        "\nCyclic import: " ++ Dhall.Pretty.Internal.prettyToString import_
 
 {-| Dhall tries to ensure that all expressions hosted on network endpoints are
     weakly referentially transparent, meaning roughly that any two clients will
@@ -232,7 +228,7 @@ instance Exception ReferentiallyOpaque
 
 instance Show ReferentiallyOpaque where
     show (ReferentiallyOpaque import_) =
-        "\nReferentially opaque import: " ++ builderToString (build import_)
+        "\nReferentially opaque import: " ++ Dhall.Pretty.Internal.prettyToString import_
 
 -- | Extend another exception with the current import stack
 data Imported e = Imported
@@ -249,7 +245,7 @@ instance Show e => Show (Imported e) where
         ++  show e
       where
         indent (n, import_) =
-            take (2 * n) (repeat ' ') ++ "↳ " ++ builderToString (build import_)
+            take (2 * n) (repeat ' ') ++ "↳ " ++ Dhall.Pretty.Internal.prettyToString import_
         -- Canonicalize all imports
         imports' = zip [0..] (drop 1 (reverse (canonicalizeAll imports)))
 
@@ -546,7 +542,7 @@ exprFromImport (Import {..}) = do
         URL prefix file suffix maybeHeaders -> do
             m <- needManager
 
-            let fileText = Data.Text.Lazy.toStrict $ Builder.toLazyText (build file)
+            let fileText = Dhall.Pretty.Internal.prettyToStrictText file
             let url      = Text.unpack (prefix <> fileText <> suffix)
 
             request <- liftIO (HTTP.parseUrlThrow url)
@@ -568,11 +564,7 @@ exprFromImport (Import {..}) = do
                                         [("header", Text), ("value", Text)]
                                     )
                                 )
-                    let suffix_ =
-                            ( Data.Text.Lazy.toStrict
-                            . Builder.toLazyText
-                            . build
-                            ) expected
+                    let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
                     let annot = case expr of
                             Note (Src begin end bytes) _ ->
                                 Note (Src begin end bytes') (Annot expr expected)

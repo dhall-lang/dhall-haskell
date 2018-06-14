@@ -10,12 +10,7 @@ module Dhall.Pretty.Internal (
       Ann(..)
     , annToAnsiStyle
     , prettyExpr
-    , buildConst
-    , buildVar
-    , buildExpr
-    , buildNatural
-    , buildNumber
-    , buildScientific
+    , prettyVar
     , pretty
     , escapeText
 
@@ -25,6 +20,10 @@ module Dhall.Pretty.Internal (
     , prettyNatural
     , prettyNumber
     , prettyScientific
+    , prettyToStrictText
+    , prettyToString
+
+    , docToStrictText
 
     , builtin
     , keyword
@@ -63,7 +62,6 @@ import Data.Scientific (Scientific)
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
-import Formatting.Buildable (Buildable(..))
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
@@ -73,11 +71,10 @@ import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.Set
-import qualified Data.Text                             as Text
-import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Builder                as Builder
-import qualified Data.Text.Prettyprint.Doc             as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
+import qualified Data.Text                               as Text
+import qualified Data.Text.Prettyprint.Doc               as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text   as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 
 {-| Annotation type used to tag elements in a pretty-printed document for
     syntax highlighting purposes
@@ -828,33 +825,6 @@ pretty = Pretty.renderStrict . Pretty.layoutPretty options . Pretty.pretty
   where
    options = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
 
--- | Text corresponding to the @label@ token in "Dhall.Parser"
-buildLabel :: Text -> Text
-buildLabel l = case Text.uncons l of
-    Just (h, t)
-        | headCharacter h && Text.all tailCharacter t && not (Data.HashSet.member l reservedIdentifiers)
-            -> l
-    _       -> "`" <> l <> "`"
-
-
--- | Text corresponding to the @number@ token in "Dhall.Parser"
-buildNumber :: Integer -> Text
-buildNumber = Text.pack . show
-
--- | Text corresponding to the @natural@ token in "Dhall.Parser"
-buildNatural :: Natural -> Text
-buildNatural = Text.pack . show
-
--- | Text corresponding to the @double@ token in "Dhall.Parser"
-buildScientific :: Scientific -> Text
-buildScientific = Text.pack . show
-
--- | Text corresponding to the @text@ token in "Dhall.Parser"
-buildChunks :: Buildable a => Chunks s a -> Text
-buildChunks (Chunks a b) = "\"" <> foldMap buildChunk a <> escapeText b <> "\""
-  where
-    buildChunk (c, d) = escapeText c <> "${" <> buildExprA d <> "}"
-
 -- | Escape a `Text` literal using Dhall's escaping rules for single-quoted
 --   @Text@
 escapeSingleQuotedText :: Text -> Text
@@ -901,331 +871,16 @@ escapeText text = Text.concatMap adapt text
         | n < 10    = Data.Char.chr (Data.Char.ord '0' + n)
         | otherwise = Data.Char.chr (Data.Char.ord 'A' + n - 10)
 
--- | Text corresponding to the @expr@ parser in "Dhall.Parser"
-buildExpr :: Buildable a => Expr s a -> Text
-buildExpr = buildExprA
+prettyToString :: Pretty a => a -> String
+prettyToString =
+    Pretty.renderString . Pretty.layoutPretty options . Pretty.pretty
+  where
+   options = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
 
--- | Text corresponding to the @exprA@ parser in "Dhall.Parser"
-buildExprA :: Buildable a => Expr s a -> Text
-buildExprA (Annot a b) = buildExprB a <> " : " <> buildExprA b
-buildExprA (Note  _ b) = buildExprA b
-buildExprA a           = buildExprB a
+docToStrictText :: Doc ann -> Text.Text
+docToStrictText = Pretty.renderStrict . Pretty.layoutPretty options
+  where
+   options = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
 
--- | Text corresponding to the @exprB@ parser in "Dhall.Parser"
-buildExprB :: Buildable a => Expr s a -> Text
-buildExprB (Lam a b c) =
-        "λ("
-    <>  buildLabel a
-    <>  " : "
-    <>  buildExprA b
-    <>  ") → "
-    <>  buildExprB c
-buildExprB (BoolIf a b c) =
-        "if "
-    <>  buildExprA a
-    <>  " then "
-    <>  buildExprA b
-    <>  " else "
-    <>  buildExprA c
-buildExprB (Pi "_" b c) =
-        buildExprC b
-    <>  " → "
-    <>  buildExprB c
-buildExprB (Pi a b c) =
-        "∀("
-    <>  buildLabel a
-    <>  " : "
-    <>  buildExprA b
-    <>  ") → "
-    <>  buildExprB c
-buildExprB (Let a Nothing c d) =
-        "let "
-    <>  buildLabel a
-    <>  " = "
-    <>  buildExprA c
-    <>  " in "
-    <>  buildExprB d
-buildExprB (Let a (Just b) c d) =
-        "let "
-    <>  buildLabel a
-    <>  " : "
-    <>  buildExprA b
-    <>  " = "
-    <>  buildExprA c
-    <>  " in "
-    <>  buildExprB d
-buildExprB (ListLit Nothing b) =
-    "[" <> buildElems (Data.Foldable.toList b) <> "]"
-buildExprB (ListLit (Just a) b) =
-    "[" <> buildElems (Data.Foldable.toList b) <> "] : List "  <> buildExprE a
-buildExprB (OptionalLit a b) =
-    "[" <> buildElems (Data.Foldable.toList b) <> "] : Optional "  <> buildExprE a
-buildExprB (Merge a b (Just c)) =
-    "merge " <> buildExprE a <> " " <> buildExprE b <> " : " <> buildExprD c
-buildExprB (Merge a b Nothing) =
-    "merge " <> buildExprE a <> " " <> buildExprE b
-buildExprB (Note _ b) =
-    buildExprB b
-buildExprB a =
-    buildExprC a
-
--- | Text corresponding to the @exprC@ parser in "Dhall.Parser"
-buildExprC :: Buildable a => Expr s a -> Text
-buildExprC = buildExprC0
-
--- | Text corresponding to the @exprC0@ parser in "Dhall.Parser"
-buildExprC0 :: Buildable a => Expr s a -> Text
-buildExprC0 (BoolOr a b) = buildExprC1 a <> " || " <> buildExprC0 b
-buildExprC0 (Note   _ b) = buildExprC0 b
-buildExprC0  a           = buildExprC1 a
-
--- | Text corresponding to the @exprC1@ parser in "Dhall.Parser"
-buildExprC1 :: Buildable a => Expr s a -> Text
-buildExprC1 (TextAppend a b) = buildExprC2 a <> " ++ " <> buildExprC1 b
-buildExprC1 (Note       _ b) = buildExprC1 b
-buildExprC1  a               = buildExprC2 a
-
--- | Text corresponding to the @exprC2@ parser in "Dhall.Parser"
-buildExprC2 :: Buildable a => Expr s a -> Text
-buildExprC2 (NaturalPlus a b) = buildExprC3 a <> " + " <> buildExprC2 b
-buildExprC2 (Note        _ b) = buildExprC2 b
-buildExprC2  a                = buildExprC3 a
-
--- | Text corresponding to the @exprC3@ parser in "Dhall.Parser"
-buildExprC3 :: Buildable a => Expr s a -> Text
-buildExprC3 (ListAppend a b) = buildExprC4 a <> " # " <> buildExprC3 b
-buildExprC3 (Note       _ b) = buildExprC3 b
-buildExprC3  a               = buildExprC4 a
-
--- | Text corresponding to the @exprC4@ parser in "Dhall.Parser"
-buildExprC4 :: Buildable a => Expr s a -> Text
-buildExprC4 (BoolAnd a b) = buildExprC5 a <> " && " <> buildExprC4 b
-buildExprC4 (Note    _ b) = buildExprC4 b
-buildExprC4  a            = buildExprC5 a
-
--- | Text corresponding to the @exprC5@ parser in "Dhall.Parser"
-buildExprC5 :: Buildable a => Expr s a -> Text
-buildExprC5 (Combine   a b) = buildExprC6 a <> " ∧ " <> buildExprC5 b
-buildExprC5 (Note      _ b) = buildExprC5 b
-buildExprC5  a              = buildExprC6 a
-
--- | Text corresponding to the @exprC6@ parser in "Dhall.Parser"
-buildExprC6 :: Buildable a => Expr s a -> Text
-buildExprC6 (Prefer a b) = buildExprC7 a <> " ⫽ " <> buildExprC6 b
-buildExprC6 (Note   _ b) = buildExprC6 b
-buildExprC6  a           = buildExprC7 a
-
--- | Text corresponding to the @exprC7@ parser in "Dhall.Parser"
-buildExprC7 :: Buildable a => Expr s a -> Text
-buildExprC7 (CombineTypes a b) = buildExprC8 a <> " ⩓ " <> buildExprC7 b
-buildExprC7 (Note         _ b) = buildExprC7 b
-buildExprC7  a                 = buildExprC8 a
-
--- | Text corresponding to the @exprC8@ parser in "Dhall.Parser"
-buildExprC8 :: Buildable a => Expr s a -> Text
-buildExprC8 (NaturalTimes a b) = buildExprC9 a <> " * " <> buildExprC8 b
-buildExprC8 (Note         _ b) = buildExprC8 b
-buildExprC8  a                 = buildExprC9 a
-
--- | Text corresponding to the @exprC9@ parser in "Dhall.Parser"
-buildExprC9 :: Buildable a => Expr s a -> Text
-buildExprC9 (BoolEQ a b) = buildExprC10 a <> " == " <> buildExprC9 b
-buildExprC9 (Note   _ b) = buildExprC9 b
-buildExprC9  a           = buildExprC10 a
-
--- | Text corresponding to the @exprC10@ parser in "Dhall.Parser"
-buildExprC10 :: Buildable a => Expr s a -> Text
-buildExprC10 (BoolNE a b) = buildExprD  a <> " != " <> buildExprC10 b
-buildExprC10 (Note   _ b) = buildExprC10 b
-buildExprC10  a           = buildExprD  a
-
--- | Text corresponding to the @exprD@ parser in "Dhall.Parser"
-buildExprD :: Buildable a => Expr s a -> Text
-buildExprD (App        a b) = buildExprD a <> " " <> buildExprE b
-buildExprD (Constructors b) = "constructors " <> buildExprE b
-buildExprD (Note       _ b) = buildExprD b
-buildExprD  a               = buildExprE a
-
--- | Text corresponding to the @exprE@ parser in "Dhall.Parser"
-buildExprE :: Buildable a => Expr s a -> Text
-buildExprE (Field a b) = buildExprE a <> "." <> buildLabel b
-buildExprE (Note  _ b) = buildExprE b
-buildExprE  a          = buildExprF a
-
--- | Text corresponding to the @exprF@ parser in "Dhall.Parser"
-buildExprF :: Buildable a => Expr s a -> Text
-buildExprF (Var a) =
-    buildVar a
-buildExprF (Const k) =
-    buildConst k
-buildExprF Bool =
-    "Bool"
-buildExprF Natural =
-    "Natural"
-buildExprF NaturalFold =
-    "Natural/fold"
-buildExprF NaturalBuild =
-    "Natural/build"
-buildExprF NaturalIsZero =
-    "Natural/isZero"
-buildExprF NaturalEven =
-    "Natural/even"
-buildExprF NaturalOdd =
-    "Natural/odd"
-buildExprF NaturalToInteger =
-    "Natural/toInteger"
-buildExprF NaturalShow =
-    "Natural/show"
-buildExprF Integer =
-    "Integer"
-buildExprF IntegerShow =
-    "Integer/show"
-buildExprF IntegerToDouble =
-    "Integer/toDouble"
-buildExprF Double =
-    "Double"
-buildExprF DoubleShow =
-    "Double/show"
-buildExprF Text =
-    "Text"
-buildExprF List =
-    "List"
-buildExprF ListBuild =
-    "List/build"
-buildExprF ListFold =
-    "List/fold"
-buildExprF ListLength =
-    "List/length"
-buildExprF ListHead =
-    "List/head"
-buildExprF ListLast =
-    "List/last"
-buildExprF ListIndexed =
-    "List/indexed"
-buildExprF ListReverse =
-    "List/reverse"
-buildExprF Optional =
-    "Optional"
-buildExprF OptionalFold =
-    "Optional/fold"
-buildExprF OptionalBuild =
-    "Optional/build"
-buildExprF (BoolLit True) =
-    "True"
-buildExprF (BoolLit False) =
-    "False"
-buildExprF (IntegerLit a)
-    | 0 <= a    = "+" <> buildNumber a
-    | otherwise = buildNumber a
-buildExprF (NaturalLit a) =
-    buildNatural a
-buildExprF (DoubleLit a) =
-    buildScientific a
-buildExprF (TextLit a) =
-    buildChunks a
-buildExprF (Record a) =
-    buildRecord a
-buildExprF (RecordLit a) =
-    buildRecordLit a
-buildExprF (Union a) =
-    buildUnion a
-buildExprF (UnionLit a b c) =
-    buildUnionLit a b c
-buildExprF (ListLit Nothing b) =
-    "[" <> buildElems (Data.Foldable.toList b) <> "]"
-buildExprF (Embed a) =
-    Data.Text.Lazy.toStrict . Builder.toLazyText $ build a
-buildExprF (Note _ b) =
-    buildExprF b
-buildExprF a =
-    "(" <> buildExprA a <> ")"
-
--- | Text corresponding to the @const@ parser in "Dhall.Parser"
-buildConst :: Const -> Text
-buildConst Type = "Type"
-buildConst Kind = "Kind"
-
--- | Text corresponding to the @var@ parser in "Dhall.Parser"
-buildVar :: Var -> Text
-buildVar (V x 0) = buildLabel x
-buildVar (V x n) = buildLabel x <> "@" <> buildNumber n
-
--- | Text corresponding to the @elems@ parser in "Dhall.Parser"
-buildElems :: Buildable a => [Expr s a] -> Text
-buildElems   []   = ""
-buildElems   [a]  = buildExprA a
-buildElems (a:bs) = buildExprA a <> ", " <> buildElems bs
-
--- | Text corresponding to the @recordLit@ parser in "Dhall.Parser"
-buildRecordLit :: Buildable a => InsOrdHashMap Text (Expr s a) -> Text
-buildRecordLit a | Data.HashMap.Strict.InsOrd.null a =
-    "{=}"
-buildRecordLit a =
-    "{ " <> buildFieldValues (Data.HashMap.Strict.InsOrd.toList a) <> " }"
-
--- | Text corresponding to the @fieldValues@ parser in "Dhall.Parser"
-buildFieldValues :: Buildable a => [(Text, Expr s a)] -> Text
-buildFieldValues    []  = ""
-buildFieldValues   [a]  = buildFieldValue a
-buildFieldValues (a:bs) = buildFieldValue a <> ", " <> buildFieldValues bs
-
--- | Text corresponding to the @fieldValue@ parser in "Dhall.Parser"
-buildFieldValue :: Buildable a => (Text, Expr s a) -> Text
-buildFieldValue (a, b) = buildLabel a <> " = " <> buildExprA b
-
--- | Text corresponding to the @record@ parser in "Dhall.Parser"
-buildRecord :: Buildable a => InsOrdHashMap Text (Expr s a) -> Text
-buildRecord a | Data.HashMap.Strict.InsOrd.null a =
-    "{}"
-buildRecord a =
-    "{ " <> buildFieldTypes (Data.HashMap.Strict.InsOrd.toList a) <> " }"
-
--- | Text corresponding to the @fieldTypes@ parser in "Dhall.Parser"
-buildFieldTypes :: Buildable a => [(Text, Expr s a)] -> Text
-buildFieldTypes    []  = ""
-buildFieldTypes   [a]  = buildFieldType a
-buildFieldTypes (a:bs) = buildFieldType a <> ", " <> buildFieldTypes bs
-
--- | Text corresponding to the @fieldType@ parser in "Dhall.Parser"
-buildFieldType :: Buildable a => (Text, Expr s a) -> Text
-buildFieldType (a, b) = buildLabel a <> " : " <> buildExprA b
-
--- | Text corresponding to the @union@ parser in "Dhall.Parser"
-buildUnion :: Buildable a => InsOrdHashMap Text (Expr s a) -> Text
-buildUnion a | Data.HashMap.Strict.InsOrd.null a =
-    "<>"
-buildUnion a =
-    "< " <> buildAlternativeTypes (Data.HashMap.Strict.InsOrd.toList a) <> " >"
-
--- | Text corresponding to the @alternativeTypes@ parser in "Dhall.Parser"
-buildAlternativeTypes :: Buildable a => [(Text, Expr s a)] -> Text
-buildAlternativeTypes [] =
-    ""
-buildAlternativeTypes [a] =
-    buildAlternativeType a
-buildAlternativeTypes (a:bs) =
-    buildAlternativeType a <> " | " <> buildAlternativeTypes bs
-
--- | Text corresponding to the @alternativeType@ parser in "Dhall.Parser"
-buildAlternativeType :: Buildable a => (Text, Expr s a) -> Text
-buildAlternativeType (a, b) = buildLabel a <> " : " <> buildExprA b
-
--- | Text corresponding to the @unionLit@ parser in "Dhall.Parser"
-buildUnionLit
-    :: Buildable a
-    => Text -> Expr s a -> InsOrdHashMap Text (Expr s a) -> Text
-buildUnionLit a b c
-    | Data.HashMap.Strict.InsOrd.null c =
-            "< "
-        <>  buildLabel a
-        <>  " = "
-        <>  buildExprA b
-        <>  " >"
-    | otherwise =
-            "< "
-        <>  buildLabel a
-        <>  " = "
-        <>  buildExprA b
-        <>  " | "
-        <>  buildAlternativeTypes (Data.HashMap.Strict.InsOrd.toList c)
-        <>  " >"
+prettyToStrictText :: Pretty a => a -> Text.Text
+prettyToStrictText = docToStrictText . Pretty.pretty

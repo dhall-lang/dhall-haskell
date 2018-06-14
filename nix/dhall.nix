@@ -1,11 +1,11 @@
 { mkDerivation, ansi-terminal, base, bytestring, case-insensitive
-, containers, contravariant, criterion, cryptonite, deepseq
+, containers, contravariant, criterion, cryptonite, deepseq, Diff
 , directory, doctest, exceptions, filepath, formatting, haskeline
 , http-client, http-client-tls, insert-ordered-containers
 , lens-family-core, megaparsec, memory, mtl, optparse-applicative
 , parsers, prettyprinter, prettyprinter-ansi-terminal, repline
-, scientific, stdenv, tasty, tasty-hunit, text, transformers
-, unordered-containers, vector
+, scientific, stdenv, tasty, tasty-hunit, template-haskell, text
+, transformers, unordered-containers, vector
 }:
 mkDerivation {
   pname = "dhall";
@@ -15,11 +15,11 @@ mkDerivation {
   isExecutable = true;
   libraryHaskellDepends = [
     ansi-terminal base bytestring case-insensitive containers
-    contravariant cryptonite directory exceptions filepath formatting
+    contravariant cryptonite Diff directory exceptions filepath formatting
     http-client http-client-tls insert-ordered-containers
-    lens-family-core megaparsec memory parsers prettyprinter
-    prettyprinter-ansi-terminal scientific text transformers
-    unordered-containers vector
+    lens-family-core megaparsec memory optparse-applicative parsers
+    prettyprinter prettyprinter-ansi-terminal scientific
+    template-haskell text transformers unordered-containers vector
   ];
   executableHaskellDepends = [
     ansi-terminal base haskeline megaparsec mtl optparse-applicative

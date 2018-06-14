@@ -1503,10 +1503,10 @@ import Dhall
 -- > 
 -- > 1
 --
--- You can compute the Hash for any import by using the @dhall-hash@ utility
--- installed by this package.  For example:
+-- You can compute the Hash for any import by using the hash subcommand 
+-- of this package.  For example:
 --
--- > dhall-hash <<< './bar'
+-- > dhall hash <<< './bar'
 -- > sha256:6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b
 --
 -- Then you can paste that output into your code after the import
@@ -1599,7 +1599,7 @@ import Dhall
 
 -- $format
 --
--- This package also provides a @dhall-format@ executable that you can use to
+-- A format subcommand is also available that you can use to 
 -- automatically format Dhall expressions.  For example, we can take the
 -- following unformatted Dhall expression:
 --
@@ -1616,9 +1616,9 @@ import Dhall
 -- > z) (y.diff (n + List/length { index : Natural, value : a } kvs)) }) { count = 
 -- > 0, diff = λ(_ : Natural) → nil }).diff 0)
 --
--- ... and run the expression through the @dhall-format@ executable:
+-- ... and run the expression through the the formatter:
 --
--- > $ dhall-format < ./unformatted
+-- > $ dhall format < ./unformatted
 -- >   λ(a : Type)
 -- > → λ(kvss : List (List { index : Natural, value : a }))
 -- > → List/build
@@ -1654,7 +1654,7 @@ import Dhall
 -- The executable formats expressions without resolving, type-checking, or
 -- normalizing them:
 --
--- > $ dhall-format
+-- > $ dhall format
 -- > let replicate = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/replicate 
 -- > in replicate 5 (List (List Natural)) (replicate 5 (List Natural) (replicate 5 Natural 1))
 -- > <Ctrl-D>
@@ -1669,7 +1669,7 @@ import Dhall
 -- You can also use the formatter to modify files in place using the
 -- @--inplace@ flag (i.e. for formatting source code):
 --
--- > $ dhall-format --inplace ./unformatted
+-- > $ dhall format --inplace ./unformatted
 -- > $ cat ./unformatted
 -- >   λ(a : Type)
 -- > → λ(kvss : List (List { index : Natural, value : a }))
@@ -1707,7 +1707,7 @@ import Dhall
 -- Currently, the formatter only preserves leading comments and whitespace
 -- up until the last newline preceding the code.  In other words:
 --
--- > $ dhall-format
+-- > $ dhall format
 -- > {- This comment will be preserved by the formatter -}
 -- > -- ... and this comment will be preserved, too
 -- > {- This comment will *NOT* be preserved -} 1
@@ -1717,7 +1717,7 @@ import Dhall
 -- > -- ... and this comment will be preserved, too
 -- > 1
 --
--- Note that you do not need to use @dhall-format@ to format the output of the
+-- Note that you do not need to format the output of the
 -- @dhall@ interpreter.  The interpreter already automatically formats
 -- multi-line expressions, too:
 --

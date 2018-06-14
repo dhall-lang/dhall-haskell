@@ -28,43 +28,33 @@ import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
 import Data.Text (Text)
-import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Traversable (forM)
 import Data.Typeable (Typeable)
 import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
-import Formatting.Buildable (Buildable(..))
+import Dhall.Pretty (Ann)
 
 import qualified Data.Foldable
 import qualified Data.HashMap.Strict
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
 import qualified Data.Set
-import qualified Data.Text                             as Text
-import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Builder                as Builder
-import qualified Data.Text.Prettyprint.Doc             as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
+import qualified Data.Text                               as Text
+import qualified Data.Text.Prettyprint.Doc               as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
-import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
 
 traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
 traverseWithIndex_ k xs =
     Data.Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
 
-docToLazyText :: Doc a -> Text
-docToLazyText = Pretty.renderStrict . Pretty.layoutPretty opts
-  where
-    opts = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
-
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
 axiom Kind = Left (TypeError Dhall.Context.empty (Const Kind) Untyped)
-
 
 rule :: Const -> Const -> Either () Const
 -- This forbids dependent types. If this ever changes, then the fast
@@ -741,7 +731,7 @@ typeWithA tpa = loop
                     Just t' -> return t'
                     Nothing -> Left (TypeError ctx e (MissingField x t))
             _ -> do
-                let text = docToLazyText (Dhall.Pretty.Internal.prettyLabel x)
+                let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
                 Left (TypeError ctx e (NotARecord text r t))
     loop ctx e@(Project r xs    ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
@@ -756,7 +746,7 @@ typeWithA tpa = loop
                 let adapt = Record . Data.HashMap.Strict.InsOrd.fromList
                 fmap adapt (traverse process (Data.Set.toList xs))
             _ -> do
-                let text = docToLazyText (Dhall.Pretty.Internal.prettyLabels xs)
+                let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
                 Left (TypeError ctx e (NotARecord text r t))
     loop ctx   (Note s e'       ) = case loop ctx e' of
         Left (TypeError ctx' (Note s' e'') m) -> Left (TypeError ctx' (Note s' e'') m)
@@ -779,9 +769,6 @@ instance Show X where
 
 instance Eq X where
   _ == _ = True
-
-instance Buildable X where
-    build = absurd
 
 instance Data X where
     dataTypeOf = absurd
@@ -845,63 +832,37 @@ data TypeMessage s a
     | NoDependentTypes (Expr s a) (Expr s a)
     deriving (Show)
 
-shortTypeMessage :: (Buildable a, Eq a, Pretty a) => TypeMessage s a -> Builder
+shortTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> Doc Ann
 shortTypeMessage msg =
-    "\ESC[1;31mError\ESC[0m: " <> build short <> "\n"
+    "\ESC[1;31mError\ESC[0m: " <> short <> "\n"
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
-longTypeMessage :: (Buildable a, Eq a, Pretty a) => TypeMessage s a -> Builder
+longTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> Doc Ann
 longTypeMessage msg =
-        "\ESC[1;31mError\ESC[0m: " <> build short <> "\n"
+        "\ESC[1;31mError\ESC[0m: " <> short <> "\n"
     <>  "\n"
     <>  long
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
 data ErrorMessages = ErrorMessages
-    { short :: Builder
+    { short :: Doc Ann
     -- ^ Default succinct 1-line explanation of what went wrong
-    , long  :: Builder
+    , long  :: Doc Ann
     -- ^ Longer and more detailed explanation of the error
     }
 
-_NOT :: Builder
+_NOT :: Doc ann
 _NOT = "\ESC[1mnot\ESC[0m"
 
-insert :: Pretty a => a -> Builder
-insert expression = builder
-  where
-    doc = "↳ " <> Pretty.align (Pretty.pretty expression)
+insert :: Pretty a => a -> Doc Ann
+insert expression = "↳ " <> Pretty.align (Pretty.pretty expression)
 
-    coloredDoc = fmap Dhall.Pretty.annToAnsiStyle doc
+prettyDiff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
+prettyDiff exprL exprR = Dhall.Diff.diffNormalized exprL exprR
 
-    opts =
-        Pretty.LayoutOptions
-            { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
-
-    stream = Pretty.layoutPretty opts coloredDoc
-
-    lazyText = Pretty.renderLazy stream
-
-    builder = Builder.fromLazyText lazyText
-
-prettyDiff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Builder
-prettyDiff exprL exprR = builder
-  where
-    doc =
-        fmap Dhall.Pretty.annToAnsiStyle (Dhall.Diff.diffNormalized exprL exprR)
-
-    opts = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
-
-    stream = Pretty.layoutPretty opts doc
-
-    lazyText = Pretty.renderLazy stream
-
-    builder = Builder.fromLazyText lazyText
-
-prettyTypeMessage
-    :: (Buildable a, Eq a, Pretty a) => TypeMessage s a -> ErrorMessages
+prettyTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> ErrorMessages
 prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
   -- https://github.com/dhall-lang/dhall-haskell/pull/116
@@ -1895,7 +1856,7 @@ prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
         \" <> txt3 <> "\n"
       where
         txt0 = insert expr0
-        txt1 = build i
+        txt1 = pretty i
         txt3 = insert expr2
 
 prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
@@ -1934,7 +1895,7 @@ prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
         \" <> txt3 <> "\n"
       where
         txt0 = insert expr0
-        txt1 = build i
+        txt1 = pretty i
         txt3 = insert expr2
 
 prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
@@ -2477,7 +2438,7 @@ prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt1 <> "\n"
       where
-        op   = build c
+        op   = pretty c
         txt0 = insert expr0
         txt1 = insert expr1
 
@@ -3031,9 +2992,9 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
         \                                                                                \n\
         \" <> txt3 <> "\n"
       where
-        txt0 = build key0
+        txt0 = pretty key0
         txt1 = insert expr0
-        txt2 = build key1
+        txt2 = pretty key1
         txt3 = insert expr1
 
 prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
@@ -3450,7 +3411,7 @@ buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
         txt0 = insert expr0
         txt1 = insert expr1
 
-    txt2 = build operator
+    txt2 = pretty operator
 
 buildNaturalOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
 buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
@@ -3511,41 +3472,46 @@ buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
         txt0 = insert expr0
         txt1 = insert expr1
 
-    txt2 = build operator
+    txt2 = pretty operator
 
 -- | A structured type error that includes context
 data TypeError s a = TypeError
     { context     :: Context (Expr s a)
     , current     :: Expr s a
     , typeMessage :: TypeMessage s a
-    } deriving (Typeable)
+    }
 
-instance (Buildable a, Buildable s, Eq a, Pretty a) => Show (TypeError s a) where
-    show = Data.Text.Lazy.unpack . Builder.toLazyText . build
-
-instance (Buildable a, Buildable s, Eq a, Pretty a, Typeable a, Typeable s) => Exception (TypeError s a)
-
-instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (TypeError s a) where
-    build (TypeError ctx expr msg)
-        =   "\n"
-        <>  (   if  Data.Text.Lazy.null (Builder.toLazyText (buildContext ctx))
-                then ""
-                else buildContext ctx <> "\n"
-            )
-        <>  shortTypeMessage msg <> "\n"
-        <>  source
+instance (Eq a, Pretty s, Pretty a) => Show (TypeError s a) where
+    show = Pretty.renderString . Pretty.layoutPretty options . Pretty.pretty
       where
-        buildKV (key, val) = build key <> " : " <> build val
+        options =
+            Pretty.LayoutOptions
+                { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
 
-        buildContext =
-                build
-            .   Data.Text.Lazy.unlines
-            .   map (Builder.toLazyText . buildKV)
+instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (TypeError s a)
+
+instance (Eq a, Pretty s, Pretty a) => Pretty (TypeError s a) where
+    pretty (TypeError ctx expr msg)
+        = Pretty.unAnnotate
+            ("\n"
+            <>  (   if null (Dhall.Context.toList ctx)
+                    then ""
+                    else prettyContext ctx <> "\n"
+                )
+            <>  shortTypeMessage msg <> "\n"
+            <>  source
+            )
+      where
+        prettyKV (key, val) = pretty key <> " : " <> pretty val
+
+        prettyContext =
+                Pretty.vsep
+            .   map prettyKV
             .   reverse
             .   Dhall.Context.toList
 
         source = case expr of
-            Note s _ -> build s
+            Note s _ -> pretty s
             _        -> mempty
 
 {-| Newtype used to wrap error messages so that they render with a more
@@ -3554,34 +3520,39 @@ instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (TypeError s a)
 newtype DetailedTypeError s a = DetailedTypeError (TypeError s a)
     deriving (Typeable)
 
-instance (Buildable a, Buildable s, Eq a, Pretty a) => Show (DetailedTypeError s a) where
-    show = Data.Text.Lazy.unpack . Builder.toLazyText . build
-
-instance (Buildable a, Buildable s, Eq a, Pretty a, Typeable a, Typeable s) => Exception (DetailedTypeError s a)
-
-instance (Buildable a, Buildable s, Eq a, Pretty a) => Buildable (DetailedTypeError s a) where
-    build (DetailedTypeError (TypeError ctx expr msg))
-        =   "\n"
-        <>  (   if  Data.Text.Lazy.null (Builder.toLazyText (buildContext ctx))
-                then ""
-                else buildContext ctx <> "\n"
-            )
-        <>  longTypeMessage msg <> "\n"
-        <>  "────────────────────────────────────────────────────────────────────────────────\n"
-        <>  "\n"
-        <>  source
+instance (Eq a, Pretty s, Pretty a) => Show (DetailedTypeError s a) where
+    show = Pretty.renderString . Pretty.layoutPretty options . Pretty.pretty
       where
-        buildKV (key, val) = build key <> " : " <> build val
+        options =
+            Pretty.LayoutOptions
+                { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
 
-        buildContext =
-                build
-            .   Data.Text.Lazy.unlines
-            .   map (Builder.toLazyText . buildKV)
+instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (DetailedTypeError s a)
+
+instance (Eq a, Pretty s, Pretty a) => Pretty (DetailedTypeError s a) where
+    pretty (DetailedTypeError (TypeError ctx expr msg))
+        = Pretty.unAnnotate
+            (   "\n"
+            <>  (   if  null (Dhall.Context.toList ctx)
+                    then ""
+                    else prettyContext ctx <> "\n"
+                )
+            <>  longTypeMessage msg <> "\n"
+            <>  "────────────────────────────────────────────────────────────────────────────────\n"
+            <>  "\n"
+            <>  source
+            )
+      where
+        prettyKV (key, val) = pretty key <> " : " <> pretty val
+
+        prettyContext =
+                Pretty.vsep
+            .   map prettyKV
             .   reverse
             .   Dhall.Context.toList
 
         source = case expr of
-            Note s _ -> build s
+            Note s _ -> pretty s
             _        -> mempty
 
 {-| This function verifies that a custom context is well-formed so that
