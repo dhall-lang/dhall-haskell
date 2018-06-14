@@ -267,6 +267,7 @@ primitiveExpression embedded =
                 , alternative13
                 , alternative14
                 , alternative15
+                , alternativeIntegerToDouble
                 , alternative16
                 , alternative17
                 , alternative18
@@ -352,6 +353,10 @@ primitiveExpression embedded =
     alternative15 = do
         _IntegerShow
         return IntegerShow
+
+    alternativeIntegerToDouble = do
+        _IntegerToDouble
+        return IntegerToDouble
 
     alternative16 = do
         _DoubleShow

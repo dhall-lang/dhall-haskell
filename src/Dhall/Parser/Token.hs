@@ -443,6 +443,9 @@ _NaturalShow = reserved "Natural/show"
 _IntegerShow :: Parser ()
 _IntegerShow = reserved "Integer/show"
 
+_IntegerToDouble :: Parser ()
+_IntegerToDouble = reserved "Integer/toDouble"
+
 _DoubleShow :: Parser ()
 _DoubleShow = reserved "Double/show"
 
