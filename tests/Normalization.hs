@@ -32,6 +32,7 @@ normalizationTests =
         , shouldNormalize "Optional build/fold fusion" "optionalBuildFold"
         , customization
         , shouldNormalize "a remote-systems.conf builder" "remoteSystems"
+        , shouldNormalize "multi-line strings correctly" "multiLine"
         ]
 
 tutorialExamples :: TestTree

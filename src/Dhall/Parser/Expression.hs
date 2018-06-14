@@ -795,10 +795,10 @@ import_ = (do
 -- This also doesn't include the surrounding quotes since they would interfere
 -- with the whitespace detection
 renderChunks :: Chunks s a -> Text
-renderChunks (Chunks a b) = foldMap renderChunk a <> escapeText b
+renderChunks (Chunks a b) = foldMap renderChunk a <> b
   where
     renderChunk :: (Text, Expr s a) -> Text
-    renderChunk (c, _) = escapeText c <> "${x}"
+    renderChunk (c, _) = c <> "${x}"
 
 dedent :: Chunks Src a -> Chunks Src a
 dedent chunks0 = process chunks0
