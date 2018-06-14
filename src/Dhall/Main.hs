@@ -10,9 +10,10 @@ module Dhall.Main
     , main
     ) where
 
-import Control.Applicative ((<|>))
+import Control.Applicative (optional, (<|>))
 import Control.Exception (Exception, SomeException)
 import Data.Monoid (mempty, (<>))
+import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Version (showVersion)
 import Dhall.Core (Expr, Import)
@@ -27,12 +28,17 @@ import System.IO (Handle)
 import qualified Paths_dhall as Meta
 
 import qualified Control.Exception
+import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import qualified Dhall
 import qualified Dhall.Core
+import qualified Dhall.Diff
 import qualified Dhall.Parser
 import qualified Dhall.Repl
+import qualified Dhall.Hash
+import qualified Dhall.Format
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
 import qualified System.Console.ANSI
@@ -44,7 +50,15 @@ data Options = Options
     , plain   :: Bool
     }
 
-data Mode = Default | Version | Resolve | Type | Normalize | Repl
+data Mode = Default | Version | Resolve | Type | Normalize | Repl | Format (Maybe FilePath) | Hash | Diff Text Text
+
+parseInplace :: Parser String
+parseInplace =
+        Options.Applicative.strOption
+        (   Options.Applicative.long "inplace"
+        <>  Options.Applicative.help "Modify the specified file in-place"
+        <>  Options.Applicative.metavar "FILE"
+        )
 
 parseOptions :: Parser Options
 parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
@@ -61,16 +75,20 @@ parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
             <>  Options.Applicative.help "Disable syntax highlighting"
             )
 
+
 parseMode :: Parser Mode
 parseMode =
-        subcommand "version"   "Display version"                 Version
-    <|> subcommand "resolve"   "Resolve an expression's imports" Resolve
-    <|> subcommand "type"      "Infer an expression's type"      Type
-    <|> subcommand "normalize" "Normalize an expression"         Normalize
-    <|> subcommand "repl"      "Interpret expressions in a REPL" Repl
+        subcommand "version"   "Display version"                 (pure Version)
+    <|> subcommand "resolve"   "Resolve an expression's imports" (pure Resolve)
+    <|> subcommand "type"      "Infer an expression's type"      (pure Type)
+    <|> subcommand "normalize" "Normalize an expression"         (pure Normalize)
+    <|> subcommand "repl"      "Interpret expressions in a REPL" (pure Repl)
+    <|> subcommand "diff"      "Render the difference between the normal form of two expressions" diffParser
+    <|> subcommand "hash"      "Compute semantic hashes for Dhall expressions" (pure Hash)
+    <|> formatSubcommand
     <|> pure Default
   where
-    subcommand name description mode =
+    subcommand name description modeParser =
         Options.Applicative.subparser
             (   Options.Applicative.command name parserInfo
             <>  Options.Applicative.metavar name
@@ -83,7 +101,28 @@ parseMode =
                 )
 
         parser =
-            Options.Applicative.helper <*> pure mode
+            Options.Applicative.helper <*> modeParser
+
+    diffParser =
+        Diff <$> argument "expr1" <*> argument "expr2"
+      where
+        argument =
+                fmap Data.Text.pack
+            .   Options.Applicative.strArgument
+            .   Options.Applicative.metavar
+
+    formatSubcommand =
+        Options.Applicative.hsubparser
+            (   Options.Applicative.command "format" parserInfo
+            <>  Options.Applicative.metavar "format"
+            )
+      where parserInfo =
+                Options.Applicative.info parserWithHelper
+                    (   Options.Applicative.fullDesc
+                    <>  Options.Applicative.progDesc "Formatter for the Dhall language"
+                    )
+            parserWithHelper = Options.Applicative.helper <*> parser
+            parser = Format <$> optional parseInplace
 
 opts :: Pretty.LayoutOptions
 opts =
@@ -211,6 +250,22 @@ command (Options {..}) = do
 
         Repl -> do
             Dhall.Repl.repl explain
+
+        Diff expr1 expr2 -> do
+            expression1 <- Dhall.inputExpr expr1
+
+            expression2 <- Dhall.inputExpr expr2
+
+            let diff = Dhall.Diff.diffNormalized expression1 expression2
+                prettyDiff = fmap annToAnsiStyle diff
+
+            Pretty.hPutDoc System.IO.stdout prettyDiff
+
+        Format inplace -> do
+            Dhall.Format.format inplace
+
+        Hash -> do
+            Dhall.Hash.hash 
 
 main :: IO ()
 main = do

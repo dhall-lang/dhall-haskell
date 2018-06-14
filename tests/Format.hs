@@ -39,6 +39,12 @@ formatTests =
         , should
             "indent then/else to the same column"
             "ifThenElse"
+        , should
+            "handle indenting long imports correctly without trailing space per line"
+            "importLines"
+        , should
+            "handle indenting small imports correctly without trailing space inline"
+            "importLines2"
         ]
 
 opts :: Data.Text.Prettyprint.Doc.LayoutOptions

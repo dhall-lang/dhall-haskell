@@ -10,11 +10,10 @@ import System.Directory
 
 import qualified Criterion.Main as Criterion
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.IO as TLIO
+import qualified Data.Text.IO as TIO
 import qualified Dhall.Parser as Dhall
 
-type PreludeFiles = Map FilePath TL.Text
+type PreludeFiles = Map FilePath T.Text
 
 loadPreludeFiles :: IO PreludeFiles
 loadPreludeFiles = loadDirectory "Prelude"
@@ -32,21 +31,21 @@ loadPreludeFiles = loadDirectory "Prelude"
                 pure $ unions results
 
         loadFile :: FilePath -> IO PreludeFiles
-        loadFile path = singleton path <$> TLIO.readFile path
+        loadFile path = singleton path <$> TIO.readFile path
 
 benchParser :: PreludeFiles -> Criterion.Benchmark
 benchParser =
       bgroup "exprFromText"
     . foldrWithKey (\name expr -> (benchExprFromText name expr :)) []
 
-benchExprFromText :: String -> TL.Text -> Criterion.Benchmark
+benchExprFromText :: String -> T.Text -> Criterion.Benchmark
 benchExprFromText name expr =
     bench name $ whnf (Dhall.exprFromText "(input)") expr
 
 main :: IO ()
 main = do
     prelude <- loadPreludeFiles
-    issue108 <- TLIO.readFile "benchmark/examples/issue108.dhall"
+    issue108 <- TIO.readFile "benchmark/examples/issue108.dhall"
     defaultMain
         [ benchParser prelude
         , bgroup "Issue #108" $

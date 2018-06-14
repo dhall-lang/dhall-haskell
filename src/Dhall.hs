@@ -19,7 +19,9 @@ module Dhall
     (
     -- * Input
       input
+    , inputFrom
     , inputWith
+    , inputFromWith
     , inputExpr
     , inputExprWith
     , detailed
@@ -82,7 +84,6 @@ import Dhall.Core (Expr(..), Chunks(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
-import Formatting.Buildable (Buildable(..))
 import GHC.Generics
 import Numeric.Natural (Natural)
 import Prelude hiding (maybe, sequence)
@@ -98,12 +99,12 @@ import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Builder
 import qualified Data.Vector
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
+import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 
 -- $setup
@@ -156,8 +157,20 @@ input
     -- ^ The Dhall program
     -> IO a
     -- ^ The decoded value in Haskell
-input ty txt =
-  inputWith ty Dhall.Context.empty (const Nothing) txt
+input =
+  inputFrom "(input)"
+
+inputFrom
+    :: FilePath
+    -- ^ The source file to report locations from; only used in error messages
+    -> Type a
+    -- ^ The type of value to decode from Dhall to Haskell
+    -> Text
+    -- ^ The Dhall program
+    -> IO a
+    -- ^ The decoded value in Haskell
+inputFrom filename ty txt =
+  inputFromWith filename ty Dhall.Context.empty (const Nothing) txt
 
 {-| Extend 'input' with a custom typing context and normalization process.
 
@@ -172,14 +185,28 @@ inputWith
     -- ^ The Dhall program
     -> IO a
     -- ^ The decoded value in Haskell
-inputWith (Type {..}) ctx n txt = do
-    expr  <- throws (Dhall.Parser.exprFromText "(input)" txt)
+inputWith =
+  inputFromWith "(input)"
+
+{-| Extend 'inputFrom' with a custom typing context and normalization process.
+
+-}
+inputFromWith
+    :: FilePath
+    -- ^ The source file to report locations from; only used in error messages
+    -> Type a
+    -- ^ The type of value to decode from Dhall to Haskell
+    -> Dhall.Context.Context (Expr Src X)
+    -- ^ The starting context for type-checking
+    -> Dhall.Core.Normalizer X
+    -> Text
+    -- ^ The Dhall program
+    -> IO a
+    -- ^ The decoded value in Haskell
+inputFromWith filename (Type {..}) ctx n txt = do
+    expr  <- throws (Dhall.Parser.exprFromText filename txt)
     expr' <- Dhall.Import.loadWithContext ctx n expr
-    let suffix =
-            ( Data.Text.Lazy.toStrict
-            . Data.Text.Lazy.Builder.toLazyText
-            . build
-            ) expected
+    let suffix = Dhall.Pretty.Internal.prettyToStrictText expected
     let annot = case expr' of
             Note (Src begin end bytes) _ ->
                 Note (Src begin end bytes') (Annot expr' expected)
