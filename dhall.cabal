@@ -34,6 +34,7 @@ Extra-Source-Files:
     Prelude/Bool/show
     Prelude/Double/show
     Prelude/Integer/show
+    Prelude/Integer/toDouble
     Prelude/List/all
     Prelude/List/any
     Prelude/List/build
@@ -63,6 +64,7 @@ Extra-Source-Files:
     Prelude/Natural/product
     Prelude/Natural/show
     Prelude/Natural/sum
+    Prelude/Natural/toDouble
     Prelude/Natural/toInteger
     Prelude/Optional/all
     Prelude/Optional/any
@@ -95,6 +97,7 @@ Extra-Source-Files:
     tests/normalization/examples/Bool/show/*.dhall
     tests/normalization/examples/Double/show/*.dhall
     tests/normalization/examples/Integer/show/*.dhall
+    tests/normalization/examples/Integer/toDouble/*.dhall
     tests/normalization/examples/List/all/*.dhall
     tests/normalization/examples/List/any/*.dhall
     tests/normalization/examples/List/build/*.dhall
@@ -123,6 +126,7 @@ Extra-Source-Files:
     tests/normalization/examples/Natural/product/*.dhall
     tests/normalization/examples/Natural/show/*.dhall
     tests/normalization/examples/Natural/sum/*.dhall
+    tests/normalization/examples/Natural/toDouble/*.dhall
     tests/normalization/examples/Natural/toInteger/*.dhall
     tests/normalization/examples/Optional/all/*.dhall
     tests/normalization/examples/Optional/any/*.dhall

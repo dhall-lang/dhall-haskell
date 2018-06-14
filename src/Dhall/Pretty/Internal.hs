@@ -720,6 +720,8 @@ prettyExprF Integer =
     builtin "Integer"
 prettyExprF IntegerShow =
     builtin "Integer/show"
+prettyExprF IntegerToDouble =
+    builtin "Integer/toDouble"
 prettyExprF Double =
     builtin "Double"
 prettyExprF DoubleShow =
