@@ -171,6 +171,14 @@ makeOperatorExpression subExpression operatorParser operator embedded =
         b <- many (do operatorParser; subExpression embedded)
         return (foldr1 operator (a:b)) )
 
+importAltExpression :: Parser a -> Parser (Expr Src a)
+importAltExpression embedded =
+  noted (do
+    l <- orExpression embedded
+    a <- embedded  -- FIXME: broken
+    r <- many (do _importAlt; orExpression embedded)
+    return (foldr1 (ImportAlt a) (l:r)))
+
 orExpression :: Parser a -> Parser (Expr Src a)
 orExpression =
     makeOperatorExpression plusExpression _or BoolOr
@@ -755,8 +763,13 @@ http = do
         importHashed_ )
     return (URL prefix path suffix headers)
 
+missing :: Parser ImportType
+missing = do
+  _missing
+  return Missing
+
 importType_ :: Parser ImportType
-importType_ = choice [ local, http, env ]
+importType_ = choice [ local, http, env, missing ]
 
 importHashed_ :: Parser ImportHashed
 importHashed_ = do

@@ -572,6 +572,12 @@ _colon = reserved ":"
 _at :: Parser ()
 _at = reserved "@"
 
+_missing :: Parser ()
+_missing = reserved "missing"
+
+_importAlt :: Parser ()
+_importAlt = reserved "?"
+
 _combine :: Parser ()
 _combine = do
     void (Text.Parser.Char.char '∧' <?> "\"∧\"") <|> void (Text.Parser.Char.text "/\\")

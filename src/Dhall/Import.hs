@@ -321,6 +321,18 @@ instance Show MissingEnvironmentVariable where
         <>  "\n"
         <>  "↳ " <> Text.unpack name
 
+-- | Exception thrown when encountering a @missing@ keyword
+data MissingKeyword = MissingKeyword
+    deriving (Typeable)
+
+instance Exception MissingKeyword
+
+instance Show MissingKeyword where
+    show MissingKeyword =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Missing keyword found\n"
+        <>  "\n"
+
 -- | State threaded throughout the import process
 data Status = Status
     { _stack   :: [Import]
@@ -407,6 +419,9 @@ instance Canonicalize ImportType where
 
     canonicalize (Env name) =
         Env name
+
+    canonicalize Missing =
+        Missing
 
 instance Canonicalize ImportHashed where
     canonicalize (ImportHashed hash importType) =
@@ -605,6 +620,9 @@ exprFromImport (Import {..}) = do
                 Just string -> return (Text.unpack env, Text.pack string)
                 Nothing     -> throwIO (MissingEnvironmentVariable env)
 
+        Missing -> liftIO $ do
+            throwIO MissingKeyword
+
     case importMode of
         Code -> do
             let parser = unParser $ do
@@ -656,9 +674,10 @@ loadStaticWith
 loadStaticWith from_import ctx n (Embed import_) = do
     imports <- zoom stack State.get
 
-    let local (Import (ImportHashed _ (URL   {})) _) = False
-        local (Import (ImportHashed _ (Local {})) _) = True
-        local (Import (ImportHashed _ (Env   {})) _) = True
+    let local (Import (ImportHashed _ (URL     {})) _) = False
+        local (Import (ImportHashed _ (Local   {})) _) = True
+        local (Import (ImportHashed _ (Env     {})) _) = True
+        local (Import (ImportHashed _ (Missing {})) _) = True
 
     let parent = canonicalizeImport imports
     let here   = canonicalizeImport (import_:imports)
