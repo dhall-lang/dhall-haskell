@@ -136,6 +136,9 @@ parserTests =
             , shouldNotParse
                 "records with duplicate fields"
                 "./tests/parser/failure/duplicateFields.dhall"
+            , shouldParse
+                "a parenthesized custom header import"
+                "./tests/parser/parenthesizeUsing.dhall"
             ]
         ]
 
