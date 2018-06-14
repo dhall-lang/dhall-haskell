@@ -966,7 +966,17 @@ prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
         \    │  (x : Bool) → Bool │                                                      \n\
         \    └────────────────────┘                                                      \n\
         \      ⇧                                                                         \n\
-        \      A ❰∀❱ or ❰forall❱ here would transform this into a valid function type    \n"
+        \      A ❰∀❱ or ❰forall❱ here would transform this into a valid function type    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \● You forgot to prefix a file path with ❰./❱:                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ path/to/file.dhall │                                                      \n\
+        \    └────────────────────┘                                                      \n\
+        \      ⇧                                                                         \n\
+        \      This should be ❰./path/to/file.dhall❱                                     \n"
 
 prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
   where
