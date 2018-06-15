@@ -45,6 +45,9 @@ formatTests =
         , should
             "handle indenting small imports correctly without trailing space inline"
             "importLines2"
+        , should
+            "not remove parentheses when accessing a field of a record"
+            "importAccess"
         ]
 
 opts :: Data.Text.Prettyprint.Doc.LayoutOptions
