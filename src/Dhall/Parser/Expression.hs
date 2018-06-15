@@ -112,8 +112,8 @@ annotatedExpression embedded =
   where
     alternative0 = do
         _merge
-        a <- selectorExpression embedded
-        b <- selectorExpression embedded
+        a <- importExpression embedded
+        b <- importExpression embedded
         c <- optional (do
             _colon
             applicationExpression embedded )
@@ -136,7 +136,7 @@ emptyCollection embedded = do
     _closeBracket
     _colon
     a <- alternative0 <|> alternative1
-    b <- selectorExpression embedded
+    b <- importExpression embedded
     return (a b)
   where
     alternative0 = do
@@ -153,7 +153,7 @@ nonEmptyOptional embedded = do
     _closeBracket
     _colon
     _Optional
-    b <- selectorExpression embedded
+    b <- importExpression embedded
     return (OptionalLit b (pure a))
 
 operatorExpression :: Parser a -> Parser (Expr Src a)
@@ -800,10 +800,10 @@ import_ = (do
 -- This also doesn't include the surrounding quotes since they would interfere
 -- with the whitespace detection
 renderChunks :: Chunks s a -> Text
-renderChunks (Chunks a b) = foldMap renderChunk a <> escapeText b
+renderChunks (Chunks a b) = foldMap renderChunk a <> b
   where
     renderChunk :: (Text, Expr s a) -> Text
-    renderChunk (c, _) = escapeText c <> "${x}"
+    renderChunk (c, _) = c <> "${x}"
 
 dedent :: Chunks Src a -> Chunks Src a
 dedent chunks0 = process chunks0

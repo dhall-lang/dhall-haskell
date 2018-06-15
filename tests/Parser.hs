@@ -137,6 +137,9 @@ parserTests =
                 "records with duplicate fields"
                 "./tests/parser/failure/duplicateFields.dhall"
             , shouldParse
+                "collections with type annotations containing imports"
+                "./tests/parser/collectionImportType.dhall"
+            , shouldParse
                 "a parenthesized custom header import"
                 "./tests/parser/parenthesizeUsing.dhall"
             , shouldNotParse
