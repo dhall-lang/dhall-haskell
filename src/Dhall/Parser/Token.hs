@@ -585,6 +585,11 @@ _combineTypes = do
     void (Text.Parser.Char.char '⩓' <?> "\"⩓\"") <|> void (Text.Parser.Char.text "//\\\\")
     whitespace
 
+_extendTypes :: Parser ()
+_extendTypes = do
+    void (Text.Parser.Char.text "\\\\\\")
+    whitespace
+
 _prefer :: Parser ()
 _prefer = do
     void (Text.Parser.Char.char '⫽' <?> "\"⫽\"") <|> void (Text.Parser.Char.text "//")

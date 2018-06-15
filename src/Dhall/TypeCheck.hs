@@ -622,6 +622,26 @@ typeWithA tpa = loop
         combineTypes ktsL0 ktsR0
 
         return (Const c)
+    loop ctx e@(ExtendTypes l r) = do
+        tL <- loop ctx l
+        let l' = Dhall.Core.normalize l
+        cL <- case tL of
+            Const cL -> return cL
+            _        -> Left (TypeError ctx e (ExtendTypesRequiresUnionType l l'))
+        tR <- loop ctx r
+        let r' = Dhall.Core.normalize r
+        cR <- case tR of
+            Const cR -> return cR
+            _        -> Left (TypeError ctx e (ExtendTypesRequiresUnionType r r'))
+
+        case l' of
+            Union _ -> return ()
+            _       -> Left (TypeError ctx e (ExtendTypesRequiresUnionType l l'))
+        case r' of
+            Union _ -> return ()
+            _       -> Left (TypeError ctx e (ExtendTypesRequiresUnionType r r'))
+
+        return (Const Type)
     loop ctx e@(Prefer kvsX kvsY) = do
         tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
         ktsX  <- case tKvsX of
@@ -806,6 +826,7 @@ data TypeMessage s a
     | DuplicateAlternative Text
     | MustCombineARecord Char (Expr s a) (Expr s a)
     | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
+    | ExtendTypesRequiresUnionType (Expr s a) (Expr s a)
     | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
     | FieldCollision Text
     | MustMergeARecord (Expr s a) (Expr s a)
@@ -2487,6 +2508,45 @@ prettyTypeMessage (CombineTypesRequiresRecordType expr0 expr1) =
         \" <> txt1 <> "\n\
         \                                                                                \n\
         \... which is not a record type literal                                          \n"
+      where
+        txt0 = insert expr0
+        txt1 = insert expr1
+
+prettyTypeMessage (ExtendTypesRequiresUnionType expr0 expr1) =
+    ErrorMessages {..}
+  where
+    short = "❰\\\\\\❱ requires arguments that are union types"
+
+    long = 
+        "Explanation: You can only use the ❰\\\\\\❱ operator on arguments that are union type\n\
+        \literals, like this:                                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────┐                                \n\
+        \    │ < age : Natural > \\\\\\ < name : Text > │                                \n\
+        \    └───────────────────────────────────────┘                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot use the ❰\\\\\\❱ operator on any other type of arguments.  For    \n\
+        \example, you cannot use variable arguments:                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────┐                                       \n\
+        \    │ λ(t : Type) → t \\\\\\ < name : Text > │  Invalid: ❰t❱ might not be a union   \n\
+        \    └───────────────────────────────────┘  type                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to supply the following argument:                                     \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... which normalized to:                                                        \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... which is not an union type literal                                          \n"
       where
         txt0 = insert expr0
         txt1 = insert expr1

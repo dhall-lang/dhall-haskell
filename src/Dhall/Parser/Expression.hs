@@ -201,7 +201,11 @@ preferExpression =
 
 combineTypesExpression :: Parser a -> Parser (Expr Src a)
 combineTypesExpression =
-    makeOperatorExpression timesExpression _combineTypes CombineTypes
+    makeOperatorExpression extendTypesExpression _combineTypes CombineTypes
+
+extendTypesExpression :: Parser a -> Parser (Expr Src a)
+extendTypesExpression =
+    makeOperatorExpression timesExpression _extendTypes ExtendTypes
 
 timesExpression :: Parser a -> Parser (Expr Src a)
 timesExpression =
