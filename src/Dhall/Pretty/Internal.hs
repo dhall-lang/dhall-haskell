@@ -486,18 +486,18 @@ prettyAnnotatedExpression (Merge a b (Just c)) =
         Pretty.align
             (   keyword "merge"
             <>  Pretty.hardline
-            <>  prettySelectorExpression a
+            <>  prettyImportExpression a
             <>  Pretty.hardline
-            <>  prettySelectorExpression b
+            <>  prettyImportExpression b
             <>  Pretty.hardline
             <>  colon <> space
             <>  prettyApplicationExpression c
             )
 
     short = keyword "merge" <> space
-        <>  prettySelectorExpression a
+        <>  prettyImportExpression a
         <>  " "
-        <>  prettySelectorExpression b
+        <>  prettyImportExpression b
         <>  space <> colon <> space
         <>  prettyApplicationExpression c
 prettyAnnotatedExpression (Merge a b Nothing) =
@@ -507,15 +507,15 @@ prettyAnnotatedExpression (Merge a b Nothing) =
         Pretty.align
             (   keyword "merge"
             <>  Pretty.hardline
-            <>  prettySelectorExpression a
+            <>  prettyImportExpression a
             <>  Pretty.hardline
-            <>  prettySelectorExpression b
+            <>  prettyImportExpression b
             )
 
     short = keyword "merge" <> space
-        <>  prettySelectorExpression a
+        <>  prettyImportExpression a
         <>  " "
-        <>  prettySelectorExpression b
+        <>  prettyImportExpression b
 prettyAnnotatedExpression a0@(Annot _ _) =
     enclose'
         ""
