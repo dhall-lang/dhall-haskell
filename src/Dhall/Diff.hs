@@ -737,8 +737,8 @@ diffAnnotatedExpression (Merge aL bL cL) (Merge aR bR cR) = align doc
   where
     doc =   keyword "merge"
         <>  " "
-        <>  format " " (diffSelectorExpression aL aR)
-        <>  format " " (diffSelectorExpression bL bR)
+        <>  format " " (diffImportExpression aL aR)
+        <>  format " " (diffImportExpression bL bR)
         <>  diffMaybe (colon <> " ") diffApplicationExpression cL cR
 diffAnnotatedExpression l@(Merge {}) r =
     mismatch l r
