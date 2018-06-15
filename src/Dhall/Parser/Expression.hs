@@ -112,8 +112,8 @@ annotatedExpression embedded =
   where
     alternative0 = do
         _merge
-        a <- selectorExpression embedded
-        b <- selectorExpression embedded
+        a <- importExpression embedded
+        b <- importExpression embedded
         c <- optional (do
             _colon
             applicationExpression embedded )
@@ -136,7 +136,7 @@ emptyCollection embedded = do
     _closeBracket
     _colon
     a <- alternative0 <|> alternative1
-    b <- selectorExpression embedded
+    b <- importExpression embedded
     return (a b)
   where
     alternative0 = do
@@ -153,7 +153,7 @@ nonEmptyOptional embedded = do
     _closeBracket
     _colon
     _Optional
-    b <- selectorExpression embedded
+    b <- importExpression embedded
     return (OptionalLit b (pure a))
 
 operatorExpression :: Parser a -> Parser (Expr Src a)
