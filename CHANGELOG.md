@@ -3,6 +3,10 @@
 * BREAKING CHANGE TO THE API: Removed the `Parent` constructor from `FilePrefix`.
     * Instead, use `Here` with a `".."` prefix.
 
+* Added `inputFrom` and `inputFromWith`, which allow naming the file
+  that the expression is coming from. This improves error messages but
+  has no change to the semantics.
+
 1.14.0
 
 * BREAKING CHANGE TO THE LANGUAGE: Switch grammar of `Natural` and `Integer`

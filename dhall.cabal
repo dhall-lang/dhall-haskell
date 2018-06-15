@@ -1,6 +1,6 @@
 Name: dhall
 Version: 1.14.0
-Cabal-Version: >=1.8.0.2
+Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.0.1
 License: BSD3
@@ -34,6 +34,7 @@ Extra-Source-Files:
     Prelude/Bool/show
     Prelude/Double/show
     Prelude/Integer/show
+    Prelude/Integer/toDouble
     Prelude/List/all
     Prelude/List/any
     Prelude/List/build
@@ -63,6 +64,7 @@ Extra-Source-Files:
     Prelude/Natural/product
     Prelude/Natural/show
     Prelude/Natural/sum
+    Prelude/Natural/toDouble
     Prelude/Natural/toInteger
     Prelude/Optional/all
     Prelude/Optional/any
@@ -95,6 +97,7 @@ Extra-Source-Files:
     tests/normalization/examples/Bool/show/*.dhall
     tests/normalization/examples/Double/show/*.dhall
     tests/normalization/examples/Integer/show/*.dhall
+    tests/normalization/examples/Integer/toDouble/*.dhall
     tests/normalization/examples/List/all/*.dhall
     tests/normalization/examples/List/any/*.dhall
     tests/normalization/examples/List/build/*.dhall
@@ -123,6 +126,7 @@ Extra-Source-Files:
     tests/normalization/examples/Natural/product/*.dhall
     tests/normalization/examples/Natural/show/*.dhall
     tests/normalization/examples/Natural/sum/*.dhall
+    tests/normalization/examples/Natural/toDouble/*.dhall
     tests/normalization/examples/Natural/toInteger/*.dhall
     tests/normalization/examples/Optional/all/*.dhall
     tests/normalization/examples/Optional/any/*.dhall
@@ -255,6 +259,7 @@ Test-Suite doctest
     GHC-Options: -Wall
     Build-Depends:
         base                      ,
+        Diff    >= 0.2   && < 0.4 ,
         doctest >= 0.7.0 && < 0.16
     Default-Language: Haskell2010
 
