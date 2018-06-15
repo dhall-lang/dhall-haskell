@@ -161,7 +161,7 @@ diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
 diff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
 diff l0 r0 = doc
   where
-    Diff {..} = diffExprA l0 r0 <> hardline
+    Diff {..} = diffExpression l0 r0 <> hardline
 
 diffPrimitive :: Eq a => (a -> Diff) -> a -> a -> Diff
 diffPrimitive f l r
@@ -209,6 +209,9 @@ diffVar (V xL nL) (V xR nR) = format mempty label <> "@" <> natural
 
     natural = diffInteger nL nR
 
+diffPretty :: (Eq a, Pretty a) => a -> a -> Diff
+diffPretty = diffPrimitive (token . Pretty.pretty)
+
 diffMaybe :: Diff -> (a -> a -> Diff) -> (Maybe a -> Maybe a -> Diff)
 diffMaybe _ _ Nothing Nothing =
     mempty
@@ -243,7 +246,7 @@ enclosed' l m docs =
     prefixes = l :| repeat (hardline <> m)
 
 diffKeyVals
-    :: Pretty a
+    :: (Eq a, Pretty a)
     => Diff
     -> InsOrdHashMap Text (Expr s a)
     -> InsOrdHashMap Text (Expr s a)
@@ -267,7 +270,7 @@ diffKeyVals assign kvsL kvsR =
             <>  ignore
             ]
 
-    shared = HashMap.intersectionWith diffExprA kvsL kvsR
+    shared = HashMap.intersectionWith diffExpression kvsL kvsR
 
     diffFieldValues =
         filter (not . same) (HashMap.foldMapWithKey adapt shared)
@@ -330,7 +333,7 @@ diffText l r
     parts = Algo.Diff.getGroupedDiff (Data.Text.unpack l) (Data.Text.unpack r)
 
 diffChunks
-    :: Pretty a
+    :: (Eq a, Pretty a)
     => Chunks s a -> Chunks s a -> Diff
 diffChunks cL cR
   | null chunks             = "\"\""
@@ -347,11 +350,11 @@ diffChunks cL cR
     chunkDiff a b =
       case (a, b) of
         (Left  x, Left y ) -> diffText x y
-        (Right x, Right y) -> diffExprA x y
+        (Right x, Right y) -> diffExpression x y
         _                  -> diffTextSkeleton
 
 diffList
-    :: Pretty a
+    :: (Eq a, Pretty a)
     => Seq (Expr s a) -> Seq (Expr s a) -> Diff
 diffList l r
   | allDifferent parts = difference listSkeleton listSkeleton
@@ -361,7 +364,7 @@ diffList l r
 
     -- Sections of the list that are only in left, only in right, or in both
     parts =
-        Algo.Diff.getGroupedDiffBy ((same .) . diffExprA) (toList l) (toList r)
+        Algo.Diff.getGroupedDiffBy ((same .) . diffExpression) (toList l) (toList r)
 
     -- Render each element of a list using an extra rendering function f
     prettyElems f = map (f . token . Internal.prettyExpr)
@@ -387,22 +390,22 @@ isBoth p
   | otherwise               = False
 
 diffRecord
-    :: Pretty a
+    :: (Eq a, Pretty a)
     => InsOrdHashMap Text (Expr s a) -> InsOrdHashMap Text (Expr s a) -> Diff
 diffRecord kvsL kvsR = braced (diffKeyVals colon kvsL kvsR)
 
 diffRecordLit
-    :: Pretty a
+    :: (Eq a, Pretty a)
     => InsOrdHashMap Text (Expr s a) -> InsOrdHashMap Text (Expr s a) -> Diff
 diffRecordLit kvsL kvsR = braced (diffKeyVals equals kvsL kvsR)
 
 diffUnion
-    :: Pretty a
+    :: (Eq a, Pretty a)
     => InsOrdHashMap Text (Expr s a) -> InsOrdHashMap Text (Expr s a) -> Diff
 diffUnion kvsL kvsR = angled (diffKeyVals colon kvsL kvsR)
 
 diffUnionLit
-    :: Pretty a
+    :: (Eq a, Pretty a)
     => Text
     -> Text
     -> Expr s a
@@ -416,7 +419,7 @@ diffUnionLit kL kR vL vR kvsL kvsR =
     <>  format " " (diffLabel kL kR)
     <>  equals
     <>  " "
-    <>  format " " (diffExprA vL vR)
+    <>  format " " (diffExpression vL vR)
     <>  halfAngled (diffKeyVals equals kvsL kvsR)
   where
     halfAngled = enclosed (pipe <> " ") (pipe <> " ") rangle
@@ -651,25 +654,8 @@ skeleton x = token (Pretty.pretty x)
 mismatch :: Pretty a => Expr s a -> Expr s a -> Diff
 mismatch l r = difference (skeleton l) (skeleton r)
 
-diffExprA :: Pretty a => Expr s a -> Expr s a -> Diff
-diffExprA l@(Annot {}) r@(Annot {}) =
-    enclosed' "  " (colon <> " ") (docs l r)
-  where
-    docs (Annot aL bL) (Annot aR bR) =
-        Data.List.NonEmpty.cons (align doc) (docs bL bR)
-      where
-        doc = diffExprB aL aR
-    docs aL aR =
-        diffExprB aL aR :| []
-diffExprA l@(Annot {}) r =
-    mismatch l r
-diffExprA l r@(Annot {}) =
-    mismatch l r
-diffExprA l r =
-    diffExprB l r
-
-diffExprB :: Pretty a => Expr s a -> Expr s a -> Diff
-diffExprB l@(Lam {}) r@(Lam {}) =
+diffExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffExpression l@(Lam {}) r@(Lam {}) =
     enclosed' "  " (rarrow <> " ") (docs l r)
   where
     docs (Lam aL bL cL) (Lam aR bR cR) =
@@ -680,16 +666,16 @@ diffExprB l@(Lam {}) r@(Lam {}) =
             <>  format " " (diffLabel aL aR)
             <>  colon
             <>  " "
-            <>  format mempty (diffExprA bL bR)
+            <>  format mempty (diffExpression bL bR)
             <>  rparen
 
     docs aL aR =
-        pure (diffExprC aL aR)
-diffExprB l@(Lam {}) r =
+        pure (diffExpression aL aR)
+diffExpression l@(Lam {}) r =
     mismatch l r
-diffExprB l r@(Lam {}) =
+diffExpression l r@(Lam {}) =
     mismatch l r
-diffExprB l@(BoolIf {}) r@(BoolIf {}) =
+diffExpression l@(BoolIf {}) r@(BoolIf {}) =
     enclosed' "      " (keyword "else" <> "  ") (docs l r)
   where
     docs (BoolIf aL bL cL) (BoolIf aR bR cR) =
@@ -697,17 +683,35 @@ diffExprB l@(BoolIf {}) r@(BoolIf {}) =
       where
         doc =   keyword "if"
             <>  " "
-            <>  format " " (diffExprA aL aR)
+            <>  format " " (diffExpression aL aR)
             <>  keyword "then"
             <>  " "
-            <>  diffExprA bL bR
+            <>  diffExpression bL bR
     docs aL aR =
-        pure (diffExprB aL aR)
-diffExprB l@(BoolIf {}) r =
+        pure (diffExpression aL aR)
+diffExpression l@(BoolIf {}) r =
     mismatch l r
-diffExprB l r@(BoolIf {}) =
+diffExpression l r@(BoolIf {}) =
     mismatch l r
-diffExprB l@(Pi {}) r@(Pi {}) =
+diffExpression l@(Let {}) r@(Let {}) =
+    enclosed' "    " (keyword "in" <> "  ") (docs l r)
+  where
+    docs (Let aL bL cL dL) (Let aR bR cR dR) =
+        Data.List.NonEmpty.cons (align doc) (docs dL dR)
+      where
+        doc =   keyword "let"
+            <>  " "
+            <>  format " " (diffLabel aL aR)
+            <>  format " " (diffMaybe (colon <> " ") diffExpression bL bR)
+            <>  equals
+            <>  " "
+            <>  diffExpression cL cR
+    docs aL aR = pure (diffExpression aL aR)
+diffExpression l@(Let {}) r =
+    mismatch l r
+diffExpression l r@(Let {}) =
+    mismatch l r
+diffExpression l@(Pi {}) r@(Pi {}) =
     enclosed' "  " (rarrow <> " ") (docs l r)
   where
     docs (Pi aL bL cL) (Pi aR bR cR) =
@@ -718,265 +722,274 @@ diffExprB l@(Pi {}) r@(Pi {}) =
             <>  format " " (diffLabel aL aR)
             <>  colon
             <>  " "
-            <>  format mempty (diffExprA bL bR)
+            <>  format mempty (diffExpression bL bR)
             <>  rparen
-    docs aL aR = pure (diffExprB aL aR)
-diffExprB l@(Pi {}) r =
+    docs aL aR = pure (diffExpression aL aR)
+diffExpression l@(Pi {}) r =
     mismatch l r
-diffExprB l r@(Pi {}) =
+diffExpression l r@(Pi {}) =
     mismatch l r
-diffExprB l@(Let {}) r@(Let {}) =
-    enclosed' "    " (keyword "in" <> "  ") (docs l r)
+diffExpression l r =
+    diffAnnotatedExpression l r
+
+diffAnnotatedExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffAnnotatedExpression (Merge aL bL cL) (Merge aR bR cR) = align doc
   where
-    docs (Let aL bL cL dL) (Let aR bR cR dR) =
-        Data.List.NonEmpty.cons (align doc) (docs dL dR)
-      where
-        doc =   keyword "let"
-            <>  " "
-            <>  format " " (diffLabel aL aR)
-            <>  format " " (diffMaybe (colon <> " ") diffExprA bL bR)
-            <>  equals
-            <>  " "
-            <>  diffExprA cL cR
-    docs aL aR = pure (diffExprB aL aR)
-diffExprB l@(Let {}) r =
+    doc =   keyword "merge"
+        <>  " "
+        <>  format " " (diffImportExpression aL aR)
+        <>  format " " (diffImportExpression bL bR)
+        <>  diffMaybe (colon <> " ") diffApplicationExpression cL cR
+diffAnnotatedExpression l@(Merge {}) r =
     mismatch l r
-diffExprB l r@(Let {}) =
+diffAnnotatedExpression l r@(Merge {}) =
     mismatch l r
-diffExprB (ListLit aL bL) (ListLit aR bR) = align doc
+diffAnnotatedExpression (ListLit aL@(Just _) bL) (ListLit aR bR) = align doc
   where
     doc =   format " " (diffList bL bR)
-        <>  format " " (diffMaybe (colon <> " ") (diffExprA `on` App List) aL aR)
-
-diffExprB l@(ListLit {}) r =
-    mismatch l r
-diffExprB l r@(ListLit {}) =
-    mismatch l r
-diffExprB (OptionalLit aL bL) (OptionalLit aR bR) = align doc
+        <>  format " " (diffMaybe (colon <> " ") (diffApplicationExpression `on` App List) aL aR)
+diffAnnotatedExpression (ListLit aL bL) (ListLit aR@(Just _) bR) = align doc
+  where
+    doc =   format " " (diffList bL bR)
+        <>  format " " (diffMaybe (colon <> " ") (diffApplicationExpression `on` App List) aL aR)
+diffAnnotatedExpression (OptionalLit aL bL) (OptionalLit aR bR) =
+    align doc
   where
     doc =   lbracket
         <>  " "
-        <>  format " " (diffMaybe mempty diffExprA bL bR)
+        <>  format " " (diffMaybe mempty diffExpression bL bR)
         <>  rbracket
         <>  " "
         <>  colon
         <>  " "
-        <>  diffExprD (App Optional aL) (App Optional aR)
-diffExprB l@(OptionalLit {}) r =
+        <>  diffApplicationExpression (App Optional aL) (App Optional aR)
+diffAnnotatedExpression l@(OptionalLit {}) r =
     mismatch l r
-diffExprB l r@(OptionalLit {}) =
+diffAnnotatedExpression l r@(OptionalLit {}) =
     mismatch l r
-diffExprB (Merge aL bL cL) (Merge aR bR cR) = align doc
+diffAnnotatedExpression l@(Annot {}) r@(Annot {}) =
+    enclosed' "  " (colon <> " ") (docs l r)
   where
-    doc =   keyword "merge"
-        <>  " "
-        <>  format " " (diffExprE aL aR)
-        <>  format " " (diffExprE bL bR)
-        <>  diffMaybe (colon <> " ") diffExprE cL cR
-diffExprB l@(Merge {}) r =
+    docs (Annot aL bL) (Annot aR bR) =
+        Data.List.NonEmpty.cons (align doc) (docs bL bR)
+      where
+        doc = diffOperatorExpression aL aR
+    docs aL aR =
+        diffExpression aL aR :| []
+diffAnnotatedExpression l@(Annot {}) r =
     mismatch l r
-diffExprB l r@(Merge {}) =
+diffAnnotatedExpression l r@(Annot {}) =
     mismatch l r
-diffExprB l r =
-    diffExprC l r
+diffAnnotatedExpression l r =
+    diffOperatorExpression l r
 
-diffExprC :: Pretty a => Expr s a -> Expr s a -> Diff
-diffExprC = diffBoolOr
+diffOperatorExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffOperatorExpression = diffOrExpression
 
-diffBoolOr :: Pretty a => Expr s a -> Expr s a -> Diff
-diffBoolOr l@(BoolOr {}) r@(BoolOr {}) =
+diffOrExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffOrExpression l@(BoolOr {}) r@(BoolOr {}) =
     enclosed' "    " (operator "||" <> "  ") (docs l r)
   where
     docs (BoolOr aL bL) (BoolOr aR bR) =
-        Data.List.NonEmpty.cons (diffTextAppend aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffTextAppendExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffTextAppend aL aR)
-diffBoolOr l@(BoolOr {}) r =
+        pure (diffTextAppendExpression aL aR)
+diffOrExpression l@(BoolOr {}) r =
     mismatch l r
-diffBoolOr l r@(BoolOr {}) =
+diffOrExpression l r@(BoolOr {}) =
     mismatch l r
-diffBoolOr l r =
-    diffTextAppend l r
+diffOrExpression l r =
+    diffPlusExpression l r
 
-diffTextAppend :: Pretty a => Expr s a -> Expr s a -> Diff
-diffTextAppend l@(TextAppend {}) r@(TextAppend {}) =
-    enclosed' "    " (operator "++" <> "  ") (docs l r)
-  where
-    docs (TextAppend aL bL) (TextAppend aR bR) =
-        Data.List.NonEmpty.cons (diffNaturalPlus aL aR) (docs bL bR)
-    docs aL aR =
-        pure (diffNaturalPlus aL aR)
-diffTextAppend l@(TextAppend {}) r =
-    mismatch l r
-diffTextAppend l r@(TextAppend {}) =
-    mismatch l r
-diffTextAppend l r =
-    diffNaturalPlus l r
-
-diffNaturalPlus :: Pretty a => Expr s a -> Expr s a -> Diff
-diffNaturalPlus l@(NaturalPlus {}) r@(NaturalPlus {}) =
+diffPlusExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffPlusExpression l@(NaturalPlus {}) r@(NaturalPlus {}) =
     enclosed' "  " (operator "+" <> " ") (docs l r)
   where
     docs (NaturalPlus aL bL) (NaturalPlus aR bR) =
-        Data.List.NonEmpty.cons (diffListAppend aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffListAppendExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffListAppend aL aR)
-diffNaturalPlus l@(NaturalPlus {}) r =
+        pure (diffListAppendExpression aL aR)
+diffPlusExpression l@(NaturalPlus {}) r =
     mismatch l r
-diffNaturalPlus l r@(NaturalPlus {}) =
+diffPlusExpression l r@(NaturalPlus {}) =
     mismatch l r
-diffNaturalPlus l r =
-    diffListAppend l r
+diffPlusExpression l r =
+    diffTextAppendExpression l r
 
-diffListAppend :: Pretty a => Expr s a -> Expr s a -> Diff
-diffListAppend l@(ListAppend {}) r@(ListAppend {}) =
+diffTextAppendExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffTextAppendExpression l@(TextAppend {}) r@(TextAppend {}) =
+    enclosed' "    " (operator "++" <> "  ") (docs l r)
+  where
+    docs (TextAppend aL bL) (TextAppend aR bR) =
+        Data.List.NonEmpty.cons (diffPlusExpression aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffPlusExpression aL aR)
+diffTextAppendExpression l@(TextAppend {}) r =
+    mismatch l r
+diffTextAppendExpression l r@(TextAppend {}) =
+    mismatch l r
+diffTextAppendExpression l r =
+    diffListAppendExpression l r
+
+diffListAppendExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffListAppendExpression l@(ListAppend {}) r@(ListAppend {}) =
     enclosed' "  " (operator "#" <> " ") (docs l r)
   where
     docs (ListAppend aL bL) (ListAppend aR bR) =
-        Data.List.NonEmpty.cons (diffBoolAnd aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffAndExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffBoolAnd aL aR)
-diffListAppend l@(ListAppend {}) r =
+        pure (diffAndExpression aL aR)
+diffListAppendExpression l@(ListAppend {}) r =
     mismatch l r
-diffListAppend l r@(ListAppend {}) =
+diffListAppendExpression l r@(ListAppend {}) =
     mismatch l r
-diffListAppend l r =
-    diffBoolAnd l r
+diffListAppendExpression l r =
+    diffAndExpression l r
 
-diffBoolAnd :: Pretty a => Expr s a -> Expr s a -> Diff
-diffBoolAnd l@(BoolAnd {}) r@(BoolAnd {}) =
+diffAndExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffAndExpression l@(BoolAnd {}) r@(BoolAnd {}) =
     enclosed' "    " (operator "&&" <> "  ") (docs l r)
   where
     docs (BoolAnd aL bL) (BoolAnd aR bR) =
-        Data.List.NonEmpty.cons (diffCombine aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffCombineExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffCombine aL aR)
-diffBoolAnd l@(BoolAnd {}) r =
+        pure (diffCombineExpression aL aR)
+diffAndExpression l@(BoolAnd {}) r =
     mismatch l r
-diffBoolAnd l r@(BoolAnd {}) =
+diffAndExpression l r@(BoolAnd {}) =
     mismatch l r
-diffBoolAnd l r =
-    diffCombine l r
+diffAndExpression l r =
+    diffCombineExpression l r
 
-diffCombine :: Pretty a => Expr s a -> Expr s a -> Diff
-diffCombine l@(Combine {}) r@(Combine {}) =
+diffCombineExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffCombineExpression l@(Combine {}) r@(Combine {}) =
     enclosed' "  " (operator "∧" <> " ") (docs l r)
   where
     docs (Combine aL bL) (Combine aR bR) =
-        Data.List.NonEmpty.cons (diffPrefer aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffPreferExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffPrefer aL aR)
-diffCombine l@(Combine {}) r =
+        pure (diffPreferExpression aL aR)
+diffCombineExpression l@(Combine {}) r =
     mismatch l r
-diffCombine l r@(Combine {}) =
+diffCombineExpression l r@(Combine {}) =
     mismatch l r
-diffCombine l r =
-    diffPrefer l r
+diffCombineExpression l r =
+    diffPreferExpression l r
 
-diffPrefer :: Pretty a => Expr s a -> Expr s a -> Diff
-diffPrefer l@(Prefer {}) r@(Prefer {}) =
+diffPreferExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffPreferExpression l@(Prefer {}) r@(Prefer {}) =
     enclosed' "  " (operator "⫽" <> " ") (docs l r)
   where
     docs (Prefer aL bL) (Prefer aR bR) =
-        Data.List.NonEmpty.cons (diffCombineTypes aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffCombineTypesExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffCombineTypes aL aR)
-diffPrefer l@(Prefer {}) r =
+        pure (diffCombineTypesExpression aL aR)
+diffPreferExpression l@(Prefer {}) r =
     mismatch l r
-diffPrefer l r@(Prefer {}) =
+diffPreferExpression l r@(Prefer {}) =
     mismatch l r
-diffPrefer l r =
-    diffCombineTypes l r
+diffPreferExpression l r =
+    diffCombineTypesExpression l r
 
-diffCombineTypes :: Pretty a => Expr s a -> Expr s a -> Diff
-diffCombineTypes l@(CombineTypes {}) r@(CombineTypes {}) =
+diffCombineTypesExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffCombineTypesExpression l@(CombineTypes {}) r@(CombineTypes {}) =
     enclosed' "  " (operator "*" <> " ") (docs l r)
   where
     docs (CombineTypes aL bL) (CombineTypes aR bR) =
-        Data.List.NonEmpty.cons (diffNaturalTimes aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffTimesExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffNaturalTimes aL aR)
-diffCombineTypes l@(CombineTypes {}) r =
+        pure (diffTimesExpression aL aR)
+diffCombineTypesExpression l@(CombineTypes {}) r =
     mismatch l r
-diffCombineTypes l r@(CombineTypes {}) =
+diffCombineTypesExpression l r@(CombineTypes {}) =
     mismatch l r
-diffCombineTypes l r =
-    diffNaturalTimes l r
+diffCombineTypesExpression l r =
+    diffTimesExpression l r
 
-diffNaturalTimes :: Pretty a => Expr s a -> Expr s a -> Diff
-diffNaturalTimes l@(NaturalTimes {}) r@(NaturalTimes {}) =
+diffTimesExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffTimesExpression l@(NaturalTimes {}) r@(NaturalTimes {}) =
     enclosed' "  " (operator "*" <> " ") (docs l r)
   where
     docs (NaturalTimes aL bL) (NaturalTimes aR bR) =
-        Data.List.NonEmpty.cons (diffBoolEQ aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffEqualExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffBoolEQ aL aR)
-diffNaturalTimes l@(NaturalTimes {}) r =
+        pure (diffEqualExpression aL aR)
+diffTimesExpression l@(NaturalTimes {}) r =
     mismatch l r
-diffNaturalTimes l r@(NaturalTimes {}) =
+diffTimesExpression l r@(NaturalTimes {}) =
     mismatch l r
-diffNaturalTimes l r =
-    diffBoolEQ l r
+diffTimesExpression l r =
+    diffEqualExpression l r
 
-diffBoolEQ :: Pretty a => Expr s a -> Expr s a -> Diff
-diffBoolEQ l@(BoolEQ {}) r@(BoolEQ {}) =
+diffEqualExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffEqualExpression l@(BoolEQ {}) r@(BoolEQ {}) =
     enclosed' "    " (operator "==" <> "  ") (docs l r)
   where
     docs (BoolEQ aL bL) (BoolEQ aR bR) =
-        Data.List.NonEmpty.cons (diffBoolNE aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffNotEqualExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffBoolNE aL aR)
-diffBoolEQ l@(BoolEQ {}) r =
+        pure (diffNotEqualExpression aL aR)
+diffEqualExpression l@(BoolEQ {}) r =
     mismatch l r
-diffBoolEQ l r@(BoolEQ {}) =
+diffEqualExpression l r@(BoolEQ {}) =
     mismatch l r
-diffBoolEQ l r =
-    diffBoolNE l r
+diffEqualExpression l r =
+    diffNotEqualExpression l r
 
-diffBoolNE :: Pretty a => Expr s a -> Expr s a -> Diff
-diffBoolNE l@(BoolNE {}) r@(BoolNE {}) =
+diffNotEqualExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffNotEqualExpression l@(BoolNE {}) r@(BoolNE {}) =
     enclosed' "    " (operator "!=" <> "  ") (docs l r)
   where
     docs (BoolNE aL bL) (BoolNE aR bR) =
-        Data.List.NonEmpty.cons (diffExprD aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffApplicationExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffExprD aL aR)
-diffBoolNE l@(BoolNE {}) r =
+        pure (diffApplicationExpression aL aR)
+diffNotEqualExpression l@(BoolNE {}) r =
     mismatch l r
-diffBoolNE l r@(BoolNE {}) =
+diffNotEqualExpression l r@(BoolNE {}) =
     mismatch l r
-diffBoolNE l r =
-    diffExprD l r
+diffNotEqualExpression l r =
+    diffApplicationExpression l r
 
-diffExprD :: Pretty a => Expr s a -> Expr s a -> Diff
-diffExprD l@(App {}) r@(App {}) =
+diffApplicationExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffApplicationExpression l@(App {}) r@(App {}) =
     enclosed' mempty mempty (Data.List.NonEmpty.reverse (docs l r))
   where
     docs (App aL bL) (App aR bR) =
-        Data.List.NonEmpty.cons (diffExprE bL bR) (docs aL aR)
+        Data.List.NonEmpty.cons (diffImportExpression bL bR) (docs aL aR)
     docs (Constructors aL) (Constructors aR) =
-        diffExprE aL aR :| [ keyword "constructors" ]
+        diffImportExpression aL aR :| [ keyword "constructors" ]
     docs aL@(App {}) aR@(Constructors {}) =
         pure (mismatch aL aR)
     docs aL@(Constructors {}) aR@(App {}) =
         pure (mismatch aL aR)
     docs aL aR =
-        pure (diffExprE aL aR)
-diffExprD l@(App {}) r =
+        pure (diffImportExpression aL aR)
+diffApplicationExpression l@(App {}) r =
     mismatch l r
-diffExprD l r@(App {}) =
+diffApplicationExpression l r@(App {}) =
     mismatch l r
-diffExprD l@(Constructors {}) r@(Constructors {}) =
-    enclosed' mempty mempty (keyword "constructors" :| [ diffExprE l r ])
-diffExprD l@(Constructors {}) r =
+diffApplicationExpression l@(Constructors {}) r@(Constructors {}) =
+    enclosed' mempty mempty (keyword "constructors" :| [ diffImportExpression l r ])
+diffApplicationExpression l@(Constructors {}) r =
     mismatch l r
-diffExprD l r@(Constructors {}) =
+diffApplicationExpression l r@(Constructors {}) =
     mismatch l r
-diffExprD l r =
-    diffExprE l r
+diffApplicationExpression l r =
+    diffImportExpression l r
 
-diffExprE :: Pretty a => Expr s a -> Expr s a -> Diff
-diffExprE l@(Field {}) r@(Field {}) =
+diffImportExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffImportExpression (Embed l) (Embed r) =
+    diffPretty l r
+diffImportExpression l@(Embed {}) r =
+    mismatch l r
+diffImportExpression l r@(Embed {}) =
+    mismatch l r
+diffImportExpression l r =
+    diffSelectorExpression l r
+
+diffSelectorExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffSelectorExpression l@(Field {}) r@(Field {}) =
     enclosed' "  " (dot <> " ") (Data.List.NonEmpty.reverse (docs l r))
   where
     docs (Field aL bL) (Field aR bR) =
@@ -984,12 +997,12 @@ diffExprE l@(Field {}) r@(Field {}) =
     docs (Project aL bL) (Project aR bR) =
         Data.List.NonEmpty.cons (diffLabels bL bR) (docs aL aR)
     docs aL aR =
-        pure (diffExprF aL aR)
-diffExprE l@(Field {}) r =
+        pure (diffPrimitiveExpression aL aR)
+diffSelectorExpression l@(Field {}) r =
     mismatch l r
-diffExprE l r@(Field {}) =
+diffSelectorExpression l r@(Field {}) =
     mismatch l r
-diffExprE l@(Project {}) r@(Project {}) =
+diffSelectorExpression l@(Project {}) r@(Project {}) =
     enclosed' "  " (dot <> " ") (Data.List.NonEmpty.reverse (docs l r))
   where
     docs (Field aL bL) (Field aR bR) =
@@ -997,240 +1010,247 @@ diffExprE l@(Project {}) r@(Project {}) =
     docs (Project aL bL) (Project aR bR) =
         Data.List.NonEmpty.cons (diffLabels bL bR) (docs aL aR)
     docs aL aR =
-        pure (diffExprF aL aR)
-diffExprE l@(Project {}) r =
+        pure (diffPrimitiveExpression aL aR)
+diffSelectorExpression l@(Project {}) r =
     mismatch l r
-diffExprE l r@(Project {}) =
+diffSelectorExpression l r@(Project {}) =
     mismatch l r
-diffExprE l r =
-    diffExprF l r
+diffSelectorExpression l r =
+    diffPrimitiveExpression l r
 
-diffExprF :: Pretty a => Expr s a -> Expr s a -> Diff
-diffExprF (Var aL) (Var aR) =
+diffPrimitiveExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffPrimitiveExpression (Var aL) (Var aR) =
     diffVar aL aR
-diffExprF l@(Var {}) r =
+diffPrimitiveExpression l@(Var {}) r =
     mismatch l r
-diffExprF l r@(Var {}) =
+diffPrimitiveExpression l r@(Var {}) =
     mismatch l r
-diffExprF (Const aL) (Const aR) =
+diffPrimitiveExpression (Const aL) (Const aR) =
     diffConst aL aR
-diffExprF l@(Const {}) r =
+diffPrimitiveExpression l@(Const {}) r =
     mismatch l r
-diffExprF l r@(Const {}) =
+diffPrimitiveExpression l r@(Const {}) =
     mismatch l r
-diffExprF Bool Bool =
+diffPrimitiveExpression Bool Bool =
     "…"
-diffExprF l@Bool r =
+diffPrimitiveExpression l@Bool r =
     mismatch l r
-diffExprF l r@Bool =
+diffPrimitiveExpression l r@Bool =
     mismatch l r
-diffExprF Natural Natural =
+diffPrimitiveExpression Natural Natural =
     "…"
-diffExprF l@Natural r =
+diffPrimitiveExpression l@Natural r =
     mismatch l r
-diffExprF l r@Natural =
+diffPrimitiveExpression l r@Natural =
     mismatch l r
-diffExprF NaturalFold NaturalFold =
+diffPrimitiveExpression NaturalFold NaturalFold =
     "…"
-diffExprF l@NaturalFold r =
+diffPrimitiveExpression l@NaturalFold r =
     mismatch l r
-diffExprF l r@NaturalFold =
+diffPrimitiveExpression l r@NaturalFold =
     mismatch l r
-diffExprF NaturalBuild NaturalBuild =
+diffPrimitiveExpression NaturalBuild NaturalBuild =
     "…"
-diffExprF l@NaturalBuild r =
+diffPrimitiveExpression l@NaturalBuild r =
     mismatch l r
-diffExprF l r@NaturalBuild =
+diffPrimitiveExpression l r@NaturalBuild =
     mismatch l r
-diffExprF NaturalIsZero NaturalIsZero =
+diffPrimitiveExpression NaturalIsZero NaturalIsZero =
     "…"
-diffExprF l@NaturalIsZero r =
+diffPrimitiveExpression l@NaturalIsZero r =
     mismatch l r
-diffExprF l r@NaturalIsZero =
+diffPrimitiveExpression l r@NaturalIsZero =
     mismatch l r
-diffExprF NaturalEven NaturalEven =
+diffPrimitiveExpression NaturalEven NaturalEven =
     "…"
-diffExprF l@NaturalEven r =
+diffPrimitiveExpression l@NaturalEven r =
     mismatch l r
-diffExprF l r@NaturalEven =
+diffPrimitiveExpression l r@NaturalEven =
     mismatch l r
-diffExprF NaturalOdd NaturalOdd =
+diffPrimitiveExpression NaturalOdd NaturalOdd =
     "…"
-diffExprF l@NaturalOdd r =
+diffPrimitiveExpression l@NaturalOdd r =
     mismatch l r
-diffExprF l r@NaturalOdd =
+diffPrimitiveExpression l r@NaturalOdd =
     mismatch l r
-diffExprF NaturalToInteger NaturalToInteger =
+diffPrimitiveExpression NaturalToInteger NaturalToInteger =
     "…"
-diffExprF l@NaturalToInteger r =
+diffPrimitiveExpression l@NaturalToInteger r =
     mismatch l r
-diffExprF l r@NaturalToInteger =
+diffPrimitiveExpression l r@NaturalToInteger =
     mismatch l r
-diffExprF NaturalShow NaturalShow =
+diffPrimitiveExpression NaturalShow NaturalShow =
     "…"
-diffExprF l@NaturalShow r =
+diffPrimitiveExpression l@NaturalShow r =
     mismatch l r
-diffExprF l r@NaturalShow =
+diffPrimitiveExpression l r@NaturalShow =
     mismatch l r
-diffExprF Integer Integer =
+diffPrimitiveExpression Integer Integer =
     "…"
-diffExprF l@Integer r =
+diffPrimitiveExpression l@Integer r =
     mismatch l r
-diffExprF l r@Integer =
+diffPrimitiveExpression l r@Integer =
     mismatch l r
-diffExprF IntegerShow IntegerShow =
+diffPrimitiveExpression IntegerShow IntegerShow =
     "…"
-diffExprF l@IntegerShow r =
+diffPrimitiveExpression l@IntegerShow r =
     mismatch l r
-diffExprF l r@IntegerShow =
+diffPrimitiveExpression l r@IntegerShow =
     mismatch l r
-diffExprF IntegerToDouble IntegerToDouble =
+diffPrimitiveExpression IntegerToDouble IntegerToDouble =
     "…"
-diffExprF l@IntegerToDouble r =
+diffPrimitiveExpression l@IntegerToDouble r =
     mismatch l r
-diffExprF l r@IntegerToDouble =
+diffPrimitiveExpression l r@IntegerToDouble =
     mismatch l r
-diffExprF Double Double =
+diffPrimitiveExpression Double Double =
     "…"
-diffExprF l@Double r =
+diffPrimitiveExpression l@Double r =
     mismatch l r
-diffExprF l r@Double =
+diffPrimitiveExpression l r@Double =
     mismatch l r
-diffExprF DoubleShow DoubleShow =
+diffPrimitiveExpression DoubleShow DoubleShow =
     "…"
-diffExprF l@DoubleShow r =
+diffPrimitiveExpression l@DoubleShow r =
     mismatch l r
-diffExprF l r@DoubleShow =
+diffPrimitiveExpression l r@DoubleShow =
     mismatch l r
-diffExprF Text Text =
+diffPrimitiveExpression Text Text =
     "…"
-diffExprF l@Text r =
+diffPrimitiveExpression l@Text r =
     mismatch l r
-diffExprF l r@Text =
+diffPrimitiveExpression l r@Text =
     mismatch l r
-diffExprF List List =
+diffPrimitiveExpression List List =
     "…"
-diffExprF l@List r =
+diffPrimitiveExpression l@List r =
     mismatch l r
-diffExprF l r@List =
+diffPrimitiveExpression l r@List =
     mismatch l r
-diffExprF ListBuild ListBuild =
+diffPrimitiveExpression (ListLit Nothing bL) (ListLit Nothing bR) = align doc
+  where
+    doc = format " " (diffList bL bR)
+diffPrimitiveExpression l@(ListLit {}) r =
+    mismatch l r
+diffPrimitiveExpression l r@(ListLit {}) =
+    mismatch l r
+diffPrimitiveExpression ListBuild ListBuild =
     "…"
-diffExprF l@ListBuild r =
+diffPrimitiveExpression l@ListBuild r =
     mismatch l r
-diffExprF l r@ListBuild =
+diffPrimitiveExpression l r@ListBuild =
     mismatch l r
-diffExprF ListFold ListFold =
+diffPrimitiveExpression ListFold ListFold =
     "…"
-diffExprF l@ListFold r =
+diffPrimitiveExpression l@ListFold r =
     mismatch l r
-diffExprF l r@ListFold =
+diffPrimitiveExpression l r@ListFold =
     mismatch l r
-diffExprF ListLength ListLength =
+diffPrimitiveExpression ListLength ListLength =
     "…"
-diffExprF l@ListLength r =
+diffPrimitiveExpression l@ListLength r =
     mismatch l r
-diffExprF l r@ListLength =
+diffPrimitiveExpression l r@ListLength =
     mismatch l r
-diffExprF ListHead ListHead =
+diffPrimitiveExpression ListHead ListHead =
     "…"
-diffExprF l@ListHead r =
+diffPrimitiveExpression l@ListHead r =
     mismatch l r
-diffExprF l r@ListHead =
+diffPrimitiveExpression l r@ListHead =
     mismatch l r
-diffExprF ListLast ListLast =
+diffPrimitiveExpression ListLast ListLast =
     "…"
-diffExprF l@ListLast r =
+diffPrimitiveExpression l@ListLast r =
     mismatch l r
-diffExprF l r@ListLast =
+diffPrimitiveExpression l r@ListLast =
     mismatch l r
-diffExprF ListIndexed ListIndexed =
+diffPrimitiveExpression ListIndexed ListIndexed =
     "…"
-diffExprF l@ListIndexed r =
+diffPrimitiveExpression l@ListIndexed r =
     mismatch l r
-diffExprF l r@ListIndexed =
+diffPrimitiveExpression l r@ListIndexed =
     mismatch l r
-diffExprF ListReverse ListReverse =
+diffPrimitiveExpression ListReverse ListReverse =
     "…"
-diffExprF l@ListReverse r =
+diffPrimitiveExpression l@ListReverse r =
     mismatch l r
-diffExprF l r@ListReverse =
+diffPrimitiveExpression l r@ListReverse =
     mismatch l r
-diffExprF Optional Optional =
+diffPrimitiveExpression Optional Optional =
     "…"
-diffExprF l@Optional r =
+diffPrimitiveExpression l@Optional r =
     mismatch l r
-diffExprF l r@Optional =
+diffPrimitiveExpression l r@Optional =
     mismatch l r
-diffExprF OptionalFold OptionalFold =
+diffPrimitiveExpression OptionalFold OptionalFold =
     "…"
-diffExprF l@OptionalFold r =
+diffPrimitiveExpression l@OptionalFold r =
     mismatch l r
-diffExprF l r@OptionalFold =
+diffPrimitiveExpression l r@OptionalFold =
     mismatch l r
-diffExprF OptionalBuild OptionalBuild =
+diffPrimitiveExpression OptionalBuild OptionalBuild =
     "…"
-diffExprF l@OptionalBuild r =
+diffPrimitiveExpression l@OptionalBuild r =
     mismatch l r
-diffExprF l r@OptionalBuild =
+diffPrimitiveExpression l r@OptionalBuild =
     mismatch l r
-diffExprF (BoolLit aL) (BoolLit aR) =
+diffPrimitiveExpression (BoolLit aL) (BoolLit aR) =
     diffBool aL aR
-diffExprF l@(BoolLit {}) r =
+diffPrimitiveExpression l@(BoolLit {}) r =
     mismatch l r
-diffExprF l r@(BoolLit {}) =
+diffPrimitiveExpression l r@(BoolLit {}) =
     mismatch l r
-diffExprF (IntegerLit aL) (IntegerLit aR) =
+diffPrimitiveExpression (IntegerLit aL) (IntegerLit aR) =
     diffInteger aL aR
-diffExprF l@(IntegerLit {}) r =
+diffPrimitiveExpression l@(IntegerLit {}) r =
     mismatch l r
-diffExprF l r@(IntegerLit {}) =
+diffPrimitiveExpression l r@(IntegerLit {}) =
     mismatch l r
-diffExprF (NaturalLit aL) (NaturalLit aR) =
+diffPrimitiveExpression (NaturalLit aL) (NaturalLit aR) =
     diffNatural aL aR
-diffExprF l@(NaturalLit {}) r =
+diffPrimitiveExpression l@(NaturalLit {}) r =
     mismatch l r
-diffExprF l r@(NaturalLit {}) =
+diffPrimitiveExpression l r@(NaturalLit {}) =
     mismatch l r
-diffExprF (DoubleLit aL) (DoubleLit aR) =
+diffPrimitiveExpression (DoubleLit aL) (DoubleLit aR) =
     diffScientific aL aR
-diffExprF l@(DoubleLit {}) r =
+diffPrimitiveExpression l@(DoubleLit {}) r =
     mismatch l r
-diffExprF l r@(DoubleLit {}) =
+diffPrimitiveExpression l r@(DoubleLit {}) =
     mismatch l r
-diffExprF (TextLit l) (TextLit r) =
+diffPrimitiveExpression (TextLit l) (TextLit r) =
     diffChunks l r
-diffExprF l@(TextLit {}) r =
+diffPrimitiveExpression l@(TextLit {}) r =
     mismatch l r
-diffExprF l r@(TextLit {}) =
+diffPrimitiveExpression l r@(TextLit {}) =
     mismatch l r
-diffExprF (Record aL) (Record aR) =
+diffPrimitiveExpression (Record aL) (Record aR) =
     diffRecord aL aR
-diffExprF l@(Record {}) r =
+diffPrimitiveExpression l@(Record {}) r =
     mismatch l r
-diffExprF l r@(Record {}) =
+diffPrimitiveExpression l r@(Record {}) =
     mismatch l r
-diffExprF (RecordLit aL) (RecordLit aR) =
+diffPrimitiveExpression (RecordLit aL) (RecordLit aR) =
     diffRecordLit aL aR
-diffExprF l@(RecordLit {}) r =
+diffPrimitiveExpression l@(RecordLit {}) r =
     mismatch l r
-diffExprF l r@(RecordLit {}) =
+diffPrimitiveExpression l r@(RecordLit {}) =
     mismatch l r
-diffExprF (Union aL) (Union aR) =
+diffPrimitiveExpression (Union aL) (Union aR) =
     diffUnion aL aR
-diffExprF l@(Union {}) r =
+diffPrimitiveExpression l@(Union {}) r =
     mismatch l r
-diffExprF l r@(Union {}) =
+diffPrimitiveExpression l r@(Union {}) =
     mismatch l r
-diffExprF (UnionLit aL bL cL) (UnionLit aR bR cR) =
+diffPrimitiveExpression (UnionLit aL bL cL) (UnionLit aR bR cR) =
     diffUnionLit aL aR bL bR cL cR
-diffExprF l@(UnionLit {}) r =
+diffPrimitiveExpression l@(UnionLit {}) r =
     mismatch l r
-diffExprF l r@(UnionLit {}) =
+diffPrimitiveExpression l r@(UnionLit {}) =
     mismatch l r
-diffExprF aL aR =
+diffPrimitiveExpression aL aR =
     if same doc
     then ignore
     else align ("( " <> doc <> hardline <> ")")
   where
-    doc = diffExprA aL aR
+    doc = diffExpression aL aR
