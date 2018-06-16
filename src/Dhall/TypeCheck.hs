@@ -625,14 +625,14 @@ typeWithA tpa = loop
     loop ctx e@(ExtendTypes l r) = do
         tL <- loop ctx l
         let l' = Dhall.Core.normalize l
-        cL <- case tL of
-            Const cL -> return cL
-            _        -> Left (TypeError ctx e (ExtendTypesRequiresUnionType l l'))
+        case tL of
+            Const Type  -> return ()
+            _           -> Left (TypeError ctx e (ExtendTypesRequiresUnionType l l'))
         tR <- loop ctx r
         let r' = Dhall.Core.normalize r
-        cR <- case tR of
-            Const cR -> return cR
-            _        -> Left (TypeError ctx e (ExtendTypesRequiresUnionType r r'))
+        case tR of
+            Const Type  -> return ()
+            _           -> Left (TypeError ctx e (ExtendTypesRequiresUnionType r r'))
 
         case l' of
             Union _ -> return ()
@@ -2531,9 +2531,9 @@ prettyTypeMessage (ExtendTypesRequiresUnionType expr0 expr1) =
         \example, you cannot use variable arguments:                                     \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌───────────────────────────────────┐                                       \n\
+        \    ┌─────────────────────────────────────┐                                       \n\
         \    │ λ(t : Type) → t \\\\\\ < name : Text > │  Invalid: ❰t❱ might not be a union   \n\
-        \    └───────────────────────────────────┘  type                                 \n\
+        \    └─────────────────────────────────────┘  type                                 \n\
         \                                                                                \n\
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
