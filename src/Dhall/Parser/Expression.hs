@@ -157,7 +157,7 @@ nonEmptyOptional embedded = do
     return (OptionalLit b (pure a))
 
 operatorExpression :: Parser a -> Parser (Expr Src a)
-operatorExpression = orExpression
+operatorExpression = importAltExpression
 
 makeOperatorExpression
     :: (Parser a -> Parser (Expr Src a))
@@ -172,12 +172,8 @@ makeOperatorExpression subExpression operatorParser operator embedded =
         return (foldr1 operator (a:b)) )
 
 importAltExpression :: Parser a -> Parser (Expr Src a)
-importAltExpression embedded =
-  noted (do
-    l <- orExpression embedded
-    a <- embedded  -- FIXME: broken
-    r <- many (do _importAlt; orExpression embedded)
-    return (foldr1 (ImportAlt a) (l:r)))
+importAltExpression =
+    makeOperatorExpression orExpression _importAlt ImportAlt
 
 orExpression :: Parser a -> Parser (Expr Src a)
 orExpression =

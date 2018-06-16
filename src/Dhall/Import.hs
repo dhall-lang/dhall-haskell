@@ -737,6 +737,15 @@ loadStaticWith from_import ctx n (Embed import_) = do
                 else throwM (Imported (import_:imports) (HashMismatch {..}))
 
     return expr
+loadStaticWith from_import ctx n (ImportAlt a b) = do
+  resolveExpr a `catch` handler
+    where
+      resolveExpr expr = fmap join (traverse process expr)
+
+      process import_ = loadStaticWith from_import ctx n (Embed import_)
+
+      handler e = let _ = (e :: SomeException) in
+        resolveExpr b
 loadStaticWith from_import ctx n expr = fmap join (traverse process expr)
   where
     process import_ = loadStaticWith from_import ctx n (Embed import_)

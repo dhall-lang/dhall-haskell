@@ -404,7 +404,7 @@ data Expr s a
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
     -- | > ImportAlt                                ~  e1 ? e2
-    | ImportAlt a (Expr s a) (Expr s a)
+    | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
     deriving (Functor, Foldable, Traversable, Show, Eq, Data)
@@ -478,7 +478,7 @@ instance Monad (Expr s) where
     Field a b            >>= k = Field (a >>= k) b
     Project a b          >>= k = Project (a >>= k) b
     Note a b             >>= k = Note a (b >>= k)
-    ImportAlt a _b _c    >>= k = k a  -- TODO: does this make sense?
+    ImportAlt a b        >>= k = ImportAlt (a >>= k) (b >>= k)
     Embed a              >>= k = k a
 
 instance Bifunctor Expr where
@@ -543,7 +543,7 @@ instance Bifunctor Expr where
     first k (Field a b           ) = Field (first k a) b
     first k (Project a b         ) = Project (first k a) b
     first k (Note a b            ) = Note (k a) (first k b)
-    first k (ImportAlt a b c     ) = ImportAlt a (first k b) (first k c)
+    first k (ImportAlt a b       ) = ImportAlt (first k a) (first k b)
     first _ (Embed a             ) = Embed a
 
     second = fmap
@@ -800,10 +800,10 @@ shift d v (Project a b) = Project a' b
 shift d v (Note a b) = Note a b'
   where
     b' = shift d v b
-shift d v (ImportAlt a b c) = ImportAlt a b' c'
+shift d v (ImportAlt a b) = ImportAlt a' b'
   where
+    a' = shift d v a
     b' = shift d v b
-    c' = shift d v c
 -- The Dhall compiler enforces that all embedded values are closed expressions
 -- and `shift` does nothing to a closed expression
 shift _ _ (Embed p) = Embed p
@@ -952,10 +952,10 @@ subst x e (Project a b) = Project a' b
 subst x e (Note a b) = Note a b'
   where
     b' = subst x e b
-subst x e (ImportAlt a b c) = ImportAlt a b' c'
+subst x e (ImportAlt a b) = ImportAlt a' b'
   where
+    a' = subst x e a
     b' = subst x e b
-    c' = subst x e c
 -- The Dhall compiler enforces that all embedded values are closed expressions
 -- and `subst` does nothing to a closed expression
 subst _ _ (Embed p) = Embed p
@@ -1221,12 +1221,8 @@ alphaNormalize (Note s e₀) =
     Note s e₁
   where
     e₁ = alphaNormalize e₀
-alphaNormalize (ImportAlt a l₀ r₀) =
-    ImportAlt a l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
+alphaNormalize (ImportAlt l₀ _r₀) =
+    alphaNormalize l₀
 alphaNormalize (Embed a) =
     Embed a
 
@@ -1327,7 +1323,7 @@ denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (Constructors a      ) = Constructors (denote a)
 denote (Field a b           ) = Field (denote a) b
 denote (Project a b         ) = Project (denote a) b
-denote (ImportAlt a b c     ) = ImportAlt a (denote b) (denote c)
+denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
 {-| Reduce an expression to its normal form, performing beta reduction and applying
@@ -1698,7 +1694,7 @@ normalizeWith ctx e0 = loop (denote e0)
                     return (x, v)
             r' -> Project r' xs
     Note _ e' -> loop e'
-    ImportAlt a x y -> ImportAlt a (loop x) (loop y)
+    ImportAlt l _r -> loop l
     Embed a -> Embed a
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
@@ -1912,7 +1908,7 @@ isNormalized e = case denote e of
                     else True
             _ -> True
     Note _ e' -> isNormalized e'
-    ImportAlt _ _ _ -> True
+    ImportAlt l _r -> isNormalized l
     Embed _ -> True
 
 _ERROR :: String
