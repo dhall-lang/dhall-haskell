@@ -704,7 +704,7 @@ loadStaticWith from_import ctx n (Embed import_) = do
                     -- cached, since they have already been checked
                     expr''' <- case Dhall.TypeCheck.typeWith ctx expr'' of
                         Left  err -> throwM (Imported (import_:imports) err)
-                        Right _   -> return (Dhall.Core.normalizeWith n expr'')
+                        Right _   -> return (Dhall.Core.normalizeWith Nothing n expr'')
                     zoom cache (State.put $! Map.insert here expr''' m)
                     return expr'''
 

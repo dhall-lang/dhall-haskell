@@ -215,7 +215,7 @@ inputFromWith filename (Type {..}) ctx n txt = do
             _ ->
                 Annot expr' expected
     _ <- throws (Dhall.TypeCheck.typeWith ctx annot)
-    case extract (Dhall.Core.normalizeWith n expr') of
+    case extract (Dhall.Core.normalizeWith Nothing n expr') of
         Just x  -> return x
         Nothing -> Control.Exception.throwIO InvalidType
 
@@ -243,7 +243,7 @@ inputExprWith ctx n txt = do
     expr  <- throws (Dhall.Parser.exprFromText "(input)" txt)
     expr' <- Dhall.Import.loadWithContext ctx n expr
     _ <- throws (Dhall.TypeCheck.typeWith ctx expr')
-    pure (Dhall.Core.normalizeWith n expr')
+    pure (Dhall.Core.normalizeWith Nothing n expr')
 
 -- | Use this function to extract Haskell values directly from Dhall AST.
 --   The intended use case is to allow easy extraction of Dhall values for

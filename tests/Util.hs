@@ -31,7 +31,7 @@ normalize' :: Expr Src X -> Text
 normalize' = Dhall.Core.pretty . Dhall.Core.normalize
 
 normalizeWith' :: Normalizer X -> Expr Src X -> Text
-normalizeWith' ctx = Dhall.Core.pretty . Dhall.Core.normalizeWith ctx
+normalizeWith' ctx = Dhall.Core.pretty . Dhall.Core.normalizeWith Nothing ctx
 
 code :: Text -> IO (Expr Src X)
 code = codeWith Dhall.Context.empty

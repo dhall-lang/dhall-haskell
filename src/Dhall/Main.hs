@@ -21,6 +21,7 @@ import Dhall.Import (Imported(..), load)
 import Dhall.Parser (Src)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
+import Dhall.Optimizer (Optimizer, optimizer)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
@@ -50,7 +51,8 @@ data Options = Options
     , plain   :: Bool
     }
 
-data Mode = Default | Version | Resolve | Type | Normalize | Repl | Format (Maybe FilePath) | Hash | Diff Text Text
+data Mode = Default | Version | Resolve | Type | Normalize | NormalizeOpt
+          | Repl | Format (Maybe FilePath) | Hash | Diff Text Text
 
 parseInplace :: Parser String
 parseInplace =
@@ -78,13 +80,14 @@ parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
 
 parseMode :: Parser Mode
 parseMode =
-        subcommand "version"   "Display version"                 (pure Version)
-    <|> subcommand "resolve"   "Resolve an expression's imports" (pure Resolve)
-    <|> subcommand "type"      "Infer an expression's type"      (pure Type)
-    <|> subcommand "normalize" "Normalize an expression"         (pure Normalize)
-    <|> subcommand "repl"      "Interpret expressions in a REPL" (pure Repl)
-    <|> subcommand "diff"      "Render the difference between the normal form of two expressions" diffParser
-    <|> subcommand "hash"      "Compute semantic hashes for Dhall expressions" (pure Hash)
+        subcommand "version"      "Display version"                 (pure Version)
+    <|> subcommand "resolve"      "Resolve an expression's imports" (pure Resolve)
+    <|> subcommand "type"         "Infer an expression's type"      (pure Type)
+    <|> subcommand "normalize"    "Normalize an expression"         (pure Normalize)
+    <|> subcommand "normalizeOpt" "Normalize an expression with optimizations" (pure NormalizeOpt)
+    <|> subcommand "repl"         "Interpret expressions in a REPL" (pure Repl)
+    <|> subcommand "diff"         "Render the difference between the normal form of two expressions" diffParser
+    <|> subcommand "hash"         "Compute semantic hashes for Dhall expressions" (pure Hash)
     <|> formatSubcommand
     <|> pure Default
   where
@@ -239,6 +242,15 @@ command (Options {..}) = do
 
             render System.IO.stdout (Dhall.Core.normalize resolvedExpression)
 
+        NormalizeOpt -> do
+            expression <- getExpression
+
+            resolvedExpression <- assertNoImports expression
+
+            _ <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
+
+            render System.IO.stdout (Dhall.Core.normalizeOpt (Just (optimizer :: Optimizer Src X)) resolvedExpression)
+
         Type -> do
             expression <- getExpression
 
@@ -265,7 +277,7 @@ command (Options {..}) = do
             Dhall.Format.format inplace
 
         Hash -> do
-            Dhall.Hash.hash 
+            Dhall.Hash.hash
 
 main :: IO ()
 main = do
