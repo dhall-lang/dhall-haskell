@@ -737,18 +737,86 @@ loadStaticWith from_import ctx n (Embed import_) = do
                 else throwM (Imported (import_:imports) (HashMismatch {..}))
 
     return expr
-loadStaticWith from_import ctx n (ImportAlt a b) = do
-  resolveExpr a `catch` handler
-    where
-      resolveExpr expr = fmap join (traverse process expr)
-
-      process import_ = loadStaticWith from_import ctx n (Embed import_)
-
-      handler e = let _ = (e :: SomeException) in
-        resolveExpr b
-loadStaticWith from_import ctx n expr = fmap join (traverse process expr)
+loadStaticWith from_import ctx n expr = fmap join (importMapM process expr)
   where
     process import_ = loadStaticWith from_import ctx n (Embed import_)
+
+{-| This is basically just a monomorphic implementation of @traverse@
+    for @Expr@, with the exception for the @ImportAlt@ constructor, that
+    gets eliminated while we search for imports that fail to resolve.
+-}
+importMapM
+  :: (MonadCatch m)
+  => (a -> m b)
+  -> Expr s a
+  -> m (Expr s b)
+importMapM f (ImportAlt a b       ) = catch (importMapM f a)
+                                           (\e -> let _ = (e :: SomeException) in importMapM f b)
+importMapM _ (Const a             ) = pure (Const a)
+importMapM _ (Var a               ) = pure (Var a)
+importMapM f (Lam a b c           ) = Lam <$> pure a <*> importMapM f b <*> importMapM f c
+importMapM f (Pi a b c            ) = Pi <$> pure a <*> importMapM f b <*> importMapM f c
+importMapM f (App a b             ) = App <$> importMapM f a <*> importMapM f b
+importMapM f (Let a b c d         ) = Let <$> pure a <*> mapM (importMapM f) b <*> importMapM f c <*> importMapM f d
+importMapM f (Annot a b           ) = Annot <$> importMapM f a <*> importMapM f b
+importMapM _  Bool                  = pure Bool
+importMapM _ (BoolLit a           ) = pure (BoolLit a)
+importMapM f (BoolAnd a b         ) = BoolAnd <$> importMapM f a <*> importMapM f b
+importMapM f (BoolOr a b          ) = BoolOr <$> importMapM f a <*> importMapM f b
+importMapM f (BoolEQ a b          ) = BoolEQ <$> importMapM f a <*> importMapM f b
+importMapM f (BoolNE a b          ) = BoolNE <$> importMapM f a <*> importMapM f b
+importMapM f (BoolIf a b c        ) = BoolIf <$> importMapM f a <*> importMapM f b <*> importMapM f c
+importMapM _  Natural               = pure Natural
+importMapM _ (NaturalLit a        ) = pure (NaturalLit a)
+importMapM _  NaturalFold           = pure NaturalFold
+importMapM _  NaturalBuild          = pure NaturalBuild
+importMapM _  NaturalIsZero         = pure NaturalIsZero
+importMapM _  NaturalEven           = pure NaturalEven
+importMapM _  NaturalOdd            = pure NaturalOdd
+importMapM _  NaturalToInteger      = pure NaturalToInteger
+importMapM _  NaturalShow           = pure NaturalShow
+importMapM f (NaturalPlus a b     ) = NaturalPlus <$> importMapM f a <*> importMapM f b
+importMapM f (NaturalTimes a b    ) = NaturalTimes <$> importMapM f a <*> importMapM f b
+importMapM _  Integer               = pure Integer
+importMapM _ (IntegerLit a        ) = pure (IntegerLit a)
+importMapM _  IntegerShow           = pure IntegerShow
+importMapM _  IntegerToDouble       = pure IntegerToDouble
+importMapM _  Double                = pure Double
+importMapM _ (DoubleLit a         ) = pure (DoubleLit a)
+importMapM _  DoubleShow            = pure DoubleShow
+importMapM _  Text                  = pure Text
+importMapM f (TextLit (Chunks a b)) = fmap TextLit (Chunks <$> mapM (mapM (importMapM f)) a <*> pure b)
+importMapM f (TextAppend a b      ) = TextAppend <$> importMapM f a <*> importMapM f b
+importMapM _  List                  = pure List
+importMapM f (ListLit a b         ) = ListLit <$> mapM (importMapM f) a <*> mapM (importMapM f) b
+importMapM f (ListAppend a b      ) = ListAppend <$> importMapM f a <*> importMapM f b
+importMapM _  ListBuild             = pure ListBuild
+importMapM _  ListFold              = pure ListFold
+importMapM _  ListLength            = pure ListLength
+importMapM _  ListHead              = pure ListHead
+importMapM _  ListLast              = pure ListLast
+importMapM _  ListIndexed           = pure ListIndexed
+importMapM _  ListReverse           = pure ListReverse
+importMapM _  Optional              = pure Optional
+importMapM f (OptionalLit a b     ) = OptionalLit <$> importMapM f a <*> mapM (importMapM f) b
+importMapM _  OptionalFold          = pure OptionalFold
+importMapM _  OptionalBuild         = pure OptionalBuild
+importMapM f (Record a            ) = Record <$> mapM (importMapM f) a
+importMapM f (RecordLit a         ) = RecordLit <$> mapM (importMapM f) a
+importMapM f (Union a             ) = Union <$> mapM (importMapM f) a
+importMapM f (UnionLit a b c      ) = UnionLit <$> pure a <*> importMapM f b <*> mapM (importMapM f) c
+importMapM f (Combine a b         ) = Combine <$> importMapM f a <*> importMapM f b
+importMapM f (CombineTypes a b    ) = CombineTypes <$> importMapM f a <*> importMapM f b
+importMapM f (Prefer a b          ) = Prefer <$> importMapM f a <*> importMapM f b
+importMapM f (Merge a b c         ) = Merge <$> importMapM f a <*> importMapM f b <*> mapM (importMapM f) c
+importMapM f (Constructors a      ) = Constructors <$> importMapM f a
+importMapM f (Field a b           ) = Field <$> importMapM f a <*> pure b
+importMapM f (Project a b         ) = Project <$> importMapM f a <*> pure b
+importMapM f (Note a b            ) = Note <$> pure a <*> importMapM f b
+importMapM f (Embed a             ) = Embed <$> f a
+
+
+--traverse f (ImportAlt a b) = traverse f a `catch` (\e -> ... traverse f b)
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
