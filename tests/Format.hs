@@ -48,6 +48,9 @@ formatTests =
         , should
             "not remove parentheses when accessing a field of a record"
             "importAccess"
+        , should
+            "handle formatting sha256 imports correctly"
+            "sha256Printing"
         ]
 
 opts :: Data.Text.Prettyprint.Doc.LayoutOptions

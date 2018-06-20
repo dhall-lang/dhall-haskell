@@ -204,7 +204,7 @@ instance Pretty ImportHashed where
     pretty (ImportHashed  Nothing p) =
       Pretty.pretty p
     pretty (ImportHashed (Just h) p) =
-      Pretty.pretty p <> "sha256:" <> Pretty.pretty (show h) <> " "
+      Pretty.pretty p <> " sha256:" <> Pretty.pretty (show h)
 
 -- | Reference to an external resource
 data Import = Import
