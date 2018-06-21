@@ -153,7 +153,7 @@ Extra-Source-Files:
     tests/typecheck/*.dhall
     tests/typecheck/examples/Monoid/*.dhall
     benchmark/examples/*.dhall
-    benchmark/deep-nested-large/record/*.dhall
+    benchmark/deep-nested-large-record/*.dhall
 
 Source-Repository head
     Type: git
