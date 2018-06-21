@@ -465,6 +465,12 @@ skeleton (Pi {}) =
     <>  rarrow
     <>  " "
     <>  ignore
+skeleton (App Optional _) =
+        "Optional "
+    <>  ignore
+skeleton (App List _) =
+        "List "
+    <>  ignore
 skeleton (App {}) =
         ignore
     <>  " "
