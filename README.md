@@ -76,7 +76,7 @@ Optional Double
 
 ```bash
 $ dhall
-let null = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/null
+let null = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/null
 in  null Double ./bar
 <Ctrl-D>
 Bool

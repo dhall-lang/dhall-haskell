@@ -423,26 +423,26 @@ import Dhall
 -- > Cyclic import: ./file1
 --
 -- You can also import expressions by URL.  For example, you can find a Dhall
--- expression hosted at this URL using @ipfs@:
+-- expression hosted at this GitHub URL:
 --
--- <https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB>
+-- <https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True>
 --
--- > $ curl https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB
+-- > $ curl https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True
 -- > True
 --
 -- ... and you can reference that expression either directly:
 --
--- > >>> input auto "https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB" :: IO Bool
+-- > >>> input auto "https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
 -- > True
 -- 
 -- ... or inside of a larger expression:
 --
--- > >>> input auto "False == https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB" :: IO Bool
+-- > >>> input auto "False == https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
 -- > False
 --
--- You're not limited to hosting Dhall expressions on @ipfs@.  You can host a
--- Dhall expression anywhere that you can host UTF8-encoded text on the web, such
--- as Github, a pastebin, or your own web server.
+-- You're not limited to hosting Dhall expressions on GitHub.  You can host a
+-- Dhall expression anywhere that you can host UTF8-encoded text on the web,
+-- as a pastebin, or your own web server.
 --
 -- You can also import Dhall expressions from environment variables, too:
 --
@@ -483,12 +483,12 @@ import Dhall
 --
 -- __Exercise:__ There is a @not@ function hosted online here:
 --
--- <https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/Bool/not>
+-- <https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Bool/not>
 --
 -- Visit that link and read the documentation.  Then try to guess what this
 -- code returns:
 --
--- > >>> input auto "https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/Bool/not https://ipfs.io/ipfs/QmVf6hhTCXc9y2pRvhUmLk3AZYEgjeAz5PNwjt1GBYqsVB" :: IO Bool
+-- > >>> input auto "https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Bool/not https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
 -- > ???
 --
 -- Run the code to test your guess
@@ -1017,7 +1017,7 @@ import Dhall
 -- You can also use @let@ expressions to rename imports, like this:
 --
 -- > $ dhall
--- > let not = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/Bool/not
+-- > let not = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Bool/not
 -- > in  not True
 -- > <Ctrl-D>
 -- > Bool
@@ -1375,7 +1375,7 @@ import Dhall
 -- complex example:
 --
 -- > $ dhall
--- >     let Prelude/List/map = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/map
+-- >     let Prelude/List/map = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/map
 -- > in  λ(f : Natural → Natural) → Prelude/List/map Natural Natural f [1, 2, 3]
 -- > <Ctrl-D>
 -- > ∀(f : Natural → Natural) → List Natural
@@ -1399,11 +1399,11 @@ import Dhall
 -- __Exercise__: The Dhall Prelude provides a @replicate@ function which you can
 -- find here:
 --
--- <https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/replicate>
+-- <https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/replicate>
 --
 -- Test what the following Dhall expression normalizes to:
 --
--- > let replicate = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/replicate
+-- > let replicate = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/replicate
 -- > in  replicate 10
 --
 -- __Exercise__: If you have a lot of spare time, try to \"break the compiler\" by
@@ -1655,11 +1655,11 @@ import Dhall
 -- normalizing them:
 --
 -- > $ dhall format
--- > let replicate = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/replicate 
+-- > let replicate = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/replicate 
 -- > in replicate 5 (List (List Natural)) (replicate 5 (List Natural) (replicate 5 Natural 1))
 -- > <Ctrl-D>
 -- >     let replicate =
--- >           https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/replicate 
+-- >           https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/replicate 
 -- > 
 -- > in  replicate
 -- >     5
@@ -1722,7 +1722,7 @@ import Dhall
 -- multi-line expressions, too:
 --
 -- > $ dhall
--- > let replicate = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/replicate 
+-- > let replicate = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/replicate 
 -- > in replicate 5 (List (List Natural)) (replicate 5 (List Natural) (replicate 5 Natural 1))
 -- > <Ctrl-D>
 -- > List (List (List Natural))
@@ -2336,7 +2336,7 @@ import Dhall
 --
 -- Rules:
 --
--- > let Prelude/List/concat = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/concat
+-- > let Prelude/List/concat = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concat
 -- >
 -- > List/fold a (Prelude/List/concat a xss) b c
 -- >     = List/fold (List a) xss b (λ(x : List a) → List/fold a x b c)
@@ -2405,10 +2405,10 @@ import Dhall
 --
 -- Rules:
 --
--- > let Prelude/Optional/head  = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/Optional/head
--- > let Prelude/List/concat    = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/concat
--- > let Prelude/List/concatMap = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/concatMap
--- > let Prelude/List/map       = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/map
+-- > let Prelude/Optional/head  = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Optional/head
+-- > let Prelude/List/concat    = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concat
+-- > let Prelude/List/concatMap = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concatMap
+-- > let Prelude/List/map       = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/map
 -- > 
 -- > List/head a (Prelude/List/concat a xss) =
 -- >     Prelude/Optional/head a (Prelude/List/map (List a) (Optional a) (List/head a) xss)
@@ -2436,10 +2436,10 @@ import Dhall
 --
 -- Rules:
 --
--- > let Prelude/Optional/last  = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/Optional/last
--- > let Prelude/List/concat    = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/concat
--- > let Prelude/List/concatMap = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/concatMap
--- > let Prelude/List/map       = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/map
+-- > let Prelude/Optional/last  = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Optional/last
+-- > let Prelude/List/concat    = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concat
+-- > let Prelude/List/concatMap = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concatMap
+-- > let Prelude/List/map       = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/map
 -- > 
 -- > List/last a (Prelude/List/concat a xss) =
 -- >     Prelude/Optional/last a (Prelude/List/map (List a) (Optional a) (List/last a) xss)
@@ -2467,9 +2467,9 @@ import Dhall
 --
 -- Rules:
 --
--- > let Prelude/List/shifted = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/shifted
--- > let Prelude/List/concat  = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/concat
--- > let Prelude/List/map     = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/map
+-- > let Prelude/List/shifted = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/shifted
+-- > let Prelude/List/concat  = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concat
+-- > let Prelude/List/map     = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/map
 -- > 
 -- > List/indexed a (Prelude/List/concat a xss) =
 -- >     Prelude/List/shifted a (Prelude/List/map (List a) (List { index : Natural, value : a }) (List/indexed a) xss)
@@ -2492,9 +2492,9 @@ import Dhall
 --
 -- Rules:
 --
--- > let Prelude/List/map       = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/map
--- > let Prelude/List/concat    = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/concat
--- > let Prelude/List/concatMap = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/List/concatMap
+-- > let Prelude/List/map       = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/map
+-- > let Prelude/List/concat    = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concat
+-- > let Prelude/List/concatMap = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concatMap
 -- > 
 -- > List/reverse a (Prelude/List/concat a xss)
 -- >     = Prelude/List/concat a (List/reverse (List a) (Prelude/List/map (List a) (List a) (List/reverse a) xss))
@@ -2552,7 +2552,7 @@ import Dhall
 --
 -- ... which currenty redirects to:
 --
--- <https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude>
+-- <https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75>
 --
 -- There is nothing \"official\" or \"standard\" about this Prelude other than
 -- the fact that it is mentioned in this tutorial.  The \"Prelude\" is just a
@@ -2563,12 +2563,12 @@ import Dhall
 -- subdirectories.  For example, the @Bool@ subdirectory has a @not@ file
 -- located here:
 --
--- <https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/Bool/not>
+-- <https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Bool/not>
 --
 -- The @not@ function is just a UTF8-encoded text file hosted online with the
 -- following contents
 --
--- > $ curl https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/Bool/not
+-- > $ curl https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Bool/not
 -- > {-
 -- > Flip the value of a `Bool`
 -- > 
@@ -2601,7 +2601,7 @@ import Dhall
 -- You can use this @not@ function either directly:
 --
 -- > $ dhall
--- > https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/Bool/not True
+-- > https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Bool/not True
 -- > <Ctrl-D>
 -- > Bool
 -- > 
@@ -2610,7 +2610,7 @@ import Dhall
 -- ... or assign the URL to a shorter name:
 --
 -- > $ dhall
--- > let Bool/not = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/Bool/not
+-- > let Bool/not = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Bool/not
 -- > in  Bool/not True
 -- > <Ctrl-D>
 -- > Bool
@@ -2621,7 +2621,7 @@ import Dhall
 -- consistency and documentation, such as @Prelude\/Natural\/even@, which
 -- re-exports the built-in @Natural/even@ function:
 --
--- > $ curl https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/Natural/even
+-- > $ curl https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Natural/even
 -- > {-
 -- > Returns `True` if a number if even and returns `False` otherwise
 -- > 
@@ -2638,11 +2638,10 @@ import Dhall
 -- > 
 -- > in  even
 --
--- You can also download the Prelude locally to your filesystem if you prefer
--- using local relative paths instead of URLs.  For example, you can use @wget@,
--- like this:
+-- You can also clone the Prelude locally to your filesystem if you prefer
+-- using `git clone`, like this:
 --
--- > $ wget -np -nH -r --cut-dirs=2 https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/
+-- > $ git clone https://github.com/dhall-lang/Prelude.git
 -- > $ tree Prelude
 -- > Prelude
 -- > ├── Bool
@@ -2653,16 +2652,20 @@ import Dhall
 -- > │   ├── not
 -- > │   ├── odd
 -- > │   ├── or
+-- > │   ├── package.dhall
 -- > │   └── show
 -- > ├── Double
+-- > │   ├── package.dhall
 -- > │   └── show
 -- > ├── Integer
+-- > │   ├── package.dhall
 -- > │   └── show
 -- > ├── List
 -- > │   ├── all
 -- > │   ├── any
 -- > │   ├── build
 -- > │   ├── concat
+-- > │   ├── concatMap
 -- > │   ├── filter
 -- > │   ├── fold
 -- > │   ├── generate
@@ -2673,6 +2676,7 @@ import Dhall
 -- > │   ├── length
 -- > │   ├── map
 -- > │   ├── null
+-- > │   ├── package.dhall
 -- > │   ├── replicate
 -- > │   ├── reverse
 -- > │   ├── shifted
@@ -2685,33 +2689,46 @@ import Dhall
 -- > │   ├── fold
 -- > │   ├── isZero
 -- > │   ├── odd
+-- > │   ├── package.dhall
 -- > │   ├── product
 -- > │   ├── show
 -- > │   ├── sum
 -- > │   └── toInteger
 -- > ├── Optional
+-- > │   ├── None
+-- > │   ├── Some
+-- > │   ├── all
+-- > │   ├── any
 -- > │   ├── build
 -- > │   ├── concat
+-- > │   ├── filter
 -- > │   ├── fold
 -- > │   ├── head
 -- > │   ├── last
+-- > │   ├── length
 -- > │   ├── map
+-- > │   ├── null
+-- > │   ├── package.dhall
 -- > │   ├── toList
 -- > │   └── unzip
+-- > ├── Record
+-- > │   ├── keyText
+-- > │   ├── keyValue
+-- > │   └── package.dhall
 -- > ├── Text
--- > │   └── concat
--- > └── index.html
---
--- ... or if you have an @ipfs@ daemon running, you can mount the Prelude
--- locally like this:
---
--- > $ ipfs mount
--- > $ cd /ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude
+-- > │   ├── concat
+-- > │   ├── concatMap
+-- > │   ├── concatMapSep
+-- > │   ├── concatSep
+-- > │   └── package.dhall
+-- > └── package.dhall
+-- > 
+-- > 8 directories, 70 files
 --
 -- Browse the Prelude online to learn more by seeing what functions are
 -- available and reading their inline documentation:
 --
--- <https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude>
+-- <https://github.com/dhall-lang/Prelude>
 --
 -- __Exercise__: Try to use a new Prelude function that has not been covered
 -- previously in this tutorial
@@ -2720,7 +2737,7 @@ import Dhall
 -- convenience:
 --
 -- > $ dhall
--- >     let Prelude = https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/package.dhall
+-- >     let Prelude = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/package.dhall
 -- >
 -- > in    λ(x : Text)
 -- >     → Prelude.`List`.length Text (Prelude.`List`.replicate 10 Text x)
@@ -2735,7 +2752,7 @@ import Dhall
 --
 -- __Exercise__: Browse the Prelude by running:
 --
--- > $ dhall <<< 'https://ipfs.io/ipfs/QmV5MMfZehF4Z1EC4hK1s4yjE81kZV5hxypcuqfh9qcDMB/Prelude/package.dhall'
+-- > $ dhall <<< 'https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/package.dhall'
 
 -- $conclusion
 --
