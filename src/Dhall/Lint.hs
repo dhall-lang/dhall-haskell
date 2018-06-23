@@ -28,7 +28,7 @@ lint expression = loop (Dhall.Core.denote expression)
         a' = loop a
         b' = loop b
     loop (Let a b c d)
-        | V a 0 `Dhall.Core.freeIn` d =
+        | not (V a 0 `Dhall.Core.freeIn` d) =
             loop d
         | otherwise =
             Let a b' c' d'
