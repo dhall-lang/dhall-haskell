@@ -204,6 +204,7 @@ Library
         Dhall.Format,
         Dhall.Hash,
         Dhall.Import,
+        Dhall.Lint,
         Dhall.Main
         Dhall.Parser,
         Dhall.Pretty,

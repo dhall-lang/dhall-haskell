@@ -35,10 +35,11 @@ import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Dhall
 import qualified Dhall.Core
 import qualified Dhall.Diff
+import qualified Dhall.Format
+import qualified Dhall.Hash
+import qualified Dhall.Lint
 import qualified Dhall.Parser
 import qualified Dhall.Repl
-import qualified Dhall.Hash
-import qualified Dhall.Format
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
 import qualified System.Console.ANSI
@@ -50,7 +51,17 @@ data Options = Options
     , plain   :: Bool
     }
 
-data Mode = Default | Version | Resolve | Type | Normalize | Repl | Format (Maybe FilePath) | Hash | Diff Text Text
+data Mode
+    = Default
+    | Version
+    | Resolve
+    | Type
+    | Normalize
+    | Repl
+    | Format (Maybe FilePath)
+    | Hash
+    | Diff Text Text
+    | Lint
 
 parseInplace :: Parser String
 parseInplace =
@@ -85,6 +96,7 @@ parseMode =
     <|> subcommand "repl"      "Interpret expressions in a REPL" (pure Repl)
     <|> subcommand "diff"      "Render the difference between the normal form of two expressions" diffParser
     <|> subcommand "hash"      "Compute semantic hashes for Dhall expressions" (pure Hash)
+    <|> subcommand "lint"      "Improve Dhall code"              (pure Lint)
     <|> formatSubcommand
     <|> pure Default
   where
@@ -266,6 +278,13 @@ command (Options {..}) = do
 
         Hash -> do
             Dhall.Hash.hash 
+
+        Lint -> do
+            expression <- getExpression
+
+            let lintedExpression = Dhall.Lint.lint expression
+
+            render System.IO.stdout lintedExpression
 
 main :: IO ()
 main = do
