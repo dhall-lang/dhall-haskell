@@ -1,11 +1,43 @@
 1.15.0
 
-* BREAKING CHANGE TO THE API: Removed the `Parent` constructor from `FilePrefix`.
+* BREAKING CHANGE TO THE API: Use strict `Text` instead of lazy `Text`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/455
+* BREAKING CHANGE TO THE API: Remove `Buildable` in favor of `Pretty`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/459
+* BREAKING CHANGE TO THE API: Removed the `Parent` constructor from `FilePrefix`
     * Instead, use `Here` with a `".."` prefix.
-
-* Added `inputFrom` and `inputFromWith`, which allow naming the file
-  that the expression is coming from. This improves error messages but
-  has no change to the semantics.
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/407
+* BUG FIX: Disallow duplicate fields in records
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/430
+* BUG FIX: Fix stripping of leading whitespace in multi-line strings
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/469
+* BUG FIX: Fix formatting field access of an import
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/471
+* Add `Integer/toDouble` built-in function
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/434
+* Add `dhall diff` command
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/442
+* Change `dhall-repl`/`dhall-hash`/`dhall-format` to `dhall` subcommands
+    * i.e. `dhall repl`/`dhall hash`/`dhall format`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/435
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/452
+* Added `inputFrom` and `inputFromWith`
+    * These allow naming the file that the expression is coming from for better
+      error messages
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/464
+* Performance improvements
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/420
+* Tutorial recommends GitHub for Prelude instead of IPFS
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/479
+* Pretty-print expressions in type errors
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/429
+* Formatting improvements
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/398
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/458
+* Diff improvements
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/455
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/470
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/478
 
 1.14.0
 
