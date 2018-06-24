@@ -34,6 +34,7 @@ module Dhall.Core (
     -- * Normalization
     , alphaNormalize
     , normalize
+    , normalizeOpt
     , normalizeWith
     , Normalizer
     , judgmentallyEqual
@@ -71,6 +72,7 @@ import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Traversable
+import Data.Maybe (fromMaybe)
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
@@ -1219,7 +1221,15 @@ alphaNormalize (Embed a) =
     leave ill-typed sub-expressions unevaluated.
 -}
 normalize :: Eq a => Expr s a -> Expr t a
-normalize = normalizeWith (const Nothing)
+normalize = normalizeWith Nothing (const Nothing)
+
+{-| Reduce an expression to its normal form, performing beta reduction and
+    appying optimizations.
+
+    `normalizeOpt` is similar to `normalize` but also apply optimizations.
+-}
+normalizeOpt :: Eq a => Maybe (Expr t a -> Expr t a) -> Expr s a -> Expr t a
+normalizeOpt opt = normalizeWith opt (const Nothing)
 
 {-| This function is used to determine whether folds like @Natural/fold@ or
     @List/fold@ should be lazy or strict in their accumulator based on the type
@@ -1323,10 +1333,10 @@ denote (Embed a             ) = Embed a
     with those functions is not total either.
 
 -}
-normalizeWith :: Eq a => Normalizer a -> Expr s a -> Expr t a
-normalizeWith ctx e0 = loop (denote e0)
+normalizeWith :: Eq a => Maybe (Expr t a -> Expr t a) -> Normalizer a -> Expr s a -> Expr t a
+normalizeWith opt ctx e0 = loop (denote e0)
  where
- loop e =  case e of
+ loop e = case fromMaybe id opt e of
     Const k -> Const k
     Var v -> Var v
     Lam x _A b -> Lam x _A' b'
@@ -1696,7 +1706,7 @@ type Normalizer a = forall s. Expr s a -> Maybe (Expr s a)
 --
 --   It is much more efficient to use `isNormalized`.
 isNormalizedWith :: (Eq s, Eq a) => Normalizer a -> Expr s a -> Bool
-isNormalizedWith ctx e = e == (normalizeWith ctx e)
+isNormalizedWith ctx e = e == (normalizeWith Nothing ctx e)
 
 
 -- | Quickly check if an expression is in normal form

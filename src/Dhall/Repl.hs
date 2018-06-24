@@ -15,12 +15,13 @@ import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
 import qualified Dhall
 import qualified Dhall.Context
-import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize )
+import qualified Dhall.Core as Dhall ( Var(V), Expr, normalizeOpt )
 import qualified Dhall.Pretty
 import qualified Dhall.Core as Expr ( Expr(..) )
 import qualified Dhall.Import as Dhall
 import qualified Dhall.Parser as Dhall
 import qualified Dhall.TypeCheck as Dhall
+import qualified Dhall.Optimizer as Dhall
 import qualified System.Console.ANSI
 import qualified System.Console.Haskeline.MonadException as Haskeline
 import qualified System.Console.Repline as Repline
@@ -34,7 +35,7 @@ repl explain = if explain then Dhall.detailed io else io
       evalStateT
         ( Repline.evalRepl
             "⊢ "
-            ( dontCrash . eval )
+            ( dontCrash . eval False . (:[]))
             options
         ( Repline.Word completer )
             greeter
@@ -89,21 +90,22 @@ parseAndLoad src = do
   liftIO ( Dhall.load parsed )
 
 
-eval :: ( MonadIO m, MonadState Env m ) => String -> m ()
-eval src = do
+eval :: ( MonadIO m, MonadState Env m ) => Bool -> [String] -> m ()
+eval withOpt srcs = do
   loaded <-
-    parseAndLoad src
+    parseAndLoad ( unwords srcs )
 
   exprType <-
     typeCheck loaded
 
   expr <-
-    normalize loaded
+    normalize opt loaded
 
   modify ( \e -> e { envIt = Just ( Binding expr exprType ) } )
 
   output System.IO.stdout expr
-
+  where
+    opt = if withOpt then Just Dhall.optimizer else Nothing
 
 
 typeOf :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
@@ -119,21 +121,20 @@ typeOf srcs = do
     typeCheck loaded
 
   exprType' <-
-    normalize exprType
+    normalize Nothing exprType
 
   output System.IO.stdout exprType'
 
 
-
 normalize
   :: MonadState Env m
-  => Dhall.Expr Dhall.Src Dhall.X -> m ( Dhall.Expr t Dhall.X )
-normalize e = do
+  => Maybe ( Dhall.Optimizer t Dhall.X ) -> Dhall.Expr Dhall.Src Dhall.X -> m ( Dhall.Expr t Dhall.X )
+normalize optimizer e = do
   env <-
     get
 
   return
-    ( Dhall.normalize
+    ( Dhall.normalizeOpt optimizer
         ( foldl'
             ( \a (k, Binding { bindingType, bindingExpr }) ->
                 Expr.Let k ( Just bindingType ) bindingExpr a
@@ -174,7 +175,7 @@ addBinding (k : "=" : srcs) = do
     typeCheck loaded
 
   expr <-
-    normalize loaded
+    normalize Nothing loaded
 
   modify
     ( \e ->
@@ -200,7 +201,7 @@ saveBinding (file : "=" : tokens) = do
 
   _ <- typeCheck loadedExpression
 
-  normalizedExpression <- normalize loadedExpression
+  normalizedExpression <- normalize Nothing loadedExpression
 
   let handler handle = output handle normalizedExpression
 
@@ -215,6 +216,8 @@ options =
   [ ( "type", dontCrash . typeOf )
   , ( "let", dontCrash . addBinding )
   , ( "save", dontCrash . saveBinding )
+  , ( "normalize", dontCrash . eval False )
+  , ( "normalizeOpt", dontCrash . eval True )
   ]
 
 
