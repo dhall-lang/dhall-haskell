@@ -118,7 +118,7 @@ module Dhall.Import (
 
 import Control.Applicative (empty)
 import Control.Exception (Exception, SomeException, throwIO)
-import Control.Monad.Catch (throwM, MonadCatch(catch))
+import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
@@ -321,6 +321,37 @@ instance Show MissingEnvironmentVariable where
         <>  "\n"
         <>  "↳ " <> Text.unpack name
 
+-- | Wrapper type for all Exceptions related to Imports
+data MissingImport = forall e. Exception e => MissingImport e
+  deriving (Typeable)
+
+instance Exception MissingImport
+
+instance Show MissingImport where
+  show (MissingImport e) = show e
+
+-- | List of Exceptions we encounter while resolving Import Alternatives
+newtype MissingImports = MissingImports [MissingImport]
+  deriving (Typeable)
+
+instance Exception MissingImports
+
+instance Show MissingImports where
+    show (MissingImports []) =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: No valid imports"
+        <>  "\n"
+    show (MissingImports [e]) = show e
+    show (MissingImports es) =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Failed to resolve imports. Error list:"
+        <>  "\n"
+        <>  concatMap (\e -> show e <> "\n") es
+        <>  "\n"
+
+throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
+throwMissingImport e = throwM (MissingImports [(MissingImport e)])
+
 
 -- | State threaded throughout the import process
 data Status = Status
@@ -333,22 +364,6 @@ data Status = Status
     , _manager :: Maybe Manager
     -- ^ Cache for the `Manager` so that we only acquire it once
     }
-
-newtype MissingImports = MissingImports [SomeException]
-  deriving (Typeable)
-
-instance Exception MissingImports
-
-instance Show MissingImports where
-    show (MissingImports []) =
-            "\n"
-        <>  "\ESC[1;31mError\ESC[0m: No valid imports"
-        <>  "\n"
-    show (MissingImports es) =
-            "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Failed to resolve imports:"
-        <>  concatMap show es
-        <>  "\n"
 
 -- | Default starting `Status`
 emptyStatus :: Status
@@ -553,7 +568,7 @@ exprFromImport (Import {..}) = do
 
             if exists
                 then return ()
-                else throwIO (MissingImports [(MissingFile path)])
+                else throwMissingImport (MissingFile path)
 
             text <- Data.Text.IO.readFile path
 
@@ -623,10 +638,10 @@ exprFromImport (Import {..}) = do
             x <- System.Environment.lookupEnv (Text.unpack env)
             case x of
                 Just string -> return (Text.unpack env, Text.pack string)
-                Nothing     -> throwIO (MissingEnvironmentVariable env)
+                Nothing     -> throwMissingImport (MissingEnvironmentVariable env)
 
         Missing -> liftIO $ do
-            throwIO (MissingImports [])
+            throwM (MissingImports [])
 
     case importMode of
         Code -> do
@@ -689,28 +704,41 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
     let here   = canonicalizeImport (import_:imports)
 
     if local here && not (local parent)
-        then throwM (Imported imports (ReferentiallyOpaque import_))
+        then throwMissingImport (Imported imports (ReferentiallyOpaque import_))
         else return ()
 
     expr <- if here `elem` canonicalizeAll imports
-        then throwM (Imported imports (Cycle import_))
+        then throwMissingImport (Imported imports (Cycle import_))
         else do
             m <- zoom cache State.get
             case Map.lookup here m of
                 Just expr -> return expr
                 Nothing   -> do
-                    let handler
-                            :: MonadCatch m
+                    let handler₀
+                            :: (MonadCatch m)
+                            => MissingImports
+                            -> StateT Status m (Expr Src Import)
+                        handler₀ e@(MissingImports []) = throwM e
+                        handler₀ (MissingImports [e]) =
+                          throwMissingImport (Imported (import_:imports) e)
+                        handler₀ (MissingImports es) = throwM
+                          (MissingImports
+                           (fmap
+                             (\e -> (MissingImport (Imported (import_:imports) e)))
+                             es))
+                        handler₁
+                            :: (MonadCatch m)
                             => SomeException
                             -> StateT Status m (Expr Src Import)
-                        handler e = throwM (Imported (import_:imports) e)
+                        handler₁ e =
+                          throwMissingImport (Imported (import_:imports) e)
 
                     -- This loads a \"dynamic\" expression (i.e. an expression
                     -- that might still contain imports)
                     let loadDynamic =
                             from_import (canonicalizeImport (import_:imports))
 
-                    expr' <- loadDynamic `catch` handler
+                    expr' <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
 
                     let imports' = import_:imports
                     zoom stack (State.put imports')
@@ -728,7 +756,7 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
                     -- There is no need to check expressions that have been
                     -- cached, since they have already been checked
                     expr''' <- case Dhall.TypeCheck.typeWith ctx expr'' of
-                        Left  err -> throwM (Imported (import_:imports) err)
+                        Left  err -> throwMissingImport (Imported (import_:imports) err)
                         Right _   -> return (Dhall.Core.normalizeWith n expr'')
                     zoom cache (State.put $! Map.insert here expr''' m)
                     return expr'''
@@ -740,7 +768,7 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
             let actualHash = hashExpression expr
             if expectedHash == actualHash
                 then return ()
-                else throwM (Imported (import_:imports) (HashMismatch {..}))
+                else throwMissingImport (Imported (import_:imports) (HashMismatch {..}))
 
     return expr
   ImportAlt a b -> loop a `catch` handler₀
