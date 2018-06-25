@@ -1,6 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Dhall.Freeze (freeze) where
+module Dhall.Freeze (
+      freeze
+    , hashImport
+    ) where
 
 import Dhall.Core
 import Dhall.Import (load, hashExpression)
