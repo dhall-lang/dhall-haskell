@@ -42,6 +42,7 @@ module Dhall.Core (
     , isNormalized
     , isNormalizedWith
     , denote
+    , freeIn
 
     -- * Pretty-printing
     , pretty
@@ -1890,6 +1891,24 @@ isNormalized e = case denote e of
             _ -> True
     Note _ e' -> isNormalized e'
     Embed _ -> True
+
+{-| Detect if the given variable is free within the given expression
+
+>>> "x" `freeIn` "x"
+True
+>>> "x" `freeIn` "y"
+False
+>>> "x" `freeIn` Lam "x" (Const Type) "x"
+False
+-}
+freeIn :: Eq a => Var -> Expr s a -> Bool
+variable `freeIn` expression =
+    Dhall.Core.shift 1 variable strippedExpression /= strippedExpression
+  where
+    denote' :: Expr t b -> Expr () b
+    denote' = denote
+
+    strippedExpression = denote' expression
 
 _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
