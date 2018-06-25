@@ -222,7 +222,7 @@ instance Pretty Import where
       where
         suffix :: Text
         suffix = case importMode of
-            RawText -> "as Text"
+            RawText -> " as Text"
             Code    -> ""
 
 -- | Type synonym for `Import`, provided for backwards compatibility
