@@ -4,7 +4,7 @@
 
 module Dhall.Import.HTTP where
 
-import Control.Exception (Exception, throwIO)
+import Control.Exception (throwIO)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
@@ -12,7 +12,6 @@ import Data.ByteString (ByteString)
 import Data.CaseInsensitive (CI)
 import Data.Dynamic (fromDynamic, toDyn)
 import Data.Semigroup ((<>))
-import Data.Typeable (Typeable)
 import Lens.Family.State.Strict (zoom)
 
 import qualified Control.Monad.Trans.State.Strict        as State
