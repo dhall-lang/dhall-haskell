@@ -142,18 +142,9 @@ parseMode =
             parserWithHelper = Options.Applicative.helper <*> parser
             parser = Format <$> optional parseInplace
 
-    freezeSubcommand =
-        Options.Applicative.hsubparser
-            (   Options.Applicative.command "freeze" parserInfo
-            <>  Options.Applicative.metavar "freeze"
-            )
-      where parserInfo =
-                Options.Applicative.info parserWithHelper
-                    (   Options.Applicative.fullDesc
-                    <>  Options.Applicative.progDesc "Add hashes to all import statements of an expression"
-                    )
-            parserWithHelper = Options.Applicative.helper <*> parser
-            parser = Freeze <$> optional parseInplace
+    freezeSubcommand = subcommand "freeze" "Add hashes to all import statements of an expression" parseFreeze
+        where
+            parseFreeze = Freeze <$> optional parseInplace
 
 opts :: Pretty.LayoutOptions
 opts =
