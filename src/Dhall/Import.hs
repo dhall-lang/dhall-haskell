@@ -123,7 +123,6 @@ import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
 import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Map (Map)
 import Data.Semigroup (sconcat, (<>))
 import Data.Text (Text)
 #if MIN_VERSION_base(4,8,0)
@@ -143,38 +142,32 @@ import Dhall.Core
     , ImportMode(..)
     , Import(..)
     )
+#ifdef MIN_VERSION_http_client
+import Dhall.Import.HTTP
+#endif
+import Dhall.Import.Types
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..))
 import Dhall.TypeCheck (X(..))
-import Lens.Family (LensLike')
 import Lens.Family.State.Strict (zoom)
-#if MIN_VERSION_http_client(0,5,0)
-import Network.HTTP.Client
-    (HttpException(..), HttpExceptionContent(..), Manager)
-#else
-import Network.HTTP.Client (HttpException(..), Manager)
-#endif
 
 import qualified Control.Monad.Trans.State.Strict        as State
 import qualified Crypto.Hash
 import qualified Data.ByteString
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
+
 import qualified Data.List                               as List
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Map.Strict                         as Map
 import qualified Data.Text.Encoding
 import qualified Data.Text                               as Text
-import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Encoding
 import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.Context
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
-import qualified Network.HTTP.Client                     as HTTP
-import qualified Network.HTTP.Client.TLS                 as HTTP
 import qualified System.Environment
 import qualified System.Directory
 import qualified Text.Megaparsec
@@ -248,51 +241,6 @@ instance Show e => Show (Imported e) where
         -- Canonicalize all imports
         imports' = zip [0..] (drop 1 (reverse (canonicalizeAll imports)))
 
--- | Newtype used to wrap `HttpException`s with a prettier `Show` instance
-newtype PrettyHttpException = PrettyHttpException HttpException
-    deriving (Typeable)
-
-instance Exception PrettyHttpException
-
-#if MIN_VERSION_http_client(0,5,0)
-instance Show PrettyHttpException where
-  show (PrettyHttpException (InvalidUrlException _ r)) =
-    "\n"
-    <>  "\ESC[1;31mError\ESC[0m: Invalid URL\n"
-    <>  "\n"
-    <>  "↳ " <> show r
-  show (PrettyHttpException (HttpExceptionRequest _ e)) = case e of
-    ConnectionFailure e' ->
-      "\n"
-      <>  "\ESC[1;31mError\ESC[0m: Wrong host\n"
-      <>  "\n"
-      <>  "↳ " <> show e'
-    InvalidDestinationHost host ->
-      "\n"
-      <>  "\ESC[1;31mError\ESC[0m: Invalid host name\n"
-      <>  "\n"
-      <>  "↳ " <> show host
-    ResponseTimeout ->
-      "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
-    e' -> "\n" <> show e'
-#else
-instance Show PrettyHttpException where
-    show (PrettyHttpException e) = case e of
-        FailedConnectionException2 _ _ _ e' ->
-                "\n"
-            <>  "\ESC[1;31mError\ESC[0m: Wrong host\n"
-            <>  "\n"
-            <>  "↳ " <> show e'
-        InvalidDestinationHost host ->
-                "\n"
-            <>  "\ESC[1;31mError\ESC[0m: Invalid host name\n"
-            <>  "\n"
-            <>  "↳ " <> show host
-        ResponseTimeout ->
-                "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
-        e' ->   "\n"
-            <> show e'
-#endif
 
 -- | Exception thrown when an imported file is missing
 data MissingFile = MissingFile FilePath
@@ -364,37 +312,29 @@ data Status = Status
     -- ^ Cache for the `Manager` so that we only acquire it once
     }
 
--- | Default starting `Status`
-emptyStatus :: Status
-emptyStatus = Status [] Map.empty Nothing
+-- | Exception thrown when a HTTP url is imported but dhall was built without
+-- the @with-http@ Cabal flag.
+data CannotImportHTTPURL =
+    CannotImportHTTPURL
+        String
+        (Maybe [(CI Data.ByteString.ByteString, Data.ByteString.ByteString)])
+    deriving (Typeable)
+
+instance Exception CannotImportHTTPURL
+
+instance Show CannotImportHTTPURL where
+    show (CannotImportHTTPURL url _mheaders) =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Cannot import HTTP URL.\n"
+        <>  "\n"
+        <>  "Dhall was compiled without the 'with-http' flag.\n"
+        <>  "\n"
+        <>  "The requested URL was: "
+        <>  url
+        <>  "\n"
 
 canonicalizeAll :: [Import] -> [Import]
 canonicalizeAll = map canonicalizeImport . List.tails
-
-stack :: Functor f => LensLike' f Status [Import]
-stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
-
-cache :: Functor f => LensLike' f Status (Map Import (Expr Src X))
-cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
-
-manager :: Functor f => LensLike' f Status (Maybe Manager)
-manager k s = fmap (\x -> s { _manager = x }) (k (_manager s))
-
-needManager :: StateT Status IO Manager
-needManager = do
-    x <- zoom manager State.get
-    case x of
-        Just m  -> return m
-        Nothing -> do
-            let settings = HTTP.tlsManagerSettings
-#if MIN_VERSION_http_client(0,5,0)
-                    { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (30 * 1000 * 1000) }  -- 30 seconds
-#else
-                    { HTTP.managerResponseTimeout = Just (30 * 1000 * 1000) }  -- 30 seconds
-#endif
-            m <- liftIO (HTTP.newManager settings)
-            zoom manager (State.put (Just m))
-            return m
 
 {-|
 > canonicalize (canonicalize x) = canonicalize x
@@ -485,38 +425,6 @@ toHeader _ = do
     empty
 
 
-{-| This exception indicates that there was an internal error in Dhall's
-    import-related logic
-    the `expected` type then the `extract` function must succeed.  If not, then
-    this exception is thrown
-
-    This exception indicates that an invalid `Type` was provided to the `input`
-    function
--}
-data InternalError = InternalError deriving (Typeable)
-
-_ERROR :: String
-_ERROR = "\ESC[1;31mError\ESC[0m"
-
-instance Show InternalError where
-    show InternalError = unlines
-        [ _ERROR <> ": Compiler bug                                                        "
-        , "                                                                                "
-        , "Explanation: This error message means that there is a bug in the Dhall compiler."
-        , "You didn't do anything wrong, but if you would like to see this problem fixed   "
-        , "then you should report the bug at:                                              "
-        , "                                                                                "
-        , "https://github.com/dhall-lang/dhall-haskell/issues                              "
-        , "                                                                                "
-        , "Please include the following text in your bug report:                           "
-        , "                                                                                "
-        , "```                                                                             "
-        , "Header extraction failed even though the header type-checked                    "
-        , "```                                                                             "
-        ]
-
-instance Exception InternalError
-
 -- | Exception thrown when an integrity check fails
 data HashMismatch = HashMismatch
     { expectedHash :: Crypto.Hash.Digest SHA256
@@ -574,15 +482,11 @@ exprFromImport (Import {..}) = do
             return (path, text)
 
         URL prefix file suffix maybeHeaders -> do
-            m <- needManager
-
             let fileText = Dhall.Pretty.Internal.prettyToStrictText file
             let url      = Text.unpack (prefix <> fileText <> suffix)
 
-            request <- liftIO (HTTP.parseUrlThrow url)
-
-            requestWithHeaders <- case maybeHeaders of
-                Nothing            -> return request
+            mheaders <- case maybeHeaders of
+                Nothing            -> return Nothing
                 Just importHashed_ -> do
                     expr <- loadStaticWith
                         exprFromImport
@@ -613,25 +517,17 @@ exprFromImport (Import {..}) = do
 
                     let expr' = Dhall.Core.normalize expr
 
-                    headers <- case toHeaders expr' of
+                    case toHeaders expr' of
                         Just headers -> do
-                            return headers
+                            return (Just headers)
                         Nothing      -> do
                             liftIO (throwIO InternalError)
 
-                    let requestWithHeaders = request
-                            { HTTP.requestHeaders = headers
-                            }
-
-                    return requestWithHeaders
-
-            response <- liftIO (HTTP.httpLbs requestWithHeaders m)
-
-            let bytes = HTTP.responseBody response
-
-            case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
-                Left  err  -> liftIO (throwIO err)
-                Right text -> return (url, Data.Text.Lazy.toStrict text)
+#ifdef MIN_VERSION_http_client
+            fetchFromHttpUrl url mheaders
+#else
+            liftIO (throwIO (CannotImportHTTPURL url mheaders))
+#endif
 
         Env env -> liftIO $ do
             x <- System.Environment.lookupEnv (Text.unpack env)
