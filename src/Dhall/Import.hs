@@ -116,7 +116,7 @@ module Dhall.Import (
     ) where
 
 import Control.Applicative (empty)
-import Control.Exception (Exception, SomeException, throwIO)
+import Control.Exception (Exception, SomeException, throwIO, toException)
 import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
@@ -268,18 +268,8 @@ instance Show MissingEnvironmentVariable where
         <>  "\n"
         <>  "↳ " <> Text.unpack name
 
--- | Wrapper type for all Exceptions related to Imports
-data MissingImport = forall e. Exception e => MissingImport e
-  deriving (Typeable)
-
-instance Exception MissingImport
-
-instance Show MissingImport where
-  show (MissingImport e) = show e
-
 -- | List of Exceptions we encounter while resolving Import Alternatives
-newtype MissingImports = MissingImports [MissingImport]
-  deriving (Typeable)
+newtype MissingImports = MissingImports [SomeException]
 
 instance Exception MissingImports
 
@@ -293,24 +283,12 @@ instance Show MissingImports where
             "\n"
         <>  "\ESC[1;31mError\ESC[0m: Failed to resolve imports. Error list:"
         <>  "\n"
-        <>  concatMap (\e -> show e <> "\n") es
+        <>  concatMap (\e -> "\n" <> show e <> "\n") es
         <>  "\n"
 
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
-throwMissingImport e = throwM (MissingImports [(MissingImport e)])
+throwMissingImport e = throwM (MissingImports [(toException e)])
 
-
--- | State threaded throughout the import process
-data Status = Status
-    { _stack   :: [Import]
-    -- ^ Stack of `Import`s that we've imported along the way to get to the
-    -- current point
-    , _cache   :: Map Import (Expr Src X)
-    -- ^ Cache of imported expressions in order to avoid importing the same
-    --   expression twice with different values
-    , _manager :: Maybe Manager
-    -- ^ Cache for the `Manager` so that we only acquire it once
-    }
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
@@ -619,7 +597,7 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
                         handler₀ (MissingImports es) = throwM
                           (MissingImports
                            (fmap
-                             (\e -> (MissingImport (Imported (import_:imports) e)))
+                             (\e -> (toException (Imported (import_:imports) e)))
                              es))
                         handler₁
                             :: (MonadCatch m)
