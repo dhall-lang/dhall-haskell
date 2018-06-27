@@ -587,6 +587,13 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
             case Map.lookup here m of
                 Just expr -> return expr
                 Nothing   -> do
+                    -- Here we have to match and unwrap the @MissingImports@
+                    -- in a separate handler, otherwise we'd have it wrapped
+                    -- in another @Imported@ when parsing a @missing@, because
+                    -- we are representing it with an empty exception list
+                    -- (which would not be empty if this would happen).
+                    -- TODO: restructure the Exception hierarchy to prevent
+                    -- this nesting from happening in the first place.
                     let handler₀
                             :: (MonadCatch m)
                             => MissingImports
