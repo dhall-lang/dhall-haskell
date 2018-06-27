@@ -125,6 +125,9 @@ parserTests =
                 "builtins"
                 "./tests/parser/builtins.dhall"
             , shouldParse
+                "import alternatives"
+                "./tests/parser/importAlt.dhall"
+            , shouldParse
                 "large expression"
                 "./tests/parser/largeExpression.dhall"
             , shouldParse
