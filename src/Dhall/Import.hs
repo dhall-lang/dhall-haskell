@@ -113,6 +113,7 @@ module Dhall.Import (
     , PrettyHttpException(..)
     , MissingFile(..)
     , MissingEnvironmentVariable(..)
+    , MissingImports(..)
     ) where
 
 import Control.Applicative (empty)
