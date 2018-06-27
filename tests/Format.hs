@@ -51,6 +51,9 @@ formatTests =
         , should
             "handle formatting sha256 imports correctly"
             "sha256Printing"
+        , should
+            "handle formatting of Import suffix correctly"
+            "importSuffix"
         ]
 
 opts :: Data.Text.Prettyprint.Doc.LayoutOptions
