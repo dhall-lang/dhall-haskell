@@ -213,5 +213,10 @@ lint expression = loop (Dhall.Core.denote expression)
         a' = loop a
     loop (Note a _) =
         absurd a
+    loop (ImportAlt a b) =
+        ImportAlt a' b'
+      where
+        a' = loop a
+        b' = loop b
     loop (Embed a) =
         Embed a
