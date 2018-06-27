@@ -637,7 +637,7 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
                     -- There is no need to check expressions that have been
                     -- cached, since they have already been checked
                     expr''' <- case Dhall.TypeCheck.typeWith ctx expr'' of
-                        Left  err -> throwMissingImport (Imported (import_:imports) err)
+                        Left  err -> throwM (Imported (import_:imports) err)
                         Right _   -> return (Dhall.Core.normalizeWith n expr'')
                     zoom cache (State.put $! Map.insert here expr''' m)
                     return expr'''
