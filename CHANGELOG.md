@@ -1,5 +1,11 @@
 1.15.0
 
+* BREAKING CHANGE TO THE API: Support alternative imports using new `?` operator
+    * This adds a new constructor which affects exhaustive pattern matches
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/473
+* BREAKING CHANGE TO THE API: Add `Integer/toDouble` built-in function
+    * This adds a new constructor which affects exhaustive pattern matches
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/434
 * BREAKING CHANGE TO THE API: Use strict `Text` instead of lazy `Text`
     * See: https://github.com/dhall-lang/dhall-haskell/pull/455
 * BREAKING CHANGE TO THE API: Remove `Buildable` in favor of `Pretty`
@@ -13,8 +19,6 @@
     * See: https://github.com/dhall-lang/dhall-haskell/pull/469
 * BUG FIX: Fix formatting field access of an import
     * See: https://github.com/dhall-lang/dhall-haskell/pull/471
-* Add `Integer/toDouble` built-in function
-    * See: https://github.com/dhall-lang/dhall-haskell/pull/434
 * Add `dhall freeze` command
     * See: https://github.com/dhall-lang/dhall-haskell/pull/486
 * Add `dhall diff` command
