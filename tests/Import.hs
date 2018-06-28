@@ -61,7 +61,7 @@ shouldFail failures name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name
     catch
       (do
           _ <- Dhall.Import.load actualExpr
-          return ())
+          fail "Import should have failed, but it succeeds")
       (\(MissingImports es) -> case length es == failures of
                                 True -> pure ()
                                 False -> fail ("Should have failed "
