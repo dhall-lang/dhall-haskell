@@ -1222,6 +1222,8 @@ alphaNormalize (Note s e₀) =
     Note s e₁
   where
     e₁ = alphaNormalize e₀
+-- | We normalize only the left branch, because by the time we run
+--   this there should be no ImportAlt constructors anymore
 alphaNormalize (ImportAlt l₀ _r₀) =
     alphaNormalize l₀
 alphaNormalize (Embed a) =
