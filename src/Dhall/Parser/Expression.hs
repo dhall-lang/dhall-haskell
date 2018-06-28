@@ -157,7 +157,7 @@ nonEmptyOptional embedded = do
     return (OptionalLit b (pure a))
 
 operatorExpression :: Parser a -> Parser (Expr Src a)
-operatorExpression = orExpression
+operatorExpression = importAltExpression
 
 makeOperatorExpression
     :: (Parser a -> Parser (Expr Src a))
@@ -170,6 +170,10 @@ makeOperatorExpression subExpression operatorParser operator embedded =
         a <- subExpression embedded
         b <- many (do operatorParser; subExpression embedded)
         return (foldr1 operator (a:b)) )
+
+importAltExpression :: Parser a -> Parser (Expr Src a)
+importAltExpression =
+    makeOperatorExpression orExpression _importAlt ImportAlt
 
 orExpression :: Parser a -> Parser (Expr Src a)
 orExpression =
@@ -760,8 +764,13 @@ http = do
         (importHashed_ <|> (_openParens *> importHashed_ <* _closeParens)) )
     return (URL prefix path suffix headers)
 
+missing :: Parser ImportType
+missing = do
+  _missing
+  return Missing
+
 importType_ :: Parser ImportType
-importType_ = choice [ local, http, env ]
+importType_ = choice [ local, http, env, missing ]
 
 importHashed_ :: Parser ImportHashed
 importHashed_ = do

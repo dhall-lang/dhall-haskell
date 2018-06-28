@@ -163,6 +163,7 @@ data ImportType
     -- ^ URL of remote resource and optional headers stored in an import
     | Env  Text
     -- ^ Environment variable
+    | Missing
     deriving (Eq, Ord, Show)
 
 instance Semigroup ImportType where
@@ -187,6 +188,8 @@ instance Pretty ImportType where
         prettyHeaders h = " using " <> Pretty.pretty h
 
     pretty (Env env) = "env:" <> Pretty.pretty env
+
+    pretty Missing = "missing"
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
 data ImportMode = Code | RawText deriving (Eq, Ord, Show)
@@ -401,6 +404,8 @@ data Expr s a
     | Project (Expr s a) (Set Text)
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
+    -- | > ImportAlt                                ~  e1 ? e2
+    | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
     deriving (Functor, Foldable, Traversable, Show, Eq, Data)
@@ -474,6 +479,7 @@ instance Monad (Expr s) where
     Field a b            >>= k = Field (a >>= k) b
     Project a b          >>= k = Project (a >>= k) b
     Note a b             >>= k = Note a (b >>= k)
+    ImportAlt a b        >>= k = ImportAlt (a >>= k) (b >>= k)
     Embed a              >>= k = k a
 
 instance Bifunctor Expr where
@@ -538,6 +544,7 @@ instance Bifunctor Expr where
     first k (Field a b           ) = Field (first k a) b
     first k (Project a b         ) = Project (first k a) b
     first k (Note a b            ) = Note (k a) (first k b)
+    first k (ImportAlt a b       ) = ImportAlt (first k a) (first k b)
     first _ (Embed a             ) = Embed a
 
     second = fmap
@@ -794,6 +801,10 @@ shift d v (Project a b) = Project a' b
 shift d v (Note a b) = Note a b'
   where
     b' = shift d v b
+shift d v (ImportAlt a b) = ImportAlt a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
 -- The Dhall compiler enforces that all embedded values are closed expressions
 -- and `shift` does nothing to a closed expression
 shift _ _ (Embed p) = Embed p
@@ -941,6 +952,10 @@ subst x e (Project a b) = Project a' b
     a' = subst x e a
 subst x e (Note a b) = Note a b'
   where
+    b' = subst x e b
+subst x e (ImportAlt a b) = ImportAlt a' b'
+  where
+    a' = subst x e a
     b' = subst x e b
 -- The Dhall compiler enforces that all embedded values are closed expressions
 -- and `subst` does nothing to a closed expression
@@ -1207,6 +1222,11 @@ alphaNormalize (Note s e₀) =
     Note s e₁
   where
     e₁ = alphaNormalize e₀
+alphaNormalize (ImportAlt l₀ r₀) =
+    ImportAlt l₁ r₁
+  where
+    l₁ = alphaNormalize l₀
+    r₁ = alphaNormalize r₀
 alphaNormalize (Embed a) =
     Embed a
 
@@ -1307,6 +1327,7 @@ denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (Constructors a      ) = Constructors (denote a)
 denote (Field a b           ) = Field (denote a) b
 denote (Project a b         ) = Project (denote a) b
+denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
 {-| Reduce an expression to its normal form, performing beta reduction and applying
@@ -1677,6 +1698,7 @@ normalizeWith ctx e0 = loop (denote e0)
                     return (x, v)
             r' -> Project r' xs
     Note _ e' -> loop e'
+    ImportAlt l _r -> loop l
     Embed a -> Embed a
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
@@ -1890,6 +1912,7 @@ isNormalized e = case denote e of
                     else True
             _ -> True
     Note _ e' -> isNormalized e'
+    ImportAlt l _r -> isNormalized l
     Embed _ -> True
 
 {-| Detect if the given variable is free within the given expression

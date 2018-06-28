@@ -6,6 +6,7 @@ import Regression (regressionTests)
 import Tutorial (tutorialTests)
 import TypeCheck (typecheckTests)
 import Format (formatTests)
+import Import (importTests)
 import Test.Tasty
 
 allTests :: TestTree
@@ -17,6 +18,7 @@ allTests =
         , tutorialTests
         , formatTests
         , typecheckTests
+        , importTests
         ]
 
 main :: IO ()
