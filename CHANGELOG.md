@@ -15,12 +15,18 @@
     * See: https://github.com/dhall-lang/dhall-haskell/pull/471
 * Add `Integer/toDouble` built-in function
     * See: https://github.com/dhall-lang/dhall-haskell/pull/434
+* Add `dhall freeze` command
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/486
 * Add `dhall diff` command
     * See: https://github.com/dhall-lang/dhall-haskell/pull/442
+* Add `dhall lint` command
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/484
 * Change `dhall-repl`/`dhall-hash`/`dhall-format` to `dhall` subcommands
     * i.e. `dhall repl`/`dhall hash`/`dhall format`
     * See: https://github.com/dhall-lang/dhall-haskell/pull/435
     * See: https://github.com/dhall-lang/dhall-haskell/pull/452
+* Add `with-http` cabal flag to disable support for remote imports
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/482
 * Added `inputFrom` and `inputFromWith`
     * These allow naming the file that the expression is coming from for better
       error messages
