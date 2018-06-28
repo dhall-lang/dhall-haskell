@@ -35,10 +35,12 @@ import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Dhall
 import qualified Dhall.Core
 import qualified Dhall.Diff
+import qualified Dhall.Format
+import qualified Dhall.Freeze
+import qualified Dhall.Hash
+import qualified Dhall.Lint
 import qualified Dhall.Parser
 import qualified Dhall.Repl
-import qualified Dhall.Hash
-import qualified Dhall.Format
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
 import qualified System.Console.ANSI
@@ -50,7 +52,18 @@ data Options = Options
     , plain   :: Bool
     }
 
-data Mode = Default | Version | Resolve | Type | Normalize | Repl | Format (Maybe FilePath) | Hash | Diff Text Text
+data Mode
+    = Default
+    | Version
+    | Resolve
+    | Type
+    | Normalize
+    | Repl
+    | Format (Maybe FilePath)
+    | Freeze (Maybe FilePath)
+    | Hash
+    | Diff Text Text
+    | Lint (Maybe FilePath)
 
 parseInplace :: Parser String
 parseInplace =
@@ -85,7 +98,9 @@ parseMode =
     <|> subcommand "repl"      "Interpret expressions in a REPL" (pure Repl)
     <|> subcommand "diff"      "Render the difference between the normal form of two expressions" diffParser
     <|> subcommand "hash"      "Compute semantic hashes for Dhall expressions" (pure Hash)
+    <|> subcommand "lint"      "Improve Dhall code"              parseLint
     <|> formatSubcommand
+    <|> freezeSubcommand
     <|> pure Default
   where
     subcommand name description modeParser =
@@ -111,6 +126,9 @@ parseMode =
             .   Options.Applicative.strArgument
             .   Options.Applicative.metavar
 
+    parseLint =
+        Lint <$> optional parseInplace
+
     formatSubcommand =
         Options.Applicative.hsubparser
             (   Options.Applicative.command "format" parserInfo
@@ -123,6 +141,10 @@ parseMode =
                     )
             parserWithHelper = Options.Applicative.helper <*> parser
             parser = Format <$> optional parseInplace
+
+    freezeSubcommand = subcommand "freeze" "Add hashes to all import statements of an expression" parseFreeze
+        where
+            parseFreeze = Freeze <$> optional parseInplace
 
 opts :: Pretty.LayoutOptions
 opts =
@@ -264,8 +286,47 @@ command (Options {..}) = do
         Format inplace -> do
             Dhall.Format.format inplace
 
+        Freeze inplace -> do
+            Dhall.Freeze.freeze inplace
+
         Hash -> do
             Dhall.Hash.hash 
+
+        Lint inplace -> do
+            case inplace of
+                Just file -> do
+                    text <- Data.Text.IO.readFile file
+
+                    (header, expression) <- throws (Dhall.Parser.exprAndHeaderFromText file text)
+
+                    let lintedExpression = Dhall.Lint.lint expression
+
+                    let doc = Pretty.pretty header <> Pretty.pretty lintedExpression
+
+                    System.IO.withFile file System.IO.WriteMode (\h -> do
+                        Pretty.renderIO h (Pretty.layoutSmart opts doc)
+                        Data.Text.IO.hPutStrLn h "" )
+                Nothing -> do
+                    System.IO.hSetEncoding System.IO.stdin System.IO.utf8
+                    text <- Data.Text.IO.getContents
+
+                    (header, expression) <- throws (Dhall.Parser.exprAndHeaderFromText "(stdin)" text)
+
+                    let lintedExpression = Dhall.Lint.lint expression
+
+                    let doc = Pretty.pretty header <> prettyExpr lintedExpression
+
+                    supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
+
+                    if supportsANSI
+                      then
+                        Pretty.renderIO
+                          System.IO.stdout
+                          (fmap annToAnsiStyle (Pretty.layoutSmart opts doc))
+                      else
+                        Pretty.renderIO
+                          System.IO.stdout
+                          (Pretty.layoutSmart opts (Pretty.unAnnotate doc))
 
 main :: IO ()
 main = do
