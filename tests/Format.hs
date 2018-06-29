@@ -12,6 +12,7 @@ import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc
 import qualified Data.Text.Prettyprint.Doc.Render.Text
 import qualified Dhall.Parser
+import qualified Dhall.Pretty
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
@@ -56,13 +57,6 @@ formatTests =
             "importSuffix"
         ]
 
-opts :: Data.Text.Prettyprint.Doc.LayoutOptions
-opts =
-    Data.Text.Prettyprint.Doc.defaultLayoutOptions
-        { Data.Text.Prettyprint.Doc.layoutPageWidth =
-            Data.Text.Prettyprint.Doc.AvailablePerLine 80 1.0
-        }
-
 should :: Text -> Text -> TestTree
 should name basename =
     Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
@@ -77,7 +71,7 @@ should name basename =
             Right expr -> return expr
 
         let doc        = Data.Text.Prettyprint.Doc.pretty expr
-        let docStream  = Data.Text.Prettyprint.Doc.layoutSmart opts doc
+        let docStream  = Data.Text.Prettyprint.Doc.layoutSmart Dhall.Pretty.layoutOpts doc
         let actualText = Data.Text.Prettyprint.Doc.Render.Text.renderStrict docStream
 
         expectedText <- Data.Text.IO.readFile outputFile

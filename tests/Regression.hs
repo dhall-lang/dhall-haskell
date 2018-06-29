@@ -14,6 +14,7 @@ import qualified Dhall
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Parser
+import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified System.Timeout
 import qualified Test.Tasty
@@ -141,19 +142,12 @@ issue209 = Test.Tasty.HUnit.testCase "Issue #209" (do
     Just _ <- System.Timeout.timeout 1000000 (Control.Exception.evaluate $!! text)
     return () )
 
-opts :: Data.Text.Prettyprint.Doc.LayoutOptions
-opts =
-    Data.Text.Prettyprint.Doc.defaultLayoutOptions
-        { Data.Text.Prettyprint.Doc.layoutPageWidth =
-            Data.Text.Prettyprint.Doc.AvailablePerLine 80 1.0
-        }
-
 issue216 :: TestTree
 issue216 = Test.Tasty.HUnit.testCase "Issue #216" (do
     -- Verify that pretty-printing preserves string interpolation
     e <- Util.code "./tests/regression/issue216a.dhall"
     let doc       = Data.Text.Prettyprint.Doc.pretty e
-    let docStream = Data.Text.Prettyprint.Doc.layoutSmart opts doc
+    let docStream = Data.Text.Prettyprint.Doc.layoutSmart Dhall.Pretty.layoutOpts doc
     let text0 = Data.Text.Prettyprint.Doc.Render.Text.renderLazy docStream
 
     text1 <- Data.Text.Lazy.IO.readFile "./tests/regression/issue216b.dhall"
