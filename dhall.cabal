@@ -276,7 +276,7 @@ Test-Suite doctest
     Build-Depends:
         base                      ,
         Diff    >= 0.2   && < 0.4 ,
-        doctest >= 0.7.0 && < 0.16
+        doctest >= 0.7.0 && < 0.17
     Default-Language: Haskell2010
 
 Benchmark dhall-parser
