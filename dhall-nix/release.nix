@@ -13,6 +13,9 @@ let
     packageOverrides = pkgs: {
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: {
+          cryptohash-sha512 =
+            pkgs.haskell.lib.dontCheck haskellPackagesOld.cryptohash-sha512;
+
           dhall = haskellPackagesNew.callPackage ./nix/dhall.nix { };
 
           dhall-nix =
@@ -21,9 +24,17 @@ let
                 (haskellPackagesNew.callPackage ./nix/dhall-nix.nix { })
               );
 
-          formatting = haskellPackagesOld.formatting_6_3_0;
+          hnix =
+            pkgs.haskell.lib.dontCheck
+              (haskellPackagesNew.callPackage ./nix/hnix.nix { });
 
           prettyprinter = haskellPackagesOld.prettyprinter_1_2_0_1;
+
+          serialise =
+            pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
+
+          unordered-containers =
+            haskellPackagesOld.unordered-containers_0_2_9_0;
         };
       };
     };

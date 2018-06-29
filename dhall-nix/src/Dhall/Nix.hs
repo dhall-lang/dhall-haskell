@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE QuasiQuotes        #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 {-| This library only exports a single `dhallToNix` function for translating a
     Dhall syntax tree to a Nix syntax tree for the @hnix@ library
@@ -95,7 +97,6 @@ import Control.Applicative (empty)
 import Control.Exception (Exception)
 import Data.Foldable (toList)
 import Data.Fix (Fix(..))
-import Data.Scientific (Scientific)
 import Data.Typeable (Typeable)
 import Dhall.Core (Chunks(..), Const(..), Expr(..), Var(..))
 import Dhall.TypeCheck (X(..))
@@ -108,17 +109,13 @@ import Nix.Expr
     , NKeyName(..)
     , NString(..)
     , Params(..)
-    , ParamSet(..)
     )
 
 import qualified Data.HashMap.Strict.InsOrd
-import qualified Data.Map
 import qualified Data.Text
-import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Builder
 import qualified Dhall.Core
-import qualified Formatting.Buildable
 import qualified NeatInterpolation
+import qualified Nix
 
 {-| This is the exception type for all possible errors that might arise when
     translating the Dhall syntax tree to the Nix syntax tree
@@ -126,8 +123,6 @@ import qualified NeatInterpolation
 data CompileError
     = CannotReferenceShadowedVariable Var
     -- ^ Nix does not provide a way to reference a shadowed variable
-    | NoDoubles Scientific
-    -- ^ Nix does not provide a way to represent floating point values
     | UnexpectedConstructorsKeyword
     -- ^ The @constructors@ keyword is not yet supported
     deriving (Typeable)
@@ -183,27 +178,7 @@ Your code contains the following expression:
 Nix
 |]
       where
-        builder = Formatting.Buildable.build v
-
-        txt =
-            Data.Text.Lazy.toStrict (Data.Text.Lazy.Builder.toLazyText builder)
-
-    show (NoDoubles n) =
-        Data.Text.unpack [NeatInterpolation.text|
-$_ERROR: No doubles
-
-Explanation: Dhall values of type ❰Double❱ cannot be converted to Nix
-expressions because the Nix language provides no way to represent floating point
-values
-
-You provided the following value:
-
-↳ $txt
-
-... which cannot be translated to Nix
-|]
-      where
-        txt = Data.Text.pack (show n)
+        txt = Dhall.Core.pretty v
 
     show UnexpectedConstructorsKeyword =
         Data.Text.unpack [NeatInterpolation.text|
@@ -239,22 +214,20 @@ dhallToNix :: Expr s X -> Either CompileError (Fix NExprF)
 dhallToNix e = loop (Dhall.Core.normalize e)
   where
     loop (Const _) = return (Fix (NSet []))
-    loop (Var (V a 0)) = return (Fix (NSym (Data.Text.Lazy.toStrict a)))
+    loop (Var (V a 0)) = return (Fix (NSym a))
     loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
     loop (Lam a _ c) = do
-        let a' = Data.Text.Lazy.toStrict a
         c' <- loop c
-        return (Fix (NAbs (Param a') c'))
+        return (Fix (NAbs (Param a) c'))
     loop (Pi _ _ _) = return (Fix (NSet []))
     loop (App a b) = do
         a' <- loop a
         b' <- loop b
-        return (Fix (NApp a' b'))
+        return (Fix (NBinary NApp a' b'))
     loop (Let a _ c d) = do
-        let a' = Data.Text.Lazy.toStrict a
         c' <- loop c
         d' <- loop d
-        return (Fix (NLet [NamedVar [StaticKey a'] c'] d'))
+        return (Fix (NLet [NamedVar [StaticKey a] c' Nix.nullPos] d'))
     loop (Annot a _) = loop a
     loop Bool = return (Fix (NSet []))
     loop (BoolLit b) = return (Fix (NConstant (NBool b)))
@@ -283,40 +256,40 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop (NaturalLit n) = return (Fix (NConstant (NInt (fromIntegral n))))
     loop NaturalFold = do
         let e0 = Fix (NBinary NMinus "n" (Fix (NConstant (NInt 1))))
-        let e1 = Fix (NApp (Fix (NApp (Fix (NApp "naturalFold" e0)) "t")) "succ")
-        let e2 = Fix (NApp "succ" (Fix (NApp e1 "zero")))
+        let e1 = Fix (NBinary NApp (Fix (NBinary NApp (Fix (NBinary NApp "naturalFold" e0)) "t")) "succ")
+        let e2 = Fix (NBinary NApp "succ" (Fix (NBinary NApp e1 "zero")))
         let e3 = Fix (NBinary NLte "n" (Fix (NConstant (NInt 0))))
         let e4 = Fix (NAbs "succ" (Fix (NAbs "zero" (Fix (NIf e3 "zero" e2)))))
         let e5 = Fix (NAbs "n" (Fix (NAbs "t" e4)))
-        return (Fix (NLet [NamedVar ["naturalFold"] e5] "naturalFold"))
+        return (Fix (NLet [NamedVar ["naturalFold"] e5 Nix.nullPos] "naturalFold"))
     loop NaturalBuild = do
         let e0 = Fix (NBinary NPlus "n" (Fix (NConstant (NInt 1))))
-        let e1 = Fix (NApp (Fix (NApp "k" (Fix (NSet [])))) (Fix (NAbs "n" e0)))
-        return (Fix (NAbs "k" (Fix (NApp e1 (Fix (NConstant (NInt 0)))))))
+        let e1 = Fix (NBinary NApp (Fix (NBinary NApp "k" (Fix (NSet [])))) (Fix (NAbs "n" e0)))
+        return (Fix (NAbs "k" (Fix (NBinary NApp e1 (Fix (NConstant (NInt 0)))))))
     loop NaturalIsZero = do
         let e0 = Fix (NBinary NEq "n" (Fix (NConstant (NInt 0))))
         return (Fix (NAbs "n" e0))
     loop NaturalEven = do
         let e0 = Fix (NBinary NMinus "n" (Fix (NConstant (NInt 2))))
-        let e1 = Fix (NApp "naturalEven" e0)
+        let e1 = Fix (NBinary NApp "naturalEven" e0)
         let e2 = Fix (NBinary NNEq "n" (Fix (NConstant (NInt 1))))
         let e3 = Fix (NBinary NEq "n" (Fix (NConstant (NInt 0))))
         let e4 = Fix (NBinary NOr e3 (Fix (NBinary NAnd e2 e1)))
-        let e5 = NamedVar ["naturalEven"] (Fix (NAbs "n" e4))
+        let e5 = NamedVar ["naturalEven"] (Fix (NAbs "n" e4)) Nix.nullPos
         let e6 = Fix (NBinary NMinus (Fix (NConstant (NInt 0))) "n")
         let e7 = Fix (NBinary NLte "n" (Fix (NConstant (NInt 0))))
-        let e8 = Fix (NAbs "n" (Fix (NApp "naturalEven" (Fix (NIf e7 e6 "n")))))
+        let e8 = Fix (NAbs "n" (Fix (NBinary NApp "naturalEven" (Fix (NIf e7 e6 "n")))))
         return (Fix (NLet [e5] e8))
     loop NaturalOdd = do
         let e0 = Fix (NBinary NMinus "n" (Fix (NConstant (NInt 2))))
-        let e1 = Fix (NApp "naturalOdd" e0)
+        let e1 = Fix (NBinary NApp "naturalOdd" e0)
         let e2 = Fix (NBinary NNEq "n" (Fix (NConstant (NInt 0))))
         let e3 = Fix (NBinary NEq "n" (Fix (NConstant (NInt 1))))
         let e4 = Fix (NBinary NOr e3 (Fix (NBinary NAnd e2 e1)))
-        let e5 = NamedVar ["naturalOdd"] (Fix (NAbs "n" e4))
+        let e5 = NamedVar ["naturalOdd"] (Fix (NAbs "n" e4)) Nix.nullPos
         let e6 = Fix (NBinary NMinus (Fix (NConstant (NInt 0))) "n")
         let e7 = Fix (NBinary NLte "n" (Fix (NConstant (NInt 0))))
-        let e8 = Fix (NAbs "n" (Fix (NApp "naturalOdd" (Fix (NIf e7 e6 "n")))))
+        let e8 = Fix (NAbs "n" (Fix (NBinary NApp "naturalOdd" (Fix (NIf e7 e6 "n")))))
         return (Fix (NLet [e5] e8))
     loop NaturalShow = do
         return "toString"
@@ -333,28 +306,25 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop Integer = return (Fix (NSet []))
     loop (IntegerLit n) = return (Fix (NConstant (NInt (fromIntegral n))))
     loop IntegerShow = do
-        let e0 = Fix (NApp "toString" "x")
+        let e0 = Fix (NBinary NApp "toString" "x")
         let e1 = Fix (NBinary NPlus (Fix (NStr "+")) e0)
         let e2 = Fix (NBinary NLte (Fix (NConstant (NInt 0))) "x")
         let e3 = Fix (NAbs "x" (Fix (NIf e2 e1 e0)))
         return e3
+    loop IntegerToDouble = do
+        return (Fix (NAbs "x" "x"))
     loop Double = return (Fix (NSet []))
-    loop (DoubleLit n) = Left (NoDoubles n)
+    loop (DoubleLit n) = return (Fix (NConstant (NFloat (realToFrac n))))
     loop DoubleShow = do
         return "toString"
     loop Text = return (Fix (NSet []))
     loop (TextLit (Chunks abs_ c)) = do
         let process (a, b) = do
-                let text = Data.Text.Lazy.Builder.toLazyText a
-                let a'   = Data.Text.Lazy.toStrict text
                 b' <- loop b
-                return [Plain a', Antiquoted b']
+                return [Plain a, Antiquoted b']
         abs' <- mapM process abs_
 
-        let text = Data.Text.Lazy.Builder.toLazyText c
-        let c'   = Data.Text.Lazy.toStrict text
-
-        let chunks = concat abs' ++ [Plain c']
+        let chunks = concat abs' ++ [Plain c]
         return (Fix (NStr (DoubleQuoted chunks)))
     loop (TextAppend a b) = do
         a' <- loop a
@@ -369,48 +339,48 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         bs' <- mapM loop (toList bs)
         return (Fix (NList bs'))
     loop ListBuild = do
-        let e0 = Fix (NApp "k" (Fix (NSet [])))
+        let e0 = Fix (NBinary NApp "k" (Fix (NSet [])))
         let e1 = Fix (NBinary NConcat (Fix (NList ["x"])) "xs")
-        let e2 = Fix (NApp e0 (Fix (NAbs "x" (Fix (NAbs "xs" e1)))))
-        let e3 = Fix (NAbs "k" (Fix (NApp e2 (Fix (NList [])))))
+        let e2 = Fix (NBinary NApp e0 (Fix (NAbs "x" (Fix (NAbs "xs" e1)))))
+        let e3 = Fix (NAbs "k" (Fix (NBinary NApp e2 (Fix (NList [])))))
         return (Fix (NAbs "t" e3))
     loop ListFold = do
-        let e0 = Fix (NApp "f" (Fix (NApp (Fix (NApp "cons" "y")) "ys")))
+        let e0 = Fix (NBinary NApp "f" (Fix (NBinary NApp (Fix (NBinary NApp "cons" "y")) "ys")))
         let e1 = Fix (NAbs "f" (Fix (NAbs "y" (Fix (NAbs "ys" e0)))))
-        let e2 = Fix (NApp "builtins.foldl'" e1)
-        let e3 = Fix (NApp (Fix (NApp e2 (Fix (NAbs "ys" "ys")))) "xs")
+        let e2 = Fix (NBinary NApp "builtins.foldl'" e1)
+        let e3 = Fix (NBinary NApp (Fix (NBinary NApp e2 (Fix (NAbs "ys" "ys")))) "xs")
         let e4 = Fix (NAbs "xs" (Fix (NAbs "t" (Fix (NAbs "cons" e3)))))
         return (Fix (NAbs "t" e4))
     loop ListLength = return (Fix (NAbs "t" "builtins.length"))
     loop ListHead = do
-        let e0 = Fix (NApp "builtins.head" "xs")
+        let e0 = Fix (NBinary NApp "builtins.head" "xs")
         let e1 = Fix (NBinary NEq "xs" (Fix (NList [])))
         let e2 = Fix (NAbs "xs" (Fix (NIf e1 (Fix (NConstant NNull)) e0)))
         return (Fix (NAbs "t" e2))
     loop ListLast = do
-        let e0 = Fix (NApp "builtins.length" "xs")
+        let e0 = Fix (NBinary NApp "builtins.length" "xs")
         let e1 = Fix (NBinary NMinus e0 (Fix (NConstant (NInt 1))))
-        let e2 = Fix (NApp (Fix (NApp "builtins.elemAt" "xs")) e1)
+        let e2 = Fix (NBinary NApp (Fix (NBinary NApp "builtins.elemAt" "xs")) e1)
         let e3 = Fix (NBinary NEq "xs" (Fix (NList [])))
         let e4 = Fix (NAbs "xs" (Fix (NIf e3 (Fix (NConstant NNull)) e2)))
         return (Fix (NAbs "t" e4))
     loop ListIndexed = do
-        let e0 = Fix (NApp "builtins.length" "xs")
-        let e1 = Fix (NApp (Fix (NApp "builtins.elemAt" "xs")) "i")
+        let e0 = Fix (NBinary NApp "builtins.length" "xs")
+        let e1 = Fix (NBinary NApp (Fix (NBinary NApp "builtins.elemAt" "xs")) "i")
         let e2 =
-                [ NamedVar ["index"] "i"
-                , NamedVar ["value"] e1
+                [ NamedVar ["index"] "i" Nix.nullPos
+                , NamedVar ["value"] e1  Nix.nullPos
                 ]
-        let e3 = Fix (NApp "builtins.genList" (Fix (NAbs "i" (Fix (NSet e2)))))
-        return (Fix (NAbs "t" (Fix (NAbs "xs" (Fix (NApp e3 e0))))))
+        let e3 = Fix (NBinary NApp "builtins.genList" (Fix (NAbs "i" (Fix (NSet e2)))))
+        return (Fix (NAbs "t" (Fix (NAbs "xs" (Fix (NBinary NApp e3 e0))))))
     loop ListReverse = do
         let e0 = Fix (NBinary NMinus "n" "i")
         let e1 = Fix (NBinary NMinus e0 (Fix (NConstant (NInt 1))))
-        let e2 = Fix (NApp (Fix (NApp "builtins.elemAt" "xs")) e1)
-        let e3 = Fix (NApp "builtins.genList" (Fix (NAbs "i" e2)))
-        let e4 = Fix (NApp e3 "n")
-        let e5 = Fix (NApp "builtins.length" "xs")
-        let e6 = Fix (NAbs "xs" (Fix (NLet [NamedVar ["n"] e5] e4)))
+        let e2 = Fix (NBinary NApp (Fix (NBinary NApp "builtins.elemAt" "xs")) e1)
+        let e3 = Fix (NBinary NApp "builtins.genList" (Fix (NAbs "i" e2)))
+        let e4 = Fix (NBinary NApp e3 "n")
+        let e5 = Fix (NBinary NApp "builtins.length" "xs")
+        let e6 = Fix (NAbs "xs" (Fix (NLet [NamedVar ["n"] e5 Nix.nullPos] e4)))
         return (Fix (NAbs "t" e6))
     loop Optional = return (Fix (NAbs "t" (Fix (NSet []))))
     loop (OptionalLit _ b) =
@@ -419,7 +389,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
             Just c  -> loop c
     loop OptionalFold = do
         let e0 = Fix (NBinary NEq "x" (Fix (NConstant NNull)))
-        let e1 = Fix (NIf e0 "nothing" (Fix (NApp "just" "x")))
+        let e1 = Fix (NIf e0 "nothing" (Fix (NBinary NApp "just" "x")))
         let e2 = Fix (NAbs "t" (Fix (NAbs "just" (Fix (NAbs "nothing" e1)))))
         return (Fix (NAbs "t" (Fix (NAbs "x" e2))))
     loop OptionalBuild = do
@@ -435,65 +405,62 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- traverse loop a
         let a'' = do
                 (k, v) <- Data.HashMap.Strict.InsOrd.toList a'
-                let k' = Data.Text.Lazy.toStrict k
-                return (NamedVar [StaticKey k'] v)
+                return (NamedVar [StaticKey k] v Nix.nullPos)
         return (Fix (NSet a''))
     loop (Union _) = return (Fix (NSet []))
     loop (UnionLit k v kts) = do
         v' <- loop v
-        let k'   = Data.Text.Lazy.toStrict k
-        let e0   = do
-                k'' <- k : Data.HashMap.Strict.InsOrd.keys kts
-                return (Data.Text.Lazy.toStrict k'', Nothing)
-        let e1   = Data.Map.fromAscList e0
-        let e2   = Fix (NApp (Fix (NSym k')) v')
-        return (Fix (NAbs (ParamSet (FixedParamSet e1) Nothing) e2))
+        let e0 = do
+                k' <- k : Data.HashMap.Strict.InsOrd.keys kts
+                return (k', Nothing)
+        let e2 = Fix (NBinary NApp (Fix (NSym k)) v')
+        return (Fix (NAbs (ParamSet e0 False Nothing) e2))
     loop (Combine a b) = do
         a' <- loop a
         b' <- loop b
-        let e0 = Fix (NApp (Fix (NApp "map" "toKeyVals")) "ks")
-        let e1 = Fix (NApp "builtins.concatLists" e0)
-        let e2 = Fix (NApp "builtins.listToAttrs" e1)
+        let e0 = Fix (NBinary NApp (Fix (NBinary NApp "map" "toKeyVals")) "ks")
+        let e1 = Fix (NBinary NApp "builtins.concatLists" e0)
+        let e2 = Fix (NBinary NApp "builtins.listToAttrs" e1)
 
-        let defL = Fix (NApp (Fix (NApp "builtins.hasAttr" "k")) "kvsL")
-        let defR = Fix (NApp (Fix (NApp "builtins.hasAttr" "k")) "kvsR")
-        let valL = Fix (NApp (Fix (NApp "builtins.getAttr" "k")) "kvsL")
-        let valR = Fix (NApp (Fix (NApp "builtins.getAttr" "k")) "kvsR")
+        let defL = Fix (NBinary NApp (Fix (NBinary NApp "builtins.hasAttr" "k")) "kvsL")
+        let defR = Fix (NBinary NApp (Fix (NBinary NApp "builtins.hasAttr" "k")) "kvsR")
+        let valL = Fix (NBinary NApp (Fix (NBinary NApp "builtins.getAttr" "k")) "kvsL")
+        let valR = Fix (NBinary NApp (Fix (NBinary NApp "builtins.getAttr" "k")) "kvsR")
 
         let empty_ = Fix (NList [])
         let toNameValue v =
                 let bindings =
-                        [ NamedVar ["name" ] "k"
-                        , NamedVar ["value"] v
+                        [ NamedVar ["name" ] "k" Nix.nullPos
+                        , NamedVar ["value"] v   Nix.nullPos
                         ]
                 in  Fix (NList [Fix (NSet bindings)])
 
-        let e3 = Fix (NApp (Fix (NApp "combine" valL)) valR)
-        let e4 = Fix (NApp "builtins.isAttrs" valL)
-        let e5 = Fix (NApp "builtins.isAttrs" valR)
+        let e3 = Fix (NBinary NApp (Fix (NBinary NApp "combine" valL)) valR)
+        let e4 = Fix (NBinary NApp "builtins.isAttrs" valL)
+        let e5 = Fix (NBinary NApp "builtins.isAttrs" valR)
         let e6 = Fix (NBinary NAnd e4 e5)
         let e7 = Fix (NIf e6 (toNameValue e3) (toNameValue valR))
         let e8 = Fix (NIf defR e7 (toNameValue valL))
         let e9 = Fix (NIf defR (toNameValue valR) empty_)
         let toKeyVals = Fix (NAbs "k" (Fix (NIf defL e8 e9)))
 
-        let ksL = Fix (NApp "builtins.attrNames" "kvsL")
-        let ksR = Fix (NApp "builtins.attrNames" "kvsR")
+        let ksL = Fix (NBinary NApp "builtins.attrNames" "kvsL")
+        let ksR = Fix (NBinary NApp "builtins.attrNames" "kvsR")
         let ks  = Fix (NBinary NConcat ksL ksR)
 
         let e10 =
-                [ NamedVar ["ks"       ] ks
-                , NamedVar ["toKeyVals"] toKeyVals
+                [ NamedVar ["ks"       ] ks        Nix.nullPos
+                , NamedVar ["toKeyVals"] toKeyVals Nix.nullPos
                 ]
         let combine = Fix (NAbs "kvsL" (Fix (NAbs "kvsR" (Fix (NLet e10 e2)))))
 
-        let e11 = Fix (NApp (Fix (NApp "combine" a')) b')
-        return (Fix (NLet [NamedVar ["combine"] combine] e11))
+        let e11 = Fix (NBinary NApp (Fix (NBinary NApp "combine" a')) b')
+        return (Fix (NLet [NamedVar ["combine"] combine Nix.nullPos] e11))
     loop (CombineTypes _ _) = return (Fix (NSet []))
     loop (Merge a b _) = do
         a' <- loop a
         b' <- loop b
-        return (Fix (NApp b' a'))
+        return (Fix (NBinary NApp b' a'))
     loop (Constructors _) = do
         Left UnexpectedConstructorsKeyword
     loop (Prefer a b) = do
@@ -502,11 +469,11 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return (Fix (NBinary NUpdate a' b'))
     loop (Field a b) = do
         a' <- loop a
-        let b' = Data.Text.Lazy.toStrict b
-        return (Fix (NSelect a' [StaticKey b'] Nothing))
+        return (Fix (NSelect a' [StaticKey b] Nothing))
     loop (Project a b) = do
         a' <- loop a
-        let b' = fmap (StaticKey . Data.Text.Lazy.toStrict) (toList b)
-        return (Fix (NSet [Inherit (Just a') b']))
+        let b' = fmap StaticKey (toList b)
+        return (Fix (NSet [Inherit (Just a') b' Nix.nullPos]))
+    loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
     loop (Embed (X x)) = x

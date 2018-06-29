@@ -6,7 +6,7 @@ import Control.Exception (SomeException)
 import System.Exit (ExitCode(..))
 
 import qualified Control.Exception
-import qualified Data.Text.Lazy.IO
+import qualified Data.Text.IO
 import qualified Dhall
 import qualified Dhall.Import
 import qualified Dhall.Nix
@@ -23,7 +23,7 @@ main = handle (Dhall.detailed (do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
     () <- Options.Generic.getRecord "Compile Dhall to Nix"
 
-    inText <- Data.Text.Lazy.IO.getContents
+    inText <- Data.Text.IO.getContents
 
     expr <- case Dhall.Parser.exprFromText "(stdin)" inText of
         Left  err  -> Control.Exception.throwIO err
