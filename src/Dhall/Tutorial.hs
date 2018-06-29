@@ -629,6 +629,12 @@ import Dhall
 -- > 
 -- > { x = 1, y = True }
 --
+-- If the field has the name of a builtin symbol, like @Text@ or @List@,
+-- you can access it by putting the field name in backticks:
+--
+-- > >>> input auto "({ `Text` = \"hello\"}).`Text`" :: IO Text
+-- > "hello"
+--
 -- __Exercise__: What is the type of this record:
 --
 -- > { foo = 1
@@ -2768,6 +2774,10 @@ import Dhall
 -- The organization of the package mirrors the layout of the Prelude, meaning
 -- that every directory is stored as a record whose children are the fields of
 -- that record.
+--
+-- __Note__: You might have noticed, in order to access a field that has the
+-- same name as a builtin symbol, you need to put it in backticks:
+-- @Prelude.`Text`@.
 --
 -- __Exercise__: Browse the Prelude by running:
 --
