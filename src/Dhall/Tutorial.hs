@@ -482,7 +482,7 @@ import Dhall
 -- *** Exception: 
 -- ↳ ./baz: 
 -- ...
--- ...Error...: Missing file /Users/gabriel/proj/dhall-haskell/baz:
+-- ...Error...: Missing file .../baz:
 -- ...
 --
 -- This is because the parser thinks that @./baz:@ is a single token due to
