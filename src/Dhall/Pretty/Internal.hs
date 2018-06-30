@@ -541,7 +541,19 @@ prettyAnnotatedExpression a0 =
     prettyOperatorExpression a0
 
 prettyOperatorExpression :: Pretty a => Expr s a -> Doc Ann
-prettyOperatorExpression = prettyOrExpression
+prettyOperatorExpression = prettyImportAltExpression
+
+prettyImportAltExpression :: Pretty a => Expr s a -> Doc Ann
+prettyImportAltExpression a0@(ImportAlt _ _) =
+    enclose' "" "    " (space <> operator "?" <> space) (operator "?" <> "  ") (fmap duplicate (docs a0))
+  where
+    docs (ImportAlt a b) = prettyOrExpression a : docs b
+    docs (Note      _ b) = docs b
+    docs              b  = [ prettyOrExpression b ]
+prettyImportAltExpression (Note _ a) =
+    prettyImportAltExpression a
+prettyImportAltExpression a0 =
+    prettyOrExpression a0
 
 prettyOrExpression :: Pretty a => Expr s a -> Doc Ann
 prettyOrExpression a0@(BoolOr _ _) =
