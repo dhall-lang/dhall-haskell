@@ -1823,20 +1823,20 @@ import Dhall
 --
 -- First, Dhall only supports addition and multiplication on @Natural@ numbers
 -- (i.e. non-negative integers), which are not the same type of number as
--- @Integer@s (which can be negative).  An @Integer@ number is a number prefixed
--- with either a @+@ or @-@ symbol whereas a @Natural@ number has no leading
--- sign.  If you try to add or multiply two @Integer@s you will get a type
+-- @Integer@s (which can be negative).  An @Integer@ number is a number without
+-- the @+@ prefix or a @-@ symbol whereas a @Natural@ number is always prefixed
+-- with a @+@.  If you try to add or multiply two @Integer@s you will get a type
 -- error:
 --
 -- > $ dhall
--- > +2 + +2
+-- > 2 + 2
 -- > <Ctrl-D>
 -- > Use "dhall --explain" for detailed errors
--- > 
+-- >
 -- > Error: ❰+❱ only works on ❰Natural❱s
--- > 
--- > +2 + +2
--- > 
+-- >
+-- > 2 + 2
+-- >
 -- > (stdin):1:1
 --
 -- In fact, there are no built-in functions for @Integer@s (or @Double@s).  As
