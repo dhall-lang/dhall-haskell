@@ -1,3 +1,8 @@
+1.15.1
+
+* Fix infinite loop when formatting expressions containing `?`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/491
+
 1.15.0
 
 * BREAKING CHANGE TO THE API: Support alternative imports using new `?` operator
