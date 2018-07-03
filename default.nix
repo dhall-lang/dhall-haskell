@@ -9,20 +9,27 @@ let
     outputSha256 = "0ga345hgw6v2kzyhvf5kw96hf60mx5pbd9c4qj5q4nan4lr7nkxn";
   };
 
+  readDirectory = import ./nix/readDirectory.nix;
+
   config = {
     packageOverrides = pkgs: {
       haskellPackages = pkgs.haskellPackages.override {
-        overrides = haskellPackagesNew: haskellPackagesOld: {
-          dhall =
-            pkgs.haskell.lib.failOnAllWarnings
-              (pkgs.haskell.lib.justStaticExecutables
-                (haskellPackagesNew.callPackage ./nix/dhall.nix { })
-              );
+        overrides =
+          let
+            manualOverrides =
+              haskellPackagesNew: haskellPackagesOld: {
+                dhall =
+                  pkgs.haskell.lib.failOnAllWarnings
+                    (pkgs.haskell.lib.justStaticExecutables
+                      haskellPackagesOld.dhall
+                    );
 
-          formatting = haskellPackagesOld.formatting_6_3_0;
+                 prettyprinter =
+                   pkgs.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
+              };
 
-          prettyprinter = haskellPackagesOld.prettyprinter_1_2_0_1;
-        };
+          in
+            pkgs.lib.composeExtensions (readDirectory ./nix) manualOverrides;
       };
     };
   };
