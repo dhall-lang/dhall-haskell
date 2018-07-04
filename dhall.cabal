@@ -277,7 +277,7 @@ Test-Suite doctest
         base                          ,
         directory >= 1.2.2.0 && < 1.4 ,
         filepath                < 1.5 ,
-        temporary >= 1.2     && < 1.4 ,
+        mockery                 < 0.4 ,
         doctest   >= 0.7.0   && < 0.17
     Default-Language: Haskell2010
 
