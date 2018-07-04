@@ -274,9 +274,11 @@ Test-Suite doctest
     Main-Is: Main.hs
     GHC-Options: -Wall
     Build-Depends:
-        base                      ,
-        Diff    >= 0.2   && < 0.4 ,
-        doctest >= 0.7.0 && < 0.17
+        base                          ,
+        directory >= 1.2.2.0 && < 1.4 ,
+        filepath                < 1.5 ,
+        mockery                 < 0.4 ,
+        doctest   >= 0.7.0   && < 0.17
     Default-Language: Haskell2010
 
 Benchmark dhall-parser
