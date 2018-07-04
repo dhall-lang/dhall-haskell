@@ -171,12 +171,6 @@ import Dhall
 -- $setup
 --
 -- >>> :set -XOverloadedStrings
--- >>> writeFile "makeBools" "λ(n : Bool) → [ n && True, n && False, n || True, n || False ]"
--- >>> writeFile "bool1" "True"
--- >>> writeFile "bool2" "False"
--- >>> writeFile "both" "./bool1 && ./bool2"
--- >>> writeFile "file2" "./file1"
--- >>> writeFile "file1" "./file2"
 
 -- $introduction
 --
@@ -2822,14 +2816,3 @@ import Dhall
 -- this guide:
 --
 -- <https://github.com/dhall-lang/dhall-lang/wiki/How-to-translate-recursive-code-to-Dhall How to translate recursive code to Dhall>
-
--- $cleanup
---
--- >>> System.Directory.removeFile "bool"
--- >>> System.Directory.removeFile "bool1"
--- >>> System.Directory.removeFile "bool2"
--- >>> System.Directory.removeFile "both"
--- >>> System.Directory.removeFile "file1"
--- >>> System.Directory.removeFile "file2"
--- >>> System.Directory.removeFile "baz"
--- >>> System.Directory.removeFile "makeBools"
