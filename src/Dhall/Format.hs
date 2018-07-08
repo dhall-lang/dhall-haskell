@@ -33,7 +33,6 @@ format inplace = do
                     Pretty.renderIO handle (Pretty.layoutSmart opts doc)
                     Data.Text.IO.hPutStrLn handle "" )
             Nothing -> do
-                System.IO.hSetEncoding System.IO.stdin System.IO.utf8
                 inText <- Data.Text.IO.getContents
 
                 (header, expr) <- case exprAndHeaderFromText "(stdin)" inText of

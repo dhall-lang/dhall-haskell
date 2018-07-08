@@ -8,11 +8,9 @@ import Dhall.Import (hashExpressionToCode, load)
 import qualified Control.Exception
 import qualified Dhall.TypeCheck
 import qualified Data.Text.IO
-import qualified System.IO
 
 hash :: IO ()
 hash = do
-        System.IO.hSetEncoding System.IO.stdin System.IO.utf8
         inText <- Data.Text.IO.getContents
 
         expr <- case exprFromText "(stdin)" inText of
