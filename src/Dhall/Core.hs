@@ -1359,6 +1359,7 @@ normalizeWith ctx e0 = loop (denote e0)
       where
         _A' = loop _A
         _B' = loop _B
+    App NaturalFold (App NaturalBuild g) -> loop g -- fold/build fusion for `Natural'
     App f a -> case loop f of
         Lam x _A b -> loop b''  -- Beta reduce
           where
