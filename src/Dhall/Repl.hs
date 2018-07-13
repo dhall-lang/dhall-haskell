@@ -241,11 +241,7 @@ output
 output handle expr = do
   liftIO (System.IO.hPutStrLn handle "")  -- Visual spacing
 
-  let opts =
-          Pretty.defaultLayoutOptions
-              { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
-
-  let stream = Pretty.layoutSmart opts (Dhall.Pretty.prettyExpr expr)
+  let stream = Pretty.layoutSmart Dhall.Pretty.layoutOpts (Dhall.Pretty.prettyExpr expr)
   supportsANSI <- liftIO (System.Console.ANSI.hSupportsANSI handle)
   let ansiStream =
           if supportsANSI
