@@ -17,7 +17,11 @@ import Dhall.TypeCheck (X)
 
 -- | State threaded throughout the import process
 data Status = Status
-    { _stack   :: [Import]
+    { _root :: FilePath
+    -- ^ The directory we're resolving imports relative to.
+    --
+    -- @since 1.6
+    , _stack   :: [Import]
     -- ^ Stack of `Import`s that we've imported along the way to get to the
     -- current point
     , _cache   :: Map Import (Expr Src X)
@@ -27,9 +31,14 @@ data Status = Status
     -- ^ Cache for the HTTP `Manager` so that we only acquire it once
     }
 
--- | Default starting `Status`
-emptyStatus :: Status
-emptyStatus = Status [] Map.empty Nothing
+-- | Default starting `Status`, importing relative to the given directory.
+emptyStatus :: FilePath -> Status
+emptyStatus dir = Status dir [] Map.empty Nothing
+
+
+-- | @since 1.6
+root :: Functor f => LensLike' f Status FilePath
+root k s = fmap (\x -> s { _root = x }) (k (_root s))
 
 stack :: Functor f => LensLike' f Status [Import]
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))

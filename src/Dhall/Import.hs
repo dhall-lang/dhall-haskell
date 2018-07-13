@@ -103,6 +103,7 @@ module Dhall.Import (
     , load
     , loadWith
     , loadWithContext
+    , loadDirWithContext
     , hashExpression
     , hashExpressionToCode
     , Status(..)
@@ -150,7 +151,7 @@ import Dhall.Import.Types
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..))
 import Dhall.TypeCheck (X(..))
-import Lens.Family.State.Strict (zoom)
+import Lens.Family.State.Strict (use, zoom)
 
 import qualified Control.Monad.Trans.State.Strict        as State
 import qualified Crypto.Hash
@@ -431,18 +432,18 @@ exprFromImport (Import {..}) = do
     let ImportHashed {..} = importHashed
 
     (path, text) <- case importType of
-        Local prefix (File {..}) -> liftIO $ do
+        Local prefix (File {..}) -> do
             let Directory {..} = directory
 
             prefixPath <- case prefix of
                 Home -> do
-                    System.Directory.getHomeDirectory
+                    liftIO System.Directory.getHomeDirectory
 
                 Absolute -> do
                     return "/"
 
                 Here -> do
-                    System.Directory.getCurrentDirectory
+                    use root
 
             let cs = map Text.unpack (file : components)
 
@@ -450,13 +451,13 @@ exprFromImport (Import {..}) = do
 
             let path = foldr cons prefixPath cs
 
-            exists <- System.Directory.doesFileExist path
+            exists <- liftIO (System.Directory.doesFileExist path)
 
             if exists
                 then return ()
                 else throwMissingImport (MissingFile path)
 
-            text <- Data.Text.IO.readFile path
+            text <- liftIO (Data.Text.IO.readFile path)
 
             return (path, text)
 
@@ -536,6 +537,8 @@ exprFromImport (Import {..}) = do
 
 -- | Resolve all imports within an expression using a custom typing context and
 -- `Import`-resolving callback in arbitrary `MonadCatch` monad.
+--
+-- This resolves imports relative to @.@ (the current working directory).
 loadWith
     :: MonadCatch m
     => (Import -> StateT Status m (Expr Src Import))
@@ -544,20 +547,37 @@ loadWith
     -> Expr Src Import
     -> m (Expr Src X)
 loadWith from_import ctx n expr =
-    State.evalStateT (loadStaticWith from_import ctx n expr) emptyStatus
+    State.evalStateT (loadStaticWith from_import ctx n expr) (emptyStatus ".")
 
--- | Resolve all imports within an expression using a custom typing context.
+-- | Resolve all imports within an expression, relative to @.@ (the current working directory), using a custom typing context.
 --
 -- @load = loadWithContext Dhall.Context.empty@
+--
+-- This resolves imports relative to @.@ (the current working directory).
 loadWithContext
     :: Dhall.Context.Context (Expr Src X)
     -> Dhall.Core.Normalizer X
     -> Expr Src Import
     -> IO (Expr Src X)
 loadWithContext ctx n expr =
-    State.evalStateT (loadStaticWith exprFromImport ctx n expr) emptyStatus
+    loadDirWithContext "." ctx n expr
 
--- | This loads a \"static\" expression (i.e. an expression free of imports)
+-- | Resolve all imports within an expression, relative to a given directory, using a custom typing context.
+--
+-- @load = loadDirWithContext "." Dhall.Context.empty@
+--
+-- @since 1.6
+loadDirWithContext
+    :: FilePath
+    -> Dhall.Context.Context (Expr Src X)
+    -> Dhall.Core.Normalizer X
+    -> Expr Src Import
+    -> IO (Expr Src X)
+loadDirWithContext dir ctx n expr =
+    State.evalStateT (loadStaticWith exprFromImport ctx n expr) (emptyStatus dir)
+
+
+-- | This loads a \"static\" expression (i.e. an expression free of imports).
 loadStaticWith
     :: MonadCatch m
     => (Import -> StateT Status m (Expr Src Import))
@@ -565,7 +585,7 @@ loadStaticWith
     -> Dhall.Core.Normalizer X
     -> Expr Src Import
     -> StateT Status m (Expr Src X)
-loadStaticWith from_import ctx n expr₀ = case expr₀ of
+loadStaticWith from_import ctx n  expr₀ = case expr₀ of
   Embed import_ -> do
     imports <- zoom stack State.get
 

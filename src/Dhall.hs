@@ -22,8 +22,10 @@ module Dhall
     , inputFrom
     , inputWith
     , inputFromWith
+    , inputDirFromWith
     , inputExpr
     , inputExprWith
+    , inputExprDirWith
     , detailed
 
     -- * Types
@@ -149,6 +151,8 @@ instance Exception InvalidType
 
 >>> input auto "True" :: IO Bool
 True
+
+Resolves imports relative to @.@ (the current working directory).
 -}
 input
     :: Type a
@@ -160,6 +164,7 @@ input
 input =
   inputFrom "(input)"
 
+-- | Resolves imports relative to @.@ (the current working directory).
 inputFrom
     :: FilePath
     -- ^ The source file to report locations from; only used in error messages
@@ -173,6 +178,8 @@ inputFrom filename ty txt =
   inputFromWith filename ty Dhall.Context.empty (const Nothing) txt
 
 {-| Extend 'input' with a custom typing context and normalization process.
+
+Resolves imports relative to @.@ (the current working directory).
 
 -}
 inputWith
@@ -190,6 +197,8 @@ inputWith =
 
 {-| Extend 'inputFrom' with a custom typing context and normalization process.
 
+Resolves imports relative to @.@ (the current working directory).
+
 -}
 inputFromWith
     :: FilePath
@@ -203,9 +212,32 @@ inputFromWith
     -- ^ The Dhall program
     -> IO a
     -- ^ The decoded value in Haskell
-inputFromWith filename (Type {..}) ctx n txt = do
+inputFromWith filename ty ctx n txt =
+  inputDirFromWith "." filename ty ctx n txt
+
+{-| Extend 'inputFrom' with a root directory to resolve imports relative
+    to, a file to mention in errors as the source, a custom typing
+    context, and a custom normalization process.
+
+@since 1.6
+-}
+inputDirFromWith
+    :: FilePath
+    -- ^ The directory to resolve imports relative to.
+    -> FilePath
+    -- ^ The source file to report locations from; only used in error messages
+    -> Type a
+    -- ^ The type of value to decode from Dhall to Haskell
+    -> Dhall.Context.Context (Expr Src X)
+    -- ^ The starting context for type-checking
+    -> Dhall.Core.Normalizer X
+    -> Text
+    -- ^ The Dhall program
+    -> IO a
+    -- ^ The decoded value in Haskell
+inputDirFromWith dir filename (Type {..}) ctx n txt = do
     expr  <- throws (Dhall.Parser.exprFromText filename txt)
-    expr' <- Dhall.Import.loadWithContext ctx n expr
+    expr' <- Dhall.Import.loadDirWithContext dir ctx n expr
     let suffix = Dhall.Pretty.Internal.prettyToStrictText expected
     let annot = case expr' of
             Note (Src begin end bytes) _ ->
@@ -221,6 +253,9 @@ inputFromWith filename (Type {..}) ctx n txt = do
 
 {-| Similar to `input`, but without interpreting the Dhall `Expr` into a Haskell
     type.
+
+Resolves imports relative to @.@ (the current working directory).
+
 -}
 inputExpr
     :: Text
@@ -230,6 +265,9 @@ inputExpr
 inputExpr = inputExprWith Dhall.Context.empty (const Nothing)
 
 {-| Extend `inputExpr` with a custom typing context and normalization process.
+
+Resolves imports relative to @.@ (the current working directory).
+
 -}
 inputExprWith
     :: Dhall.Context.Context (Expr Src X)
@@ -240,10 +278,29 @@ inputExprWith
     -> IO (Expr Src X)
     -- ^ The fully normalized AST
 inputExprWith ctx n txt = do
+  inputExprDirWith "." ctx n txt
+
+{-| Extend `inputExpr` with a directory to resolve imports relative to,
+    custom typing context and normalization process.
+
+@since 1.6
+-}
+inputExprDirWith
+    :: FilePath
+    -- ^ The directory to resolve imports relative to.
+    -> Dhall.Context.Context (Expr Src X)
+    -- ^ The starting context for type-checking
+    -> Dhall.Core.Normalizer X
+    -> Text
+    -- ^ The Dhall program
+    -> IO (Expr Src X)
+    -- ^ The fully normalized AST
+inputExprDirWith dir ctx n txt = do
     expr  <- throws (Dhall.Parser.exprFromText "(input)" txt)
-    expr' <- Dhall.Import.loadWithContext ctx n expr
+    expr' <- Dhall.Import.loadDirWithContext dir ctx n expr
     _ <- throws (Dhall.TypeCheck.typeWith ctx expr')
     pure (Dhall.Core.normalizeWith n expr')
+
 
 -- | Use this function to extract Haskell values directly from Dhall AST.
 --   The intended use case is to allow easy extraction of Dhall values for
