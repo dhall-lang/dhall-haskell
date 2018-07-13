@@ -23,22 +23,23 @@
 -}
 module Dhall.TH where
 
-import Control.Monad
 import Data.Typeable
 import Language.Haskell.TH.Quote (dataToExpQ) -- 7.10 compatibility.
 import Language.Haskell.TH.Syntax
 
 import qualified Data.Text as Text
 import qualified Dhall
+import qualified GHC.IO.Encoding
+import qualified System.IO
 
 -- | This fully resolves, type checks, and normalizes the expression, so the
 --   resulting AST is self-contained.
 staticDhallExpression :: Text.Text -> Q Exp
-staticDhallExpression =
-    dataToExpQ (\a -> liftText <$> cast a) <=< runIO . Dhall.inputExpr
+staticDhallExpression text = do
+    runIO (GHC.IO.Encoding.setLocaleEncoding System.IO.utf8)
+    expression <- runIO (Dhall.inputExpr text)
+    dataToExpQ (\a -> liftText <$> cast a) expression
   where
     -- A workaround for a problem in TemplateHaskell (see
     -- https://stackoverflow.com/questions/38143464/cant-find-inerface-file-declaration-for-variable)
     liftText = fmap (AppE (VarE 'Text.pack)) . lift . Text.unpack
-
-
