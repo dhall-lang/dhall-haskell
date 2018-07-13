@@ -168,6 +168,10 @@ module Dhall.Tutorial (
 import Data.Vector (Vector)
 import Dhall
 
+-- $setup
+--
+-- >>> :set -XOverloadedStrings
+
 -- $introduction
 --
 -- The simplest way to use Dhall is to ignore the programming language features
@@ -208,9 +212,9 @@ import Dhall
 -- You can also load some types directly into Haskell without having to define a
 -- record, like this:
 --
--- > >>> :set -XOverloadedStrings
--- > >>> input auto "True" :: IO Bool
--- > True
+-- >>> :set -XOverloadedStrings
+-- >>> input auto "True" :: IO Bool
+-- True
 --
 -- The `input` function can decode any value if we specify the value's expected
 -- `Type`:
@@ -227,9 +231,9 @@ import Dhall
 -- > input bool :: Text -> IO Bool
 -- >
 -- > input bool "True" :: IO Bool
--- >
--- > >>> input bool "True"
--- > True
+--
+-- >>> input bool "True"
+-- True
 --
 -- ... or we can use `auto` to let the compiler infer what type to decode from
 -- the expected return type:
@@ -237,9 +241,9 @@ import Dhall
 -- > auto :: Interpret a => Type a
 -- >
 -- > input auto :: Interpret a => Text -> IO a
--- >
--- > >>> input auto "True" :: IO Bool
--- > True
+--
+-- >>> input auto "True" :: IO Bool
+-- True
 --
 -- You can see what types `auto` supports \"out-of-the-box\" by browsing the
 -- instances for the `Interpret` class.  For example, the following instance
@@ -259,14 +263,14 @@ import Dhall
 -- Therefore, since we can decode a @Bool@, we must also be able to decode a
 -- @List@ of @Bool@s, like this:
 --
--- > >>> input auto "[True, False]" :: IO (Vector Bool)
--- > [True,False]
+-- >>> input auto "[True, False]" :: IO (Vector Bool)
+-- [True,False]
 --
 -- We could also specify what type to decode by providing an explicit `Type`
 -- instead of using `auto` with a type annotation:
 --
--- > >>> input (vector bool) "[True, False]"
--- > [True, False]
+-- >>> input (vector bool) "[True, False]"
+-- [True,False]
 --
 -- __Exercise:__ Create a @./config@ file that the following program can decode:
 --
@@ -303,16 +307,17 @@ import Dhall
 --
 -- Suppose that we try to decode a value of the wrong type, like this:
 --
--- > >>> input auto "1" :: IO Bool
--- > *** Exception:
--- > Error: Expression doesn't match annotation
--- > 
--- > - Bool
--- > + Natural
--- > 
--- > 1 : Bool
--- > 
--- > (input):1:1
+-- >>> input auto "1" :: IO Bool
+-- *** Exception:
+-- ...Error...: Expression doesn't match annotation
+-- ...
+-- - Bool
+-- + Natural
+-- ...
+-- 1 : Bool
+-- ...
+-- (input):1:1
+-- ...
 --
 -- The interpreter complains because the string @\"1\"@ cannot be decoded into a
 -- Haskell value of type `Bool`.  This part of the type error:
@@ -364,14 +369,14 @@ import Dhall
 --
 -- You might wonder why in some cases we can decode a configuration file:
 --
--- > >>> writeFile "bool" "True"
--- > >>> input auto "./bool" :: IO Bool
--- > True
+-- >>> writeFile "bool" "True"
+-- >>> input auto "./bool" :: IO Bool
+-- True
 --
 -- ... and in other cases we can decode a value directly:
 --
--- > >>> input auto "True" :: IO Bool
--- > True
+-- >>> input auto "True" :: IO Bool
+-- True
 --
 -- This is because importing a configuration from a file is a special case of a
 -- more general language feature: Dhall expressions can reference other
@@ -385,8 +390,8 @@ import Dhall
 --
 -- ... and read in all three files in a single expression:
 -- 
--- > >>> input auto "[ ./bool1 , ./bool2 , ./both ]" :: IO (Vector Bool)
--- > [True,False,False]
+-- >>> input auto "[ ./bool1 , ./bool2 , ./both ]" :: IO (Vector Bool)
+-- [True,False,False]
 --
 -- Each file path is replaced with the Dhall expression contained within that
 -- file.  If that file contains references to other files then those references
@@ -415,12 +420,12 @@ import Dhall
 --
 -- ... then the interpreter will reject the import:
 --
--- > >>> input auto "./file1" :: IO Natural
--- > *** Exception: 
--- > ↳ ./file1
--- >   ↳ ./file2
--- >
--- > Cyclic import: ./file1
+-- >>> input auto "./file1" :: IO Natural
+-- *** Exception: 
+-- ↳ ./file1
+--   ↳ ./file2
+-- ...
+-- Cyclic import: ./file1
 --
 -- You can also import expressions by URL.  For example, you can find a Dhall
 -- expression hosted at this GitHub URL:
@@ -432,13 +437,13 @@ import Dhall
 --
 -- ... and you can reference that expression either directly:
 --
--- > >>> input auto "https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
--- > True
+-- >>> input auto "https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
+-- True
 -- 
 -- ... or inside of a larger expression:
 --
--- > >>> input auto "False == https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
--- > False
+-- >>> input auto "False == https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
+-- False
 --
 -- You're not limited to hosting Dhall expressions on GitHub.  You can host a
 -- Dhall expression anywhere that you can host UTF8-encoded text on the web,
@@ -446,9 +451,9 @@ import Dhall
 --
 -- You can also import Dhall expressions from environment variables, too:
 --
--- > >>> System.Environment.setEnv "FOO" "1"
--- > >>> input auto "env:FOO" :: IO Natural
--- > 1
+-- >>> System.Environment.setEnv "FOO" "1"
+-- >>> input auto "env:FOO" :: IO Natural
+-- 1
 --
 -- You can import types, too.  For example, we can change our @./bar@ file to:
 --
@@ -466,20 +471,21 @@ import Dhall
 -- Note that all imports must be terminated by whitespace or you will get either
 -- an import error or a parse error, like this:
 --
--- > >>> writeFile "baz" "2.0"
--- > >>> input auto "./baz: Double" :: IO Double
--- > *** Exception: 
--- > ↳ ./baz: 
--- > 
--- > Error: Missing file
+-- >>> writeFile "baz" "2.0"
+-- >>> input auto "./baz: Double" :: IO Double
+-- *** Exception: 
+-- ↳ ./baz: 
+-- ...
+-- ...Error...: Missing file .../baz:
+-- ...
 --
 -- This is because the parser thinks that @./baz:@ is a single token due to
 -- the missing whitespace before the colon and tries to import a file named
 -- @./baz:@, which does not exist.  To fix the problem we have to add a space
 -- after @./baz@:
 --
--- > >>> input auto "./baz : Double" :: IO Double
--- > 2.0
+-- >>> input auto "./baz : Double" :: IO Double
+-- 2.0
 --
 -- __Exercise:__ There is a @not@ function hosted online here:
 --
@@ -503,30 +509,32 @@ import Dhall
 -- required for empty lists but optional for non-empty lists.  You will get a
 -- type error if you provide an empty list without a type annotation:
 --
--- > >>> input auto "[]" :: IO (Vector Natural)
--- > *** Exception:
--- > Error: Invalid input
--- > 
--- > (input):1:3:
--- >   |
--- > 1 | []
--- >   |   ^
--- > unexpected end of input
--- > expecting ':' or whitespace
+-- >>> input auto "[]" :: IO (Vector Natural)
+-- *** Exception:
+-- ...Error...: Invalid input
+-- ...
+-- (input):1:3:
+--   |
+-- 1 | []
+--   |   ^
+-- unexpected end of input
+-- expecting ':' or whitespace
+-- ...
 --
 -- Also, list elements must all have the same type.  You will get an error if
 -- you try to store elements of different types in a list:
 --
--- > >>> input auto "[1, True, 3]" :: IO (Vector Natural)
--- > *** Exception:
--- > Error: List elements should all have the same type
--- > 
--- > - Natural
--- > + Bool
--- > 
--- > True
--- > 
--- > (input):1:5
+-- >>> input auto "[1, True, 3]" :: IO (Vector Natural)
+-- *** Exception:
+-- ...Error...: List elements should all have the same type
+-- ...
+-- - Natural
+-- + Bool
+-- ...
+-- True
+-- ...
+-- (input):1:5
+-- ...
 --
 -- __Exercise:__ What is the shortest @./config@ file that you can decode using
 -- this command:
@@ -550,10 +558,10 @@ import Dhall
 --
 -- An @Optional@ corresponds to Haskell's `Maybe` type for decoding purposes:
 --
--- > >>> input auto "[1] : Optional Natural" :: IO (Maybe Natural)
--- > Just 1
--- > >>> input auto "[] : Optional Natural" :: IO (Maybe Natural)
--- > Nothing
+-- >>> input auto "[1] : Optional Natural" :: IO (Maybe Natural)
+-- Just 1
+-- >>> input auto "[] : Optional Natural" :: IO (Maybe Natural)
+-- Nothing
 --
 -- You cannot omit the type annotation for @Optional@ values.  The type
 -- annotation is mandatory
@@ -612,8 +620,8 @@ import Dhall
 -- ... which means to access the value of the field named @fieldName@ from the
 -- @record@.  For example:
 --
--- > >>> input auto "{ foo = True, bar = 2, baz = 4.2 }.baz" :: IO Double
--- > 4.2
+-- >>> input auto "{ foo = True, bar = 2, baz = 4.2 }.baz" :: IO Double
+-- 4.2
 --
 -- ... and you can project out multiple fields into a new record using this
 -- syntax:
@@ -809,8 +817,8 @@ import Dhall
 -- Now that we've verified that our function type checks and works, we can use
 -- the same function within Haskell:
 --
--- > >>> input auto "./makeBools True" :: IO (Vector Bool)
--- > [True,False,True,True]
+-- >>> input auto "./makeBools True" :: IO (Vector Bool)
+-- [True,False,True,True]
 --
 -- __Exercise__: Create a file named @getFoo@ that is a function of the following
 -- type:
@@ -1226,10 +1234,10 @@ import Dhall
 -- The identity function is polymorphic, meaning that `id` works on values of
 -- different types:
 --
--- > >>> id 4
--- > 4
--- > >>> id True
--- > True
+-- >>> id 4
+-- 4
+-- >>> id True
+-- True
 --
 -- The equivalent function in Dhall is:
 --
