@@ -9,7 +9,7 @@
 }:
 mkDerivation {
   pname = "dhall";
-  version = "1.15.1";
+  version = "1.15.2";
   src = ./..;
   isLibrary = true;
   isExecutable = true;

@@ -1,3 +1,8 @@
+1.15.2
+
+* Permit `$` in quoted variable names
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/510
+
 1.15.1
 
 * Fix infinite loop when formatting expressions containing `?`
