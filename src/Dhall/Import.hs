@@ -589,8 +589,9 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
         local (Import (ImportHashed _ (Env     {})) _) = True
         local (Import (ImportHashed _ (Missing {})) _) = True
 
-    let parent = canonicalizeImport imports
-    let here   = canonicalizeImport (NonEmpty.cons import_ imports)
+    let parent   = canonicalizeImport imports
+    let imports' = NonEmpty.cons import_ imports
+    let here     = canonicalizeImport imports'
 
     if local here && not (local parent)
         then throwMissingImport (Imported imports (ReferentiallyOpaque import_))
@@ -616,27 +617,26 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
                             -> StateT Status m (Expr Src Import)
                         handler₀ e@(MissingImports []) = throwM e
                         handler₀ (MissingImports [e]) =
-                          throwMissingImport (Imported (NonEmpty.cons import_ imports) e)
+                          throwMissingImport (Imported imports' e)
                         handler₀ (MissingImports es) = throwM
                           (MissingImports
                            (fmap
-                             (\e -> (toException (Imported (NonEmpty.cons import_ imports) e)))
+                             (\e -> (toException (Imported imports' e)))
                              es))
                         handler₁
                             :: (MonadCatch m)
                             => SomeException
                             -> StateT Status m (Expr Src Import)
                         handler₁ e =
-                          throwMissingImport (Imported (NonEmpty.cons import_ imports) e)
+                          throwMissingImport (Imported imports' e)
 
                     -- This loads a \"dynamic\" expression (i.e. an expression
                     -- that might still contain imports)
                     let loadDynamic =
-                            from_import (canonicalizeImport (NonEmpty.cons import_ imports))
+                            from_import here
 
                     expr' <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
 
-                    let imports' = NonEmpty.cons import_ imports
                     zoom stack (State.put imports')
                     expr'' <- loadStaticWith from_import ctx n expr'
                     zoom stack (State.put imports)
@@ -652,7 +652,7 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
                     -- There is no need to check expressions that have been
                     -- cached, since they have already been checked
                     expr''' <- case Dhall.TypeCheck.typeWith ctx expr'' of
-                        Left  err -> throwM (Imported (NonEmpty.cons import_ imports) err)
+                        Left  err -> throwM (Imported imports' err)
                         Right _   -> return (Dhall.Core.normalizeWith n expr'')
                     zoom cache (State.put $! Map.insert here expr''' m)
                     return expr'''
