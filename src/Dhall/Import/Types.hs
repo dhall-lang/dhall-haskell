@@ -1,27 +1,30 @@
+{-# LANGUAGE OverloadedStrings   #-}
 {-# OPTIONS_GHC -Wall #-}
 
 module Dhall.Import.Types where
 
 import Control.Exception (Exception)
 import Data.Dynamic
+import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import Data.Semigroup ((<>))
 import Lens.Family (LensLike')
+import System.FilePath (isRelative, splitDirectories)
 
 import qualified Data.Map as Map
+import qualified Data.Text
 
-import Dhall.Core (Import, Expr)
+import Dhall.Core
+  ( Directory (..), Expr, File (..), FilePrefix (..), Import (..)
+  , ImportHashed (..), ImportMode (..), ImportType (..)
+  )
 import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
 
 
 -- | State threaded throughout the import process
 data Status = Status
-    { _root :: FilePath
-    -- ^ The directory we're resolving imports relative to.
-    --
-    -- @since 1.6
-    , _stack   :: [Import]
+    { _stack   :: NonEmpty Import
     -- ^ Stack of `Import`s that we've imported along the way to get to the
     -- current point
     , _cache   :: Map Import (Expr Src X)
@@ -33,14 +36,24 @@ data Status = Status
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status
-emptyStatus dir = Status dir [] Map.empty Nothing
+emptyStatus dir = Status (pure rootImport) Map.empty Nothing
+  where
+    prefix = if isRelative dir
+      then Here
+      else Absolute
+    pathComponents = fmap Data.Text.pack (reverse (splitDirectories dir))
+    dirAsFile = File (Directory pathComponents) "."
+    -- Fake import to set the directory we're relative to.
+    rootImport = Import
+      { importHashed = ImportHashed
+        { hash = Nothing
+        , importType = Local prefix dirAsFile
+        }
+      , importMode = Code
+      }
 
 
--- | @since 1.6
-root :: Functor f => LensLike' f Status FilePath
-root k s = fmap (\x -> s { _root = x }) (k (_root s))
-
-stack :: Functor f => LensLike' f Status [Import]
+stack :: Functor f => LensLike' f Status (NonEmpty Import)
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
 
 cache :: Functor f => LensLike' f Status (Map Import (Expr Src X))

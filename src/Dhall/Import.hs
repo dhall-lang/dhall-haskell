@@ -151,7 +151,7 @@ import Dhall.Import.Types
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..))
 import Dhall.TypeCheck (X(..))
-import Lens.Family.State.Strict (use, zoom)
+import Lens.Family.State.Strict (zoom)
 
 import qualified Control.Monad.Trans.State.Strict        as State
 import qualified Crypto.Hash
@@ -159,8 +159,8 @@ import qualified Data.ByteString
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
 
-import qualified Data.List                               as List
 import qualified Data.HashMap.Strict.InsOrd
+import qualified Data.List.NonEmpty                      as NonEmpty
 import qualified Data.Map.Strict                         as Map
 import qualified Data.Text.Encoding
 import qualified Data.Text                               as Text
@@ -226,23 +226,25 @@ instance Show ReferentiallyOpaque where
 
 -- | Extend another exception with the current import stack
 data Imported e = Imported
-    { importStack :: [Import] -- ^ Imports resolved so far, in reverse order
-    , nested      :: e        -- ^ The nested exception
+    { importStack :: NonEmpty Import -- ^ Imports resolved so far, in reverse order
+    , nested      :: e               -- ^ The nested exception
     } deriving (Typeable)
 
 instance Exception e => Exception (Imported e)
 
 instance Show e => Show (Imported e) where
     show (Imported imports e) =
-            (case imports of [] -> ""; _ -> "\n")
-        ++  unlines (map indent imports')
-        ++  show e
+           concat (zipWith indent [0..] toDisplay)
+        ++ show e
       where
-        indent (n, import_) =
-            take (2 * n) (repeat ' ') ++ "↳ " ++ Dhall.Pretty.Internal.prettyToString import_
-        -- Canonicalize all imports
-        imports' = zip [0..] (drop 1 (reverse (canonicalizeAll imports)))
-
+        indent n import_ =
+            "\n" ++ replicate (2 * n) ' ' ++ "↳ " ++ Dhall.Pretty.Internal.prettyToString import_
+        canonical = NonEmpty.toList (canonicalizeAll imports)
+        -- The immediate error's source is displayed by 'e', so we
+        -- need to not display the first (innermost) import, and the
+        -- final (outermost) import is fake to establish the base
+        -- directory. Also, we need outermost-first.
+        toDisplay = drop 1 (reverse (drop 1 canonical))
 
 -- | Exception thrown when an imported file is missing
 data MissingFile = MissingFile FilePath
@@ -313,8 +315,10 @@ instance Show CannotImportHTTPURL where
         <>  url
         <>  "\n"
 
-canonicalizeAll :: [Import] -> [Import]
-canonicalizeAll = map canonicalizeImport . List.tails
+canonicalizeAll :: NonEmpty Import -> NonEmpty Import
+canonicalizeAll = NonEmpty.scanr1 step
+  where
+    step a parent = canonicalizeImport (a :| [parent])
 
 {-|
 > canonicalize (canonicalize x) = canonicalize x
@@ -370,18 +374,9 @@ instance Canonicalize Import where
     canonicalize (Import importHashed importMode) =
         Import (canonicalize importHashed) importMode
 
-canonicalizeImport :: [Import] -> Import
+canonicalizeImport :: NonEmpty Import -> Import
 canonicalizeImport imports =
-    canonicalize (sconcat (defaultImport :| reverse imports))
-  where
-    defaultImport =
-        Import
-            { importMode   = Code
-            , importHashed = ImportHashed
-                { hash       = Nothing
-                , importType = Local Here (File (Directory []) ".")
-                }
-            }
+    canonicalize (sconcat (NonEmpty.reverse imports))
 
 toHeaders
   :: Expr s a
@@ -432,18 +427,18 @@ exprFromImport (Import {..}) = do
     let ImportHashed {..} = importHashed
 
     (path, text) <- case importType of
-        Local prefix (File {..}) -> do
+        Local prefix (File {..}) -> liftIO $ do
             let Directory {..} = directory
 
             prefixPath <- case prefix of
                 Home -> do
-                    liftIO System.Directory.getHomeDirectory
+                    System.Directory.getHomeDirectory
 
                 Absolute -> do
                     return "/"
 
                 Here -> do
-                    use root
+                    System.Directory.getCurrentDirectory
 
             let cs = map Text.unpack (file : components)
 
@@ -451,13 +446,13 @@ exprFromImport (Import {..}) = do
 
             let path = foldr cons prefixPath cs
 
-            exists <- liftIO (System.Directory.doesFileExist path)
+            exists <- System.Directory.doesFileExist path
 
             if exists
                 then return ()
                 else throwMissingImport (MissingFile path)
 
-            text <- liftIO (Data.Text.IO.readFile path)
+            text <- Data.Text.IO.readFile path
 
             return (path, text)
 
@@ -597,7 +592,7 @@ loadStaticWith from_import ctx n  expr₀ = case expr₀ of
         local (Import (ImportHashed _ (Missing {})) _) = True
 
     let parent = canonicalizeImport imports
-    let here   = canonicalizeImport (import_:imports)
+    let here   = canonicalizeImport (NonEmpty.cons import_ imports)
 
     if local here && not (local parent)
         then throwMissingImport (Imported imports (ReferentiallyOpaque import_))
@@ -623,27 +618,27 @@ loadStaticWith from_import ctx n  expr₀ = case expr₀ of
                             -> StateT Status m (Expr Src Import)
                         handler₀ e@(MissingImports []) = throwM e
                         handler₀ (MissingImports [e]) =
-                          throwMissingImport (Imported (import_:imports) e)
+                          throwMissingImport (Imported (NonEmpty.cons import_ imports) e)
                         handler₀ (MissingImports es) = throwM
                           (MissingImports
                            (fmap
-                             (\e -> (toException (Imported (import_:imports) e)))
+                             (\e -> (toException (Imported (NonEmpty.cons import_ imports) e)))
                              es))
                         handler₁
                             :: (MonadCatch m)
                             => SomeException
                             -> StateT Status m (Expr Src Import)
                         handler₁ e =
-                          throwMissingImport (Imported (import_:imports) e)
+                          throwMissingImport (Imported (NonEmpty.cons import_ imports) e)
 
                     -- This loads a \"dynamic\" expression (i.e. an expression
                     -- that might still contain imports)
                     let loadDynamic =
-                            from_import (canonicalizeImport (import_:imports))
+                            from_import (canonicalizeImport (NonEmpty.cons import_ imports))
 
                     expr' <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
 
-                    let imports' = import_:imports
+                    let imports' = NonEmpty.cons import_ imports
                     zoom stack (State.put imports')
                     expr'' <- loadStaticWith from_import ctx n expr'
                     zoom stack (State.put imports)
@@ -659,7 +654,7 @@ loadStaticWith from_import ctx n  expr₀ = case expr₀ of
                     -- There is no need to check expressions that have been
                     -- cached, since they have already been checked
                     expr''' <- case Dhall.TypeCheck.typeWith ctx expr'' of
-                        Left  err -> throwM (Imported (import_:imports) err)
+                        Left  err -> throwM (Imported (NonEmpty.cons import_ imports) err)
                         Right _   -> return (Dhall.Core.normalizeWith n expr'')
                     zoom cache (State.put $! Map.insert here expr''' m)
                     return expr'''
@@ -671,7 +666,7 @@ loadStaticWith from_import ctx n  expr₀ = case expr₀ of
             let actualHash = hashExpression expr
             if expectedHash == actualHash
                 then return ()
-                else throwMissingImport (Imported (import_:imports) (HashMismatch {..}))
+                else throwMissingImport (Imported (NonEmpty.cons import_ imports) (HashMismatch {..}))
 
     return expr
   ImportAlt a b -> loop a `catch` handler₀
