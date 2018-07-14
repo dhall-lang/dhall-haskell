@@ -572,7 +572,7 @@ loadWithContext ctx n expr =
     loadDirWith "." exprFromImport ctx n expr
 
 
--- | This loads a \"static\" expression (i.e. an expression free of imports).
+-- | This loads a \"static\" expression (i.e. an expression free of imports)
 loadStaticWith
     :: MonadCatch m
     => (Import -> StateT Status m (Expr Src Import))
@@ -580,7 +580,7 @@ loadStaticWith
     -> Dhall.Core.Normalizer X
     -> Expr Src Import
     -> StateT Status m (Expr Src X)
-loadStaticWith from_import ctx n  expr₀ = case expr₀ of
+loadStaticWith from_import ctx n expr₀ = case expr₀ of
   Embed import_ -> do
     imports <- zoom stack State.get
 
