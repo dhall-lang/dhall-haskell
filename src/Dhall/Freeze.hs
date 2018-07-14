@@ -22,9 +22,7 @@ import qualified Data.Text.IO
 import qualified System.IO
 
 readInput :: Maybe FilePath -> IO Text
-readInput = maybe fromStdin Data.Text.IO.readFile
-    where 
-        fromStdin = System.IO.hSetEncoding System.IO.stdin System.IO.utf8 >> Data.Text.IO.getContents
+readInput = maybe Data.Text.IO.getContents Data.Text.IO.readFile
 
 hashImport :: Import -> IO Import
 hashImport import_ = do
