@@ -173,7 +173,7 @@ backtickLabel = do
     _ <- Text.Parser.Char.char '`'
     return (Data.Text.pack t)
   where
-    predicate c = alpha c || digit c || elem c ("-/_:." :: String)
+    predicate c = alpha c || digit c || elem c ("$-/_:." :: String)
 
 labels :: Parser (Set Text)
 labels = do

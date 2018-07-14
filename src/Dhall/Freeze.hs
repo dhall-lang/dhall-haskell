@@ -8,7 +8,7 @@ module Dhall.Freeze (
 import Dhall.Core
 import Dhall.Import (load, hashExpression)
 import Dhall.Parser (exprAndHeaderFromText, Src)
-import Dhall.Pretty (annToAnsiStyle)
+import Dhall.Pretty (annToAnsiStyle, layoutOpts)
 
 import System.Console.ANSI (hSupportsANSI)
 import Data.Monoid ((<>))
@@ -20,11 +20,6 @@ import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Control.Exception
 import qualified Data.Text.IO
 import qualified System.IO
-
-opts :: Pretty.LayoutOptions
-opts =
-    Pretty.defaultLayoutOptions
-        { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
 
 readInput :: Maybe FilePath -> IO Text
 readInput = maybe Data.Text.IO.getContents Data.Text.IO.readFile
@@ -50,8 +45,7 @@ freezeExpr (t, e) = do
 writeExpr :: Maybe FilePath -> (Text, Expr s Import) -> IO ()
 writeExpr inplace (header, expr) = do
     let doc = Pretty.pretty header <> Pretty.pretty expr
-    let layoutOptions = opts
-    let stream = Pretty.layoutSmart layoutOptions doc
+    let stream = Pretty.layoutSmart layoutOpts doc
 
     case inplace of
         Just f ->
@@ -62,9 +56,9 @@ writeExpr inplace (header, expr) = do
             supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
             if supportsANSI 
                then 
-                 Pretty.renderIO System.IO.stdout (annToAnsiStyle <$> Pretty.layoutSmart opts doc)
+                 Pretty.renderIO System.IO.stdout (annToAnsiStyle <$> Pretty.layoutSmart layoutOpts doc)
                else
-                 Pretty.renderIO System.IO.stdout (Pretty.layoutSmart opts (Pretty.unAnnotate doc)) 
+                 Pretty.renderIO System.IO.stdout (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc)) 
 
 freeze :: Maybe FilePath -> IO ()
 freeze inplace = do

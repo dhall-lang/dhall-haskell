@@ -3,7 +3,7 @@
 module Dhall.Format ( format ) where
 
 import Dhall.Parser (exprAndHeaderFromText)
-import Dhall.Pretty (annToAnsiStyle, prettyExpr)
+import Dhall.Pretty (annToAnsiStyle, prettyExpr, layoutOpts)
 
 import Data.Monoid ((<>))
 
@@ -13,11 +13,6 @@ import qualified Control.Exception
 import qualified Data.Text.IO
 import qualified System.Console.ANSI
 import qualified System.IO
-
-opts :: Pretty.LayoutOptions
-opts =
-    Pretty.defaultLayoutOptions
-        { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
 
 format :: Maybe FilePath -> IO ()
 format inplace = do
@@ -30,7 +25,7 @@ format inplace = do
 
                 let doc = Pretty.pretty header <> Pretty.pretty expr
                 System.IO.withFile file System.IO.WriteMode (\handle -> do
-                    Pretty.renderIO handle (Pretty.layoutSmart opts doc)
+                    Pretty.renderIO handle (Pretty.layoutSmart layoutOpts doc)
                     Data.Text.IO.hPutStrLn handle "" )
             Nothing -> do
                 inText <- Data.Text.IO.getContents
@@ -47,8 +42,8 @@ format inplace = do
                   then
                     Pretty.renderIO
                       System.IO.stdout
-                      (fmap annToAnsiStyle (Pretty.layoutSmart opts doc))
+                      (fmap annToAnsiStyle (Pretty.layoutSmart layoutOpts doc))
                   else
                     Pretty.renderIO
                       System.IO.stdout
-                      (Pretty.layoutSmart opts (Pretty.unAnnotate doc))
+                      (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc))

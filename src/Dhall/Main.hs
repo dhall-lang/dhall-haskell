@@ -19,7 +19,7 @@ import Data.Version (showVersion)
 import Dhall.Core (Expr, Import)
 import Dhall.Import (Imported(..), load)
 import Dhall.Parser (Src)
-import Dhall.Pretty (annToAnsiStyle, prettyExpr)
+import Dhall.Pretty (annToAnsiStyle, prettyExpr, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
@@ -147,11 +147,6 @@ parseMode =
         where
             parseFreeze = Freeze <$> optional parseInplace
 
-opts :: Pretty.LayoutOptions
-opts =
-    Pretty.defaultLayoutOptions
-        { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
-
 data ImportResolutionDisabled = ImportResolutionDisabled deriving (Exception)
 
 instance Show ImportResolutionDisabled where
@@ -215,9 +210,7 @@ command (Options {..}) = do
         render h e = do
             let doc = prettyExpr e
 
-            let layoutOptions = opts
-
-            let stream = Pretty.layoutSmart layoutOptions doc
+            let stream = Pretty.layoutSmart layoutOpts doc
 
             supportsANSI <- System.Console.ANSI.hSupportsANSI h
             let ansiStream =
@@ -304,7 +297,7 @@ command (Options {..}) = do
                     let doc = Pretty.pretty header <> Pretty.pretty lintedExpression
 
                     System.IO.withFile file System.IO.WriteMode (\h -> do
-                        Pretty.renderIO h (Pretty.layoutSmart opts doc)
+                        Pretty.renderIO h (Pretty.layoutSmart layoutOpts doc)
                         Data.Text.IO.hPutStrLn h "" )
                 Nothing -> do
                     text <- Data.Text.IO.getContents
@@ -321,11 +314,11 @@ command (Options {..}) = do
                       then
                         Pretty.renderIO
                           System.IO.stdout
-                          (fmap annToAnsiStyle (Pretty.layoutSmart opts doc))
+                          (fmap annToAnsiStyle (Pretty.layoutSmart layoutOpts doc))
                       else
                         Pretty.renderIO
                           System.IO.stdout
-                          (Pretty.layoutSmart opts (Pretty.unAnnotate doc))
+                          (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc))
 
 main :: IO ()
 main = do

@@ -33,7 +33,7 @@ import Data.Traversable (forM)
 import Data.Typeable (Typeable)
 import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
-import Dhall.Pretty (Ann)
+import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Foldable
 import qualified Data.HashMap.Strict
@@ -3494,11 +3494,7 @@ data TypeError s a = TypeError
     }
 
 instance (Eq a, Pretty s, Pretty a) => Show (TypeError s a) where
-    show = Pretty.renderString . Pretty.layoutPretty options . Pretty.pretty
-      where
-        options =
-            Pretty.LayoutOptions
-                { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
+    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
 
 instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (TypeError s a)
 
@@ -3533,11 +3529,7 @@ newtype DetailedTypeError s a = DetailedTypeError (TypeError s a)
     deriving (Typeable)
 
 instance (Eq a, Pretty s, Pretty a) => Show (DetailedTypeError s a) where
-    show = Pretty.renderString . Pretty.layoutPretty options . Pretty.pretty
-      where
-        options =
-            Pretty.LayoutOptions
-                { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
+    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
 
 instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (DetailedTypeError s a)
 
