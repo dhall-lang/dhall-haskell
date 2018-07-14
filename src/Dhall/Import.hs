@@ -664,7 +664,7 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
             let actualHash = hashExpression expr
             if expectedHash == actualHash
                 then return ()
-                else throwMissingImport (Imported (NonEmpty.cons import_ imports) (HashMismatch {..}))
+                else throwMissingImport (Imported imports' (HashMismatch {..}))
 
     return expr
   ImportAlt a b -> loop a `catch` handler₀
