@@ -219,7 +219,7 @@ inputFromWith filename ty ctx n txt =
     to, a file to mention in errors as the source, a custom typing
     context, and a custom normalization process.
 
-@since 1.6
+@since 1.16
 -}
 inputDirFromWith
     :: FilePath
@@ -283,7 +283,7 @@ inputExprWith ctx n txt = do
 {-| Extend `inputExpr` with a directory to resolve imports relative to,
     custom typing context and normalization process.
 
-@since 1.6
+@since 1.16
 -}
 inputExprDirWith
     :: FilePath

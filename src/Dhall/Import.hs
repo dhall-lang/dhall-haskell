@@ -547,7 +547,7 @@ loadWith from_import ctx n expr =
 -- context and `Import`-resolving callback in arbitrary `MonadCatch`
 -- monad, relative to a given directory.
 --
--- @since 1.6
+-- @since 1.16
 loadDirWith
     :: MonadCatch m
     => FilePath
