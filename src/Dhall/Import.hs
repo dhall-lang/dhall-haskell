@@ -240,11 +240,9 @@ instance Show e => Show (Imported e) where
         indent n import_ =
             "\n" ++ replicate (2 * n) ' ' ++ "↳ " ++ Dhall.Pretty.Internal.prettyToString import_
         canonical = NonEmpty.toList (canonicalizeAll imports)
-        -- The immediate error's source is displayed by 'e', so we
-        -- need to not display the first (innermost) import, and the
-        -- final (outermost) import is fake to establish the base
+        -- Tthe final (outermost) import is fake to establish the base
         -- directory. Also, we need outermost-first.
-        toDisplay = drop 1 (reverse (drop 1 canonical))
+        toDisplay = drop 1 (reverse canonical)
 
 -- | Exception thrown when an imported file is missing
 data MissingFile = MissingFile FilePath
