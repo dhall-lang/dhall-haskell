@@ -102,8 +102,8 @@ module Dhall.Import (
       exprFromImport
     , load
     , loadWith
+    , loadDirWith
     , loadWithContext
-    , loadDirWithContext
     , hashExpression
     , hashExpressionToCode
     , Status(..)
@@ -535,8 +535,9 @@ exprFromImport (Import {..}) = do
         RawText -> do
             return (TextLit (Chunks [] text))
 
--- | Resolve all imports within an expression using a custom typing context and
--- `Import`-resolving callback in arbitrary `MonadCatch` monad.
+-- | Resolve all imports within an expression using a custom typing
+-- context and `Import`-resolving callback in arbitrary `MonadCatch`
+-- monad.
 --
 -- This resolves imports relative to @.@ (the current working directory).
 loadWith
@@ -547,34 +548,35 @@ loadWith
     -> Expr Src Import
     -> m (Expr Src X)
 loadWith from_import ctx n expr =
-    State.evalStateT (loadStaticWith from_import ctx n expr) (emptyStatus ".")
+    loadDirWith "." from_import ctx n expr
 
--- | Resolve all imports within an expression, relative to @.@ (the current working directory), using a custom typing context.
+-- | Resolve all imports within an expression using a custom typing
+-- context and `Import`-resolving callback in arbitrary `MonadCatch`
+-- monad, relative to a given directory.
+--
+-- @since 1.6
+loadDirWith
+    :: MonadCatch m
+    => FilePath
+    -> (Import -> StateT Status m (Expr Src Import))
+    -> Dhall.Context.Context (Expr Src X)
+    -> Dhall.Core.Normalizer X
+    -> Expr Src Import
+    -> m (Expr Src X)
+loadDirWith dir from_import ctx n expr = do
+    State.evalStateT (loadStaticWith from_import ctx n expr) (emptyStatus dir)
+
+-- | Resolve all imports within an expression, relative to @.@ (the
+-- current working directory), using a custom typing context.
 --
 -- @load = loadWithContext Dhall.Context.empty@
---
--- This resolves imports relative to @.@ (the current working directory).
 loadWithContext
     :: Dhall.Context.Context (Expr Src X)
     -> Dhall.Core.Normalizer X
     -> Expr Src Import
     -> IO (Expr Src X)
 loadWithContext ctx n expr =
-    loadDirWithContext "." ctx n expr
-
--- | Resolve all imports within an expression, relative to a given directory, using a custom typing context.
---
--- @load = loadDirWithContext "." Dhall.Context.empty@
---
--- @since 1.6
-loadDirWithContext
-    :: FilePath
-    -> Dhall.Context.Context (Expr Src X)
-    -> Dhall.Core.Normalizer X
-    -> Expr Src Import
-    -> IO (Expr Src X)
-loadDirWithContext dir ctx n expr =
-    State.evalStateT (loadStaticWith exprFromImport ctx n expr) (emptyStatus dir)
+    loadDirWith "." exprFromImport ctx n expr
 
 
 -- | This loads a \"static\" expression (i.e. an expression free of imports).

@@ -237,7 +237,7 @@ inputDirFromWith
     -- ^ The decoded value in Haskell
 inputDirFromWith dir filename (Type {..}) ctx n txt = do
     expr  <- throws (Dhall.Parser.exprFromText filename txt)
-    expr' <- Dhall.Import.loadDirWithContext dir ctx n expr
+    expr' <- Dhall.Import.loadDirWith dir Dhall.Import.exprFromImport ctx n expr
     let suffix = Dhall.Pretty.Internal.prettyToStrictText expected
     let annot = case expr' of
             Note (Src begin end bytes) _ ->
@@ -297,7 +297,7 @@ inputExprDirWith
     -- ^ The fully normalized AST
 inputExprDirWith dir ctx n txt = do
     expr  <- throws (Dhall.Parser.exprFromText "(input)" txt)
-    expr' <- Dhall.Import.loadDirWithContext dir ctx n expr
+    expr' <- Dhall.Import.loadDirWith dir Dhall.Import.exprFromImport ctx n expr
     _ <- throws (Dhall.TypeCheck.typeWith ctx expr')
     pure (Dhall.Core.normalizeWith n expr')
 
