@@ -19,13 +19,11 @@ module Dhall
     (
     -- * Input
       input
-    , inputFrom
-    , inputWith
-    , inputFromWith
-    , inputDirFromWith
+    , inputWithSettings
     , inputExpr
-    , inputExprWith
-    , inputExprDirWith
+    , inputExprWithSettings
+    , defaultInputSettings
+    , InputSettings (..)
     , detailed
 
     -- * Types
@@ -152,7 +150,7 @@ instance Exception InvalidType
 >>> input auto "True" :: IO Bool
 True
 
-Resolves imports relative to @.@ (the current working directory).
+    This uses the settings from 'defaultInputSettings'.
 -}
 input
     :: Type a
@@ -162,82 +160,25 @@ input
     -> IO a
     -- ^ The decoded value in Haskell
 input =
-  inputFrom "(input)"
+  inputWithSettings defaultInputSettings
 
--- | Resolves imports relative to @.@ (the current working directory).
-inputFrom
-    :: FilePath
-    -- ^ The source file to report locations from; only used in error messages
-    -> Type a
-    -- ^ The type of value to decode from Dhall to Haskell
-    -> Text
-    -- ^ The Dhall program
-    -> IO a
-    -- ^ The decoded value in Haskell
-inputFrom filename ty txt =
-  inputFromWith filename ty Dhall.Context.empty (const Nothing) txt
-
-{-| Extend 'input' with a custom typing context and normalization process.
-
-Resolves imports relative to @.@ (the current working directory).
-
--}
-inputWith
-    :: Type a
-    -- ^ The type of value to decode from Dhall to Haskell
-    -> Dhall.Context.Context (Expr Src X)
-    -- ^ The starting context for type-checking
-    -> Dhall.Core.Normalizer X
-    -> Text
-    -- ^ The Dhall program
-    -> IO a
-    -- ^ The decoded value in Haskell
-inputWith =
-  inputFromWith "(input)"
-
-{-| Extend 'inputFrom' with a custom typing context and normalization process.
-
-Resolves imports relative to @.@ (the current working directory).
-
--}
-inputFromWith
-    :: FilePath
-    -- ^ The source file to report locations from; only used in error messages
-    -> Type a
-    -- ^ The type of value to decode from Dhall to Haskell
-    -> Dhall.Context.Context (Expr Src X)
-    -- ^ The starting context for type-checking
-    -> Dhall.Core.Normalizer X
-    -> Text
-    -- ^ The Dhall program
-    -> IO a
-    -- ^ The decoded value in Haskell
-inputFromWith filename ty ctx n txt =
-  inputDirFromWith "." filename ty ctx n txt
-
-{-| Extend 'inputFrom' with a root directory to resolve imports relative
+{-| Extend 'input' with a root directory to resolve imports relative
     to, a file to mention in errors as the source, a custom typing
     context, and a custom normalization process.
 
 @since 1.16
 -}
-inputDirFromWith
-    :: FilePath
-    -- ^ The directory to resolve imports relative to.
-    -> FilePath
-    -- ^ The source file to report locations from; only used in error messages
+inputWithSettings
+    :: InputSettings
     -> Type a
     -- ^ The type of value to decode from Dhall to Haskell
-    -> Dhall.Context.Context (Expr Src X)
-    -- ^ The starting context for type-checking
-    -> Dhall.Core.Normalizer X
     -> Text
     -- ^ The Dhall program
     -> IO a
     -- ^ The decoded value in Haskell
-inputDirFromWith dir filename (Type {..}) ctx n txt = do
-    expr  <- throws (Dhall.Parser.exprFromText filename txt)
-    expr' <- Dhall.Import.loadDirWith dir Dhall.Import.exprFromImport ctx n expr
+inputWithSettings InputSettings {..} (Type {..}) txt = do
+    expr  <- throws (Dhall.Parser.exprFromText sourceName txt)
+    expr' <- Dhall.Import.loadDirWith rootDirectory Dhall.Import.exprFromImport startingContext normalizer expr
     let suffix = Dhall.Pretty.Internal.prettyToStrictText expected
     let annot = case expr' of
             Note (Src begin end bytes) _ ->
@@ -246,61 +187,67 @@ inputDirFromWith dir filename (Type {..}) ctx n txt = do
                 bytes' = bytes <> " : " <> suffix
             _ ->
                 Annot expr' expected
-    _ <- throws (Dhall.TypeCheck.typeWith ctx annot)
-    case extract (Dhall.Core.normalizeWith n expr') of
+    _ <- throws (Dhall.TypeCheck.typeWith startingContext annot)
+    case extract (Dhall.Core.normalizeWith normalizer expr') of
         Just x  -> return x
         Nothing -> Control.Exception.throwIO InvalidType
+
+-- | @since 1.16
+data InputSettings = InputSettings
+  { rootDirectory :: FilePath
+    -- ^ The directory to resolve imports relative to.
+  , sourceName :: FilePath
+    -- ^ The source file to report locations from; only used in error messages
+  , startingContext :: Dhall.Context.Context (Expr Src X)
+    -- ^ The starting context for type-checking
+  , normalizer :: Dhall.Core.Normalizer X
+    -- ^ Custom normalizer.
+  }
+
+-- | Default input settings: resolves imports relative to @.@ (the
+-- current working directory), report errors as coming from @(input)@,
+-- no extra entries in the initial context, and no special normalizer
+-- behaviour.
+--
+-- @since 1.16
+defaultInputSettings :: InputSettings
+defaultInputSettings = InputSettings
+  { rootDirectory = "."
+  , sourceName = "(input)"
+  , startingContext = Dhall.Context.empty
+  , normalizer = const Nothing
+  }
 
 {-| Similar to `input`, but without interpreting the Dhall `Expr` into a Haskell
     type.
 
-Resolves imports relative to @.@ (the current working directory).
-
+    Uses the settings from 'defaultInputSettings'.
 -}
 inputExpr
     :: Text
     -- ^ The Dhall program
     -> IO (Expr Src X)
     -- ^ The fully normalized AST
-inputExpr = inputExprWith Dhall.Context.empty (const Nothing)
+inputExpr =
+  inputExprWithSettings defaultInputSettings
 
-{-| Extend `inputExpr` with a custom typing context and normalization process.
-
-Resolves imports relative to @.@ (the current working directory).
-
--}
-inputExprWith
-    :: Dhall.Context.Context (Expr Src X)
-    -- ^ The starting context for type-checking
-    -> Dhall.Core.Normalizer X
-    -> Text
-    -- ^ The Dhall program
-    -> IO (Expr Src X)
-    -- ^ The fully normalized AST
-inputExprWith ctx n txt = do
-  inputExprDirWith "." ctx n txt
-
-{-| Extend `inputExpr` with a directory to resolve imports relative to,
-    custom typing context and normalization process.
+{-| Extend 'inputExpr' with a root directory to resolve imports relative
+    to, a file to mention in errors as the source, a custom typing
+    context, and a custom normalization process.
 
 @since 1.16
 -}
-inputExprDirWith
-    :: FilePath
-    -- ^ The directory to resolve imports relative to.
-    -> Dhall.Context.Context (Expr Src X)
-    -- ^ The starting context for type-checking
-    -> Dhall.Core.Normalizer X
+inputExprWithSettings
+    :: InputSettings
     -> Text
     -- ^ The Dhall program
     -> IO (Expr Src X)
     -- ^ The fully normalized AST
-inputExprDirWith dir ctx n txt = do
-    expr  <- throws (Dhall.Parser.exprFromText "(input)" txt)
-    expr' <- Dhall.Import.loadDirWith dir Dhall.Import.exprFromImport ctx n expr
-    _ <- throws (Dhall.TypeCheck.typeWith ctx expr')
-    pure (Dhall.Core.normalizeWith n expr')
-
+inputExprWithSettings InputSettings {..} txt = do
+    expr  <- throws (Dhall.Parser.exprFromText sourceName txt)
+    expr' <- Dhall.Import.loadDirWith rootDirectory Dhall.Import.exprFromImport startingContext normalizer expr
+    _ <- throws (Dhall.TypeCheck.typeWith startingContext expr')
+    pure (Dhall.Core.normalizeWith normalizer expr')
 
 -- | Use this function to extract Haskell values directly from Dhall AST.
 --   The intended use case is to allow easy extraction of Dhall values for
