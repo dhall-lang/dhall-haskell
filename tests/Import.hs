@@ -10,6 +10,7 @@ import Data.Monoid ((<>))
 
 import qualified Data.Text
 import qualified Data.Text.IO
+import qualified Dhall.Context
 import qualified Dhall.Parser
 import qualified Dhall.Import
 import qualified Test.Tasty
@@ -41,6 +42,12 @@ importTests =
                 "alternative of a Natural and missing"
                 "./tests/import/alternativeNatural.dhall"
             ]
+        , Test.Tasty.testGroup "import relative to argument"
+            [ shouldNotFailRelative
+                "works"
+                "./tests/import/data/foo/bar"
+                "./tests/import/relative.dhall"
+            ]
         ]
 
 shouldNotFail :: Text -> FilePath -> TestTree
@@ -50,6 +57,15 @@ shouldNotFail name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) (do
                      Left  err  -> throwIO err
                      Right expr -> return expr
     _ <- Dhall.Import.load actualExpr
+    return ())
+
+shouldNotFailRelative :: Text -> FilePath -> FilePath -> TestTree
+shouldNotFailRelative name dir path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) (do
+    text <- Data.Text.IO.readFile path
+    expr <- case Dhall.Parser.exprFromText mempty text of
+                     Left  err  -> throwIO err
+                     Right expr -> return expr
+    _ <- Dhall.Import.loadDirWith dir Dhall.Import.exprFromImport Dhall.Context.empty (const Nothing) expr
     return ())
 
 shouldFail :: Int -> Text -> FilePath -> TestTree

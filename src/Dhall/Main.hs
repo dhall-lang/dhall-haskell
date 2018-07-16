@@ -42,6 +42,7 @@ import qualified Dhall.Lint
 import qualified Dhall.Parser
 import qualified Dhall.Repl
 import qualified Dhall.TypeCheck
+import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified System.Console.ANSI
 import qualified System.IO
@@ -175,7 +176,7 @@ parserInfoOptions =
 
 command :: Options -> IO ()
 command (Options {..}) = do
-    System.IO.hSetEncoding System.IO.stdin System.IO.utf8
+    GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
     let handle =
                 Control.Exception.handle handler2
@@ -202,7 +203,6 @@ command (Options {..}) = do
 
             handler2 e = do
                 let _ = e :: SomeException
-                System.IO.hSetEncoding System.IO.stderr System.IO.utf8
                 System.IO.hPrint System.IO.stderr e
                 System.Exit.exitFailure
 
@@ -300,7 +300,6 @@ command (Options {..}) = do
                         Pretty.renderIO h (Pretty.layoutSmart layoutOpts doc)
                         Data.Text.IO.hPutStrLn h "" )
                 Nothing -> do
-                    System.IO.hSetEncoding System.IO.stdin System.IO.utf8
                     text <- Data.Text.IO.getContents
 
                     (header, expression) <- throws (Dhall.Parser.exprAndHeaderFromText "(stdin)" text)
