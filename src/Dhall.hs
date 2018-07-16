@@ -22,8 +22,15 @@ module Dhall
     , inputWithSettings
     , inputExpr
     , inputExprWithSettings
+    , rootDirectory
+    , sourceName
+    , startingContext
+    , normalizer
     , defaultInputSettings
-    , InputSettings (..)
+    , InputSettings
+    , defaultEvaluateSettings
+    , EvaluateSettings
+    , HasEvaluateSettings
     , detailed
 
     -- * Types
@@ -85,6 +92,7 @@ import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import GHC.Generics
+import Lens.Family (LensLike', view)
 import Numeric.Natural (Natural)
 import Prelude hiding (maybe, sequence)
 
@@ -176,9 +184,14 @@ inputWithSettings
     -- ^ The Dhall program
     -> IO a
     -- ^ The decoded value in Haskell
-inputWithSettings InputSettings {..} (Type {..}) txt = do
-    expr  <- throws (Dhall.Parser.exprFromText sourceName txt)
-    expr' <- Dhall.Import.loadDirWith rootDirectory Dhall.Import.exprFromImport startingContext normalizer expr
+inputWithSettings settings (Type {..}) txt = do
+    expr  <- throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
+    expr' <- Dhall.Import.loadDirWith
+               (view rootDirectory settings)
+               Dhall.Import.exprFromImport
+               (view startingContext settings)
+               (Dhall.Core.getReifiedNormalizer (view normalizer settings))
+               expr
     let suffix = Dhall.Pretty.Internal.prettyToStrictText expected
     let annot = case expr' of
             Note (Src begin end bytes) _ ->
@@ -187,35 +200,101 @@ inputWithSettings InputSettings {..} (Type {..}) txt = do
                 bytes' = bytes <> " : " <> suffix
             _ ->
                 Annot expr' expected
-    _ <- throws (Dhall.TypeCheck.typeWith startingContext annot)
-    case extract (Dhall.Core.normalizeWith normalizer expr') of
+    _ <- throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
+    case extract (Dhall.Core.normalizeWith (Dhall.Core.getReifiedNormalizer (view normalizer settings)) expr') of
         Just x  -> return x
         Nothing -> Control.Exception.throwIO InvalidType
 
 -- | @since 1.16
 data InputSettings = InputSettings
-  { rootDirectory :: FilePath
-    -- ^ The directory to resolve imports relative to.
-  , sourceName :: FilePath
-    -- ^ The source file to report locations from; only used in error messages
-  , startingContext :: Dhall.Context.Context (Expr Src X)
-    -- ^ The starting context for type-checking
-  , normalizer :: Dhall.Core.Normalizer X
-    -- ^ Custom normalizer.
+  { _rootDirectory :: FilePath
+  , _sourceName :: FilePath
+  , _evaluateSettings :: EvaluateSettings
   }
+
+-- | Access the directory to resolve imports relative to.
+--
+-- @since 1.16
+rootDirectory
+  :: (Functor f)
+  => LensLike' f InputSettings FilePath
+rootDirectory k s =
+  fmap (\x -> s { _rootDirectory = x }) (k (_rootDirectory s))
+
+-- | Access the name of the source to report locations from; this is
+-- only used in error messages, so it's okay if this is a best guess
+-- or something symbolic.
+--
+-- @since 1.16
+sourceName
+  :: (Functor f)
+  => LensLike' f InputSettings FilePath
+sourceName k s =
+  fmap (\x -> s { _sourceName = x}) (k (_sourceName s))
+
+-- | @since 1.16
+data EvaluateSettings = EvaluateSettings
+  { _startingContext :: Dhall.Context.Context (Expr Src X)
+  , _normalizer :: Dhall.Core.ReifiedNormalizer X
+  }
+
+-- | Access the starting context used for evaluation and type-checking.
+--
+-- @since 1.16
+startingContext
+  :: (Functor f, HasEvaluateSettings s)
+  => LensLike' f s (Dhall.Context.Context (Expr Src X))
+startingContext = evaluateSettings . l
+  where
+    l :: (Functor f)
+      => LensLike' f EvaluateSettings (Dhall.Context.Context (Expr Src X))
+    l k s = fmap (\x -> s { _startingContext = x}) (k (_startingContext s))
+
+-- | Access the custom normalizer.
+--
+-- @since 1.16
+normalizer
+  :: (Functor f, HasEvaluateSettings s)
+  => LensLike' f s (Dhall.Core.ReifiedNormalizer X)
+normalizer = evaluateSettings . l
+  where
+    l :: (Functor f)
+      => LensLike' f EvaluateSettings (Dhall.Core.ReifiedNormalizer X)
+    l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
+
+-- | @since 1.16
+class HasEvaluateSettings s where
+  evaluateSettings
+    :: (Functor f)
+    => LensLike' f s EvaluateSettings
+
+instance HasEvaluateSettings InputSettings where
+  evaluateSettings k s =
+    fmap (\x -> s { _evaluateSettings = x }) (k (_evaluateSettings s))
+
+instance HasEvaluateSettings EvaluateSettings where
+  evaluateSettings = id
 
 -- | Default input settings: resolves imports relative to @.@ (the
 -- current working directory), report errors as coming from @(input)@,
--- no extra entries in the initial context, and no special normalizer
--- behaviour.
+-- and default evaluation settings from 'defaultEvaluateSettings'.
 --
 -- @since 1.16
 defaultInputSettings :: InputSettings
 defaultInputSettings = InputSettings
-  { rootDirectory = "."
-  , sourceName = "(input)"
-  , startingContext = Dhall.Context.empty
-  , normalizer = const Nothing
+  { _rootDirectory = "."
+  , _sourceName = "(input)"
+  , _evaluateSettings = defaultEvaluateSettings
+  }
+
+-- | Default evaluation settings: no extra entries in the initial
+-- context, and no special normalizer behaviour.
+--
+-- @since 1.16
+defaultEvaluateSettings :: EvaluateSettings
+defaultEvaluateSettings = EvaluateSettings
+  { _startingContext = Dhall.Context.empty
+  , _normalizer = Dhall.Core.ReifiedNormalizer (const Nothing)
   }
 
 {-| Similar to `input`, but without interpreting the Dhall `Expr` into a Haskell
@@ -243,11 +322,16 @@ inputExprWithSettings
     -- ^ The Dhall program
     -> IO (Expr Src X)
     -- ^ The fully normalized AST
-inputExprWithSettings InputSettings {..} txt = do
-    expr  <- throws (Dhall.Parser.exprFromText sourceName txt)
-    expr' <- Dhall.Import.loadDirWith rootDirectory Dhall.Import.exprFromImport startingContext normalizer expr
-    _ <- throws (Dhall.TypeCheck.typeWith startingContext expr')
-    pure (Dhall.Core.normalizeWith normalizer expr')
+inputExprWithSettings settings txt = do
+    expr  <- throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
+    expr' <- Dhall.Import.loadDirWith
+               (view rootDirectory settings)
+               Dhall.Import.exprFromImport
+               (view startingContext settings)
+               (Dhall.Core.getReifiedNormalizer (view normalizer settings))
+               expr
+    _ <- throws (Dhall.TypeCheck.typeWith (view startingContext settings) expr')
+    pure (Dhall.Core.normalizeWith (Dhall.Core.getReifiedNormalizer (view normalizer settings)) expr')
 
 -- | Use this function to extract Haskell values directly from Dhall AST.
 --   The intended use case is to allow easy extraction of Dhall values for
