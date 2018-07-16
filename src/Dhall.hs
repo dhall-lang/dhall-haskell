@@ -20,6 +20,8 @@ module Dhall
     -- * Input
       input
     , inputWithSettings
+    , inputFile
+    , inputFileWithSettings
     , inputExpr
     , inputExprWithSettings
     , rootDirectory
@@ -95,6 +97,7 @@ import GHC.Generics
 import Lens.Family (LensLike', view)
 import Numeric.Natural (Natural)
 import Prelude hiding (maybe, sequence)
+import System.FilePath (takeDirectory)
 
 import qualified Control.Applicative
 import qualified Control.Exception
@@ -106,6 +109,7 @@ import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
+import qualified Data.Text.IO
 import qualified Data.Text.Lazy
 import qualified Data.Vector
 import qualified Dhall.Context
@@ -142,6 +146,98 @@ instance Show InvalidType where
         \matches the expected type.  You provided a Type that disobeys this contract     \n"
 
 instance Exception InvalidType
+
+-- | @since 1.16
+data InputSettings = InputSettings
+  { _rootDirectory :: FilePath
+  , _sourceName :: FilePath
+  , _evaluateSettings :: EvaluateSettings
+  }
+
+-- | Default input settings: resolves imports relative to @.@ (the
+-- current working directory), report errors as coming from @(input)@,
+-- and default evaluation settings from 'defaultEvaluateSettings'.
+--
+-- @since 1.16
+defaultInputSettings :: InputSettings
+defaultInputSettings = InputSettings
+  { _rootDirectory = "."
+  , _sourceName = "(input)"
+  , _evaluateSettings = defaultEvaluateSettings
+  }
+
+-- | Access the directory to resolve imports relative to.
+--
+-- @since 1.16
+rootDirectory
+  :: (Functor f)
+  => LensLike' f InputSettings FilePath
+rootDirectory k s =
+  fmap (\x -> s { _rootDirectory = x }) (k (_rootDirectory s))
+
+-- | Access the name of the source to report locations from; this is
+-- only used in error messages, so it's okay if this is a best guess
+-- or something symbolic.
+--
+-- @since 1.16
+sourceName
+  :: (Functor f)
+  => LensLike' f InputSettings FilePath
+sourceName k s =
+  fmap (\x -> s { _sourceName = x}) (k (_sourceName s))
+
+-- | @since 1.16
+data EvaluateSettings = EvaluateSettings
+  { _startingContext :: Dhall.Context.Context (Expr Src X)
+  , _normalizer :: Dhall.Core.ReifiedNormalizer X
+  }
+
+-- | Default evaluation settings: no extra entries in the initial
+-- context, and no special normalizer behaviour.
+--
+-- @since 1.16
+defaultEvaluateSettings :: EvaluateSettings
+defaultEvaluateSettings = EvaluateSettings
+  { _startingContext = Dhall.Context.empty
+  , _normalizer = Dhall.Core.ReifiedNormalizer (const Nothing)
+  }
+
+-- | Access the starting context used for evaluation and type-checking.
+--
+-- @since 1.16
+startingContext
+  :: (Functor f, HasEvaluateSettings s)
+  => LensLike' f s (Dhall.Context.Context (Expr Src X))
+startingContext = evaluateSettings . l
+  where
+    l :: (Functor f)
+      => LensLike' f EvaluateSettings (Dhall.Context.Context (Expr Src X))
+    l k s = fmap (\x -> s { _startingContext = x}) (k (_startingContext s))
+
+-- | Access the custom normalizer.
+--
+-- @since 1.16
+normalizer
+  :: (Functor f, HasEvaluateSettings s)
+  => LensLike' f s (Dhall.Core.ReifiedNormalizer X)
+normalizer = evaluateSettings . l
+  where
+    l :: (Functor f)
+      => LensLike' f EvaluateSettings (Dhall.Core.ReifiedNormalizer X)
+    l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
+
+-- | @since 1.16
+class HasEvaluateSettings s where
+  evaluateSettings
+    :: (Functor f)
+    => LensLike' f s EvaluateSettings
+
+instance HasEvaluateSettings InputSettings where
+  evaluateSettings k s =
+    fmap (\x -> s { _evaluateSettings = x }) (k (_evaluateSettings s))
+
+instance HasEvaluateSettings EvaluateSettings where
+  evaluateSettings = id
 
 {-| Type-check and evaluate a Dhall program, decoding the result into Haskell
 
@@ -205,97 +301,44 @@ inputWithSettings settings (Type {..}) txt = do
         Just x  -> return x
         Nothing -> Control.Exception.throwIO InvalidType
 
--- | @since 1.16
-data InputSettings = InputSettings
-  { _rootDirectory :: FilePath
-  , _sourceName :: FilePath
-  , _evaluateSettings :: EvaluateSettings
-  }
+{-| Type-check and evaluate a Dhall program that is read from the
+    file-system.
 
--- | Access the directory to resolve imports relative to.
---
--- @since 1.16
-rootDirectory
-  :: (Functor f)
-  => LensLike' f InputSettings FilePath
-rootDirectory k s =
-  fmap (\x -> s { _rootDirectory = x }) (k (_rootDirectory s))
+    This uses the settings from 'defaultEvaluateSettings'.
 
--- | Access the name of the source to report locations from; this is
--- only used in error messages, so it's okay if this is a best guess
--- or something symbolic.
---
--- @since 1.16
-sourceName
-  :: (Functor f)
-  => LensLike' f InputSettings FilePath
-sourceName k s =
-  fmap (\x -> s { _sourceName = x}) (k (_sourceName s))
+    @since 1.16
+-}
+inputFile
+  :: Type a
+  -- ^ The type of value to decode from Dhall to Haskell
+  -> FilePath
+  -- ^ The path to the Dhall program.
+  -> IO a
+  -- ^ The decoded value in Haskell.
+inputFile =
+  inputFileWithSettings defaultEvaluateSettings
 
--- | @since 1.16
-data EvaluateSettings = EvaluateSettings
-  { _startingContext :: Dhall.Context.Context (Expr Src X)
-  , _normalizer :: Dhall.Core.ReifiedNormalizer X
-  }
+{-| Extend 'inputFile' with a custom typing context and a custom
+    normalization process.
 
--- | Access the starting context used for evaluation and type-checking.
---
--- @since 1.16
-startingContext
-  :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Dhall.Context.Context (Expr Src X))
-startingContext = evaluateSettings . l
-  where
-    l :: (Functor f)
-      => LensLike' f EvaluateSettings (Dhall.Context.Context (Expr Src X))
-    l k s = fmap (\x -> s { _startingContext = x}) (k (_startingContext s))
-
--- | Access the custom normalizer.
---
--- @since 1.16
-normalizer
-  :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Dhall.Core.ReifiedNormalizer X)
-normalizer = evaluateSettings . l
-  where
-    l :: (Functor f)
-      => LensLike' f EvaluateSettings (Dhall.Core.ReifiedNormalizer X)
-    l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
-
--- | @since 1.16
-class HasEvaluateSettings s where
-  evaluateSettings
-    :: (Functor f)
-    => LensLike' f s EvaluateSettings
-
-instance HasEvaluateSettings InputSettings where
-  evaluateSettings k s =
-    fmap (\x -> s { _evaluateSettings = x }) (k (_evaluateSettings s))
-
-instance HasEvaluateSettings EvaluateSettings where
-  evaluateSettings = id
-
--- | Default input settings: resolves imports relative to @.@ (the
--- current working directory), report errors as coming from @(input)@,
--- and default evaluation settings from 'defaultEvaluateSettings'.
---
--- @since 1.16
-defaultInputSettings :: InputSettings
-defaultInputSettings = InputSettings
-  { _rootDirectory = "."
-  , _sourceName = "(input)"
-  , _evaluateSettings = defaultEvaluateSettings
-  }
-
--- | Default evaluation settings: no extra entries in the initial
--- context, and no special normalizer behaviour.
---
--- @since 1.16
-defaultEvaluateSettings :: EvaluateSettings
-defaultEvaluateSettings = EvaluateSettings
-  { _startingContext = Dhall.Context.empty
-  , _normalizer = Dhall.Core.ReifiedNormalizer (const Nothing)
-  }
+@since 1.16
+-}
+inputFileWithSettings
+  :: EvaluateSettings
+  -> Type a
+  -- ^ The type of value to decode from Dhall to Haskell
+  -> FilePath
+  -- ^ The path to the Dhall program.
+  -> IO a
+  -- ^ The decoded value in Haskell.
+inputFileWithSettings settings ty path = do
+  text <- Data.Text.IO.readFile path
+  let inputSettings = InputSettings
+        { _rootDirectory = takeDirectory path
+        , _sourceName = path
+        , _evaluateSettings = settings
+        }
+  inputWithSettings inputSettings ty text
 
 {-| Similar to `input`, but without interpreting the Dhall `Expr` into a Haskell
     type.
@@ -351,8 +394,6 @@ rawInput (Type {..}) expr = do
     case extract (Dhall.Core.normalize expr) of
         Just x  -> pure x
         Nothing -> empty
-
-
 
 {-| Use this to provide more detailed error messages
 
