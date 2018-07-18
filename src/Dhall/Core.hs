@@ -27,6 +27,7 @@ module Dhall.Core (
     , ImportMode(..)
     , ImportType(..)
     , Path
+    , Scheme(..)
     , Var(..)
     , Chunks(..)
     , Expr(..)
@@ -155,11 +156,13 @@ instance Pretty FilePrefix where
     pretty Here     = "."
     pretty Home     = "~"
 
+data Scheme = HTTP | HTTPS deriving (Eq, Ord, Show)
+
 -- | The type of import (i.e. local vs. remote vs. environment)
 data ImportType
     = Local FilePrefix File
     -- ^ Local path
-    | URL Text File Text (Maybe ImportHashed)
+    | URL Scheme Text File (Maybe Text) (Maybe Text) (Maybe ImportHashed)
     -- ^ URL of remote resource and optional headers stored in an import
     | Env  Text
     -- ^ Environment variable
@@ -169,8 +172,8 @@ data ImportType
 instance Semigroup ImportType where
     Local prefix file₀ <> Local Here file₁ = Local prefix (file₀ <> file₁)
 
-    URL prefix file₀ suffix headers <> Local Here file₁ =
-        URL prefix (file₀ <> file₁) suffix headers
+    URL scheme authority file₀ query fragment headers <> Local Here file₁ =
+        URL scheme authority (file₀ <> file₁) query fragment headers
 
     _ <> import₁ =
         import₁
@@ -179,13 +182,28 @@ instance Pretty ImportType where
     pretty (Local prefix file) =
         Pretty.pretty prefix <> Pretty.pretty file
 
-    pretty (URL prefix file suffix headers) =
-            Pretty.pretty prefix
+    pretty (URL scheme authority file query fragment headers) =
+            schemeDoc
+        <>  "://"
+        <>  Pretty.pretty authority
         <>  Pretty.pretty file
-        <>  Pretty.pretty suffix
+        <>  queryDoc
+        <>  fragmentDoc
         <>  foldMap prettyHeaders headers
       where
         prettyHeaders h = " using " <> Pretty.pretty h
+
+        schemeDoc = case scheme of
+            HTTP  -> "http"
+            HTTPS -> "https"
+
+        queryDoc = case query of
+            Nothing -> ""
+            Just q  -> "?" <> Pretty.pretty q
+
+        fragmentDoc = case fragment of
+            Nothing -> ""
+            Just f  -> "#" <> Pretty.pretty f
 
     pretty (Env env) = "env:" <> Pretty.pretty env
 
