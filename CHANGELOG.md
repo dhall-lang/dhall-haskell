@@ -1,7 +1,8 @@
 1.16.0
 
-* BREAKING CHANGE: Add `inputDirFromWith`/`inputExprDirWith`
-    * This changes `_stack` field of the `Status` type from `[Import]` to
+* BREAKING CHANGE: Consolidate `input` family of functions
+    * These now take a record of options
+    * This also `_stack` field of the `Status` type from `[Import]` to
       `NonEmpty Import`
 * Permit `$` in quoted variable names
     * See: https://github.com/dhall-lang/dhall-haskell/pull/510
