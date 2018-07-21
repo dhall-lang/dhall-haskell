@@ -575,13 +575,22 @@ instance IsString (Expr s a) where
     fromString str = Var (fromString str)
 
 instance Serialise (Expr s Import) where
-    encode expression = encode (expressionToTerm expression)
+    encode expression =
+        encode (TList [ TString "1.0.0", expressionToTerm expression ])
 
     decode = do
         term <- decode
-        case termToExpression term of
+        subTerm <- case term of
+            TList [ TString version, subTerm ]
+                | Data.Text.isPrefixOf "1.0." version -> do
+                    return subTerm
+                | otherwise -> do
+                    fail ("This decoded version is not supported: " <> Data.Text.unpack version)
+            _ -> do
+                fail ("Cannot decode the version from this decoded CBOR expression: " <> show term)
+        case termToExpression subTerm of
             Nothing ->
-                fail "Codec.Serialize.decode @(Expr s Import): Could not decode the Term to a Dhall expression"
+                fail ("This decoded CBOR expression does not represent a valid Dhall expression: " <> show subTerm)
             Just expression ->
                 return expression
 
