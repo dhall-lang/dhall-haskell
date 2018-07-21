@@ -116,6 +116,7 @@ module Dhall.Import (
     , MissingEnvironmentVariable(..)
     , MissingImports(..)
     , expressionToTerm
+    , termToExpression
     ) where
 
 import Codec.CBOR.Term (Term(..))
@@ -169,6 +170,8 @@ import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.List.NonEmpty                      as NonEmpty
 import qualified Data.Map.Strict                         as Map
 import qualified Data.Scientific
+import qualified Data.Sequence
+import qualified Data.Set
 import qualified Data.Text.Encoding
 import qualified Data.Text                               as Text
 import qualified Data.Text.IO
@@ -1109,3 +1112,318 @@ importToTerm import_ =
     Import {..} = import_
 
     ImportHashed {..} = importHashed
+
+-- TODO: Handle import types that haven't been standardized yet
+termToExpression :: Term -> Maybe (Expr s Import)
+termToExpression (TInt n) =
+    return (Var (V "_" (fromIntegral n)))
+termToExpression (TInteger n) =
+    return (Var (V "_" n))
+termToExpression (TString "Natural/build") =
+    return NaturalBuild
+termToExpression (TString "Natural/fold") =
+    return NaturalFold
+termToExpression (TString "Natural/isZero") =
+    return NaturalIsZero
+termToExpression (TString "Natural/even") =
+    return NaturalEven
+termToExpression (TString "Natural/odd") =
+    return NaturalOdd
+termToExpression (TString "Natural/toInteger") =
+    return NaturalToInteger
+termToExpression (TString "Natural/show") =
+    return NaturalShow
+termToExpression (TString "Integer/toDouble") =
+    return IntegerToDouble
+termToExpression (TString "Integer/show") =
+    return IntegerShow
+termToExpression (TString "Double/show") =
+    return DoubleShow
+termToExpression (TString "List/build") =
+    return ListBuild
+termToExpression (TString "List/fold") =
+    return ListFold
+termToExpression (TString "List/length") =
+    return ListLength
+termToExpression (TString "List/head") =
+    return ListHead
+termToExpression (TString "List/last") =
+    return ListLast
+termToExpression (TString "List/indexed") =
+    return ListIndexed
+termToExpression (TString "List/reverse") =
+    return ListReverse
+termToExpression (TString "Optional/fold") =
+    return OptionalFold
+termToExpression (TString "Optional/build") =
+    return OptionalBuild
+termToExpression (TString "Bool") =
+    return Bool
+termToExpression (TString "Optional") =
+    return Optional
+termToExpression (TString "Natural") =
+    return Natural
+termToExpression (TString "Integer") =
+    return Integer
+termToExpression (TString "Double") =
+    return Double
+termToExpression (TString "Text") =
+    return Text
+termToExpression (TString "List") =
+    return List
+termToExpression (TString "Type") =
+    return (Const Type)
+termToExpression (TString "Kind") =
+    return (Const Kind)
+termToExpression (TString "missing") = do
+    let hash         = Nothing
+    let importType   = Missing
+    let importHashed = ImportHashed {..}
+    let importMode   = Code
+    return (Embed (Import {..}))
+termToExpression (TString x) =
+    return (Var (V x 0))
+termToExpression (TList [ TString x, TInt n ]) =
+    return (Var (V x (fromIntegral n)))
+termToExpression (TList [ TString x, TInteger n ]) =
+    return (Var (V x n))
+termToExpression (TList (TInt 0 : f₁ : xs₁)) = do
+    f₀  <- termToExpression f₁
+    xs₀ <- traverse termToExpression xs₁
+    return (foldl App f₀ xs₀)
+termToExpression (TList [ TInt 1, _A₁, b₁ ]) = do
+    _A₀ <- termToExpression _A₁
+    b₀  <- termToExpression b₁
+    return (Lam "_" _A₀ b₀)
+termToExpression (TList [ TInt 1, TString x, _A₁, b₁ ]) = do
+    _A₀ <- termToExpression _A₁
+    b₀  <- termToExpression b₁
+    return (Lam x _A₀ b₀)
+termToExpression (TList [ TInt 2, _A₁, _B₁ ]) = do
+    _A₀ <- termToExpression _A₁
+    _B₀ <- termToExpression _B₁
+    return (Pi "_" _A₀ _B₀)
+termToExpression (TList [ TInt 2, TString x, _A₁, _B₁ ]) = do
+    _A₀ <- termToExpression _A₁
+    _B₀ <- termToExpression _B₁
+    return (Pi x _A₀ _B₀)
+termToExpression (TList [ TInt 3, TInt n, l₁, r₁ ]) = do
+    l₀ <- termToExpression l₁
+    r₀ <- termToExpression r₁
+    op <- case n of
+            0  -> return BoolOr
+            1  -> return BoolAnd
+            2  -> return BoolEQ
+            3  -> return BoolNE
+            4  -> return NaturalPlus
+            5  -> return NaturalTimes
+            6  -> return TextAppend
+            7  -> return ListAppend
+            8  -> return Combine
+            9  -> return Prefer
+            10 -> return CombineTypes
+            11 -> return ImportAlt
+            _  -> empty
+    return (op l₀ r₀)
+termToExpression (TList [ TInt 4, _T₁ ]) = do
+    _T₀ <- termToExpression _T₁
+    return (ListLit (Just _T₀) empty)
+termToExpression (TList (TInt 4 : TNull : xs₁ )) = do
+    xs₀ <- traverse termToExpression xs₁
+    return (ListLit Nothing (Data.Sequence.fromList xs₀))
+termToExpression (TList [ TInt 5, _T₁ ]) = do
+    _T₀ <- termToExpression _T₁
+    return (OptionalLit _T₀ Nothing)
+termToExpression (TList [ TInt 5, _T₁, t₁ ]) = do
+    _T₀ <- termToExpression _T₁
+    t₀  <- termToExpression t₁
+    return (OptionalLit _T₀ (Just t₀))
+termToExpression (TList [ TInt 6, t₁, u₁ ]) = do
+    t₀ <- termToExpression t₁
+    u₀ <- termToExpression u₁
+    return (Merge t₀ u₀ Nothing)
+termToExpression (TList [ TInt 6, t₁, u₁, _T₁ ]) = do
+    t₀  <- termToExpression t₁
+    u₀  <- termToExpression u₁
+    _T₀ <- termToExpression _T₁
+    return (Merge t₀ u₀ (Just _T₀))
+termToExpression (TList [ TInt 7, TMap xTs₁ ]) = do
+    let process (TString x, _T₁) = do
+            _T₀ <- termToExpression _T₁
+
+            return (x, _T₀)
+        process _ =
+            empty
+
+    xTs₀ <- traverse process xTs₁
+
+    return (Record (Data.HashMap.Strict.InsOrd.fromList xTs₀))
+termToExpression (TList [ TInt 8, TMap xts₁ ]) = do
+    let process (TString x, t₁) = do
+           t₀ <- termToExpression t₁
+
+           return (x, t₀)
+        process _ =
+            empty
+
+    xts₀ <- traverse process xts₁
+
+    return (RecordLit (Data.HashMap.Strict.InsOrd.fromList xts₀))
+termToExpression (TList [ TInt 9, t₁, TString x ]) = do
+    t₀ <- termToExpression t₁
+
+    return (Field t₀ x)
+termToExpression (TList (TInt 10 : t₁ : xs₁)) = do
+    t₀ <- termToExpression t₁
+
+    let process (TString x) = return x
+        process  _          = empty
+
+    xs₀ <- traverse process xs₁
+
+    return (Project t₀ (Data.Set.fromList xs₀))
+termToExpression (TList [ TInt 11, TMap xTs₁ ]) = do
+    let process (TString x, _T₁) = do
+            _T₀ <- termToExpression _T₁
+
+            return (x, _T₀)
+        process _ =
+            empty
+
+    xTs₀ <- traverse process xTs₁
+
+    return (Union (Data.HashMap.Strict.InsOrd.fromList xTs₀))
+termToExpression (TList [ TInt 12, TString x, t₁, TMap yTs₁ ]) = do
+    t₀ <- termToExpression t₁
+
+    let process (TString y, _T₁) = do
+            _T₀ <- termToExpression _T₁
+
+            return (y, _T₀)
+        process _ =
+            empty
+
+    yTs₀ <- traverse process yTs₁
+
+    return (UnionLit x t₀ (Data.HashMap.Strict.InsOrd.fromList yTs₀))
+termToExpression (TList [ TInt 13, u₁ ]) = do
+    u₀ <- termToExpression u₁
+
+    return (Constructors u₀)
+termToExpression (TBool b) = do
+    return (BoolLit b)
+termToExpression (TList [ TInt 14, t₁, l₁, r₁ ]) = do
+    t₀ <- termToExpression t₁
+    l₀ <- termToExpression l₁
+    r₀ <- termToExpression r₁
+
+    return (BoolIf t₀ l₀ r₀)
+termToExpression (TList [ TInt 15, TInt n ]) = do
+    return (NaturalLit (fromIntegral n))
+termToExpression (TList [ TInt 15, TInteger n ]) = do
+    return (NaturalLit (fromInteger n))
+termToExpression (TList [ TInt 16, TInt n ]) = do
+    return (IntegerLit (fromIntegral n))
+termToExpression (TList [ TInt 16, TInteger n ]) = do
+    return (IntegerLit n)
+termToExpression (TList [ TInt 17, TTagged 4 (TList [ TInt exponent, TInteger mantissa ]) ]) = do
+    return (DoubleLit (Data.Scientific.scientific mantissa exponent))
+termToExpression (TList [ TInt 17, TTagged 4 (TList [ TInt exponent, TInt mantissa ]) ]) = do
+    return (DoubleLit (Data.Scientific.scientific (fromIntegral mantissa) exponent))
+termToExpression (TList (TInt 18 : xs)) = do
+    let process (TString x : y₁ : zs) = do
+            y₀ <- termToExpression y₁
+
+            ~(xys, z) <- process zs
+
+            return ((x, y₀) : xys, z)
+        process [ TString z ] = do
+            return ([], z)
+        process _ = do
+            empty
+
+    (xys, z) <- process xs
+
+    return (TextLit (Chunks xys z))
+termToExpression (TList (TInt 24 : TInt n : xs)) = do
+    let remote scheme = do
+            let process [ TString file, q, f ] = do
+                    query <- case q of
+                        TNull     -> return Nothing
+                        TString x -> return (Just x)
+                        _         -> empty
+                    fragment <- case f of
+                        TNull     -> return Nothing
+                        TString x -> return (Just x)
+                        _         -> empty
+                    return ([], file, query, fragment)
+                process (TString path : ys) = do
+                    (paths, file, query, fragment) <- process ys
+                    return (path : paths, file, query, fragment)
+                process _ = do
+                    empty
+
+            (authority, paths, file, query, fragment) <- case xs of
+                TString authority : ys -> do
+                    (paths, file, query, fragment) <- process ys
+                    return (authority, paths, file, query, fragment)
+                _                      -> empty
+
+            let components   = reverse paths
+            let directory    = Directory {..}
+            return (URL scheme authority (File {..}) query fragment Nothing)
+
+    let local prefix = do
+            let process [ TString file ] = do
+                    return ([], file)
+                process (TString path : ys) = do
+                    (paths, file) <- process ys
+                    return (path : paths, file)
+                process _ =
+                    empty
+
+            (paths, file) <- process xs
+
+            let finalPaths = case n of
+                    4 -> ".." : paths
+                    _ -> paths
+
+            let components = reverse finalPaths
+            let directory  = Directory {..}
+
+            return (Local prefix (File {..}))
+
+    let env = do
+            case xs of
+                [ TString x ] -> return (Env x)
+                _             -> empty
+
+    importType <- case n of
+        0 -> remote HTTP
+        1 -> remote HTTPS
+        2 -> local Absolute
+        3 -> local Here
+        4 -> local Here
+        5 -> local Home
+        6 -> env
+        _ -> empty
+
+    let hash         = Nothing
+    let importHashed = ImportHashed {..}
+    let importMode   = Code
+    return (Embed (Import {..}))
+termToExpression (TList [ TInt 25, TString x, a₁, b₁ ]) = do
+    a₀ <- termToExpression a₁
+    b₀ <- termToExpression b₁
+    return (Let x Nothing a₀ b₀)
+termToExpression (TList [ TInt 25, TString x, _A₁, a₁, b₁ ]) = do
+    _A₀ <- termToExpression _A₁
+    a₀  <- termToExpression a₁
+    b₀  <- termToExpression b₁
+    return (Let x (Just _A₀) a₀ b₀)
+termToExpression (TList [ TInt 26, t₁, _T₁ ]) = do
+    t₀  <- termToExpression t₁
+    _T₀ <- termToExpression _T₁
+    return (Annot t₀ _T₀)
+termToExpression _ =
+    empty
