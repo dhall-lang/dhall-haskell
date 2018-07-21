@@ -154,12 +154,13 @@ import Dhall.Parser (Parser(..), ParseError(..), Src(..))
 import Dhall.TypeCheck (X(..))
 import Lens.Family.State.Strict (zoom)
 
+import qualified Codec.Serialise
 import qualified Control.Monad.Trans.State.Strict        as State
 import qualified Crypto.Hash
 import qualified Data.ByteString
+import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
-
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.List.NonEmpty                      as NonEmpty
 import qualified Data.Map.Strict                         as Map
@@ -754,11 +755,15 @@ load :: Expr Src Import -> IO (Expr Src X)
 load = loadWithContext Dhall.Context.empty (const Nothing)
 
 -- | Hash a fully resolved expression
-hashExpression :: Expr s X -> (Crypto.Hash.Digest SHA256)
-hashExpression expr = Crypto.Hash.hash actualBytes
+hashExpression :: forall s . Expr s X -> (Crypto.Hash.Digest SHA256)
+hashExpression expression = Crypto.Hash.hash bytesStrict
   where
-    text = Dhall.Core.pretty (Dhall.Core.normalize expr)
-    actualBytes = Data.Text.Encoding.encodeUtf8 text
+    intermediateExpression :: Expr s Import
+    intermediateExpression = fmap absurd expression
+
+    bytesLazy = Codec.Serialise.serialise intermediateExpression
+
+    bytesStrict = Data.ByteString.Lazy.toStrict bytesLazy
 
 {-| Convenience utility to hash a fully resolved expression and return the
     base-16 encoded hash with the @sha256:@ prefix
