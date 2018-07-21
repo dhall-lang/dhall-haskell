@@ -4,8 +4,8 @@
 , http-client, http-client-tls, insert-ordered-containers
 , lens-family-core, megaparsec, memory, mockery, mtl
 , optparse-applicative, parsers, prettyprinter
-, prettyprinter-ansi-terminal, repline, scientific, stdenv, tasty
-, tasty-hunit, template-haskell, text, transformers
+, prettyprinter-ansi-terminal, repline, scientific, serialise
+, stdenv, tasty, tasty-hunit, template-haskell, text, transformers
 , unordered-containers, vector
 }:
 mkDerivation {
@@ -20,7 +20,8 @@ mkDerivation {
     haskeline http-client http-client-tls insert-ordered-containers
     lens-family-core megaparsec memory mtl optparse-applicative parsers
     prettyprinter prettyprinter-ansi-terminal repline scientific
-    template-haskell text transformers unordered-containers vector
+    serialise template-haskell text transformers unordered-containers
+    vector
   ];
   executableHaskellDepends = [ base ];
   testHaskellDepends = [

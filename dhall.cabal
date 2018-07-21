@@ -191,6 +191,7 @@ Library
         prettyprinter               >= 1.2.0.1  && < 1.3 ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
         repline                     >= 0.1.6.0  && < 0.2 ,
+        serialise                   >= 0.2.0.0  && < 0.3 ,
         scientific                  >= 0.3.0.0  && < 0.4 ,
         template-haskell                           < 2.14,
         text                        >= 0.11.1.0 && < 1.3 ,

@@ -26,6 +26,9 @@ let
 
                  prettyprinter =
                    pkgs.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
+
+                 serialise =
+                   pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
               };
 
           in
