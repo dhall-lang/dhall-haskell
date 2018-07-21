@@ -2364,13 +2364,12 @@ importToTerm import_ =
             TList [ TInt 24, TInt 6, TString x ]
 
         Missing ->
-            TString "missing"
+            TList [ TInt 24, TInt 7 ]
   where
     Import {..} = import_
 
     ImportHashed {..} = importHashed
 
--- TODO: Handle import types that haven't been standardized yet
 termToExpression :: Term -> Maybe (Expr s Import)
 termToExpression (TInt n) =
     return (Var (V "_" (fromIntegral n)))
@@ -2432,12 +2431,6 @@ termToExpression (TString "Type") =
     return (Const Type)
 termToExpression (TString "Kind") =
     return (Const Kind)
-termToExpression (TString "missing") = do
-    let hash         = Nothing
-    let importType   = Missing
-    let importHashed = ImportHashed {..}
-    let importMode   = Code
-    return (Embed (Import {..}))
 termToExpression (TString x) =
     return (Var (V x 0))
 termToExpression (TList [ TString x, TInt n ]) =
@@ -2655,6 +2648,8 @@ termToExpression (TList (TInt 24 : TInt n : xs)) = do
                 [ TString x ] -> return (Env x)
                 _             -> empty
 
+    let missing = return Missing
+
     importType <- case n of
         0 -> remote HTTP
         1 -> remote HTTPS
@@ -2663,6 +2658,7 @@ termToExpression (TList (TInt 24 : TInt n : xs)) = do
         4 -> local Here
         5 -> local Home
         6 -> env
+        7 -> missing
         _ -> empty
 
     let hash         = Nothing
