@@ -1,3 +1,7 @@
+1.16.1
+
+* Fix test failure due to missing test data file
+
 1.16.0
 
 * BREAKING CHANGE: Consolidate `input` family of functions
