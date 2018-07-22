@@ -1,4 +1,5 @@
 { rev                             # The Git revision of nixpkgs to fetch
+, owner ? "NixOS"
 , sha256                          # The SHA256 of the downloaded data
 , outputSha256 ? null             # The SHA256 fixed-output hash
 , system ? builtins.currentSystem # This is overridable if necessary
@@ -17,7 +18,7 @@ then (
 else (
   (rec {
     tarball = import <nix/fetchurl.nix> {
-      url = "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz";
+      url = "https://github.com/${owner}/nixpkgs/archive/${rev}.tar.gz";
       inherit sha256;
     };
 
