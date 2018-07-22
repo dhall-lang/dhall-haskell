@@ -133,15 +133,19 @@ in
   rec {
     inherit pwd;
 
-    dhall-static = pkgsStaticLinux.pkgsMusl.haskellPackages.dhall;
+    tarball =
+      pkgsStaticLinux.releaseTools.binaryTarball {
+        src = pkgsStaticLinux.pkgsMusl.haskellPackages.dhall;
+      };
 
     inherit (pkgs.haskellPackages) dhall;
 
     all = pkgs.releaseTools.aggregate
       { name = "dhall";
+
         constituents = [
           dhall
-          dhall-static
+          tarball
           pwd
         ];
       };
