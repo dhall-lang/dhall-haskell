@@ -1,3 +1,12 @@
+1.16.0
+
+* BREAKING CHANGE: Consolidate `input` family of functions
+    * These now take a record of options
+    * This also `_stack` field of the `Status` type from `[Import]` to
+      `NonEmpty Import`
+* Permit `$` in quoted variable names
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/510
+
 1.15.1
 
 * Fix infinite loop when formatting expressions containing `?`
