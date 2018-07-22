@@ -2,15 +2,15 @@
 , containers, contravariant, criterion, cryptonite, deepseq, Diff
 , directory, doctest, exceptions, filepath, haskeline, http-client
 , http-client-tls, insert-ordered-containers, lens-family-core
-, megaparsec, memory, mtl, optparse-applicative, parsers
+, megaparsec, memory, mockery, mtl, optparse-applicative, parsers
 , prettyprinter, prettyprinter-ansi-terminal, repline, scientific
 , stdenv, tasty, tasty-hunit, template-haskell, text, transformers
 , unordered-containers, vector
 }:
 mkDerivation {
   pname = "dhall";
-  version = "1.15.0";
-  sha256 = "dabb3023924657156224ef1a1326408c099c431e53b059ae74b9bc427396e4dc";
+  version = "1.16.1";
+  sha256 = "02a69a5d6c61b646a3a3822f6e077c2d298624baa142148af108bfe004e9c0d5";
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
@@ -23,8 +23,8 @@ mkDerivation {
   ];
   executableHaskellDepends = [ base ];
   testHaskellDepends = [
-    base deepseq Diff doctest insert-ordered-containers prettyprinter
-    tasty tasty-hunit text vector
+    base deepseq directory doctest filepath insert-ordered-containers
+    mockery prettyprinter tasty tasty-hunit text vector
   ];
   benchmarkHaskellDepends = [
     base containers criterion directory text

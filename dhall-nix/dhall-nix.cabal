@@ -30,7 +30,7 @@ Library
         base                      >= 4.8.0.0 && < 5   ,
         containers                              < 0.6 ,
         data-fix                                < 0.3 ,
-        dhall                     >= 1.15    && < 1.16,
+        dhall                     >= 1.15    && < 1.17,
         hnix                      >= 0.5     && < 0.6 ,
         insert-ordered-containers >= 0.1.0.1 && < 0.3 ,
         neat-interpolation                      < 0.4 ,
