@@ -74,7 +74,9 @@ let
         pkgsNew.lib.foldl pkgsNew.haskell.lib.appendConfigureFlag
           (pkgsNew.haskell.lib.disableLibraryProfiling
             (pkgsNew.haskell.lib.disableSharedExecutables
-              (pkgsNew.haskell.lib.useFixedCabal drv)
+              (pkgsNew.haskell.lib.useFixedCabal
+                 (pkgsNew.haskell.lib.justStaticExecutables drv)
+              )
             )
           )
           [ "--enable-executable-static"
