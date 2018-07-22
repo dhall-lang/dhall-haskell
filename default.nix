@@ -130,11 +130,21 @@ let
   pwd = pkgs.runCommand "pwd" { here = ./.; } "touch $out";
 
 in
-  { inherit pwd;
+  rec {
+    inherit pwd;
 
     dhall-static = pkgsStaticLinux.pkgsMusl.haskellPackages.dhall;
 
     inherit (pkgs.haskellPackages) dhall;
+
+    all = pkgs.releaseTools.aggregate
+      { name = "dhall";
+        constituents = [
+          dhall
+          dhall-static
+          pwd
+        ];
+      };
 
     shell = (pkgs.haskell.lib.doBenchmark pkgs.haskellPackages.dhall).env;
   }
