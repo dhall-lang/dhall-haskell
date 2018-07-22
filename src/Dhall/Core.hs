@@ -37,6 +37,7 @@ module Dhall.Core (
     , normalize
     , normalizeWith
     , Normalizer
+    , ReifiedNormalizer (..)
     , judgmentallyEqual
     , subst
     , shift
@@ -1755,6 +1756,11 @@ judgmentallyEqual eL0 eR0 = alphaBetaNormalize eL0 == alphaBetaNormalize eR0
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
 --   polymorphic enough to be used.
 type Normalizer a = forall s. Expr s a -> Maybe (Expr s a)
+
+-- | A reified 'Normalizer', which can be stored in structures without
+-- running into impredicative polymorphism.
+data ReifiedNormalizer a = ReifiedNormalizer
+  { getReifiedNormalizer :: Normalizer a }
 
 -- | Check if an expression is in a normal form given a context of evaluation.
 --   Unlike `isNormalized`, this will fully normalize and traverse through the expression.
