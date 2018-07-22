@@ -11,7 +11,28 @@ let
               haskellPackagesNew: haskellPackagesOld: {
                 dhall =
                   pkgsNew.haskell.lib.failOnAllWarnings
-                    haskellPackagesOld.dhall;
+                    (pkgsNew.haskell.lib.overrideCabal
+                      haskellPackagesOld.dhall
+                      (old: {
+                          src =
+                            let
+                              predicate = path: type:
+                                let
+                                  base = baseNameOf path;
+
+                                in
+                                   !( pkgsNew.lib.hasSuffix ".nix" base
+                                   && base == "dist"
+                                   && base == "result"
+                                   );
+
+                            in
+                              builtins.filterSource
+                              predicate
+                              old.src;
+                        }
+                      )
+                    );
 
                 prettyprinter =
                   pkgsNew.haskell.lib.dontCheck
@@ -134,8 +155,13 @@ in
     inherit pwd;
 
     tarball =
-      pkgsStaticLinux.releaseTools.binaryTarball {
+      pkgsStaticLinux.releaseTools.binaryTarball rec {
         src = pkgsStaticLinux.pkgsMusl.haskellPackages.dhall;
+
+        installPhase = ''
+          releaseName=${src.name}
+          ${pkgsStaticLinux.coreutils}/bin/install -D "$src/bin/dhall" "$TMPDIR/inst/bin/dhall"
+        '';
       };
 
     inherit (pkgs.haskellPackages) dhall;
