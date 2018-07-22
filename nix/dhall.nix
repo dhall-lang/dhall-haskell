@@ -1,10 +1,12 @@
 { mkDerivation, ansi-terminal, base, bytestring, case-insensitive
-, containers, contravariant, criterion, cryptonite, deepseq, Diff
-, directory, doctest, exceptions, filepath, haskeline, http-client
-, http-client-tls, insert-ordered-containers, lens-family-core
-, megaparsec, memory, mockery, mtl, optparse-applicative, parsers
-, prettyprinter, prettyprinter-ansi-terminal, repline, scientific
-, stdenv, tasty, tasty-hunit, template-haskell, text, transformers
+, cborg, containers, contravariant, criterion, cryptonite, deepseq
+, Diff, directory, doctest, exceptions, filepath, hashable
+, haskeline, http-client, http-client-tls
+, insert-ordered-containers, lens-family-core, megaparsec, memory
+, mockery, mtl, optparse-applicative, parsers, prettyprinter
+, prettyprinter-ansi-terminal, QuickCheck, quickcheck-instances
+, repline, scientific, serialise, stdenv, tasty, tasty-hunit
+, tasty-quickcheck, template-haskell, text, transformers
 , unordered-containers, vector
 }:
 mkDerivation {
@@ -14,17 +16,20 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    ansi-terminal base bytestring case-insensitive containers
+    ansi-terminal base bytestring case-insensitive cborg containers
     contravariant cryptonite Diff directory exceptions filepath
     haskeline http-client http-client-tls insert-ordered-containers
     lens-family-core megaparsec memory mtl optparse-applicative parsers
     prettyprinter prettyprinter-ansi-terminal repline scientific
-    template-haskell text transformers unordered-containers vector
+    serialise template-haskell text transformers unordered-containers
+    vector
   ];
   executableHaskellDepends = [ base ];
   testHaskellDepends = [
-    base deepseq directory doctest filepath insert-ordered-containers
-    mockery prettyprinter tasty tasty-hunit text vector
+    base containers deepseq directory doctest filepath hashable
+    insert-ordered-containers mockery prettyprinter QuickCheck
+    quickcheck-instances serialise tasty tasty-hunit tasty-quickcheck
+    text vector
   ];
   benchmarkHaskellDepends = [
     base containers criterion directory text

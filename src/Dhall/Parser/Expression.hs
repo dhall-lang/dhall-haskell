@@ -757,12 +757,12 @@ local = do
 
 http :: Parser ImportType
 http = do
-    (prefix, path, suffix) <- httpRaw
+    (s, a, path, q, f) <- httpRaw
     whitespace
     headers <- optional (do
         _using
         (importHashed_ <|> (_openParens *> importHashed_ <* _closeParens)) )
-    return (URL prefix path suffix headers)
+    return (URL s a path q f headers)
 
 missing :: Parser ImportType
 missing = do

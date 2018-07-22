@@ -6,7 +6,7 @@ module Dhall.Parser.Token where
 
 import           Dhall.Parser.Combinators
 
-import Control.Applicative (Alternative(..))
+import Control.Applicative (Alternative(..), optional)
 import Data.Functor (void)
 import Data.Semigroup (Semigroup(..))
 import Data.Set (Set)
@@ -247,16 +247,21 @@ file_ = do
 
     return (File {..})
 
-scheme :: Parser Text
-scheme = "http" <> option "s"
+scheme :: Parser Scheme
+scheme =
+        ("http" :: Parser Text)
+    *>  ((("s" :: Parser Text) *> pure HTTPS) <|> pure HTTP)
+    <*  ("://" :: Parser Text)
 
-httpRaw :: Parser (Text, File, Text)
+httpRaw :: Parser (Scheme, Text, File, Maybe Text, Maybe Text)
 httpRaw = do
-    prefixText <- scheme <> "://" <> authority
-    file   <- file_
-    suffixText <- option ("?" <> query) <> option ("#" <> fragment)
+    s <- scheme
+    a <- authority
+    file <- file_
+    q <- optional (("?" :: Parser Text) *> query)
+    f <- optional (("#" :: Parser Text) *> fragment)
 
-    return (prefixText, file, suffixText)
+    return (s, a, file, q, f)
 
 authority :: Parser Text
 authority = option (try (userinfo <> "@")) <> host <> option (":" <> port)
