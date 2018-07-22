@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
@@ -24,7 +23,6 @@ import Dhall.Core
     , Scheme(..)
     , Var(..)
     )
-import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Test.QuickCheck
     (Arbitrary(..), Gen, Property, genericShrink, (===))
@@ -38,19 +36,6 @@ import qualified Test.QuickCheck
 import qualified Test.Tasty.QuickCheck
 
 deriving instance Eq DeserialiseFailure
-
-deriving instance Generic (Chunks s a)
-deriving instance Generic Const
-deriving instance Generic Directory
-deriving instance Generic (Expr s a)
-deriving instance Generic File
-deriving instance Generic FilePrefix
-deriving instance Generic Import
-deriving instance Generic ImportHashed
-deriving instance Generic ImportMode
-deriving instance Generic ImportType
-deriving instance Generic Scheme
-deriving instance Generic Var
 
 lift0 :: a -> Gen a
 lift0 = pure

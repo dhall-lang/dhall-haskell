@@ -1,8 +1,7 @@
 {-# LANGUAGE BangPatterns       #-}
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFoldable     #-}
-{-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
@@ -77,6 +76,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Traversable
 import {-# SOURCE #-} Dhall.Pretty.Internal
+import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Prelude hiding (exponent, succ)
 
@@ -107,7 +107,7 @@ import qualified Data.Text.Prettyprint.Doc  as Pretty
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
 -}
-data Const = Type | Kind deriving (Show, Eq, Data, Bounded, Enum)
+data Const = Type | Kind deriving (Show, Eq, Data, Bounded, Enum, Generic)
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -119,7 +119,7 @@ instance Pretty Const where
     @Directory { components = [ "baz", "bar", "foo" ] }@
 -}
 newtype Directory = Directory { components :: [Text] }
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Generic, Ord, Show)
 
 instance Semigroup Directory where
     Directory components₀ <> Directory components₁ =
@@ -137,7 +137,7 @@ instance Pretty Directory where
 data File = File
     { directory :: Directory
     , file      :: Text
-    } deriving (Eq, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show)
 
 instance Pretty File where
     pretty (File {..}) = Pretty.pretty directory <> "/" <> Pretty.pretty file
@@ -153,14 +153,14 @@ data FilePrefix
     -- ^ Path relative to @.@
     | Home
     -- ^ Path relative to @~@
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Generic, Ord, Show)
 
 instance Pretty FilePrefix where
     pretty Absolute = ""
     pretty Here     = "."
     pretty Home     = "~"
 
-data Scheme = HTTP | HTTPS deriving (Eq, Ord, Show)
+data Scheme = HTTP | HTTPS deriving (Eq, Generic, Ord, Show)
 
 -- | The type of import (i.e. local vs. remote vs. environment)
 data ImportType
@@ -171,7 +171,7 @@ data ImportType
     | Env  Text
     -- ^ Environment variable
     | Missing
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Generic, Ord, Show)
 
 instance Semigroup ImportType where
     Local prefix file₀ <> Local Here file₁ = Local prefix (file₀ <> file₁)
@@ -214,13 +214,13 @@ instance Pretty ImportType where
     pretty Missing = "missing"
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
-data ImportMode = Code | RawText deriving (Eq, Ord, Show)
+data ImportMode = Code | RawText deriving (Eq, Generic, Ord, Show)
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
     { hash       :: Maybe (Crypto.Hash.Digest SHA256)
     , importType :: ImportType
-    } deriving (Eq, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show)
 
 instance Semigroup ImportHashed where
     ImportHashed _ importType₀ <> ImportHashed hash importType₁ =
@@ -236,7 +236,7 @@ instance Pretty ImportHashed where
 data Import = Import
     { importHashed :: ImportHashed
     , importMode   :: ImportMode
-    } deriving (Eq, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show)
 
 instance Semigroup Import where
     Import importHashed₀ _ <> Import importHashed₁ code =
@@ -288,7 +288,7 @@ type Path = Import
     appear as a numeric suffix.
 -}
 data Var = V Text !Integer
-    deriving (Data, Eq, Show)
+    deriving (Data, Generic, Eq, Show)
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -430,7 +430,7 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Functor, Foldable, Traversable, Show, Eq, Data)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
 
 instance Applicative (Expr s) where
     pure = Embed
@@ -596,7 +596,7 @@ instance Serialise (Expr s Import) where
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving (Functor, Foldable, Traversable, Show, Eq, Data)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =
