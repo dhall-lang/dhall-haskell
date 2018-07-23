@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
@@ -121,10 +122,10 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             (Test.QuickCheck.frequency
                 [ ( 7, lift1 Const)
                 , ( 7, lift1 Var)
-                , ( 1, lift3 Lam)
-                , ( 1, lift3 Pi)
+                , ( 1, Test.QuickCheck.oneof [ lift2 (Lam "_"), lift3 Lam ])
+                , ( 1, Test.QuickCheck.oneof [ lift2 (Pi "_"), lift3 Pi ])
                 , ( 1, lift2 App)
-                , ( 1, lift4 Let)
+                , ( 1, Test.QuickCheck.oneof [ lift3 (Let "_"), lift4 Let ])
                 , ( 1, lift2 Annot)
                 , ( 7, lift0 Bool)
                 , ( 7, lift1 BoolLit)
@@ -260,7 +261,8 @@ instance Arbitrary Scheme where
     shrink = genericShrink
 
 instance Arbitrary Var where
-    arbitrary = lift2 V
+    arbitrary =
+        Test.QuickCheck.oneof [ lift1 (V "_"), lift1 (\t -> V t 0), lift2 V ]
 
     shrink = genericShrink
 
