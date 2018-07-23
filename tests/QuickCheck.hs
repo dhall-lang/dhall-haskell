@@ -30,12 +30,18 @@ import Test.QuickCheck.Instances ()
 import Test.Tasty (TestTree)
 
 import qualified Codec.Serialise
+import qualified Data.Coerce
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
 import qualified Test.QuickCheck
 import qualified Test.Tasty.QuickCheck
 
-deriving instance Eq DeserialiseFailure
+newtype DeserialiseFailureWithEq = D DeserialiseFailure
+    deriving (Show)
+
+instance Eq DeserialiseFailureWithEq where
+    D (DeserialiseFailure aL bL) == D (DeserialiseFailure aR bR) =
+        aL == aR && bL == bR
 
 lift0 :: a -> Gen a
 lift0 = pure
@@ -260,8 +266,16 @@ instance Arbitrary Var where
 
 binaryRoundtrip :: Expr () Import -> Property
 binaryRoundtrip expression =
-        Codec.Serialise.deserialiseOrFail (Codec.Serialise.serialise expression)
-    === Right expression
+        wrap
+            (Codec.Serialise.deserialiseOrFail
+                (Codec.Serialise.serialise expression)
+            )
+    === wrap (Right expression)
+  where
+    wrap
+        :: Either DeserialiseFailure       (Expr () Import)
+        -> Either DeserialiseFailureWithEq (Expr () Import)
+    wrap = Data.Coerce.coerce
 
 quickcheckTests :: TestTree
 quickcheckTests
