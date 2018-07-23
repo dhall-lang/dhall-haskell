@@ -1,5 +1,5 @@
 Name: dhall
-Version: 1.15.1
+Version: 1.16.1
 Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.0.1
@@ -153,6 +153,7 @@ Extra-Source-Files:
     tests/typecheck/*.dhall
     tests/typecheck/examples/Monoid/*.dhall
     tests/import/*.dhall
+    tests/import/data/foo/bar/a.dhall
     benchmark/examples/*.dhall
     benchmark/deep-nested-large-record/*.dhall
 
