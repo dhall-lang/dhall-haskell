@@ -22,6 +22,7 @@ import Dhall.Core
     , ImportMode(..)
     , ImportType(..)
     , Scheme(..)
+    , URL(..)
     , Var(..)
     )
 import Numeric.Natural (Natural)
@@ -71,6 +72,23 @@ lift5
     => (a -> b -> c -> d -> e -> f) -> Gen f
 lift5 f =
       f <$> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+
+lift6
+    :: ( Arbitrary a
+       , Arbitrary b
+       , Arbitrary c
+       , Arbitrary d
+       , Arbitrary e
+       , Arbitrary f
+       )
+    => (a -> b -> c -> d -> e -> f -> g) -> Gen g
+lift6 f =
+      f <$> arbitrary
+        <*> arbitrary
         <*> arbitrary
         <*> arbitrary
         <*> arbitrary
@@ -213,7 +231,7 @@ instance Arbitrary ImportType where
         Test.QuickCheck.suchThat
             (Test.QuickCheck.oneof
                 [ lift2 Local
-                , lift5 (\a b c d e -> URL a b c d e Nothing)
+                , lift5 (\a b c d e -> Remote (URL a b c d e Nothing))
                 , lift1 Env
                 , lift0 Missing
                 ]
@@ -224,8 +242,8 @@ instance Arbitrary ImportType where
         filter standardizedImportType (genericShrink importType)
 
 standardizedImportType :: ImportType -> Bool
-standardizedImportType (URL _ _ _ _ _ (Just _)) = False
-standardizedImportType  _                       = True
+standardizedImportType (Remote (URL _ _ _ _ _ (Just _))) = False
+standardizedImportType  _                                = True
 
 instance Arbitrary ImportHashed where
     arbitrary =
@@ -257,6 +275,11 @@ instance Arbitrary Import where
 
 instance Arbitrary Scheme where
     arbitrary = Test.QuickCheck.oneof [ pure HTTP, pure HTTPS ]
+
+    shrink = genericShrink
+
+instance Arbitrary URL where
+    arbitrary = lift6 URL
 
     shrink = genericShrink
 
