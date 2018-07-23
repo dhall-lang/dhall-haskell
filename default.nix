@@ -22,8 +22,9 @@ let
 
                                 in
                                    !( pkgsNew.lib.hasSuffix ".nix" base
-                                   && base == "dist"
-                                   && base == "result"
+                                   || base == "dist"
+                                   || base == "result"
+                                   || base == ".git"
                                    );
 
                             in
