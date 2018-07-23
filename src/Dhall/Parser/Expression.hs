@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Parsing Dhall expressions.
@@ -757,12 +758,12 @@ local = do
 
 http :: Parser ImportType
 http = do
-    (s, a, path, q, f) <- httpRaw
+    url <- httpRaw
     whitespace
     headers <- optional (do
         _using
         (importHashed_ <|> (_openParens *> importHashed_ <* _closeParens)) )
-    return (URL s a path q f headers)
+    return (Remote (url { headers }))
 
 missing :: Parser ImportType
 missing = do

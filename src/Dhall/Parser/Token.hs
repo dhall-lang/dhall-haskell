@@ -247,24 +247,26 @@ file_ = do
 
     return (File {..})
 
-scheme :: Parser Scheme
-scheme =
+scheme_ :: Parser Scheme
+scheme_ =
         ("http" :: Parser Text)
     *>  ((("s" :: Parser Text) *> pure HTTPS) <|> pure HTTP)
     <*  ("://" :: Parser Text)
 
-httpRaw :: Parser (Scheme, Text, File, Maybe Text, Maybe Text)
+httpRaw :: Parser URL
 httpRaw = do
-    s <- scheme
-    a <- authority
-    file <- file_
-    q <- optional (("?" :: Parser Text) *> query)
-    f <- optional (("#" :: Parser Text) *> fragment)
+    scheme    <- scheme_
+    authority <- authority_
+    path      <- file_
+    query     <- optional (("?" :: Parser Text) *> query_)
+    fragment  <- optional (("#" :: Parser Text) *> fragment_)
 
-    return (s, a, file, q, f)
+    let headers = Nothing
 
-authority :: Parser Text
-authority = option (try (userinfo <> "@")) <> host <> option (":" <> port)
+    return (URL {..})
+
+authority_ :: Parser Text
+authority_ = option (try (userinfo <> "@")) <> host <> option (":" <> port)
 
 userinfo :: Parser Text
 userinfo = star (satisfy predicate <|> pctEncoded)
@@ -374,13 +376,13 @@ pchar = satisfy predicate <|> pctEncoded
   where
     predicate c = unreserved c || subDelims c || c == ':' || c == '@'
 
-query :: Parser Text
-query = star (pchar <|> satisfy predicate)
+query_ :: Parser Text
+query_ = star (pchar <|> satisfy predicate)
   where
     predicate c = c == '/' || c == '?'
 
-fragment :: Parser Text
-fragment = star (pchar <|> satisfy predicate)
+fragment_ :: Parser Text
+fragment_ = star (pchar <|> satisfy predicate)
   where
     predicate c = c == '/' || c == '?'
 

@@ -26,6 +26,7 @@ module Dhall.Core (
     , ImportHashed(..)
     , ImportMode(..)
     , ImportType(..)
+    , URL(..)
     , Path
     , Scheme(..)
     , Var(..)
@@ -163,11 +164,20 @@ instance Pretty FilePrefix where
 
 data Scheme = HTTP | HTTPS deriving (Eq, Generic, Ord, Show)
 
+data URL = URL
+    { scheme    :: Scheme
+    , authority :: Text
+    , path      :: File
+    , query     :: Maybe Text
+    , fragment  :: Maybe Text
+    , headers   :: Maybe ImportHashed
+    } deriving (Eq, Generic, Ord, Show)
+
 -- | The type of import (i.e. local vs. remote vs. environment)
 data ImportType
     = Local FilePrefix File
     -- ^ Local path
-    | URL Scheme Text File (Maybe Text) (Maybe Text) (Maybe ImportHashed)
+    | Remote URL
     -- ^ URL of remote resource and optional headers stored in an import
     | Env  Text
     -- ^ Environment variable
@@ -177,8 +187,8 @@ data ImportType
 instance Semigroup ImportType where
     Local prefix file₀ <> Local Here file₁ = Local prefix (file₀ <> file₁)
 
-    URL scheme authority file₀ query fragment headers <> Local Here file₁ =
-        URL scheme authority (file₀ <> file₁) query fragment headers
+    Remote (URL { path = path₀, ..}) <> Local Here path₁ =
+        Remote (URL { path = path₀ <> path₁, ..})
 
     _ <> import₁ =
         import₁
@@ -187,11 +197,11 @@ instance Pretty ImportType where
     pretty (Local prefix file) =
         Pretty.pretty prefix <> Pretty.pretty file
 
-    pretty (URL scheme authority file query fragment headers) =
+    pretty (Remote (URL {..})) =
             schemeDoc
         <>  "://"
         <>  Pretty.pretty authority
-        <>  Pretty.pretty file
+        <>  Pretty.pretty path
         <>  queryDoc
         <>  fragmentDoc
         <>  foldMap prettyHeaders headers
@@ -2342,7 +2352,7 @@ expressionToTerm (Note _ e) =
 importToTerm :: Import -> Term
 importToTerm import_ =
     case importType of
-        URL scheme₀ authority path query fragment _ ->
+        Remote (URL { scheme = scheme₀, ..}) ->
             TList
                 (   [ TInt 24, TInt scheme₁, TString authority ]
                 ++  map TString (reverse components)
@@ -2634,9 +2644,12 @@ termToExpression (TList (TInt 24 : TInt n : xs)) = do
                     return (authority, paths, file, query, fragment)
                 _                      -> empty
 
-            let components   = reverse paths
-            let directory    = Directory {..}
-            return (URL scheme authority (File {..}) query fragment Nothing)
+            let components = reverse paths
+            let directory  = Directory {..}
+            let path       = File {..}
+            let headers    = Nothing
+
+            return (Remote (URL {..}))
 
     let local prefix = do
             let process [ TString file ] = do

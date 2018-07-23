@@ -144,6 +144,7 @@ import Dhall.Core
     , ImportMode(..)
     , Import(..)
     , Scheme(..)
+    , URL(..)
     )
 #ifdef MIN_VERSION_http_client
 import Dhall.Import.HTTP
@@ -357,8 +358,8 @@ instance Canonicalize ImportType where
     canonicalize (Local prefix file) =
         Local prefix (canonicalize file)
 
-    canonicalize (URL scheme authority file query fragment header) =
-        URL scheme authority (canonicalize file) query fragment header
+    canonicalize (Remote (URL {..})) =
+        Remote (URL { path = canonicalize path, ..})
 
     canonicalize (Env name) =
         Env name
@@ -456,7 +457,7 @@ exprFromImport (Import {..}) = do
 
             return (path, text)
 
-        URL scheme authority file query fragment maybeHeaders -> do
+        Remote (URL scheme authority file query fragment maybeHeaders) -> do
             let prefix =
                         (case scheme of HTTP -> "http"; HTTPS -> "https")
                     <>  "://"
@@ -595,7 +596,7 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
   Embed import_ -> do
     imports <- zoom stack State.get
 
-    let local (Import (ImportHashed _ (URL     {})) _) = False
+    let local (Import (ImportHashed _ (Remote  {})) _) = False
         local (Import (ImportHashed _ (Local   {})) _) = True
         local (Import (ImportHashed _ (Env     {})) _) = True
         local (Import (ImportHashed _ (Missing {})) _) = True
