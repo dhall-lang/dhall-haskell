@@ -1729,7 +1729,7 @@ isNormalizedWith ctx e = e == (normalizeWith ctx e)
 
 
 -- | Quickly check if an expression is in normal form
-isNormalized :: Expr s a -> Bool
+isNormalized :: Eq a => Expr s a -> Bool
 isNormalized e = case denote e of
     Const _ -> True
     Var _ -> True
@@ -1773,37 +1773,32 @@ isNormalized e = case denote e of
     Annot _ _ -> False
     Bool -> True
     BoolLit _ -> True
-    BoolAnd x y -> isNormalized x && isNormalized y &&
-        case x of
-            BoolLit _ ->
-                case y of
-                    BoolLit _ -> False
-                    _ -> True
-            _ -> True
-    BoolOr x y -> isNormalized x && isNormalized y &&
-        case x of
-            BoolLit _ ->
-                case y of
-                    BoolLit _ -> False
-                    _ -> True
-            _ -> True
-    BoolEQ x y -> isNormalized x && isNormalized y &&
-        case x of
-            BoolLit _ ->
-                case y of
-                    BoolLit _ -> False
-                    _ -> True
-            _ -> True
-    BoolNE x y -> isNormalized x && isNormalized y &&
-        case x of
-            BoolLit _ ->
-                case y of
-                    BoolLit _ -> False
-                    _ -> True
-            _ -> True
-    BoolIf b true false -> isNormalized b && case b of
-        BoolLit _ -> False
-        _         -> isNormalized true && isNormalized false
+    BoolAnd x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (BoolLit _)  _          = False
+        decide  _          (BoolLit _) = False
+        decide  l           r          = not (judgmentallyEqual l r)
+    BoolOr x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (BoolLit _)  _          = False
+        decide  _          (BoolLit _) = False
+        decide  l           r          = not (judgmentallyEqual l r)
+    BoolEQ x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (BoolLit True)  _             = False
+        decide  _             (BoolLit True) = False
+        decide  l              r             = not (judgmentallyEqual l r)
+    BoolNE x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (BoolLit False)  _               = False
+        decide  _              (BoolLit False ) = False
+        decide  l               r               = not (judgmentallyEqual l r)
+    BoolIf x y z ->
+        isNormalized x && isNormalized y && isNormalized z && decide x y z
+      where
+        decide (BoolLit _)  _              _              = False
+        decide  _          (BoolLit True) (BoolLit False) = False
+        decide  _           l              r              = not (judgmentallyEqual l r)
     Natural -> True
     NaturalLit _ -> True
     NaturalFold -> True
@@ -1813,20 +1808,18 @@ isNormalized e = case denote e of
     NaturalOdd -> True
     NaturalShow -> True
     NaturalToInteger -> True
-    NaturalPlus x y -> isNormalized x && isNormalized y &&
-        case x of
-            NaturalLit _ ->
-                case y of
-                    NaturalLit _ -> False
-                    _ -> True
-            _ -> True
-    NaturalTimes x y -> isNormalized x && isNormalized y &&
-        case x of
-            NaturalLit _ ->
-                case y of
-                    NaturalLit _ -> False
-                    _ -> True
-            _ -> True
+    NaturalPlus x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (NaturalLit 0)  _             = False
+        decide  _             (NaturalLit 0) = False
+        decide (NaturalLit _) (NaturalLit _) = False
+        decide  _              _             = True
+    NaturalTimes x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (NaturalLit 1)  _             = False
+        decide  _             (NaturalLit 1) = False
+        decide (NaturalLit _) (NaturalLit _) = False
+        decide  _              _             = True
     Integer -> True
     IntegerLit _ -> True
     IntegerShow -> True
@@ -1836,22 +1829,23 @@ isNormalized e = case denote e of
     DoubleShow -> True
     Text -> True
     TextLit (Chunks xys _) -> all (all isNormalized) xys
-    TextAppend x y -> isNormalized x && isNormalized y &&
-        case x of
-            TextLit _ ->
-                case y of
-                    TextLit _ -> False
-                    _ -> True
-            _ -> True
+    TextAppend x y -> isNormalized x && isNormalized y && decide x y
+      where
+        isEmpty (Chunks [] "") = True
+        isEmpty  _             = False
+
+        decide (TextLit m)  _          | isEmpty m = False
+        decide  _          (TextLit n) | isEmpty n = False
+        decide (TextLit _) (TextLit _)             = False
+        decide  _           _                      = True
     List -> True
     ListLit t es -> all isNormalized t && all isNormalized es
-    ListAppend x y -> isNormalized x && isNormalized y &&
-        case x of
-            ListLit _ _ ->
-                case y of
-                    ListLit _ _ -> False
-                    _ -> True
-            _ -> True
+    ListAppend x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (ListLit _ m)  _            | Data.Sequence.null m = False
+        decide  _            (ListLit _ n) | Data.Sequence.null n = False
+        decide (ListLit _ _) (ListLit _ _)                        = False
+        decide  _             _                                   = True
     ListBuild -> True
     ListFold -> True
     ListLength -> True
@@ -1867,27 +1861,24 @@ isNormalized e = case denote e of
     RecordLit kvs -> all isNormalized kvs
     Union kts -> all isNormalized kts
     UnionLit _ v kvs -> isNormalized v && all isNormalized kvs
-    Combine x y -> isNormalized x && isNormalized y && combine
+    Combine x y -> isNormalized x && isNormalized y && decide x y
       where
-        combine = case x of
-            RecordLit _ -> case y of
-                RecordLit _ -> False
-                _ -> True
-            _ -> True
-    CombineTypes x y -> isNormalized x && isNormalized y && combine
+        decide (RecordLit m) _ | Data.HashMap.Strict.InsOrd.null m = False
+        decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
+        decide (RecordLit _) (RecordLit _) = False
+        decide  _ _ = True
+    CombineTypes x y -> isNormalized x && isNormalized y && decide x y
       where
-        combine = case x of
-            Record _ -> case y of
-                Record _ -> False
-                _ -> True
-            _ -> True
-    Prefer x y -> isNormalized x && isNormalized y && combine
+        decide (Record m) _ | Data.HashMap.Strict.InsOrd.null m = False
+        decide _ (Record n) | Data.HashMap.Strict.InsOrd.null n = False
+        decide (Record _) (Record _) = False
+        decide  _ _ = True
+    Prefer x y -> isNormalized x && isNormalized y && decide x y
       where
-        combine = case x of
-            RecordLit _ -> case y of
-                RecordLit _ -> False
-                _ -> True
-            _ -> True
+        decide (RecordLit m) _ | Data.HashMap.Strict.InsOrd.null m = False
+        decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
+        decide (RecordLit _) (RecordLit _) = False
+        decide  _ _ = True
     Merge x y t -> isNormalized x && isNormalized y && any isNormalized t &&
         case x of
             RecordLit kvsX ->
