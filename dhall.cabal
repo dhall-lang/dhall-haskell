@@ -209,6 +209,7 @@ Library
 
     Exposed-Modules:
         Dhall,
+        Dhall.Binary,
         Dhall.Context,
         Dhall.Core,
         Dhall.Diff,

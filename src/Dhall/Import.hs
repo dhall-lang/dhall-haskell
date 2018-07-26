@@ -117,6 +117,7 @@ module Dhall.Import (
     , MissingImports(..)
     ) where
 
+import Codec.CBOR.Term (Term)
 import Control.Applicative (empty)
 import Control.Exception (Exception, SomeException, throwIO, toException)
 import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..))
@@ -168,6 +169,7 @@ import qualified Data.Map.Strict                         as Map
 import qualified Data.Text.Encoding
 import qualified Data.Text                               as Text
 import qualified Data.Text.IO
+import qualified Dhall.Binary
 import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.Context
@@ -762,7 +764,10 @@ hashExpression expression = Crypto.Hash.hash bytesStrict
     intermediateExpression :: Expr s Import
     intermediateExpression = fmap absurd expression
 
-    bytesLazy = Codec.Serialise.serialise intermediateExpression
+    term :: Term
+    term = Dhall.Binary.encodeWithVersion_1_0 intermediateExpression
+
+    bytesLazy = Codec.Serialise.serialise term
 
     bytesStrict = Data.ByteString.Lazy.toStrict bytesLazy
 

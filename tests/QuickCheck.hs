@@ -35,6 +35,7 @@ import qualified Codec.Serialise
 import qualified Data.Coerce
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
+import qualified Dhall.Binary
 import qualified Test.QuickCheck
 import qualified Test.Tasty.QuickCheck
 
@@ -292,14 +293,19 @@ instance Arbitrary Var where
 binaryRoundtrip :: Expr () Import -> Property
 binaryRoundtrip expression =
         wrap
-            (Codec.Serialise.deserialiseOrFail
-                (Codec.Serialise.serialise expression)
+            (fmap
+                Dhall.Binary.decodeWithVersion_1_0
+                (Codec.Serialise.deserialiseOrFail
+                  (Codec.Serialise.serialise
+                    (Dhall.Binary.encodeWithVersion_1_0 expression)
+                  )
+                )
             )
-    === wrap (Right expression)
+    === wrap (Right (Just expression))
   where
     wrap
-        :: Either DeserialiseFailure       (Expr () Import)
-        -> Either DeserialiseFailureWithEq (Expr () Import)
+        :: Either DeserialiseFailure       a
+        -> Either DeserialiseFailureWithEq a
     wrap = Data.Coerce.coerce
 
 quickcheckTests :: TestTree
