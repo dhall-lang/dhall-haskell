@@ -1,6 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Dhall.Format ( format ) where
+-- | This module contains the implementation of the @dhall format@ subcommand
+
+module Dhall.Format
+    ( -- * Format
+      format
+    ) where
 
 import Dhall.Parser (exprAndHeaderFromText)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr, layoutOpts)
@@ -14,7 +19,12 @@ import qualified Data.Text.IO
 import qualified System.Console.ANSI
 import qualified System.IO
 
-format :: Maybe FilePath -> IO ()
+-- | Implementation of the @dhall format@ subcommand
+format
+    :: Maybe FilePath
+    -- ^ Modify file in-place if present, otherwise read from @stdin@ and write
+    --   to @stdout@
+    -> IO ()
 format inplace = do
         case inplace of
             Just file -> do

@@ -142,6 +142,7 @@ instance Semigroup File where
     File directory₀ _ <> File directory₁ file =
         File (directory₀ <> directory₁) file
 
+-- | The beginning of a file path which anchors subsequent path components
 data FilePrefix
     = Absolute
     -- ^ Absolute path

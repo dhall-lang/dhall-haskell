@@ -1,6 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Dhall.Hash ( hash ) where
+-- | This module contains the implementation of the @dhall hash@ subcommand
+
+module Dhall.Hash
+    ( -- * Hash
+      hash
+    ) where
 
 import Dhall.Parser (exprFromText)
 import Dhall.Import (hashExpressionToCode, load)
@@ -9,6 +14,7 @@ import qualified Control.Exception
 import qualified Dhall.TypeCheck
 import qualified Data.Text.IO
 
+-- | Implementation of the @dhall hash@ subcommand
 hash :: IO ()
 hash = do
         inText <- Data.Text.IO.getContents

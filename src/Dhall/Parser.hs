@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards            #-}
+
 -- | This module contains Dhall's parsing logic
 
 module Dhall.Parser (

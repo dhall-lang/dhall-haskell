@@ -658,9 +658,9 @@ list = fmap Data.Foldable.toList . sequence
 vector :: Type a -> Type (Vector a)
 vector = fmap Data.Vector.fromList . list
 
-{-| Decode `()` from an empty record.
+{-| Decode @()@ from an empty record.
 
->>> input unit "{=}"  -- GHC doesn't print the result if it is @()@
+>>> input unit "{=}"  -- GHC doesn't print the result if it is ()
 
 -}
 unit :: Type ()
@@ -677,7 +677,7 @@ unit = Type extractOut expectedOut
 >>> input string "\"ABC\""
 "ABC"
 
-"-}
+-}
 string :: Type String
 string = Data.Text.Lazy.unpack <$> lazyText
 

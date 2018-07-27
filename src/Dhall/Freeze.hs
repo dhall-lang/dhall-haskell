@@ -1,6 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Dhall.Freeze (
+-- | This module contains the implementation of the @dhall freeze@ subcommand
+
+module Dhall.Freeze
+    ( -- * Freeze
       freeze
     , hashImport
     ) where
@@ -24,6 +27,7 @@ import qualified System.IO
 readInput :: Maybe FilePath -> IO Text
 readInput = maybe Data.Text.IO.getContents Data.Text.IO.readFile
 
+-- | Retrieve an `Import` and update the hash to match the latest contents
 hashImport :: Import -> IO Import
 hashImport import_ = do
     expression <- Dhall.Import.load (Embed import_)
@@ -60,7 +64,12 @@ writeExpr inplace (header, expr) = do
                else
                  Pretty.renderIO System.IO.stdout (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc)) 
 
-freeze :: Maybe FilePath -> IO ()
+-- | Implementation of the @dhall freeze@ subcommand
+freeze
+    :: Maybe FilePath
+    -- ^ Modify file in-place if present, otherwise read from @stdin@ and write
+    --   to @stdout@
+    -> IO ()
 freeze inplace = do
     expr <- readInput inplace
     parseExpr srcInfo expr >>= freezeExpr >>= writeExpr inplace
