@@ -47,7 +47,7 @@ main = do
     prelude <- loadPreludeFiles
     issue108 <- TIO.readFile "benchmark/examples/issue108.dhall"
     defaultMain
-        [ benchParser prelude
-        , bgroup "Issue #108" $
-            [ benchExprFromText "108" issue108 ]
+        [ benchExprFromText "Issue #108" issue108
+        , benchExprFromText "Long variable names" (T.replicate 1000000 "x")
+        , benchParser prelude
         ]
