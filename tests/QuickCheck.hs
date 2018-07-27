@@ -95,6 +95,21 @@ lift6 f =
         <*> arbitrary
         <*> arbitrary
 
+natural :: (Arbitrary a, Num a) => Gen a
+natural =
+    Test.QuickCheck.frequency
+        [ (7, arbitrary)
+        , (1, fmap (\x -> x + (2 ^ (64 :: Int))) arbitrary)
+        ]
+
+integer :: (Arbitrary a, Num a) => Gen a
+integer =
+    Test.QuickCheck.frequency
+        [ (7, arbitrary)
+        , (1, fmap (\x -> x + (2 ^ (64 :: Int))) arbitrary)
+        , (1, fmap (\x -> x - (2 ^ (64 :: Int))) arbitrary)
+        ]
+
 instance (Eq k, Hashable k, Arbitrary k, Arbitrary v) => Arbitrary (InsOrdHashMap k v) where
     arbitrary = do
         n   <- Test.QuickCheck.choose (0, 2)
@@ -154,7 +169,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                 , ( 1, lift2 BoolNE)
                 , ( 1, lift3 BoolIf)
                 , ( 7, lift0 Natural)
-                , ( 7, lift1 NaturalLit)
+                , ( 7, fmap NaturalLit natural)
                 , ( 7, lift0 NaturalFold)
                 , ( 7, lift0 NaturalBuild)
                 , ( 7, lift0 NaturalIsZero)
@@ -165,7 +180,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                 , ( 1, lift2 NaturalPlus)
                 , ( 1, lift2 NaturalTimes)
                 , ( 7, lift0 Integer)
-                , ( 7, lift1 IntegerLit)
+                , ( 7, fmap IntegerLit integer)
                 , ( 7, lift0 IntegerShow)
                 , ( 7, lift0 Double)
                 , ( 7, lift1 DoubleLit)
@@ -286,7 +301,11 @@ instance Arbitrary URL where
 
 instance Arbitrary Var where
     arbitrary =
-        Test.QuickCheck.oneof [ lift1 (V "_"), lift1 (\t -> V t 0), lift2 V ]
+        Test.QuickCheck.oneof
+            [ fmap (V "_") natural
+            , lift1 (\t -> V t 0)
+            , lift1 V <*> natural
+            ]
 
     shrink = genericShrink
 
