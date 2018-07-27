@@ -1,8 +1,13 @@
+-- | This module contains the implementation of the @dhall repl@ subcommand
+
 {-# language FlexibleContexts #-}
 {-# language NamedFieldPuns #-}
 {-# language OverloadedStrings #-}
 
-module Dhall.Repl ( repl ) where
+module Dhall.Repl
+    ( -- * Repl
+      repl
+    ) where
 
 import Control.Exception ( SomeException(SomeException), displayException, throwIO )
 import Control.Monad.IO.Class ( MonadIO, liftIO )
@@ -26,7 +31,7 @@ import qualified System.Console.Haskeline.MonadException as Haskeline
 import qualified System.Console.Repline as Repline
 import qualified System.IO
 
-
+-- | Implementation of the @dhall repl@ subcommand
 repl :: Bool -> IO ()
 repl explain = if explain then Dhall.detailed io else io
   where
