@@ -186,6 +186,7 @@ constantFolding =
         [ shouldNormalize "Natural/plus"   "naturalPlus"
         , shouldNormalize "Optional/fold"  "optionalFold"
         , shouldNormalize "Optional/build" "optionalBuild"
+        , shouldNormalize "Natural/build"  "naturalBuild"
         ]
 
 conversions :: TestTree
