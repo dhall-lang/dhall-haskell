@@ -962,62 +962,73 @@ subst x e (ImportAlt a b) = ImportAlt a' b'
 -- and `subst` does nothing to a closed expression
 subst _ _ (Embed p) = Embed p
 
-{-| α-normalize an expression by renaming all variables to @\"_\"@ and using
-    De Bruijn indices to distinguish them
+{-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
+    using De Bruijn indices to distinguish them
+
+>>> alphaNormalize (Lam "a" (Const Type) (Lam "b" (Const Type) (Lam "x" "a" (Lam "y" "b" "x"))))
+Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
+
+    α-normalization does not affect free variables:
+
+>>> alphaNormalize "x"
+Var (V "x" 0)
+
 -}
 alphaNormalize :: Expr s a -> Expr s a
 alphaNormalize (Const c) =
     Const c
 alphaNormalize (Var v) =
     Var v
+alphaNormalize (Lam "_" _A₀ b₀) =
+    Lam "_" _A₁ b₁
+  where
+    _A₁ = alphaNormalize _A₀
+    b₁  = alphaNormalize b₀
 alphaNormalize (Lam x _A₀ b₀) =
-    Lam "_" _A₁ b₃
+    Lam "_" _A₁ b₄
   where
     _A₁ = alphaNormalize _A₀
 
-    v₀ = Var (V "_" 0)
-    v₁ = shift 1 (V x 0) v₀
-    b₁ = subst (V x 0) v₁ b₀
-    b₂ = shift (-1) (V x 0) b₁
-    b₃ = alphaNormalize b₂
+    b₁ = shift 1 (V "_" 0) b₀
+    b₂ = subst (V x 0) (Var (V "_" 0)) b₁
+    b₃ = shift (-1) (V x 0) b₂
+    b₄ = alphaNormalize b₃
+alphaNormalize (Pi "_" _A₀ _B₀) =
+    Pi "_" _A₁ _B₁
+  where
+    _A₁ = alphaNormalize _A₀
+    _B₁ = alphaNormalize _B₀
 alphaNormalize (Pi x _A₀ _B₀) =
-    Pi "_" _A₁ _B₃
+    Pi "_" _A₁ _B₄
   where
     _A₁ = alphaNormalize _A₀
 
-    v₀  = Var (V "_" 0)
-    v₁  = shift 1 (V x 0) v₀
-    _B₁ = subst (V x 0) v₁ _B₀
-    _B₂ = shift (-1) (V x 0) _B₁
-    _B₃ = alphaNormalize _B₂
+    _B₁ = shift 1 (V "_" 0) _B₀
+    _B₂ = subst (V x 0) (Var (V "_" 0)) _B₁
+    _B₃ = shift (-1) (V x 0) _B₂
+    _B₄ = alphaNormalize _B₃
 alphaNormalize (App f₀ a₀) =
     App f₁ a₁
   where
     f₁ = alphaNormalize f₀
 
     a₁ = alphaNormalize a₀
-alphaNormalize (Let x (Just _A₀) a₀ b₀) =
-    Let "_" (Just _A₁) a₁ b₃
+alphaNormalize (Let "_" mA₀ a₀ b₀) =
+    Let "_" mA₁ a₁ b₁
   where
-    _A₁ = alphaNormalize _A₀
-
-    a₁ = alphaNormalize a₀
-
-    v₀ = Var (V "_" 0)
-    v₁ = shift 1 (V x 0) v₀
-    b₁ = subst (V x 0) v₁ b₀
-    b₂ = shift (-1) (V x 0) b₁
-    b₃ = alphaNormalize b₂
-alphaNormalize (Let x Nothing a₀ b₀) =
-    Let "_" Nothing a₁ b₃
+    mA₁ = fmap alphaNormalize mA₀
+    a₁  =      alphaNormalize a₀
+    b₁  =      alphaNormalize b₀
+alphaNormalize (Let x mA₀ a₀ b₀) =
+    Let "_" mA₁ a₁ b₄
   where
-    a₁ = alphaNormalize a₀
+    mA₁ = fmap alphaNormalize mA₀
+    a₁  =      alphaNormalize a₀
 
-    v₀ = Var (V "_" 0)
-    v₁ = shift 1 (V x 0) v₀
-    b₁ = subst (V x 0) v₁ b₀
-    b₂ = shift (-1) (V x 0) b₁
-    b₃ = alphaNormalize b₂
+    b₁ = shift 1 (V "_" 0) b₀
+    b₂ = subst (V x 0) (Var (V "_" 0)) b₁
+    b₃ = shift (-1) (V x 0) b₂
+    b₄ = alphaNormalize b₃
 alphaNormalize (Annot t₀ _T₀) =
     Annot t₁ _T₁
   where
