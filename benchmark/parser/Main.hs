@@ -49,5 +49,6 @@ main = do
     defaultMain
         [ benchExprFromText "Issue #108" issue108
         , benchExprFromText "Long variable names" (T.replicate 1000000 "x")
+        , benchExprFromText "Large number of function arguments" (T.replicate 10000 "x ")
         , benchParser prelude
         ]
