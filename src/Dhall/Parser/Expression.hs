@@ -168,7 +168,7 @@ makeOperatorExpression
 makeOperatorExpression subExpression operatorParser operator embedded =
     noted (do
         a <- subExpression embedded
-        b <- many (do operatorParser; subExpression embedded)
+        b <- Text.Megaparsec.many (do operatorParser; subExpression embedded)
         return (foldr1 operator (a:b)) )
 
 importAltExpression :: Parser a -> Parser (Expr Src a)
@@ -223,7 +223,7 @@ applicationExpression :: Parser a -> Parser (Expr Src a)
 applicationExpression embedded = do
     f <- (do _constructors; return Constructors) <|> return id
     a <- noted (importExpression embedded)
-    b <- many (noted (importExpression embedded))
+    b <- Text.Megaparsec.many (noted (importExpression embedded))
     return (foldl app (f a) b)
   where
     app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
@@ -246,7 +246,7 @@ selectorExpression embedded = noted (do
 
     let left  x  e = Field   e x
     let right xs e = Project e xs
-    b <- many (try (do _dot; fmap left label <|> fmap right labels))
+    b <- Text.Megaparsec.many (try (do _dot; fmap left label <|> fmap right labels))
     return (foldl (\e k -> k e) a b) )
 
 primitiveExpression :: Parser a -> Parser (Expr Src a)
@@ -526,7 +526,7 @@ doubleQuotedChunk embedded =
 doubleQuotedLiteral :: Parser a -> Parser (Chunks Src a)
 doubleQuotedLiteral embedded = do
     _      <- Text.Parser.Char.char '"'
-    chunks <- many (doubleQuotedChunk embedded)
+    chunks <- Text.Megaparsec.many (doubleQuotedChunk embedded)
     _      <- Text.Parser.Char.char '"'
     return (mconcat chunks)
 
@@ -626,7 +626,7 @@ nonEmptyRecordTypeOrLiteral embedded = do
     let nonEmptyRecordType = do
             _colon
             b <- expression embedded
-            e <- many (do
+            e <- Text.Megaparsec.many (do
                 _comma
                 c <- label
                 _colon
@@ -638,7 +638,7 @@ nonEmptyRecordTypeOrLiteral embedded = do
     let nonEmptyRecordLiteral = do
             _equal
             b <- expression embedded
-            e <- many (do
+            e <- Text.Megaparsec.many (do
                 _comma
                 c <- label
                 _equal
@@ -666,7 +666,7 @@ nonEmptyUnionTypeOrLiteral embedded = do
         let alternative0 = do
                 _equal
                 b <- expression embedded
-                kvs <- many (do
+                kvs <- Text.Megaparsec.many (do
                     _bar
                     c <- label
                     _colon
@@ -693,7 +693,7 @@ nonEmptyListLiteral :: Parser a -> Parser (Expr Src a)
 nonEmptyListLiteral embedded = (do
     _openBracket
     a <- expression embedded
-    b <- many (do _comma; expression embedded)
+    b <- Text.Megaparsec.many (do _comma; expression embedded)
     _closeBracket
     return (ListLit Nothing (Data.Sequence.fromList (a:b))) ) <?> "list literal"
 
