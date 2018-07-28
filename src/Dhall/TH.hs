@@ -21,7 +21,10 @@
     time with all imports resolved, making it easy to keep your Dhall configs
     and Haskell interpreters in sync.
 -}
-module Dhall.TH where
+module Dhall.TH
+    ( -- * Template Haskell
+      staticDhallExpression
+    ) where
 
 import Data.Typeable
 import Language.Haskell.TH.Quote (dataToExpQ) -- 7.10 compatibility.
