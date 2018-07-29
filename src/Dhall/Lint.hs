@@ -1,3 +1,5 @@
+-- | This module contains the implementation of the @dhall lint@ command
+
 module Dhall.Lint
     ( -- * Lint
       lint
@@ -8,6 +10,10 @@ import Dhall.TypeCheck (X(..))
 
 import qualified Dhall.Core
 
+{-| Automatically improve a Dhall expression
+
+    Currently this only removes unused @let@ bindings
+-}
 lint :: Expr s Import -> Expr t Import
 lint expression = loop (Dhall.Core.denote expression)
   where

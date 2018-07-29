@@ -155,10 +155,9 @@ blockCommentContinue = endOfComment <|> continue
 
 simpleLabel :: Parser Text
 simpleLabel = try (do
-    c  <- Text.Parser.Char.satisfy headCharacter
-    cs <- many (Text.Parser.Char.satisfy tailCharacter)
-    let string = c:cs
-    let text = Data.Text.pack string
+    c    <- Text.Parser.Char.satisfy headCharacter
+    rest <- Dhall.Parser.Combinators.takeWhile tailCharacter
+    let text = Data.Text.cons c rest
     Control.Monad.guard (not (Data.HashSet.member text reservedIdentifiers))
     return text )
   where
@@ -169,9 +168,9 @@ simpleLabel = try (do
 backtickLabel :: Parser Text
 backtickLabel = do
     _ <- Text.Parser.Char.char '`'
-    t <- some (Text.Parser.Char.satisfy predicate)
+    t <- takeWhile1 predicate
     _ <- Text.Parser.Char.char '`'
-    return (Data.Text.pack t)
+    return t
   where
     predicate c = alpha c || digit c || elem c ("$-/_:." :: String)
 

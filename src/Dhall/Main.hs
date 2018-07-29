@@ -1,11 +1,19 @@
+{-| This module contains the top-level entrypoint and options parsing for the
+    @dhall@ executable
+-}
+
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
 module Dhall.Main
-    ( -- Commands
-      parseOptions
+    ( -- * Options
+      Options(..)
+    , Mode(..)
+    , parseOptions
     , parserInfoOptions
+
+      -- * Execution
     , command
     , main
     ) where
@@ -47,12 +55,14 @@ import qualified Options.Applicative
 import qualified System.Console.ANSI
 import qualified System.IO
 
+-- | Top-level program options
 data Options = Options
     { mode    :: Mode
     , explain :: Bool
     , plain   :: Bool
     }
 
+-- | The subcommands for the @dhall@ executable
 data Mode
     = Default
     | Version
@@ -74,6 +84,7 @@ parseInplace =
         <>  Options.Applicative.metavar "FILE"
         )
 
+-- | `Parser` for the `Options` type
 parseOptions :: Parser Options
 parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
   where
@@ -166,6 +177,7 @@ assertNoImports :: Expr Src Import -> IO (Expr Src X)
 assertNoImports expression =
     throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
 
+-- | `ParserInfo` for the `Options` type
 parserInfoOptions :: ParserInfo Options
 parserInfoOptions =
     Options.Applicative.info
@@ -174,6 +186,7 @@ parserInfoOptions =
         <>  Options.Applicative.fullDesc
         )
 
+-- | Run the command specified by the `Options` type
 command :: Options -> IO ()
 command (Options {..}) = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
@@ -320,6 +333,7 @@ command (Options {..}) = do
                           System.IO.stdout
                           (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc))
 
+-- | Entry point for the @dhall@ executable
 main :: IO ()
 main = do
     options <- Options.Applicative.execParser parserInfoOptions
