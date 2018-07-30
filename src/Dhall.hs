@@ -1395,7 +1395,7 @@ field key valueType =
 (>*<) :: Divisible f => f a -> f b -> f (a, b)
 (>*<) = divided
 
-infixr 4 >*<
+infixr 5 >*<
 
 newtype RecordInputType a
   = RecordInputType (Data.HashMap.Strict.InsOrd.InsOrdHashMap Text (InputType a))
