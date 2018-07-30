@@ -1,8 +1,7 @@
 {-# LANGUAGE BangPatterns       #-}
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFoldable     #-}
-{-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
@@ -26,7 +25,9 @@ module Dhall.Core (
     , ImportHashed(..)
     , ImportMode(..)
     , ImportType(..)
+    , URL(..)
     , Path
+    , Scheme(..)
     , Var(..)
     , Chunks(..)
     , Expr(..)
@@ -74,6 +75,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Traversable
 import {-# SOURCE #-} Dhall.Pretty.Internal
+import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 
@@ -103,7 +105,7 @@ import qualified Data.Text.Prettyprint.Doc  as Pretty
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
 -}
-data Const = Type | Kind deriving (Show, Eq, Data, Bounded, Enum)
+data Const = Type | Kind deriving (Show, Eq, Data, Bounded, Enum, Generic)
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -115,7 +117,7 @@ instance Pretty Const where
     @Directory { components = [ "baz", "bar", "foo" ] }@
 -}
 newtype Directory = Directory { components :: [Text] }
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Generic, Ord, Show)
 
 instance Semigroup Directory where
     Directory components₀ <> Directory components₁ =
@@ -133,7 +135,7 @@ instance Pretty Directory where
 data File = File
     { directory :: Directory
     , file      :: Text
-    } deriving (Eq, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show)
 
 instance Pretty File where
     pretty (File {..}) = Pretty.pretty directory <> "/" <> Pretty.pretty file
@@ -142,6 +144,7 @@ instance Semigroup File where
     File directory₀ _ <> File directory₁ file =
         File (directory₀ <> directory₁) file
 
+-- | The beginning of a file path which anchors subsequent path components
 data FilePrefix
     = Absolute
     -- ^ Absolute path
@@ -149,29 +152,40 @@ data FilePrefix
     -- ^ Path relative to @.@
     | Home
     -- ^ Path relative to @~@
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Generic, Ord, Show)
 
 instance Pretty FilePrefix where
     pretty Absolute = ""
     pretty Here     = "."
     pretty Home     = "~"
 
+data Scheme = HTTP | HTTPS deriving (Eq, Generic, Ord, Show)
+
+data URL = URL
+    { scheme    :: Scheme
+    , authority :: Text
+    , path      :: File
+    , query     :: Maybe Text
+    , fragment  :: Maybe Text
+    , headers   :: Maybe ImportHashed
+    } deriving (Eq, Generic, Ord, Show)
+
 -- | The type of import (i.e. local vs. remote vs. environment)
 data ImportType
     = Local FilePrefix File
     -- ^ Local path
-    | URL Text File Text (Maybe ImportHashed)
+    | Remote URL
     -- ^ URL of remote resource and optional headers stored in an import
     | Env  Text
     -- ^ Environment variable
     | Missing
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Generic, Ord, Show)
 
 instance Semigroup ImportType where
     Local prefix file₀ <> Local Here file₁ = Local prefix (file₀ <> file₁)
 
-    URL prefix file₀ suffix headers <> Local Here file₁ =
-        URL prefix (file₀ <> file₁) suffix headers
+    Remote (URL { path = path₀, ..}) <> Local Here path₁ =
+        Remote (URL { path = path₀ <> path₁, ..})
 
     _ <> import₁ =
         import₁
@@ -180,26 +194,41 @@ instance Pretty ImportType where
     pretty (Local prefix file) =
         Pretty.pretty prefix <> Pretty.pretty file
 
-    pretty (URL prefix file suffix headers) =
-            Pretty.pretty prefix
-        <>  Pretty.pretty file
-        <>  Pretty.pretty suffix
+    pretty (Remote (URL {..})) =
+            schemeDoc
+        <>  "://"
+        <>  Pretty.pretty authority
+        <>  Pretty.pretty path
+        <>  queryDoc
+        <>  fragmentDoc
         <>  foldMap prettyHeaders headers
       where
         prettyHeaders h = " using " <> Pretty.pretty h
+
+        schemeDoc = case scheme of
+            HTTP  -> "http"
+            HTTPS -> "https"
+
+        queryDoc = case query of
+            Nothing -> ""
+            Just q  -> "?" <> Pretty.pretty q
+
+        fragmentDoc = case fragment of
+            Nothing -> ""
+            Just f  -> "#" <> Pretty.pretty f
 
     pretty (Env env) = "env:" <> Pretty.pretty env
 
     pretty Missing = "missing"
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
-data ImportMode = Code | RawText deriving (Eq, Ord, Show)
+data ImportMode = Code | RawText deriving (Eq, Generic, Ord, Show)
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
     { hash       :: Maybe (Crypto.Hash.Digest SHA256)
     , importType :: ImportType
-    } deriving (Eq, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show)
 
 instance Semigroup ImportHashed where
     ImportHashed _ importType₀ <> ImportHashed hash importType₁ =
@@ -215,7 +244,7 @@ instance Pretty ImportHashed where
 data Import = Import
     { importHashed :: ImportHashed
     , importMode   :: ImportMode
-    } deriving (Eq, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show)
 
 instance Semigroup Import where
     Import importHashed₀ _ <> Import importHashed₁ code =
@@ -267,7 +296,7 @@ type Path = Import
     appear as a numeric suffix.
 -}
 data Var = V Text !Integer
-    deriving (Data, Eq, Show)
+    deriving (Data, Generic, Eq, Show)
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -409,7 +438,7 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Functor, Foldable, Traversable, Show, Eq, Data)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
 
 instance Applicative (Expr s) where
     pure = Embed
@@ -555,7 +584,7 @@ instance IsString (Expr s a) where
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving (Functor, Foldable, Traversable, Show, Eq, Data)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =
@@ -962,62 +991,73 @@ subst x e (ImportAlt a b) = ImportAlt a' b'
 -- and `subst` does nothing to a closed expression
 subst _ _ (Embed p) = Embed p
 
-{-| α-normalize an expression by renaming all variables to @\"_\"@ and using
-    De Bruijn indices to distinguish them
+{-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
+    using De Bruijn indices to distinguish them
+
+>>> alphaNormalize (Lam "a" (Const Type) (Lam "b" (Const Type) (Lam "x" "a" (Lam "y" "b" "x"))))
+Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
+
+    α-normalization does not affect free variables:
+
+>>> alphaNormalize "x"
+Var (V "x" 0)
+
 -}
 alphaNormalize :: Expr s a -> Expr s a
 alphaNormalize (Const c) =
     Const c
 alphaNormalize (Var v) =
     Var v
+alphaNormalize (Lam "_" _A₀ b₀) =
+    Lam "_" _A₁ b₁
+  where
+    _A₁ = alphaNormalize _A₀
+    b₁  = alphaNormalize b₀
 alphaNormalize (Lam x _A₀ b₀) =
-    Lam "_" _A₁ b₃
+    Lam "_" _A₁ b₄
   where
     _A₁ = alphaNormalize _A₀
 
-    v₀ = Var (V "_" 0)
-    v₁ = shift 1 (V x 0) v₀
-    b₁ = subst (V x 0) v₁ b₀
-    b₂ = shift (-1) (V x 0) b₁
-    b₃ = alphaNormalize b₂
+    b₁ = shift 1 (V "_" 0) b₀
+    b₂ = subst (V x 0) (Var (V "_" 0)) b₁
+    b₃ = shift (-1) (V x 0) b₂
+    b₄ = alphaNormalize b₃
+alphaNormalize (Pi "_" _A₀ _B₀) =
+    Pi "_" _A₁ _B₁
+  where
+    _A₁ = alphaNormalize _A₀
+    _B₁ = alphaNormalize _B₀
 alphaNormalize (Pi x _A₀ _B₀) =
-    Pi "_" _A₁ _B₃
+    Pi "_" _A₁ _B₄
   where
     _A₁ = alphaNormalize _A₀
 
-    v₀  = Var (V "_" 0)
-    v₁  = shift 1 (V x 0) v₀
-    _B₁ = subst (V x 0) v₁ _B₀
-    _B₂ = shift (-1) (V x 0) _B₁
-    _B₃ = alphaNormalize _B₂
+    _B₁ = shift 1 (V "_" 0) _B₀
+    _B₂ = subst (V x 0) (Var (V "_" 0)) _B₁
+    _B₃ = shift (-1) (V x 0) _B₂
+    _B₄ = alphaNormalize _B₃
 alphaNormalize (App f₀ a₀) =
     App f₁ a₁
   where
     f₁ = alphaNormalize f₀
 
     a₁ = alphaNormalize a₀
-alphaNormalize (Let x (Just _A₀) a₀ b₀) =
-    Let "_" (Just _A₁) a₁ b₃
+alphaNormalize (Let "_" mA₀ a₀ b₀) =
+    Let "_" mA₁ a₁ b₁
   where
-    _A₁ = alphaNormalize _A₀
-
-    a₁ = alphaNormalize a₀
-
-    v₀ = Var (V "_" 0)
-    v₁ = shift 1 (V x 0) v₀
-    b₁ = subst (V x 0) v₁ b₀
-    b₂ = shift (-1) (V x 0) b₁
-    b₃ = alphaNormalize b₂
-alphaNormalize (Let x Nothing a₀ b₀) =
-    Let "_" Nothing a₁ b₃
+    mA₁ = fmap alphaNormalize mA₀
+    a₁  =      alphaNormalize a₀
+    b₁  =      alphaNormalize b₀
+alphaNormalize (Let x mA₀ a₀ b₀) =
+    Let "_" mA₁ a₁ b₄
   where
-    a₁ = alphaNormalize a₀
+    mA₁ = fmap alphaNormalize mA₀
+    a₁  =      alphaNormalize a₀
 
-    v₀ = Var (V "_" 0)
-    v₁ = shift 1 (V x 0) v₀
-    b₁ = subst (V x 0) v₁ b₀
-    b₂ = shift (-1) (V x 0) b₁
-    b₃ = alphaNormalize b₂
+    b₁ = shift 1 (V "_" 0) b₀
+    b₂ = subst (V x 0) (Var (V "_" 0)) b₁
+    b₃ = shift (-1) (V x 0) b₂
+    b₄ = alphaNormalize b₃
 alphaNormalize (Annot t₀ _T₀) =
     Annot t₁ _T₁
   where
@@ -1998,3 +2038,4 @@ reservedIdentifiers =
         , "Optional/build"
         , "Optional/fold"
         ]
+

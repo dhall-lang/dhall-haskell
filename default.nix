@@ -22,8 +22,9 @@ let
 
                                 in
                                    !( pkgsNew.lib.hasSuffix ".nix" base
-                                   && base == "dist"
-                                   && base == "result"
+                                   || base == "dist"
+                                   || base == "result"
+                                   || base == ".git"
                                    );
 
                             in
@@ -34,9 +35,11 @@ let
                       )
                     );
 
-                prettyprinter =
-                  pkgsNew.haskell.lib.dontCheck
-                    haskellPackagesOld.prettyprinter;
+                 prettyprinter =
+                   pkgs.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
+
+                 serialise =
+                   pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
               };
 
           in

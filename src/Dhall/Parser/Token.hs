@@ -6,7 +6,7 @@ module Dhall.Parser.Token where
 
 import           Dhall.Parser.Combinators
 
-import Control.Applicative (Alternative(..))
+import Control.Applicative (Alternative(..), optional)
 import Data.Functor (void)
 import Data.Semigroup (Semigroup(..))
 import Data.Set (Set)
@@ -155,10 +155,9 @@ blockCommentContinue = endOfComment <|> continue
 
 simpleLabel :: Parser Text
 simpleLabel = try (do
-    c  <- Text.Parser.Char.satisfy headCharacter
-    cs <- many (Text.Parser.Char.satisfy tailCharacter)
-    let string = c:cs
-    let text = Data.Text.pack string
+    c    <- Text.Parser.Char.satisfy headCharacter
+    rest <- Dhall.Parser.Combinators.takeWhile tailCharacter
+    let text = Data.Text.cons c rest
     Control.Monad.guard (not (Data.HashSet.member text reservedIdentifiers))
     return text )
   where
@@ -169,9 +168,9 @@ simpleLabel = try (do
 backtickLabel :: Parser Text
 backtickLabel = do
     _ <- Text.Parser.Char.char '`'
-    t <- some (Text.Parser.Char.satisfy predicate)
+    t <- takeWhile1 predicate
     _ <- Text.Parser.Char.char '`'
-    return (Data.Text.pack t)
+    return t
   where
     predicate c = alpha c || digit c || elem c ("$-/_:." :: String)
 
@@ -247,19 +246,26 @@ file_ = do
 
     return (File {..})
 
-scheme :: Parser Text
-scheme = "http" <> option "s"
+scheme_ :: Parser Scheme
+scheme_ =
+        ("http" :: Parser Text)
+    *>  ((("s" :: Parser Text) *> pure HTTPS) <|> pure HTTP)
+    <*  ("://" :: Parser Text)
 
-httpRaw :: Parser (Text, File, Text)
+httpRaw :: Parser URL
 httpRaw = do
-    prefixText <- scheme <> "://" <> authority
-    file   <- file_
-    suffixText <- option ("?" <> query) <> option ("#" <> fragment)
+    scheme    <- scheme_
+    authority <- authority_
+    path      <- file_
+    query     <- optional (("?" :: Parser Text) *> query_)
+    fragment  <- optional (("#" :: Parser Text) *> fragment_)
 
-    return (prefixText, file, suffixText)
+    let headers = Nothing
 
-authority :: Parser Text
-authority = option (try (userinfo <> "@")) <> host <> option (":" <> port)
+    return (URL {..})
+
+authority_ :: Parser Text
+authority_ = option (try (userinfo <> "@")) <> host <> option (":" <> port)
 
 userinfo :: Parser Text
 userinfo = star (satisfy predicate <|> pctEncoded)
@@ -369,13 +375,13 @@ pchar = satisfy predicate <|> pctEncoded
   where
     predicate c = unreserved c || subDelims c || c == ':' || c == '@'
 
-query :: Parser Text
-query = star (pchar <|> satisfy predicate)
+query_ :: Parser Text
+query_ = star (pchar <|> satisfy predicate)
   where
     predicate c = c == '/' || c == '?'
 
-fragment :: Parser Text
-fragment = star (pchar <|> satisfy predicate)
+fragment_ :: Parser Text
+fragment_ = star (pchar <|> satisfy predicate)
   where
     predicate c = c == '/' || c == '?'
 
