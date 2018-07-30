@@ -66,9 +66,15 @@ module Dhall
 
     , Inject(..)
     , inject
+    , RecordInputType(..)
+    , inputFieldWith
+    , inputField
+    , inputRecord
 
     -- * Miscellaneous
     , rawInput
+    , (>$<)
+    , (>*<)
 
     -- * Re-exports
     , Natural
@@ -82,6 +88,7 @@ import Control.Applicative (empty, liftA2, (<|>), Alternative)
 import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
 import Data.Functor.Contravariant (Contravariant(..))
+import Data.Functor.Contravariant.Divisible (Divisible(..), divided, Decidable(..))
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
@@ -1333,3 +1340,80 @@ field key valueType =
           )
           ( Data.Functor.Compose.Compose extractBody )
       )
+
+{-| The 'InputRecordType' divisible (contravariant) functor allows you to build 
+    an 'InputType' injector for a Dhall record.
+
+    For example, let's take the following Haskell data type:
+
+> data Project = Project
+>   { projectName :: Text
+>   , projectDescription :: Text
+>   , projectStars :: Natural
+>   }
+
+    And assume that we have the following Dhall record that we would like to
+    parse as a @Project@:
+
+> { name =
+>     "dhall-haskell"
+> , description =
+>     "A configuration language guaranteed to terminate"
+> , stars =
+>     289
+> }
+
+    Our injector has type 'InputType' @Project@, but we can't build that out of any
+    smaller injectors, as 'InputType's cannot be combined (they are only 'Contravariant's).
+    However, we can use an 'InputRecordType' to build an 'InputType' for @Project@:
+
+> injectProject :: InputType Project
+> injectProject =
+>   inputRecord
+>     (  adapt >$< inputField "name" (inject @Text)
+>              >*< inputField "description" (inject @Text)
+>              >*< inputField "stars" (inject @Natural)
+>     )
+>   where
+>     adapt (Project{..}) = (projectName, (projectDescription, projectStars))
+
+-}
+
+-- | Infix 'contramap'
+(>$<) :: Contravariant f => (a -> b) -> f b -> f a
+(>$<) = contramap
+
+-- | Infix 'divided'
+(>*<) :: Divisible f => f a -> f b -> f (a, b)
+(>*<) = divided
+
+infixr 4 >*<
+infixr 3 >$<
+
+newtype RecordInputType a
+  = RecordInputType (Data.HashMap.Strict.InsOrd.InsOrdHashMap Text (InputType a))
+
+instance Contravariant RecordInputType where
+  contramap f (RecordInputType inputTypeRecord) = RecordInputType $ contramap f <$> inputTypeRecord
+
+instance Divisible RecordInputType where
+  divide f (RecordInputType bInputTypeRecord) (RecordInputType cInputTypeRecord) =
+      RecordInputType
+    $ Data.HashMap.Strict.InsOrd.union
+      ((contramap $ fst . f) <$> bInputTypeRecord)
+      ((contramap $ snd . f) <$> cInputTypeRecord)
+  conquer = RecordInputType Data.HashMap.Strict.InsOrd.empty
+
+inputFieldWith :: Text -> InputType a -> RecordInputType a
+inputFieldWith name inputType = RecordInputType $ Data.HashMap.Strict.InsOrd.singleton name inputType
+
+inputField :: Inject a => Text -> RecordInputType a
+inputField name = inputFieldWith name inject
+
+inputRecord :: RecordInputType a -> InputType a
+inputRecord (RecordInputType inputTypeRecord) = InputType makeRecordLit recordType
+  where
+    recordType = Record $ declared <$> inputTypeRecord
+    makeRecordLit x = RecordLit $ (($ x) . embed) <$> inputTypeRecord
+
+
