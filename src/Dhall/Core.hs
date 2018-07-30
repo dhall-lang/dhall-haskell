@@ -1856,6 +1856,8 @@ isNormalized e = case denote e of
         decide  _              _             = True
     NaturalTimes x y -> isNormalized x && isNormalized y && decide x y
       where
+        decide (NaturalLit 0)  _             = False
+        decide  _             (NaturalLit 0) = False
         decide (NaturalLit 1)  _             = False
         decide  _             (NaturalLit 1) = False
         decide (NaturalLit _) (NaturalLit _) = False
@@ -1868,7 +1870,12 @@ isNormalized e = case denote e of
     DoubleLit _ -> True
     DoubleShow -> True
     Text -> True
-    TextLit (Chunks xys _) -> all (all isNormalized) xys
+    TextLit (Chunks [("", _)] "") -> False
+    TextLit (Chunks xys _) -> all (all check) xys
+      where
+        check y = isNormalized y && case y of
+            TextLit _ -> False
+            _         -> True
     TextAppend x y -> isNormalized x && isNormalized y && decide x y
       where
         isEmpty (Chunks [] "") = True
@@ -1919,7 +1926,7 @@ isNormalized e = case denote e of
         decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
         decide (RecordLit _) (RecordLit _) = False
         decide  _ _ = True
-    Merge x y t -> isNormalized x && isNormalized y && any isNormalized t &&
+    Merge x y t -> isNormalized x && isNormalized y && all isNormalized t &&
         case x of
             RecordLit kvsX ->
                 case y of
