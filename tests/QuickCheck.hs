@@ -36,6 +36,7 @@ import qualified Data.Coerce
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
 import qualified Dhall.Binary
+import qualified Dhall.Core
 import qualified Test.QuickCheck
 import qualified Test.Tasty.QuickCheck
 
@@ -327,11 +328,20 @@ binaryRoundtrip expression =
         -> Either DeserialiseFailureWithEq a
     wrap = Data.Coerce.coerce
 
+isNormalizedIsConsistentWithNormalize :: Expr () Import -> Property
+isNormalizedIsConsistentWithNormalize expression =
+        Dhall.Core.isNormalized expression
+    === (Dhall.Core.normalize expression == expression)
+
 quickcheckTests :: TestTree
 quickcheckTests
     = Test.Tasty.QuickCheck.testProperties
         "QuickCheck"
         [ ( "Binary serialization should round-trip"
           , Test.QuickCheck.property binaryRoundtrip
+          )
+        , ( "isNormalized should be consistent with normalize"
+          , Test.QuickCheck.property
+              (Test.QuickCheck.withMaxSuccess 10000 isNormalizedIsConsistentWithNormalize)
           )
         ]
