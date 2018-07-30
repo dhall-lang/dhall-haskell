@@ -87,7 +87,7 @@ module Dhall
 import Control.Applicative (empty, liftA2, (<|>), Alternative)
 import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
-import Data.Functor.Contravariant (Contravariant(..))
+import Data.Functor.Contravariant (Contravariant(..), (>$<))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
@@ -1341,7 +1341,7 @@ field key valueType =
           ( Data.Functor.Compose.Compose extractBody )
       )
 
-{-| The 'InputRecordType' divisible (contravariant) functor allows you to build 
+{-| The 'RecordInputType' divisible (contravariant) functor allows you to build 
     an 'InputType' injector for a Dhall record.
 
     For example, let's take the following Haskell data type:
@@ -1370,25 +1370,32 @@ field key valueType =
 > injectProject :: InputType Project
 > injectProject =
 >   inputRecord
->     (  adapt >$< inputField "name" (inject @Text)
->              >*< inputField "description" (inject @Text)
->              >*< inputField "stars" (inject @Natural)
+>     (  adapt >$< inputFieldWith "name" inject
+>              >*< inputFieldWith "description" inject
+>              >*< inputFieldWith "stars" inject
+>     )
+>   where
+>     adapt (Project{..}) = (projectName, (projectDescription, projectStars))
+
+    Or, since we are simply using the `Inject` instance to inject each field, we could write
+
+> injectProject :: InputType Project
+> injectProject =
+>   inputRecord
+>     (  adapt >$< inputField "name"
+>              >*< inputField "description"
+>              >*< inputField "stars"
 >     )
 >   where
 >     adapt (Project{..}) = (projectName, (projectDescription, projectStars))
 
 -}
 
--- | Infix 'contramap'
-(>$<) :: Contravariant f => (a -> b) -> f b -> f a
-(>$<) = contramap
-
 -- | Infix 'divided'
 (>*<) :: Divisible f => f a -> f b -> f (a, b)
 (>*<) = divided
 
 infixr 4 >*<
-infixr 3 >$<
 
 newtype RecordInputType a
   = RecordInputType (Data.HashMap.Strict.InsOrd.InsOrdHashMap Text (InputType a))
