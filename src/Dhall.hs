@@ -88,7 +88,7 @@ import Control.Applicative (empty, liftA2, (<|>), Alternative)
 import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
 import Data.Functor.Contravariant (Contravariant(..))
-import Data.Functor.Contravariant.Divisible (Divisible(..), divided, Decidable(..))
+import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
