@@ -2,7 +2,6 @@
 module Main (main) where
 
 import Criterion.Main (defaultMain)
-import Dhall.Binary (ProtocolVersion(..))
 
 import qualified Criterion as Criterion
 import qualified Data.Sequence as Seq
