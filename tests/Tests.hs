@@ -3,6 +3,7 @@ module Main where
 import Normalization (normalizationTests)
 import Parser (parserTests)
 import Regression (regressionTests)
+import QuickCheck (quickcheckTests)
 import Tutorial (tutorialTests)
 import TypeCheck (typecheckTests)
 import Format (formatTests)
@@ -19,6 +20,7 @@ allTests =
         , formatTests
         , typecheckTests
         , importTests
+        , quickcheckTests
         ]
 
 main :: IO ()

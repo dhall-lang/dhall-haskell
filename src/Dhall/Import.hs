@@ -117,6 +117,7 @@ module Dhall.Import (
     , MissingImports(..)
     ) where
 
+import Codec.CBOR.Term (Term)
 import Control.Applicative (empty)
 import Control.Exception (Exception, SomeException, throwIO, toException)
 import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..))
@@ -143,6 +144,8 @@ import Dhall.Core
     , ImportType(..)
     , ImportMode(..)
     , Import(..)
+    , Scheme(..)
+    , URL(..)
     )
 #ifdef MIN_VERSION_http_client
 import Dhall.Import.HTTP
@@ -153,18 +156,20 @@ import Dhall.Parser (Parser(..), ParseError(..), Src(..))
 import Dhall.TypeCheck (X(..))
 import Lens.Family.State.Strict (zoom)
 
+import qualified Codec.Serialise
 import qualified Control.Monad.Trans.State.Strict        as State
 import qualified Crypto.Hash
 import qualified Data.ByteString
+import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
-
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.List.NonEmpty                      as NonEmpty
 import qualified Data.Map.Strict                         as Map
 import qualified Data.Text.Encoding
 import qualified Data.Text                               as Text
 import qualified Data.Text.IO
+import qualified Dhall.Binary
 import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.Context
@@ -355,8 +360,8 @@ instance Canonicalize ImportType where
     canonicalize (Local prefix file) =
         Local prefix (canonicalize file)
 
-    canonicalize (URL prefix file suffix header) =
-        URL prefix (canonicalize file) suffix header
+    canonicalize (Remote (URL {..})) =
+        Remote (URL { path = canonicalize path, ..})
 
     canonicalize (Env name) =
         Env name
@@ -454,8 +459,17 @@ exprFromImport (Import {..}) = do
 
             return (path, text)
 
-        URL prefix file suffix maybeHeaders -> do
+        Remote (URL scheme authority file query fragment maybeHeaders) -> do
+            let prefix =
+                        (case scheme of HTTP -> "http"; HTTPS -> "https")
+                    <>  "://"
+                    <>  authority
+
             let fileText = Dhall.Pretty.Internal.prettyToStrictText file
+
+            let suffix =
+                        (case query    of Nothing -> ""; Just q -> "?" <> q)
+                    <>  (case fragment of Nothing -> ""; Just f -> "#" <> f)
             let url      = Text.unpack (prefix <> fileText <> suffix)
 
             mheaders <- case maybeHeaders of
@@ -584,7 +598,7 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
   Embed import_ -> do
     imports <- zoom stack State.get
 
-    let local (Import (ImportHashed _ (URL     {})) _) = False
+    let local (Import (ImportHashed _ (Remote  {})) _) = False
         local (Import (ImportHashed _ (Local   {})) _) = True
         local (Import (ImportHashed _ (Env     {})) _) = True
         local (Import (ImportHashed _ (Missing {})) _) = True
@@ -744,11 +758,18 @@ load :: Expr Src Import -> IO (Expr Src X)
 load = loadWithContext Dhall.Context.empty (const Nothing)
 
 -- | Hash a fully resolved expression
-hashExpression :: Expr s X -> (Crypto.Hash.Digest SHA256)
-hashExpression expr = Crypto.Hash.hash actualBytes
+hashExpression :: forall s . Expr s X -> (Crypto.Hash.Digest SHA256)
+hashExpression expression = Crypto.Hash.hash bytesStrict
   where
-    text = Dhall.Core.pretty (Dhall.Core.normalize expr)
-    actualBytes = Data.Text.Encoding.encodeUtf8 text
+    intermediateExpression :: Expr s Import
+    intermediateExpression = fmap absurd expression
+
+    term :: Term
+    term = Dhall.Binary.encodeWithVersion_1_0 intermediateExpression
+
+    bytesLazy = Codec.Serialise.serialise term
+
+    bytesStrict = Data.ByteString.Lazy.toStrict bytesLazy
 
 {-| Convenience utility to hash a fully resolved expression and return the
     base-16 encoded hash with the @sha256:@ prefix
