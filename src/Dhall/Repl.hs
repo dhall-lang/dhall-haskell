@@ -14,7 +14,11 @@ import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
 import Data.List ( foldl' )
+import Dhall.Binary (ProtocolVersion(..))
+import Dhall.Import (protocolVersion)
+import Lens.Family (set)
 
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text as Text
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
@@ -32,8 +36,8 @@ import qualified System.Console.Repline as Repline
 import qualified System.IO
 
 -- | Implementation of the @dhall repl@ subcommand
-repl :: Bool -> IO ()
-repl explain = if explain then Dhall.detailed io else io
+repl :: Bool -> ProtocolVersion -> IO ()
+repl explain _protocolVersion = if explain then Dhall.detailed io else io
   where
     io =
       evalStateT
@@ -44,13 +48,14 @@ repl explain = if explain then Dhall.detailed io else io
         ( Repline.Word completer )
             greeter
         )
-        (emptyEnv { explain })
+        (emptyEnv { explain, _protocolVersion })
 
 
 data Env = Env
-  { envBindings :: Dhall.Context.Context Binding
-  , envIt :: Maybe Binding
-  , explain :: Bool
+  { envBindings      :: Dhall.Context.Context Binding
+  , envIt            :: Maybe Binding
+  , explain          :: Bool
+  , _protocolVersion :: ProtocolVersion
   }
 
 
@@ -60,6 +65,7 @@ emptyEnv =
     { envBindings = Dhall.Context.empty
     , envIt = Nothing
     , explain = False
+    , _protocolVersion = V_1_0
     }
 
 
@@ -83,6 +89,9 @@ parseAndLoad
   :: ( MonadIO m, MonadState Env m )
   => String -> m ( Dhall.Expr Dhall.Src Dhall.X )
 parseAndLoad src = do
+  env <-
+    get
+
   parsed <-
     case Dhall.exprFromText "(stdin)" ( Text.pack src ) of
       Left e ->
@@ -91,7 +100,10 @@ parseAndLoad src = do
       Right a ->
         return a
 
-  liftIO ( Dhall.load parsed )
+  let status =
+        set protocolVersion (_protocolVersion env) (Dhall.emptyStatus ".")
+
+  liftIO ( State.evalStateT (Dhall.loadWith parsed) status )
 
 
 eval :: ( MonadIO m, MonadState Env m ) => String -> m ()

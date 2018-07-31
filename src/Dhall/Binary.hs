@@ -7,8 +7,13 @@
 -}
 
 module Dhall.Binary
-    ( encodeWithVersion_1_0
-    , decodeWithVersion_1_0
+    ( -- * Protocol versions
+      ProtocolVersion(..)
+    , parseProtocolVersion
+
+    -- * Encoding and decoding
+    , encode
+    , decode
     ) where
 
 import Codec.CBOR.Term (Term(..))
@@ -28,6 +33,8 @@ import Dhall.Core
     , URL(..)
     , Var(..)
     )
+import Data.Text (Text)
+import Options.Applicative (Parser)
 import Prelude hiding (exponent)
 
 import qualified Data.Foldable
@@ -36,6 +43,26 @@ import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
+import qualified Options.Applicative
+
+-- | Supported protocol version strings
+data ProtocolVersion
+    = V_1_0
+    -- ^ Protocol version string "1.0"
+
+parseProtocolVersion :: Parser ProtocolVersion
+parseProtocolVersion =
+    Options.Applicative.option readProtocolVersion
+        (   Options.Applicative.long "protocol-version"
+        <>  Options.Applicative.metavar "X.Y"
+        <>  Options.Applicative.value V_1_0
+        )
+  where
+    readProtocolVersion = do
+        string <- Options.Applicative.str
+        case string :: Text of
+            "1.0" -> return V_1_0
+            _     -> fail "Unsupported protocol version"
 
 {-| Convert a function applied to multiple arguments to the base function and
     the list of arguments
@@ -689,14 +716,14 @@ decode_1_0 _ =
 -- | Encode a Dhall expression using protocol version @1.0@
 encodeWithVersion_1_0 :: Expr s Import -> Term
 encodeWithVersion_1_0 expression =
-    TList [ TString "1.0.0", encode_1_0 expression ]
+    TList [ TString "1.0", encode_1_0 expression ]
 
 -- | Decode a Dhall expression using protocol version @1.0@
 decodeWithVersion_1_0 :: Term -> Maybe (Expr s Import)
 decodeWithVersion_1_0 term = do
     subTerm <- case term of
         TList [ TString version, subTerm ]
-            | Data.Text.isPrefixOf "1.0." version -> do
+            | version == "1.0" -> do
                 return subTerm
             | otherwise -> do
                 fail ("This decoded version is not supported: " <> Data.Text.unpack version)
@@ -707,3 +734,11 @@ decodeWithVersion_1_0 term = do
             fail ("This decoded CBOR expression does not represent a valid Dhall expression: " <> show subTerm)
         Just expression ->
             return expression
+
+-- | Encode a Dhall expression using the specified `ProtocolVersion`
+encode :: ProtocolVersion -> Expr s Import -> Term
+encode V_1_0 = encodeWithVersion_1_0
+
+-- | Decode a Dhall expression using the specified `ProtocolVersion`
+decode :: ProtocolVersion -> Term -> Maybe (Expr s Import)
+decode V_1_0 = decodeWithVersion_1_0

@@ -8,31 +8,41 @@ module Dhall.Freeze
     , hashImport
     ) where
 
-import Dhall.Core
-import Dhall.Import (load, hashExpression)
-import Dhall.Parser (exprAndHeaderFromText, Src)
-import Dhall.Pretty (annToAnsiStyle, layoutOpts)
-
-import System.Console.ANSI (hSupportsANSI)
 import Data.Monoid ((<>))
 import Data.Maybe (fromMaybe)
 import Data.Text
+import Dhall.Binary (ProtocolVersion(..))
+import Dhall.Core
+import Dhall.Import (hashExpression, protocolVersion)
+import Dhall.Parser (exprAndHeaderFromText, Src)
+import Dhall.Pretty (annToAnsiStyle, layoutOpts)
+import Lens.Family (set)
+import System.Console.ANSI (hSupportsANSI)
 
+import qualified Control.Exception
+import qualified Control.Monad.Trans.State.Strict          as State
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
-import qualified Control.Exception
 import qualified Data.Text.IO
+import qualified Dhall.Import
 import qualified System.IO
 
 readInput :: Maybe FilePath -> IO Text
 readInput = maybe Data.Text.IO.getContents Data.Text.IO.readFile
 
 -- | Retrieve an `Import` and update the hash to match the latest contents
-hashImport :: Import -> IO Import
-hashImport import_ = do
-    expression <- Dhall.Import.load (Embed import_)
-    let expressionHash = Just (Dhall.Import.hashExpression expression)
+hashImport :: ProtocolVersion -> Import -> IO Import
+hashImport _protocolVersion import_ = do
+    let status =
+            set protocolVersion _protocolVersion (Dhall.Import.emptyStatus ".")
+
+    expression <- State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
+
+    let expressionHash =
+            Just (Dhall.Import.hashExpression _protocolVersion expression)
+
     let newImportHashed = (importHashed import_) { hash = expressionHash }
+
     return $ import_ { importHashed = newImportHashed }
 
 parseExpr :: String -> Text -> IO (Text, Expr Src Import)
@@ -40,11 +50,6 @@ parseExpr src txt =
     case exprAndHeaderFromText src txt of
         Left err -> Control.Exception.throwIO err
         Right x  -> return x
-
-freezeExpr :: (Text, Expr s Import) -> IO (Text, Expr s Import)
-freezeExpr (t, e) = do
-    e' <- traverse hashImport e
-    return (t, e')
 
 writeExpr :: Maybe FilePath -> (Text, Expr s Import) -> IO ()
 writeExpr inplace (header, expr) = do
@@ -69,9 +74,12 @@ freeze
     :: Maybe FilePath
     -- ^ Modify file in-place if present, otherwise read from @stdin@ and write
     --   to @stdout@
+    -> ProtocolVersion
     -> IO ()
-freeze inplace = do
-    expr <- readInput inplace
-    parseExpr srcInfo expr >>= freezeExpr >>= writeExpr inplace
+freeze inplace _protocolVersion = do
+    text <- readInput inplace
+    (header, parsedExpression) <- parseExpr srcInfo text
+    frozenExpression <- traverse (hashImport _protocolVersion) parsedExpression
+    writeExpr inplace (header, frozenExpression)
         where
             srcInfo = fromMaybe "(stdin)" inplace

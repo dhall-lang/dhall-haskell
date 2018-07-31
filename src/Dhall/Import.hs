@@ -102,12 +102,18 @@ module Dhall.Import (
       exprFromImport
     , load
     , loadWith
-    , loadDirWith
-    , loadWithContext
     , hashExpression
     , hashExpressionToCode
-    , Status(..)
+    , Status
     , emptyStatus
+    , stack
+    , cache
+    , manager
+    , protocolVersion
+    , normalizer
+    , startingContext
+    , resolver
+    , rootDirectory
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -134,6 +140,7 @@ import Data.Traversable (traverse)
 #endif
 import Data.Typeable (Typeable)
 import System.FilePath ((</>))
+import Dhall.Binary (ProtocolVersion(..))
 import Dhall.Core
     ( Expr(..)
     , Chunks(..)
@@ -144,6 +151,7 @@ import Dhall.Core
     , ImportType(..)
     , ImportMode(..)
     , Import(..)
+    , ReifiedNormalizer(..)
     , Scheme(..)
     , URL(..)
     )
@@ -172,7 +180,6 @@ import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core
 import qualified Dhall.Parser
-import qualified Dhall.Context
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 import qualified System.Environment
@@ -425,7 +432,7 @@ instance Show HashMismatch where
         <>  "↳ " <> show actualHash <> "\n"
 
 -- | Parse an expression from a `Import` containing a Dhall program
-exprFromImport :: Import -> StateT Status IO (Expr Src Import)
+exprFromImport :: Import -> StateT (Status IO) IO (Expr Src Import)
 exprFromImport (Import {..}) = do
     let ImportHashed {..} = importHashed
 
@@ -475,11 +482,7 @@ exprFromImport (Import {..}) = do
             mheaders <- case maybeHeaders of
                 Nothing            -> return Nothing
                 Just importHashed_ -> do
-                    expr <- loadStaticWith
-                        exprFromImport
-                        Dhall.Context.empty
-                        (const Nothing)
-                        (Embed (Import importHashed_ Code))
+                    expr <- loadWith (Embed (Import importHashed_ Code))
 
                     let expected :: Expr Src X
                         expected =
@@ -542,61 +545,17 @@ exprFromImport (Import {..}) = do
         RawText -> do
             return (TextLit (Chunks [] text))
 
--- | Resolve all imports within an expression using a custom typing
--- context and `Import`-resolving callback in arbitrary `MonadCatch`
--- monad.
---
--- This resolves imports relative to @.@ (the current working directory).
-loadWith
-    :: MonadCatch m
-    => (Import -> StateT Status m (Expr Src Import))
-    -> Dhall.Context.Context (Expr Src X)
-    -> Dhall.Core.Normalizer X
-    -> Expr Src Import
-    -> m (Expr Src X)
-loadWith from_import ctx n expr =
-    loadDirWith "." from_import ctx n expr
-
--- | Resolve all imports within an expression using a custom typing
--- context and `Import`-resolving callback in arbitrary `MonadCatch`
--- monad, relative to a given directory.
---
--- @since 1.16
-loadDirWith
-    :: MonadCatch m
-    => FilePath
-    -> (Import -> StateT Status m (Expr Src Import))
-    -> Dhall.Context.Context (Expr Src X)
-    -> Dhall.Core.Normalizer X
-    -> Expr Src Import
-    -> m (Expr Src X)
-loadDirWith dir from_import ctx n expr = do
-    State.evalStateT (loadStaticWith from_import ctx n expr) (emptyStatus dir)
-
--- | Resolve all imports within an expression, relative to @.@ (the
--- current working directory), using a custom typing context.
---
--- @load = loadWithContext Dhall.Context.empty@
-loadWithContext
-    :: Dhall.Context.Context (Expr Src X)
-    -> Dhall.Core.Normalizer X
-    -> Expr Src Import
-    -> IO (Expr Src X)
-loadWithContext ctx n expr =
-    loadDirWith "." exprFromImport ctx n expr
-
+-- | Default starting `Status`, importing relative to the given directory.
+emptyStatus :: FilePath -> Status IO
+emptyStatus = emptyStatusWith exprFromImport
 
 -- | This loads a \"static\" expression (i.e. an expression free of imports)
-loadStaticWith
-    :: MonadCatch m
-    => (Import -> StateT Status m (Expr Src Import))
-    -> Dhall.Context.Context (Expr Src X)
-    -> Dhall.Core.Normalizer X
-    -> Expr Src Import
-    -> StateT Status m (Expr Src X)
-loadStaticWith from_import ctx n expr₀ = case expr₀ of
+loadWith :: MonadCatch m => Expr Src Import -> StateT (Status m) m (Expr Src X)
+loadWith expr₀ = case expr₀ of
   Embed import_ -> do
-    imports <- zoom stack State.get
+    Status {..} <- State.get
+
+    let imports = _stack
 
     let local (Import (ImportHashed _ (Remote  {})) _) = False
         local (Import (ImportHashed _ (Local   {})) _) = True
@@ -614,8 +573,7 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
     expr <- if here `elem` canonicalizeAll imports
         then throwMissingImport (Imported imports (Cycle import_))
         else do
-            m <- zoom cache State.get
-            case Map.lookup here m of
+            case Map.lookup here _cache of
                 Just expr -> return expr
                 Nothing   -> do
                     -- Here we have to match and unwrap the @MissingImports@
@@ -628,7 +586,7 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
                     let handler₀
                             :: (MonadCatch m)
                             => MissingImports
-                            -> StateT Status m (Expr Src Import)
+                            -> StateT (Status m) m (Expr Src Import)
                         handler₀ e@(MissingImports []) = throwM e
                         handler₀ (MissingImports [e]) =
                           throwMissingImport (Imported imports' e)
@@ -640,19 +598,18 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
                         handler₁
                             :: (MonadCatch m)
                             => SomeException
-                            -> StateT Status m (Expr Src Import)
+                            -> StateT (Status m) m (Expr Src Import)
                         handler₁ e =
                           throwMissingImport (Imported imports' e)
 
                     -- This loads a \"dynamic\" expression (i.e. an expression
                     -- that might still contain imports)
-                    let loadDynamic =
-                            from_import here
+                    let loadDynamic = _resolver here
 
                     expr' <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
 
                     zoom stack (State.put imports')
-                    expr'' <- loadStaticWith from_import ctx n expr'
+                    expr'' <- loadWith expr'
                     zoom stack (State.put imports)
 
                     -- Type-check expressions here for three separate reasons:
@@ -665,17 +622,17 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
                     --
                     -- There is no need to check expressions that have been
                     -- cached, since they have already been checked
-                    expr''' <- case Dhall.TypeCheck.typeWith ctx expr'' of
+                    expr''' <- case Dhall.TypeCheck.typeWith _startingContext expr'' of
                         Left  err -> throwM (Imported imports' err)
-                        Right _   -> return (Dhall.Core.normalizeWith n expr'')
-                    zoom cache (State.put $! Map.insert here expr''' m)
+                        Right _   -> return (Dhall.Core.normalizeWith (getReifiedNormalizer _normalizer) expr'')
+                    zoom cache (State.put $! Map.insert here expr''' _cache)
                     return expr'''
 
     case hash (importHashed import_) of
         Nothing -> do
             return ()
         Just expectedHash -> do
-            let actualHash = hashExpression expr
+            let actualHash = hashExpression _protocolVersion expr
             if expectedHash == actualHash
                 then return ()
                 else throwMissingImport (Imported imports' (HashMismatch {..}))
@@ -750,22 +707,23 @@ loadStaticWith from_import ctx n expr₀ = case expr₀ of
   Project a b          -> Project <$> loop a <*> pure b
   Note a b             -> Note <$> pure a <*> loop b
   where
-    loop = loadStaticWith from_import ctx n
+    loop = loadWith
 
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
-load = loadWithContext Dhall.Context.empty (const Nothing)
+load expression = State.evalStateT (loadWith expression) (emptyStatus ".")
 
 -- | Hash a fully resolved expression
-hashExpression :: forall s . Expr s X -> (Crypto.Hash.Digest SHA256)
-hashExpression expression = Crypto.Hash.hash bytesStrict
+hashExpression
+    :: forall s . ProtocolVersion -> Expr s X -> (Crypto.Hash.Digest SHA256)
+hashExpression _protocolVersion expression = Crypto.Hash.hash bytesStrict
   where
     intermediateExpression :: Expr s Import
     intermediateExpression = fmap absurd expression
 
     term :: Term
-    term = Dhall.Binary.encodeWithVersion_1_0 intermediateExpression
+    term = Dhall.Binary.encode _protocolVersion intermediateExpression
 
     bytesLazy = Codec.Serialise.serialise term
 
@@ -777,5 +735,6 @@ hashExpression expression = Crypto.Hash.hash bytesStrict
     In other words, the output of this function can be pasted into Dhall
     source code to add an integrity check to an import
 -}
-hashExpressionToCode :: Expr s X -> Text
-hashExpressionToCode expr = "sha256:" <> Text.pack (show (hashExpression expr))
+hashExpressionToCode :: ProtocolVersion -> Expr s X -> Text
+hashExpressionToCode _protocolVersion expr =
+    "sha256:" <> Text.pack (show (hashExpression _protocolVersion expr))

@@ -1,48 +1,88 @@
-{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 {-# OPTIONS_GHC -Wall #-}
 
 module Dhall.Import.Types where
 
 import Control.Exception (Exception)
+import Control.Monad.Trans.State.Strict (StateT)
 import Data.Dynamic
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import Data.Semigroup ((<>))
-import Lens.Family (LensLike')
-import System.FilePath (isRelative, splitDirectories)
-
-import qualified Data.Map as Map
-import qualified Data.Text
-
+import Dhall.Binary (ProtocolVersion(..))
+import Dhall.Context (Context)
 import Dhall.Core
-  ( Directory (..), Expr, File (..), FilePrefix (..), Import (..)
-  , ImportHashed (..), ImportMode (..), ImportType (..)
+  ( Directory (..)
+  , Expr
+  , File (..)
+  , FilePrefix (..)
+  , Import (..)
+  , ImportHashed (..)
+  , ImportMode (..)
+  , ImportType (..)
+  , ReifiedNormalizer(..)
   )
 import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
+import Lens.Family (LensLike')
+import System.FilePath (isRelative, splitDirectories)
 
+import qualified Dhall.Context
+import qualified Data.Map      as Map
+import qualified Data.Text
 
 -- | State threaded throughout the import process
-data Status = Status
-    { _stack   :: NonEmpty Import
+data Status m = Status
+    { _stack :: NonEmpty Import
     -- ^ Stack of `Import`s that we've imported along the way to get to the
     -- current point
-    , _cache   :: Map Import (Expr Src X)
+
+    , _cache :: Map Import (Expr Src X)
     -- ^ Cache of imported expressions in order to avoid importing the same
     --   expression twice with different values
+
     , _manager :: Maybe Dynamic
     -- ^ Cache for the HTTP `Manager` so that we only acquire it once
+
+    , _protocolVersion :: ProtocolVersion
+
+    , _normalizer :: ReifiedNormalizer X
+
+    , _startingContext :: Context (Expr Src X)
+
+    , _resolver :: Import -> StateT (Status m) m (Expr Src Import)
+
+    , _rootDirectory :: FilePath
     }
 
--- | Default starting `Status`, importing relative to the given directory.
-emptyStatus :: FilePath -> Status
-emptyStatus dir = Status (pure rootImport) Map.empty Nothing
+-- | Default starting `Status` that is polymorphic in the base `Monad`
+emptyStatusWith
+    :: (Import -> StateT (Status m) m (Expr Src Import))
+    -> FilePath
+    -> Status m
+emptyStatusWith _resolver _rootDirectory = Status {..}
   where
-    prefix = if isRelative dir
+    _stack = pure rootImport
+
+    _cache = Map.empty
+
+    _manager = Nothing
+
+    _protocolVersion = V_1_0
+
+    _normalizer = ReifiedNormalizer (const Nothing)
+
+    _startingContext = Dhall.Context.empty
+
+    prefix = if isRelative _rootDirectory
       then Here
       else Absolute
-    pathComponents = fmap Data.Text.pack (reverse (splitDirectories dir))
+    pathComponents =
+        fmap Data.Text.pack (reverse (splitDirectories _rootDirectory))
+
     dirAsFile = File (Directory pathComponents) "."
+
     -- Fake import to set the directory we're relative to.
     rootImport = Import
       { importHashed = ImportHashed
@@ -52,17 +92,33 @@ emptyStatus dir = Status (pure rootImport) Map.empty Nothing
       , importMode = Code
       }
 
-
-stack :: Functor f => LensLike' f Status (NonEmpty Import)
+stack :: Functor f => LensLike' f (Status m) (NonEmpty Import)
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
 
-cache :: Functor f => LensLike' f Status (Map Import (Expr Src X))
+cache :: Functor f => LensLike' f (Status m) (Map Import (Expr Src X))
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
-manager :: Functor f => LensLike' f Status (Maybe Dynamic)
+manager :: Functor f => LensLike' f (Status m) (Maybe Dynamic)
 manager k s = fmap (\x -> s { _manager = x }) (k (_manager s))
 
+protocolVersion :: Functor f => LensLike' f (Status m) ProtocolVersion
+protocolVersion k s =
+    fmap (\x -> s { _protocolVersion = x }) (k (_protocolVersion s))
 
+normalizer :: Functor f => LensLike' f (Status m) (ReifiedNormalizer X)
+normalizer k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
+
+startingContext :: Functor f => LensLike' f (Status m) (Context (Expr Src X))
+startingContext k s =
+    fmap (\x -> s { _startingContext = x }) (k (_startingContext s))
+
+resolver
+    :: Functor f
+    => LensLike' f (Status m) (Import -> StateT (Status m) m (Expr Src Import))
+resolver k s = fmap (\x -> s { _resolver = x }) (k (_resolver s))
+
+rootDirectory :: Functor f => LensLike' f (Status m) FilePath
+rootDirectory k s = fmap (\x -> s { _rootDirectory = x }) (k (_rootDirectory s))
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic

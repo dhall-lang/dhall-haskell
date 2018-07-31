@@ -8,9 +8,9 @@ import Dhall.Import (MissingImports(..))
 import Control.Exception (catch, throwIO)
 import Data.Monoid ((<>))
 
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text
 import qualified Data.Text.IO
-import qualified Dhall.Context
 import qualified Dhall.Parser
 import qualified Dhall.Import
 import qualified Test.Tasty
@@ -65,7 +65,9 @@ shouldNotFailRelative name dir path = Test.Tasty.HUnit.testCase (Data.Text.unpac
     expr <- case Dhall.Parser.exprFromText mempty text of
                      Left  err  -> throwIO err
                      Right expr -> return expr
-    _ <- Dhall.Import.loadDirWith dir Dhall.Import.exprFromImport Dhall.Context.empty (const Nothing) expr
+
+    _ <- State.evalStateT (Dhall.Import.loadWith expr) (Dhall.Import.emptyStatus dir)
+
     return ())
 
 shouldFail :: Int -> Text -> FilePath -> TestTree

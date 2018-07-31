@@ -24,11 +24,13 @@ import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Version (showVersion)
+import Dhall.Binary (ProtocolVersion)
 import Dhall.Core (Expr, Import)
-import Dhall.Import (Imported(..), load)
+import Dhall.Import (Imported(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
+import Lens.Family (set)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
@@ -36,16 +38,19 @@ import System.IO (Handle)
 import qualified Paths_dhall as Meta
 
 import qualified Control.Exception
+import qualified Control.Monad.Trans.State.Strict          as State
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Dhall
+import qualified Dhall.Binary
 import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Format
 import qualified Dhall.Freeze
 import qualified Dhall.Hash
+import qualified Dhall.Import
 import qualified Dhall.Lint
 import qualified Dhall.Parser
 import qualified Dhall.Repl
@@ -57,9 +62,10 @@ import qualified System.IO
 
 -- | Top-level program options
 data Options = Options
-    { mode    :: Mode
-    , explain :: Bool
-    , plain   :: Bool
+    { mode            :: Mode
+    , explain         :: Bool
+    , plain           :: Bool
+    , protocolVersion :: ProtocolVersion
     }
 
 -- | The subcommands for the @dhall@ executable
@@ -86,7 +92,12 @@ parseInplace =
 
 -- | `Parser` for the `Options` type
 parseOptions :: Parser Options
-parseOptions = Options <$> parseMode <*> parseExplain <*> parsePlain
+parseOptions =
+        Options
+    <$> parseMode
+    <*> parseExplain
+    <*> parsePlain
+    <*> Dhall.Binary.parseProtocolVersion
   where
     parseExplain =
         Options.Applicative.switch
@@ -191,6 +202,10 @@ command :: Options -> IO ()
 command (Options {..}) = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
+    let status =
+            set Dhall.Import.protocolVersion protocolVersion (Dhall.Import.emptyStatus ".")
+
+
     let handle =
                 Control.Exception.handle handler2
             .   Control.Exception.handle handler1
@@ -241,7 +256,7 @@ command (Options {..}) = do
         Default -> do
             expression <- getExpression
 
-            resolvedExpression <- load expression
+            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) status
 
             inferredType <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -254,7 +269,7 @@ command (Options {..}) = do
         Resolve -> do
             expression <- getExpression
 
-            resolvedExpression <- load expression
+            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) status
 
             render System.IO.stdout resolvedExpression
 
@@ -277,7 +292,7 @@ command (Options {..}) = do
             render System.IO.stdout (Dhall.Core.normalize inferredType)
 
         Repl -> do
-            Dhall.Repl.repl explain
+            Dhall.Repl.repl explain protocolVersion
 
         Diff expr1 expr2 -> do
             expression1 <- Dhall.inputExpr expr1
@@ -293,10 +308,10 @@ command (Options {..}) = do
             Dhall.Format.format inplace
 
         Freeze inplace -> do
-            Dhall.Freeze.freeze inplace
+            Dhall.Freeze.freeze inplace protocolVersion
 
         Hash -> do
-            Dhall.Hash.hash 
+            Dhall.Hash.hash protocolVersion
 
         Lint inplace -> do
             case inplace of

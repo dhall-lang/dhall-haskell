@@ -5,6 +5,7 @@ module Main where
 import Control.Monad (forM)
 import Criterion.Main (defaultMain, bgroup, bench, whnf, nfIO)
 import Data.Map (Map, foldrWithKey, singleton, unions)
+import Dhall.Binary (ProtocolVersion(..))
 
 import System.Directory
 
@@ -53,7 +54,7 @@ benchExprFromBytes name bytes = bench name (whnf f bytes)
         term <- case Codec.Serialise.deserialiseOrFail bytes of
             Left  _    -> Nothing
             Right term -> return term
-        Dhall.Binary.decodeWithVersion_1_0 term
+        Dhall.Binary.decode V_1_0 term
 
 main :: IO ()
 main = do
