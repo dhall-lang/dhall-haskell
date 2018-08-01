@@ -548,7 +548,11 @@ exprFromImport (Import {..}) = do
 emptyStatus :: FilePath -> Status IO
 emptyStatus = emptyStatusWith exprFromImport
 
--- | This loads a \"static\" expression (i.e. an expression free of imports)
+{-| Generalized version of `load`
+
+    You can configure the desired behavior through the initial `Status` that you
+    supply
+-}
 loadWith :: MonadCatch m => Expr Src Import -> StateT (Status m) m (Expr Src X)
 loadWith expr₀ = case expr₀ of
   Embed import_ -> do
