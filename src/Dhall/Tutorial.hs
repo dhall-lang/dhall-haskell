@@ -1427,7 +1427,7 @@ import Dhall
 -- Dhall URL imports let you add or modify request headers with the @using@
 -- keyword:
 --
--- > https://example.com using ./headers
+-- > https://example.com/example.dhall using ./headers
 --
 -- ... where you can replace @./headers@ with any import that points to a Dhall
 -- expression of the following type:
@@ -1451,16 +1451,16 @@ import Dhall
 -- You cannot inline the headers within the same file as the URL.  You must
 -- provide them as a separate import.  That means that this is /not/ legal code:
 --
--- > http://example.com using [ { header = "Accept", value = "application/dhall" } ]  -- NOT legal
+-- > http://example.com/example.dhall using [ { header = "Accept", value = "application/dhall" } ]  -- NOT legal
 --
 -- Dhall will forward imports if you import an expression from a URL that
 -- contains a relative import.  For example, if you import an expression like
 -- this:
 -- 
--- > http://example.com using ./headers
+-- > http://example.com/example.dhall using ./headers
 -- 
--- ... and @http:\/\/example.com@ contains a relative import of @./foo@ then
--- Dhall will import @http:\/\/example.com/foo@ using the same @./headers@ file.
+-- ... and @http:\/\/example.com/example.dhall@ contains a relative import of @./foo@
+-- then Dhall will import @http:\/\/example.com/foo@ using the same @./headers@ file.
 
 -- $integrity
 --
