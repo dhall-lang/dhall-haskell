@@ -115,6 +115,7 @@ import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
 import qualified Data.Vector
+import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
@@ -204,7 +205,7 @@ defaultEvaluateSettings :: EvaluateSettings
 defaultEvaluateSettings = EvaluateSettings
   { _startingContext = Dhall.Context.empty
   , _normalizer      = Dhall.Core.ReifiedNormalizer (const Nothing)
-  , _protocolVersion = V_1_0
+  , _protocolVersion = Dhall.Binary.defaultProtocolVersion
   }
 
 -- | Access the starting context used for evaluation and type-checking.

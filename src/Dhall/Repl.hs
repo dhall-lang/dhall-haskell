@@ -23,6 +23,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
 import qualified Dhall
+import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize )
 import qualified Dhall.Pretty
@@ -65,7 +66,7 @@ emptyEnv =
     { envBindings = Dhall.Context.empty
     , envIt = Nothing
     , explain = False
-    , _protocolVersion = V_1_0
+    , _protocolVersion = Dhall.Binary.defaultProtocolVersion
     }
 
 

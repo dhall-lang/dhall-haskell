@@ -9,6 +9,7 @@
 module Dhall.Binary
     ( -- * Protocol versions
       ProtocolVersion(..)
+    , defaultProtocolVersion
     , parseProtocolVersion
 
     -- * Encoding and decoding
@@ -50,12 +51,15 @@ data ProtocolVersion
     = V_1_0
     -- ^ Protocol version string "1.0"
 
+defaultProtocolVersion :: ProtocolVersion
+defaultProtocolVersion = V_1_0
+
 parseProtocolVersion :: Parser ProtocolVersion
 parseProtocolVersion =
     Options.Applicative.option readProtocolVersion
         (   Options.Applicative.long "protocol-version"
         <>  Options.Applicative.metavar "X.Y"
-        <>  Options.Applicative.value V_1_0
+        <>  Options.Applicative.value defaultProtocolVersion
         )
   where
     readProtocolVersion = do

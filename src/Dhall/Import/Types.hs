@@ -28,6 +28,7 @@ import Dhall.TypeCheck (X)
 import Lens.Family (LensLike')
 import System.FilePath (isRelative, splitDirectories)
 
+import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Data.Map      as Map
 import qualified Data.Text
@@ -67,7 +68,7 @@ emptyStatusWith _resolver rootDirectory = Status {..}
 
     _manager = Nothing
 
-    _protocolVersion = V_1_0
+    _protocolVersion = Dhall.Binary.defaultProtocolVersion
 
     _normalizer = ReifiedNormalizer (const Nothing)
 

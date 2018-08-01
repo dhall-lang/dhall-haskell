@@ -318,7 +318,7 @@ binaryRoundtrip expression =
                 Dhall.Binary.decode
                 (Codec.Serialise.deserialiseOrFail
                   (Codec.Serialise.serialise
-                    (Dhall.Binary.encode V_1_0 expression)
+                    (Dhall.Binary.encode defaultProtocolVersion expression)
                   )
                 )
             )
