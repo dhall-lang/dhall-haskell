@@ -637,27 +637,27 @@ loadWith expr₀ = case expr₀ of
                 else throwMissingImport (Imported imports' (HashMismatch {..}))
 
     return expr
-  ImportAlt a b -> loop a `catch` handler₀
+  ImportAlt a b -> loadWith a `catch` handler₀
     where
       handler₀ (MissingImports es₀) =
-        loop b `catch` handler₁
+        loadWith b `catch` handler₁
         where
           handler₁ (MissingImports es₁) =
             throwM (MissingImports (es₀ ++ es₁))
   Const a              -> pure (Const a)
   Var a                -> pure (Var a)
-  Lam a b c            -> Lam <$> pure a <*> loop b <*> loop c
-  Pi a b c             -> Pi <$> pure a <*> loop b <*> loop c
-  App a b              -> App <$> loop a <*> loop b
-  Let a b c d          -> Let <$> pure a <*> mapM loop b <*> loop c <*> loop d
-  Annot a b            -> Annot <$> loop a <*> loop b
+  Lam a b c            -> Lam <$> pure a <*> loadWith b <*> loadWith c
+  Pi a b c             -> Pi <$> pure a <*> loadWith b <*> loadWith c
+  App a b              -> App <$> loadWith a <*> loadWith b
+  Let a b c d          -> Let <$> pure a <*> mapM loadWith b <*> loadWith c <*> loadWith d
+  Annot a b            -> Annot <$> loadWith a <*> loadWith b
   Bool                 -> pure Bool
   BoolLit a            -> pure (BoolLit a)
-  BoolAnd a b          -> BoolAnd <$> loop a <*> loop b
-  BoolOr a b           -> BoolOr <$> loop a <*> loop b
-  BoolEQ a b           -> BoolEQ <$> loop a <*> loop b
-  BoolNE a b           -> BoolNE <$> loop a <*> loop b
-  BoolIf a b c         -> BoolIf <$> loop a <*> loop b <*> loop c
+  BoolAnd a b          -> BoolAnd <$> loadWith a <*> loadWith b
+  BoolOr a b           -> BoolOr <$> loadWith a <*> loadWith b
+  BoolEQ a b           -> BoolEQ <$> loadWith a <*> loadWith b
+  BoolNE a b           -> BoolNE <$> loadWith a <*> loadWith b
+  BoolIf a b c         -> BoolIf <$> loadWith a <*> loadWith b <*> loadWith c
   Natural              -> pure Natural
   NaturalLit a         -> pure (NaturalLit a)
   NaturalFold          -> pure NaturalFold
@@ -667,8 +667,8 @@ loadWith expr₀ = case expr₀ of
   NaturalOdd           -> pure NaturalOdd
   NaturalToInteger     -> pure NaturalToInteger
   NaturalShow          -> pure NaturalShow
-  NaturalPlus a b      -> NaturalPlus <$> loop a <*> loop b
-  NaturalTimes a b     -> NaturalTimes <$> loop a <*> loop b
+  NaturalPlus a b      -> NaturalPlus <$> loadWith a <*> loadWith b
+  NaturalTimes a b     -> NaturalTimes <$> loadWith a <*> loadWith b
   Integer              -> pure Integer
   IntegerLit a         -> pure (IntegerLit a)
   IntegerShow          -> pure IntegerShow
@@ -677,11 +677,11 @@ loadWith expr₀ = case expr₀ of
   DoubleLit a          -> pure (DoubleLit a)
   DoubleShow           -> pure DoubleShow
   Text                 -> pure Text
-  TextLit (Chunks a b) -> fmap TextLit (Chunks <$> mapM (mapM loop) a <*> pure b)
-  TextAppend a b       -> TextAppend <$> loop a <*> loop b
+  TextLit (Chunks a b) -> fmap TextLit (Chunks <$> mapM (mapM loadWith) a <*> pure b)
+  TextAppend a b       -> TextAppend <$> loadWith a <*> loadWith b
   List                 -> pure List
-  ListLit a b          -> ListLit <$> mapM loop a <*> mapM loop b
-  ListAppend a b       -> ListAppend <$> loop a <*> loop b
+  ListLit a b          -> ListLit <$> mapM loadWith a <*> mapM loadWith b
+  ListAppend a b       -> ListAppend <$> loadWith a <*> loadWith b
   ListBuild            -> pure ListBuild
   ListFold             -> pure ListFold
   ListLength           -> pure ListLength
@@ -690,24 +690,21 @@ loadWith expr₀ = case expr₀ of
   ListIndexed          -> pure ListIndexed
   ListReverse          -> pure ListReverse
   Optional             -> pure Optional
-  OptionalLit a b      -> OptionalLit <$> loop a <*> mapM loop b
+  OptionalLit a b      -> OptionalLit <$> loadWith a <*> mapM loadWith b
   OptionalFold         -> pure OptionalFold
   OptionalBuild        -> pure OptionalBuild
-  Record a             -> Record <$> mapM loop a
-  RecordLit a          -> RecordLit <$> mapM loop a
-  Union a              -> Union <$> mapM loop a
-  UnionLit a b c       -> UnionLit <$> pure a <*> loop b <*> mapM loop c
-  Combine a b          -> Combine <$> loop a <*> loop b
-  CombineTypes a b     -> CombineTypes <$> loop a <*> loop b
-  Prefer a b           -> Prefer <$> loop a <*> loop b
-  Merge a b c          -> Merge <$> loop a <*> loop b <*> mapM loop c
-  Constructors a       -> Constructors <$> loop a
-  Field a b            -> Field <$> loop a <*> pure b
-  Project a b          -> Project <$> loop a <*> pure b
-  Note a b             -> Note <$> pure a <*> loop b
-  where
-    loop = loadWith
-
+  Record a             -> Record <$> mapM loadWith a
+  RecordLit a          -> RecordLit <$> mapM loadWith a
+  Union a              -> Union <$> mapM loadWith a
+  UnionLit a b c       -> UnionLit <$> pure a <*> loadWith b <*> mapM loadWith c
+  Combine a b          -> Combine <$> loadWith a <*> loadWith b
+  CombineTypes a b     -> CombineTypes <$> loadWith a <*> loadWith b
+  Prefer a b           -> Prefer <$> loadWith a <*> loadWith b
+  Merge a b c          -> Merge <$> loadWith a <*> loadWith b <*> mapM loadWith c
+  Constructors a       -> Constructors <$> loadWith a
+  Field a b            -> Field <$> loadWith a <*> pure b
+  Project a b          -> Project <$> loadWith a <*> pure b
+  Note a b             -> Note <$> pure a <*> loadWith b
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
