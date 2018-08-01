@@ -718,18 +718,26 @@ encodeWithVersion_1_0 :: Expr s Import -> Term
 encodeWithVersion_1_0 expression =
     TList [ TString "1.0", encode_1_0 expression ]
 
--- | Decode a Dhall expression using protocol version @1.0@
-decodeWithVersion_1_0 :: Term -> Maybe (Expr s Import)
-decodeWithVersion_1_0 term = do
-    subTerm <- case term of
-        TList [ TString version, subTerm ]
-            | version == "1.0" -> do
-                return subTerm
-            | otherwise -> do
-                fail ("This decoded version is not supported: " <> Data.Text.unpack version)
-        _ -> do
+{-| Decode a Dhall expression
+
+    This auto-detects whiich protocol version to decode based on the included
+    protocol version string in the decoded expression
+-}
+decode :: Term -> Maybe (Expr s Import)
+decode term = do
+    (version, subTerm) <- case term of
+        TList [ TString version, subTerm ] ->
+            return (version, subTerm)
+        _ ->
             fail ("Cannot decode the version from this decoded CBOR expression: " <> show term)
-    case decode_1_0 subTerm of
+
+    maybeExpression <- case version of
+        "1.0" -> do
+            return (decode_1_0 subTerm)
+        _ -> do
+            fail ("This decoded version is not supported: " <> Data.Text.unpack version)
+
+    case maybeExpression of
         Nothing ->
             fail ("This decoded CBOR expression does not represent a valid Dhall expression: " <> show subTerm)
         Just expression ->
@@ -738,7 +746,3 @@ decodeWithVersion_1_0 term = do
 -- | Encode a Dhall expression using the specified `ProtocolVersion`
 encode :: ProtocolVersion -> Expr s Import -> Term
 encode V_1_0 = encodeWithVersion_1_0
-
--- | Decode a Dhall expression using the specified `ProtocolVersion`
-decode :: ProtocolVersion -> Term -> Maybe (Expr s Import)
-decode V_1_0 = decodeWithVersion_1_0
