@@ -307,7 +307,6 @@ inputWithSettings settings (Type {..}) txt = do
                set Dhall.Import.protocolVersion _protocolVersion
             .  set Dhall.Import.normalizer      _normalizer
             .  set Dhall.Import.startingContext _startingContext
-            .  set Dhall.Import.rootDirectory   _rootDirectory
 
     let status = transform (Dhall.Import.emptyStatus ".")
 
@@ -401,7 +400,6 @@ inputExprWithSettings settings txt = do
                set Dhall.Import.protocolVersion _protocolVersion
             .  set Dhall.Import.normalizer      _normalizer
             .  set Dhall.Import.startingContext _startingContext
-            .  set Dhall.Import.rootDirectory   _rootDirectory
 
     let status = transform (Dhall.Import.emptyStatus ".")
 

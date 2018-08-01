@@ -52,8 +52,6 @@ data Status m = Status
     , _startingContext :: Context (Expr Src X)
 
     , _resolver :: Import -> StateT (Status m) m (Expr Src Import)
-
-    , _rootDirectory :: FilePath
     }
 
 -- | Default starting `Status` that is polymorphic in the base `Monad`
@@ -61,7 +59,7 @@ emptyStatusWith
     :: (Import -> StateT (Status m) m (Expr Src Import))
     -> FilePath
     -> Status m
-emptyStatusWith _resolver _rootDirectory = Status {..}
+emptyStatusWith _resolver rootDirectory = Status {..}
   where
     _stack = pure rootImport
 
@@ -75,11 +73,11 @@ emptyStatusWith _resolver _rootDirectory = Status {..}
 
     _startingContext = Dhall.Context.empty
 
-    prefix = if isRelative _rootDirectory
+    prefix = if isRelative rootDirectory
       then Here
       else Absolute
     pathComponents =
-        fmap Data.Text.pack (reverse (splitDirectories _rootDirectory))
+        fmap Data.Text.pack (reverse (splitDirectories rootDirectory))
 
     dirAsFile = File (Directory pathComponents) "."
 
@@ -116,9 +114,6 @@ resolver
     :: Functor f
     => LensLike' f (Status m) (Import -> StateT (Status m) m (Expr Src Import))
 resolver k s = fmap (\x -> s { _resolver = x }) (k (_resolver s))
-
-rootDirectory :: Functor f => LensLike' f (Status m) FilePath
-rootDirectory k s = fmap (\x -> s { _rootDirectory = x }) (k (_rootDirectory s))
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic

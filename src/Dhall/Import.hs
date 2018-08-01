@@ -113,7 +113,6 @@ module Dhall.Import (
     , normalizer
     , startingContext
     , resolver
-    , rootDirectory
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
