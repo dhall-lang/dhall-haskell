@@ -5,7 +5,6 @@ module Main where
 import Control.Monad (forM)
 import Criterion.Main (defaultMain, bgroup, bench, whnf, nfIO)
 import Data.Map (Map, foldrWithKey, singleton, unions)
-import Dhall.Binary (ProtocolVersion(..))
 
 import System.Directory
 
