@@ -309,7 +309,7 @@ inputWithSettings settings (Type {..}) txt = do
             .  set Dhall.Import.normalizer      _normalizer
             .  set Dhall.Import.startingContext _startingContext
 
-    let status = transform (Dhall.Import.emptyStatus ".")
+    let status = transform (Dhall.Import.emptyStatus _rootDirectory)
 
     expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
 
@@ -402,7 +402,7 @@ inputExprWithSettings settings txt = do
             .  set Dhall.Import.normalizer      _normalizer
             .  set Dhall.Import.startingContext _startingContext
 
-    let status = transform (Dhall.Import.emptyStatus ".")
+    let status = transform (Dhall.Import.emptyStatus _rootDirectory)
 
     expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
 
