@@ -10,7 +10,6 @@ import Codec.Serialise (DeserialiseFailure(..))
 import Control.Monad (guard)
 import Data.Hashable (Hashable)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
-import Dhall.Binary (ProtocolVersion(..))
 import Dhall.Core
     ( Chunks(..)
     , Const(..)
@@ -318,7 +317,7 @@ binaryRoundtrip expression =
                 Dhall.Binary.decode
                 (Codec.Serialise.deserialiseOrFail
                   (Codec.Serialise.serialise
-                    (Dhall.Binary.encode defaultProtocolVersion expression)
+                    (Dhall.Binary.encode Dhall.Binary.defaultProtocolVersion expression)
                   )
                 )
             )
