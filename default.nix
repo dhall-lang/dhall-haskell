@@ -1,57 +1,63 @@
+{ compiler ? "ghc843" }:
+
 let
   fetchNixpkgs = import ./nix/fetchNixpkgs.nix;
 
   readDirectory = import ./nix/readDirectory.nix;
 
   overlayShared = pkgsNew: pkgsOld: {
-    haskellPackages = pkgsOld.haskellPackages.override (old: {
-        overrides =
-          let
-            extension =
-              haskellPackagesNew: haskellPackagesOld: {
-                dhall =
-                  pkgsNew.haskell.lib.failOnAllWarnings
-                    (pkgsNew.haskell.lib.overrideCabal
-                      haskellPackagesOld.dhall
-                      (old: {
-                          src =
-                            let
-                              predicate = path: type:
+    haskell = pkgsOld.haskell // {
+      packages = pkgsOld.haskell.packages // {
+        "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
+            overrides =
+              let
+                extension =
+                  haskellPackagesNew: haskellPackagesOld: {
+                    dhall =
+                      pkgsNew.haskell.lib.failOnAllWarnings
+                        (pkgsNew.haskell.lib.overrideCabal
+                          haskellPackagesOld.dhall
+                          (old: {
+                              src =
                                 let
-                                  base = baseNameOf path;
+                                  predicate = path: type:
+                                    let
+                                      base = baseNameOf path;
+
+                                    in
+                                       !( pkgsNew.lib.hasSuffix ".nix" base
+                                       || base == "dist"
+                                       || base == "result"
+                                       || base == ".git"
+                                       );
 
                                 in
-                                   !( pkgsNew.lib.hasSuffix ".nix" base
-                                   || base == "dist"
-                                   || base == "result"
-                                   || base == ".git"
-                                   );
+                                  builtins.filterSource
+                                  predicate
+                                  old.src;
+                            }
+                          )
+                        );
 
-                            in
-                              builtins.filterSource
-                              predicate
-                              old.src;
-                        }
-                      )
-                    );
+                     prettyprinter =
+                       pkgs.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
 
-                 prettyprinter =
-                   pkgs.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
+                     serialise =
+                       pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
+                  };
 
-                 serialise =
-                   pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
-              };
+              in
+                pkgsNew.lib.fold
+                  pkgsNew.lib.composeExtensions
+                  (old.overrides or (_: _: {}))
+                  [ (readDirectory ./nix)
 
-          in
-            pkgsNew.lib.fold
-              pkgsNew.lib.composeExtensions
-              (old.overrides or (_: _: {}))
-              [ (readDirectory ./nix)
-
-                extension
-              ];
-      }
-    );
+                    extension
+                  ];
+          }
+        );
+      };
+    };
   };
 
   nixpkgs = fetchNixpkgs {
@@ -84,12 +90,12 @@ let
         useFixedCabal = drv: pkgsNew.haskell.lib.overrideCabal drv (old: {
             setupHaskellDepends =
               (old.setupHaskellDepends or []) ++ [
-                pkgsNew.haskellPackages.Cabal_patched
+                pkgsNew.haskell.packages."${compiler}".Cabal_patched
               ];
 
             libraryHaskellDepends =
               (old.libraryHaskellDepends or []) ++ [
-                pkgsNew.haskellPackages.Cabal_patched
+                pkgsNew.haskellPackages."${compiler}".Cabal_patched
               ];
           }
         );
@@ -159,7 +165,7 @@ in
 
     tarball =
       pkgsStaticLinux.releaseTools.binaryTarball rec {
-        src = pkgsStaticLinux.pkgsMusl.haskellPackages.dhall;
+        src = pkgsStaticLinux.pkgsMusl.haskell.packages."${compiler}".dhall;
 
         installPhase = ''
           releaseName=${src.name}
@@ -167,7 +173,7 @@ in
         '';
       };
 
-    inherit (pkgs.haskellPackages) dhall;
+    inherit (pkgs.haskell.packages."${compiler}") dhall;
 
     all = pkgs.releaseTools.aggregate
       { name = "dhall";
@@ -179,5 +185,5 @@ in
         ];
       };
 
-    shell = (pkgs.haskell.lib.doBenchmark pkgs.haskellPackages.dhall).env;
+    shell = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall).env;
   }
