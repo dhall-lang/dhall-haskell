@@ -28,6 +28,7 @@ module Dhall
     , sourceName
     , startingContext
     , normalizer
+    , protocolVersion
     , defaultInputSettings
     , InputSettings
     , defaultEvaluateSettings
@@ -89,18 +90,20 @@ import Data.Text (Text)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Data.Word (Word8, Word16, Word32, Word64)
+import Dhall.Binary (ProtocolVersion(..))
 import Dhall.Core (Expr(..), Chunks(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import GHC.Generics
-import Lens.Family (LensLike', view)
+import Lens.Family (LensLike', set, view)
 import Numeric.Natural (Natural)
 import Prelude hiding (maybe, sequence)
 import System.FilePath (takeDirectory)
 
 import qualified Control.Applicative
 import qualified Control.Exception
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
@@ -112,6 +115,7 @@ import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
 import qualified Data.Vector
+import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
@@ -189,7 +193,8 @@ sourceName k s =
 -- | @since 1.16
 data EvaluateSettings = EvaluateSettings
   { _startingContext :: Dhall.Context.Context (Expr Src X)
-  , _normalizer :: Dhall.Core.ReifiedNormalizer X
+  , _normalizer      :: Dhall.Core.ReifiedNormalizer X
+  , _protocolVersion :: ProtocolVersion
   }
 
 -- | Default evaluation settings: no extra entries in the initial
@@ -199,7 +204,8 @@ data EvaluateSettings = EvaluateSettings
 defaultEvaluateSettings :: EvaluateSettings
 defaultEvaluateSettings = EvaluateSettings
   { _startingContext = Dhall.Context.empty
-  , _normalizer = Dhall.Core.ReifiedNormalizer (const Nothing)
+  , _normalizer      = Dhall.Core.ReifiedNormalizer (const Nothing)
+  , _protocolVersion = Dhall.Binary.defaultProtocolVersion
   }
 
 -- | Access the starting context used for evaluation and type-checking.
@@ -225,6 +231,17 @@ normalizer = evaluateSettings . l
     l :: (Functor f)
       => LensLike' f EvaluateSettings (Dhall.Core.ReifiedNormalizer X)
     l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
+
+-- | Access the protocol version used when encoding or decoding Dhall
+-- expressions to and from a binary representation
+--
+-- @since 1.17
+protocolVersion
+    :: (Functor f, HasEvaluateSettings s)
+    => LensLike' f s ProtocolVersion
+protocolVersion = evaluateSettings . l
+  where
+  l k s = fmap (\x -> s { _protocolVersion = x}) (k (_protocolVersion s))
 
 -- | @since 1.16
 class HasEvaluateSettings s where
@@ -282,12 +299,20 @@ inputWithSettings
     -- ^ The decoded value in Haskell
 inputWithSettings settings (Type {..}) txt = do
     expr  <- throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
-    expr' <- Dhall.Import.loadDirWith
-               (view rootDirectory settings)
-               Dhall.Import.exprFromImport
-               (view startingContext settings)
-               (Dhall.Core.getReifiedNormalizer (view normalizer settings))
-               expr
+
+    let InputSettings {..} = settings
+
+    let EvaluateSettings {..} = _evaluateSettings
+
+    let transform =
+               set Dhall.Import.protocolVersion _protocolVersion
+            .  set Dhall.Import.normalizer      _normalizer
+            .  set Dhall.Import.startingContext _startingContext
+
+    let status = transform (Dhall.Import.emptyStatus _rootDirectory)
+
+    expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
+
     let suffix = Dhall.Pretty.Internal.prettyToStrictText expected
     let annot = case expr' of
             Note (Src begin end bytes) _ ->
@@ -367,12 +392,20 @@ inputExprWithSettings
     -- ^ The fully normalized AST
 inputExprWithSettings settings txt = do
     expr  <- throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
-    expr' <- Dhall.Import.loadDirWith
-               (view rootDirectory settings)
-               Dhall.Import.exprFromImport
-               (view startingContext settings)
-               (Dhall.Core.getReifiedNormalizer (view normalizer settings))
-               expr
+
+    let InputSettings {..} = settings
+
+    let EvaluateSettings {..} = _evaluateSettings
+
+    let transform =
+               set Dhall.Import.protocolVersion _protocolVersion
+            .  set Dhall.Import.normalizer      _normalizer
+            .  set Dhall.Import.startingContext _startingContext
+
+    let status = transform (Dhall.Import.emptyStatus _rootDirectory)
+
+    expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
+
     _ <- throws (Dhall.TypeCheck.typeWith (view startingContext settings) expr')
     pure (Dhall.Core.normalizeWith (Dhall.Core.getReifiedNormalizer (view normalizer settings)) expr')
 

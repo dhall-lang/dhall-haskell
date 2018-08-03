@@ -1,8 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main (main) where
 
-import qualified Criterion as Criterion
 import Criterion.Main (defaultMain)
+
+import qualified Criterion as Criterion
 import qualified Data.Sequence as Seq
 import qualified Dhall.Core as Core
 import qualified Dhall.Import as Import

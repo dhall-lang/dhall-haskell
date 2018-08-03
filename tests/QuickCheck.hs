@@ -314,10 +314,10 @@ binaryRoundtrip :: Expr () Import -> Property
 binaryRoundtrip expression =
         wrap
             (fmap
-                Dhall.Binary.decodeWithVersion_1_0
+                Dhall.Binary.decode
                 (Codec.Serialise.deserialiseOrFail
                   (Codec.Serialise.serialise
-                    (Dhall.Binary.encodeWithVersion_1_0 expression)
+                    (Dhall.Binary.encode Dhall.Binary.defaultProtocolVersion expression)
                   )
                 )
             )
