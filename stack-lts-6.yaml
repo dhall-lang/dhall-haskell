@@ -21,3 +21,5 @@ extra-deps:
 - insert-ordered-containers-0.2.1.0
 - aeson-1.2.3.0
 - th-abstraction-0.2.6.0
+- cborg-0.2.0.0
+- serialise-0.2.0.0
