@@ -321,7 +321,7 @@ binaryRoundtrip expression =
                   )
                 )
             )
-    === wrap (Right (Just expression))
+    === wrap (Right (Right expression))
   where
     wrap
         :: Either DeserialiseFailure       a

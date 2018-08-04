@@ -122,9 +122,11 @@ module Dhall.Import (
     , MissingImports(..)
     ) where
 
+import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term)
 import Control.Applicative (empty)
 import Control.Exception (Exception, SomeException, throwIO, toException)
+import Control.Monad (guard)
 import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
@@ -164,17 +166,18 @@ import Dhall.TypeCheck (X(..))
 import Lens.Family.State.Strict (zoom)
 
 import qualified Codec.Serialise
-import qualified Control.Monad.Trans.State.Strict        as State
+import qualified Control.Monad.Trans.Maybe        as Maybe
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Crypto.Hash
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
 import qualified Data.HashMap.Strict.InsOrd
-import qualified Data.List.NonEmpty                      as NonEmpty
-import qualified Data.Map.Strict                         as Map
+import qualified Data.List.NonEmpty               as NonEmpty
+import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Encoding
-import qualified Data.Text                               as Text
+import qualified Data.Text                        as Text
 import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core
@@ -182,7 +185,7 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 import qualified System.Environment
-import qualified System.Directory
+import qualified System.Directory                 as Directory
 import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
@@ -432,7 +435,148 @@ instance Show HashMismatch where
 
 -- | Parse an expression from a `Import` containing a Dhall program
 exprFromImport :: Import -> StateT (Status IO) IO (Expr Src Import)
-exprFromImport (Import {..}) = do
+exprFromImport import_@(Import {..}) = do
+    let ImportHashed {..} = importHashed
+
+    case hash of
+        Nothing -> do
+            exprFromUncachedImport import_
+
+        Just expectedHash -> do
+            Status {..} <- State.get
+
+            result <- Maybe.runMaybeT (getCacheFile expectedHash)
+
+            case result of
+                Just (Read, cacheFile) -> do
+                    bytesStrict <- liftIO (Data.ByteString.readFile cacheFile)
+
+                    let actualHash = Crypto.Hash.hash bytesStrict
+
+                    if expectedHash == actualHash
+                        then return ()
+                        else liftIO (Control.Exception.throwIO (HashMismatch {..}))
+
+                    let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
+
+                    term <- case Codec.Serialise.deserialiseOrFail bytesLazy of
+                        Left exception ->
+                            liftIO (Control.Exception.throwIO exception)
+
+                        Right term ->
+                            return term
+
+                    case Dhall.Binary.decode term of
+                        Left exception ->
+                            liftIO (Control.Exception.throwIO exception)
+
+                        Right expression ->
+                            return expression
+
+                Just (Write, cacheFile) -> do
+                    expression <- exprFromUncachedImport import_
+
+                    let _stack' = NonEmpty.cons import_ _stack
+                    zoom stack (State.put _stack')
+                    resolvedExpression <- loadWith expression
+                    zoom stack (State.put _stack)
+
+                    case Dhall.TypeCheck.typeWith _startingContext resolvedExpression of
+                        Left  _ -> do
+                            return ()
+
+                        Right _ -> do
+                            let normalizedExpression =
+                                    Dhall.Core.normalizeWith
+                                        (getReifiedNormalizer _normalizer)
+                                            (Dhall.Core.alphaNormalize resolvedExpression)
+
+                            let bytes =
+                                    encodeExpression _protocolVersion normalizedExpression
+
+                            let actualHash = Crypto.Hash.hash bytes
+
+                            if expectedHash == actualHash
+                                then return ()
+                                else liftIO (Control.Exception.throwIO (HashMismatch {..}))
+
+                            liftIO (Data.ByteString.writeFile cacheFile bytes)
+
+                    return expression
+
+                Nothing -> do
+                    exprFromUncachedImport import_
+
+data CacheMode = Read | Write
+
+getCacheFile
+    :: (Alternative m, MonadIO m)
+    => Crypto.Hash.Digest SHA256 -> m (CacheMode, FilePath)
+getCacheFile hash = do
+    let assertDirectory directory = do
+            let private = transform Directory.emptyPermissions
+                  where
+                    transform =
+                            Directory.setOwnerReadable   True
+                        .   Directory.setOwnerWritable   True
+                        .   Directory.setOwnerSearchable True
+
+            let accessible path =
+                       Directory.readable   path
+                    && Directory.writable   path
+                    && Directory.searchable path
+
+            directoryExists <- liftIO (Directory.doesDirectoryExist directory)
+
+            if directoryExists
+                then do
+                    permissions <- liftIO (Directory.getPermissions directory)
+
+                    guard (accessible permissions)
+
+                else do
+                    liftIO (Directory.createDirectory directory)
+
+                    liftIO (Directory.setPermissions directory private)
+
+    let tryXdgCacheHome = do
+            Just cacheDirectory <- liftIO (System.Environment.lookupEnv "XDG_CACHE_HOME")
+            assertDirectory cacheDirectory
+
+            return cacheDirectory
+
+    let tryHome = do
+            Just home <- liftIO (System.Environment.lookupEnv "HOME")
+
+            assertDirectory home
+
+            let cacheDirectory = home </> ".cache"
+
+            assertDirectory cacheDirectory
+
+            return cacheDirectory
+
+    cacheDirectory <- tryXdgCacheHome <|> tryHome
+
+    let dhallDirectory = cacheDirectory </> "dhall"
+
+    assertDirectory dhallDirectory
+
+    let cacheFile = dhallDirectory </> show hash
+
+    cacheFileExists <- liftIO (Directory.doesPathExist cacheFile)
+
+    if cacheFileExists
+        then do
+            True <- liftIO (Directory.doesFileExist cacheFile)
+
+            return (Read, cacheFile)
+
+        else do
+            return (Write, cacheFile)
+
+exprFromUncachedImport :: Import -> StateT (Status IO) IO (Expr Src Import)
+exprFromUncachedImport (Import {..}) = do
     let ImportHashed {..} = importHashed
 
     (path, text) <- case importType of
@@ -441,13 +585,13 @@ exprFromImport (Import {..}) = do
 
             prefixPath <- case prefix of
                 Home -> do
-                    System.Directory.getHomeDirectory
+                    Directory.getHomeDirectory
 
                 Absolute -> do
                     return "/"
 
                 Here -> do
-                    System.Directory.getCurrentDirectory
+                    Directory.getCurrentDirectory
 
             let cs = map Text.unpack (file : components)
 
@@ -455,7 +599,7 @@ exprFromImport (Import {..}) = do
 
             let path = foldr cons prefixPath cs
 
-            exists <- System.Directory.doesFileExist path
+            exists <- Directory.doesFileExist path
 
             if exists
                 then return ()
@@ -635,7 +779,9 @@ loadWith expr₀ = case expr₀ of
         Nothing -> do
             return ()
         Just expectedHash -> do
-            let actualHash = hashExpression _protocolVersion expr
+            let actualHash =
+                    hashExpression _protocolVersion (Dhall.Core.alphaNormalize expr)
+
             if expectedHash == actualHash
                 then return ()
                 else throwMissingImport (Imported imports' (HashMismatch {..}))
@@ -714,10 +860,9 @@ loadWith expr₀ = case expr₀ of
 load :: Expr Src Import -> IO (Expr Src X)
 load expression = State.evalStateT (loadWith expression) (emptyStatus ".")
 
--- | Hash a fully resolved expression
-hashExpression
-    :: forall s . ProtocolVersion -> Expr s X -> (Crypto.Hash.Digest SHA256)
-hashExpression _protocolVersion expression = Crypto.Hash.hash bytesStrict
+encodeExpression
+    :: forall s . ProtocolVersion -> Expr s X -> Data.ByteString.ByteString
+encodeExpression _protocolVersion expression = bytesStrict
   where
     intermediateExpression :: Expr s Import
     intermediateExpression = fmap absurd expression
@@ -728,6 +873,11 @@ hashExpression _protocolVersion expression = Crypto.Hash.hash bytesStrict
     bytesLazy = Codec.Serialise.serialise term
 
     bytesStrict = Data.ByteString.Lazy.toStrict bytesLazy
+
+-- | Hash a fully resolved expression
+hashExpression :: ProtocolVersion -> Expr s X -> (Crypto.Hash.Digest SHA256)
+hashExpression _protocolVersion expression =
+    Crypto.Hash.hash (encodeExpression _protocolVersion expression)
 
 {-| Convenience utility to hash a fully resolved expression and return the
     base-16 encoded hash with the @sha256:@ prefix
