@@ -1,5 +1,6 @@
-resolver: lts-11.12
-
+resolver: lts-12.4
+extra-deps:
+  - serialise-0.2.0.0
 nix:
   packages:
     - ncurses
