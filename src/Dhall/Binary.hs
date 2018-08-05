@@ -39,6 +39,7 @@ import Dhall.Core
     , URL(..)
     , Var(..)
     )
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Options.Applicative (Parser)
 import Prelude hiding (exponent)
