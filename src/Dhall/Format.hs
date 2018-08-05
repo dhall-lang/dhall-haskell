@@ -12,11 +12,11 @@ import Dhall.Pretty (annToAnsiStyle, prettyExpr, layoutOpts)
 
 import Data.Monoid ((<>))
 
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Control.Exception
 import qualified Data.Text.IO
-import qualified System.Console.ANSI
+import qualified Data.Text.Prettyprint.Doc                 as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import qualified Dhall.Pretty.Internal
 import qualified System.IO
 
 -- | Implementation of the @dhall format@ subcommand
@@ -46,7 +46,7 @@ format inplace = do
 
                 let doc = Pretty.pretty header <> prettyExpr expr
 
-                supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
+                supportsANSI <- Dhall.Pretty.Internal.hSupportsANSI System.IO.stdout
 
                 if supportsANSI
                   then

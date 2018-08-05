@@ -30,8 +30,8 @@ import qualified Dhall.Pretty
 import qualified Dhall.Core as Expr ( Expr(..) )
 import qualified Dhall.Import as Dhall
 import qualified Dhall.Parser as Dhall
+import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck as Dhall
-import qualified System.Console.ANSI
 import qualified System.Console.Haskeline.MonadException as Haskeline
 import qualified System.Console.Repline as Repline
 import qualified System.IO
@@ -260,7 +260,7 @@ output handle expr = do
   liftIO (System.IO.hPutStrLn handle "")  -- Visual spacing
 
   let stream = Pretty.layoutSmart Dhall.Pretty.layoutOpts (Dhall.Pretty.prettyExpr expr)
-  supportsANSI <- liftIO (System.Console.ANSI.hSupportsANSI handle)
+  supportsANSI <- liftIO (Dhall.Pretty.Internal.hSupportsANSI handle)
   let ansiStream =
           if supportsANSI
           then fmap Dhall.Pretty.annToAnsiStyle stream
