@@ -53,11 +53,11 @@ import qualified Dhall.Hash
 import qualified Dhall.Import
 import qualified Dhall.Lint
 import qualified Dhall.Parser
+import qualified Dhall.Pretty.Internal
 import qualified Dhall.Repl
 import qualified Dhall.TypeCheck
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
-import qualified System.Console.ANSI
 import qualified System.IO
 
 -- | Top-level program options
@@ -240,7 +240,7 @@ command (Options {..}) = do
 
             let stream = Pretty.layoutSmart layoutOpts doc
 
-            supportsANSI <- System.Console.ANSI.hSupportsANSI h
+            supportsANSI <- Dhall.Pretty.Internal.hSupportsANSI h
             let ansiStream =
                     if supportsANSI && not plain
                     then fmap annToAnsiStyle stream
@@ -336,7 +336,7 @@ command (Options {..}) = do
 
                     let doc = Pretty.pretty header <> prettyExpr lintedExpression
 
-                    supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
+                    supportsANSI <- Dhall.Pretty.Internal.hSupportsANSI System.IO.stdout
 
                     if supportsANSI
                       then

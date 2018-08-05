@@ -47,6 +47,8 @@ module Dhall.Pretty.Internal (
     , rbrace
     , rbracket
     , rparen
+
+    , hSupportsANSI
     ) where
 
 import {-# SOURCE #-} Dhall.Core
@@ -64,17 +66,20 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
+import System.IO (Handle)
 
 import qualified Data.Char
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.Set
-import qualified Data.Text                               as Text
-import qualified Data.Text.Prettyprint.Doc               as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text   as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
+import qualified Data.Text                                 as Text
+import qualified Data.Text.Prettyprint.Doc                 as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
+import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.String   as Pretty
+import qualified System.Environment
+import qualified System.IO
 
 {-| Annotation type used to tag elements in a pretty-printed document for
     syntax highlighting purposes
@@ -910,3 +915,11 @@ docToStrictText = Pretty.renderStrict . Pretty.layoutPretty options
 
 prettyToStrictText :: Pretty a => a -> Text.Text
 prettyToStrictText = docToStrictText . Pretty.pretty
+
+-- | Copied from @ansi-terminal@ to eliminate a dependency
+hSupportsANSI :: Handle -> IO Bool
+hSupportsANSI handle = do
+    isTerminalDevice <- System.IO.hIsTerminalDevice handle
+    maybeTerm        <- System.Environment.lookupEnv "TERM"
+
+    return (isTerminalDevice && maybeTerm /= Just "dumb")

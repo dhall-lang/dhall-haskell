@@ -17,7 +17,6 @@ import Dhall.Import (hashExpression, protocolVersion)
 import Dhall.Parser (exprAndHeaderFromText, Src)
 import Dhall.Pretty (annToAnsiStyle, layoutOpts)
 import Lens.Family (set)
-import System.Console.ANSI (hSupportsANSI)
 
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict          as State
@@ -25,6 +24,7 @@ import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Data.Text.IO
 import qualified Dhall.Import
+import qualified Dhall.Pretty.Internal
 import qualified System.IO
 
 readInput :: Maybe FilePath -> IO Text
@@ -62,7 +62,7 @@ writeExpr inplace (header, expr) = do
                 Pretty.renderIO h (annToAnsiStyle <$> stream))
 
         Nothing -> do
-            supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
+            supportsANSI <- Dhall.Pretty.Internal.hSupportsANSI System.IO.stdout
             if supportsANSI 
                then 
                  Pretty.renderIO System.IO.stdout (annToAnsiStyle <$> Pretty.layoutSmart layoutOpts doc)
