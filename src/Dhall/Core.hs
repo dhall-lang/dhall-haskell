@@ -1,8 +1,7 @@
 {-# LANGUAGE BangPatterns       #-}
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFoldable     #-}
-{-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
@@ -26,7 +25,9 @@ module Dhall.Core (
     , ImportHashed(..)
     , ImportMode(..)
     , ImportType(..)
+    , URL(..)
     , Path
+    , Scheme(..)
     , Var(..)
     , Chunks(..)
     , Expr(..)
@@ -74,6 +75,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Traversable
 import {-# SOURCE #-} Dhall.Pretty.Internal
+import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 
@@ -103,7 +105,7 @@ import qualified Data.Text.Prettyprint.Doc  as Pretty
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
 -}
-data Const = Type | Kind deriving (Show, Eq, Data, Bounded, Enum)
+data Const = Type | Kind deriving (Show, Eq, Data, Bounded, Enum, Generic)
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -115,7 +117,7 @@ instance Pretty Const where
     @Directory { components = [ "baz", "bar", "foo" ] }@
 -}
 newtype Directory = Directory { components :: [Text] }
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Generic, Ord, Show)
 
 instance Semigroup Directory where
     Directory components₀ <> Directory components₁ =
@@ -133,7 +135,7 @@ instance Pretty Directory where
 data File = File
     { directory :: Directory
     , file      :: Text
-    } deriving (Eq, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show)
 
 instance Pretty File where
     pretty (File {..}) = Pretty.pretty directory <> "/" <> Pretty.pretty file
@@ -150,29 +152,40 @@ data FilePrefix
     -- ^ Path relative to @.@
     | Home
     -- ^ Path relative to @~@
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Generic, Ord, Show)
 
 instance Pretty FilePrefix where
     pretty Absolute = ""
     pretty Here     = "."
     pretty Home     = "~"
 
+data Scheme = HTTP | HTTPS deriving (Eq, Generic, Ord, Show)
+
+data URL = URL
+    { scheme    :: Scheme
+    , authority :: Text
+    , path      :: File
+    , query     :: Maybe Text
+    , fragment  :: Maybe Text
+    , headers   :: Maybe ImportHashed
+    } deriving (Eq, Generic, Ord, Show)
+
 -- | The type of import (i.e. local vs. remote vs. environment)
 data ImportType
     = Local FilePrefix File
     -- ^ Local path
-    | URL Text File Text (Maybe ImportHashed)
+    | Remote URL
     -- ^ URL of remote resource and optional headers stored in an import
     | Env  Text
     -- ^ Environment variable
     | Missing
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Generic, Ord, Show)
 
 instance Semigroup ImportType where
     Local prefix file₀ <> Local Here file₁ = Local prefix (file₀ <> file₁)
 
-    URL prefix file₀ suffix headers <> Local Here file₁ =
-        URL prefix (file₀ <> file₁) suffix headers
+    Remote (URL { path = path₀, ..}) <> Local Here path₁ =
+        Remote (URL { path = path₀ <> path₁, ..})
 
     _ <> import₁ =
         import₁
@@ -181,26 +194,41 @@ instance Pretty ImportType where
     pretty (Local prefix file) =
         Pretty.pretty prefix <> Pretty.pretty file
 
-    pretty (URL prefix file suffix headers) =
-            Pretty.pretty prefix
-        <>  Pretty.pretty file
-        <>  Pretty.pretty suffix
+    pretty (Remote (URL {..})) =
+            schemeDoc
+        <>  "://"
+        <>  Pretty.pretty authority
+        <>  Pretty.pretty path
+        <>  queryDoc
+        <>  fragmentDoc
         <>  foldMap prettyHeaders headers
       where
         prettyHeaders h = " using " <> Pretty.pretty h
+
+        schemeDoc = case scheme of
+            HTTP  -> "http"
+            HTTPS -> "https"
+
+        queryDoc = case query of
+            Nothing -> ""
+            Just q  -> "?" <> Pretty.pretty q
+
+        fragmentDoc = case fragment of
+            Nothing -> ""
+            Just f  -> "#" <> Pretty.pretty f
 
     pretty (Env env) = "env:" <> Pretty.pretty env
 
     pretty Missing = "missing"
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
-data ImportMode = Code | RawText deriving (Eq, Ord, Show)
+data ImportMode = Code | RawText deriving (Eq, Generic, Ord, Show)
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
     { hash       :: Maybe (Crypto.Hash.Digest SHA256)
     , importType :: ImportType
-    } deriving (Eq, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show)
 
 instance Semigroup ImportHashed where
     ImportHashed _ importType₀ <> ImportHashed hash importType₁ =
@@ -216,7 +244,7 @@ instance Pretty ImportHashed where
 data Import = Import
     { importHashed :: ImportHashed
     , importMode   :: ImportMode
-    } deriving (Eq, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show)
 
 instance Semigroup Import where
     Import importHashed₀ _ <> Import importHashed₁ code =
@@ -268,7 +296,7 @@ type Path = Import
     appear as a numeric suffix.
 -}
 data Var = V Text !Integer
-    deriving (Data, Eq, Show)
+    deriving (Data, Generic, Eq, Show)
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -410,7 +438,7 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Functor, Foldable, Traversable, Show, Eq, Data)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
 
 instance Applicative (Expr s) where
     pure = Embed
@@ -556,7 +584,7 @@ instance IsString (Expr s a) where
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving (Functor, Foldable, Traversable, Show, Eq, Data)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =
@@ -1741,7 +1769,7 @@ isNormalizedWith ctx e = e == (normalizeWith ctx e)
 
 
 -- | Quickly check if an expression is in normal form
-isNormalized :: Expr s a -> Bool
+isNormalized :: Eq a => Expr s a -> Bool
 isNormalized e = case denote e of
     Const _ -> True
     Var _ -> True
@@ -1785,37 +1813,32 @@ isNormalized e = case denote e of
     Annot _ _ -> False
     Bool -> True
     BoolLit _ -> True
-    BoolAnd x y -> isNormalized x && isNormalized y &&
-        case x of
-            BoolLit _ ->
-                case y of
-                    BoolLit _ -> False
-                    _ -> True
-            _ -> True
-    BoolOr x y -> isNormalized x && isNormalized y &&
-        case x of
-            BoolLit _ ->
-                case y of
-                    BoolLit _ -> False
-                    _ -> True
-            _ -> True
-    BoolEQ x y -> isNormalized x && isNormalized y &&
-        case x of
-            BoolLit _ ->
-                case y of
-                    BoolLit _ -> False
-                    _ -> True
-            _ -> True
-    BoolNE x y -> isNormalized x && isNormalized y &&
-        case x of
-            BoolLit _ ->
-                case y of
-                    BoolLit _ -> False
-                    _ -> True
-            _ -> True
-    BoolIf b true false -> isNormalized b && case b of
-        BoolLit _ -> False
-        _         -> isNormalized true && isNormalized false
+    BoolAnd x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (BoolLit _)  _          = False
+        decide  _          (BoolLit _) = False
+        decide  l           r          = not (judgmentallyEqual l r)
+    BoolOr x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (BoolLit _)  _          = False
+        decide  _          (BoolLit _) = False
+        decide  l           r          = not (judgmentallyEqual l r)
+    BoolEQ x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (BoolLit True)  _             = False
+        decide  _             (BoolLit True) = False
+        decide  l              r             = not (judgmentallyEqual l r)
+    BoolNE x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (BoolLit False)  _               = False
+        decide  _              (BoolLit False ) = False
+        decide  l               r               = not (judgmentallyEqual l r)
+    BoolIf x y z ->
+        isNormalized x && isNormalized y && isNormalized z && decide x y z
+      where
+        decide (BoolLit _)  _              _              = False
+        decide  _          (BoolLit True) (BoolLit False) = False
+        decide  _           l              r              = not (judgmentallyEqual l r)
     Natural -> True
     NaturalLit _ -> True
     NaturalFold -> True
@@ -1825,20 +1848,20 @@ isNormalized e = case denote e of
     NaturalOdd -> True
     NaturalShow -> True
     NaturalToInteger -> True
-    NaturalPlus x y -> isNormalized x && isNormalized y &&
-        case x of
-            NaturalLit _ ->
-                case y of
-                    NaturalLit _ -> False
-                    _ -> True
-            _ -> True
-    NaturalTimes x y -> isNormalized x && isNormalized y &&
-        case x of
-            NaturalLit _ ->
-                case y of
-                    NaturalLit _ -> False
-                    _ -> True
-            _ -> True
+    NaturalPlus x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (NaturalLit 0)  _             = False
+        decide  _             (NaturalLit 0) = False
+        decide (NaturalLit _) (NaturalLit _) = False
+        decide  _              _             = True
+    NaturalTimes x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (NaturalLit 0)  _             = False
+        decide  _             (NaturalLit 0) = False
+        decide (NaturalLit 1)  _             = False
+        decide  _             (NaturalLit 1) = False
+        decide (NaturalLit _) (NaturalLit _) = False
+        decide  _              _             = True
     Integer -> True
     IntegerLit _ -> True
     IntegerShow -> True
@@ -1847,23 +1870,29 @@ isNormalized e = case denote e of
     DoubleLit _ -> True
     DoubleShow -> True
     Text -> True
-    TextLit (Chunks xys _) -> all (all isNormalized) xys
-    TextAppend x y -> isNormalized x && isNormalized y &&
-        case x of
-            TextLit _ ->
-                case y of
-                    TextLit _ -> False
-                    _ -> True
-            _ -> True
+    TextLit (Chunks [("", _)] "") -> False
+    TextLit (Chunks xys _) -> all (all check) xys
+      where
+        check y = isNormalized y && case y of
+            TextLit _ -> False
+            _         -> True
+    TextAppend x y -> isNormalized x && isNormalized y && decide x y
+      where
+        isEmpty (Chunks [] "") = True
+        isEmpty  _             = False
+
+        decide (TextLit m)  _          | isEmpty m = False
+        decide  _          (TextLit n) | isEmpty n = False
+        decide (TextLit _) (TextLit _)             = False
+        decide  _           _                      = True
     List -> True
     ListLit t es -> all isNormalized t && all isNormalized es
-    ListAppend x y -> isNormalized x && isNormalized y &&
-        case x of
-            ListLit _ _ ->
-                case y of
-                    ListLit _ _ -> False
-                    _ -> True
-            _ -> True
+    ListAppend x y -> isNormalized x && isNormalized y && decide x y
+      where
+        decide (ListLit _ m)  _            | Data.Sequence.null m = False
+        decide  _            (ListLit _ n) | Data.Sequence.null n = False
+        decide (ListLit _ _) (ListLit _ _)                        = False
+        decide  _             _                                   = True
     ListBuild -> True
     ListFold -> True
     ListLength -> True
@@ -1879,28 +1908,25 @@ isNormalized e = case denote e of
     RecordLit kvs -> all isNormalized kvs
     Union kts -> all isNormalized kts
     UnionLit _ v kvs -> isNormalized v && all isNormalized kvs
-    Combine x y -> isNormalized x && isNormalized y && combine
+    Combine x y -> isNormalized x && isNormalized y && decide x y
       where
-        combine = case x of
-            RecordLit _ -> case y of
-                RecordLit _ -> False
-                _ -> True
-            _ -> True
-    CombineTypes x y -> isNormalized x && isNormalized y && combine
+        decide (RecordLit m) _ | Data.HashMap.Strict.InsOrd.null m = False
+        decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
+        decide (RecordLit _) (RecordLit _) = False
+        decide  _ _ = True
+    CombineTypes x y -> isNormalized x && isNormalized y && decide x y
       where
-        combine = case x of
-            Record _ -> case y of
-                Record _ -> False
-                _ -> True
-            _ -> True
-    Prefer x y -> isNormalized x && isNormalized y && combine
+        decide (Record m) _ | Data.HashMap.Strict.InsOrd.null m = False
+        decide _ (Record n) | Data.HashMap.Strict.InsOrd.null n = False
+        decide (Record _) (Record _) = False
+        decide  _ _ = True
+    Prefer x y -> isNormalized x && isNormalized y && decide x y
       where
-        combine = case x of
-            RecordLit _ -> case y of
-                RecordLit _ -> False
-                _ -> True
-            _ -> True
-    Merge x y t -> isNormalized x && isNormalized y && any isNormalized t &&
+        decide (RecordLit m) _ | Data.HashMap.Strict.InsOrd.null m = False
+        decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
+        decide (RecordLit _) (RecordLit _) = False
+        decide  _ _ = True
+    Merge x y t -> isNormalized x && isNormalized y && all isNormalized t &&
         case x of
             RecordLit kvsX ->
                 case y of
@@ -2019,3 +2045,4 @@ reservedIdentifiers =
         , "Optional/build"
         , "Optional/fold"
         ]
+

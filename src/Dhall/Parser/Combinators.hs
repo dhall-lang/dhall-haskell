@@ -131,6 +131,12 @@ plus p = mappend <$> p <*> star p
 satisfy :: (Char -> Bool) -> Parser Text
 satisfy = fmap Data.Text.singleton . Text.Parser.Char.satisfy
 
+takeWhile :: (Char -> Bool) -> Parser Text
+takeWhile predicate = Parser (Text.Megaparsec.takeWhileP Nothing predicate)
+
+takeWhile1 :: (Char -> Bool) -> Parser Text
+takeWhile1 predicate = Parser (Text.Megaparsec.takeWhile1P Nothing predicate)
+
 noDuplicates :: Ord a => [a] -> Parser (Set a)
 noDuplicates = go Data.Set.empty
   where
