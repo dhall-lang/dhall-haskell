@@ -4,6 +4,10 @@ module TypeCheck where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
+import Dhall.Core (Import)
+import Dhall.Import (Imported)
+import Dhall.Parser (Src)
+import Dhall.TypeCheck (TypeError)
 import Test.Tasty (TestTree)
 
 import qualified Control.Exception
@@ -43,6 +47,13 @@ typecheckTests =
         , should
             "correctly handle α-equivalent merge alternatives"
             "mergeEquivalence"
+
+        , shouldNotTypeCheck
+            "combining records of terms and types"
+            "combineMixedRecords"
+        , shouldNotTypeCheck
+            "preferring a record of types over a record of terms"
+            "preferMixedRecords"
         ]
 
 should :: Text -> Text -> TestTree
@@ -64,3 +75,26 @@ should name basename =
         case Dhall.TypeCheck.typeOf resolvedExpr of
             Left  err -> Control.Exception.throwIO err
             Right _   -> return ()
+
+shouldNotTypeCheck :: Text -> Text -> TestTree
+shouldNotTypeCheck name basename =
+    Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
+        let code = "./tests/typecheck/" <> basename <> ".dhall"
+
+        expression <- case Dhall.Parser.exprFromText mempty code of
+            Left  exception  -> Control.Exception.throwIO exception
+            Right expression -> return expression
+
+        let io :: IO Bool
+            io = do
+                _ <- Dhall.Import.load expression
+                return True
+
+        let handler :: Imported (TypeError Src Import) -> IO Bool
+            handler _ = return False
+
+        typeChecked <- Control.Exception.handle handler io
+
+        if typeChecked
+            then fail (Data.Text.unpack code <> " should not have type-checked")
+            else return ()
