@@ -12,7 +12,7 @@ import Data.Monoid ((<>))
 import Data.Maybe (fromMaybe)
 import Data.Text
 import Dhall.Binary (ProtocolVersion(..))
-import Dhall.Core
+import Dhall.Core (Expr(..), Import(..), ImportHashed(..))
 import Dhall.Import (hashExpression, protocolVersion)
 import Dhall.Parser (exprAndHeaderFromText, Src)
 import Dhall.Pretty (annToAnsiStyle, layoutOpts)
@@ -24,7 +24,9 @@ import qualified Control.Monad.Trans.State.Strict          as State
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Data.Text.IO
+import qualified Dhall.Core
 import qualified Dhall.Import
+import qualified Dhall.TypeCheck
 import qualified System.IO
 
 readInput :: Maybe FilePath -> IO Text
@@ -38,8 +40,15 @@ hashImport _protocolVersion import_ = do
 
     expression <- State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
 
+    case Dhall.TypeCheck.typeOf expression of
+        Left  exception -> Control.Exception.throwIO exception
+        Right _         -> return ()
+
+    let normalizedExpression =
+            Dhall.Core.alphaNormalize (Dhall.Core.normalize expression)
+
     let expressionHash =
-            Just (Dhall.Import.hashExpression _protocolVersion expression)
+            Just (Dhall.Import.hashExpression _protocolVersion normalizedExpression)
 
     let newImportHashed = (importHashed import_) { hash = expressionHash }
 
