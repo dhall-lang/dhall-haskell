@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -15,10 +16,14 @@ module Dhall.Binary
     -- * Encoding and decoding
     , encode
     , decode
+
+    -- * Exceptions
+    , DecodingFailure(..)
     ) where
 
 import Codec.CBOR.Term (Term(..))
 import Control.Applicative (empty)
+import Control.Exception (Exception)
 import Dhall.Core
     ( Chunks(..)
     , Const(..)
@@ -728,7 +733,7 @@ encodeWithVersion_1_0 expression =
     This auto-detects whiich protocol version to decode based on the included
     protocol version string in the decoded expression
 -}
-decode :: Term -> Maybe (Expr s Import)
+decode :: Term -> Either DecodingFailure (Expr s Import)
 decode term = do
     (version, subTerm) <- case term of
         TList [ TString version, subTerm ] ->
@@ -751,3 +756,39 @@ decode term = do
 -- | Encode a Dhall expression using the specified `ProtocolVersion`
 encode :: ProtocolVersion -> Expr s Import -> Term
 encode V_1_0 = encodeWithVersion_1_0
+
+data DecodingFailure
+    = CannotDecodeProtocolVersionString Term
+    | UnsupportedProtocolVersionString Text
+    | CBORIsNotDhall Term
+    deriving (Eq, Exception)
+
+_ERROR :: String
+_ERROR = "\ESC[1;31mError\ESC[0m"
+
+instance Show DecodingFailure where
+    show (CannotDecodeProtocolVersionString term) =
+            _ERROR <> ": Cannot decode version string\n"
+        <>  "\n"
+        <>  "This CBOR expression does not contain a protocol version string in any\n"
+        <>  "recognizable format\n"
+        <>  "\n"
+        <>  "↳ " <> show term <> "\n"
+    show (UnsupportedProtocolVersionString version) =
+            _ERROR <> ": Unsupported version string\n"
+        <>  "\n"
+        <>  "The encoded Dhall expression was tagged with a protocol version string of:\n"
+        <>  "\n"
+        <>  "↳ " <> show version <> "\n"
+        <>  "\n"
+        <>  "... but this implementation cannot decode that protocol version\n"
+        <>  "\n"
+        <>  "Some common reasons why you might get this error:\n"
+        <>  "\n"
+        <>  "● You are using an old version of the interpreter and need to upgrade\n"
+    show (CBORIsNotDhall term) =
+            _ERROR <> ": Cannot decode CBOR to Dhall\n"
+        <>  "\n"
+        <>  "The following CBOR expression does not encode a valid Dhall expression\n"
+        <>  "\n"
+        <>  "↳ " <> show term <> "\n"
