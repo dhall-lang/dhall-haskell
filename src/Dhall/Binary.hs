@@ -1,6 +1,7 @@
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE OverloadedStrings  #-}
 
 {-| This module contains logic for converting Dhall expressions to and from
     CBOR expressions which can in turn be converted to and from a binary
@@ -761,7 +762,9 @@ data DecodingFailure
     = CannotDecodeProtocolVersionString Term
     | UnsupportedProtocolVersionString Text
     | CBORIsNotDhall Term
-    deriving (Eq, Exception)
+    deriving (Eq)
+
+deriving instance Exception DecodingFailure
 
 _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
