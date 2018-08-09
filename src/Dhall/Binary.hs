@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE OverloadedStrings  #-}
 
@@ -764,7 +762,7 @@ data DecodingFailure
     | CBORIsNotDhall Term
     deriving (Eq)
 
-deriving instance Exception DecodingFailure
+instance Exception DecodingFailure
 
 _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
