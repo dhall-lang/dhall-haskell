@@ -453,14 +453,7 @@ skeleton (Lam {}) =
     <>  " "
     <>  ignore
 skeleton (Pi {}) =
-        forall
-    <>  lparen
-    <>  ignore
-    <>  " "
-    <>  colon
-    <>  " "
-    <>  ignore
-    <>  rparen
+        ignore
     <>  " "
     <>  rarrow
     <>  " "
@@ -723,13 +716,20 @@ diffExpression l@(Pi {}) r@(Pi {}) =
     docs (Pi aL bL cL) (Pi aR bR cR) =
         Data.List.NonEmpty.cons (align doc) (docs cL cR)
       where
-        doc =   forall
+        doc | same docA && same docB = ignore
+            | otherwise =
+                forall
             <>  lparen
-            <>  format " " (diffLabel aL aR)
+            <>  format " " docA
             <>  colon
             <>  " "
-            <>  format mempty (diffExpression bL bR)
+            <>  format mempty docB
             <>  rparen
+          where
+            docA = diffLabel aL aR
+
+            docB = diffExpression bL bR
+
     docs aL aR = pure (diffExpression aL aR)
 diffExpression l@(Pi {}) r =
     mismatch l r
