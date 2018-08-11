@@ -2,11 +2,11 @@ let
   fetchNixpkgs = import ./nix/fetchNixpkgs.nix;
 
   nixpkgs = fetchNixpkgs {
-    rev = "804060ff9a79ceb0925fe9ef79ddbf564a225d47";
+    rev = "1d4de0d552ae9aa66a5b8dee5fb0650a4372d148";
 
-    sha256 = "01pb6p07xawi60kshsxxq1bzn8a0y4s5jjqvhkwps4f5xjmmwav3";
+    sha256 = "09qx58dp1kbj7cpzp8ahbqfbbab1frb12sh1qng87rybcaz0dz01";
 
-    outputSha256 = "0ga345hgw6v2kzyhvf5kw96hf60mx5pbd9c4qj5q4nan4lr7nkxn";
+    outputSha256 = "0xpqc1fhkvvv5dv1zmas2j1q27mi7j7dgyjcdh82mlgl1q63i660";
   };
 
   config = {
@@ -24,17 +24,8 @@ let
                 (haskellPackagesNew.callPackage ./nix/dhall-nix.nix { })
               );
 
-          hnix =
-            pkgs.haskell.lib.dontCheck
-              (haskellPackagesNew.callPackage ./nix/hnix.nix { });
-
-          prettyprinter = haskellPackagesOld.prettyprinter_1_2_0_1;
-
           serialise =
             pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
-
-          unordered-containers =
-            haskellPackagesOld.unordered-containers_0_2_9_0;
         };
       };
     };
