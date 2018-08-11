@@ -20,7 +20,7 @@ module Dhall.Main
 
 import Control.Applicative (optional, (<|>))
 import Control.Exception (Exception, SomeException)
-import Data.Monoid (mempty, (<>))
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Version (showVersion)
