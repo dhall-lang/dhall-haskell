@@ -27,7 +27,6 @@ let
           let
             extension =
               haskellPackagesNew: haskellPackagesOld: {
-
                 dhall =
                   pkgsNew.haskell.lib.failOnAllWarnings
                     (haskellPackagesNew.callCabal2nix
@@ -36,14 +35,11 @@ let
                       { }
                     );
 
-                 hpack =
-                   haskellPackagesOld.hpack_0_29_6;
+                prettyprinter =
+                  pkgs.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
 
-                 prettyprinter =
-                   pkgs.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
-
-                 serialise =
-                   pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
+                serialise =
+                  pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
               };
 
           in
@@ -58,6 +54,15 @@ let
     );
   };
 
+  overlayDynamic = pkgsNew: pkgsOld: {
+    haskellPackages = pkgsOld.haskellPackages.override {
+      overrides = haskellPackagesNew: haskellPackagesOld: {
+        hpack =
+          haskellPackagesOld.hpack_0_29_6;
+      };
+    };
+  };
+
   nixpkgs = fetchNixpkgs {
     rev = "1d4de0d552ae9aa66a5b8dee5fb0650a4372d148";
 
@@ -66,7 +71,10 @@ let
     outputSha256 = "0xpqc1fhkvvv5dv1zmas2j1q27mi7j7dgyjcdh82mlgl1q63i660";
   };
 
-  pkgs = import nixpkgs { config = {}; overlays = [ overlayShared ]; };
+  pkgs = import nixpkgs {
+    config = {};
+    overlays = [ overlayShared overlayDynamic ];
+  };
 
   overlayStaticLinux = pkgsNew: pkgsOld: {
     cabal_patched_src = pkgsNew.fetchFromGitHub {
