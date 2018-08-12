@@ -20,12 +20,12 @@ module Dhall.Main
 
 import Control.Applicative (optional, (<|>))
 import Control.Exception (Exception, SomeException)
-import Data.Monoid (mempty, (<>))
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Version (showVersion)
 import Dhall.Binary (ProtocolVersion)
-import Dhall.Core (Expr, Import)
+import Dhall.Core (Expr(..), Import)
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (annToAnsiStyle, prettyExpr, layoutOpts)
@@ -70,7 +70,7 @@ data Options = Options
 
 -- | The subcommands for the @dhall@ executable
 data Mode
-    = Default
+    = Default { annotate :: Bool }
     | Version
     | Resolve
     | Type
@@ -124,7 +124,7 @@ parseMode =
     <|> subcommand "lint"      "Improve Dhall code"              parseLint
     <|> formatSubcommand
     <|> freezeSubcommand
-    <|> pure Default
+    <|> parseDefault
   where
     subcommand name description modeParser =
         Options.Applicative.subparser
@@ -168,6 +168,13 @@ parseMode =
     freezeSubcommand = subcommand "freeze" "Add hashes to all import statements of an expression" parseFreeze
         where
             parseFreeze = Freeze <$> optional parseInplace
+
+    parseDefault = Default <$> parseAnnotate
+      where
+        parseAnnotate =
+            Options.Applicative.switch
+                (   Options.Applicative.long "annotate"
+                )
 
 data ImportResolutionDisabled = ImportResolutionDisabled deriving (Exception)
 
@@ -253,18 +260,21 @@ command (Options {..}) = do
         Version -> do
             putStrLn (showVersion Meta.version)
 
-        Default -> do
+        Default {..} -> do
             expression <- getExpression
 
             resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) status
 
             inferredType <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-            render System.IO.stderr (Dhall.Core.normalize inferredType)
+            let normalizedExpression = Dhall.Core.normalize resolvedExpression
 
-            Data.Text.IO.hPutStrLn System.IO.stderr mempty
+            let annotatedExpression =
+                    if annotate
+                        then Annot normalizedExpression inferredType
+                        else normalizedExpression
 
-            render System.IO.stdout (Dhall.Core.normalize resolvedExpression)
+            render System.IO.stdout annotatedExpression
 
         Resolve -> do
             expression <- getExpression
