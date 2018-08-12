@@ -55,12 +55,21 @@ let
   };
 
   overlayDynamic = pkgsNew: pkgsOld: {
-    haskellPackages = pkgsOld.haskellPackages.override {
-      overrides = haskellPackagesNew: haskellPackagesOld: {
-        hpack =
-          haskellPackagesOld.hpack_0_29_6;
-      };
-    };
+    haskellPackages = pkgsOld.haskellPackages.override (old: {
+        overrides =
+          let
+            extension =
+              haskellPackagesNew: haskellPackagesOld: {
+                hpack =
+                  haskellPackagesOld.hpack_0_29_6;
+              };
+
+          in
+            pkgsNew.lib.composeExtensions
+              (old.overrides or (_: _: {}))
+              extension;
+      }
+    );
   };
 
   nixpkgs = fetchNixpkgs {
