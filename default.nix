@@ -4,6 +4,24 @@ let
   readDirectory = import ./nix/readDirectory.nix;
 
   overlayShared = pkgsNew: pkgsOld: {
+    dhall-sdist =
+      let
+        predicate = path: type:
+          let
+            base = baseNameOf path;
+
+          in
+             !( pkgsNew.lib.hasSuffix ".nix" base
+             || base == "dist"
+             || base == "result"
+             || base == ".git"
+             );
+
+        src = builtins.filterSource predicate ./.;
+
+      in
+        pkgsNew.callPackage (import ./nix/dhall-sdist.nix src) { };
+
     haskellPackages = pkgsOld.haskellPackages.override (old: {
         overrides =
           let
@@ -11,35 +29,17 @@ let
               haskellPackagesNew: haskellPackagesOld: {
                 dhall =
                   pkgsNew.haskell.lib.failOnAllWarnings
-                    (pkgsNew.haskell.lib.overrideCabal
-                      haskellPackagesOld.dhall
-                      (old: {
-                          src =
-                            let
-                              predicate = path: type:
-                                let
-                                  base = baseNameOf path;
-
-                                in
-                                   !( pkgsNew.lib.hasSuffix ".nix" base
-                                   || base == "dist"
-                                   || base == "result"
-                                   || base == ".git"
-                                   );
-
-                            in
-                              builtins.filterSource
-                              predicate
-                              old.src;
-                        }
-                      )
+                    (haskellPackagesNew.callCabal2nix
+                      "dhall"
+                      pkgsNew.dhall-sdist
+                      { }
                     );
 
-                 prettyprinter =
-                   pkgs.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
+                prettyprinter =
+                  pkgs.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
 
-                 serialise =
-                   pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
+                serialise =
+                  pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
               };
 
           in
@@ -54,15 +54,27 @@ let
     );
   };
 
-  nixpkgs = fetchNixpkgs {
-    rev = "2c07921cff84dfb0b9e0f6c2d10ee2bfee6a85ac";
-
-    sha256 = "09cfdbrzy3wfpqd3nkahv0jqfynpxy4kpcxq0gab0pq9a8bia6sg";
-
-    outputSha256 = "1sxh54zxqy54vrak203qci4128z9mxnzfr5bb5pl6xdrdkcdpqrn";
+  overlayDynamic = pkgsNew: pkgsOld: {
+    haskellPackages = pkgsOld.haskellPackages.override {
+      overrides = haskellPackagesNew: haskellPackagesOld: {
+        hpack =
+          haskellPackagesOld.hpack_0_29_6;
+      };
+    };
   };
 
-  pkgs = import nixpkgs { config = {}; overlays = [ overlayShared ]; };
+  nixpkgs = fetchNixpkgs {
+    rev = "1d4de0d552ae9aa66a5b8dee5fb0650a4372d148";
+
+    sha256 = "09qx58dp1kbj7cpzp8ahbqfbbab1frb12sh1qng87rybcaz0dz01";
+
+    outputSha256 = "0xpqc1fhkvvv5dv1zmas2j1q27mi7j7dgyjcdh82mlgl1q63i660";
+  };
+
+  pkgs = import nixpkgs {
+    config = {};
+    overlays = [ overlayShared overlayDynamic ];
+  };
 
   overlayStaticLinux = pkgsNew: pkgsOld: {
     cabal_patched_src = pkgsNew.fetchFromGitHub {
