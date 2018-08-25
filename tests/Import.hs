@@ -41,6 +41,9 @@ importTests =
             , shouldNotFail
                 "alternative of a Natural and missing"
                 "./tests/import/alternativeNatural.dhall"
+            , shouldNotFail
+                "a semantic integrity check if fields are reordered"
+                "./tests/import/fieldOrderC.dhall"
             ]
         , Test.Tasty.testGroup "import relative to argument"
             [ shouldNotFailRelative
