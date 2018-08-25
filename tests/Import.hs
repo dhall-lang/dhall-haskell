@@ -49,7 +49,7 @@ importTests =
                 "./tests/import/relative.dhall"
             , shouldNotFailRelative
                 "a semantic integrity check if fields are reordered"
-                "./tests/import/fieldOrderC.dhall"
+                "./tests/import/"
                 "./tests/import/fieldOrderC.dhall"
             ]
         ]
