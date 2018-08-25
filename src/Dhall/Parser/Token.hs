@@ -34,6 +34,9 @@ import qualified Text.Parser.Token
 whitespace :: Parser ()
 whitespace = Text.Parser.Combinators.skipMany whitespaceChunk
 
+nonemptyWhitespace :: Parser ()
+nonemptyWhitespace = Text.Parser.Combinators.skipSome whitespaceChunk
+
 alpha :: Char -> Bool
 alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
 
@@ -399,7 +402,7 @@ reserved :: Data.Text.Text -> Parser ()
 reserved x = do _ <- Text.Parser.Char.text x; whitespace
 
 keyword :: Data.Text.Text -> Parser ()
-keyword x = try (do _ <- Text.Parser.Char.text x; whitespaceChunk)
+keyword x = try (do _ <- Text.Parser.Char.text x; nonemptyWhitespace)
 
 _if :: Parser ()
 _if = keyword "if"
