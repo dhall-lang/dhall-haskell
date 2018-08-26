@@ -539,12 +539,9 @@ getCacheFile hash = do
 
                     liftIO (Directory.setPermissions directory private)
 
-    cacheDirectory <- do
-            cacheDirectory <- liftIO $ Directory.getXdgDirectory Directory.XdgCache ""
+    cacheDirectory <- liftIO $ Directory.getXdgDirectory Directory.XdgCache ""
             
-            assertDirectory cacheDirectory
-
-            return cacheDirectory
+    assertDirectory cacheDirectory
 
     let dhallDirectory = cacheDirectory </> "dhall"
 
