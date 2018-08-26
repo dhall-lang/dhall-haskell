@@ -539,24 +539,9 @@ getCacheFile hash = do
 
                     liftIO (Directory.setPermissions directory private)
 
-    let tryXdgCacheHome = do
-            Just cacheDirectory <- liftIO (System.Environment.lookupEnv "XDG_CACHE_HOME")
-            assertDirectory cacheDirectory
-
-            return cacheDirectory
-
-    let tryHome = do
-            Just home <- liftIO (System.Environment.lookupEnv "HOME")
-
-            assertDirectory home
-
-            let cacheDirectory = home </> ".cache"
-
-            assertDirectory cacheDirectory
-
-            return cacheDirectory
-
-    cacheDirectory <- tryXdgCacheHome <|> tryHome
+    cacheDirectory <- liftIO $ Directory.getXdgDirectory Directory.XdgCache ""
+            
+    assertDirectory cacheDirectory
 
     let dhallDirectory = cacheDirectory </> "dhall"
 
