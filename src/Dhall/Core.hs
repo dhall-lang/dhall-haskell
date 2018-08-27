@@ -64,6 +64,7 @@ import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Data (Data)
 import Data.Foldable
+import Data.Hashable (Hashable)
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.HashSet (HashSet)
 import Data.String (IsString(..))
@@ -81,8 +82,10 @@ import Prelude hiding (succ)
 
 import qualified Control.Monad
 import qualified Crypto.Hash
+import qualified Data.List
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
+import qualified Data.Ord
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
@@ -1371,6 +1374,12 @@ denote (Project a b         ) = Project (denote a) b
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
+sortMap :: (Ord k, Hashable k) => InsOrdHashMap k v -> InsOrdHashMap k v
+sortMap =
+      Data.HashMap.Strict.InsOrd.fromList
+    . Data.List.sortBy (Data.Ord.comparing fst)
+    . Data.HashMap.Strict.InsOrd.toList
+
 {-| Reduce an expression to its normal form, performing beta reduction and applying
     any custom definitions.
 
@@ -1646,16 +1655,16 @@ normalizeWith ctx e0 = loop (denote e0)
         es' = fmap loop es
     OptionalFold -> OptionalFold
     OptionalBuild -> OptionalBuild
-    Record kts -> Record kts'
+    Record kts -> Record (sortMap kts')
       where
         kts' = fmap loop kts
-    RecordLit kvs -> RecordLit kvs'
+    RecordLit kvs -> RecordLit (sortMap kvs')
       where
         kvs' = fmap loop kvs
-    Union kts -> Union kts'
+    Union kts -> Union (sortMap kts')
       where
         kts' = fmap loop kts
-    UnionLit k v kvs -> UnionLit k v' kvs'
+    UnionLit k v kvs -> UnionLit k v' (sortMap kvs')
       where
         v'   =      loop v
         kvs' = fmap loop kvs

@@ -186,6 +186,7 @@ import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 import qualified System.Environment
 import qualified System.Directory                 as Directory
+import qualified System.FilePath                  as FilePath
 import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
@@ -535,6 +536,8 @@ getCacheFile hash = do
                     guard (accessible permissions)
 
                 else do
+                    assertDirectory (FilePath.takeDirectory directory)
+
                     liftIO (Directory.createDirectory directory)
 
                     liftIO (Directory.setPermissions directory private)
