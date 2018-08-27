@@ -34,8 +34,8 @@ lint expression = loop (Dhall.Core.denote expression)
         a' = loop a
         b' = loop b
     loop (Let a b c d)
-        | not (V a 0 `Dhall.Core.freeIn` d) =
-            loop d
+        | not (V a 0 `Dhall.Core.freeIn` d') =
+            d'
         | otherwise =
             Let a b' c' d'
       where
