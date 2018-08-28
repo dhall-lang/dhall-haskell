@@ -51,6 +51,10 @@ importTests =
                 "a semantic integrity check if fields are reordered"
                 "./tests/import/"
                 "./tests/import/fieldOrderC.dhall"
+            , shouldNotFailRelative
+                "a semantic integrity check when importing an expression using `constructors`"
+                "./tests/import/"
+                "./tests/import/issue553B.dhall"
             ]
         ]
 

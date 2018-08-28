@@ -488,9 +488,11 @@ exprFromImport import_@(Import {..}) = do
 
                         Right _ -> do
                             let normalizedExpression =
-                                    Dhall.Core.normalizeWith
-                                        (getReifiedNormalizer _normalizer)
-                                            (Dhall.Core.alphaNormalize resolvedExpression)
+                                    Dhall.Core.alphaNormalize
+                                        (Dhall.Core.normalizeWith
+                                            (getReifiedNormalizer _normalizer)
+                                            resolvedExpression
+                                        )
 
                             let bytes =
                                     encodeExpression _protocolVersion normalizedExpression
