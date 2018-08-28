@@ -34,6 +34,9 @@ import qualified Text.Parser.Token
 whitespace :: Parser ()
 whitespace = Text.Parser.Combinators.skipMany whitespaceChunk
 
+nonemptyWhitespace :: Parser ()
+nonemptyWhitespace = Text.Parser.Combinators.skipSome whitespaceChunk
+
 alpha :: Char -> Bool
 alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
 
@@ -398,32 +401,35 @@ unreserved c =
 reserved :: Data.Text.Text -> Parser ()
 reserved x = do _ <- Text.Parser.Char.text x; whitespace
 
+keyword :: Data.Text.Text -> Parser ()
+keyword x = try (do _ <- Text.Parser.Char.text x; nonemptyWhitespace)
+
 _if :: Parser ()
-_if = reserved "if"
+_if = keyword "if"
 
 _then :: Parser ()
-_then = reserved "then"
+_then = keyword "then"
 
 _else :: Parser ()
-_else = reserved "else"
+_else = keyword "else"
 
 _let :: Parser ()
-_let = reserved "let"
+_let = keyword "let"
 
 _in :: Parser ()
-_in = reserved "in"
+_in = keyword "in"
 
 _as :: Parser ()
-_as = reserved "as"
+_as = keyword "as"
 
 _using :: Parser ()
-_using = reserved "using"
+_using = keyword "using"
 
 _merge :: Parser ()
-_merge = reserved "merge"
+_merge = keyword "merge"
 
 _constructors :: Parser ()
-_constructors = reserved "constructors"
+_constructors = keyword "constructors"
 
 _NaturalFold :: Parser ()
 _NaturalFold = reserved "Natural/fold"

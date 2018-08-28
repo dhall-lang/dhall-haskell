@@ -47,6 +47,10 @@ importTests =
                 "works"
                 "./tests/import/data/foo/bar"
                 "./tests/import/relative.dhall"
+            , shouldNotFailRelative
+                "a semantic integrity check if fields are reordered"
+                "./tests/import/"
+                "./tests/import/fieldOrderC.dhall"
             ]
         ]
 
