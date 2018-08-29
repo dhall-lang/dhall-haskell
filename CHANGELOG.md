@@ -1,3 +1,46 @@
+1.17.0
+
+* This release corresponds to version 2.0.0 of the language standard
+* BREAKING CHANGE TO THE LANGUAGE AND API: Binary serialization support
+    * This is a breaking change to the hash for all semantic integrity checks
+    * The hash used by the semantic integrity check is now based on the
+      binary representation instead of a text representation of the
+      expression
+    * You can pin the new hashes by supplying the `--protocol-version 1.0`
+      option on the command line until you need support for newer language
+      features 
+    * This also includes a breaking change to `ImportType` in the API
+* BREAKING CHANGE TO THE LANGUAGE: Disallow combining records of terms and
+  types
+    * This is mainly for consistency and to improve type errors that would
+      have otherwise happened further downstream
+    * This should not affect the vast majority of code
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/538
+* BUG FIX: Semantic integrity checks now work for imported expression using
+  the `constructors` keyword
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/554
+* BUG FIX: Fix α-normalization of expressions with bound variables named `_`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/524
+* BUG FIX: Fix `isNormalized` to match `normalize`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/522
+* BUG FIX: `dhall lint` now correctly handles nested `let` expressions
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/555
+* FEATURE: Imports protected by a semantic integrity check are now cached
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/533
+* The default `dhall` command no longer outputs the type to `stderr`
+    * You can add back the type as a type annotation using the
+      `--annotate` switch
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/544
+* New utilities for building `InputTypes`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/530
+* Improve parsing performance for long variable names
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/526
+* More succinct type diffs for function types
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/540
+* Identifier names can now begin with keywords
+    * i.e. `ifChanged` and `lettuce` are now legal identifiers
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/551
+
 1.16.1
 
 * Fix test failure due to missing test data file
