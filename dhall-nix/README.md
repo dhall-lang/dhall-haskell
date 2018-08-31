@@ -1,4 +1,4 @@
-# `dhall-nix 1.1.5`
+# `dhall-nix 1.1.6`
 
 This `dhall-nix` package provides a Dhall to Nix compiler.  You can use this
 compiler to program Nix using the Dhall language.  This package targets people
