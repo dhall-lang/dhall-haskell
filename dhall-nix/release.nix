@@ -39,6 +39,8 @@ let
 in
   { dhall-nix = pkgs.haskellPackages.dhall-nix;
 
+    shell = (pkgs.haskell.lib.addBuildTool pkgs.haskellPackages.dhall-nix pkgs.cabal-install).env;
+
     # Test that various Dhall to Nix conversions work
     tests =
       let
