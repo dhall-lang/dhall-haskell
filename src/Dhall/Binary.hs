@@ -135,6 +135,8 @@ encode_1_0 Bool =
     TString "Bool"
 encode_1_0 Optional =
     TString "Optional"
+encode_1_0 None =
+    TString "None"
 encode_1_0 Natural =
     TString "Natural"
 encode_1_0 Integer =
@@ -253,6 +255,10 @@ encode_1_0 (OptionalLit _T₀ (Just t₀)) =
   where
     _T₁ = encode_1_0 _T₀
     t₁  = encode_1_0 t₀
+encode_1_0 (Some t₀) =
+    TList [ TInt 5, TNull, t₁ ]
+  where
+    t₁ = encode_1_0 t₀
 encode_1_0 (Merge t₀ u₀ Nothing) =
     TList [ TInt 6, t₁, u₁ ]
   where
@@ -455,6 +461,8 @@ decode_1_0 (TString "Bool") =
     return Bool
 decode_1_0 (TString "Optional") =
     return Optional
+decode_1_0 (TString "None") =
+    return None
 decode_1_0 (TString "Natural") =
     return Natural
 decode_1_0 (TString "Integer") =
@@ -522,6 +530,9 @@ decode_1_0 (TList (TInt 4 : TNull : xs₁ )) = do
 decode_1_0 (TList [ TInt 5, _T₁ ]) = do
     _T₀ <- decode_1_0 _T₁
     return (OptionalLit _T₀ Nothing)
+decode_1_0 (TList [ TInt 5, TNull, t₁ ]) = do
+    t₀ <- decode_1_0 t₁
+    return (Some t₀)
 decode_1_0 (TList [ TInt 5, _T₁, t₁ ]) = do
     _T₀ <- decode_1_0 _T₁
     t₀  <- decode_1_0 t₁

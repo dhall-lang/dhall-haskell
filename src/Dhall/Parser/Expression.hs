@@ -222,7 +222,9 @@ notEqualExpression =
 
 applicationExpression :: Parser a -> Parser (Expr Src a)
 applicationExpression embedded = do
-    f <- (do _constructors; return Constructors) <|> return id
+    f <-    (do _constructors; return Constructors)
+        <|> (do _Some; return Some)
+        <|> return id
     a <- noted (importExpression embedded)
     b <- Text.Megaparsec.many (noted (importExpression embedded))
     return (foldl app (f a) b)
@@ -285,6 +287,7 @@ primitiveExpression embedded =
                 , alternative25
                 , alternative26
                 , alternative27
+                , alternativeNone
                 , alternative28
                 , alternative29
                 , alternative30
@@ -410,6 +413,10 @@ primitiveExpression embedded =
     alternative27 = do
         _Optional
         return Optional
+
+    alternativeNone = do
+        _None
+        return None
 
     alternative28 = do
         _Natural

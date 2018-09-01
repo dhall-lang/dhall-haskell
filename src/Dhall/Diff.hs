@@ -461,6 +461,12 @@ skeleton (Pi {}) =
 skeleton (App Optional _) =
         "Optional "
     <>  ignore
+skeleton (App None _) =
+        "None "
+    <>  ignore
+skeleton (Some _) =
+        "Some "
+    <>  ignore
 skeleton (App List _) =
         "List "
     <>  ignore
@@ -965,9 +971,15 @@ diffApplicationExpression l@(App {}) r@(App {}) =
         Data.List.NonEmpty.cons (diffImportExpression bL bR) (docs aL aR)
     docs (Constructors aL) (Constructors aR) =
         diffImportExpression aL aR :| [ keyword "constructors" ]
-    docs aL@(App {}) aR@(Constructors {}) =
+    docs aL aR@(Constructors {}) =
         pure (mismatch aL aR)
-    docs aL@(Constructors {}) aR@(App {}) =
+    docs aL@(Constructors {}) aR =
+        pure (mismatch aL aR)
+    docs (Some aL) (Some aR) =
+        diffImportExpression aL aR :| [ builtin "Some" ]
+    docs aL aR@(Some {}) =
+        pure (mismatch aL aR)
+    docs aL@(Some {}) aR =
         pure (mismatch aL aR)
     docs aL aR =
         pure (diffImportExpression aL aR)
@@ -975,11 +987,17 @@ diffApplicationExpression l@(App {}) r =
     mismatch l r
 diffApplicationExpression l r@(App {}) =
     mismatch l r
-diffApplicationExpression l@(Constructors {}) r@(Constructors {}) =
+diffApplicationExpression (Constructors l) (Constructors r) =
     enclosed' mempty mempty (keyword "constructors" :| [ diffImportExpression l r ])
 diffApplicationExpression l@(Constructors {}) r =
     mismatch l r
 diffApplicationExpression l r@(Constructors {}) =
+    mismatch l r
+diffApplicationExpression (Some l) (Some r) =
+    enclosed' mempty mempty (builtin "Some" :| [ diffImportExpression l r ])
+diffApplicationExpression l@(Some {}) r =
+    mismatch l r
+diffApplicationExpression l r@(Some {}) =
     mismatch l r
 diffApplicationExpression l r =
     diffImportExpression l r
@@ -1187,6 +1205,12 @@ diffPrimitiveExpression Optional Optional =
 diffPrimitiveExpression l@Optional r =
     mismatch l r
 diffPrimitiveExpression l r@Optional =
+    mismatch l r
+diffPrimitiveExpression None None =
+    "…"
+diffPrimitiveExpression l@None r =
+    mismatch l r
+diffPrimitiveExpression l r@None =
     mismatch l r
 diffPrimitiveExpression OptionalFold OptionalFold =
     "…"

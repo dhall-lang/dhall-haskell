@@ -431,6 +431,12 @@ _merge = keyword "merge"
 _constructors :: Parser ()
 _constructors = keyword "constructors"
 
+_Some :: Parser ()
+_Some = reserved "Some"
+
+_None :: Parser ()
+_None = reserved "None"
+
 _NaturalFold :: Parser ()
 _NaturalFold = reserved "Natural/fold"
 
