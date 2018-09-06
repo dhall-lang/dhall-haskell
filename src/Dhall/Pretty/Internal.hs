@@ -334,6 +334,7 @@ prettyChunks (Chunks a b) =
 prettyConst :: Const -> Doc Ann
 prettyConst Type = builtin "Type"
 prettyConst Kind = builtin "Kind"
+prettyConst Sort = builtin "Sort"
 
 prettyVar :: Var -> Doc Ann
 prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))

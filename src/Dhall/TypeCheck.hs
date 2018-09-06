@@ -54,15 +54,19 @@ traverseWithIndex_ k xs =
 
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
-axiom Kind = Left (TypeError Dhall.Context.empty (Const Kind) Untyped)
+axiom Kind = return Sort
+axiom Sort = Left (TypeError Dhall.Context.empty (Const Sort) Untyped)
 
 rule :: Const -> Const -> Either () Const
+rule Type Type = return Type
+rule Kind Type = return Type
+rule Sort Type = return Type
+rule Kind Kind = return Kind
+rule Sort Kind = return Kind
+rule Sort Sort = return Sort
 -- This forbids dependent types. If this ever changes, then the fast
 -- path in the Let case of typeWithA will become unsound.
-rule Type Kind = Left ()
-rule Type Type = return Type
-rule Kind Kind = return Kind
-rule Kind Type = return Type
+rule _    _    = Left ()
 
 {-| Type-check an expression and return the expression's type if type-checking
     succeeds or an error if type-checking fails
@@ -1529,38 +1533,39 @@ prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
 
 prettyTypeMessage Untyped = ErrorMessages {..}
   where
-    short = "❰Kind❱ has no type or kind"
+    short = "❰Sort❱ has no type, kind, or sort"
 
     long =
-        "Explanation: There are four levels of expressions that form a hierarchy:        \n\
+        "Explanation: There are five levels of expressions that form a hierarchy:        \n\
         \                                                                                \n\
         \● terms                                                                         \n\
         \● types                                                                         \n\
         \● kinds                                                                         \n\
         \● sorts                                                                         \n\
+        \● orders                                                                        \n\
         \                                                                                \n\
         \The following example illustrates this hierarchy:                               \n\
         \                                                                                \n\
-        \    ┌────────────────────────────┐                                              \n\
-        \    │ \"ABC\" : Text : Type : Kind │                                            \n\
-        \    └────────────────────────────┘                                              \n\
-        \       ⇧      ⇧      ⇧      ⇧                                                   \n\
-        \       term   type   kind   sort                                                \n\
+        \    ┌───────────────────────────────────┐                                       \n\
+        \    │ \"ABC\" : Text : Type : Kind : Sort │                                     \n\
+        \    └───────────────────────────────────┘                                       \n\
+        \       ⇧      ⇧      ⇧      ⇧      ⇧                                            \n\
+        \       term   type   kind   sort   order                                        \n\
         \                                                                                \n\
-        \There is nothing above ❰Kind❱ in this hierarchy, so if you try to type check any\n\
-        \expression containing ❰Kind❱ anywhere in the expression then type checking fails\n\
+        \There is nothing above ❰Sort❱ in this hierarchy, so if you try to type check any\n\
+        \expression containing ❰Sort❱ anywhere in the expression then type checking fails\n\
         \                                                                                \n\
         \Some common reasons why you might get this error:                               \n\
         \                                                                                \n\
-        \● You supplied a kind where a type was expected                                 \n\
+        \● You supplied a sort where a kind was expected                                 \n\
         \                                                                                \n\
         \  For example, the following expression will fail to type check:                \n\
         \                                                                                \n\
-        \    ┌────────────────┐                                                          \n\
-        \    │ [] : List Type │                                                          \n\
-        \    └────────────────┘                                                          \n\
-        \                ⇧                                                               \n\
-        \                ❰Type❱ is a kind, not a type                                    \n"
+        \    ┌──────────────────┐                                                        \n\
+        \    │ f : Type -> Kind │                                                        \n\
+        \    └──────────────────┘                                                        \n\
+        \                  ⇧                                                             \n\
+        \                  ❰Kind❱ is a sort, not a kind                                  \n"
 
 prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
   where
