@@ -473,6 +473,9 @@ typeWithA tpa = loop
                     Const Kind
                         | Dhall.Core.judgmentallyEqual t0 (Const Type) ->
                             return Kind
+                    Const Sort
+                        | Dhall.Core.judgmentallyEqual t0 (Const Kind) ->
+                            return Sort
                     _ -> Left (TypeError ctx e (InvalidFieldType k0 t0))
                 let process (k, t) = do
                         s <- fmap Dhall.Core.normalize (loop ctx t)
@@ -480,14 +483,21 @@ typeWithA tpa = loop
                             Const Type ->
                                 if c == Type
                                 then return ()
-                                else Left (TypeError ctx e (FieldAnnotationMismatch k t k0 t0 Type))
+                                else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 Type))
                             Const Kind ->
                                 if c == Kind
                                 then
                                     if Dhall.Core.judgmentallyEqual t (Const Type)
                                     then return ()
                                     else Left (TypeError ctx e (InvalidFieldType k t))
-                                else Left (TypeError ctx e (FieldAnnotationMismatch k t k0 t0 Kind))
+                                else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 Kind))
+                            Const Sort ->
+                                if c == Sort
+                                then
+                                    if Dhall.Core.judgmentallyEqual t (Const Kind)
+                                    then return ()
+                                    else Left (TypeError ctx e (InvalidFieldType k t))
+                                else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 Sort))
                             _ ->
                                 Left (TypeError ctx e (InvalidFieldType k t))
                 mapM_ process rest
@@ -504,6 +514,9 @@ typeWithA tpa = loop
                     Const Kind
                         | Dhall.Core.judgmentallyEqual t0 (Const Type) ->
                             return Kind
+                    Const Sort
+                        | Dhall.Core.judgmentallyEqual t0 (Const Kind) ->
+                            return Sort
                     _       -> Left (TypeError ctx e (InvalidField k0 v0))
                 let process k v = do
                         t <- loop ctx v
@@ -512,14 +525,21 @@ typeWithA tpa = loop
                             Const Type ->
                                 if c == Type
                                 then return ()
-                                else Left (TypeError ctx e (FieldMismatch k v k0 v0 Type))
+                                else Left (TypeError ctx e (FieldMismatch k v c k0 v0 Type))
                             Const Kind ->
                                 if c == Kind
                                 then
                                     if Dhall.Core.judgmentallyEqual t (Const Type)
                                     then return ()
                                     else Left (TypeError ctx e (InvalidFieldType k t))
-                                else Left (TypeError ctx e (FieldMismatch k v k0 v0 Kind))
+                                else Left (TypeError ctx e (FieldMismatch k v c k0 v0 Kind))
+                            Const Sort ->
+                                if c == Sort
+                                then
+                                    if Dhall.Core.judgmentallyEqual t (Const Kind)
+                                    then return ()
+                                    else Left (TypeError ctx e (InvalidFieldType k t))
+                                else Left (TypeError ctx e (FieldMismatch k v c k0 v0 Sort))
                             _ ->
                                 Left (TypeError ctx e (InvalidField k t))
 
@@ -833,8 +853,8 @@ data TypeMessage s a
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
     | InvalidField Text (Expr s a)
     | InvalidFieldType Text (Expr s a)
-    | FieldAnnotationMismatch Text (Expr s a) Text (Expr s a) Const
-    | FieldMismatch Text (Expr s a) Text (Expr s a) Const
+    | FieldAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
+    | FieldMismatch Text (Expr s a) Const Text (Expr s a) Const
     | InvalidAlternative Text (Expr s a)
     | InvalidAlternativeType Text (Expr s a)
     | ListAppendMismatch (Expr s a) (Expr s a)
@@ -2081,7 +2101,7 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
         txt0 = insert k
         txt1 = insert expr0
 
-prettyTypeMessage (FieldAnnotationMismatch k0 expr0 k1 expr1 c) = ErrorMessages {..}
+prettyTypeMessage (FieldAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
   where
     short = "Field annotation mismatch"
 
@@ -2120,7 +2140,7 @@ prettyTypeMessage (FieldAnnotationMismatch k0 expr0 k1 expr1 c) = ErrorMessages 
         \                                                                                \n\
         \" <> txt1 <> "\n\
         \                                                                                \n\
-        \... which is a " <> here <> " whereas another field named:                      \n\
+        \... which is a " <> level c1 <> " whereas another field named:                  \n\
         \                                                                                \n\
         \" <> txt2 <> "\n\
         \                                                                                \n\
@@ -2128,22 +2148,18 @@ prettyTypeMessage (FieldAnnotationMismatch k0 expr0 k1 expr1 c) = ErrorMessages 
         \                                                                                \n\
         \" <> txt3 <> "\n\
         \                                                                                \n\
-        \... is a " <> there <> ", which does not match                                  \n"
+        \... is a " <> level c0 <> ", which does not match                               \n"
       where
         txt0 = insert k0
         txt1 = insert expr0
         txt2 = insert k1
         txt3 = insert expr1
 
-        here = case c of
-            Type -> "❰Type❱"
-            Kind -> "❰Kind❱"
+        level Type = "❰Type❱"
+        level Kind = "❰Kind❱"
+        level Sort = "❰Sort❱"
 
-        there = case c of
-            Type -> "❰Kind❱"
-            Kind -> "❰Type❱"
-
-prettyTypeMessage (FieldMismatch k0 expr0 k1 expr1 c) = ErrorMessages {..}
+prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
   where
     short = "Field mismatch"
 
@@ -2182,7 +2198,7 @@ prettyTypeMessage (FieldMismatch k0 expr0 k1 expr1 c) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt1 <> "\n\
         \                                                                                \n\
-        \... which is a " <> here <> " whereas another field named:                      \n\
+        \... which is a " <> level c1 <> " whereas another field named:                  \n\
         \                                                                                \n\
         \" <> txt2 <> "\n\
         \                                                                                \n\
@@ -2190,20 +2206,16 @@ prettyTypeMessage (FieldMismatch k0 expr0 k1 expr1 c) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt3 <> "\n\
         \                                                                                \n\
-        \... is a " <> there <> ", which does not match                                  \n"
+        \... is a " <> level c0 <> ", which does not match                               \n"
       where
         txt0 = insert k0
         txt1 = insert expr0
         txt2 = insert k1
         txt3 = insert expr1
 
-        here = case c of
-            Type -> "term"
-            Kind -> "type"
-
-        there = case c of
-            Type -> "type"
-            Kind -> "term"
+        level Type = "term"
+        level Kind = "type"
+        level Sort = "kind"
 
 prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
   where
@@ -2540,6 +2552,7 @@ prettyTypeMessage (RecordMismatch c expr0 expr1 const0 const1) = ErrorMessages {
 
         toClass Type = "terms"
         toClass Kind = "types"
+        toClass Sort = "kinds"
 
         class0 = toClass const0
         class1 = toClass const1
