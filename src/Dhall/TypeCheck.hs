@@ -470,9 +470,8 @@ typeWithA tpa = loop
                 c <- case s0 of
                     Const Type ->
                         return Type
-                    Const Kind
-                        | Dhall.Core.judgmentallyEqual t0 (Const Type) ->
-                            return Kind
+                    Const Kind ->
+                        return Kind
                     Const Sort
                         | Dhall.Core.judgmentallyEqual t0 (Const Kind) ->
                             return Sort
@@ -486,10 +485,7 @@ typeWithA tpa = loop
                                 else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 Type))
                             Const Kind ->
                                 if c == Kind
-                                then
-                                    if Dhall.Core.judgmentallyEqual t (Const Type)
-                                    then return ()
-                                    else Left (TypeError ctx e (InvalidFieldType k t))
+                                then return ()
                                 else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 Kind))
                             Const Sort ->
                                 if c == Sort
@@ -2063,8 +2059,8 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
     short = "Invalid field type"
 
     long =
-        "Explanation: Every record type annotates each field with a ❰Type❱ or a ❰Kind❱,  \n\
-        \like this:                                                                      \n\
+        "Explanation: Every record type annotates each field with a ❰Type❱, a ❰Kind❱, or \n\
+        \a ❰Sort❱ like this:                                                             \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────────────────────────┐                            \n\
@@ -2084,8 +2080,8 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
         \    │ { foo : Natural, bar : 1 } │  Invalid record type                         \n\
         \    └────────────────────────────┘                                              \n\
         \                             ⇧                                                  \n\
-        \                             ❰1❱ is a ❰Natural❱ number and not a ❰Type❱ or      \n\
-        \                             ❰Kind❱                                             \n\
+        \                             ❰1❱ is a ❰Natural❱ number and not a ❰Type❱,        \n\
+        \                             ❰Kind❱, or ❰Sort❱                                  \n\
         \                                                                                \n\
         \                                                                                \n\
         \You provided a record type with a field named:                                  \n\
@@ -2096,7 +2092,7 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt1 <> "\n\
         \                                                                                \n\
-        \... which is neither a ❰Type❱ nor a ❰Kind❱                                      \n"
+        \... which is neither a ❰Type❱, a ❰Kind❱, nor a ❰Sort❱                           \n"
       where
         txt0 = insert k
         txt1 = insert expr0

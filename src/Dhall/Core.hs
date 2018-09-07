@@ -102,6 +102,7 @@ import qualified Data.Text.Prettyprint.Doc  as Pretty
 
 > ⊦ Type ↝ Type : Type  -- Functions from terms to terms (ordinary functions)
 > ⊦ Kind ↝ Type : Type  -- Functions from types to terms (polymorphic functions)
+> ⊦ Sort ↝ Type : Type  -- Functions from kinds to terms (???)
 > ⊦ Kind ↝ Kind : Kind  -- Functions from types to types (type constructors)
 > ⊦ Sort ↝ Kind : Kind  -- Functions from kinds to types (polymorphic type constructors)
 > ⊦ Sort ↝ Sort : Sort  -- Functions from kinds to kinds (kind constructors)
