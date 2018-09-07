@@ -5,21 +5,22 @@
     Dhall expressions from Haskell without having a runtime dependency on the
     location of Dhall files.
 
-    For example, given a file “Some/Type.dhall” containing
+    For example, given a file @".\/Some\/Type.dhall"@ containing
 
-        < This : Natural | Other : ../Other/Type.dhall >
+    > < This : Natural | Other : ../Other/Type.dhall >
 
-    rather than duplicating the AST manually in a Haskell `Type`, you can do
+    ... rather than duplicating the AST manually in a Haskell `Type`, you can
+    do:
 
-        Dhall.Type
-        (\case
-            UnionLit "This" _ _  -> ...
-            UnionLit "Other" _ _ -> ...)
-        $(staticDhallExpression "../../Some/Type.dhall")
+    > Dhall.Type
+    > (\case
+    >     UnionLit "This" _ _  -> ...
+    >     UnionLit "Other" _ _ -> ...)
+    > $(staticDhallExpression "./Some/Type.dhall")
 
-    This would create the Dhall Expr AST from the `Type.dhall` file at compile
-    time with all imports resolved, making it easy to keep your Dhall configs
-    and Haskell interpreters in sync.
+    This would create the Dhall Expr AST from the @".\/Some\/Type.dhall"@ file
+    at compile time with all imports resolved, making it easy to keep your Dhall
+    configs and Haskell interpreters in sync.
 -}
 module Dhall.TH
     ( -- * Template Haskell
