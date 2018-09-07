@@ -7,27 +7,27 @@ Examples:
 ./build
 Natural
 (   λ(optional : Type)
-→   λ(just : Natural → optional)
-→   λ(nothing : optional)
-→   just 1
+→   λ(some : Natural → optional)
+→   λ(none : optional)
+→   some 1
 )
-= [ 1 ] : Optional Natural
+= Some 1
 
 ./build
 Natural
 (   λ(optional : Type)
-→   λ(just : Natural → optional)
-→   λ(nothing : optional)
-→   nothing
+→   λ(some : Natural → optional)
+→   λ(none : optional)
+→   none
 )
-= [] : Optional Natural
+= None Natural
 ```
 -}
     let build
         :   ∀(a : Type)
           → (   ∀(optional : Type)
-              → ∀(just : a → optional)
-              → ∀(nothing : optional)
+              → ∀(some : a → optional)
+              → ∀(none : optional)
               → optional
             )
           → Optional a

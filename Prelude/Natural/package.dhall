@@ -1,21 +1,21 @@
 { build =
-    ./build 
+    ./build
 , enumerate =
-    ./enumerate 
+    ./enumerate
 , even =
-    ./even 
+    ./even
 , fold =
-    ./fold 
+    ./fold
 , isZero =
-    ./isZero 
+    ./isZero
 , odd =
-    ./odd 
+    ./odd
 , product =
-    ./product 
+    ./product
 , sum =
-    ./sum 
+    ./sum
 , show =
-    ./show 
+    ./show
 , toInteger =
-    ./toInteger 
+    ./toInteger
 }

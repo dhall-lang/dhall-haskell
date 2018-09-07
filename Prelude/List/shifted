@@ -58,8 +58,9 @@ Bool
                                         { index : Natural, value : a }
                                         kvs
                               
-                              in  { count = y.count + length
-                                  , diff  =
+                              in  { count =
+                                      y.count + length
+                                  , diff =
                                         λ(n : Natural)
                                       → List/fold
                                         { index : Natural, value : a }
@@ -70,8 +71,10 @@ Bool
                                               )
                                           → λ(z : list)
                                           →     let kvNew =
-                                                      { index = kvOld.index + n
-                                                      , value = kvOld.value
+                                                      { index =
+                                                          kvOld.index + n
+                                                      , value =
+                                                          kvOld.value
                                                       }
                                             
                                             in  cons kvNew z

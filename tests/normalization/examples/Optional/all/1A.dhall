@@ -1,1 +1,1 @@
-../../../../../Prelude/Optional/all Natural Natural/even ([] : Optional Natural)
+../../../../../Prelude/Optional/all Natural Natural/even (None Natural)

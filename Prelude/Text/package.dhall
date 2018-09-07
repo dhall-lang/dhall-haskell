@@ -1,9 +1,9 @@
 { concat =
-    ./concat 
+    ./concat
 , concatMap =
-    ./concatMap 
+    ./concatMap
 , concatMapSep =
-    ./concatMapSep 
+    ./concatMapSep
 , concatSep =
-    ./concatSep 
+    ./concatSep
 }

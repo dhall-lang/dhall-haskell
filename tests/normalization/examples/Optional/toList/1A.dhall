@@ -1,1 +1,1 @@
-../../../../../Prelude/Optional/toList Natural ([] : Optional Natural)
+../../../../../Prelude/Optional/toList Natural (None Natural)
