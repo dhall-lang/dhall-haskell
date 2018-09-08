@@ -87,13 +87,13 @@ instance Text.Parser.Combinators.Parsing Parser where
   notFollowedBy = Text.Megaparsec.notFollowedBy
 
 instance Text.Parser.Char.CharParsing Parser where
-  satisfy = Parser . Text.Megaparsec.Char.satisfy
+  satisfy = Parser . Text.Megaparsec.satisfy
 
   char = Text.Megaparsec.Char.char
 
   notChar = Text.Megaparsec.Char.char
 
-  anyChar = Text.Megaparsec.Char.anyChar
+  anyChar = Text.Megaparsec.anySingle
 
   string = fmap Data.Text.unpack . Text.Megaparsec.Char.string . fromString
 
@@ -102,7 +102,7 @@ instance Text.Parser.Char.CharParsing Parser where
 instance TokenParsing Parser where
     someSpace =
         Text.Parser.Token.Style.buildSomeSpaceParser
-            (Parser (Text.Megaparsec.skipSome (Text.Megaparsec.Char.satisfy Data.Char.isSpace)))
+            (Parser (Text.Megaparsec.skipSome (Text.Megaparsec.satisfy Data.Char.isSpace)))
             Text.Parser.Token.Style.haskellCommentStyle
 
     highlight _ = id
