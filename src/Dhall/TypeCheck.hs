@@ -117,7 +117,6 @@ typeWithA tpa = loop
             Const k -> return k
             _       -> Left (TypeError ctx e (InvalidInputType _A))
 
-        _ <- loop ctx _A
         let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
         tB <- fmap Dhall.Core.normalize (loop ctx' _B)
         kB <- case tB of
