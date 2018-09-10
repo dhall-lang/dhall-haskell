@@ -559,7 +559,7 @@ typeWithA tpa = loop
         ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
         constX <- case ttKvsX of
             Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
+            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
 
         ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
         constY <- case ttKvsY of
@@ -650,7 +650,7 @@ typeWithA tpa = loop
         ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
         constX <- case ttKvsX of
             Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
+            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
 
         ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
         constY <- case ttKvsY of
