@@ -4,21 +4,11 @@ Returns the first non-empty `Optional` value in a `List`
 Examples:
 
 ```
-./head
-Natural
-[ [   ] : Optional Natural
-, [ 1 ] : Optional Natural
-, [ 2 ] : Optional Natural
-]
-= [ 1 ] : Optional Natural
+./head Natural [ None Natural, Some 1, Some 2 ] = Some 1
 
-./head
-Natural
-[ [] : Optional Natural, [] : Optional Natural ]
-= [] : Optional Natural
+./head Natural [ None Natural, None Natural ] = None Natural
 
-./head Natural ([] : List (Optional Natural))
-= [] : Optional Natural
+./head Natural ([] : List (Optional Natural)) = None Natural
 ```
 -}
     let head
@@ -31,8 +21,8 @@ Natural
             (Optional a)
             (   λ(l : Optional a)
               → λ(r : Optional a)
-              → Optional/fold a l (Optional a) (λ(x : a) → [ x ] : Optional a) r
+              → Optional/fold a l (Optional a) (λ(x : a) → Some x) r
             )
-            ([] : Optional a)
+            (None a)
 
 in  head

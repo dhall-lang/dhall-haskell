@@ -5,9 +5,9 @@ and `True` otherwise:
 Examples:
 
 ```
-./all Natural Natural/even ([ 3 ] : Optional Natural) = False
+./all Natural Natural/even (Some 3) = False
 
-./all Natural Natural/even ([] : Optional Natural) = True
+./all Natural Natural/even (None Natural) = True
 ```
 -}
     let all

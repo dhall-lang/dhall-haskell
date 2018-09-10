@@ -12,7 +12,10 @@ import qualified Dhall.Core
 
 {-| Automatically improve a Dhall expression
 
-    Currently this only removes unused @let@ bindings
+    Currently this:
+
+    * removes unused @let@ bindings
+    * switches legacy @List@-like @Optional@ literals to use @Some@ / @None@ instead
 -}
 lint :: Expr s Import -> Expr t Import
 lint expression = loop (Dhall.Core.denote expression)
@@ -158,11 +161,16 @@ lint expression = loop (Dhall.Core.denote expression)
         ListReverse
     loop Optional =
         Optional
-    loop (OptionalLit a b) =
-        OptionalLit a' b'
+    loop (Some a) =
+        Some a'
       where
-        a' =      loop a
-        b' = fmap loop b
+        a' = loop a
+    loop None =
+        None
+    loop (OptionalLit _ (Just b)) =
+        loop (Some b)
+    loop (OptionalLit a Nothing) =
+        loop (App None a)
     loop OptionalFold =
         OptionalFold
     loop OptionalBuild =

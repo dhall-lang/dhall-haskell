@@ -1,3 +1,1 @@
-../../../../../Prelude/Optional/head
-Natural
-[ [] : Optional Natural, [] : Optional Natural ]
+../../../../../Prelude/Optional/head Natural [ None Natural, None Natural ]

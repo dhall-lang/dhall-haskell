@@ -24,12 +24,14 @@ Examples:
                       (   λ(element : a)
                         → λ(status : < Empty : {} | NonEmpty : Text >)
                         → merge
-                          { Empty    =
+                          { Empty =
                               λ(_ : {}) → < NonEmpty = f element | Empty : {} >
                           , NonEmpty =
                                 λ(result : Text)
-                              → < NonEmpty = f element ++ separator ++ result
-                                | Empty    : {}
+                              → < NonEmpty =
+                                    f element ++ separator ++ result
+                                | Empty :
+                                    {}
                                 >
                           }
                           status

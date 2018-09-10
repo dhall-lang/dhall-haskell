@@ -1,1 +1,1 @@
-{ show = ./show  }
+{ show = ./show }

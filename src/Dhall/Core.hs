@@ -408,6 +408,10 @@ data Expr s a
     -- | > OptionalLit t (Just e)                   ~  [e] : Optional t
     --   > OptionalLit t Nothing                    ~  []  : Optional t
     | OptionalLit (Expr s a) (Maybe (Expr s a))
+    -- | > Some e                                   ~  Some e
+    | Some (Expr s a)
+    -- | > None                                     ~  None
+    | None
     -- | > OptionalFold                             ~  Optional/fold
     | OptionalFold
     -- | > OptionalBuild                            ~  Optional/build
@@ -498,6 +502,8 @@ instance Monad (Expr s) where
     ListReverse          >>= _ = ListReverse
     Optional             >>= _ = Optional
     OptionalLit a b      >>= k = OptionalLit (a >>= k) (fmap (>>= k) b)
+    Some a               >>= k = Some (a >>= k)
+    None                 >>= _ = None
     OptionalFold         >>= _ = OptionalFold
     OptionalBuild        >>= _ = OptionalBuild
     Record    a          >>= k = Record (fmap (>>= k) a)
@@ -563,6 +569,8 @@ instance Bifunctor Expr where
     first _  ListReverse           = ListReverse
     first _  Optional              = Optional
     first k (OptionalLit a b     ) = OptionalLit (first k a) (fmap (first k) b)
+    first k (Some a              ) = Some (first k a)
+    first _  None                  = None
     first _  OptionalFold          = OptionalFold
     first _  OptionalBuild         = OptionalBuild
     first k (Record a            ) = Record (fmap (first k) a)
@@ -790,6 +798,10 @@ shift d v (OptionalLit a b) = OptionalLit a' b'
   where
     a' =       shift d v  a
     b' = fmap (shift d v) b
+shift d v (Some a) = Some a'
+  where
+    a' = shift d v a
+shift _ _ None = None
 shift _ _ OptionalFold = OptionalFold
 shift _ _ OptionalBuild = OptionalBuild
 shift d v (Record a) = Record a'
@@ -951,6 +963,10 @@ subst x e (OptionalLit a b) = OptionalLit a' b'
   where
     a' =       subst x e  a
     b' = fmap (subst x e) b
+subst x e (Some a) = Some a'
+  where
+    a' = subst x e a
+subst _ _ None = None
 subst _ _ OptionalFold = OptionalFold
 subst _ _ OptionalBuild = OptionalBuild
 subst x e (Record       kts) = Record                   (fmap (subst x e) kts)
@@ -1202,6 +1218,10 @@ alphaNormalize (OptionalLit _T₀ ts₀) =
     _T₁ = alphaNormalize _T₀
 
     ts₁ = fmap alphaNormalize ts₀
+alphaNormalize (Some a₀) = Some a₁
+  where
+    a₁ = alphaNormalize a₀
+alphaNormalize None = None
 alphaNormalize OptionalFold =
     OptionalFold
 alphaNormalize OptionalBuild =
@@ -1358,6 +1378,8 @@ denote  ListIndexed           = ListIndexed
 denote  ListReverse           = ListReverse
 denote  Optional              = Optional
 denote (OptionalLit a b     ) = OptionalLit (denote a) (fmap denote b)
+denote (Some a              ) = Some (denote a)
+denote  None                  = None
 denote  OptionalFold          = OptionalFold
 denote  OptionalBuild         = OptionalBuild
 denote (Record a            ) = Record (fmap denote a)
@@ -1456,13 +1478,11 @@ normalizeWith ctx e0 = loop (denote e0)
             App (App OptionalBuild _A₀) g ->
                 loop (App (App (App g optional) just) nothing)
               where
-                _A₁ = shift 1 "a" _A₀
-
                 optional = App Optional _A₀
 
-                just = Lam "a" _A₀ (OptionalLit _A₁ (pure "a"))
+                just = Lam "a" _A₀ (Some "a")
 
-                nothing = OptionalLit _A₀ empty
+                nothing = App None _A₀
             App (App ListBuild _A₀) g -> loop (App (App (App g list) cons) nil)
               where
                 _A₁ = shift 1 "a" _A₀
@@ -1490,16 +1510,16 @@ normalizeWith ctx e0 = loop (denote e0)
                 lazyCons   y ys =       App (App cons y) ys
             App (App ListLength _) (ListLit _ ys) ->
                 NaturalLit (fromIntegral (Data.Sequence.length ys))
-            App (App ListHead t) (ListLit _ ys) -> loop (OptionalLit t m)
+            App (App ListHead t) (ListLit _ ys) -> loop o
               where
-                m = case Data.Sequence.viewl ys of
-                        y :< _ -> Just y
-                        _      -> Nothing
-            App (App ListLast t) (ListLit _ ys) -> loop (OptionalLit t m)
+                o = case Data.Sequence.viewl ys of
+                        y :< _ -> Some y
+                        _      -> App None t
+            App (App ListLast t) (ListLit _ ys) -> loop o
               where
-                m = case Data.Sequence.viewr ys of
-                        _ :> y -> Just y
-                        _      -> Nothing
+                o = case Data.Sequence.viewr ys of
+                        _ :> y -> Some y
+                        _      -> App None t
             App (App ListIndexed _A₀) (ListLit _A₁ as₀) -> loop (ListLit t as₁)
               where
                 as₁ = Data.Sequence.mapWithIndex adapt as₀
@@ -1523,10 +1543,10 @@ normalizeWith ctx e0 = loop (denote e0)
                 loop (ListLit m (Data.Sequence.reverse xs))
               where
                 m = if Data.Sequence.null xs then Just t else Nothing
-            App (App (App (App (App OptionalFold _) (OptionalLit _ xs)) _) just) nothing ->
-                loop (maybe nothing just' xs)
-              where
-                just' = App just
+            App (App (App (App (App OptionalFold _) (App None _)) _) _) nothing ->
+                loop nothing
+            App (App (App (App (App OptionalFold _) (Some x)) _) just) _ ->
+                loop (App just x)
             _ ->  case ctx (App f' a') of
                     Nothing -> App f' a'
                     Just app' -> loop app'
@@ -1649,10 +1669,12 @@ normalizeWith ctx e0 = loop (denote e0)
     ListIndexed -> ListIndexed
     ListReverse -> ListReverse
     Optional -> Optional
-    OptionalLit t es -> OptionalLit t' es'
+    OptionalLit _A Nothing -> loop (App None _A)
+    OptionalLit _ (Just a) -> loop (Some a)
+    Some a -> Some a'
       where
-        t'  =      loop t
-        es' = fmap loop es
+        a' = loop a
+    None -> None
     OptionalFold -> OptionalFold
     OptionalBuild -> OptionalBuild
     Record kts -> Record (sortMap kts')
@@ -1815,7 +1837,9 @@ isNormalized e = case denote e of
         App (App ListLast _) (ListLit _ _) -> False
         App (App ListIndexed _) (ListLit _ _) -> False
         App (App ListReverse _) (ListLit _ _) -> False
-        App (App (App (App (App OptionalFold _) (OptionalLit _ _)) _) _) _ ->
+        App (App (App (App (App OptionalFold _) (Some _)) _) _) _ ->
+            False
+        App (App (App (App (App OptionalFold _) (App None _)) _) _) _ ->
             False
         _ -> True
     Let _ _ _ _ -> False
@@ -1910,7 +1934,9 @@ isNormalized e = case denote e of
     ListIndexed -> True
     ListReverse -> True
     Optional -> True
-    OptionalLit t es -> isNormalized t && all isNormalized es
+    OptionalLit _ _ -> False
+    Some a -> isNormalized a
+    None -> True
     OptionalFold -> True
     OptionalBuild -> True
     Record kts -> all isNormalized kts
@@ -2051,6 +2077,8 @@ reservedIdentifiers =
         , "List/indexed"
         , "List/reverse"
         , "Optional"
+        , "Some"
+        , "None"
         , "Optional/build"
         , "Optional/fold"
         ]
