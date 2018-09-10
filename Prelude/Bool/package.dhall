@@ -1,17 +1,17 @@
 { and =
-    ./and 
+    ./and
 , build =
-    ./build 
+    ./build
 , even =
-    ./even 
+    ./even
 , fold =
-    ./fold 
+    ./fold
 , not =
-    ./not 
+    ./not
 , odd =
-    ./odd 
+    ./odd
 , or =
-    ./or 
+    ./or
 , show =
-    ./show 
+    ./show
 }

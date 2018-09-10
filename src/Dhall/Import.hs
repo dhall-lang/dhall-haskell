@@ -830,6 +830,8 @@ loadWith expr₀ = case expr₀ of
   ListIndexed          -> pure ListIndexed
   ListReverse          -> pure ListReverse
   Optional             -> pure Optional
+  None                 -> pure None
+  Some a               -> Some <$> loadWith a
   OptionalLit a b      -> OptionalLit <$> loadWith a <*> mapM loadWith b
   OptionalFold         -> pure OptionalFold
   OptionalBuild        -> pure OptionalBuild

@@ -4,21 +4,11 @@ Returns the last non-empty `Optional` value in a `List`
 Examples:
 
 ```
-./last
-Natural
-[ [   ] : Optional Natural
-, [ 1 ] : Optional Natural
-, [ 2 ] : Optional Natural
-]
-= [ 2 ] : Optional Natural
+./last Natural [ None Natural, Some 1, Some 2 ] = Some 2
 
-./last
-Natural
-[ [] : Optional Natural, [] : Optional Natural ]
-= [] : Optional Natural
+./last Natural [ None Natural, None Natural ] = None Natural
 
-./last Natural ([] : List (Optional Natural))
-= [] : Optional Natural
+./last Natural ([] : List (Optional Natural)) = None Natural
 ```
 -}
     let last
@@ -31,8 +21,8 @@ Natural
             (Optional a)
             (   λ(l : Optional a)
               → λ(r : Optional a)
-              → Optional/fold a r (Optional a) (λ(x : a) → [ x ] : Optional a) l
+              → Optional/fold a r (Optional a) (λ(x : a) → Some x) l
             )
-            ([] : Optional a)
+            (None a)
 
 in  last

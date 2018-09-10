@@ -4,14 +4,11 @@ Unzip an `Optional` value into two separate `Optional` values
 Examples:
 
 ```
-./unzip
-Text
-Bool
-([ { _1 = "ABC", _2 = True  } ] : Optional { _1 : Text, _2 : Bool })
-= { _1 = [ "ABC" ] : Optional Text, _2 = [ True ] : Optional Bool }
+./unzip Text Bool (Some { _1 = "ABC", _2 = True  })
+= { _1 = Some "ABC", _2 = Some True }
 
-./unzip Text Bool ([] : Optional { _1 : Text, _2 : Bool })
-= { _1 = [] : Optional Text, _2 = [] : Optional Bool }
+./unzip Text Bool (None { _1 : Text, _2 : Bool })
+= { _1 = None Text, _2 = None Bool }
 ```
 -}
     let unzip
@@ -27,15 +24,15 @@ Bool
                 { _1 : a, _2 : b }
                 xs
                 (Optional a)
-                (λ(x : { _1 : a, _2 : b }) → [ x._1 ] : Optional a)
-                ([] : Optional a)
+                (λ(x : { _1 : a, _2 : b }) → Some x._1)
+                (None a)
             , _2 =
                 Optional/fold
                 { _1 : a, _2 : b }
                 xs
                 (Optional b)
-                (λ(x : { _1 : a, _2 : b }) → [ x._2 ] : Optional b)
-                ([] : Optional b)
+                (λ(x : { _1 : a, _2 : b }) → Some x._2)
+                (None b)
             }
 
 in  unzip

@@ -1,1 +1,1 @@
-../../../../../Prelude/Optional/fold Natural ([ 2 ] : Optional Natural) Natural (λ(x : Natural) → x) 0
+../../../../../Prelude/Optional/fold Natural (Some 2) Natural (λ(x : Natural) → x) 0

@@ -1,1 +1,1 @@
-{ _1 = [] : Optional Text, _2 = [] : Optional Bool }
+{ _1 = None Text, _2 = None Bool }
