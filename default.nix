@@ -28,11 +28,23 @@ let
             extension =
               haskellPackagesNew: haskellPackagesOld: {
                 dhall =
-                  pkgsNew.haskell.lib.failOnAllWarnings
-                    (haskellPackagesNew.callCabal2nix
-                      "dhall"
-                      pkgsNew.dhall-sdist
-                      { }
+                  pkgsNew.haskell.lib.overrideCabal
+                    (pkgsNew.haskell.lib.doCoverage
+                      (pkgsNew.haskell.lib.failOnAllWarnings
+                        (haskellPackagesNew.callCabal2nix
+                          "dhall"
+                          pkgsNew.dhall-sdist
+                          { }
+                        )
+                      )
+                    )
+                    (old: {
+                        postInstall = (old.postInstall or "") + ''
+                          ${pkgsNew.coreutils}/bin/mkdir --parents $out/nix-support
+                          ${pkgsNew.coreutils}/bin/ln --symbolic $out/share/hpc/vanilla/html/dhall-* "$out/share/hpc/vanilla/html/dhall"
+                          ${pkgsNew.coreutils}/bin/echo "report coverage $out/share/hpc/vanilla/html/dhall/hpc_index.html" >> $out/nix-support/hydra-build-products
+                        '';
+                      }
                     );
 
                 prettyprinter =

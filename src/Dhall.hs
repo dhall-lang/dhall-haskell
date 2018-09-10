@@ -658,14 +658,15 @@ strictText = fmap Data.Text.Lazy.toStrict lazyText
 
 {-| Decode a `Maybe`
 
->>> input (maybe natural) "[1] : Optional Natural"
+>>> input (maybe natural) "Some 1"
 Just 1
 -}
 maybe :: Type a -> Type (Maybe a)
 maybe (Type extractIn expectedIn) = Type extractOut expectedOut
   where
-    extractOut (OptionalLit _ es) = traverse extractIn es
-    extractOut  _                 = Nothing
+    extractOut (Some e    ) = fmap Just (extractIn e)
+    extractOut (App None _) = return Nothing
+    extractOut _            = empty
 
     expectedOut = App Optional expectedIn
 

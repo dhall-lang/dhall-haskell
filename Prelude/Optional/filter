@@ -4,11 +4,11 @@ Only keep an `Optional` element if the supplied function returns `True`
 Examples:
 
 ```
-./filter Natural Natural/even ([ 2 ] : Optional Natural)
-= [ 2 ] : Optional Natural
+./filter Natural Natural/even (Some 2)
+= Some 2
 
-./filter Natural Natural/odd ([ 2 ] : Optional Natural)
-= [] : Optional Natural
+./filter Natural Natural/odd (Some 2)
+= None Natural
 ```
 -}
     let filter
@@ -19,14 +19,14 @@ Examples:
           → Optional/build
             a
             (   λ(optional : Type)
-              → λ(just : a → optional)
-              → λ(nil : optional)
+              → λ(some : a → optional)
+              → λ(none : optional)
               → Optional/fold
                 a
                 xs
                 optional
-                (λ(x : a) → if f x then just x else nil)
-                nil
+                (λ(x : a) → if f x then some x else none)
+                none
             )
 
 in  filter

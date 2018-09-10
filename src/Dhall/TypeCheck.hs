@@ -429,6 +429,8 @@ typeWithA tpa = loop
         return (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a")))
     loop _      Optional          = do
         return (Pi "_" (Const Type) (Const Type))
+    loop _      None              = do
+        return (Pi "A" (Const Type) (App Optional "A"))
     loop ctx e@(OptionalLit t xs) = do
         s <- fmap Dhall.Core.normalize (loop ctx t)
         case s of
@@ -443,6 +445,13 @@ typeWithA tpa = loop
                     let nf_t' = Dhall.Core.normalize t'
                     Left (TypeError ctx e (InvalidOptionalElement nf_t x nf_t')) )
         return (App Optional t)
+    loop ctx e@(Some a) = do
+        _A <- loop ctx a
+        s <- fmap Dhall.Core.normalize (loop ctx _A)
+        case s of
+            Const Type -> return ()
+            _          -> Left (TypeError ctx e (InvalidSome a _A s))
+        return (App Optional _A)
     loop _      OptionalFold      = do
         return
             (Pi "a" (Const Type)
@@ -558,7 +567,7 @@ typeWithA tpa = loop
         ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
         constX <- case ttKvsX of
             Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
+            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
 
         ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
         constY <- case ttKvsY of
@@ -649,7 +658,7 @@ typeWithA tpa = loop
         ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
         constX <- case ttKvsX of
             Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
+            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
 
         ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
         constY <- case ttKvsY of
@@ -823,6 +832,7 @@ data TypeMessage s a
     | InvalidListType (Expr s a)
     | InvalidOptionalElement (Expr s a) (Expr s a) (Expr s a)
     | InvalidOptionalType (Expr s a)
+    | InvalidSome (Expr s a) (Expr s a) (Expr s a)
     | InvalidPredicate (Expr s a) (Expr s a)
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
@@ -1944,8 +1954,8 @@ prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
     short = "Invalid type for ❰Optional❱ element"
 
     long =
-        "Explanation: Every optional element ends with a type annotation for the element \n\
-        \that might be present, like this:                                               \n\
+        "Explanation: The legacy ❰List❱-like syntax for ❰Optional❱ literals ends with a  \n\
+        \type annotation for the element that might be present, like this:               \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────┐                                                  \n\
@@ -2027,6 +2037,48 @@ prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..
         \... has this type instead:                                                      \n\
         \                                                                                \n\
         \" <> txt2 <> "\n"
+      where
+        txt0 = insert expr0
+        txt1 = insert expr1
+        txt2 = insert expr2
+
+prettyTypeMessage (InvalidSome expr0 expr1 expr2) = ErrorMessages {..}
+  where
+    short = "❰Some❱ argument has the wrong type"
+
+    long =
+        "Explanation: The ❰Some❱ constructor expects an argument that is a term, where   \n\
+        \the type of the type of a term must be ❰Type❱                                   \n\
+        \                                                                                \n\
+        \For example, this is a valid use of ❰Some❱:                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────┐                                                                  \n\
+        \    │ Some 1 │  ❰1❱ is a valid term because ❰1 : Natural : Type❱                \n\
+        \    └────────┘                                                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but this is " <> _NOT <> " a valid ❰Optional❱ value:                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────┐                                                               \n\
+        \    │ Some Text │  ❰Text❱ is not a valid term because ❰Text : Type : Kind ❱     \n\
+        \    └───────────┘                                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \The ❰Some❱ argument you provided:                                               \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... has this type:                                                              \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... but the type of that type is:                                               \n\
+        \                                                                                \n\
+        \" <> txt2 <> "\n\
+        \                                                                                \n\
+        \... which is not ❰Type❱                                                         \n"
       where
         txt0 = insert expr0
         txt1 = insert expr1

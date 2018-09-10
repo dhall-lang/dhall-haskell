@@ -1,27 +1,27 @@
 { all =
-    ./all 
+    ./all
 , any =
-    ./any 
+    ./any
 , build =
-    ./build 
+    ./build
 , concat =
-    ./concat 
+    ./concat
 , filter =
-    ./filter 
+    ./filter
 , fold =
-    ./fold 
+    ./fold
 , head =
-    ./head 
+    ./head
 , last =
-    ./last 
+    ./last
 , length =
-    ./length 
+    ./length
 , map =
-    ./map 
+    ./map
 , null =
-    ./null 
+    ./null
 , toList =
-    ./toList 
+    ./toList
 , unzip =
-    ./unzip 
+    ./unzip
 }

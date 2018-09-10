@@ -1,15 +1,19 @@
 { `Bool` =
-    ./Bool/package.dhall 
+    ./Bool/package.dhall
 , `Double` =
-    ./Double/package.dhall 
+    ./Double/package.dhall
+, Function =
+    ./Function/package.dhall
 , `Integer` =
-    ./Integer/package.dhall 
+    ./Integer/package.dhall
 , `List` =
-    ./List/package.dhall 
+    ./List/package.dhall
 , `Natural` =
-    ./Natural/package.dhall 
+    ./Natural/package.dhall
 , `Optional` =
-    ./Optional/package.dhall 
+    ./Optional/package.dhall
+, JSON =
+    ./JSON/package.dhall
 , `Text` =
-    ./Text/package.dhall 
+    ./Text/package.dhall
 }
