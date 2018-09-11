@@ -6,6 +6,10 @@ module Dhall.Pretty
       Ann(..)
     , annToAnsiStyle
     , prettyExpr
+
+    , CharacterSet(..)
+    , prettyCharacterSet
+
     , layoutOpts
     ) where
 
@@ -17,4 +21,3 @@ layoutOpts :: Pretty.LayoutOptions
 layoutOpts =
     Pretty.defaultLayoutOptions
         { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
-

@@ -16,6 +16,7 @@ import Control.Monad.State.Strict ( evalStateT )
 import Data.List ( foldl' )
 import Dhall.Binary (ProtocolVersion(..))
 import Dhall.Import (protocolVersion)
+import Dhall.Pretty (CharacterSet(..))
 import Lens.Family (set)
 
 import qualified Control.Monad.Trans.State.Strict as State
@@ -37,8 +38,9 @@ import qualified System.Console.Repline as Repline
 import qualified System.IO
 
 -- | Implementation of the @dhall repl@ subcommand
-repl :: Bool -> ProtocolVersion -> IO ()
-repl explain _protocolVersion = if explain then Dhall.detailed io else io
+repl :: CharacterSet -> Bool -> ProtocolVersion -> IO ()
+repl characterSet explain _protocolVersion =
+    if explain then Dhall.detailed io else io
   where
     io =
       evalStateT
@@ -49,13 +51,14 @@ repl explain _protocolVersion = if explain then Dhall.detailed io else io
         ( Repline.Word completer )
             greeter
         )
-        (emptyEnv { explain, _protocolVersion })
+        (emptyEnv { characterSet, explain, _protocolVersion })
 
 
 data Env = Env
   { envBindings      :: Dhall.Context.Context Binding
   , envIt            :: Maybe Binding
   , explain          :: Bool
+  , characterSet     :: CharacterSet
   , _protocolVersion :: ProtocolVersion
   }
 
@@ -67,6 +70,7 @@ emptyEnv =
     , envIt = Nothing
     , explain = False
     , _protocolVersion = Dhall.Binary.defaultProtocolVersion
+    , characterSet = Unicode
     }
 
 
@@ -220,7 +224,10 @@ saveBinding (file : "=" : tokens) = do
 
   normalizedExpression <- normalize loadedExpression
 
-  let handler handle = output handle normalizedExpression
+  env <- get
+
+  let handler handle =
+          State.evalStateT (output handle normalizedExpression) env
 
   liftIO (System.IO.withFile file System.IO.WriteMode handler)
 saveBinding _ = fail ":save should be of the form `:save x = y`"
@@ -254,12 +261,17 @@ dontCrash m =
 
 
 output
-    :: (Pretty.Pretty a, MonadIO m)
+    :: (Pretty.Pretty a, MonadState Env m, MonadIO m)
     => System.IO.Handle -> Dhall.Expr s a -> m ()
 output handle expr = do
+  Env { characterSet } <- get
+
   liftIO (System.IO.hPutStrLn handle "")  -- Visual spacing
 
-  let stream = Pretty.layoutSmart Dhall.Pretty.layoutOpts (Dhall.Pretty.prettyExpr expr)
+  let stream =
+          Pretty.layoutSmart Dhall.Pretty.layoutOpts
+              (Dhall.Pretty.prettyCharacterSet characterSet expr)
+
   supportsANSI <- liftIO (System.Console.ANSI.hSupportsANSI handle)
   let ansiStream =
           if supportsANSI
