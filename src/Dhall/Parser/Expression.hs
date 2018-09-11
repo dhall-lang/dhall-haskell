@@ -29,9 +29,9 @@ import Dhall.Parser.Token
 
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
-    before      <- Text.Megaparsec.getPosition
+    before      <- Text.Megaparsec.getSourcePos
     (tokens, e) <- Text.Megaparsec.match parser
-    after       <- Text.Megaparsec.getPosition
+    after       <- Text.Megaparsec.getSourcePos
     let src₀ = Src before after tokens
     case e of
         Note src₁ _ | src₀ == src₁ -> return e
