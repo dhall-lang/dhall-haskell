@@ -4,9 +4,9 @@ Returns `1` if the `Optional` value is present and `0` if the value is absent
 Examples:
 
 ```
-./length Natural ([ 2 ] : Optional Natural) = 1
+./length Natural (Some 2) = 1
 
-./length Natural ([] : Optional Natural) = 0
+./length Natural (None Natural) = 0
 ```
 -}
     let length

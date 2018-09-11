@@ -4,17 +4,17 @@
 Examples:
 
 ```
-./fold Natural ([ 2 ] : Optional Natural) Natural (λ(x : Natural) → x) 0 = 2
+./fold Natural (Some 2) Natural (λ(x : Natural) → x) 0 = 2
 
-./fold Natural ([] : Optional Natural) Natural (λ(x : Natural) → x) 0 = 0
+./fold Natural (None Natural) Natural (λ(x : Natural) → x) 0 = 0
 ```
 -}
     let fold
         :   ∀(a : Type)
           → Optional a
           → ∀(optional : Type)
-          → ∀(just : a → optional)
-          → ∀(nothing : optional)
+          → ∀(some : a → optional)
+          → ∀(none : optional)
           → optional
         = Optional/fold
 
