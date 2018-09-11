@@ -1,0 +1,3 @@
+[submodule "Prelude"]
+	path = Prelude
+	url = https://github.com/dhall-lang/Prelude.git
