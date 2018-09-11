@@ -41,13 +41,13 @@ exprA = completeExpression
 
 -- | A parsing error
 data ParseError = ParseError
-    { unwrap :: Text.Megaparsec.ParseError Char Void
+    { unwrap :: Text.Megaparsec.ParseErrorBundle Text Void
     , input  :: Text
     }
 
 instance Show ParseError where
     show (ParseError {..}) =
-      "\n\ESC[1;31mError\ESC[0m: Invalid input\n\n" <> Text.Megaparsec.parseErrorPretty' input unwrap
+      "\n\ESC[1;31mError\ESC[0m: Invalid input\n\n" <> Text.Megaparsec.errorBundlePretty unwrap
 
 instance Exception ParseError
 
