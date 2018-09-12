@@ -151,6 +151,7 @@ Extra-Source-Files:
     tests/regression/*.dhall
     tests/tutorial/*.dhall
     tests/typecheck/*.dhall
+    tests/typecheck/failure/*.dhall
     tests/typecheck/examples/Monoid/*.dhall
     tests/import/*.dhall
     tests/import/data/foo/bar/a.dhall
