@@ -115,10 +115,10 @@ equals :: Diff
 equals = token Internal.equals
 
 forall :: Diff
-forall = token Internal.forall
+forall = token (Internal.forall Internal.Unicode)
 
 lambda :: Diff
-lambda = token Internal.lambda
+lambda = token (Internal.lambda Internal.Unicode)
 
 langle :: Diff
 langle = token Internal.langle
@@ -139,7 +139,7 @@ rangle :: Diff
 rangle = token Internal.rangle
 
 rarrow :: Diff
-rarrow = token Internal.rarrow
+rarrow = token (Internal.rarrow Internal.Unicode)
 
 rbrace :: Diff
 rbrace = token Internal.rbrace

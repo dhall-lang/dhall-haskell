@@ -28,14 +28,12 @@ import Dhall.Binary (ProtocolVersion)
 import Dhall.Core (Expr(..), Import)
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src)
-import Dhall.Pretty (annToAnsiStyle, prettyExpr, layoutOpts)
+import Dhall.Pretty (CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import Lens.Family (set)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
-
-import qualified Paths_dhall as Meta
 
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict          as State
@@ -53,10 +51,12 @@ import qualified Dhall.Hash
 import qualified Dhall.Import
 import qualified Dhall.Lint
 import qualified Dhall.Parser
+import qualified Dhall.Pretty
 import qualified Dhall.Repl
 import qualified Dhall.TypeCheck
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
+import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.IO
 
@@ -65,6 +65,7 @@ data Options = Options
     { mode            :: Mode
     , explain         :: Bool
     , plain           :: Bool
+    , ascii           :: Bool
     , protocolVersion :: ProtocolVersion
     }
 
@@ -95,22 +96,16 @@ parseOptions :: Parser Options
 parseOptions =
         Options
     <$> parseMode
-    <*> parseExplain
-    <*> parsePlain
+    <*> switch "explain" "Explain error messages in more detail"
+    <*> switch "plain" "Disable syntax highlighting"
+    <*> switch "ascii" "Format code using only ASCII characters"
     <*> Dhall.Binary.parseProtocolVersion
   where
-    parseExplain =
+    switch name description =
         Options.Applicative.switch
-            (   Options.Applicative.long "explain"
-            <>  Options.Applicative.help "Explain error messages in more detail"
+            (   Options.Applicative.long name
+            <>  Options.Applicative.help description
             )
-
-    parsePlain =
-        Options.Applicative.switch
-            (   Options.Applicative.long "plain"
-            <>  Options.Applicative.help "Disable syntax highlighting"
-            )
-
 
 parseMode :: Parser Mode
 parseMode =
@@ -207,6 +202,10 @@ parserInfoOptions =
 -- | Run the command specified by the `Options` type
 command :: Options -> IO ()
 command (Options {..}) = do
+    let characterSet = case ascii of
+            True  -> ASCII
+            False -> Unicode
+
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
     let status =
@@ -243,7 +242,7 @@ command (Options {..}) = do
 
     let render :: Pretty a => Handle -> Expr s a -> IO ()
         render h e = do
-            let doc = prettyExpr e
+            let doc = Dhall.Pretty.prettyCharacterSet characterSet e
 
             let stream = Pretty.layoutSmart layoutOpts doc
 
@@ -302,7 +301,7 @@ command (Options {..}) = do
             render System.IO.stdout (Dhall.Core.normalize inferredType)
 
         Repl -> do
-            Dhall.Repl.repl explain protocolVersion
+            Dhall.Repl.repl characterSet explain protocolVersion
 
         Diff expr1 expr2 -> do
             expression1 <- Dhall.inputExpr expr1
@@ -315,7 +314,7 @@ command (Options {..}) = do
             Pretty.hPutDoc System.IO.stdout prettyDiff
 
         Format inplace -> do
-            Dhall.Format.format inplace
+            Dhall.Format.format characterSet inplace
 
         Freeze inplace -> do
             Dhall.Freeze.freeze inplace protocolVersion
@@ -332,7 +331,8 @@ command (Options {..}) = do
 
                     let lintedExpression = Dhall.Lint.lint expression
 
-                    let doc = Pretty.pretty header <> Pretty.pretty lintedExpression
+                    let doc =   Pretty.pretty header
+                            <>  fmap annToAnsiStyle (Dhall.Pretty.prettyCharacterSet characterSet lintedExpression)
 
                     System.IO.withFile file System.IO.WriteMode (\h -> do
                         Pretty.renderIO h (Pretty.layoutSmart layoutOpts doc)
@@ -344,7 +344,8 @@ command (Options {..}) = do
 
                     let lintedExpression = Dhall.Lint.lint expression
 
-                    let doc = Pretty.pretty header <> prettyExpr lintedExpression
+                    let doc =   Pretty.pretty header
+                            <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
 
                     supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
 
