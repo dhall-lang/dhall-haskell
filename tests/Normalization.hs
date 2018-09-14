@@ -33,6 +33,7 @@ normalizationTests =
         , customization
         , shouldNormalize "a remote-systems.conf builder" "remoteSystems"
         , shouldNormalize "multi-line strings correctly" "multiLine"
+        , shouldNormalize "the // operator and sort the fields" "sortOperator"
         ]
 
 tutorialExamples :: TestTree
