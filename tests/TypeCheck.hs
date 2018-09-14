@@ -49,10 +49,10 @@ typecheckTests =
 
         , shouldNotTypeCheck
             "combining records of terms and types"
-            "combineMixedRecords"
+            "failure/combineMixedRecords"
         , shouldNotTypeCheck
             "preferring a record of types over a record of terms"
-            "preferMixedRecords"
+            "failure/preferMixedRecords"
         ]
 
 should :: Text -> Text -> TestTree
