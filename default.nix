@@ -1,8 +1,6 @@
 let
   fetchNixpkgs = import ./nix/fetchNixpkgs.nix;
 
-  readDirectory = import ./nix/readDirectory.nix;
-
   overlayShared = pkgsNew: pkgsOld: {
     dhall-sdist =
       let
@@ -48,17 +46,17 @@ let
                     );
 
                 prettyprinter =
-                  pkgs.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
+                  pkgsNew.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
 
                 serialise =
-                  pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
+                  pkgsNew.haskell.lib.dontCheck haskellPackagesOld.serialise;
               };
 
           in
             pkgsNew.lib.fold
               pkgsNew.lib.composeExtensions
               (old.overrides or (_: _: {}))
-              [ (readDirectory ./nix)
+              [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./nix; })
 
                 extension
               ];
