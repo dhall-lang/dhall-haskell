@@ -161,7 +161,7 @@ diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
 diff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
 diff l0 r0 = doc
   where
-    Diff {..} = diffExpression l0 r0 <> hardline
+    Diff {..} = diffExpression l0 r0
 
 diffPrimitive :: Eq a => (a -> Diff) -> a -> a -> Diff
 diffPrimitive f l r
