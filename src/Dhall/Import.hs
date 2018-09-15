@@ -250,6 +250,7 @@ instance Exception e => Exception (Imported e)
 instance Show e => Show (Imported e) where
     show (Imported imports e) =
            concat (zipWith indent [0..] toDisplay)
+        ++ "\n"
         ++ show e
       where
         indent n import_ =
