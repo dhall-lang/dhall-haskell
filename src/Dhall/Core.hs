@@ -1697,7 +1697,7 @@ normalizeWith ctx e0 = loop (denote e0)
         decide l (RecordLit n) | Data.HashMap.Strict.InsOrd.null n =
             l
         decide (RecordLit m) (RecordLit n) =
-            loop (RecordLit (Data.HashMap.Strict.InsOrd.unionWith decide m n))
+            RecordLit (sortMap (Data.HashMap.Strict.InsOrd.unionWith decide m n))
         decide l r =
             Combine l r
     CombineTypes x y -> decide (loop x) (loop y)
@@ -1707,7 +1707,7 @@ normalizeWith ctx e0 = loop (denote e0)
         decide l (Record n) | Data.HashMap.Strict.InsOrd.null n =
             l
         decide (Record m) (Record n) =
-            loop (Record (Data.HashMap.Strict.InsOrd.unionWith decide m n))
+            Record (sortMap (Data.HashMap.Strict.InsOrd.unionWith decide m n))
         decide l r =
             CombineTypes l r
 
@@ -1718,7 +1718,7 @@ normalizeWith ctx e0 = loop (denote e0)
         decide l (RecordLit n) | Data.HashMap.Strict.InsOrd.null n =
             l
         decide (RecordLit m) (RecordLit n) =
-            loop (RecordLit (Data.HashMap.Strict.InsOrd.union n m))
+            RecordLit (sortMap (Data.HashMap.Strict.InsOrd.union n m))
         decide l r =
             Prefer l r
     Merge x y t      ->
