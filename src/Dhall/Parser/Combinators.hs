@@ -42,7 +42,6 @@ instance Pretty Src where
             pretty text <> "\n"
         <>  "\n"
         <>  pretty (Text.Megaparsec.sourcePosPretty begin)
-        <>  "\n"
 
 {-| A `Parser` that is almost identical to
     @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
