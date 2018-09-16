@@ -440,13 +440,17 @@ exprFromImport :: Import -> StateT (Status IO) IO (Expr Src Import)
 exprFromImport import_@(Import {..}) = do
     let ImportHashed {..} = importHashed
 
+    Status {..} <- State.get
+
+    let imports  = _stack
+    let imports' = NonEmpty.cons import_ imports
+    let here     = canonicalizeImport imports'
+
     case hash of
         Nothing -> do
-            exprFromUncachedImport import_
+            exprFromUncachedImport here
 
         Just expectedHash -> do
-            Status {..} <- State.get
-
             result <- Maybe.runMaybeT (getCacheFile expectedHash)
 
             case result of
@@ -476,12 +480,11 @@ exprFromImport import_@(Import {..}) = do
                             return expression
 
                 Just (Write, cacheFile) -> do
-                    expression <- exprFromUncachedImport import_
+                    expression <- exprFromUncachedImport here
 
-                    let _stack' = NonEmpty.cons import_ _stack
-                    zoom stack (State.put _stack')
+                    zoom stack (State.put imports')
                     resolvedExpression <- loadWith expression
-                    zoom stack (State.put _stack)
+                    zoom stack (State.put imports)
 
                     case Dhall.TypeCheck.typeWith _startingContext resolvedExpression of
                         Left  _ -> do
@@ -742,7 +745,7 @@ loadWith expr₀ = case expr₀ of
 
                     -- This loads a \"dynamic\" expression (i.e. an expression
                     -- that might still contain imports)
-                    let loadDynamic = _resolver here
+                    let loadDynamic = _resolver import_
 
                     expr' <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
 
