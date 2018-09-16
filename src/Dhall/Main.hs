@@ -22,13 +22,13 @@ import Control.Applicative (optional, (<|>))
 import Control.Exception (Exception, SomeException)
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Data.Text.Prettyprint.Doc (Pretty)
+import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
 import Dhall.Binary (ProtocolVersion)
 import Dhall.Core (Expr(..), Import)
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src)
-import Dhall.Pretty (CharacterSet(..), annToAnsiStyle, layoutOpts)
+import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import Lens.Family (set)
 import Options.Applicative (Parser, ParserInfo)
@@ -77,19 +77,11 @@ data Mode
     | Type
     | Normalize
     | Repl
-    | Format (Maybe FilePath)
-    | Freeze (Maybe FilePath)
+    | Format { inplace :: Maybe FilePath }
+    | Freeze { inplace :: Maybe FilePath }
     | Hash
-    | Diff Text Text
-    | Lint (Maybe FilePath)
-
-parseInplace :: Parser String
-parseInplace =
-        Options.Applicative.strOption
-        (   Options.Applicative.long "inplace"
-        <>  Options.Applicative.help "Modify the specified file in-place"
-        <>  Options.Applicative.metavar "FILE"
-        )
+    | Diff { expr1 :: Text, expr2 :: Text }
+    | Lint { inplace :: Maybe FilePath }
 
 -- | `Parser` for the `Options` type
 parseOptions :: Parser Options
@@ -98,7 +90,7 @@ parseOptions =
     <$> parseMode
     <*> switch "explain" "Explain error messages in more detail"
     <*> switch "plain" "Disable syntax highlighting"
-    <*> switch "ascii" "Format code using only ASCII characters"
+    <*> switch "ascii" "Format code using only ASCII syntax"
     <*> Dhall.Binary.parseProtocolVersion
   where
     switch name description =
@@ -107,69 +99,80 @@ parseOptions =
             <>  Options.Applicative.help description
             )
 
+subcommand :: String -> String -> Parser a -> Parser a
+subcommand name description parser =
+    Options.Applicative.hsubparser
+        (   Options.Applicative.command name parserInfo
+        <>  Options.Applicative.metavar name
+        )
+  where
+    parserInfo =
+        Options.Applicative.info parser
+            (   Options.Applicative.fullDesc
+            <>  Options.Applicative.progDesc description
+            )
+
 parseMode :: Parser Mode
 parseMode =
-        subcommand "version"   "Display version"                 (pure Version)
-    <|> subcommand "resolve"   "Resolve an expression's imports" (pure Resolve)
-    <|> subcommand "type"      "Infer an expression's type"      (pure Type)
-    <|> subcommand "normalize" "Normalize an expression"         (pure Normalize)
-    <|> subcommand "repl"      "Interpret expressions in a REPL" (pure Repl)
-    <|> subcommand "diff"      "Render the difference between the normal form of two expressions" diffParser
-    <|> subcommand "hash"      "Compute semantic hashes for Dhall expressions" (pure Hash)
-    <|> subcommand "lint"      "Improve Dhall code"              parseLint
-    <|> formatSubcommand
-    <|> freezeSubcommand
-    <|> parseDefault
+        subcommand
+            "version"
+            "Display version"
+            (pure Version)
+    <|> subcommand
+            "resolve"
+            "Resolve an expression's imports"
+            (pure Resolve)
+    <|> subcommand
+            "type"
+            "Infer an expression's type"
+            (pure Type)
+    <|> subcommand
+            "normalize"
+            "Normalize an expression"
+            (pure Normalize)
+    <|> subcommand
+            "repl"
+            "Interpret expressions in a REPL"
+            (pure Repl)
+    <|> subcommand
+            "diff"
+            "Render the difference between the normal form of two expressions"
+            (Diff <$> argument "expr1" <*> argument "expr2")
+    <|> subcommand
+            "hash"
+            "Compute semantic hashes for Dhall expressions"
+            (pure Hash)
+    <|> subcommand
+            "lint"
+            "Improve Dhall code"
+            (Lint <$> optional parseInplace)
+    <|> subcommand
+            "format"
+            "Formatter for the Dhall language"
+            (Format <$> optional parseInplace)
+    <|> subcommand
+            "freeze"
+            "Add hashes to all import statements of an expression"
+            (Freeze <$> optional parseInplace)
+    <|> (Default <$> parseAnnotate)
   where
-    subcommand name description modeParser =
-        Options.Applicative.subparser
-            (   Options.Applicative.command name parserInfo
-            <>  Options.Applicative.metavar name
-            )
-      where
-        parserInfo =
-            Options.Applicative.info parser
-                (   Options.Applicative.fullDesc
-                <>  Options.Applicative.progDesc description
-                )
+    argument =
+            fmap Data.Text.pack
+        .   Options.Applicative.strArgument
+        .   Options.Applicative.metavar
 
-        parser =
-            Options.Applicative.helper <*> modeParser
+    parseAnnotate =
+        Options.Applicative.switch
+            (Options.Applicative.long "annotate")
 
-    diffParser =
-        Diff <$> argument "expr1" <*> argument "expr2"
-      where
-        argument =
-                fmap Data.Text.pack
-            .   Options.Applicative.strArgument
-            .   Options.Applicative.metavar
+    parseInplace =
+        Options.Applicative.strOption
+        (   Options.Applicative.long "inplace"
+        <>  Options.Applicative.help "Modify the specified file in-place"
+        <>  Options.Applicative.metavar "FILE"
+        )
 
-    parseLint =
-        Lint <$> optional parseInplace
 
-    formatSubcommand =
-        Options.Applicative.hsubparser
-            (   Options.Applicative.command "format" parserInfo
-            <>  Options.Applicative.metavar "format"
-            )
-      where parserInfo =
-                Options.Applicative.info parserWithHelper
-                    (   Options.Applicative.fullDesc
-                    <>  Options.Applicative.progDesc "Formatter for the Dhall language"
-                    )
-            parserWithHelper = Options.Applicative.helper <*> parser
-            parser = Format <$> optional parseInplace
-
-    freezeSubcommand = subcommand "freeze" "Add hashes to all import statements of an expression" parseFreeze
-        where
-            parseFreeze = Freeze <$> optional parseInplace
-
-    parseDefault = Default <$> parseAnnotate
-      where
-        parseAnnotate =
-            Options.Applicative.switch
-                (   Options.Applicative.long "annotate"
-                )
 
 data ImportResolutionDisabled = ImportResolutionDisabled deriving (Exception)
 
@@ -240,10 +243,8 @@ command (Options {..}) = do
                 System.IO.hPrint System.IO.stderr e
                 System.Exit.exitFailure
 
-    let render :: Pretty a => Handle -> Expr s a -> IO ()
-        render h e = do
-            let doc = Dhall.Pretty.prettyCharacterSet characterSet e
-
+    let renderDoc :: Handle -> Doc Ann -> IO ()
+        renderDoc h doc = do
             let stream = Pretty.layoutSmart layoutOpts doc
 
             supportsANSI <- System.Console.ANSI.hSupportsANSI h
@@ -254,6 +255,12 @@ command (Options {..}) = do
 
             Pretty.renderIO h ansiStream
             Data.Text.IO.hPutStrLn h ""
+
+    let render :: Pretty a => Handle -> Expr s a -> IO ()
+        render h expression = do
+            let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
+
+            renderDoc h doc
 
     handle $ case mode of
         Version -> do
@@ -303,26 +310,25 @@ command (Options {..}) = do
         Repl -> do
             Dhall.Repl.repl characterSet explain protocolVersion
 
-        Diff expr1 expr2 -> do
+        Diff {..} -> do
             expression1 <- Dhall.inputExpr expr1
 
             expression2 <- Dhall.inputExpr expr2
 
             let diff = Dhall.Diff.diffNormalized expression1 expression2
-                prettyDiff = fmap annToAnsiStyle diff
 
-            Pretty.hPutDoc System.IO.stdout prettyDiff
+            renderDoc System.IO.stdout diff
 
-        Format inplace -> do
+        Format {..} -> do
             Dhall.Format.format characterSet inplace
 
-        Freeze inplace -> do
+        Freeze {..} -> do
             Dhall.Freeze.freeze inplace protocolVersion
 
         Hash -> do
             Dhall.Hash.hash protocolVersion
 
-        Lint inplace -> do
+        Lint {..} -> do
             case inplace of
                 Just file -> do
                     text <- Data.Text.IO.readFile file
@@ -332,11 +338,11 @@ command (Options {..}) = do
                     let lintedExpression = Dhall.Lint.lint expression
 
                     let doc =   Pretty.pretty header
-                            <>  fmap annToAnsiStyle (Dhall.Pretty.prettyCharacterSet characterSet lintedExpression)
+                            <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
 
                     System.IO.withFile file System.IO.WriteMode (\h -> do
-                        Pretty.renderIO h (Pretty.layoutSmart layoutOpts doc)
-                        Data.Text.IO.hPutStrLn h "" )
+                        renderDoc h doc )
+
                 Nothing -> do
                     text <- Data.Text.IO.getContents
 
@@ -347,17 +353,7 @@ command (Options {..}) = do
                     let doc =   Pretty.pretty header
                             <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
 
-                    supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
-
-                    if supportsANSI
-                      then
-                        Pretty.renderIO
-                          System.IO.stdout
-                          (fmap annToAnsiStyle (Pretty.layoutSmart layoutOpts doc))
-                      else
-                        Pretty.renderIO
-                          System.IO.stdout
-                          (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc))
+                    renderDoc System.IO.stdout doc
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()
