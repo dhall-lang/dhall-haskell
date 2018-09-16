@@ -3637,10 +3637,10 @@ instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (TypeEr
 instance (Eq a, Pretty s, Pretty a) => Pretty (TypeError s a) where
     pretty (TypeError ctx expr msg)
         = Pretty.unAnnotate
-            ("\n"
+            (   "\n"
             <>  (   if null (Dhall.Context.toList ctx)
                     then ""
-                    else prettyContext ctx <> "\n"
+                    else prettyContext ctx <> "\n\n"
                 )
             <>  shortTypeMessage msg <> "\n"
             <>  source
@@ -3673,9 +3673,9 @@ instance (Eq a, Pretty s, Pretty a) => Pretty (DetailedTypeError s a) where
     pretty (DetailedTypeError (TypeError ctx expr msg))
         = Pretty.unAnnotate
             (   "\n"
-            <>  (   if  null (Dhall.Context.toList ctx)
+            <>  (   if null (Dhall.Context.toList ctx)
                     then ""
-                    else prettyContext ctx <> "\n"
+                    else prettyContext ctx <> "\n\n"
                 )
             <>  longTypeMessage msg <> "\n"
             <>  "────────────────────────────────────────────────────────────────────────────────\n"
