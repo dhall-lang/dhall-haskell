@@ -512,7 +512,7 @@ exprFromImport import_@(Import {..}) = do
                     return expression
 
                 Nothing -> do
-                    exprFromUncachedImport import_
+                    exprFromUncachedImport here
 
 data CacheMode = Read | Write
 
