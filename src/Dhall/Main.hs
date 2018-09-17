@@ -172,13 +172,6 @@ parseMode =
         <>  Options.Applicative.metavar "FILE"
         )
 
-
-
-data ImportResolutionDisabled = ImportResolutionDisabled deriving (Exception)
-
-instance Show ImportResolutionDisabled where
-    show _ = "\nImport resolution is disabled"
-
 throws :: Exception e => Either e a -> IO a
 throws (Left  e) = Control.Exception.throwIO e
 throws (Right a) = return a
@@ -188,10 +181,6 @@ getExpression = do
     inText <- Data.Text.IO.getContents
 
     throws (Dhall.Parser.exprFromText "(stdin)" inText)
-
-assertNoImports :: Expr Src Import -> IO (Expr Src X)
-assertNoImports expression =
-    throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
 
 -- | `ParserInfo` for the `Options` type
 parserInfoOptions :: ParserInfo Options
@@ -292,7 +281,7 @@ command (Options {..}) = do
         Normalize -> do
             expression <- getExpression
 
-            resolvedExpression <- assertNoImports expression
+            resolvedExpression <- Dhall.Import.assertNoImports expression
 
             _ <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -301,7 +290,7 @@ command (Options {..}) = do
         Type -> do
             expression <- getExpression
 
-            resolvedExpression <- assertNoImports expression
+            resolvedExpression <- Dhall.Import.assertNoImports expression
 
             inferredType <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
 

@@ -53,14 +53,17 @@ data Status m = Status
     , _startingContext :: Context (Expr Src X)
 
     , _resolver :: Import -> StateT (Status m) m (Expr Src Import)
+
+    , _cacher :: Import -> Expr Src X -> StateT (Status m) m ()
     }
 
 -- | Default starting `Status` that is polymorphic in the base `Monad`
 emptyStatusWith
     :: (Import -> StateT (Status m) m (Expr Src Import))
+    -> (Import -> Expr Src X -> StateT (Status m) m ())
     -> FilePath
     -> Status m
-emptyStatusWith _resolver rootDirectory = Status {..}
+emptyStatusWith _resolver _cacher rootDirectory = Status {..}
   where
     _stack = pure rootImport
 
@@ -115,6 +118,11 @@ resolver
     :: Functor f
     => LensLike' f (Status m) (Import -> StateT (Status m) m (Expr Src Import))
 resolver k s = fmap (\x -> s { _resolver = x }) (k (_resolver s))
+
+cacher
+    :: Functor f
+    => LensLike' f (Status m) (Import -> Expr Src X -> StateT (Status m) m ())
+cacher k s = fmap (\x -> s { _cacher = x }) (k (_cacher s))
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic
