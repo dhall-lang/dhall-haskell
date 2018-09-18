@@ -39,9 +39,38 @@ data Src = Src Text.Megaparsec.SourcePos Text.Megaparsec.SourcePos Text
 
 instance Pretty Src where
     pretty (Src begin _ text) =
-            pretty text <> "\n"
+            prefix
+        <>  preview
         <>  "\n"
         <>  pretty (Text.Megaparsec.sourcePosPretty begin)
+      where
+        prefix = pretty (Data.Text.replicate (n - 1) " ")
+          where
+            n = Text.Megaparsec.unPos (Text.Megaparsec.sourceColumn begin)
+
+        ls = Data.Text.lines text
+
+        header = Data.Text.unlines (take 3 ls)
+
+        footer = Data.Text.unlines (takeEnd 3 ls)
+
+        preview
+            | length ls <= 6 =
+                    pretty text <> "\n"
+            | otherwise =
+                    pretty header
+                <>  pretty snip <> "\n"
+                <>  pretty footer
+
+takeEnd :: Int -> [a] -> [a]
+takeEnd n l = go (drop n l) l
+  where
+    go (_:xs) (_:ys) = go xs ys
+    go _ r = r
+
+snip :: Text
+snip =
+    "✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈"
 
 {-| A `Parser` that is almost identical to
     @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
