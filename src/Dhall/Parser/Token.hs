@@ -486,6 +486,9 @@ unreserved c =
 reserved :: Data.Text.Text -> Parser ()
 reserved x = do _ <- Text.Parser.Char.text x; whitespace
 
+reservedChar :: Char -> Parser ()
+reservedChar c = do _ <- Text.Parser.Char.char c; whitespace
+
 keyword :: Data.Text.Text -> Parser ()
 keyword x = try (do _ <- Text.Parser.Char.text x; nonemptyWhitespace)
 
@@ -613,25 +616,25 @@ _Kind :: Parser ()
 _Kind = reserved "Kind"
 
 _equal :: Parser ()
-_equal = reserved "="
+_equal = reservedChar '='
 
 _or :: Parser ()
 _or = reserved "||"
 
 _plus :: Parser ()
-_plus = reserved "+"
+_plus = reservedChar '+'
 
 _textAppend :: Parser ()
 _textAppend = reserved "++"
 
 _listAppend :: Parser ()
-_listAppend = reserved "#"
+_listAppend = reservedChar '#'
 
 _and :: Parser ()
 _and = reserved "&&"
 
 _times :: Parser ()
-_times = reserved "*"
+_times = reservedChar '*'
 
 _doubleEqual :: Parser ()
 _doubleEqual = reserved "=="
@@ -640,49 +643,49 @@ _notEqual :: Parser ()
 _notEqual = reserved "!="
 
 _dot :: Parser ()
-_dot = reserved "."
+_dot = reservedChar '.'
 
 _openBrace :: Parser ()
-_openBrace = reserved "{"
+_openBrace = reservedChar '{'
 
 _closeBrace :: Parser ()
-_closeBrace = reserved "}"
+_closeBrace = reservedChar '}'
 
 _openBracket :: Parser ()
-_openBracket = reserved "["
+_openBracket = reservedChar '['
 
 _closeBracket :: Parser ()
-_closeBracket = reserved "]"
+_closeBracket = reservedChar ']'
 
 _openAngle :: Parser ()
-_openAngle = reserved "<"
+_openAngle = reservedChar '<'
 
 _closeAngle :: Parser ()
-_closeAngle = reserved ">"
+_closeAngle = reservedChar '>'
 
 _bar :: Parser ()
-_bar = reserved "|"
+_bar = reservedChar '|'
 
 _comma :: Parser ()
-_comma = reserved ","
+_comma = reservedChar ','
 
 _openParens :: Parser ()
-_openParens = reserved "("
+_openParens = reservedChar '('
 
 _closeParens :: Parser ()
-_closeParens = reserved ")"
+_closeParens = reservedChar ')'
 
 _colon :: Parser ()
-_colon = reserved ":"
+_colon = reservedChar ':'
 
 _at :: Parser ()
-_at = reserved "@"
+_at = reservedChar '@'
 
 _missing :: Parser ()
 _missing = reserved "missing"
 
 _importAlt :: Parser ()
-_importAlt = reserved "?"
+_importAlt = reservedChar '?'
 
 _combine :: Parser ()
 _combine = do
