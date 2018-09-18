@@ -34,8 +34,19 @@ import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token.Style
 
 -- | Source code extract
-data Src = Src Text.Megaparsec.SourcePos Text.Megaparsec.SourcePos Text
+data Src = Src !Text.Megaparsec.SourcePos !Text.Megaparsec.SourcePos Text
+  -- Text field is intentionally lazy
   deriving (Data, Eq, Show)
+
+-- | Doesn't force the 'Text' part
+laxSrcEq :: Src -> Src -> Bool
+laxSrcEq (Src p q _) (Src p' q' _) = eq p  p' && eq q q'
+  where
+    -- Don't compare filename (which is FilePath = String)
+    eq  :: Text.Megaparsec.SourcePos -> Text.Megaparsec.SourcePos -> Bool
+    eq (Text.Megaparsec.SourcePos _ a b) (Text.Megaparsec.SourcePos _ a' b') =
+        a == a' && b == b'
+{-# INLINE laxSrcEq #-}
 
 instance Pretty Src where
     pretty (Src begin _ text) =
