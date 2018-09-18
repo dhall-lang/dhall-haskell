@@ -88,23 +88,23 @@ instance Control.Monad.Fail.MonadFail Parser where
 
 instance Alternative Parser where
     empty = Parser empty
-    {-# INLINE empty #-}
+    -- {-# INLINE empty #-}
 
     Parser a <|> Parser b = Parser (a <|> b)
-    {-# INLINE (<|>) #-}
+    -- {-# INLINE (<|>) #-}
 
     some (Parser a) = Parser (some a)
-    {-# INLINE some #-}
+    -- {-# INLINE some #-}
 
     many (Parser a) = Parser (many a)
-    {-# INLINE many #-}
+    -- {-# INLINE many #-}
 
 instance MonadPlus Parser where
     mzero = empty
-    {-# INLINE mzero #-}
+    -- {-# INLINE mzero #-}
 
     mplus = (<|>)
-    {-# INLINE mplus #-}
+    -- {-# INLINE mplus #-}
 
 instance Text.Megaparsec.MonadParsec Void Text Parser where
     failure u e    = Parser (Text.Megaparsec.failure u e)
