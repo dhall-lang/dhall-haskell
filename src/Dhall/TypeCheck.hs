@@ -904,11 +904,11 @@ prettyDiff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
 prettyDiff exprL exprR = Dhall.Diff.diffNormalized exprL exprR
 
 prettyTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> ErrorMessages
-prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
+prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
   -- https://github.com/dhall-lang/dhall-haskell/pull/116
   where
-    short = "Unbound variable"
+    short = "Unbound variable: " <> Pretty.pretty x
 
     long =
         "Explanation: Expressions can only reference previously introduced (i.e. \"bound\")\n\
