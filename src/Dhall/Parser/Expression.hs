@@ -170,7 +170,7 @@ makeOperatorExpression subExpression operatorParser operator embedded =
     noted (do
         a <- subExpression embedded
         b <- Text.Megaparsec.many (do operatorParser; subExpression embedded)
-        return (foldr1 operator (a:b)) )
+        return (foldl operator a b) )
 
 importAltExpression :: Parser a -> Parser (Expr Src a)
 importAltExpression =
