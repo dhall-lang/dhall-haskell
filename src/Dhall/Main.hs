@@ -35,8 +35,10 @@ import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
 
+import qualified Codec.Serialise
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict          as State
+import qualified Data.ByteString.Lazy
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
@@ -82,6 +84,8 @@ data Mode
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Maybe FilePath }
+    | Encode
+    | Decode
 
 -- | `Parser` for the `Options` type
 parseOptions :: Parser Options
@@ -154,6 +158,14 @@ parseMode =
             "freeze"
             "Add hashes to all import statements of an expression"
             (Freeze <$> optional parseInplace)
+    <|> subcommand
+            "encode"
+            "Encode a Dhall expression to binary"
+            (pure Encode)
+    <|> subcommand
+            "decode"
+            "Decode a Dhall expression from binary"
+            (pure Decode)
     <|> (Default <$> parseAnnotate)
   where
     argument =
@@ -343,6 +355,26 @@ command (Options {..}) = do
                             <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
 
                     renderDoc System.IO.stdout doc
+
+        Encode -> do
+            expression <- getExpression
+
+            let term = Dhall.Binary.encode protocolVersion expression
+
+            let bytes = Codec.Serialise.serialise term
+
+            Data.ByteString.Lazy.putStr bytes
+
+        Decode -> do
+            bytes <- Data.ByteString.Lazy.getContents
+
+            term <- throws (Codec.Serialise.deserialiseOrFail bytes)
+
+            expression <- throws (Dhall.Binary.decode term)
+
+            let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
+
+            renderDoc System.IO.stdout doc
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()
