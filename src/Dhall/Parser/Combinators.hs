@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RecordWildCards            #-}
 module Dhall.Parser.Combinators where
 
 
@@ -27,6 +26,7 @@ import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
+import qualified Control.Monad.Fail
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
@@ -63,6 +63,9 @@ instance Applicative Parser where
     Parser f <*> Parser x = Parser (f <*> x)
     {-# INLINE (<*>) #-}
 
+    Parser a <* Parser b = Parser (a <* b)
+    {-# INLINE (<*) #-}
+
     Parser a *> Parser b = Parser (a *> b)
     {-# INLINE (*>) #-}
 
@@ -75,6 +78,13 @@ instance Monad Parser where
 
     Parser n >>= k = Parser (n >>= unParser . k)
     {-# INLINE (>>=) #-}
+
+    fail = Control.Monad.Fail.fail
+    {-# INLINE fail #-}
+
+instance Control.Monad.Fail.MonadFail Parser where
+    fail = Parser . Control.Monad.Fail.fail
+    {-# INLINE fail #-}
 
 instance Alternative Parser where
     empty = Parser empty

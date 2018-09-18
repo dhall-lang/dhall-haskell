@@ -208,6 +208,7 @@ Library
     if !impl(ghc >= 8.0)
       Build-Depends: semigroups == 0.18.*
       Build-Depends: transformers == 0.4.2.*
+      Build-Depends: fail == 4.9.*
 
     Exposed-Modules:
         Dhall,
