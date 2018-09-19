@@ -63,11 +63,13 @@ main = do
     issue108Text  <- TIO.readFile "benchmark/examples/issue108.dhall"
     issue108Bytes <- Data.ByteString.Lazy.readFile "benchmark/examples/issue108.dhall.bin"
     defaultMain
-        [ bgroup "Issue #108"
+        [ benchExprFromText "Long single-quoted strings" ("''" <> T.replicate 1000000 "x" <> "''")
+        , bgroup "Issue #108"
             [ benchExprFromText  "Text"   issue108Text
             , benchExprFromBytes "Binary" issue108Bytes
             ]
         , benchExprFromText "Long variable names" (T.replicate 1000000 "x")
         , benchExprFromText "Large number of function arguments" (T.replicate 10000 "x ")
+        , benchExprFromText "Long double-quoted strings" ("\"" <> T.replicate 1000000 "x" <> "\"")
         , benchParser prelude
         ]
