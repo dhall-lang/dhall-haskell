@@ -22,7 +22,7 @@ Examples:
     Natural
     (λ(x : Natural) → λ(y : Natural) → x + y)
     nil
-=   λ(nil : Natural) → 10 + nil
+=   λ(nil : Natural) → 2 + (3 + (5 + nil))
 
     λ(list : Type)
 →   λ(cons : Natural → list → list)
