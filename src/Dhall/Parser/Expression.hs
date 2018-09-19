@@ -469,7 +469,8 @@ doubleQuotedChunk :: Parser a -> Parser (Chunks Src a)
 doubleQuotedChunk embedded =
     choice
         [ interpolation
-        , unescapedCharacter
+        , unescapedCharacterFast
+        , unescapedCharacterSlow
         , escapedCharacter
         ]
   where
@@ -479,14 +480,19 @@ doubleQuotedChunk embedded =
         _ <- Text.Parser.Char.char '}'
         return (Chunks [(mempty, e)] mempty)
 
-    unescapedCharacter = do
-        c <- Text.Parser.Char.satisfy predicate
-        return (Chunks [] (Data.Text.singleton c))
+    unescapedCharacterFast = do
+        t <- Text.Megaparsec.takeWhile1P Nothing predicate
+        return (Chunks [] t)
       where
         predicate c =
-                ('\x20' <= c && c <= '\x21'    )
+            (   ('\x20' <= c && c <= '\x21'    )
             ||  ('\x23' <= c && c <= '\x5B'    )
             ||  ('\x5D' <= c && c <= '\x10FFFF')
+            ) && c /= '$'
+
+    unescapedCharacterSlow = do
+        _ <- Text.Megaparsec.single '$'
+        return (Chunks [] "$")
 
     escapedCharacter = do
         _ <- Text.Parser.Char.char '\\'
@@ -545,7 +551,8 @@ singleQuoteContinue embedded =
         , interpolation
         , escapeInterpolation
         , endLiteral
-        , unescapedCharacter
+        , unescapedCharacterFast
+        , unescapedCharacterSlow
         , tab
         , endOfLine
         ]
@@ -571,12 +578,20 @@ singleQuoteContinue embedded =
             _ <- Text.Parser.Char.text "''"
             return mempty
 
-        unescapedCharacter = do
+        unescapedCharacterFast = do
+            a <- Text.Megaparsec.takeWhile1P Nothing predicate
+            b <- singleQuoteContinue embedded
+            return (Chunks [] a <> b)
+          where
+            predicate c =
+                ('\x20' <= c && c <= '\x10FFFF') && c /= '$' && c /= '\''
+
+        unescapedCharacterSlow = do
             a <- satisfy predicate
             b <- singleQuoteContinue embedded
             return (Chunks [] a <> b)
           where
-            predicate c = '\x20' <= c && c <= '\x10FFFF'
+            predicate c = c == '$' || c == '\''
 
         endOfLine = do
             a <- "\n" <|> "\r\n"
