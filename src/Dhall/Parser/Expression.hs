@@ -34,8 +34,8 @@ noted parser = do
     after       <- Text.Megaparsec.getSourcePos
     let src₀ = Src before after tokens
     case e of
-        Note src₁ _ | src₀ == src₁ -> return e
-        _                          -> return (Note src₀ e)
+        Note src₁ _ | laxSrcEq src₀ src₁ -> return e
+        _                                -> return (Note src₀ e)
 
 expression :: Parser a -> Parser (Expr Src a)
 expression embedded =
