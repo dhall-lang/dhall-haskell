@@ -19,12 +19,9 @@ import qualified Dhall.Pretty
 -- | Utility function to cut out the interior of a large text block
 snip :: Text -> Text
 snip text
-    | length ls <= 7 =
-            Data.Text.unlines ls
+    | length ls <= 7 = text
     | otherwise =
-            Data.Text.unlines header
-        <>  separator <> "\n"
-        <>  Data.Text.unlines footer
+         if Data.Text.last text == '\n' then preview else Data.Text.init preview
   where
     ls = Data.Text.lines text
 
@@ -44,6 +41,11 @@ snip text
     separator =
             Data.Text.replicate minSpaces " "
         <>  Data.Text.replicate (maxLength - minSpaces) "="
+
+    preview =
+            Data.Text.unlines header
+        <>  separator <> "\n"
+        <>  Data.Text.unlines footer
 
 {-| Like `snip`, but for `Doc`s
 
