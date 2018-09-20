@@ -10,7 +10,7 @@ Examples:
 ./fold 3 Natural (λ(x : Natural) → 5 * x) 1 = 125
 
 λ(zero : Natural) → ./fold 3 Natural (λ(x : Natural) → 5 * x) zero
-= λ(zero : Natural) → 5 * 5 * 5 * zero
+= λ(zero : Natural) → 5 * (5 * (5 * zero))
 
     λ(natural : Type)
 →   λ(succ : natural → natural)
