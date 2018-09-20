@@ -7,6 +7,7 @@ module Dhall.Util
     , snipDoc
     ) where
 
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc)
 import Dhall.Pretty (Ann)
