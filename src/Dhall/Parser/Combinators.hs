@@ -26,6 +26,7 @@ import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
+import qualified Dhall.Util
 import qualified Control.Monad.Fail
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char
@@ -50,9 +51,13 @@ laxSrcEq (Src p q _) (Src p' q' _) = eq p  p' && eq q q'
 
 instance Pretty Src where
     pretty (Src begin _ text) =
-            pretty text <> "\n"
+            pretty (Dhall.Util.snip (prefix <> text))
         <>  "\n"
         <>  pretty (Text.Megaparsec.sourcePosPretty begin)
+      where
+        prefix = Data.Text.replicate (n - 1) " "
+          where
+            n = Text.Megaparsec.unPos (Text.Megaparsec.sourceColumn begin)
 
 {-| A `Parser` that is almost identical to
     @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
