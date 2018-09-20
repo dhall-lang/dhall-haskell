@@ -50,38 +50,45 @@ laxSrcEq (Src p q _) (Src p' q' _) = eq p  p' && eq q q'
 
 instance Pretty Src where
     pretty (Src begin _ text) =
-            prefix
-        <>  preview
+            preview
         <>  "\n"
         <>  pretty (Text.Megaparsec.sourcePosPretty begin)
       where
-        prefix = pretty (Data.Text.replicate (n - 1) " ")
+        prefix = Data.Text.replicate (n - 1) " "
           where
             n = Text.Megaparsec.unPos (Text.Megaparsec.sourceColumn begin)
 
-        ls = Data.Text.lines text
+        ls = Data.Text.lines (prefix <> text)
 
-        header = Data.Text.unlines (take 3 ls)
+        header = take 3 ls
 
-        footer = Data.Text.unlines (takeEnd 3 ls)
+        footer = takeEnd 3 ls
+
+        excerpt = filter (Data.Text.any (/= ' ')) (header <> footer)
+
+        leadingSpaces =
+            Data.Text.length . Data.Text.takeWhile (== ' ')
+
+        minSpaces = minimum (map leadingSpaces excerpt)
+
+        maxLength = maximum (map Data.Text.length excerpt)
+
+        snip = Data.Text.replicate minSpaces " "
+            <> Data.Text.replicate (maxLength - minSpaces) "="
 
         preview
             | length ls <= 6 =
                     pretty text <> "\n"
             | otherwise =
-                    pretty header
+                    pretty (Data.Text.unlines header)
                 <>  pretty snip <> "\n"
-                <>  pretty footer
+                <>  pretty (Data.Text.unlines footer)
 
 takeEnd :: Int -> [a] -> [a]
 takeEnd n l = go (drop n l) l
   where
     go (_:xs) (_:ys) = go xs ys
     go _ r = r
-
-snip :: Text
-snip =
-    "✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈✂┈┈┈┈┈┈┈"
 
 {-| A `Parser` that is almost identical to
     @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
