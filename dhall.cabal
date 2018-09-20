@@ -234,6 +234,7 @@ Library
         Dhall.Parser.Combinators,
         Dhall.Parser.Token,
         Dhall.Import.Types,
+        Dhall.Util,
         Paths_dhall
     if flag(with-http)
       Other-Modules:

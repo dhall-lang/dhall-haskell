@@ -47,6 +47,7 @@ import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Pretty.Internal
+import qualified Dhall.Util
 
 traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
 traverseWithIndex_ k xs =
@@ -898,7 +899,8 @@ _NOT :: Doc ann
 _NOT = "\ESC[1mnot\ESC[0m"
 
 insert :: Pretty a => a -> Doc Ann
-insert expression = "↳ " <> Pretty.align (Pretty.pretty expression)
+insert expression =
+    "↳ " <> Pretty.align (Dhall.Util.snipDoc (Pretty.pretty expression))
 
 prettyDiff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
 prettyDiff exprL exprR = Dhall.Diff.diffNormalized exprL exprR
@@ -3646,7 +3648,8 @@ instance (Eq a, Pretty s, Pretty a) => Pretty (TypeError s a) where
             <>  source
             )
       where
-        prettyKV (key, val) = pretty key <> " : " <> pretty val
+        prettyKV (key, val) =
+            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
 
         prettyContext =
                 Pretty.vsep
@@ -3683,7 +3686,8 @@ instance (Eq a, Pretty s, Pretty a) => Pretty (DetailedTypeError s a) where
             <>  source
             )
       where
-        prettyKV (key, val) = pretty key <> " : " <> pretty val
+        prettyKV (key, val) =
+            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
 
         prettyContext =
                 Pretty.vsep
