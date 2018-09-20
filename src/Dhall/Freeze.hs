@@ -52,7 +52,11 @@ hashImport _protocolVersion import_ = do
 
     let newImportHashed = (importHashed import_) { hash = expressionHash }
 
-    return $ import_ { importHashed = newImportHashed }
+    let newImport = import_ { importHashed = newImportHashed }
+
+    State.evalStateT (Dhall.Import.exprToImport newImport normalizedExpression) status
+
+    return newImport
 
 parseExpr :: String -> Text -> IO (Text, Expr Src Import)
 parseExpr src txt =
