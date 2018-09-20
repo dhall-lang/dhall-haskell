@@ -36,7 +36,7 @@ format characterSet inplace = do
                     Right x   -> return x
 
                 let doc =   Pretty.pretty header
-                        <>  fmap annToAnsiStyle (Dhall.Pretty.prettyCharacterSet characterSet expr)
+                        <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
                 System.IO.withFile file System.IO.WriteMode (\handle -> do
                     Pretty.renderIO handle (Pretty.layoutSmart layoutOpts doc)
                     Data.Text.IO.hPutStrLn handle "" )
