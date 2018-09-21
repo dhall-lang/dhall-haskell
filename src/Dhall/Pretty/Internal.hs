@@ -523,11 +523,24 @@ prettyCharacterSet characterSet = prettyExpression
     prettyOperatorExpression :: Pretty a => Expr s a -> Doc Ann
     prettyOperatorExpression = prettyImportAltExpression
 
+    prettyOperator :: Text -> [Doc Ann] -> Doc Ann
+    prettyOperator op docs =
+        enclose'
+            ""
+            prefix
+            (" " <> operator (Pretty.pretty op) <> " ")
+            (operator (Pretty.pretty op) <> spacer)
+            (reverse (fmap duplicate docs))
+      where
+        prefix = if Text.length op == 1 then "  " else "    "
+
+        spacer = if Text.length op == 1 then " "  else "  "
+
     prettyImportAltExpression :: Pretty a => Expr s a -> Doc Ann
     prettyImportAltExpression a0@(ImportAlt _ _) =
-        enclose' "" "    " (space <> operator "?" <> space) (operator "?" <> "  ") (fmap duplicate (docs a0))
+        prettyOperator "?" (docs a0)
       where
-        docs (ImportAlt a b) = prettyOrExpression a : docs b
+        docs (ImportAlt a b) = prettyOrExpression b : docs a
         docs (Note      _ b) = docs b
         docs              b  = [ prettyOrExpression b ]
     prettyImportAltExpression (Note _ a) =
@@ -537,9 +550,9 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyOrExpression :: Pretty a => Expr s a -> Doc Ann
     prettyOrExpression a0@(BoolOr _ _) =
-        enclose' "" "    " (space <> operator "||" <> space) (operator "||" <> "  ") (fmap duplicate (docs a0))
+        prettyOperator "||" (docs a0)
       where
-        docs (BoolOr a b) = prettyPlusExpression a : docs b
+        docs (BoolOr a b) = prettyPlusExpression b : docs a
         docs (Note   _ b) = docs b
         docs           b  = [ prettyPlusExpression b ]
     prettyOrExpression (Note _ a) =
@@ -549,9 +562,9 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyPlusExpression :: Pretty a => Expr s a -> Doc Ann
     prettyPlusExpression a0@(NaturalPlus _ _) =
-        enclose' "" "  " (" " <> operator "+" <> " ") (operator "+" <> " ") (fmap duplicate (docs a0))
+        prettyOperator "+" (docs a0)
       where
-        docs (NaturalPlus a b) = prettyTextAppendExpression a : docs b
+        docs (NaturalPlus a b) = prettyTextAppendExpression b : docs a
         docs (Note        _ b) = docs b
         docs                b  = [ prettyTextAppendExpression b ]
     prettyPlusExpression (Note _ a) =
@@ -561,9 +574,9 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyTextAppendExpression :: Pretty a => Expr s a -> Doc Ann
     prettyTextAppendExpression a0@(TextAppend _ _) =
-        enclose' "" "    " (" " <> operator "++" <> " ") (operator "++" <> "  ") (fmap duplicate (docs a0))
+        prettyOperator "++" (docs a0)
       where
-        docs (TextAppend a b) = prettyListAppendExpression a : docs b
+        docs (TextAppend a b) = prettyListAppendExpression b : docs a
         docs (Note       _ b) = docs b
         docs               b  = [ prettyListAppendExpression b ]
     prettyTextAppendExpression (Note _ a) =
@@ -573,9 +586,9 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyListAppendExpression :: Pretty a => Expr s a -> Doc Ann
     prettyListAppendExpression a0@(ListAppend _ _) =
-        enclose' "" "  " (" " <> operator "#" <> " ") (operator "#" <> " ") (fmap duplicate (docs a0))
+        prettyOperator "#" (docs a0)
       where
-        docs (ListAppend a b) = prettyAndExpression a : docs b
+        docs (ListAppend a b) = prettyAndExpression b : docs a
         docs (Note       _ b) = docs b
         docs               b  = [ prettyAndExpression b ]
     prettyListAppendExpression (Note _ a) =
@@ -585,9 +598,9 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyAndExpression :: Pretty a => Expr s a -> Doc Ann
     prettyAndExpression a0@(BoolAnd _ _) =
-        enclose' "" "    " (" " <> operator "&&" <> " ") (operator "&&" <> "  ") (fmap duplicate (docs a0))
+        prettyOperator "&&" (docs a0)
       where
-        docs (BoolAnd a b) = prettyCombineExpression a : docs b
+        docs (BoolAnd a b) = prettyCombineExpression b : docs a
         docs (Note    _ b) = docs b
         docs            b  = [ prettyCombineExpression b ]
     prettyAndExpression (Note _ a) =
@@ -597,9 +610,9 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyCombineExpression :: Pretty a => Expr s a -> Doc Ann
     prettyCombineExpression a0@(Combine _ _) =
-        enclose' "" "  " (" " <> operator "∧" <> " ") (operator "∧" <> " ") (fmap duplicate (docs a0))
+        prettyOperator "∧" (docs a0)
       where
-        docs (Combine a b) = prettyPreferExpression a : docs b
+        docs (Combine a b) = prettyPreferExpression b : docs a
         docs (Note    _ b) = docs b
         docs            b  = [ prettyPreferExpression b ]
     prettyCombineExpression (Note _ a) =
@@ -609,9 +622,9 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyPreferExpression :: Pretty a => Expr s a -> Doc Ann
     prettyPreferExpression a0@(Prefer _ _) =
-        enclose' "" "  " (" " <> operator "⫽" <> " ") (operator "⫽" <> " ") (fmap duplicate (docs a0))
+        prettyOperator "⫽" (docs a0)
       where
-        docs (Prefer a b) = prettyCombineTypesExpression a : docs b
+        docs (Prefer a b) = prettyCombineTypesExpression b : docs a
         docs (Note   _ b) = docs b
         docs           b  = [ prettyCombineTypesExpression b ]
     prettyPreferExpression (Note _ a) =
@@ -621,9 +634,9 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyCombineTypesExpression :: Pretty a => Expr s a -> Doc Ann
     prettyCombineTypesExpression a0@(CombineTypes _ _) =
-        enclose' "" "  " (" " <> operator "⩓" <> " ") (operator "⩓" <> " ") (fmap duplicate (docs a0))
+        prettyOperator "⩓" (docs a0)
       where
-        docs (CombineTypes a b) = prettyTimesExpression a : docs b
+        docs (CombineTypes a b) = prettyTimesExpression b : docs a
         docs (Note         _ b) = docs b
         docs                 b  = [ prettyTimesExpression b ]
     prettyCombineTypesExpression (Note _ a) =
@@ -633,9 +646,9 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyTimesExpression :: Pretty a => Expr s a -> Doc Ann
     prettyTimesExpression a0@(NaturalTimes _ _) =
-        enclose' "" "  " (" " <> operator "*" <> " ") (operator "*" <> " ") (fmap duplicate (docs a0))
+        prettyOperator "*" (docs a0)
       where
-        docs (NaturalTimes a b) = prettyEqualExpression a : docs b
+        docs (NaturalTimes a b) = prettyEqualExpression b : docs a
         docs (Note         _ b) = docs b
         docs                 b  = [ prettyEqualExpression b ]
     prettyTimesExpression (Note _ a) =
@@ -645,9 +658,9 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyEqualExpression :: Pretty a => Expr s a -> Doc Ann
     prettyEqualExpression a0@(BoolEQ _ _) =
-        enclose' "" "    " (" " <> operator "==" <> " ") (operator "==" <> "  ") (fmap duplicate (docs a0))
+        prettyOperator "==" (docs a0)
       where
-        docs (BoolEQ a b) = prettyNotEqualExpression a : docs b
+        docs (BoolEQ a b) = prettyNotEqualExpression b : docs a
         docs (Note   _ b) = docs b
         docs           b  = [ prettyNotEqualExpression b ]
     prettyEqualExpression (Note _ a) =
@@ -657,9 +670,9 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyNotEqualExpression :: Pretty a => Expr s a -> Doc Ann
     prettyNotEqualExpression a0@(BoolNE _ _) =
-        enclose' "" "    " (" " <> operator "!=" <> " ") (operator "!=" <> "  ") (fmap duplicate (docs a0))
+        prettyOperator "!=" (docs a0)
       where
-        docs (BoolNE a b) = prettyApplicationExpression a : docs b
+        docs (BoolNE a b) = prettyApplicationExpression b : docs a
         docs (Note   _ b) = docs b
         docs           b  = [ prettyApplicationExpression b ]
     prettyNotEqualExpression (Note _ a) =
