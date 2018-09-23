@@ -168,7 +168,7 @@ identifier = do
 whitespaceChunk :: Parser ()
 whitespaceChunk =
     choice
-        [ void (Text.Parser.Char.satisfy predicate)
+        [ void (Dhall.Parser.Combinators.takeWhile1 predicate)
         , void (Text.Parser.Char.text "\r\n")
         , lineComment
         , blockComment
@@ -200,17 +200,18 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
 lineComment :: Parser ()
 lineComment = do
     _ <- Text.Parser.Char.text "--"
-    Text.Parser.Combinators.skipMany notEndOfLine
+
+    let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
+
+    _ <- Dhall.Parser.Combinators.takeWhile predicate
+
     endOfLine
+
     return ()
   where
     endOfLine =
             void (Text.Parser.Char.char '\n'  )
         <|> void (Text.Parser.Char.text "\r\n")
-
-    notEndOfLine = void (Text.Parser.Char.satisfy predicate)
-      where
-        predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
 
 blockComment :: Parser ()
 blockComment = do
@@ -221,11 +222,11 @@ blockCommentChunk :: Parser ()
 blockCommentChunk =
     choice
         [ blockComment  -- Nested block comment
-        , character
+        , characters
         , endOfLine
         ]
   where
-    character = void (Text.Parser.Char.satisfy predicate)
+    characters = void (Dhall.Parser.Combinators.takeWhile1 predicate)
       where
         predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
 
@@ -239,7 +240,6 @@ blockCommentContinue = endOfComment <|> continue
     continue = do
         blockCommentChunk
         blockCommentContinue
-
 
 simpleLabel :: Parser Text
 simpleLabel = try (do
