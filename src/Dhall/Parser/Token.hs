@@ -223,10 +223,18 @@ blockCommentChunk =
     choice
         [ blockComment  -- Nested block comment
         , characters
+        , character
         , endOfLine
         ]
   where
     characters = void (Dhall.Parser.Combinators.takeWhile1 predicate)
+      where
+        predicate c =
+                '\x20' <= c && c <= '\x10FFFF' && c /= '-' && c /= '{'
+            ||  c == '\n'
+            || c == '\t'
+
+    character = void (Text.Parser.Char.satisfy predicate)
       where
         predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
 
