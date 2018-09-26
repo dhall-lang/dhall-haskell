@@ -158,67 +158,61 @@ nonEmptyOptional embedded = do
     return (OptionalLit b (pure a))
 
 operatorExpression :: Parser a -> Parser (Expr Src a)
-operatorExpression = importAltExpression
+operatorExpression = precedence0Expression
 
 makeOperatorExpression
     :: (Parser a -> Parser (Expr Src a))
-    -> Parser ()
-    -> (Expr Src a -> Expr Src a -> Expr Src a)
+    -> Parser (Expr Src a -> Expr Src a -> Expr Src a)
     -> Parser a
     -> Parser (Expr Src a)
-makeOperatorExpression subExpression operatorParser operator embedded =
+makeOperatorExpression subExpression operatorParser embedded =
     noted (do
         a <- subExpression embedded
-        b <- Text.Megaparsec.many (do operatorParser; subExpression embedded)
-        return (foldl operator a b) )
+        b <- Text.Megaparsec.many $ do
+            op <- operatorParser
+            r  <- subExpression embedded
 
-importAltExpression :: Parser a -> Parser (Expr Src a)
-importAltExpression =
-    makeOperatorExpression orExpression _importAlt ImportAlt
+            return (\l -> l `op` r)
+        return (foldl (\x f -> f x) a b) )
 
-orExpression :: Parser a -> Parser (Expr Src a)
-orExpression =
-    makeOperatorExpression plusExpression _or BoolOr
+precedence0Operator :: Parser (Expr Src a -> Expr Src a -> Expr Src a)
+precedence0Operator =
+        ImportAlt   <$ _importAlt
+    <|> BoolOr      <$ _or
+    <|> TextAppend  <$ _textAppend
+    <|> NaturalPlus <$ _plus
+    <|> ListAppend  <$ _listAppend
 
-plusExpression :: Parser a -> Parser (Expr Src a)
-plusExpression =
-    makeOperatorExpression textAppendExpression _plus NaturalPlus
+precedence1Operator :: Parser (Expr Src a -> Expr Src a -> Expr Src a)
+precedence1Operator =
+        BoolAnd     <$ _and
+    <|> Combine     <$ _combine
 
-textAppendExpression :: Parser a -> Parser (Expr Src a)
-textAppendExpression =
-    makeOperatorExpression listAppendExpression _textAppend TextAppend
+precedence2Operator :: Parser (Expr Src a -> Expr Src a -> Expr Src a)
+precedence2Operator =
+        Prefer       <$ _prefer
+    <|> CombineTypes <$ _combineTypes
+    <|> NaturalTimes <$ _times
+    <|> BoolNE       <$ _notEqual
 
-listAppendExpression :: Parser a -> Parser (Expr Src a)
-listAppendExpression =
-    makeOperatorExpression andExpression _listAppend ListAppend
+precedence3Operator :: Parser (Expr Src a -> Expr Src a -> Expr Src a)
+precedence3Operator = BoolEQ <$ _doubleEqual
 
-andExpression :: Parser a -> Parser (Expr Src a)
-andExpression =
-    makeOperatorExpression combineExpression _and BoolAnd
+precedence0Expression :: Parser a -> Parser (Expr Src a)
+precedence0Expression =
+    makeOperatorExpression precedence1Expression precedence0Operator
 
-combineExpression :: Parser a -> Parser (Expr Src a)
-combineExpression =
-    makeOperatorExpression preferExpression _combine Combine
+precedence1Expression :: Parser a -> Parser (Expr Src a)
+precedence1Expression =
+    makeOperatorExpression precedence2Expression precedence1Operator
 
-preferExpression :: Parser a -> Parser (Expr Src a)
-preferExpression =
-    makeOperatorExpression combineTypesExpression _prefer Prefer
+precedence2Expression :: Parser a -> Parser (Expr Src a)
+precedence2Expression =
+    makeOperatorExpression precedence3Expression precedence2Operator
 
-combineTypesExpression :: Parser a -> Parser (Expr Src a)
-combineTypesExpression =
-    makeOperatorExpression timesExpression _combineTypes CombineTypes
-
-timesExpression :: Parser a -> Parser (Expr Src a)
-timesExpression =
-    makeOperatorExpression equalExpression _times NaturalTimes
-
-equalExpression :: Parser a -> Parser (Expr Src a)
-equalExpression =
-    makeOperatorExpression notEqualExpression _doubleEqual BoolEQ
-
-notEqualExpression :: Parser a -> Parser (Expr Src a)
-notEqualExpression =
-    makeOperatorExpression applicationExpression _notEqual BoolNE
+precedence3Expression :: Parser a -> Parser (Expr Src a)
+precedence3Expression =
+    makeOperatorExpression applicationExpression precedence3Operator
 
 applicationExpression :: Parser a -> Parser (Expr Src a)
 applicationExpression embedded = do
