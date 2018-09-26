@@ -264,40 +264,6 @@ primitiveExpression embedded =
             , alternative05
             , alternative06
             , alternative37
-
-            , choice
-                [ alternative08
-                , alternative09
-                , alternative10
-                , alternative11
-                , alternative12
-                , alternative13
-                , alternative14
-                , alternative15
-                , alternativeIntegerToDouble
-                , alternative16
-                , alternative17
-                , alternative18
-                , alternative19
-                , alternative20
-                , alternative21
-                , alternative22
-                , alternative23
-                , alternative24
-                , alternative25
-                , alternative26
-                , alternative27
-                , alternativeNone
-                , alternative28
-                , alternative29
-                , alternative30
-                , alternative31
-                , alternative32
-                , alternative33
-                , alternative34
-                , alternative35
-                , alternative36
-                ] <?> "built-in expression"
             ]
         )
     <|> alternative38

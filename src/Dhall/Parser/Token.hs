@@ -253,9 +253,7 @@ simpleLabel :: Parser Text
 simpleLabel = try (do
     c    <- Text.Parser.Char.satisfy headCharacter
     rest <- Dhall.Parser.Combinators.takeWhile tailCharacter
-    let text = Data.Text.cons c rest
-    Control.Monad.guard (not (Data.HashSet.member text reservedIdentifiers))
-    return text )
+    return (Data.Text.cons c rest))
   where
     headCharacter c = alpha c || c == '_'
 
