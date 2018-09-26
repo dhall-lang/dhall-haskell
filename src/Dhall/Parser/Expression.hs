@@ -26,13 +26,14 @@ import qualified Text.Parser.Char
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
+import Dhall.Parser.Vector
 
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
     before      <- Text.Megaparsec.getSourcePos
     (tokens, e) <- Text.Megaparsec.match parser
     after       <- Text.Megaparsec.getSourcePos
-    let src₀ = Src before after tokens
+    let src₀ = Src before after (uvectorToText tokens)
     case e of
         Note src₁ _ | laxSrcEq src₀ src₁ -> return e
         _                                -> return (Note src₀ e)
@@ -481,7 +482,7 @@ doubleQuotedChunk embedded =
         return (Chunks [(mempty, e)] mempty)
 
     unescapedCharacterFast = do
-        t <- Text.Megaparsec.takeWhile1P Nothing predicate
+        t <- takeWhile1 predicate
         return (Chunks [] t)
       where
         predicate c =
@@ -579,7 +580,7 @@ singleQuoteContinue embedded =
             return mempty
 
         unescapedCharacterFast = do
-            a <- Text.Megaparsec.takeWhile1P Nothing predicate
+            a <- takeWhile1 predicate
             b <- singleQuoteContinue embedded
             return (Chunks [] a <> b)
           where
