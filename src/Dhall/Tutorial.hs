@@ -511,15 +511,10 @@ import Dhall
 --
 -- >>> input auto "[]" :: IO (Vector Natural)
 -- *** Exception:
--- ...Error...: Invalid input
+-- ...Error...: An empty list requires a type annotation
 -- ...
--- (input):1:3:
---   |
--- 1 | []
---   |   ^
--- unexpected end of input
--- expecting ':' or whitespace
--- ...
+-- []
+-- (input):1:1
 --
 -- Also, list elements must all have the same type.  You will get an error if
 -- you try to store elements of different types in a list:
