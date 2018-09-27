@@ -54,8 +54,7 @@ completeExpression embedded = completeExpression_
                 , alternative2
                 , alternative3
                 , annotatedExpression1
-                , arrowExpression
-                , annotatedExpression2
+                , operatorExpression >>= (\a ->  arrowExpression' a <|> annotatedExpression2' a)
                 ]
             )
         ) <?> "expression"
@@ -133,6 +132,11 @@ completeExpression embedded = completeExpression_
             b <- expression
             return (Pi "_" a b)
 
+    arrowExpression' a = do
+            _arrow
+            b <- expression
+            return (Pi "_" a b)
+
     annotatedExpression2 = alternative2
           where
             alternative2 = do
@@ -141,6 +145,12 @@ completeExpression embedded = completeExpression_
                 case b of
                     Nothing -> return a
                     Just c  -> return (Annot a c)
+
+    annotatedExpression2' a = do
+            b <- optional (do _colon; expression)
+            case b of
+                Nothing -> return a
+                Just c  -> return (Annot a c)
 
     emptyCollection = do
             _closeBracket
