@@ -233,6 +233,7 @@ Library
         Dhall.Parser.Expression,
         Dhall.Parser.Combinators,
         Dhall.Parser.Token,
+        Dhall.Parser.InputText,
         Dhall.Import.Types,
         Dhall.Util,
         Paths_dhall

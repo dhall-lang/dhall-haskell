@@ -183,7 +183,6 @@ import qualified Data.List.NonEmpty               as NonEmpty
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Encoding
 import qualified Data.Text                        as Text
-import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core
 import qualified Dhall.Parser
@@ -580,7 +579,7 @@ exprFromUncachedImport :: Import -> StateT (Status IO) IO (Expr Src Import)
 exprFromUncachedImport (Import {..}) = do
     let ImportHashed {..} = importHashed
 
-    (path, text) <- case importType of
+    (path, inputText) <- case importType of
         Local prefix file -> liftIO $ do
             path   <- localToPath prefix file
             exists <- Directory.doesFileExist path
@@ -589,9 +588,9 @@ exprFromUncachedImport (Import {..}) = do
                 then return ()
                 else throwMissingImport (MissingFile path)
 
-            text <- Data.Text.IO.readFile path
+            inputText <- Dhall.Parser.readInputText path
 
-            return (path, text)
+            return (path, inputText)
 
         Remote (URL scheme authority file query fragment maybeHeaders) -> do
             let prefix =
@@ -624,7 +623,7 @@ exprFromUncachedImport (Import {..}) = do
                             Note (Src begin end bytes) _ ->
                                 Note (Src begin end bytes') (Annot expr expected)
                               where
-                                bytes' = bytes <> " : " <> suffix_
+                                bytes' = bytes <> " : " <> Dhall.Parser.inputChunkFromText suffix_
                             _ ->
                                 Annot expr expected
 
@@ -649,7 +648,7 @@ exprFromUncachedImport (Import {..}) = do
         Env env -> liftIO $ do
             x <- System.Environment.lookupEnv (Text.unpack env)
             case x of
-                Just string -> return (Text.unpack env, Text.pack string)
+                Just string -> return (Text.unpack env, Dhall.Parser.inputTextFromString string)
                 Nothing     -> throwMissingImport (MissingEnvironmentVariable env)
 
         Missing -> liftIO $ do
@@ -663,14 +662,14 @@ exprFromUncachedImport (Import {..}) = do
                     Text.Parser.Combinators.eof
                     return r
 
-            case Text.Megaparsec.parse parser path text of
+            case Text.Megaparsec.parse parser path inputText of
                 Left errInfo -> do
-                    liftIO (throwIO (ParseError errInfo text))
+                    liftIO (throwIO (ParseError errInfo $ Dhall.Parser.inputTextToText inputText))
                 Right expr -> do
                     return expr
 
         RawText -> do
-            return (TextLit (Chunks [] text))
+            return (TextLit (Chunks [] (Dhall.Parser.inputTextToText inputText)))
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status IO

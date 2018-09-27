@@ -4,7 +4,6 @@
 
 module Dhall.Import.HTTP where
 
-import Control.Exception (throwIO)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
@@ -15,11 +14,9 @@ import Data.Semigroup ((<>))
 import Lens.Family.State.Strict (zoom)
 
 import qualified Control.Monad.Trans.State.Strict        as State
-import qualified Data.Text                               as Text
-import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Encoding
 
 import Dhall.Import.Types
+import Dhall.Parser.InputText
 
 #if MIN_VERSION_http_client(0,5,0)
 import Network.HTTP.Client
@@ -97,7 +94,7 @@ needManager = do
 fetchFromHttpUrl
     :: String
     -> Maybe [(CI ByteString, ByteString)]
-    -> StateT (Status m) IO (String, Text.Text)
+    -> StateT (Status m) IO (String, InputText)
 fetchFromHttpUrl url mheaders = do
     m <- needManager
 
@@ -112,6 +109,4 @@ fetchFromHttpUrl url mheaders = do
 
     let bytes = HTTP.responseBody response
 
-    case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
-        Left  err  -> liftIO (throwIO err)
-        Right text -> return (url, Data.Text.Lazy.toStrict text)
+    liftIO $ fmap ((,) url) $ inputTextFromLazyByteStringIO bytes

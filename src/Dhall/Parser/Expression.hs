@@ -475,7 +475,7 @@ doubleQuotedChunk embedded =
         return (Chunks [(mempty, e)] mempty)
 
     unescapedCharacterFast = do
-        t <- Text.Megaparsec.takeWhile1P Nothing predicate
+        t <- takeWhile1 predicate
         return (Chunks [] t)
       where
         predicate c =
@@ -573,7 +573,7 @@ singleQuoteContinue embedded =
             return mempty
 
         unescapedCharacterFast = do
-            a <- Text.Megaparsec.takeWhile1P Nothing predicate
+            a <- takeWhile1 predicate
             b <- singleQuoteContinue embedded
             return (Chunks [] a <> b)
           where
