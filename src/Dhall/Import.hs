@@ -196,6 +196,8 @@ import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 
+import           Dhall.Parser.Vector
+
 -- | An import failed because of a cycle in the import graph
 newtype Cycle = Cycle
     { cyclicImport :: Import  -- ^ The offending cyclic import
@@ -663,7 +665,7 @@ exprFromUncachedImport (Import {..}) = do
                     Text.Parser.Combinators.eof
                     return r
 
-            case Text.Megaparsec.parse parser path text of
+            case Text.Megaparsec.parse parser path (uvectorFromText text) of
                 Left errInfo -> do
                     liftIO (throwIO (ParseError errInfo text))
                 Right expr -> do
