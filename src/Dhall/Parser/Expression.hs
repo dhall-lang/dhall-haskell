@@ -53,10 +53,10 @@ completeExpression embedded = completeExpression_
                 , alternative1
                 , alternative2
                 , alternative3
-                , alternative4
+                , annotatedExpression1
+                , operatorExpression >>= (\a ->  arrowExpression' a <|> annotatedExpression2' a)
                 ]
             )
-        <|> alternative5
         ) <?> "expression"
       where
         alternative0 = do
@@ -102,19 +102,11 @@ completeExpression embedded = completeExpression_
             c <- expression
             return (Pi a b c)
 
-        alternative4 = do
-            a <- try (do a <- operatorExpression; _arrow; return a)
-            b <- expression
-            return (Pi "_" a b)
-
-        alternative5 = annotatedExpression
-
-    annotatedExpression =
-            noted
+    annotatedExpression1 =
+           
                 ( choice
                     [ alternative0
                     , try alternative1
-                    , alternative2
                     ]
                 )
           where
@@ -132,12 +124,33 @@ completeExpression embedded = completeExpression_
                 (emptyCollection <|> nonEmptyOptional) )
                 <?> "list literal"
 
+    arrowExpression = do
+            a <- try $ do
+                a <- operatorExpression
+                _arrow
+                return a
+            b <- expression
+            return (Pi "_" a b)
+
+    arrowExpression' a = do
+            _arrow
+            b <- expression
+            return (Pi "_" a b)
+
+    annotatedExpression2 = alternative2
+          where
             alternative2 = do
                 a <- operatorExpression
                 b <- optional (do _colon; expression)
                 case b of
                     Nothing -> return a
                     Just c  -> return (Annot a c)
+
+    annotatedExpression2' a = do
+            b <- optional (do _colon; expression)
+            case b of
+                Nothing -> return a
+                Just c  -> return (Annot a c)
 
     emptyCollection = do
             _closeBracket
@@ -235,6 +248,7 @@ completeExpression embedded = completeExpression_
             return (foldl (\e k -> k e) a b) )
 
     primitiveExpression =
+            parensExpression <|>
             noted
                 ( choice
                     [ alternative00
@@ -249,7 +263,6 @@ completeExpression embedded = completeExpression_
                     , builtin <?> "built-in expression"
                     ]
                 )
-            <|> alternative38
           where
             alternative00 = do
                 a <- try doubleLiteral
@@ -351,11 +364,11 @@ completeExpression embedded = completeExpression_
                 a <- identifier
                 return (Var a)
 
-            alternative38 = do
-                _openParens
-                a <- expression
-                _closeParens
-                return a
+    parensExpression = do
+        _openParens
+        a <- expression
+        _closeParens
+        return a
 
     doubleQuotedChunk =
             choice
