@@ -246,39 +246,7 @@ completeExpression embedded = completeExpression_
                     , alternative06
                     , alternative37
 
-                    , choice
-                        [ alternative08
-                        , alternative09
-                        , alternative10
-                        , alternative11
-                        , alternative12
-                        , alternative13
-                        , alternative14
-                        , alternative15
-                        , alternativeIntegerToDouble
-                        , alternative16
-                        , alternative17
-                        , alternative18
-                        , alternative19
-                        , alternative20
-                        , alternative21
-                        , alternative22
-                        , alternative23
-                        , alternative24
-                        , alternative25
-                        , alternative26
-                        , alternative27
-                        , alternativeNone
-                        , alternative28
-                        , alternative29
-                        , alternative30
-                        , alternative31
-                        , alternative32
-                        , alternative33
-                        , alternative34
-                        , alternative35
-                        , alternative36
-                        ] <?> "built-in expression"
+                    , builtin <?> "built-in expression"
                     ]
                 )
             <|> alternative38
@@ -310,6 +278,54 @@ completeExpression embedded = completeExpression_
                 return a ) <?> "union type or literal"
 
             alternative06 = nonEmptyListLiteral
+
+            builtin = do
+                let predicate c =
+                            c == 'N'
+                        ||  c == 'I'
+                        ||  c == 'D'
+                        ||  c == 'L'
+                        ||  c == 'O'
+                        ||  c == 'B'
+                        ||  c == 'T'
+                        ||  c == 'F'
+                        ||  c == 'K'
+
+                _ <- Text.Megaparsec.lookAhead (Text.Megaparsec.satisfy predicate)
+
+                choice
+                    [ alternative08
+                    , alternative09
+                    , alternative10
+                    , alternative11
+                    , alternative12
+                    , alternative13
+                    , alternative14
+                    , alternative15
+                    , alternativeIntegerToDouble
+                    , alternative16
+                    , alternative17
+                    , alternative18
+                    , alternative19
+                    , alternative20
+                    , alternative21
+                    , alternative22
+                    , alternative23
+                    , alternative24
+                    , alternative25
+                    , alternative26
+                    , alternative27
+                    , alternativeNone
+                    , alternative28
+                    , alternative29
+                    , alternative30
+                    , alternative31
+                    , alternative32
+                    , alternative33
+                    , alternative34
+                    , alternative35
+                    , alternative36
+                    ]
 
             alternative08 = do
                 _NaturalFold
