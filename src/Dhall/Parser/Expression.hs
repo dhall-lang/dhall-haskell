@@ -53,10 +53,11 @@ completeExpression embedded = completeExpression_
                 , alternative1
                 , alternative2
                 , alternative3
-                , alternative4
+                , annotatedExpression1
+                , arrowExpression
+                , annotatedExpression2
                 ]
             )
-        <|> alternative5
         ) <?> "expression"
       where
         alternative0 = do
@@ -102,19 +103,11 @@ completeExpression embedded = completeExpression_
             c <- expression
             return (Pi a b c)
 
-        alternative4 = do
-            a <- try (do a <- operatorExpression; _arrow; return a)
-            b <- expression
-            return (Pi "_" a b)
-
-        alternative5 = annotatedExpression
-
-    annotatedExpression =
-            noted
+    annotatedExpression1 =
+           
                 ( choice
                     [ alternative0
                     , try alternative1
-                    , alternative2
                     ]
                 )
           where
@@ -132,6 +125,16 @@ completeExpression embedded = completeExpression_
                 (emptyCollection <|> nonEmptyOptional) )
                 <?> "list literal"
 
+    arrowExpression = do
+            a <- try $ do
+                a <- operatorExpression
+                _arrow
+                return a
+            b <- expression
+            return (Pi "_" a b)
+
+    annotatedExpression2 = alternative2
+          where
             alternative2 = do
                 a <- operatorExpression
                 b <- optional (do _colon; expression)
