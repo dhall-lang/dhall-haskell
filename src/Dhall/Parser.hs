@@ -14,6 +14,23 @@ module Dhall.Parser (
     , Src(..)
     , ParseError(..)
     , Parser(..)
+
+    --  ** InputText
+    , InputText
+    , inputTextFromString
+    , inputTextFromText
+    , inputTextToText
+    , inputTextFromByteString
+    , inputTextFromByteStringIO
+    , inputTextFromLazyByteString
+    , inputTextFromLazyByteStringIO
+    , readInputText
+    -- ** Input chunk
+    , InputChunk
+    , inputChunkToText
+    , inputChunkFromText
+    , inputChunkToString
+    , inputChunkFromString
     ) where
 
 import Control.Exception (Exception)
@@ -29,6 +46,7 @@ import qualified Text.Megaparsec
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
 import Dhall.Parser.Expression
+import Dhall.Parser.InputText
 
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Import)
@@ -41,7 +59,7 @@ exprA = completeExpression
 
 -- | A parsing error
 data ParseError = ParseError
-    { unwrap :: Text.Megaparsec.ParseErrorBundle Text Void
+    { unwrap :: Text.Megaparsec.ParseErrorBundle InputText Void
     , input  :: Text
     }
 
@@ -78,7 +96,7 @@ exprAndHeaderFromText
     -> Either ParseError (Text, Expr Src Import)
 exprAndHeaderFromText delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
-    Right (txt, r) -> Right (Data.Text.dropWhileEnd (/= '\n') txt, r)
+    Right (txt, r) -> Right (Data.Text.dropWhileEnd (/= '\n') (inputChunkToText txt), r)
   where
     parser = do
         (bytes, _) <- Text.Megaparsec.match whitespace
@@ -86,4 +104,4 @@ exprAndHeaderFromText delta text = case result of
         Text.Megaparsec.eof
         return (bytes, r)
 
-    result = Text.Megaparsec.parse (unParser parser) delta text
+    result = Text.Megaparsec.parse (unParser parser) delta (inputTextFromText text)

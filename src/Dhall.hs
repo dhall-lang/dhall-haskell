@@ -325,7 +325,7 @@ inputWithSettings settings (Type {..}) txt = do
             Note (Src begin end bytes) _ ->
                 Note (Src begin end bytes') (Annot expr' expected)
               where
-                bytes' = bytes <> " : " <> suffix
+                bytes' = bytes <> " : " <> Dhall.Parser.inputChunkFromText suffix
             _ ->
                 Annot expr' expected
     _ <- throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)

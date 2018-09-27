@@ -34,8 +34,10 @@ import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token.Style
 
+import Dhall.Parser.InputText
+
 -- | Source code extract
-data Src = Src !Text.Megaparsec.SourcePos !Text.Megaparsec.SourcePos Text
+data Src = Src !Text.Megaparsec.SourcePos !Text.Megaparsec.SourcePos InputChunk
   -- Text field is intentionally lazy
   deriving (Data, Eq, Show)
 
@@ -51,7 +53,7 @@ laxSrcEq (Src p q _) (Src p' q' _) = eq p  p' && eq q q'
 
 instance Pretty Src where
     pretty (Src begin _ text) =
-            pretty (Dhall.Util.snip (prefix <> text))
+            pretty (Dhall.Util.snip (prefix <> inputChunkToText text))
         <>  "\n"
         <>  pretty (Text.Megaparsec.sourcePosPretty begin)
       where
@@ -63,7 +65,7 @@ instance Pretty Src where
     @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
     comments as whitespace
 -}
-newtype Parser a = Parser { unParser :: Text.Megaparsec.Parsec Void Text a }
+newtype Parser a = Parser { unParser :: Text.Megaparsec.Parsec Void InputText a }
 
 instance Functor Parser where
     fmap f (Parser x) = Parser (fmap f x)
@@ -122,7 +124,7 @@ instance MonadPlus Parser where
     mplus = (<|>)
     -- {-# INLINE mplus #-}
 
-instance Text.Megaparsec.MonadParsec Void Text Parser where
+instance Text.Megaparsec.MonadParsec Void InputText Parser where
     failure u e    = Parser (Text.Megaparsec.failure u e)
 
     fancyFailure e = Parser (Text.Megaparsec.fancyFailure e)
@@ -169,7 +171,7 @@ instance (Data.Semigroup.Semigroup a, Monoid a) => Monoid (Parser a) where
 #endif
 
 instance IsString a => IsString (Parser a) where
-    fromString x = fromString x <$ Text.Megaparsec.Char.string (fromString x)
+    fromString x = fromString x <$ Text.Megaparsec.Char.string (inputChunkFromString x)
 
 instance Text.Parser.Combinators.Parsing Parser where
   try = Text.Megaparsec.try
@@ -195,9 +197,9 @@ instance Text.Parser.Char.CharParsing Parser where
 
   anyChar = Text.Megaparsec.anySingle
 
-  string = fmap Data.Text.unpack . Text.Megaparsec.Char.string . fromString
+  string = fmap inputChunkToString . Text.Megaparsec.Char.string . inputChunkFromString
 
-  text = Text.Megaparsec.Char.string
+  text = fmap inputChunkToText . Text.Megaparsec.Char.string . inputChunkFromText
 
 instance TokenParsing Parser where
     someSpace =
@@ -232,10 +234,10 @@ satisfy :: (Char -> Bool) -> Parser Text
 satisfy = fmap Data.Text.singleton . Text.Parser.Char.satisfy
 
 takeWhile :: (Char -> Bool) -> Parser Text
-takeWhile predicate = Parser (Text.Megaparsec.takeWhileP Nothing predicate)
+takeWhile predicate = Parser (inputChunkToText <$> Text.Megaparsec.takeWhileP Nothing predicate)
 
 takeWhile1 :: (Char -> Bool) -> Parser Text
-takeWhile1 predicate = Parser (Text.Megaparsec.takeWhile1P Nothing predicate)
+takeWhile1 predicate = Parser (inputChunkToText <$> Text.Megaparsec.takeWhile1P Nothing predicate)
 
 noDuplicates :: Ord a => [a] -> Parser (Set a)
 noDuplicates = go Data.Set.empty

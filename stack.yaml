@@ -1,4 +1,4 @@
-resolver: lts-12.4
+resolver: lts-12.10
 extra-deps:
   - megaparsec-7.0.0@rev:0
   # Version 0.2.0.0 of cborg, the latest on Hackage, is broken on i386.
