@@ -758,7 +758,13 @@ missing = do
   return Missing
 
 importType_ :: Parser ImportType
-importType_ = choice [ local, http, env, missing ]
+importType_ = do
+    let predicate c =
+            c == '~' || c == '.' || c == '/' || c == 'h' || c == 'e' || c == 'm'
+
+    _ <- Text.Megaparsec.lookAhead (Text.Megaparsec.satisfy predicate)
+
+    choice [ local, http, env, missing ]
 
 importHashed_ :: Parser ImportHashed
 importHashed_ = do
