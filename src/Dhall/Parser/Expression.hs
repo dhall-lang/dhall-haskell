@@ -1,6 +1,8 @@
-{-# LANGUAGE NamedFieldPuns  #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -- | Parsing Dhall expressions.
 module Dhall.Parser.Expression where
 
@@ -37,687 +39,656 @@ noted parser = do
         Note src₁ _ | laxSrcEq src₀ src₁ -> return e
         _                                -> return (Note src₀ e)
 
-expression :: Parser a -> Parser (Expr Src a)
-expression embedded =
-    (   noted
-        ( choice
-            [ alternative0
-            , alternative1
-            , alternative2
-            , alternative3
-            , alternative4
-            ]
-        )
-    <|> alternative5
-    ) <?> "expression"
-  where
-    alternative0 = do
-        _lambda
-        _openParens
-        a <- label
-        _colon
-        b <- expression embedded
-        _closeParens
-        _arrow
-        c <- expression embedded
-        return (Lam a b c)
-
-    alternative1 = do
-        _if
-        a <- expression embedded
-        _then
-        b <- expression embedded
-        _else
-        c <- expression embedded
-        return (BoolIf a b c)
-
-    alternative2 = do
-        _let
-        a <- label
-        b <- optional (do
-            _colon
-            expression embedded )
-        _equal
-        c <- expression embedded
-        _in
-        d <- expression embedded
-        return (Let a b c d)
-
-    alternative3 = do
-        _forall
-        _openParens
-        a <- label
-        _colon
-        b <- expression embedded
-        _closeParens
-        _arrow
-        c <- expression embedded
-        return (Pi a b c)
-
-    alternative4 = do
-        a <- try (do a <- operatorExpression embedded; _arrow; return a)
-        b <- expression embedded
-        return (Pi "_" a b)
-
-    alternative5 = annotatedExpression embedded
-
-annotatedExpression :: Parser a -> Parser (Expr Src a)
-annotatedExpression embedded =
-    noted
-        ( choice
-            [ alternative0
-            , try alternative1
-            , alternative2
-            ]
-        )
-  where
-    alternative0 = do
-        _merge
-        a <- importExpression embedded
-        b <- importExpression embedded
-        c <- optional (do
-            _colon
-            applicationExpression embedded )
-        return (Merge a b c)
-
-    alternative1 = (do
-        _openBracket
-        (emptyCollection embedded <|> nonEmptyOptional embedded) )
-        <?> "list literal"
-
-    alternative2 = do
-        a <- operatorExpression embedded
-        b <- optional (do _colon; expression embedded)
-        case b of
-            Nothing -> return a
-            Just c  -> return (Annot a c)
-
-emptyCollection :: Parser a -> Parser (Expr Src a)
-emptyCollection embedded = do
-    _closeBracket
-    _colon
-    a <- alternative0 <|> alternative1
-    b <- importExpression embedded
-    return (a b)
-  where
-    alternative0 = do
-        _List
-        return (\a -> ListLit (Just a) empty)
-
-    alternative1 = do
-        _Optional
-        return (\a -> OptionalLit a empty)
-
-nonEmptyOptional :: Parser a -> Parser (Expr Src a)
-nonEmptyOptional embedded = do
-    a <- expression embedded
-    _closeBracket
-    _colon
-    _Optional
-    b <- importExpression embedded
-    return (OptionalLit b (pure a))
-
-operatorExpression :: Parser a -> Parser (Expr Src a)
-operatorExpression = precedence0Expression
-
-makeOperatorExpression
-    :: (Parser a -> Parser (Expr Src a))
-    -> Parser (Expr Src a -> Expr Src a -> Expr Src a)
-    -> Parser a
-    -> Parser (Expr Src a)
-makeOperatorExpression subExpression operatorParser embedded =
-    noted (do
-        a <- subExpression embedded
-        b <- Text.Megaparsec.many $ do
-            op <- operatorParser
-            r  <- subExpression embedded
-
-            return (\l -> l `op` r)
-        return (foldl (\x f -> f x) a b) )
-
-precedence0Operator :: Parser (Expr Src a -> Expr Src a -> Expr Src a)
-precedence0Operator =
-        ImportAlt   <$ _importAlt
-    <|> BoolOr      <$ _or
-    <|> TextAppend  <$ _textAppend
-    <|> NaturalPlus <$ _plus
-    <|> ListAppend  <$ _listAppend
-
-precedence1Operator :: Parser (Expr Src a -> Expr Src a -> Expr Src a)
-precedence1Operator =
-        BoolAnd     <$ _and
-    <|> Combine     <$ _combine
-
-precedence2Operator :: Parser (Expr Src a -> Expr Src a -> Expr Src a)
-precedence2Operator =
-        Prefer       <$ _prefer
-    <|> CombineTypes <$ _combineTypes
-    <|> NaturalTimes <$ _times
-    <|> BoolNE       <$ _notEqual
-
-precedence3Operator :: Parser (Expr Src a -> Expr Src a -> Expr Src a)
-precedence3Operator = BoolEQ <$ _doubleEqual
-
-precedence0Expression :: Parser a -> Parser (Expr Src a)
-precedence0Expression =
-    makeOperatorExpression precedence1Expression precedence0Operator
-
-precedence1Expression :: Parser a -> Parser (Expr Src a)
-precedence1Expression =
-    makeOperatorExpression precedence2Expression precedence1Operator
-
-precedence2Expression :: Parser a -> Parser (Expr Src a)
-precedence2Expression =
-    makeOperatorExpression precedence3Expression precedence2Operator
-
-precedence3Expression :: Parser a -> Parser (Expr Src a)
-precedence3Expression =
-    makeOperatorExpression applicationExpression precedence3Operator
-
-applicationExpression :: Parser a -> Parser (Expr Src a)
-applicationExpression embedded = do
-    f <-    (do _constructors; return Constructors)
-        <|> (do _Some; return Some)
-        <|> return id
-    a <- noted (importExpression embedded)
-    b <- Text.Megaparsec.many (noted (importExpression embedded))
-    return (foldl app (f a) b)
-  where
-    app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
-        Note (Src before after (bytesL <> bytesR)) (App nL nR)
-    app nL nR =
-        App nL nR
-
-importExpression :: Parser a -> Parser (Expr Src a)
-importExpression embedded = noted (choice [ alternative0, alternative1 ])
-  where
-    alternative0 = do
-        a <- embedded
-        return (Embed a)
-
-    alternative1 = selectorExpression embedded
-
-selectorExpression :: Parser a -> Parser (Expr Src a)
-selectorExpression embedded = noted (do
-    a <- primitiveExpression embedded
-
-    let left  x  e = Field   e x
-    let right xs e = Project e xs
-    b <- Text.Megaparsec.many (try (do _dot; fmap left label <|> fmap right labels))
-    return (foldl (\e k -> k e) a b) )
-
-primitiveExpression :: Parser a -> Parser (Expr Src a)
-primitiveExpression embedded =
-    noted
-        ( choice
-            [ alternative00
-            , alternative01
-            , alternative02
-            , alternative03
-            , alternative04
-            , alternative05
-            , alternative06
-            , alternative37
-
-            , choice
-                [ alternative08
-                , alternative09
-                , alternative10
-                , alternative11
-                , alternative12
-                , alternative13
-                , alternative14
-                , alternative15
-                , alternativeIntegerToDouble
-                , alternative16
-                , alternative17
-                , alternative18
-                , alternative19
-                , alternative20
-                , alternative21
-                , alternative22
-                , alternative23
-                , alternative24
-                , alternative25
-                , alternative26
-                , alternative27
-                , alternativeNone
-                , alternative28
-                , alternative29
-                , alternative30
-                , alternative31
-                , alternative32
-                , alternative33
-                , alternative34
-                , alternative35
-                , alternative36
-                ] <?> "built-in expression"
-            ]
-        )
-    <|> alternative38
-  where
-    alternative00 = do
-        a <- try doubleLiteral
-        return (DoubleLit a)
-
-    alternative01 = do
-        a <- try naturalLiteral
-        return (NaturalLit a)
-
-    alternative02 = do
-        a <- try integerLiteral
-        return (IntegerLit a)
-
-    alternative03 = textLiteral embedded
-
-    alternative04 = (do
-        _openBrace
-        a <- recordTypeOrLiteral embedded
-        _closeBrace
-        return a ) <?> "record type or literal"
-
-    alternative05 = (do
-        _openAngle
-        a <- unionTypeOrLiteral embedded
-        _closeAngle
-        return a ) <?> "union type or literal"
-
-    alternative06 = nonEmptyListLiteral embedded
-
-    alternative08 = do
-        _NaturalFold
-        return NaturalFold
-
-    alternative09 = do
-        _NaturalBuild
-        return NaturalBuild
-
-    alternative10 = do
-        _NaturalIsZero
-        return NaturalIsZero
-
-    alternative11 = do
-        _NaturalEven
-        return NaturalEven
-
-    alternative12 = do
-        _NaturalOdd
-        return NaturalOdd
-
-    alternative13 = do
-        _NaturalToInteger
-        return NaturalToInteger
-
-    alternative14 = do
-        _NaturalShow
-        return NaturalShow
-
-    alternative15 = do
-        _IntegerShow
-        return IntegerShow
-
-    alternativeIntegerToDouble = do
-        _IntegerToDouble
-        return IntegerToDouble
-
-    alternative16 = do
-        _DoubleShow
-        return DoubleShow
-
-    alternative17 = do
-        _ListBuild
-        return ListBuild
-
-    alternative18 = do
-        _ListFold
-        return ListFold
-
-    alternative19 = do
-        _ListLength
-        return ListLength
-
-    alternative20 = do
-        _ListHead
-        return ListHead
-
-    alternative21 = do
-        _ListLast
-        return ListLast
-
-    alternative22 = do
-        _ListIndexed
-        return ListIndexed
-
-    alternative23 = do
-        _ListReverse
-        return ListReverse
-
-    alternative24 = do
-        _OptionalFold
-        return OptionalFold
-
-    alternative25 = do
-        _OptionalBuild
-        return OptionalBuild
-
-    alternative26 = do
-        _Bool
-        return Bool
-
-    alternative27 = do
-        _Optional
-        return Optional
-
-    alternativeNone = do
-        _None
-        return None
-
-    alternative28 = do
-        _Natural
-        return Natural
-
-    alternative29 = do
-        _Integer
-        return Integer
-
-    alternative30 = do
-        _Double
-        return Double
-
-    alternative31 = do
-        _Text
-        return Text
-
-    alternative32 = do
-        _List
-        return List
-
-    alternative33 = do
-        _True
-        return (BoolLit True)
-
-    alternative34 = do
-        _False
-        return (BoolLit False)
-
-    alternative35 = do
-        _Type
-        return (Const Type)
-
-    alternative36 = do
-        _Kind
-        return (Const Kind)
-
-    alternative37 = do
-        a <- identifier
-        return (Var a)
-
-    alternative38 = do
-        _openParens
-        a <- expression embedded
-        _closeParens
-        return a
-
-
-doubleQuotedChunk :: Parser a -> Parser (Chunks Src a)
-doubleQuotedChunk embedded =
-    choice
-        [ interpolation
-        , unescapedCharacterFast
-        , unescapedCharacterSlow
-        , escapedCharacter
-        ]
-  where
-    interpolation = do
-        _ <- Text.Parser.Char.text "${"
-        e <- completeExpression embedded
-        _ <- Text.Parser.Char.char '}'
-        return (Chunks [(mempty, e)] mempty)
-
-    unescapedCharacterFast = do
-        t <- Text.Megaparsec.takeWhile1P Nothing predicate
-        return (Chunks [] t)
-      where
-        predicate c =
-            (   ('\x20' <= c && c <= '\x21'    )
-            ||  ('\x23' <= c && c <= '\x5B'    )
-            ||  ('\x5D' <= c && c <= '\x10FFFF')
-            ) && c /= '$'
-
-    unescapedCharacterSlow = do
-        _ <- Text.Megaparsec.single '$'
-        return (Chunks [] "$")
-
-    escapedCharacter = do
-        _ <- Text.Parser.Char.char '\\'
-        c <- choice
-            [ quotationMark
-            , dollarSign
-            , backSlash
-            , forwardSlash
-            , backSpace
-            , formFeed
-            , lineFeed
-            , carriageReturn
-            , tab
-            , unicode
-            ]
-        return (Chunks [] (Data.Text.singleton c))
-      where
-        quotationMark = Text.Parser.Char.char '"'
-
-        dollarSign = Text.Parser.Char.char '$'
-
-        backSlash = Text.Parser.Char.char '\\'
-
-        forwardSlash = Text.Parser.Char.char '/'
-
-        backSpace = do _ <- Text.Parser.Char.char 'b'; return '\b'
-
-        formFeed = do _ <- Text.Parser.Char.char 'f'; return '\f'
-
-        lineFeed = do _ <- Text.Parser.Char.char 'n'; return '\n'
-
-        carriageReturn = do _ <- Text.Parser.Char.char 'r'; return '\r'
-
-        tab = do _ <- Text.Parser.Char.char 't'; return '\t'
-
-        unicode = do
-            _  <- Text.Parser.Char.char 'u';
-            n0 <- hexNumber
-            n1 <- hexNumber
-            n2 <- hexNumber
-            n3 <- hexNumber
-            let n = ((n0 * 16 + n1) * 16 + n2) * 16 + n3
-            return (Data.Char.chr n)
-
-doubleQuotedLiteral :: Parser a -> Parser (Chunks Src a)
-doubleQuotedLiteral embedded = do
-    _      <- Text.Parser.Char.char '"'
-    chunks <- Text.Megaparsec.many (doubleQuotedChunk embedded)
-    _      <- Text.Parser.Char.char '"'
-    return (mconcat chunks)
-
-singleQuoteContinue :: Parser a -> Parser (Chunks Src a)
-singleQuoteContinue embedded =
-    choice
-        [ escapeSingleQuotes
-        , interpolation
-        , escapeInterpolation
-        , endLiteral
-        , unescapedCharacterFast
-        , unescapedCharacterSlow
-        , tab
-        , endOfLine
-        ]
-  where
-        escapeSingleQuotes = do
-            _ <- "'''" :: Parser Text
-            b <- singleQuoteContinue embedded
-            return ("''" <> b)
-
-        interpolation = do
-            _ <- Text.Parser.Char.text "${"
-            a <- completeExpression embedded
-            _ <- Text.Parser.Char.char '}'
-            b <- singleQuoteContinue embedded
-            return (Chunks [(mempty, a)] mempty <> b)
-
-        escapeInterpolation = do
-            _ <- Text.Parser.Char.text "''${"
-            b <- singleQuoteContinue embedded
-            return ("${" <> b)
-
-        endLiteral = do
-            _ <- Text.Parser.Char.text "''"
-            return mempty
-
-        unescapedCharacterFast = do
-            a <- Text.Megaparsec.takeWhile1P Nothing predicate
-            b <- singleQuoteContinue embedded
-            return (Chunks [] a <> b)
-          where
-            predicate c =
-                ('\x20' <= c && c <= '\x10FFFF') && c /= '$' && c /= '\''
-
-        unescapedCharacterSlow = do
-            a <- satisfy predicate
-            b <- singleQuoteContinue embedded
-            return (Chunks [] a <> b)
-          where
-            predicate c = c == '$' || c == '\''
-
-        endOfLine = do
-            a <- "\n" <|> "\r\n"
-            b <- singleQuoteContinue embedded
-            return (Chunks [] a <> b)
-
-        tab = do
-            _ <- Text.Parser.Char.char '\t'
-            b <- singleQuoteContinue embedded
-            return ("\t" <> b)
-
-singleQuoteLiteral :: Parser a -> Parser (Chunks Src a)
-singleQuoteLiteral embedded = do
-    _ <- Text.Parser.Char.text "''"
-
-    -- This is technically not in the grammar, but it's still equivalent to the
-    -- original grammar and an easy way to discard the first character if it's
-    -- a newline
-    _ <- optional endOfLine
-
-    a <- singleQuoteContinue embedded
-
-    return (dedent a)
-  where
-    endOfLine =
-            void (Text.Parser.Char.char '\n'  )
-        <|> void (Text.Parser.Char.text "\r\n")
-
-textLiteral :: Parser a -> Parser (Expr Src a)
-textLiteral embedded = (do
-    literal <- doubleQuotedLiteral embedded <|> singleQuoteLiteral embedded
-    whitespace
-    return (TextLit literal) ) <?> "text literal"
-
-recordTypeOrLiteral :: Parser a -> Parser (Expr Src a)
-recordTypeOrLiteral embedded =
-    choice
-        [ alternative0
-        , alternative1
-        , alternative2
-        ]
-  where
-    alternative0 = do
-        _equal
-        return (RecordLit Data.HashMap.Strict.InsOrd.empty)
-
-    alternative1 = nonEmptyRecordTypeOrLiteral embedded
-
-    alternative2 = return (Record Data.HashMap.Strict.InsOrd.empty)
-
-nonEmptyRecordTypeOrLiteral :: Parser a -> Parser (Expr Src a)
-nonEmptyRecordTypeOrLiteral embedded = do
-    a <- label
-
-    let nonEmptyRecordType = do
-            _colon
-            b <- expression embedded
-            e <- Text.Megaparsec.many (do
-                _comma
-                c <- label
-                _colon
-                d <- expression embedded
-                return (c, d) )
-            m <- toMap ((a, b) : e)
-            return (Record m)
-
-    let nonEmptyRecordLiteral = do
-            _equal
-            b <- expression embedded
-            e <- Text.Megaparsec.many (do
-                _comma
-                c <- label
-                _equal
-                d <- expression embedded
-                return (c, d) )
-            m <- toMap ((a, b) : e)
-            return (RecordLit m)
-
-    nonEmptyRecordType <|> nonEmptyRecordLiteral
-
-unionTypeOrLiteral :: Parser a -> Parser (Expr Src a)
-unionTypeOrLiteral embedded =
-        nonEmptyUnionTypeOrLiteral embedded
-    <|> return (Union Data.HashMap.Strict.InsOrd.empty)
-
-nonEmptyUnionTypeOrLiteral :: Parser a -> Parser (Expr Src a)
-nonEmptyUnionTypeOrLiteral embedded = do
-    (f, kvs) <- loop
-    m <- toMap kvs
-    return (f m)
-  where
-    loop = do
-        a <- label
-
-        let alternative0 = do
-                _equal
-                b <- expression embedded
-                kvs <- Text.Megaparsec.many (do
-                    _bar
-                    c <- label
-                    _colon
-                    d <- expression embedded
-                    return (c, d) )
-                return (UnionLit a b, kvs)
-
-        let alternative1 = do
-                _colon
-                b <- expression embedded
-
-                let alternative2 = do
-                        _bar
-                        (f, kvs) <- loop
-                        return (f, (a, b):kvs)
-
-                let alternative3 = return (Union, [(a, b)])
-
-                alternative2 <|> alternative3
-
-        alternative0 <|> alternative1
-
-nonEmptyListLiteral :: Parser a -> Parser (Expr Src a)
-nonEmptyListLiteral embedded = (do
-    _openBracket
-    a <- expression embedded
-    b <- Text.Megaparsec.many (do _comma; expression embedded)
-    _closeBracket
-    return (ListLit Nothing (Data.Sequence.fromList (a:b))) ) <?> "list literal"
-
 completeExpression :: Parser a -> Parser (Expr Src a)
-completeExpression embedded = do
-    whitespace
-    expression embedded
+completeExpression embedded = completeExpression_
+  where
+    completeExpression_ = do
+        whitespace
+        expression
+
+    expression =
+        (   noted
+            ( choice
+                [ alternative0
+                , alternative1
+                , alternative2
+                , alternative3
+                , alternative4
+                ]
+            )
+        <|> alternative5
+        ) <?> "expression"
+      where
+        alternative0 = do
+            _lambda
+            _openParens
+            a <- label
+            _colon
+            b <- expression
+            _closeParens
+            _arrow
+            c <- expression
+            return (Lam a b c)
+
+        alternative1 = do
+            _if
+            a <- expression
+            _then
+            b <- expression
+            _else
+            c <- expression
+            return (BoolIf a b c)
+
+        alternative2 = do
+            _let
+            a <- label
+            b <- optional (do
+                _colon
+                expression )
+            _equal
+            c <- expression
+            _in
+            d <- expression
+            return (Let a b c d)
+
+        alternative3 = do
+            _forall
+            _openParens
+            a <- label
+            _colon
+            b <- expression
+            _closeParens
+            _arrow
+            c <- expression
+            return (Pi a b c)
+
+        alternative4 = do
+            a <- try (do a <- operatorExpression; _arrow; return a)
+            b <- expression
+            return (Pi "_" a b)
+
+        alternative5 = annotatedExpression
+
+    annotatedExpression =
+            noted
+                ( choice
+                    [ alternative0
+                    , try alternative1
+                    , alternative2
+                    ]
+                )
+          where
+            alternative0 = do
+                _merge
+                a <- importExpression
+                b <- importExpression
+                c <- optional (do
+                    _colon
+                    applicationExpression )
+                return (Merge a b c)
+
+            alternative1 = (do
+                _openBracket
+                (emptyCollection <|> nonEmptyOptional) )
+                <?> "list literal"
+
+            alternative2 = do
+                a <- operatorExpression
+                b <- optional (do _colon; expression)
+                case b of
+                    Nothing -> return a
+                    Just c  -> return (Annot a c)
+
+    emptyCollection = do
+            _closeBracket
+            _colon
+            a <- alternative0 <|> alternative1
+            b <- importExpression
+            return (a b)
+          where
+            alternative0 = do
+                _List
+                return (\a -> ListLit (Just a) empty)
+
+            alternative1 = do
+                _Optional
+                return (\a -> OptionalLit a empty)
+
+    nonEmptyOptional = do
+            a <- expression
+            _closeBracket
+            _colon
+            _Optional
+            b <- importExpression
+            return (OptionalLit b (pure a))
+
+    operatorExpression = precedence0Expression
+
+    makeOperatorExpression subExpression operatorParser =
+            noted (do
+                a <- subExpression
+                b <- Text.Megaparsec.many $ do
+                    op <- operatorParser
+                    r  <- subExpression
+
+                    return (\l -> l `op` r)
+                return (foldl (\x f -> f x) a b) )
+
+    precedence0Operator =
+                ImportAlt   <$ _importAlt
+            <|> BoolOr      <$ _or
+            <|> TextAppend  <$ _textAppend
+            <|> NaturalPlus <$ _plus
+            <|> ListAppend  <$ _listAppend
+
+    precedence1Operator =
+                BoolAnd     <$ _and
+            <|> Combine     <$ _combine
+
+    precedence2Operator =
+                Prefer       <$ _prefer
+            <|> CombineTypes <$ _combineTypes
+            <|> NaturalTimes <$ _times
+            <|> BoolNE       <$ _notEqual
+
+    precedence3Operator = BoolEQ <$ _doubleEqual
+
+    precedence0Expression =
+            makeOperatorExpression precedence1Expression precedence0Operator
+
+    precedence1Expression =
+            makeOperatorExpression precedence2Expression precedence1Operator
+
+    precedence2Expression =
+            makeOperatorExpression precedence3Expression precedence2Operator
+
+    precedence3Expression =
+            makeOperatorExpression applicationExpression precedence3Operator
+
+    applicationExpression = do
+            f <-    (do _constructors; return Constructors)
+                <|> (do _Some; return Some)
+                <|> return id
+            a <- noted importExpression
+            b <- Text.Megaparsec.many (noted importExpression)
+            return (foldl app (f a) b)
+          where
+            app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
+                Note (Src before after (bytesL <> bytesR)) (App nL nR)
+            app nL nR =
+                App nL nR
+
+    importExpression = noted (choice [ alternative0, alternative1 ])
+          where
+            alternative0 = do
+                a <- embedded
+                return (Embed a)
+
+            alternative1 = selectorExpression
+
+    selectorExpression = noted (do
+            a <- primitiveExpression
+
+            let left  x  e = Field   e x
+            let right xs e = Project e xs
+            b <- Text.Megaparsec.many (try (do _dot; fmap left label <|> fmap right labels))
+            return (foldl (\e k -> k e) a b) )
+
+    primitiveExpression =
+            noted
+                ( choice
+                    [ alternative00
+                    , alternative01
+                    , alternative02
+                    , alternative03
+                    , alternative04
+                    , alternative05
+                    , alternative06
+                    , alternative37
+
+                    , choice
+                        [ alternative08
+                        , alternative09
+                        , alternative10
+                        , alternative11
+                        , alternative12
+                        , alternative13
+                        , alternative14
+                        , alternative15
+                        , alternativeIntegerToDouble
+                        , alternative16
+                        , alternative17
+                        , alternative18
+                        , alternative19
+                        , alternative20
+                        , alternative21
+                        , alternative22
+                        , alternative23
+                        , alternative24
+                        , alternative25
+                        , alternative26
+                        , alternative27
+                        , alternativeNone
+                        , alternative28
+                        , alternative29
+                        , alternative30
+                        , alternative31
+                        , alternative32
+                        , alternative33
+                        , alternative34
+                        , alternative35
+                        , alternative36
+                        ] <?> "built-in expression"
+                    ]
+                )
+            <|> alternative38
+          where
+            alternative00 = do
+                a <- try doubleLiteral
+                return (DoubleLit a)
+
+            alternative01 = do
+                a <- try naturalLiteral
+                return (NaturalLit a)
+
+            alternative02 = do
+                a <- try integerLiteral
+                return (IntegerLit a)
+
+            alternative03 = textLiteral
+
+            alternative04 = (do
+                _openBrace
+                a <- recordTypeOrLiteral
+                _closeBrace
+                return a ) <?> "record type or literal"
+
+            alternative05 = (do
+                _openAngle
+                a <- unionTypeOrLiteral
+                _closeAngle
+                return a ) <?> "union type or literal"
+
+            alternative06 = nonEmptyListLiteral
+
+            alternative08 = do
+                _NaturalFold
+                return NaturalFold
+
+            alternative09 = do
+                _NaturalBuild
+                return NaturalBuild
+
+            alternative10 = do
+                _NaturalIsZero
+                return NaturalIsZero
+
+            alternative11 = do
+                _NaturalEven
+                return NaturalEven
+
+            alternative12 = do
+                _NaturalOdd
+                return NaturalOdd
+
+            alternative13 = do
+                _NaturalToInteger
+                return NaturalToInteger
+
+            alternative14 = do
+                _NaturalShow
+                return NaturalShow
+
+            alternative15 = do
+                _IntegerShow
+                return IntegerShow
+
+            alternativeIntegerToDouble = do
+                _IntegerToDouble
+                return IntegerToDouble
+
+            alternative16 = do
+                _DoubleShow
+                return DoubleShow
+
+            alternative17 = do
+                _ListBuild
+                return ListBuild
+
+            alternative18 = do
+                _ListFold
+                return ListFold
+
+            alternative19 = do
+                _ListLength
+                return ListLength
+
+            alternative20 = do
+                _ListHead
+                return ListHead
+
+            alternative21 = do
+                _ListLast
+                return ListLast
+
+            alternative22 = do
+                _ListIndexed
+                return ListIndexed
+
+            alternative23 = do
+                _ListReverse
+                return ListReverse
+
+            alternative24 = do
+                _OptionalFold
+                return OptionalFold
+
+            alternative25 = do
+                _OptionalBuild
+                return OptionalBuild
+
+            alternative26 = do
+                _Bool
+                return Bool
+
+            alternative27 = do
+                _Optional
+                return Optional
+
+            alternativeNone = do
+                _None
+                return None
+
+            alternative28 = do
+                _Natural
+                return Natural
+
+            alternative29 = do
+                _Integer
+                return Integer
+
+            alternative30 = do
+                _Double
+                return Double
+
+            alternative31 = do
+                _Text
+                return Text
+
+            alternative32 = do
+                _List
+                return List
+
+            alternative33 = do
+                _True
+                return (BoolLit True)
+
+            alternative34 = do
+                _False
+                return (BoolLit False)
+
+            alternative35 = do
+                _Type
+                return (Const Type)
+
+            alternative36 = do
+                _Kind
+                return (Const Kind)
+
+            alternative37 = do
+                a <- identifier
+                return (Var a)
+
+            alternative38 = do
+                _openParens
+                a <- expression
+                _closeParens
+                return a
+
+    doubleQuotedChunk =
+            choice
+                [ interpolation
+                , unescapedCharacterFast
+                , unescapedCharacterSlow
+                , escapedCharacter
+                ]
+          where
+            interpolation = do
+                _ <- Text.Parser.Char.text "${"
+                e <- completeExpression_
+                _ <- Text.Parser.Char.char '}'
+                return (Chunks [(mempty, e)] mempty)
+
+            unescapedCharacterFast = do
+                t <- Text.Megaparsec.takeWhile1P Nothing predicate
+                return (Chunks [] t)
+              where
+                predicate c =
+                    (   ('\x20' <= c && c <= '\x21'    )
+                    ||  ('\x23' <= c && c <= '\x5B'    )
+                    ||  ('\x5D' <= c && c <= '\x10FFFF')
+                    ) && c /= '$'
+
+            unescapedCharacterSlow = do
+                _ <- Text.Megaparsec.single '$'
+                return (Chunks [] "$")
+
+            escapedCharacter = do
+                _ <- Text.Parser.Char.char '\\'
+                c <- choice
+                    [ quotationMark
+                    , dollarSign
+                    , backSlash
+                    , forwardSlash
+                    , backSpace
+                    , formFeed
+                    , lineFeed
+                    , carriageReturn
+                    , tab
+                    , unicode
+                    ]
+                return (Chunks [] (Data.Text.singleton c))
+              where
+                quotationMark = Text.Parser.Char.char '"'
+
+                dollarSign = Text.Parser.Char.char '$'
+
+                backSlash = Text.Parser.Char.char '\\'
+
+                forwardSlash = Text.Parser.Char.char '/'
+
+                backSpace = do _ <- Text.Parser.Char.char 'b'; return '\b'
+
+                formFeed = do _ <- Text.Parser.Char.char 'f'; return '\f'
+
+                lineFeed = do _ <- Text.Parser.Char.char 'n'; return '\n'
+
+                carriageReturn = do _ <- Text.Parser.Char.char 'r'; return '\r'
+
+                tab = do _ <- Text.Parser.Char.char 't'; return '\t'
+
+                unicode = do
+                    _  <- Text.Parser.Char.char 'u';
+                    n0 <- hexNumber
+                    n1 <- hexNumber
+                    n2 <- hexNumber
+                    n3 <- hexNumber
+                    let n = ((n0 * 16 + n1) * 16 + n2) * 16 + n3
+                    return (Data.Char.chr n)
+
+    doubleQuotedLiteral = do
+            _      <- Text.Parser.Char.char '"'
+            chunks <- Text.Megaparsec.many doubleQuotedChunk
+            _      <- Text.Parser.Char.char '"'
+            return (mconcat chunks)
+
+    singleQuoteContinue =
+            choice
+                [ escapeSingleQuotes
+                , interpolation
+                , escapeInterpolation
+                , endLiteral
+                , unescapedCharacterFast
+                , unescapedCharacterSlow
+                , tab
+                , endOfLine
+                ]
+          where
+                escapeSingleQuotes = do
+                    _ <- "'''" :: Parser Text
+                    b <- singleQuoteContinue
+                    return ("''" <> b)
+
+                interpolation = do
+                    _ <- Text.Parser.Char.text "${"
+                    a <- completeExpression_
+                    _ <- Text.Parser.Char.char '}'
+                    b <- singleQuoteContinue
+                    return (Chunks [(mempty, a)] mempty <> b)
+
+                escapeInterpolation = do
+                    _ <- Text.Parser.Char.text "''${"
+                    b <- singleQuoteContinue
+                    return ("${" <> b)
+
+                endLiteral = do
+                    _ <- Text.Parser.Char.text "''"
+                    return mempty
+
+                unescapedCharacterFast = do
+                    a <- Text.Megaparsec.takeWhile1P Nothing predicate
+                    b <- singleQuoteContinue
+                    return (Chunks [] a <> b)
+                  where
+                    predicate c =
+                        ('\x20' <= c && c <= '\x10FFFF') && c /= '$' && c /= '\''
+
+                unescapedCharacterSlow = do
+                    a <- satisfy predicate
+                    b <- singleQuoteContinue
+                    return (Chunks [] a <> b)
+                  where
+                    predicate c = c == '$' || c == '\''
+
+                endOfLine = do
+                    a <- "\n" <|> "\r\n"
+                    b <- singleQuoteContinue
+                    return (Chunks [] a <> b)
+
+                tab = do
+                    _ <- Text.Parser.Char.char '\t'
+                    b <- singleQuoteContinue
+                    return ("\t" <> b)
+
+    singleQuoteLiteral = do
+            _ <- Text.Parser.Char.text "''"
+
+            -- This is technically not in the grammar, but it's still equivalent to the
+            -- original grammar and an easy way to discard the first character if it's
+            -- a newline
+            _ <- optional endOfLine
+
+            a <- singleQuoteContinue
+
+            return (dedent a)
+          where
+            endOfLine =
+                    void (Text.Parser.Char.char '\n'  )
+                <|> void (Text.Parser.Char.text "\r\n")
+
+    textLiteral = (do
+            literal <- doubleQuotedLiteral <|> singleQuoteLiteral
+            whitespace
+            return (TextLit literal) ) <?> "text literal"
+
+    recordTypeOrLiteral =
+            choice
+                [ alternative0
+                , alternative1
+                , alternative2
+                ]
+          where
+            alternative0 = do
+                _equal
+                return (RecordLit Data.HashMap.Strict.InsOrd.empty)
+
+            alternative1 = nonEmptyRecordTypeOrLiteral
+
+            alternative2 = return (Record Data.HashMap.Strict.InsOrd.empty)
+
+    nonEmptyRecordTypeOrLiteral = do
+            a <- label
+
+            let nonEmptyRecordType = do
+                    _colon
+                    b <- expression
+                    e <- Text.Megaparsec.many (do
+                        _comma
+                        c <- label
+                        _colon
+                        d <- expression
+                        return (c, d) )
+                    m <- toMap ((a, b) : e)
+                    return (Record m)
+
+            let nonEmptyRecordLiteral = do
+                    _equal
+                    b <- expression
+                    e <- Text.Megaparsec.many (do
+                        _comma
+                        c <- label
+                        _equal
+                        d <- expression
+                        return (c, d) )
+                    m <- toMap ((a, b) : e)
+                    return (RecordLit m)
+
+            nonEmptyRecordType <|> nonEmptyRecordLiteral
+
+    unionTypeOrLiteral =
+                nonEmptyUnionTypeOrLiteral
+            <|> return (Union Data.HashMap.Strict.InsOrd.empty)
+
+    nonEmptyUnionTypeOrLiteral = do
+            (f, kvs) <- loop
+            m <- toMap kvs
+            return (f m)
+          where
+            loop = do
+                a <- label
+
+                let alternative0 = do
+                        _equal
+                        b <- expression
+                        kvs <- Text.Megaparsec.many (do
+                            _bar
+                            c <- label
+                            _colon
+                            d <- expression
+                            return (c, d) )
+                        return (UnionLit a b, kvs)
+
+                let alternative1 = do
+                        _colon
+                        b <- expression
+
+                        let alternative2 = do
+                                _bar
+                                (f, kvs) <- loop
+                                return (f, (a, b):kvs)
+
+                        let alternative3 = return (Union, [(a, b)])
+
+                        alternative2 <|> alternative3
+
+                alternative0 <|> alternative1
+
+    nonEmptyListLiteral = (do
+            _openBracket
+            a <- expression
+            b <- Text.Megaparsec.many (do _comma; expression)
+            _closeBracket
+            return (ListLit Nothing (Data.Sequence.fromList (a:b))) ) <?> "list literal"
 
 env :: Parser ImportType
 env = do
@@ -787,7 +758,13 @@ missing = do
   return Missing
 
 importType_ :: Parser ImportType
-importType_ = choice [ local, http, env, missing ]
+importType_ = do
+    let predicate c =
+            c == '~' || c == '.' || c == '/' || c == 'h' || c == 'e' || c == 'm'
+
+    _ <- Text.Megaparsec.lookAhead (Text.Megaparsec.satisfy predicate)
+
+    choice [ local, http, env, missing ]
 
 importHashed_ :: Parser ImportHashed
 importHashed_ = do
