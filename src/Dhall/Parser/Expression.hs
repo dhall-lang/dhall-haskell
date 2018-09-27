@@ -246,39 +246,7 @@ completeExpression embedded = completeExpression_
                     , alternative06
                     , alternative37
 
-                    , choice
-                        [ alternative08
-                        , alternative09
-                        , alternative10
-                        , alternative11
-                        , alternative12
-                        , alternative13
-                        , alternative14
-                        , alternative15
-                        , alternativeIntegerToDouble
-                        , alternative16
-                        , alternative17
-                        , alternative18
-                        , alternative19
-                        , alternative20
-                        , alternative21
-                        , alternative22
-                        , alternative23
-                        , alternative24
-                        , alternative25
-                        , alternative26
-                        , alternative27
-                        , alternativeNone
-                        , alternative28
-                        , alternative29
-                        , alternative30
-                        , alternative31
-                        , alternative32
-                        , alternative33
-                        , alternative34
-                        , alternative35
-                        , alternative36
-                        ] <?> "built-in expression"
+                    , builtin <?> "built-in expression"
                     ]
                 )
             <|> alternative38
@@ -311,129 +279,73 @@ completeExpression embedded = completeExpression_
 
             alternative06 = nonEmptyListLiteral
 
-            alternative08 = do
-                _NaturalFold
-                return NaturalFold
+            builtin = do
+                let predicate c =
+                            c == 'N'
+                        ||  c == 'I'
+                        ||  c == 'D'
+                        ||  c == 'L'
+                        ||  c == 'O'
+                        ||  c == 'B'
+                        ||  c == 'T'
+                        ||  c == 'F'
+                        ||  c == 'K'
 
-            alternative09 = do
-                _NaturalBuild
-                return NaturalBuild
+                c <- Text.Megaparsec.lookAhead (Text.Megaparsec.satisfy predicate)
 
-            alternative10 = do
-                _NaturalIsZero
-                return NaturalIsZero
+                case c of
+                    'N' ->
+                        choice
+                            [ NaturalFold      <$ _NaturalFold
+                            , NaturalBuild     <$ _NaturalBuild
+                            , NaturalIsZero    <$ _NaturalIsZero
+                            , NaturalEven      <$ _NaturalEven
+                            , NaturalOdd       <$ _NaturalOdd
+                            , NaturalToInteger <$ _NaturalToInteger
+                            , NaturalToInteger <$ _NaturalToInteger
+                            , NaturalShow      <$ _NaturalShow
+                            , Natural          <$ _Natural
+                            , None             <$ _None
+                            ]
+                    'I' ->
+                        choice
+                            [ IntegerShow      <$ _IntegerShow
+                            , IntegerToDouble  <$ _IntegerToDouble
+                            , Integer          <$ _Integer
+                            ]
 
-            alternative11 = do
-                _NaturalEven
-                return NaturalEven
-
-            alternative12 = do
-                _NaturalOdd
-                return NaturalOdd
-
-            alternative13 = do
-                _NaturalToInteger
-                return NaturalToInteger
-
-            alternative14 = do
-                _NaturalShow
-                return NaturalShow
-
-            alternative15 = do
-                _IntegerShow
-                return IntegerShow
-
-            alternativeIntegerToDouble = do
-                _IntegerToDouble
-                return IntegerToDouble
-
-            alternative16 = do
-                _DoubleShow
-                return DoubleShow
-
-            alternative17 = do
-                _ListBuild
-                return ListBuild
-
-            alternative18 = do
-                _ListFold
-                return ListFold
-
-            alternative19 = do
-                _ListLength
-                return ListLength
-
-            alternative20 = do
-                _ListHead
-                return ListHead
-
-            alternative21 = do
-                _ListLast
-                return ListLast
-
-            alternative22 = do
-                _ListIndexed
-                return ListIndexed
-
-            alternative23 = do
-                _ListReverse
-                return ListReverse
-
-            alternative24 = do
-                _OptionalFold
-                return OptionalFold
-
-            alternative25 = do
-                _OptionalBuild
-                return OptionalBuild
-
-            alternative26 = do
-                _Bool
-                return Bool
-
-            alternative27 = do
-                _Optional
-                return Optional
-
-            alternativeNone = do
-                _None
-                return None
-
-            alternative28 = do
-                _Natural
-                return Natural
-
-            alternative29 = do
-                _Integer
-                return Integer
-
-            alternative30 = do
-                _Double
-                return Double
-
-            alternative31 = do
-                _Text
-                return Text
-
-            alternative32 = do
-                _List
-                return List
-
-            alternative33 = do
-                _True
-                return (BoolLit True)
-
-            alternative34 = do
-                _False
-                return (BoolLit False)
-
-            alternative35 = do
-                _Type
-                return (Const Type)
-
-            alternative36 = do
-                _Kind
-                return (Const Kind)
+                    'D' ->
+                        choice
+                            [ DoubleShow       <$ _DoubleShow
+                            , Double           <$ _Double
+                            ]
+                    'L' ->
+                        choice
+                            [ ListBuild        <$ _ListBuild
+                            , ListFold         <$ _ListFold
+                            , ListLength       <$ _ListLength
+                            , ListHead         <$ _ListHead
+                            , ListLast         <$ _ListLast
+                            , ListIndexed      <$ _ListIndexed
+                            , ListReverse      <$ _ListReverse
+                            , List             <$ _List
+                            ]
+                    'O' ->
+                        choice
+                            [ OptionalFold     <$ _OptionalFold
+                            , OptionalBuild    <$ _OptionalBuild
+                            , Optional         <$ _Optional
+                            ]
+                    'B' ->    Bool             <$ _Bool
+                    'T' ->
+                        choice
+                            [ Text             <$ _Text
+                            , BoolLit True     <$ _True
+                            , Const Type       <$ _Type
+                            ]
+                    'F' ->    BoolLit False    <$ _False
+                    'K' ->    Const Kind       <$ _Kind
+                    _   ->    empty
 
             alternative37 = do
                 a <- identifier
