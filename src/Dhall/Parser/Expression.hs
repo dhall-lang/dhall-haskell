@@ -235,6 +235,7 @@ completeExpression embedded = completeExpression_
             return (foldl (\e k -> k e) a b) )
 
     primitiveExpression =
+            parensExpression <|>
             noted
                 ( choice
                     [ alternative00
@@ -249,7 +250,6 @@ completeExpression embedded = completeExpression_
                     , builtin <?> "built-in expression"
                     ]
                 )
-            <|> alternative38
           where
             alternative00 = do
                 a <- try doubleLiteral
@@ -351,11 +351,11 @@ completeExpression embedded = completeExpression_
                 a <- identifier
                 return (Var a)
 
-            alternative38 = do
-                _openParens
-                a <- expression
-                _closeParens
-                return a
+    parensExpression = do
+        _openParens
+        a <- expression
+        _closeParens
+        return a
 
     doubleQuotedChunk =
             choice
