@@ -1,5 +1,6 @@
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE OverloadedLists     #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -39,6 +40,10 @@ noted parser = do
         Note src₁ _ | laxSrcEq src₀ src₁ -> return e
         _                                -> return (Note src₀ e)
 
+shallowDenote :: Expr s a -> Expr s a
+shallowDenote (Note _ e) = shallowDenote e
+shallowDenote         e  = e
+
 completeExpression :: Parser a -> Parser (Expr Src a)
 completeExpression embedded = completeExpression_
   where
@@ -47,7 +52,7 @@ completeExpression embedded = completeExpression_
         expression
 
     expression =
-        (   noted
+        noted
             ( choice
                 [ alternative0
                 , alternative1
@@ -55,9 +60,7 @@ completeExpression embedded = completeExpression_
                 , alternative3
                 , alternative4
                 ]
-            )
-        <|> alternative5
-        ) <?> "expression"
+            ) <?> "expression"
       where
         alternative0 = do
             _lambda
@@ -103,64 +106,34 @@ completeExpression embedded = completeExpression_
             return (Pi a b c)
 
         alternative4 = do
-            a <- try (do a <- operatorExpression; _arrow; return a)
-            b <- expression
-            return (Pi "_" a b)
+            a <- operatorExpression
 
-        alternative5 = annotatedExpression
+            let alternative4A = do
+                    _arrow
+                    b <- expression
+                    return (Pi "_" a b)
 
-    annotatedExpression =
-            noted
-                ( choice
-                    [ alternative0
-                    , try alternative1
-                    , alternative2
-                    ]
-                )
-          where
-            alternative0 = do
-                _merge
-                a <- importExpression
-                b <- importExpression
-                c <- optional (do
+            let alternative4B = do
                     _colon
-                    applicationExpression )
-                return (Merge a b c)
 
-            alternative1 = (do
-                _openBracket
-                (emptyCollection <|> nonEmptyOptional) )
-                <?> "list literal"
+                    b <- expression
 
-            alternative2 = do
-                a <- operatorExpression
-                b <- optional (do _colon; expression)
-                case b of
-                    Nothing -> return a
-                    Just c  -> return (Annot a c)
+                    case (shallowDenote a, shallowDenote b) of
+                        (ListLit _ xs, App f c) ->
+                            case shallowDenote f of
+                                List     ->
+                                    return (ListLit (Just c) xs)
+                                Optional -> case xs of
+                                    [x] -> return (OptionalLit c (Just x))
+                                    []  -> return (OptionalLit c Nothing)
+                                    _   -> return (Annot a b)
+                                _ ->
+                                    return (Annot a b)
+                        (Merge c d _, e) ->
+                            return (Merge c d (Just e))
+                        _ -> return (Annot a b)
 
-    emptyCollection = do
-            _closeBracket
-            _colon
-            a <- alternative0 <|> alternative1
-            b <- importExpression
-            return (a b)
-          where
-            alternative0 = do
-                _List
-                return (\a -> ListLit (Just a) empty)
-
-            alternative1 = do
-                _Optional
-                return (\a -> OptionalLit a empty)
-
-    nonEmptyOptional = do
-            a <- expression
-            _closeBracket
-            _colon
-            _Optional
-            b <- importExpression
-            return (OptionalLit b (pure a))
+            alternative4A <|> alternative4B <|> pure a
 
     operatorExpression = precedence0Expression
 
@@ -244,6 +217,7 @@ completeExpression embedded = completeExpression_
                     , alternative04
                     , alternative05
                     , alternative06
+                    , alternative07
                     , alternative37
 
                     , builtin <?> "built-in expression"
@@ -277,7 +251,13 @@ completeExpression embedded = completeExpression_
                 _closeAngle
                 return a ) <?> "union type or literal"
 
-            alternative06 = nonEmptyListLiteral
+            alternative06 = listLiteral
+
+            alternative07 = do
+                _merge
+                a <- importExpression
+                b <- importExpression
+                return (Merge a b Nothing)
 
             builtin = do
                 let predicate c =
@@ -595,12 +575,11 @@ completeExpression embedded = completeExpression_
 
                 alternative0 <|> alternative1
 
-    nonEmptyListLiteral = (do
+    listLiteral = (do
             _openBracket
-            a <- expression
-            b <- Text.Megaparsec.many (do _comma; expression)
+            a <- Text.Megaparsec.sepBy expression _comma
             _closeBracket
-            return (ListLit Nothing (Data.Sequence.fromList (a:b))) ) <?> "list literal"
+            return (ListLit Nothing (Data.Sequence.fromList a)) ) <?> "list literal"
 
 env :: Parser ImportType
 env = do
