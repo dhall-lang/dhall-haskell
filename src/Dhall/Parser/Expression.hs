@@ -52,7 +52,7 @@ completeExpression embedded = completeExpression_
         expression
 
     expression =
-        (   noted
+        noted
             ( choice
                 [ alternative0
                 , alternative1
@@ -60,9 +60,7 @@ completeExpression embedded = completeExpression_
                 , alternative3
                 , alternative4
                 ]
-            )
-        <|> alternative5
-        ) <?> "expression"
+            ) <?> "expression"
       where
         alternative0 = do
             _lambda
@@ -136,8 +134,6 @@ completeExpression embedded = completeExpression_
                         _ -> return (Annot a b)
 
             alternative4A <|> alternative4B <|> pure a
-
-        alternative5 = operatorExpression
 
     operatorExpression = precedence0Expression
 
