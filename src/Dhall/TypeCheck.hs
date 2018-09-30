@@ -21,11 +21,13 @@ module Dhall.TypeCheck (
     , TypeMessage(..)
     ) where
 
+import Control.Applicative (liftA2)
 import Control.Exception (Exception)
 import Data.Data (Data(..))
 import Data.Foldable (forM_, toList)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..))
+import Data.Semigroup (Semigroup(..))
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
@@ -36,8 +38,6 @@ import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Foldable
-import qualified Data.HashMap.Strict
-import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text                               as Text
@@ -46,6 +46,7 @@ import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
+import qualified Dhall.Map
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Util
 
@@ -425,7 +426,7 @@ typeWithA tpa = loop
         return
             (Pi "a" (Const Type)
                 (Pi "_" (App List "a")
-                    (App List (Record (Data.HashMap.Strict.InsOrd.fromList kts))) ) )
+                    (App List (Record (Dhall.Map.fromList kts))) ) )
     loop _      ListReverse       = do
         return (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a")))
     loop _      Optional          = do
@@ -468,7 +469,7 @@ typeWithA tpa = loop
                       (Pi "just" (Pi "_" "a" "optional")
                           (Pi "nothing" "optional" "optional") )
     loop ctx e@(Record    kts   ) = do
-        case Data.HashMap.Strict.InsOrd.toList kts of
+        case Dhall.Map.toList kts of
             []            -> return (Const Type)
             (k0, t0):rest -> do
                 s0 <- fmap Dhall.Core.normalize (loop ctx t0)
@@ -498,8 +499,8 @@ typeWithA tpa = loop
                 mapM_ process rest
                 return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
-        case Data.HashMap.Strict.InsOrd.toList kvs of
-            []         -> return (Record Data.HashMap.Strict.InsOrd.empty)
+        case Dhall.Map.toList kvs of
+            []         -> return (Record Dhall.Map.empty)
             (k0, v0):_ -> do
                 t0 <- loop ctx v0
                 s0 <- fmap Dhall.Core.normalize (loop ctx t0)
@@ -529,29 +530,23 @@ typeWithA tpa = loop
                                 Left (TypeError ctx e (InvalidField k t))
 
                         return t
-                kts <- Data.HashMap.Strict.InsOrd.traverseWithKey process kvs
+                kts <- Dhall.Map.traverseWithKey process kvs
                 return (Record kts)
     loop ctx e@(Union     kts   ) = do
-        let process k t = do
+        let process k t = Process $ do
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
                     Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
-        -- toList from insert-ordered-containers does some work to
-        -- ensure that the elements do follow insertion order. In this
-        -- instance, insertion order doesn't matter: we only need to
-        -- peek at each element to make sure it is well-typed. If
-        -- there are multiple type errors, it does not matter which
-        -- gets reported first here.
-        Data.HashMap.Strict.foldrWithKey (\ k t prev -> prev >> process k t) (Right ()) (Data.HashMap.Strict.InsOrd.toHashMap kts)
+        runProcess (Dhall.Map.unorderedFoldMapWithKey process kts)
         return (Const Type)
     loop ctx e@(UnionLit k v kts) = do
-        case Data.HashMap.Strict.InsOrd.lookup k kts of
+        case Dhall.Map.lookup k kts of
             Just _  -> Left (TypeError ctx e (DuplicateAlternative k))
             Nothing -> return ()
         t <- loop ctx v
-        let union = Union (Data.HashMap.Strict.InsOrd.insert k (Dhall.Core.normalize t) kts)
+        let union = Union (Dhall.Map.insert k (Dhall.Core.normalize t) kts)
         _ <- loop ctx union
         return union
     loop ctx e@(Combine kvsX kvsY) = do
@@ -581,12 +576,12 @@ typeWithA tpa = loop
 
         let combineTypes ktsL ktsR = do
                 let ksL =
-                        Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsL)
+                        Data.Set.fromList (Dhall.Map.keys ktsL)
                 let ksR =
-                        Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsR)
+                        Data.Set.fromList (Dhall.Map.keys ktsR)
                 let ks = Data.Set.union ksL ksR
                 kts <- forM (toList ks) (\k -> do
-                    case (Data.HashMap.Strict.InsOrd.lookup k ktsL, Data.HashMap.Strict.InsOrd.lookup k ktsR) of
+                    case (Dhall.Map.lookup k ktsL, Dhall.Map.lookup k ktsR) of
                         (Just (Record ktsL'), Just (Record ktsR')) -> do
                             t <- combineTypes ktsL' ktsR'
                             return (k, t)
@@ -596,7 +591,7 @@ typeWithA tpa = loop
                             return (k, t)
                         _ -> do
                             Left (TypeError ctx e (FieldCollision k)) )
-                return (Record (Data.HashMap.Strict.InsOrd.fromList kts))
+                return (Record (Dhall.Map.fromList kts))
 
         combineTypes ktsX ktsY
     loop ctx e@(CombineTypes l r) = do
@@ -627,12 +622,12 @@ typeWithA tpa = loop
 
         let combineTypes ktsL ktsR = do
                 let ksL =
-                        Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsL)
+                        Data.Set.fromList (Dhall.Map.keys ktsL)
                 let ksR =
-                        Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsR)
+                        Data.Set.fromList (Dhall.Map.keys ktsR)
                 let ks = Data.Set.union ksL ksR
                 forM_ (toList ks) (\k -> do
-                    case (Data.HashMap.Strict.InsOrd.lookup k ktsL, Data.HashMap.Strict.InsOrd.lookup k ktsR) of
+                    case (Dhall.Map.lookup k ktsL, Dhall.Map.lookup k ktsR) of
                         (Just (Record ktsL'), Just (Record ktsR')) -> do
                             combineTypes ktsL' ktsR'
                         (Nothing, Just _) -> do
@@ -670,7 +665,7 @@ typeWithA tpa = loop
             then return ()
             else Left (TypeError ctx e (RecordMismatch '⫽' kvsX kvsY constX constY))
 
-        return (Record (Data.HashMap.Strict.InsOrd.union ktsY ktsX))
+        return (Record (Dhall.Map.union ktsY ktsX))
     loop ctx e@(Merge kvsX kvsY (Just t)) = do
         _ <- loop ctx t
 
@@ -678,13 +673,13 @@ typeWithA tpa = loop
         ktsX  <- case tKvsX of
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustMergeARecord kvsX tKvsX))
-        let ksX = Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsX)
+        let ksX = Data.Set.fromList (Dhall.Map.keys ktsX)
 
         tKvsY <- fmap Dhall.Core.normalize (loop ctx kvsY)
         ktsY  <- case tKvsY of
             Union kts -> return kts
             _         -> Left (TypeError ctx e (MustMergeUnion kvsY tKvsY))
-        let ksY = Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsY)
+        let ksY = Data.Set.fromList (Dhall.Map.keys ktsY)
 
         let diffX = Data.Set.difference ksX ksY
         let diffY = Data.Set.difference ksY ksX
@@ -694,7 +689,7 @@ typeWithA tpa = loop
             else Left (TypeError ctx e (UnusedHandler diffX))
 
         let process (kY, tY) = do
-                case Data.HashMap.Strict.InsOrd.lookup kY ktsX of
+                case Dhall.Map.lookup kY ktsX of
                     Nothing  -> Left (TypeError ctx e (MissingHandler diffY))
                     Just tX  ->
                         case tX of
@@ -707,20 +702,20 @@ typeWithA tpa = loop
                                     then return ()
                                     else Left (TypeError ctx e (InvalidHandlerOutputType kY t t''))
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
-        mapM_ process (Data.HashMap.Strict.InsOrd.toList ktsY)
+        mapM_ process (Dhall.Map.toList ktsY)
         return t
     loop ctx e@(Merge kvsX kvsY Nothing) = do
         tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
         ktsX  <- case tKvsX of
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustMergeARecord kvsX tKvsX))
-        let ksX = Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsX)
+        let ksX = Data.Set.fromList (Dhall.Map.keys ktsX)
 
         tKvsY <- fmap Dhall.Core.normalize (loop ctx kvsY)
         ktsY  <- case tKvsY of
             Union kts -> return kts
             _         -> Left (TypeError ctx e (MustMergeUnion kvsY tKvsY))
-        let ksY = Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsY)
+        let ksY = Data.Set.fromList (Dhall.Map.keys ktsY)
 
         let diffX = Data.Set.difference ksX ksY
         let diffY = Data.Set.difference ksY ksX
@@ -729,12 +724,12 @@ typeWithA tpa = loop
             then return ()
             else Left (TypeError ctx e (UnusedHandler diffX))
 
-        (kX, t) <- case Data.HashMap.Strict.InsOrd.toList ktsX of
+        (kX, t) <- case Dhall.Map.toList ktsX of
             []               -> Left (TypeError ctx e MissingMergeType)
             (kX, Pi y _ t):_ -> return (kX, Dhall.Core.shift (-1) (V y 0) t)
             (kX, tX      ):_ -> Left (TypeError ctx e (HandlerNotAFunction kX tX))
         let process (kY, tY) = do
-                case Data.HashMap.Strict.InsOrd.lookup kY ktsX of
+                case Dhall.Map.lookup kY ktsX of
                     Nothing  -> Left (TypeError ctx e (MissingHandler diffY))
                     Just tX  ->
                         case tX of
@@ -747,7 +742,7 @@ typeWithA tpa = loop
                                     then return ()
                                     else Left (TypeError ctx e (HandlerOutputTypeMismatch kX t kY t''))
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
-        mapM_ process (Data.HashMap.Strict.InsOrd.toList ktsY)
+        mapM_ process (Dhall.Map.toList ktsY)
         return t
     loop ctx e@(Constructors t  ) = do
         _ <- loop ctx t
@@ -758,14 +753,14 @@ typeWithA tpa = loop
 
         let adapt k t_ = Pi k t_ (Union kts)
 
-        return (Record (Data.HashMap.Strict.InsOrd.mapWithKey adapt kts))
+        return (Record (Dhall.Map.mapWithKey adapt kts))
     loop ctx e@(Field r x       ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
         case t of
             Record kts -> do
                 _ <- loop ctx t
 
-                case Data.HashMap.Strict.InsOrd.lookup x kts of
+                case Dhall.Map.lookup x kts of
                     Just t' -> return t'
                     Nothing -> Left (TypeError ctx e (MissingField x t))
             _ -> do
@@ -778,10 +773,10 @@ typeWithA tpa = loop
                 _ <- loop ctx t
 
                 let process k =
-                        case Data.HashMap.Strict.InsOrd.lookup k kts of
+                        case Dhall.Map.lookup k kts of
                             Just t' -> return (k, t')
                             Nothing -> Left (TypeError ctx e (MissingField k t))
-                let adapt = Record . Data.HashMap.Strict.InsOrd.fromList
+                let adapt = Record . Dhall.Map.fromList
                 fmap adapt (traverse process (Data.Set.toList xs))
             _ -> do
                 let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
@@ -793,6 +788,16 @@ typeWithA tpa = loop
     loop ctx   (ImportAlt l _r  ) =
        fmap Dhall.Core.normalize (loop ctx l)
     loop _     (Embed p         ) = Right $ tpa p
+
+newtype Process a b = Process { runProcess :: Either a b }
+
+instance Semigroup b => Semigroup (Process a b) where
+    Process eL <> Process eR = Process (liftA2 (<>) eL eR)
+
+instance Monoid b => Monoid (Process a b) where
+    mempty = Process (pure mempty)
+
+    mappend = (<>)
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
