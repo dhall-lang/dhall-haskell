@@ -501,7 +501,7 @@ typeWithA tpa = loop
                 return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
         case Dhall.Map.toList kvs of
-            []         -> return (Record Dhall.Map.empty)
+            []         -> return (Record mempty)
             (k0, v0):_ -> do
                 t0 <- loop ctx v0
                 s0 <- fmap Dhall.Core.normalize (loop ctx t0)

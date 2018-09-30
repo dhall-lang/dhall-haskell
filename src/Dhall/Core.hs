@@ -1683,9 +1683,9 @@ normalizeWith ctx e0 = loop (denote e0)
         kvs' = fmap loop kvs
     Combine x y -> decide (loop x) (loop y)
       where
-        decide (RecordLit m) r | Dhall.Map.null m =
+        decide (RecordLit m) r | Data.Foldable.null m =
             r
-        decide l (RecordLit n) | Dhall.Map.null n =
+        decide l (RecordLit n) | Data.Foldable.null n =
             l
         decide (RecordLit m) (RecordLit n) =
             RecordLit (Dhall.Map.sort (Dhall.Map.unionWith decide m n))
@@ -1693,9 +1693,9 @@ normalizeWith ctx e0 = loop (denote e0)
             Combine l r
     CombineTypes x y -> decide (loop x) (loop y)
       where
-        decide (Record m) r | Dhall.Map.null m =
+        decide (Record m) r | Data.Foldable.null m =
             r
-        decide l (Record n) | Dhall.Map.null n =
+        decide l (Record n) | Data.Foldable.null n =
             l
         decide (Record m) (Record n) =
             Record (Dhall.Map.sort (Dhall.Map.unionWith decide m n))
@@ -1704,9 +1704,9 @@ normalizeWith ctx e0 = loop (denote e0)
 
     Prefer x y -> decide (loop x) (loop y)
       where
-        decide (RecordLit m) r | Dhall.Map.null m =
+        decide (RecordLit m) r | Data.Foldable.null m =
             r
-        decide l (RecordLit n) | Dhall.Map.null n =
+        decide l (RecordLit n) | Data.Foldable.null n =
             l
         decide (RecordLit m) (RecordLit n) =
             RecordLit (Dhall.Map.sort (Dhall.Map.union n m))
@@ -1938,20 +1938,20 @@ isNormalized e0 = loop (denote e0)
       UnionLit _ v kvs -> loop v && Dhall.Map.isSorted kvs && all loop kvs
       Combine x y -> loop x && loop y && decide x y
         where
-          decide (RecordLit m) _ | Dhall.Map.null m = False
-          decide _ (RecordLit n) | Dhall.Map.null n = False
+          decide (RecordLit m) _ | Data.Foldable.null m = False
+          decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
           decide  _ _ = True
       CombineTypes x y -> loop x && loop y && decide x y
         where
-          decide (Record m) _ | Dhall.Map.null m = False
-          decide _ (Record n) | Dhall.Map.null n = False
+          decide (Record m) _ | Data.Foldable.null m = False
+          decide _ (Record n) | Data.Foldable.null n = False
           decide (Record _) (Record _) = False
           decide  _ _ = True
       Prefer x y -> loop x && loop y && decide x y
         where
-          decide (RecordLit m) _ | Dhall.Map.null m = False
-          decide _ (RecordLit n) | Dhall.Map.null n = False
+          decide (RecordLit m) _ | Data.Foldable.null m = False
+          decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
           decide  _ _ = True
       Merge x y t -> loop x && loop y && all loop t &&

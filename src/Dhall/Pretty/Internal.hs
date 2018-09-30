@@ -824,7 +824,7 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyRecordLit :: Pretty a => Map Text (Expr s a) -> Doc Ann
     prettyRecordLit a
-        | Dhall.Map.null a =
+        | Data.Foldable.null a =
             lbrace <> equals <> rbrace
         | otherwise
             = braces (map (prettyKeyValue equals) (Dhall.Map.toList a))

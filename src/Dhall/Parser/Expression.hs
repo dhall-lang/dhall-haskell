@@ -23,7 +23,6 @@ import qualified Data.Char
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Encoding
-import qualified Dhall.Map
 import qualified Text.Megaparsec
 import qualified Text.Parser.Char
 
@@ -502,11 +501,11 @@ completeExpression embedded = completeExpression_
           where
             alternative0 = do
                 _equal
-                return (RecordLit Dhall.Map.empty)
+                return (RecordLit mempty)
 
             alternative1 = nonEmptyRecordTypeOrLiteral
 
-            alternative2 = return (Record Dhall.Map.empty)
+            alternative2 = return (Record mempty)
 
     nonEmptyRecordTypeOrLiteral = do
             a <- label
@@ -539,7 +538,7 @@ completeExpression embedded = completeExpression_
 
     unionTypeOrLiteral =
                 nonEmptyUnionTypeOrLiteral
-            <|> return (Union Dhall.Map.empty)
+            <|> return (Union mempty)
 
     nonEmptyUnionTypeOrLiteral = do
             (f, kvs) <- loop

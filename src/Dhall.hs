@@ -708,10 +708,10 @@ unit :: Type ()
 unit = Type extractOut expectedOut
   where
     extractOut (RecordLit fields)
-        | Dhall.Map.null fields = return ()
+        | Data.Foldable.null fields = return ()
     extractOut _ = Nothing
 
-    expectedOut = Record Dhall.Map.empty
+    expectedOut = Record mempty
 
 {-| Decode a `String`
 
@@ -864,7 +864,7 @@ instance GenericInterpret V1 where
       where
         extract _ = Nothing
 
-        expected = Union Dhall.Map.empty
+        expected = Union mempty
 
 instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret f2) => GenericInterpret (M1 C c1 f1 :+: M1 C c2 f2) where
     genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
@@ -1117,9 +1117,9 @@ instance Inject Double where
 instance Inject () where
     injectWith _ = InputType {..}
       where
-        embed = const (RecordLit Dhall.Map.empty)
+        embed = const (RecordLit mempty)
 
-        declared = Record Dhall.Map.empty
+        declared = Record mempty
 
 instance Inject a => Inject (Maybe a) where
     injectWith options = InputType embedOut declaredOut
@@ -1269,9 +1269,9 @@ instance (GenericInject f, GenericInject g) => GenericInject (f :*: g) where
 instance GenericInject U1 where
     genericInjectWith _ = pure (InputType {..})
       where
-        embed _ = RecordLit Dhall.Map.empty
+        embed _ = RecordLit mempty
 
-        declared = Record Dhall.Map.empty
+        declared = Record mempty
 
 instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
     genericInjectWith opts@(InterpretOptions {..}) = do
@@ -1443,7 +1443,7 @@ instance Divisible RecordInputType where
     $ Dhall.Map.union
       ((contramap $ fst . f) <$> bInputTypeRecord)
       ((contramap $ snd . f) <$> cInputTypeRecord)
-  conquer = RecordInputType Dhall.Map.empty
+  conquer = RecordInputType mempty
 
 inputFieldWith :: Text -> InputType a -> RecordInputType a
 inputFieldWith name inputType = RecordInputType $ Dhall.Map.singleton name inputType
