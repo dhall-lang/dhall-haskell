@@ -30,15 +30,15 @@ module Dhall.Map
 
 import Control.Applicative ((<|>))
 import Data.Data (Data)
-import Data.Vector (Vector)
+import Data.Sequence (Seq, (|>))
 import Prelude hiding (lookup)
 
 import qualified Data.Foldable
 import qualified Data.Map
+import qualified Data.Sequence
 import qualified Data.Set
-import qualified Data.Vector
 
-data Map k v = Map (Data.Map.Map k v) (Vector k)
+data Map k v = Map (Data.Map.Map k v) (Seq k)
     deriving (Data, Eq, Foldable, Functor, Show, Traversable)
 
 instance Ord k => Semigroup (Map k v) where
@@ -54,7 +54,7 @@ fromList kvs = Map m ks
   where
     m = Data.Map.fromList kvs
 
-    ks = Data.Vector.fromList (nub (map fst kvs))
+    ks = Data.Sequence.fromList (nub (map fst kvs))
 
 nub :: Ord k => [k] -> [k]
 nub = go Data.Set.empty
@@ -67,10 +67,10 @@ nub = go Data.Set.empty
 sort :: Ord k => Map k v -> Map k v
 sort (Map m _) = Map m ks
   where
-    ks = Data.Vector.fromList (Data.Map.keys m)
+    ks = Data.Sequence.fromList (Data.Map.keys m)
 
 isSorted :: Eq k => Map k v -> Bool
-isSorted (Map m k) = Data.Map.keys m == Data.Vector.toList k
+isSorted (Map m k) = Data.Map.keys m == Data.Foldable.toList k
 
 unionWith :: Ord k => (v -> v -> v) -> Map k v -> Map k v -> Map k v
 unionWith combine (Map mL ksL) (Map mR ksR) = Map m ks
@@ -79,7 +79,7 @@ unionWith combine (Map mL ksL) (Map mR ksR) = Map m ks
 
     setL = Data.Map.keysSet mL
 
-    ks = ksL <|> Data.Vector.filter (\k -> Data.Set.notMember k setL) ksR
+    ks = ksL <|> Data.Sequence.filter (\k -> Data.Set.notMember k setL) ksR
 
 union :: Ord k => Map k v -> Map k v -> Map k v
 union (Map mL ksL) (Map mR ksR) = Map m ks
@@ -88,7 +88,7 @@ union (Map mL ksL) (Map mR ksR) = Map m ks
 
     setL = Data.Map.keysSet mL
 
-    ks = ksL <|> Data.Vector.filter (\k -> Data.Set.notMember k setL) ksR
+    ks = ksL <|> Data.Sequence.filter (\k -> Data.Set.notMember k setL) ksR
 
 lookup :: Ord k => k -> Map k v -> Maybe v
 lookup k (Map m _) = Data.Map.lookup k m
@@ -103,16 +103,16 @@ delete k (Map m ks) = Map m' ks'
   where
     m' = Data.Map.delete k m
 
-    ks' = Data.Vector.filter (k /=) ks
+    ks' = Data.Sequence.filter (k /=) ks
 
 keys :: Map k v -> [k]
-keys (Map _ ks) = Data.Vector.toList ks
+keys (Map _ ks) = Data.Foldable.toList ks
 
 member :: Ord k => k -> Map k v -> Bool
 member k (Map m _) = Data.Map.member k m
 
 toList :: Ord k => Map k v -> [(k, v)]
-toList (Map m ks) = Data.Vector.toList (fmap (\k -> (k, m Data.Map.! k)) ks)
+toList (Map m ks) = Data.Foldable.toList (fmap (\k -> (k, m Data.Map.! k)) ks)
 
 intersectionWith :: Ord k => (a -> b -> c) -> Map k a -> Map k b -> Map k c
 intersectionWith combine (Map mL ksL) (Map mR _) = Map m ks
@@ -122,13 +122,13 @@ intersectionWith combine (Map mL ksL) (Map mR _) = Map m ks
     setL = Data.Map.keysSet mL
     setR = Data.Map.keysSet mR
     set  = Data.Set.intersection setL setR
-    ks   = Data.Vector.filter (\k -> Data.Set.member k set) ksL
+    ks   = Data.Sequence.filter (\k -> Data.Set.member k set) ksL
 
 foldMapWithKey :: (Monoid m, Ord k) => (k -> a -> m) -> Map k a -> m
 foldMapWithKey f m = foldMap (uncurry f) (toList m)
 
 empty :: Map k a
-empty = Map Data.Map.empty Data.Vector.empty
+empty = Map Data.Map.empty Data.Sequence.empty
 
 traverseWithKey
     :: Ord k => Applicative f => (k -> a -> f b) -> Map k a -> f (Map k b)
@@ -141,16 +141,16 @@ insert k v (Map m ks) = Map m' ks'
   where
     m' = Data.Map.insert k v m
 
-    ks' | Data.Vector.elem k ks = ks
-        | otherwise             = Data.Vector.snoc ks k
+    ks' | Data.Foldable.elem k ks = ks
+        | otherwise               = ks |> k
 
 insertWith :: Ord k => (v -> v -> v) -> k -> v -> Map k v -> Map k v
 insertWith f k v (Map m ks) = Map m' ks'
   where
     m' = Data.Map.insertWith f k v m
 
-    ks' | Data.Vector.elem k ks = ks
-        | otherwise             = Data.Vector.snoc ks k
+    ks' | Data.Foldable.elem k ks = ks
+        | otherwise               = ks |> k
 
 singleton :: k -> v -> Map k v
 singleton k v = Map m ks
