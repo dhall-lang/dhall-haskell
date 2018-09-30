@@ -21,10 +21,10 @@ module Dhall.Map
     , sort
     , isSorted
     , toList
+    , toMap
     , traverseWithKey
     , union
     , unionWith
-    , unorderedFoldMapWithKey
     , Data.Foldable.null
     ) where
 
@@ -127,9 +127,6 @@ intersectionWith combine (Map mL ksL) (Map mR _) = Map m ks
 foldMapWithKey :: (Monoid m, Ord k) => (k -> a -> m) -> Map k a -> m
 foldMapWithKey f m = foldMap (uncurry f) (toList m)
 
-unorderedFoldMapWithKey :: Monoid m => (k -> a -> m) -> Map k a -> m
-unorderedFoldMapWithKey f (Map m _) = Data.Map.foldMapWithKey f m
-
 empty :: Map k a
 empty = Map Data.Map.empty Data.Vector.empty
 
@@ -145,7 +142,7 @@ insert k v (Map m ks) = Map m' ks'
     m' = Data.Map.insert k v m
 
     ks' | Data.Vector.elem k ks = ks
-        | otherwise             = ks <|> pure k
+        | otherwise             = Data.Vector.snoc ks k
 
 insertWith :: Ord k => (v -> v -> v) -> k -> v -> Map k v -> Map k v
 insertWith f k v (Map m ks) = Map m' ks'
@@ -153,7 +150,7 @@ insertWith f k v (Map m ks) = Map m' ks'
     m' = Data.Map.insertWith f k v m
 
     ks' | Data.Vector.elem k ks = ks
-        | otherwise             = ks <|> pure k
+        | otherwise             = Data.Vector.snoc ks k
 
 singleton :: k -> v -> Map k v
 singleton k v = Map m ks
@@ -161,3 +158,6 @@ singleton k v = Map m ks
     m = Data.Map.singleton k v
 
     ks = pure k
+
+toMap :: Map k v -> Data.Map.Map k v
+toMap (Map m _) = m

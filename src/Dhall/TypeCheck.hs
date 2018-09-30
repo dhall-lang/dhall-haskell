@@ -38,6 +38,7 @@ import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Foldable
+import qualified Data.Map
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text                               as Text
@@ -539,7 +540,7 @@ typeWithA tpa = loop
                     Const Type -> return ()
                     Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
-        runProcess (Dhall.Map.unorderedFoldMapWithKey process kts)
+        runProcess (Data.Map.foldMapWithKey process (Dhall.Map.toMap kts))
         return (Const Type)
     loop ctx e@(UnionLit k v kts) = do
         case Dhall.Map.lookup k kts of
