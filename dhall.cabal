@@ -221,10 +221,11 @@ Library
         Dhall.Hash,
         Dhall.Import,
         Dhall.Lint,
-        Dhall.Main
+        Dhall.Main,
+        Dhall.Map,
         Dhall.Parser,
         Dhall.Pretty,
-        Dhall.Repl
+        Dhall.Repl,
         Dhall.TH,
         Dhall.Tutorial,
         Dhall.TypeCheck

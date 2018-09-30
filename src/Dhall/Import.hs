@@ -178,7 +178,6 @@ import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
-import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.List.NonEmpty               as NonEmpty
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Encoding
@@ -186,6 +185,7 @@ import qualified Data.Text                        as Text
 import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core
+import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
@@ -410,8 +410,8 @@ toHeader
   :: Expr s a
   -> Maybe (CI Data.ByteString.ByteString, Data.ByteString.ByteString)
 toHeader (RecordLit m) = do
-    TextLit (Chunks [] keyText  ) <- Data.HashMap.Strict.InsOrd.lookup "header" m
-    TextLit (Chunks [] valueText) <- Data.HashMap.Strict.InsOrd.lookup "value"  m
+    TextLit (Chunks [] keyText  ) <- Dhall.Map.lookup "header" m
+    TextLit (Chunks [] valueText) <- Dhall.Map.lookup "value"  m
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
     let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
     return (Data.CaseInsensitive.mk keyBytes, valueBytes)
@@ -615,7 +615,7 @@ exprFromUncachedImport (Import {..}) = do
                         expected =
                             App List
                                 ( Record
-                                    ( Data.HashMap.Strict.InsOrd.fromList
+                                    ( Dhall.Map.fromList
                                         [("header", Text), ("value", Text)]
                                     )
                                 )

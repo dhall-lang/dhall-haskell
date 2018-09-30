@@ -17,7 +17,6 @@ module Dhall.Diff (
 
 import Data.Foldable (fold, toList)
 import Data.Function (on)
-import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (Any(..))
 import Data.Scientific (Scientific)
@@ -28,16 +27,17 @@ import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Dhall.Core (Chunks (..), Const(..), Expr(..), Var(..))
+import Dhall.Map (Map)
 import Dhall.Pretty.Internal (Ann)
 import Numeric.Natural (Natural)
 
 import qualified Data.Algorithm.Diff        as Algo.Diff
-import qualified Data.HashMap.Strict.InsOrd as HashMap
 import qualified Data.List.NonEmpty
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Core
+import qualified Dhall.Map as HashMap
 import qualified Dhall.Pretty.Internal      as Internal
 
 data Diff =
@@ -248,8 +248,8 @@ enclosed' l m docs =
 diffKeyVals
     :: (Eq a, Pretty a)
     => Diff
-    -> InsOrdHashMap Text (Expr s a)
-    -> InsOrdHashMap Text (Expr s a)
+    -> Map Text (Expr s a)
+    -> Map Text (Expr s a)
     -> [Diff]
 diffKeyVals assign kvsL kvsR =
     diffFieldNames <> diffFieldValues <> (if anyEqual then [ ignore ] else [])
@@ -391,17 +391,17 @@ isBoth p
 
 diffRecord
     :: (Eq a, Pretty a)
-    => InsOrdHashMap Text (Expr s a) -> InsOrdHashMap Text (Expr s a) -> Diff
+    => Map Text (Expr s a) -> Map Text (Expr s a) -> Diff
 diffRecord kvsL kvsR = braced (diffKeyVals colon kvsL kvsR)
 
 diffRecordLit
     :: (Eq a, Pretty a)
-    => InsOrdHashMap Text (Expr s a) -> InsOrdHashMap Text (Expr s a) -> Diff
+    => Map Text (Expr s a) -> Map Text (Expr s a) -> Diff
 diffRecordLit kvsL kvsR = braced (diffKeyVals equals kvsL kvsR)
 
 diffUnion
     :: (Eq a, Pretty a)
-    => InsOrdHashMap Text (Expr s a) -> InsOrdHashMap Text (Expr s a) -> Diff
+    => Map Text (Expr s a) -> Map Text (Expr s a) -> Diff
 diffUnion kvsL kvsR = angled (diffKeyVals colon kvsL kvsR)
 
 diffUnionLit
@@ -410,8 +410,8 @@ diffUnionLit
     -> Text
     -> Expr s a
     -> Expr s a
-    -> InsOrdHashMap Text (Expr s a)
-    -> InsOrdHashMap Text (Expr s a)
+    -> Map Text (Expr s a)
+    -> Map Text (Expr s a)
     -> Diff
 diffUnionLit kL kR vL vR kvsL kvsR =
         langle
