@@ -22,7 +22,6 @@ import           Text.Parser.Token          (TokenParsing (..))
 
 import qualified Control.Monad.Fail
 import qualified Data.Char
-import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
@@ -260,8 +259,8 @@ toMap kvs = do
                         ("duplicate field: " ++ Data.Text.unpack k)
     Dhall.Map.traverseWithKey action m
   where
-    fromListWith combine = Data.List.foldl' snoc nil
+    fromListWith combine = foldr cons nil
       where
         nil = Dhall.Map.empty
 
-        snoc m (k, v) = Dhall.Map.insertWith combine k v m
+        cons (k, v) = Dhall.Map.insertWith combine k v

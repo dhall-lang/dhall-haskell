@@ -53,14 +53,18 @@ data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
 unnamedFields :: TestTree
 unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
     let ty = Dhall.auto @Foo
-    Test.Tasty.HUnit.assertEqual "Good type" (Dhall.expected ty) (Dhall.Core.Union (
-            Dhall.Map.fromList [
-                ("Bar",Dhall.Core.Record (Dhall.Map.fromList [
-                    ("_1",Dhall.Core.Bool),("_2",Dhall.Core.Bool),("_3",Dhall.Core.Bool)]))
-                , ("Baz",Dhall.Core.Record (Dhall.Map.fromList [
-                    ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Integer)]))
-                ,("Foo",Dhall.Core.Record (Dhall.Map.fromList [
-                    ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool)]))]))
+    Test.Tasty.HUnit.assertEqual "Good type" (Dhall.expected ty)
+        (Dhall.Core.Union
+            (Dhall.Map.fromList
+                [   ("Foo",Dhall.Core.Record (Dhall.Map.fromList [
+                        ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool)]))
+                ,   ("Bar",Dhall.Core.Record (Dhall.Map.fromList [
+                        ("_1",Dhall.Core.Bool),("_2",Dhall.Core.Bool),("_3",Dhall.Core.Bool)]))
+                ,   ("Baz",Dhall.Core.Record (Dhall.Map.fromList [
+                        ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Integer)]))
+                ]
+            )
+        )
 
     let inj = Dhall.inject @Foo
     Test.Tasty.HUnit.assertEqual "Good Inject" (Dhall.declared inj) (Dhall.expected ty)
