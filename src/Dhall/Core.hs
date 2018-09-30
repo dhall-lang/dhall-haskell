@@ -1801,198 +1801,200 @@ isNormalizedWith ctx e = e == (normalizeWith ctx e)
 
 -- | Quickly check if an expression is in normal form
 isNormalized :: Eq a => Expr s a -> Bool
-isNormalized e = case denote e of
-    Const _ -> True
-    Var _ -> True
-    Lam _ a b -> isNormalized a && isNormalized b
-    Pi _ a b -> isNormalized a && isNormalized b
-    App f a -> isNormalized f && isNormalized a && case App f a of
-        App (Lam _ _ _) _ -> False
+isNormalized e0 = loop (denote e0)
+  where
+    loop e = case e of
+      Const _ -> True
+      Var _ -> True
+      Lam _ a b -> loop a && loop b
+      Pi _ a b -> loop a && loop b
+      App f a -> loop f && loop a && case App f a of
+          App (Lam _ _ _) _ -> False
 
-        -- build/fold fusion for `List`
-        App (App ListBuild _) (App (App ListFold _) _) -> False
+          -- build/fold fusion for `List`
+          App (App ListBuild _) (App (App ListFold _) _) -> False
 
-        -- build/fold fusion for `Natural`
-        App NaturalBuild (App NaturalFold _) -> False
+          -- build/fold fusion for `Natural`
+          App NaturalBuild (App NaturalFold _) -> False
 
-        -- build/fold fusion for `Optional`
-        App (App OptionalBuild _) (App (App OptionalFold _) _) -> False
+          -- build/fold fusion for `Optional`
+          App (App OptionalBuild _) (App (App OptionalFold _) _) -> False
 
-        App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
-        App NaturalBuild _ -> False
-        App NaturalIsZero (NaturalLit _) -> False
-        App NaturalEven (NaturalLit _) -> False
-        App NaturalOdd (NaturalLit _) -> False
-        App NaturalShow (NaturalLit _) -> False
-        App NaturalToInteger (NaturalLit _) -> False
-        App IntegerShow (IntegerLit _) -> False
-        App IntegerToDouble (IntegerLit _) -> False
-        App DoubleShow (DoubleLit _) -> False
-        App (App OptionalBuild _) _ -> False
-        App (App ListBuild _) _ -> False
-        App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _ ->
-            False
-        App (App ListLength _) (ListLit _ _) -> False
-        App (App ListHead _) (ListLit _ _) -> False
-        App (App ListLast _) (ListLit _ _) -> False
-        App (App ListIndexed _) (ListLit _ _) -> False
-        App (App ListReverse _) (ListLit _ _) -> False
-        App (App (App (App (App OptionalFold _) (Some _)) _) _) _ ->
-            False
-        App (App (App (App (App OptionalFold _) (App None _)) _) _) _ ->
-            False
-        _ -> True
-    Let _ _ _ _ -> False
-    Annot _ _ -> False
-    Bool -> True
-    BoolLit _ -> True
-    BoolAnd x y -> isNormalized x && isNormalized y && decide x y
-      where
-        decide (BoolLit _)  _          = False
-        decide  _          (BoolLit _) = False
-        decide  l           r          = not (judgmentallyEqual l r)
-    BoolOr x y -> isNormalized x && isNormalized y && decide x y
-      where
-        decide (BoolLit _)  _          = False
-        decide  _          (BoolLit _) = False
-        decide  l           r          = not (judgmentallyEqual l r)
-    BoolEQ x y -> isNormalized x && isNormalized y && decide x y
-      where
-        decide (BoolLit True)  _             = False
-        decide  _             (BoolLit True) = False
-        decide  l              r             = not (judgmentallyEqual l r)
-    BoolNE x y -> isNormalized x && isNormalized y && decide x y
-      where
-        decide (BoolLit False)  _               = False
-        decide  _              (BoolLit False ) = False
-        decide  l               r               = not (judgmentallyEqual l r)
-    BoolIf x y z ->
-        isNormalized x && isNormalized y && isNormalized z && decide x y z
-      where
-        decide (BoolLit _)  _              _              = False
-        decide  _          (BoolLit True) (BoolLit False) = False
-        decide  _           l              r              = not (judgmentallyEqual l r)
-    Natural -> True
-    NaturalLit _ -> True
-    NaturalFold -> True
-    NaturalBuild -> True
-    NaturalIsZero -> True
-    NaturalEven -> True
-    NaturalOdd -> True
-    NaturalShow -> True
-    NaturalToInteger -> True
-    NaturalPlus x y -> isNormalized x && isNormalized y && decide x y
-      where
-        decide (NaturalLit 0)  _             = False
-        decide  _             (NaturalLit 0) = False
-        decide (NaturalLit _) (NaturalLit _) = False
-        decide  _              _             = True
-    NaturalTimes x y -> isNormalized x && isNormalized y && decide x y
-      where
-        decide (NaturalLit 0)  _             = False
-        decide  _             (NaturalLit 0) = False
-        decide (NaturalLit 1)  _             = False
-        decide  _             (NaturalLit 1) = False
-        decide (NaturalLit _) (NaturalLit _) = False
-        decide  _              _             = True
-    Integer -> True
-    IntegerLit _ -> True
-    IntegerShow -> True
-    IntegerToDouble -> True
-    Double -> True
-    DoubleLit _ -> True
-    DoubleShow -> True
-    Text -> True
-    TextLit (Chunks [("", _)] "") -> False
-    TextLit (Chunks xys _) -> all (all check) xys
-      where
-        check y = isNormalized y && case y of
-            TextLit _ -> False
-            _         -> True
-    TextAppend x y -> isNormalized x && isNormalized y && decide x y
-      where
-        isEmpty (Chunks [] "") = True
-        isEmpty  _             = False
+          App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
+          App NaturalBuild _ -> False
+          App NaturalIsZero (NaturalLit _) -> False
+          App NaturalEven (NaturalLit _) -> False
+          App NaturalOdd (NaturalLit _) -> False
+          App NaturalShow (NaturalLit _) -> False
+          App NaturalToInteger (NaturalLit _) -> False
+          App IntegerShow (IntegerLit _) -> False
+          App IntegerToDouble (IntegerLit _) -> False
+          App DoubleShow (DoubleLit _) -> False
+          App (App OptionalBuild _) _ -> False
+          App (App ListBuild _) _ -> False
+          App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _ ->
+              False
+          App (App ListLength _) (ListLit _ _) -> False
+          App (App ListHead _) (ListLit _ _) -> False
+          App (App ListLast _) (ListLit _ _) -> False
+          App (App ListIndexed _) (ListLit _ _) -> False
+          App (App ListReverse _) (ListLit _ _) -> False
+          App (App (App (App (App OptionalFold _) (Some _)) _) _) _ ->
+              False
+          App (App (App (App (App OptionalFold _) (App None _)) _) _) _ ->
+              False
+          _ -> True
+      Let _ _ _ _ -> False
+      Annot _ _ -> False
+      Bool -> True
+      BoolLit _ -> True
+      BoolAnd x y -> loop x && loop y && decide x y
+        where
+          decide (BoolLit _)  _          = False
+          decide  _          (BoolLit _) = False
+          decide  l           r          = not (judgmentallyEqual l r)
+      BoolOr x y -> loop x && loop y && decide x y
+        where
+          decide (BoolLit _)  _          = False
+          decide  _          (BoolLit _) = False
+          decide  l           r          = not (judgmentallyEqual l r)
+      BoolEQ x y -> loop x && loop y && decide x y
+        where
+          decide (BoolLit True)  _             = False
+          decide  _             (BoolLit True) = False
+          decide  l              r             = not (judgmentallyEqual l r)
+      BoolNE x y -> loop x && loop y && decide x y
+        where
+          decide (BoolLit False)  _               = False
+          decide  _              (BoolLit False ) = False
+          decide  l               r               = not (judgmentallyEqual l r)
+      BoolIf x y z ->
+          loop x && loop y && loop z && decide x y z
+        where
+          decide (BoolLit _)  _              _              = False
+          decide  _          (BoolLit True) (BoolLit False) = False
+          decide  _           l              r              = not (judgmentallyEqual l r)
+      Natural -> True
+      NaturalLit _ -> True
+      NaturalFold -> True
+      NaturalBuild -> True
+      NaturalIsZero -> True
+      NaturalEven -> True
+      NaturalOdd -> True
+      NaturalShow -> True
+      NaturalToInteger -> True
+      NaturalPlus x y -> loop x && loop y && decide x y
+        where
+          decide (NaturalLit 0)  _             = False
+          decide  _             (NaturalLit 0) = False
+          decide (NaturalLit _) (NaturalLit _) = False
+          decide  _              _             = True
+      NaturalTimes x y -> loop x && loop y && decide x y
+        where
+          decide (NaturalLit 0)  _             = False
+          decide  _             (NaturalLit 0) = False
+          decide (NaturalLit 1)  _             = False
+          decide  _             (NaturalLit 1) = False
+          decide (NaturalLit _) (NaturalLit _) = False
+          decide  _              _             = True
+      Integer -> True
+      IntegerLit _ -> True
+      IntegerShow -> True
+      IntegerToDouble -> True
+      Double -> True
+      DoubleLit _ -> True
+      DoubleShow -> True
+      Text -> True
+      TextLit (Chunks [("", _)] "") -> False
+      TextLit (Chunks xys _) -> all (all check) xys
+        where
+          check y = loop y && case y of
+              TextLit _ -> False
+              _         -> True
+      TextAppend x y -> loop x && loop y && decide x y
+        where
+          isEmpty (Chunks [] "") = True
+          isEmpty  _             = False
 
-        decide (TextLit m)  _          | isEmpty m = False
-        decide  _          (TextLit n) | isEmpty n = False
-        decide (TextLit _) (TextLit _)             = False
-        decide  _           _                      = True
-    List -> True
-    ListLit t es -> all isNormalized t && all isNormalized es
-    ListAppend x y -> isNormalized x && isNormalized y && decide x y
-      where
-        decide (ListLit _ m)  _            | Data.Sequence.null m = False
-        decide  _            (ListLit _ n) | Data.Sequence.null n = False
-        decide (ListLit _ _) (ListLit _ _)                        = False
-        decide  _             _                                   = True
-    ListBuild -> True
-    ListFold -> True
-    ListLength -> True
-    ListHead -> True
-    ListLast -> True
-    ListIndexed -> True
-    ListReverse -> True
-    Optional -> True
-    OptionalLit _ _ -> False
-    Some a -> isNormalized a
-    None -> True
-    OptionalFold -> True
-    OptionalBuild -> True
-    Record kts -> all isNormalized kts
-    RecordLit kvs -> all isNormalized kvs
-    Union kts -> all isNormalized kts
-    UnionLit _ v kvs -> isNormalized v && all isNormalized kvs
-    Combine x y -> isNormalized x && isNormalized y && decide x y
-      where
-        decide (RecordLit m) _ | Data.HashMap.Strict.InsOrd.null m = False
-        decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
-        decide (RecordLit _) (RecordLit _) = False
-        decide  _ _ = True
-    CombineTypes x y -> isNormalized x && isNormalized y && decide x y
-      where
-        decide (Record m) _ | Data.HashMap.Strict.InsOrd.null m = False
-        decide _ (Record n) | Data.HashMap.Strict.InsOrd.null n = False
-        decide (Record _) (Record _) = False
-        decide  _ _ = True
-    Prefer x y -> isNormalized x && isNormalized y && decide x y
-      where
-        decide (RecordLit m) _ | Data.HashMap.Strict.InsOrd.null m = False
-        decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
-        decide (RecordLit _) (RecordLit _) = False
-        decide  _ _ = True
-    Merge x y t -> isNormalized x && isNormalized y && all isNormalized t &&
-        case x of
-            RecordLit kvsX ->
-                case y of
-                    UnionLit kY _  _ ->
-                        case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
-                            Just _  -> False
-                            Nothing -> True
-                    _ -> True
-            _ -> True
-    Constructors t -> isNormalized t &&
-        case t of
-            Union _ -> False
-            _       -> True
+          decide (TextLit m)  _          | isEmpty m = False
+          decide  _          (TextLit n) | isEmpty n = False
+          decide (TextLit _) (TextLit _)             = False
+          decide  _           _                      = True
+      List -> True
+      ListLit t es -> all loop t && all loop es
+      ListAppend x y -> loop x && loop y && decide x y
+        where
+          decide (ListLit _ m)  _            | Data.Sequence.null m = False
+          decide  _            (ListLit _ n) | Data.Sequence.null n = False
+          decide (ListLit _ _) (ListLit _ _)                        = False
+          decide  _             _                                   = True
+      ListBuild -> True
+      ListFold -> True
+      ListLength -> True
+      ListHead -> True
+      ListLast -> True
+      ListIndexed -> True
+      ListReverse -> True
+      Optional -> True
+      OptionalLit _ _ -> False
+      Some a -> loop a
+      None -> True
+      OptionalFold -> True
+      OptionalBuild -> True
+      Record kts -> all loop kts
+      RecordLit kvs -> all loop kvs
+      Union kts -> all loop kts
+      UnionLit _ v kvs -> loop v && all loop kvs
+      Combine x y -> loop x && loop y && decide x y
+        where
+          decide (RecordLit m) _ | Data.HashMap.Strict.InsOrd.null m = False
+          decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
+          decide (RecordLit _) (RecordLit _) = False
+          decide  _ _ = True
+      CombineTypes x y -> loop x && loop y && decide x y
+        where
+          decide (Record m) _ | Data.HashMap.Strict.InsOrd.null m = False
+          decide _ (Record n) | Data.HashMap.Strict.InsOrd.null n = False
+          decide (Record _) (Record _) = False
+          decide  _ _ = True
+      Prefer x y -> loop x && loop y && decide x y
+        where
+          decide (RecordLit m) _ | Data.HashMap.Strict.InsOrd.null m = False
+          decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
+          decide (RecordLit _) (RecordLit _) = False
+          decide  _ _ = True
+      Merge x y t -> loop x && loop y && all loop t &&
+          case x of
+              RecordLit kvsX ->
+                  case y of
+                      UnionLit kY _  _ ->
+                          case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
+                              Just _  -> False
+                              Nothing -> True
+                      _ -> True
+              _ -> True
+      Constructors t -> loop t &&
+          case t of
+              Union _ -> False
+              _       -> True
 
-    Field r x -> isNormalized r &&
-        case r of
-            RecordLit kvs ->
-                case Data.HashMap.Strict.InsOrd.lookup x kvs of
-                    Just _  -> False
-                    Nothing -> True
-            _ -> True
-    Project r xs -> isNormalized r &&
-        case r of
-            RecordLit kvs ->
-                if all (flip Data.HashMap.Strict.InsOrd.member kvs) xs
-                    then False
-                    else True
-            _ -> True
-    Note _ e' -> isNormalized e'
-    ImportAlt l _r -> isNormalized l
-    Embed _ -> True
+      Field r x -> loop r &&
+          case r of
+              RecordLit kvs ->
+                  case Data.HashMap.Strict.InsOrd.lookup x kvs of
+                      Just _  -> False
+                      Nothing -> True
+              _ -> True
+      Project r xs -> loop r &&
+          case r of
+              RecordLit kvs ->
+                  if all (flip Data.HashMap.Strict.InsOrd.member kvs) xs
+                      then False
+                      else True
+              _ -> True
+      Note _ e' -> loop e'
+      ImportAlt l _r -> loop l
+      Embed _ -> True
 
 {-| Detect if the given variable is free within the given expression
 
