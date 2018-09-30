@@ -64,7 +64,6 @@ import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Data (Data)
 import Data.Foldable
-import Data.Hashable (Hashable)
 import Data.HashSet (HashSet)
 import Data.String (IsString(..))
 import Data.Scientific (Scientific)
@@ -82,9 +81,7 @@ import Prelude hiding (succ)
 
 import qualified Control.Monad
 import qualified Crypto.Hash
-import qualified Data.List
 import qualified Data.HashSet
-import qualified Data.Ord
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
@@ -1396,12 +1393,6 @@ denote (Project a b         ) = Project (denote a) b
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
-sortMap :: (Ord k, Hashable k) => Map k v -> Map k v
-sortMap =
-      Dhall.Map.fromList
-    . Data.List.sortBy (Data.Ord.comparing fst)
-    . Dhall.Map.toList
-
 {-| Reduce an expression to its normal form, performing beta reduction and applying
     any custom definitions.
 
@@ -1677,16 +1668,16 @@ normalizeWith ctx e0 = loop (denote e0)
     None -> None
     OptionalFold -> OptionalFold
     OptionalBuild -> OptionalBuild
-    Record kts -> Record (sortMap kts')
+    Record kts -> Record (Dhall.Map.sort kts')
       where
         kts' = fmap loop kts
-    RecordLit kvs -> RecordLit (sortMap kvs')
+    RecordLit kvs -> RecordLit (Dhall.Map.sort kvs')
       where
         kvs' = fmap loop kvs
-    Union kts -> Union (sortMap kts')
+    Union kts -> Union (Dhall.Map.sort kts')
       where
         kts' = fmap loop kts
-    UnionLit k v kvs -> UnionLit k v' (sortMap kvs')
+    UnionLit k v kvs -> UnionLit k v' (Dhall.Map.sort kvs')
       where
         v'   =      loop v
         kvs' = fmap loop kvs
@@ -1697,7 +1688,7 @@ normalizeWith ctx e0 = loop (denote e0)
         decide l (RecordLit n) | Dhall.Map.null n =
             l
         decide (RecordLit m) (RecordLit n) =
-            RecordLit (sortMap (Dhall.Map.unionWith decide m n))
+            RecordLit (Dhall.Map.sort (Dhall.Map.unionWith decide m n))
         decide l r =
             Combine l r
     CombineTypes x y -> decide (loop x) (loop y)
@@ -1707,7 +1698,7 @@ normalizeWith ctx e0 = loop (denote e0)
         decide l (Record n) | Dhall.Map.null n =
             l
         decide (Record m) (Record n) =
-            Record (sortMap (Dhall.Map.unionWith decide m n))
+            Record (Dhall.Map.sort (Dhall.Map.unionWith decide m n))
         decide l r =
             CombineTypes l r
 
@@ -1718,7 +1709,7 @@ normalizeWith ctx e0 = loop (denote e0)
         decide l (RecordLit n) | Dhall.Map.null n =
             l
         decide (RecordLit m) (RecordLit n) =
-            RecordLit (sortMap (Dhall.Map.union n m))
+            RecordLit (Dhall.Map.sort (Dhall.Map.union n m))
         decide l r =
             Prefer l r
     Merge x y t      ->
@@ -1941,10 +1932,10 @@ isNormalized e0 = loop (denote e0)
       None -> True
       OptionalFold -> True
       OptionalBuild -> True
-      Record kts -> all loop kts
-      RecordLit kvs -> all loop kvs
-      Union kts -> all loop kts
-      UnionLit _ v kvs -> loop v && all loop kvs
+      Record kts -> Dhall.Map.isSorted kts && all loop kts
+      RecordLit kvs -> Dhall.Map.isSorted kvs && all loop kvs
+      Union kts -> Dhall.Map.isSorted kts && all loop kts
+      UnionLit _ v kvs -> loop v && Dhall.Map.isSorted kvs && all loop kvs
       Combine x y -> loop x && loop y && decide x y
         where
           decide (RecordLit m) _ | Dhall.Map.null m = False

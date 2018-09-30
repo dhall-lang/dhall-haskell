@@ -21,11 +21,13 @@ module Dhall.TypeCheck (
     , TypeMessage(..)
     ) where
 
+import Control.Applicative (liftA2)
 import Control.Exception (Exception)
 import Data.Data (Data(..))
 import Data.Foldable (forM_, toList)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..))
+import Data.Semigroup (Semigroup(..))
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
@@ -36,7 +38,6 @@ import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Foldable
-import qualified Data.HashMap.Strict
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text                               as Text
@@ -532,19 +533,13 @@ typeWithA tpa = loop
                 kts <- Dhall.Map.traverseWithKey process kvs
                 return (Record kts)
     loop ctx e@(Union     kts   ) = do
-        let process k t = do
+        let process k t = Process $ do
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
                     Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
-        -- toList from insert-ordered-containers does some work to
-        -- ensure that the elements do follow insertion order. In this
-        -- instance, insertion order doesn't matter: we only need to
-        -- peek at each element to make sure it is well-typed. If
-        -- there are multiple type errors, it does not matter which
-        -- gets reported first here.
-        Data.HashMap.Strict.foldrWithKey (\ k t prev -> prev >> process k t) (Right ()) (Dhall.Map.toHashMap kts)
+        runProcess (Dhall.Map.unorderedFoldMapWithKey process kts)
         return (Const Type)
     loop ctx e@(UnionLit k v kts) = do
         case Dhall.Map.lookup k kts of
@@ -793,6 +788,16 @@ typeWithA tpa = loop
     loop ctx   (ImportAlt l _r  ) =
        fmap Dhall.Core.normalize (loop ctx l)
     loop _     (Embed p         ) = Right $ tpa p
+
+newtype Process a b = Process { runProcess :: Either a b }
+
+instance Semigroup b => Semigroup (Process a b) where
+    Process eL <> Process eR = Process (liftA2 (<>) eL eR)
+
+instance Monoid b => Monoid (Process a b) where
+    mempty = Process (pure mempty)
+
+    mappend = (<>)
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking

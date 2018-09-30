@@ -37,7 +37,7 @@ import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Core
-import qualified Dhall.Map as HashMap
+import qualified Dhall.Map
 import qualified Dhall.Pretty.Internal      as Internal
 
 data Diff =
@@ -254,8 +254,8 @@ diffKeyVals
 diffKeyVals assign kvsL kvsR =
     diffFieldNames <> diffFieldValues <> (if anyEqual then [ ignore ] else [])
   where
-    ksL = Data.Set.fromList (HashMap.keys kvsL)
-    ksR = Data.Set.fromList (HashMap.keys kvsR)
+    ksL = Data.Set.fromList (Dhall.Map.keys kvsL)
+    ksR = Data.Set.fromList (Dhall.Map.keys kvsR)
 
     extraL = Data.Set.difference ksL ksR
     extraR = Data.Set.difference ksR ksL
@@ -270,10 +270,10 @@ diffKeyVals assign kvsL kvsR =
             <>  ignore
             ]
 
-    shared = HashMap.intersectionWith diffExpression kvsL kvsR
+    shared = Dhall.Map.intersectionWith diffExpression kvsL kvsR
 
     diffFieldValues =
-        filter (not . same) (HashMap.foldMapWithKey adapt shared)
+        filter (not . same) (Dhall.Map.foldMapWithKey adapt shared)
       where
         adapt key doc =
             [   (if ksL == ksR then mempty else "  ")

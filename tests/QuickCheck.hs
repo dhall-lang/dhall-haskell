@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -9,7 +8,6 @@ module QuickCheck where
 
 import Codec.Serialise (DeserialiseFailure(..))
 import Control.Monad (guard)
-import Data.Hashable (Hashable)
 import Dhall.Map (Map)
 import Dhall.Core
     ( Chunks(..)
@@ -112,7 +110,7 @@ integer =
         , (1, fmap (\x -> x - (2 ^ (64 :: Int))) arbitrary)
         ]
 
-instance (Eq k, Hashable k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
+instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
     arbitrary = do
         n   <- Test.QuickCheck.choose (0, 2)
         kvs <- Test.QuickCheck.vectorOf n ((,) <$> arbitrary <*> arbitrary)
