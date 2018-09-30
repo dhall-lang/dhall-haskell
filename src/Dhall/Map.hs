@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -30,6 +31,7 @@ module Dhall.Map
 
 import Control.Applicative ((<|>))
 import Data.Data (Data)
+import Data.Semigroup
 import Prelude hiding (lookup)
 
 import qualified Data.Foldable
@@ -39,13 +41,15 @@ import qualified Data.Set
 data Map k v = Map (Data.Map.Map k v) [k]
     deriving (Data, Eq, Foldable, Functor, Show, Traversable)
 
-instance Ord k => Semigroup (Map k v) where
+instance Ord k => Data.Semigroup.Semigroup (Map k v) where
     (<>) = union
 
 instance Ord k => Monoid (Map k v) where
     mempty = empty
 
+#if !(MIN_VERSION_base(4,11,0))
     mappend = (<>)
+#endif
 
 fromList :: Ord k => [(k, v)] -> Map k v
 fromList kvs = Map m ks
