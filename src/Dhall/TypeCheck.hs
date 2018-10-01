@@ -795,7 +795,7 @@ newtype Process a b = Process { runProcess :: Either a b }
 instance Semigroup b => Semigroup (Process a b) where
     Process eL <> Process eR = Process (liftA2 (<>) eL eR)
 
-instance Monoid b => Monoid (Process a b) where
+instance (Semigroup b, Monoid b) => Monoid (Process a b) where
     mempty = Process (pure mempty)
 
     mappend = (<>)
