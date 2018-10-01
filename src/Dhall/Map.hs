@@ -92,10 +92,10 @@ fromList kvs = Map m ks
   where
     m = Data.Map.fromList kvs
 
-    ks = nub (map fst kvs)
+    ks = nubOrd (map fst kvs)
 
-nub :: Ord k => [k] -> [k]
-nub = go Data.Set.empty
+nubOrd :: Ord k => [k] -> [k]
+nubOrd = go Data.Set.empty
   where
     go _      []  = []
     go set (k:ks)
