@@ -507,9 +507,8 @@ typeWithA tpa = loop
                 c <- case s0 of
                     Const Type ->
                         return Type
-                    Const Kind
-                        | Dhall.Core.judgmentallyEqual t0 (Const Type) ->
-                            return Kind
+                    Const Kind ->
+                        return Kind
                     Const Sort
                         | Dhall.Core.judgmentallyEqual t0 (Const Kind) ->
                             return Sort
@@ -534,7 +533,7 @@ typeWithA tpa = loop
                                 then
                                     if Dhall.Core.judgmentallyEqual t (Const Kind)
                                     then return ()
-                                    else Left (TypeError ctx e (InvalidFieldType k t))
+                                    else Left (TypeError ctx e (InvalidField k t))
                                 else Left (TypeError ctx e (FieldMismatch k v c k0 v0 Sort))
                             _ ->
                                 Left (TypeError ctx e (InvalidField k t))
@@ -922,29 +921,29 @@ prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
     short = "Unbound variable"
 
     long =
-        "Explanation: Expressions can only reference previously introduced (i.e. \"bound\")\n\
-        \variables that are still \"in scope\"                                           \n\
+        "Explanation: Expressions can only reference previously introduced (i.e. “bound”)\n\
+        \variables that are still “in scope”                                             \n\
         \                                                                                \n\
-        \For example, the following valid expressions introduce a \"bound\" variable named\n\
+        \For example, the following valid expressions introduce a “bound” variable named \n\
         \❰x❱:                                                                            \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────┐                                                         \n\
-        \    │ λ(x : Bool) → x │  Anonymous functions introduce \"bound\" variables      \n\
+        \    │ λ(x : Bool) → x │  Anonymous functions introduce “bound” variables        \n\
         \    └─────────────────┘                                                         \n\
         \        ⇧                                                                       \n\
         \        This is the bound variable                                              \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────┐                                                         \n\
-        \    │ let x = 1 in x  │  ❰let❱ expressions introduce \"bound\" variables        \n\
+        \    │ let x = 1 in x  │  ❰let❱ expressions introduce “bound” variables          \n\
         \    └─────────────────┘                                                         \n\
         \          ⇧                                                                     \n\
         \          This is the bound variable                                            \n\
         \                                                                                \n\
         \                                                                                \n\
         \However, the following expressions are not valid because they all reference a   \n\
-        \variable that has not been introduced yet (i.e. an \"unbound\" variable):       \n\
+        \variable that has not been introduced yet (i.e. an “unbound” variable):         \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────┐                                                         \n\
@@ -974,7 +973,7 @@ prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────────────────────────────┐                      \n\
-        \    │ λ(empty : Bool) → if emty then \"Empty\" else \"Full\" │                  \n\
+        \    │ λ(empty : Bool) → if emty then \"Empty\" else \"Full\" │                      \n\
         \    └────────────────────────────────────────────────────┘                      \n\
         \                           ⇧                                                    \n\
         \                           Typo                                                 \n\
@@ -1035,7 +1034,7 @@ prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
     short = "Invalid function input"
 
     long =
-        "Explanation: A function can accept an input \"term\" that has a given \"type\", like\n\
+        "Explanation: A function can accept an input “term” that has a given “type”, like\n\
         \this:                                                                           \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1055,7 +1054,7 @@ prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
         \      This is the type of the input term                                        \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... or a function can accept an input \"type\" that has a given \"kind\", like this:\n\
+        \... or a function can accept an input “type” that has a given “kind”, like this:\n\
         \                                                                                \n\
         \                                                                                \n\
         \        This is the input type that the function accepts                        \n\
@@ -1078,15 +1077,15 @@ prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────┐                                                            \n\
-        \    │ ∀(x : 1) → x │  ❰1❱ is a \"term\" and not a \"type\" nor a \"kind\" so ❰x❱\n\
-        \    └──────────────┘  cannot have \"type\" ❰1❱ or \"kind\" ❰1❱                  \n\
+        \    │ ∀(x : 1) → x │  ❰1❱ is a “term” and not a “type” nor a “kind” so ❰x❱      \n\
+        \    └──────────────┘  cannot have “type” ❰1❱ or “kind” ❰1❱                      \n\
         \            ⇧                                                                   \n\
         \            This is not a type or kind                                          \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────┐                                                                \n\
-        \    │ True → x │  ❰True❱ is a \"term\" and not a \"type\" nor a \"kind\" so the \n\
-        \    └──────────┘  anonymous input cannot have \"type\" ❰True❱ or \"kind\" ❰True❱\n\
+        \    │ True → x │  ❰True❱ is a “term” and not a “type” nor a “kind” so the       \n\
+        \    └──────────┘  anonymous input cannot have “type” ❰True❱ or “kind” ❰True❱    \n\
         \      ⇧                                                                         \n\
         \      This is not a type or kind                                                \n\
         \                                                                                \n\
@@ -1104,7 +1103,7 @@ prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
     short = "Invalid function output"
 
     long =
-        "Explanation: A function can return an output \"term\" that has a given \"type\",\n\
+        "Explanation: A function can return an output “term” that has a given “type”,    \n\
         \like this:                                                                      \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1122,7 +1121,7 @@ prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
         \             This is the type of the output term                                \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... or a function can return an output \"type\" that has a given \"kind\", like \n\
+        \... or a function can return an output “type” that has a given “kind”, like     \n\
         \this:                                                                           \n\
         \                                                                                \n\
         \    ┌────────────────────┐                                                      \n\
@@ -1143,15 +1142,15 @@ prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────┐                                                         \n\
-        \    │ ∀(x : Bool) → x │  ❰x❱ is a \"term\" and not a \"type\" nor a \"kind\" so the\n\
-        \    └─────────────────┘  output cannot have \"type\" ❰x❱ or \"kind\" ❰x❱        \n\
+        \    │ ∀(x : Bool) → x │  ❰x❱ is a “term” and not a “type” nor a “kind” so the   \n\
+        \    └─────────────────┘  output cannot have “type” ❰x❱ or “kind” ❰x❱            \n\
         \                    ⇧                                                           \n\
         \                    This is not a type or kind                                  \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────┐                                                             \n\
-        \    │ Text → True │  ❰True❱ is a \"term\" and not a \"type\" nor a \"kind\" so the\n\
-        \    └─────────────┘  output cannot have \"type\" ❰True❱ or \"kind\" ❰True❱      \n\
+        \    │ Text → True │  ❰True❱ is a “term” and not a “type” nor a “kind” so the    \n\
+        \    └─────────────┘  output cannot have “type” ❰True❱ or “kind” ❰True❱          \n\
         \             ⇧                                                                  \n\
         \             This is not a type or kind                                         \n\
         \                                                                                \n\
@@ -1665,10 +1664,10 @@ prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
         \                   Expression for ❰else❱ branch                                 \n\
         \                                                                                \n\
         \                                                                                \n\
-        \These expressions must be a \"term\", where a \"term\" is defined as an expression\n\
+        \These expressions must be a “term”, where a “term” is defined as an expression  \n\
         \that has a type thas has kind ❰Type❱                                            \n\
         \                                                                                \n\
-        \For example, the following expressions are all valid \"terms\":                 \n\
+        \For example, the following expressions are all valid “terms”:                   \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────┐                                                      \n\
@@ -2705,7 +2704,7 @@ prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
         \    │ { foo = 1, bar = \"ABC\" } ∧ { foo = 2 } │                                \n\
         \    └────────────────────────────────────────┘                                  \n\
         \                                   ⇧                                            \n\
-        \                                   Invalid attempt to update ❰foo❱'s value to ❰2❱\n\
+        \                                  Invalid attempt to update ❰foo❱'s value to ❰2❱\n\
         \                                                                                \n\
         \  Field updates are intentionally not allowed as the Dhall language discourages \n\
         \  patch-oriented programming                                                    \n\
@@ -2738,7 +2737,7 @@ prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \... but the first argument to ❰merge❱ must be a record and not some other type. \n\
         \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                 \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────┐                                 \n\
@@ -3006,8 +3005,8 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... as long as the output type of each handler function matches the declared type\n\
-        \of the result:                                                                  \n\
+        \... as long as the output type of each handler function matches the declared    \n\
+        \type of the result:                                                             \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────────────────────────┐               \n\
@@ -3294,7 +3293,8 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt0 <> "\n\
         \                                                                                \n\
-        \... but the field is missing because the record only defines the following fields:\n\
+        \... but the field is missing because the record only defines the following      \n\
+        \fields:                                                                         \n\
         \                                                                                \n\
         \" <> txt1 <> "\n"
       where
@@ -3324,17 +3324,17 @@ prettyTypeMessage (CantInterpolate expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────┐                                                        \n\
-        \    │ \"ABC${\"DEF\"}GHI\" │                                                    \n\
+        \    │ \"ABC${\"DEF\"}GHI\" │                                                        \n\
         \    └──────────────────┘                                                        \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────┐                                              \n\
-        \    │ λ(x : Text) → \"ABC${x}GHI\" │                                            \n\
+        \    │ λ(x : Text) → \"ABC${x}GHI\" │                                              \n\
         \    └────────────────────────────┘                                              \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────────────┐                           \n\
-        \    │ λ(age : Natural) → \"Age: ${Natural/show age}\" │                         \n\
+        \    │ λ(age : Natural) → \"Age: ${Natural/show age}\" │                           \n\
         \    └───────────────────────────────────────────────┘                           \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -3345,7 +3345,7 @@ prettyTypeMessage (CantInterpolate expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────────────┐                                        \n\
-        \    │ λ(age : Natural) → \"Age: ${age}\" │                                      \n\
+        \    │ λ(age : Natural) → \"Age: ${age}\" │                                        \n\
         \    └──────────────────────────────────┘                                        \n\
         \                                  ⇧                                             \n\
         \                                  Invalid: ❰age❱ has type ❰Natural❱             \n\
@@ -3356,7 +3356,7 @@ prettyTypeMessage (CantInterpolate expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────┐                                                          \n\
-        \    │ \"echo ${HOME}\" │                                                        \n\
+        \    │ \"echo ${HOME}\" │                                                          \n\
         \    └────────────────┘                                                          \n\
         \             ⇧                                                                  \n\
         \             ❰HOME❱ is not in scope and this might have meant to use ❰\\${HOME}❱\n\
@@ -3386,7 +3386,7 @@ prettyTypeMessage (CantTextAppend expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────┐                                                          \n\
-        \    │ \"ABC\" ++ \"DEF\" │                                                      \n\
+        \    │ \"ABC\" ++ \"DEF\" │                                                          \n\
         \    └────────────────┘                                                          \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -3461,8 +3461,8 @@ prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
 
     long =
         "Explanation: The Dhall programming language does not allow functions from terms \n\
-        \to types.  These function types are also known as \"dependent function types\"  \n\
-        \because you have a type whose value \"depends\" on the value of a term.         \n\
+        \to types.  These function types are also known as “dependent function types”    \n\
+        \because you have a type whose value “depends” on the value of a term.           \n\
         \                                                                                \n\
         \For example, this is " <> _NOT <> " a legal function type:                      \n\
         \                                                                                \n\
