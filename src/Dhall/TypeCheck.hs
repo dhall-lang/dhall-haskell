@@ -469,9 +469,9 @@ typeWithA tpa = loop
                       (Pi "just" (Pi "_" "a" "optional")
                           (Pi "nothing" "optional" "optional") )
     loop ctx e@(Record    kts   ) = do
-        case Dhall.Map.toList kts of
-            []            -> return (Const Type)
-            (k0, t0):rest -> do
+        case {-# SCC "RECORD_TOLIST" #-} Dhall.Map.head kts of
+            Nothing       -> return (Const Type)
+            Just (k0, t0) -> do
                 s0 <- fmap Dhall.Core.normalize (loop ctx t0)
                 c <- case s0 of
                     Const Type ->
@@ -480,7 +480,7 @@ typeWithA tpa = loop
                         | Dhall.Core.judgmentallyEqual t0 (Const Type) ->
                             return Kind
                     _ -> Left (TypeError ctx e (InvalidFieldType k0 t0))
-                let process (k, t) = do
+                let process k t = do
                         s <- fmap Dhall.Core.normalize (loop ctx t)
                         case s of
                             Const Type ->
@@ -496,8 +496,9 @@ typeWithA tpa = loop
                                 else Left (TypeError ctx e (FieldAnnotationMismatch k t k0 t0 Kind))
                             _ ->
                                 Left (TypeError ctx e (InvalidFieldType k t))
-                mapM_ process rest
-                return (Const c)
+                case Dhall.Map.tail kts of
+                  Nothing -> return (Const Type)
+                  Just rest -> Dhall.Map.traverseWithKey_ process rest >> return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
         case Dhall.Map.toList kvs of
             []         -> return (Record Dhall.Map.empty)

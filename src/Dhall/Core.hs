@@ -442,7 +442,75 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
+    deriving (Foldable, Generic, Traversable, Show, Eq, Data)
+
+instance Functor (Expr s) where
+  fmap _ (Const c) = Const c
+  fmap _ (Var v) = Var v
+  fmap f (Lam v e1 e2) = Lam v (fmap f e1) (fmap f e2)
+  fmap f (Pi v e1 e2) = Pi v (fmap f e1) (fmap f e2)
+  fmap f (App e1 e2) = App (fmap f e1) (fmap f e2)
+  fmap f (Let v maybeE e1 e2) = Let v (fmap (fmap f) maybeE) (fmap f e1) (fmap f e2)
+  fmap f (Annot e1 e2) = Annot (fmap f e1) (fmap f e2)
+  fmap _ Bool = Bool
+  fmap _ (BoolLit b) = BoolLit b
+  fmap f (BoolAnd e1 e2) = BoolAnd (fmap f e1) (fmap f e2)
+  fmap f (BoolOr e1 e2) = BoolOr (fmap f e1) (fmap f e2)
+  fmap f (BoolEQ e1 e2) = BoolEQ (fmap f e1) (fmap f e2)
+  fmap f (BoolNE e1 e2) = BoolNE (fmap f e1) (fmap f e2)
+  fmap f (BoolIf e1 e2 e3) = BoolIf (fmap f e1) (fmap f e2) (fmap f e3)
+  fmap _ Natural = Natural
+  fmap _ (NaturalLit n) = NaturalLit n
+  fmap _ NaturalFold = NaturalFold
+  fmap _ NaturalBuild = NaturalBuild
+  fmap _ NaturalIsZero = NaturalIsZero
+  fmap _ NaturalEven = NaturalEven
+  fmap _ NaturalOdd = NaturalOdd
+  fmap _ NaturalToInteger = NaturalToInteger
+  fmap _ NaturalShow = NaturalShow
+  fmap f (NaturalPlus e1 e2) = NaturalPlus (fmap f e1) (fmap f e2)
+  fmap f (NaturalTimes e1 e2) = NaturalTimes (fmap f e1) (fmap f e2)
+  fmap _ Integer = Integer
+  fmap _ (IntegerLit i) = IntegerLit i
+  fmap _ IntegerShow = IntegerShow
+  fmap _ IntegerToDouble = IntegerToDouble
+  fmap _ Double = Double
+  fmap _ (DoubleLit d) = DoubleLit d
+  fmap _ DoubleShow = DoubleShow
+  fmap _ Text = Text
+  fmap f (TextLit cs) = TextLit (fmap f cs)
+  fmap f (TextAppend e1 e2) = TextAppend (fmap f e1) (fmap f e2)
+  fmap _ List = List
+  fmap f (ListLit maybeE seqE) = ListLit (fmap (fmap f) maybeE) (fmap (fmap f) seqE)
+  fmap f (ListAppend e1 e2) = ListAppend (fmap f e1) (fmap f e2)
+  fmap _ ListBuild = ListBuild
+  fmap _ ListFold = ListFold
+  fmap _ ListLength = ListLength
+  fmap _ ListHead = ListHead
+  fmap _ ListLast = ListLast
+  fmap _ ListIndexed = ListIndexed
+  fmap _ ListReverse = ListReverse
+  fmap _ Optional = Optional
+  fmap f (OptionalLit e maybeE) = OptionalLit (fmap f e) (fmap (fmap f) maybeE)
+  fmap f (Some e) = Some (fmap f e)
+  fmap _ None = None
+  fmap _ OptionalFold = OptionalFold
+  fmap _ OptionalBuild = OptionalBuild
+  fmap f (Record r) = Record (fmap (fmap f) r)
+  fmap f (RecordLit r) = RecordLit (fmap (fmap f) r)
+  fmap f (Union u) = Union (fmap (fmap f) u)
+  fmap f (UnionLit v e u) = UnionLit v (fmap f e) (fmap (fmap f) u)
+  fmap f (Combine e1 e2) = Combine (fmap f e1) (fmap f e2)
+  fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
+  fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
+  fmap f (Merge e1 e2 maybeE) = Merge (fmap f e1) (fmap f e2) (fmap (fmap f) maybeE)
+  fmap f (Constructors e1) = Constructors (fmap f e1)
+  fmap f (Field e1 v) = Field (fmap f e1) v
+  fmap f (Project e1 vs) = Project (fmap f e1) vs
+  fmap f (Note s e1) = Note s (fmap f e1)
+  fmap f (ImportAlt e1 e2) = ImportAlt (fmap f e1) (fmap f e2)
+  fmap f (Embed a) = Embed (f a)
+  {-# INLINE fmap #-}
 
 instance Applicative (Expr s) where
     pure = Embed

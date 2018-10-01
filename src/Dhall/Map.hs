@@ -22,16 +22,19 @@ module Dhall.Map
     , isSorted
     , toList
     , traverseWithKey
+    , traverseWithKey_
     , union
     , unionWith
     , unorderedFoldMapWithKey
     , Data.Foldable.null
+    , head
+    , tail
     ) where
 
 import Control.Applicative ((<|>))
 import Data.Data (Data)
 import Data.Vector (Vector)
-import Prelude hiding (lookup)
+import Prelude hiding (head, lookup, tail)
 
 import qualified Data.Foldable
 import qualified Data.Map
@@ -39,7 +42,7 @@ import qualified Data.Set
 import qualified Data.Vector
 
 data Map k v = Map (Data.Map.Map k v) (Vector k)
-    deriving (Data, Eq, Foldable, Functor, Show, Traversable)
+    deriving (Data, Show)
 
 instance Ord k => Semigroup (Map k v) where
     (<>) = union
@@ -48,6 +51,25 @@ instance Ord k => Monoid (Map k v) where
     mempty = empty
 
     mappend = (<>)
+
+instance (Eq k, Eq v) => Eq (Map k v) where
+  (Map m1 _) == (Map m2 _) = m1 == m2
+  {-# INLINE (==) #-}
+
+instance Functor (Map k) where
+  fmap f (Map m ks) = Map ({-# SCC "FMAP" #-} fmap f m) ks
+  {-# INLINE fmap #-}
+
+instance Foldable (Map k) where
+  foldr f z (Map m _) = foldr f z m
+  {-# INLINE foldr #-}
+
+  foldMap f (Map m _) = foldMap f m
+  {-# INLINE foldMap #-}
+
+instance Traversable (Map k) where
+  traverse f (Map m ks) = (\m' -> Map m' ks) <$> traverse f m
+  {-# INLINE traverse #-}
 
 fromList :: Ord k => [(k, v)] -> Map k v
 fromList kvs = Map m ks
@@ -138,6 +160,11 @@ traverseWithKey
 traverseWithKey f m = fmap fromList (traverse f' (toList m))
   where
     f' (k, a) = fmap ((,) k) (f k a)
+{-# INLINE traverseWithKey #-}
+
+traverseWithKey_
+    :: Ord k => Applicative f => (k -> a -> f ()) -> Map k a -> f ()
+traverseWithKey_ f (Map m _) = fmap (const ()) $ Data.Map.traverseWithKey f m
 
 insert :: Ord k => k -> v -> Map k v -> Map k v
 insert k v (Map m ks) = Map m' ks'
@@ -161,3 +188,13 @@ singleton k v = Map m ks
     m = Data.Map.singleton k v
 
     ks = pure k
+
+head :: Ord k => Map k v -> Maybe (k, v)
+head (Map m ks)
+  | Data.Vector.null ks = Nothing
+  | otherwise = let k = Data.Vector.unsafeHead ks in Just (k, m Data.Map.! k)
+
+tail :: Ord k => Map k v -> Maybe (Map k v)
+tail (Map m ks)
+  | Data.Vector.length ks < 1 = Nothing
+  | otherwise = let k = Data.Vector.head ks in Just $ Map (Data.Map.delete k m) (Data.Vector.unsafeTail ks)
