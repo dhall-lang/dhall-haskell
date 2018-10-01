@@ -259,6 +259,6 @@ toMap kvs = do
                         ("duplicate field: " ++ Data.Text.unpack k)
     Dhall.Map.traverseWithKey action m
   where
-    fromListWith combine = foldr cons mempty
+    fromListWith combine = foldr cons Dhall.Map.empty
       where
         cons (k, v) = Dhall.Map.insertWith combine k v

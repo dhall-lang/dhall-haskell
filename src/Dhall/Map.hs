@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -10,6 +9,7 @@ module Dhall.Map
       Map
 
       -- * Construction
+    , empty
     , singleton
     , fromList
 
@@ -47,7 +47,6 @@ module Dhall.Map
 
 import Control.Applicative ((<|>))
 import Data.Data (Data)
-import Data.Semigroup
 import Prelude hiding (lookup)
 
 import qualified Data.Map
@@ -63,15 +62,9 @@ import qualified Data.Set
 data Map k v = Map (Data.Map.Map k v) [k]
     deriving (Data, Eq, Foldable, Functor, Show, Traversable)
 
-instance Ord k => Data.Semigroup.Semigroup (Map k v) where
-    (<>) = union
-
-instance Ord k => Monoid (Map k v) where
-    mempty = Map Data.Map.empty []
-
-#if !(MIN_VERSION_base(4,11,0))
-    mappend = (<>)
-#endif
+-- | An `empty` `Map`
+empty :: Map k v
+empty = Map Data.Map.empty []
 
 -- | Create a `Map` from a single key-value pair
 singleton :: k -> v -> Map k v
