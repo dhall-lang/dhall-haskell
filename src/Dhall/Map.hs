@@ -27,8 +27,7 @@ module Dhall.Map
       -- * Query
     , lookup
     , member
-    , head
-    , tail
+    , uncons
 
       -- * Combine
     , union
@@ -50,7 +49,7 @@ module Dhall.Map
 
 import Control.Applicative ((<|>))
 import Data.Data (Data)
-import Prelude hiding (head, lookup, tail)
+import Prelude hiding (lookup)
 
 import qualified Data.Map
 import qualified Data.Set
@@ -66,7 +65,7 @@ data Map k v = Map (Data.Map.Map k v) [k]
     deriving (Data, Show)
 
 instance (Eq k, Eq v) => Eq (Map k v) where
-  (Map m1 _) == (Map m2 _) = m1 == m2
+  (Map m1 ks) == (Map m2 ks') = m1 == m2 && ks == ks'
   {-# INLINABLE (==) #-}
 
 instance Functor (Map k) where
@@ -184,31 +183,17 @@ lookup :: Ord k => k -> Map k v -> Maybe v
 lookup k (Map m _) = Data.Map.lookup k m
 {-# INLINABLE lookup #-}
 
-{-| Retrieve the first key/value pair where
-    the key is chosen from the underlying list of keys.
+{-| Retrieve the first key, value of the 'Map', if present,
+    and also returning the rest of the 'Map'.
 
-> head k mempty = Nothing
+> uncons mempty = empty
 >
-> head k (singleton k v) = Just (k, v)
+> uncons (singleton k v) = (k, v, mempty)
 -}
-head :: Ord k => Map k v -> Maybe (k, v)
-head (Map _ []) = Nothing
-head (Map m (k:_)) = Just $ (k, m Data.Map.! k)
-{-# INLINABLE head #-}
-
-{-| Retrieve the 'Map' with head key deleted.
-    The first key is used to remove that entry from
-    the 'Data.Map.Map' and the key list becomes the tail
-    of the original list.
-
-> tail k mempty = Nothing
->
-> tail k (singleton k v) = singleton k v
--}
-tail :: Ord k => Map k v -> Maybe (Map k v)
-tail (Map _ []) = Nothing
-tail (Map m (k:ks)) = Just $ Map (Data.Map.delete k m) ks
-{-# INLINABLE tail #-}
+uncons :: Ord k => Map k v -> Maybe (k, v, Map k v)
+uncons (Map _ [])     = Nothing
+uncons (Map m (k:ks)) = Just (k, m Data.Map.! k, Map (Data.Map.delete k m) ks)
+{-# INLINABLE uncons #-}
 
 {-| Check if a key belongs to a `Map`
 
@@ -304,6 +289,8 @@ traverseWithKey f m = fmap fromList (traverse f' (toList m))
     f' (k, a) = fmap ((,) k) (f k a)
 {-# INLINABLE traverseWithKey #-}
 
+-- | Traverse all of the key-value pairs in a `Map`, in their original order
+--   where the result of the computation can be forgotten.
 traverseWithKey_
     :: Ord k => Applicative f => (k -> a -> f ()) -> Map k a -> f ()
 traverseWithKey_ f (Map m _) = fmap (const ()) $ Data.Map.traverseWithKey f m
