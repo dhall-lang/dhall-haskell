@@ -310,8 +310,7 @@ instance Show MissingImports where
         <>  "\n"
 
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
-throwMissingImport e = throwM (MissingImports [(toException e)])
-
+throwMissingImport e = throwM (MissingImports [toException e])
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
@@ -593,23 +592,33 @@ exprFromUncachedImport (Import {..}) = do
 
             return (path, text)
 
-        Remote (URL scheme authority file query fragment maybeHeaders) -> do
+        Remote (URL {headers = maybeHeaders, ..}) -> do
             let prefix =
                         (case scheme of HTTP -> "http"; HTTPS -> "https")
                     <>  "://"
                     <>  authority
 
-            let fileText = Dhall.Pretty.Internal.prettyToStrictText file
+            let pathText = Dhall.Pretty.Internal.prettyToStrictText path
 
             let suffix =
                         (case query    of Nothing -> ""; Just q -> "?" <> q)
                     <>  (case fragment of Nothing -> ""; Just f -> "#" <> f)
-            let url      = Text.unpack (prefix <> fileText <> suffix)
+
+            let url = Text.unpack (prefix <> pathText <> suffix)
 
             mheaders <- case maybeHeaders of
                 Nothing            -> return Nothing
                 Just importHashed_ -> do
+                    current <- zoom stack State.get
+
+                    let previous =
+                            case NonEmpty.uncons current of
+                                (_, Just p ) -> p
+                                (_, Nothing) -> _stack (emptyStatus ".")
+
+                    zoom stack (State.put previous)
                     expr <- loadWith (Embed (Import importHashed_ Code))
+                    zoom stack (State.put current)
 
                     let expected :: Expr Src X
                         expected =
@@ -715,19 +724,17 @@ loadWith expr₀ = case expr₀ of
                     -- TODO: restructure the Exception hierarchy to prevent
                     -- this nesting from happening in the first place.
                     let handler₀
-                            :: (MonadCatch m)
+                            :: MonadCatch m
                             => MissingImports
                             -> StateT (Status m) m (Expr Src Import)
-                        handler₀ e@(MissingImports []) = throwM e
-                        handler₀ (MissingImports [e]) =
-                          throwMissingImport (Imported imports' e)
                         handler₀ (MissingImports es) = throwM
                           (MissingImports
                            (fmap
                              (\e -> (toException (Imported imports' e)))
                              es))
-                        handler₁
-                            :: (MonadCatch m)
+
+                    let handler₁
+                            :: MonadCatch m
                             => SomeException
                             -> StateT (Status m) m (Expr Src Import)
                         handler₁ e =
