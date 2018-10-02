@@ -90,7 +90,6 @@ import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
 import Data.Functor.Contravariant (Contravariant(..), (>$<))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
-import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Semigroup
 import Data.Sequence (Seq)
@@ -1387,7 +1386,7 @@ field key valueType =
           ( Data.Functor.Compose.Compose extractBody )
       )
 
-{-| The 'RecordInputType' divisible (contravariant) functor allows you to build 
+{-| The 'RecordInputType' divisible (contravariant) functor allows you to build
     an 'InputType' injector for a Dhall record.
 
     For example, let's take the following Haskell data type:

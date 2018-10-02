@@ -27,6 +27,7 @@ module Dhall.Map
       -- * Query
     , lookup
     , member
+    , uncons
 
       -- * Combine
     , union
@@ -37,6 +38,7 @@ module Dhall.Map
       -- * Traversals
     , mapWithKey
     , traverseWithKey
+    , traverseWithKey_
     , foldMapWithKey
 
       -- * Conversions
@@ -60,11 +62,31 @@ import qualified Data.Set
     and also to improve performance
 -}
 data Map k v = Map (Data.Map.Map k v) [k]
-    deriving (Data, Eq, Foldable, Functor, Show, Traversable)
+    deriving (Data, Show)
+
+instance (Eq k, Eq v) => Eq (Map k v) where
+  (Map m1 ks) == (Map m2 ks') = m1 == m2 && ks == ks'
+  {-# INLINABLE (==) #-}
+
+instance Functor (Map k) where
+  fmap f (Map m ks) = Map (fmap f m) ks
+  {-# INLINABLE fmap #-}
+
+instance Foldable (Map k) where
+  foldr f z (Map m _) = foldr f z m
+  {-# INLINABLE foldr #-}
+
+  foldMap f (Map m _) = foldMap f m
+  {-# INLINABLE foldMap #-}
+
+instance Traversable (Map k) where
+  traverse f (Map m ks) = (\m' -> Map m' ks) <$> traverse f m
+  {-# INLINABLE traverse #-}
 
 -- | An `empty` `Map`
 empty :: Map k v
 empty = Map Data.Map.empty []
+{-# INLINABLE empty #-}
 
 -- | Create a `Map` from a single key-value pair
 singleton :: k -> v -> Map k v
@@ -73,6 +95,7 @@ singleton k v = Map m ks
     m = Data.Map.singleton k v
 
     ks = pure k
+{-# INLINABLE singleton #-}
 
 {-| Create a `Map` from a list of key-value pairs
 
@@ -86,6 +109,7 @@ fromList kvs = Map m ks
     m = Data.Map.fromList kvs
 
     ks = nubOrd (map fst kvs)
+{-# INLINABLE fromList #-}
 
 nubOrd :: Ord k => [k] -> [k]
 nubOrd = go Data.Set.empty
@@ -94,6 +118,7 @@ nubOrd = go Data.Set.empty
     go set (k:ks)
         | Data.Set.member k set =     go                    set  ks
         | otherwise             = k : go (Data.Set.insert k set) ks
+{-# INLINABLE nubOrd #-}
 
 {-| Sort the keys of a `Map`, forgetting the original ordering
 
@@ -103,6 +128,7 @@ sort :: Ord k => Map k v -> Map k v
 sort (Map m _) = Map m ks
   where
     ks = Data.Map.keys m
+{-# INLINABLE sort #-}
 
 {-| Check if the keys of a `Map` are already sorted
 
@@ -110,6 +136,7 @@ sort (Map m _) = Map m ks
 -}
 isSorted :: Eq k => Map k v -> Bool
 isSorted (Map m k) = Data.Map.keys m == k
+{-# INLINABLE isSorted #-}
 
 {-| Insert a key-value pair into a `Map`, overriding any previous value stored
     underneath the same key, if present
@@ -123,6 +150,7 @@ insert k v (Map m ks) = Map m' ks'
 
     ks' | elem k ks = ks
         | otherwise = k : ks
+{-# INLINABLE insert #-}
 
 {-| Insert a key-value pair into a `Map`, using the supplied function to combine
     the new value with any old value underneath the same key, if present
@@ -134,6 +162,7 @@ insertWith f k v (Map m ks) = Map m' ks'
 
     ks' | elem k ks = ks
         | otherwise = k : ks
+{-# INLINABLE insertWith #-}
 
 -- | Delete a key from a `Map` if present, otherwise return the original `Map`
 delete :: Ord k => k -> Map k v -> Map k v
@@ -142,6 +171,7 @@ delete k (Map m ks) = Map m' ks'
     m' = Data.Map.delete k m
 
     ks' = filter (k /=) ks
+{-# INLINABLE delete #-}
 
 {-| Retrieve a key from a `Map`
 
@@ -151,6 +181,19 @@ delete k (Map m ks) = Map m' ks'
 -}
 lookup :: Ord k => k -> Map k v -> Maybe v
 lookup k (Map m _) = Data.Map.lookup k m
+{-# INLINABLE lookup #-}
+
+{-| Retrieve the first key, value of the 'Map', if present,
+    and also returning the rest of the 'Map'.
+
+> uncons mempty = empty
+>
+> uncons (singleton k v) = (k, v, mempty)
+-}
+uncons :: Ord k => Map k v -> Maybe (k, v, Map k v)
+uncons (Map _ [])     = Nothing
+uncons (Map m (k:ks)) = Just (k, m Data.Map.! k, Map (Data.Map.delete k m) ks)
+{-# INLINABLE uncons #-}
 
 {-| Check if a key belongs to a `Map`
 
@@ -160,6 +203,7 @@ lookup k (Map m _) = Data.Map.lookup k m
 -}
 member :: Ord k => k -> Map k v -> Bool
 member k (Map m _) = Data.Map.member k m
+{-# INLINABLE member #-}
 
 {-| Combine two `Map`s, preferring keys from the first `Map`
 
@@ -173,6 +217,7 @@ union (Map mL ksL) (Map mR ksR) = Map m ks
     setL = Data.Map.keysSet mL
 
     ks = ksL <|> filter (\k -> Data.Set.notMember k setL) ksR
+{-# INLINABLE union #-}
 
 -- | Combine two `Map`s using a combining function for colliding keys
 unionWith :: Ord k => (v -> v -> v) -> Map k v -> Map k v -> Map k v
@@ -183,6 +228,7 @@ unionWith combine (Map mL ksL) (Map mR ksR) = Map m ks
     setL = Data.Map.keysSet mL
 
     ks = ksL <|> filter (\k -> Data.Set.notMember k setL) ksR
+{-# INLINABLE unionWith #-}
 
 {-| Combine two `Map` on their shared keys, keeping the value from the first
     `Map`
@@ -198,6 +244,7 @@ intersection (Map mL ksL) (Map mR _) = Map m ks
     setR = Data.Map.keysSet mR
     set  = Data.Set.intersection setL setR
     ks   = filter (\k -> Data.Set.member k set) ksL
+{-# INLINABLE intersection #-}
 
 {-| Combine two `Map`s on their shared keys, using the supplied function to
     combine values from the first and second `Map`
@@ -211,10 +258,12 @@ intersectionWith combine (Map mL ksL) (Map mR _) = Map m ks
     setR = Data.Map.keysSet mR
     set  = Data.Set.intersection setL setR
     ks   = filter (\k -> Data.Set.member k set) ksL
+{-# INLINABLE intersectionWith #-}
 
 -- | Fold all of the key-value pairs in a `Map`, in their original order
 foldMapWithKey :: (Monoid m, Ord k) => (k -> a -> m) -> Map k a -> m
 foldMapWithKey f m = foldMap (uncurry f) (toList m)
+{-# INLINABLE foldMapWithKey #-}
 
 {-| Transform the values of a `Map` using their corresponding key
 
@@ -230,6 +279,7 @@ mapWithKey :: (k -> a -> b) -> Map k a -> Map k b
 mapWithKey f (Map m ks) = Map m' ks
   where
     m' = Data.Map.mapWithKey f m
+{-# INLINABLE mapWithKey #-}
 
 -- | Traverse all of the key-value pairs in a `Map`, in their original order
 traverseWithKey
@@ -237,15 +287,26 @@ traverseWithKey
 traverseWithKey f m = fmap fromList (traverse f' (toList m))
   where
     f' (k, a) = fmap ((,) k) (f k a)
+{-# INLINABLE traverseWithKey #-}
+
+-- | Traverse all of the key-value pairs in a `Map`, in their original order
+--   where the result of the computation can be forgotten.
+traverseWithKey_
+    :: Ord k => Applicative f => (k -> a -> f ()) -> Map k a -> f ()
+traverseWithKey_ f (Map m _) = fmap (const ()) $ Data.Map.traverseWithKey f m
+{-# INLINABLE traverseWithKey_ #-}
 
 -- | Convert a `Map` to a list of key-value pairs in the original order of keys
 toList :: Ord k => Map k v -> [(k, v)]
 toList (Map m ks) = fmap (\k -> (k, m Data.Map.! k)) ks
+{-# INLINABLE toList #-}
 
 -- | Convert a @"Dhall.Map".`Map`@ to a @"Data.Map".`Data.Map.Map`@
 toMap :: Map k v -> Data.Map.Map k v
 toMap (Map m _) = m
+{-# INLINABLE toMap #-}
 
 -- | Return the keys from a `Map` in their original order
 keys :: Map k v -> [k]
 keys (Map _ ks) = ks
+{-# INLINABLE keys #-}

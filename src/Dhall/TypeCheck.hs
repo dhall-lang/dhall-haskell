@@ -21,11 +21,9 @@ module Dhall.TypeCheck (
     , TypeMessage(..)
     ) where
 
-import Control.Applicative (liftA2)
 import Control.Exception (Exception)
 import Data.Data (Data(..))
 import Data.Foldable (forM_, toList)
-import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Set (Set)
@@ -38,7 +36,6 @@ import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Foldable
-import qualified Data.Map
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text                               as Text
@@ -470,9 +467,9 @@ typeWithA tpa = loop
                       (Pi "just" (Pi "_" "a" "optional")
                           (Pi "nothing" "optional" "optional") )
     loop ctx e@(Record    kts   ) = do
-        case Dhall.Map.toList kts of
-            []            -> return (Const Type)
-            (k0, t0):rest -> do
+        case Dhall.Map.uncons kts of
+            Nothing             -> return (Const Type)
+            Just (k0, t0, rest) -> do
                 s0 <- fmap Dhall.Core.normalize (loop ctx t0)
                 c <- case s0 of
                     Const Type ->
@@ -481,7 +478,7 @@ typeWithA tpa = loop
                         | Dhall.Core.judgmentallyEqual t0 (Const Type) ->
                             return Kind
                     _ -> Left (TypeError ctx e (InvalidFieldType k0 t0))
-                let process (k, t) = do
+                let process k t = do
                         s <- fmap Dhall.Core.normalize (loop ctx t)
                         case s of
                             Const Type ->
@@ -497,7 +494,7 @@ typeWithA tpa = loop
                                 else Left (TypeError ctx e (FieldAnnotationMismatch k t k0 t0 Kind))
                             _ ->
                                 Left (TypeError ctx e (InvalidFieldType k t))
-                mapM_ process rest
+                Dhall.Map.traverseWithKey_ process rest
                 return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
         case Dhall.Map.toList kvs of
@@ -534,13 +531,13 @@ typeWithA tpa = loop
                 kts <- Dhall.Map.traverseWithKey process kvs
                 return (Record kts)
     loop ctx e@(Union     kts   ) = do
-        let process k t = Process $ do
+        let process k t = do
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
                     Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
-        runProcess (Data.Map.foldMapWithKey process (Dhall.Map.toMap kts))
+        Dhall.Map.traverseWithKey_ process kts
         return (Const Type)
     loop ctx e@(UnionLit k v kts) = do
         case Dhall.Map.lookup k kts of
@@ -789,16 +786,6 @@ typeWithA tpa = loop
     loop ctx   (ImportAlt l _r  ) =
        fmap Dhall.Core.normalize (loop ctx l)
     loop _     (Embed p         ) = Right $ tpa p
-
-newtype Process a b = Process { runProcess :: Either a b }
-
-instance Semigroup b => Semigroup (Process a b) where
-    Process eL <> Process eR = Process (liftA2 (<>) eL eR)
-
-instance (Semigroup b, Monoid b) => Monoid (Process a b) where
-    mempty = Process (pure mempty)
-
-    mappend = (<>)
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
