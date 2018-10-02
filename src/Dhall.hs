@@ -90,7 +90,6 @@ import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
 import Data.Functor.Contravariant (Contravariant(..), (>$<))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
-import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Semigroup
 import Data.Sequence (Seq)
