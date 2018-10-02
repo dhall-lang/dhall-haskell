@@ -38,7 +38,7 @@ module Dhall
 
     -- * Types
     , Type(..)
-    , RecordType(..)
+    , RecordType
     , InputType(..)
     , Interpret(..)
     , InvalidType(..)
@@ -67,7 +67,7 @@ module Dhall
 
     , Inject(..)
     , inject
-    , RecordInputType(..)
+    , RecordInputType
     , inputFieldWith
     , inputField
     , inputRecord
@@ -92,6 +92,7 @@ import Data.Functor.Contravariant (Contravariant(..), (>$<))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
+import Data.Semigroup
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Typeable (Typeable)
@@ -708,7 +709,7 @@ unit :: Type ()
 unit = Type extractOut expectedOut
   where
     extractOut (RecordLit fields)
-        | Dhall.Map.null fields = return ()
+        | Data.Foldable.null fields = return ()
     extractOut _ = Nothing
 
     expectedOut = Record Dhall.Map.empty
@@ -1327,7 +1328,7 @@ newtype RecordType a =
   RecordType
     ( Data.Functor.Product.Product
         ( Control.Applicative.Const
-            ( Dhall.Map.Map
+            ( MonoidMap
                 Text
                 ( Expr Src X )
             )
@@ -1340,10 +1341,19 @@ newtype RecordType a =
     )
   deriving (Functor, Applicative)
 
+newtype MonoidMap k v = MonoidMap (Dhall.Map.Map k v)
+
+instance Ord k => Data.Semigroup.Semigroup (MonoidMap k v) where
+    MonoidMap l <> MonoidMap r = MonoidMap (Dhall.Map.union l r)
+
+instance Ord k => Monoid (MonoidMap k v) where
+    mempty = MonoidMap Dhall.Map.empty
+
+    mappend = (<>)
 
 -- | Run a 'RecordType' parser to build a 'Type' parser.
 record :: RecordType a -> Dhall.Type a
-record ( RecordType ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Data.Functor.Compose.Compose extractF ) ) ) =
+record ( RecordType ( Data.Functor.Product.Pair ( Control.Applicative.Const ( MonoidMap fields ) ) ( Data.Functor.Compose.Compose extractF ) ) ) =
   Type
     { extract =
         extractF
@@ -1367,15 +1377,17 @@ field key valueType =
     RecordType
       ( Data.Functor.Product.Pair
           ( Control.Applicative.Const
-              ( Dhall.Map.singleton
-                  key
-                  ( Dhall.expected valueType )
+              ( MonoidMap
+                  ( Dhall.Map.singleton
+                      key
+                      ( Dhall.expected valueType )
+                  )
               )
           )
           ( Data.Functor.Compose.Compose extractBody )
       )
 
-{-| The 'RecordInputType' divisible (contravariant) functor allows you to build 
+{-| The 'RecordInputType' divisible (contravariant) functor allows you to build
     an 'InputType' injector for a Dhall record.
 
     For example, let's take the following Haskell data type:
@@ -1440,9 +1452,11 @@ instance Contravariant RecordInputType where
 instance Divisible RecordInputType where
   divide f (RecordInputType bInputTypeRecord) (RecordInputType cInputTypeRecord) =
       RecordInputType
-    $ Dhall.Map.union
-      ((contramap $ fst . f) <$> bInputTypeRecord)
-      ((contramap $ snd . f) <$> cInputTypeRecord)
+          (Dhall.Map.union
+              ((contramap $ fst . f) <$> bInputTypeRecord)
+              ((contramap $ snd . f) <$> cInputTypeRecord)
+          )
+
   conquer = RecordInputType Dhall.Map.empty
 
 inputFieldWith :: Text -> InputType a -> RecordInputType a
