@@ -270,9 +270,9 @@ command (Options {..}) = do
         Default {..} -> do
             expression <- getExpression
 
-            resolvedExpression <- {-# SCC "RESOLVE" #-} State.evalStateT (Dhall.Import.loadWith expression) status
+            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) status
 
-            inferredType <- {-# SCC "TYPECHECK" #-} throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            inferredType <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
 

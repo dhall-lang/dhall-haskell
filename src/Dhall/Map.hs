@@ -70,7 +70,7 @@ instance (Eq k, Eq v) => Eq (Map k v) where
   {-# INLINABLE (==) #-}
 
 instance Functor (Map k) where
-  fmap f (Map m ks) = Map ({-# SCC "FMAP" #-} fmap f m) ks
+  fmap f (Map m ks) = Map (fmap f m) ks
   {-# INLINABLE fmap #-}
 
 instance Foldable (Map k) where

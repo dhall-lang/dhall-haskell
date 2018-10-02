@@ -470,7 +470,7 @@ typeWithA tpa = loop
                       (Pi "just" (Pi "_" "a" "optional")
                           (Pi "nothing" "optional" "optional") )
     loop ctx e@(Record    kts   ) = do
-        case {-# SCC "RECORD_TOLIST" #-} Dhall.Map.head kts of
+        case Dhall.Map.head kts of
             Nothing       -> return (Const Type)
             Just (k0, t0) -> do
                 s0 <- fmap Dhall.Core.normalize (loop ctx t0)
