@@ -54,22 +54,22 @@ instance Ord k => Monoid (Map k v) where
 
 instance (Eq k, Eq v) => Eq (Map k v) where
   (Map m1 _) == (Map m2 _) = m1 == m2
-  {-# INLINE (==) #-}
+  {-# INLINABLE (==) #-}
 
 instance Functor (Map k) where
   fmap f (Map m ks) = Map ({-# SCC "FMAP" #-} fmap f m) ks
-  {-# INLINE fmap #-}
+  {-# INLINABLE fmap #-}
 
 instance Foldable (Map k) where
   foldr f z (Map m _) = foldr f z m
-  {-# INLINE foldr #-}
+  {-# INLINABLE foldr #-}
 
   foldMap f (Map m _) = foldMap f m
-  {-# INLINE foldMap #-}
+  {-# INLINABLE foldMap #-}
 
 instance Traversable (Map k) where
   traverse f (Map m ks) = (\m' -> Map m' ks) <$> traverse f m
-  {-# INLINE traverse #-}
+  {-# INLINABLE traverse #-}
 
 fromList :: Ord k => [(k, v)] -> Map k v
 fromList kvs = Map m ks
@@ -160,11 +160,11 @@ traverseWithKey
 traverseWithKey f m = fmap fromList (traverse f' (toList m))
   where
     f' (k, a) = fmap ((,) k) (f k a)
-{-# INLINE traverseWithKey #-}
 
 traverseWithKey_
     :: Ord k => Applicative f => (k -> a -> f ()) -> Map k a -> f ()
 traverseWithKey_ f (Map m _) = fmap (const ()) $ Data.Map.traverseWithKey f m
+{-# INLINABLE traverseWithKey_ #-}
 
 insert :: Ord k => k -> v -> Map k v -> Map k v
 insert k v (Map m ks) = Map m' ks'
