@@ -129,7 +129,6 @@ module Dhall.Import (
 
 import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term)
-import Control.Applicative (empty)
 import Control.Exception (Exception, SomeException, throwIO, toException)
 import Control.Monad (guard)
 import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..))
