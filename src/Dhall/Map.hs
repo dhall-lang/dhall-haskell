@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -9,7 +10,6 @@ module Dhall.Map
       Map
 
       -- * Construction
-    , empty
     , singleton
     , fromList
 
@@ -49,6 +49,7 @@ module Dhall.Map
 
 import Control.Applicative ((<|>))
 import Data.Data (Data)
+import Data.Semigroup
 import Prelude hiding (lookup)
 
 import qualified Data.Map
@@ -83,10 +84,15 @@ instance Traversable (Map k) where
   traverse f (Map m ks) = (\m' -> Map m' ks) <$> traverse f m
   {-# INLINABLE traverse #-}
 
--- | An `empty` `Map`
-empty :: Map k v
-empty = Map Data.Map.empty []
-{-# INLINABLE empty #-}
+instance Ord k => Data.Semigroup.Semigroup (Map k v) where
+    (<>) = union
+
+instance Ord k => Monoid (Map k v) where
+    mempty = Map Data.Map.empty []
+
+#if !(MIN_VERSION_base(4,11,0))
+    mappend = (<>)
+#endif
 
 -- | Create a `Map` from a single key-value pair
 singleton :: k -> v -> Map k v
