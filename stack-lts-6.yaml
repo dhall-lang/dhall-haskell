@@ -4,8 +4,8 @@ extra-deps:
 - ansi-wl-pprint-0.6.8.2
 - cryptonite-0.24
 - formatting-6.3.2
-- megaparsec-6.4.1
-- parser-combinators-0.4.0
+- megaparsec-7.0.0
+- parser-combinators-1.0.0
 - optparse-generic-1.3.0
 - optparse-applicative-0.14.0.0
 - Only-0.1
@@ -18,7 +18,6 @@ extra-deps:
 - process-1.6.2.0
 - repline-0.1.7.0
 - haskeline-0.7.4.2
-- insert-ordered-containers-0.2.1.0
 - aeson-1.2.3.0
 - th-abstraction-0.2.6.0
 - cborg-0.2.0.0
