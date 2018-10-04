@@ -30,9 +30,20 @@ issue412 prelude = Criterion.whnf TypeCheck.typeOf expr
       $ Seq.replicate 5
       $ Core.Var (Core.V "prelude" 0) `Core.Field` "types" `Core.Field` "Little" `Core.Field` "Foo"
 
+unionPerformance :: Core.Expr s TypeCheck.X -> Criterion.Benchmarkable
+unionPerformance prelude = Criterion.whnf TypeCheck.typeOf expr
+  where
+    expr =
+        Core.Let "x" Nothing
+            (Core.Let "big" Nothing (prelude `Core.Field` "types" `Core.Field` "Big")
+                (Core.Prefer "big" "big")
+            )
+            "x"
+
 main :: IO ()
 main = do
   prelude <- Import.load (Core.Embed dhallPreludeImport)
   defaultMain
     [ Criterion.bench "issue 412" (issue412 prelude)
+    , Criterion.bench "union performance" (unionPerformance prelude)
     ]
