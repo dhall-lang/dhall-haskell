@@ -377,7 +377,7 @@ instance Canonicalize ImportType where
         Local prefix (canonicalize file)
 
     canonicalize (Remote (URL {..})) =
-        Remote (URL { path = canonicalize path, ..})
+        Remote (URL { path = canonicalize path, headers = fmap canonicalize headers, ..})
 
     canonicalize (Env name) =
         Env name
