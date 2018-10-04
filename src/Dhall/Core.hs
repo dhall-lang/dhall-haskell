@@ -190,6 +190,13 @@ instance Semigroup ImportType where
     Remote (URL { path = path₀, ..}) <> Local Here path₁ =
         Remote (URL { path = path₀ <> path₁, ..})
 
+    import₀ <> Remote (URL { headers = headers₀, .. }) =
+        Remote (URL { headers = headers₁, .. })
+      where
+        importHashed₀ = ImportHashed Nothing import₀
+
+        headers₁ = fmap (importHashed₀ <>) headers₀
+
     _ <> import₁ =
         import₁
 
