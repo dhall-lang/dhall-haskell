@@ -13,7 +13,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text
 import Dhall.Binary (ProtocolVersion(..))
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..))
-import Dhall.Import (hashExpression, protocolVersion)
+import Dhall.Import (Status, hashExpression, protocolVersion)
 import Dhall.Parser (exprAndHeaderFromText, Src)
 import Dhall.Pretty (annToAnsiStyle, layoutOpts)
 import Lens.Family (set)
@@ -27,17 +27,12 @@ import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.TypeCheck
+import qualified System.FilePath
 import qualified System.IO
 
-readInput :: Maybe FilePath -> IO Text
-readInput = maybe Data.Text.IO.getContents Data.Text.IO.readFile
-
 -- | Retrieve an `Import` and update the hash to match the latest contents
-hashImport :: ProtocolVersion -> Import -> IO Import
-hashImport _protocolVersion import_ = do
-    let status =
-            set protocolVersion _protocolVersion (Dhall.Import.emptyStatus ".")
-
+hashImport :: Status IO -> ProtocolVersion -> Import -> IO Import
+hashImport status _protocolVersion import_ = do
     expression <- State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
 
     case Dhall.TypeCheck.typeOf expression of
@@ -90,9 +85,24 @@ freeze
     -> ProtocolVersion
     -> IO ()
 freeze inplace _protocolVersion = do
-    text <- readInput inplace
+    (text, status) <- case inplace of
+        Nothing -> do
+            text <- Data.Text.IO.getContents
+
+            let status = set protocolVersion _protocolVersion (Dhall.Import.emptyStatus ".")
+            return (text, status)
+
+        Just file -> do
+            text <- Data.Text.IO.readFile file
+
+            let directory = System.FilePath.takeDirectory file
+
+            let status = set protocolVersion _protocolVersion (Dhall.Import.emptyStatus directory)
+
+            return (text, status)
+
     (header, parsedExpression) <- parseExpr srcInfo text
-    frozenExpression <- traverse (hashImport _protocolVersion) parsedExpression
+    frozenExpression <- traverse (hashImport status _protocolVersion) parsedExpression
     writeExpr inplace (header, frozenExpression)
         where
             srcInfo = fromMaybe "(stdin)" inplace
