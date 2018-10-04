@@ -1,7 +1,9 @@
-resolver: lts-11.12
+resolver: lts-11.22
 extra-deps:
   - cborg-0.2.0.0
   - serialise-0.2.0.0
+  - megaparsec-7.0.0
+  - parser-combinators-1.0.0
 nix:
   packages:
     - ncurses
