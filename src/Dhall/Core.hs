@@ -444,6 +444,10 @@ data Expr s a
     | Embed a
     deriving (Eq, Foldable, Generic, Traversable, Show, Data)
 
+-- This instance is hand-written due to the fact that deriving
+-- it does not give us an INLINABLE pragma. We annotate this fmap
+-- implementation with this pragma below to allow GHC to, possibly,
+-- inline the implementation for performance improvements.
 instance Functor (Expr s) where
   fmap _ (Const c) = Const c
   fmap _ (Var v) = Var v
