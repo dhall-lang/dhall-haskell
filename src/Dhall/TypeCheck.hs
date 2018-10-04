@@ -60,8 +60,8 @@ axiom Sort = Left (TypeError Dhall.Context.empty (Const Sort) Untyped)
 rule :: Const -> Const -> Either () Const
 rule Type Type = return Type
 rule Kind Type = return Type
-rule Sort Type = return Type
 rule Kind Kind = return Kind
+rule Sort Type = return Type
 rule Sort Kind = return Kind
 rule Sort Sort = return Sort
 -- This forbids dependent types. If this ever changes, then the fast
