@@ -1,0 +1,29 @@
+diff -Naur wcwidth-0.0.2.before/wcwidth.cabal wcwidth-0.0.2.after/wcwidth.cabal
+--- wcwidth-0.0.2.before/wcwidth.cabal	2011-04-03 21:19:59.000000000 -0700
++++ wcwidth-0.0.2.after/wcwidth.cabal	2018-10-04 11:34:55.000000000 -0700
+@@ -35,25 +35,3 @@
+   extensions                  : StandaloneDeriving
+                                 ForeignFunctionInterface
+                                 OverloadedStrings
+-
+-
+-executable                      wcwidth-tools
+-  main-is                     : WCWidthTableaux.hs
+-  if flag(cli)
+-    buildable                 : True
+-  else
+-    buildable                 : False
+-  if flag(split-base)
+-    build-depends             : base >= 4 && < 5
+-  else
+-    build-depends             : base < 4
+-  build-depends               : containers
+-                              , bytestring
+-                              , setlocale >= 0.0.3
+-                              , utf8-string >= 0.3
+-                              , attoparsec >= 0.8.5
+-  extensions                  : StandaloneDeriving
+-                                ForeignFunctionInterface
+-                                OverloadedStrings
+-
+-

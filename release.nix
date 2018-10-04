@@ -1,10 +1,14 @@
 let
-  default = (import ./default.nix);
+  default_7_10_3 = import ./default.nix { compiler = "ghc7103"; };
+
+  default_8_4_3 = import ./default.nix { compiler = "ghc843"; };
 
 in
-  { dhall = default.all;
+  { dhall = default_8_4_3.all;
 
-    inherit (default) tarball;
+    "dhall-8.4.3" = default_8_4_3.dhall;
 
-    coverage = default.dhall;
+    "dhall-7.10.3" = default_7_10_3.dhall;
+
+    inherit (default_8_4_3) tarball;
   }
