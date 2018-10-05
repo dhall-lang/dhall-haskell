@@ -6,9 +6,9 @@ let
 in
   { dhall = default_8_4_3.all;
 
-    "dhall-8.4.3" = default_8_4_3.dhall;
+    "coverage-8.4.3" = default_8_4_3.dhall;
 
-    "dhall-7.10.3" = default_7_10_3.dhall;
+    "coverage-7.10.3" = default_7_10_3.dhall;
 
     inherit (default_8_4_3) tarball;
   }
