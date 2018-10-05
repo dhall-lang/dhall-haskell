@@ -638,6 +638,8 @@ skeleton (Merge {}) =
     <>  ignore
     <>  " "
     <>  ignore
+    <>  " "
+    <>  ignore
 skeleton (Constructors {}) =
         keyword "constructors"
     <>  " "
@@ -751,7 +753,7 @@ diffAnnotatedExpression (Merge aL bL cL) (Merge aR bR cR) = align doc
         <>  " "
         <>  format " " (diffImportExpression aL aR)
         <>  format " " (diffImportExpression bL bR)
-        <>  diffMaybe (colon <> " ") diffApplicationExpression cL cR
+        <>  format " " (diffImportExpression cL cR)
 diffAnnotatedExpression l@(Merge {}) r =
     mismatch l r
 diffAnnotatedExpression l r@(Merge {}) =

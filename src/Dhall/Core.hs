@@ -437,9 +437,8 @@ data Expr s a
     | CombineTypes (Expr s a) (Expr s a)
     -- | > CombineRight x y                         ~  x ⫽ y
     | Prefer (Expr s a) (Expr s a)
-    -- | > Merge x y (Just t )                      ~  merge x y : t
-    --   > Merge x y  Nothing                       ~  merge x y
-    | Merge (Expr s a) (Expr s a) (Maybe (Expr s a))
+    -- | > Merge t x y                              ~  merge t x y
+    | Merge (Expr s a) (Expr s a) (Expr s a)
     -- | > Constructors e                           ~  constructors e
     | Constructors (Expr s a)
     -- | > Field e x                                ~  e.x
@@ -520,7 +519,7 @@ instance Monad (Expr s) where
     Combine a b          >>= k = Combine (a >>= k) (b >>= k)
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
     Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
-    Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
+    Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (c >>= k)
     Constructors a       >>= k = Constructors (a >>= k)
     Field a b            >>= k = Field (a >>= k) b
     Project a b          >>= k = Project (a >>= k) b
@@ -587,7 +586,7 @@ instance Bifunctor Expr where
     first k (Combine a b         ) = Combine (first k a) (first k b)
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
     first k (Prefer a b          ) = Prefer (first k a) (first k b)
-    first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
+    first k (Merge a b c         ) = Merge (first k a) (first k b) (first k c)
     first k (Constructors a      ) = Constructors (first k a)
     first k (Field a b           ) = Field (first k a) b
     first k (Project a b         ) = Project (first k a) b
@@ -838,9 +837,9 @@ shift d v (Prefer a b) = Prefer a' b'
     b' = shift d v b
 shift d v (Merge a b c) = Merge a' b' c'
   where
-    a' =       shift d v  a
-    b' =       shift d v  b
-    c' = fmap (shift d v) c
+    a' = shift d v a
+    b' = shift d v b
+    c' = shift d v c
 shift d v (Constructors a) = Constructors a'
   where
     a' = shift d v  a
@@ -994,9 +993,9 @@ subst x e (Prefer a b) = Prefer a' b'
     b' = subst x e b
 subst x e (Merge a b c) = Merge a' b' c'
   where
-    a' =       subst x e  a
-    b' =       subst x e  b
-    c' = fmap (subst x e) c
+    a' = subst x e a
+    b' = subst x e b
+    c' = subst x e c
 subst x e (Constructors a) = Constructors a'
   where
     a' = subst x e  a
@@ -1269,14 +1268,14 @@ alphaNormalize (Prefer l₀ r₀) =
     l₁ = alphaNormalize l₀
 
     r₁ = alphaNormalize r₀
-alphaNormalize (Merge t₀ u₀ _T₀) =
-    Merge t₁ u₁ _T₁
+alphaNormalize (Merge _T₀ t₀ u₀) =
+    Merge _T₁ t₁ u₁
   where
+    _T₁ = alphaNormalize _T₀
+
     t₁ = alphaNormalize t₀
 
     u₁ = alphaNormalize u₀
-
-    _T₁ = fmap alphaNormalize _T₀
 alphaNormalize (Constructors u₀) =
     Constructors u₁
   where
@@ -1396,7 +1395,7 @@ denote (UnionLit a b c      ) = UnionLit a (denote b) (fmap denote c)
 denote (Combine a b         ) = Combine (denote a) (denote b)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
 denote (Prefer a b          ) = Prefer (denote a) (denote b)
-denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
+denote (Merge a b c         ) = Merge (denote a) (denote b) (denote c)
 denote (Constructors a      ) = Constructors (denote a)
 denote (Field a b           ) = Field (denote a) b
 denote (Project a b         ) = Project (denote a) b
@@ -1728,20 +1727,20 @@ normalizeWith ctx e0 = loop (denote e0)
             RecordLit (sortMap (Data.HashMap.Strict.InsOrd.union n m))
         decide l r =
             Prefer l r
-    Merge x y t      ->
+    Merge t x y      ->
         case x' of
             RecordLit kvsX ->
                 case y' of
                     UnionLit kY vY _ ->
                         case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
                             Just vX -> loop (App vX vY)
-                            Nothing -> Merge x' y' t'
-                    _ -> Merge x' y' t'
-            _ -> Merge x' y' t'
+                            Nothing -> Merge t' x' y'
+                    _ -> Merge t' x' y'
+            _ -> Merge t' x' y'
       where
-        x' =      loop x
-        y' =      loop y
-        t' = fmap loop t
+        t' = loop t
+        x' = loop x
+        y' = loop y
     Constructors t   ->
         case t' of
             Union kts -> RecordLit kvs
@@ -1970,7 +1969,7 @@ isNormalized e0 = loop (denote e0)
           decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
           decide (RecordLit _) (RecordLit _) = False
           decide  _ _ = True
-      Merge x y t -> loop x && loop y && all loop t &&
+      Merge t x y -> loop t && loop x && loop y &&
           case x of
               RecordLit kvsX ->
                   case y of

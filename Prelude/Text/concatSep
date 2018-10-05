@@ -21,6 +21,7 @@ Examples:
                       (   λ(element : Text)
                         → λ(status : < Empty : {} | NonEmpty : Text >)
                         → merge
+                          < Empty : {} | NonEmpty : Text >
                           { Empty =
                               λ(_ : {}) → < NonEmpty = element | Empty : {} >
                           , NonEmpty =
@@ -32,13 +33,12 @@ Examples:
                                 >
                           }
                           status
-                          : < Empty : {} | NonEmpty : Text >
                       )
                       < Empty = {=} | NonEmpty : Text >
             
             in  merge
+                Text
                 { Empty = λ(_ : {}) → "", NonEmpty = λ(result : Text) → result }
                 status
-                : Text
 
 in  concatSep

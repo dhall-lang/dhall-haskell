@@ -129,8 +129,6 @@ completeExpression embedded = completeExpression_
                                     _   -> return (Annot a b)
                                 _ ->
                                     return (Annot a b)
-                        (Merge c d _, e) ->
-                            return (Merge c d (Just e))
                         _ -> return (Annot a b)
 
             alternative4A <|> alternative4B <|> pure a
@@ -257,7 +255,8 @@ completeExpression embedded = completeExpression_
                 _merge
                 a <- importExpression
                 b <- importExpression
-                return (Merge a b Nothing)
+                c <- importExpression
+                return (Merge a b c)
 
             builtin = do
                 let predicate c =

@@ -459,7 +459,7 @@ prettyCharacterSet characterSet = prettyExpression
         prettyAnnotatedExpression a0
 
     prettyAnnotatedExpression :: Pretty a => Expr s a -> Doc Ann
-    prettyAnnotatedExpression (Merge a b (Just c)) =
+    prettyAnnotatedExpression (Merge a b c) =
         Pretty.group (Pretty.flatAlt long short)
       where
         long =
@@ -470,32 +470,15 @@ prettyCharacterSet characterSet = prettyExpression
                 <>  Pretty.hardline
                 <>  prettyImportExpression b
                 <>  Pretty.hardline
-                <>  colon <> space
-                <>  prettyApplicationExpression c
+                <>  prettyImportExpression c
                 )
 
         short = keyword "merge" <> space
             <>  prettyImportExpression a
             <>  " "
             <>  prettyImportExpression b
-            <>  space <> colon <> space
-            <>  prettyApplicationExpression c
-    prettyAnnotatedExpression (Merge a b Nothing) =
-        Pretty.group (Pretty.flatAlt long short)
-      where
-        long =
-            Pretty.align
-                (   keyword "merge"
-                <>  Pretty.hardline
-                <>  prettyImportExpression a
-                <>  Pretty.hardline
-                <>  prettyImportExpression b
-                )
-
-        short = keyword "merge" <> space
-            <>  prettyImportExpression a
             <>  " "
-            <>  prettyImportExpression b
+            <>  prettyImportExpression c
     prettyAnnotatedExpression a0@(Annot _ _) =
         enclose'
             ""

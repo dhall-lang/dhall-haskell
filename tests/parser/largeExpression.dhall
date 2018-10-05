@@ -84,6 +84,7 @@
                 x.host
             ++  " "
             ++  ( merge
+                  Text
                   { Empty    = λ(_ : {}) → ""
                   , NonEmpty = λ(result : Text) → result
                   }
@@ -120,10 +121,12 @@
                           )
                       → λ(status : < Empty : {} | NonEmpty : Text >)
                       → merge
+                        < Empty : {} | NonEmpty : Text >
                         { Empty    =
                               λ(_ : {})
                             → < NonEmpty =
                                   merge
+                                  Text
                                   { AArch64_Linux  = λ(_ : {}) → "aarch64-linux"
                                   , ARMv5tel_Linux =
                                       λ(_ : {}) → "armv5tel-linux"
@@ -148,6 +151,7 @@
                               λ(result : Text)
                             → < NonEmpty =
                                       ( merge
+                                        Text
                                         { AArch64_Linux  =
                                             λ(_ : {}) → "aarch64-linux"
                                         , ARMv5tel_Linux =
@@ -181,11 +185,9 @@
                               >
                         }
                         status
-                        : < Empty : {} | NonEmpty : Text >
                     )
                     < Empty = {=} | NonEmpty : Text >
                   )
-                  : Text
                 )
             ++  " "
             ++  x.key
@@ -195,6 +197,7 @@
             ++  Integer/show (Natural/toInteger x.speedFactor)
             ++  " "
             ++  ( merge
+                  Text
                   { Empty    = λ(_ : {}) → ""
                   , NonEmpty = λ(result : Text) → result
                   }
@@ -205,6 +208,7 @@
                     (   λ(element : Text)
                       → λ(status : < Empty : {} | NonEmpty : Text >)
                       → merge
+                        < Empty : {} | NonEmpty : Text >
                         { Empty    =
                             λ(_ : {}) → < NonEmpty = element | Empty : {} >
                         , NonEmpty =
@@ -214,14 +218,13 @@
                               >
                         }
                         status
-                        : < Empty : {} | NonEmpty : Text >
                     )
                     < Empty = {=} | NonEmpty : Text >
                   )
-                  : Text
                 )
             ++  " "
             ++  ( merge
+                  Text
                   { Empty    = λ(_ : {}) → ""
                   , NonEmpty = λ(result : Text) → result
                   }
@@ -232,6 +235,7 @@
                     (   λ(element : Text)
                       → λ(status : < Empty : {} | NonEmpty : Text >)
                       → merge
+                        < Empty : {} | NonEmpty : Text >
                         { Empty    =
                             λ(_ : {}) → < NonEmpty = element | Empty : {} >
                         , NonEmpty =
@@ -241,11 +245,9 @@
                               >
                         }
                         status
-                        : < Empty : {} | NonEmpty : Text >
                     )
                     < Empty = {=} | NonEmpty : Text >
                   )
-                  : Text
                 )
             ++  "\n"
           )

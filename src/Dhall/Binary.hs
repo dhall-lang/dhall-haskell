@@ -262,12 +262,7 @@ encode_1_1 (Some t₀) =
     TList [ TInt 5, TNull, t₁ ]
   where
     t₁ = encode_1_1 t₀
-encode_1_1 (Merge t₀ u₀ Nothing) =
-    TList [ TInt 6, t₁, u₁ ]
-  where
-    t₁ = encode_1_1 t₀
-    u₁ = encode_1_1 u₀
-encode_1_1 (Merge t₀ u₀ (Just _T₀)) =
+encode_1_1 (Merge _T₀ t₀ u₀) =
     TList [ TInt 6, t₁, u₁, _T₁ ]
   where
     t₁  = encode_1_1 t₀
@@ -540,15 +535,11 @@ decode_1_1 (TList [ TInt 5, _T₁, t₁ ]) = do
     _T₀ <- decode_1_1 _T₁
     t₀  <- decode_1_1 t₁
     return (OptionalLit _T₀ (Just t₀))
-decode_1_1 (TList [ TInt 6, t₁, u₁ ]) = do
-    t₀ <- decode_1_1 t₁
-    u₀ <- decode_1_1 u₁
-    return (Merge t₀ u₀ Nothing)
 decode_1_1 (TList [ TInt 6, t₁, u₁, _T₁ ]) = do
     t₀  <- decode_1_1 t₁
     u₀  <- decode_1_1 u₁
     _T₀ <- decode_1_1 _T₁
-    return (Merge t₀ u₀ (Just _T₀))
+    return (Merge _T₀ t₀ u₀)
 decode_1_1 (TList [ TInt 7, TMap xTs₁ ]) = do
     let process (TString x, _T₁) = do
             _T₀ <- decode_1_1 _T₁
