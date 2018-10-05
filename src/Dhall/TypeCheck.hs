@@ -26,7 +26,6 @@ import Data.Data (Data(..))
 import Data.Foldable (forM_, toList)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..))
-import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Traversable (forM)
@@ -40,7 +39,6 @@ import qualified Data.HashMap.Strict
 import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
 import qualified Data.Set
-import qualified Data.Text                               as Text
 import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Context
@@ -671,44 +669,25 @@ typeWithA tpa = loop
             else Left (TypeError ctx e (RecordMismatch '⫽' kvsX kvsY constX constY))
 
         return (Record (Data.HashMap.Strict.InsOrd.union ktsY ktsX))
-    loop ctx e@(Merge t kvsX kvsY) = do
+    loop ctx e@(Merge t kvsX) = do
         _ <- loop ctx t
 
         tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
         ktsX  <- case tKvsX of
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustMergeARecord kvsX tKvsX))
-        let ksX = Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsX)
 
-        tKvsY <- fmap Dhall.Core.normalize (loop ctx kvsY)
-        ktsY  <- case tKvsY of
-            Union kts -> return kts
-            _         -> Left (TypeError ctx e (MustMergeUnion kvsY tKvsY))
-        let ksY = Data.Set.fromList (Data.HashMap.Strict.InsOrd.keys ktsY)
-
-        let diffX = Data.Set.difference ksX ksY
-        let diffY = Data.Set.difference ksY ksX
-
-        if Data.Set.null diffX
-            then return ()
-            else Left (TypeError ctx e (UnusedHandler diffX))
-
-        let process (kY, tY) = do
-                case Data.HashMap.Strict.InsOrd.lookup kY ktsX of
-                    Nothing  -> Left (TypeError ctx e (MissingHandler diffY))
-                    Just tX  ->
-                        case tX of
-                            Pi y tY' t' -> do
-                                if Dhall.Core.judgmentallyEqual tY tY'
-                                    then return ()
-                                    else Left (TypeError ctx e (HandlerInputTypeMismatch kY tY tY'))
-                                let t'' = Dhall.Core.shift (-1) (V y 0) t'
-                                if Dhall.Core.judgmentallyEqual t t''
-                                    then return ()
-                                    else Left (TypeError ctx e (InvalidHandlerOutputType kY t t''))
-                            _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
-        mapM_ process (Data.HashMap.Strict.InsOrd.toList ktsY)
-        return t
+        ktX <- Data.HashMap.Strict.InsOrd.traverseWithKey
+               (\kY tX ->
+                   case tX of
+                     Pi y tY' t' -> do
+                       let t'' = Dhall.Core.shift (-1) (V y 0) t'
+                       if Dhall.Core.judgmentallyEqual t t''
+                         then return tY'
+                         else Left (TypeError ctx e (InvalidHandlerOutputType kY t t''))
+                     _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX)))
+               ktsX
+        return (Pi "_" (Union ktX) t)
     loop ctx e@(Constructors t  ) = do
         _ <- loop ctx t
 
@@ -811,10 +790,6 @@ data TypeMessage s a
     | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
     | FieldCollision Text
     | MustMergeARecord (Expr s a) (Expr s a)
-    | MustMergeUnion (Expr s a) (Expr s a)
-    | UnusedHandler (Set Text)
-    | MissingHandler (Set Text)
-    | HandlerInputTypeMismatch Text (Expr s a) (Expr s a)
     | InvalidHandlerOutputType Text (Expr s a) (Expr s a)
     | HandlerNotAFunction Text (Expr s a)
     | ConstructorsRequiresAUnionType (Expr s a) (Expr s a)
@@ -2771,188 +2746,6 @@ prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
       where
         txt0 = insert expr0
         txt1 = insert expr1
-
-prettyTypeMessage (MustMergeUnion expr0 expr1) = ErrorMessages {..}
-  where
-    short = "❰merge❱ expects a union"
-
-    long =
-        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
-        \handler per alternative, like this:                                             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
-        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
-        \    │ in  merge Bool handlers union                                       │     \n\
-        \    └─────────────────────────────────────────────────────────────────────┘     \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but the second argument to ❰merge❱ must be a union and not some other type. \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────────────────┐                                \n\
-        \    │ let handlers = { Foo = λ(x : Bool) → x } │                                \n\
-        \    │ in  merge Bool handlers True             │                                \n\
-        \    └──────────────────────────────────────────┘                                \n\
-        \                              ⇧                                                 \n\
-        \                              Invalid: ❰True❱ isn't a union                     \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You tried to ❰merge❱ this expression:                                           \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... which is not a union, but is actually a value of type:                      \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n"
-      where
-        txt0 = insert expr0
-        txt1 = insert expr1
-
-prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
-  where
-    short = "Unused handler"
-
-    long =
-        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
-        \handler per alternative, like this:                                             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
-        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
-        \    │ in  merge Bool handlers union                                       │     \n\
-        \    └─────────────────────────────────────────────────────────────────────┘     \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you must provide exactly one handler per alternative in the union.  You \n\
-        \cannot supply extra handlers                                                    \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────────┐                                   \n\
-        \    │     let union    = < Left = 2 >       │  The ❰Right❱ alternative is       \n\
-        \    │ in  let handlers =                    │  missing                          \n\
-        \    │             { Left  = Natural/even    │                                   \n\
-        \    │             , Right = λ(x : Bool) → x │  Invalid: ❰Right❱ handler isn't   \n\
-        \    │             }                         │           used                    \n\
-        \    │ in  merge Bool handlers union         │                                   \n\
-        \    └───────────────────────────────────────┘                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided the following handlers:                                            \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... which had no matching alternatives in the union you tried to ❰merge❱        \n"
-      where
-        txt0 = insert (Text.intercalate ", " (Data.Set.toList ks))
-
-prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
-  where
-    short = "Missing handler"
-
-    long =
-        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
-        \handler per alternative, like this:                                             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
-        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
-        \    │ in  merge Bool handlers union                                       │     \n\
-        \    └─────────────────────────────────────────────────────────────────────┘     \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you must provide exactly one handler per alternative in the union.  You \n\
-        \cannot omit any handlers                                                        \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \                                              Invalid: Missing ❰Right❱ handler  \n\
-        \                                              ⇩                                 \n\
-        \    ┌─────────────────────────────────────────────────┐                         \n\
-        \    │     let handlers = { Left = Natural/even }      │                         \n\
-        \    │ in  let union    = < Left = 2 | Right : Bool >  │                         \n\
-        \    │ in  merge Bool handlers union                   │                         \n\
-        \    └─────────────────────────────────────────────────┘                         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Note that you need to provide handlers for other alternatives even if those     \n\
-        \alternatives are never used                                                     \n\
-        \                                                                                \n\
-        \You need to supply the following handlers:                                      \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n"
-      where
-        txt0 = insert (Text.intercalate ", " (Data.Set.toList ks))
-
-prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
-    ErrorMessages {..}
-  where
-    short = "Wrong handler input type\n"
-        <>  "\n"
-        <>  prettyDiff expr1 expr2
-
-    long =
-        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
-        \handler per alternative, like this:                                             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
-        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
-        \    │ in  merge Bool handlers union                                       │     \n\
-        \    └─────────────────────────────────────────────────────────────────────┘     \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... as long as the input type of each handler function matches the type of the  \n\
-        \corresponding alternative:                                                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────────────────────────────┐               \n\
-        \    │ union    : < Left : Natural       | Right : Bool        > │               \n\
-        \    └───────────────────────────────────────────────────────────┘               \n\
-        \                          ⇧                       ⇧                             \n\
-        \                   These must match        These must match                     \n\
-        \                          ⇩                       ⇩                             \n\
-        \    ┌───────────────────────────────────────────────────────────┐               \n\
-        \    │ handlers : { Left : Natural → Bool, Right : Bool → Bool } │               \n\
-        \    └───────────────────────────────────────────────────────────┘               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \      Invalid: Doesn't match the type of the ❰Right❱ alternative                \n\
-        \                                                               ⇩                \n\
-        \    ┌──────────────────────────────────────────────────────────────────────┐    \n\
-        \    │     let handlers = { Left = Natural/even | Right = λ(x : Text) → x } │    \n\
-        \    │ in  let union    = < Left = 2 | Right : Bool >                       │    \n\
-        \    │ in  merge Bool handlers union                                        │    \n\
-        \    └──────────────────────────────────────────────────────────────────────┘    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Your handler for the following alternative:                                     \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... needs to accept an input value of type:                                     \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... but actually accepts an input value of a different type:                    \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n"
-      where
-        txt0 = insert expr0
-        txt1 = insert expr1
-        txt2 = insert expr2
 
 prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
     ErrorMessages {..}

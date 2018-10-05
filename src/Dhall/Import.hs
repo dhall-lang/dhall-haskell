@@ -838,7 +838,7 @@ loadWith expr₀ = case expr₀ of
   Combine a b          -> Combine <$> loadWith a <*> loadWith b
   CombineTypes a b     -> CombineTypes <$> loadWith a <*> loadWith b
   Prefer a b           -> Prefer <$> loadWith a <*> loadWith b
-  Merge a b c          -> Merge <$> loadWith a <*> loadWith b <*> loadWith c
+  Merge a b            -> Merge <$> loadWith a <*> loadWith b
   Constructors a       -> Constructors <$> loadWith a
   Field a b            -> Field <$> loadWith a <*> pure b
   Project a b          -> Project <$> loadWith a <*> pure b

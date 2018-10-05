@@ -638,8 +638,6 @@ skeleton (Merge {}) =
     <>  ignore
     <>  " "
     <>  ignore
-    <>  " "
-    <>  ignore
 skeleton (Constructors {}) =
         keyword "constructors"
     <>  " "
@@ -747,13 +745,12 @@ diffExpression l r =
     diffAnnotatedExpression l r
 
 diffAnnotatedExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
-diffAnnotatedExpression (Merge aL bL cL) (Merge aR bR cR) = align doc
+diffAnnotatedExpression (Merge aL bL) (Merge aR bR) = align doc
   where
     doc =   keyword "merge"
         <>  " "
         <>  format " " (diffImportExpression aL aR)
         <>  format " " (diffImportExpression bL bR)
-        <>  format " " (diffImportExpression cL cR)
 diffAnnotatedExpression l@(Merge {}) r =
     mismatch l r
 diffAnnotatedExpression l r@(Merge {}) =

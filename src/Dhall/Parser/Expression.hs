@@ -255,8 +255,7 @@ completeExpression embedded = completeExpression_
                 _merge
                 a <- importExpression
                 b <- importExpression
-                c <- importExpression
-                return (Merge a b c)
+                return (Merge a b)
 
             builtin = do
                 let predicate c =

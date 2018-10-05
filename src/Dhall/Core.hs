@@ -437,8 +437,8 @@ data Expr s a
     | CombineTypes (Expr s a) (Expr s a)
     -- | > CombineRight x y                         ~  x ⫽ y
     | Prefer (Expr s a) (Expr s a)
-    -- | > Merge t x y                              ~  merge t x y
-    | Merge (Expr s a) (Expr s a) (Expr s a)
+    -- | > Merge t x                                ~  merge t x
+    | Merge (Expr s a) (Expr s a)
     -- | > Constructors e                           ~  constructors e
     | Constructors (Expr s a)
     -- | > Field e x                                ~  e.x
@@ -519,7 +519,7 @@ instance Monad (Expr s) where
     Combine a b          >>= k = Combine (a >>= k) (b >>= k)
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
     Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
-    Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (c >>= k)
+    Merge a b            >>= k = Merge (a >>= k) (b >>= k)
     Constructors a       >>= k = Constructors (a >>= k)
     Field a b            >>= k = Field (a >>= k) b
     Project a b          >>= k = Project (a >>= k) b
@@ -586,7 +586,7 @@ instance Bifunctor Expr where
     first k (Combine a b         ) = Combine (first k a) (first k b)
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
     first k (Prefer a b          ) = Prefer (first k a) (first k b)
-    first k (Merge a b c         ) = Merge (first k a) (first k b) (first k c)
+    first k (Merge a b           ) = Merge (first k a) (first k b)
     first k (Constructors a      ) = Constructors (first k a)
     first k (Field a b           ) = Field (first k a) b
     first k (Project a b         ) = Project (first k a) b
@@ -835,11 +835,10 @@ shift d v (Prefer a b) = Prefer a' b'
   where
     a' = shift d v a
     b' = shift d v b
-shift d v (Merge a b c) = Merge a' b' c'
+shift d v (Merge a b) = Merge a' b'
   where
     a' = shift d v a
     b' = shift d v b
-    c' = shift d v c
 shift d v (Constructors a) = Constructors a'
   where
     a' = shift d v  a
@@ -991,11 +990,10 @@ subst x e (Prefer a b) = Prefer a' b'
   where
     a' = subst x e a
     b' = subst x e b
-subst x e (Merge a b c) = Merge a' b' c'
+subst x e (Merge a b) = Merge a' b'
   where
     a' = subst x e a
     b' = subst x e b
-    c' = subst x e c
 subst x e (Constructors a) = Constructors a'
   where
     a' = subst x e  a
@@ -1268,14 +1266,12 @@ alphaNormalize (Prefer l₀ r₀) =
     l₁ = alphaNormalize l₀
 
     r₁ = alphaNormalize r₀
-alphaNormalize (Merge _T₀ t₀ u₀) =
-    Merge _T₁ t₁ u₁
+alphaNormalize (Merge _T₀ t₀) =
+    Merge _T₁ t₁
   where
     _T₁ = alphaNormalize _T₀
 
     t₁ = alphaNormalize t₀
-
-    u₁ = alphaNormalize u₀
 alphaNormalize (Constructors u₀) =
     Constructors u₁
   where
@@ -1395,7 +1391,7 @@ denote (UnionLit a b c      ) = UnionLit a (denote b) (fmap denote c)
 denote (Combine a b         ) = Combine (denote a) (denote b)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
 denote (Prefer a b          ) = Prefer (denote a) (denote b)
-denote (Merge a b c         ) = Merge (denote a) (denote b) (denote c)
+denote (Merge a b           ) = Merge (denote a) (denote b)
 denote (Constructors a      ) = Constructors (denote a)
 denote (Field a b           ) = Field (denote a) b
 denote (Project a b         ) = Project (denote a) b
@@ -1553,11 +1549,17 @@ normalizeWith ctx e0 = loop (denote e0)
                 loop nothing
             App (App (App (App (App OptionalFold _) (Some x)) _) just) _ ->
                 loop (App just x)
-            _ ->  case ctx (App f' a') of
-                    Nothing -> App f' a'
-                    Just app' -> loop app'
+            App (Merge _ (RecordLit kvsX)) (UnionLit kY vY _) ->
+                case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
+                  Just vX -> loop (App vX vY)
+                  Nothing -> appCtx (App f' a')
+            app -> appCtx app
           where
             a' = loop a
+            appCtx app =
+              case ctx app of
+                Nothing -> app
+                Just app' -> loop app'
     Let f _ r b -> loop b''
       where
         r'  = shift   1  (V f 0) r
@@ -1727,20 +1729,10 @@ normalizeWith ctx e0 = loop (denote e0)
             RecordLit (sortMap (Data.HashMap.Strict.InsOrd.union n m))
         decide l r =
             Prefer l r
-    Merge t x y      ->
-        case x' of
-            RecordLit kvsX ->
-                case y' of
-                    UnionLit kY vY _ ->
-                        case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
-                            Just vX -> loop (App vX vY)
-                            Nothing -> Merge t' x' y'
-                    _ -> Merge t' x' y'
-            _ -> Merge t' x' y'
+    Merge t x -> Merge t' x'
       where
         t' = loop t
         x' = loop x
-        y' = loop y
     Constructors t   ->
         case t' of
             Union kts -> RecordLit kvs
@@ -1849,6 +1841,10 @@ isNormalized e0 = loop (denote e0)
               False
           App (App (App (App (App OptionalFold _) (App None _)) _) _) _ ->
               False
+          App (Merge _ (RecordLit kvsX)) (UnionLit kY _ _) ->
+              case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
+                Just _  -> False
+                Nothing -> True
           _ -> True
       Let _ _ _ _ -> False
       Annot _ _ -> False
@@ -1969,16 +1965,7 @@ isNormalized e0 = loop (denote e0)
           decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
           decide (RecordLit _) (RecordLit _) = False
           decide  _ _ = True
-      Merge t x y -> loop t && loop x && loop y &&
-          case x of
-              RecordLit kvsX ->
-                  case y of
-                      UnionLit kY _  _ ->
-                          case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
-                              Just _  -> False
-                              Nothing -> True
-                      _ -> True
-              _ -> True
+      Merge t x -> loop t && loop x
       Constructors t -> loop t &&
           case t of
               Union _ -> False

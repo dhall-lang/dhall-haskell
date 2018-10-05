@@ -207,12 +207,11 @@ lint expression = loop (Dhall.Core.denote expression)
       where
         a' = loop a
         b' = loop b
-    loop (Merge a b c) =
-        Merge a' b' c'
+    loop (Merge a b) =
+        Merge a' b'
       where
         a' = loop a
         b' = loop b
-        c' = loop c
     loop (Constructors a) =
         Constructors a'
       where
