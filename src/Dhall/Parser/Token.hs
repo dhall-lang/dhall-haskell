@@ -2,7 +2,92 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | Parse Dhall tokens. Even though we don't have a tokenizer per-se this
 ---  module is useful for keeping some small parsing utilities.
-module Dhall.Parser.Token where
+module Dhall.Parser.Token (
+    whitespace,
+    bashEnvironmentVariable,
+    posixEnvironmentVariable,
+    file_,
+    label,
+    labels,
+    httpRaw,
+    hexdig,
+    identifier,
+    hexNumber,
+    doubleLiteral,
+    naturalLiteral,
+    integerLiteral,
+    _Optional,
+    _if,
+    _then,
+    _else,
+    _let,
+    _in,
+    _as,
+    _using,
+    _merge,
+    _constructors,
+    _Some,
+    _None,
+    _NaturalFold,
+    _NaturalBuild,
+    _NaturalIsZero,
+    _NaturalEven,
+    _NaturalOdd,
+    _NaturalToInteger,
+    _NaturalShow,
+    _IntegerShow,
+    _IntegerToDouble,
+    _DoubleShow,
+    _ListBuild,
+    _ListFold,
+    _ListLength,
+    _ListHead,
+    _ListLast,
+    _ListIndexed,
+    _ListReverse,
+    _OptionalFold,
+    _OptionalBuild,
+    _Bool,
+    _Natural,
+    _Integer,
+    _Double,
+    _Text,
+    _List,
+    _True,
+    _False,
+    _Type,
+    _Kind,
+    _equal,
+    _or,
+    _plus,
+    _textAppend,
+    _listAppend,
+    _and,
+    _times,
+    _doubleEqual,
+    _notEqual,
+    _dot,
+    _openBrace,
+    _closeBrace,
+    _openBracket,
+    _closeBracket,
+    _openAngle,
+    _closeAngle,
+    _bar,
+    _comma,
+    _openParens,
+    _closeParens,
+    _colon,
+    _at,
+    _missing,
+    _importAlt,
+    _combine,
+    _combineTypes,
+    _prefer,
+    _lambda,
+    _forall,
+    _arrow,
+    ) where
 
 import           Dhall.Parser.Combinators
 
@@ -83,7 +168,7 @@ identifier = do
 whitespaceChunk :: Parser ()
 whitespaceChunk =
     choice
-        [ void (Text.Parser.Char.satisfy predicate)
+        [ void (Dhall.Parser.Combinators.takeWhile1 predicate)
         , void (Text.Parser.Char.text "\r\n")
         , lineComment
         , blockComment
@@ -115,17 +200,18 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
 lineComment :: Parser ()
 lineComment = do
     _ <- Text.Parser.Char.text "--"
-    Text.Parser.Combinators.skipMany notEndOfLine
+
+    let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
+
+    _ <- Dhall.Parser.Combinators.takeWhile predicate
+
     endOfLine
+
     return ()
   where
     endOfLine =
             void (Text.Parser.Char.char '\n'  )
         <|> void (Text.Parser.Char.text "\r\n")
-
-    notEndOfLine = void (Text.Parser.Char.satisfy predicate)
-      where
-        predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
 
 blockComment :: Parser ()
 blockComment = do
@@ -136,10 +222,18 @@ blockCommentChunk :: Parser ()
 blockCommentChunk =
     choice
         [ blockComment  -- Nested block comment
+        , characters
         , character
         , endOfLine
         ]
   where
+    characters = void (Dhall.Parser.Combinators.takeWhile1 predicate)
+      where
+        predicate c =
+                '\x20' <= c && c <= '\x10FFFF' && c /= '-' && c /= '{'
+            ||  c == '\n'
+            || c == '\t'
+
     character = void (Text.Parser.Char.satisfy predicate)
       where
         predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
@@ -154,7 +248,6 @@ blockCommentContinue = endOfComment <|> continue
     continue = do
         blockCommentChunk
         blockCommentContinue
-
 
 simpleLabel :: Parser Text
 simpleLabel = try (do
@@ -401,6 +494,9 @@ unreserved c =
 reserved :: Data.Text.Text -> Parser ()
 reserved x = do _ <- Text.Parser.Char.text x; whitespace
 
+reservedChar :: Char -> Parser ()
+reservedChar c = do _ <- Text.Parser.Char.char c; whitespace
+
 keyword :: Data.Text.Text -> Parser ()
 keyword x = try (do _ <- Text.Parser.Char.text x; nonemptyWhitespace)
 
@@ -430,6 +526,12 @@ _merge = keyword "merge"
 
 _constructors :: Parser ()
 _constructors = keyword "constructors"
+
+_Some :: Parser ()
+_Some = reserved "Some"
+
+_None :: Parser ()
+_None = reserved "None"
 
 _NaturalFold :: Parser ()
 _NaturalFold = reserved "Natural/fold"
@@ -522,25 +624,25 @@ _Kind :: Parser ()
 _Kind = reserved "Kind"
 
 _equal :: Parser ()
-_equal = reserved "="
+_equal = reservedChar '='
 
 _or :: Parser ()
 _or = reserved "||"
 
 _plus :: Parser ()
-_plus = reserved "+"
+_plus = reservedChar '+'
 
 _textAppend :: Parser ()
 _textAppend = reserved "++"
 
 _listAppend :: Parser ()
-_listAppend = reserved "#"
+_listAppend = reservedChar '#'
 
 _and :: Parser ()
 _and = reserved "&&"
 
 _times :: Parser ()
-_times = reserved "*"
+_times = reservedChar '*'
 
 _doubleEqual :: Parser ()
 _doubleEqual = reserved "=="
@@ -549,49 +651,49 @@ _notEqual :: Parser ()
 _notEqual = reserved "!="
 
 _dot :: Parser ()
-_dot = reserved "."
+_dot = reservedChar '.'
 
 _openBrace :: Parser ()
-_openBrace = reserved "{"
+_openBrace = reservedChar '{'
 
 _closeBrace :: Parser ()
-_closeBrace = reserved "}"
+_closeBrace = reservedChar '}'
 
 _openBracket :: Parser ()
-_openBracket = reserved "["
+_openBracket = reservedChar '['
 
 _closeBracket :: Parser ()
-_closeBracket = reserved "]"
+_closeBracket = reservedChar ']'
 
 _openAngle :: Parser ()
-_openAngle = reserved "<"
+_openAngle = reservedChar '<'
 
 _closeAngle :: Parser ()
-_closeAngle = reserved ">"
+_closeAngle = reservedChar '>'
 
 _bar :: Parser ()
-_bar = reserved "|"
+_bar = reservedChar '|'
 
 _comma :: Parser ()
-_comma = reserved ","
+_comma = reservedChar ','
 
 _openParens :: Parser ()
-_openParens = reserved "("
+_openParens = reservedChar '('
 
 _closeParens :: Parser ()
-_closeParens = reserved ")"
+_closeParens = reservedChar ')'
 
 _colon :: Parser ()
-_colon = reserved ":"
+_colon = reservedChar ':'
 
 _at :: Parser ()
-_at = reserved "@"
+_at = reservedChar '@'
 
 _missing :: Parser ()
 _missing = reserved "missing"
 
 _importAlt :: Parser ()
-_importAlt = reserved "?"
+_importAlt = reservedChar '?'
 
 _combine :: Parser ()
 _combine = do

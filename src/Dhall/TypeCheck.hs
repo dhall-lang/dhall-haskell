@@ -47,6 +47,7 @@ import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Pretty.Internal
+import qualified Dhall.Util
 
 traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
 traverseWithIndex_ k xs =
@@ -121,7 +122,6 @@ typeWithA tpa = loop
             Const k -> return k
             _       -> Left (TypeError ctx e (InvalidInputType _A))
 
-        _ <- loop ctx _A
         let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
         tB <- fmap Dhall.Core.normalize (loop ctx' _B)
         kB <- case tB of
@@ -434,6 +434,8 @@ typeWithA tpa = loop
         return (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a")))
     loop _      Optional          = do
         return (Pi "_" (Const Type) (Const Type))
+    loop _      None              = do
+        return (Pi "A" (Const Type) (App Optional "A"))
     loop ctx e@(OptionalLit t xs) = do
         s <- fmap Dhall.Core.normalize (loop ctx t)
         case s of
@@ -448,6 +450,13 @@ typeWithA tpa = loop
                     let nf_t' = Dhall.Core.normalize t'
                     Left (TypeError ctx e (InvalidOptionalElement nf_t x nf_t')) )
         return (App Optional t)
+    loop ctx e@(Some a) = do
+        _A <- loop ctx a
+        s <- fmap Dhall.Core.normalize (loop ctx _A)
+        case s of
+            Const Type -> return ()
+            _          -> Left (TypeError ctx e (InvalidSome a _A s))
+        return (App Optional _A)
     loop _      OptionalFold      = do
         return
             (Pi "a" (Const Type)
@@ -578,7 +587,7 @@ typeWithA tpa = loop
         ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
         constX <- case ttKvsX of
             Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
+            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
 
         ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
         constY <- case ttKvsY of
@@ -669,7 +678,7 @@ typeWithA tpa = loop
         ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
         constX <- case ttKvsX of
             Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
+            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
 
         ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
         constY <- case ttKvsY of
@@ -843,6 +852,7 @@ data TypeMessage s a
     | InvalidListType (Expr s a)
     | InvalidOptionalElement (Expr s a) (Expr s a) (Expr s a)
     | InvalidOptionalType (Expr s a)
+    | InvalidSome (Expr s a) (Expr s a) (Expr s a)
     | InvalidPredicate (Expr s a) (Expr s a)
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
@@ -908,17 +918,18 @@ _NOT :: Doc ann
 _NOT = "\ESC[1mnot\ESC[0m"
 
 insert :: Pretty a => a -> Doc Ann
-insert expression = "↳ " <> Pretty.align (Pretty.pretty expression)
+insert expression =
+    "↳ " <> Pretty.align (Dhall.Util.snipDoc (Pretty.pretty expression))
 
 prettyDiff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
 prettyDiff exprL exprR = Dhall.Diff.diffNormalized exprL exprR
 
 prettyTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> ErrorMessages
-prettyTypeMessage (UnboundVariable _) = ErrorMessages {..}
+prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
   -- https://github.com/dhall-lang/dhall-haskell/pull/116
   where
-    short = "Unbound variable"
+    short = "Unbound variable: " <> Pretty.pretty x
 
     long =
         "Explanation: Expressions can only reference previously introduced (i.e. “bound”)\n\
@@ -1965,8 +1976,8 @@ prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
     short = "Invalid type for ❰Optional❱ element"
 
     long =
-        "Explanation: Every optional element ends with a type annotation for the element \n\
-        \that might be present, like this:                                               \n\
+        "Explanation: The legacy ❰List❱-like syntax for ❰Optional❱ literals ends with a  \n\
+        \type annotation for the element that might be present, like this:               \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────┐                                                  \n\
@@ -2048,6 +2059,48 @@ prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..
         \... has this type instead:                                                      \n\
         \                                                                                \n\
         \" <> txt2 <> "\n"
+      where
+        txt0 = insert expr0
+        txt1 = insert expr1
+        txt2 = insert expr2
+
+prettyTypeMessage (InvalidSome expr0 expr1 expr2) = ErrorMessages {..}
+  where
+    short = "❰Some❱ argument has the wrong type"
+
+    long =
+        "Explanation: The ❰Some❱ constructor expects an argument that is a term, where   \n\
+        \the type of the type of a term must be ❰Type❱                                   \n\
+        \                                                                                \n\
+        \For example, this is a valid use of ❰Some❱:                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────┐                                                                  \n\
+        \    │ Some 1 │  ❰1❱ is a valid term because ❰1 : Natural : Type❱                \n\
+        \    └────────┘                                                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but this is " <> _NOT <> " a valid ❰Optional❱ value:                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────┐                                                               \n\
+        \    │ Some Text │  ❰Text❱ is not a valid term because ❰Text : Type : Kind ❱     \n\
+        \    └───────────┘                                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \The ❰Some❱ argument you provided:                                               \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... has this type:                                                              \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... but the type of that type is:                                               \n\
+        \                                                                                \n\
+        \" <> txt2 <> "\n\
+        \                                                                                \n\
+        \... which is not ❰Type❱                                                         \n"
       where
         txt0 = insert expr0
         txt1 = insert expr1
@@ -3600,16 +3653,17 @@ instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (TypeEr
 instance (Eq a, Pretty s, Pretty a) => Pretty (TypeError s a) where
     pretty (TypeError ctx expr msg)
         = Pretty.unAnnotate
-            ("\n"
+            (   "\n"
             <>  (   if null (Dhall.Context.toList ctx)
                     then ""
-                    else prettyContext ctx <> "\n"
+                    else prettyContext ctx <> "\n\n"
                 )
             <>  shortTypeMessage msg <> "\n"
             <>  source
             )
       where
-        prettyKV (key, val) = pretty key <> " : " <> pretty val
+        prettyKV (key, val) =
+            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
 
         prettyContext =
                 Pretty.vsep
@@ -3636,9 +3690,9 @@ instance (Eq a, Pretty s, Pretty a) => Pretty (DetailedTypeError s a) where
     pretty (DetailedTypeError (TypeError ctx expr msg))
         = Pretty.unAnnotate
             (   "\n"
-            <>  (   if  null (Dhall.Context.toList ctx)
+            <>  (   if null (Dhall.Context.toList ctx)
                     then ""
-                    else prettyContext ctx <> "\n"
+                    else prettyContext ctx <> "\n\n"
                 )
             <>  longTypeMessage msg <> "\n"
             <>  "────────────────────────────────────────────────────────────────────────────────\n"
@@ -3646,7 +3700,8 @@ instance (Eq a, Pretty s, Pretty a) => Pretty (DetailedTypeError s a) where
             <>  source
             )
       where
-        prettyKV (key, val) = pretty key <> " : " <> pretty val
+        prettyKV (key, val) =
+            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
 
         prettyContext =
                 Pretty.vsep

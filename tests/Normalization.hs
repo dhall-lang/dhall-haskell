@@ -33,6 +33,7 @@ normalizationTests =
         , customization
         , shouldNormalize "a remote-systems.conf builder" "remoteSystems"
         , shouldNormalize "multi-line strings correctly" "multiLine"
+        , shouldNormalize "the // operator and sort the fields" "sortOperator"
         ]
 
 tutorialExamples :: TestTree
@@ -148,8 +149,10 @@ preludeExamples =
         , shouldNormalize "Optional/fold" "./examples/Optional/fold/1"
         , shouldNormalize "Optional/head" "./examples/Optional/head/0"
         , shouldNormalize "Optional/head" "./examples/Optional/head/1"
+        , shouldNormalize "Optional/head" "./examples/Optional/head/2"
         , shouldNormalize "Optional/last" "./examples/Optional/last/0"
         , shouldNormalize "Optional/last" "./examples/Optional/last/1"
+        , shouldNormalize "Optional/last" "./examples/Optional/last/2"
         , shouldNormalize "Optional/length" "./examples/Optional/length/0"
         , shouldNormalize "Optional/length" "./examples/Optional/length/1"
         , shouldNormalize "Optional/map" "./examples/Optional/map/0"

@@ -511,15 +511,10 @@ import Dhall
 --
 -- >>> input auto "[]" :: IO (Vector Natural)
 -- *** Exception:
--- ...Error...: Invalid input
+-- ...Error...: An empty list requires a type annotation
 -- ...
--- (input):1:3:
---   |
--- 1 | []
---   |   ^
--- unexpected end of input
--- expecting ':' or whitespace
--- ...
+-- []
+-- (input):1:1
 --
 -- Also, list elements must all have the same type.  You will get an error if
 -- you try to store elements of different types in a list:
@@ -531,7 +526,7 @@ import Dhall
 -- - Natural
 -- + Bool
 -- ...
--- True
+--     True
 -- ...
 -- (input):1:5
 -- ...
@@ -543,37 +538,27 @@ import Dhall
 
 -- $optional0
 --
--- @Optional@ values are exactly like lists except they can only hold 0 or 1
--- elements.  They cannot hold 2 or more elements:
+-- @Optional@ values are either of the form @Some aValue@ or @None aType@.
 --
 -- For example, these are valid @Optional@ values:
 --
--- > [1] : Optional Natural
+-- > Some 1
 -- >
--- > []  : Optional Natural
+-- > None Natural
 --
--- ... but this is /not/ valid:
---
--- > [1, 2] : Optional Natural  -- NOT valid
+-- ... which both have type @Optional Natural@
 --
 -- An @Optional@ corresponds to Haskell's `Maybe` type for decoding purposes:
 --
--- >>> input auto "[1] : Optional Natural" :: IO (Maybe Natural)
+-- >>> input auto "Some 1" :: IO (Maybe Natural)
 -- Just 1
--- >>> input auto "[] : Optional Natural" :: IO (Maybe Natural)
+-- >>> input auto "None Natural" :: IO (Maybe Natural)
 -- Nothing
 --
--- You cannot omit the type annotation for @Optional@ values.  The type
--- annotation is mandatory
---
--- __Exercise:__ What is the shortest possible @./config@ file that you can decode
--- like this:
+-- __Exercise:__ Author a @./config@ file that you can decode like this:
 --
 -- > >>> input auto "./config" :: IO (Maybe (Maybe (Maybe Natural)))
 -- > ???
---
--- __Exercise:__ Try to decode an @Optional@ value with more than one element and
--- see what happens
 
 -- $records
 --
@@ -1402,7 +1387,7 @@ import Dhall
 -- > <Ctrl-D>
 -- > Optional Natural
 -- > 
--- > [] : Optional Natural
+-- > None Natural
 --
 -- __Exercise__: The Dhall Prelude provides a @replicate@ function which you can
 -- find here:
@@ -2423,11 +2408,11 @@ import Dhall
 -- > <Ctrl-D>
 -- > Optional Natural
 -- > 
--- > [1] : Optional Natural
+-- > Some 1
 --
 -- Type:
 --
--- > ─────────────────────────────────────
+-- > ───────────────────────────────────────────────
 -- > Γ ⊢ List/head ∀(a : Type) → List a → Optional a
 --
 -- Rules:
@@ -2440,7 +2425,7 @@ import Dhall
 -- > List/head a (Prelude/List/concat a xss) =
 -- >     Prelude/Optional/head a (Prelude/List/map (List a) (Optional a) (List/head a) xss)
 -- > 
--- > List/head a ([x] : List a) = [x] : Optional a
+-- > List/head a ([x] : List a) = Some x
 -- > 
 -- > List/head b (Prelude/List/concatMap a b f m)
 -- >     = Prelude/Optional/concatMap a b (λ(x : a) → List/head b (f x)) (List/head a m)
@@ -2454,11 +2439,11 @@ import Dhall
 -- > <Ctrl-D>
 -- > Optional Natural
 -- > 
--- > [1] : Optional Natural
+-- > Some 1
 --
 -- Type:
 --
--- > ─────────────────────────────────────
+-- > ─────────────────────────────────────────────────
 -- > Γ ⊢ List/last : ∀(a : Type) → List a → Optional a
 --
 -- Rules:
@@ -2471,7 +2456,7 @@ import Dhall
 -- > List/last a (Prelude/List/concat a xss) =
 -- >     Prelude/Optional/last a (Prelude/List/map (List a) (Optional a) (List/last a) xss)
 -- > 
--- > List/last a ([x] : List a) = [x] : Optional a
+-- > List/last a ([x] : List a) = Some x
 -- > 
 -- > List/last b (Prelude/List/concatMap a b f m)
 -- >     = Prelude/Optional/concatMap a b (λ(x : a) → List/last b (f x)) (List/last a m)
@@ -2535,17 +2520,18 @@ import Dhall
 
 -- $optional1
 --
--- Dhall @Optional@ literals are 0 or 1 values inside of brackets:
+-- Dhall @Optional@ literals are either @Some@ followed by a value:
 --
--- > Γ ⊢ t : Type   Γ ⊢ x : t
+-- > Γ ⊢ x : t   Γ ⊢ t : Type
 -- > ────────────────────────
--- > Γ ⊢ ([x] : Optional t) : Optional t
+-- > Γ ⊢ Some x : Optional t
 --
--- > Γ ⊢ t : Type
--- > ────────────────────────
--- > Γ ⊢ ([] : Optional t) : Optional t
+-- ... or @None@ followed by a type:
 --
--- Also, every @Optional@ literal must end with a mandatory type annotation
+-- > ───────────────────────────────────
+-- > Γ ⊢ None : ∀(t : Type) → Optional t
+--
+-- Note that `None` is a valid standalone function
 --
 -- The built-in operations on @Optional@ values are:
 
@@ -2554,7 +2540,7 @@ import Dhall
 -- Example:
 --
 -- > $ dhall
--- > Optional/fold Text (["ABC"] : Optional Text) Text (λ(t : Text) → t) ""
+-- > Optional/fold Text (Some "ABC") Text (λ(t : Text) → t) ""
 -- > <Ctrl-D>
 -- > Text
 -- > 
@@ -2562,14 +2548,14 @@ import Dhall
 --
 -- Type:
 --
--- > ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
--- > Γ ⊢ Optional/fold : ∀(a : Type) → Optional a → ∀(optional : Type) → ∀(just : a → optional) → ∀(nothing : optional) → optional
+-- > ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+-- > Γ ⊢ Optional/fold : ∀(a : Type) → Optional a → ∀(optional : Type) → ∀(some : a → optional) → ∀(none : optional) → optional
 --
 -- Rules:
 --
--- > Optional/fold a ([]  : Optional a) o j n = n
+-- > Optional/fold a (None a) o j n = n
 -- >
--- > Optional/fold a ([x] : Optional a) o j n = j x
+-- > Optional/fold a (Some x) o j n = j x
 
 -- $prelude
 --

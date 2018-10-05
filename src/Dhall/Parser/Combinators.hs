@@ -1,13 +1,12 @@
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RecordWildCards            #-}
 module Dhall.Parser.Combinators where
 
 
 import           Control.Applicative        (Alternative (..), liftA2)
-import           Control.Monad              (MonadPlus)
+import           Control.Monad              (MonadPlus (..))
 import           Data.Data                  (Data)
 import           Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import           Data.Semigroup             (Semigroup (..))
@@ -27,6 +26,8 @@ import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
+import qualified Dhall.Util
+import qualified Control.Monad.Fail
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
@@ -34,29 +35,128 @@ import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token.Style
 
 -- | Source code extract
-data Src = Src Text.Megaparsec.SourcePos Text.Megaparsec.SourcePos Text
+data Src = Src !Text.Megaparsec.SourcePos !Text.Megaparsec.SourcePos Text
+  -- Text field is intentionally lazy
   deriving (Data, Eq, Show)
+
+-- | Doesn't force the 'Text' part
+laxSrcEq :: Src -> Src -> Bool
+laxSrcEq (Src p q _) (Src p' q' _) = eq p  p' && eq q q'
+  where
+    -- Don't compare filename (which is FilePath = String)
+    eq  :: Text.Megaparsec.SourcePos -> Text.Megaparsec.SourcePos -> Bool
+    eq (Text.Megaparsec.SourcePos _ a b) (Text.Megaparsec.SourcePos _ a' b') =
+        a == a' && b == b'
+{-# INLINE laxSrcEq #-}
 
 instance Pretty Src where
     pretty (Src begin _ text) =
-            pretty text <> "\n"
+            pretty (Dhall.Util.snip (prefix <> text))
         <>  "\n"
         <>  pretty (Text.Megaparsec.sourcePosPretty begin)
-        <>  "\n"
+      where
+        prefix = Data.Text.replicate (n - 1) " "
+          where
+            n = Text.Megaparsec.unPos (Text.Megaparsec.sourceColumn begin)
 
 {-| A `Parser` that is almost identical to
     @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
     comments as whitespace
 -}
 newtype Parser a = Parser { unParser :: Text.Megaparsec.Parsec Void Text a }
-    deriving
-    (   Functor
-    ,   Applicative
-    ,   Monad
-    ,   Alternative
-    ,   MonadPlus
-    ,   Text.Megaparsec.MonadParsec Void Text
-    )
+
+instance Functor Parser where
+    fmap f (Parser x) = Parser (fmap f x)
+    {-# INLINE fmap #-}
+
+    f <$ Parser x = Parser (f <$ x)
+    {-# INLINE (<$) #-}
+
+instance Applicative Parser where
+    pure = Parser . pure
+    {-# INLINE pure #-}
+
+    Parser f <*> Parser x = Parser (f <*> x)
+    {-# INLINE (<*>) #-}
+
+    Parser a <* Parser b = Parser (a <* b)
+    {-# INLINE (<*) #-}
+
+    Parser a *> Parser b = Parser (a *> b)
+    {-# INLINE (*>) #-}
+
+instance Monad Parser where
+    return = pure
+    {-# INLINE return #-}
+
+    (>>) = (*>)
+    {-# INLINE (>>) #-}
+
+    Parser n >>= k = Parser (n >>= unParser . k)
+    {-# INLINE (>>=) #-}
+
+    fail = Control.Monad.Fail.fail
+    {-# INLINE fail #-}
+
+instance Control.Monad.Fail.MonadFail Parser where
+    fail = Parser . Control.Monad.Fail.fail
+    {-# INLINE fail #-}
+
+instance Alternative Parser where
+    empty = Parser empty
+    -- {-# INLINE empty #-}
+
+    Parser a <|> Parser b = Parser (a <|> b)
+    -- {-# INLINE (<|>) #-}
+
+    some (Parser a) = Parser (some a)
+    -- {-# INLINE some #-}
+
+    many (Parser a) = Parser (many a)
+    -- {-# INLINE many #-}
+
+instance MonadPlus Parser where
+    mzero = empty
+    -- {-# INLINE mzero #-}
+
+    mplus = (<|>)
+    -- {-# INLINE mplus #-}
+
+instance Text.Megaparsec.MonadParsec Void Text Parser where
+    failure u e    = Parser (Text.Megaparsec.failure u e)
+
+    fancyFailure e = Parser (Text.Megaparsec.fancyFailure e)
+
+    label l (Parser p) = Parser (Text.Megaparsec.label l p)
+
+    hidden (Parser p) = Parser (Text.Megaparsec.hidden p)
+
+    try (Parser p) = Parser (Text.Megaparsec.try p)
+
+    lookAhead (Parser p) = Parser (Text.Megaparsec.lookAhead p)
+
+    notFollowedBy (Parser p) = Parser (Text.Megaparsec.notFollowedBy p)
+
+    withRecovery e (Parser p) = Parser (Text.Megaparsec.withRecovery (unParser . e) p)
+
+    observing (Parser p) = Parser (Text.Megaparsec.observing p)
+
+    eof = Parser Text.Megaparsec.eof
+
+    token f e = Parser (Text.Megaparsec.token f e)
+
+    tokens f ts = Parser (Text.Megaparsec.tokens f ts)
+
+    takeWhileP s f = Parser (Text.Megaparsec.takeWhileP s f)
+
+    takeWhile1P s f = Parser (Text.Megaparsec.takeWhile1P s f)
+
+    takeP s n = Parser (Text.Megaparsec.takeP s n)
+
+    getParserState = Parser Text.Megaparsec.getParserState
+    {-# INLINE getParserState #-}
+
+    updateParserState f = Parser (Text.Megaparsec.updateParserState f)
 
 instance Data.Semigroup.Semigroup a => Data.Semigroup.Semigroup (Parser a) where
     (<>) = liftA2 (<>)
@@ -87,13 +187,13 @@ instance Text.Parser.Combinators.Parsing Parser where
   notFollowedBy = Text.Megaparsec.notFollowedBy
 
 instance Text.Parser.Char.CharParsing Parser where
-  satisfy = Parser . Text.Megaparsec.Char.satisfy
+  satisfy = Parser . Text.Megaparsec.satisfy
 
   char = Text.Megaparsec.Char.char
 
   notChar = Text.Megaparsec.Char.char
 
-  anyChar = Text.Megaparsec.Char.anyChar
+  anyChar = Text.Megaparsec.anySingle
 
   string = fmap Data.Text.unpack . Text.Megaparsec.Char.string . fromString
 
@@ -102,7 +202,7 @@ instance Text.Parser.Char.CharParsing Parser where
 instance TokenParsing Parser where
     someSpace =
         Text.Parser.Token.Style.buildSomeSpaceParser
-            (Parser (Text.Megaparsec.skipSome (Text.Megaparsec.Char.satisfy Data.Char.isSpace)))
+            (Parser (Text.Megaparsec.skipSome (Text.Megaparsec.satisfy Data.Char.isSpace)))
             Text.Parser.Token.Style.haskellCommentStyle
 
     highlight _ = id

@@ -1,8 +1,6 @@
 let
   fetchNixpkgs = import ./nix/fetchNixpkgs.nix;
 
-  readDirectory = import ./nix/readDirectory.nix;
-
   overlayShared = pkgsNew: pkgsOld: {
     dhall-sdist =
       let
@@ -28,25 +26,37 @@ let
             extension =
               haskellPackagesNew: haskellPackagesOld: {
                 dhall =
-                  pkgsNew.haskell.lib.failOnAllWarnings
-                    (haskellPackagesNew.callCabal2nix
-                      "dhall"
-                      pkgsNew.dhall-sdist
-                      { }
+                  pkgsNew.haskell.lib.overrideCabal
+                    (pkgsNew.haskell.lib.doCoverage
+                      (pkgsNew.haskell.lib.failOnAllWarnings
+                        (haskellPackagesNew.callCabal2nix
+                          "dhall"
+                          pkgsNew.dhall-sdist
+                          { }
+                        )
+                      )
+                    )
+                    (old: {
+                        postInstall = (old.postInstall or "") + ''
+                          ${pkgsNew.coreutils}/bin/mkdir --parents $out/nix-support
+                          ${pkgsNew.coreutils}/bin/ln --symbolic $out/share/hpc/vanilla/html/dhall-* "$out/share/hpc/vanilla/html/dhall"
+                          ${pkgsNew.coreutils}/bin/echo "report coverage $out/share/hpc/vanilla/html/dhall/hpc_index.html" >> $out/nix-support/hydra-build-products
+                        '';
+                      }
                     );
 
                 prettyprinter =
-                  pkgs.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
+                  pkgsNew.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
 
                 serialise =
-                  pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
+                  pkgsNew.haskell.lib.dontCheck haskellPackagesOld.serialise;
               };
 
           in
             pkgsNew.lib.fold
               pkgsNew.lib.composeExtensions
               (old.overrides or (_: _: {}))
-              [ (readDirectory ./nix)
+              [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./nix; })
 
                 extension
               ];

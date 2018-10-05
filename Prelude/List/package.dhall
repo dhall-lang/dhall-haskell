@@ -1,39 +1,39 @@
 { all =
-    ./all 
+    ./all
 , any =
-    ./any 
+    ./any
 , build =
-    ./build 
+    ./build
 , concat =
-    ./concat 
+    ./concat
 , concatMap =
-    ./concatMap 
+    ./concatMap
 , filter =
-    ./filter 
+    ./filter
 , fold =
-    ./fold 
+    ./fold
 , generate =
-    ./generate 
+    ./generate
 , head =
-    ./head 
+    ./head
 , indexed =
-    ./indexed 
+    ./indexed
 , iterate =
-    ./iterate 
+    ./iterate
 , last =
-    ./last 
+    ./last
 , length =
-    ./length 
+    ./length
 , map =
-    ./map 
+    ./map
 , null =
-    ./null 
+    ./null
 , replicate =
-    ./replicate 
+    ./replicate
 , reverse =
-    ./reverse 
+    ./reverse
 , shifted =
-    ./shifted 
+    ./shifted
 , unzip =
-    ./unzip 
+    ./unzip
 }

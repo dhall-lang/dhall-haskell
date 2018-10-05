@@ -115,10 +115,10 @@ equals :: Diff
 equals = token Internal.equals
 
 forall :: Diff
-forall = token Internal.forall
+forall = token (Internal.forall Internal.Unicode)
 
 lambda :: Diff
-lambda = token Internal.lambda
+lambda = token (Internal.lambda Internal.Unicode)
 
 langle :: Diff
 langle = token Internal.langle
@@ -139,7 +139,7 @@ rangle :: Diff
 rangle = token Internal.rangle
 
 rarrow :: Diff
-rarrow = token Internal.rarrow
+rarrow = token (Internal.rarrow Internal.Unicode)
 
 rbrace :: Diff
 rbrace = token Internal.rbrace
@@ -161,7 +161,7 @@ diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
 diff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
 diff l0 r0 = doc
   where
-    Diff {..} = diffExpression l0 r0 <> hardline
+    Diff {..} = diffExpression l0 r0
 
 diffPrimitive :: Eq a => (a -> Diff) -> a -> a -> Diff
 diffPrimitive f l r
@@ -460,6 +460,12 @@ skeleton (Pi {}) =
     <>  ignore
 skeleton (App Optional _) =
         "Optional "
+    <>  ignore
+skeleton (App None _) =
+        "None "
+    <>  ignore
+skeleton (Some _) =
+        "Some "
     <>  ignore
 skeleton (App List _) =
         "List "
@@ -965,9 +971,15 @@ diffApplicationExpression l@(App {}) r@(App {}) =
         Data.List.NonEmpty.cons (diffImportExpression bL bR) (docs aL aR)
     docs (Constructors aL) (Constructors aR) =
         diffImportExpression aL aR :| [ keyword "constructors" ]
-    docs aL@(App {}) aR@(Constructors {}) =
+    docs aL aR@(Constructors {}) =
         pure (mismatch aL aR)
-    docs aL@(Constructors {}) aR@(App {}) =
+    docs aL@(Constructors {}) aR =
+        pure (mismatch aL aR)
+    docs (Some aL) (Some aR) =
+        diffImportExpression aL aR :| [ builtin "Some" ]
+    docs aL aR@(Some {}) =
+        pure (mismatch aL aR)
+    docs aL@(Some {}) aR =
         pure (mismatch aL aR)
     docs aL aR =
         pure (diffImportExpression aL aR)
@@ -975,11 +987,17 @@ diffApplicationExpression l@(App {}) r =
     mismatch l r
 diffApplicationExpression l r@(App {}) =
     mismatch l r
-diffApplicationExpression l@(Constructors {}) r@(Constructors {}) =
+diffApplicationExpression (Constructors l) (Constructors r) =
     enclosed' mempty mempty (keyword "constructors" :| [ diffImportExpression l r ])
 diffApplicationExpression l@(Constructors {}) r =
     mismatch l r
 diffApplicationExpression l r@(Constructors {}) =
+    mismatch l r
+diffApplicationExpression (Some l) (Some r) =
+    enclosed' mempty mempty (builtin "Some" :| [ diffImportExpression l r ])
+diffApplicationExpression l@(Some {}) r =
+    mismatch l r
+diffApplicationExpression l r@(Some {}) =
     mismatch l r
 diffApplicationExpression l r =
     diffImportExpression l r
@@ -1187,6 +1205,12 @@ diffPrimitiveExpression Optional Optional =
 diffPrimitiveExpression l@Optional r =
     mismatch l r
 diffPrimitiveExpression l r@Optional =
+    mismatch l r
+diffPrimitiveExpression None None =
+    "…"
+diffPrimitiveExpression l@None r =
+    mismatch l r
+diffPrimitiveExpression l r@None =
     mismatch l r
 diffPrimitiveExpression OptionalFold OptionalFold =
     "…"

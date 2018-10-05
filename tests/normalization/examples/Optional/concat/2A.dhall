@@ -1,1 +1,1 @@
-../../../../../Prelude/Optional/concat Natural ([ [] : Optional Natural ]: Optional (Optional Natural))
+../../../../../Prelude/Optional/concat Natural (None (Optional Natural))

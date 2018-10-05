@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -100,10 +101,12 @@
 module Dhall.Import (
     -- * Import
       exprFromImport
+    , exprToImport
     , load
     , loadWith
     , hashExpression
     , hashExpressionToCode
+    , assertNoImports
     , Status
     , emptyStatus
     , stack
@@ -113,9 +116,11 @@ module Dhall.Import (
     , normalizer
     , startingContext
     , resolver
+    , cacher
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
+    , ImportResolutionDisabled(..)
     , PrettyHttpException(..)
     , MissingFile(..)
     , MissingEnvironmentVariable(..)
@@ -250,6 +255,7 @@ instance Exception e => Exception (Imported e)
 instance Show e => Show (Imported e) where
     show (Imported imports e) =
            concat (zipWith indent [0..] toDisplay)
+        ++ "\n"
         ++ show e
       where
         indent n import_ =
@@ -371,7 +377,7 @@ instance Canonicalize ImportType where
         Local prefix (canonicalize file)
 
     canonicalize (Remote (URL {..})) =
-        Remote (URL { path = canonicalize path, ..})
+        Remote (URL { path = canonicalize path, headers = fmap canonicalize headers, ..})
 
     canonicalize (Env name) =
         Env name
@@ -434,87 +440,101 @@ instance Show HashMismatch where
         <>  "\n"
         <>  "↳ " <> show actualHash <> "\n"
 
+localToPath :: MonadIO io => FilePrefix -> File -> io FilePath
+localToPath prefix file_ = liftIO $ do
+    let File {..} = file_
+
+    let Directory {..} = directory
+
+    prefixPath <- case prefix of
+        Home -> do
+            Directory.getHomeDirectory
+
+        Absolute -> do
+            return "/"
+
+        Here -> do
+            Directory.getCurrentDirectory
+
+    let cs = map Text.unpack (file : components)
+
+    let cons component dir = dir </> component
+
+    return (foldr cons prefixPath cs)
+
 -- | Parse an expression from a `Import` containing a Dhall program
 exprFromImport :: Import -> StateT (Status IO) IO (Expr Src Import)
-exprFromImport import_@(Import {..}) = do
+exprFromImport here@(Import {..}) = do
     let ImportHashed {..} = importHashed
 
-    case hash of
-        Nothing -> do
-            exprFromUncachedImport import_
+    result <- Maybe.runMaybeT $ do
+        Just expectedHash <- return hash
+        cacheFile         <- getCacheFile expectedHash
+        True              <- liftIO (Directory.doesPathExist cacheFile)
 
-        Just expectedHash -> do
-            Status {..} <- State.get
+        bytesStrict <- liftIO (Data.ByteString.readFile cacheFile)
 
-            result <- Maybe.runMaybeT (getCacheFile expectedHash)
+        let actualHash = Crypto.Hash.hash bytesStrict
 
-            case result of
-                Just (Read, cacheFile) -> do
-                    bytesStrict <- liftIO (Data.ByteString.readFile cacheFile)
+        if expectedHash == actualHash
+            then return ()
+            else liftIO (Control.Exception.throwIO (HashMismatch {..}))
 
-                    let actualHash = Crypto.Hash.hash bytesStrict
+        let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
 
-                    if expectedHash == actualHash
-                        then return ()
-                        else liftIO (Control.Exception.throwIO (HashMismatch {..}))
+        term <- throws (Codec.Serialise.deserialiseOrFail bytesLazy)
 
-                    let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
+        throws (Dhall.Binary.decode term)
 
-                    term <- case Codec.Serialise.deserialiseOrFail bytesLazy of
-                        Left exception ->
-                            liftIO (Control.Exception.throwIO exception)
+    case result of
+        Just expression -> return expression
+        Nothing         -> exprFromUncachedImport here
 
-                        Right term ->
-                            return term
+{-| Save an expression to the specified `Import`
 
-                    case Dhall.Binary.decode term of
-                        Left exception ->
-                            liftIO (Control.Exception.throwIO exception)
+    Currently this only works for cached imports and ignores other types of
+    imports, but could conceivably work for uncached imports in the future
 
-                        Right expression ->
-                            return expression
+    The main reason for this more general type is for symmetry with
+    `exprFromImport` and to support doing more clever things in the future,
+    like doing \"the right thing\" for uncached imports (i.e. exporting
+    environment variables or creating files)
+-}
+exprToImport :: Import -> Expr Src X -> StateT (Status IO) IO ()
+exprToImport here expression = do
+    Status {..} <- State.get
 
-                Just (Write, cacheFile) -> do
-                    expression <- exprFromUncachedImport import_
+    let Import {..} = here
 
-                    let _stack' = NonEmpty.cons import_ _stack
-                    zoom stack (State.put _stack')
-                    resolvedExpression <- loadWith expression
-                    zoom stack (State.put _stack)
+    let ImportHashed {..} = importHashed
 
-                    case Dhall.TypeCheck.typeWith _startingContext resolvedExpression of
-                        Left  _ -> do
-                            return ()
+    _ <- Maybe.runMaybeT $ do
+        Just expectedHash  <- return hash
+        cacheFile          <- getCacheFile expectedHash
 
-                        Right _ -> do
-                            let normalizedExpression =
-                                    Dhall.Core.alphaNormalize
-                                        (Dhall.Core.normalizeWith
-                                            (getReifiedNormalizer _normalizer)
-                                            resolvedExpression
-                                        )
+        _ <- throws (Dhall.TypeCheck.typeWith _startingContext expression)
 
-                            let bytes =
-                                    encodeExpression _protocolVersion normalizedExpression
+        let normalizedExpression =
+                Dhall.Core.alphaNormalize
+                    (Dhall.Core.normalizeWith
+                        (getReifiedNormalizer _normalizer)
+                        expression
+                    )
 
-                            let actualHash = Crypto.Hash.hash bytes
+        let bytes = encodeExpression _protocolVersion normalizedExpression
 
-                            if expectedHash == actualHash
-                                then return ()
-                                else liftIO (Control.Exception.throwIO (HashMismatch {..}))
+        let actualHash = Crypto.Hash.hash bytes
 
-                            liftIO (Data.ByteString.writeFile cacheFile bytes)
+        if expectedHash == actualHash
+            then return ()
+            else liftIO (Control.Exception.throwIO (HashMismatch {..}))
 
-                    return expression
+        liftIO (Data.ByteString.writeFile cacheFile bytes)
 
-                Nothing -> do
-                    exprFromUncachedImport import_
-
-data CacheMode = Read | Write
+    return ()
 
 getCacheFile
-    :: (Alternative m, MonadIO m)
-    => Crypto.Hash.Digest SHA256 -> m (CacheMode, FilePath)
+    :: (Alternative m, MonadIO m) => Crypto.Hash.Digest SHA256 -> m FilePath
 getCacheFile hash = do
     let assertDirectory directory = do
             let private = transform Directory.emptyPermissions
@@ -554,41 +574,15 @@ getCacheFile hash = do
 
     let cacheFile = dhallDirectory </> show hash
 
-    cacheFileExists <- liftIO (Directory.doesPathExist cacheFile)
-
-    if cacheFileExists
-        then do
-            True <- liftIO (Directory.doesFileExist cacheFile)
-
-            return (Read, cacheFile)
-
-        else do
-            return (Write, cacheFile)
+    return cacheFile
 
 exprFromUncachedImport :: Import -> StateT (Status IO) IO (Expr Src Import)
 exprFromUncachedImport (Import {..}) = do
     let ImportHashed {..} = importHashed
 
     (path, text) <- case importType of
-        Local prefix (File {..}) -> liftIO $ do
-            let Directory {..} = directory
-
-            prefixPath <- case prefix of
-                Home -> do
-                    Directory.getHomeDirectory
-
-                Absolute -> do
-                    return "/"
-
-                Here -> do
-                    Directory.getCurrentDirectory
-
-            let cs = map Text.unpack (file : components)
-
-            let cons component dir = dir </> component
-
-            let path = foldr cons prefixPath cs
-
+        Local prefix file -> liftIO $ do
+            path   <- localToPath prefix file
             exists <- Directory.doesFileExist path
 
             if exists
@@ -680,7 +674,7 @@ exprFromUncachedImport (Import {..}) = do
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status IO
-emptyStatus = emptyStatusWith exprFromImport
+emptyStatus = emptyStatusWith exprFromImport exprToImport
 
 {-| Generalized version of `load`
 
@@ -748,6 +742,8 @@ loadWith expr₀ = case expr₀ of
                     zoom stack (State.put imports')
                     expr'' <- loadWith expr'
                     zoom stack (State.put imports)
+
+                    _cacher here expr''
 
                     -- Type-check expressions here for three separate reasons:
                     --
@@ -830,6 +826,8 @@ loadWith expr₀ = case expr₀ of
   ListIndexed          -> pure ListIndexed
   ListReverse          -> pure ListReverse
   Optional             -> pure Optional
+  None                 -> pure None
+  Some a               -> Some <$> loadWith a
   OptionalLit a b      -> OptionalLit <$> loadWith a <*> mapM loadWith b
   OptionalFold         -> pure OptionalFold
   OptionalBuild        -> pure OptionalBuild
@@ -878,3 +876,18 @@ hashExpression _protocolVersion expression =
 hashExpressionToCode :: ProtocolVersion -> Expr s X -> Text
 hashExpressionToCode _protocolVersion expr =
     "sha256:" <> Text.pack (show (hashExpression _protocolVersion expr))
+
+-- | A call to `assertNoImports` failed because there was at least one import
+data ImportResolutionDisabled = ImportResolutionDisabled deriving (Exception)
+
+instance Show ImportResolutionDisabled where
+    show _ = "\nImport resolution is disabled"
+
+-- | Assert than an expression is import-free
+assertNoImports :: MonadIO io => Expr Src Import -> io (Expr Src X)
+assertNoImports expression =
+    throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
+
+throws :: (Exception e, MonadIO io) => Either e a -> io a
+throws (Left  e) = liftIO (Control.Exception.throwIO e)
+throws (Right a) = return a

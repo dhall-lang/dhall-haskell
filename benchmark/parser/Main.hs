@@ -69,5 +69,11 @@ main = do
             ]
         , benchExprFromText "Long variable names" (T.replicate 1000000 "x")
         , benchExprFromText "Large number of function arguments" (T.replicate 10000 "x ")
+        , benchExprFromText "Long double-quoted strings" ("\"" <> T.replicate 1000000 "x" <> "\"")
+        , benchExprFromText "Long single-quoted strings" ("''" <> T.replicate 1000000 "x" <> "''")
+        , benchExprFromText "Whitespace" (T.replicate 1000000 " " <> "x")
+        , benchExprFromText "Line comment" ("x -- " <> T.replicate 1000000 " ")
+        , benchExprFromText "Block comment" ("x {- " <> T.replicate 1000000 " " <> "-}")
+        , benchExprFromText "Deeply nested parentheses" "((((((((((((((((x))))))))))))))))"
         , benchParser prelude
         ]

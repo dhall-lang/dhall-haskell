@@ -1,4 +1,1 @@
-../../../../../Prelude/Optional/unzip
-Text
-Bool
-([ { _1 = "ABC", _2 = True } ] : Optional { _1 : Text, _2 : Bool })
+../../../../../Prelude/Optional/unzip Text Bool (Some { _1 = "ABC", _2 = True })
