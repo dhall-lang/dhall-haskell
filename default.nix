@@ -57,7 +57,7 @@ let
                     # https://github.com/well-typed/cborg/issues/172
 
                     # All of the following fixes are for `ghc-7.10.3`, although
-                    # they don't for newer versions, either
+                    # they don't hurt for newer versions, either
                     #
                     # Most of these fixes are due to certain dependencies being
                     # hidden behind a conditional compiler version directive, so
