@@ -54,8 +54,6 @@ let
                       pkgsNew.haskell.lib.dontCheck
                         haskellPackagesOld.serialise;
 
-                    # https://github.com/well-typed/cborg/issues/172
-
                     # All of the following fixes are for `ghc-7.10.3`, although
                     # they don't hurt for newer versions, either
                     #
