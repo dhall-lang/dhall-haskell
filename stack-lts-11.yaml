@@ -4,6 +4,7 @@ extra-deps:
   - serialise-0.2.0.0
   - megaparsec-7.0.0
   - parser-combinators-1.0.0
+  - repline-0.2.0.0
 nix:
   packages:
     - ncurses
