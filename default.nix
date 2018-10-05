@@ -260,15 +260,7 @@ in
 
     inherit (pkgs.haskell.packages."${compiler}") dhall;
 
-    all = pkgs.releaseTools.aggregate
-      { name = "dhall";
-
-        constituents = [
-          dhall
-          tarball
-          pwd
-        ];
-      };
+    inherit (pkgs.releaseTools) aggregate;
 
     shell = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall).env;
   }
