@@ -2778,19 +2778,19 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
         \                                                                                \n\
         \            ... must match the declared type of the ❰merge❱                     \n\
         \            ⇩                                                                   \n\
-        \    ┌─────────────────────────────┐                                             \n\
-        \    │ merge Bool handlers union   │                                             \n\
-        \    └─────────────────────────────┘                                             \n\
+        \    ┌───────────────────────────┐                                               \n\
+        \    │ merge Bool handlers union │                                               \n\
+        \    └───────────────────────────┘                                               \n\
         \                                                                                \n\
         \                                                                                \n\
         \For example, the following expression is " <> _NOT <> " valid:                  \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌──────────────────────────────────────────────────────────────────────┐    \n\
-        \    │     let union    = < Left = 2 | Right : Bool >                       │    \n\
-        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }  │    \n\
-        \    │ in  merge Text handlers union                                        │    \n\
-        \    └──────────────────────────────────────────────────────────────────────┘    \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let union    = < Left = 2 | Right : Bool >                      │     \n\
+        \    │ in  let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │     \n\
+        \    │ in  merge Text handlers union                                       │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                ⇧                                                               \n\
         \                Invalid: Doesn't match output of either handler                 \n\
         \                                                                                \n\
