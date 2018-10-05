@@ -1074,12 +1074,11 @@ import Dhall
 -- would write:
 --
 -- > $ cat > process <<EOF
--- >     λ(union : < Left : Natural | Right : Bool >)
--- > →   let handlers =
+-- >     let handlers =
 -- >             { Left  = Natural/even  -- Natural/even is a built-in function
 -- >             , Right = λ(b : Bool) → b
 -- >             }
--- > in  merge handlers union : Bool
+-- > in  merge Bool handlers union
 -- > EOF
 --
 -- Now our @./process@ function can handle both alternatives:
@@ -1100,38 +1099,33 @@ import Dhall
 --
 -- Every @merge@ has the following form:
 --
--- > merge handlers union : type
+-- > merge type handlers union
 --
 -- ... where: 
 --
+-- * @type@ is the declared result type of the @merge@
 -- * @union@ is the union you want to consume
 -- * @handlers@ is a record with one function per alternative of the union
--- * @type@ is the declared result type of the @merge@
 --
 -- The @merge@ function selects which function to apply from the record based on
 -- which alternative the union selects:
 --
--- > merge { Foo = f, ... } < Foo = x | ... > : t = f x : t
+-- > merge t { Foo = f, ... } < Foo = x | ... > = f x : t
 --
 -- So, for example:
 --
--- > merge { Left = Natural/even, Right = λ(b : Bool) → b } < Left = 3 | Right : Bool > : Bool
+-- > merge Bool { Left = Natural/even, Right = λ(b : Bool) → b } < Left = 3 | Right : Bool >
 -- >     = Natural/even 3 : Bool
 -- >     = False
 --
 -- ... and similarly:
 --
--- > merge { Left = Natural/even, Right = λ(b : Bool) → b } < Right = True | Left : Natural > : Bool
+-- > merge Bool { Left = Natural/even, Right = λ(b : Bool) → b } < Right = True | Left : Natural >
 -- >     = (λ(b : Bool) → b) True : Bool
 -- >     = True
 --
 -- Notice that each handler has to return the same type of result (@Bool@ in
 -- this case) which must also match the declared result type of the @merge@.
---
--- You can also omit the type annotation when merging a union with one or more
--- alternatives, like this:
---
--- > merge { Left = Natural/even, Right = λ(b : Bool) → b } < Right = True | Left : Natural >
 --
 -- You can also store more than one value or less than one value within
 -- alternatives using Dhall's support for anonymous records.  You can nest an
@@ -1188,15 +1182,14 @@ import Dhall
 -- You can also extract fields during pattern matching such as in the following
 -- function which renders each value to `Text`:
 --
--- >     λ(x : < Empty : {} | Person : { name : Text, age : Natural } >)
 -- > →   merge
+-- >     < Empty : {} | Person : { name : Text, age : Natural } >
 -- >     {   Empty = λ(_ : {}) → "Unknown"
 -- >
 -- >     ,   Person =
 -- >             λ(person : { name : Text, age : Natural })
 -- >         →   "Name: ${person.name}, Age: ${Natural/show person.age}"
 -- >     }
--- >     x
 --
 -- __Exercise__: Create a list of the following type with at least one element
 -- per alternative:
