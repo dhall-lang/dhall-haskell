@@ -5,13 +5,13 @@
 module Regression where
 
 import qualified Control.Exception
-import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Text.Lazy.IO
 import qualified Data.Text.Prettyprint.Doc
 import qualified Data.Text.Prettyprint.Doc.Render.Text
 import qualified Dhall
 import qualified Dhall.Context
 import qualified Dhall.Core
+import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
@@ -52,21 +52,25 @@ data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
 unnamedFields :: TestTree
 unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
     let ty = Dhall.auto :: Dhall.Type Foo
-    Test.Tasty.HUnit.assertEqual "Good type" (Dhall.expected ty) (Dhall.Core.Union (
-            Data.HashMap.Strict.InsOrd.fromList [
-                ("Bar",Dhall.Core.Record (Data.HashMap.Strict.InsOrd.fromList [
-                    ("_1",Dhall.Core.Bool),("_2",Dhall.Core.Bool),("_3",Dhall.Core.Bool)]))
-                , ("Baz",Dhall.Core.Record (Data.HashMap.Strict.InsOrd.fromList [
-                    ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Integer)]))
-                ,("Foo",Dhall.Core.Record (Data.HashMap.Strict.InsOrd.fromList [
-                    ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool)]))]))
+    Test.Tasty.HUnit.assertEqual "Good type" (Dhall.expected ty)
+        (Dhall.Core.Union
+            (Dhall.Map.fromList
+                [   ("Foo",Dhall.Core.Record (Dhall.Map.fromList [
+                        ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool)]))
+                ,   ("Bar",Dhall.Core.Record (Dhall.Map.fromList [
+                        ("_1",Dhall.Core.Bool),("_2",Dhall.Core.Bool),("_3",Dhall.Core.Bool)]))
+                ,   ("Baz",Dhall.Core.Record (Dhall.Map.fromList [
+                        ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Integer)]))
+                ]
+            )
+        )
 
     let inj = Dhall.inject :: Dhall.InputType Foo
     Test.Tasty.HUnit.assertEqual "Good Inject" (Dhall.declared inj) (Dhall.expected ty)
 
     let tu_ty = Dhall.auto :: Dhall.Type (Integer, Bool)
     Test.Tasty.HUnit.assertEqual "Auto Tuple" (Dhall.expected tu_ty) (Dhall.Core.Record (
-            Data.HashMap.Strict.InsOrd.fromList [ ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool) ]))
+            Dhall.Map.fromList [ ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool) ]))
 
     let tu_in = Dhall.inject :: Dhall.InputType (Integer, Bool)
     Test.Tasty.HUnit.assertEqual "Inj. Tuple" (Dhall.declared tu_in) (Dhall.expected tu_ty)

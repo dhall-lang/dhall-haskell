@@ -60,18 +60,17 @@ import {-# SOURCE #-} Dhall.Core
 import Control.Applicative (Applicative(..), (<$>))
 #endif
 import Data.Foldable
-import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
+import Dhall.Map (Map)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
 
 import qualified Data.Char
-import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.Set
@@ -79,6 +78,7 @@ import qualified Data.Text                               as Text
 import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text   as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
+import qualified Dhall.Map
 
 {-| Annotation type used to tag elements in a pretty-printed document for
     syntax highlighting purposes
@@ -818,25 +818,25 @@ prettyCharacterSet characterSet = prettyExpression
       where
         long = Pretty.hardline <> "    " <> prettyExpression value
 
-    prettyRecord :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc Ann
+    prettyRecord :: Pretty a => Map Text (Expr s a) -> Doc Ann
     prettyRecord =
-        braces . map (prettyKeyValue colon) . Data.HashMap.Strict.InsOrd.toList
+        braces . map (prettyKeyValue colon) . Dhall.Map.toList
 
-    prettyRecordLit :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc Ann
+    prettyRecordLit :: Pretty a => Map Text (Expr s a) -> Doc Ann
     prettyRecordLit a
-        | Data.HashMap.Strict.InsOrd.null a =
+        | Data.Foldable.null a =
             lbrace <> equals <> rbrace
         | otherwise
-            = braces (map (prettyKeyValue equals) (Data.HashMap.Strict.InsOrd.toList a))
+            = braces (map (prettyKeyValue equals) (Dhall.Map.toList a))
 
-    prettyUnion :: Pretty a => InsOrdHashMap Text (Expr s a) -> Doc Ann
+    prettyUnion :: Pretty a => Map Text (Expr s a) -> Doc Ann
     prettyUnion =
-        angles . map (prettyKeyValue colon) . Data.HashMap.Strict.InsOrd.toList
+        angles . map (prettyKeyValue colon) . Dhall.Map.toList
 
     prettyUnionLit
-        :: Pretty a => Text -> Expr s a -> InsOrdHashMap Text (Expr s a) -> Doc Ann
+        :: Pretty a => Text -> Expr s a -> Map Text (Expr s a) -> Doc Ann
     prettyUnionLit a b c =
-        angles (front : map adapt (Data.HashMap.Strict.InsOrd.toList c))
+        angles (front : map adapt (Dhall.Map.toList c))
       where
         front = prettyKeyValue equals (a, b)
 

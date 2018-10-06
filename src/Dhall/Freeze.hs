@@ -13,7 +13,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text
 import Dhall.Binary (ProtocolVersion(..))
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..))
-import Dhall.Import (hashExpression, protocolVersion)
+import Dhall.Import (protocolVersion)
 import Dhall.Parser (exprAndHeaderFromText, Src)
 import Dhall.Pretty (annToAnsiStyle, layoutOpts)
 import Lens.Family (set)

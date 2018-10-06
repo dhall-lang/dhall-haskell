@@ -64,8 +64,6 @@ import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Data (Data)
 import Data.Foldable
-import Data.Hashable (Hashable)
-import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.HashSet (HashSet)
 import Data.String (IsString(..))
 import Data.Scientific (Scientific)
@@ -75,6 +73,7 @@ import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Traversable
+import Dhall.Map (Map)
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
@@ -82,14 +81,12 @@ import Prelude hiding (succ)
 
 import qualified Control.Monad
 import qualified Crypto.Hash
-import qualified Data.List
-import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.HashSet
-import qualified Data.Ord
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
+import qualified Dhall.Map
 
 {-| Constants for a pure type system
 
@@ -424,13 +421,13 @@ data Expr s a
     -- | > OptionalBuild                            ~  Optional/build
     | OptionalBuild
     -- | > Record       [(k1, t1), (k2, t2)]        ~  { k1 : t1, k2 : t1 }
-    | Record    (InsOrdHashMap Text (Expr s a))
+    | Record    (Map Text (Expr s a))
     -- | > RecordLit    [(k1, v1), (k2, v2)]        ~  { k1 = v1, k2 = v2 }
-    | RecordLit (InsOrdHashMap Text (Expr s a))
+    | RecordLit (Map Text (Expr s a))
     -- | > Union        [(k1, t1), (k2, t2)]        ~  < k1 : t1 | k2 : t2 >
-    | Union     (InsOrdHashMap Text (Expr s a))
+    | Union     (Map Text (Expr s a))
     -- | > UnionLit k v [(k1, t1), (k2, t2)]        ~  < k = v | k1 : t1 | k2 : t2 >
-    | UnionLit Text (Expr s a) (InsOrdHashMap Text (Expr s a))
+    | UnionLit Text (Expr s a) (Map Text (Expr s a))
     -- | > Combine x y                              ~  x ∧ y
     | Combine (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
@@ -452,7 +449,79 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
+    deriving (Eq, Foldable, Generic, Traversable, Show, Data)
+
+-- This instance is hand-written due to the fact that deriving
+-- it does not give us an INLINABLE pragma. We annotate this fmap
+-- implementation with this pragma below to allow GHC to, possibly,
+-- inline the implementation for performance improvements.
+instance Functor (Expr s) where
+  fmap _ (Const c) = Const c
+  fmap _ (Var v) = Var v
+  fmap f (Lam v e1 e2) = Lam v (fmap f e1) (fmap f e2)
+  fmap f (Pi v e1 e2) = Pi v (fmap f e1) (fmap f e2)
+  fmap f (App e1 e2) = App (fmap f e1) (fmap f e2)
+  fmap f (Let v maybeE e1 e2) = Let v (fmap (fmap f) maybeE) (fmap f e1) (fmap f e2)
+  fmap f (Annot e1 e2) = Annot (fmap f e1) (fmap f e2)
+  fmap _ Bool = Bool
+  fmap _ (BoolLit b) = BoolLit b
+  fmap f (BoolAnd e1 e2) = BoolAnd (fmap f e1) (fmap f e2)
+  fmap f (BoolOr e1 e2) = BoolOr (fmap f e1) (fmap f e2)
+  fmap f (BoolEQ e1 e2) = BoolEQ (fmap f e1) (fmap f e2)
+  fmap f (BoolNE e1 e2) = BoolNE (fmap f e1) (fmap f e2)
+  fmap f (BoolIf e1 e2 e3) = BoolIf (fmap f e1) (fmap f e2) (fmap f e3)
+  fmap _ Natural = Natural
+  fmap _ (NaturalLit n) = NaturalLit n
+  fmap _ NaturalFold = NaturalFold
+  fmap _ NaturalBuild = NaturalBuild
+  fmap _ NaturalIsZero = NaturalIsZero
+  fmap _ NaturalEven = NaturalEven
+  fmap _ NaturalOdd = NaturalOdd
+  fmap _ NaturalToInteger = NaturalToInteger
+  fmap _ NaturalShow = NaturalShow
+  fmap f (NaturalPlus e1 e2) = NaturalPlus (fmap f e1) (fmap f e2)
+  fmap f (NaturalTimes e1 e2) = NaturalTimes (fmap f e1) (fmap f e2)
+  fmap _ Integer = Integer
+  fmap _ (IntegerLit i) = IntegerLit i
+  fmap _ IntegerShow = IntegerShow
+  fmap _ IntegerToDouble = IntegerToDouble
+  fmap _ Double = Double
+  fmap _ (DoubleLit d) = DoubleLit d
+  fmap _ DoubleShow = DoubleShow
+  fmap _ Text = Text
+  fmap f (TextLit cs) = TextLit (fmap f cs)
+  fmap f (TextAppend e1 e2) = TextAppend (fmap f e1) (fmap f e2)
+  fmap _ List = List
+  fmap f (ListLit maybeE seqE) = ListLit (fmap (fmap f) maybeE) (fmap (fmap f) seqE)
+  fmap f (ListAppend e1 e2) = ListAppend (fmap f e1) (fmap f e2)
+  fmap _ ListBuild = ListBuild
+  fmap _ ListFold = ListFold
+  fmap _ ListLength = ListLength
+  fmap _ ListHead = ListHead
+  fmap _ ListLast = ListLast
+  fmap _ ListIndexed = ListIndexed
+  fmap _ ListReverse = ListReverse
+  fmap _ Optional = Optional
+  fmap f (OptionalLit e maybeE) = OptionalLit (fmap f e) (fmap (fmap f) maybeE)
+  fmap f (Some e) = Some (fmap f e)
+  fmap _ None = None
+  fmap _ OptionalFold = OptionalFold
+  fmap _ OptionalBuild = OptionalBuild
+  fmap f (Record r) = Record (fmap (fmap f) r)
+  fmap f (RecordLit r) = RecordLit (fmap (fmap f) r)
+  fmap f (Union u) = Union (fmap (fmap f) u)
+  fmap f (UnionLit v e u) = UnionLit v (fmap f e) (fmap (fmap f) u)
+  fmap f (Combine e1 e2) = Combine (fmap f e1) (fmap f e2)
+  fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
+  fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
+  fmap f (Merge e1 e2 maybeE) = Merge (fmap f e1) (fmap f e2) (fmap (fmap f) maybeE)
+  fmap f (Constructors e1) = Constructors (fmap f e1)
+  fmap f (Field e1 v) = Field (fmap f e1) v
+  fmap f (Project e1 vs) = Project (fmap f e1) vs
+  fmap f (Note s e1) = Note s (fmap f e1)
+  fmap f (ImportAlt e1 e2) = ImportAlt (fmap f e1) (fmap f e2)
+  fmap f (Embed a) = Embed (f a)
+  {-# INLINABLE fmap #-}
 
 instance Applicative (Expr s) where
     pure = Embed
@@ -1403,12 +1472,6 @@ denote (Project a b         ) = Project (denote a) b
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
-sortMap :: (Ord k, Hashable k) => InsOrdHashMap k v -> InsOrdHashMap k v
-sortMap =
-      Data.HashMap.Strict.InsOrd.fromList
-    . Data.List.sortBy (Data.Ord.comparing fst)
-    . Data.HashMap.Strict.InsOrd.toList
-
 {-| Reduce an expression to its normal form, performing beta reduction and applying
     any custom definitions.
 
@@ -1531,7 +1594,7 @@ normalizeWith ctx e0 = loop (denote e0)
               where
                 as₁ = Data.Sequence.mapWithIndex adapt as₀
 
-                _A₂ = Record (Data.HashMap.Strict.InsOrd.fromList kts)
+                _A₂ = Record (Dhall.Map.fromList kts)
                   where
                     kts = [ ("index", Natural)
                           , ("value", _A₀)
@@ -1541,7 +1604,7 @@ normalizeWith ctx e0 = loop (denote e0)
                   | otherwise = Nothing
 
                 adapt n a_ =
-                    RecordLit (Data.HashMap.Strict.InsOrd.fromList kvs)
+                    RecordLit (Dhall.Map.fromList kvs)
                   where
                     kvs = [ ("index", NaturalLit (fromIntegral n))
                           , ("value", a_)
@@ -1684,48 +1747,48 @@ normalizeWith ctx e0 = loop (denote e0)
     None -> None
     OptionalFold -> OptionalFold
     OptionalBuild -> OptionalBuild
-    Record kts -> Record (sortMap kts')
+    Record kts -> Record (Dhall.Map.sort kts')
       where
         kts' = fmap loop kts
-    RecordLit kvs -> RecordLit (sortMap kvs')
+    RecordLit kvs -> RecordLit (Dhall.Map.sort kvs')
       where
         kvs' = fmap loop kvs
-    Union kts -> Union (sortMap kts')
+    Union kts -> Union (Dhall.Map.sort kts')
       where
         kts' = fmap loop kts
-    UnionLit k v kvs -> UnionLit k v' (sortMap kvs')
+    UnionLit k v kvs -> UnionLit k v' (Dhall.Map.sort kvs')
       where
         v'   =      loop v
         kvs' = fmap loop kvs
     Combine x y -> decide (loop x) (loop y)
       where
-        decide (RecordLit m) r | Data.HashMap.Strict.InsOrd.null m =
+        decide (RecordLit m) r | Data.Foldable.null m =
             r
-        decide l (RecordLit n) | Data.HashMap.Strict.InsOrd.null n =
+        decide l (RecordLit n) | Data.Foldable.null n =
             l
         decide (RecordLit m) (RecordLit n) =
-            RecordLit (sortMap (Data.HashMap.Strict.InsOrd.unionWith decide m n))
+            RecordLit (Dhall.Map.sort (Dhall.Map.unionWith decide m n))
         decide l r =
             Combine l r
     CombineTypes x y -> decide (loop x) (loop y)
       where
-        decide (Record m) r | Data.HashMap.Strict.InsOrd.null m =
+        decide (Record m) r | Data.Foldable.null m =
             r
-        decide l (Record n) | Data.HashMap.Strict.InsOrd.null n =
+        decide l (Record n) | Data.Foldable.null n =
             l
         decide (Record m) (Record n) =
-            Record (sortMap (Data.HashMap.Strict.InsOrd.unionWith decide m n))
+            Record (Dhall.Map.sort (Dhall.Map.unionWith decide m n))
         decide l r =
             CombineTypes l r
 
     Prefer x y -> decide (loop x) (loop y)
       where
-        decide (RecordLit m) r | Data.HashMap.Strict.InsOrd.null m =
+        decide (RecordLit m) r | Data.Foldable.null m =
             r
-        decide l (RecordLit n) | Data.HashMap.Strict.InsOrd.null n =
+        decide l (RecordLit n) | Data.Foldable.null n =
             l
         decide (RecordLit m) (RecordLit n) =
-            RecordLit (sortMap (Data.HashMap.Strict.InsOrd.union n m))
+            RecordLit (Dhall.Map.sort (Dhall.Map.union n m))
         decide l r =
             Prefer l r
     Merge x y t      ->
@@ -1733,7 +1796,7 @@ normalizeWith ctx e0 = loop (denote e0)
             RecordLit kvsX ->
                 case y' of
                     UnionLit kY vY _ ->
-                        case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
+                        case Dhall.Map.lookup kY kvsX of
                             Just vX -> loop (App vX vY)
                             Nothing -> Merge x' y' t'
                     _ -> Merge x' y' t'
@@ -1746,18 +1809,18 @@ normalizeWith ctx e0 = loop (denote e0)
         case t' of
             Union kts -> RecordLit kvs
               where
-                kvs = Data.HashMap.Strict.InsOrd.mapWithKey adapt kts
+                kvs = Dhall.Map.mapWithKey adapt kts
 
                 adapt k t_ = Lam k t_ (UnionLit k (Var (V k 0)) rest)
                   where
-                    rest = Data.HashMap.Strict.InsOrd.delete k kts
+                    rest = Dhall.Map.delete k kts
             _ -> Constructors t'
       where
         t' = loop t
     Field r x        ->
         case loop r of
             RecordLit kvs ->
-                case Data.HashMap.Strict.InsOrd.lookup x kvs of
+                case Dhall.Map.lookup x kvs of
                     Just v  -> loop v
                     Nothing -> Field (RecordLit (fmap loop kvs)) x
             r' -> Field r' x
@@ -1768,12 +1831,12 @@ normalizeWith ctx e0 = loop (denote e0)
                     Just s  ->
                         loop (RecordLit kvs')
                       where
-                        kvs' = Data.HashMap.Strict.InsOrd.fromList s
+                        kvs' = Dhall.Map.fromList s
                     Nothing ->
                         Project (RecordLit (fmap loop kvs)) xs
               where
                 adapt x = do
-                    v <- Data.HashMap.Strict.InsOrd.lookup x kvs
+                    v <- Dhall.Map.lookup x kvs
                     return (x, v)
             r' -> Project r' xs
     Note _ e' -> loop e'
@@ -1948,26 +2011,26 @@ isNormalized e0 = loop (denote e0)
       None -> True
       OptionalFold -> True
       OptionalBuild -> True
-      Record kts -> all loop kts
-      RecordLit kvs -> all loop kvs
-      Union kts -> all loop kts
-      UnionLit _ v kvs -> loop v && all loop kvs
+      Record kts -> Dhall.Map.isSorted kts && all loop kts
+      RecordLit kvs -> Dhall.Map.isSorted kvs && all loop kvs
+      Union kts -> Dhall.Map.isSorted kts && all loop kts
+      UnionLit _ v kvs -> loop v && Dhall.Map.isSorted kvs && all loop kvs
       Combine x y -> loop x && loop y && decide x y
         where
-          decide (RecordLit m) _ | Data.HashMap.Strict.InsOrd.null m = False
-          decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
+          decide (RecordLit m) _ | Data.Foldable.null m = False
+          decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
           decide  _ _ = True
       CombineTypes x y -> loop x && loop y && decide x y
         where
-          decide (Record m) _ | Data.HashMap.Strict.InsOrd.null m = False
-          decide _ (Record n) | Data.HashMap.Strict.InsOrd.null n = False
+          decide (Record m) _ | Data.Foldable.null m = False
+          decide _ (Record n) | Data.Foldable.null n = False
           decide (Record _) (Record _) = False
           decide  _ _ = True
       Prefer x y -> loop x && loop y && decide x y
         where
-          decide (RecordLit m) _ | Data.HashMap.Strict.InsOrd.null m = False
-          decide _ (RecordLit n) | Data.HashMap.Strict.InsOrd.null n = False
+          decide (RecordLit m) _ | Data.Foldable.null m = False
+          decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
           decide  _ _ = True
       Merge x y t -> loop x && loop y && all loop t &&
@@ -1975,7 +2038,7 @@ isNormalized e0 = loop (denote e0)
               RecordLit kvsX ->
                   case y of
                       UnionLit kY _  _ ->
-                          case Data.HashMap.Strict.InsOrd.lookup kY kvsX of
+                          case Dhall.Map.lookup kY kvsX of
                               Just _  -> False
                               Nothing -> True
                       _ -> True
@@ -1988,14 +2051,14 @@ isNormalized e0 = loop (denote e0)
       Field r x -> loop r &&
           case r of
               RecordLit kvs ->
-                  case Data.HashMap.Strict.InsOrd.lookup x kvs of
+                  case Dhall.Map.lookup x kvs of
                       Just _  -> False
                       Nothing -> True
               _ -> True
       Project r xs -> loop r &&
           case r of
               RecordLit kvs ->
-                  if all (flip Data.HashMap.Strict.InsOrd.member kvs) xs
+                  if all (flip Dhall.Map.member kvs) xs
                       then False
                       else True
               _ -> True
