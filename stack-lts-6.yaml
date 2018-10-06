@@ -16,7 +16,7 @@ extra-deps:
 - directory-1.2.7.1
 - foundation-0.0.19
 - process-1.6.2.0
-- repline-0.1.7.0
+- repline-0.2.0.0
 - haskeline-0.7.4.2
 - aeson-1.2.3.0
 - th-abstraction-0.2.6.0

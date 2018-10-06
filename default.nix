@@ -27,12 +27,19 @@ let
         "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
             overrides =
               let
+                failOnAllWarnings = drv:
+                  # GHC 7.10.3 incorrectly detects non-exhaustive pattern
+                  # matches
+                  if compiler == "ghc7103"
+                  then drv
+                  else pkgsNew.haskell.lib.failOnAllWarnings drv;
+
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
                     dhall =
                       pkgsNew.haskell.lib.overrideCabal
                         (pkgsNew.haskell.lib.doCoverage
-                          (pkgsNew.haskell.lib.failOnAllWarnings
+                          (failOnAllWarnings
                             (haskellPackagesNew.callCabal2nix
                               "dhall"
                               pkgsNew.dhall-sdist
