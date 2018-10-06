@@ -90,12 +90,15 @@ instance Traversable (Map k) where
 
 instance Ord k => Data.Semigroup.Semigroup (Map k v) where
     (<>) = union
+    {-# INLINABLE (<>) #-}
 
 instance Ord k => Monoid (Map k v) where
     mempty = Map Data.Map.empty []
+    {-# INLINABLE mempty #-}
 
 #if !(MIN_VERSION_base(4,11,0))
     mappend = (<>)
+    {-# INLINABLE mappend #-}
 #endif
 
 -- | Create a `Map` from a single key-value pair
