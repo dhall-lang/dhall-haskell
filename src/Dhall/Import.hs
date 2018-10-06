@@ -129,7 +129,6 @@ module Dhall.Import (
 
 import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term)
-import Control.Applicative (empty)
 import Control.Exception (Exception, SomeException, throwIO, toException)
 import Control.Monad (guard)
 import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..))
@@ -470,7 +469,7 @@ exprFromImport here@(Import {..}) = do
     result <- Maybe.runMaybeT $ do
         Just expectedHash <- return hash
         cacheFile         <- getCacheFile expectedHash
-        True              <- liftIO (Directory.doesPathExist cacheFile)
+        True              <- liftIO (Directory.doesFileExist cacheFile)
 
         bytesStrict <- liftIO (Data.ByteString.readFile cacheFile)
 
@@ -564,7 +563,7 @@ getCacheFile hash = do
 
                     liftIO (Directory.setPermissions directory private)
 
-    cacheDirectory <- liftIO $ Directory.getXdgDirectory Directory.XdgCache ""
+    cacheDirectory <- getCacheDirectory
             
     assertDirectory cacheDirectory
 
@@ -575,6 +574,23 @@ getCacheFile hash = do
     let cacheFile = dhallDirectory </> show hash
 
     return cacheFile
+
+getCacheDirectory :: MonadIO io => io FilePath
+#if MIN_VERSION_directory(1,2,3)
+getCacheDirectory = liftIO (Directory.getXdgDirectory Directory.XdgCache "")
+#else
+getCacheDirectory = liftIO $ do
+    maybeXDGCacheHome <- System.Environment.lookupEnv "XDG_CACHE_HOME"
+
+    case maybeXDGCacheHome of
+        Nothing -> do
+            homeDirectory <- Directory.getHomeDirectory
+
+            return (homeDirectory </> ".cache")
+
+        Just xdgCacheHome -> do
+            return xdgCacheHome
+#endif
 
 exprFromUncachedImport :: Import -> StateT (Status IO) IO (Expr Src Import)
 exprFromUncachedImport (Import {..}) = do
