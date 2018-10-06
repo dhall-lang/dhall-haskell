@@ -23,6 +23,8 @@ module Dhall.Map
 
       -- * Deletion/Update
     , delete
+    , filter
+    , mapMaybe
 
       -- * Query
     , lookup
@@ -34,6 +36,7 @@ module Dhall.Map
     , unionWith
     , intersection
     , intersectionWith
+    , difference
 
       -- * Traversals
     , mapWithKey
@@ -50,10 +53,11 @@ module Dhall.Map
 import Control.Applicative ((<|>))
 import Data.Data (Data)
 import Data.Semigroup
-import Prelude hiding (lookup)
+import Prelude hiding (filter, lookup)
 
 import qualified Data.Map
 import qualified Data.Set
+import qualified Prelude
 
 {-| A `Map` that remembers the original ordering of keys
 
@@ -176,8 +180,32 @@ delete k (Map m ks) = Map m' ks'
   where
     m' = Data.Map.delete k m
 
-    ks' = filter (k /=) ks
+    ks' = Prelude.filter (k /=) ks
 {-# INLINABLE delete #-}
+
+-- | Keep all values that satisfy the given predicate
+filter :: Ord k => (a -> Bool) -> Map k a -> Map k a
+filter predicate (Map m ks) = Map m' ks'
+  where
+    m' = Data.Map.filter predicate m
+
+    set = Data.Map.keysSet m'
+
+    ks' = Prelude.filter (\k -> Data.Set.member k set) ks
+{-# INLINABLE filter #-}
+
+{-| Transform all values in a `Map` using the supplied function, deleting the
+    key if the function returns `Nothing`
+-}
+mapMaybe :: Ord k => (a -> Maybe b) -> Map k a -> Map k b
+mapMaybe f (Map m ks) = Map m' ks'
+  where
+    m' = Data.Map.mapMaybe f m
+
+    set = Data.Map.keysSet m'
+
+    ks' = Prelude.filter (\k -> Data.Set.member k set) ks
+{-# INLINABLE mapMaybe #-}
 
 {-| Retrieve a key from a `Map`
 
@@ -222,7 +250,7 @@ union (Map mL ksL) (Map mR ksR) = Map m ks
 
     setL = Data.Map.keysSet mL
 
-    ks = ksL <|> filter (\k -> Data.Set.notMember k setL) ksR
+    ks = ksL <|> Prelude.filter (\k -> Data.Set.notMember k setL) ksR
 {-# INLINABLE union #-}
 
 -- | Combine two `Map`s using a combining function for colliding keys
@@ -233,7 +261,7 @@ unionWith combine (Map mL ksL) (Map mR ksR) = Map m ks
 
     setL = Data.Map.keysSet mL
 
-    ks = ksL <|> filter (\k -> Data.Set.notMember k setL) ksR
+    ks = ksL <|> Prelude.filter (\k -> Data.Set.notMember k setL) ksR
 {-# INLINABLE unionWith #-}
 
 {-| Combine two `Map` on their shared keys, keeping the value from the first
@@ -249,7 +277,7 @@ intersection (Map mL ksL) (Map mR _) = Map m ks
     setL = Data.Map.keysSet mL
     setR = Data.Map.keysSet mR
     set  = Data.Set.intersection setL setR
-    ks   = filter (\k -> Data.Set.member k set) ksL
+    ks   = Prelude.filter (\k -> Data.Set.member k set) ksL
 {-# INLINABLE intersection #-}
 
 {-| Combine two `Map`s on their shared keys, using the supplied function to
@@ -263,8 +291,21 @@ intersectionWith combine (Map mL ksL) (Map mR _) = Map m ks
     setL = Data.Map.keysSet mL
     setR = Data.Map.keysSet mR
     set  = Data.Set.intersection setL setR
-    ks   = filter (\k -> Data.Set.member k set) ksL
+    ks   = Prelude.filter (\k -> Data.Set.member k set) ksL
 {-# INLINABLE intersectionWith #-}
+
+{-| Compute the difference of two `Map`s by subtracting all keys from the
+    second `Map` from the first `Map`
+-}
+difference :: Ord k => Map k a -> Map k b -> Map k a
+difference (Map mL ksL) (Map mR _) = Map m ks
+  where
+    m = Data.Map.difference mL mR
+
+    setR = Data.Map.keysSet mR
+
+    ks = Prelude.filter (\k -> Data.Set.notMember k setR) ksL
+{-# INLINABLE difference #-}
 
 -- | Fold all of the key-value pairs in a `Map`, in their original order
 foldMapWithKey :: (Monoid m, Ord k) => (k -> a -> m) -> Map k a -> m
