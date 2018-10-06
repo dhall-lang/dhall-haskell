@@ -61,57 +61,9 @@ let
                       pkgsNew.haskell.lib.dontCheck
                         haskellPackagesOld.serialise;
 
-                    # All of the following fixes are for `ghc-7.10.3`, although
-                    # they don't hurt for newer versions, either
-                    #
-                    # Most of these fixes are due to certain dependencies being
-                    # hidden behind a conditional compiler version directive, so
-                    # they aren't included by default in the default Hackage
-                    # package set (which was generated for `ghc-8.4.3`)
-                    base-compat-batteries =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.base-compat-batteries
-                        [ haskellPackagesNew.bifunctors
-                          haskellPackagesNew.fail
-                        ];
-
-                    cborg =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.cborg
-                        [ haskellPackagesNew.fail
-                          haskellPackagesNew.semigroups
-                        ];
-
-                    megaparsec =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.megaparsec
-                        haskellPackagesNew.fail;
-
-                    generic-deriving =
-                      pkgsNew.haskell.lib.dontCheck
-                        haskellPackagesOld.generic-deriving;
-
-                    transformers-compat =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.transformers-compat
-                        haskellPackagesNew.generic-deriving;
-
                     prettyprinter =
-                      pkgsNew.haskell.lib.addBuildDepend
-                      ( pkgsNew.haskell.lib.dontCheck
-                          haskellPackagesOld.prettyprinter
-                      )
-                      haskellPackagesNew.semigroups;
-
-                    # For some reason, `Cabal-1.22.5` does not respect the
-                    # `buildable: False` directive for the executable section
-                    # even when configured with `-f -cli`.  Fixing this requires
-                    # patching out the executable section of `wcwidth` in order
-                    # to avoid pulling in some extra dependencies which cause a
-                    # a dependency cycle.
-                    wcwidth =
-                      pkgsNew.haskell.lib.appendPatch
-                        haskellPackagesOld.wcwidth ./nix/wcwidth.patch;
+                      pkgsNew.haskell.lib.dontCheck
+                        haskellPackagesOld.prettyprinter;
                   };
 
               in
@@ -147,6 +99,79 @@ let
     );
   };
 
+  overlayGHC7103 = pkgsNew: pkgsOld: {
+    haskell = pkgsOld.haskell // {
+      packages = pkgsOld.haskell.packages // {
+        "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
+            overrides =
+              let
+                extension =
+                  haskellPackagesNew: haskellPackagesOld: {
+                    # Most of these fixes are due to certain dependencies being
+                    # hidden behind a conditional compiler version directive, so
+                    # they aren't included by default in the default Hackage
+                    # package set (which was generated for `ghc-8.4.3`)
+                    base-compat-batteries =
+                      pkgsNew.haskell.lib.addBuildDepends
+                        haskellPackagesOld.base-compat-batteries
+                        [ haskellPackagesNew.bifunctors
+                          haskellPackagesNew.fail
+                        ];
+
+                    cborg =
+                      pkgsNew.haskell.lib.addBuildDepends
+                        haskellPackagesOld.cborg
+                        [ haskellPackagesNew.fail
+                          haskellPackagesNew.semigroups
+                        ];
+
+                    dhall =
+                      pkgsNew.haskell.lib.addBuildDepends
+                        haskellPackagesOld.dhall
+                        [ haskellPackagesNew.doctest
+                          haskellPackagesNew.mockery
+                        ];
+
+                    megaparsec =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.megaparsec
+                        haskellPackagesNew.fail;
+
+                    generic-deriving =
+                      pkgsNew.haskell.lib.dontCheck
+                        haskellPackagesOld.generic-deriving;
+
+                    prettyprinter =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.prettyprinter
+                        haskellPackagesNew.semigroups;
+
+                    transformers-compat =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.transformers-compat
+                        haskellPackagesNew.generic-deriving;
+
+                    # For some reason, `Cabal-1.22.5` does not respect the
+                    # `buildable: False` directive for the executable section
+                    # even when configured with `-f -cli`.  Fixing this requires
+                    # patching out the executable section of `wcwidth` in order
+                    # to avoid pulling in some extra dependencies which cause a
+                    # a dependency cycle.
+                    wcwidth =
+                      pkgsNew.haskell.lib.appendPatch
+                        haskellPackagesOld.wcwidth ./nix/wcwidth.patch;
+                  };
+
+              in
+                pkgsNew.lib.composeExtensions
+                  (old.overrides or (_: _: {}))
+                  extension;
+          }
+        );
+      };
+    };
+  };
+
   nixpkgs = fetchNixpkgs {
     rev = "1d4de0d552ae9aa66a5b8dee5fb0650a4372d148";
 
@@ -157,7 +182,9 @@ let
 
   pkgs = import nixpkgs {
     config = {};
-    overlays = [ overlayShared overlayCabal2nix ];
+    overlays =
+          [ overlayShared overlayCabal2nix ]
+      ++  (if compiler == "ghc7103" then [ overlayGHC7103 ] else []);
   };
 
   overlayStaticLinux = pkgsNew: pkgsOld: {
