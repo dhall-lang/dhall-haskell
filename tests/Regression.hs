@@ -1,7 +1,6 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Regression where
 
@@ -52,7 +51,7 @@ data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
 
 unnamedFields :: TestTree
 unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
-    let ty = Dhall.auto @Foo
+    let ty = Dhall.auto :: Dhall.Type Foo
     Test.Tasty.HUnit.assertEqual "Good type" (Dhall.expected ty)
         (Dhall.Core.Union
             (Dhall.Map.fromList
@@ -66,14 +65,14 @@ unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
             )
         )
 
-    let inj = Dhall.inject @Foo
+    let inj = Dhall.inject :: Dhall.InputType Foo
     Test.Tasty.HUnit.assertEqual "Good Inject" (Dhall.declared inj) (Dhall.expected ty)
 
-    let tu_ty = Dhall.auto @(Integer, Bool)
+    let tu_ty = Dhall.auto :: Dhall.Type (Integer, Bool)
     Test.Tasty.HUnit.assertEqual "Auto Tuple" (Dhall.expected tu_ty) (Dhall.Core.Record (
             Dhall.Map.fromList [ ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool) ]))
 
-    let tu_in = Dhall.inject @(Integer, Bool)
+    let tu_in = Dhall.inject :: Dhall.InputType (Integer, Bool)
     Test.Tasty.HUnit.assertEqual "Inj. Tuple" (Dhall.declared tu_in) (Dhall.expected tu_ty)
 
     return () )

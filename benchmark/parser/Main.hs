@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
@@ -5,6 +6,7 @@ module Main where
 import Control.Monad (forM)
 import Criterion.Main (defaultMain, bgroup, bench, whnf, nfIO)
 import Data.Map (Map, foldrWithKey, singleton, unions)
+import Data.Monoid ((<>))
 
 import System.Directory
 
@@ -15,6 +17,23 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Dhall.Binary
 import qualified Dhall.Parser as Dhall
+
+#if MIN_VERSION_directory(1,2,3)
+#else
+import Control.Exception (bracket)
+
+withCurrentDirectory :: FilePath  -- ^ Directory to execute in
+                     -> IO a      -- ^ Action to be executed
+                     -> IO a
+withCurrentDirectory dir action =
+  bracket getCurrentDirectory setCurrentDirectory $ \ _ -> do
+    setCurrentDirectory dir
+    action
+
+listDirectory :: FilePath -> IO [FilePath]
+listDirectory path = filter f <$> getDirectoryContents path
+  where f filename = filename /= "." && filename /= ".."
+#endif
 
 type PreludeFiles = Map FilePath T.Text
 

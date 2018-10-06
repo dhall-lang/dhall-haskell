@@ -27,16 +27,18 @@ import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.TypeCheck
+import qualified System.FilePath
 import qualified System.IO
 
-readInput :: Maybe FilePath -> IO Text
-readInput = maybe Data.Text.IO.getContents Data.Text.IO.readFile
-
 -- | Retrieve an `Import` and update the hash to match the latest contents
-hashImport :: ProtocolVersion -> Import -> IO Import
-hashImport _protocolVersion import_ = do
-    let status =
-            set protocolVersion _protocolVersion (Dhall.Import.emptyStatus ".")
+hashImport
+    :: FilePath
+    -- ^ Current working directory
+    -> ProtocolVersion
+    -> Import
+    -> IO Import
+hashImport directory _protocolVersion import_ = do
+    let status = set protocolVersion _protocolVersion (Dhall.Import.emptyStatus directory)
 
     expression <- State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
 
@@ -90,9 +92,19 @@ freeze
     -> ProtocolVersion
     -> IO ()
 freeze inplace _protocolVersion = do
-    text <- readInput inplace
+    (text, directory) <- case inplace of
+        Nothing -> do
+            text <- Data.Text.IO.getContents
+
+            return (text, ".")
+
+        Just file -> do
+            text <- Data.Text.IO.readFile file
+
+            return (text, System.FilePath.takeDirectory file)
+
     (header, parsedExpression) <- parseExpr srcInfo text
-    frozenExpression <- traverse (hashImport _protocolVersion) parsedExpression
+    frozenExpression <- traverse (hashImport directory _protocolVersion) parsedExpression
     writeExpr inplace (header, frozenExpression)
         where
             srcInfo = fromMaybe "(stdin)" inplace
