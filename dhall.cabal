@@ -296,6 +296,11 @@ Test-Suite doctest
         mockery                 < 0.4 ,
         doctest   >= 0.7.0   && < 0.17
     Default-Language: Haskell2010
+    -- `doctest` doesn't work with `MIN_VERSION` macros before GHC 8
+    --
+    --  See: https://ghc.haskell.org/trac/ghc/ticket/10970
+    if impl(ghc < 8.0)
+      Buildable: False
 
 Benchmark dhall-parser
     Type: exitcode-stdio-1.0
