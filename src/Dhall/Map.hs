@@ -12,7 +12,7 @@ module Dhall.Map
 
       -- * Construction
     , singleton
-    , Dhall.Map.fromList
+    , fromList
 
       -- * Sorting
     , sort
@@ -46,7 +46,7 @@ module Dhall.Map
     , foldMapWithKey
 
       -- * Conversions
-    , Dhall.Map.toList
+    , toList
     , toMap
     , keys
     ) where
@@ -54,12 +54,12 @@ module Dhall.Map
 import Control.Applicative ((<|>))
 import Data.Data (Data)
 import Data.Semigroup
-import GHC.Exts (IsList(..))
 import Prelude hiding (filter, lookup)
 
 import qualified Data.Functor
 import qualified Data.Map
 import qualified Data.Set
+import qualified GHC.Exts
 import qualified Prelude
 
 {-| A `Map` that remembers the original ordering of keys
@@ -106,11 +106,11 @@ instance Ord k => Monoid (Map k v) where
 
 instance (Show k, Show v, Ord k) => Show (Map k v) where
     showsPrec d m =
-        showParen (d > 10) (showString "Dhall.Map.fromList " . showsPrec 11 kvs)
+        showParen (d > 10) (showString "fromList " . showsPrec 11 kvs)
       where
-        kvs = Dhall.Map.toList m
+        kvs = toList m
 
-instance Ord k => IsList (Map k v) where
+instance Ord k => GHC.Exts.IsList (Map k v) where
     type Item (Map k v) = (k, v)
 
     fromList = Dhall.Map.fromList
@@ -120,7 +120,7 @@ instance Ord k => IsList (Map k v) where
 {-| Create a `Map` from a single key-value pair
 
 >>> singleton "A" 1
-Dhall.Map.fromList [("A",1)]
+fromList [("A",1)]
 -}
 singleton :: k -> v -> Map k v
 singleton k v = Map m ks
@@ -137,9 +137,9 @@ singleton k v = Map m ks
 > fromList (x <|> y) = fromList x <> fromList y
 
 >>> fromList [("B",1),("A",2)]  -- The map preserves order
-Dhall.Map.fromList [("B",1),("A",2)]
+fromList [("B",1),("A",2)]
 >>> fromList [("A",1),("A",2)]  -- For duplicates, later values take precedence
-Dhall.Map.fromList [("A",2)]
+fromList [("A",2)]
 -}
 fromList :: Ord k => [(k, v)] -> Map k v
 fromList kvs = Map m ks
@@ -170,7 +170,7 @@ nubOrd = go Data.Set.empty
 > sort (sort x) = sort x
 
 >>> sort (fromList [("B",1),("A",2)])
-Dhall.Map.fromList [("A",2),("B",1)]
+fromList [("A",2),("B",1)]
 -}
 sort :: Ord k => Map k v -> Map k v
 sort (Map m _) = Map m ks
@@ -197,9 +197,9 @@ isSorted (Map m k) = Data.Map.keys m == k
 > insert = insertWith (\v _ -> v)
 
 >>> insert "C" 1 (fromList [("B",2),("A",3)])  -- Values are inserted on left
-Dhall.Map.fromList [("C",1),("B",2),("A",3)]
+fromList [("C",1),("B",2),("A",3)]
 >>> insert "C" 1 (fromList [("C",2),("A",3)])  -- New value takes precedence
-Dhall.Map.fromList [("C",1),("A",3)]
+fromList [("C",1),("A",3)]
 -}
 insert :: Ord k => k -> v -> Map k v -> Map k v
 insert k v (Map m ks) = Map m' ks'
@@ -214,9 +214,9 @@ insert k v (Map m ks) = Map m' ks'
     the new value with any old value underneath the same key, if present
 
 >>> insertWith (+) "C" 1 (fromList [("B",2),("A",3)])  -- No collision
-Dhall.Map.fromList [("C",1),("B",2),("A",3)]
+fromList [("C",1),("B",2),("A",3)]
 >>> insertWith (+) "C" 1 (fromList [("C",2),("A",3)])  -- Collision
-Dhall.Map.fromList [("C",3),("A",3)]
+fromList [("C",3),("A",3)]
 -}
 insertWith :: Ord k => (v -> v -> v) -> k -> v -> Map k v -> Map k v
 insertWith f k v (Map m ks) = Map m' ks'
@@ -230,9 +230,9 @@ insertWith f k v (Map m ks) = Map m' ks'
 {-| Delete a key from a `Map` if present, otherwise return the original `Map`
 
 >>> delete "B" (fromList [("C",1),("B",2),("A",3)])
-Dhall.Map.fromList [("C",1),("A",3)]
+fromList [("C",1),("A",3)]
 >>> delete "D" (fromList [("C",1),("B",2),("A",3)])
-Dhall.Map.fromList [("C",1),("B",2),("A",3)]
+fromList [("C",1),("B",2),("A",3)]
 -}
 delete :: Ord k => k -> Map k v -> Map k v
 delete k (Map m ks) = Map m' ks'
@@ -245,9 +245,9 @@ delete k (Map m ks) = Map m' ks'
 {-| Keep all values that satisfy the given predicate
 
 >>> filter even (fromList [("C",3),("B",2),("A",1)])
-Dhall.Map.fromList [("B",2)]
+fromList [("B",2)]
 >>> filter odd (fromList [("C",3),("B",2),("A",1)])
-Dhall.Map.fromList [("C",3),("A",1)]
+fromList [("C",3),("A",1)]
 -}
 filter :: Ord k => (a -> Bool) -> Map k a -> Map k a
 filter predicate (Map m ks) = Map m' ks'
@@ -263,7 +263,7 @@ filter predicate (Map m ks) = Map m' ks'
     key if the function returns `Nothing`
 
 >>> mapMaybe Data.Maybe.listToMaybe (fromList [("C",[1]),("B",[]),("A",[3])])
-Dhall.Map.fromList [("C",1),("A",3)]
+fromList [("C",1),("A",3)]
 -}
 mapMaybe :: Ord k => (a -> Maybe b) -> Map k a -> Map k b
 mapMaybe f (Map m ks) = Map m' ks'
@@ -298,7 +298,7 @@ lookup k (Map m _) = Data.Map.lookup k m
 > uncons (singleton k v) = (k, v, mempty)
 
 >>> uncons (fromList [("C",1),("B",2),("A",3)])
-Just ("C",1,Dhall.Map.fromList [("B",2),("A",3)])
+Just ("C",1,fromList [("B",2),("A",3)])
 >>> uncons (fromList [])
 Nothing
 -}
@@ -327,9 +327,9 @@ member k (Map m _) = Data.Map.member k m
 > union = unionWith (\v _ -> v)
 
 >>> union (fromList [("D",1),("C",2)]) (fromList [("B",3),("A",4)])
-Dhall.Map.fromList [("D",1),("C",2),("B",3),("A",4)]
+fromList [("D",1),("C",2),("B",3),("A",4)]
 >>> union (fromList [("D",1),("C",2)]) (fromList [("C",3),("A",4)])
-Dhall.Map.fromList [("D",1),("C",2),("A",4)]
+fromList [("D",1),("C",2),("A",4)]
 -}
 union :: Ord k => Map k v -> Map k v -> Map k v
 union (Map mL ksL) (Map mR ksR) = Map m ks
@@ -344,9 +344,9 @@ union (Map mL ksL) (Map mR ksR) = Map m ks
 {-| Combine two `Map`s using a combining function for colliding keys
 
 >>> unionWith (+) (fromList [("D",1),("C",2)]) (fromList [("B",3),("A",4)])
-Dhall.Map.fromList [("D",1),("C",2),("B",3),("A",4)]
+fromList [("D",1),("C",2),("B",3),("A",4)]
 >>> unionWith (+) (fromList [("D",1),("C",2)]) (fromList [("C",3),("A",4)])
-Dhall.Map.fromList [("D",1),("C",5),("A",4)]
+fromList [("D",1),("C",5),("A",4)]
 -}
 unionWith :: Ord k => (v -> v -> v) -> Map k v -> Map k v -> Map k v
 unionWith combine (Map mL ksL) (Map mR ksR) = Map m ks
@@ -364,7 +364,7 @@ unionWith combine (Map mL ksL) (Map mR ksR) = Map m ks
 > intersection = intersectionWith (\v _ -> v)
 
 >>> intersection (fromList [("C",1),("B",2)]) (fromList [("B",3),("A",4)])
-Dhall.Map.fromList [("B",2)]
+fromList [("B",2)]
 -}
 intersection :: Ord k => Map k a -> Map k b -> Map k a
 intersection (Map mL ksL) (Map mR _) = Map m ks
@@ -381,7 +381,7 @@ intersection (Map mL ksL) (Map mR _) = Map m ks
     combine values from the first and second `Map`
 
 >>> intersectionWith (+) (fromList [("C",1),("B",2)]) (fromList [("B",3),("A",4)])
-Dhall.Map.fromList [("B",5)]
+fromList [("B",5)]
 -}
 intersectionWith :: Ord k => (a -> b -> c) -> Map k a -> Map k b -> Map k c
 intersectionWith combine (Map mL ksL) (Map mR _) = Map m ks
@@ -398,7 +398,7 @@ intersectionWith combine (Map mL ksL) (Map mR _) = Map m ks
     second `Map` from the first `Map`
 
 >>> difference (fromList [("C",1),("B",2)]) (fromList [("B",3),("A",4)])
-Dhall.Map.fromList [("C",1)]
+fromList [("C",1)]
 -}
 difference :: Ord k => Map k a -> Map k b -> Map k a
 difference (Map mL ksL) (Map mR _) = Map m ks
@@ -416,7 +416,7 @@ difference (Map mL ksL) (Map mR _) = Map m ks
 ("BA",[1,2])
 -}
 foldMapWithKey :: (Monoid m, Ord k) => (k -> a -> m) -> Map k a -> m
-foldMapWithKey f m = foldMap (uncurry f) (Dhall.Map.toList m)
+foldMapWithKey f m = foldMap (uncurry f) (toList m)
 {-# INLINABLE foldMapWithKey #-}
 
 {-| Transform the values of a `Map` using their corresponding key
@@ -430,7 +430,7 @@ foldMapWithKey f m = foldMap (uncurry f) (Dhall.Map.toList m)
 > mapWithKey f (x <> y) = mapWithKey f x <> mapWithKey f y
 
 >>> mapWithKey (,) (fromList [("B",1),("A",2)])
-Dhall.Map.fromList [("B",("B",1)),("A",("A",2))]
+fromList [("B",("B",1)),("A",("A",2))]
 -}
 mapWithKey :: (k -> a -> b) -> Map k a -> Map k b
 mapWithKey f (Map m ks) = Map m' ks
@@ -441,12 +441,12 @@ mapWithKey f (Map m ks) = Map m' ks
 {-| Traverse all of the key-value pairs in a `Map`, in their original order
 
 >>> traverseWithKey (,) (fromList [("B",1),("A",2)])
-("BA",Dhall.Map.fromList [("B",1),("A",2)])
+("BA",fromList [("B",1),("A",2)])
 -}
 traverseWithKey
     :: Ord k => Applicative f => (k -> a -> f b) -> Map k a -> f (Map k b)
 traverseWithKey f m =
-    fmap Dhall.Map.fromList (traverse f' (Dhall.Map.toList m))
+    fmap fromList (traverse f' (toList m))
   where
     f' (k, a) = fmap ((,) k) (f k a)
 {-# INLINABLE traverseWithKey #-}
