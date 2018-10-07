@@ -29,6 +29,7 @@ module Dhall.Map
       -- * Query
     , lookup
     , member
+    , null
     , uncons
 
       -- * Combine
@@ -53,7 +54,7 @@ module Dhall.Map
 import Control.Applicative ((<|>))
 import Data.Data (Data)
 import Data.Semigroup
-import Prelude hiding (filter, lookup)
+import Prelude hiding (filter, lookup, null)
 
 import qualified Data.Functor
 import qualified Data.Map
@@ -265,6 +266,15 @@ mapMaybe f (Map m ks) = Map m' ks'
 
     ks' = Prelude.filter (\k -> Data.Set.member k set) ks
 {-# INLINABLE mapMaybe #-}
+
+{-| Check if the map is empty
+
+> Data.Map.null (empty)           == True
+> Data.Map.null (singleton 1 'a') == False
+-}
+null :: Map k v -> Bool
+null (Map m _) = Data.Map.null m
+{-# INLINABLE null #-}
 
 {-| Retrieve a key from a `Map`
 
