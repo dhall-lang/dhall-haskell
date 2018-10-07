@@ -31,7 +31,7 @@ module Dhall.Map
     , member
     , null
     , uncons
-    
+
       -- * Combine
     , union
     , unionWith
