@@ -8,7 +8,6 @@ module Dhall.Parser.Combinators where
 import           Control.Applicative        (Alternative (..), liftA2)
 import           Control.Monad              (MonadPlus (..))
 import           Data.Data                  (Data)
-import           Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import           Data.Semigroup             (Semigroup (..))
 import           Data.Sequence              (ViewL (..))
 import           Data.Set                   (Set)
@@ -16,18 +15,18 @@ import           Data.String                (IsString (..))
 import           Data.Text                  (Text)
 import           Data.Text.Prettyprint.Doc  (Pretty (..))
 import           Data.Void                  (Void)
+import           Dhall.Map (Map)
 import           Prelude                    hiding (const, pi)
 import           Text.Parser.Combinators    (try, (<?>))
 import           Text.Parser.Token          (TokenParsing (..))
 
+import qualified Control.Monad.Fail
 import qualified Data.Char
-import qualified Data.HashMap.Strict.InsOrd
-import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
+import qualified Dhall.Map
 import qualified Dhall.Util
-import qualified Control.Monad.Fail
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
@@ -246,7 +245,7 @@ noDuplicates = go Data.Set.empty
         then fail "Duplicate key"
         else go (Data.Set.insert x found) xs
 
-toMap :: [(Text, a)] -> Parser (InsOrdHashMap Text a)
+toMap :: [(Text, a)] -> Parser (Map Text a)
 toMap kvs = do
     let adapt (k, v) = (k, pure v)
     let m = fromListWith (<|>) (fmap adapt kvs)
@@ -258,10 +257,8 @@ toMap kvs = do
                 else
                     Text.Parser.Combinators.unexpected
                         ("duplicate field: " ++ Data.Text.unpack k)
-    Data.HashMap.Strict.InsOrd.traverseWithKey action m
+    Dhall.Map.traverseWithKey action m
   where
-    fromListWith combine = Data.List.foldl' snoc nil
+    fromListWith combine = foldr cons mempty
       where
-        nil = Data.HashMap.Strict.InsOrd.empty
-
-        snoc m (k, v) = Data.HashMap.Strict.InsOrd.insertWith combine k v m
+        cons (k, v) = Dhall.Map.insertWith combine k v

@@ -1,3 +1,5 @@
+{ compiler ? "ghc843" }:
+
 let
   fetchNixpkgs = import ./nix/fetchNixpkgs.nix;
 
@@ -20,56 +22,71 @@ let
       in
         pkgsNew.callPackage (import ./nix/dhall-sdist.nix src) { };
 
-    haskellPackages = pkgsOld.haskellPackages.override (old: {
-        overrides =
-          let
-            extension =
-              haskellPackagesNew: haskellPackagesOld: {
-                dhall =
-                  pkgsNew.haskell.lib.overrideCabal
-                    (pkgsNew.haskell.lib.doCoverage
-                      (pkgsNew.haskell.lib.failOnAllWarnings
-                        (haskellPackagesNew.callCabal2nix
-                          "dhall"
-                          pkgsNew.dhall-sdist
-                          { }
+    haskell = pkgsOld.haskell // {
+      packages = pkgsOld.haskell.packages // {
+        "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
+            overrides =
+              let
+                failOnAllWarnings = drv:
+                  # GHC 7.10.3 incorrectly detects non-exhaustive pattern
+                  # matches
+                  if compiler == "ghc7103"
+                  then drv
+                  else pkgsNew.haskell.lib.failOnAllWarnings drv;
+
+                extension =
+                  haskellPackagesNew: haskellPackagesOld: {
+                    dhall =
+                      pkgsNew.haskell.lib.overrideCabal
+                        (pkgsNew.haskell.lib.doCoverage
+                          (failOnAllWarnings
+                            (haskellPackagesNew.callCabal2nix
+                              "dhall"
+                              pkgsNew.dhall-sdist
+                              { }
+                            )
+                          )
                         )
-                      )
-                    )
-                    (old: {
-                        postInstall = (old.postInstall or "") + ''
-                          ${pkgsNew.coreutils}/bin/mkdir --parents $out/nix-support
-                          ${pkgsNew.coreutils}/bin/ln --symbolic $out/share/hpc/vanilla/html/dhall-* "$out/share/hpc/vanilla/html/dhall"
-                          ${pkgsNew.coreutils}/bin/echo "report coverage $out/share/hpc/vanilla/html/dhall/hpc_index.html" >> $out/nix-support/hydra-build-products
-                        '';
-                      }
-                    );
+                        (old: {
+                            postInstall = (old.postInstall or "") + ''
+                              ${pkgsNew.coreutils}/bin/mkdir --parents $out/nix-support
+                              ${pkgsNew.coreutils}/bin/ln --symbolic $out/share/hpc/vanilla/html/dhall-* "$out/share/hpc/vanilla/html/dhall"
+                              ${pkgsNew.coreutils}/bin/echo "report coverage $out/share/hpc/vanilla/html/dhall/hpc_index.html" >> $out/nix-support/hydra-build-products
+                            '';
+                          }
+                        );
 
-                prettyprinter =
-                  pkgsNew.haskell.lib.dontCheck haskellPackagesOld.prettyprinter;
+                    # https://github.com/well-typed/cborg/issues/172
+                    serialise =
+                      pkgsNew.haskell.lib.dontCheck
+                        haskellPackagesOld.serialise;
 
-                serialise =
-                  pkgsNew.haskell.lib.dontCheck haskellPackagesOld.serialise;
-              };
+                    prettyprinter =
+                      pkgsNew.haskell.lib.dontCheck
+                        haskellPackagesOld.prettyprinter;
+                  };
 
-          in
-            pkgsNew.lib.fold
-              pkgsNew.lib.composeExtensions
-              (old.overrides or (_: _: {}))
-              [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./nix; })
+              in
+                pkgsNew.lib.fold
+                  pkgsNew.lib.composeExtensions
+                  (old.overrides or (_: _: {}))
+                  [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./nix; })
 
-                extension
-              ];
-      }
-    );
+                    extension
+                  ];
+          }
+        );
+      };
+    };
   };
 
-  overlayDynamic = pkgsNew: pkgsOld: {
+  overlayCabal2nix = pkgsNew: pkgsOld: {
     haskellPackages = pkgsOld.haskellPackages.override (old: {
         overrides =
           let
             extension =
               haskellPackagesNew: haskellPackagesOld: {
+                # `cabal2nix` requires a newer version of `hpack`
                 hpack =
                   haskellPackagesOld.hpack_0_29_6;
               };
@@ -82,6 +99,79 @@ let
     );
   };
 
+  overlayGHC7103 = pkgsNew: pkgsOld: {
+    haskell = pkgsOld.haskell // {
+      packages = pkgsOld.haskell.packages // {
+        "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
+            overrides =
+              let
+                extension =
+                  haskellPackagesNew: haskellPackagesOld: {
+                    # Most of these fixes are due to certain dependencies being
+                    # hidden behind a conditional compiler version directive, so
+                    # they aren't included by default in the default Hackage
+                    # package set (which was generated for `ghc-8.4.3`)
+                    base-compat-batteries =
+                      pkgsNew.haskell.lib.addBuildDepends
+                        haskellPackagesOld.base-compat-batteries
+                        [ haskellPackagesNew.bifunctors
+                          haskellPackagesNew.fail
+                        ];
+
+                    cborg =
+                      pkgsNew.haskell.lib.addBuildDepends
+                        haskellPackagesOld.cborg
+                        [ haskellPackagesNew.fail
+                          haskellPackagesNew.semigroups
+                        ];
+
+                    dhall =
+                      pkgsNew.haskell.lib.addBuildDepends
+                        haskellPackagesOld.dhall
+                        [ haskellPackagesNew.doctest
+                          haskellPackagesNew.mockery
+                        ];
+
+                    megaparsec =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.megaparsec
+                        haskellPackagesNew.fail;
+
+                    generic-deriving =
+                      pkgsNew.haskell.lib.dontCheck
+                        haskellPackagesOld.generic-deriving;
+
+                    prettyprinter =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.prettyprinter
+                        haskellPackagesNew.semigroups;
+
+                    transformers-compat =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.transformers-compat
+                        haskellPackagesNew.generic-deriving;
+
+                    # For some reason, `Cabal-1.22.5` does not respect the
+                    # `buildable: False` directive for the executable section
+                    # even when configured with `-f -cli`.  Fixing this requires
+                    # patching out the executable section of `wcwidth` in order
+                    # to avoid pulling in some extra dependencies which cause a
+                    # a dependency cycle.
+                    wcwidth =
+                      pkgsNew.haskell.lib.appendPatch
+                        haskellPackagesOld.wcwidth ./nix/wcwidth.patch;
+                  };
+
+              in
+                pkgsNew.lib.composeExtensions
+                  (old.overrides or (_: _: {}))
+                  extension;
+          }
+        );
+      };
+    };
+  };
+
   nixpkgs = fetchNixpkgs {
     rev = "1d4de0d552ae9aa66a5b8dee5fb0650a4372d148";
 
@@ -92,7 +182,9 @@ let
 
   pkgs = import nixpkgs {
     config = {};
-    overlays = [ overlayShared overlayDynamic ];
+    overlays =
+          [ overlayShared overlayCabal2nix ]
+      ++  (if compiler == "ghc7103" then [ overlayGHC7103 ] else []);
   };
 
   overlayStaticLinux = pkgsNew: pkgsOld: {
@@ -115,12 +207,12 @@ let
         useFixedCabal = drv: pkgsNew.haskell.lib.overrideCabal drv (old: {
             setupHaskellDepends =
               (old.setupHaskellDepends or []) ++ [
-                pkgsNew.haskellPackages.Cabal_patched
+                pkgsNew.haskell.packages."${compiler}".Cabal_patched
               ];
 
             libraryHaskellDepends =
               (old.libraryHaskellDepends or []) ++ [
-                pkgsNew.haskellPackages.Cabal_patched
+                pkgsNew.haskell.packages."${compiler}".Cabal_patched
               ];
           }
         );
@@ -140,28 +232,30 @@ let
             "--extra-lib-dirs=${pkgsNew.ncurses.override { enableStatic = true; }}/lib"
           ];
       };
+
+      packages = pkgsOld.haskell.packages // {
+        "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
+            overrides =
+              let
+                extension =
+                  haskellPackagesNew: haskellPackagesOld: {
+                    Cabal_patched =
+                      haskellPackagesNew.callCabal2nix
+                        "Cabal"
+                        pkgsNew.Cabal_patched_Cabal_subdir
+                        { };
+
+                    dhall = pkgsNew.haskell.lib.statify haskellPackagesOld.dhall;
+                  };
+
+              in
+                pkgsNew.lib.composeExtensions
+                  (old.overrides or (_: _: {}))
+                  extension;
+          }
+        );
+      };
     };
-
-    haskellPackages = pkgsOld.haskellPackages.override (old: {
-        overrides =
-          let
-            extension =
-              haskellPackagesNew: haskellPackagesOld: {
-                Cabal_patched =
-                  pkgsNew.haskellPackages.callCabal2nix
-                    "Cabal"
-                    pkgsNew.Cabal_patched_Cabal_subdir
-                    { };
-
-                dhall = pkgsNew.haskell.lib.statify haskellPackagesOld.dhall;
-              };
-
-          in
-            pkgsNew.lib.composeExtensions
-              (old.overrides or (_: _: {}))
-              extension;
-      }
-    );
   };
 
   nixpkgsStaticLinux = fetchNixpkgs {
@@ -190,7 +284,7 @@ in
 
     tarball =
       pkgsStaticLinux.releaseTools.binaryTarball rec {
-        src = pkgsStaticLinux.pkgsMusl.haskellPackages.dhall;
+        src = pkgsStaticLinux.pkgsMusl.haskell.packages."${compiler}".dhall;
 
         installPhase = ''
           releaseName=${src.name}
@@ -198,17 +292,9 @@ in
         '';
       };
 
-    inherit (pkgs.haskellPackages) dhall;
+    inherit (pkgs.haskell.packages."${compiler}") dhall;
 
-    all = pkgs.releaseTools.aggregate
-      { name = "dhall";
+    inherit (pkgs.releaseTools) aggregate;
 
-        constituents = [
-          dhall
-          tarball
-          pwd
-        ];
-      };
-
-    shell = (pkgs.haskell.lib.doBenchmark pkgs.haskellPackages.dhall).env;
+    shell = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall).env;
   }

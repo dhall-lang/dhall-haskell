@@ -20,7 +20,6 @@ import qualified Crypto.Hash
 import qualified Data.ByteArray.Encoding
 import qualified Data.ByteString
 import qualified Data.Char
-import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Encoding
@@ -502,11 +501,11 @@ completeExpression embedded = completeExpression_
           where
             alternative0 = do
                 _equal
-                return (RecordLit Data.HashMap.Strict.InsOrd.empty)
+                return (RecordLit mempty)
 
             alternative1 = nonEmptyRecordTypeOrLiteral
 
-            alternative2 = return (Record Data.HashMap.Strict.InsOrd.empty)
+            alternative2 = return (Record mempty)
 
     nonEmptyRecordTypeOrLiteral = do
             a <- label
@@ -539,7 +538,7 @@ completeExpression embedded = completeExpression_
 
     unionTypeOrLiteral =
                 nonEmptyUnionTypeOrLiteral
-            <|> return (Union Data.HashMap.Strict.InsOrd.empty)
+            <|> return (Union mempty)
 
     nonEmptyUnionTypeOrLiteral = do
             (f, kvs) <- loop

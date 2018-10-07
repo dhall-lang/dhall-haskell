@@ -8,8 +8,7 @@ module QuickCheck where
 
 import Codec.Serialise (DeserialiseFailure(..))
 import Control.Monad (guard)
-import Data.Hashable (Hashable)
-import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
+import Dhall.Map (Map)
 import Dhall.Core
     ( Chunks(..)
     , Const(..)
@@ -33,7 +32,7 @@ import Test.Tasty (TestTree)
 
 import qualified Codec.Serialise
 import qualified Data.Coerce
-import qualified Data.HashMap.Strict.InsOrd
+import qualified Dhall.Map
 import qualified Data.Sequence
 import qualified Dhall.Binary
 import qualified Dhall.Core
@@ -111,16 +110,16 @@ integer =
         , (1, fmap (\x -> x - (2 ^ (64 :: Int))) arbitrary)
         ]
 
-instance (Eq k, Hashable k, Arbitrary k, Arbitrary v) => Arbitrary (InsOrdHashMap k v) where
+instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
     arbitrary = do
         n   <- Test.QuickCheck.choose (0, 2)
         kvs <- Test.QuickCheck.vectorOf n ((,) <$> arbitrary <*> arbitrary)
-        return (Data.HashMap.Strict.InsOrd.fromList kvs)
+        return (Dhall.Map.fromList kvs)
 
     shrink =
-            map Data.HashMap.Strict.InsOrd.fromList
+            map Dhall.Map.fromList
         .   shrink
-        .   Data.HashMap.Strict.InsOrd.toList
+        .   Dhall.Map.toList
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Chunks s a) where
     arbitrary = do

@@ -44,11 +44,11 @@ import Options.Applicative (Parser)
 import Prelude hiding (exponent)
 
 import qualified Data.Foldable
-import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
+import qualified Dhall.Map
 import qualified Options.Applicative
 
 -- | Supported protocol version strings
@@ -279,7 +279,7 @@ encode_1_1 (Record xTs₀) =
     TList [ TInt 7, TMap xTs₁ ]
   where
     xTs₁ = do
-        (x₀, _T₀) <- Data.HashMap.Strict.InsOrd.toList xTs₀
+        (x₀, _T₀) <- Dhall.Map.toList xTs₀
         let x₁  = TString x₀
         let _T₁ = encode_1_1 _T₀
         return (x₁, _T₁)
@@ -287,7 +287,7 @@ encode_1_1 (RecordLit xts₀) =
     TList [ TInt 8, TMap xts₁ ]
   where
     xts₁ = do
-        (x₀, t₀) <- Data.HashMap.Strict.InsOrd.toList xts₀
+        (x₀, t₀) <- Dhall.Map.toList xts₀
         let x₁ = TString x₀
         let t₁ = encode_1_1 t₀
         return (x₁, t₁)
@@ -304,7 +304,7 @@ encode_1_1 (Union xTs₀) =
     TList [ TInt 11, TMap xTs₁ ]
   where
     xTs₁ = do
-        (x₀, _T₀) <- Data.HashMap.Strict.InsOrd.toList xTs₀
+        (x₀, _T₀) <- Dhall.Map.toList xTs₀
         let x₁  = TString x₀
         let _T₁ = encode_1_1 _T₀
         return (x₁, _T₁)
@@ -314,7 +314,7 @@ encode_1_1 (UnionLit x t₀ yTs₀) =
     t₁ = encode_1_1 t₀
 
     yTs₁ = do
-        (y₀, _T₀) <- Data.HashMap.Strict.InsOrd.toList yTs₀
+        (y₀, _T₀) <- Dhall.Map.toList yTs₀
         let y₁  = TString y₀
         let _T₁ = encode_1_1 _T₀
         return (y₁, _T₁)
@@ -563,7 +563,7 @@ decode_1_1 (TList [ TInt 7, TMap xTs₁ ]) = do
 
     xTs₀ <- traverse process xTs₁
 
-    return (Record (Data.HashMap.Strict.InsOrd.fromList xTs₀))
+    return (Record (Dhall.Map.fromList xTs₀))
 decode_1_1 (TList [ TInt 8, TMap xts₁ ]) = do
     let process (TString x, t₁) = do
            t₀ <- decode_1_1 t₁
@@ -574,7 +574,7 @@ decode_1_1 (TList [ TInt 8, TMap xts₁ ]) = do
 
     xts₀ <- traverse process xts₁
 
-    return (RecordLit (Data.HashMap.Strict.InsOrd.fromList xts₀))
+    return (RecordLit (Dhall.Map.fromList xts₀))
 decode_1_1 (TList [ TInt 9, t₁, TString x ]) = do
     t₀ <- decode_1_1 t₁
 
@@ -598,7 +598,7 @@ decode_1_1 (TList [ TInt 11, TMap xTs₁ ]) = do
 
     xTs₀ <- traverse process xTs₁
 
-    return (Union (Data.HashMap.Strict.InsOrd.fromList xTs₀))
+    return (Union (Dhall.Map.fromList xTs₀))
 decode_1_1 (TList [ TInt 12, TString x, t₁, TMap yTs₁ ]) = do
     t₀ <- decode_1_1 t₁
 
@@ -611,7 +611,7 @@ decode_1_1 (TList [ TInt 12, TString x, t₁, TMap yTs₁ ]) = do
 
     yTs₀ <- traverse process yTs₁
 
-    return (UnionLit x t₀ (Data.HashMap.Strict.InsOrd.fromList yTs₀))
+    return (UnionLit x t₀ (Dhall.Map.fromList yTs₀))
 decode_1_1 (TList [ TInt 13, u₁ ]) = do
     u₀ <- decode_1_1 u₁
 
