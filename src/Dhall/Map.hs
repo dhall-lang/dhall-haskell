@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 -- | `Map` type used to represent records and unions
 
@@ -11,7 +12,7 @@ module Dhall.Map
 
       -- * Construction
     , singleton
-    , fromList
+    , Dhall.Map.fromList
 
       -- * Sorting
     , sort
@@ -45,7 +46,7 @@ module Dhall.Map
     , foldMapWithKey
 
       -- * Conversions
-    , toList
+    , Dhall.Map.toList
     , toMap
     , keys
     ) where
@@ -53,6 +54,7 @@ module Dhall.Map
 import Control.Applicative ((<|>))
 import Data.Data (Data)
 import Data.Semigroup
+import GHC.Exts (IsList(..))
 import Prelude hiding (filter, lookup)
 
 import qualified Data.Functor
@@ -106,7 +108,14 @@ instance (Show k, Show v, Ord k) => Show (Map k v) where
     showsPrec d m =
         showParen (d > 10) (showString "Dhall.Map.fromList " . showsPrec 11 kvs)
       where
-        kvs = toList m
+        kvs = Dhall.Map.toList m
+
+instance Ord k => IsList (Map k v) where
+    type Item (Map k v) = (k, v)
+
+    fromList = Dhall.Map.fromList
+
+    toList = Dhall.Map.toList
 
 {-| Create a `Map` from a single key-value pair
 
@@ -407,7 +416,7 @@ difference (Map mL ksL) (Map mR _) = Map m ks
 ("BA",[1,2])
 -}
 foldMapWithKey :: (Monoid m, Ord k) => (k -> a -> m) -> Map k a -> m
-foldMapWithKey f m = foldMap (uncurry f) (toList m)
+foldMapWithKey f m = foldMap (uncurry f) (Dhall.Map.toList m)
 {-# INLINABLE foldMapWithKey #-}
 
 {-| Transform the values of a `Map` using their corresponding key
@@ -436,7 +445,8 @@ mapWithKey f (Map m ks) = Map m' ks
 -}
 traverseWithKey
     :: Ord k => Applicative f => (k -> a -> f b) -> Map k a -> f (Map k b)
-traverseWithKey f m = fmap fromList (traverse f' (toList m))
+traverseWithKey f m =
+    fmap Dhall.Map.fromList (traverse f' (Dhall.Map.toList m))
   where
     f' (k, a) = fmap ((,) k) (f k a)
 {-# INLINABLE traverseWithKey #-}
