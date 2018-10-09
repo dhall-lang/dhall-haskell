@@ -129,7 +129,6 @@ module Dhall.Import (
 
 import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term)
-import Control.Applicative (empty)
 import Control.Exception (Exception, SomeException, throwIO, toException)
 import Control.Monad (guard)
 import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..))
@@ -178,7 +177,6 @@ import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
-import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.List.NonEmpty               as NonEmpty
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Encoding
@@ -186,6 +184,7 @@ import qualified Data.Text                        as Text
 import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core
+import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
@@ -377,7 +376,7 @@ instance Canonicalize ImportType where
         Local prefix (canonicalize file)
 
     canonicalize (Remote (URL {..})) =
-        Remote (URL { path = canonicalize path, ..})
+        Remote (URL { path = canonicalize path, headers = fmap canonicalize headers, ..})
 
     canonicalize (Env name) =
         Env name
@@ -410,8 +409,8 @@ toHeader
   :: Expr s a
   -> Maybe (CI Data.ByteString.ByteString, Data.ByteString.ByteString)
 toHeader (RecordLit m) = do
-    TextLit (Chunks [] keyText  ) <- Data.HashMap.Strict.InsOrd.lookup "header" m
-    TextLit (Chunks [] valueText) <- Data.HashMap.Strict.InsOrd.lookup "value"  m
+    TextLit (Chunks [] keyText  ) <- Dhall.Map.lookup "header" m
+    TextLit (Chunks [] valueText) <- Dhall.Map.lookup "value"  m
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
     let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
     return (Data.CaseInsensitive.mk keyBytes, valueBytes)
@@ -470,7 +469,7 @@ exprFromImport here@(Import {..}) = do
     result <- Maybe.runMaybeT $ do
         Just expectedHash <- return hash
         cacheFile         <- getCacheFile expectedHash
-        True              <- liftIO (Directory.doesPathExist cacheFile)
+        True              <- liftIO (Directory.doesFileExist cacheFile)
 
         bytesStrict <- liftIO (Data.ByteString.readFile cacheFile)
 
@@ -564,7 +563,7 @@ getCacheFile hash = do
 
                     liftIO (Directory.setPermissions directory private)
 
-    cacheDirectory <- liftIO $ Directory.getXdgDirectory Directory.XdgCache ""
+    cacheDirectory <- getCacheDirectory
             
     assertDirectory cacheDirectory
 
@@ -575,6 +574,23 @@ getCacheFile hash = do
     let cacheFile = dhallDirectory </> show hash
 
     return cacheFile
+
+getCacheDirectory :: MonadIO io => io FilePath
+#if MIN_VERSION_directory(1,2,3)
+getCacheDirectory = liftIO (Directory.getXdgDirectory Directory.XdgCache "")
+#else
+getCacheDirectory = liftIO $ do
+    maybeXDGCacheHome <- System.Environment.lookupEnv "XDG_CACHE_HOME"
+
+    case maybeXDGCacheHome of
+        Nothing -> do
+            homeDirectory <- Directory.getHomeDirectory
+
+            return (homeDirectory </> ".cache")
+
+        Just xdgCacheHome -> do
+            return xdgCacheHome
+#endif
 
 exprFromUncachedImport :: Import -> StateT (Status IO) IO (Expr Src Import)
 exprFromUncachedImport (Import {..}) = do
@@ -615,7 +631,7 @@ exprFromUncachedImport (Import {..}) = do
                         expected =
                             App List
                                 ( Record
-                                    ( Data.HashMap.Strict.InsOrd.fromList
+                                    ( Dhall.Map.fromList
                                         [("header", Text), ("value", Text)]
                                     )
                                 )

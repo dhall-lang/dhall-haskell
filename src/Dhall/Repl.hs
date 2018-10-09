@@ -45,10 +45,11 @@ repl characterSet explain _protocolVersion =
     io =
       evalStateT
         ( Repline.evalRepl
-            "⊢ "
+            ( pure "⊢ " )
             ( dontCrash . eval )
             options
-        ( Repline.Word completer )
+            Nothing
+            ( Repline.Word completer )
             greeter
         )
         (emptyEnv { characterSet, explain, _protocolVersion })
