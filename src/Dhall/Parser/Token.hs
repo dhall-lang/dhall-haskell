@@ -430,7 +430,7 @@ h16 :: Parser Text
 h16 = range 1 3 (satisfy hexdig)
 
 ls32 :: Parser Text
-ls32 = (h16 <> ":" <> h16) <|> ipV4Address
+ls32 = try (h16 <> ":" <> h16) <|> ipV4Address
 
 ipV4Address :: Parser Text
 ipV4Address = decOctet <> "." <> decOctet <> "." <> decOctet <> "." <> decOctet
