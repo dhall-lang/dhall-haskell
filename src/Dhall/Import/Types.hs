@@ -10,7 +10,7 @@ import Data.Dynamic
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import Data.Semigroup ((<>))
-import Dhall.Binary (ProtocolVersion(..))
+import Dhall.Binary (StandardVersion(..))
 import Dhall.Context (Context)
 import Dhall.Core
   ( Directory (..)
@@ -46,7 +46,7 @@ data Status m = Status
     , _manager :: Maybe Dynamic
     -- ^ Cache for the HTTP `Manager` so that we only acquire it once
 
-    , _protocolVersion :: ProtocolVersion
+    , _standardVersion :: StandardVersion
 
     , _normalizer :: ReifiedNormalizer X
 
@@ -71,7 +71,7 @@ emptyStatusWith _resolver _cacher rootDirectory = Status {..}
 
     _manager = Nothing
 
-    _protocolVersion = Dhall.Binary.defaultProtocolVersion
+    _standardVersion = Dhall.Binary.defaultStandardVersion
 
     _normalizer = ReifiedNormalizer (const Nothing)
 
@@ -103,9 +103,9 @@ cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 manager :: Functor f => LensLike' f (Status m) (Maybe Dynamic)
 manager k s = fmap (\x -> s { _manager = x }) (k (_manager s))
 
-protocolVersion :: Functor f => LensLike' f (Status m) ProtocolVersion
-protocolVersion k s =
-    fmap (\x -> s { _protocolVersion = x }) (k (_protocolVersion s))
+standardVersion :: Functor f => LensLike' f (Status m) StandardVersion
+standardVersion k s =
+    fmap (\x -> s { _standardVersion = x }) (k (_standardVersion s))
 
 normalizer :: Functor f => LensLike' f (Status m) (ReifiedNormalizer X)
 normalizer k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
