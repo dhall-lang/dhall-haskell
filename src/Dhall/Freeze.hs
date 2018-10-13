@@ -8,6 +8,7 @@ module Dhall.Freeze
     , hashImport
     ) where
 
+import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Data.Maybe (fromMaybe)
 import Data.Text
@@ -16,6 +17,7 @@ import Dhall.Core (Expr(..), Import(..), ImportHashed(..))
 import Dhall.Import (standardVersion)
 import Dhall.Parser (exprAndHeaderFromText, Src)
 import Dhall.Pretty (annToAnsiStyle, layoutOpts)
+import Dhall.TypeCheck (X)
 import Lens.Family (set)
 import System.Console.ANSI (hSupportsANSI)
 
@@ -47,7 +49,15 @@ hashImport directory _standardVersion import_ = do
                 }
     let status = set standardVersion _standardVersion (Dhall.Import.emptyStatus directory)
 
-    expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
+    let download =
+            State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
+
+    -- Try again without the semantic integrity check if decoding fails
+    let handler :: SomeException -> IO (Expr Src X)
+        handler _ = do
+            State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
+
+    expression <- Control.Exception.handle handler download
 
     case Dhall.TypeCheck.typeOf expression of
         Left  exception -> Control.Exception.throwIO exception
