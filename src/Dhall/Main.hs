@@ -24,7 +24,7 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
-import Dhall.Binary (ProtocolVersion)
+import Dhall.Binary (StandardVersion)
 import Dhall.Core (Expr(..), Import)
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src)
@@ -68,7 +68,7 @@ data Options = Options
     , explain         :: Bool
     , plain           :: Bool
     , ascii           :: Bool
-    , protocolVersion :: ProtocolVersion
+    , standardVersion :: StandardVersion
     }
 
 -- | The subcommands for the @dhall@ executable
@@ -95,7 +95,7 @@ parseOptions =
     <*> switch "explain" "Explain error messages in more detail"
     <*> switch "plain" "Disable syntax highlighting"
     <*> switch "ascii" "Format code using only ASCII syntax"
-    <*> Dhall.Binary.parseProtocolVersion
+    <*> Dhall.Binary.parseStandardVersion
   where
     switch name description =
         Options.Applicative.switch
@@ -213,7 +213,7 @@ command (Options {..}) = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
     let status =
-            set Dhall.Import.protocolVersion protocolVersion (Dhall.Import.emptyStatus ".")
+            set Dhall.Import.standardVersion standardVersion (Dhall.Import.emptyStatus ".")
 
 
     let handle =
@@ -309,7 +309,7 @@ command (Options {..}) = do
             render System.IO.stdout (Dhall.Core.normalize inferredType)
 
         Repl -> do
-            Dhall.Repl.repl characterSet explain protocolVersion
+            Dhall.Repl.repl characterSet explain standardVersion
 
         Diff {..} -> do
             expression1 <- Dhall.inputExpr expr1
@@ -324,10 +324,10 @@ command (Options {..}) = do
             Dhall.Format.format characterSet inplace
 
         Freeze {..} -> do
-            Dhall.Freeze.freeze inplace protocolVersion
+            Dhall.Freeze.freeze inplace standardVersion
 
         Hash -> do
-            Dhall.Hash.hash protocolVersion
+            Dhall.Hash.hash standardVersion
 
         Lint {..} -> do
             case inplace of
@@ -359,7 +359,8 @@ command (Options {..}) = do
         Encode -> do
             expression <- getExpression
 
-            let term = Dhall.Binary.encode protocolVersion expression
+            let term =
+                    Dhall.Binary.encodeWithVersion standardVersion expression
 
             let bytes = Codec.Serialise.serialise term
 
@@ -370,7 +371,7 @@ command (Options {..}) = do
 
             term <- throws (Codec.Serialise.deserialiseOrFail bytes)
 
-            expression <- throws (Dhall.Binary.decode term)
+            expression <- throws (Dhall.Binary.decodeWithVersion term)
 
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 

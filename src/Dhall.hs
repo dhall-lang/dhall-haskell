@@ -28,7 +28,7 @@ module Dhall
     , sourceName
     , startingContext
     , normalizer
-    , protocolVersion
+    , standardVersion
     , defaultInputSettings
     , InputSettings
     , defaultEvaluateSettings
@@ -97,7 +97,7 @@ import Data.Text (Text)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Data.Word (Word8, Word16, Word32, Word64)
-import Dhall.Binary (ProtocolVersion(..))
+import Dhall.Binary (StandardVersion(..))
 import Dhall.Core (Expr(..), Chunks(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
@@ -201,7 +201,7 @@ sourceName k s =
 data EvaluateSettings = EvaluateSettings
   { _startingContext :: Dhall.Context.Context (Expr Src X)
   , _normalizer      :: Dhall.Core.ReifiedNormalizer X
-  , _protocolVersion :: ProtocolVersion
+  , _standardVersion :: StandardVersion
   }
 
 -- | Default evaluation settings: no extra entries in the initial
@@ -212,7 +212,7 @@ defaultEvaluateSettings :: EvaluateSettings
 defaultEvaluateSettings = EvaluateSettings
   { _startingContext = Dhall.Context.empty
   , _normalizer      = Dhall.Core.ReifiedNormalizer (const Nothing)
-  , _protocolVersion = Dhall.Binary.defaultProtocolVersion
+  , _standardVersion = Dhall.Binary.defaultStandardVersion
   }
 
 -- | Access the starting context used for evaluation and type-checking.
@@ -239,16 +239,16 @@ normalizer = evaluateSettings . l
       => LensLike' f EvaluateSettings (Dhall.Core.ReifiedNormalizer X)
     l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
 
--- | Access the protocol version used when encoding or decoding Dhall
--- expressions to and from a binary representation
+-- | Access the standard version (used primarily when encoding or decoding
+-- Dhall expressions to and from a binary representation)
 --
 -- @since 1.17
-protocolVersion
+standardVersion
     :: (Functor f, HasEvaluateSettings s)
-    => LensLike' f s ProtocolVersion
-protocolVersion = evaluateSettings . l
+    => LensLike' f s StandardVersion
+standardVersion = evaluateSettings . l
   where
-  l k s = fmap (\x -> s { _protocolVersion = x}) (k (_protocolVersion s))
+  l k s = fmap (\x -> s { _standardVersion = x}) (k (_standardVersion s))
 
 -- | @since 1.16
 class HasEvaluateSettings s where
@@ -312,7 +312,7 @@ inputWithSettings settings (Type {..}) txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               set Dhall.Import.protocolVersion _protocolVersion
+               set Dhall.Import.standardVersion _standardVersion
             .  set Dhall.Import.normalizer      _normalizer
             .  set Dhall.Import.startingContext _startingContext
 
@@ -405,7 +405,7 @@ inputExprWithSettings settings txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               set Dhall.Import.protocolVersion _protocolVersion
+               set Dhall.Import.standardVersion _standardVersion
             .  set Dhall.Import.normalizer      _normalizer
             .  set Dhall.Import.startingContext _startingContext
 

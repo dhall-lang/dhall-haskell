@@ -112,7 +112,7 @@ module Dhall.Import (
     , stack
     , cache
     , manager
-    , protocolVersion
+    , standardVersion
     , normalizer
     , startingContext
     , resolver
@@ -145,7 +145,7 @@ import Data.Traversable (traverse)
 #endif
 import Data.Typeable (Typeable)
 import System.FilePath ((</>))
-import Dhall.Binary (ProtocolVersion(..))
+import Dhall.Binary (StandardVersion(..))
 import Dhall.Core
     ( Expr(..)
     , Chunks(..)
@@ -483,7 +483,7 @@ exprFromImport here@(Import {..}) = do
 
         term <- throws (Codec.Serialise.deserialiseOrFail bytesLazy)
 
-        throws (Dhall.Binary.decode term)
+        throws (Dhall.Binary.decodeWithVersion term)
 
     case result of
         Just expression -> return expression
@@ -520,7 +520,7 @@ exprToImport here expression = do
                         expression
                     )
 
-        let bytes = encodeExpression _protocolVersion normalizedExpression
+        let bytes = encodeExpression _standardVersion normalizedExpression
 
         let actualHash = Crypto.Hash.hash bytes
 
@@ -782,7 +782,7 @@ loadWith expr₀ = case expr₀ of
             return ()
         Just expectedHash -> do
             let actualHash =
-                    hashExpression _protocolVersion (Dhall.Core.alphaNormalize expr)
+                    hashExpression _standardVersion (Dhall.Core.alphaNormalize expr)
 
             if expectedHash == actualHash
                 then return ()
@@ -865,23 +865,26 @@ load :: Expr Src Import -> IO (Expr Src X)
 load expression = State.evalStateT (loadWith expression) (emptyStatus ".")
 
 encodeExpression
-    :: forall s . ProtocolVersion -> Expr s X -> Data.ByteString.ByteString
-encodeExpression _protocolVersion expression = bytesStrict
+    :: forall s . StandardVersion -> Expr s X -> Data.ByteString.ByteString
+encodeExpression _standardVersion expression = bytesStrict
   where
     intermediateExpression :: Expr s Import
     intermediateExpression = fmap absurd expression
 
     term :: Term
-    term = Dhall.Binary.encode _protocolVersion intermediateExpression
+    term =
+        Dhall.Binary.encodeWithVersion
+            _standardVersion
+            intermediateExpression
 
     bytesLazy = Codec.Serialise.serialise term
 
     bytesStrict = Data.ByteString.Lazy.toStrict bytesLazy
 
 -- | Hash a fully resolved expression
-hashExpression :: ProtocolVersion -> Expr s X -> (Crypto.Hash.Digest SHA256)
-hashExpression _protocolVersion expression =
-    Crypto.Hash.hash (encodeExpression _protocolVersion expression)
+hashExpression :: StandardVersion -> Expr s X -> (Crypto.Hash.Digest SHA256)
+hashExpression _standardVersion expression =
+    Crypto.Hash.hash (encodeExpression _standardVersion expression)
 
 {-| Convenience utility to hash a fully resolved expression and return the
     base-16 encoded hash with the @sha256:@ prefix
@@ -889,9 +892,9 @@ hashExpression _protocolVersion expression =
     In other words, the output of this function can be pasted into Dhall
     source code to add an integrity check to an import
 -}
-hashExpressionToCode :: ProtocolVersion -> Expr s X -> Text
-hashExpressionToCode _protocolVersion expr =
-    "sha256:" <> Text.pack (show (hashExpression _protocolVersion expr))
+hashExpressionToCode :: StandardVersion -> Expr s X -> Text
+hashExpressionToCode _standardVersion expr =
+    "sha256:" <> Text.pack (show (hashExpression _standardVersion expr))
 
 -- | A call to `assertNoImports` failed because there was at least one import
 data ImportResolutionDisabled = ImportResolutionDisabled deriving (Exception)
