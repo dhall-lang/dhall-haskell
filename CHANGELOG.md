@@ -1,3 +1,72 @@
+1.18.0
+
+* BREAKING CHANGE TO THE LANGUAGE AND API: New `Some`/`None` constructors for
+  `Optional` values
+    * Example: `[ Some 1, None Natural ]`
+    * This is a breaking change to the language because `Some` and `None` are
+      now reserved keywords
+    * This is a breaking change to the API because `Some` and `None` are new
+      constructors for the `Expr` type
+* BREAKING CHANGE TO THE API: New `Dhall.Map` module
+    * This replaces `InsOrdHashMap` in the API
+    * The primary motivation is to improve performance and to remove the
+      dependency on `insert-ordered-containers`
+* BREAKING CHANGE TO THE API: Use standard version instead of protocol version
+    * The binary protocol is now versioned alongside the standard
+    * The `ProtocolVersion` type is renamed to `StandardVersion` and the
+    * `--protocol-version` option is renamed to `--standard-version`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/634
+* BUG FIX: Fix import chaining for custom header imports
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/618
+* BUG FIX: Fix import chaining for imports protected by semantic integrity
+  checks
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/584
+* BUG FIX: Record literals and types produced by `∧`/`⫽`/`⩓` are now sorted
+    * This ensures that β-normalization is idempotent
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/572
+* BUG FIX: `dhall freeze` now correctly handles the starting file being
+  located outside the current working directory
+    * See: https://github.com/dhall-lang/dhall-haskell/commit/a22aa79d1957be9ecf166ea066e2a9a5b309e1ae
+* BUG FIX: Fix parsing of IPv4-mapped IPv6 addresses
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/632
+* FEATURE: New `--ascii` flag for ASCII output
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/570
+* FEATURE: New `dhall encode` and `dhall decode` subcommands
+    * These allow you to transform Dhall source code to and from its binary
+      representation
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/588
+* LARGE parsing performance improvements
+    * Parsing is about 10x-100x faster on most code
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/591
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/592
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/597
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/601
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/602
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/604
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/606
+* Type-checking performance improvements:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/566
+* Normalization performance improvements:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/610
+* `dhall freeze` now caches the imports as it freezes them
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/587
+* `dhall freeze` now adds a trailing newline
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/629
+* Build against `megaparsec-7.0.*`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/565
+* Support GHC 8.6
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/599
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/623
+* Support GHC all the way back to 7.10.3
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/595
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/621
+* Improvements to error messages:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/563
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/576
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/583
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/589
+
+
 1.17.0
 
 * This release corresponds to version 2.0.0 of the language standard
