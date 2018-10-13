@@ -38,9 +38,16 @@ hashImport
     -> Import
     -> IO Import
 hashImport directory _standardVersion import_ = do
+    let unprotectedImport =
+            import_
+                { importHashed =
+                    (importHashed import_)
+                        { hash = Nothing
+                        }
+                }
     let status = set standardVersion _standardVersion (Dhall.Import.emptyStatus directory)
 
-    expression <- State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
+    expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 
     case Dhall.TypeCheck.typeOf expression of
         Left  exception -> Control.Exception.throwIO exception
