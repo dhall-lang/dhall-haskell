@@ -1,8 +1,8 @@
     let Text/concatMap =
-          ../../Prelude/Text/concatMap 
+(          ../../Prelude/package.dhall).`Text`.concatMap 
 
 in  let Text/concatSep =
-          ../../Prelude/Text/concatSep 
+(          ../../Prelude/package.dhall).`Text`.concatSep 
 
 in  let Row =
           { cores :

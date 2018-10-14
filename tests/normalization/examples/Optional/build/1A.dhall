@@ -1,4 +1,4 @@
-../../../../../Prelude/Optional/build
+(../../../../../Prelude/package.dhall).`Optional`.build
 Natural
 ( λ(optional : Type)
 → λ(some : Natural → optional)
