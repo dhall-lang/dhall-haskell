@@ -1725,7 +1725,9 @@ normalizeWith ctx e0 = loop (denote e0)
         decide (TextLit m) (TextLit n)             = TextLit (m <> n)
         decide  l           r                      = TextAppend l r
     List -> List
-    ListLit t es -> ListLit t' es'
+    ListLit t es
+        | Data.Sequence.null es -> ListLit t' es'
+        | otherwise             -> ListLit Nothing es'
       where
         t'  = fmap loop t
         es' = fmap loop es
