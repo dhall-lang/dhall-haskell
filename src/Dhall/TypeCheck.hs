@@ -531,10 +531,7 @@ typeWithA tpa = loop
                                 else Left (TypeError ctx e (FieldMismatch k v c k0 v0 Type))
                             Const Kind ->
                                 if c == Kind
-                                then
-                                    if Dhall.Core.judgmentallyEqual t (Const Type)
-                                    then return ()
-                                    else Left (TypeError ctx e (InvalidFieldType k t))
+                                then return ()
                                 else Left (TypeError ctx e (FieldMismatch k v c k0 v0 Kind))
                             Const Sort ->
                                 if c == Sort
