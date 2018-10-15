@@ -49,10 +49,6 @@ typecheckTests =
         , should
             "allow Kind variables"
             "kindParameter"
-        , should
-            "type kind-level functions as sorts"
-            "kindsAreSorts"
-
         , shouldNotTypeCheck
             "combining records of terms and types"
             "failure/combineMixedRecords"

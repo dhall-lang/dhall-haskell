@@ -1,1 +1,0 @@
-Kind → Kind

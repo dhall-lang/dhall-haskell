@@ -2121,6 +2121,7 @@ reservedIdentifiers =
         , "in"
         , "Type"
         , "Kind"
+        , "Sort"
         , "forall"
         , "Bool"
         , "True"

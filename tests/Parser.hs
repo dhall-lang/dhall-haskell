@@ -149,6 +149,9 @@ parserTests =
         , shouldNotParse
             "accessing a field of an import without parentheses"
             "./tests/parser/failure/importAccess.dhall"
+        , shouldParse
+            "Sort"
+            "./tests/parser/sort.dhall"
         ]
 
 shouldParse :: Text -> FilePath -> TestTree
