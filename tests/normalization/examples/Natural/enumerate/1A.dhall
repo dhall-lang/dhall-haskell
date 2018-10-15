@@ -1,1 +1,1 @@
-../../../../../Prelude/Natural/enumerate 0
+(../../../../../Prelude/package.dhall).`Natural`.enumerate 0

@@ -1,1 +1,1 @@
-../../../../../Prelude/List/map Natural Bool Natural/even ([] : List Natural)
+(../../../../../Prelude/package.dhall).`List`.map Natural Bool Natural/even ([] : List Natural)

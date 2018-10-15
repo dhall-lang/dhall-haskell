@@ -24,65 +24,8 @@ Description:
 Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
-    Prelude/Bool/and
-    Prelude/Bool/build
-    Prelude/Bool/even
-    Prelude/Bool/fold
-    Prelude/Bool/not
-    Prelude/Bool/odd
-    Prelude/Bool/or
-    Prelude/Bool/show
-    Prelude/Double/show
-    Prelude/Integer/show
-    Prelude/Integer/toDouble
-    Prelude/List/all
-    Prelude/List/any
-    Prelude/List/build
-    Prelude/List/concat
-    Prelude/List/concatMap
-    Prelude/List/filter
-    Prelude/List/fold
-    Prelude/List/generate
-    Prelude/List/head
-    Prelude/List/indexed
-    Prelude/List/iterate
-    Prelude/List/last
-    Prelude/List/length
-    Prelude/List/map
-    Prelude/List/null
-    Prelude/List/replicate
-    Prelude/List/reverse
-    Prelude/List/shifted
-    Prelude/List/unzip
+    Prelude/package.dhall
     Prelude/Monoid
-    Prelude/Natural/build
-    Prelude/Natural/enumerate
-    Prelude/Natural/even
-    Prelude/Natural/fold
-    Prelude/Natural/isZero
-    Prelude/Natural/odd
-    Prelude/Natural/product
-    Prelude/Natural/show
-    Prelude/Natural/sum
-    Prelude/Natural/toDouble
-    Prelude/Natural/toInteger
-    Prelude/Optional/all
-    Prelude/Optional/any
-    Prelude/Optional/build
-    Prelude/Optional/concat
-    Prelude/Optional/filter
-    Prelude/Optional/fold
-    Prelude/Optional/head
-    Prelude/Optional/last
-    Prelude/Optional/length
-    Prelude/Optional/map
-    Prelude/Optional/null
-    Prelude/Optional/toList
-    Prelude/Optional/unzip
-    Prelude/Text/concat
-    Prelude/Text/concatMap
-    Prelude/Text/concatMapSep
-    Prelude/Text/concatSep
     tests/format/*.dhall
     tests/normalization/tutorial/combineTypes/*.dhall
     tests/normalization/tutorial/projection/*.dhall
@@ -269,6 +212,8 @@ Test-Suite tasty
         containers                                     ,
         deepseq                   >= 1.2.0.1  && < 1.5 ,
         dhall                                          ,
+        directory                                      ,
+        filepath                                       ,
         prettyprinter                                  ,
         QuickCheck                >= 2.10     && < 2.13,
         quickcheck-instances      >= 0.3.12   && < 0.4 ,

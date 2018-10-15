@@ -1,1 +1,1 @@
-../../../../../Prelude/Natural/sum ([] : List Natural)
+(../../../../../Prelude/package.dhall).`Natural`.sum ([] : List Natural)
