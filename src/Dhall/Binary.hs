@@ -152,6 +152,8 @@ encode (Const Type) =
     TString "Type"
 encode (Const Kind) =
     TString "Kind"
+encode (Const Sort) =
+    TString "Sort"
 encode e@(App _ _) =
     TList ([ TInt 0, f₁ ] ++ map encode arguments)
   where
@@ -478,6 +480,8 @@ decode (TString "Type") =
     return (Const Type)
 decode (TString "Kind") =
     return (Const Kind)
+decode (TString "Sort") =
+    return (Const Sort)
 decode (TString x) =
     return (Var (V x 0))
 decode (TList [ TString x, TInt n ]) =
