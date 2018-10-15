@@ -538,7 +538,8 @@ typeWithA tpa = loop
                     Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
         Dhall.Map.traverseWithKey_ process kts
-        return (Const Type)
+        -- return (Const Type)
+        return e
     loop ctx e@(UnionLit k v kts) = do
         case Dhall.Map.lookup k kts of
             Just _  -> Left (TypeError ctx e (DuplicateAlternative k))
@@ -754,12 +755,19 @@ typeWithA tpa = loop
         return (Record (Dhall.Map.mapWithKey adapt kts))
     loop ctx e@(Field r x       ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
+
         case t of
             Record kts -> do
                 _ <- loop ctx t
 
                 case Dhall.Map.lookup x kts of
                     Just t' -> return t'
+                    Nothing -> Left (TypeError ctx e (MissingField x t))
+            Union kts -> do
+                _ <- loop ctx t
+
+                case Dhall.Map.lookup x kts of
+                    Just t' -> return (Pi x t' (Union kts))
                     Nothing -> Left (TypeError ctx e (MissingField x t))
             _ -> do
                 let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
@@ -3232,7 +3240,7 @@ prettyTypeMessage (ConstructorsRequiresAUnionType expr0 expr1) = ErrorMessages {
       where
         txt0 = insert expr0
         txt1 = insert expr1
- 
+
 prettyTypeMessage (NotARecord lazyText0 expr0 expr1) = ErrorMessages {..}
   where
     short = "Not a record"

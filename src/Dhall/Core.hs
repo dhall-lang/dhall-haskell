@@ -1823,6 +1823,13 @@ normalizeWith ctx e0 = loop (denote e0)
                 case Dhall.Map.lookup x kvs of
                     Just v  -> loop v
                     Nothing -> Field (RecordLit (fmap loop kvs)) x
+            Union kvs ->
+                case Dhall.Map.lookup x kvs of
+                    Just t_ -> Lam x t' (UnionLit x (Var (V x 0)) rest)
+                      where
+                        t' = loop t_
+                        rest = Dhall.Map.delete x kvs
+                    Nothing -> Field (Union (fmap loop kvs)) x
             r' -> Field r' x
     Project r xs     ->
         case loop r of
@@ -2051,6 +2058,10 @@ isNormalized e0 = loop (denote e0)
       Field r x -> loop r &&
           case r of
               RecordLit kvs ->
+                  case Dhall.Map.lookup x kvs of
+                      Just _  -> False
+                      Nothing -> True
+              Union kvs ->
                   case Dhall.Map.lookup x kvs of
                       Just _  -> False
                       Nothing -> True
