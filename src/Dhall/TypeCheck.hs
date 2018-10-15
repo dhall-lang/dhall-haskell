@@ -753,11 +753,9 @@ typeWithA tpa = loop
 
         return (Record (Dhall.Map.mapWithKey adapt kts))
     loop ctx e@(Field r x       ) = do
-        t_ <- fmap Dhall.Core.normalize (loop ctx r)
+        t <- fmap Dhall.Core.normalize (loop ctx r)
 
-        t <- case Dhall.Core.normalize r of
-          e1@(Union _)     -> return e1
-          _                -> return t_
+        let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
 
         case t of
             Record kts -> do
@@ -766,14 +764,14 @@ typeWithA tpa = loop
                 case Dhall.Map.lookup x kts of
                     Just t' -> return t'
                     Nothing -> Left (TypeError ctx e (MissingField x t))
-            Union kts -> do
-                _ <- loop ctx t
-
-                case Dhall.Map.lookup x kts of
-                    Just t' -> return (Pi x t' (Union kts))
-                    Nothing -> Left (TypeError ctx e (MissingField x t))
+            Const Type -> do
+                case r of
+                  (Note _ (Union kts)) ->
+                    case Dhall.Map.lookup x kts of
+                        Just t' -> return (Pi x t' (Union kts))
+                        Nothing -> Left (TypeError ctx e (MissingField x t))
+                  _ -> Left (TypeError ctx e (NotARecord text r t))
             _ -> do
-                let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
                 Left (TypeError ctx e (NotARecord text r t))
     loop ctx e@(Project r xs    ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
