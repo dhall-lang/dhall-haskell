@@ -538,8 +538,7 @@ typeWithA tpa = loop
                     Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
         Dhall.Map.traverseWithKey_ process kts
-        -- return (Const Type)
-        return e
+        return (Const Type)
     loop ctx e@(UnionLit k v kts) = do
         case Dhall.Map.lookup k kts of
             Just _  -> Left (TypeError ctx e (DuplicateAlternative k))
@@ -754,7 +753,11 @@ typeWithA tpa = loop
 
         return (Record (Dhall.Map.mapWithKey adapt kts))
     loop ctx e@(Field r x       ) = do
-        t <- fmap Dhall.Core.normalize (loop ctx r)
+        t_ <- fmap Dhall.Core.normalize (loop ctx r)
+
+        t <- case Dhall.Core.normalize r of
+          e1@(Union _)     -> return e1
+          _                -> return t_
 
         case t of
             Record kts -> do
