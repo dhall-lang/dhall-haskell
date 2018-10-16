@@ -1,1 +1,1 @@
-../../../../../Prelude/Bool/odd ([] : List Bool)
+(../../../../../Prelude/package.dhall).`Bool`.odd ([] : List Bool)

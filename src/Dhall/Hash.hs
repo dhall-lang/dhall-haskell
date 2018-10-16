@@ -7,9 +7,9 @@ module Dhall.Hash
       hash
     ) where
 
-import Dhall.Binary (ProtocolVersion)
+import Dhall.Binary (StandardVersion)
 import Dhall.Parser (exprFromText)
-import Dhall.Import (hashExpressionToCode, protocolVersion)
+import Dhall.Import (hashExpressionToCode, standardVersion)
 import Lens.Family (set)
 
 import qualified Control.Monad.Trans.State.Strict as State
@@ -20,8 +20,8 @@ import qualified Dhall.TypeCheck
 import qualified Data.Text.IO
 
 -- | Implementation of the @dhall hash@ subcommand
-hash :: ProtocolVersion -> IO ()
-hash _protocolVersion = do
+hash :: StandardVersion -> IO ()
+hash _standardVersion = do
     inText <- Data.Text.IO.getContents
 
     parsedExpression <- case exprFromText "(stdin)" inText of
@@ -29,7 +29,7 @@ hash _protocolVersion = do
         Right parsedExpression -> return parsedExpression
 
     let status =
-            set protocolVersion _protocolVersion (Dhall.Import.emptyStatus ".")
+            set standardVersion _standardVersion (Dhall.Import.emptyStatus ".")
 
     resolvedExpression <- State.evalStateT (Dhall.Import.loadWith parsedExpression) status
 
@@ -41,4 +41,4 @@ hash _protocolVersion = do
             Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)
 
     Data.Text.IO.putStrLn
-        (hashExpressionToCode _protocolVersion normalizedExpression)
+        (hashExpressionToCode _standardVersion normalizedExpression)

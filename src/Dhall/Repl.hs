@@ -14,8 +14,8 @@ import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
 import Data.List ( foldl' )
-import Dhall.Binary (ProtocolVersion(..))
-import Dhall.Import (protocolVersion)
+import Dhall.Binary (StandardVersion(..))
+import Dhall.Import (standardVersion)
 import Dhall.Pretty (CharacterSet(..))
 import Lens.Family (set)
 
@@ -38,8 +38,8 @@ import qualified System.Console.Repline as Repline
 import qualified System.IO
 
 -- | Implementation of the @dhall repl@ subcommand
-repl :: CharacterSet -> Bool -> ProtocolVersion -> IO ()
-repl characterSet explain _protocolVersion =
+repl :: CharacterSet -> Bool -> StandardVersion -> IO ()
+repl characterSet explain _standardVersion =
     if explain then Dhall.detailed io else io
   where
     io =
@@ -48,11 +48,11 @@ repl characterSet explain _protocolVersion =
             ( pure "⊢ " )
             ( dontCrash . eval )
             options
-            Nothing
+            (Just ':')
             ( Repline.Word completer )
             greeter
         )
-        (emptyEnv { characterSet, explain, _protocolVersion })
+        (emptyEnv { characterSet, explain, _standardVersion })
 
 
 data Env = Env
@@ -60,7 +60,7 @@ data Env = Env
   , envIt            :: Maybe Binding
   , explain          :: Bool
   , characterSet     :: CharacterSet
-  , _protocolVersion :: ProtocolVersion
+  , _standardVersion :: StandardVersion
   }
 
 
@@ -70,7 +70,7 @@ emptyEnv =
     { envBindings = Dhall.Context.empty
     , envIt = Nothing
     , explain = False
-    , _protocolVersion = Dhall.Binary.defaultProtocolVersion
+    , _standardVersion = Dhall.Binary.defaultStandardVersion
     , characterSet = Unicode
     }
 
@@ -107,7 +107,7 @@ parseAndLoad src = do
         return a
 
   let status =
-        set protocolVersion (_protocolVersion env) (Dhall.emptyStatus ".")
+        set standardVersion (_standardVersion env) (Dhall.emptyStatus ".")
 
   liftIO ( State.evalStateT (Dhall.loadWith parsed) status )
 

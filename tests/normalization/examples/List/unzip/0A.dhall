@@ -1,4 +1,4 @@
-../../../../../Prelude/List/unzip
+(../../../../../Prelude/package.dhall).`List`.unzip
 Text
 Bool
 [ { _1 = "ABC", _2 = True }
