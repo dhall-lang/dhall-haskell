@@ -129,7 +129,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Chunks s a) where
     shrink = genericShrink
 
 instance Arbitrary Const where
-    arbitrary = Test.QuickCheck.oneof [ pure Type, pure Kind ]
+    arbitrary = Test.QuickCheck.oneof [ pure Type, pure Kind, pure Sort ]
 
     shrink = genericShrink
 

@@ -46,7 +46,9 @@ typecheckTests =
         , should
             "correctly handle α-equivalent merge alternatives"
             "mergeEquivalence"
-
+        , should
+            "allow Kind variables"
+            "kindParameter"
         , shouldNotTypeCheck
             "combining records of terms and types"
             "failure/combineMixedRecords"

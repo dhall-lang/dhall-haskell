@@ -1,1 +1,1 @@
-../../../../../Prelude/Text/concat [ "ABC", "DEF", "GHI" ]
+(../../../../../Prelude/package.dhall).`Text`.concat [ "ABC", "DEF", "GHI" ]

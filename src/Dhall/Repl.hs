@@ -48,7 +48,7 @@ repl characterSet explain _standardVersion =
             ( pure "⊢ " )
             ( dontCrash . eval )
             options
-            Nothing
+            (Just ':')
             ( Repline.Word completer )
             greeter
         )

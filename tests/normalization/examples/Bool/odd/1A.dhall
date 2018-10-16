@@ -1,1 +1,1 @@
-../../../../../Prelude/Bool/odd [ True, False ]
+(../../../../../Prelude/package.dhall).`Bool`.odd [ True, False ]

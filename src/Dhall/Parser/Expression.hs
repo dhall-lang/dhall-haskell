@@ -266,6 +266,7 @@ completeExpression embedded = completeExpression_
                         ||  c == 'L'
                         ||  c == 'O'
                         ||  c == 'B'
+                        ||  c == 'S'
                         ||  c == 'T'
                         ||  c == 'F'
                         ||  c == 'K'
@@ -316,6 +317,7 @@ completeExpression embedded = completeExpression_
                             , Optional         <$ _Optional
                             ]
                     'B' ->    Bool             <$ _Bool
+                    'S' ->    Const Sort       <$ _Sort
                     'T' ->
                         choice
                             [ Text             <$ _Text

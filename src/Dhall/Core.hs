@@ -90,22 +90,26 @@ import qualified Dhall.Map
 
 {-| Constants for a pure type system
 
-    The only axiom is:
+    The axioms are:
 
 > ⊦ Type : Kind
+> ⊦ Kind : Sort
 
     ... and the valid rule pairs are:
 
 > ⊦ Type ↝ Type : Type  -- Functions from terms to terms (ordinary functions)
 > ⊦ Kind ↝ Type : Type  -- Functions from types to terms (polymorphic functions)
 > ⊦ Kind ↝ Kind : Kind  -- Functions from types to types (type constructors)
+> ⊦ Sort ↝ Type : Type  -- Functions from kinds to terms (kind-polymorphic functions)
+> ⊦ Sort ↝ Kind : Kind  -- Functions from kinds to types (polymorphic type constructors)
+> ⊦ Sort ↝ Sort : Sort  -- Functions from kinds to kinds (kind constructors)
 
     These are the same rule pairs as System Fω
 
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
 -}
-data Const = Type | Kind deriving (Show, Eq, Data, Bounded, Enum, Generic)
+data Const = Type | Kind | Sort deriving (Show, Eq, Data, Bounded, Enum, Generic)
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -1721,7 +1725,9 @@ normalizeWith ctx e0 = loop (denote e0)
         decide (TextLit m) (TextLit n)             = TextLit (m <> n)
         decide  l           r                      = TextAppend l r
     List -> List
-    ListLit t es -> ListLit t' es'
+    ListLit t es
+        | Data.Sequence.null es -> ListLit t' es'
+        | otherwise             -> ListLit Nothing es'
       where
         t'  = fmap loop t
         es' = fmap loop es
@@ -2115,6 +2121,7 @@ reservedIdentifiers =
         , "in"
         , "Type"
         , "Kind"
+        , "Sort"
         , "forall"
         , "Bool"
         , "True"
