@@ -1,5 +1,7 @@
 1.18.0
 
+* Supports version 3.0.0 of the language standard:
+    * See: https://github.com/dhall-lang/dhall-lang/releases/tag/v3.0.0
 * BREAKING CHANGE TO THE LANGUAGE AND API: New `Some`/`None` constructors for
   `Optional` values
     * Example: `[ Some 1, None Natural ]`
@@ -7,6 +9,13 @@
       now reserved keywords
     * This is a breaking change to the API because `Some` and `None` are new
       constructors for the `Expr` type
+* BREAKING CHANGE TO THE LANGUAGE AND API: Support for kind polymorphism
+    * This adds a new `Sort` constant above `Kind` in the hierarchy
+    * i.e. `Type : Kind : Sort`
+    * This is a breaking change to the language because `Sort` is now a
+      reserved keyword
+    * This is a breaking change to the API because `Sort` is a new
+      constructor for the `Expr` type
 * BREAKING CHANGE TO THE API: New `Dhall.Map` module
     * This replaces `InsOrdHashMap` in the API
     * The primary motivation is to improve performance and to remove the
@@ -50,6 +59,8 @@
     * See: https://github.com/dhall-lang/dhall-haskell/pull/610
 * `dhall freeze` now caches the imports as it freezes them
     * See: https://github.com/dhall-lang/dhall-haskell/pull/587
+* `dhall freeze` now refreezes imports with invalid semantic integrity checks
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/637
 * `dhall freeze` now adds a trailing newline
     * See: https://github.com/dhall-lang/dhall-haskell/pull/629
 * Build against `megaparsec-7.0.*`
