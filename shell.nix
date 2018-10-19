@@ -1,1 +1,1 @@
-(import ./default.nix {}).shell
+(import ./shared.nix {}).shell
