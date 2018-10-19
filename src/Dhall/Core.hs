@@ -436,7 +436,7 @@ data Expr s a
     | Combine (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
     | CombineTypes (Expr s a) (Expr s a)
-    -- | > CombineRight x y                         ~  x ⫽ y
+    -- | > Prefer x y                               ~  x ⫽ y
     | Prefer (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
     --   > Merge x y  Nothing                       ~  merge x y
