@@ -529,7 +529,7 @@ _constructors :: Parser ()
 _constructors = keyword "constructors"
 
 _Some :: Parser ()
-_Some = reserved "Some"
+_Some = keyword "Some"
 
 _None :: Parser ()
 _None = reserved "None"
