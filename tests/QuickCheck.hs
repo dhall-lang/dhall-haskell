@@ -129,7 +129,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Chunks s a) where
     shrink = genericShrink
 
 instance Arbitrary Const where
-    arbitrary = Test.QuickCheck.oneof [ pure Type, pure Kind ]
+    arbitrary = Test.QuickCheck.oneof [ pure Type, pure Kind, pure Sort ]
 
     shrink = genericShrink
 
@@ -313,10 +313,10 @@ binaryRoundtrip :: Expr () Import -> Property
 binaryRoundtrip expression =
         wrap
             (fmap
-                Dhall.Binary.decode
+                Dhall.Binary.decodeWithVersion
                 (Codec.Serialise.deserialiseOrFail
                   (Codec.Serialise.serialise
-                    (Dhall.Binary.encode Dhall.Binary.defaultProtocolVersion expression)
+                    (Dhall.Binary.encodeWithVersion Dhall.Binary.defaultStandardVersion expression)
                   )
                 )
             )

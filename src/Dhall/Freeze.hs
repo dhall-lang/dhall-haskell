@@ -8,14 +8,16 @@ module Dhall.Freeze
     , hashImport
     ) where
 
+import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Data.Maybe (fromMaybe)
 import Data.Text
-import Dhall.Binary (ProtocolVersion(..))
+import Dhall.Binary (StandardVersion(..))
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..))
-import Dhall.Import (protocolVersion)
+import Dhall.Import (standardVersion)
 import Dhall.Parser (exprAndHeaderFromText, Src)
 import Dhall.Pretty (annToAnsiStyle, layoutOpts)
+import Dhall.TypeCheck (X)
 import Lens.Family (set)
 import System.Console.ANSI (hSupportsANSI)
 
@@ -34,13 +36,28 @@ import qualified System.IO
 hashImport
     :: FilePath
     -- ^ Current working directory
-    -> ProtocolVersion
+    -> StandardVersion
     -> Import
     -> IO Import
-hashImport directory _protocolVersion import_ = do
-    let status = set protocolVersion _protocolVersion (Dhall.Import.emptyStatus directory)
+hashImport directory _standardVersion import_ = do
+    let unprotectedImport =
+            import_
+                { importHashed =
+                    (importHashed import_)
+                        { hash = Nothing
+                        }
+                }
+    let status = set standardVersion _standardVersion (Dhall.Import.emptyStatus directory)
 
-    expression <- State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
+    let download =
+            State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
+
+    -- Try again without the semantic integrity check if decoding fails
+    let handler :: SomeException -> IO (Expr Src X)
+        handler _ = do
+            State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
+
+    expression <- Control.Exception.handle handler download
 
     case Dhall.TypeCheck.typeOf expression of
         Left  exception -> Control.Exception.throwIO exception
@@ -50,7 +67,7 @@ hashImport directory _protocolVersion import_ = do
             Dhall.Core.alphaNormalize (Dhall.Core.normalize expression)
 
     let expressionHash =
-            Just (Dhall.Import.hashExpression _protocolVersion normalizedExpression)
+            Just (Dhall.Import.hashExpression _standardVersion normalizedExpression)
 
     let newImportHashed = (importHashed import_) { hash = expressionHash }
 
@@ -90,9 +107,9 @@ freeze
     :: Maybe FilePath
     -- ^ Modify file in-place if present, otherwise read from @stdin@ and write
     --   to @stdout@
-    -> ProtocolVersion
+    -> StandardVersion
     -> IO ()
-freeze inplace _protocolVersion = do
+freeze inplace _standardVersion = do
     (text, directory) <- case inplace of
         Nothing -> do
             text <- Data.Text.IO.getContents
@@ -105,7 +122,7 @@ freeze inplace _protocolVersion = do
             return (text, System.FilePath.takeDirectory file)
 
     (header, parsedExpression) <- parseExpr srcInfo text
-    frozenExpression <- traverse (hashImport directory _protocolVersion) parsedExpression
+    frozenExpression <- traverse (hashImport directory _standardVersion) parsedExpression
     writeExpr inplace (header, frozenExpression)
         where
             srcInfo = fromMaybe "(stdin)" inplace
