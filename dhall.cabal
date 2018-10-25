@@ -29,6 +29,7 @@ Extra-Source-Files:
     tests/format/*.dhall
     tests/normalization/tutorial/combineTypes/*.dhall
     tests/normalization/tutorial/projection/*.dhall
+    tests/normalization/tutorial/access/*.dhall
     tests/normalization/*.dhall
     tests/normalization/examples/Bool/and/*.dhall
     tests/normalization/examples/Bool/build/*.dhall
