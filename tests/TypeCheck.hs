@@ -21,19 +21,8 @@ import qualified Test.Tasty.HUnit
 typecheckTests :: TestTree
 typecheckTests =
     Test.Tasty.testGroup "typecheck tests"
-        [ Test.Tasty.testGroup "Prelude examples"
-            [ should "Monoid" "./examples/Monoid/00"
-            , should "Monoid" "./examples/Monoid/01"
-            , should "Monoid" "./examples/Monoid/02"
-            , should "Monoid" "./examples/Monoid/03"
-            , should "Monoid" "./examples/Monoid/04"
-            , should "Monoid" "./examples/Monoid/05"
-            , should "Monoid" "./examples/Monoid/06"
-            , should "Monoid" "./examples/Monoid/07"
-            , should "Monoid" "./examples/Monoid/08"
-            , should "Monoid" "./examples/Monoid/09"
-            , should "Monoid" "./examples/Monoid/10"
-            ]
+        [ preludeExamples
+        , accessTypeChecks
         , should
             "allow type-valued fields in a record"
             "fieldsAreTypes"
@@ -55,6 +44,29 @@ typecheckTests =
         , shouldNotTypeCheck
             "preferring a record of types over a record of terms"
             "failure/preferMixedRecords"
+        ]
+
+preludeExamples :: TestTree
+preludeExamples =
+    Test.Tasty.testGroup "Prelude examples"
+        [ should "Monoid" "./examples/Monoid/00"
+        , should "Monoid" "./examples/Monoid/01"
+        , should "Monoid" "./examples/Monoid/02"
+        , should "Monoid" "./examples/Monoid/03"
+        , should "Monoid" "./examples/Monoid/04"
+        , should "Monoid" "./examples/Monoid/05"
+        , should "Monoid" "./examples/Monoid/06"
+        , should "Monoid" "./examples/Monoid/07"
+        , should "Monoid" "./examples/Monoid/08"
+        , should "Monoid" "./examples/Monoid/09"
+        , should "Monoid" "./examples/Monoid/10"
+        ]
+
+accessTypeChecks :: TestTree
+accessTypeChecks =
+    Test.Tasty.testGroup "typecheck access"
+        [ should "record" "./access/0"
+        , should "record" "./access/1"
         ]
 
 should :: Text -> Text -> TestTree
