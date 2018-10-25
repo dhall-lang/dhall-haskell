@@ -3295,7 +3295,7 @@ prettyTypeMessage (CantAccess lazyText0 expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
-        \You tried to access the field:aaa                                               \n\
+        \You tried to access the field:                                                  \n\
         \                                                                                \n\
         \" <> txt0 <> "\n\
         \                                                                                \n\
