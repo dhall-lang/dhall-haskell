@@ -1,1 +1,1 @@
-../../../../../Prelude/Text/concatSep ", " [ "ABC", "DEF", "GHI" ]
+(../../../../../Prelude/package.dhall).`Text`.concatSep ", " [ "ABC", "DEF", "GHI" ]

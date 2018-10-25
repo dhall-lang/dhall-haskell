@@ -1,21 +1,23 @@
 let
-  default_7_10_3 = import ./default.nix { compiler = "ghc7103"; };
+  shared_7_10_3 =
+    import ./shared.nix { compiler = "ghc7103"; coverage = true; };
 
-  default_8_4_3 = import ./default.nix { compiler = "ghc843"; };
+  shared_8_4_3 =
+    import ./shared.nix { compiler = "ghc843"; coverage = true; };
 
 in
-  { dhall = default_8_4_3.aggregate
+  { dhall = shared_8_4_3.aggregate
       { name = "dhall";
 
         constituents = [
-          default_7_10_3.dhall
-          default_8_4_3.dhall
-          default_8_4_3.tarball
-          default_8_4_3.pwd
+          shared_7_10_3.dhall
+          shared_8_4_3.dhall
+          shared_8_4_3.tarball
+          shared_8_4_3.pwd
         ];
       };
 
-    "coverage" = default_8_4_3.dhall;
+    "coverage" = shared_8_4_3.dhall;
 
-    inherit (default_8_4_3) tarball;
+    inherit (shared_8_4_3) tarball;
   }

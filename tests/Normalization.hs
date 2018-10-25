@@ -246,7 +246,9 @@ should name basename =
         case Dhall.TypeCheck.typeOf actualResolved of
             Left  err -> Control.Exception.throwIO err
             Right _   -> return ()
-        let actualNormalized = Dhall.Core.normalize actualResolved :: Expr X X
+        let actualNormalized =
+                Dhall.Core.alphaNormalize
+                    (Dhall.Core.normalize actualResolved :: Expr X X)
 
         expectedExpr <- case Dhall.Parser.exprFromText mempty expectedCode of
             Left  err  -> Control.Exception.throwIO err
@@ -257,7 +259,8 @@ should name basename =
             Right _   -> return ()
         -- Use `denote` instead of `normalize` to enforce that the expected
         -- expression is already in normal form
-        let expectedNormalized = Dhall.Core.denote expectedResolved
+        let expectedNormalized =
+                Dhall.Core.alphaNormalize (Dhall.Core.denote expectedResolved)
 
         let message =
                 "The normalized expression did not match the expected output"

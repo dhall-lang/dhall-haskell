@@ -1,1 +1,1 @@
-../../../../../Prelude/Text/concatSep ", " ([] : List Text)
+(../../../../../Prelude/package.dhall).`Text`.concatSep ", " ([] : List Text)
