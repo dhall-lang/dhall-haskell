@@ -3319,14 +3319,14 @@ prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
         "Explanation: You can only project fields on records, like this:                 \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌─────────────────────────────────┐                                         \n\
+        \    ┌─────────────────────────────────────────────────────┐                     \n\
         \    │ { foo = True, bar = \"ABC\", baz = 1 }.{ foo, bar } │  This is valid ...  \n\
-        \    └─────────────────────────────────┘                                         \n\
+        \    └─────────────────────────────────────────────────────┘                     \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌───────────────────────────────────────────┐                               \n\
+        \    ┌────────────────────────────────────────────────────────────────────┐      \n\
         \    │ λ(r : { foo : Bool, bar : Text , baz : Natural }) → r.{ foo, bar } │  ... and so is this           \n\
-        \    └───────────────────────────────────────────┘                               \n\
+        \    └────────────────────────────────────────────────────────────────────┘      \n\
         \                                                                                \n\
         \                                                                                \n\
         \... but you cannot project fields on non-record expressions                     \n\
