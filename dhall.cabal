@@ -97,6 +97,7 @@ Extra-Source-Files:
     tests/typecheck/*.dhall
     tests/typecheck/failure/*.dhall
     tests/typecheck/examples/Monoid/*.dhall
+    tests/typecheck/access/*.dhall
     tests/import/*.dhall
     tests/import/data/foo/bar/a.dhall
     benchmark/examples/*.dhall
