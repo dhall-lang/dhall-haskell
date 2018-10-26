@@ -770,6 +770,9 @@ typeWithA tpa = loop
         return (Record (Dhall.Map.mapWithKey adapt kts))
     loop ctx e@(Field r x       ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
+
+        let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
+
         case t of
             Record kts -> do
                 _ <- loop ctx t
@@ -777,9 +780,15 @@ typeWithA tpa = loop
                 case Dhall.Map.lookup x kts of
                     Just t' -> return t'
                     Nothing -> Left (TypeError ctx e (MissingField x t))
+            Const Type -> do
+                case r of
+                  (Note _ (Union kts)) ->
+                    case Dhall.Map.lookup x kts of
+                        Just t' -> return (Pi x t' (Union kts))
+                        Nothing -> Left (TypeError ctx e (MissingField x t))
+                  _ -> Left (TypeError ctx e (CantAccess text r t))
             _ -> do
-                let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
-                Left (TypeError ctx e (NotARecord text r t))
+                Left (TypeError ctx e (CantAccess text r t))
     loop ctx e@(Project r xs    ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
         case t of
@@ -794,7 +803,7 @@ typeWithA tpa = loop
                 fmap adapt (traverse process (Data.Set.toList xs))
             _ -> do
                 let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
-                Left (TypeError ctx e (NotARecord text r t))
+                Left (TypeError ctx e (CantProject text r t))
     loop ctx   (Note s e'       ) = case loop ctx e' of
         Left (TypeError ctx' (Note s' e'') m) -> Left (TypeError ctx' (Note s' e'') m)
         Left (TypeError ctx'          e''  m) -> Left (TypeError ctx' (Note s  e'') m)
@@ -869,7 +878,8 @@ data TypeMessage s a
     | MissingMergeType
     | HandlerNotAFunction Text (Expr s a)
     | ConstructorsRequiresAUnionType (Expr s a) (Expr s a)
-    | NotARecord Text (Expr s a) (Expr s a)
+    | CantAccess Text (Expr s a) (Expr s a)
+    | CantProject Text (Expr s a) (Expr s a)
     | MissingField Text (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
     | CantOr (Expr s a) (Expr s a)
@@ -3242,23 +3252,33 @@ prettyTypeMessage (ConstructorsRequiresAUnionType expr0 expr1) = ErrorMessages {
       where
         txt0 = insert expr0
         txt1 = insert expr1
- 
-prettyTypeMessage (NotARecord lazyText0 expr0 expr1) = ErrorMessages {..}
+
+prettyTypeMessage (CantAccess lazyText0 expr0 expr1) = ErrorMessages {..}
   where
-    short = "Not a record"
+    short = "Not a record or a union"
 
     long =
-        "Explanation: You can only access fields on records, like this:                  \n\
+        "Explanation: You can only access fields on records or unions, like this:        \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌─────────────────────────────────┐                                         \n\
+        \    ┌───────────────────────────────────┐                                       \n\
         \    │ { foo = True, bar = \"ABC\" }.foo │  This is valid ...                    \n\
-        \    └─────────────────────────────────┘                                         \n\
+        \    └───────────────────────────────────┘                                       \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────────┐                               \n\
         \    │ λ(r : { foo : Bool, bar : Text }) → r.foo │  ... and so is this           \n\
         \    └───────────────────────────────────────────┘                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ < foo : Bool | bar : Text >.foo │  ... and so is this                     \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────────────┐                              \n\
+        \    │ λ(r : < foo : Bool | bar : Text >) → r.foo │  ... and so is this          \n\
+        \    └────────────────────────────────────────────┘                              \n\
         \                                                                                \n\
         \                                                                                \n\
         \... but you cannot access fields on non-record expressions                      \n\
@@ -3273,22 +3293,70 @@ prettyTypeMessage (NotARecord lazyText0 expr0 expr1) = ErrorMessages {..}
         \      Invalid: Not a record                                                     \n\
         \                                                                                \n\
         \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to access the field:                                                  \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... on the following expression which is not a record nor a union:              \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... but is actually an expression of type:                                      \n\
+        \                                                                                \n\
+        \" <> txt2 <> "\n"
+      where
+        txt0 = insert lazyText0
+        txt1 = insert expr0
+        txt2 = insert expr1
+
+prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
+  where
+    short = "Not a record"
+
+    long =
+        "Explanation: You can only project fields on records, like this:                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────┐                     \n\
+        \    │ { foo = True, bar = \"ABC\", baz = 1 }.{ foo, bar } │  This is valid ...  \n\
+        \    └─────────────────────────────────────────────────────┘                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────────────────────────────────────┐      \n\
+        \    │ λ(r : { foo : Bool, bar : Text , baz : Natural }) → r.{ foo, bar } │  ... and so is this           \n\
+        \    └────────────────────────────────────────────────────────────────────┘      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot project fields on non-record expressions                     \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ 1.{ foo, bar } │                                                          \n\
+        \    └────────────────┘                                                          \n\
+        \      ⇧                                                                         \n\
+        \      Invalid: Not a record                                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
         \Some common reasons why you might get this error:                               \n\
         \                                                                                \n\
-        \● You accidentally try to access a field of a union instead of a record, like   \n\
+        \● You accidentally try to project fields of a union instead of a record, like   \n\
         \  this:                                                                         \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌─────────────────┐                                                         \n\
-        \    │ < foo : a >.foo │                                                         \n\
-        \    └─────────────────┘                                                         \n\
+        \    ┌────────────────────────────────────┐                                      \n\
+        \    │ < foo : a | bar : b >.{ foo, bar } │                                      \n\
+        \    └────────────────────────────────────┘                                      \n\
         \      ⇧                                                                         \n\
         \      This is a union, not a record                                             \n\
         \                                                                                \n\
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
-        \You tried to access the field(s):                                               \n\
+        \You tried to access the fields:                                               \n\
         \                                                                                \n\
         \" <> txt0 <> "\n\
         \                                                                                \n\
