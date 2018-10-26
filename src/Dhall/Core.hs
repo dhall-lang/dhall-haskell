@@ -2242,4 +2242,4 @@ subExpressions f (Field a b) = Field <$> f a <*> pure b
 subExpressions f (Project a b) = Project <$> f a <*> pure b
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
-subExpressions f (Embed a) = pure (Embed a)
+subExpressions _ (Embed a) = pure (Embed a)
