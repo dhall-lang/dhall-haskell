@@ -1813,14 +1813,8 @@ normalizeWith ctx e0 = loop (denote e0)
         t' = fmap loop t
     Constructors t   ->
         case t' of
-            Union kts -> RecordLit kvs
-              where
-                kvs = Dhall.Map.mapWithKey adapt kts
-
-                adapt k t_ = Lam k t_ (UnionLit k (Var (V k 0)) rest)
-                  where
-                    rest = Dhall.Map.delete k kts
-            _ -> Constructors t'
+            u@(Union _) -> u
+            _           -> Constructors t'
       where
         t' = loop t
     Field r x        ->
