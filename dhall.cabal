@@ -170,6 +170,7 @@ Library
         Dhall.Pretty,
         Dhall.Repl,
         Dhall.TH,
+        Dhall.Traverse,
         Dhall.Tutorial,
         Dhall.TypeCheck
     Other-Modules:
