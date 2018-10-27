@@ -137,8 +137,9 @@ hexdig c =
 
 doubleLiteral :: Parser Scientific
 doubleLiteral = (do
-    sign <-  fmap (\_ -> negate) (Text.Parser.Char.char '-')
-         <|> pure id
+    let positive = fmap (\_ -> id    ) (Text.Parser.Char.char '+')
+    let negative = fmap (\_ -> negate) (Text.Parser.Char.char '-')
+    sign <- positive <|> negative <|> pure id
     a    <-  Text.Parser.Token.scientific
     return (sign a) ) <?> "double literal"
 
