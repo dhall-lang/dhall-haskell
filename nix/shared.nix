@@ -277,7 +277,17 @@ let
                         pkgsNew.Cabal_patched_Cabal_subdir
                         { };
 
-                    dhall = pkgsNew.haskell.lib.statify haskellPackagesOld.dhall;
+                    dhall-static =
+                      pkgsNew.haskell.lib.statify haskellPackagesOld.dhall;
+
+                    dhall-bash-static =
+                      pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-bash;
+
+                    dhall-json-static =
+                      pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-json;
+
+                    dhall-text-static =
+                      pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-text;
                   };
 
               in
@@ -312,7 +322,7 @@ let
 
   makeTarball = name:
     pkgsStaticLinux.releaseTools.binaryTarball rec {
-      src = pkgsStaticLinux.pkgsMusl.haskell.packages."${compiler}"."${name}";
+      src = pkgsStaticLinux.haskell.lib.statify (pkgsStaticLinux.pkgsMusl.haskell.packages."${compiler}"."${name}");
 
       installPhase = ''
         releaseName=${name}
