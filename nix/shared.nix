@@ -1,7 +1,7 @@
 { compiler ? "ghc843", coverage ? false }:
 
 let
-  fetchNixpkgs = import ./nix/fetchNixpkgs.nix;
+  fetchNixpkgs = import ./fetchNixpkgs.nix;
 
   overlayShared = pkgsNew: pkgsOld: {
     dhall-sdist =
@@ -17,21 +17,23 @@ let
              || base == ".git"
              );
 
-        src = builtins.filterSource predicate ./.;
+        src = builtins.filterSource predicate ../dhall;
 
       in
-        pkgsNew.callPackage (import ./nix/dhall-sdist.nix src) { };
+        pkgsNew.callPackage (import ./dhall-sdist.nix src) { };
 
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
         "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
             overrides =
               let
-                doCoverage = drv:
+                applyCoverage = drv:
                   if coverage
                   then
                     pkgsNew.haskell.lib.overrideCabal
-                      (pkgsNew.haskell.lib.doCoverage drv)
+                      (pkgsNew.haskell.lib.doCoverage
+                        (pkgsNew.haskell.lib.doCheck drv)
+                      )
                       (old: {
                           postInstall = (old.postInstall or "") + ''
                             ${pkgsNew.coreutils}/bin/mkdir --parents $out/nix-support
@@ -40,7 +42,8 @@ let
                           '';
                         }
                       )
-                  else drv;
+                  else
+                    pkgsNew.haskell.lib.dontCheck drv;
 
                 failOnAllWarnings = drv:
                   # GHC 7.10.3 incorrectly detects non-exhaustive pattern
@@ -52,13 +55,37 @@ let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
                     dhall =
-                      doCoverage
+                      applyCoverage
                         (failOnAllWarnings
                           (haskellPackagesNew.callCabal2nix
                             "dhall"
                             pkgsNew.dhall-sdist
                             { }
                           )
+                        );
+
+                    dhall-bash =
+                      failOnAllWarnings
+                        (haskellPackagesNew.callCabal2nix
+                          "dhall-bash"
+                          ../dhall-bash
+                          { }
+                        );
+
+                    dhall-json =
+                      failOnAllWarnings
+                        (haskellPackagesNew.callCabal2nix
+                          "dhall-json"
+                          ../dhall-json
+                          { }
+                        );
+
+                    dhall-text =
+                      failOnAllWarnings
+                        (haskellPackagesNew.callCabal2nix
+                          "dhall-text"
+                          ../dhall-text
+                          { }
                         );
 
                     # https://github.com/well-typed/cborg/issues/172
@@ -75,7 +102,7 @@ let
                 pkgsNew.lib.fold
                   pkgsNew.lib.composeExtensions
                   (old.overrides or (_: _: {}))
-                  [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./nix; })
+                  [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./.; })
 
                     extension
                   ];
@@ -164,7 +191,7 @@ let
                     # a dependency cycle.
                     wcwidth =
                       pkgsNew.haskell.lib.appendPatch
-                        haskellPackagesOld.wcwidth ./nix/wcwidth.patch;
+                        haskellPackagesOld.wcwidth ./wcwidth.patch;
                   };
 
               in
@@ -281,27 +308,41 @@ let
 
   # Derivation that trivially depends on the current directory so that Hydra's
   # pull request builder always posts a GitHub status on each revision
-  pwd = pkgs.runCommand "pwd" { here = ./.; } "touch $out";
+  pwd = pkgs.runCommand "pwd" { here = ../.; } "touch $out";
+
+  makeTarball = name:
+    pkgsStaticLinux.releaseTools.binaryTarball rec {
+      src = pkgsStaticLinux.pkgsMusl.haskellPackages."${name}";
+
+      installPhase = ''
+        releaseName=${name}
+        ${pkgsStaticLinux.coreutils}/bin/install --target-directory "$TMPDIR/inst/bin" -D $src/bin/*
+      '';
+    };
 
 in
   rec {
     inherit pwd;
 
-    tarball =
-      pkgsStaticLinux.releaseTools.binaryTarball rec {
-        src = pkgsStaticLinux.pkgsMusl.haskell.packages."${compiler}".dhall;
+    tarball-dhall = makeTarball "dhall";
 
-        installPhase = ''
-          releaseName=${src.name}
-          ${pkgsStaticLinux.coreutils}/bin/install -D "$src/bin/dhall" "$TMPDIR/inst/bin/dhall"
-        '';
-      };
+    tarball-dhall-bash = makeTarball "dhall-bash";
 
-    inherit (pkgs.haskell.packages."${compiler}") dhall;
+    tarball-dhall-json = makeTarball "dhall-json";
+
+    tarball-dhall-text = makeTarball "dhall-text";
+
+    inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-text;
 
     inherit (pkgs.releaseTools) aggregate;
 
-    shell = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall).env;
+    shell-dhall = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall).env;
+
+    shell-dhall-bash = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall-bash).env;
+
+    shell-dhall-json = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall-json).env;
+
+    shell-dhall-text = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall-text).env;
 
     test-dhall =
       pkgs.mkShell

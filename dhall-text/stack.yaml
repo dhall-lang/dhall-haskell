@@ -1,0 +1,4 @@
+resolver: lts-11.9
+
+extra-deps:
+  - dhall-1.14.0
