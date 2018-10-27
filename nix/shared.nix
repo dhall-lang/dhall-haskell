@@ -312,7 +312,7 @@ let
 
   makeTarball = name:
     pkgsStaticLinux.releaseTools.binaryTarball rec {
-      src = pkgsStaticLinux.pkgsMusl.haskellPackages."${name}";
+      src = pkgsStaticLinux.pkgsMusl.haskell.packages."${compiler}"."${name}";
 
       installPhase = ''
         releaseName=${name}
