@@ -1,8 +1,11 @@
 let
   shared_7_10_3 =
-    import ./nix/shared.nix { compiler = "ghc7103"; coverage = true; };
+    import ./nix/shared.nix { compiler = "ghc7103"; };
 
   shared_8_4_3 =
+    import ./nix/shared.nix { compiler = "ghc843"; };
+
+  coverage_8_4_3 =
     import ./nix/shared.nix { compiler = "ghc843"; coverage = true; };
 
 in
@@ -23,7 +26,7 @@ in
         ];
       };
 
-    "coverage-dhall" = shared_8_4_3.dhall;
+    "coverage-dhall" = coverage_8_4_3.dhall;
 
     inherit (shared_8_4_3) tarball-dhall tarball-dhall-bash tarball-dhall-json tarball-dhall-text;
   }
