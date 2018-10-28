@@ -89,8 +89,7 @@ completeExpression embedded = completeExpression_
                 expression )
             _equal
             c <- expression
-            _in
-            d <- expression
+            d <- (_in >> expression) <|> alternative2
             return (Let a b c d)
 
         alternative3 = do
