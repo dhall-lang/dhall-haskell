@@ -105,7 +105,7 @@ Extra-Source-Files:
 
 Source-Repository head
     Type: git
-    Location: https://github.com/dhall-lang/dhall-haskell
+    Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall
 
 Flag with-http
   Description: Include support for importing dhall modules from HTTP URLs

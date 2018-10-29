@@ -1,1 +1,1 @@
-(import ../shared.nix {}).test-dhall
+(import ./shared.nix {}).test-dhall
