@@ -1,4 +1,4 @@
-{ compiler ? "ghc843", coverage ? false }:
+{ compiler ? "ghc861", coverage ? false }:
 
 let
   fetchNixpkgs = import ./fetchNixpkgs.nix;
@@ -54,6 +54,12 @@ let
 
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
+                    aeson =
+                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.aeson;
+
+                    comonad =
+                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.comonad;
+
                     dhall =
                       applyCoverage
                         (failOnAllWarnings
@@ -88,6 +94,12 @@ let
                           { }
                         );
 
+                    distributive =
+                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.distributive;
+
+                    doctest =
+                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.doctest;
+
                     # https://github.com/well-typed/cborg/issues/172
                     serialise =
                       pkgsNew.haskell.lib.dontCheck
@@ -96,6 +108,10 @@ let
                     prettyprinter =
                       pkgsNew.haskell.lib.dontCheck
                         haskellPackagesOld.prettyprinter;
+
+                    unordered-containers =
+                      pkgsNew.haskell.lib.dontCheck
+                        haskellPackagesOld.unordered-containers;
                   };
 
               in
@@ -139,6 +155,12 @@ let
               let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
+                    # Newer versions of `foundation` don't build against older
+                    # versions of `base`
+                    basement = haskellPackagesOld.basement_0_0_6;
+
+                    foundation = haskellPackagesOld.foundation_0_0_19;
+
                     # Most of these fixes are due to certain dependencies being
                     # hidden behind a conditional compiler version directive, so
                     # they aren't included by default in the default Hackage
