@@ -40,6 +40,8 @@ tutorialExamples :: TestTree
 tutorialExamples =
     testGroup "Tutorial examples"
         [ shouldNormalize "⩓" "./tutorial/combineTypes/0"
+        , shouldNormalize "//\\\\" "./tutorial/combineTypes/1"
+        , shouldNormalize "//" "./tutorial/prefer/0"
         , shouldNormalize "projection" "./tutorial/projection/0"
         , shouldNormalize "access record" "./tutorial/access/0"
         , shouldNormalize "access union" "./tutorial/access/1"
