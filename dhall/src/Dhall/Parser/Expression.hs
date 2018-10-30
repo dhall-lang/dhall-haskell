@@ -158,8 +158,8 @@ completeExpression embedded = completeExpression_
             <|> Combine     <$ _combine
 
     precedence2Operator =
-                Prefer       <$ _prefer
-            <|> CombineTypes <$ _combineTypes
+                CombineTypes <$ _combineTypes
+            <|> Prefer       <$ _prefer
             <|> NaturalTimes <$ _times
             <|> BoolNE       <$ _notEqual
 
