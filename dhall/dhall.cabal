@@ -28,6 +28,7 @@ Extra-Source-Files:
     Prelude/Monoid
     tests/format/*.dhall
     tests/normalization/tutorial/combineTypes/*.dhall
+    tests/normalization/tutorial/prefer/*.dhall
     tests/normalization/tutorial/projection/*.dhall
     tests/normalization/tutorial/access/*.dhall
     tests/normalization/*.dhall
