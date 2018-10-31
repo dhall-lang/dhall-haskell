@@ -14,6 +14,7 @@ module Dhall.Parser.Token (
     identifier,
     hexNumber,
     doubleLiteral,
+    doubleInfinity,
     naturalLiteral,
     integerLiteral,
     _Optional,
@@ -55,6 +56,7 @@ module Dhall.Parser.Token (
     _List,
     _True,
     _False,
+    _NaN,
     _Type,
     _Kind,
     _Sort,
@@ -134,19 +136,27 @@ hexdig c =
     ||  ('A' <= c && c <= 'F')
     ||  ('a' <= c && c <= 'f')
 
-doubleLiteral :: Parser Double
-doubleLiteral = (do
+signPrefix :: Num a => Parser (a -> a)
+signPrefix = (do
     let positive = fmap (\_ -> id    ) (Text.Parser.Char.char '+')
     let negative = fmap (\_ -> negate) (Text.Parser.Char.char '-')
-    sign <- positive <|> negative <|> pure id
+    positive <|> negative ) <?> "sign"
+
+doubleLiteral :: Parser Double
+doubleLiteral = (do
+    sign <- signPrefix <|> pure id
     a <- Text.Parser.Token.double
     return (sign a) ) <?> "double literal"
 
+doubleInfinity :: Parser Double
+doubleInfinity = (do
+    sign <- signPrefix <|> pure id
+    a <- Text.Parser.Char.text "Infinity" >> whitespace >> return (1.0/0.0)
+    return (sign a) ) <?> "double infinity"
+
 integerLiteral :: Parser Integer
 integerLiteral = (do
-    let positive = fmap (\_ -> id    ) (Text.Parser.Char.char '+')
-    let negative = fmap (\_ -> negate) (Text.Parser.Char.char '-')
-    sign <- positive <|> negative
+    sign <- signPrefix
     a <- Text.Parser.Token.natural
     return (sign a) ) <?> "integer literal"
 
@@ -617,6 +627,9 @@ _True = reserved "True"
 
 _False :: Parser ()
 _False = reserved "False"
+
+_NaN :: Parser ()
+_NaN = reserved "NaN"
 
 _Type :: Parser ()
 _Type = reserved "Type"

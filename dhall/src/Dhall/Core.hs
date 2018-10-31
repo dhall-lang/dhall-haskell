@@ -2171,6 +2171,8 @@ reservedIdentifiers =
         , "None"
         , "Optional/build"
         , "Optional/fold"
+        , "NaN"
+        , "Infinity"
         ]
 
 

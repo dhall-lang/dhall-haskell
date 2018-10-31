@@ -218,6 +218,7 @@ completeExpression embedded = completeExpression_
                     , alternative06
                     , alternative07
                     , alternative37
+                    , alternative09
 
                     , builtin <?> "built-in expression"
                     ]
@@ -262,6 +263,10 @@ completeExpression embedded = completeExpression_
                 b <- importExpression
                 return (Merge a b Nothing)
 
+            alternative09 = do
+                a <- try doubleInfinity
+                return (DoubleLit a)
+
             builtin = do
                 let predicate c =
                             c == 'N'
@@ -274,6 +279,8 @@ completeExpression embedded = completeExpression_
                         ||  c == 'T'
                         ||  c == 'F'
                         ||  c == 'K'
+
+                let nan = (0.0/0.0)
 
                 c <- Text.Megaparsec.lookAhead (Text.Megaparsec.satisfy predicate)
 
@@ -290,6 +297,7 @@ completeExpression embedded = completeExpression_
                             , NaturalShow      <$ _NaturalShow
                             , Natural          <$ _Natural
                             , None             <$ _None
+                            , DoubleLit nan    <$ _NaN
                             ]
                     'I' ->
                         choice
