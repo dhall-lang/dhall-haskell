@@ -67,7 +67,6 @@ import Data.Data (Data)
 import Data.Foldable
 import Data.HashSet (HashSet)
 import Data.String (IsString(..))
-import Data.Scientific (Scientific)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Set (Set)
@@ -382,7 +381,7 @@ data Expr s a
     -- | > Double                                   ~  Double
     | Double
     -- | > DoubleLit n                              ~  n
-    | DoubleLit Scientific
+    | DoubleLit Double
     -- | > DoubleShow                               ~  Double/show
     | DoubleShow
     -- | > Text                                     ~  Text

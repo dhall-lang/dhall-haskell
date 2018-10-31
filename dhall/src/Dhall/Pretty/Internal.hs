@@ -23,7 +23,7 @@ module Dhall.Pretty.Internal (
     , prettyLabels
     , prettyNatural
     , prettyNumber
-    , prettyScientific
+    , prettyDouble
     , prettyToStrictText
     , prettyToString
 
@@ -61,7 +61,6 @@ import Control.Applicative (Applicative(..), (<$>))
 #endif
 import Data.Foldable
 import Data.Monoid ((<>))
-import Data.Scientific (Scientific)
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
@@ -305,8 +304,8 @@ prettyNumber = literal . Pretty.pretty
 prettyNatural :: Natural -> Doc Ann
 prettyNatural = literal . Pretty.pretty
 
-prettyScientific :: Scientific -> Doc Ann
-prettyScientific = literal . Pretty.pretty . show
+prettyDouble :: Double -> Doc Ann
+prettyDouble = literal . Pretty.pretty . show
 
 prettyConst :: Const -> Doc Ann
 prettyConst Type = builtin "Type"
@@ -784,7 +783,7 @@ prettyCharacterSet characterSet = prettyExpression
     prettyPrimitiveExpression (NaturalLit a) =
         prettyNatural a
     prettyPrimitiveExpression (DoubleLit a) =
-        prettyScientific a
+        prettyDouble a
     prettyPrimitiveExpression (TextLit a) =
         prettyChunks a
     prettyPrimitiveExpression (Record a) =

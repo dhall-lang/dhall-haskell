@@ -49,7 +49,6 @@ module Dhall
     , bool
     , natural
     , integer
-    , scientific
     , double
     , lazyText
     , strictText
@@ -91,7 +90,6 @@ import Control.Monad.Trans.State.Strict
 import Data.Functor.Contravariant (Contravariant(..), (>$<))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
 import Data.Monoid ((<>))
-import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Typeable (Typeable)
@@ -114,7 +112,6 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
-import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
@@ -614,26 +611,18 @@ integer = Type {..}
 
     expected = Integer
 
-{-| Decode a `Scientific`
-
->>> input scientific "1e1000000000"
-1.0e1000000000
--}
-scientific :: Type Scientific
-scientific = Type {..}
-  where
-    extract (DoubleLit n) = pure n
-    extract  _            = empty
-
-    expected = Double
-
 {-| Decode a `Double`
 
 >>> input double "42.0"
 42.0
 -}
 double :: Type Double
-double = fmap Data.Scientific.toRealFloat scientific
+double = Type {..}
+  where
+    extract (DoubleLit n) = pure n
+    extract  _            = empty
+
+    expected = Double
 
 {-| Decode lazy `Text`
 
@@ -767,9 +756,6 @@ instance Interpret Natural where
 
 instance Interpret Integer where
     autoWith _ = integer
-
-instance Interpret Scientific where
-    autoWith _ = scientific
 
 instance Interpret Double where
     autoWith _ = double
@@ -1103,16 +1089,12 @@ instance Inject Word64 where
 
         declared = Integer
 
-instance Inject Scientific where
+instance Inject Double where
     injectWith _ = InputType {..}
       where
         embed = DoubleLit
 
         declared = Double
-
-instance Inject Double where
-    injectWith =
-        fmap (contramap (Data.Scientific.fromFloatDigits :: Double -> Scientific)) injectWith
 
 instance Inject () where
     injectWith _ = InputType {..}

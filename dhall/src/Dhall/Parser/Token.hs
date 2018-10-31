@@ -110,7 +110,6 @@ import qualified Data.Text
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 
-import Data.Scientific (Scientific)
 import Numeric.Natural (Natural)
 import Prelude hiding (const, pi)
 
@@ -135,12 +134,12 @@ hexdig c =
     ||  ('A' <= c && c <= 'F')
     ||  ('a' <= c && c <= 'f')
 
-doubleLiteral :: Parser Scientific
+doubleLiteral :: Parser Double
 doubleLiteral = (do
     let positive = fmap (\_ -> id    ) (Text.Parser.Char.char '+')
     let negative = fmap (\_ -> negate) (Text.Parser.Char.char '-')
     sign <- positive <|> negative <|> pure id
-    a    <-  Text.Parser.Token.scientific
+    a <- Text.Parser.Token.double
     return (sign a) ) <?> "double literal"
 
 integerLiteral :: Parser Integer

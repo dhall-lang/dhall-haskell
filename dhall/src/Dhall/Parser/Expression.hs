@@ -225,8 +225,12 @@ completeExpression embedded = completeExpression_
             <|> alternative38
           where
             alternative00 = do
+                n <- Text.Megaparsec.getOffset
                 a <- try doubleLiteral
-                return (DoubleLit a)
+                b <- if isInfinite a
+                       then Text.Megaparsec.setOffset n *> fail "double out of bounds"
+                       else return a
+                return (DoubleLit b)
 
             alternative01 = do
                 a <- try naturalLiteral

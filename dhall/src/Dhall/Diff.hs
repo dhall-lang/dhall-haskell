@@ -19,7 +19,6 @@ import Data.Foldable (fold, toList)
 import Data.Function (on)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (Any(..))
-import Data.Scientific (Scientific)
 import Data.Semigroup
 import Data.Sequence (Seq)
 import Data.Set (Set)
@@ -187,8 +186,8 @@ diffLabels ksL ksR =
 diffNatural :: Natural -> Natural -> Diff
 diffNatural = diffPrimitive (token . Internal.prettyNatural)
 
-diffScientific :: Scientific -> Scientific -> Diff
-diffScientific = diffPrimitive (token . Internal.prettyScientific)
+diffDouble :: Double -> Double -> Diff
+diffDouble = diffPrimitive (token . Internal.prettyDouble)
 
 diffConst :: Const -> Const -> Diff
 diffConst = diffPrimitive (token . Internal.prettyConst)
@@ -1243,7 +1242,7 @@ diffPrimitiveExpression l@(NaturalLit {}) r =
 diffPrimitiveExpression l r@(NaturalLit {}) =
     mismatch l r
 diffPrimitiveExpression (DoubleLit aL) (DoubleLit aR) =
-    diffScientific aL aR
+    diffDouble aL aR
 diffPrimitiveExpression l@(DoubleLit {}) r =
     mismatch l r
 diffPrimitiveExpression l r@(DoubleLit {}) =
