@@ -6,9 +6,11 @@ module Dhall.Freeze
     ( -- * Freeze
       freeze
     , hashImport
+    , allowPrefix
     ) where
 
 import Control.Exception (SomeException)
+import Control.Monad.IO.Class (MonadIO)
 import Data.Monoid ((<>))
 import Data.Maybe (fromMaybe)
 import Data.Text
@@ -23,9 +25,10 @@ import System.Console.ANSI (hSupportsANSI)
 
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict          as State
+import qualified Data.Text
+import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
-import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.TypeCheck
@@ -108,8 +111,12 @@ freeze
     -- ^ Modify file in-place if present, otherwise read from @stdin@ and write
     --   to @stdout@
     -> StandardVersion
+    -> (Import -> IO Bool)
+       -- ^ A filter that can choose which imports to freeze. If this predicate
+       -- returns true, the import will be frozen. Otherwise, it will left
+       -- unchanged.
     -> IO ()
-freeze inplace _standardVersion = do
+freeze inplace _standardVersion shouldFreeze = do
     (text, directory) <- case inplace of
         Nothing -> do
             text <- Data.Text.IO.getContents
@@ -122,7 +129,28 @@ freeze inplace _standardVersion = do
             return (text, System.FilePath.takeDirectory file)
 
     (header, parsedExpression) <- parseExpr srcInfo text
-    frozenExpression <- traverse (hashImport directory _standardVersion) parsedExpression
+    frozenExpression <- traverse (tryFreeze directory) parsedExpression
     writeExpr inplace (header, frozenExpression)
         where
             srcInfo = fromMaybe "(stdin)" inplace
+
+            tryFreeze directory i = do
+                eligible <- shouldFreeze i
+                if eligible then hashImport directory _standardVersion i else return i
+
+-- | @allowPrefix x@ is an import predicate suitable for use with 'freeze' that
+-- allows any import with a common prefix.
+allowPrefix :: MonadIO io => Text -> (Import -> io Bool)
+allowPrefix prefix i =
+  case importType (importHashed i) of
+      Dhall.Core.Missing ->
+          return False
+
+      Dhall.Core.Env{} ->
+          return False
+
+      Dhall.Core.Remote (Dhall.Core.URL scheme authority file query fragment _maybeHeaders) ->
+        return (prefix `isPrefixOf` Dhall.Import.remoteToURL scheme authority file query fragment)
+
+      Dhall.Core.Local prefix1 file1 ->
+          fmap ((prefix `isPrefixOf`) . Data.Text.pack) (Dhall.Import.localToPath prefix1 file1)

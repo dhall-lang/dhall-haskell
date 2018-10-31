@@ -125,6 +125,8 @@ module Dhall.Import (
     , MissingFile(..)
     , MissingEnvironmentVariable(..)
     , MissingImports(..)
+    , localToPath
+    , remoteToURL
     ) where
 
 import Control.Applicative (Alternative(..))
@@ -439,6 +441,7 @@ instance Show HashMismatch where
         <>  "\n"
         <>  "↳ " <> show actualHash <> "\n"
 
+-- | Convert the components of 'Local' to a 'FilePath'.
 localToPath :: MonadIO io => FilePrefix -> File -> io FilePath
 localToPath prefix file_ = liftIO $ do
     let File {..} = file_
@@ -460,6 +463,22 @@ localToPath prefix file_ = liftIO $ do
     let cons component dir = dir </> component
 
     return (foldr cons prefixPath cs)
+
+-- | Form a URL from the components of 'URL'.
+remoteToURL :: Scheme -> Text -> File -> Maybe Text -> Maybe Text -> Text
+remoteToURL scheme authority file query fragment =
+    let prefix =
+                (case scheme of HTTP -> "http"; HTTPS -> "https")
+            <>  "://"
+            <>  authority
+
+        fileText = Dhall.Pretty.Internal.prettyToStrictText file
+
+        suffix =
+                (case query    of Nothing -> ""; Just q -> "?" <> q)
+            <>  (case fragment of Nothing -> ""; Just f -> "#" <> f)
+
+    in prefix <> fileText <> suffix
 
 -- | Parse an expression from a `Import` containing a Dhall program
 exprFromImport :: Import -> StateT (Status IO) IO (Expr Src Import)
@@ -564,7 +583,7 @@ getCacheFile hash = do
                     liftIO (Directory.setPermissions directory private)
 
     cacheDirectory <- getCacheDirectory
-            
+
     assertDirectory cacheDirectory
 
     let dhallDirectory = cacheDirectory </> "dhall"
@@ -610,17 +629,7 @@ exprFromUncachedImport (Import {..}) = do
             return (path, text)
 
         Remote (URL scheme authority file query fragment maybeHeaders) -> do
-            let prefix =
-                        (case scheme of HTTP -> "http"; HTTPS -> "https")
-                    <>  "://"
-                    <>  authority
-
-            let fileText = Dhall.Pretty.Internal.prettyToStrictText file
-
-            let suffix =
-                        (case query    of Nothing -> ""; Just q -> "?" <> q)
-                    <>  (case fragment of Nothing -> ""; Just f -> "#" <> f)
-            let url      = Text.unpack (prefix <> fileText <> suffix)
+            let url = Text.unpack (remoteToURL scheme authority file query fragment)
 
             mheaders <- case maybeHeaders of
                 Nothing            -> return Nothing

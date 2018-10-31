@@ -80,7 +80,7 @@ data Mode
     | Normalize
     | Repl
     | Format { inplace :: Maybe FilePath }
-    | Freeze { inplace :: Maybe FilePath }
+    | Freeze { inplace :: Maybe FilePath, prefix :: Maybe Text }
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Maybe FilePath }
@@ -157,7 +157,7 @@ parseMode =
     <|> subcommand
             "freeze"
             "Add hashes to all import statements of an expression"
-            (Freeze <$> optional parseInplace)
+            (Freeze <$> optional parseInplace <*> optional parsePrefix)
     <|> subcommand
             "encode"
             "Encode a Dhall expression to binary"
@@ -183,6 +183,15 @@ parseMode =
         <>  Options.Applicative.help "Modify the specified file in-place"
         <>  Options.Applicative.metavar "FILE"
         )
+
+    parsePrefix =
+        fmap Data.Text.pack
+             (Options.Applicative.strOption
+                  (   Options.Applicative.long "prefix"
+                  <>  Options.Applicative.help "Only freeze imports that match this common prefix"
+                  <>  Options.Applicative.metavar "IMPORT"
+                  )
+             )
 
 throws :: Exception e => Either e a -> IO a
 throws (Left  e) = Control.Exception.throwIO e
@@ -324,7 +333,10 @@ command (Options {..}) = do
             Dhall.Format.format characterSet inplace
 
         Freeze {..} -> do
-            Dhall.Freeze.freeze inplace standardVersion
+            Dhall.Freeze.freeze
+                inplace
+                standardVersion
+                (maybe (\_ -> return True) Dhall.Freeze.allowPrefix prefix)
 
         Hash -> do
             Dhall.Hash.hash standardVersion
