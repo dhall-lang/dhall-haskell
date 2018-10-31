@@ -150,7 +150,8 @@ doubleLiteral = (do
 
 doubleInfinity :: Parser Double
 doubleInfinity = (do
-    sign <- signPrefix <|> pure id
+    let negative = fmap (\_ -> negate) (Text.Parser.Char.char '-')
+    sign <- negative <|> pure id
     a <- Text.Parser.Char.text "Infinity" >> whitespace >> return (1.0/0.0)
     return (sign a) ) <?> "double infinity"
 
