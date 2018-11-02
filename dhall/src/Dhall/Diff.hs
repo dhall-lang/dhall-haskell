@@ -22,12 +22,12 @@ import Data.Monoid (Any(..))
 import Data.Scientific (Scientific)
 import Data.Semigroup
 import Data.Sequence (Seq)
-import Data.Set (Set)
 import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Dhall.Core (Chunks (..), Const(..), Expr(..), Var(..))
 import Dhall.Map (Map)
+import Dhall.OSet (OSet)
 import Dhall.Pretty.Internal (Ann)
 import Numeric.Natural (Natural)
 
@@ -38,6 +38,7 @@ import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Core
 import qualified Dhall.Map
+import qualified Dhall.OSet
 import qualified Dhall.Pretty.Internal      as Internal
 
 data Diff =
@@ -171,18 +172,20 @@ diffPrimitive f l r
 diffLabel :: Text -> Text -> Diff
 diffLabel = diffPrimitive (token . Internal.prettyLabel)
 
-diffLabels :: Set Text -> Set Text -> Diff
+diffLabels :: OSet Text -> OSet Text -> Diff
 diffLabels ksL ksR =
     braced (diffFieldNames <> (if anyEqual then [ ignore ] else []))
   where
-    extraL = Data.Set.difference ksL ksR
-    extraR = Data.Set.difference ksR ksL
+    extraL = Dhall.OSet.difference ksL ksR
+    extraR = Dhall.OSet.difference ksR ksL
 
     diffFieldNames = foldMap (adapt minus) extraL <> foldMap (adapt plus) extraR
       where
         adapt sign key = [ sign (token (Internal.prettyLabel key)) ]
 
-    anyEqual = not (Data.Set.null (Data.Set.intersection ksL ksR))
+    anyEqual = not (Data.Set.null (Data.Set.intersection
+                                   (Dhall.OSet.toSet ksL)
+                                   (Dhall.OSet.toSet ksR)))
 
 diffNatural :: Natural -> Natural -> Diff
 diffNatural = diffPrimitive (token . Internal.prettyNatural)

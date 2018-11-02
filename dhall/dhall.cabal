@@ -167,6 +167,7 @@ Library
         Dhall.Lint,
         Dhall.Main,
         Dhall.Map,
+        Dhall.OSet,
         Dhall.Parser,
         Dhall.Pretty,
         Dhall.Repl,

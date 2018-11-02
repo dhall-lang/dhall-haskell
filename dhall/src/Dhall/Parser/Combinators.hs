@@ -10,12 +10,12 @@ import           Control.Monad              (MonadPlus (..))
 import           Data.Data                  (Data)
 import           Data.Semigroup             (Semigroup (..))
 import           Data.Sequence              (ViewL (..))
-import           Data.Set                   (Set)
 import           Data.String                (IsString (..))
 import           Data.Text                  (Text)
 import           Data.Text.Prettyprint.Doc  (Pretty (..))
 import           Data.Void                  (Void)
-import           Dhall.Map (Map)
+import           Dhall.Map                  (Map)
+import           Dhall.OSet                 (OSet)
 import           Prelude                    hiding (const, pi)
 import           Text.Parser.Combinators    (try, (<?>))
 import           Text.Parser.Token          (TokenParsing (..))
@@ -27,6 +27,7 @@ import qualified Data.Set
 import qualified Data.Text
 import qualified Dhall.Map
 import qualified Dhall.Util
+import qualified Dhall.OSet
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
@@ -236,14 +237,14 @@ takeWhile predicate = Parser (Text.Megaparsec.takeWhileP Nothing predicate)
 takeWhile1 :: (Char -> Bool) -> Parser Text
 takeWhile1 predicate = Parser (Text.Megaparsec.takeWhile1P Nothing predicate)
 
-noDuplicates :: Ord a => [a] -> Parser (Set a)
-noDuplicates = go Data.Set.empty
+noDuplicates :: Ord a => [a] -> Parser (OSet a)
+noDuplicates = go Dhall.OSet.empty
   where
     go found    []  = return found
     go found (x:xs) =
-        if Data.Set.member x found
+        if Data.Set.member x (Dhall.OSet.toSet found)
         then fail "Duplicate key"
-        else go (Data.Set.insert x found) xs
+        else go (Dhall.OSet.append x found) xs
 
 toMap :: [(Text, a)] -> Parser (Map Text a)
 toMap kvs = do
