@@ -30,7 +30,7 @@ Library
     Build-Depends:
         base                      >= 4.8.0.0 && < 5   ,
         bytestring                              < 0.11,
-        containers                              < 0.6 ,
+        containers                              < 0.7 ,
         dhall                     >= 1.18.0  && < 1.19,
         neat-interpolation                      < 0.4 ,
         shell-escape                            < 0.3 ,
