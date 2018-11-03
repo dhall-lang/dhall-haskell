@@ -155,11 +155,19 @@ let
               let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
-                    # Newer versions of `foundation` don't build against older
-                    # versions of `base`
-                    basement = haskellPackagesOld.basement_0_0_6;
+                    # Newer version of these packages have bounds incompatible
+                    # with GHC 7.10.3
+                    lens-family-core =
+                      haskellPackagesOld.lens-family-core_1_2_1;
 
-                    foundation = haskellPackagesOld.foundation_0_0_19;
+                    memory =
+                      haskellPackagesOld.memory_0_14_16;
+
+                    basement =
+                      haskellPackagesOld.basement_0_0_6;
+
+                    foundation =
+                      haskellPackagesOld.foundation_0_0_19;
 
                     # Most of these fixes are due to certain dependencies being
                     # hidden behind a conditional compiler version directive, so
@@ -175,6 +183,13 @@ let
                     cborg =
                       pkgsNew.haskell.lib.addBuildDepends
                         haskellPackagesOld.cborg
+                        [ haskellPackagesNew.fail
+                          haskellPackagesNew.semigroups
+                        ];
+
+                    contravariant =
+                      pkgsNew.haskell.lib.addBuildDepends
+                        haskellPackagesOld.contravariant
                         [ haskellPackagesNew.fail
                           haskellPackagesNew.semigroups
                         ];
