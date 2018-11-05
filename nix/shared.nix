@@ -54,6 +54,12 @@ let
 
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
+                    aeson =
+                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.aeson;
+
+                    comonad =
+                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.comonad;
+
                     dhall =
                       applyCoverage
                         (failOnAllWarnings
@@ -88,6 +94,12 @@ let
                           { }
                         );
 
+                    distributive =
+                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.distributive;
+
+                    doctest =
+                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.doctest;
+
                     # https://github.com/well-typed/cborg/issues/172
                     serialise =
                       pkgsNew.haskell.lib.dontCheck
@@ -96,6 +108,10 @@ let
                     prettyprinter =
                       pkgsNew.haskell.lib.dontCheck
                         haskellPackagesOld.prettyprinter;
+
+                    unordered-containers =
+                      pkgsNew.haskell.lib.dontCheck
+                        haskellPackagesOld.unordered-containers;
                   };
 
               in
@@ -139,6 +155,20 @@ let
               let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
+                    # Newer version of these packages have bounds incompatible
+                    # with GHC 7.10.3
+                    lens-family-core =
+                      haskellPackagesOld.lens-family-core_1_2_1;
+
+                    memory =
+                      haskellPackagesOld.memory_0_14_16;
+
+                    basement =
+                      haskellPackagesOld.basement_0_0_6;
+
+                    foundation =
+                      haskellPackagesOld.foundation_0_0_19;
+
                     # Most of these fixes are due to certain dependencies being
                     # hidden behind a conditional compiler version directive, so
                     # they aren't included by default in the default Hackage
@@ -153,6 +183,13 @@ let
                     cborg =
                       pkgsNew.haskell.lib.addBuildDepends
                         haskellPackagesOld.cborg
+                        [ haskellPackagesNew.fail
+                          haskellPackagesNew.semigroups
+                        ];
+
+                    contravariant =
+                      pkgsNew.haskell.lib.addBuildDepends
+                        haskellPackagesOld.contravariant
                         [ haskellPackagesNew.fail
                           haskellPackagesNew.semigroups
                         ];
