@@ -1,4 +1,10 @@
 resolver: lts-6.27
+packages:
+  - dhall
+  - dhall-bash
+#  dhall-json uses ApplicativeDo
+#  - dhall-json
+  - dhall-text
 extra-deps:
 - ansi-terminal-0.7.1.1
 - ansi-wl-pprint-0.6.8.2
@@ -22,6 +28,7 @@ extra-deps:
 - th-abstraction-0.2.6.0
 - cborg-0.2.1.0
 - serialise-0.2.1.0
+- shell-escape-0.2.0
 nix:
   packages:
     - ncurses
