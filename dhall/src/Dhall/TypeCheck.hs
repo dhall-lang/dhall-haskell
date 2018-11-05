@@ -45,7 +45,7 @@ import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Map
-import qualified Dhall.OSet
+import qualified Dhall.Set
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Util
 
@@ -801,7 +801,7 @@ typeWithA tpa = loop
                             Just t' -> return (k, t')
                             Nothing -> Left (TypeError ctx e (MissingField k t))
                 let adapt = Record . Dhall.Map.fromList
-                fmap adapt (traverse process (Dhall.OSet.toList xs))
+                fmap adapt (traverse process (Dhall.Set.toList xs))
             _ -> do
                 let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
                 Left (TypeError ctx e (CantProject text r t))

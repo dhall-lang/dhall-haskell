@@ -15,7 +15,7 @@ import           Data.Text                  (Text)
 import           Data.Text.Prettyprint.Doc  (Pretty (..))
 import           Data.Void                  (Void)
 import           Dhall.Map                  (Map)
-import           Dhall.OSet                 (OSet)
+import           Dhall.Set                  (Set)
 import           Prelude                    hiding (const, pi)
 import           Text.Parser.Combinators    (try, (<?>))
 import           Text.Parser.Token          (TokenParsing (..))
@@ -27,7 +27,7 @@ import qualified Data.Set
 import qualified Data.Text
 import qualified Dhall.Map
 import qualified Dhall.Util
-import qualified Dhall.OSet
+import qualified Dhall.Set
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
@@ -237,14 +237,14 @@ takeWhile predicate = Parser (Text.Megaparsec.takeWhileP Nothing predicate)
 takeWhile1 :: (Char -> Bool) -> Parser Text
 takeWhile1 predicate = Parser (Text.Megaparsec.takeWhile1P Nothing predicate)
 
-noDuplicates :: Ord a => [a] -> Parser (OSet a)
-noDuplicates = go Dhall.OSet.empty
+noDuplicates :: Ord a => [a] -> Parser (Set a)
+noDuplicates = go Dhall.Set.empty
   where
     go found    []  = return found
     go found (x:xs) =
-        if Data.Set.member x (Dhall.OSet.toSet found)
+        if Data.Set.member x (Dhall.Set.toSet found)
         then fail "Duplicate key"
-        else go (Dhall.OSet.append x found) xs
+        else go (Dhall.Set.append x found) xs
 
 toMap :: [(Text, a)] -> Parser (Map Text a)
 toMap kvs = do

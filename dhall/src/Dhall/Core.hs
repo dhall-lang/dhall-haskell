@@ -74,7 +74,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Traversable
 import Dhall.Map (Map)
-import Dhall.OSet (OSet)
+import Dhall.Set (Set)
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
@@ -87,7 +87,7 @@ import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Map
-import qualified Dhall.OSet
+import qualified Dhall.Set
 
 {-| Constants for a pure type system
 
@@ -447,7 +447,7 @@ data Expr s a
     -- | > Field e x                                ~  e.x
     | Field (Expr s a) Text
     -- | > Project e xs                             ~  e.{ xs }
-    | Project (Expr s a) (OSet Text)
+    | Project (Expr s a) (Set Text)
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
     -- | > ImportAlt                                ~  e1 ? e2
@@ -1841,7 +1841,7 @@ normalizeWith ctx e0 = loop (denote e0)
     Project r xs     ->
         case loop r of
             RecordLit kvs ->
-                case traverse adapt (Dhall.OSet.toList xs) of
+                case traverse adapt (Dhall.Set.toList xs) of
                     Just s  ->
                         loop (RecordLit kvs')
                       where

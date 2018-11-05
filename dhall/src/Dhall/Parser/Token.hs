@@ -97,7 +97,7 @@ import Data.Functor (void)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Dhall.Core
-import Dhall.OSet (OSet)
+import Dhall.Set (Set)
 import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
@@ -106,7 +106,7 @@ import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Text
-import qualified Dhall.OSet
+import qualified Dhall.Set
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 
@@ -271,14 +271,14 @@ backtickLabel = do
   where
     predicate c = alpha c || digit c || elem c ("$-/_:." :: String)
 
-labels :: Parser (OSet Text)
+labels :: Parser (Set Text)
 labels = do
     _openBrace
     xs <- nonEmptyLabels <|> emptyLabels
     _closeBrace
     return xs
   where
-    emptyLabels = pure Dhall.OSet.empty
+    emptyLabels = pure Dhall.Set.empty
 
     nonEmptyLabels = do
         x  <- label
