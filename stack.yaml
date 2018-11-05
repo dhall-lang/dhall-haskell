@@ -1,8 +1,14 @@
 resolver: lts-12.16
+packages:
+  - dhall
+  - dhall-bash
+  - dhall-json
+  - dhall-text
 extra-deps:
   - megaparsec-7.0.3
   - repline-0.2.0.0
   - serialise-0.2.1.0
+  - neat-interpolation-0.3.2.4
 nix:
   packages:
     - ncurses
