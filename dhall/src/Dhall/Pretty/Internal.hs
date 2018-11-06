@@ -53,7 +53,7 @@ module Dhall.Pretty.Internal (
     , rparen
     ) where
 
-import {-# SOURCE #-} Dhall.Core
+import Dhall.Core
 
 #if MIN_VERSION_base(4,8,0)
 #else
