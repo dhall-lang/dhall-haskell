@@ -7,7 +7,6 @@
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE UnicodeSyntax      #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| This module contains the core calculus for the Dhall language.
@@ -37,7 +36,9 @@ module Dhall.Core (
     , alphaNormalize
     , normalize
     , normalizeWith
+    , normalizeWithM
     , Normalizer
+    , NormalizerM
     , ReifiedNormalizer (..)
     , judgmentallyEqual
     , subst
@@ -1497,10 +1498,9 @@ denote (Embed a             ) = Embed a
 normalizeWith :: Eq a => Normalizer a -> Expr s a -> Expr t a
 normalizeWith ctx = runIdentity . normalizeWithM ctx
 
-normalizeWithM :: forall m a s t. (Eq a, Monad m) => NormalizerM m a -> Expr s a -> m (Expr t a)
+normalizeWithM :: (Eq a, Monad m) => NormalizerM m a -> Expr s a -> m (Expr t a)
 normalizeWithM ctx e0 = loop (denote e0)
  where
- loop :: Expr t a -> m (Expr t a)
  loop e =  case e of
     Const k -> pure (Const k)
     Var v -> pure (Var v)
