@@ -1,6 +1,0 @@
-resolver: lts-12.16
-extra-deps:
-  - dhall-1.18.0
-  - megaparsec-7.0.3
-  - repline-0.2.0.0
-  - serialise-0.2.1.0
