@@ -216,8 +216,8 @@ simpleCustomization :: TestTree
 simpleCustomization = testCase "simpleCustomization" $ do
   let tyCtx  = insert "min" (Pi "_" Natural (Pi "_" Natural Natural)) empty
       valCtx e = case e of
-                    (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalLit y)) -> Just (NaturalLit (min x y))
-                    _ -> Nothing
+                    (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalLit y)) -> pure (Just (NaturalLit (min x y)))
+                    _ -> pure Nothing
   e <- codeWith tyCtx "min (min 11 12) 8 + 1"
   assertNormalizesToWith valCtx e "9"
 
@@ -228,12 +228,12 @@ nestedReduction = testCase "doubleReduction" $ do
   wurbleType     <- insert "wurble"     <$> code "Natural → Integer"
   let tyCtx = minType . fiveorlessType . wurbleType $ empty
       valCtx e = case e of
-                    (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalLit y)) -> Just (NaturalLit (min x y))
-                    (App (Var (V "wurble" 0)) (NaturalLit x)) -> Just
-                        (App (Var (V "fiveorless" 0)) (NaturalPlus (NaturalLit x) (NaturalLit 2)))
-                    (App (Var (V "fiveorless" 0)) (NaturalLit x)) -> Just
-                        (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalPlus (NaturalLit 3) (NaturalLit 2)))
-                    _ -> Nothing
+                    (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalLit y)) -> pure (Just (NaturalLit (min x y)))
+                    (App (Var (V "wurble" 0)) (NaturalLit x)) -> pure (Just
+                        (App (Var (V "fiveorless" 0)) (NaturalPlus (NaturalLit x) (NaturalLit 2))))
+                    (App (Var (V "fiveorless" 0)) (NaturalLit x)) -> pure (Just
+                        (App (App (Var (V "min" 0)) (NaturalLit x)) (NaturalPlus (NaturalLit 3) (NaturalLit 2))))
+                    _ -> pure Nothing
   e <- codeWith tyCtx "wurble 6"
   assertNormalizesToWith valCtx e "5"
 
