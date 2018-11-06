@@ -46,9 +46,9 @@ import Prelude hiding (exponent)
 import qualified Data.Foldable
 import qualified Data.Scientific
 import qualified Data.Sequence
-import qualified Data.Set
 import qualified Data.Text
 import qualified Dhall.Map
+import qualified Dhall.Set
 import qualified Options.Applicative
 
 -- | Supported version strings
@@ -297,7 +297,7 @@ encode (Project t₀ xs₀) =
     TList ([ TInt 10, t₁ ] ++ xs₁)
   where
     t₁  = encode t₀
-    xs₁ = map TString (Data.Foldable.toList xs₀)
+    xs₁ = map TString (Dhall.Set.toList xs₀)
 encode (Union xTs₀) =
     TList [ TInt 11, TMap xTs₁ ]
   where
@@ -585,7 +585,7 @@ decode (TList (TInt 10 : t₁ : xs₁)) = do
 
     xs₀ <- traverse process xs₁
 
-    return (Project t₀ (Data.Set.fromList xs₀))
+    return (Project t₀ (Dhall.Set.fromList xs₀))
 decode (TList [ TInt 11, TMap xTs₁ ]) = do
     let process (TString x, _T₁) = do
             _T₀ <- decode _T₁
