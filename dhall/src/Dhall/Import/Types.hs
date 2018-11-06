@@ -73,7 +73,7 @@ emptyStatusWith _resolver _cacher rootDirectory = Status {..}
 
     _standardVersion = Dhall.Binary.defaultStandardVersion
 
-    _normalizer = ReifiedNormalizer (const Nothing)
+    _normalizer = ReifiedNormalizer (const (pure Nothing))
 
     _startingContext = Dhall.Context.empty
 

@@ -34,6 +34,10 @@ formatTests =
             "fieldOrder"
         , should
             Unicode
+            "preserve the original order of projections"
+            "projectionOrder"
+        , should
+            Unicode
             "escape numeric labels correctly"
             "escapeNumericLabel"
         , should

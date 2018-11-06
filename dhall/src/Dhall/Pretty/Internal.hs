@@ -53,7 +53,7 @@ module Dhall.Pretty.Internal (
     , rparen
     ) where
 
-import {-# SOURCE #-} Dhall.Core
+import Dhall.Core
 
 #if MIN_VERSION_base(4,8,0)
 #else
@@ -61,10 +61,10 @@ import Control.Applicative (Applicative(..), (<$>))
 #endif
 import Data.Foldable
 import Data.Monoid ((<>))
-import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
 import Dhall.Map (Map)
+import Dhall.Set (Set)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
@@ -78,6 +78,7 @@ import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text   as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Map
+import qualified Dhall.Set
 
 {-| Annotation type used to tag elements in a pretty-printed document for
     syntax highlighting purposes
@@ -293,10 +294,10 @@ prettyLabel a = label doc
 
 prettyLabels :: Set Text -> Doc Ann
 prettyLabels a
-    | Data.Set.null a =
+    | Data.Set.null (Dhall.Set.toSet a) =
         lbrace <> rbrace
     | otherwise =
-        braces (map (duplicate . prettyLabel) (Data.Set.toList a))
+        braces (map (duplicate . prettyLabel) (Dhall.Set.toList a))
 
 prettyNumber :: Integer -> Doc Ann
 prettyNumber = literal . Pretty.pretty

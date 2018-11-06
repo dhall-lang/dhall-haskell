@@ -97,9 +97,9 @@ import           Dhall.Parser.Combinators
 import Control.Applicative (Alternative(..), optional)
 import Data.Functor (void)
 import Data.Semigroup (Semigroup(..))
-import Data.Set (Set)
 import Data.Text (Text)
 import Dhall.Core
+import Dhall.Set (Set)
 import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
@@ -107,8 +107,8 @@ import qualified Control.Monad
 import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
-import qualified Data.Set
 import qualified Data.Text
+import qualified Dhall.Set
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 
@@ -289,7 +289,7 @@ labels = do
     _closeBrace
     return xs
   where
-    emptyLabels = pure Data.Set.empty
+    emptyLabels = pure Dhall.Set.empty
 
     nonEmptyLabels = do
         x  <- label
