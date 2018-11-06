@@ -12,14 +12,49 @@ Navigate to each package's directory for their respective `README`s
 
 # Quick start
 
+## Building from source
+
+### [cabal](https://www.haskell.org/cabal)
+
 You can build all of the packages by running:
 
+```console
+$ cabal new-build all
 ```
+
+And each of them with `cabal new-build <package-name>`, for example:
+
+```console
+$ cabal new-build dhall
+```
+
+... or you can run `cabal new-build` within each package directory.
+
+### [nix](https://nixos.org/nix/)
+
+You can build all of the packages by running:
+
+```console
 $ nix-build
 ```
 
 ... or you can run `nix-build` within each package's respective directory to
 build just that one package.
+
+### [stack](https://docs.haskellstack.org)
+
+You can build all of the packages with
+
+```console
+$ stack build
+```
+
+And each of them with `stack build <package-name>`, for example:
+
+```console
+$ stack build dhall-json
+```
+
 
 ## Development status
 
