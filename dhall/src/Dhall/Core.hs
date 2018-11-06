@@ -70,11 +70,11 @@ import Data.String (IsString(..))
 import Data.Scientific (Scientific)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
-import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Traversable
 import Dhall.Map (Map)
+import Dhall.Set (Set)
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
@@ -84,10 +84,10 @@ import qualified Control.Monad
 import qualified Crypto.Hash
 import qualified Data.HashSet
 import qualified Data.Sequence
-import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Map
+import qualified Dhall.Set
 
 {-| Constants for a pure type system
 
@@ -1841,7 +1841,7 @@ normalizeWith ctx e0 = loop (denote e0)
     Project r xs     ->
         case loop r of
             RecordLit kvs ->
-                case traverse adapt (Data.Set.toList xs) of
+                case traverse adapt (Dhall.Set.toList xs) of
                     Just s  ->
                         loop (RecordLit kvs')
                       where
