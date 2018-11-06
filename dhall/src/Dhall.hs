@@ -211,7 +211,7 @@ data EvaluateSettings = EvaluateSettings
 defaultEvaluateSettings :: EvaluateSettings
 defaultEvaluateSettings = EvaluateSettings
   { _startingContext = Dhall.Context.empty
-  , _normalizer      = Dhall.Core.ReifiedNormalizer (const Nothing)
+  , _normalizer      = Dhall.Core.ReifiedNormalizer (const (pure Nothing))
   , _standardVersion = Dhall.Binary.defaultStandardVersion
   }
 

@@ -24,6 +24,7 @@ import Dhall.Core
     , URL(..)
     , Var(..)
     )
+import Dhall.Set (Set)
 import Numeric.Natural (Natural)
 import Test.QuickCheck
     (Arbitrary(..), Gen, Property, genericShrink, (===))
@@ -36,6 +37,7 @@ import qualified Dhall.Map
 import qualified Data.Sequence
 import qualified Dhall.Binary
 import qualified Dhall.Core
+import qualified Dhall.Set
 import qualified Test.QuickCheck
 import qualified Test.Tasty.QuickCheck
 
@@ -45,6 +47,9 @@ newtype DeserialiseFailureWithEq = D DeserialiseFailure
 instance Eq DeserialiseFailureWithEq where
     D (DeserialiseFailure aL bL) == D (DeserialiseFailure aR bR) =
         aL == aR && bL == bR
+
+instance (Arbitrary a, Ord a) => Arbitrary (Set a) where
+  arbitrary = Dhall.Set.fromList <$> arbitrary
 
 lift0 :: a -> Gen a
 lift0 = pure
