@@ -1194,8 +1194,8 @@ alphaNormalize (Let (Binding "_" mA₀ a₀ :| []) b₀) =
 alphaNormalize (Let (Binding "_" mA₀ a₀ :| (l₀ : ls₀)) b₀) =
     Let (Binding "_" mA₁ a₁ :| (l₁ : ls₁)) b₁
   where
-    mA₁ = fmap alphaNormalize mA₁
-    a₁  =      alphaNormalize  a₁
+    mA₁ = fmap alphaNormalize mA₀
+    a₁  =      alphaNormalize  a₀
 
     Let (l₁ :| ls₁) b₁ = alphaNormalize (Let (l₀ :| ls₀) b₀)
 alphaNormalize (Let (Binding x mA₀ a₀ :| []) b₀) =
@@ -1700,15 +1700,14 @@ normalizeWithM ctx e0 = loop (denote e0)
                 case res of
                     Nothing -> pure (App f' a')
                     Just app' -> loop app'
-    Let (Binding x _ a₀ :| []) b₀ -> loop b₂
+    Let (Binding x _ a₀ :| ls₀) b₀ -> loop b₂
       where
+        rest = case ls₀ of
+            []       -> b₀
+            l₁ : ls₁ -> Let (l₁ :| ls₁) b₀
+
         a₁ = shift 1 (V x 0) a₀
-        b₁ = subst (V x 0) a₁ b₀
-        b₂ = shift (-1) (V x 0) b₁
-    Let (Binding x _ a₀ :| (l : ls)) b₀ -> loop b₂
-      where
-        a₁ = shift 1 (V x 0) a₀
-        b₁ = subst (V x 0) a₁ (Let (l :| ls) b₀)
+        b₁ = subst (V x 0) a₁ rest
         b₂ = shift (-1) (V x 0) b₁
     Annot x _ -> loop x
     Bool -> pure Bool

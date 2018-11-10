@@ -701,7 +701,7 @@ diffExpression l@(BoolIf {}) r =
     mismatch l r
 diffExpression l r@(BoolIf {}) =
     mismatch l r
-diffExpression l@(Let asL bL ) r@(Let asR bR) =
+diffExpression (Let asL bL ) (Let asR bR) =
     enclosed' "" (keyword "in" <> "  ")
         (Data.List.NonEmpty.zipWith docA asL asR <> pure docB)
   where

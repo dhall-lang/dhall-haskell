@@ -46,7 +46,6 @@ import Data.Text (Text)
 import Options.Applicative (Parser)
 import Prelude hiding (exponent)
 
-import qualified Data.Foldable
 import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Text
@@ -730,25 +729,25 @@ decode (TList (TInt 24 : TInt n : xs)) = do
     let importMode   = Code
     return (Embed (Import {..}))
 decode (TList (TInt 25 : xs)) = do
-    let process (TString x : TNull : a₁ : ls₁) = do
-            a₀  <- decode a₁
-            Let (l₀ :| ls₀) b₀ <- process ls₁
-            return (Let (Binding x Nothing a₀ :| (l₀ : ls₀)) b₀)
     let process (TString x : _A₁ : a₁ : ls₁) = do
-            _A₀ <- decode _A₁
+            mA₀ <- case _A₁ of
+                TNull -> return Nothing
+                _     -> fmap Just (decode _A₁)
+
             a₀  <- decode a₁
-            Let (l₀ :| ls₀) b₀ <- process ls₁
-            return (Let (Binding x (Just _A₀) a₀ :| (l₀ : ls₀)) b₀)
-    let process [ TString x, TNull, a₁, b₁ ] = do
-            a₀ <- decode a₁
-            b₀ <- decode b₁
-            return (Let (Binding x Nothing a₀ :| []) b₀)
-    let process [ TString x, _A₁, a₁, b₁ ] = do
-            _A₀ <- decode _A₁
-            a₀  <- decode a₁
-            b₀  <- decode b₁
-            return (Let (Binding x (Just _A₀) a₀ :| []) b₀)
-    let process _ = do
+
+            let binding = Binding x mA₀ a₀
+
+            case ls₁ of
+                [ b₁ ] -> do
+                    b₀ <- decode b₁
+
+                    return (Let (binding :| []) b₀)
+                _ -> do
+                    Let (l₀ :| ls₀) b₀ <- process ls₁
+
+                    return (Let (binding :| (l₀ : ls₀)) b₀)
+        process _ = do
             empty
 
     process xs

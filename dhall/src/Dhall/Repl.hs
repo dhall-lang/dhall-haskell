@@ -26,6 +26,7 @@ import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO 
 import qualified Dhall
 import qualified Dhall.Binary
 import qualified Dhall.Context
+import qualified Dhall.Core
 import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize )
 import qualified Dhall.Pretty
 import qualified Dhall.Core as Expr ( Expr(..) )
@@ -159,7 +160,7 @@ normalize e = do
     ( Dhall.normalize
         ( foldl'
             ( \a (k, Binding { bindingType, bindingExpr }) ->
-                Expr.Let k ( Just bindingType ) bindingExpr a
+                Expr.Let (pure (Dhall.Core.Binding k (Just bindingType) bindingExpr)) a
             )
             e
             ( Dhall.Context.toList ( envToContext env ) )
