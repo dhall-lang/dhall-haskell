@@ -148,6 +148,7 @@ import System.FilePath ((</>))
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Core
     ( Expr(..)
+    , Binding(..)
     , Chunks(..)
     , Directory(..)
     , File(..)
@@ -801,7 +802,9 @@ loadWith expr₀ = case expr₀ of
   Lam a b c            -> Lam <$> pure a <*> loadWith b <*> loadWith c
   Pi a b c             -> Pi <$> pure a <*> loadWith b <*> loadWith c
   App a b              -> App <$> loadWith a <*> loadWith b
-  Let a b c d          -> Let <$> pure a <*> mapM loadWith b <*> loadWith c <*> loadWith d
+  Let as b             -> Let <$> traverse f as <*> loadWith b
+    where
+      f (Binding c d e) = Binding c <$> traverse loadWith d <*> loadWith e
   Annot a b            -> Annot <$> loadWith a <*> loadWith b
   Bool                 -> pure Bool
   BoolLit a            -> pure (BoolLit a)
