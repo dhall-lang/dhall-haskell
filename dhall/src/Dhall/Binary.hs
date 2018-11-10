@@ -24,7 +24,8 @@ import Codec.CBOR.Term (Term(..))
 import Control.Applicative (empty)
 import Control.Exception (Exception)
 import Dhall.Core
-    ( Chunks(..)
+    ( Binding(..)
+    , Chunks(..)
     , Const(..)
     , Directory(..)
     , Expr(..)
@@ -38,6 +39,8 @@ import Dhall.Core
     , URL(..)
     , Var(..)
     )
+import Data.Foldable (toList)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Options.Applicative (Parser)
@@ -352,17 +355,21 @@ encode (TextLit (Chunks xys₀ z₀)) =
     z₁ = TString z₀
 encode (Embed x) =
     importToTerm x
-encode (Let x Nothing a₀ b₀) =
-    TList [ TInt 25, TString x, a₁, b₁ ]
+encode (Let as₀ b₀) =
+    TList ([ TInt 25 ] ++ as₁ ++ [ b₁ ])
   where
-    a₁ = encode a₀
+    as₁ = do
+        Binding x mA₀ a₀ <- toList as₀
+
+        let mA₁ = case mA₀ of
+                Nothing  -> TNull
+                Just _A₀ -> encode _A₀
+
+        let a₁ = encode a₀
+
+        [ TString x, mA₁, a₁ ]
+
     b₁ = encode b₀
-encode (Let x (Just _A₀) a₀ b₀) =
-    TList [ TInt 25, TString x, _A₁, a₁, b₁ ]
-  where
-    a₁  = encode a₀
-    _A₁ = encode _A₀
-    b₁  = encode b₀
 encode (Annot t₀ _T₀) =
     TList [ TInt 26, t₁, _T₁ ]
   where
@@ -722,15 +729,29 @@ decode (TList (TInt 24 : TInt n : xs)) = do
     let importHashed = ImportHashed {..}
     let importMode   = Code
     return (Embed (Import {..}))
-decode (TList [ TInt 25, TString x, a₁, b₁ ]) = do
-    a₀ <- decode a₁
-    b₀ <- decode b₁
-    return (Let x Nothing a₀ b₀)
-decode (TList [ TInt 25, TString x, _A₁, a₁, b₁ ]) = do
-    _A₀ <- decode _A₁
-    a₀  <- decode a₁
-    b₀  <- decode b₁
-    return (Let x (Just _A₀) a₀ b₀)
+decode (TList (TInt 25 : xs)) = do
+    let process (TString x : TNull : a₁ : ls₁) = do
+            a₀  <- decode a₁
+            Let (l₀ :| ls₀) b₀ <- process ls₁
+            return (Let (Binding x Nothing a₀ :| (l₀ : ls₀)) b₀)
+    let process (TString x : _A₁ : a₁ : ls₁) = do
+            _A₀ <- decode _A₁
+            a₀  <- decode a₁
+            Let (l₀ :| ls₀) b₀ <- process ls₁
+            return (Let (Binding x (Just _A₀) a₀ :| (l₀ : ls₀)) b₀)
+    let process [ TString x, TNull, a₁, b₁ ] = do
+            a₀ <- decode a₁
+            b₀ <- decode b₁
+            return (Let (Binding x Nothing a₀ :| []) b₀)
+    let process [ TString x, _A₁, a₁, b₁ ] = do
+            _A₀ <- decode _A₁
+            a₀  <- decode a₁
+            b₀  <- decode b₁
+            return (Let (Binding x (Just _A₀) a₀ :| []) b₀)
+    let process _ = do
+            empty
+
+    process xs
 decode (TList [ TInt 26, t₁, _T₁ ]) = do
     t₀  <- decode t₁
     _T₀ <- decode _T₁

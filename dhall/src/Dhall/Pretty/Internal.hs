@@ -387,12 +387,12 @@ prettyCharacterSet characterSet = prettyExpression
                 ]
         docsShort (Note  _    c) = docsShort c
         docsShort             c  = [ prettyExpression c ]
-    prettyExpression a0@(Let _ _ _ _) =
-        enclose' "" "    " (space <> keyword "in" <> space) (Pretty.hardline <> keyword "in" <> "  ")
-            (fmap duplicate (docs a0))
+    prettyExpression a0@(Let as b) =
+        enclose' "" "" space Pretty.hardline
+            (fmap duplicate (fmap docA (toList as) ++ [ docB ]))
       where
-        docs (Let a Nothing c d) =
-            Pretty.group (Pretty.flatAlt long short) : docs d
+        docA (Binding a Nothing c) =
+            Pretty.group (Pretty.flatAlt long short)
           where
             long =  keyword "let" <> space
                 <>  Pretty.align
@@ -407,8 +407,8 @@ prettyCharacterSet characterSet = prettyExpression
                 <>  prettyLabel a
                 <>  (space <> equals <> space)
                 <>  prettyExpression c
-        docs (Let a (Just b) c d) =
-            Pretty.group (Pretty.flatAlt long short) : docs d
+        docA (Binding a (Just b) c) =
+            Pretty.group (Pretty.flatAlt long short)
           where
             long = keyword "let" <> space
                 <>  Pretty.align
@@ -427,10 +427,9 @@ prettyCharacterSet characterSet = prettyExpression
                 <>  prettyExpression b
                 <>  space <> equals <> space
                 <>  prettyExpression c
-        docs (Note _ d)  =
-            docs d
-        docs d =
-            [ prettyExpression d ]
+
+        docB =
+            prettyExpression b
     prettyExpression a0@(Pi _ _ _) =
         arrows characterSet (fmap duplicate (docs a0))
       where
