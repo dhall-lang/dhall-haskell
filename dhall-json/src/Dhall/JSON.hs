@@ -386,12 +386,17 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Dhall.Core.normalize e0)
             a' = loop a
             b' = loop b
 
-        Dhall.Core.Let a b c d ->
-            Dhall.Core.Let a b' c' d'
+        Dhall.Core.Let as b ->
+            Dhall.Core.Let as' b'
           where
-            b' = fmap loop b
-            c' =      loop c
-            d' =      loop d
+            f (Dhall.Core.Binding x y z) = Dhall.Core.Binding x y' z'
+              where
+                y' = fmap loop y
+                z' =      loop z
+
+            as' = fmap f as
+
+            b' = loop b
 
         Dhall.Core.Annot a b ->
             Dhall.Core.Annot a' b'
