@@ -6,7 +6,7 @@ module Dhall.Lint
     ) where
 
 import Dhall.Core (Binding(..), Chunks(..), Expr(..), Import, Var(..))
-import Data.Monoid ((<>))
+import Data.Semigroup ((<>))
 import Data.List.NonEmpty (NonEmpty(..))
 import Dhall.TypeCheck (X(..))
 
