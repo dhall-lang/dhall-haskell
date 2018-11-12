@@ -44,6 +44,21 @@ typecheckTests =
         , shouldNotTypeCheck
             "preferring a record of types over a record of terms"
             "failure/preferMixedRecords"
+        , should
+            "allow records of types of mixed kinds"
+            "recordOfTypes"
+        , should
+            "allow Boehm-Berarducci-encoded records of types of mixed kinds"
+            "encodedRecordOfTypes"
+        , should
+            "allow accessing a type from a record"
+            "accessType"
+        , should
+            "allow accessing a type from a Boehm-Berarducci-encoded record"
+            "accessEncodedType"
+        , shouldNotTypeCheck
+            "Hurkens' paradox"
+            "failure/hurkensParadox"
         ]
 
 preludeExamples :: TestTree

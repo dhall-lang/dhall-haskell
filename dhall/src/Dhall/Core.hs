@@ -102,13 +102,11 @@ import qualified Dhall.Set
     ... and the valid rule pairs are:
 
 > ⊦ Type ↝ Type : Type  -- Functions from terms to terms (ordinary functions)
-> ⊦ Kind ↝ Type : Type  -- Functions from types to terms (polymorphic functions)
-> ⊦ Kind ↝ Kind : Kind  -- Functions from types to types (type constructors)
-> ⊦ Sort ↝ Type : Type  -- Functions from kinds to terms (kind-polymorphic functions)
-> ⊦ Sort ↝ Kind : Kind  -- Functions from kinds to types (polymorphic type constructors)
-> ⊦ Sort ↝ Sort : Sort  -- Functions from kinds to kinds (kind constructors)
-
-    These are the same rule pairs as System Fω
+> ⊦ Kind ↝ Type : Type  -- Functions from types to terms (type-polymorphic functions)
+> ⊦ Sort ↝ Type : Type  -- Functions from kinds to terms
+> ⊦ Kind ↝ Kind : Kind  -- Functions from types to types (type-level functions)
+> ⊦ Sort ↝ Kind : Sort  -- Functions from kinds to types (kind-polymorphic functions)
+> ⊦ Sort ↝ Sort : Sort  -- Functions from kinds to kinds (kind-level functions)
 
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
