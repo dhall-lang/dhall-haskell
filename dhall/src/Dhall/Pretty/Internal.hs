@@ -911,22 +911,22 @@ escapeText :: Text -> Text
 escapeText text = Text.concatMap adapt text
   where
     adapt c
-        | '\x20' <= c && c <= '\x21' = Text.singleton c
+        | '\x20' <= c && c <= '\x21'     = Text.singleton c
         -- '\x22' == '"'
-        | '\x23' == c                = Text.singleton c
+        | '\x23' == c                    = Text.singleton c
         -- '\x24' == '$'
-        | '\x25' <= c && c <= '\x5B' = Text.singleton c
+        | '\x25' <= c && c <= '\x5B'     = Text.singleton c
         -- '\x5C' == '\\'
-        | '\x5D' <= c && c <= '\x7F' = Text.singleton c
-        | c == '"'                   = "\\\""
-        | c == '$'                   = "\\$"
-        | c == '\\'                  = "\\\\"
-        | c == '\b'                  = "\\b"
-        | c == '\f'                  = "\\f"
-        | c == '\n'                  = "\\n"
-        | c == '\r'                  = "\\r"
-        | c == '\t'                  = "\\t"
-        | otherwise                  = "\\u" <> showDigits (Data.Char.ord c)
+        | '\x5D' <= c && c <= '\x10FFFF' = Text.singleton c
+        | c == '"'                       = "\\\""
+        | c == '$'                       = "\\$"
+        | c == '\\'                      = "\\\\"
+        | c == '\b'                      = "\\b"
+        | c == '\f'                      = "\\f"
+        | c == '\n'                      = "\\n"
+        | c == '\r'                      = "\\r"
+        | c == '\t'                      = "\\t"
+        | otherwise                      = "\\u" <> showDigits (Data.Char.ord c)
 
     showDigits r0 = Text.pack (map showDigit [q1, q2, q3, r3])
       where
