@@ -5,7 +5,9 @@ module Dhall.Lint
       lint
     ) where
 
-import Dhall.Core (Chunks(..), Expr(..), Import, Var(..))
+import Dhall.Core (Binding(..), Chunks(..), Expr(..), Import, Var(..))
+import Data.Semigroup ((<>))
+import Data.List.NonEmpty (NonEmpty(..))
 import Dhall.TypeCheck (X(..))
 
 import qualified Dhall.Core
@@ -15,6 +17,7 @@ import qualified Dhall.Core
     Currently this:
 
     * removes unused @let@ bindings
+    * consolidates nested @let@ bindings to use a multiple-@let@ binding
     * switches legacy @List@-like @Optional@ literals to use @Some@ / @None@ instead
 -}
 lint :: Expr s Import -> Expr t Import
@@ -36,15 +39,32 @@ lint expression = loop (Dhall.Core.denote expression)
       where
         a' = loop a
         b' = loop b
-    loop (Let a b c d)
+
+    -- Consolidate nested `let` expresssions
+    loop (Let a (Let b c)) = loop (Let (a <> b) c)
+
+    -- Remove unused bindings
+    loop (Let (Binding a b c :| []) d)
         | not (V a 0 `Dhall.Core.freeIn` d') =
             d'
         | otherwise =
-            Let a b' c' d'
+            Let (Binding a b' c' :| [])  d'
       where
         b' = fmap loop b
         c' =      loop c
-        d' =      loop d
+
+        d' = loop d
+    loop (Let (Binding a b c :| (l : ls)) d)
+        | not (V a 0 `Dhall.Core.freeIn` d') =
+            Let (l' :| ls') d'
+        | otherwise =
+            Let (Binding a b' c' :| (l' : ls'))  d'
+      where
+        b' = fmap loop b
+        c' =      loop c
+
+        Let (l' :| ls') d' = loop (Let (l :| ls) d)
+
     loop (Annot a b) =
         Annot a' b'
       where
