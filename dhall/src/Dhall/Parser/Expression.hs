@@ -20,6 +20,7 @@ import qualified Crypto.Hash
 import qualified Data.ByteArray.Encoding
 import qualified Data.ByteString
 import qualified Data.Char
+import qualified Data.List.NonEmpty
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Encoding
@@ -82,16 +83,27 @@ completeExpression embedded = completeExpression_
             return (BoolIf a b c)
 
         alternative2 = do
-            _let
-            a <- label
-            b <- optional (do
-                _colon
-                expression )
-            _equal
-            c <- expression
+            let binding = do
+                    _let
+
+                    c <- label
+                    d <- optional (do
+                        _colon
+                        expression )
+
+                    _equal
+
+                    e <- expression
+
+                    return (Binding c d e)
+
+            as <- Data.List.NonEmpty.some1 binding
+
             _in
-            d <- expression
-            return (Let a b c d)
+
+            b <- expression
+
+            return (Let as b)
 
         alternative3 = do
             _forall

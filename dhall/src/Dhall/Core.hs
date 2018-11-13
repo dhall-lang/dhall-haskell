@@ -29,6 +29,7 @@ module Dhall.Core (
     , Path
     , Scheme(..)
     , Var(..)
+    , Binding(..)
     , Chunks(..)
     , Expr(..)
 
@@ -69,6 +70,7 @@ import Data.Data (Data)
 import Data.Foldable
 import Data.Functor.Identity (Identity(..))
 import Data.HashSet (HashSet)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.String (IsString(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
@@ -332,9 +334,9 @@ data Expr s a
     | Pi  Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
-    -- | > Let x Nothing  r e                       ~  let x     = r in e
-    --   > Let x (Just t) r e                       ~  let x : t = r in e
-    | Let Text (Maybe (Expr s a)) (Expr s a) (Expr s a)
+    -- | > Let [Binding x Nothing  r] e             ~  let x     = r in e
+    --   > Let [Binding x (Just t) r] e             ~  let x : t = r in e
+    | Let (NonEmpty (Binding s a)) (Expr s a)
     -- | > Annot x t                                ~  x : t
     | Annot (Expr s a) (Expr s a)
     -- | > Bool                                     ~  Bool
@@ -468,7 +470,7 @@ instance Functor (Expr s) where
   fmap f (Lam v e1 e2) = Lam v (fmap f e1) (fmap f e2)
   fmap f (Pi v e1 e2) = Pi v (fmap f e1) (fmap f e2)
   fmap f (App e1 e2) = App (fmap f e1) (fmap f e2)
-  fmap f (Let v maybeE e1 e2) = Let v (fmap (fmap f) maybeE) (fmap f e1) (fmap f e2)
+  fmap f (Let as b) = Let (fmap (fmap f) as) (fmap f b)
   fmap f (Annot e1 e2) = Annot (fmap f e1) (fmap f e2)
   fmap _ Bool = Bool
   fmap _ (BoolLit b) = BoolLit b
@@ -543,7 +545,9 @@ instance Monad (Expr s) where
     Lam a b c            >>= k = Lam a (b >>= k) (c >>= k)
     Pi  a b c            >>= k = Pi a (b >>= k) (c >>= k)
     App a b              >>= k = App (a >>= k) (b >>= k)
-    Let a b c d          >>= k = Let a (fmap (>>= k) b) (c >>= k) (d >>= k)
+    Let as b             >>= k = Let (fmap f as) (b >>= k)
+      where
+        f (Binding c d e) = Binding c (fmap (>>= k) d) (e >>= k)
     Annot a b            >>= k = Annot (a >>= k) (b >>= k)
     Bool                 >>= _ = Bool
     BoolLit a            >>= _ = BoolLit a
@@ -610,7 +614,7 @@ instance Bifunctor Expr where
     first k (Lam a b c           ) = Lam a (first k b) (first k c)
     first k (Pi a b c            ) = Pi a (first k b) (first k c)
     first k (App a b             ) = App (first k a) (first k b)
-    first k (Let a b c d         ) = Let a (fmap (first k) b) (first k c) (first k d)
+    first k (Let as b            ) = Let (fmap (first k) as) (first k b)
     first k (Annot a b           ) = Annot (first k a) (first k b)
     first _  Bool                  = Bool
     first _ (BoolLit a           ) = BoolLit a
@@ -675,6 +679,17 @@ instance Bifunctor Expr where
 
 instance IsString (Expr s a) where
     fromString str = Var (fromString str)
+
+data Binding s a = Binding
+    { variable   :: Text
+    , annotation :: Maybe (Expr s a)
+    , value      :: Expr s a
+    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
+
+instance Bifunctor Binding where
+    first k (Binding a b c) = Binding a (fmap (first k) b) (first k c)
+
+    second = fmap
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
@@ -793,14 +808,24 @@ shift d v (App f a) = App f' a'
   where
     f' = shift d v f
     a' = shift d v a
-shift d (V x n) (Let f mt r e) = Let f mt' r' e'
+shift d (V x₀ n₀) (Let (Binding x₁ mA₀ a₀ :| []) b₀) =
+    Let (Binding x₁ mA₁ a₁ :| []) b₁
   where
-    e' = shift d (V x n') e
-      where
-        n' = if x == f then n + 1 else n
+    n₁ = if x₀ == x₁ then n₀ + 1 else n₀
 
-    mt' = fmap (shift d (V x n)) mt
-    r'  =       shift d (V x n)  r
+    mA₁ = fmap (shift d (V x₀ n₀)) mA₀
+    a₁  =       shift d (V x₀ n₀)   a₀
+
+    b₁  =       shift d (V x₀ n₁)   b₀
+shift d (V x₀ n₀) (Let (Binding x₁ mA₀ a₀ :| (l₀ : ls₀)) b₀) =
+    Let (Binding x₁ mA₁ a₁ :| (l₁ : ls₁)) b₁
+  where
+    n₁ = if x₀ == x₁ then n₀ + 1 else n₀
+
+    mA₁ = fmap (shift d (V x₀ n₀)) mA₀
+    a₁  =       shift d (V x₀ n₀)   a₀
+
+    Let (l₁ :| ls₁) b₁ = shift d (V x₀ n₁) (Let (l₀ :| ls₀) b₀)
 shift d v (Annot a b) = Annot a' b'
   where
     a' = shift d v a
@@ -958,14 +983,28 @@ subst v e (App f a) = App f' a'
     f' = subst v e f
     a' = subst v e a
 subst v e (Var v') = if v == v' then e else Var v'
-subst (V x n) e (Let f mt r b) = Let f mt' r' b'
+subst (V x₀ n₀) e₀ (Let (Binding x₁ mA₀ a₀ :| []) b₀) =
+    Let (Binding x₁ mA₁ a₁ :| []) b₁
   where
-    b' = subst (V x n') (shift 1 (V f 0) e) b
-      where
-        n' = if x == f then n + 1 else n
+    n₁ = if x₀ == x₁ then n₀ + 1 else n₀
 
-    mt' = fmap (subst (V x n) e) mt
-    r'  =       subst (V x n) e  r
+    e₁ = shift 1 (V x₁ 0) e₀
+
+    mA₁ = fmap (subst (V x₀ n₀) e₀) mA₀
+    a₁  =       subst (V x₀ n₀) e₀   a₀
+
+    b₁  =       subst (V x₀ n₁) e₁   b₀
+subst (V x₀ n₀) e₀ (Let (Binding x₁ mA₀ a₀ :| (l₀ : ls₀)) b₀) =
+    Let (Binding x₁ mA₁ a₁ :| (l₁ : ls₁)) b₁
+  where
+    n₁ = if x₀ == x₁ then n₀ + 1 else n₀
+
+    e₁ = shift 1 (V x₁ 0) e₀
+
+    mA₁ = fmap (subst (V x₀ n₀) e₀) mA₀
+    a₁  =       subst (V x₀ n₀) e₀   a₀
+
+    Let (l₁ :| ls₁) b₁ = subst (V x₀ n₁) e₁ (Let (l₀ :| ls₀) b₀)
 subst x e (Annot a b) = Annot a' b'
   where
     a' = subst x e a
@@ -1144,14 +1183,22 @@ alphaNormalize (App f₀ a₀) =
     f₁ = alphaNormalize f₀
 
     a₁ = alphaNormalize a₀
-alphaNormalize (Let "_" mA₀ a₀ b₀) =
-    Let "_" mA₁ a₁ b₁
+alphaNormalize (Let (Binding "_" mA₀ a₀ :| []) b₀) =
+    Let (Binding "_" mA₁ a₁ :| []) b₁
   where
     mA₁ = fmap alphaNormalize mA₀
     a₁  =      alphaNormalize a₀
+
     b₁  =      alphaNormalize b₀
-alphaNormalize (Let x mA₀ a₀ b₀) =
-    Let "_" mA₁ a₁ b₄
+alphaNormalize (Let (Binding "_" mA₀ a₀ :| (l₀ : ls₀)) b₀) =
+    Let (Binding "_" mA₁ a₁ :| (l₁ : ls₁)) b₁
+  where
+    mA₁ = fmap alphaNormalize mA₀
+    a₁  =      alphaNormalize  a₀
+
+    Let (l₁ :| ls₁) b₁ = alphaNormalize (Let (l₀ :| ls₀) b₀)
+alphaNormalize (Let (Binding x mA₀ a₀ :| []) b₀) =
+    Let (Binding "_" mA₁ a₁ :| []) b₄
   where
     mA₁ = fmap alphaNormalize mA₀
     a₁  =      alphaNormalize a₀
@@ -1160,6 +1207,17 @@ alphaNormalize (Let x mA₀ a₀ b₀) =
     b₂ = subst (V x 0) (Var (V "_" 0)) b₁
     b₃ = shift (-1) (V x 0) b₂
     b₄ = alphaNormalize b₃
+alphaNormalize (Let (Binding x mA₀ a₀ :| (l₀ : ls₀)) b₀) =
+    Let (Binding "_" mA₁ a₁ :| (l₁ : ls₁)) b₄
+  where
+    mA₁ = fmap alphaNormalize mA₀
+    a₁  =      alphaNormalize a₀
+
+    b₁ = shift 1 (V "_" 0) b₀
+    b₂ = subst (V x 0) (Var (V "_" 0)) b₁
+    b₃ = shift (-1) (V x 0) b₂
+
+    Let (l₁ :| ls₁) b₄ = alphaNormalize (Let (l₀ :| ls₀) b₃)
 alphaNormalize (Annot t₀ _T₀) =
     Annot t₁ _T₁
   where
@@ -1419,7 +1477,9 @@ denote (Var a               ) = Var a
 denote (Lam a b c           ) = Lam a (denote b) (denote c)
 denote (Pi a b c            ) = Pi a (denote b) (denote c)
 denote (App a b             ) = App (denote a) (denote b)
-denote (Let a b c d         ) = Let a (fmap denote b) (denote c) (denote d)
+denote (Let as b            ) = Let (fmap f as) (denote b)
+  where
+    f (Binding c d e) = Binding c (fmap denote d) (denote e)
 denote (Annot a b           ) = Annot (denote a) (denote b)
 denote  Bool                  = Bool
 denote (BoolLit a           ) = BoolLit a
@@ -1639,11 +1699,15 @@ normalizeWithM ctx e0 = loop (denote e0)
                 case res of
                     Nothing -> pure (App f' a')
                     Just app' -> loop app'
-    Let f _ r b -> loop b''
+    Let (Binding x _ a₀ :| ls₀) b₀ -> loop b₂
       where
-        r'  = shift   1  (V f 0) r
-        b'  = subst (V f 0) r' b
-        b'' = shift (-1) (V f 0) b'
+        rest = case ls₀ of
+            []       -> b₀
+            l₁ : ls₁ -> Let (l₁ :| ls₁) b₀
+
+        a₁ = shift 1 (V x 0) a₀
+        b₁ = subst (V x 0) a₁ rest
+        b₂ = shift (-1) (V x 0) b₁
     Annot x _ -> loop x
     Bool -> pure Bool
     BoolLit b -> pure (BoolLit b)
@@ -1945,7 +2009,7 @@ isNormalized e0 = loop (denote e0)
           App (App (App (App (App OptionalFold _) (App None _)) _) _) _ ->
               False
           _ -> True
-      Let _ _ _ _ -> False
+      Let _ _ -> False
       Annot _ _ -> False
       Bool -> True
       BoolLit _ -> True
@@ -2201,7 +2265,9 @@ subExpressions _ (Var v) = pure (Var v)
 subExpressions f (Lam a b c) = Lam a <$> f b <*> f c
 subExpressions f (Pi a b c) = Pi a <$> f b <*> f c
 subExpressions f (App a b) = App <$> f a <*> f b
-subExpressions f (Let a b c d) = Let a <$> traverse f b <*> f c <*> f d
+subExpressions f (Let as b) = Let <$> traverse g as <*> f b
+  where
+    g (Binding c d e) = Binding c <$> traverse f d <*> f e
 subExpressions f (Annot a b) = Annot <$> f a <*> f b
 subExpressions _ Bool = pure Bool
 subExpressions _ (BoolLit b) = pure (BoolLit b)

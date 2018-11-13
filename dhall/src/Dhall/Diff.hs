@@ -24,7 +24,7 @@ import Data.Sequence (Seq)
 import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Dhall.Core (Chunks (..), Const(..), Expr(..), Var(..))
+import Dhall.Core (Binding(..), Chunks (..), Const(..), Expr(..), Var(..))
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import Dhall.Pretty.Internal (Ann)
@@ -700,20 +700,21 @@ diffExpression l@(BoolIf {}) r =
     mismatch l r
 diffExpression l r@(BoolIf {}) =
     mismatch l r
-diffExpression l@(Let {}) r@(Let {}) =
-    enclosed' "    " (keyword "in" <> "  ") (docs l r)
+diffExpression (Let asL bL ) (Let asR bR) =
+    enclosed' "" (keyword "in" <> "  ")
+        (Data.List.NonEmpty.zipWith docA asL asR <> pure docB)
   where
-    docs (Let aL bL cL dL) (Let aR bR cR dR) =
-        Data.List.NonEmpty.cons (align doc) (docs dL dR)
+    docA (Binding cL dL eL) (Binding cR dR eR) = align doc
       where
         doc =   keyword "let"
             <>  " "
-            <>  format " " (diffLabel aL aR)
-            <>  format " " (diffMaybe (colon <> " ") diffExpression bL bR)
+            <>  format " " (diffLabel cL cR)
+            <>  format " " (diffMaybe (colon <> " ") diffExpression dL dR)
             <>  equals
             <>  " "
-            <>  diffExpression cL cR
-    docs aL aR = pure (diffExpression aL aR)
+            <>  diffExpression eL eR
+
+    docB = diffExpression bL bR
 diffExpression l@(Let {}) r =
     mismatch l r
 diffExpression l r@(Let {}) =
