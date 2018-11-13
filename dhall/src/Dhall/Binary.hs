@@ -48,7 +48,6 @@ import Prelude hiding (exponent)
 import GHC.Float (double2Float, float2Double)
 import Codec.CBOR.Magic (floatToWord16, wordToFloat16)
 
-import qualified Data.Foldable
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Dhall.Map
