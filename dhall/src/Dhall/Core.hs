@@ -1558,6 +1558,12 @@ denote (Embed a             ) = Embed a
 normalizeWith :: Eq a => Normalizer a -> Expr s a -> Expr t a
 normalizeWith ctx = runIdentity . normalizeWithM ctx
 
+bind2 :: Monad m => (a -> b -> m c) -> m a -> m b -> m c
+bind2 f ma mb = do
+    a <- ma
+    b <- mb
+    f a b
+
 normalizeWithM :: (Eq a, Monad m) => NormalizerM m a -> Expr s a -> m (Expr t a)
 normalizeWithM ctx e0 = loop (denote e0)
  where
@@ -1712,38 +1718,62 @@ normalizeWithM ctx e0 = loop (denote e0)
     Annot x _ -> loop x
     Bool -> pure Bool
     BoolLit b -> pure (BoolLit b)
-    BoolAnd x y -> decide <$> loop x <*> loop y
+    BoolAnd x₀ y₀ -> do
+        x₁ <- loop x₀
+        y₁ <- loop y₀
+        decide x₁ y₁
       where
-        decide (BoolLit True )  r              = r
-        decide (BoolLit False)  _              = BoolLit False
-        decide  l              (BoolLit True ) = l
-        decide  _              (BoolLit False) = BoolLit False
+        decide (BoolLit True )  r              = return r
+        decide (BoolLit False)  _              = return (BoolLit False)
+        decide  l              (BoolLit True ) = return l
+        decide  _              (BoolLit False) = return (BoolLit False)
+        decide  x              (BoolAnd y z  ) = loop (BoolAnd (BoolAnd x y) z)
+        decide (BoolAnd x l)    r
+            | judgmentallyEqual l r = loop (BoolAnd x l)
         decide  l               r
-            | judgmentallyEqual l r = l
-            | otherwise             = BoolAnd l r
-    BoolOr x y -> decide <$> loop x <*> loop y
+            | judgmentallyEqual l r = return l
+            | otherwise             = return (BoolAnd l r)
+    BoolOr x₀ y₀ -> do
+        x₁ <- loop x₀
+        y₁ <- loop y₀
+        decide x₁ y₁
       where
-        decide (BoolLit False)  r              = r
-        decide (BoolLit True )  _              = BoolLit True
-        decide  l              (BoolLit False) = l
-        decide  _              (BoolLit True ) = BoolLit True
+        decide (BoolLit False)  r              = return r
+        decide (BoolLit True )  _              = return (BoolLit True)
+        decide  l              (BoolLit False) = return l
+        decide  _              (BoolLit True ) = return (BoolLit True)
+        decide  x              (BoolOr y z  )  = loop (BoolOr (BoolOr x y) z)
+        decide (BoolOr x l)     r
+            | judgmentallyEqual l r = loop (BoolOr x l)
         decide  l               r
-            | judgmentallyEqual l r = l
-            | otherwise             = BoolOr l r
-    BoolEQ x y -> decide <$> loop x <*> loop y
+            | judgmentallyEqual l r = return l
+            | otherwise             = return (BoolOr l r)
+    BoolEQ x₀ y₀ -> do
+        x₁ <- loop x₀
+        y₁ <- loop y₀
+        decide x₁ y₁
       where
-        decide (BoolLit True )  r              = r
-        decide  l              (BoolLit True ) = l
+        decide (BoolLit True )  r              = return r
+        decide  l              (BoolLit True ) = return l
+        decide  x              (BoolEQ y z   ) = loop (BoolEQ (BoolEQ x y) z)
+        decide (BoolEQ x l   )  r
+            | judgmentallyEqual l r = return x
         decide  l               r
-            | judgmentallyEqual l r = BoolLit True
-            | otherwise             = BoolEQ l r
-    BoolNE x y -> decide <$> loop x <*> loop y
+            | judgmentallyEqual l r = return (BoolLit True)
+            | otherwise             = return (BoolEQ l r)
+    BoolNE x₀ y₀ -> do
+        x₁ <- loop x₀
+        y₁ <- loop y₀
+        decide x₁ y₁
       where
-        decide (BoolLit False)  r              = r
-        decide  l              (BoolLit False) = l
+        decide (BoolLit False)  r              = return r
+        decide  l              (BoolLit False) = return l
+        decide  x              (BoolNE y z   ) = loop (BoolNE (BoolNE x y) z)
+        decide (BoolNE x l   )  r
+            | judgmentallyEqual l r = return x
         decide  l               r
-            | judgmentallyEqual l r = BoolLit False
-            | otherwise             = BoolNE l r
+            | judgmentallyEqual l r = return (BoolLit False)
+            | otherwise             = return (BoolNE l r)
     BoolIf bool true false -> decide <$> loop bool <*> loop true <*> loop false
       where
         decide (BoolLit True )  l              _              = l
@@ -1761,20 +1791,44 @@ normalizeWithM ctx e0 = loop (denote e0)
     NaturalOdd -> pure NaturalOdd
     NaturalToInteger -> pure NaturalToInteger
     NaturalShow -> pure NaturalShow
-    NaturalPlus x y -> decide <$> loop x <*> loop y
+    NaturalPlus x₀ y₀ -> do
+        x₁ <- loop x₀
+        y₁ <- loop y₀
+        decide x₁ y₁
       where
-        decide (NaturalLit 0)  r             = r
-        decide  l             (NaturalLit 0) = l
-        decide (NaturalLit m) (NaturalLit n) = NaturalLit (m + n)
-        decide  l              r             = NaturalPlus l r
-    NaturalTimes x y -> decide <$> loop x <*> loop y
+        decide (NaturalLit 0) r =
+            return r
+        decide l (NaturalLit 0) =
+            return l
+        decide (NaturalLit m) (NaturalLit n) =
+            return (NaturalLit (m + n))
+        decide x (NaturalPlus y z) =
+            loop (NaturalPlus (NaturalPlus x y) z)
+        decide (NaturalPlus x (NaturalLit m)) (NaturalLit n) =
+            loop (NaturalPlus x (NaturalLit (m + n)))
+        decide l r =
+            return (NaturalPlus l r)
+    NaturalTimes x₀ y₀ -> do
+        x₁ <- loop x₀
+        y₁ <- loop y₀
+        decide x₁ y₁
       where
-        decide (NaturalLit 1)  r             = r
-        decide  l             (NaturalLit 1) = l
-        decide (NaturalLit 0)  _             = NaturalLit 0
-        decide  _             (NaturalLit 0) = NaturalLit 0
-        decide (NaturalLit m) (NaturalLit n) = NaturalLit (m * n)
-        decide  l              r             = NaturalTimes l r
+        decide (NaturalLit 1) r =
+            return r
+        decide l (NaturalLit 1) =
+            return l
+        decide (NaturalLit 0) _ =
+            return (NaturalLit 0)
+        decide _ (NaturalLit 0) =
+            return (NaturalLit 0)
+        decide (NaturalLit m) (NaturalLit n) =
+            return (NaturalLit (m * n))
+        decide x (NaturalTimes y z) =
+            loop (NaturalTimes (NaturalTimes x y) z)
+        decide (NaturalTimes x (NaturalLit m)) (NaturalLit n) =
+            loop (NaturalTimes x (NaturalLit (m * n)))
+        decide l r =
+            return (NaturalTimes l r)
     Integer -> pure Integer
     IntegerLit n -> pure (IntegerLit n)
     IntegerShow -> pure IntegerShow
@@ -1797,15 +1851,26 @@ normalizeWithM ctx e0 = loop (denote e0)
           case y' of
             TextLit c -> pure [Chunks [] x, c]
             _         -> pure [Chunks [(x, y')] mempty]
-    TextAppend x y -> decide <$> loop x <*> loop y
+    TextAppend x₀ y₀ -> do
+        x₁ <- loop x₀
+        y₁ <- loop y₀
+        decide x₁ y₁
       where
         isEmpty (Chunks [] "") = True
         isEmpty  _             = False
 
-        decide (TextLit m)  r          | isEmpty m = r
-        decide  l          (TextLit n) | isEmpty n = l
-        decide (TextLit m) (TextLit n)             = TextLit (m <> n)
-        decide  l           r                      = TextAppend l r
+        decide (TextLit m) r
+            | isEmpty m = return r
+        decide l (TextLit n)
+            | isEmpty n = return l
+        decide (TextLit m) (TextLit n) =
+            return (TextLit (m <> n))
+        decide x (TextAppend y z) =
+            loop (TextAppend (TextAppend x y) z)
+        decide (TextAppend x (TextLit m)) (TextLit n) =
+            loop (TextAppend x (TextLit (m <> n)))
+        decide l r =
+            return (TextAppend l r)
     List -> pure List
     ListLit t es
         | Data.Sequence.null es -> ListLit <$> t' <*> es'
@@ -1813,12 +1878,23 @@ normalizeWithM ctx e0 = loop (denote e0)
       where
         t'  = traverse loop t
         es' = traverse loop es
-    ListAppend x y -> decide <$> loop x <*> loop y
+    ListAppend x₀ y₀ -> do
+        x₁ <- loop x₀
+        y₁ <- loop y₀
+        decide x₁ y₁
       where
-        decide (ListLit _ m)  r            | Data.Sequence.null m = r
-        decide  l            (ListLit _ n) | Data.Sequence.null n = l
-        decide (ListLit t m) (ListLit _ n)                        = ListLit t (m <> n)
-        decide  l             r                                   = ListAppend l r
+        decide (ListLit _ m)  r
+            | Data.Sequence.null m = return r
+        decide l (ListLit _ n)
+            | Data.Sequence.null n = return l
+        decide (ListLit t m) (ListLit _ n) =
+            return (ListLit t (m <> n))
+        decide x (ListAppend y z) =
+            loop (ListAppend (ListAppend x y) z)
+        decide (ListAppend x (ListLit t m)) (ListLit _ n) =
+            loop (ListAppend x (ListLit t (m <> n)))
+        decide l r =
+            return (ListAppend l r)
     ListBuild -> pure ListBuild
     ListFold -> pure ListFold
     ListLength -> pure ListLength
@@ -1848,36 +1924,65 @@ normalizeWithM ctx e0 = loop (denote e0)
       where
         v'   =          loop v
         kvs' = traverse loop kvs
-    Combine x y -> decide <$> loop x <*> loop y
+    Combine x₀ y₀ -> do
+        x₁ <- loop x₀
+        y₁ <- loop y₀
+        decide x₁ y₁
       where
         decide (RecordLit m) r | Data.Foldable.null m =
-            r
+            return r
         decide l (RecordLit n) | Data.Foldable.null n =
-            l
-        decide (RecordLit m) (RecordLit n) =
-            RecordLit (Dhall.Map.sort (Dhall.Map.unionWith decide m n))
+            return l
+        decide (RecordLit m) (RecordLit n) = do
+            u <- Data.Traversable.sequence (Dhall.Map.unionWith (bind2 decide) (fmap return m) (fmap return n))
+
+            return (RecordLit (Dhall.Map.sort u))
+        decide x (Combine y z) = do
+            loop (Combine (Combine x y) z)
+        decide (Combine x (RecordLit m)) (RecordLit n) = do
+            u <- Data.Traversable.sequence (Dhall.Map.unionWith (bind2 decide) (fmap return m) (fmap return n))
+
+            return (Combine x (RecordLit (Dhall.Map.sort u)))
         decide l r =
-            Combine l r
-    CombineTypes x y -> decide <$> loop x <*> loop y
+            return (Combine l r)
+    CombineTypes x₀ y₀ -> do
+        x₁ <- loop x₀
+        y₁ <- loop y₀
+        decide x₁ y₁
       where
         decide (Record m) r | Data.Foldable.null m =
-            r
+            return r
         decide l (Record n) | Data.Foldable.null n =
-            l
-        decide (Record m) (Record n) =
-            Record (Dhall.Map.sort (Dhall.Map.unionWith decide m n))
+            return l
+        decide (Record m) (Record n) = do
+            u <- Data.Traversable.sequence (Dhall.Map.unionWith (bind2 decide) (fmap return m) (fmap return n))
+
+            return (Record (Dhall.Map.sort u))
+        decide x (Combine y z) = do
+            loop (Combine (Combine x y) z)
+        decide (Combine x (Record m)) (Record n) = do
+            u <- Data.Traversable.sequence (Dhall.Map.unionWith (bind2 decide) (fmap return m) (fmap return n))
+
+            return (Combine x (Record (Dhall.Map.sort u)))
         decide l r =
-            CombineTypes l r
-    Prefer x y -> decide <$> loop x <*> loop y
+            return (CombineTypes l r)
+    Prefer x₀ y₀ -> do
+        x₁ <- loop x₀
+        y₁ <- loop y₀
+        decide x₁ y₁
       where
         decide (RecordLit m) r | Data.Foldable.null m =
-            r
+            return r
         decide l (RecordLit n) | Data.Foldable.null n =
-            l
+            return l
         decide (RecordLit m) (RecordLit n) =
-            RecordLit (Dhall.Map.sort (Dhall.Map.union n m))
+            return (RecordLit (Dhall.Map.sort (Dhall.Map.union n m)))
+        decide x (Combine y z) =
+            loop (Combine (Combine x y) z)
+        decide (Combine x (RecordLit m)) (RecordLit n) =
+            return (Combine x (RecordLit (Dhall.Map.sort (Dhall.Map.union n m))))
         decide l r =
-            Prefer l r
+            return (Prefer l r)
     Merge x y t      -> do
         x' <- loop x
         y' <- loop y
@@ -2016,23 +2121,31 @@ isNormalized e0 = loop (denote e0)
       BoolLit _ -> True
       BoolAnd x y -> loop x && loop y && decide x y
         where
-          decide (BoolLit _)  _          = False
-          decide  _          (BoolLit _) = False
-          decide  l           r          = not (judgmentallyEqual l r)
+          decide (BoolLit _  )  _            = False
+          decide  _            (BoolLit _  ) = False
+          decide  _            (BoolAnd _ _) = False
+          decide (BoolAnd _ l)  r            = not (judgmentallyEqual l r)
+          decide  l             r            = not (judgmentallyEqual l r)
       BoolOr x y -> loop x && loop y && decide x y
         where
-          decide (BoolLit _)  _          = False
-          decide  _          (BoolLit _) = False
-          decide  l           r          = not (judgmentallyEqual l r)
+          decide (BoolLit _)   _           = False
+          decide  _           (BoolLit _ ) = False
+          decide  _           (BoolOr _ _) = False
+          decide (BoolOr _ l)  r           = not (judgmentallyEqual l r)
+          decide  l            r           = not (judgmentallyEqual l r)
       BoolEQ x y -> loop x && loop y && decide x y
         where
           decide (BoolLit True)  _             = False
           decide  _             (BoolLit True) = False
+          decide  _             (BoolEQ _ _  ) = False
+          decide (BoolEQ _ l  )  r             = not (judgmentallyEqual l r)
           decide  l              r             = not (judgmentallyEqual l r)
       BoolNE x y -> loop x && loop y && decide x y
         where
           decide (BoolLit False)  _               = False
           decide  _              (BoolLit False ) = False
+          decide  _              (BoolNE _ _    ) = False
+          decide (BoolNE _ l   )  r               = not (judgmentallyEqual l r)
           decide  l               r               = not (judgmentallyEqual l r)
       BoolIf x y z ->
           loop x && loop y && loop z && decide x y z
@@ -2051,18 +2164,22 @@ isNormalized e0 = loop (denote e0)
       NaturalToInteger -> True
       NaturalPlus x y -> loop x && loop y && decide x y
         where
-          decide (NaturalLit 0)  _             = False
-          decide  _             (NaturalLit 0) = False
-          decide (NaturalLit _) (NaturalLit _) = False
-          decide  _              _             = True
+          decide (NaturalLit 0)                  _                = False
+          decide  _                             (NaturalLit 0   ) = False
+          decide (NaturalLit _)                 (NaturalLit _   ) = False
+          decide  _                             (NaturalPlus _ _) = False
+          decide (NaturalPlus _ (NaturalLit _)) (NaturalLit _   ) = False
+          decide  _                              _                = True
       NaturalTimes x y -> loop x && loop y && decide x y
         where
-          decide (NaturalLit 0)  _             = False
-          decide  _             (NaturalLit 0) = False
-          decide (NaturalLit 1)  _             = False
-          decide  _             (NaturalLit 1) = False
-          decide (NaturalLit _) (NaturalLit _) = False
-          decide  _              _             = True
+          decide (NaturalLit 0)                   _                = False
+          decide  _                              (NaturalLit 0   ) = False
+          decide (NaturalLit 1)                   _                = False
+          decide  _                              (NaturalLit 1   ) = False
+          decide (NaturalLit _)                  (NaturalLit _   ) = False
+          decide  _                              (NaturalPlus _ _) = False
+          decide (NaturalTimes _ (NaturalLit _)) (NaturalLit _   ) = False
+          decide  _                               _                = True
       Integer -> True
       IntegerLit _ -> True
       IntegerShow -> True
@@ -2082,18 +2199,28 @@ isNormalized e0 = loop (denote e0)
           isEmpty (Chunks [] "") = True
           isEmpty  _             = False
 
-          decide (TextLit m)  _          | isEmpty m = False
-          decide  _          (TextLit n) | isEmpty n = False
-          decide (TextLit _) (TextLit _)             = False
-          decide  _           _                      = True
+          decide (TextLit m)                 _          | isEmpty m = False
+          decide  _                         (TextLit n) | isEmpty n = False
+          decide (TextLit _)                (TextLit _)             = False
+          decide  _                         (TextAppend _ _)        = False
+          decide (TextAppend _ (TextLit _)) (TextLit _)             = False
+          decide  _           _                                     = True
       List -> True
       ListLit t es -> all loop t && all loop es
       ListAppend x y -> loop x && loop y && decide x y
         where
-          decide (ListLit _ m)  _            | Data.Sequence.null m = False
-          decide  _            (ListLit _ n) | Data.Sequence.null n = False
-          decide (ListLit _ _) (ListLit _ _)                        = False
-          decide  _             _                                   = True
+          decide (ListLit _ m) _
+              | Data.Sequence.null m = False
+          decide _ (ListLit _ n)
+              | Data.Sequence.null n = False
+          decide (ListLit _ _) (ListLit _ _) =
+              False
+          decide _ (ListAppend _ _) =
+              False
+          decide (ListAppend _ (ListLit _ _)) (ListLit _ _) =
+              False
+          decide _ _ =
+              True
       ListBuild -> True
       ListFold -> True
       ListLength -> True
@@ -2116,18 +2243,24 @@ isNormalized e0 = loop (denote e0)
           decide (RecordLit m) _ | Data.Foldable.null m = False
           decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
-          decide  _ _ = True
+          decide _ (Combine _ _) = False
+          decide (Combine _ (RecordLit _)) (RecordLit _) = False
+          decide _ _ = True
       CombineTypes x y -> loop x && loop y && decide x y
         where
           decide (Record m) _ | Data.Foldable.null m = False
           decide _ (Record n) | Data.Foldable.null n = False
           decide (Record _) (Record _) = False
+          decide _ (CombineTypes _ _) = False
+          decide (CombineTypes _ (Record _)) (Record _) = False
           decide  _ _ = True
       Prefer x y -> loop x && loop y && decide x y
         where
           decide (RecordLit m) _ | Data.Foldable.null m = False
           decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
+          decide _ (Prefer _ _) = False
+          decide (Prefer _ (RecordLit _)) (RecordLit _) = False
           decide  _ _ = True
       Merge x y t -> loop x && loop y && all loop t &&
           case x of

@@ -185,6 +185,7 @@ simplifications =
         , shouldNormalize "&&" "./simplifications/and"
         , shouldNormalize "==" "./simplifications/eq"
         , shouldNormalize "!=" "./simplifications/ne"
+        , shouldNormalize "associative operations" "./simplifications/associativity"
         ]
 
 constantFolding :: TestTree
