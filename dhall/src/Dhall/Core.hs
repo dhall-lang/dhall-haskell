@@ -1700,8 +1700,8 @@ normalizeWithM ctx e0 = loop (denote e0)
                     App (App (App (App (App OptionalFold _) (Some x)) _) just) _ ->
                         loop (App just x)
                     _ -> do
-                        res <- ctx (App f' a')
-                        case res of
+                        res2 <- ctx (App f' a')
+                        case res2 of
                             Nothing -> pure (App f' a')
                             Just app' -> loop app'
     Let (Binding x _ a₀ :| ls₀) b₀ -> loop b₂
