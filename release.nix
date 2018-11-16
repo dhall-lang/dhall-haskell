@@ -38,6 +38,9 @@ in
           shared.tarball-dhall-json
           shared.tarball-dhall-text
 
+          # This is the only `dhall` build that runs the test suite
+          coverage.dhall
+
           shared.pwd
         ];
       };
