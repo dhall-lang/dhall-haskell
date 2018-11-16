@@ -76,6 +76,10 @@ formatTests =
             ASCII
             "be able to format with ASCII characters"
             "ascii"
+        , should
+            Unicode
+            "preserve Unicode characters"
+            "unicode"
         ]
 
 should :: CharacterSet -> Text -> Text -> TestTree

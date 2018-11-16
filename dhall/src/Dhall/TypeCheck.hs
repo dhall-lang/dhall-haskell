@@ -24,6 +24,7 @@ module Dhall.TypeCheck (
 import Control.Exception (Exception)
 import Data.Data (Data(..))
 import Data.Foldable (forM_, toList)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Sequence (Seq, ViewL(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Set (Set)
@@ -31,7 +32,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Traversable (forM)
 import Data.Typeable (Typeable)
-import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
+import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
 
@@ -147,7 +148,7 @@ typeWithA tpa = loop
                 let nf_A  = Dhall.Core.normalize _A
                 let nf_A' = Dhall.Core.normalize _A'
                 Left (TypeError ctx e (TypeMismatch f nf_A a nf_A'))
-    loop ctx e@(Let x mA a0 b0) = do
+    loop ctx e@(Let (Binding x mA a0 :| ls) b0) = do
         _A1 <- loop ctx a0
         case mA of
             Just _A0 -> do
@@ -164,6 +165,10 @@ typeWithA tpa = loop
         let a1 = Dhall.Core.normalize a0
         let a2 = Dhall.Core.shift 1 (V x 0) a1
 
+        let rest = case ls of
+                []       -> b0
+                l' : ls' -> Let (l' :| ls') b0
+
         -- The catch-all branch directly implements the Dhall
         -- specification as written; it is necessary to substitute in
         -- types in order to get 'dependent let' behaviour and to
@@ -176,13 +181,13 @@ typeWithA tpa = loop
         case Dhall.Core.normalize t of
           Const Type -> do
             let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A1) ctx)
-            _B0 <- loop ctx' b0
+            _B0 <- loop ctx' rest
             let _B1 = Dhall.Core.subst (V x 0) a2 _B0
             let _B2 = Dhall.Core.shift (-1) (V x 0) _B1
             return _B2
 
           _ -> do
-            let b1 = Dhall.Core.subst (V x 0) a2 b0
+            let b1 = Dhall.Core.subst (V x 0) a2 rest
             let b2 = Dhall.Core.shift (-1) (V x 0) b1
             loop ctx b2
 
