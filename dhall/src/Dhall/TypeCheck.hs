@@ -62,9 +62,9 @@ axiom Sort = Left (TypeError Dhall.Context.empty (Const Sort) Untyped)
 rule :: Const -> Const -> Either () Const
 rule Type Type = return Type
 rule Kind Type = return Type
-rule Kind Kind = return Kind
 rule Sort Type = return Type
-rule Sort Kind = return Kind
+rule Kind Kind = return Kind
+rule Sort Kind = return Sort
 rule Sort Sort = return Sort
 -- This forbids dependent types. If this ever changes, then the fast
 -- path in the Let case of typeWithA will become unsound.
@@ -511,7 +511,11 @@ typeWithA tpa = loop
                             _ ->
                                 Left (TypeError ctx e (InvalidFieldType k t))
                 Dhall.Map.traverseWithKey_ process rest
-                return (Const c)
+
+                case c of
+                    Type -> return (Const Type)
+                    Kind -> return (Const Sort)
+                    Sort -> return (Const Sort)
     loop ctx e@(RecordLit kvs   ) = do
         case Dhall.Map.toList kvs of
             []         -> return (Record mempty)
