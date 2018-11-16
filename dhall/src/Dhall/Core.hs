@@ -1960,12 +1960,12 @@ normalizeWithM ctx e0 = loop (denote e0)
             u <- Data.Traversable.sequence (Dhall.Map.unionWith (bind2 decide) (fmap return m) (fmap return n))
 
             return (Record (Dhall.Map.sort u))
-        decide x (Combine y z) = do
-            loop (Combine (Combine x y) z)
-        decide (Combine x (Record m)) (Record n) = do
+        decide x (CombineTypes y z) = do
+            loop (CombineTypes (CombineTypes x y) z)
+        decide (CombineTypes x (Record m)) (Record n) = do
             u <- Data.Traversable.sequence (Dhall.Map.unionWith (bind2 decide) (fmap return m) (fmap return n))
 
-            return (Combine x (Record (Dhall.Map.sort u)))
+            return (CombineTypes x (Record (Dhall.Map.sort u)))
         decide l r =
             return (CombineTypes l r)
     Prefer x₀ y₀ -> do
@@ -1979,10 +1979,10 @@ normalizeWithM ctx e0 = loop (denote e0)
             return l
         decide (RecordLit m) (RecordLit n) =
             return (RecordLit (Dhall.Map.sort (Dhall.Map.union n m)))
-        decide x (Combine y z) =
-            loop (Combine (Combine x y) z)
-        decide (Combine x (RecordLit m)) (RecordLit n) =
-            return (Combine x (RecordLit (Dhall.Map.sort (Dhall.Map.union n m))))
+        decide x (Prefer y z) =
+            loop (Prefer (Prefer x y) z)
+        decide (Prefer x (RecordLit m)) (RecordLit n) =
+            return (Prefer x (RecordLit (Dhall.Map.sort (Dhall.Map.union n m))))
         decide l r =
             return (Prefer l r)
     Merge x y t      -> do
@@ -2174,14 +2174,14 @@ isNormalized e0 = loop (denote e0)
           decide  _                              _                = True
       NaturalTimes x y -> loop x && loop y && decide x y
         where
-          decide (NaturalLit 0)                   _                = False
-          decide  _                              (NaturalLit 0   ) = False
-          decide (NaturalLit 1)                   _                = False
-          decide  _                              (NaturalLit 1   ) = False
-          decide (NaturalLit _)                  (NaturalLit _   ) = False
-          decide  _                              (NaturalPlus _ _) = False
-          decide (NaturalTimes _ (NaturalLit _)) (NaturalLit _   ) = False
-          decide  _                               _                = True
+          decide (NaturalLit 0)                   _                 = False
+          decide  _                              (NaturalLit 0    ) = False
+          decide (NaturalLit 1)                   _                 = False
+          decide  _                              (NaturalLit 1    ) = False
+          decide (NaturalLit _)                  (NaturalLit _    ) = False
+          decide  _                              (NaturalTimes _ _) = False
+          decide (NaturalTimes _ (NaturalLit _)) (NaturalLit _    ) = False
+          decide  _                               _                 = True
       Integer -> True
       IntegerLit _ -> True
       IntegerShow -> True
