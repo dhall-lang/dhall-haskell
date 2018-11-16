@@ -133,7 +133,7 @@ Library
         megaparsec                  >= 7.0.0    && < 7.1 ,
         memory                      >= 0.14     && < 0.15,
         mtl                         >= 2.2.1    && < 2.3 ,
-        optparse-applicative                       < 0.15,
+        optparse-applicative        >= 0.14.0.0 && < 0.15,
         parsers                     >= 0.12.4   && < 0.13,
         prettyprinter               >= 1.2.0.1  && < 1.3 ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
