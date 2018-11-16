@@ -133,6 +133,7 @@ import Control.Exception (Exception, SomeException, throwIO, toException)
 import Control.Monad (guard)
 import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..))
 import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
 import Data.CaseInsensitive (CI)
@@ -463,7 +464,7 @@ localToPath prefix file_ = liftIO $ do
     return (foldr cons prefixPath cs)
 
 -- | Parse an expression from a `Import` containing a Dhall program
-exprFromImport :: Import -> StateT (Status IO) IO (Expr Src Import)
+exprFromImport :: (MonadCatch m, MonadIO m) => Import -> StateT (Status m) m (Expr Src Import)
 exprFromImport here@(Import {..}) = do
     let ImportHashed {..} = importHashed
 
@@ -500,7 +501,7 @@ exprFromImport here@(Import {..}) = do
     like doing \"the right thing\" for uncached imports (i.e. exporting
     environment variables or creating files)
 -}
-exprToImport :: Import -> Expr Src X -> StateT (Status IO) IO ()
+exprToImport :: MonadIO m => Import -> Expr Src X -> StateT (Status m) m ()
 exprToImport here expression = do
     Status {..} <- State.get
 
@@ -514,12 +515,14 @@ exprToImport here expression = do
 
         _ <- throws (Dhall.TypeCheck.typeWith _startingContext expression)
 
-        let normalizedExpression =
+        normalizedExpression <-
+          lift . lift $
+            fmap
                 Dhall.Core.alphaNormalize
-                    (Dhall.Core.normalizeWith
-                        (getReifiedNormalizer _normalizer)
-                        expression
-                    )
+                (Dhall.Core.normalizeWithM
+                    (getReifiedNormalizer _normalizer)
+                    expression
+                )
 
         let bytes = encodeExpression _standardVersion normalizedExpression
 
@@ -593,7 +596,7 @@ getCacheDirectory = liftIO $ do
             return xdgCacheHome
 #endif
 
-exprFromUncachedImport :: Import -> StateT (Status IO) IO (Expr Src Import)
+exprFromUncachedImport :: (MonadCatch m, MonadIO m) => Import -> StateT (Status m) m (Expr Src Import)
 exprFromUncachedImport (Import {..}) = do
     let ImportHashed {..} = importHashed
 
@@ -690,7 +693,7 @@ exprFromUncachedImport (Import {..}) = do
             return (TextLit (Chunks [] text))
 
 -- | Default starting `Status`, importing relative to the given directory.
-emptyStatus :: FilePath -> Status IO
+emptyStatus :: (MonadCatch m, MonadIO m) => FilePath -> Status m
 emptyStatus = emptyStatusWith exprFromImport exprToImport
 
 {-| Generalized version of `load`
@@ -774,7 +777,7 @@ loadWith expr₀ = case expr₀ of
                     -- cached, since they have already been checked
                     expr''' <- case Dhall.TypeCheck.typeWith _startingContext expr'' of
                         Left  err -> throwM (Imported imports' err)
-                        Right _   -> return (Dhall.Core.normalizeWith (getReifiedNormalizer _normalizer) expr'')
+                        Right _   -> lift $ Dhall.Core.normalizeWithM (getReifiedNormalizer _normalizer) expr''
                     zoom cache (State.put $! Map.insert here expr''' _cache)
                     return expr'''
 

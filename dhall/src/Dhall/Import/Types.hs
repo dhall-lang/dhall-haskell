@@ -48,7 +48,7 @@ data Status m = Status
 
     , _standardVersion :: StandardVersion
 
-    , _normalizer :: ReifiedNormalizer X
+    , _normalizer :: ReifiedNormalizer m X
 
     , _startingContext :: Context (Expr Src X)
 
@@ -59,7 +59,8 @@ data Status m = Status
 
 -- | Default starting `Status` that is polymorphic in the base `Monad`
 emptyStatusWith
-    :: (Import -> StateT (Status m) m (Expr Src Import))
+    :: Applicative m
+    => (Import -> StateT (Status m) m (Expr Src Import))
     -> (Import -> Expr Src X -> StateT (Status m) m ())
     -> FilePath
     -> Status m
@@ -107,7 +108,7 @@ standardVersion :: Functor f => LensLike' f (Status m) StandardVersion
 standardVersion k s =
     fmap (\x -> s { _standardVersion = x }) (k (_standardVersion s))
 
-normalizer :: Functor f => LensLike' f (Status m) (ReifiedNormalizer X)
+normalizer :: Functor f => LensLike' f (Status m) (ReifiedNormalizer m X)
 normalizer k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
 
 startingContext :: Functor f => LensLike' f (Status m) (Context (Expr Src X))

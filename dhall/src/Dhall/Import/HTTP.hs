@@ -75,7 +75,7 @@ renderPrettyHttpException e = case e of
         <> show e'
 #endif
 
-needManager :: StateT (Status m) IO Manager
+needManager :: MonadIO m => StateT (Status m) m Manager
 needManager = do
     x <- zoom manager State.get
     case join (fmap fromDynamic x) of
@@ -95,9 +95,10 @@ needManager = do
             return m
 
 fetchFromHttpUrl
-    :: String
+    :: MonadIO m
+    => String
     -> Maybe [(CI ByteString, ByteString)]
-    -> StateT (Status m) IO (String, Text.Text)
+    -> StateT (Status m) m (String, Text.Text)
 fetchFromHttpUrl url mheaders = do
     m <- needManager
 

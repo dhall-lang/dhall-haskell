@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FunctionalDependencies     #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -159,10 +160,10 @@ instance Show InvalidType where
 instance Exception InvalidType
 
 -- | @since 1.16
-data InputSettings = InputSettings
+data InputSettings m = InputSettings
   { _rootDirectory :: FilePath
   , _sourceName :: FilePath
-  , _evaluateSettings :: EvaluateSettings
+  , _evaluateSettings :: EvaluateSettings m
   }
 
 -- | Default input settings: resolves imports relative to @.@ (the
@@ -170,7 +171,7 @@ data InputSettings = InputSettings
 -- and default evaluation settings from 'defaultEvaluateSettings'.
 --
 -- @since 1.16
-defaultInputSettings :: InputSettings
+defaultInputSettings :: Applicative m => InputSettings m
 defaultInputSettings = InputSettings
   { _rootDirectory = "."
   , _sourceName = "(input)"
@@ -182,7 +183,7 @@ defaultInputSettings = InputSettings
 -- @since 1.16
 rootDirectory
   :: (Functor f)
-  => LensLike' f InputSettings FilePath
+  => LensLike' f (InputSettings m) FilePath
 rootDirectory k s =
   fmap (\x -> s { _rootDirectory = x }) (k (_rootDirectory s))
 
@@ -193,14 +194,14 @@ rootDirectory k s =
 -- @since 1.16
 sourceName
   :: (Functor f)
-  => LensLike' f InputSettings FilePath
+  => LensLike' f (InputSettings m) FilePath
 sourceName k s =
   fmap (\x -> s { _sourceName = x}) (k (_sourceName s))
 
 -- | @since 1.16
-data EvaluateSettings = EvaluateSettings
+data EvaluateSettings m = EvaluateSettings
   { _startingContext :: Dhall.Context.Context (Expr Src X)
-  , _normalizer      :: Dhall.Core.ReifiedNormalizer X
+  , _normalizer      :: Dhall.Core.ReifiedNormalizer m X
   , _standardVersion :: StandardVersion
   }
 
@@ -208,7 +209,7 @@ data EvaluateSettings = EvaluateSettings
 -- context, and no special normalizer behaviour.
 --
 -- @since 1.16
-defaultEvaluateSettings :: EvaluateSettings
+defaultEvaluateSettings :: Applicative m => EvaluateSettings m
 defaultEvaluateSettings = EvaluateSettings
   { _startingContext = Dhall.Context.empty
   , _normalizer      = Dhall.Core.ReifiedNormalizer (const (pure Nothing))
@@ -219,24 +220,24 @@ defaultEvaluateSettings = EvaluateSettings
 --
 -- @since 1.16
 startingContext
-  :: (Functor f, HasEvaluateSettings s)
+  :: (Functor f, HasEvaluateSettings s m)
   => LensLike' f s (Dhall.Context.Context (Expr Src X))
 startingContext = evaluateSettings . l
   where
     l :: (Functor f)
-      => LensLike' f EvaluateSettings (Dhall.Context.Context (Expr Src X))
+      => LensLike' f (EvaluateSettings m) (Dhall.Context.Context (Expr Src X))
     l k s = fmap (\x -> s { _startingContext = x}) (k (_startingContext s))
 
 -- | Access the custom normalizer.
 --
 -- @since 1.16
 normalizer
-  :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Dhall.Core.ReifiedNormalizer X)
+  :: (Functor f, HasEvaluateSettings s m)
+  => LensLike' f s (Dhall.Core.ReifiedNormalizer m X)
 normalizer = evaluateSettings . l
   where
     l :: (Functor f)
-      => LensLike' f EvaluateSettings (Dhall.Core.ReifiedNormalizer X)
+      => LensLike' f (EvaluateSettings m) (Dhall.Core.ReifiedNormalizer m X)
     l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
 
 -- | Access the standard version (used primarily when encoding or decoding
@@ -244,23 +245,23 @@ normalizer = evaluateSettings . l
 --
 -- @since 1.17
 standardVersion
-    :: (Functor f, HasEvaluateSettings s)
+    :: (Functor f, HasEvaluateSettings s m)
     => LensLike' f s StandardVersion
 standardVersion = evaluateSettings . l
   where
   l k s = fmap (\x -> s { _standardVersion = x}) (k (_standardVersion s))
 
 -- | @since 1.16
-class HasEvaluateSettings s where
+class HasEvaluateSettings s m | s -> m where
   evaluateSettings
     :: (Functor f)
-    => LensLike' f s EvaluateSettings
+    => LensLike' f s (EvaluateSettings m)
 
-instance HasEvaluateSettings InputSettings where
+instance HasEvaluateSettings (InputSettings m) m where
   evaluateSettings k s =
     fmap (\x -> s { _evaluateSettings = x }) (k (_evaluateSettings s))
 
-instance HasEvaluateSettings EvaluateSettings where
+instance HasEvaluateSettings (EvaluateSettings m) m where
   evaluateSettings = id
 
 {-| Type-check and evaluate a Dhall program, decoding the result into Haskell
@@ -297,7 +298,7 @@ input =
 @since 1.16
 -}
 inputWithSettings
-    :: InputSettings
+    :: InputSettings IO
     -> Type a
     -- ^ The type of value to decode from Dhall to Haskell
     -> Text
@@ -329,7 +330,8 @@ inputWithSettings settings (Type {..}) txt = do
             _ ->
                 Annot expr' expected
     _ <- throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
-    case extract (Dhall.Core.normalizeWith (Dhall.Core.getReifiedNormalizer (view normalizer settings)) expr') of
+    expr'' <- Dhall.Core.normalizeWithM (Dhall.Core.getReifiedNormalizer (view normalizer settings)) expr'
+    case extract expr'' of
         Just x  -> return x
         Nothing -> Control.Exception.throwIO InvalidType
 
@@ -356,7 +358,7 @@ inputFile =
 @since 1.16
 -}
 inputFileWithSettings
-  :: EvaluateSettings
+  :: EvaluateSettings IO
   -> Type a
   -- ^ The type of value to decode from Dhall to Haskell
   -> FilePath
@@ -392,7 +394,7 @@ inputExpr =
 @since 1.16
 -}
 inputExprWithSettings
-    :: InputSettings
+    :: InputSettings IO
     -> Text
     -- ^ The Dhall program
     -> IO (Expr Src X)
@@ -414,7 +416,7 @@ inputExprWithSettings settings txt = do
     expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
 
     _ <- throws (Dhall.TypeCheck.typeWith (view startingContext settings) expr')
-    pure (Dhall.Core.normalizeWith (Dhall.Core.getReifiedNormalizer (view normalizer settings)) expr')
+    Dhall.Core.normalizeWithM (Dhall.Core.getReifiedNormalizer (view normalizer settings)) expr'
 
 -- | Use this function to extract Haskell values directly from Dhall AST.
 --   The intended use case is to allow easy extraction of Dhall values for

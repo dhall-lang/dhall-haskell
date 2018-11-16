@@ -1955,8 +1955,8 @@ type Normalizer a = NormalizerM Identity a
 
 -- | A reified 'Normalizer', which can be stored in structures without
 -- running into impredicative polymorphism.
-data ReifiedNormalizer a = ReifiedNormalizer
-  { getReifiedNormalizer :: Normalizer a }
+data ReifiedNormalizer m a = ReifiedNormalizer
+  { getReifiedNormalizer :: NormalizerM m a }
 
 -- | Check if an expression is in a normal form given a context of evaluation.
 --   Unlike `isNormalized`, this will fully normalize and traverse through the expression.
