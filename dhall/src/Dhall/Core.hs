@@ -104,13 +104,11 @@ import qualified Dhall.Set
     ... and the valid rule pairs are:
 
 > ⊦ Type ↝ Type : Type  -- Functions from terms to terms (ordinary functions)
-> ⊦ Kind ↝ Type : Type  -- Functions from types to terms (polymorphic functions)
-> ⊦ Kind ↝ Kind : Kind  -- Functions from types to types (type constructors)
-> ⊦ Sort ↝ Type : Type  -- Functions from kinds to terms (kind-polymorphic functions)
-> ⊦ Sort ↝ Kind : Kind  -- Functions from kinds to types (polymorphic type constructors)
-> ⊦ Sort ↝ Sort : Sort  -- Functions from kinds to kinds (kind constructors)
-
-    These are the same rule pairs as System Fω
+> ⊦ Kind ↝ Type : Type  -- Functions from types to terms (type-polymorphic functions)
+> ⊦ Sort ↝ Type : Type  -- Functions from kinds to terms
+> ⊦ Kind ↝ Kind : Kind  -- Functions from types to types (type-level functions)
+> ⊦ Sort ↝ Kind : Sort  -- Functions from kinds to types (kind-polymorphic functions)
+> ⊦ Sort ↝ Sort : Sort  -- Functions from kinds to kinds (kind-level functions)
 
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
@@ -1573,133 +1571,137 @@ normalizeWithM ctx e0 = loop (denote e0)
         _A' = loop _A
         _B' = loop _B
     App f a -> do
-      f' <- loop f
-      case f' of
-        Lam x _A b -> loop b''
-          where
-            a'  = shift   1  (V x 0) a
-            b'  = subst (V x 0) a' b
-            b'' = shift (-1) (V x 0) b'
-        _ -> do
-          a' <- loop a
-          case App f' a' of
-            -- build/fold fusion for `List`
-            App (App ListBuild _) (App (App ListFold _) e') -> loop e'
-
-            -- build/fold fusion for `Natural`
-            App NaturalBuild (App NaturalFold e') -> loop e'
-
-            -- build/fold fusion for `Optional`
-            App (App OptionalBuild _) (App (App OptionalFold _) e') -> loop e'
-
-            App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
-              t' <- loop t
-              if boundedType t' then strict else lazy
-              where
-                strict =       strictLoop n0
-                lazy   = loop (  lazyLoop n0)
-
-                strictLoop !0 = loop zero
-                strictLoop !n = App succ' <$> strictLoop (n - 1) >>= loop
-
-                lazyLoop !0 = zero
-                lazyLoop !n = App succ' (lazyLoop (n - 1))
-            App NaturalBuild g -> loop (App (App (App g Natural) succ) zero)
-              where
-                succ = Lam "x" Natural (NaturalPlus "x" (NaturalLit 1))
-
-                zero = NaturalLit 0
-            App NaturalIsZero (NaturalLit n) -> pure (BoolLit (n == 0))
-            App NaturalEven (NaturalLit n) -> pure (BoolLit (even n))
-            App NaturalOdd (NaturalLit n) -> pure (BoolLit (odd n))
-            App NaturalToInteger (NaturalLit n) -> pure (IntegerLit (toInteger n))
-            App NaturalShow (NaturalLit n) ->
-                pure (TextLit (Chunks [] (Data.Text.pack (show n))))
-            App IntegerShow (IntegerLit n)
-                | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
-                | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
-            App IntegerToDouble (IntegerLit n) -> pure (DoubleLit (fromInteger n))
-            App DoubleShow (DoubleLit n) ->
-                pure (TextLit (Chunks [] (Data.Text.pack (show n))))
-            App (App OptionalBuild _A₀) g ->
-                loop (App (App (App g optional) just) nothing)
-              where
-                optional = App Optional _A₀
-
-                just = Lam "a" _A₀ (Some "a")
-
-                nothing = App None _A₀
-            App (App ListBuild _A₀) g -> loop (App (App (App g list) cons) nil)
-              where
-                _A₁ = shift 1 "a" _A₀
-
-                list = App List _A₀
-
-                cons =
-                    Lam "a" _A₀
-                        (Lam "as"
-                            (App List _A₁)
-                            (ListAppend (ListLit Nothing (pure "a")) "as")
-                        )
-
-                nil = ListLit (Just _A₀) empty
-            App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil -> do
-              t' <- loop t
-              if boundedType t' then strict else lazy
-              where
-                strict =       foldr strictCons strictNil xs
-                lazy   = loop (foldr   lazyCons   lazyNil xs)
-
-                strictNil = loop nil
-                lazyNil   =      nil
-
-                strictCons y ys = do
-                  App (App cons y) <$> ys >>= loop
-                lazyCons   y ys =       App (App cons y) ys
-            App (App ListLength _) (ListLit _ ys) ->
-                pure (NaturalLit (fromIntegral (Data.Sequence.length ys)))
-            App (App ListHead t) (ListLit _ ys) -> loop o
-              where
-                o = case Data.Sequence.viewl ys of
-                        y :< _ -> Some y
-                        _      -> App None t
-            App (App ListLast t) (ListLit _ ys) -> loop o
-              where
-                o = case Data.Sequence.viewr ys of
-                        _ :> y -> Some y
-                        _      -> App None t
-            App (App ListIndexed _A₀) (ListLit _A₁ as₀) -> loop (ListLit t as₁)
-              where
-                as₁ = Data.Sequence.mapWithIndex adapt as₀
-
-                _A₂ = Record (Dhall.Map.fromList kts)
+      res <- ctx (App f a)
+      case res of
+          Just e1 -> loop e1
+          Nothing -> do
+              f' <- loop f
+              case f' of
+                Lam x _A b -> loop b''
                   where
-                    kts = [ ("index", Natural)
-                          , ("value", _A₀)
-                          ]
+                    a'  = shift   1  (V x 0) a
+                    b'  = subst (V x 0) a' b
+                    b'' = shift (-1) (V x 0) b'
+                _ -> do
+                  a' <- loop a
+                  case App f' a' of
+                    -- build/fold fusion for `List`
+                    App (App ListBuild _) (App (App ListFold _) e') -> loop e'
 
-                t | null as₀  = Just _A₂
-                  | otherwise = Nothing
+                    -- build/fold fusion for `Natural`
+                    App NaturalBuild (App NaturalFold e') -> loop e'
 
-                adapt n a_ =
-                    RecordLit (Dhall.Map.fromList kvs)
-                  where
-                    kvs = [ ("index", NaturalLit (fromIntegral n))
-                          , ("value", a_)
-                          ]
-            App (App ListReverse t) (ListLit _ xs) ->
-                loop (ListLit m (Data.Sequence.reverse xs))
-              where
-                m = if Data.Sequence.null xs then Just t else Nothing
-            App (App (App (App (App OptionalFold _) (App None _)) _) _) nothing ->
-                loop nothing
-            App (App (App (App (App OptionalFold _) (Some x)) _) just) _ ->
-                loop (App just x)
-            _ -> do
-                res <- ctx (App f' a')
-                case res of
-                    Nothing -> pure (App f' a')
-                    Just app' -> loop app'
+                    -- build/fold fusion for `Optional`
+                    App (App OptionalBuild _) (App (App OptionalFold _) e') -> loop e'
+
+                    App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
+                      t' <- loop t
+                      if boundedType t' then strict else lazy
+                      where
+                        strict =       strictLoop n0
+                        lazy   = loop (  lazyLoop n0)
+
+                        strictLoop !0 = loop zero
+                        strictLoop !n = App succ' <$> strictLoop (n - 1) >>= loop
+
+                        lazyLoop !0 = zero
+                        lazyLoop !n = App succ' (lazyLoop (n - 1))
+                    App NaturalBuild g -> loop (App (App (App g Natural) succ) zero)
+                      where
+                        succ = Lam "x" Natural (NaturalPlus "x" (NaturalLit 1))
+
+                        zero = NaturalLit 0
+                    App NaturalIsZero (NaturalLit n) -> pure (BoolLit (n == 0))
+                    App NaturalEven (NaturalLit n) -> pure (BoolLit (even n))
+                    App NaturalOdd (NaturalLit n) -> pure (BoolLit (odd n))
+                    App NaturalToInteger (NaturalLit n) -> pure (IntegerLit (toInteger n))
+                    App NaturalShow (NaturalLit n) ->
+                        pure (TextLit (Chunks [] (Data.Text.pack (show n))))
+                    App IntegerShow (IntegerLit n)
+                        | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
+                        | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
+                    App IntegerToDouble (IntegerLit n) -> pure (DoubleLit (fromInteger n))
+                    App DoubleShow (DoubleLit n) ->
+                        pure (TextLit (Chunks [] (Data.Text.pack (show n))))
+                    App (App OptionalBuild _A₀) g ->
+                        loop (App (App (App g optional) just) nothing)
+                      where
+                        optional = App Optional _A₀
+
+                        just = Lam "a" _A₀ (Some "a")
+
+                        nothing = App None _A₀
+                    App (App ListBuild _A₀) g -> loop (App (App (App g list) cons) nil)
+                      where
+                        _A₁ = shift 1 "a" _A₀
+
+                        list = App List _A₀
+
+                        cons =
+                            Lam "a" _A₀
+                                (Lam "as"
+                                    (App List _A₁)
+                                    (ListAppend (ListLit Nothing (pure "a")) "as")
+                                )
+
+                        nil = ListLit (Just _A₀) empty
+                    App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil -> do
+                      t' <- loop t
+                      if boundedType t' then strict else lazy
+                      where
+                        strict =       foldr strictCons strictNil xs
+                        lazy   = loop (foldr   lazyCons   lazyNil xs)
+
+                        strictNil = loop nil
+                        lazyNil   =      nil
+
+                        strictCons y ys = do
+                          App (App cons y) <$> ys >>= loop
+                        lazyCons   y ys =       App (App cons y) ys
+                    App (App ListLength _) (ListLit _ ys) ->
+                        pure (NaturalLit (fromIntegral (Data.Sequence.length ys)))
+                    App (App ListHead t) (ListLit _ ys) -> loop o
+                      where
+                        o = case Data.Sequence.viewl ys of
+                                y :< _ -> Some y
+                                _      -> App None t
+                    App (App ListLast t) (ListLit _ ys) -> loop o
+                      where
+                        o = case Data.Sequence.viewr ys of
+                                _ :> y -> Some y
+                                _      -> App None t
+                    App (App ListIndexed _A₀) (ListLit _A₁ as₀) -> loop (ListLit t as₁)
+                      where
+                        as₁ = Data.Sequence.mapWithIndex adapt as₀
+
+                        _A₂ = Record (Dhall.Map.fromList kts)
+                          where
+                            kts = [ ("index", Natural)
+                                  , ("value", _A₀)
+                                  ]
+
+                        t | null as₀  = Just _A₂
+                          | otherwise = Nothing
+
+                        adapt n a_ =
+                            RecordLit (Dhall.Map.fromList kvs)
+                          where
+                            kvs = [ ("index", NaturalLit (fromIntegral n))
+                                  , ("value", a_)
+                                  ]
+                    App (App ListReverse t) (ListLit _ xs) ->
+                        loop (ListLit m (Data.Sequence.reverse xs))
+                      where
+                        m = if Data.Sequence.null xs then Just t else Nothing
+                    App (App (App (App (App OptionalFold _) (App None _)) _) _) nothing ->
+                        loop nothing
+                    App (App (App (App (App OptionalFold _) (Some x)) _) just) _ ->
+                        loop (App just x)
+                    _ -> do
+                        res2 <- ctx (App f' a')
+                        case res2 of
+                            Nothing -> pure (App f' a')
+                            Just app' -> loop app'
     Let (Binding x _ a₀ :| ls₀) b₀ -> loop b₂
       where
         rest = case ls₀ of
