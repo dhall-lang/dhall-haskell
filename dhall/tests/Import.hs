@@ -23,38 +23,38 @@ importTests =
             [ shouldFail
                 3
                 "alternative of several unset env variables"
-                "./tests/import/alternativeEnv.dhall"
+                "./tests/import/failure/alternativeEnv.dhall"
             , shouldFail
                 1
                 "alternative of env variable and missing"
-                "./tests/import/alternativeEnvMissing.dhall"
+                "./tests/import/failure/alternativeEnvMissing.dhall"
             , shouldFail
                 0
                 "just missing"
-                "./tests/import/missing.dhall"
+                "./tests/import/failure/missing.dhall"
             , shouldNotFail
                 "alternative of env variable, missing, and a Natural"
-                "./tests/import/alternativeEnvNatural.dhall"
+                "./tests/import/success/alternativeEnvNaturalA.dhall"
             , shouldNotFail
                 "alternative of env variable and a Natural"
-                "./tests/import/alternativeEnvSimple.dhall"
+                "./tests/import/success/alternativeEnvSimpleA.dhall"
             , shouldNotFail
                 "alternative of a Natural and missing"
-                "./tests/import/alternativeNatural.dhall"
+                "./tests/import/success/alternativeNaturalA.dhall"
             ]
         , Test.Tasty.testGroup "import relative to argument"
             [ shouldNotFailRelative
                 "works"
                 "./tests/import/data/foo/bar"
-                "./tests/import/relative.dhall"
+                "./tests/import/success/relative.dhall"
             , shouldNotFailRelative
                 "a semantic integrity check if fields are reordered"
-                "./tests/import/"
-                "./tests/import/fieldOrderC.dhall"
+                "./tests/import/success/"
+                "./tests/import/success/fieldOrderA.dhall"
             , shouldNotFailRelative
                 "a semantic integrity check when importing an expression using `constructors`"
-                "./tests/import/"
-                "./tests/import/issue553B.dhall"
+                "./tests/import/success/"
+                "./tests/import/success/issue553B.dhall"
             ]
         ]
 

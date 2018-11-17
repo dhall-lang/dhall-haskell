@@ -18,145 +18,142 @@ parserTests =
         [ Test.Tasty.testGroup "whitespace"
             [ shouldParse
                 "prefix/suffix"
-                "./tests/parser/whitespace.dhall"
+                "./tests/parser/success/whitespace"
             , shouldParse
                 "block comment"
-                "./tests/parser/blockComment.dhall"
+                "./tests/parser/success/blockComment"
             , shouldParse
                 "nested block comment"
-                "./tests/parser/nestedBlockComment.dhall"
+                "./tests/parser/success/nestedBlockComment"
             , shouldParse
                 "line comment"
-                "./tests/parser/lineComment.dhall"
+                "./tests/parser/success/lineComment"
             , shouldParse
                 "Unicode comment"
-                "./tests/parser/unicodeComment.dhall"
+                "./tests/parser/success/unicodeComment"
             , shouldParse
                 "whitespace buffet"
-                "./tests/parser/whitespaceBuffet.dhall"
+                "./tests/parser/success/whitespaceBuffet"
             ]
         , shouldParse
             "label"
-            "./tests/parser/label.dhall"
+            "./tests/parser/success/label"
         , shouldParse
             "quoted label"
-            "./tests/parser/quotedLabel.dhall"
+            "./tests/parser/success/quotedLabel"
         , shouldParse
             "double quoted string"
-            "./tests/parser/doubleQuotedString.dhall"
+            "./tests/parser/success/doubleQuotedString"
         , shouldParse
             "Unicode double quoted string"
-            "./tests/parser/unicodeDoubleQuotedString.dhall"
+            "./tests/parser/success/unicodeDoubleQuotedString"
         , shouldParse
             "escaped double quoted string"
-            "./tests/parser/escapedDoubleQuotedString.dhall"
+            "./tests/parser/success/escapedDoubleQuotedString"
         , shouldParse
             "interpolated double quoted string"
-            "./tests/parser/interpolatedDoubleQuotedString.dhall"
+            "./tests/parser/success/interpolatedDoubleQuotedString"
         , shouldParse
             "single quoted string"
-            "./tests/parser/singleQuotedString.dhall"
+            "./tests/parser/success/singleQuotedString"
         , shouldParse
             "escaped single quoted string"
-            "./tests/parser/escapedSingleQuotedString.dhall"
+            "./tests/parser/success/escapedSingleQuotedString"
         , shouldParse
             "interpolated single quoted string"
-            "./tests/parser/interpolatedSingleQuotedString.dhall"
+            "./tests/parser/success/interpolatedSingleQuotedString"
         , shouldParse
             "double"
-            "./tests/parser/double.dhall"
+            "./tests/parser/success/double"
         , shouldParse
             "natural"
-            "./tests/parser/natural.dhall"
+            "./tests/parser/success/natural"
         , shouldParse
             "identifier"
-            "./tests/parser/identifier.dhall"
+            "./tests/parser/success/identifier"
         , shouldParse
             "paths"
-            "./tests/parser/paths.dhall"
+            "./tests/parser/success/paths"
         , shouldParse
             "path termination"
-            "./tests/parser/pathTermination.dhall"
+            "./tests/parser/success/pathTermination"
         , shouldParse
             "urls"
-            "./tests/parser/urls.dhall"
+            "./tests/parser/success/urls"
         , shouldParse
             "environmentVariables"
-            "./tests/parser/environmentVariables.dhall"
+            "./tests/parser/success/environmentVariables"
         , shouldParse
             "lambda"
-            "./tests/parser/lambda.dhall"
+            "./tests/parser/success/lambda"
         , shouldParse
             "if then else"
-            "./tests/parser/ifThenElse.dhall"
+            "./tests/parser/success/ifThenElse"
         , shouldParse
             "let"
-            "./tests/parser/let.dhall"
+            "./tests/parser/success/let"
         , shouldParse
             "forall"
-            "./tests/parser/forall.dhall"
+            "./tests/parser/success/forall"
         , shouldParse
             "function type"
-            "./tests/parser/functionType.dhall"
+            "./tests/parser/success/functionType"
         , shouldParse
             "operators"
-            "./tests/parser/operators.dhall"
+            "./tests/parser/success/operators"
         , shouldParse
             "annotations"
-            "./tests/parser/annotations.dhall"
+            "./tests/parser/success/annotations"
         , shouldParse
             "merge"
-            "./tests/parser/merge.dhall"
+            "./tests/parser/success/merge"
         , shouldParse
             "constructors"
-            "./tests/parser/constructors.dhall"
+            "./tests/parser/success/constructors"
         , shouldParse
             "fields"
-            "./tests/parser/fields.dhall"
+            "./tests/parser/success/fields"
         , shouldParse
             "record"
-            "./tests/parser/record.dhall"
+            "./tests/parser/success/record"
         , shouldParse
             "union"
-            "./tests/parser/union.dhall"
+            "./tests/parser/success/union"
         , shouldParse
             "list"
-            "./tests/parser/list.dhall"
+            "./tests/parser/success/list"
         , shouldParse
             "builtins"
-            "./tests/parser/builtins.dhall"
+            "./tests/parser/success/builtins"
         , shouldParse
             "import alternatives"
-            "./tests/parser/importAlt.dhall"
+            "./tests/parser/success/importAlt"
         , shouldParse
             "large expression"
-            "./tests/parser/largeExpression.dhall"
+            "./tests/parser/success/largeExpression"
         , shouldParse
             "names that begin with reserved identifiers"
-            "./tests/parser/reservedPrefix.dhall"
+            "./tests/parser/success/reservedPrefix"
         , shouldParse
             "interpolated expressions with leading whitespace"
-            "./tests/parser/template.dhall"
-        , shouldNotParse
-            "records with duplicate fields"
-            "./tests/parser/failure/duplicateFields.dhall"
+            "./tests/parser/success/template"
         , shouldParse
             "collections with type annotations containing imports"
-            "./tests/parser/collectionImportType.dhall"
+            "./tests/parser/success/collectionImportType"
         , shouldParse
             "a parenthesized custom header import"
-            "./tests/parser/parenthesizeUsing.dhall"
+            "./tests/parser/success/parenthesizeUsing"
         , shouldNotParse
             "accessing a field of an import without parentheses"
             "./tests/parser/failure/importAccess.dhall"
         , shouldParse
             "Sort"
-            "./tests/parser/sort.dhall"
+            "./tests/parser/success/sort"
         ]
 
 shouldParse :: Text -> FilePath -> TestTree
 shouldParse name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) (do
-    text <- Data.Text.IO.readFile path
+    text <- Data.Text.IO.readFile (path <> "A.dhall")
     case Dhall.Parser.exprFromText mempty text of
         Left err -> Control.Exception.throwIO err
         Right _  -> return () )
