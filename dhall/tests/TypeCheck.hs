@@ -25,19 +25,19 @@ typecheckTests =
         , accessTypeChecks
         , should
             "allow type-valued fields in a record"
-            "fieldsAreTypes"
+            "success/simple/fieldsAreTypes"
         , should
             "allow type-valued alternatives in a union"
-            "alternativesAreTypes"
+            "success/simple/alternativesAreTypes"
         , should
             "allow anonymous functions in types to be judgmentally equal"
-            "anonymousFunctionsInTypes"
+            "success/simple/anonymousFunctionsInTypes"
         , should
             "correctly handle α-equivalent merge alternatives"
-            "mergeEquivalence"
+            "success/simple/mergeEquivalence"
         , should
             "allow Kind variables"
-            "kindParameter"
+            "success/simple/kindParameter"
         , shouldNotTypeCheck
             "combining records of terms and types"
             "failure/combineMixedRecords"
@@ -46,16 +46,16 @@ typecheckTests =
             "failure/preferMixedRecords"
         , should
             "allow records of types of mixed kinds"
-            "recordOfTypes"
+            "success/recordOfTypes"
         , should
             "allow Boehm-Berarducci-encoded records of types of mixed kinds"
-            "encodedRecordOfTypes"
+            "success/encodedRecordOfTypes"
         , should
             "allow accessing a type from a record"
-            "accessType"
+            "success/accessType"
         , should
             "allow accessing a type from a Boehm-Berarducci-encoded record"
-            "accessEncodedType"
+            "success/accessEncodedType"
         , shouldNotTypeCheck
             "Hurkens' paradox"
             "failure/hurkensParadox"
@@ -64,24 +64,24 @@ typecheckTests =
 preludeExamples :: TestTree
 preludeExamples =
     Test.Tasty.testGroup "Prelude examples"
-        [ should "Monoid" "./examples/Monoid/00"
-        , should "Monoid" "./examples/Monoid/01"
-        , should "Monoid" "./examples/Monoid/02"
-        , should "Monoid" "./examples/Monoid/03"
-        , should "Monoid" "./examples/Monoid/04"
-        , should "Monoid" "./examples/Monoid/05"
-        , should "Monoid" "./examples/Monoid/06"
-        , should "Monoid" "./examples/Monoid/07"
-        , should "Monoid" "./examples/Monoid/08"
-        , should "Monoid" "./examples/Monoid/09"
-        , should "Monoid" "./examples/Monoid/10"
+        [ should "Monoid" "./success/prelude/Monoid/00"
+        , should "Monoid" "./success/prelude/Monoid/01"
+        , should "Monoid" "./success/prelude/Monoid/02"
+        , should "Monoid" "./success/prelude/Monoid/03"
+        , should "Monoid" "./success/prelude/Monoid/04"
+        , should "Monoid" "./success/prelude/Monoid/05"
+        , should "Monoid" "./success/prelude/Monoid/06"
+        , should "Monoid" "./success/prelude/Monoid/07"
+        , should "Monoid" "./success/prelude/Monoid/08"
+        , should "Monoid" "./success/prelude/Monoid/09"
+        , should "Monoid" "./success/prelude/Monoid/10"
         ]
 
 accessTypeChecks :: TestTree
 accessTypeChecks =
     Test.Tasty.testGroup "typecheck access"
-        [ should "record" "./access/0"
-        , should "record" "./access/1"
+        [ should "record" "./success/simple/access/0"
+        , should "record" "./success/simple/access/1"
         ]
 
 should :: Text -> Text -> TestTree
