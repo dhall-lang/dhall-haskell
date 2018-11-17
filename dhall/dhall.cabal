@@ -103,14 +103,64 @@ Extra-Source-Files:
     tests/tutorial/*.dhall
     tests/typecheck/failure/*.dhall
     tests/typecheck/success/*.dhall
-    tests/typecheck/success/prelude/Bool/*.dhall
-    tests/typecheck/success/prelude/Double/*.dhall
-    tests/typecheck/success/prelude/Integer/*.dhall
-    tests/typecheck/success/prelude/List/*.dhall
-    tests/typecheck/success/prelude/Monoid/*.dhall
-    tests/typecheck/success/prelude/Natural/*.dhall
-    tests/typecheck/success/prelude/Optional/*.dhall
-    tests/typecheck/success/prelude/Text/*.dhall
+    tests/normalization/success/prelude/Bool/and/*.dhall
+    tests/normalization/success/prelude/Bool/build/*.dhall
+    tests/normalization/success/prelude/Bool/even/*.dhall
+    tests/normalization/success/prelude/Bool/fold/*.dhall
+    tests/normalization/success/prelude/Bool/not/*.dhall
+    tests/normalization/success/prelude/Bool/odd/*.dhall
+    tests/normalization/success/prelude/Bool/or/*.dhall
+    tests/normalization/success/prelude/Bool/show/*.dhall
+    tests/normalization/success/prelude/Double/show/*.dhall
+    tests/normalization/success/prelude/Integer/show/*.dhall
+    tests/normalization/success/prelude/Integer/toDouble/*.dhall
+    tests/normalization/success/prelude/List/all/*.dhall
+    tests/normalization/success/prelude/List/any/*.dhall
+    tests/normalization/success/prelude/List/build/*.dhall
+    tests/normalization/success/prelude/List/concat/*.dhall
+    tests/normalization/success/prelude/List/concatMap/*.dhall
+    tests/normalization/success/prelude/List/filter/*.dhall
+    tests/normalization/success/prelude/List/fold/*.dhall
+    tests/normalization/success/prelude/List/generate/*.dhall
+    tests/normalization/success/prelude/List/head/*.dhall
+    tests/normalization/success/prelude/List/indexed/*.dhall
+    tests/normalization/success/prelude/List/iterate/*.dhall
+    tests/normalization/success/prelude/List/last/*.dhall
+    tests/normalization/success/prelude/List/length/*.dhall
+    tests/normalization/success/prelude/List/map/*.dhall
+    tests/normalization/success/prelude/List/null/*.dhall
+    tests/normalization/success/prelude/List/replicate/*.dhall
+    tests/normalization/success/prelude/List/reverse/*.dhall
+    tests/normalization/success/prelude/List/shifted/*.dhall
+    tests/normalization/success/prelude/List/unzip/*.dhall
+    tests/normalization/success/prelude/Natural/build/*.dhall
+    tests/normalization/success/prelude/Natural/enumerate/*.dhall
+    tests/normalization/success/prelude/Natural/even/*.dhall
+    tests/normalization/success/prelude/Natural/fold/*.dhall
+    tests/normalization/success/prelude/Natural/isZero/*.dhall
+    tests/normalization/success/prelude/Natural/odd/*.dhall
+    tests/normalization/success/prelude/Natural/product/*.dhall
+    tests/normalization/success/prelude/Natural/show/*.dhall
+    tests/normalization/success/prelude/Natural/sum/*.dhall
+    tests/normalization/success/prelude/Natural/toDouble/*.dhall
+    tests/normalization/success/prelude/Natural/toInteger/*.dhall
+    tests/normalization/success/prelude/Optional/all/*.dhall
+    tests/normalization/success/prelude/Optional/any/*.dhall
+    tests/normalization/success/prelude/Optional/build/*.dhall
+    tests/normalization/success/prelude/Optional/concat/*.dhall
+    tests/normalization/success/prelude/Optional/filter/*.dhall
+    tests/normalization/success/prelude/Optional/fold/*.dhall
+    tests/normalization/success/prelude/Optional/head/*.dhall
+    tests/normalization/success/prelude/Optional/last/*.dhall
+    tests/normalization/success/prelude/Optional/length/*.dhall
+    tests/normalization/success/prelude/Optional/map/*.dhall
+    tests/normalization/success/prelude/Optional/null/*.dhall
+    tests/normalization/success/prelude/Optional/toList/*.dhall
+    tests/normalization/success/prelude/Optional/unzip/*.dhall
+    tests/normalization/success/prelude/Text/concat/*.dhall
+    tests/normalization/success/prelude/Text/concatMap/*.dhall
+    tests/normalization/success/prelude/Text/concatMapSep/*.dhall
+    tests/normalization/success/prelude/Text/concatSep/*.dhall
     tests/typecheck/success/simple/access/*.dhall
     tests/typecheck/success/simple/*.dhall
 
