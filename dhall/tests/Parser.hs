@@ -149,6 +149,9 @@ parserTests =
         , shouldParse
             "Sort"
             "./tests/parser/success/sort"
+        , shouldParse
+            "quoted path components"
+            "./tests/parser/success/quotedPaths"
         ]
 
 shouldParse :: Text -> FilePath -> TestTree

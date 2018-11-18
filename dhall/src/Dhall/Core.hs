@@ -57,6 +57,7 @@ module Dhall.Core (
     , reservedIdentifiers
     , escapeText
     , subExpressions
+    , pathCharacter
     ) where
 
 #if MIN_VERSION_base(4,8,0)
@@ -76,7 +77,7 @@ import Data.Scientific (Scientific)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
-import Data.Text.Prettyprint.Doc (Pretty)
+import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Traversable
 import Dhall.Map (Map)
 import Dhall.Set (Set)
@@ -132,10 +133,7 @@ instance Semigroup Directory where
         Directory (components₁ <> components₀)
 
 instance Pretty Directory where
-    pretty (Directory {..}) =
-        foldMap prettyComponent (reverse components)
-      where
-        prettyComponent text = "/" <> Pretty.pretty text
+    pretty (Directory {..}) = foldMap prettyPathComponent (reverse components)
 
 {-| A `File` is a `directory` followed by one additional path component
     representing the `file` name
@@ -146,7 +144,9 @@ data File = File
     } deriving (Eq, Generic, Ord, Show)
 
 instance Pretty File where
-    pretty (File {..}) = Pretty.pretty directory <> "/" <> Pretty.pretty file
+    pretty (File {..}) =
+            Pretty.pretty directory
+        <>  prettyPathComponent file
 
 instance Semigroup File where
     File directory₀ _ <> File directory₁ file =
@@ -2329,3 +2329,28 @@ subExpressions f (Project a b) = Project <$> f a <*> pure b
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 subExpressions _ (Embed a) = pure (Embed a)
+
+{-| Returns `True` if the given `Char` is valid within an unquoted path
+    component
+
+    This is exported for reuse within the @"Dhall.Parser.Token"@ module
+-}
+pathCharacter :: Char -> Bool
+pathCharacter c =
+         '\x21' == c
+    ||  ('\x24' <= c && c <= '\x27')
+    ||  ('\x2A' <= c && c <= '\x2B')
+    ||  ('\x2D' <= c && c <= '\x2E')
+    ||  ('\x30' <= c && c <= '\x3B')
+    ||  c == '\x3D'
+    ||  ('\x40' <= c && c <= '\x5A')
+    ||  ('\x5E' <= c && c <= '\x7A')
+    ||  c == '\x7C'
+    ||  c == '\x7E'
+
+prettyPathComponent :: Text -> Doc ann
+prettyPathComponent text
+    | Data.Text.all pathCharacter text =
+        "/" <> Pretty.pretty text
+    | otherwise =
+        "/\"" <> Pretty.pretty text <> "\""

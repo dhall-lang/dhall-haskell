@@ -189,6 +189,7 @@ import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
+import qualified Network.URI.Encode
 import qualified System.Environment
 import qualified System.Directory                 as Directory
 import qualified System.FilePath                  as FilePath
@@ -610,13 +611,22 @@ exprFromUncachedImport (Import {..}) = do
 
             return (path, text)
 
-        Remote (URL scheme authority file query fragment maybeHeaders) -> do
+        Remote (URL scheme authority path query fragment maybeHeaders) -> do
             let prefix =
                         (case scheme of HTTP -> "http"; HTTPS -> "https")
                     <>  "://"
                     <>  authority
 
-            let fileText = Dhall.Pretty.Internal.prettyToStrictText file
+            let File {..} = path
+            let Directory {..} = directory
+
+            let pathComponentToText component =
+                    "/" <> Network.URI.Encode.encodeText component
+
+            let fileText =
+                       Text.concat
+                           (map pathComponentToText (reverse components))
+                    <> pathComponentToText file
 
             let suffix =
                         (case query    of Nothing -> ""; Just q -> "?" <> q)
