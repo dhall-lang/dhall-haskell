@@ -239,7 +239,10 @@ dhallToJSON e0 = loop (Dhall.Core.normalize e0)
         Dhall.Core.BoolLit a -> return (toJSON a)
         Dhall.Core.NaturalLit a -> return (toJSON a)
         Dhall.Core.IntegerLit a -> return (toJSON a)
-        Dhall.Core.DoubleLit a -> return (toJSON a)
+        Dhall.Core.DoubleLit a
+          | isInfinite a && a > 0 -> return (toJSON ( 1.7976931348623157e308 :: Double))
+          | isInfinite a && a < 0 -> return (toJSON (-1.7976931348623157e308 :: Double))
+          | otherwise -> return (toJSON a)
         Dhall.Core.TextLit (Dhall.Core.Chunks [] a) -> do
             return (toJSON a)
         Dhall.Core.ListLit _ a -> do

@@ -45,8 +45,9 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Options.Applicative (Parser)
 import Prelude hiding (exponent)
+import GHC.Float (double2Float, float2Double)
+import Codec.CBOR.Magic (floatToWord16, wordToFloat16)
 
-import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Dhall.Map
@@ -334,14 +335,17 @@ encode (NaturalLit n) =
     TList [ TInt 15, TInteger (fromIntegral n) ]
 encode (IntegerLit n) =
     TList [ TInt 16, TInteger n ]
-encode (DoubleLit n) =
-    TList [ TInt 17, TTagged 4 (TList [ TInt exponent, TInteger mantissa ]) ]
+encode (DoubleLit n64)
+    -- cborg always encodes NaN as "7e00"
+    | isNaN n64 = THalf n32
+    | useHalf   = THalf n32
+    | useFloat  = TFloat n32
+    | otherwise = TDouble n64
   where
-    normalized = Data.Scientific.normalize n
-
-    exponent = Data.Scientific.base10Exponent normalized
-
-    mantissa = Data.Scientific.coefficient normalized
+    n32      = double2Float n64
+    n16      = floatToWord16 n32
+    useFloat = n64 == float2Double n32
+    useHalf  = n64 == (float2Double . wordToFloat16 . fromIntegral) n16
 encode (TextLit (Chunks xys₀ z₀)) =
     TList ([ TInt 18 ] ++ xys₁ ++ [ z₁ ])
   where
@@ -636,10 +640,12 @@ decode (TList [ TInt 16, TInt n ]) = do
     return (IntegerLit (fromIntegral n))
 decode (TList [ TInt 16, TInteger n ]) = do
     return (IntegerLit n)
-decode (TList [ TInt 17, TTagged 4 (TList [ TInt exponent, TInteger mantissa ]) ]) = do
-    return (DoubleLit (Data.Scientific.scientific mantissa exponent))
-decode (TList [ TInt 17, TTagged 4 (TList [ TInt exponent, TInt mantissa ]) ]) = do
-    return (DoubleLit (Data.Scientific.scientific (fromIntegral mantissa) exponent))
+decode (THalf n) = do
+    return (DoubleLit (float2Double n))
+decode (TFloat n) = do
+    return (DoubleLit (float2Double n))
+decode (TDouble n) = do
+    return (DoubleLit n)
 decode (TList (TInt 18 : xs)) = do
     let process (TString x : y₁ : zs) = do
             y₀ <- decode y₁

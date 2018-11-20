@@ -46,6 +46,10 @@ formatTests =
             "largeExponent"
         , should
             Unicode
+            "round a double to the nearest representable value. Ties go to even least significant bit"
+            "doubleRound"
+        , should
+            Unicode
             "correctly format the empty record literal"
             "emptyRecord"
         , should

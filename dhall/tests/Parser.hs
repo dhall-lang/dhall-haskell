@@ -149,6 +149,12 @@ parserTests =
         , shouldParse
             "Sort"
             "./tests/parser/success/sort"
+        , shouldNotParse
+            "positive double out of bounds"
+            "./tests/parser/failure/doubleBoundsPos.dhall"
+        , shouldNotParse
+            "negative double out of bounds"
+            "./tests/parser/failure/doubleBoundsNeg.dhall"
         ]
 
 shouldParse :: Text -> FilePath -> TestTree
