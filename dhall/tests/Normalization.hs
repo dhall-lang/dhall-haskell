@@ -203,7 +203,7 @@ conversions =
         , shouldNormalize "Integer/show" "success/simple/integerShow"
         , shouldNormalize "Double/show"  "success/simple/doubleShow"
         , shouldNormalize "Natural/toInteger" "success/simple/naturalToInteger"
-        , shouldNormalize "Integer/toDouble" "integerToDouble"
+        , shouldNormalize "Integer/toDouble" "success/simple/integerToDouble"
         ]
 
 customization :: TestTree
