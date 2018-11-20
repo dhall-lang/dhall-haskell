@@ -306,7 +306,7 @@ prettyNatural :: Natural -> Doc Ann
 prettyNatural = literal . Pretty.pretty
 
 prettyDouble :: Double -> Doc Ann
-prettyDouble = literal . Pretty.pretty . show
+prettyDouble = literal . Pretty.pretty
 
 prettyConst :: Const -> Doc Ann
 prettyConst Type = builtin "Type"
