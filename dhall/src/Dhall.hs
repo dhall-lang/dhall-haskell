@@ -616,8 +616,8 @@ integer = Type {..}
 
 {-| Decode a `Scientific`
 
->>> input scientific "1e1000000000"
-1.0e1000000000
+>>> input scientific "1e100"
+1.0e100
 -}
 scientific :: Type Scientific
 scientific = fmap Data.Scientific.fromFloatDigits double
