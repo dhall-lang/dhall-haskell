@@ -1619,7 +1619,8 @@ normalizeWithM ctx e0 = loop (denote e0)
                     App IntegerShow (IntegerLit n)
                         | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
                         | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
-                    App IntegerToDouble (IntegerLit n) -> pure (DoubleLit (fromInteger n))
+                    -- `(read . show)` is used instead of `fromInteger` because `read` uses the correct rounding rule
+                    App IntegerToDouble (IntegerLit n) -> pure (DoubleLit ((read . show) n))
                     App DoubleShow (DoubleLit n) ->
                         pure (TextLit (Chunks [] (Data.Text.pack (show n))))
                     App (App OptionalBuild _A₀) g ->
