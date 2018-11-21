@@ -109,6 +109,7 @@ import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Text
 import qualified Dhall.Set
+import qualified Text.Megaparsec
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 
@@ -325,25 +326,25 @@ posixEnvironmentVariableCharacter =
         ||  ('\x3E' <= c && c <= '\x5B')
         ||  ('\x5D' <= c && c <= '\x7E')
 
-pathCharacter :: Char -> Bool
-pathCharacter c =
-        ('\x21' <= c && c <= '\x22')
-    ||  ('\x24' <= c && c <= '\x27')
-    ||  ('\x2A' <= c && c <= '\x2B')
-    ||  ('\x2D' <= c && c <= '\x2E')
-    ||  ('\x30' <= c && c <= '\x3B')
-    ||  c == '\x3D'
-    ||  ('\x40' <= c && c <= '\x5A')
-    ||  ('\x5E' <= c && c <= '\x7A')
-    ||  c == '\x7C'
-    ||  c == '\x7E'
+quotedPathCharacter :: Char -> Bool
+quotedPathCharacter c =
+        ('\x20' <= c && c <= '\x21')
+    ||  ('\x23' <= c && c <= '\x2E')
+    ||  ('\x30' <= c && c <= '\x7E')
 
 pathComponent :: Parser Text
 pathComponent = do
     _      <- "/" :: Parser Text
-    string <- some (Text.Parser.Char.satisfy pathCharacter)
 
-    return (Data.Text.pack string)
+    let pathData = Text.Megaparsec.takeWhile1P Nothing Dhall.Core.pathCharacter
+
+    let quotedPathData = do
+            _    <- Text.Parser.Char.char '"'
+            text <- Text.Megaparsec.takeWhile1P Nothing quotedPathCharacter
+            _    <- Text.Parser.Char.char '"'
+            return text
+
+    pathData <|> quotedPathData
 
 file_ :: Parser File
 file_ = do

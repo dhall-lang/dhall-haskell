@@ -149,6 +149,9 @@ parserTests =
         , shouldParse
             "Sort"
             "./tests/parser/success/sort"
+        , shouldParse
+            "quoted path components"
+            "./tests/parser/success/quotedPaths"
         , shouldNotParse
             "positive double out of bounds"
             "./tests/parser/failure/doubleBoundsPos.dhall"
