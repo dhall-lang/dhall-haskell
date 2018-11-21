@@ -1897,12 +1897,13 @@ normalizeWithM ctx e0 = loop (denote e0)
     Constructors t   -> do
         t' <- loop t
         case t' of
-            u@(Union _) -> u
-            _           -> Constructors t'
+            u@(Union _) -> pure u
+            _           -> pure $ Constructors t'
       where
         t' = loop t
-    Field r x        ->
-        case loop r of
+    Field r x        -> do
+        r' <- loop r
+        case r' of
             RecordLit kvs ->
                 case Dhall.Map.lookup x kvs of
                     Just v  -> loop v
