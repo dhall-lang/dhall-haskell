@@ -1,4 +1,4 @@
-# `dhall-text 1.0.13`
+# `dhall-text 1.0.14`
 
 [![Hackage](https://img.shields.io/hackage/v/dhall-text.svg)](https://hackage.haskell.org/package/dhall-text)
 

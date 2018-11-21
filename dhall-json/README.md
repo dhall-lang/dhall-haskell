@@ -1,4 +1,4 @@
-# `dhall-json 1.2.4`
+# `dhall-json 1.2.5`
 
 [![Hackage](https://img.shields.io/hackage/v/dhall-json.svg)](https://hackage.haskell.org/package/dhall-json)
 
