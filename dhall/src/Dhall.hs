@@ -616,16 +616,11 @@ integer = Type {..}
 
 {-| Decode a `Scientific`
 
->>> input scientific "1e1000000000"
-1.0e1000000000
+>>> input scientific "1e100"
+1.0e100
 -}
 scientific :: Type Scientific
-scientific = Type {..}
-  where
-    extract (DoubleLit n) = pure n
-    extract  _            = empty
-
-    expected = Double
+scientific = fmap Data.Scientific.fromFloatDigits double
 
 {-| Decode a `Double`
 
@@ -633,7 +628,12 @@ scientific = Type {..}
 42.0
 -}
 double :: Type Double
-double = fmap Data.Scientific.toRealFloat scientific
+double = Type {..}
+  where
+    extract (DoubleLit n) = pure n
+    extract  _            = empty
+
+    expected = Double
 
 {-| Decode lazy `Text`
 
@@ -1103,16 +1103,12 @@ instance Inject Word64 where
 
         declared = Integer
 
-instance Inject Scientific where
+instance Inject Double where
     injectWith _ = InputType {..}
       where
         embed = DoubleLit
 
         declared = Double
-
-instance Inject Double where
-    injectWith =
-        fmap (contramap (Data.Scientific.fromFloatDigits :: Double -> Scientific)) injectWith
 
 instance Inject () where
     injectWith _ = InputType {..}

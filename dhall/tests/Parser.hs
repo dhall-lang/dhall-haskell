@@ -152,6 +152,12 @@ parserTests =
         , shouldParse
             "quoted path components"
             "./tests/parser/success/quotedPaths"
+        , shouldNotParse
+            "positive double out of bounds"
+            "./tests/parser/failure/doubleBoundsPos.dhall"
+        , shouldNotParse
+            "negative double out of bounds"
+            "./tests/parser/failure/doubleBoundsNeg.dhall"
         ]
 
 shouldParse :: Text -> FilePath -> TestTree

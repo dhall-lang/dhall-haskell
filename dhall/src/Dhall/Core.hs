@@ -73,7 +73,6 @@ import Data.Functor.Identity (Identity(..))
 import Data.HashSet (HashSet)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.String (IsString(..))
-import Data.Scientific (Scientific)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
@@ -385,7 +384,7 @@ data Expr s a
     -- | > Double                                   ~  Double
     | Double
     -- | > DoubleLit n                              ~  n
-    | DoubleLit Scientific
+    | DoubleLit Double
     -- | > DoubleShow                               ~  Double/show
     | DoubleShow
     -- | > Text                                     ~  Text
@@ -1620,7 +1619,8 @@ normalizeWithM ctx e0 = loop (denote e0)
                     App IntegerShow (IntegerLit n)
                         | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
                         | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
-                    App IntegerToDouble (IntegerLit n) -> pure (DoubleLit (fromInteger n))
+                    -- `(read . show)` is used instead of `fromInteger` because `read` uses the correct rounding rule
+                    App IntegerToDouble (IntegerLit n) -> pure (DoubleLit ((read . show) n))
                     App DoubleShow (DoubleLit n) ->
                         pure (TextLit (Chunks [] (Data.Text.pack (show n))))
                     App (App OptionalBuild _A₀) g ->
@@ -2256,6 +2256,8 @@ reservedIdentifiers =
         , "None"
         , "Optional/build"
         , "Optional/fold"
+        , "NaN"
+        , "Infinity"
         ]
 
 
