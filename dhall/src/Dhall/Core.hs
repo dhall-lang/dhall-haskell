@@ -1899,8 +1899,6 @@ normalizeWithM ctx e0 = loop (denote e0)
         case t' of
             u@(Union _) -> pure u
             _           -> pure $ Constructors t'
-      where
-        t' = loop t
     Field r x        -> do
         r' <- loop r
         case r' of
