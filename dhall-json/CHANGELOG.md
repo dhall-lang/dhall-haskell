@@ -1,3 +1,10 @@
+1.2.5
+
+* Build against `dhall-1.19.0`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/667
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/675
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/689
+
 1.2.4
 
 * Build against `dhall-1.18.0`
