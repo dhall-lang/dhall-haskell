@@ -59,6 +59,9 @@ typecheckTests =
         , shouldNotTypeCheck
             "Hurkens' paradox"
             "failure/hurkensParadox"
+        , should
+            "allow accessing a constructor from a type stored inside a record"
+            "success/simple/mixedFieldAccess"
         ]
 
 preludeExamples :: TestTree
