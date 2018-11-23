@@ -785,7 +785,7 @@ loadWith expr₀ = case expr₀ of
                     expr''' <- case Dhall.TypeCheck.typeWith _startingContext expr'' of
                         Left  err -> throwM (Imported imports' err)
                         Right _   -> return (Dhall.Core.normalizeWith (getReifiedNormalizer _normalizer) expr'')
-                    zoom cache (State.put $! Map.insert here expr''' _cache)
+                    zoom cache (State.modify' (Map.insert here expr'''))
                     return expr'''
 
     case hash (importHashed import_) of
