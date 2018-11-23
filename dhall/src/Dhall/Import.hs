@@ -165,6 +165,7 @@ import Dhall.Core
 import Dhall.Import.HTTP
 #endif
 import Dhall.Import.Types
+import Text.Dot ((.->.))
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..))
 import Dhall.TypeCheck (X(..))
@@ -766,9 +767,24 @@ loadWith expr₀ = case expr₀ of
 
                     expr' <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
 
+                    -- Make current node the dot graph
+                    zoom dot (State.put $ importNode here)
+
                     zoom stack (State.put imports')
                     expr'' <- loadWith expr'
                     zoom stack (State.put imports)
+
+                    zoom dot (State.modify $ \getSubDot -> do
+                        parentNode <- _dot
+
+                        -- Get current node back from sub-graph
+                        hereNode <- getSubDot
+
+                        -- Add edge between parent and here
+                        () <- parentNode .->. hereNode
+
+                        -- Return parent NodeId
+                        pure parentNode)
 
                     _cacher here expr''
 
