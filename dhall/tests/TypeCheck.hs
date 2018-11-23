@@ -48,9 +48,6 @@ typecheckTests =
             "allow records of types of mixed kinds"
             "success/recordOfTypes"
         , should
-            "allow Boehm-Berarducci-encoded records of types of mixed kinds"
-            "success/encodedRecordOfTypes"
-        , should
             "allow accessing a type from a record"
             "success/accessType"
         , should
@@ -62,6 +59,9 @@ typecheckTests =
         , should
             "allow accessing a constructor from a type stored inside a record"
             "success/simple/mixedFieldAccess"
+        , should
+            "allow a record of a record of types"
+            "success/recordOfRecordOfTypes"
         ]
 
 preludeExamples :: TestTree
