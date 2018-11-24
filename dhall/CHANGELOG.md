@@ -22,6 +22,9 @@
     * This changes the `Let` constructor to now support storing multiple
       bindings per `let` expression
     * See: https://github.com/dhall-lang/dhall-haskell/pull/675
+* Access constructors as if they were fields of the union type
+    * In other words: `< Left : Bool | Right : Natural >.Left`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/657
 * Support GHC 8.6
     * See: https://github.com/dhall-lang/dhall-haskell/pull/669
 * Add support for quoted path components
