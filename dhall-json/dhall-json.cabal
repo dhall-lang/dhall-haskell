@@ -54,6 +54,8 @@ Executable dhall-to-json
         dhall-json                 ,
         optparse-applicative       ,
         text
+    Other-Modules:
+        Paths_dhall_json
     GHC-Options: -Wall
 
 Executable dhall-to-yaml
