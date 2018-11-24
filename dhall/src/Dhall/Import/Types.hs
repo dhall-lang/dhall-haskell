@@ -28,7 +28,7 @@ import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
 import Lens.Family (LensLike')
 import System.FilePath (isRelative, splitDirectories)
-import Text.Dot (Dot, NodeId, node)
+import Text.Dot (Dot, NodeId, userNode, userNodeId)
 
 import qualified Dhall.Binary
 import qualified Dhall.Context
@@ -41,12 +41,12 @@ data Status m = Status
     -- ^ Stack of `Import`s that we've imported along the way to get to the
     -- current point
 
-    , _dot :: Dot NodeId
-    -- ^ Graph of all the imports visited to far
+    , _dot :: (Int, Dot NodeId)
+    -- ^ Next node id along with the graph of all the imports visited to far
 
-    , _cache :: Map Import (Expr Src X)
-    -- ^ Cache of imported expressions in order to avoid importing the same
-    --   expression twice with different values
+    , _cache :: Map Import (NodeId, Expr Src X)
+    -- ^ Cache of imported expressions with their node id in order to avoid
+    --   importing the same expression twice with different values
 
     , _manager :: Maybe Dynamic
     -- ^ Cache for the HTTP `Manager` so that we only acquire it once
@@ -72,7 +72,7 @@ emptyStatusWith _resolver _cacher rootDirectory = Status {..}
   where
     _stack = pure rootImport
 
-    _dot = importNode rootImport
+    _dot = (1, importNode (userNodeId 0) rootImport)
 
     _cache = Map.empty
 
@@ -101,21 +101,23 @@ emptyStatusWith _resolver _cacher rootDirectory = Status {..}
       , importMode = Code
       }
 
-importNode :: Import -> Dot NodeId
-importNode i =
-    node
+importNode :: NodeId -> Import -> Dot NodeId
+importNode nodeId i = do
+    userNode
+        nodeId
         [ ("label", Data.Text.unpack $ pretty i)
         , ("shape", "box")
         , ("style", "rounded")
         ]
+    pure nodeId
 
 stack :: Functor f => LensLike' f (Status m) (NonEmpty Import)
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
 
-dot :: Functor f => LensLike' f (Status m) (Dot NodeId)
+dot :: Functor f => LensLike' f (Status m) ((Int, Dot NodeId))
 dot k s = fmap (\x -> s { _dot = x }) (k (_dot s))
 
-cache :: Functor f => LensLike' f (Status m) (Map Import (Expr Src X))
+cache :: Functor f => LensLike' f (Status m) (Map Import (NodeId, Expr Src X))
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
 manager :: Functor f => LensLike' f (Status m) (Maybe Dynamic)
