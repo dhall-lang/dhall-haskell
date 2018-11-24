@@ -33,6 +33,7 @@ Extra-Source-Files:
     tests/import/data/foo/bar/*.dhall
     tests/import/failure/*.dhall
     tests/import/success/*.dhall
+    tests/lint/success/*.dhall
     tests/normalization/success/*.dhall
     tests/normalization/success/haskell-tutorial/access/*.dhall
     tests/normalization/success/haskell-tutorial/combineTypes/*.dhall
@@ -383,6 +384,7 @@ Test-Suite tasty
     Other-Modules:
         Format
         Import
+        Lint
         Normalization
         Parser
         QuickCheck
