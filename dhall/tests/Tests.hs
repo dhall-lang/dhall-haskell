@@ -1,5 +1,6 @@
 module Main where
 
+import Lint (lintTests)
 import Normalization (normalizationTests)
 import Parser (parserTests)
 import Regression (regressionTests)
@@ -25,6 +26,7 @@ allTests =
         , typecheckTests
         , importTests
         , quickcheckTests
+        , lintTests
         ]
 
 main :: IO ()
