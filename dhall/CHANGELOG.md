@@ -1,3 +1,13 @@
+1.19.1
+
+* Fix serious `dhall lint` bug
+    * `dhall lint` would sometimes remove `let` expressions that were still
+      in use
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/703
+* Fix import caching efficiency bug
+    * Some imports were being wastefully fetched multiple times
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/702
+
 1.19.0
 
 * Supports version 4.0.0 of the language standard
