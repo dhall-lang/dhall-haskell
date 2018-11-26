@@ -3,6 +3,7 @@
 -}
 
 {-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -51,6 +52,7 @@ import qualified Dhall.Format
 import qualified Dhall.Freeze
 import qualified Dhall.Hash
 import qualified Dhall.Import
+import qualified Dhall.Import.Types
 import qualified Dhall.Lint
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
@@ -61,6 +63,7 @@ import qualified Options.Applicative
 import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.IO
+import qualified Text.Dot
 
 -- | Top-level program options
 data Options = Options
@@ -75,7 +78,7 @@ data Options = Options
 data Mode
     = Default { annotate :: Bool }
     | Version
-    | Resolve
+    | Resolve { dot :: Bool }
     | Type
     | Normalize
     | Repl
@@ -125,7 +128,7 @@ parseMode =
     <|> subcommand
             "resolve"
             "Resolve an expression's imports"
-            (pure Resolve)
+            (Resolve <$> parseDot)
     <|> subcommand
             "type"
             "Infer an expression's type"
@@ -176,6 +179,13 @@ parseMode =
     parseAnnotate =
         Options.Applicative.switch
             (Options.Applicative.long "annotate")
+
+    parseDot =
+        Options.Applicative.switch
+        (   Options.Applicative.long "dot"
+        <>  Options.Applicative.help
+              "Output import dependency graph in dot format"
+        )
 
     parseInplace =
         Options.Applicative.strOption
@@ -283,12 +293,16 @@ command (Options {..}) = do
 
             render System.IO.stdout annotatedExpression
 
-        Resolve -> do
+        Resolve dot -> do
             expression <- getExpression
 
-            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) status
+            (resolvedExpression, Dhall.Import.Types.Status { _dot }) <-
+                State.runStateT (Dhall.Import.loadWith expression) status
 
-            render System.IO.stdout resolvedExpression
+            if   dot
+            then putStr . Text.Dot.showDot $
+                 Text.Dot.attribute ("rankdir", "LR") >> _dot
+            else render System.IO.stdout resolvedExpression
 
         Normalize -> do
             expression <- getExpression

@@ -1,3 +1,49 @@
+1.19.0
+
+* Supports version 4.0.0 of the language standard
+    * See: https://github.com/dhall-lang/dhall-lang/releases/tag/v4.0.0
+* BREAKING CHANGE TO THE LANGUAGE AND API: Prevent Hurkens' paradox
+    * This fixes a type-checking soundness bug which permitted infinite loops
+    * This is a breaking change because infinite loops are no longer possible
+    * This is also a breaking change because a record of types is now treated as
+      a kind instead of a type
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/680
+* BREAKING CHANGE TO THE LANGUAGE AND API: `Double`s are now double-precision
+  floating point numbers
+    * This restricts the range of `Double`s to IEEE 754 double-precision
+      floating point
+    * This also implies that you can no longer convert `Scientific` values to
+      `Dhall` expressions (i.e. no `Inject` instance for `Scientific`)
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/667
+* BREAKING CHANGE TO THE API: Preserve field order for record projection
+    * The API uses a new `Dhall.Set.Set` type instead of `Data.Set.Set`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/670
+* BREAKING CHANGE TO THE API: Add support for multi-`let` expressions
+    * This changes the `Let` constructor to now support storing multiple
+      bindings per `let` expression
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/675
+* Access constructors as if they were fields of the union type
+    * In other words: `< Left : Bool | Right : Natural >.Left`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/657
+* Support GHC 8.6
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/669
+* Add support for quoted path components
+    * i.e. `/"foo"/bar/"baz qux"` or `https://example.com/foo/"bar?baz"?qux`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/690
+* Fix parsing of `//\\` operator
+    * See: https://github.com/dhall-lang/dhall-haskell/commit/9d0fd42d95ab69fa64da4afd8b60d69aca8e65a6
+* Preserve Unicode characters when formatting code
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/679
+* Allow identifier names to begin with `Some`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/658
+* Add `subExpressions` `Traversal`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/660
+* Add `normalizeWithM` for monadic normalization
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/371
+* Custom normalizers now take precedence over default normalization logic
+    * This allows one to override the implementation of built-in operators
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/684
+
 1.18.0
 
 * Supports version 3.0.0 of the language standard:

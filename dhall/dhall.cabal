@@ -1,5 +1,5 @@
 Name: dhall
-Version: 1.18.0
+Version: 1.19.0
 Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.0.1
@@ -33,6 +33,7 @@ Extra-Source-Files:
     tests/import/data/foo/bar/*.dhall
     tests/import/failure/*.dhall
     tests/import/success/*.dhall
+    tests/lint/success/*.dhall
     tests/normalization/success/*.dhall
     tests/normalization/success/haskell-tutorial/access/*.dhall
     tests/normalization/success/haskell-tutorial/combineTypes/*.dhall
@@ -304,6 +305,7 @@ Library
         cryptonite                  >= 0.23     && < 1.0 ,
         Diff                        >= 0.2      && < 0.4 ,
         directory                   >= 1.2.2.0  && < 1.4 ,
+        dotgen                      >= 0.4.2    && < 0.5 ,
         exceptions                  >= 0.8.3    && < 0.11,
         filepath                    >= 1.4      && < 1.5 ,
         haskeline                   >= 0.7.2.1  && < 0.8 ,
@@ -383,6 +385,7 @@ Test-Suite tasty
     Other-Modules:
         Format
         Import
+        Lint
         Normalization
         Parser
         QuickCheck
