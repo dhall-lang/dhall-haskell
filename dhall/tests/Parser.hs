@@ -158,6 +158,9 @@ parserTests =
         , shouldNotParse
             "negative double out of bounds"
             "./tests/parser/failure/doubleBoundsNeg.dhall"
+        , shouldParse
+            "as Text"
+            "./tests/parser/success/asText"
         ]
 
 shouldParse :: Text -> FilePath -> TestTree
