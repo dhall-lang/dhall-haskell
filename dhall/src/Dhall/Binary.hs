@@ -386,7 +386,8 @@ importToTerm import_ =
     case importType of
         Remote (URL { scheme = scheme₀, ..}) ->
             TList
-                (   [ TInt 24, TInt scheme₁, TString authority ]
+                (   prefix
+                ++  [ TInt scheme₁, TString authority ]
                 ++  map TString (reverse components)
                 ++  [ TString file ]
                 ++  (case query    of Nothing -> [ TNull ]; Just q -> [ TString q ])
@@ -402,7 +403,8 @@ importToTerm import_ =
 
         Local prefix₀ path ->
                 TList
-                    (   [ TInt 24, TInt prefix₁ ]
+                    (   prefix
+                    ++  [ TInt prefix₁ ]
                     ++  map TString components₁
                     ++  [ TString file ]
                     )
@@ -418,11 +420,13 @@ importToTerm import_ =
                 (Home    , rest       ) -> (5, rest)
 
         Env x ->
-            TList [ TInt 24, TInt 6, TString x ]
+            TList (prefix ++ [ TInt 6, TString x ])
 
         Missing ->
-            TList [ TInt 24, TInt 7 ]
+            TList (prefix ++ [ TInt 7 ])
   where
+    prefix = [ TInt 24, TInt (case importMode of Code -> 0; RawText -> 1) ]
+
     Import {..} = import_
 
     ImportHashed {..} = importHashed
@@ -661,7 +665,12 @@ decode (TList (TInt 18 : xs)) = do
     (xys, z) <- process xs
 
     return (TextLit (Chunks xys z))
-decode (TList (TInt 24 : TInt n : xs)) = do
+decode (TList (TInt 24 : TInt mode : TInt n : xs)) = do
+    importMode <- case mode of
+        0 -> return Code
+        1 -> return RawText
+        _ -> empty
+
     let remote scheme = do
             let process [ TString file, q, f ] = do
                     query <- case q of
@@ -732,7 +741,7 @@ decode (TList (TInt 24 : TInt n : xs)) = do
 
     let hash         = Nothing
     let importHashed = ImportHashed {..}
-    let importMode   = Code
+
     return (Embed (Import {..}))
 decode (TList (TInt 25 : xs)) = do
     let process (TString x : _A₁ : a₁ : ls₁) = do
