@@ -55,7 +55,7 @@ lint expression = loop (Dhall.Core.denote expression)
 
         d' = loop d
     loop (Let (Binding a b c :| (l : ls)) d)
-        | not (V a 0 `Dhall.Core.freeIn` d') =
+        | not (V a 0 `Dhall.Core.freeIn` Let (l' :| ls') d') =
             Let (l' :| ls') d'
         | otherwise =
             Let (Binding a b' c' :| (l' : ls'))  d'

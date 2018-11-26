@@ -788,12 +788,12 @@ typeWithA tpa = loop
                     Just t' -> return t'
                     Nothing -> Left (TypeError ctx e (MissingField x t))
             Const Type -> do
-                case r of
-                  (Note _ (Union kts)) ->
+                case Dhall.Core.normalize r of
+                  Union kts ->
                     case Dhall.Map.lookup x kts of
                         Just t' -> return (Pi x t' (Union kts))
                         Nothing -> Left (TypeError ctx e (MissingField x t))
-                  _ -> Left (TypeError ctx e (CantAccess text r t))
+                  r' -> Left (TypeError ctx e (CantAccess text r' t))
             _ -> do
                 Left (TypeError ctx e (CantAccess text r t))
     loop ctx e@(Project r xs    ) = do
@@ -3306,7 +3306,7 @@ prettyTypeMessage (CantAccess lazyText0 expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt0 <> "\n\
         \                                                                                \n\
-        \... on the following expression which is not a record nor a union:              \n\
+        \... on the following expression which is not a record nor a union type:         \n\
         \                                                                                \n\
         \" <> txt1 <> "\n\
         \                                                                                \n\

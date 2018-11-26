@@ -1,4 +1,4 @@
-# `dhall 1.18.0`
+# `dhall 1.19.0`
 
 [![Hackage](https://img.shields.io/hackage/v/dhall.svg)](https://hackage.haskell.org/package/dhall)
 

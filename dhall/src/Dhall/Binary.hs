@@ -56,11 +56,11 @@ import qualified Options.Applicative
 
 -- | Supported version strings
 data StandardVersion
-    = V_3_0_0
-    -- ^ Version "3.0.0"
+    = V_4_0_0
+    -- ^ Version "4.0.0"
 
 defaultStandardVersion :: StandardVersion
-defaultStandardVersion = V_3_0_0
+defaultStandardVersion = V_4_0_0
 
 parseStandardVersion :: Parser StandardVersion
 parseStandardVersion =
@@ -74,7 +74,7 @@ parseStandardVersion =
     readVersion = do
         string <- Options.Applicative.str
         case string :: Text of
-            "3.0.0" -> return V_3_0_0
+            "4.0.0" -> return V_4_0_0
             _       -> fail "Unsupported version"
 
 {-| Convert a function applied to multiple arguments to the base function and
@@ -778,7 +778,7 @@ decodeWithVersion term = do
             fail ("Cannot decode the version from this decoded CBOR expression: " <> show term)
 
     case version of
-        "3.0.0" -> do
+        "4.0.0" -> do
             return ()
         _ -> do
             fail ("This decoded version is not supported: " <> Data.Text.unpack version)
@@ -791,8 +791,8 @@ decodeWithVersion term = do
 
 -- | Encode a Dhall expression using the specified `Version`
 encodeWithVersion :: StandardVersion -> Expr s Import -> Term
-encodeWithVersion V_3_0_0 expression =
-    TList [ TString "3.0.0", encode expression ]
+encodeWithVersion V_4_0_0 expression =
+    TList [ TString "4.0.0", encode expression ]
 
 data DecodingFailure
     = CannotDecodeVersionString Term
