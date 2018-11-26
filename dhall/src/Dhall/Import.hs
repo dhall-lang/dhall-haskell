@@ -165,6 +165,7 @@ import Dhall.Core
 import Dhall.Import.HTTP
 #endif
 import Dhall.Import.Types
+import Text.Dot ((.->.), userNodeId)
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..))
 import Dhall.TypeCheck (X(..))
@@ -566,7 +567,7 @@ getCacheFile hash = do
                     liftIO (Directory.setPermissions directory private)
 
     cacheDirectory <- getCacheDirectory
-            
+
     assertDirectory cacheDirectory
 
     let dhallDirectory = cacheDirectory </> "dhall"
@@ -732,8 +733,18 @@ loadWith expr₀ = case expr₀ of
         then throwMissingImport (Imported imports (Cycle import_))
         else do
             case Map.lookup here _cache of
-                Just expr -> return expr
-                Nothing   -> do
+                Just (hereNode, expr) -> do
+                    zoom dot . State.modify $ \getDot -> do
+                        parentNode <- getDot
+
+                        -- Add edge between parent and here
+                        parentNode .->. hereNode
+
+                        -- Return parent NodeId
+                        pure parentNode
+
+                    pure expr
+                Nothing        -> do
                     -- Here we have to match and unwrap the @MissingImports@
                     -- in a separate handler, otherwise we'd have it wrapped
                     -- in another @Imported@ when parsing a @missing@, because
@@ -766,9 +777,29 @@ loadWith expr₀ = case expr₀ of
 
                     expr' <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
 
+                    let hereNodeId = userNodeId _nextNodeId
+
+                    -- Increment the next node id
+                    zoom nextNodeId $ State.modify succ
+
+                    -- Make current node the dot graph
+                    zoom dot . State.put $ importNode hereNodeId here
+
                     zoom stack (State.put imports')
                     expr'' <- loadWith expr'
                     zoom stack (State.put imports)
+
+                    zoom dot . State.modify $ \getSubDot -> do
+                        parentNode <- _dot
+
+                        -- Get current node back from sub-graph
+                        hereNode <- getSubDot
+
+                        -- Add edge between parent and here
+                        parentNode .->. hereNode
+
+                        -- Return parent NodeId
+                        pure parentNode
 
                     _cacher here expr''
 
@@ -785,7 +816,7 @@ loadWith expr₀ = case expr₀ of
                     expr''' <- case Dhall.TypeCheck.typeWith _startingContext expr'' of
                         Left  err -> throwM (Imported imports' err)
                         Right _   -> return (Dhall.Core.normalizeWith (getReifiedNormalizer _normalizer) expr'')
-                    zoom cache (State.modify' (Map.insert here expr'''))
+                    zoom cache (State.modify' (Map.insert here (hereNodeId, expr''')))
                     return expr'''
 
     case hash (importHashed import_) of
