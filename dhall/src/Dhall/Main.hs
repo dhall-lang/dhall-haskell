@@ -301,7 +301,7 @@ command (Options {..}) = do
 
             if   dot
             then putStr . Text.Dot.showDot $
-                 Text.Dot.attribute ("rankdir", "LR") >> snd _dot
+                 Text.Dot.attribute ("rankdir", "LR") >> _dot
             else render System.IO.stdout resolvedExpression
 
         Normalize -> do

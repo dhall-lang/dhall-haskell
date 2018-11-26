@@ -734,7 +734,7 @@ loadWith expr₀ = case expr₀ of
         else do
             case Map.lookup here _cache of
                 Just (hereNode, expr) -> do
-                    zoom dot . State.modify . fmap $ \getDot -> do
+                    zoom dot . State.modify $ \getDot -> do
                         parentNode <- getDot
 
                         -- Add edge between parent and here
@@ -777,18 +777,20 @@ loadWith expr₀ = case expr₀ of
 
                     expr' <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
 
-                    let hereNodeId = userNodeId $ fst _dot
+                    let hereNodeId = userNodeId _nextNodeId
 
-                    -- Make current node the dot graph and increment the next id
-                    zoom dot . State.modify $ \(currentId, _) ->
-                      (succ currentId, importNode hereNodeId here)
+                    -- Increment the next node id
+                    zoom nextNodeId $ State.modify succ
+
+                    -- Make current node the dot graph
+                    zoom dot . State.put $ importNode hereNodeId here
 
                     zoom stack (State.put imports')
                     expr'' <- loadWith expr'
                     zoom stack (State.put imports)
 
-                    zoom dot . State.modify . fmap $ \getSubDot -> do
-                        parentNode <- snd _dot
+                    zoom dot . State.modify $ \getSubDot -> do
+                        parentNode <- _dot
 
                         -- Get current node back from sub-graph
                         hereNode <- getSubDot
