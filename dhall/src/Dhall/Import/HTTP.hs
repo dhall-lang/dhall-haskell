@@ -4,7 +4,6 @@
 
 module Dhall.Import.HTTP where
 
-import Control.Exception (throwIO)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
@@ -14,6 +13,7 @@ import Data.Dynamic (fromDynamic, toDyn)
 import Data.Semigroup ((<>))
 import Lens.Family.State.Strict (zoom)
 
+import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict        as State
 import qualified Data.Text                               as Text
 import qualified Data.Text.Lazy
@@ -30,6 +30,7 @@ import Network.HTTP.Client (HttpException(..), Manager)
 
 import qualified Network.HTTP.Client                     as HTTP
 import qualified Network.HTTP.Client.TLS                 as HTTP
+import qualified Network.HTTP.Types.Status
 
 mkPrettyHttpException :: HttpException -> PrettyHttpException
 mkPrettyHttpException ex =
@@ -44,18 +45,30 @@ renderPrettyHttpException (InvalidUrlException _ r) =
   <>  "↳ " <> show r
 renderPrettyHttpException (HttpExceptionRequest _ e) =
   case e of
-    ConnectionFailure e' ->
+    ConnectionFailure _ ->
       "\n"
-      <>  "\ESC[1;31mError\ESC[0m: Wrong host\n"
-      <>  "\n"
-      <>  "↳ " <> show e'
+      <>  "\ESC[1;31mError\ESC[0m: Remote host not found\n"
     InvalidDestinationHost host ->
       "\n"
-      <>  "\ESC[1;31mError\ESC[0m: Invalid host name\n"
+      <>  "\ESC[1;31mError\ESC[0m: Invalid remote host name\n"
       <>  "\n"
-      <>  "↳ " <> show host
+      <>  "↳ " <> show host <> "\n"
     ResponseTimeout ->
-      "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
+      "\n"
+      <>  "\ESC[1;31mError\ESC[0m: The remote host took too long to respond\n"
+    StatusCodeException response _
+        | statusCode == 404 ->
+            "\n"
+            <>  "\ESC[1;31mError\ESC[0m: Remote file not found\n"
+        | otherwise ->
+            "\n"
+            <>  "\ESC[1;31mError\ESC[0m: Unexpected HTTP status code:\n"
+            <>  "\n"
+            <>  "↳ " <> show statusCode <> "\n"
+      where
+        statusCode =
+            Network.HTTP.Types.Status.statusCode
+                (HTTP.responseStatus response)
     e' -> "\n" <> show e'
 #else
 renderPrettyHttpException e = case e of
@@ -108,10 +121,16 @@ fetchFromHttpUrl url mheaders = do
               Nothing      -> request
               Just headers -> request { HTTP.requestHeaders = headers }
 
-    response <- liftIO (HTTP.httpLbs requestWithHeaders m)
+    let io = HTTP.httpLbs requestWithHeaders m
+
+    let handler e = do
+            let _ = e :: HttpException
+            Control.Exception.throwIO (mkPrettyHttpException e)
+
+    response <- liftIO (Control.Exception.handle handler io)
 
     let bytes = HTTP.responseBody response
 
     case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
-        Left  err  -> liftIO (throwIO err)
+        Left  err  -> liftIO (Control.Exception.throwIO err)
         Right text -> return (url, Data.Text.Lazy.toStrict text)

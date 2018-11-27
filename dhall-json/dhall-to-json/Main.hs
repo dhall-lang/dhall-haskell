@@ -5,7 +5,9 @@
 module Main where
 
 import Control.Exception (SomeException)
+import Control.Monad (when)
 import Data.Monoid ((<>))
+import Data.Version (showVersion)
 import Dhall.JSON (Conversion)
 import Options.Applicative (Parser, ParserInfo)
 
@@ -19,6 +21,7 @@ import qualified Dhall
 import qualified Dhall.JSON
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
+import qualified Paths_dhall_json as Meta
 import qualified System.Exit
 import qualified System.IO
 
@@ -26,6 +29,7 @@ data Options = Options
     { explain    :: Bool
     , pretty     :: Bool
     , omitNull   :: Bool
+    , version    :: Bool
     , conversion :: Conversion
     }
 
@@ -34,6 +38,7 @@ parseOptions = Options.Applicative.helper <*> do
     explain    <- parseExplain
     pretty     <- parsePretty
     omitNull   <- parseOmitNull
+    version    <- parseVersion
     conversion <- Dhall.JSON.parseConversion
     return (Options {..})
   where
@@ -55,6 +60,12 @@ parseOptions = Options.Applicative.helper <*> do
             <>  Options.Applicative.help "Omit record fields that are null"
             )
 
+    parseVersion =
+        Options.Applicative.switch
+            (   Options.Applicative.long "version"
+            <>  Options.Applicative.help "Display version"
+            )
+
 parserInfo :: ParserInfo Options
 parserInfo =
     Options.Applicative.info
@@ -68,6 +79,10 @@ main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
     Options {..} <- Options.Applicative.execParser parserInfo
+
+    when version $ do
+      putStrLn (showVersion Meta.version)
+      System.Exit.exitSuccess
 
     handle $ do
         let config = Data.Aeson.Encode.Pretty.Config

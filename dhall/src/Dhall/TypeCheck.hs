@@ -768,13 +768,10 @@ typeWithA tpa = loop
     loop ctx e@(Constructors t  ) = do
         _ <- loop ctx t
 
-        kts <- case Dhall.Core.normalize t of
-            Union kts -> return kts
-            t'        -> Left (TypeError ctx e (ConstructorsRequiresAUnionType t t'))
+        case Dhall.Core.normalize t of
+            u@(Union _) -> loop ctx u
+            t'          -> Left (TypeError ctx e (ConstructorsRequiresAUnionType t t'))
 
-        let adapt k t_ = Pi k t_ (Union kts)
-
-        return (Record (Dhall.Map.mapWithKey adapt kts))
     loop ctx e@(Field r x       ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
 
