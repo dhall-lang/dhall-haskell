@@ -300,7 +300,7 @@ command (Options {..}) = do
                 State.runStateT (Dhall.Import.loadWith expression) status
 
             if   dot
-            then putStr . Text.Dot.showDot $
+            then putStr . ("strict " <>) . Text.Dot.showDot $
                  Text.Dot.attribute ("rankdir", "LR") >> _dot
             else render System.IO.stdout resolvedExpression
 

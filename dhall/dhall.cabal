@@ -1,5 +1,5 @@
 Name: dhall
-Version: 1.19.0
+Version: 1.19.1
 Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.0.1
@@ -328,6 +328,7 @@ Library
         vector                      >= 0.11.0.0 && < 0.13
     if flag(with-http)
       Build-Depends:
+        http-types                  >= 0.7.0    && < 0.13,
         http-client                 >= 0.4.30   && < 0.6 ,
         http-client-tls             >= 0.2.0    && < 0.4
     if !impl(ghc >= 8.0)

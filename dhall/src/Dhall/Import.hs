@@ -756,14 +756,15 @@ loadWith expr₀ = case expr₀ of
                             :: (MonadCatch m)
                             => MissingImports
                             -> StateT (Status m) m (Expr Src Import)
-                        handler₀ e@(MissingImports []) = throwM e
-                        handler₀ (MissingImports [e]) =
-                          throwMissingImport (Imported imports' e)
-                        handler₀ (MissingImports es) = throwM
-                          (MissingImports
-                           (fmap
-                             (\e -> (toException (Imported imports' e)))
-                             es))
+                        handler₀ (MissingImports es) =
+                          throwM
+                            (MissingImports
+                               (map
+                                 (\e -> toException (Imported imports' e))
+                                 es
+                               )
+                             )
+
                         handler₁
                             :: (MonadCatch m)
                             => SomeException
