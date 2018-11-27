@@ -512,10 +512,7 @@ typeWithA tpa = loop
                                 Left (TypeError ctx e (InvalidFieldType k t))
                 Dhall.Map.traverseWithKey_ process rest
 
-                case c of
-                    Type -> return (Const Type)
-                    Kind -> return (Const Sort)
-                    Sort -> return (Const Sort)
+                return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
         case Dhall.Map.toList kvs of
             []         -> return (Record mempty)
