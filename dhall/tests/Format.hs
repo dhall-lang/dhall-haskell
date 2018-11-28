@@ -84,6 +84,10 @@ formatTests =
             Unicode
             "preserve Unicode characters"
             "unicode"
+        , should
+            Unicode
+            "not replace `../` with `./../`"
+            "parent"
         ]
 
 should :: CharacterSet -> Text -> Text -> TestTree

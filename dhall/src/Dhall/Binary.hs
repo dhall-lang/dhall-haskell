@@ -411,11 +411,13 @@ importToTerm import_ =
 
             Directory {..} = directory
 
-            (prefix₁, components₁) = case (prefix₀, reverse components) of
-                (Absolute, rest       ) -> (2, rest)
-                (Here    , ".." : rest) -> (4, rest)
-                (Here    , rest       ) -> (3, rest)
-                (Home    , rest       ) -> (5, rest)
+            prefix₁ = case prefix₀ of
+              Absolute -> 2
+              Here     -> 3
+              Parent   -> 4
+              Home     -> 5
+
+            components₁ = reverse components
 
         Env x ->
             TList [ TInt 24, TInt 6, TString x ]
@@ -703,11 +705,7 @@ decode (TList (TInt 24 : TInt n : xs)) = do
 
             (paths, file) <- process xs
 
-            let finalPaths = case n of
-                    4 -> ".." : paths
-                    _ -> paths
-
-            let components = reverse finalPaths
+            let components = reverse paths
             let directory  = Directory {..}
 
             return (Local prefix (File {..}))
@@ -724,7 +722,7 @@ decode (TList (TInt 24 : TInt n : xs)) = do
         1 -> remote HTTPS
         2 -> local Absolute
         3 -> local Here
-        4 -> local Here
+        4 -> local Parent
         5 -> local Home
         6 -> env
         7 -> missing
