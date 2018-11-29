@@ -3,6 +3,7 @@
 -}
 
 {-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -35,10 +36,16 @@ import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
 
+import qualified Codec.CBOR.JSON
+import qualified Codec.CBOR.Read
+import qualified Codec.CBOR.Write
 import qualified Codec.Serialise
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict          as State
+import qualified Data.Aeson
+import qualified Data.Aeson.Encode.Pretty
 import qualified Data.ByteString.Lazy
+import qualified Data.ByteString.Lazy.Char8
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
@@ -51,6 +58,7 @@ import qualified Dhall.Format
 import qualified Dhall.Freeze
 import qualified Dhall.Hash
 import qualified Dhall.Import
+import qualified Dhall.Import.Types
 import qualified Dhall.Lint
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
@@ -61,6 +69,7 @@ import qualified Options.Applicative
 import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.IO
+import qualified Text.Dot
 
 -- | Top-level program options
 data Options = Options
@@ -75,7 +84,7 @@ data Options = Options
 data Mode
     = Default { annotate :: Bool }
     | Version
-    | Resolve
+    | Resolve { dot :: Bool }
     | Type
     | Normalize
     | Repl
@@ -84,8 +93,8 @@ data Mode
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Maybe FilePath }
-    | Encode
-    | Decode
+    | Encode { json :: Bool }
+    | Decode { json :: Bool }
 
 -- | `Parser` for the `Options` type
 parseOptions :: Parser Options
@@ -125,7 +134,7 @@ parseMode =
     <|> subcommand
             "resolve"
             "Resolve an expression's imports"
-            (pure Resolve)
+            (Resolve <$> parseDot)
     <|> subcommand
             "type"
             "Infer an expression's type"
@@ -161,11 +170,11 @@ parseMode =
     <|> subcommand
             "encode"
             "Encode a Dhall expression to binary"
-            (pure Encode)
+            (Encode <$> parseJSONFlag)
     <|> subcommand
             "decode"
             "Decode a Dhall expression from binary"
-            (pure Decode)
+            (Decode <$> parseJSONFlag)
     <|> (Default <$> parseAnnotate)
   where
     argument =
@@ -177,11 +186,24 @@ parseMode =
         Options.Applicative.switch
             (Options.Applicative.long "annotate")
 
+    parseDot =
+        Options.Applicative.switch
+        (   Options.Applicative.long "dot"
+        <>  Options.Applicative.help
+              "Output import dependency graph in dot format"
+        )
+
     parseInplace =
         Options.Applicative.strOption
         (   Options.Applicative.long "inplace"
         <>  Options.Applicative.help "Modify the specified file in-place"
         <>  Options.Applicative.metavar "FILE"
+        )
+
+    parseJSONFlag =
+        Options.Applicative.switch
+        (   Options.Applicative.long "json"
+        <>  Options.Applicative.help "Use JSON representation of CBOR"
         )
 
 throws :: Exception e => Either e a -> IO a
@@ -283,12 +305,16 @@ command (Options {..}) = do
 
             render System.IO.stdout annotatedExpression
 
-        Resolve -> do
+        Resolve dot -> do
             expression <- getExpression
 
-            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) status
+            (resolvedExpression, Dhall.Import.Types.Status { _dot }) <-
+                State.runStateT (Dhall.Import.loadWith expression) status
 
-            render System.IO.stdout resolvedExpression
+            if   dot
+            then putStr . ("strict " <>) . Text.Dot.showDot $
+                 Text.Dot.attribute ("rankdir", "LR") >> _dot
+            else render System.IO.stdout resolvedExpression
 
         Normalize -> do
             expression <- getExpression
@@ -356,20 +382,42 @@ command (Options {..}) = do
 
                     renderDoc System.IO.stdout doc
 
-        Encode -> do
+        Encode {..} -> do
             expression <- getExpression
 
-            let term =
-                    Dhall.Binary.encodeWithVersion standardVersion expression
+            let term = Dhall.Binary.encodeWithVersion standardVersion expression
 
             let bytes = Codec.Serialise.serialise term
 
-            Data.ByteString.Lazy.putStr bytes
+            if json
+                then do
+                    let decoder = Codec.CBOR.JSON.decodeValue False
 
-        Decode -> do
+                    (_, value) <- throws (Codec.CBOR.Read.deserialiseFromBytes decoder bytes)
+
+                    let jsonBytes = Data.Aeson.Encode.Pretty.encodePretty value
+
+                    Data.ByteString.Lazy.Char8.putStrLn jsonBytes
+
+                else do
+                    Data.ByteString.Lazy.putStr bytes
+
+        Decode {..} -> do
             bytes <- Data.ByteString.Lazy.getContents
 
-            term <- throws (Codec.Serialise.deserialiseOrFail bytes)
+            term <- do
+                if json
+                    then do
+                        value <- case Data.Aeson.eitherDecode' bytes of
+                            Left  string -> fail string
+                            Right value  -> return value
+
+                        let encoding = Codec.CBOR.JSON.encodeValue value
+
+                        let cborBytes = Codec.CBOR.Write.toLazyByteString encoding
+                        throws (Codec.Serialise.deserialiseOrFail cborBytes)
+                    else do
+                        throws (Codec.Serialise.deserialiseOrFail bytes)
 
             expression <- throws (Dhall.Binary.decodeWithVersion term)
 

@@ -19,6 +19,7 @@ import qualified Dhall.Core
     * removes unused @let@ bindings
     * consolidates nested @let@ bindings to use a multiple-@let@ binding
     * switches legacy @List@-like @Optional@ literals to use @Some@ / @None@ instead
+    * removes the `constructors` keyword
 -}
 lint :: Expr s Import -> Expr t Import
 lint expression = loop (Dhall.Core.denote expression)
@@ -234,9 +235,7 @@ lint expression = loop (Dhall.Core.denote expression)
         b' =      loop b
         c' = fmap loop c
     loop (Constructors a) =
-        Constructors a'
-      where
-        a' = loop a
+        loop a
     loop (Field a b) =
         Field a' b
       where
