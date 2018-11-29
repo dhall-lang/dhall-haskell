@@ -455,6 +455,10 @@ localToPath prefix file_ = liftIO $ do
         Absolute -> do
             return "/"
 
+        Parent -> do
+            pwd <- Directory.getCurrentDirectory
+            return (FilePath.takeDirectory pwd)
+
         Here -> do
             Directory.getCurrentDirectory
 

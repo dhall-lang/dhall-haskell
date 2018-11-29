@@ -632,9 +632,9 @@ localRaw =
   where
     parentPath = do
         _    <- ".." :: Parser Text
-        File (Directory segments) final <- file_
+        file <- file_
 
-        return (Local Here (File (Directory (segments ++ [".."])) final))
+        return (Local Parent file)
 
     herePath = do
         _    <- "." :: Parser Text
