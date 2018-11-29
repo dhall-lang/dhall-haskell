@@ -9,7 +9,7 @@ module Dhall.Repl
       repl
     ) where
 
-import Control.Exception ( SomeException(SomeException), displayException, throw, throwIO )
+import Control.Exception ( SomeException(SomeException), displayException, throwIO )
 import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
@@ -238,7 +238,7 @@ saveBinding _ = fail ":save should be of the form `:save x = y`"
 cmdQuit :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
 cmdQuit _ = do
   liftIO (putStrLn "Goodbye.")
-  throw Interrupt
+  liftIO (throwIO Interrupt)
 
 options
   :: ( Haskeline.MonadException m, MonadIO m, MonadState Env m )
