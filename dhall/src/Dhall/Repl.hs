@@ -18,6 +18,7 @@ import Dhall.Binary (StandardVersion(..))
 import Dhall.Import (standardVersion)
 import Dhall.Pretty (CharacterSet(..))
 import Lens.Family (set)
+import System.Console.Haskeline (Interrupt(..))
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text as Text
@@ -234,6 +235,10 @@ saveBinding (file : "=" : tokens) = do
   liftIO (System.IO.withFile file System.IO.WriteMode handler)
 saveBinding _ = fail ":save should be of the form `:save x = y`"
 
+cmdQuit :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
+cmdQuit _ = do
+  liftIO (putStrLn "Goodbye.")
+  liftIO (throwIO Interrupt)
 
 options
   :: ( Haskeline.MonadException m, MonadIO m, MonadState Env m )
@@ -242,6 +247,7 @@ options =
   [ ( "type", dontCrash . typeOf )
   , ( "let", dontCrash . addBinding )
   , ( "save", dontCrash . saveBinding )
+  , ( "quit", cmdQuit )
   ]
 
 
