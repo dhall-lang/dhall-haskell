@@ -13,7 +13,7 @@ import Control.Exception ( SomeException(SomeException), displayException, throw
 import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
-import Data.List ( foldl', isPrefixOf )
+import Data.List ( elemIndex, foldl', isPrefixOf )
 import Data.Semigroup ((<>))
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Import (standardVersion)
@@ -190,6 +190,23 @@ typeCheck expr = do
     Right a ->
       return a
 
+-- Separate the equal sign to be its own word in order to simplify parsing
+-- This is intended to be used with the options that require assignment
+separateEqual :: [String] -> [String]
+separateEqual [] = []
+separateEqual (x:xs)
+  -- Handle the case where there is no space between the var and "="
+  | Just i <- elemIndex '=' x
+  = let (a, _:b) = splitAt i x
+    in  a : "=" : b : xs
+
+  -- Handle the case where there is no space between the "=" and the expression
+  | ('=':y):ys <- xs
+  = x : "=" : y : ys
+
+  | otherwise
+  = x : xs
+
 
 addBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
 addBinding (k : "=" : srcs) = do
@@ -255,8 +272,8 @@ options
   => Repline.Options m
 options =
   [ ( "type", dontCrash . typeOf )
-  , ( "let", dontCrash . addBinding )
-  , ( "save", dontCrash . saveBinding )
+  , ( "let", dontCrash . addBinding . separateEqual )
+  , ( "save", dontCrash . saveBinding . separateEqual )
   , ( "quit", cmdQuit )
   ]
 
