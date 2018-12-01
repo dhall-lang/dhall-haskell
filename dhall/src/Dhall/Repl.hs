@@ -3,6 +3,7 @@
 {-# language FlexibleContexts #-}
 {-# language NamedFieldPuns #-}
 {-# language OverloadedStrings #-}
+{-# language TypeApplications #-}
 
 module Dhall.Repl
     ( -- * Repl
@@ -39,6 +40,8 @@ import qualified System.Console.Haskeline.MonadException as Haskeline
 import qualified System.Console.Repline as Repline
 import qualified System.IO
 
+type Repl = Repline.HaskelineT (State.StateT Env IO)
+
 -- | Implementation of the @dhall repl@ subcommand
 repl :: CharacterSet -> Bool -> StandardVersion -> IO ()
 repl characterSet explain _standardVersion =
@@ -49,9 +52,9 @@ repl characterSet explain _standardVersion =
         ( Repline.evalRepl
             ( pure "⊢ " )
             ( dontCrash . eval )
-            options
-            (Just ':')
-            ( Repline.Word completer )
+            ( options @Repl )
+            ( Just optionsPrefix )
+            completer
             greeter
         )
         (emptyEnv { characterSet, explain, _standardVersion })
@@ -240,6 +243,11 @@ cmdQuit _ = do
   liftIO (putStrLn "Goodbye.")
   liftIO (throwIO Interrupt)
 
+
+optionsPrefix :: Char
+optionsPrefix = ':'
+
+
 options
   :: ( Haskeline.MonadException m, MonadIO m, MonadState Env m )
   => Repline.Options m
@@ -251,9 +259,18 @@ options =
   ]
 
 
-completer :: Monad m => Repline.WordCompleter m
-completer _ =
-  return []
+completer :: Monad m => Repline.CompleterStyle m
+completer =
+  Repline.Prefix
+    ( Repline.listCompleter [] )
+    [ optionsCompleter ]
+
+
+optionsCompleter :: Monad m => (String, Repline.CompletionFunc m)
+optionsCompleter =
+  ( pure optionsPrefix
+  , Repline.listCompleter $ (optionsPrefix :) . fst <$> options @Repl
+  )
 
 
 greeter :: MonadIO m => m ()
