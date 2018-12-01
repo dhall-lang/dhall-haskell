@@ -34,6 +34,7 @@ import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize )
 import qualified Dhall.Pretty
 import qualified Dhall.Core as Expr ( Expr(..) )
 import qualified Dhall.Import as Dhall
+import qualified Dhall.Map as Map
 import qualified Dhall.Parser as Dhall
 import qualified Dhall.TypeCheck as Dhall
 import qualified System.Console.ANSI
@@ -260,7 +261,9 @@ options =
   ]
 
 
-completer :: (Monad m, MonadIO m) => Repline.CompleterStyle m
+completer
+  :: (Monad m, MonadIO m, MonadState Env m)
+  => Repline.CompleterStyle m
 completer =
   Repline.Prefix
     dhallCompleter
@@ -274,32 +277,65 @@ optionsCompleter =
   )
 
 
-dhallCompleter :: (Monad m, MonadIO m) => Repline.CompletionFunc m
+dhallCompleter
+  :: (Monad m, MonadIO m, MonadState Env m)
+  => Repline.CompletionFunc m
 dhallCompleter ctx@(reversedPrefix, _)
 
   -- Complete absolute filepaths
-  | "/" `isPrefixOf` prefix
+  | "/" `isPrefixOf` word
   = Repline.fileCompleter ctx
 
   -- Complete relative filepaths
-  | "./" `isPrefixOf` prefix
+  | "./" `isPrefixOf` word
   = Repline.fileCompleter ctx
 
   -- Complete environment variables
-  | "env:" `isPrefixOf` prefix
+  | "env:" `isPrefixOf` word
   = do
+
     envs <- fmap fst <$> liftIO getEnvironment
+
     Repline.listCompleter (map ("env:" ++) envs) ctx
 
+  -- Complete record fields
+  | '.' `elem` word
+  = do
+    Env { envBindings } <- get
+
+    let var:subfields = Text.split (== '.') (Text.pack word)
+
+    case Dhall.Context.lookup var 0 envBindings of
+
+      Nothing -> noComplete
+
+      Just binding -> do
+        let candidates = fieldsComplete subfields (bindingType binding)
+        Repline.listCompleter (Text.unpack . (var <>) <$> candidates) ctx
+
   | otherwise
-  = Repline.listCompleter [] ctx
+  = noComplete
+
   where
-    prefix = reverse $ takeWhile (`notElem` separators) reversedPrefix
+    noComplete = Repline.listCompleter [] ctx
+
+    -- The previous word using the separators to delimit what a word is
+    word = reverse $ takeWhile (`notElem` separators) reversedPrefix
 
     -- Separators that can be found on the left of something we want to
     -- autocomplete
     separators :: String
     separators = " \t[(,=+*&|}#?>"
+
+    fields = fmap ("." <>) . Map.keys
+
+
+    fieldsComplete :: [Text.Text] -> Dhall.Expr Dhall.Src Dhall.X -> [Text.Text]
+    fieldsComplete []     (Dhall.Core.Record m) = fields m
+    fieldsComplete (f:fs) (Dhall.Core.Record m) =
+      maybe (fields m) (fmap (("." <> f) <>) . fieldsComplete fs) (Map.lookup f m)
+    fieldsComplete _      _                     = []
+
 
 greeter :: MonadIO m => m ()
 greeter =
