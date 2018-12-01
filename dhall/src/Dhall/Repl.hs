@@ -14,12 +14,13 @@ import Control.Exception ( SomeException(SomeException), displayException, throw
 import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
-import Data.List ( foldl' )
+import Data.List ( foldl', isPrefixOf )
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Import (standardVersion)
 import Dhall.Pretty (CharacterSet(..))
 import Lens.Family (set)
 import System.Console.Haskeline (Interrupt(..))
+import System.Environment ( getEnvironment )
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text as Text
@@ -259,10 +260,10 @@ options =
   ]
 
 
-completer :: Monad m => Repline.CompleterStyle m
+completer :: (Monad m, MonadIO m) => Repline.CompleterStyle m
 completer =
   Repline.Prefix
-    ( Repline.listCompleter [] )
+    dhallCompleter
     [ optionsCompleter ]
 
 
@@ -272,6 +273,28 @@ optionsCompleter =
   , Repline.listCompleter $ (optionsPrefix :) . fst <$> options @Repl
   )
 
+
+dhallCompleter :: (Monad m, MonadIO m) => Repline.CompletionFunc m
+dhallCompleter ctx@(reversedPrefix, _)
+
+  -- Complete absolute filepaths
+  | "/" `isPrefixOf` prefix
+  = Repline.fileCompleter ctx
+
+  -- Complete relative filepaths
+  | "./" `isPrefixOf` prefix
+  = Repline.fileCompleter ctx
+
+  -- Complete environment variables
+  | "env:" `isPrefixOf` prefix
+  = do
+    envs <- fmap fst <$> liftIO getEnvironment
+    Repline.listCompleter (map ("env:" ++) envs) ctx
+
+  | otherwise
+  = Repline.listCompleter [] ctx
+  where
+    prefix = reverse (takeWhile (/= ' ') reversedPrefix)
 
 greeter :: MonadIO m => m ()
 greeter =
