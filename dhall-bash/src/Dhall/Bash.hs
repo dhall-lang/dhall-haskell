@@ -40,7 +40,7 @@
     embedded anywhere Bash expressions are valid, such as the right-hand side of
     an assignment statement:
 
-> $ FOO=$(dhall-to-bash <<< 'List/length Integer [1, 2, 3]')
+> $ FOO=$(dhall-to-bash <<< 'List/length Natural [1, 2, 3]')
 > $ echo "${FOO}"
 > 3
 
