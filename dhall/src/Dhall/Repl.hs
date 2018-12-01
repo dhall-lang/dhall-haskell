@@ -293,19 +293,19 @@ dhallCompleter ctx@(reversedPrefix, _)
 
     Repline.listCompleter (map ("env:" ++) envs) ctx
 
-  -- Complete record fields
+  -- Complete record fields and union alternatives
   | '.' `elem` word
   = do
     Env { envBindings } <- get
 
-    let var:subfields = Text.split (== '.') (Text.pack word)
+    let var:subFields = Text.split (== '.') (Text.pack word)
 
     case Dhall.Context.lookup var 0 envBindings of
 
       Nothing -> noComplete
 
       Just binding -> do
-        let candidates = fieldsComplete subfields (bindingType binding)
+        let candidates = algebraicComplete subFields (bindingExpr binding)
         Repline.listCompleter (Text.unpack . (var <>) <$> candidates) ctx
 
   | otherwise
@@ -322,14 +322,25 @@ dhallCompleter ctx@(reversedPrefix, _)
     separators :: String
     separators = " \t[(,=+*&|}#?>"
 
-    fields = fmap ("." <>) . Map.keys
 
+    algebraicComplete :: [Text.Text] -> Dhall.Expr Dhall.Src Dhall.X -> [Text.Text]
+    algebraicComplete subFields expr =
+      let keys = fmap ("." <>) . Map.keys
 
-    fieldsComplete :: [Text.Text] -> Dhall.Expr Dhall.Src Dhall.X -> [Text.Text]
-    fieldsComplete []     (Dhall.Core.Record m) = fields m
-    fieldsComplete (f:fs) (Dhall.Core.Record m) =
-      maybe (fields m) (fmap (("." <> f) <>) . fieldsComplete fs) (Map.lookup f m)
-    fieldsComplete _      _                     = []
+          withMap m
+            | [] <- subFields   = keys m
+            | f:fs <- subFields =
+              maybe
+                (keys m)
+                (fmap (("." <> f) <>) . algebraicComplete fs)
+                (Map.lookup f m)
+
+      in  case expr of
+            Dhall.Core.Record       m -> withMap m
+            Dhall.Core.RecordLit    m -> withMap m
+            Dhall.Core.Union        m -> withMap m
+            Dhall.Core.UnionLit _ _ m -> withMap m
+            _                         -> []
 
 
 greeter :: MonadIO m => m ()
