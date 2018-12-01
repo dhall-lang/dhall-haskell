@@ -50,7 +50,7 @@ _Interpolation_0 = Test.Tasty.HUnit.testCase "Example #0" (do
 _Interpolation_1 :: TestTree
 _Interpolation_1 = Test.Tasty.HUnit.testCase "Example #1" (do
     e <- Util.code
-        "''                            \n\
+        "''\n\
         \    for file in *; do         \n\
         \      echo \"Found ''${file}\"\n\
         \    done                      \n\

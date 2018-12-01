@@ -161,6 +161,9 @@ parserTests =
         , shouldParse
             "as Text"
             "./tests/parser/success/asText"
+        , shouldNotParse
+            "a multi-line literal without an initial newline"
+            "./tests/parser/failure/mandatoryNewline.dhall"
         ]
 
 shouldParse :: Text -> FilePath -> TestTree
