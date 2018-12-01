@@ -26,7 +26,7 @@ $ echo "${FOO}"
 ABCDEF
 $ dhall-to-bash --declare BAR
 let replicate = https://ipfs.io/ipfs/QmcTbCdS21pCxXysTzEiucDuwwLWbLUWNSKwkJVfwpy2zK/Prelude/List/replicate
-in  replicate +10 Integer 1
+in  replicate 10 Natural 1
 <Ctrl-D>
 declare -r -a BAR=(1 1 1 1 1 1 1 1 1 1)
 $ dhall-to-bash --declare BAZ <<< '{ qux = 1, xyzzy = True }'
