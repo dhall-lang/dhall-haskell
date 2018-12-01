@@ -161,6 +161,9 @@ parserTests =
         , shouldParse
             "as Text"
             "./tests/parser/success/asText"
+        , shouldParse
+            "custom headers"
+            "./tests/parser/success/customHeaders"
         ]
 
 shouldParse :: Text -> FilePath -> TestTree
