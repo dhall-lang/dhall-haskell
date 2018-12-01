@@ -294,7 +294,12 @@ dhallCompleter ctx@(reversedPrefix, _)
   | otherwise
   = Repline.listCompleter [] ctx
   where
-    prefix = reverse (takeWhile (/= ' ') reversedPrefix)
+    prefix = reverse $ takeWhile (`notElem` separators) reversedPrefix
+
+    -- Separators that can be found on the left of something we want to
+    -- autocomplete
+    separators :: String
+    separators = " \t[(,=+*&|}#?>"
 
 greeter :: MonadIO m => m ()
 greeter =
