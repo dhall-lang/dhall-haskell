@@ -3,7 +3,6 @@
 {-# language FlexibleContexts #-}
 {-# language NamedFieldPuns #-}
 {-# language OverloadedStrings #-}
-{-# language TypeApplications #-}
 
 module Dhall.Repl
     ( -- * Repl
@@ -54,7 +53,7 @@ repl characterSet explain _standardVersion =
         ( Repline.evalRepl
             ( pure "⊢ " )
             ( dontCrash . eval )
-            ( options @Repl )
+            ( options )
             ( Just optionsPrefix )
             completer
             greeter
@@ -273,7 +272,7 @@ completer =
 optionsCompleter :: Monad m => (String, Repline.CompletionFunc m)
 optionsCompleter =
   ( pure optionsPrefix
-  , Repline.listCompleter $ (optionsPrefix :) . fst <$> options @Repl
+  , Repline.listCompleter $ (optionsPrefix :) . fst <$> (options :: Repline.Options Repl)
   )
 
 
