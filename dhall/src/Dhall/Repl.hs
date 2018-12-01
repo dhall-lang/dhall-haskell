@@ -281,12 +281,8 @@ dhallCompleter
   => Repline.CompletionFunc m
 dhallCompleter ctx@(reversedPrefix, _)
 
-  -- Complete absolute filepaths
-  | "/" `isPrefixOf` word
-  = Repline.fileCompleter ctx
-
-  -- Complete relative filepaths
-  | "./" `isPrefixOf` word
+  -- Complete file paths
+  | any (`isPrefixOf` word) [ "/", "./", "../", "~/" ]
   = Repline.fileCompleter ctx
 
   -- Complete environment variables
