@@ -23,6 +23,7 @@ import Dhall.Import (standardVersion)
 import Dhall.Pretty (CharacterSet(..))
 import Lens.Family (set)
 import System.Console.Haskeline (Interrupt(..))
+import System.Console.Haskeline.Completion ( Completion, simpleCompletion )
 import System.Environment ( getEnvironment )
 
 import qualified Control.Monad.Trans.State.Strict as State
@@ -41,6 +42,7 @@ import qualified Dhall.Map as Map
 import qualified Dhall.Parser as Dhall
 import qualified Dhall.TypeCheck as Dhall
 import qualified System.Console.ANSI
+import qualified System.Console.Haskeline.Completion as Haskeline
 import qualified System.Console.Haskeline.MonadException as Haskeline
 import qualified System.Console.Repline as Repline
 import qualified System.IO
@@ -57,7 +59,7 @@ repl characterSet explain _standardVersion =
         ( Repline.evalRepl
             ( pure "⊢ " )
             ( dontCrash . eval )
-            ( options )
+            options
             ( Just optionsPrefix )
             completer
             greeter
@@ -289,33 +291,30 @@ completer
   => Repline.CompleterStyle m
 completer =
   Repline.Prefix
-    dhallCompleter
-    [ optionsCompleter ]
+    (Haskeline.completeWordWithPrev (Just '\\') separators completeFunc)
+    []
+  where
+    -- Separators that can be found on the left of something we want to
+    -- autocomplete
+    separators :: String
+    separators = " \t[(,=+*&|}#?>:"
 
-
-optionsCompleter :: Monad m => (String, Repline.CompletionFunc m)
-optionsCompleter =
-  ( pure optionsPrefix
-  , Repline.listCompleter $ (optionsPrefix :) . fst <$> (options :: Repline.Options Repl)
-  )
-
-
-dhallCompleter
+completeFunc
   :: (Monad m, MonadIO m, MonadState Env m)
-  => Repline.CompletionFunc m
-dhallCompleter ctx@(reversedPrefix, _)
+  => String -> String -> m [Completion]
+completeFunc reversedPrev word
+
+  -- Complete commands
+  | reversedPrev == ":"
+  = pure . listCompletion $ fst <$> (options :: Repline.Options Repl)
 
   -- Complete file paths
   | any (`isPrefixOf` word) [ "/", "./", "../", "~/" ]
-  = Repline.fileCompleter ctx
+  = Haskeline.listFiles word
 
   -- Complete environment variables
-  | "env:" `isPrefixOf` word
-  = do
-
-    envs <- fmap fst <$> liftIO getEnvironment
-
-    Repline.listCompleter (map ("env:" ++) envs) ctx
+  | reverse "env:" `isPrefixOf` reversedPrev
+  = listCompletion . fmap fst <$> liftIO getEnvironment
 
   -- Complete record fields and union alternatives
   | '.' `elem` word
@@ -326,26 +325,17 @@ dhallCompleter ctx@(reversedPrefix, _)
 
     case Dhall.Context.lookup var 0 envBindings of
 
-      Nothing -> noComplete
+      Nothing -> pure []
 
       Just binding -> do
         let candidates = algebraicComplete subFields (bindingExpr binding)
-        Repline.listCompleter (Text.unpack . (var <>) <$> candidates) ctx
+        pure $ listCompletion (Text.unpack . (var <>) <$> candidates)
 
   | otherwise
-  = noComplete
+  = pure []
 
   where
-    noComplete = Repline.listCompleter [] ctx
-
-    -- The previous word using the separators to delimit what a word is
-    word = reverse $ takeWhile (`notElem` separators) reversedPrefix
-
-    -- Separators that can be found on the left of something we want to
-    -- autocomplete
-    separators :: String
-    separators = " \t[(,=+*&|}#?>"
-
+    listCompletion = map simpleCompletion . filter (word `isPrefixOf`)
 
     algebraicComplete :: [Text.Text] -> Dhall.Expr Dhall.Src Dhall.X -> [Text.Text]
     algebraicComplete subFields expr =
@@ -353,9 +343,11 @@ dhallCompleter ctx@(reversedPrefix, _)
 
           withMap m
             | [] <- subFields   = keys m
+            -- Stop on last subField (we care about the keys at this level)
+            | [_] <- subFields  = keys m
             | f:fs <- subFields =
               maybe
-                (keys m)
+                []
                 (fmap (("." <> f) <>) . algebraicComplete fs)
                 (Map.lookup f m)
 
