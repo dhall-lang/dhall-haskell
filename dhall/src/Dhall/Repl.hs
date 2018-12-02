@@ -1,8 +1,9 @@
 -- | This module contains the implementation of the @dhall repl@ subcommand
 
-{-# language FlexibleContexts #-}
-{-# language NamedFieldPuns #-}
+{-# language FlexibleContexts  #-}
+{-# language NamedFieldPuns    #-}
 {-# language OverloadedStrings #-}
+{-# language RecordWildCards   #-}
 
 module Dhall.Repl
     ( -- * Repl
@@ -14,8 +15,10 @@ import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
 import Data.List ( elemIndex, foldl', isPrefixOf )
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup ((<>))
 import Dhall.Binary (StandardVersion(..))
+import Dhall.Context (Context)
 import Dhall.Import (standardVersion)
 import Dhall.Pretty (CharacterSet(..))
 import Lens.Family (set)
@@ -154,41 +157,44 @@ typeOf srcs = do
   output System.IO.stdout exprType'
 
 
+applyContext
+    :: Context Binding
+    -> Dhall.Expr Dhall.Src Dhall.X
+    -> Dhall.Expr Dhall.Src Dhall.X
+applyContext context expression =
+  case bindings of
+    []     -> expression
+    b : bs -> Dhall.Core.Let (b :| bs) expression
+  where
+    definitions = Dhall.Context.toList context
+
+    convertBinding (variable, Binding {..}) = Dhall.Core.Binding {..}
+      where
+        annotation = Just bindingType
+        value      = bindingExpr
+
+    bindings = fmap convertBinding definitions
 
 normalize
   :: MonadState Env m
   => Dhall.Expr Dhall.Src Dhall.X -> m ( Dhall.Expr t Dhall.X )
 normalize e = do
-  env <-
-    get
+  env <- get
 
-  return
-    ( Dhall.normalize
-        ( foldl'
-            ( \a (k, Binding { bindingType, bindingExpr }) ->
-                Expr.Let (pure (Dhall.Core.Binding k (Just bindingType) bindingExpr)) a
-            )
-            e
-            ( Dhall.Context.toList ( envToContext env ) )
-        )
-    )
+  return (Dhall.normalize (applyContext (envToContext env) e))
 
 
 typeCheck
   :: ( MonadIO m, MonadState Env m )
   => Dhall.Expr Dhall.Src Dhall.X -> m ( Dhall.Expr Dhall.Src Dhall.X )
-typeCheck expr = do
-  env <-
-    get
+typeCheck expression = do
+  env <- get
 
   let wrap = if explain env then Dhall.detailed else id
 
-  case Dhall.typeWith ( bindingType <$> envToContext env ) expr of
-    Left e ->
-      liftIO ( wrap (throwIO e) )
-
-    Right a ->
-      return a
+  case Dhall.typeOf (applyContext (envToContext env) expression) of
+    Left  e -> liftIO ( wrap (throwIO e) )
+    Right a -> return a
 
 -- Separate the equal sign to be its own word in order to simplify parsing
 -- This is intended to be used with the options that require assignment
