@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Parser where
+module Dhall.Test.Parser where
 
 import Data.Text (Text)
 import Test.Tasty (TestTree)
@@ -12,8 +12,8 @@ import qualified Dhall.Parser
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
-parserTests :: TestTree
-parserTests =
+tests :: TestTree
+tests =
     Test.Tasty.testGroup "parser tests"
         [ Test.Tasty.testGroup "whitespace"
             [ shouldParse

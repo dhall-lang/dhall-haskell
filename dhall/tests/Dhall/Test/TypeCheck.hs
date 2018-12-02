@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module TypeCheck where
+module Dhall.Test.TypeCheck where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
@@ -18,8 +18,8 @@ import qualified Dhall.TypeCheck
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
-typecheckTests :: TestTree
-typecheckTests =
+tests :: TestTree
+tests =
     Test.Tasty.testGroup "typecheck tests"
         [ preludeExamples
         , accessTypeChecks
