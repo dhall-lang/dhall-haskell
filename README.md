@@ -1,16 +1,18 @@
 # `dhall-haskell`
 
-This repository is a shared repository for all of the `dhall-*` Haskell
-packages, including:
+You will probably want to read the language-agnostic `README` here:
 
-* [`dhall`](./dhall)
-* [`dhall-bash`](./dhall-bash)
-* [`dhall-json`](./dhall-json)
-* [`dhall-text`](./dhall-text)
+* [`dhall-lang` `README`](https://github.com/dhall-lang/dhall-lang/blob/master/README.md)
+
+This repository focuses on the Haskell bindings to Dhall and contains
+the following packages:
+
+* [`dhall`](./dhall) - [![Hackage](https://img.shields.io/hackage/v/dhall-bash.svg)](https://hackage.haskell.org/package/dhall-bash)
+* [`dhall-bash`](./dhall-bash) - [![Hackage](https://img.shields.io/hackage/v/dhall-bash.svg)](https://hackage.haskell.org/package/dhall-bash)
+* [`dhall-json`](./dhall-json) - [![Hackage](https://img.shields.io/hackage/v/dhall-json.svg)](https://hackage.haskell.org/package/dhall-json)
+* [`dhall-text`](./dhall-text) - [![Hackage](https://img.shields.io/hackage/v/dhall-text.svg)](https://hackage.haskell.org/package/dhall-text)
 
 Navigate to each package's directory for their respective `README`s
-
-# Quick start
 
 ## Building from source
 
@@ -41,6 +43,34 @@ $ nix-build
 ... or you can run `nix-build` within each package's respective directory to
 build just that one package.
 
+You can install all of the packages by running:
+
+```
+$ nix-env --install --file default.nix
+```
+
+... or you can run the same command within each package's respective directory
+to install just that one package.
+
+You can develop any package by navigating to that package's directory and
+running:
+
+```bash
+$ nix-shell
+[nix-shell]$ cabal configure
+[nix-shell]$ cabal build
+[nix-shell]$ cabal test
+```
+
+... or you can add `nix: True` to your `~/.cabal/config` file and then you can
+run the same `cabal` commands without an explicit `nix-shell`:
+
+```bash
+$ cabal configure
+$ cabal build
+$ cabal test
+```
+
 ### [stack](https://docs.haskellstack.org)
 
 You can build all of the packages with
@@ -55,15 +85,7 @@ And each of them with `stack build <package-name>`, for example:
 $ stack build dhall-json
 ```
 
-
-## Development status
-
-[![Build Status](https://travis-ci.org/dhall-lang/dhall-haskell.png)](https://travis-ci.org/dhall-lang/dhall-haskell)
-
-The compiler is built upon a theoretically sound foundation, meaning that if
-there are no bugs then the language will never crash and will always halt.
-However, in practice the compiler needs to be battle-tested to weed out any
-implementation bugs, so please open issues! 🙂
+## Contributing
 
 Read the following guide if you would like to contribute:
 
