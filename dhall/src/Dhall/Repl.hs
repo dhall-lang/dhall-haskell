@@ -14,7 +14,7 @@ import Control.Exception ( SomeException(SomeException), displayException, throw
 import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
-import Data.List ( elemIndex, isPrefixOf )
+import Data.List ( elemIndex, isPrefixOf, nub )
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup ((<>))
 import Dhall.Binary (StandardVersion(..))
@@ -27,6 +27,7 @@ import System.Console.Haskeline.Completion ( Completion, simpleCompletion )
 import System.Environment ( getEnvironment )
 
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.HashSet
 import qualified Data.Text as Text
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
@@ -331,8 +332,15 @@ completeFunc reversedPrev word
         let candidates = algebraicComplete subFields (bindingExpr binding)
         pure $ listCompletion (Text.unpack . (var <>) <$> candidates)
 
+  -- Complete variables in scope and all reserved identifiers
   | otherwise
-  = pure []
+  = do
+    Env { envBindings } <- get
+
+    let vars     = map fst $ Dhall.Context.toList envBindings
+        reserved = Data.HashSet.toList Dhall.Core.reservedIdentifiers
+
+    pure . listCompletion . map Text.unpack . nub $ vars ++ reserved
 
   where
     listCompletion = map simpleCompletion . filter (word `isPrefixOf`)
