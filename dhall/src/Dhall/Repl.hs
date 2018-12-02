@@ -168,7 +168,7 @@ applyContext context expression =
     []     -> expression
     b : bs -> Dhall.Core.Let (b :| bs) expression
   where
-    definitions = Dhall.Context.toList context
+    definitions = reverse $ Dhall.Context.toList context
 
     convertBinding (variable, Binding {..}) = Dhall.Core.Binding {..}
       where
