@@ -1,17 +1,8 @@
 # `dhall 1.19.1`
 
-[![Hackage](https://img.shields.io/hackage/v/dhall.svg)](https://hackage.haskell.org/package/dhall)
-
 Dhall is a programmable configuration language that is not Turing-complete
 
 You can think of Dhall as: JSON + functions + types + imports
-
-You will probably want to read the language-agnostic README here:
-
-* [`dhall-lang` `README`](https://github.com/dhall-lang/dhall-lang/blob/master/README.md)
-
-This repository (and this `README`) focuses on the Haskell implementation of
-Dhall
 
 ## Motivation
 
@@ -33,7 +24,7 @@ You probably don't want to rebuild your program every time you make a
 configuration change.  Recompilation is slow and requires the GHC toolchain
 to be installed anywhere you want to make configuration changes.
 
-## Quick start
+## Example
 
 Given this Haskell program saved to `example.hs`:
 
@@ -104,38 +95,6 @@ Bool
 False
 ```
 
-Now go read the
-[Dhall tutorial](https://hackage.haskell.org/package/dhall/docs/Dhall-Tutorial.html)
-to learn more
+Now go read the [Dhall tutorial][haskell-tutorial] to learn more.
 
-## Building this project
-
-Nix + Cabal is the recommended workflow for project development since continuous
-integration uses Nix to build and test the project.  Other development tools and
-workflows are also supported on a best-effort basis.
-
-You can build the project using only Nix by running this command from the root
-of the repository:
-
-```bash
-$ nix-build
-```
-
-More commonly, you will want to incrementally build the project using `cabal`.
-You can either do so inside of a `nix-shell`:
-
-```bash
-$ nix-shell
-[nix-shell]$ cabal configure
-[nix-shell]$ cabal build
-[nix-shell]$ cabal test
-```
-
-... or you can add `nix: True` to your `~/.cabal/config` file and then you can
-run the same `cabal` commands without an explicit `nix-shell`:
-
-```bash
-$ cabal configure
-$ cabal build
-$ cabal test
-```
+[haskell-tutorial]: https://hackage.haskell.org/package/dhall/docs/Dhall-Tutorial.html
