@@ -55,13 +55,13 @@
     if you add the @--declare@ flag specifying which variable to set or unset.
     For example:
 
-> $ dhall-to-bash --declare FOO <<< '[] : Optional Integer'
+> $ dhall-to-bash --declare FOO <<< 'None Natural'
 > unset FOO
-> $ dhall-to-bash --declare FOO <<< '[1] : Optional Integer'
+> $ dhall-to-bash --declare FOO <<< 'Some 1'
 > declare -r -i FOO=1
-> $ dhall-to-bash --declare FOO <<< '[[1] : Optional Integer] : Optional (Optional Integer)'
+> $ dhall-to-bash --declare FOO <<< 'Some (Some 1)'
 > declare -r -i FOO=1
-> $ dhall-to-bash --declare FOO <<< '[[] : Optional Integer] : Optional (Optional Integer)'
+> $ dhall-to-bash --declare FOO <<< 'Some (None Natural)'
 > unset FOO
 > $ dhall-to-bash --declare FOO <<< '[1, 2, 3]'
 > declare -r -a FOO=(1 2 3)
@@ -187,7 +187,7 @@ The following Dhall expression could not be translated to a Bash expression:
         txt = Dhall.Core.pretty e
 
         tip = case e of
-            OptionalLit _ _ -> "\n\n" <> [NeatInterpolation.text|
+            Some _ -> "\n\n" <> [NeatInterpolation.text|
 Tip: You can convert an ❰Optional❱ value to a Bash statement using the --declare
 flag
 |]
@@ -248,10 +248,8 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
                 <>  Data.ByteString.intercalate " " (Data.Foldable.toList bs')
                 <>  ")"
         return bytes
-    go (OptionalLit _ bs) = do
-        case bs of
-            Nothing -> return ("unset " <> var)
-            Just b  -> go b
+    go (Some b) = go b
+    go (App None _) = return ("unset " <> var)
     go (RecordLit a) = do
         let process (k, v) = do
                 v' <- dhallToExpression v
