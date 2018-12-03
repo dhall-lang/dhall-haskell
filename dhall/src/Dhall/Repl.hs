@@ -1,8 +1,9 @@
 -- | This module contains the implementation of the @dhall repl@ subcommand
 
-{-# language FlexibleContexts #-}
-{-# language NamedFieldPuns #-}
+{-# language FlexibleContexts  #-}
+{-# language NamedFieldPuns    #-}
 {-# language OverloadedStrings #-}
+{-# language RecordWildCards   #-}
 
 module Dhall.Repl
     ( -- * Repl
@@ -13,14 +14,20 @@ import Control.Exception ( SomeException(SomeException), displayException, throw
 import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
-import Data.List ( foldl' )
+import Data.List ( elemIndex, isPrefixOf, nub )
+import Data.List.NonEmpty (NonEmpty(..))
+import Data.Semigroup ((<>))
 import Dhall.Binary (StandardVersion(..))
+import Dhall.Context (Context)
 import Dhall.Import (standardVersion)
 import Dhall.Pretty (CharacterSet(..))
 import Lens.Family (set)
 import System.Console.Haskeline (Interrupt(..))
+import System.Console.Haskeline.Completion ( Completion, simpleCompletion )
+import System.Environment ( getEnvironment )
 
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.HashSet
 import qualified Data.Text as Text
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
@@ -32,12 +39,16 @@ import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize )
 import qualified Dhall.Pretty
 import qualified Dhall.Core as Expr ( Expr(..) )
 import qualified Dhall.Import as Dhall
+import qualified Dhall.Map as Map
 import qualified Dhall.Parser as Dhall
 import qualified Dhall.TypeCheck as Dhall
 import qualified System.Console.ANSI
+import qualified System.Console.Haskeline.Completion as Haskeline
 import qualified System.Console.Haskeline.MonadException as Haskeline
 import qualified System.Console.Repline as Repline
 import qualified System.IO
+
+type Repl = Repline.HaskelineT (State.StateT Env IO)
 
 -- | Implementation of the @dhall repl@ subcommand
 repl :: CharacterSet -> Bool -> StandardVersion -> IO ()
@@ -50,8 +61,8 @@ repl characterSet explain _standardVersion =
             ( pure "⊢ " )
             ( dontCrash . eval )
             options
-            (Just ':')
-            ( Repline.Word completer )
+            ( Just optionsPrefix )
+            completer
             greeter
         )
         (emptyEnv { characterSet, explain, _standardVersion })
@@ -149,41 +160,61 @@ typeOf srcs = do
   output System.IO.stdout exprType'
 
 
+applyContext
+    :: Context Binding
+    -> Dhall.Expr Dhall.Src Dhall.X
+    -> Dhall.Expr Dhall.Src Dhall.X
+applyContext context expression =
+  case bindings of
+    []     -> expression
+    b : bs -> Dhall.Core.Let (b :| bs) expression
+  where
+    definitions = reverse $ Dhall.Context.toList context
+
+    convertBinding (variable, Binding {..}) = Dhall.Core.Binding {..}
+      where
+        annotation = Just bindingType
+        value      = bindingExpr
+
+    bindings = fmap convertBinding definitions
 
 normalize
   :: MonadState Env m
   => Dhall.Expr Dhall.Src Dhall.X -> m ( Dhall.Expr t Dhall.X )
 normalize e = do
-  env <-
-    get
+  env <- get
 
-  return
-    ( Dhall.normalize
-        ( foldl'
-            ( \a (k, Binding { bindingType, bindingExpr }) ->
-                Expr.Let (pure (Dhall.Core.Binding k (Just bindingType) bindingExpr)) a
-            )
-            e
-            ( Dhall.Context.toList ( envToContext env ) )
-        )
-    )
+  return (Dhall.normalize (applyContext (envToContext env) e))
 
 
 typeCheck
   :: ( MonadIO m, MonadState Env m )
   => Dhall.Expr Dhall.Src Dhall.X -> m ( Dhall.Expr Dhall.Src Dhall.X )
-typeCheck expr = do
-  env <-
-    get
+typeCheck expression = do
+  env <- get
 
   let wrap = if explain env then Dhall.detailed else id
 
-  case Dhall.typeWith ( bindingType <$> envToContext env ) expr of
-    Left e ->
-      liftIO ( wrap (throwIO e) )
+  case Dhall.typeOf (applyContext (envToContext env) expression) of
+    Left  e -> liftIO ( wrap (throwIO e) )
+    Right a -> return a
 
-    Right a ->
-      return a
+-- Separate the equal sign to be its own word in order to simplify parsing
+-- This is intended to be used with the options that require assignment
+separateEqual :: [String] -> [String]
+separateEqual [] = []
+separateEqual (x:xs)
+  -- Handle the case where there is no space between the var and "="
+  | Just i <- elemIndex '=' x
+  = let (a, _:b) = splitAt i x
+    in  a : "=" : b : xs
+
+  -- Handle the case where there is no space between the "=" and the expression
+  | ('=':y):ys <- xs
+  = x : "=" : y : ys
+
+  | otherwise
+  = x : xs
 
 
 addBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
@@ -240,20 +271,100 @@ cmdQuit _ = do
   liftIO (putStrLn "Goodbye.")
   liftIO (throwIO Interrupt)
 
+
+optionsPrefix :: Char
+optionsPrefix = ':'
+
+
 options
   :: ( Haskeline.MonadException m, MonadIO m, MonadState Env m )
   => Repline.Options m
 options =
   [ ( "type", dontCrash . typeOf )
-  , ( "let", dontCrash . addBinding )
-  , ( "save", dontCrash . saveBinding )
+  , ( "let", dontCrash . addBinding . separateEqual )
+  , ( "save", dontCrash . saveBinding . separateEqual )
   , ( "quit", cmdQuit )
   ]
 
 
-completer :: Monad m => Repline.WordCompleter m
-completer _ =
-  return []
+completer
+  :: (Monad m, MonadIO m, MonadState Env m)
+  => Repline.CompleterStyle m
+completer =
+  Repline.Prefix
+    (Haskeline.completeWordWithPrev (Just '\\') separators completeFunc)
+    []
+  where
+    -- Separators that can be found on the left of something we want to
+    -- autocomplete
+    separators :: String
+    separators = " \t[(,=+*&|}#?>:"
+
+completeFunc
+  :: (Monad m, MonadIO m, MonadState Env m)
+  => String -> String -> m [Completion]
+completeFunc reversedPrev word
+
+  -- Complete commands
+  | reversedPrev == ":"
+  = pure . listCompletion $ fst <$> (options :: Repline.Options Repl)
+
+  -- Complete file paths
+  | any (`isPrefixOf` word) [ "/", "./", "../", "~/" ]
+  = Haskeline.listFiles word
+
+  -- Complete environment variables
+  | reverse "env:" `isPrefixOf` reversedPrev
+  = listCompletion . fmap fst <$> liftIO getEnvironment
+
+  -- Complete record fields and union alternatives
+  | '.' `elem` word
+  = do
+    Env { envBindings } <- get
+
+    let var:subFields = Text.split (== '.') (Text.pack word)
+
+    case Dhall.Context.lookup var 0 envBindings of
+
+      Nothing -> pure []
+
+      Just binding -> do
+        let candidates = algebraicComplete subFields (bindingExpr binding)
+        pure $ listCompletion (Text.unpack . (var <>) <$> candidates)
+
+  -- Complete variables in scope and all reserved identifiers
+  | otherwise
+  = do
+    Env { envBindings } <- get
+
+    let vars     = map fst $ Dhall.Context.toList envBindings
+        reserved = Data.HashSet.toList Dhall.Core.reservedIdentifiers
+
+    pure . listCompletion . map Text.unpack . nub $ vars ++ reserved
+
+  where
+    listCompletion = map simpleCompletion . filter (word `isPrefixOf`)
+
+    algebraicComplete :: [Text.Text] -> Dhall.Expr Dhall.Src Dhall.X -> [Text.Text]
+    algebraicComplete subFields expr =
+      let keys = fmap ("." <>) . Map.keys
+
+          withMap m
+            | [] <- subFields   = keys m
+            -- Stop on last subField (we care about the keys at this level)
+            | [_] <- subFields  = keys m
+            | f:fs <- subFields =
+              maybe
+                []
+                (fmap (("." <> f) <>) . algebraicComplete fs)
+                (Map.lookup f m)
+
+      in  case expr of
+            Dhall.Core.Record       m -> withMap m
+            Dhall.Core.RecordLit    m -> withMap m
+            Dhall.Core.Union        m -> withMap m
+            Dhall.Core.UnionLit _ _ m -> withMap m
+            _                         -> []
 
 
 greeter :: MonadIO m => m ()

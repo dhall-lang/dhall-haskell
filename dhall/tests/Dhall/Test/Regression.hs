@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Regression where
+module Dhall.Test.Regression where
 
 import qualified Control.Exception
 import qualified Data.Text.Lazy.IO
@@ -14,11 +14,11 @@ import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
+import qualified Dhall.Test.Util as Util
 import qualified Dhall.TypeCheck
 import qualified System.Timeout
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
-import qualified Util
 
 import Control.DeepSeq (($!!))
 import Dhall.Import (Imported)
@@ -27,8 +27,8 @@ import Dhall.TypeCheck (TypeError, X)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit ((@?=))
 
-regressionTests :: TestTree
-regressionTests =
+tests :: TestTree
+tests =
     Test.Tasty.testGroup "regression tests"
         [ issue96
         , issue126

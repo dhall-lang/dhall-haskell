@@ -2,13 +2,13 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Tutorial where
+module Dhall.Test.Tutorial where
 
 import qualified Data.Vector
 import qualified Dhall
+import qualified Dhall.Test.Util as Util
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
-import qualified Util
 
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -18,8 +18,8 @@ import Numeric.Natural (Natural)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit ((@?=))
 
-tutorialTests :: TestTree
-tutorialTests =
+tests :: TestTree
+tests =
     Test.Tasty.testGroup "tutorial"
         [ Test.Tasty.testGroup "Interpolation"
             [ _Interpolation_0
