@@ -110,9 +110,15 @@ let
                         { };
 
                     dhall-text =
-                       haskellPackagesNew.callCabal2nix
+                      haskellPackagesNew.callCabal2nix
                         "dhall-text"
                         ../dhall-text
+                        { };
+
+                    dhall-try =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-try"
+                        ../dhall-try
                         { };
                   };
 
@@ -370,29 +376,33 @@ let
       '';
     };
 
+  toShell = drv:
+    if compiler == "ghcjs"
+    then
+        # `doctest` doesn't work with `ghcjs`
+        (pkgs.haskell.lib.dontCheck drv).env
+    else
+        # Benchmark dependencies aren't added by default
+        (pkgs.haskell.lib.doBenchmark drv).env;
+
 in
   rec {
     inherit pwd;
 
-    tarball-dhall = makeTarball "dhall";
-
+    tarball-dhall      = makeTarball "dhall"     ;
     tarball-dhall-bash = makeTarball "dhall-bash";
-
     tarball-dhall-json = makeTarball "dhall-json";
-
     tarball-dhall-text = makeTarball "dhall-text";
 
     inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-text;
 
     inherit (pkgs.releaseTools) aggregate;
 
-    shell-dhall = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall).env;
-
-    shell-dhall-bash = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall-bash).env;
-
-    shell-dhall-json = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall-json).env;
-
-    shell-dhall-text = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall-text).env;
+    shell-dhall      = toShell pkgs.haskell.packages."${compiler}".dhall     ;
+    shell-dhall-bash = toShell pkgs.haskell.packages."${compiler}".dhall-bash;
+    shell-dhall-json = toShell pkgs.haskell.packages."${compiler}".dhall-json;
+    shell-dhall-text = toShell pkgs.haskell.packages."${compiler}".dhall-text;
+    shell-dhall-try  = toShell pkgs.haskell.packages."${compiler}".dhall-try ;
 
     test-dhall =
       pkgs.mkShell
