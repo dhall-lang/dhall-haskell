@@ -5,6 +5,9 @@ let
   shared_8_6_1 =
     import ./nix/shared.nix { compiler = "ghc861"; };
 
+  shared_ghcjs =
+    import ./nix/shared.nix { compiler = "ghcjs"; };
+
   shared =
     import ./nix/shared.nix { };
 
@@ -37,6 +40,9 @@ in
           shared.tarball-dhall-bash
           shared.tarball-dhall-json
           shared.tarball-dhall-text
+
+          # Verify that `dhall` can be built using GHCJS
+          shared_ghcjs.dhall
 
           # This is the only `dhall` build that runs the test suite
           coverage.dhall
