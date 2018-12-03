@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Format where
+module Dhall.Test.Format where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
@@ -17,8 +17,8 @@ import qualified Dhall.Pretty
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
-formatTests :: TestTree
-formatTests =
+tests :: TestTree
+tests =
     Test.Tasty.testGroup "format tests"
         [ should
             Unicode

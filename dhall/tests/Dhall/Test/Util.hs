@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-module Util
+
+module Dhall.Test.Util
     ( code
     , codeWith
     , equivalent
@@ -49,8 +50,8 @@ codeWith ctx expr = do
 
 equivalent :: Text -> Text -> IO ()
 equivalent text0 text1 = do
-    expr0 <- fmap Dhall.Core.normalize (Util.code text0) :: IO (Expr X X)
-    expr1 <- fmap Dhall.Core.normalize (Util.code text1) :: IO (Expr X X)
+    expr0 <- fmap Dhall.Core.normalize (code text0) :: IO (Expr X X)
+    expr1 <- fmap Dhall.Core.normalize (code text1) :: IO (Expr X X)
     assertEqual "Expressions are not equivalent" expr0 expr1
 
 assertNormalizesTo :: Expr Src X -> Text -> IO ()
