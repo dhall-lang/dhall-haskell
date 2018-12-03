@@ -69,7 +69,11 @@ let
                     "comonad"
                     "distributive"
                     "doctest"
+                    "half"
+                    "http-types"
+                    "megaparsec"
                     "prettyprinter"
+                    "prettyprinter-ansi-terminal"
                     # https://github.com/well-typed/cborg/issues/172
                     "serialise"
                     "unordered-containers"
