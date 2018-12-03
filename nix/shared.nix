@@ -59,7 +59,7 @@ let
                 failOnAllWarnings = drv:
                   # Older versions of GHC incorrectly detect non-exhaustive
                   # pattern matches
-                  if compiler == "ghc7103" || or compiler == "ghcjs"
+                  if compiler == "ghc7103" || compiler == "ghcjs"
                   then drv
                   else pkgsNew.haskell.lib.failOnAllWarnings drv;
 
