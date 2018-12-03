@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Import where
+module Dhall.Test.Import where
 
 import Data.Text (Text)
 import Test.Tasty (TestTree)
@@ -16,8 +16,8 @@ import qualified Dhall.Import
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
-importTests :: TestTree
-importTests =
+tests :: TestTree
+tests =
     Test.Tasty.testGroup "import tests"
         [ Test.Tasty.testGroup "import alternatives"
             [ shouldFail

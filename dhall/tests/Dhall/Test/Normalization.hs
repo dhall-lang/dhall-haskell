@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Normalization (normalizationTests) where
+module Dhall.Test.Normalization where
 
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -19,10 +19,10 @@ import Dhall.Core
 import Dhall.Context
 import Test.Tasty
 import Test.Tasty.HUnit
-import Util
+import Dhall.Test.Util
 
-normalizationTests :: TestTree
-normalizationTests =
+tests :: TestTree
+tests =
     testGroup "normalization"
         [ tutorialExamples
         , preludeExamples
