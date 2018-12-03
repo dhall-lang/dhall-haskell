@@ -57,9 +57,9 @@ let
                     pkgsNew.haskell.lib.dontCheck drv;
 
                 failOnAllWarnings = drv:
-                  # GHC 7.10.3 incorrectly detects non-exhaustive pattern
-                  # matches
-                  if compiler == "ghc7103"
+                  # Older versions of GHC incorrectly detect non-exhaustive
+                  # pattern matches
+                  if compiler == "ghc7103" || or compiler == "ghcjs"
                   then drv
                   else pkgsNew.haskell.lib.failOnAllWarnings drv;
 
