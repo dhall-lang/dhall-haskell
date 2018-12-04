@@ -2,28 +2,29 @@
 
 module Main where
 
-import Control.Monad.IO.Class (liftIO)
-
+import qualified Data.JSString
 import qualified Data.Text
 import qualified Dhall.Core
-import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified GHCJS.DOM
 import qualified GHCJS.DOM.Document
+import qualified GHCJS.DOM.Element
 import qualified GHCJS.DOM.EventM
 import qualified GHCJS.DOM.GlobalEventHandlers
 import qualified GHCJS.DOM.HTMLCollection
 import qualified GHCJS.DOM.HTMLElement
-import qualified GHCJS.DOM.HTMLTextAreaElement
 import qualified GHCJS.DOM.Types
 
 import Control.Monad.Fail (MonadFail)
+import Control.Monad.IO.Class (liftIO)
 import Data.Text (Text)
 import Dhall.Import (ImportResolutionDisabled(..))
+import GHCJS.DOM.HTMLDivElement (HTMLDivElement(..))
 import GHCJS.DOM.HTMLElement (HTMLElement(..))
-import GHCJS.DOM.HTMLTextAreaElement (HTMLTextAreaElement(..))
-import GHCJS.DOM.Types (IsGObject, JSVal, MonadDOM, MonadJSM)
+import GHCJS.DOM.Types (IsGObject, JSString, JSVal, MonadDOM, MonadJSM)
+
+foreign import javascript unsafe "editor.getValue()" getEditorText :: IO JSString
 
 orDie :: MonadFail m => m (Maybe a) -> String -> m a
 m `orDie` string = do
@@ -51,12 +52,15 @@ main = do
                 GHCJS.DOM.Types.castTo elementType element
                     `orDie` ("The first element with a class name of `" ++ className ++ "` was not the right element type")
 
-    dhallInput  <- the HTMLTextAreaElement "dhall-input"
+    dhallInput  <- the HTMLDivElement "CodeMirror"
     dhallOutput <- the HTMLElement "dhall-output"
 
     let callback :: MonadDOM m => m ()
         callback = do
-            inputText <- GHCJS.DOM.HTMLTextAreaElement.getValue dhallInput
+            inputJSString <- liftIO getEditorText -- GHCJS.DOM.HTMLElement.getInnerText dhallInput
+
+            let inputString = Data.JSString.unpack inputJSString
+            let inputText   = Data.Text.pack inputString
 
             outputText <- case Dhall.Parser.exprFromText "(input)" inputText of
                 Left exception -> do
@@ -78,6 +82,6 @@ main = do
 
     callback
 
-    GHCJS.DOM.EventM.on dhallInput GHCJS.DOM.GlobalEventHandlers.input callback
+    _ <- GHCJS.DOM.EventM.on dhallInput GHCJS.DOM.GlobalEventHandlers.input callback
 
     return ()

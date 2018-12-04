@@ -2,13 +2,68 @@
 <html>
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style>
+      * {
+        -webkit-box-sizing: border-box;
+           -moz-box-sizing: border-box;
+                box-sizing: border-box;
+      }
+
+      pre {
+          white-space: pre-wrap;       /* Since CSS 2.1 */
+          white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
+          white-space: -pre-wrap;      /* Opera 4-6 */
+          white-space: -o-pre-wrap;    /* Opera 7 */
+          word-wrap: break-word;       /* Internet Explorer 5.5+ */
+      }
+
+      #title {
+        text-align: center;
+      }
+
+      .CodeMirror {
+        margin-left: auto;
+        margin-right: auto;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        outline: 1px solid black;
+        width: 86ch;
+        height: 24em;
+      }
+
+      .dhall-output {
+        margin-left: auto;
+        margin-right: auto;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        padding: 20px;
+        overflow: auto;
+        outline: 1px solid black;
+        width: 86ch;
+        height: 24em;
+      }
+    </style>
+    <link rel="stylesheet" href="../css/codemirror.css">
+    <script src="../js/codemirror.js"></script>
+    <script src="../js/haskell.js"></script>
     <script language="javascript" src="../dist/build/dhall-try/dhall-try.jsexe/rts.js"></script>
     <script language="javascript" src="../dist/build/dhall-try/dhall-try.jsexe/lib.js"></script>
     <script language="javascript" src="../dist/build/dhall-try/dhall-try.jsexe/out.js"></script>
   </head>
   <body>
-    <textarea class="dhall-input" rows ="4" cols="50">Natural/even (1 + 1)</textarea>
-    <pre class="dhall-output""></pre>
+    <div id="container">
+      <h1 id="title">Try the Dhall configuration language</h1>
+      <textarea class="dhall-input" rows ="4" cols="50">Natural/even (1 + 1)</textarea>
+      <pre class="dhall-output""></pre>
+    </div>
   </body>
+  <script>
+    var dhallInput = document.getElementsByClassName("dhall-input")[0];
+
+    var editor = CodeMirror.fromTextArea(dhallInput, {
+      lineNumbers: true,
+      mode: "haskell"
+    });
+  </script>
   <script language="javascript" src="../dist/build/dhall-try/dhall-try.jsexe/runmain.js" defer></script>
 </html>
