@@ -4,8 +4,11 @@ module Main where
 
 import qualified Data.JSString
 import qualified Data.Text
+import qualified Data.Text.Prettyprint.Doc             as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Dhall.Core
 import qualified Dhall.Parser
+import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified GHCJS.DOM
 import qualified GHCJS.DOM.Document
@@ -55,9 +58,14 @@ main = do
     dhallInput  <- the HTMLDivElement "CodeMirror"
     dhallOutput <- the HTMLElement "dhall-output"
 
+    let prettyExpression =
+              Pretty.renderStrict
+            . Pretty.layoutSmart Dhall.Pretty.layoutOpts
+            . Dhall.Pretty.prettyExpr
+
     let callback :: MonadDOM m => m ()
         callback = do
-            inputJSString <- liftIO getEditorText -- GHCJS.DOM.HTMLElement.getInnerText dhallInput
+            inputJSString <- liftIO getEditorText
 
             let inputString = Data.JSString.unpack inputJSString
             let inputText   = Data.Text.pack inputString
@@ -76,7 +84,7 @@ main = do
                                 Right _ -> do
                                     let normalizedExpression =
                                             Dhall.Core.normalize resolvedExpression
-                                    return (Dhall.Core.pretty normalizedExpression)
+                                    return (prettyExpression normalizedExpression)
 
             GHCJS.DOM.HTMLElement.setInnerText dhallOutput (fixup outputText)
 

@@ -16,6 +16,7 @@ executable dhall-try
   main-is:             Main.hs
   build-depends:       base       >= 4.11.0.0 && < 5
                      , dhall
+                     , prettyprinter
                      , text
                      , ghcjs-base >= 0.2.0.0  && < 0.3
                      , ghcjs-dom  >= 0.9.2.0  && < 0.10
