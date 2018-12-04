@@ -13,21 +13,22 @@ import qualified Dhall.TypeCheck
 import qualified GHCJS.DOM
 import qualified GHCJS.DOM.Document
 import qualified GHCJS.DOM.Element
-import qualified GHCJS.DOM.EventM
-import qualified GHCJS.DOM.GlobalEventHandlers
 import qualified GHCJS.DOM.HTMLCollection
 import qualified GHCJS.DOM.HTMLElement
 import qualified GHCJS.DOM.Types
+import qualified GHCJS.Foreign.Callback
 
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Class (liftIO)
 import Data.Text (Text)
 import Dhall.Import (ImportResolutionDisabled(..))
-import GHCJS.DOM.HTMLDivElement (HTMLDivElement(..))
 import GHCJS.DOM.HTMLElement (HTMLElement(..))
 import GHCJS.DOM.Types (IsGObject, JSString, JSVal, MonadDOM, MonadJSM)
+import GHCJS.Foreign.Callback (Callback)
 
 foreign import javascript unsafe "editor.getValue()" getEditorText :: IO JSString
+
+foreign import javascript unsafe "editor.on('change', $1)" registerCallback :: Callback (IO ()) -> IO ()
 
 orDie :: MonadFail m => m (Maybe a) -> String -> m a
 m `orDie` string = do
@@ -55,7 +56,6 @@ main = do
                 GHCJS.DOM.Types.castTo elementType element
                     `orDie` ("The first element with a class name of `" ++ className ++ "` was not the right element type")
 
-    dhallInput  <- the HTMLDivElement "CodeMirror"
     dhallOutput <- the HTMLElement "dhall-output"
 
     let prettyExpression =
@@ -90,6 +90,8 @@ main = do
 
     callback
 
-    _ <- GHCJS.DOM.EventM.on dhallInput GHCJS.DOM.GlobalEventHandlers.input callback
+    async <- GHCJS.Foreign.Callback.asyncCallback callback
+
+    registerCallback async
 
     return ()
