@@ -10,54 +10,25 @@ import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
-import qualified GHCJS.DOM
-import qualified GHCJS.DOM.Document
-import qualified GHCJS.DOM.Element
-import qualified GHCJS.DOM.HTMLCollection
-import qualified GHCJS.DOM.HTMLElement
-import qualified GHCJS.DOM.Types
 import qualified GHCJS.Foreign.Callback
 
-import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Class (liftIO)
 import Data.Text (Text)
 import Dhall.Import (ImportResolutionDisabled(..))
-import GHCJS.DOM.HTMLElement (HTMLElement(..))
-import GHCJS.DOM.Types (IsGObject, JSString, JSVal, MonadDOM, MonadJSM)
+import GHCJS.DOM.Types (JSString, MonadDOM)
 import GHCJS.Foreign.Callback (Callback)
 
-foreign import javascript unsafe "editor.getValue()" getEditorText :: IO JSString
+foreign import javascript unsafe "input.getValue()" getInput :: IO JSString
 
-foreign import javascript unsafe "editor.on('change', $1)" registerCallback :: Callback (IO ()) -> IO ()
+foreign import javascript unsafe "input.on('change', $1)" registerCallback :: Callback (IO ()) -> IO ()
 
-orDie :: MonadFail m => m (Maybe a) -> String -> m a
-m `orDie` string = do
-    x <- m
-    case x of
-        Nothing -> fail string
-        Just y  -> return y
+foreign import javascript unsafe "output.setValue($1)" setOutput :: JSString -> IO ()
 
 fixup :: Text -> Text
 fixup = Data.Text.replace "\ESC[1;31mError\ESC[0m" "Error"
 
 main :: IO ()
 main = do
-    document <- GHCJS.DOM.currentDocument
-        `orDie` "Unable to get the current document"
-
-    let the :: (IsGObject a, MonadFail m, MonadJSM m)
-            => (JSVal -> a) -> String -> m a
-        the elementType className = do
-                elements <- GHCJS.DOM.Document.getElementsByClassName document className
-
-                element <- GHCJS.DOM.HTMLCollection.item elements 0
-                    `orDie` ("Unable to locate an element with a class name of `" ++ className ++ "`")
-
-                GHCJS.DOM.Types.castTo elementType element
-                    `orDie` ("The first element with a class name of `" ++ className ++ "` was not the right element type")
-
-    dhallOutput <- the HTMLElement "dhall-output"
-
     let prettyExpression =
               Pretty.renderStrict
             . Pretty.layoutSmart Dhall.Pretty.layoutOpts
@@ -65,7 +36,7 @@ main = do
 
     let callback :: MonadDOM m => m ()
         callback = do
-            inputJSString <- liftIO getEditorText
+            inputJSString <- liftIO getInput
 
             let inputString = Data.JSString.unpack inputJSString
             let inputText   = Data.Text.pack inputString
@@ -86,7 +57,10 @@ main = do
                                             Dhall.Core.normalize resolvedExpression
                                     return (prettyExpression normalizedExpression)
 
-            GHCJS.DOM.HTMLElement.setInnerText dhallOutput (fixup outputText)
+            let outputString   = Data.Text.unpack (fixup outputText)
+            let outputJSString = Data.JSString.pack outputString
+
+            liftIO (setOutput outputJSString)
 
     callback
 

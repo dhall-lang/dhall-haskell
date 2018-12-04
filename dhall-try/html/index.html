@@ -54,13 +54,19 @@
     <div id="container">
       <h1 id="title">Try the Dhall configuration language</h1>
       <textarea class="dhall-input" rows ="4" cols="50">Natural/even (1 + 1)</textarea>
-      <pre class="dhall-output""></pre>
+      <textarea class="dhall-output""></textarea>
     </div>
   </body>
   <script>
     var dhallInput  = document.getElementsByClassName("dhall-input")[0];
+    var dhallOutput = document.getElementsByClassName("dhall-output")[0];
 
-    var editor = CodeMirror.fromTextArea(dhallInput, {
+    var input = CodeMirror.fromTextArea(dhallInput, {
+      lineNumbers: true,
+      mode: "haskell"
+    });
+
+    var output = CodeMirror.fromTextArea(dhallOutput, {
       lineNumbers: true,
       mode: "haskell"
     });
