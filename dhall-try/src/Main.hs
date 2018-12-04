@@ -14,6 +14,7 @@ import qualified GHCJS.Foreign.Callback
 
 import Control.Monad.IO.Class (liftIO)
 import Data.Text (Text)
+import Dhall.Core (Expr(..))
 import Dhall.Import (ImportResolutionDisabled(..))
 import GHCJS.DOM.Types (JSString, MonadDOM)
 import GHCJS.Foreign.Callback (Callback)
@@ -52,10 +53,10 @@ main = do
                             case Dhall.TypeCheck.typeOf resolvedExpression of
                                 Left exception -> do
                                     return (Data.Text.pack (show exception))
-                                Right _ -> do
+                                Right inferredType -> do
                                     let normalizedExpression =
                                             Dhall.Core.normalize resolvedExpression
-                                    return (prettyExpression normalizedExpression)
+                                    return (prettyExpression (Annot normalizedExpression inferredType))
 
             let outputString   = Data.Text.unpack (fixup outputText)
             let outputJSString = Data.JSString.pack outputString
