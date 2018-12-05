@@ -66,9 +66,11 @@ let
                 dontCheckExtension =
                   mass pkgsNew.haskell.lib.dontCheck [
                     "aeson"
+                    "base-compat-batteries"
                     "comonad"
                     "distributive"
                     "doctest"
+                    "Glob"
                     "half"
                     "http-types"
                     "megaparsec"
