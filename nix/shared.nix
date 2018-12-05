@@ -396,7 +396,7 @@ in
     tarball-dhall-json = makeTarball "dhall-json";
     tarball-dhall-text = makeTarball "dhall-text";
 
-    inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-text;
+    inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-text dhall-try;
 
     inherit (pkgs.releaseTools) aggregate;
 
