@@ -12,11 +12,10 @@ import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified GHCJS.Foreign.Callback
 
-import Control.Monad.IO.Class (liftIO)
+import Data.JSString (JSString)
 import Data.Text (Text)
 import Dhall.Core (Expr(..))
 import Dhall.Import (ImportResolutionDisabled(..))
-import GHCJS.DOM.Types (JSString, MonadDOM)
 import GHCJS.Foreign.Callback (Callback)
 
 foreign import javascript unsafe "input.getValue()" getInput :: IO JSString
@@ -35,9 +34,9 @@ main = do
             . Pretty.layoutSmart Dhall.Pretty.layoutOpts
             . Dhall.Pretty.prettyExpr
 
-    let callback :: MonadDOM m => m ()
+    let callback :: IO ()
         callback = do
-            inputJSString <- liftIO getInput
+            inputJSString <- getInput
 
             let inputString = Data.JSString.unpack inputJSString
             let inputText   = Data.Text.pack inputString
@@ -61,7 +60,7 @@ main = do
             let outputString   = Data.Text.unpack (fixup outputText)
             let outputJSString = Data.JSString.pack outputString
 
-            liftIO (setOutput outputJSString)
+            setOutput outputJSString
 
     callback
 
