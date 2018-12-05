@@ -85,6 +85,14 @@ And each of them with `stack build <package-name>`, for example:
 $ stack build dhall-json
 ```
 
+## Build the "Try Dhall" server
+
+This is currently only supported for Nix:
+
+```bash
+$ nix-build --attr try-dhall
+```
+
 ## Contributing
 
 Read the following guide if you would like to contribute:

@@ -137,6 +137,17 @@ let
         );
       };
     };
+
+    try-dhall-www = pkgsNew.runCommand "try-dhall-www" {} ''
+      ${pkgsNew.coreutils}/bin/cp --recursive ${../dhall-try/www} $out
+      ${pkgsNew.coreutils}/bin/chmod --recursive u+w $out
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall.prelude} $out/Prelude
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe $out/js
+    '';
+
+    try-dhall = pkgsNew.writeScriptBin "try-dhall" ''
+      ${pkgsNew.haskellPackages.wai-app-static}/bin/warp --docroot ${pkgsNew.try-dhall-www}
+    '';
   };
 
   overlayCabal2nix = pkgsNew: pkgsOld: {
@@ -395,6 +406,8 @@ in
     tarball-dhall-bash = makeTarball "dhall-bash";
     tarball-dhall-json = makeTarball "dhall-json";
     tarball-dhall-text = makeTarball "dhall-text";
+
+    inherit (pkgs) try-dhall;
 
     inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-text dhall-try;
 
