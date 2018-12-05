@@ -2,20 +2,22 @@
 
 module Main where
 
+import qualified Control.Exception
 import qualified Data.JSString
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Dhall.Core
+import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified GHCJS.Foreign.Callback
 
+import Control.Exception (SomeException)
 import Data.JSString (JSString)
 import Data.Text (Text)
 import Dhall.Core (Expr(..))
-import Dhall.Import (ImportResolutionDisabled(..))
 import GHCJS.Foreign.Callback (Callback)
 
 foreign import javascript unsafe "input.getValue()" getInput :: IO JSString
@@ -45,17 +47,18 @@ main = do
                 Left exception -> do
                     return (Data.Text.pack (show exception))
                 Right parsedExpression -> do
-                    case traverse (\_ -> Nothing) parsedExpression of
-                        Nothing -> do
-                            return (Data.Text.pack (show ImportResolutionDisabled))
-                        Just resolvedExpression -> do
-                            case Dhall.TypeCheck.typeOf resolvedExpression of
-                                Left exception -> do
-                                    return (Data.Text.pack (show exception))
-                                Right inferredType -> do
-                                    let normalizedExpression =
-                                            Dhall.Core.normalize resolvedExpression
-                                    return (prettyExpression (Annot normalizedExpression inferredType))
+                  eitherResolvedExpression <- Control.Exception.try (Dhall.Import.load parsedExpression)
+                  case eitherResolvedExpression of
+                      Left exception -> do
+                          return (Data.Text.pack (show (exception :: SomeException)))
+                      Right resolvedExpression -> do
+                          case Dhall.TypeCheck.typeOf resolvedExpression of
+                              Left exception -> do
+                                  return (Data.Text.pack (show exception))
+                              Right inferredType -> do
+                                  let normalizedExpression =
+                                          Dhall.Core.normalize resolvedExpression
+                                  return (prettyExpression (Annot normalizedExpression inferredType))
 
             let outputString   = Data.Text.unpack (fixup outputText)
             let outputJSString = Data.JSString.pack outputString
