@@ -162,6 +162,17 @@ let
       ${pkgsNew.coreutils}/bin/echo "doc none $out/index.html" > $out/nix-support/hydra-build-products
     '';
 
+    tarball-try-dhall = pkgsStaticLinux.releaseTools.binaryTarball rec {
+      src = pkgsNew.try-dhall-static;
+
+      installPhase = ''
+        releaseName=try-dhall
+        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/" -D $src/*
+      '';
+    };
+
+
+
     try-dhall-server = pkgsNew.writeScriptBin "try-dhall-server" ''
       ${pkgsNew.haskellPackages.wai-app-static}/bin/warp --docroot ${pkgsNew.try-dhall-static}
     '';
@@ -424,7 +435,7 @@ in
     tarball-dhall-json = makeTarball "dhall-json";
     tarball-dhall-text = makeTarball "dhall-text";
 
-    inherit (pkgs) try-dhall-server try-dhall-static;
+    inherit (pkgs) tarball-try-dhall try-dhall-server try-dhall-static;
 
     inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-text dhall-try;
 
