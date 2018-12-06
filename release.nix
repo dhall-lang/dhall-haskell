@@ -54,6 +54,8 @@ in
 
     "coverage-dhall" = coverage.dhall;
 
+    "try-dhall" = shared_ghcjs.try-dhall-static;
+
     inherit (shared)
       tarball-dhall
       tarball-dhall-bash
