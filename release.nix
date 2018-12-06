@@ -41,9 +41,9 @@ in
           shared.tarball-dhall-json
           shared.tarball-dhall-text
 
-          # Verify that `try-dhall` server and dependencies can be built, which
+          # Verify that `try-dhall-server` and dependencies can be built, which
           # includes building `dhall` using GHCJS
-          shared_ghcjs.try-dhall
+          shared_ghcjs.try-dhall-server
 
           # This is the only `dhall` build that runs the test suite
           coverage.dhall

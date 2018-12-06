@@ -104,7 +104,7 @@ To also test imports you can build the `try-dhall-server` script which uses
 
 ```bash
 $ nix-build --attr try-dhall-server
-$ result/bin/try-dhall-server 
+$ result/bin/try-dhall-server
 Serving directory /nix/store/i7x86qs888rndrhvw92y69jd5xaji060-try-dhall-static on port 3000 with ["index.html","index.htm"] index files.
 ```
 
