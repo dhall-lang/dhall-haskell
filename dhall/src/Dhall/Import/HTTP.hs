@@ -15,11 +15,11 @@ import Lens.Family.State.Strict (zoom)
 
 import qualified Control.Monad.Trans.State.Strict        as State
 import qualified Data.Text                               as Text
-import qualified JavaScript.XHR
 
 import Dhall.Import.Types
 
 #ifdef __GHCJS__
+import qualified JavaScript.XHR
 #else
 import qualified Control.Exception
 import qualified Data.Text.Lazy
