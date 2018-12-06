@@ -510,10 +510,7 @@ typeWithA tpa = loop
                                 else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 Sort))
                             _ ->
                                 Left (TypeError ctx e (InvalidFieldType k t))
--- TODO(fintan): Need to make sure we want to do this
---                Dhall.Map.unorderedTraverseWithKey_ process rest
-                Dhall.Map.traverseWithKey_ process rest
-
+                Dhall.Map.unorderedTraverseWithKey_ process rest
                 return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
         case Dhall.Map.toList kvs of
@@ -553,7 +550,7 @@ typeWithA tpa = loop
                                 Left (TypeError ctx e (InvalidField k t))
 
                         return t
-                kts <- Dhall.Map.traverseWithKey process kvs
+                kts <- Dhall.Map.unorderedTraverseWithKey process kvs
                 return (Record kts)
     loop ctx e@(Union     kts   ) = do
         let process k t = do
