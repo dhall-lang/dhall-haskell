@@ -147,7 +147,7 @@ let
 
     npm = pkgsNew.callPackage ./npm { };
 
-    try-dhall-www = pkgsNew.runCommand "try-dhall-www" {} ''
+    try-dhall-static = pkgsNew.runCommand "try-dhall-static" {} ''
       ${pkgsNew.coreutils}/bin/mkdir $out
       ${pkgsNew.coreutils}/bin/mkdir $out/{css,img,js}
       ${pkgsNew.coreutils}/bin/cp ${../dhall-try/index.html} $out/index.html
@@ -156,11 +156,11 @@ let
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.css $out/css
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall-logo} $out/img/dhall-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall.prelude} $out/Prelude
-      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe $out/js
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe/{lib,out,rts,runmain}.js $out/js/
     '';
 
-    try-dhall = pkgsNew.writeScriptBin "try-dhall" ''
-      ${pkgsNew.haskellPackages.wai-app-static}/bin/warp --docroot ${pkgsNew.try-dhall-www}
+    try-dhall-server = pkgsNew.writeScriptBin "try-dhall-server" ''
+      ${pkgsNew.haskellPackages.wai-app-static}/bin/warp --docroot ${pkgsNew.try-dhall-static}
     '';
   };
 
@@ -421,7 +421,7 @@ in
     tarball-dhall-json = makeTarball "dhall-json";
     tarball-dhall-text = makeTarball "dhall-text";
 
-    inherit (pkgs) try-dhall try-dhall-www;
+    inherit (pkgs) try-dhall-server try-dhall-static;
 
     inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-text dhall-try;
 
