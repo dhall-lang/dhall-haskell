@@ -167,7 +167,10 @@ let
 
       installPhase = ''
         releaseName=try-dhall
-        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/" -D $src/*
+        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/try-dhall/"    -D $src/index.html
+        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/try-dhall/img" -D $src/img/*
+        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/try-dhall/css" -D $src/css/*
+        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/try-dhall/js"  -D $src/js/*
       '';
     };
 
