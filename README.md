@@ -85,7 +85,7 @@ And each of them with `stack build <package-name>`, for example:
 $ stack build dhall-json
 ```
 
-## Build and server the "Try Dhall" website
+## Build and serve the "Try Dhall" website
 
 This is currently only supported for Nix on Linux
 
