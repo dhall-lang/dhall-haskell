@@ -157,6 +157,8 @@ data FilePrefix
     -- ^ Absolute path
     | Here
     -- ^ Path relative to @.@
+    | Parent
+    -- ^ Path relative to @..@
     | Home
     -- ^ Path relative to @~@
     deriving (Eq, Generic, Ord, Show)
@@ -164,6 +166,7 @@ data FilePrefix
 instance Pretty FilePrefix where
     pretty Absolute = ""
     pretty Here     = "."
+    pretty Parent   = ".."
     pretty Home     = "~"
 
 data Scheme = HTTP | HTTPS deriving (Eq, Generic, Ord, Show)
@@ -188,11 +191,20 @@ data ImportType
     | Missing
     deriving (Eq, Generic, Ord, Show)
 
+parent :: File
+parent = File { directory = Directory { components = [ ".." ] }, file = "" }
+
 instance Semigroup ImportType where
     Local prefix file₀ <> Local Here file₁ = Local prefix (file₀ <> file₁)
 
     Remote (URL { path = path₀, ..}) <> Local Here path₁ =
         Remote (URL { path = path₀ <> path₁, ..})
+
+    Local prefix file₀ <> Local Parent file₁ =
+        Local prefix (file₀ <> parent <> file₁)
+
+    Remote (URL { path = path₀, .. }) <> Local Parent path₁ =
+        Remote (URL { path = path₀ <> parent <> path₁, .. })
 
     import₀ <> Remote (URL { headers = headers₀, .. }) =
         Remote (URL { headers = headers₁, .. })
@@ -1897,14 +1909,8 @@ normalizeWithM ctx e0 = loop (denote e0)
     Constructors t   -> do
         t' <- loop t
         case t' of
-            Union kts -> pure (RecordLit kvs)
-              where
-                kvs = Dhall.Map.mapWithKey adapt kts
-
-                adapt k t_ = Lam k t_ (UnionLit k (Var (V k 0)) rest)
-                  where
-                    rest = Dhall.Map.delete k kts
-            _ -> pure (Constructors t')
+            u@(Union _) -> pure u
+            _           -> pure $ Constructors t'
     Field r x        -> do
         r' <- loop r
         case r' of

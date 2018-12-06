@@ -1,3 +1,20 @@
+1.19.1
+
+
+* BUG FIX: Fix serious `dhall lint` bug
+    * `dhall lint` would sometimes remove `let` expressions that were still
+      in use
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/703
+* BUG FIX: Fix import caching efficiency bug
+    * Some imports were being wastefully fetched multiple times
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/702
+* Feature: Generate dot graph to visualize import graph
+    * Use the `dhall resolve --dot` command
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/698
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/713
+* Improve HTTP error messages
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/710
+
 1.19.0
 
 * Supports version 4.0.0 of the language standard

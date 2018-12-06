@@ -3,6 +3,17 @@
 let
   fetchNixpkgs = import ./fetchNixpkgs.nix;
 
+  mass = function: names: haskellPackagesNew: haskellPackagesOld:
+    let
+      toNameValue = name: {
+        inherit name;
+
+        value = function haskellPackagesOld."${name}";
+      };
+
+    in
+      builtins.listToAttrs (map toNameValue names);
+
   overlayShared = pkgsNew: pkgsOld: {
     dhall-sdist =
       let
@@ -46,72 +57,63 @@ let
                     pkgsNew.haskell.lib.dontCheck drv;
 
                 failOnAllWarnings = drv:
-                  # GHC 7.10.3 incorrectly detects non-exhaustive pattern
-                  # matches
-                  if compiler == "ghc7103"
+                  # Older versions of GHC incorrectly detect non-exhaustive
+                  # pattern matches
+                  if compiler == "ghc7103" || compiler == "ghcjs"
                   then drv
                   else pkgsNew.haskell.lib.failOnAllWarnings drv;
 
+                dontCheckExtension =
+                  mass pkgsNew.haskell.lib.dontCheck [
+                    "aeson"
+                    "comonad"
+                    "distributive"
+                    "doctest"
+                    "half"
+                    "http-types"
+                    "megaparsec"
+                    "prettyprinter"
+                    "prettyprinter-ansi-terminal"
+                    # https://github.com/well-typed/cborg/issues/172
+                    "serialise"
+                    "unordered-containers"
+                  ];
+
+                failOnAllWarningsExtension =
+                  mass pkgsNew.haskell.lib.failOnAllWarnings [
+                    "dhall"
+                    "dhall-bash"
+                    "dhall-json"
+                    "dhall-text"
+                  ];
+
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
-                    aeson =
-                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.aeson;
-
-                    comonad =
-                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.comonad;
-
                     dhall =
                       applyCoverage
-                        (failOnAllWarnings
-                          (haskellPackagesNew.callCabal2nix
-                            "dhall"
-                            pkgsNew.dhall-sdist
-                            { }
-                          )
+                        (haskellPackagesNew.callCabal2nix
+                          "dhall"
+                          pkgsNew.dhall-sdist
+                          { }
                         );
 
                     dhall-bash =
-                      failOnAllWarnings
-                        (haskellPackagesNew.callCabal2nix
-                          "dhall-bash"
-                          ../dhall-bash
-                          { }
-                        );
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-bash"
+                        ../dhall-bash
+                        { };
 
                     dhall-json =
-                      failOnAllWarnings
-                        (haskellPackagesNew.callCabal2nix
-                          "dhall-json"
-                          ../dhall-json
-                          { }
-                        );
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-json"
+                        ../dhall-json
+                        { };
 
                     dhall-text =
-                      failOnAllWarnings
-                        (haskellPackagesNew.callCabal2nix
-                          "dhall-text"
-                          ../dhall-text
-                          { }
-                        );
-
-                    distributive =
-                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.distributive;
-
-                    doctest =
-                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.doctest;
-
-                    # https://github.com/well-typed/cborg/issues/172
-                    serialise =
-                      pkgsNew.haskell.lib.dontCheck
-                        haskellPackagesOld.serialise;
-
-                    prettyprinter =
-                      pkgsNew.haskell.lib.dontCheck
-                        haskellPackagesOld.prettyprinter;
-
-                    unordered-containers =
-                      pkgsNew.haskell.lib.dontCheck
-                        haskellPackagesOld.unordered-containers;
+                       haskellPackagesNew.callCabal2nix
+                        "dhall-text"
+                        ../dhall-text
+                        { };
                   };
 
               in
@@ -119,7 +121,8 @@ let
                   pkgsNew.lib.composeExtensions
                   (old.overrides or (_: _: {}))
                   [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./.; })
-
+                    dontCheckExtension
+                    failOnAllWarningsExtension
                     extension
                   ];
           }

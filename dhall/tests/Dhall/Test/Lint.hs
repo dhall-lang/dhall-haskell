@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lint where
+module Dhall.Test.Lint where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
@@ -16,8 +16,8 @@ import qualified Dhall.Parser
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
-lintTests :: TestTree
-lintTests =
+tests :: TestTree
+tests =
     Test.Tasty.testGroup "format tests"
         [ should
             "correctly handle multi-let expressions"

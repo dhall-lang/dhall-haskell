@@ -4,7 +4,7 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module QuickCheck where
+module Dhall.Test.QuickCheck where
 
 import Codec.Serialise (DeserialiseFailure(..))
 import Control.Monad (guard)
@@ -350,9 +350,9 @@ isNormalizedIsConsistentWithNormalize expression =
         Dhall.Core.isNormalized expression
     === (Dhall.Core.normalize expression == expression)
 
-quickcheckTests :: TestTree
-quickcheckTests
-    = Test.Tasty.QuickCheck.testProperties
+tests :: TestTree
+tests =
+    Test.Tasty.QuickCheck.testProperties
         "QuickCheck"
         [ ( "Binary serialization should round-trip"
           , Test.QuickCheck.property binaryRoundtrip

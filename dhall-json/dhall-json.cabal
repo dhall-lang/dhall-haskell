@@ -82,6 +82,6 @@ Test-Suite tasty
         bytestring        ,
         dhall             ,
         dhall-json        ,
-        tasty       <  1.2,
+        tasty       <  1.3,
         text              ,
         tasty-hunit >= 0.2
