@@ -157,6 +157,10 @@ let
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall-logo} $out/img/dhall-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall.prelude} $out/Prelude
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe/{lib,out,rts,runmain}.js $out/js/
+
+      
+      ${pkgsNew.coreutils}/bin/mkdir $out/nix-support
+      ${pkgsNew.coreutils}/bin/echo "doc none $out/index.html" > $out/nix-support/hydra-build-products
     '';
 
     try-dhall-server = pkgsNew.writeScriptBin "try-dhall-server" ''
