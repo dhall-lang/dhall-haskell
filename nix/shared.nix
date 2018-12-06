@@ -15,6 +15,13 @@ let
       builtins.listToAttrs (map toNameValue names);
 
   overlayShared = pkgsNew: pkgsOld: {
+    dhall-logo =
+      pkgsNew.fetchurl {
+        url = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-logo.png";
+
+        sha256 = "0j6sfvm4kxqb2m6s1sv9qag7m30cibaxpphprhaibp9s9shpra4p";
+      };
+
     dhall-sdist =
       let
         predicate = path: type:
@@ -138,9 +145,16 @@ let
       };
     };
 
+    npm = pkgsNew.callPackage ./npm { };
+
     try-dhall-www = pkgsNew.runCommand "try-dhall-www" {} ''
-      ${pkgsNew.coreutils}/bin/cp --recursive ${../dhall-try/www} $out
-      ${pkgsNew.coreutils}/bin/chmod --recursive u+w $out
+      ${pkgsNew.coreutils}/bin/mkdir $out
+      ${pkgsNew.coreutils}/bin/mkdir $out/{css,img,js}
+      ${pkgsNew.coreutils}/bin/cp ${../dhall-try/index.html} $out/index.html
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.js $out/js
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/mode/haskell/haskell.js $out/js
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.css $out/css
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall-logo} $out/img/dhall-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall.prelude} $out/Prelude
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe $out/js
     '';
@@ -407,7 +421,7 @@ in
     tarball-dhall-json = makeTarball "dhall-json";
     tarball-dhall-text = makeTarball "dhall-text";
 
-    inherit (pkgs) try-dhall;
+    inherit (pkgs) try-dhall try-dhall-www;
 
     inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-text dhall-try;
 

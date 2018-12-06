@@ -6,5 +6,5 @@ let
 in
   { inherit (shared) dhall dhall-bash dhall-json dhall-text dhall-try;
 
-    inherit (shared_ghcjs) try-dhall;
+    inherit (shared_ghcjs) try-dhall try-dhall-www;
   }
