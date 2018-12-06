@@ -1,0 +1,76 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN" "http://www.w3.org/TR/REC-html40/loose.dtd">
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style>
+      * {
+        -webkit-box-sizing: border-box;
+           -moz-box-sizing: border-box;
+                box-sizing: border-box;
+      }
+
+      pre {
+          white-space: pre-wrap;       /* Since CSS 2.1 */
+          white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
+          white-space: -pre-wrap;      /* Opera 4-6 */
+          white-space: -o-pre-wrap;    /* Opera 7 */
+          word-wrap: break-word;       /* Internet Explorer 5.5+ */
+      }
+
+      #title {
+        text-align: center;
+      }
+
+      .CodeMirror {
+        margin-left: auto;
+        margin-right: auto;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        outline: 1px solid black;
+        width: 86ch;
+        height: 24em;
+      }
+
+      .dhall-output {
+        margin-left: auto;
+        margin-right: auto;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        padding: 20px;
+        overflow: auto;
+        outline: 1px solid black;
+        width: 86ch;
+        height: 24em;
+      }
+    </style>
+    <link rel="stylesheet" href="./css/codemirror.css">
+    <script src="./js/codemirror.js"></script>
+    <script src="./js/haskell.js"></script>
+    <script language="javascript" src="./js/rts.js"></script>
+    <script language="javascript" src="./js/lib.js"></script>
+    <script language="javascript" src="./js/out.js"></script>
+  </head>
+  <body>
+    <div id="container">
+      <a href="https://dhall-lang.org"><img src="./img/dhall-logo.png" height="50px"></a>
+      <h1 id="title">Try the Dhall configuration language</h1>
+      <textarea class="dhall-input" rows ="4" cols="50">Natural/even (1 + 1)</textarea>
+      <textarea class="dhall-output""></textarea>
+    </div>
+  </body>
+  <script>
+    var dhallInput  = document.getElementsByClassName("dhall-input")[0];
+    var dhallOutput = document.getElementsByClassName("dhall-output")[0];
+
+    var input = CodeMirror.fromTextArea(dhallInput, {
+      lineNumbers: true,
+      mode: "haskell"
+    });
+
+    var output = CodeMirror.fromTextArea(dhallOutput, {
+      lineNumbers: true,
+      mode: "haskell"
+    });
+  </script>
+  <script language="javascript" src="./js/runmain.js" defer></script>
+</html>
