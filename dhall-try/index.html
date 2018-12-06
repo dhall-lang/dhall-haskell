@@ -34,13 +34,13 @@
     <div id="container">
       <a href="https://dhall-lang.org"><img src="./img/dhall-logo.png" height="50px"></a>
       <h1 id="title">Try the Dhall configuration language</h1>
-      <textarea class="dhall-input" rows ="4" cols="50">Natural/even (1 + 1)</textarea>
-      <textarea class="dhall-output""></textarea>
+      <textarea id="dhall-input" rows ="4" cols="50">Natural/even (1 + 1)</textarea>
+      <textarea id="dhall-output""></textarea>
     </div>
   </body>
   <script>
-    var dhallInput  = document.getElementsByClassName("dhall-input")[0];
-    var dhallOutput = document.getElementsByClassName("dhall-output")[0];
+    var dhallInput  = document.getElementById("dhall-input");
+    var dhallOutput = document.getElementById("dhall-output");
 
     var input = CodeMirror.fromTextArea(dhallInput, {
       lineNumbers: true,
