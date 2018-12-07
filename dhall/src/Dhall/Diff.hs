@@ -11,7 +11,9 @@
 
 module Dhall.Diff (
     -- * Diff
-      diffNormalized
+      Diff (..)
+    , diffExpression
+    , diffNormalized
     , Dhall.Diff.diff
     ) where
 
