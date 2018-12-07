@@ -339,6 +339,8 @@ Library
       Build-Depends: semigroups == 0.18.*
       Build-Depends: transformers == 0.4.2.*
       Build-Depends: fail == 4.9.*
+    if impl(ghcjs)
+      Build-Depends: ghcjs-xhr
 
     Exposed-Modules:
         Dhall,
