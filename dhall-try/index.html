@@ -26,6 +26,7 @@
     <link rel="stylesheet" href="./css/codemirror.css">
     <script language="javascript" src="./js/codemirror.js"></script>
     <script language="javascript" src="./js/haskell.js"></script>
+    <script language="javascript" src="./js/javascript.js"></script>
     <script language="javascript" src="./js/rts.js"></script>
     <script language="javascript" src="./js/lib.js"></script>
     <script language="javascript" src="./js/out.js"></script>
@@ -35,10 +36,12 @@
     <h1 id="title">Try the Dhall configuration language</h1>
     <textarea id="dhall-input">Natural/even (1 + 1)</textarea>
     <textarea id="dhall-output"></textarea>
+    <textarea id="json-output"></textarea>
   </body>
   <script>
     var dhallInput  = document.getElementById("dhall-input");
     var dhallOutput = document.getElementById("dhall-output");
+    var jsonOutput   = document.getElementById("json-output");
 
     var input = CodeMirror.fromTextArea(dhallInput, {
       lineNumbers: true,
@@ -48,6 +51,11 @@
     var output = CodeMirror.fromTextArea(dhallOutput, {
       lineNumbers: true,
       mode: "haskell"
+    });
+
+    var json = CodeMirror.fromTextArea(jsonOutput, {
+      lineNumbers: true,
+      mode: "javascript"
     });
   </script>
   <script language="javascript" src="./js/runmain.js" defer></script>
