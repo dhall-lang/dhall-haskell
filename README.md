@@ -85,6 +85,39 @@ And each of them with `stack build <package-name>`, for example:
 $ stack build dhall-json
 ```
 
+## Build and serve the "Try Dhall" website
+
+This is currently only supported for Nix on Linux
+
+You can build the static assets by running:
+
+```bash
+$ nix-build --attr try-dhall-static
+```
+
+For local testing you can open the generated `./result/index.html` directly in
+your browser and everything will work except for relative imports of the
+Prelude.
+
+To also test imports you can build the `try-dhall-server` script which uses
+`warp` to serve the static assets:
+
+```bash
+$ nix-build --attr try-dhall-server
+$ result/bin/try-dhall-server
+Serving directory /nix/store/i7x86qs888rndrhvw92y69jd5xaji060-try-dhall-static on port 3000 with ["index.html","index.htm"] index files.
+```
+
+... and then open `http://localhost:3000` in your browser.  You will then be
+able to import things from the Prelude within your Dhall configuration using
+a path like `http://localhost:3000/Prelude/List/map`.  Similarly, if you host
+this on some public-facing domain such as `https://try.dhall-lang.org` then you
+can import the Prelude using `https://try.dhall-lang.org/Prelude/List/map`.
+
+Note that imports from other domains (such as `prelude.dhall-lang.org`) will not
+yet work since cross-origin resource-sharing (CORS) is not enabled.  This is why
+the "Try Dhall" server serves its own copy of the Prelude.
+
 ## Contributing
 
 Read the following guide if you would like to contribute:
