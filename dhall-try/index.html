@@ -22,6 +22,12 @@
         width: 86ch;
         height: 24em;
       }
+
+      #mode {
+        margin-left: auto;
+        margin-right: auto;
+        display: block;
+      }
     </style>
     <link rel="stylesheet" href="./css/codemirror.css">
     <script language="javascript" src="./js/codemirror.js"></script>
@@ -35,13 +41,13 @@
     <a href="https://dhall-lang.org"><img src="./img/dhall-logo.png" height="50px"></a>
     <h1 id="title">Try the Dhall configuration language</h1>
     <textarea id="dhall-input">Natural/even (1 + 1)</textarea>
+    <button type="button" id="mode">Switch to JSON output</button>
     <textarea id="dhall-output"></textarea>
-    <textarea id="json-output"></textarea>
   </body>
   <script>
     var dhallInput  = document.getElementById("dhall-input");
     var dhallOutput = document.getElementById("dhall-output");
-    var jsonOutput   = document.getElementById("json-output");
+    var mode        = document.getElementById("mode");
 
     var input = CodeMirror.fromTextArea(dhallInput, {
       lineNumbers: true,
@@ -51,11 +57,6 @@
     var output = CodeMirror.fromTextArea(dhallOutput, {
       lineNumbers: true,
       mode: "haskell"
-    });
-
-    var json = CodeMirror.fromTextArea(jsonOutput, {
-      lineNumbers: true,
-      mode: "javascript"
     });
   </script>
   <script language="javascript" src="./js/runmain.js" defer></script>
