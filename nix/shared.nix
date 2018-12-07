@@ -130,7 +130,10 @@ let
                     dhall-try =
                       haskellPackagesNew.callCabal2nix
                         "dhall-try"
-                        ../dhall-try
+                        (builtins.filterSource
+                          (path: _: baseNameOf path != "index.html")
+                          ../dhall-try
+                        )
                         { };
                   };
 
