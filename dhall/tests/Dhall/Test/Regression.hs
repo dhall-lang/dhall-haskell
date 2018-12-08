@@ -85,11 +85,7 @@ issue96 = Test.Tasty.HUnit.testCase "Issue #96" (do
 
 issue126 :: TestTree
 issue126 = Test.Tasty.HUnit.testCase "Issue #126" (do
-    e <- Util.code
-        "''\n\
-        \  foo\n\
-        \  bar\n\
-        \''"
+    e <- Util.code "''\nfoo\nbar\n''"
     Util.normalize' e @?= "''\nfoo\nbar\n''" )
 
 issue151 :: TestTree
@@ -239,5 +235,5 @@ trailingSpaceAfterStringLiterals =
     Test.Tasty.HUnit.testCase "Trailing space after string literals" (do
         -- Verify that string literals parse correctly with trailing space
         -- (Yes, I did get this wrong at some point)
-        _ <- Util.code "(''ABC'' ++ \"DEF\" )"
+        _ <- Util.code "(''\nABC'' ++ \"DEF\" )"
         return () )
