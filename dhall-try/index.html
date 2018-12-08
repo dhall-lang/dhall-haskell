@@ -2,31 +2,35 @@
 <html>
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
     <style>
-      * {
-        -webkit-box-sizing: border-box;
-           -moz-box-sizing: border-box;
-                box-sizing: border-box;
-      }
-
       #title {
         text-align: center;
+        margin-bottom: 20px;
+      }
+
+      #editor {
+        display: flex;
+      }
+
+      #input-pane {
+        order: 0;
+        flex: 1;
+        width: 80ch;
+        overflow: auto;
+      }
+
+      #output-pane {
+        order: 1;
+        flex: 1;
+        overflow: auto;
       }
 
       .CodeMirror {
-        margin-left: auto;
-        margin-right: auto;
-        margin-top: 20px;
         margin-bottom: 20px;
         outline: 1px solid black;
-        width: 86ch;
-        height: 24em;
-      }
-
-      #mode {
-        margin-left: auto;
-        margin-right: auto;
-        display: block;
+        /* height: 100% !important; */
       }
     </style>
     <link rel="stylesheet" href="./css/codemirror.css">
@@ -40,14 +44,45 @@
   <body>
     <a href="https://dhall-lang.org"><img src="./img/dhall-logo.png" height="50px"></a>
     <h1 id="title">Try the Dhall configuration language</h1>
-    <textarea id="dhall-input">Natural/even (1 + 1)</textarea>
-    <button type="button" id="mode">Switch to JSON output</button>
-    <textarea id="dhall-output"></textarea>
+    <div id="editor">
+      <div id="input-pane">
+        <ul class="nav nav-tabs">
+          <li class="nav-item">
+            <a class="nav-link active" href="#" onClick="set(example0)">Hello, world!</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#" onClick="set(example1)">Definitions</a>
+          </li>
+          <li class="nav-item">
+          <a class="nav-link" href="#" onClick="set(example2)">Functions</a>
+            </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#" onClick="set(example3)">Types</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#" onClick="set(example4)">Built-ins</a>
+          </li>
+        </ul>
+        <textarea id="dhall-input"></textarea>
+      </div>
+      <div id="output-pane">
+        <ul class="nav nav-tabs">
+          <li id="dhall-tab" class="nav-item">
+            <a class="nav-link active" href="#">Dhall</a>
+          </li>
+          <li id="json-tab" class="nav-item">
+            <a class="nav-link" href="#">JSON</a>
+          </li>
+        </ul>
+        <textarea id="dhall-output"></textarea>
+      </div>
+    </div>
   </body>
   <script>
     var dhallInput  = document.getElementById("dhall-input");
     var dhallOutput = document.getElementById("dhall-output");
-    var mode        = document.getElementById("mode");
+    var dhallTab    = document.getElementById("dhall-tab");
+    var jsonTab     = document.getElementById("json-tab");
 
     var input = CodeMirror.fromTextArea(dhallInput, {
       lineNumbers: true,
@@ -56,8 +91,102 @@
 
     var output = CodeMirror.fromTextArea(dhallOutput, {
       lineNumbers: true,
-      mode: "haskell"
+      mode: "haskell",
+      readOnly: true
     });
+
+    example0 = `{- This is an example Dhall configuration file
+
+   Can you spot the mistake?
+-}
+
+{ home       = "/home/bill"
+, privateKey = "/home/bill/id_ed25519"
+, publicKey  = "/home/blil/id_ed25519.pub"
+}
+
+{- Fix the mistake and then click the "Definitions" tab above -}`;
+
+    example1 = `{- Repetition is error-prone, so define the username just once -}
+
+let user = "bill"
+in  { home       = "/home/\${user}"
+    , privateKey = "/home/\${user}/id_ed25519"
+    , publicKey  = "/home/\${user}/id_ed25519.pub"
+    }
+
+{- Change the name "bill" to "jane" -}`;
+
+    example2 = `{- Need to create more than one user?  Use a function! -}
+
+let makeUser = \\(user : Text) ->
+      let home       = "/home/\${user}"
+      let privateKey = "\${home}/id_ed25519.pub"
+      let publicKey  = "\${privateKey}.pub"
+      in  { home = home
+          , privateKey = privateKey
+          , publicKey = publicKey
+          }
+
+in  [ makeUser "bill" , makeUser "jane" ] {- Add another user -}`
+
+    example3 = `{- You can optionally add types to clear things up
+
+   \`x : T\` means that \`x\` has type \`T\`
+-}
+
+let Config : Type =
+      { home : Text
+      , privateKey : Text
+      , publicKey : Text
+      }
+
+let makeUser : Text -> Config = \\(user : Text) ->
+      let home       : Text   = "/home/\${user}"
+      let privateKey : Text   = "\${home}/id_ed25519.pub"
+      let publicKey  : Text   = "\${privateKey}.pub"
+      let config     : Config =
+            { home       = home
+            , privateKey = privateKey
+            , publicKey  = publicKey
+            }
+      in  config
+
+let configs : List Config =
+      [ makeUser "bill"
+      , makeUser "jane"
+      ]
+
+in  configs
+`;
+
+    example4 = `{- The language provides built-in functions, like:
+
+       Natural/show : Natural -> Text
+
+    All built-ins are listed here:
+
+    https://github.com/dhall-lang/dhall-lang/wiki/Built-in-types%2C-functions%2C-and-operators
+-}
+let makeUser = \\(user : Text) ->
+      let home       = "/home/\${user}"
+      let privateKey = "\${home}/id_ed25519.pub"
+      let publicKey  = "\${privateKey}.pub"
+      in  { home = home
+          , privateKey = privateKey
+          , publicKey = publicKey
+          }
+
+let buildUser = \\(index : Natural) ->
+      makeUser "build\${Natural/show index}"
+
+in  [ buildUser 0, buildUser 1 ]`
+
+    function set(example){
+      input.setValue(example);
+    };
+
+    set(example0);
   </script>
   <script language="javascript" src="./js/runmain.js" defer></script>
 </html>

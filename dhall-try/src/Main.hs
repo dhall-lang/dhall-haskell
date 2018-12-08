@@ -21,7 +21,6 @@ import qualified GHCJS.Foreign.Callback
 
 import Control.Exception (Exception, SomeException)
 import Data.JSString (JSString)
-import Data.Monoid ((<>))
 import Data.Text (Text)
 import Dhall.Core (Expr(..))
 import GHCJS.Foreign.Callback (Callback)
@@ -30,13 +29,11 @@ foreign import javascript unsafe "input.getValue()" getInput :: IO JSString
 
 foreign import javascript unsafe "input.on('change', $1)" registerInterpret :: Callback (IO ()) -> IO ()
 
-foreign import javascript unsafe "mode.onclick = $1" registerSwitch :: Callback (IO ()) -> IO ()
+foreign import javascript unsafe "dhallTab.onclick = $1" registerDhallOutput :: Callback (IO ()) -> IO ()
+
+foreign import javascript unsafe "jsonTab.onclick = $1" registerJSONOutput :: Callback (IO ()) -> IO ()
 
 foreign import javascript unsafe "output.setValue($1)" setOutput_ :: JSString -> IO ()
-
-foreign import javascript unsafe "mode.innerHTML = $1" setButtonLabel :: JSString -> IO ()
-
-foreign import javascript unsafe "output.setOption('mode', $1)" setMode_ :: JSString -> IO ()
 
 fixup :: Text -> Text
 fixup = Data.Text.replace "\ESC[1;31mError\ESC[0m" "Error"
@@ -46,10 +43,6 @@ setOutput = setOutput_ . Data.JSString.pack . Data.Text.unpack
 
 errOutput :: Exception e => e -> IO ()
 errOutput = setOutput . fixup . Data.Text.pack . show
-
-setMode :: Mode -> IO ()
-setMode Dhall = setMode_ "haskell"
-setMode JSON  = setMode_ "javascript"
 
 jsonConfig :: Data.Aeson.Encode.Pretty.Config
 jsonConfig =
@@ -121,22 +114,22 @@ main = do
 
     registerInterpret interpretAsync
 
-    let switch = do
-            oldMode <- Data.IORef.readIORef modeRef
-
-            let newMode = case oldMode of
-                    Dhall -> JSON
-                    JSON  -> Dhall
-
-            Data.IORef.writeIORef modeRef newMode
-
-            setMode newMode
-            setButtonLabel (Data.JSString.pack ("Switch to " <> show oldMode <> " output"))
+    let dhallOutput = do
+            Data.IORef.writeIORef modeRef Dhall
 
             interpret
 
-    switchAsync <- GHCJS.Foreign.Callback.asyncCallback switch
+    dhallOutputAsync <- GHCJS.Foreign.Callback.asyncCallback dhallOutput
 
-    registerSwitch switchAsync
+    registerDhallOutput dhallOutputAsync
+
+    let jsonOutput = do
+            Data.IORef.writeIORef modeRef JSON
+
+            interpret
+
+    jsonOutputAsync <- GHCJS.Foreign.Callback.asyncCallback jsonOutput
+
+    registerJSONOutput jsonOutputAsync
 
     return ()
