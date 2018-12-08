@@ -75,6 +75,7 @@ let
                     "aeson"
                     "base-compat-batteries"
                     "comonad"
+                    "conduit"
                     "distributive"
                     "doctest"
                     "Glob"
@@ -85,7 +86,9 @@ let
                     "prettyprinter-ansi-terminal"
                     # https://github.com/well-typed/cborg/issues/172
                     "serialise"
+                    "semigroupoids"
                     "unordered-containers"
+                    "yaml"
                   ];
 
                 failOnAllWarningsExtension =
@@ -127,7 +130,10 @@ let
                     dhall-try =
                       haskellPackagesNew.callCabal2nix
                         "dhall-try"
-                        ../dhall-try
+                        (builtins.filterSource
+                          (path: _: baseNameOf path != "index.html")
+                          ../dhall-try
+                        )
                         { };
                   };
 
@@ -153,6 +159,7 @@ let
       ${pkgsNew.coreutils}/bin/cp ${../dhall-try/index.html} $out/index.html
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.js $out/js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/mode/haskell/haskell.js $out/js
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/mode/javascript/javascript.js $out/js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.css $out/css
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall-logo} $out/img/dhall-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall.prelude} $out/Prelude
