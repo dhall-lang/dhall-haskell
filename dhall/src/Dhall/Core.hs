@@ -1609,8 +1609,8 @@ normalizeWithM ctx e0 = loop (denote e0)
                       t' <- loop t
                       if boundedType t' then strict else lazy
                       where
-                        strict =       strictLoop n0
-                        lazy   = loop (  lazyLoop n0)
+                        strict =       strictLoop (fromIntegral n0 :: Integer)
+                        lazy   = loop (  lazyLoop (fromIntegral n0 :: Integer))
 
                         strictLoop !0 = loop zero
                         strictLoop !n = App succ' <$> strictLoop (n - 1) >>= loop

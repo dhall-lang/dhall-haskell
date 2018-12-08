@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style>
+      * {
+        -webkit-box-sizing: border-box;
+           -moz-box-sizing: border-box;
+                box-sizing: border-box;
+      }
+
+      #title {
+        text-align: center;
+      }
+
+      .CodeMirror {
+        margin-left: auto;
+        margin-right: auto;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        outline: 1px solid black;
+        width: 86ch;
+        height: 24em;
+      }
+    </style>
+    <link rel="stylesheet" href="./css/codemirror.css">
+    <script language="javascript" src="./js/codemirror.js"></script>
+    <script language="javascript" src="./js/haskell.js"></script>
+    <script language="javascript" src="./js/rts.js"></script>
+    <script language="javascript" src="./js/lib.js"></script>
+    <script language="javascript" src="./js/out.js"></script>
+  </head>
+  <body>
+    <a href="https://dhall-lang.org"><img src="./img/dhall-logo.png" height="50px"></a>
+    <h1 id="title">Try the Dhall configuration language</h1>
+    <textarea id="dhall-input">Natural/even (1 + 1)</textarea>
+    <textarea id="dhall-output"></textarea>
+  </body>
+  <script>
+    var dhallInput  = document.getElementById("dhall-input");
+    var dhallOutput = document.getElementById("dhall-output");
+
+    var input = CodeMirror.fromTextArea(dhallInput, {
+      lineNumbers: true,
+      mode: "haskell"
+    });
+
+    var output = CodeMirror.fromTextArea(dhallOutput, {
+      lineNumbers: true,
+      mode: "haskell"
+    });
+  </script>
+  <script language="javascript" src="./js/runmain.js" defer></script>
+</html>

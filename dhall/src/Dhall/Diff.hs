@@ -11,7 +11,9 @@
 
 module Dhall.Diff (
     -- * Diff
-      diffNormalized
+      Diff (..)
+    , diffExpression
+    , diffNormalized
     , Dhall.Diff.diff
     ) where
 
@@ -362,7 +364,7 @@ diffList l r
   | allDifferent parts = difference listSkeleton listSkeleton
   | otherwise          = bracketed (foldMap diffPart parts)
   where
-    allDifferent = not . any isBoth
+    allDifferent = any (not . isBoth)
 
     -- Sections of the list that are only in left, only in right, or in both
     parts =
