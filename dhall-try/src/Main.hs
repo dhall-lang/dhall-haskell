@@ -35,6 +35,8 @@ foreign import javascript unsafe "jsonTab.onclick = $1" registerJSONOutput :: Ca
 
 foreign import javascript unsafe "output.setValue($1)" setOutput_ :: JSString -> IO ()
 
+foreign import javascript unsafe "selectTab($1, $2)" selectTab :: JSString -> JSString -> IO ()
+
 fixup :: Text -> Text
 fixup = Data.Text.replace "\ESC[1;31mError\ESC[0m" "Error"
 
@@ -117,6 +119,8 @@ main = do
     let dhallOutput = do
             Data.IORef.writeIORef modeRef Dhall
 
+            selectTab "mode-tab" "dhall-tab"
+
             interpret
 
     dhallOutputAsync <- GHCJS.Foreign.Callback.asyncCallback dhallOutput
@@ -125,6 +129,8 @@ main = do
 
     let jsonOutput = do
             Data.IORef.writeIORef modeRef JSON
+
+            selectTab "mode-tab" "json-tab"
 
             interpret
 

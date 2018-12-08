@@ -32,6 +32,11 @@
         outline: 1px solid black;
         /* height: 100% !important; */
       }
+
+      .nav-link {
+        outline: 0;
+        border-bottom: 1px;
+      }
     </style>
     <link rel="stylesheet" href="./css/codemirror.css">
     <script language="javascript" src="./js/codemirror.js"></script>
@@ -46,32 +51,32 @@
     <h1 id="title">Try the Dhall configuration language</h1>
     <div id="editor">
       <div id="input-pane">
-        <ul class="nav nav-tabs">
+        <ul class="nav nav-tabs example-tab">
           <li class="nav-item">
-            <a class="nav-link active" href="#" onClick="set(example0)">Hello, world!</a>
+            <a id="example0" class="nav-link example-tab active" href="#" onClick="set(example0, 'example0')">Hello, world!</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#" onClick="set(example1)">Definitions</a>
+            <a id="example1" class="nav-link example-tab" href="#" onClick="set(example1, 'example1')">Definitions</a>
           </li>
           <li class="nav-item">
-          <a class="nav-link" href="#" onClick="set(example2)">Functions</a>
-            </li>
-          <li class="nav-item">
-            <a class="nav-link" href="#" onClick="set(example3)">Types</a>
+            <a id="example2" class="nav-link example-tab" href="#" onClick="set(example2, 'example2')">Functions</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#" onClick="set(example4)">Built-ins</a>
+            <a id="example3" class="nav-link example-tab" href="#" onClick="set(example3, 'example3')">Types</a>
+          </li>
+          <li class="nav-item">
+            <a id="example4" class="nav-link example-tab" href="#" onClick="set(example4, 'example4')">Built-ins</a>
           </li>
         </ul>
         <textarea id="dhall-input"></textarea>
       </div>
       <div id="output-pane">
         <ul class="nav nav-tabs">
-          <li id="dhall-tab" class="nav-item">
-            <a class="nav-link active" href="#">Dhall</a>
+          <li class="nav-item">
+            <a id="dhall-tab" class="nav-link mode-tab active" href="#">Dhall</a>
           </li>
-          <li id="json-tab" class="nav-item">
-            <a class="nav-link" href="#">JSON</a>
+          <li class="nav-item">
+            <a id="json-tab" class="nav-link mode-tab" href="#">JSON</a>
           </li>
         </ul>
         <textarea id="dhall-output"></textarea>
@@ -83,6 +88,13 @@
     var dhallOutput = document.getElementById("dhall-output");
     var dhallTab    = document.getElementById("dhall-tab");
     var jsonTab     = document.getElementById("json-tab");
+
+    function selectTab(tabClass, tabId) {
+      Array.from(document.getElementsByClassName(tabClass)).forEach(element => {
+        element.classList.remove("active");
+      });
+      document.getElementById(tabId).classList.toggle("active");
+    }
 
     var input = CodeMirror.fromTextArea(dhallInput, {
       lineNumbers: true,
@@ -182,8 +194,9 @@ let buildUser = \\(index : Natural) ->
 
 in  [ buildUser 0, buildUser 1 ]`
 
-    function set(example){
+    function set(example, tabId){
       input.setValue(example);
+      selectTab("example-tab", tabId);
     };
 
     set(example0);
