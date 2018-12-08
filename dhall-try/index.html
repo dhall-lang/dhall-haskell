@@ -30,7 +30,7 @@
       .CodeMirror {
         margin-bottom: 20px;
         outline: 1px solid black;
-        /* height: 100% !important; */
+        height: 24rem !important;
       }
 
       .nav-link {
@@ -109,17 +109,18 @@
 
     example0 = `{- This is an example Dhall configuration file
 
-   Can you spot the mistake?
+   Can you spot and correct the mistake?
 -}
 
 { home       = "/home/bill"
 , privateKey = "/home/bill/id_ed25519"
 , publicKey  = "/home/blil/id_ed25519.pub"
-}
+}`
 
-{- Fix the mistake and then click the "Definitions" tab above -}`;
+    example1 = `{- Don't repeat yourself!
 
-    example1 = `{- Repetition is error-prone, so define the username just once -}
+   Repetition is error-prone
+-}
 
 let user = "bill"
 in  { home       = "/home/\${user}"
@@ -129,7 +130,7 @@ in  { home       = "/home/\${user}"
 
 {- Change the name "bill" to "jane" -}`;
 
-    example2 = `{- Need to create more than one user?  Use a function! -}
+    example2 = `{- More than one user?  Use a function! -}
 
 let makeUser = \\(user : Text) ->
       let home       = "/home/\${user}"
@@ -139,15 +140,18 @@ let makeUser = \\(user : Text) ->
           , privateKey = privateKey
           , publicKey = publicKey
           }
+    {- Add another user to this list -}
+in  [ makeUser "bill"
+    , makeUser "jane"
+    ]`
 
-in  [ makeUser "bill" , makeUser "jane" ] {- Add another user -}`
-
-    example3 = `{- You can optionally add types to clear things up
+    example3 = `{- You can optionally add types
 
    \`x : T\` means that \`x\` has type \`T\`
 -}
 
 let Config : Type =
+      {- What happens if you add another field here? -}
       { home : Text
       , privateKey : Text
       , publicKey : Text
@@ -172,11 +176,11 @@ let configs : List Config =
 in  configs
 `;
 
-    example4 = `{- The language provides built-in functions, like:
+    example4 = `{- The language provides built-in functions, such as:
 
        Natural/show : Natural -> Text
 
-    All built-ins are listed here:
+    You can find all built-ins here:
 
     https://github.com/dhall-lang/dhall-lang/wiki/Built-in-types%2C-functions%2C-and-operators
 -}
@@ -190,6 +194,7 @@ let makeUser = \\(user : Text) ->
           }
 
 let buildUser = \\(index : Natural) ->
+      {- What happens if you delete \`Natural/show\` -}
       makeUser "build\${Natural/show index}"
 
 in  [ buildUser 0, buildUser 1 ]`
@@ -199,7 +204,7 @@ in  [ buildUser 0, buildUser 1 ]`
       selectTab("example-tab", tabId);
     };
 
-    set(example0);
+    input.setValue(example0);
   </script>
   <script language="javascript" src="./js/runmain.js" defer></script>
 </html>
