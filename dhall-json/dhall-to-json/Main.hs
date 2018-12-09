@@ -4,6 +4,7 @@
 
 module Main where
 
+import Control.Applicative ((<|>))
 import Control.Exception (SomeException)
 import Control.Monad (when)
 import Data.Monoid ((<>))
@@ -49,10 +50,24 @@ parseOptions = Options.Applicative.helper <*> do
             )
 
     parsePretty =
-        Options.Applicative.switch
-            (   Options.Applicative.long "pretty"
-            <>  Options.Applicative.help "Pretty print generated JSON"
-            )
+        prettyFlag <|> compactFlag <|> defaultBehavior
+      where
+        prettyFlag =
+            Options.Applicative.flag'
+                True
+                (   Options.Applicative.long "pretty"
+                <>  Options.Applicative.help "Pretty print generated JSON"
+                )
+
+        compactFlag =
+            Options.Applicative.flag'
+                False
+                (   Options.Applicative.long "compact"
+                <>  Options.Applicative.help "Render JSON on one line"
+                )
+
+        defaultBehavior =
+            pure False
 
     parseOmitNull =
         Options.Applicative.switch
