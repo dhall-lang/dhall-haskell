@@ -23,9 +23,7 @@ benchOrderedTraversal dataLabel mapData =
 benchUnorderedTraversal :: String -> Map.Map Integer Integer -> Criterion.Benchmark
 benchUnorderedTraversal dataLabel mapData =
     bgroup ("Unordered Traversals: " <> dataLabel)
-        [ bench "unorderedTraverseWithKey" $
-            whnf (Map.unorderedTraverseWithKey (\_ i -> pure @Maybe $ i ^ i)) mapData
-        , bench "unorderedTraverseWithKey_" $
+        [ bench "unorderedTraverseWithKey_" $
             whnf (Map.unorderedTraverseWithKey_ (\_ i -> pure @Maybe (i ^ i) *> pure ())) mapData
         ]
 
