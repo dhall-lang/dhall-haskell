@@ -15,14 +15,51 @@ let
       builtins.listToAttrs (map toNameValue names);
 
   overlayShared = pkgsNew: pkgsOld: {
-    twitterBootstrap = pkgsNew.callPackage ./twitterBootstrap.nix { };
+    logo = {
+      bash =
+        pkgsNew.fetchurl {
+          url    = "https://raw.githubusercontent.com/odb/official-bash-logo/master/assets/Logos/Icons/PNG/128x128.png";
+          sha256 = "0fybbp6hbqrfw80fbk55bnykzda0m7x4vk38i80bjlmfbrkfvild";
+        };
 
-    dhall-logo =
-      pkgsNew.fetchurl {
-        url = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-logo.png";
+      clojure =
+        pkgsNew.fetchurl {
+          url    = "https://upload.wikimedia.org/wikipedia/commons/5/5d/Clojure_logo.svg";
+          sha256 = "0mrjzv690g9mxljzxsvay8asyr8vlxhhs9smmax7mp3psd49b43g";
+        };
 
-        sha256 = "0j6sfvm4kxqb2m6s1sv9qag7m30cibaxpphprhaibp9s9shpra4p";
-      };
+      dhall =
+        pkgsNew.fetchurl {
+          url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-logo.png";
+          sha256 = "0j6sfvm4kxqb2m6s1sv9qag7m30cibaxpphprhaibp9s9shpra4p";
+        };
+
+      github = pkgsNew.callPackage ./githubLogo.nix { };
+
+      haskell =
+        pkgsNew.fetchurl {
+          url    = "https://wiki.haskell.org/wikiupload/4/4a/HaskellLogoStyPreview-1.png";
+          sha256 = "0g26j7vx34m46mwp93qgg3q5x8pfdq2j1ch0vxz5gj0nk3b8fxda";
+        };
+
+      nix =
+        pkgsNew.fetchurl {
+          url    = "https://nixos.org/logo/nix-wiki.png";
+          sha256 = "1hrz7wr7i0b2bips60ygacbkmdzv466lsbxi22hycg42kv4m0173";
+        };
+
+      json =
+        pkgsNew.fetchurl {
+          url    = "https://upload.wikimedia.org/wikipedia/commons/c/c9/JSON_vector_logo.svg";
+          sha256 = "1hqd1qh35v9magjp3rbsw8wszk2wn3hkz981ir49z5cyf11jnx95";
+        };
+
+      yaml =
+        pkgsNew.fetchurl {
+          url    = "https://raw.githubusercontent.com/yaml/yaml-spec/a6f764e13de58d5f753877f588a01b35dc9a5168/logo.png";
+          sha256 = "12grgaxpqi755p2rnvw3x02zc69brpnzx208id1f0z42w387j4hi";
+        };
+    };
 
     dhall-sdist =
       let
@@ -155,6 +192,8 @@ let
 
     npm = pkgsNew.callPackage ./npm { };
 
+    twitterBootstrap = pkgsNew.callPackage ./twitterBootstrap.nix { };
+
     try-dhall-static = pkgsNew.runCommand "try-dhall-static" {} ''
       ${pkgsNew.coreutils}/bin/mkdir $out
       ${pkgsNew.coreutils}/bin/mkdir $out/{css,img,js}
@@ -166,8 +205,15 @@ let
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/mode/haskell/haskell.js $out/js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/mode/javascript/javascript.js $out/js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.css $out/css
-      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall-logo} $out/img/dhall-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall.prelude} $out/Prelude
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.bash} $out/img/bash-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.clojure} $out/img/clojure-logo.svg
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.dhall} $out/img/dhall-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.github}/PNG/GitHub-Mark-32px.png $out/img/github-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.haskell} $out/img/haskell-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.json} $out/img/json-logo.svg
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.nix} $out/img/nix-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.yaml} $out/img/yaml-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe/{lib,out,rts,runmain}.js $out/js/
 
       ${pkgsNew.coreutils}/bin/mkdir $out/nix-support
