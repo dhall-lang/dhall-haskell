@@ -15,13 +15,57 @@ let
       builtins.listToAttrs (map toNameValue names);
 
   overlayShared = pkgsNew: pkgsOld: {
+    githubLogo = pkgsNew.callPackage ./githubLogo.nix { };
+
     twitterBootstrap = pkgsNew.callPackage ./twitterBootstrap.nix { };
 
-    dhall-logo =
+    jsonLogo =
+      pkgsNew.fetchurl {
+        url = "https://upload.wikimedia.org/wikipedia/commons/c/c9/JSON_vector_logo.svg";
+
+        sha256 = "1hqd1qh35v9magjp3rbsw8wszk2wn3hkz981ir49z5cyf11jnx95";
+      };
+
+    nixLogo =
+      pkgsNew.fetchurl {
+        url = "https://nixos.org/logo/nix-wiki.png";
+
+        sha256 = "1hrz7wr7i0b2bips60ygacbkmdzv466lsbxi22hycg42kv4m0173";
+      };
+
+    yamlLogo =
+      pkgsNew.fetchurl {
+        url = "https://raw.githubusercontent.com/yaml/yaml-spec/a6f764e13de58d5f753877f588a01b35dc9a5168/logo.png";
+
+        sha256 = "12grgaxpqi755p2rnvw3x02zc69brpnzx208id1f0z42w387j4hi";
+      };
+
+    clojureLogo =
+      pkgsNew.fetchurl {
+        url = "https://upload.wikimedia.org/wikipedia/commons/5/5d/Clojure_logo.svg";
+
+        sha256 = "0mrjzv690g9mxljzxsvay8asyr8vlxhhs9smmax7mp3psd49b43g";
+      };
+
+    bashLogo =
+      pkgsNew.fetchurl {
+        url = "https://raw.githubusercontent.com/odb/official-bash-logo/master/assets/Logos/Icons/PNG/128x128.png";
+
+        sha256 = "0fybbp6hbqrfw80fbk55bnykzda0m7x4vk38i80bjlmfbrkfvild";
+      };
+
+    dhallLogo =
       pkgsNew.fetchurl {
         url = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-logo.png";
 
         sha256 = "0j6sfvm4kxqb2m6s1sv9qag7m30cibaxpphprhaibp9s9shpra4p";
+      };
+
+    haskellLogo =
+      pkgsNew.fetchurl {
+        url = "https://wiki.haskell.org/wikiupload/4/4a/HaskellLogoStyPreview-1.png";
+
+        sha256 = "0g26j7vx34m46mwp93qgg3q5x8pfdq2j1ch0vxz5gj0nk3b8fxda";
       };
 
     dhall-sdist =
@@ -166,8 +210,15 @@ let
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/mode/haskell/haskell.js $out/js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/mode/javascript/javascript.js $out/js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.css $out/css
-      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall-logo} $out/img/dhall-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhallLogo} $out/img/dhall-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall.prelude} $out/Prelude
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.githubLogo}/PNG/GitHub-Mark-32px.png $out/img/github-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.clojureLogo} $out/img/clojure-logo.svg
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.haskellLogo} $out/img/haskell-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.jsonLogo} $out/img/json-logo.svg
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.yamlLogo} $out/img/yaml-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.bashLogo} $out/img/bash-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.nixLogo} $out/img/nix-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe/{lib,out,rts,runmain}.js $out/js/
 
       ${pkgsNew.coreutils}/bin/mkdir $out/nix-support

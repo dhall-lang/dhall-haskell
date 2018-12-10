@@ -34,6 +34,14 @@
       .nav-link {
         outline: 0;
       }
+
+      .navbar span {
+        margin-left: 7px;
+      }
+
+      .navbar {
+        margin-bottom: 20px;
+      };
     </style>
     <link rel="stylesheet" href="./css/codemirror.css">
     <link rel="stylesheet" href="./css/bootstrap.min.css">
@@ -46,8 +54,35 @@
     <script language="javascript" src="./js/out.js"></script>
   </head>
   <body>
-    <a href="https://dhall-lang.org"><img src="./img/dhall-logo.png" height="50px"></a>
+    <nav class="navbar navbar-light bg-light">
+      <a class="navbar-left" href="https://dhall-lang.org"><img src="./img/dhall-logo.png" height="32px"></a>
+      <div class="nav-item">
+        <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki">📚<span>Learn</span></a>
+      </div>
+      <div class="nav-item">
+        <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/blob/master/README.md"><img src = "./img/github-logo.png" height="32px"><span>GitHub</a></a>
+      </div>
+      <div class="nav-item">
+        <a class="nav-link" href="https://github.com/dhall-lang/dhall-haskell/blob/master/dhall-json/README.md"><img src = "./img/yaml-logo.png" height="32px"><span>YAML</span></a>
+      </div>
+      <div class="nav-item">
+        <a class="nav-link" href="https://github.com/dhall-lang/dhall-haskell/blob/master/dhall-json/README.md"><img src = "./img/json-logo.svg" height="32px"><span>JSON</span></a>
+      </div>
+      <div class="nav-item">
+        <a class="nav-link" href="https://github.com/dhall-lang/dhall-haskell/blob/master/dhall-bash/README.md"><img src = "./img/bash-logo.png" height="32px"><span>Bash</span></a>
+      </div>
+      <div class="nav-item">
+        <a class="nav-link" href="https://github.com/f-f/dhall-clj/blob/master/README.md"><img src = "./img/clojure-logo.svg" height="32px"><span>Clojure</span></a>
+      </div>
+      <div class="nav-item">
+        <a class="nav-link" href="https://github.com/dhall-lang/dhall-haskell/blob/master/dhall/README.md"><img src = "./img/haskell-logo.png" height="32px"><span>Haskell</span></a>
+      </div>
+      <div class="nav-item">
+        <a class="nav-link" href="https://github.com/dhall-lang/dhall-nix/blob/master/README.md"><img src = "./img/nix-logo.png" height="32px"><span>Nix</span></a>
+      </div>
+    </nav>
     <h1 id="title">Try the Dhall configuration language</h1>
+    <p class="text-center"><b>Dhall ≈ JSON + Functions + Types + Imports</b></p>
     <div id="editor">
       <div id="input-pane">
         <ul class="nav nav-tabs example-tab">
