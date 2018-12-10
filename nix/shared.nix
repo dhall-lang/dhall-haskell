@@ -28,10 +28,16 @@ let
           sha256 = "0mrjzv690g9mxljzxsvay8asyr8vlxhhs9smmax7mp3psd49b43g";
         };
 
-      dhall =
+      dhallLarge =
         pkgsNew.fetchurl {
           url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-logo.png";
           sha256 = "0j6sfvm4kxqb2m6s1sv9qag7m30cibaxpphprhaibp9s9shpra4p";
+        };
+
+      dhallSmall =
+        pkgsNew.fetchurl {
+          url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-icon.png";
+          sha256 = "1lly3yb5szl9n3hszsfzv2mil98cvlidrzyci7vs4wi461s9bhxi";
         };
 
       github = pkgsNew.callPackage ./githubLogo.nix { };
@@ -233,7 +239,8 @@ let
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall.prelude} $out/Prelude
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.bash} $out/img/bash-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.clojure} $out/img/clojure-logo.svg
-      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.dhall} $out/img/dhall-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.dhallLarge} $out/img/dhall-large-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.dhallSmall} $out/img/dhall-small-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.github}/PNG/GitHub-Mark-32px.png $out/img/github-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.haskell} $out/img/haskell-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.json} $out/img/json-logo.svg
