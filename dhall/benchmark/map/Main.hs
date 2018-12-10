@@ -20,13 +20,27 @@ benchOrderedTraversal dataLabel mapData =
             whnf (Map.traverseWithKey_ (\_ i -> pure @Maybe (i ^ i) *> pure ())) mapData
         ]
 
+benchUnorderedTraversal :: String -> Map.Map Integer Integer -> Criterion.Benchmark
+benchUnorderedTraversal dataLabel mapData =
+    bgroup ("Unordered Traversals: " <> dataLabel)
+        [ bench "unorderedTraverseWithKey" $
+            whnf (Map.unorderedTraverseWithKey (\_ i -> pure @Maybe $ i ^ i)) mapData
+        , bench "unorderedTraverseWithKey_" $
+            whnf (Map.unorderedTraverseWithKey_ (\_ i -> pure @Maybe (i ^ i) *> pure ())) mapData
+        ]
+
 main :: IO ()
 main = do
-    let !smallMap  = testData 1
---        !mediumMap = testData 1000
---        !largeMap  = testData 1000000
+    let !smallMap  = testData 10
+        !mediumMap = testData 1000
+        !largeMap  = testData 100000
     defaultMain
-        [ benchOrderedTraversal "small"  smallMap
---        , benchOrderedTraversal "medium" mediumMap
---        , benchOrderedTraversal "large"  largeMap
+        [ benchOrderedTraversal   "small" smallMap
+        , benchUnorderedTraversal "small" smallMap
+
+        , benchOrderedTraversal   "medium" mediumMap
+        , benchUnorderedTraversal "medium" mediumMap
+
+        , benchOrderedTraversal   "large"  largeMap
+        , benchUnorderedTraversal "large"  largeMap
         ]

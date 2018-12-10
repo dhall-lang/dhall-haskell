@@ -468,11 +468,11 @@ traverseWithKey_ f m = Data.Functor.void (traverseWithKey f m)
 
 unorderedTraverseWithKey
     :: Ord k => Applicative f => (k -> a -> f b) -> Map k a -> f (Map k b)
-unorderedTraverseWithKey f (Map m ks) = Map <$> Data.Map.traverseWithKey f m <*> pure ks
+unorderedTraverseWithKey f (Map m ks) = fmap (\m' -> Map m' ks) (Data.Map.traverseWithKey f m)
 
 unorderedTraverseWithKey_
     :: Ord k => Applicative f => (k -> a -> f ()) -> Map k a -> f ()
-unorderedTraverseWithKey_ f = Data.Functor.void . unorderedTraverseWithKey f
+unorderedTraverseWithKey_ f = Data.Functor.void . traverse_ (uncurry f) . toList
 {-# INLINABLE unorderedTraverseWithKey_ #-}
 
 {-| Convert a `Map` to a list of key-value pairs in the original order of keys
