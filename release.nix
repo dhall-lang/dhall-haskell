@@ -41,8 +41,7 @@ in
           shared.tarball-dhall-json
           shared.tarball-dhall-text
 
-          # Verify that `dhall` can be built using GHCJS
-          shared_ghcjs.dhall
+          shared_ghcjs.tarball-try-dhall
 
           # This is the only `dhall` build that runs the test suite
           coverage.dhall
@@ -52,6 +51,8 @@ in
       };
 
     "coverage-dhall" = coverage.dhall;
+
+    inherit (shared_ghcjs) tarball-try-dhall;
 
     inherit (shared)
       tarball-dhall

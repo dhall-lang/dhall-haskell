@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style>
+      #title {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+
+      #editor {
+        display: flex;
+      }
+
+      #input-pane {
+        order: 0;
+        flex: 1;
+        width: 80ch;
+        overflow: auto;
+      }
+
+      #output-pane {
+        order: 1;
+        flex: 1;
+        overflow: auto;
+      }
+
+      .CodeMirror {
+        margin-bottom: 20px;
+        outline: 1px solid black;
+        height: 24rem !important;
+      }
+
+      .nav-link {
+        outline: 0;
+      }
+    </style>
+    <link rel="stylesheet" href="./css/codemirror.css">
+    <link rel="stylesheet" href="./css/bootstrap.min.css">
+    <script language="javascript" src="./js/bootstrap.min.js"></script>
+    <script language="javascript" src="./js/codemirror.js"></script>
+    <script language="javascript" src="./js/haskell.js"></script>
+    <script language="javascript" src="./js/javascript.js"></script>
+  </head>
+  <body>
+    <a href="https://dhall-lang.org"><img src="./img/dhall-logo.png" height="50px"></a>
+    <h1 id="title">Try the Dhall configuration language</h1>
+    <div id="editor">
+      <div id="input-pane">
+        <ul class="nav nav-tabs example-tab">
+          <li class="nav-item">
+            <a id="example0" class="nav-link example-tab active" href="#" onClick="set(example0, 'example0')">Hello, world!</a>
+          </li>
+          <li class="nav-item">
+            <a id="example1" class="nav-link example-tab" href="#" onClick="set(example1, 'example1')">Definitions</a>
+          </li>
+          <li class="nav-item">
+            <a id="example2" class="nav-link example-tab" href="#" onClick="set(example2, 'example2')">Functions</a>
+          </li>
+          <li class="nav-item">
+            <a id="example3" class="nav-link example-tab" href="#" onClick="set(example3, 'example3')">Types</a>
+          </li>
+          <li class="nav-item">
+            <a id="example4" class="nav-link example-tab" href="#" onClick="set(example4, 'example4')">Imports</a>
+          </li>
+        </ul>
+        <textarea id="dhall-input"></textarea>
+      </div>
+      <div id="output-pane">
+        <ul class="nav nav-tabs">
+          <li class="nav-item">
+            <a id="dhall-tab" class="nav-link mode-tab active" href="#">Dhall</a>
+          </li>
+          <li class="nav-item">
+            <a id="json-tab" class="nav-link mode-tab" href="#">JSON</a>
+          </li>
+        </ul>
+        <textarea id="dhall-output"></textarea>
+      </div>
+    </div>
+  </body>
+  <script>
+    var dhallInput  = document.getElementById("dhall-input");
+    var dhallOutput = document.getElementById("dhall-output");
+    var dhallTab    = document.getElementById("dhall-tab");
+    var jsonTab     = document.getElementById("json-tab");
+
+    function selectTab(tabClass, tabId) {
+      Array.from(document.getElementsByClassName(tabClass)).forEach(element => {
+        element.classList.remove("active");
+      });
+      document.getElementById(tabId).classList.toggle("active");
+    }
+
+    var input = CodeMirror.fromTextArea(dhallInput, {
+      lineNumbers: true,
+      mode: "haskell"
+    });
+
+    var output = CodeMirror.fromTextArea(dhallOutput, {
+      lineNumbers: true,
+      mode: "haskell",
+      readOnly: true
+    });
+
+    example0 = `{- This is an example Dhall configuration file
+
+   Can you spot and correct the mistake?
+-}
+
+{ home       = "/home/bill"
+, privateKey = "/home/bill/id_ed25519"
+, publicKey  = "/home/blil/id_ed25519.pub"
+}`
+
+    example1 = `{- Don't repeat yourself!
+
+   Repetition is error-prone
+-}
+
+let user = "bill"
+in  { home       = "/home/\${user}"
+    , privateKey = "/home/\${user}/id_ed25519"
+    , publicKey  = "/home/\${user}/id_ed25519.pub"
+    }
+
+{- Change the name "bill" to "jane" -}`;
+
+    example2 = `{- More than one user?  Use a function! -}
+
+let makeUser = \\(user : Text) ->
+      let home       = "/home/\${user}"
+      let privateKey = "\${home}/id_ed25519.pub"
+      let publicKey  = "\${privateKey}.pub"
+      in  { home = home
+          , privateKey = privateKey
+          , publicKey = publicKey
+          }
+    {- Add another user to this list -}
+in  [ makeUser "bill"
+    , makeUser "jane"
+    ]`
+
+    example3 = `{- You can optionally add types
+
+   \`x : T\` means that \`x\` has type \`T\`
+-}
+
+let Config : Type =
+      {- What happens if you add another field here? -}
+      { home : Text
+      , privateKey : Text
+      , publicKey : Text
+      }
+
+let makeUser : Text -> Config = \\(user : Text) ->
+      let home       : Text   = "/home/\${user}"
+      let privateKey : Text   = "\${home}/id_ed25519.pub"
+      let publicKey  : Text   = "\${privateKey}.pub"
+      let config     : Config =
+            { home       = home
+            , privateKey = privateKey
+            , publicKey  = publicKey
+            }
+      in  config
+
+let configs : List Config =
+      [ makeUser "bill"
+      , makeUser "jane"
+      ]
+
+in  configs
+`;
+
+    example4 = `{- Need to generate a lot of users?
+
+   Use the \`generate\` function from the Dhall Prelude
+-}
+
+let generate = https://prelude.dhall-lang.org/List/generate
+
+{- You can import Dhall expressions from URLs that support
+   CORS
+
+   The command-line tools also let you import from files,
+   environment variables, and URLs without CORS support.
+
+   Browse https://prelude.dhall-lang.org for more utilities
+-}
+
+let makeUser = \\(user : Text) ->
+      let home       = "/home/\${user}"
+      let privateKey = "\${home}/id_ed25519.pub"
+      let publicKey  = "\${privateKey}.pub"
+      in  { home = home
+          , privateKey = privateKey
+          , publicKey = publicKey
+          }
+
+let buildUser = \\(index : Natural) ->
+      {- \`Natural/show\` is a "built-in", meaning that
+         you can use \`Natural/show\` without an import
+      -}
+      makeUser "build\${Natural/show index}"
+
+let Config =
+      { home : Text
+      , privateKey : Text
+      , publicKey : Text
+      }
+
+in  {- Try generating 20 users instead of 10 -}
+    generate 10 Config buildUser`
+
+    function set(example, tabId){
+      input.setValue(example);
+      selectTab("example-tab", tabId);
+    };
+
+    input.setValue(example0);
+  </script>
+  <script language="javascript" src="./js/all.min.js" defer></script>
+</html>

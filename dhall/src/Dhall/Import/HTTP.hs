@@ -13,13 +13,18 @@ import Data.Dynamic (fromDynamic, toDyn)
 import Data.Semigroup ((<>))
 import Lens.Family.State.Strict (zoom)
 
-import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict        as State
 import qualified Data.Text                               as Text
-import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Encoding
 
 import Dhall.Import.Types
+
+#ifdef __GHCJS__
+import qualified JavaScript.XHR
+#else
+import qualified Control.Exception
+import qualified Data.Text.Lazy
+import qualified Data.Text.Lazy.Encoding
+#endif
 
 #if MIN_VERSION_http_client(0,5,0)
 import Network.HTTP.Client
@@ -111,6 +116,18 @@ fetchFromHttpUrl
     :: String
     -> Maybe [(CI ByteString, ByteString)]
     -> StateT (Status m) IO (String, Text.Text)
+#ifdef __GHCJS__
+fetchFromHttpUrl url Nothing = do
+    (statusCode, body) <- liftIO (JavaScript.XHR.get (Text.pack url))
+
+    case statusCode of
+        200 -> return ()
+        _   -> fail (url <> " returned a non-200 status code: " <> show statusCode)
+
+    return (url, body)
+fetchFromHttpUrl _ _ = do
+    fail "Dhall does not yet support custom headers when built using GHCJS"
+#else
 fetchFromHttpUrl url mheaders = do
     m <- needManager
 
@@ -134,3 +151,4 @@ fetchFromHttpUrl url mheaders = do
     case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
         Left  err  -> liftIO (Control.Exception.throwIO err)
         Right text -> return (url, Data.Text.Lazy.toStrict text)
+#endif

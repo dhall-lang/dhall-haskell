@@ -8,6 +8,7 @@ module Dhall.Test.QuickCheck where
 
 import Codec.Serialise (DeserialiseFailure(..))
 import Control.Monad (guard)
+import Data.Either (isRight)
 import Data.List.NonEmpty (NonEmpty(..))
 import Dhall.Map (Map)
 import Dhall.Core
@@ -29,7 +30,7 @@ import Dhall.Core
 import Dhall.Set (Set)
 import Numeric.Natural (Natural)
 import Test.QuickCheck
-    (Arbitrary(..), Gen, Property, genericShrink, (===))
+    (Arbitrary(..), Gen, Property, genericShrink, (===), (==>))
 import Test.QuickCheck.Instances ()
 import Test.Tasty (TestTree)
 
@@ -39,7 +40,9 @@ import qualified Dhall.Map
 import qualified Data.Sequence
 import qualified Dhall.Binary
 import qualified Dhall.Core
+import qualified Dhall.Diff
 import qualified Dhall.Set
+import qualified Dhall.TypeCheck
 import qualified Test.QuickCheck
 import qualified Test.Tasty.QuickCheck
 
@@ -350,6 +353,14 @@ isNormalizedIsConsistentWithNormalize expression =
         Dhall.Core.isNormalized expression
     === (Dhall.Core.normalize expression == expression)
 
+isSameAsSelf :: Expr () Import -> Property
+isSameAsSelf expression =
+  hasNoImportAndTypechecks ==> Dhall.Diff.same (Dhall.Diff.diffExpression expression expression)
+  where hasNoImportAndTypechecks =
+          case traverse (\_ -> Left ()) expression of
+            Right importlessExpression -> isRight (Dhall.TypeCheck.typeOf importlessExpression)
+            Left _ -> False
+
 tests :: TestTree
 tests =
     Test.Tasty.QuickCheck.testProperties
@@ -360,5 +371,9 @@ tests =
         , ( "isNormalized should be consistent with normalize"
           , Test.QuickCheck.property
               (Test.QuickCheck.withMaxSuccess 10000 isNormalizedIsConsistentWithNormalize)
+          )
+        , ( "An expression should have no difference with itself"
+          , Test.QuickCheck.property
+              (Test.QuickCheck.withMaxSuccess 10000 isSameAsSelf)
           )
         ]
