@@ -1,5 +1,11 @@
 # `dhall 1.19.1`
 
+For installation or development instructions, see:
+
+* [`dhall-haskell` - `README`](https://github.com/dhall-lang/dhall-haskell/blob/master/README.md)
+
+## Introduction
+
 Dhall is a programmable configuration language that is not Turing-complete
 
 You can think of Dhall as: JSON + functions + types + imports

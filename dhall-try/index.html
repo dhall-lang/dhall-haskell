@@ -34,17 +34,121 @@
       .nav-link {
         outline: 0;
       }
+
+      .navbar span {
+        margin-left: 7px;
+      }
+
+      .navbar {
+        margin-bottom: 20px;
+      };
     </style>
     <link rel="stylesheet" href="./css/codemirror.css">
     <link rel="stylesheet" href="./css/bootstrap.min.css">
+    <script language="javascript" src="./js/jquery.min.js"></script>
     <script language="javascript" src="./js/bootstrap.min.js"></script>
     <script language="javascript" src="./js/codemirror.js"></script>
     <script language="javascript" src="./js/haskell.js"></script>
     <script language="javascript" src="./js/javascript.js"></script>
   </head>
   <body>
-    <a href="https://dhall-lang.org"><img src="./img/dhall-logo.png" height="50px"></a>
-    <h1 id="title">Try the Dhall configuration language</h1>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+      <a class="navbar-left" href="https://dhall-lang.org"><img src="./img/dhall-small-logo.png" height="31px"></a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav ml-auto">
+          <li class="divider"></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="discussionDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              Discussion
+            </a>
+            <div class="dropdown-menu" aria-labelledby="discussionDropdown">
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Programmable-configuration-files">Programmable configuration files</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Core-language-features">Core language features</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Safety-guarantees">Safety guarantees</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Dhall-in-production">Dhall in production</a>
+            </div>
+          </li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="tutorialDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              Tutorial
+            </a>
+            <div class="dropdown-menu" aria-labelledby="tutorialDropdown">
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Getting-started%3A-Generate-JSON-or-YAML">Getting started: Generate JSON or YAML</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-nethack"><code>dhall-nethack</code></a>
+            </div>
+          </li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="howtoDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              How-to guides
+            </a>
+            <div class="dropdown-menu" aria-labelledby="howtoDropdown">
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Cheatsheet">Cheatsheet</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Frequently-Asked-Questions-%28FAQ%29">Frequently Asked Questions (FAQ)</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/https://github.com/dhall-lang/dhall-lang/wiki/How-to-translate-recursive-code-to-Dhall">How to translate recursive code to Dhall</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/How-to-add-a-new-built-in-function">How to add a new built-in function</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/How-to-type-check-and-normalize-incomplete-code">How to type-check and normalize incomplete code</a>
+            </div>
+          </li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="referencesDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              References
+            </a>
+            <div class="dropdown-menu" aria-labelledby="referencesDropdown">
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/blob/master/standard/dhall.abnf">Grammar</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/blob/master/standard/semantics.md">Semantics</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Built-in-types%2C-functions%2C-and-operators">Semantics</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://prelude.dhall-lang.org/">Prelude</a>
+            </div>
+          </li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="integrationsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              Integrations
+            </a>
+            <div class="dropdown-menu" aria-labelledby="integrationsDropdown">
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-haskell/blob/master/dhall-json/README.md"><img src = "./img/yaml-logo.png" height="20px"><span>YAML</span></a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-haskell/blob/master/dhall-json/README.md"><img src = "./img/json-logo.svg" height="32px"><span>JSON</span></a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-kubernetes/blob/master/README.md"><img src = "./img/kubernetes-logo.png" height="32px"><span>Kubernetes</span></a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-haskell/blob/master/dhall-bash/README.md"><img src = "./img/bash-logo.png" height="32px"><span>Bash</span></a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/f-f/dhall-clj/blob/master/README.md"><img src = "./img/clojure-logo.svg" height="32px"><span>Clojure</span></a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-haskell/blob/master/dhall/README.md"><img src = "./img/haskell-logo.png" height="32px"><span>Haskell</span></a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-nix/blob/master/README.md"><img src = "./img/nix-logo.png" height="32px"><span>Nix</span></a>
+            </div>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/blob/master/README.md"><img src = "./img/github-logo.png" height="25px"></a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="https://twitter.com/dhall_lang"><img src = "./img/twitter-logo.png" height="32px"></a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="https://stackoverflow.com/questions/tagged/dhall"><img src = "./img/stack-overflow-logo.png" height="32px"></a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+    <img class="mx-auto" style="display: block; width: 400px;" src="./img/dhall-large-logo.png">
+    <p class="text-center"><b>Dhall ≈ JSON + Functions + Types + Imports</b></p>
     <div id="editor">
       <div id="input-pane">
         <ul class="nav nav-tabs example-tab">
@@ -78,6 +182,7 @@
         <textarea id="dhall-output"></textarea>
       </div>
     </div>
+    <p class="text-center">This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</p>
   </body>
   <script>
     var dhallInput  = document.getElementById("dhall-input");
