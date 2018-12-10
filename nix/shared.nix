@@ -48,6 +48,12 @@ let
           sha256 = "0g26j7vx34m46mwp93qgg3q5x8pfdq2j1ch0vxz5gj0nk3b8fxda";
         };
 
+      kubernetes =
+        pkgsNew.fetchurl {
+          url    = "https://raw.githubusercontent.com/kubernetes/kubernetes/7839fe38620508eb0651930cb0e1acb8ea367842/logo/logo.svg";
+          sha256 = "0kp6idffg9k52ycgv5zkg9n08pfldzsy0fzhwsrb2f7cvrl6fpw4";
+        };
+
       nix =
         pkgsNew.fetchurl {
           url    = "https://nixos.org/logo/nix-wiki.png";
@@ -243,6 +249,7 @@ let
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.dhallSmall} $out/img/dhall-small-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.github}/PNG/GitHub-Mark-32px.png $out/img/github-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.haskell} $out/img/haskell-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.kubernetes} $out/img/kubernetes-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.json} $out/img/json-logo.svg
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.nix} $out/img/nix-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.stackOverflow} $out/img/stack-overflow-logo.png
