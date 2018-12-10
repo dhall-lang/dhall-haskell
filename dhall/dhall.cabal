@@ -39,6 +39,7 @@ Extra-Source-Files:
     tests/normalization/success/haskell-tutorial/combineTypes/*.dhall
     tests/normalization/success/haskell-tutorial/prefer/*.dhall
     tests/normalization/success/haskell-tutorial/projection/*.dhall
+    tests/normalization/success/multiline/*.dhall
     tests/normalization/success/prelude/Bool/and/*.dhall
     tests/normalization/success/prelude/Bool/and/*.dhall
     tests/normalization/success/prelude/Bool/build/*.dhall
@@ -338,6 +339,8 @@ Library
       Build-Depends: semigroups == 0.18.*
       Build-Depends: transformers == 0.4.2.*
       Build-Depends: fail == 4.9.*
+    if impl(ghcjs)
+      Build-Depends: ghcjs-xhr
 
     Exposed-Modules:
         Dhall,

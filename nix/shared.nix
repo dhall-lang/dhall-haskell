@@ -15,6 +15,15 @@ let
       builtins.listToAttrs (map toNameValue names);
 
   overlayShared = pkgsNew: pkgsOld: {
+    twitterBootstrap = pkgsNew.callPackage ./twitterBootstrap.nix { };
+
+    dhall-logo =
+      pkgsNew.fetchurl {
+        url = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-logo.png";
+
+        sha256 = "0j6sfvm4kxqb2m6s1sv9qag7m30cibaxpphprhaibp9s9shpra4p";
+      };
+
     dhall-sdist =
       let
         predicate = path: type:
@@ -66,9 +75,12 @@ let
                 dontCheckExtension =
                   mass pkgsNew.haskell.lib.dontCheck [
                     "aeson"
+                    "base-compat-batteries"
                     "comonad"
+                    "conduit"
                     "distributive"
                     "doctest"
+                    "Glob"
                     "half"
                     "http-types"
                     "megaparsec"
@@ -76,7 +88,9 @@ let
                     "prettyprinter-ansi-terminal"
                     # https://github.com/well-typed/cborg/issues/172
                     "serialise"
+                    "semigroupoids"
                     "unordered-containers"
+                    "yaml"
                   ];
 
                 failOnAllWarningsExtension =
@@ -110,9 +124,18 @@ let
                         { };
 
                     dhall-text =
-                       haskellPackagesNew.callCabal2nix
+                      haskellPackagesNew.callCabal2nix
                         "dhall-text"
                         ../dhall-text
+                        { };
+
+                    dhall-try =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-try"
+                        (builtins.filterSource
+                          (path: _: baseNameOf path != "index.html")
+                          ../dhall-try
+                        )
                         { };
                   };
 
@@ -129,6 +152,44 @@ let
         );
       };
     };
+
+    npm = pkgsNew.callPackage ./npm { };
+
+    try-dhall-static = pkgsNew.runCommand "try-dhall-static" {} ''
+      ${pkgsNew.coreutils}/bin/mkdir $out
+      ${pkgsNew.coreutils}/bin/mkdir $out/{css,img,js}
+      ${pkgsNew.coreutils}/bin/cp ${../dhall-try/index.html} $out/index.html
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.twitterBootstrap}/js/bootstrap.min.js $out/js
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.twitterBootstrap}/js/bootstrap.min.js.map $out/js
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.twitterBootstrap}/css/bootstrap.min.css $out/css
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.js $out/js
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/mode/haskell/haskell.js $out/js
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/mode/javascript/javascript.js $out/js
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.css $out/css
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall-logo} $out/img/dhall-logo.png
+      ${pkgsNew.closurecompiler}/bin/closure-compiler ${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe/all.js --jscomp_off=checkVars --externs=${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe/all.js.externs > $out/js/all.min.js
+
+      ${pkgsNew.coreutils}/bin/mkdir $out/nix-support
+      ${pkgsNew.coreutils}/bin/echo "doc none $out/index.html" > $out/nix-support/hydra-build-products
+    '';
+
+    tarball-try-dhall = pkgsStaticLinux.releaseTools.binaryTarball rec {
+      src = pkgsNew.try-dhall-static;
+
+      installPhase = ''
+        releaseName=try-dhall
+        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/try-dhall/"    -D $src/index.html
+        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/try-dhall/img" -D $src/img/*
+        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/try-dhall/css" -D $src/css/*
+        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/try-dhall/js"  -D $src/js/*
+      '';
+    };
+
+
+
+    try-dhall-server = pkgsNew.writeScriptBin "try-dhall-server" ''
+      ${pkgsNew.haskellPackages.wai-app-static}/bin/warp --docroot ${pkgsNew.try-dhall-static}
+    '';
   };
 
   overlayCabal2nix = pkgsNew: pkgsOld: {
@@ -370,29 +431,35 @@ let
       '';
     };
 
+  toShell = drv:
+    if compiler == "ghcjs"
+    then
+        # `doctest` doesn't work with `ghcjs`
+        (pkgs.haskell.lib.dontCheck drv).env
+    else
+        # Benchmark dependencies aren't added by default
+        (pkgs.haskell.lib.doBenchmark drv).env;
+
 in
   rec {
     inherit pwd;
 
-    tarball-dhall = makeTarball "dhall";
-
+    tarball-dhall      = makeTarball "dhall"     ;
     tarball-dhall-bash = makeTarball "dhall-bash";
-
     tarball-dhall-json = makeTarball "dhall-json";
-
     tarball-dhall-text = makeTarball "dhall-text";
 
-    inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-text;
+    inherit (pkgs) tarball-try-dhall try-dhall-server try-dhall-static;
+
+    inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-text dhall-try;
 
     inherit (pkgs.releaseTools) aggregate;
 
-    shell-dhall = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall).env;
-
-    shell-dhall-bash = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall-bash).env;
-
-    shell-dhall-json = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall-json).env;
-
-    shell-dhall-text = (pkgs.haskell.lib.doBenchmark pkgs.haskell.packages."${compiler}".dhall-text).env;
+    shell-dhall      = toShell pkgs.haskell.packages."${compiler}".dhall     ;
+    shell-dhall-bash = toShell pkgs.haskell.packages."${compiler}".dhall-bash;
+    shell-dhall-json = toShell pkgs.haskell.packages."${compiler}".dhall-json;
+    shell-dhall-text = toShell pkgs.haskell.packages."${compiler}".dhall-text;
+    shell-dhall-try  = toShell pkgs.haskell.packages."${compiler}".dhall-try ;
 
     test-dhall =
       pkgs.mkShell
