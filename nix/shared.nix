@@ -209,12 +209,19 @@ let
 
     npm = pkgsNew.callPackage ./npm { };
 
+    jQuery =
+      pkgsNew.fetchurl {
+        url    = "https://code.jquery.com/jquery-3.3.1.min.js";
+        sha256 = "1vq2bp290rhby5l09dv5khqwv3ysnzbddggbgk6m4hl9y9pl42hn";
+      };
+
     twitterBootstrap = pkgsNew.callPackage ./twitterBootstrap.nix { };
 
     try-dhall-static = pkgsNew.runCommand "try-dhall-static" {} ''
       ${pkgsNew.coreutils}/bin/mkdir $out
       ${pkgsNew.coreutils}/bin/mkdir $out/{css,img,js}
       ${pkgsNew.coreutils}/bin/cp ${../dhall-try/index.html} $out/index.html
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.jQuery} $out/js/jquery.min.js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.twitterBootstrap}/js/bootstrap.min.js $out/js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.twitterBootstrap}/js/bootstrap.min.js.map $out/js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.twitterBootstrap}/css/bootstrap.min.css $out/css
