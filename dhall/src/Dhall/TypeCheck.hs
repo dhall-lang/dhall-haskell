@@ -550,7 +550,7 @@ typeWithA tpa = loop
                                 Left (TypeError ctx e (InvalidField k t))
 
                         return t
-                kts <- Dhall.Map.unorderedTraverseWithKey process kvs
+                kts <- Dhall.Map.traverseWithKey process kvs
                 return (Record kts)
     loop ctx e@(Union     kts   ) = do
         let process k t = do
