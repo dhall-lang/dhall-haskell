@@ -167,13 +167,21 @@ let
                         { };
 
                     dhall-try =
-                      haskellPackagesNew.callCabal2nix
-                        "dhall-try"
-                        (builtins.filterSource
-                          (path: _: baseNameOf path != "index.html")
-                          ../dhall-try
+                      pkgsNew.haskell.lib.overrideCabal
+                        (haskellPackagesNew.callCabal2nix
+                          "dhall-try"
+                          (builtins.filterSource
+                            (path: _: baseNameOf path != "index.html")
+                            ../dhall-try
+                          )
+                          { }
                         )
-                        { };
+                        (old: {
+                            postInstall = (old.postInstall or "") + ''
+                              ${pkgsNew.closurecompiler}/bin/closure-compiler $out/bin/dhall-try.jsexe/all.js --jscomp_off=checkVars --externs=$out/bin/dhall-try.jsexe/all.js.externs > $out/bin/dhall-try.jsexe/all.min.js
+                            '';
+                          }
+                        );
                   };
 
               in
@@ -205,6 +213,7 @@ let
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/mode/haskell/haskell.js $out/js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/mode/javascript/javascript.js $out/js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.css $out/css
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe/all.min.js $out/js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall.prelude} $out/Prelude
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.bash} $out/img/bash-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.clojure} $out/img/clojure-logo.svg
@@ -214,8 +223,6 @@ let
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.json} $out/img/json-logo.svg
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.nix} $out/img/nix-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.yaml} $out/img/yaml-logo.png
-      ${pkgsNew.closurecompiler}/bin/closure-compiler ${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe/all.js --jscomp_off=checkVars --externs=${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe/all.js.externs > $out/js/all.min.js
-
       ${pkgsNew.coreutils}/bin/mkdir $out/nix-support
       ${pkgsNew.coreutils}/bin/echo "doc none $out/index.html" > $out/nix-support/hydra-build-products
     '';
