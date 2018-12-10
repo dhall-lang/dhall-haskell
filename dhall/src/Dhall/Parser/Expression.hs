@@ -10,6 +10,7 @@ module Dhall.Parser.Expression where
 import Control.Applicative (Alternative(..), optional)
 import Data.ByteArray.Encoding (Base(..))
 import Data.Functor (void)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Dhall.Core
@@ -20,6 +21,7 @@ import qualified Crypto.Hash
 import qualified Data.ByteArray.Encoding
 import qualified Data.ByteString
 import qualified Data.Char
+import qualified Data.Foldable
 import qualified Data.List.NonEmpty
 import qualified Data.Sequence
 import qualified Data.Text
@@ -499,15 +501,10 @@ completeExpression embedded = completeExpression_
 
     singleQuoteLiteral = do
             _ <- Text.Parser.Char.text "''"
-
-            -- This is technically not in the grammar, but it's still equivalent to the
-            -- original grammar and an easy way to discard the first character if it's
-            -- a newline
-            _ <- optional endOfLine
-
+            _ <- endOfLine
             a <- singleQuoteContinue
 
-            return (dedent a)
+            return (toDoubleQuoted a)
           where
             endOfLine =
                     void (Text.Parser.Char.char '\n'  )
@@ -724,50 +721,53 @@ renderChunks (Chunks a b) = foldMap renderChunk a <> b
     renderChunk :: (Text, Expr s a) -> Text
     renderChunk (c, _) = c <> "${x}"
 
-dedent :: Chunks Src a -> Chunks Src a
-dedent chunks0 = process chunks0
+splitOn :: Text -> Text -> NonEmpty Text
+splitOn needle haystack =
+    case Data.Text.splitOn needle haystack of
+        []     -> "" :| []
+        t : ts -> t  :| ts
+
+linesLiteral :: Chunks s a -> NonEmpty (Chunks s a)
+linesLiteral (Chunks [] suffix) =
+    fmap (Chunks []) (splitOn "\n" suffix)
+linesLiteral (Chunks ((prefix, interpolation) : pairs₀) suffix₀) =
+    foldr
+        Data.List.NonEmpty.cons
+        (Chunks ((lastLine, interpolation) : pairs₁) suffix₁ :| chunks)
+        (fmap (Chunks []) initLines)
   where
-    text0 = renderChunks chunks0
+    splitLines = splitOn "\n" prefix
 
-    lines0 = Data.Text.lines text0
+    initLines = Data.List.NonEmpty.init splitLines
+    lastLine  = Data.List.NonEmpty.last splitLines
 
-    isEmpty = Data.Text.all Data.Char.isSpace
+    Chunks pairs₁ suffix₁ :| chunks = linesLiteral (Chunks pairs₀ suffix₀)
 
-    nonEmptyLines = filter (not . isEmpty) lines0
+unlinesLiteral :: NonEmpty (Chunks s a) -> Chunks s a
+unlinesLiteral chunks =
+    Data.Foldable.fold (Data.List.NonEmpty.intersperse "\n" chunks)
 
-    indentLength line =
-        Data.Text.length (Data.Text.takeWhile Data.Char.isSpace line)
+leadingSpaces :: Chunks s a -> Int
+leadingSpaces chunks =
+    Data.Text.length (Data.Text.takeWhile Data.Char.isSpace firstText)
+  where
+    firstText =
+        case chunks of
+            Chunks                []  suffix -> suffix
+            Chunks ((prefix, _) : _ ) _      -> prefix
 
-    shortestIndent = case nonEmptyLines of
-        [] -> 0
-        _  -> minimum (map indentLength nonEmptyLines)
+dropLiteral :: Int -> Chunks s a -> Chunks s a
+dropLiteral n (Chunks [] suffix) =
+    Chunks [] (Data.Text.drop n suffix)
+dropLiteral n (Chunks ((prefix, interpolation) : rest) suffix) =
+    Chunks ((Data.Text.drop n prefix, interpolation) : rest) suffix
 
-    -- The purpose of this complicated `trimBegin`/`trimContinue` is to ensure
-    -- that we strip leading whitespace without stripping whitespace after
-    -- variable interpolation
+toDoubleQuoted :: Chunks Src a -> Chunks Src a
+toDoubleQuoted literal =
+    unlinesLiteral (fmap (dropLiteral indent) literals)
+  where
+    literals = linesLiteral literal
 
-    -- This is the trim function we use up until the first variable
-    -- interpolation, dedenting all lines
-    trimBegin =
-          Data.Text.intercalate "\n"
-        . map (Data.Text.drop shortestIndent)
-        . Data.Text.splitOn "\n"
+    l :| ls = literals
 
-    -- This is the trim function we use after each variable interpolation
-    -- where we indent each line except the first line (since it's not a true
-    -- beginning of a line)
-    trimContinue text = Data.Text.intercalate "\n" lines_
-      where
-        lines_ = case Data.Text.splitOn "\n" text of
-            []   -> []
-            l:ls -> l:map (Data.Text.drop shortestIndent) ls
-
-    -- This is the loop that drives whether or not to use `trimBegin` or
-    -- `trimContinue`.  We call this function with `trimBegin`, but after the
-    -- first interpolation we switch permanently to `trimContinue`
-    process (Chunks ((x0, y0):xys) z) =
-        Chunks ((trimBegin x0, y0):xys') (trimContinue z)
-      where
-        xys' = [ (trimContinue x, y) | (x, y) <- xys ]
-    process (Chunks [] z) =
-        Chunks [] (trimBegin z)
+    indent = Data.Foldable.foldl' min (leadingSpaces l) (fmap leadingSpaces ls)

@@ -55,13 +55,13 @@
     if you add the @--declare@ flag specifying which variable to set or unset.
     For example:
 
-> $ dhall-to-bash --declare FOO <<< '[] : Optional Integer'
+> $ dhall-to-bash --declare FOO <<< 'None Natural'
 > unset FOO
-> $ dhall-to-bash --declare FOO <<< '[1] : Optional Integer'
+> $ dhall-to-bash --declare FOO <<< 'Some 1'
 > declare -r -i FOO=1
-> $ dhall-to-bash --declare FOO <<< '[[1] : Optional Integer] : Optional (Optional Integer)'
+> $ dhall-to-bash --declare FOO <<< 'Some (Some 1)'
 > declare -r -i FOO=1
-> $ dhall-to-bash --declare FOO <<< '[[] : Optional Integer] : Optional (Optional Integer)'
+> $ dhall-to-bash --declare FOO <<< 'Some (None Natural)'
 > unset FOO
 > $ dhall-to-bash --declare FOO <<< '[1, 2, 3]'
 > declare -r -a FOO=(1 2 3)
@@ -187,7 +187,7 @@ The following Dhall expression could not be translated to a Bash expression:
         txt = Dhall.Core.pretty e
 
         tip = case e of
-            OptionalLit _ _ -> "\n\n" <> [NeatInterpolation.text|
+            Some _ -> "\n\n" <> [NeatInterpolation.text|
 Tip: You can convert an ❰Optional❱ value to a Bash statement using the --declare
 flag
 |]
@@ -248,10 +248,8 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
                 <>  Data.ByteString.intercalate " " (Data.Foldable.toList bs')
                 <>  ")"
         return bytes
-    go (OptionalLit _ bs) = do
-        case bs of
-            Nothing -> return ("unset " <> var)
-            Just b  -> go b
+    go (Some b) = go b
+    go (App None _) = return ("unset " <> var)
     go (RecordLit a) = do
         let process (k, v) = do
                 v' <- dhallToExpression v
@@ -266,7 +264,69 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
                 <>  Data.ByteString.intercalate " " kvs'
                 <>  ")"
         return bytes
-    go e = Left (UnsupportedStatement e)
+    go (Embed   x) = do
+        Dhall.TypeCheck.absurd x
+    go (Note  _ e) = do
+        go e
+
+    -- Use an exhaustive pattern match here so that we don't forget to handle
+    -- new constructors added to the API
+    go e@(Const         {}) = Left (UnsupportedStatement e)
+    go e@(Var           {}) = Left (UnsupportedStatement e)
+    go e@(Lam           {}) = Left (UnsupportedStatement e)
+    go e@(Pi            {}) = Left (UnsupportedStatement e)
+    go e@(App           {}) = Left (UnsupportedStatement e)
+    go e@(Let           {}) = Left (UnsupportedStatement e)
+    go e@(Annot         {}) = Left (UnsupportedStatement e)
+    go e@(Bool          {}) = Left (UnsupportedStatement e)
+    go e@(BoolAnd       {}) = Left (UnsupportedStatement e)
+    go e@(BoolOr        {}) = Left (UnsupportedStatement e)
+    go e@(BoolEQ        {}) = Left (UnsupportedStatement e)
+    go e@(BoolNE        {}) = Left (UnsupportedStatement e)
+    go e@(BoolIf        {}) = Left (UnsupportedStatement e)
+    go e@(Natural         ) = Left (UnsupportedStatement e)
+    go e@(NaturalFold     ) = Left (UnsupportedStatement e)
+    go e@(NaturalBuild    ) = Left (UnsupportedStatement e)
+    go e@(NaturalIsZero   ) = Left (UnsupportedStatement e)
+    go e@(NaturalEven     ) = Left (UnsupportedStatement e)
+    go e@(NaturalOdd      ) = Left (UnsupportedStatement e)
+    go e@(NaturalToInteger) = Left (UnsupportedStatement e)
+    go e@(NaturalShow     ) = Left (UnsupportedStatement e)
+    go e@(NaturalPlus   {}) = Left (UnsupportedStatement e)
+    go e@(NaturalTimes  {}) = Left (UnsupportedStatement e)
+    go e@(Integer         ) = Left (UnsupportedStatement e)
+    go e@(IntegerShow     ) = Left (UnsupportedStatement e)
+    go e@(IntegerToDouble ) = Left (UnsupportedStatement e)
+    go e@(Double          ) = Left (UnsupportedStatement e)
+    go e@(DoubleLit     {}) = Left (UnsupportedStatement e)
+    go e@(DoubleShow      ) = Left (UnsupportedStatement e)
+    go e@(Text            ) = Left (UnsupportedStatement e)
+    go e@(TextAppend    {}) = Left (UnsupportedStatement e)
+    go e@(List            ) = Left (UnsupportedStatement e)
+    go e@(ListAppend    {}) = Left (UnsupportedStatement e)
+    go e@(ListBuild       ) = Left (UnsupportedStatement e)
+    go e@(ListFold        ) = Left (UnsupportedStatement e)
+    go e@(ListLength      ) = Left (UnsupportedStatement e)
+    go e@(ListHead        ) = Left (UnsupportedStatement e)
+    go e@(ListLast        ) = Left (UnsupportedStatement e)
+    go e@(ListIndexed     ) = Left (UnsupportedStatement e)
+    go e@(ListReverse     ) = Left (UnsupportedStatement e)
+    go e@(Optional        ) = Left (UnsupportedStatement e)
+    go e@(OptionalLit   {}) = Left (UnsupportedStatement e)
+    go e@(None            ) = Left (UnsupportedStatement e)
+    go e@(OptionalFold    ) = Left (UnsupportedStatement e)
+    go e@(OptionalBuild   ) = Left (UnsupportedStatement e)
+    go e@(Record        {}) = Left (UnsupportedStatement e)
+    go e@(Union         {}) = Left (UnsupportedStatement e)
+    go e@(UnionLit      {}) = Left (UnsupportedStatement e)
+    go e@(Combine       {}) = Left (UnsupportedStatement e)
+    go e@(CombineTypes  {}) = Left (UnsupportedStatement e)
+    go e@(Prefer        {}) = Left (UnsupportedStatement e)
+    go e@(Merge         {}) = Left (UnsupportedStatement e)
+    go e@(Constructors  {}) = Left (UnsupportedStatement e)
+    go e@(Field         {}) = Left (UnsupportedStatement e)
+    go e@(Project       {}) = Left (UnsupportedStatement e)
+    go e@(ImportAlt     {}) = Left (UnsupportedStatement e)
 
 {-| Compile a Dhall expression to a Bash expression
 

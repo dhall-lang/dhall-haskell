@@ -39,6 +39,8 @@ import Dhall.Core
     , URL(..)
     , Var(..)
     )
+
+import Data.ByteArray.Encoding (Base(..))
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
@@ -48,8 +50,12 @@ import Prelude hiding (exponent)
 import GHC.Float (double2Float, float2Double)
 import Codec.CBOR.Magic (floatToWord16, wordToFloat16)
 
+import qualified Crypto.Hash
+import qualified Data.ByteArray.Encoding
+import qualified Data.ByteString
 import qualified Data.Sequence
 import qualified Data.Text
+import qualified Data.Text.Encoding
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Options.Applicative
@@ -387,13 +393,20 @@ importToTerm import_ =
         Remote (URL { scheme = scheme₀, ..}) ->
             TList
                 (   prefix
-                ++  [ TInt scheme₁, TString authority ]
+                ++  [ TInt scheme₁, using, TString authority ]
                 ++  map TString (reverse components)
                 ++  [ TString file ]
                 ++  (case query    of Nothing -> [ TNull ]; Just q -> [ TString q ])
                 ++  (case fragment of Nothing -> [ TNull ]; Just f -> [ TString f ])
                 )
           where
+            using = case headers of
+                Nothing ->
+                    TNull
+                Just h ->
+                    importToTerm
+                        (Import { importHashed = h, importMode = Code })
+
             scheme₁ = case scheme₀ of
                 HTTP  -> 0
                 HTTPS -> 1
@@ -427,7 +440,16 @@ importToTerm import_ =
         Missing ->
             TList (prefix ++ [ TInt 7 ])
   where
-    prefix = [ TInt 24, TInt (case importMode of Code -> 0; RawText -> 1) ]
+    prefix = [ TInt 24, h, m ]
+      where
+        h = case hash of
+            Nothing ->
+                TNull
+            Just digest ->
+                TList
+                    [ TString "sha256", TString (Data.Text.pack (show digest)) ]
+
+        m = TInt (case importMode of Code -> 0; RawText -> 1)
 
     Import {..} = import_
 
@@ -667,7 +689,23 @@ decode (TList (TInt 18 : xs)) = do
     (xys, z) <- process xs
 
     return (TextLit (Chunks xys z))
-decode (TList (TInt 24 : TInt mode : TInt n : xs)) = do
+decode (TList (TInt 24 : h : TInt mode : TInt n : xs)) = do
+    hash <- case h of
+        TNull -> do
+            return Nothing
+
+        TList [ TString "sha256", TString base16Text ] -> do
+            let base16Bytes = Data.Text.Encoding.encodeUtf8 base16Text
+            digestBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 base16Bytes of
+                Left  _           -> empty
+                Right digestBytes -> return (digestBytes :: Data.ByteString.ByteString)
+
+            digest <- Crypto.Hash.digestFromByteString digestBytes
+            return (Just digest)
+
+        _ -> do
+            empty
+
     importMode <- case mode of
         0 -> return Code
         1 -> return RawText
@@ -690,16 +728,21 @@ decode (TList (TInt 24 : TInt mode : TInt n : xs)) = do
                 process _ = do
                     empty
 
-            (authority, paths, file, query, fragment) <- case xs of
-                TString authority : ys -> do
+            (headers, authority, paths, file, query, fragment) <- case xs of
+                headers₀ : TString authority : ys -> do
+                    headers₁ <- case headers₀ of
+                        TNull -> return Nothing
+                        _     -> do
+                            Embed (Import { importHashed = headers }) <- decode headers₀
+                            return (Just headers)
                     (paths, file, query, fragment) <- process ys
-                    return (authority, paths, file, query, fragment)
-                _                      -> empty
+                    return (headers₁, authority, paths, file, query, fragment)
+                _ -> do
+                    empty
 
             let components = reverse paths
             let directory  = Directory {..}
             let path       = File {..}
-            let headers    = Nothing
 
             return (Remote (URL {..}))
 
@@ -737,7 +780,6 @@ decode (TList (TInt 24 : TInt mode : TInt n : xs)) = do
         7 -> missing
         _ -> empty
 
-    let hash         = Nothing
     let importHashed = ImportHashed {..}
 
     return (Embed (Import {..}))
