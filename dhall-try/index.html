@@ -49,9 +49,6 @@
     <script language="javascript" src="./js/codemirror.js"></script>
     <script language="javascript" src="./js/haskell.js"></script>
     <script language="javascript" src="./js/javascript.js"></script>
-    <script language="javascript" src="./js/rts.js"></script>
-    <script language="javascript" src="./js/lib.js"></script>
-    <script language="javascript" src="./js/out.js"></script>
   </head>
   <body>
     <nav class="navbar navbar-light bg-light">
@@ -99,7 +96,7 @@
             <a id="example3" class="nav-link example-tab" href="#" onClick="set(example3, 'example3')">Types</a>
           </li>
           <li class="nav-item">
-            <a id="example4" class="nav-link example-tab" href="#" onClick="set(example4, 'example4')">Built-ins</a>
+            <a id="example4" class="nav-link example-tab" href="#" onClick="set(example4, 'example4')">Imports</a>
           </li>
         </ul>
         <textarea id="dhall-input"></textarea>
@@ -210,14 +207,22 @@ let configs : List Config =
 in  configs
 `;
 
-    example4 = `{- The language provides built-in functions, such as:
+    example4 = `{- Need to generate a lot of users?
 
-       Natural/show : Natural -> Text
-
-    You can find all built-ins here:
-
-    https://github.com/dhall-lang/dhall-lang/wiki/Built-in-types%2C-functions%2C-and-operators
+   Use the \`generate\` function from the Dhall Prelude
 -}
+
+let generate = https://prelude.dhall-lang.org/List/generate
+
+{- You can import Dhall expressions from URLs that support
+   CORS
+
+   The command-line tools also let you import from files,
+   environment variables, and URLs without CORS support.
+
+   Browse https://prelude.dhall-lang.org for more utilities
+-}
+
 let makeUser = \\(user : Text) ->
       let home       = "/home/\${user}"
       let privateKey = "\${home}/id_ed25519.pub"
@@ -228,10 +233,19 @@ let makeUser = \\(user : Text) ->
           }
 
 let buildUser = \\(index : Natural) ->
-      {- What happens if you delete \`Natural/show\` -}
+      {- \`Natural/show\` is a "built-in", meaning that
+         you can use \`Natural/show\` without an import
+      -}
       makeUser "build\${Natural/show index}"
 
-in  [ buildUser 0, buildUser 1 ]`
+let Config =
+      { home : Text
+      , privateKey : Text
+      , publicKey : Text
+      }
+
+in  {- Try generating 20 users instead of 10 -}
+    generate 10 Config buildUser`
 
     function set(example, tabId){
       input.setValue(example);
@@ -240,5 +254,5 @@ in  [ buildUser 0, buildUser 1 ]`
 
     input.setValue(example0);
   </script>
-  <script language="javascript" src="./js/runmain.js" defer></script>
+  <script language="javascript" src="./js/all.min.js" defer></script>
 </html>
