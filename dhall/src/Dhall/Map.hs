@@ -43,6 +43,7 @@ module Dhall.Map
     , mapWithKey
     , traverseWithKey
     , traverseWithKey_
+    , unorderedTraverseWithKey_
     , foldMapWithKey
 
       -- * Conversions
@@ -53,6 +54,7 @@ module Dhall.Map
 
 import Control.Applicative ((<|>))
 import Data.Data (Data)
+import Data.Foldable (traverse_)
 import Data.Semigroup
 import Prelude hiding (filter, lookup)
 
@@ -462,6 +464,17 @@ traverseWithKey_
     :: Ord k => Applicative f => (k -> a -> f ()) -> Map k a -> f ()
 traverseWithKey_ f m = Data.Functor.void (traverseWithKey f m)
 {-# INLINABLE traverseWithKey_ #-}
+
+{-| Travese all of the key-value pairs in a 'Map', not preserving their
+    original order, where the result of the computation can be forgotten.
+
+    Note that this is an optimisation over 'traverseWithKey_' since we do
+    not care in what order we traverse the pairs.
+-}
+unorderedTraverseWithKey_
+    :: Ord k => Applicative f => (k -> a -> f ()) -> Map k a -> f ()
+unorderedTraverseWithKey_ f = Data.Functor.void . traverse_ (uncurry f) . toList
+{-# INLINABLE unorderedTraverseWithKey_ #-}
 
 {-| Convert a `Map` to a list of key-value pairs in the original order of keys
 
