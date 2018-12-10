@@ -510,8 +510,7 @@ typeWithA tpa = loop
                                 else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 Sort))
                             _ ->
                                 Left (TypeError ctx e (InvalidFieldType k t))
-                Dhall.Map.traverseWithKey_ process rest
-
+                Dhall.Map.unorderedTraverseWithKey_ process rest
                 return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
         case Dhall.Map.toList kvs of
@@ -560,7 +559,7 @@ typeWithA tpa = loop
                     Const Type -> return ()
                     Const Kind -> return ()
                     _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
-        Dhall.Map.traverseWithKey_ process kts
+        Dhall.Map.unorderedTraverseWithKey_ process kts
         return (Const Type)
     loop ctx e@(UnionLit k v kts) = do
         case Dhall.Map.lookup k kts of
