@@ -1,5 +1,11 @@
 # `dhall-json 1.2.5`
 
+For installation or development instructions, see:
+
+* [`dhall-haskell` - `README`](https://github.com/dhall-lang/dhall-haskell/blob/master/README.md)
+
+## Introduction
+
 This `dhall-json` package provides a Dhall to JSON compiler and a Dhall to YAML
 compiler.  The reason this package is called `dhall-json` is that the Haskell
 `yaml` library uses the same data structure as Haskell's `aeson` library for
