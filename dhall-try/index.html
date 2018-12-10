@@ -133,7 +133,7 @@ in  { home       = "/home/\${user}"
 
 let makeUser = \\(user : Text) ->
       let home       = "/home/\${user}"
-      let privateKey = "\${home}/id_ed25519.pub"
+      let privateKey = "\${home}/id_ed25519"
       let publicKey  = "\${privateKey}.pub"
       in  { home = home
           , privateKey = privateKey
@@ -158,7 +158,7 @@ let Config : Type =
 
 let makeUser : Text -> Config = \\(user : Text) ->
       let home       : Text   = "/home/\${user}"
-      let privateKey : Text   = "\${home}/id_ed25519.pub"
+      let privateKey : Text   = "\${home}/id_ed25519"
       let publicKey  : Text   = "\${privateKey}.pub"
       let config     : Config =
             { home       = home
@@ -185,7 +185,7 @@ in  configs
 -}
 let makeUser = \\(user : Text) ->
       let home       = "/home/\${user}"
-      let privateKey = "\${home}/id_ed25519.pub"
+      let privateKey = "\${home}/id_ed25519"
       let publicKey  = "\${privateKey}.pub"
       in  { home = home
           , privateKey = privateKey
