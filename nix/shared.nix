@@ -167,7 +167,6 @@ let
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/mode/javascript/javascript.js $out/js
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.css $out/css
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall-logo} $out/img/dhall-logo.png
-      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.dhall.prelude} $out/Prelude
       ${pkgsNew.closurecompiler}/bin/closure-compiler ${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe/all.js --jscomp_off=checkVars --externs=${pkgsNew.haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe/all.js.externs > $out/js/all.min.js
 
       ${pkgsNew.coreutils}/bin/mkdir $out/nix-support
