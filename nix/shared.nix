@@ -270,6 +270,12 @@ let
         ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/try-dhall/js"  -D $src/js/*
       '';
     };
+
+
+
+    try-dhall-server = pkgsNew.writeScriptBin "try-dhall-server" ''
+      ${pkgsNew.haskellPackages.wai-app-static}/bin/warp --docroot ${pkgsNew.try-dhall-static}
+    '';
   };
 
   overlayCabal2nix = pkgsNew: pkgsOld: {
