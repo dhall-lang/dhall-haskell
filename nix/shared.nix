@@ -249,7 +249,7 @@ let
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.dhallSmall} $out/img/dhall-small-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.github}/PNG/GitHub-Mark-32px.png $out/img/github-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.haskell} $out/img/haskell-logo.png
-      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.kubernetes} $out/img/kubernetes-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.kubernetes} $out/img/kubernetes-logo.svg
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.json} $out/img/json-logo.svg
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.nix} $out/img/nix-logo.png
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.stackOverflow} $out/img/stack-overflow-logo.png
