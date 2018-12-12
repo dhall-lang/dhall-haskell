@@ -4,6 +4,10 @@ For installation or development instructions, see:
 
 * [`dhall-haskell` - `README`](https://github.com/dhall-lang/dhall-haskell/blob/master/README.md)
 
+Full documentation here:
+
+* [`dhall` instructions](https://hackage.haskell.org/package/dhall/docs/Dhall-Tutorial.html)
+
 ## Introduction
 
 Dhall is a programmable configuration language that is not Turing-complete
