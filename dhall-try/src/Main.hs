@@ -4,6 +4,7 @@ module Main where
 
 import qualified Control.Exception
 import qualified Data.Aeson.Encode.Pretty
+import qualified Data.Char
 import qualified Data.IORef
 import qualified Data.JSString
 import qualified Data.Text
@@ -22,8 +23,10 @@ import qualified GHCJS.Foreign.Callback
 import Control.Exception (Exception, SomeException)
 import Data.JSString (JSString)
 import Data.Text (Text)
-import Dhall.Core (Expr(..))
 import GHCJS.Foreign.Callback (Callback)
+
+-- Work around the `yaml` package not working for GHCJS
+foreign import javascript unsafe "jsonToYaml($1)" jsonToYaml_ :: JSString -> JSString
 
 foreign import javascript unsafe "input.getValue()" getInput :: IO JSString
 
@@ -33,7 +36,13 @@ foreign import javascript unsafe "dhallTab.onclick = $1" registerDhallOutput :: 
 
 foreign import javascript unsafe "jsonTab.onclick = $1" registerJSONOutput :: Callback (IO ()) -> IO ()
 
+foreign import javascript unsafe "yamlTab.onclick = $1" registerYAMLOutput :: Callback (IO ()) -> IO ()
+
+foreign import javascript unsafe "typeTab.onclick = $1" registerTypeOutput :: Callback (IO ()) -> IO ()
+
 foreign import javascript unsafe "output.setValue($1)" setOutput_ :: JSString -> IO ()
+
+foreign import javascript unsafe "output.setOption('mode', $1)" setMode_ :: JSString -> IO ()
 
 foreign import javascript unsafe "selectTab($1, $2)" selectTab :: JSString -> JSString -> IO ()
 
@@ -45,6 +54,21 @@ setOutput = setOutput_ . Data.JSString.pack . Data.Text.unpack
 
 errOutput :: Exception e => e -> IO ()
 errOutput = setOutput . fixup . Data.Text.pack . show
+
+setMode :: Mode -> IO ()
+setMode Dhall = setMode_ "haskell"
+setMode Type  = setMode_ "haskell"
+setMode JSON  = setMode_ "javascript"
+setMode YAML  = setMode_ "yaml"
+
+jsonToYaml :: Text -> Text
+jsonToYaml =
+        Data.Text.dropWhileEnd Data.Char.isSpace
+    .   Data.Text.pack
+    .   Data.JSString.unpack
+    .   jsonToYaml_
+    .   Data.JSString.pack
+    .   Data.Text.unpack
 
 jsonConfig :: Data.Aeson.Encode.Pretty.Config
 jsonConfig =
@@ -59,7 +83,7 @@ jsonConfig =
             False
         }
 
-data Mode = Dhall | JSON deriving (Show)
+data Mode = Dhall | Type | JSON | YAML deriving (Show)
 
 main :: IO ()
 main = do
@@ -95,8 +119,14 @@ main = do
                                           let normalizedExpression =
                                                   Dhall.Core.normalize resolvedExpression
                                           let dhallText =
-                                                  prettyExpression (Annot normalizedExpression inferredType)
+                                                  prettyExpression normalizedExpression
                                           setOutput dhallText
+
+                                      Type -> do
+                                          let typeText =
+                                                  prettyExpression inferredType
+
+                                          setOutput typeText
 
                                       JSON -> do
                                           case Dhall.JSON.dhallToJSON resolvedExpression of
@@ -109,6 +139,17 @@ main = do
                                                           errOutput exception
                                                       Right jsonText -> do
                                                           setOutput (Data.Text.Lazy.toStrict jsonText)
+                                      YAML -> do
+                                          case Dhall.JSON.dhallToJSON resolvedExpression of
+                                              Left exception -> do
+                                                  errOutput exception
+                                              Right value -> do
+                                                  let jsonBytes = Data.Aeson.Encode.Pretty.encodePretty' jsonConfig value
+                                                  case Data.Text.Lazy.Encoding.decodeUtf8' jsonBytes of
+                                                      Left exception -> do
+                                                          errOutput exception
+                                                      Right jsonText -> do
+                                                          setOutput (jsonToYaml (Data.Text.Lazy.toStrict jsonText))
 
     interpret
 
@@ -116,26 +157,21 @@ main = do
 
     registerInterpret interpretAsync
 
-    let dhallOutput = do
-            Data.IORef.writeIORef modeRef Dhall
+    let registerTabCallback mode tabName registerCallback = do
+            let callback = do
+                    Data.IORef.writeIORef modeRef mode
 
-            selectTab "mode-tab" "dhall-tab"
+                    selectTab "mode-tab" tabName
 
-            interpret
+                    setMode mode
 
-    dhallOutputAsync <- GHCJS.Foreign.Callback.asyncCallback dhallOutput
+                    interpret
 
-    registerDhallOutput dhallOutputAsync
+            callbackAsync <- GHCJS.Foreign.Callback.asyncCallback callback
 
-    let jsonOutput = do
-            Data.IORef.writeIORef modeRef JSON
+            registerCallback callbackAsync
 
-            selectTab "mode-tab" "json-tab"
-
-            interpret
-
-    jsonOutputAsync <- GHCJS.Foreign.Callback.asyncCallback jsonOutput
-
-    registerJSONOutput jsonOutputAsync
-
-    return ()
+    registerTabCallback Dhall "dhall-tab" registerDhallOutput
+    registerTabCallback Type  "type-tab"  registerTypeOutput
+    registerTabCallback JSON  "json-tab"  registerJSONOutput
+    registerTabCallback YAML  "yaml-tab"  registerYAMLOutput

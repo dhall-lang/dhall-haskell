@@ -50,6 +50,8 @@
     <script language="javascript" src="./js/codemirror.js"></script>
     <script language="javascript" src="./js/haskell.js"></script>
     <script language="javascript" src="./js/javascript.js"></script>
+    <script language="javascript" src="./js/yaml.js"></script>
+    <script language="javascript" src="./js/js-yaml.min.js"></script>
   </head>
   <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
@@ -176,7 +178,13 @@
             <a id="dhall-tab" class="nav-link mode-tab active" href="#">Dhall</a>
           </li>
           <li class="nav-item">
+            <a id="type-tab" class="nav-link mode-tab" href="#">Type</a>
+          </li>
+          <li class="nav-item">
             <a id="json-tab" class="nav-link mode-tab" href="#">JSON</a>
+          </li>
+          <li class="nav-item">
+            <a id="yaml-tab" class="nav-link mode-tab" href="#">YAML</a>
           </li>
         </ul>
         <textarea id="dhall-output"></textarea>
@@ -185,10 +193,12 @@
     <p class="text-center">This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</p>
   </body>
   <script>
-    var dhallInput  = document.getElementById("dhall-input");
-    var dhallOutput = document.getElementById("dhall-output");
-    var dhallTab    = document.getElementById("dhall-tab");
-    var jsonTab     = document.getElementById("json-tab");
+    let dhallInput  = document.getElementById("dhall-input");
+    let dhallOutput = document.getElementById("dhall-output");
+    let dhallTab    = document.getElementById("dhall-tab");
+    let typeTab     = document.getElementById("type-tab");
+    let jsonTab     = document.getElementById("json-tab");
+    let yamlTab     = document.getElementById("yaml-tab");
 
     function selectTab(tabClass, tabId) {
       Array.from(document.getElementsByClassName(tabClass)).forEach(element => {
@@ -197,18 +207,32 @@
       document.getElementById(tabId).classList.toggle("active");
     }
 
-    var input = CodeMirror.fromTextArea(dhallInput, {
+    /* The Haskell yaml package doesn't support GHCJS, so we simulate the
+       dhall-to-yaml conversion in the browser in two steps:
+
+       * Convert Dhall to JSON using the `dhall-to-json` Haskell package
+         compiled with GHCJS
+       * Convert JSON to YAML using the `jsyaml` JavaScript package (this
+         function)
+    */
+    function jsonToYaml(json) {
+      let obj =JSON.parse(json);
+      let str = jsyaml.safeDump(obj);
+      return str;
+    }
+
+    let input = CodeMirror.fromTextArea(dhallInput, {
       lineNumbers: true,
       mode: "haskell"
     });
 
-    var output = CodeMirror.fromTextArea(dhallOutput, {
+    let output = CodeMirror.fromTextArea(dhallOutput, {
       lineNumbers: true,
       mode: "haskell",
       readOnly: true
     });
 
-    example0 = `{- This is an example Dhall configuration file
+    let example0 = `{- This is an example Dhall configuration file
 
    Can you spot and correct the mistake?
 -}
@@ -218,7 +242,7 @@
 , publicKey  = "/home/blil/id_ed25519.pub"
 }`
 
-    example1 = `{- Don't repeat yourself!
+    let example1 = `{- Don't repeat yourself!
 
    Repetition is error-prone
 -}
@@ -231,7 +255,7 @@ in  { home       = "/home/\${user}"
 
 {- Change the name "bill" to "jane" -}`;
 
-    example2 = `{- More than one user?  Use a function! -}
+    let example2 = `{- More than one user?  Use a function! -}
 
 let makeUser = \\(user : Text) ->
       let home       = "/home/\${user}"
@@ -246,7 +270,7 @@ in  [ makeUser "bill"
     , makeUser "jane"
     ]`
 
-    example3 = `{- You can optionally add types
+    let example3 = `{- You can optionally add types
 
    \`x : T\` means that \`x\` has type \`T\`
 -}
@@ -277,7 +301,7 @@ let configs : List Config =
 in  configs
 `;
 
-    example4 = `{- Need to generate a lot of users?
+    let example4 = `{- Need to generate a lot of users?
 
    Use the \`generate\` function from the Dhall Prelude
 -}
