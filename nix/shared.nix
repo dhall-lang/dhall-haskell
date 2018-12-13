@@ -229,7 +229,7 @@ let
 
     twitterBootstrap = pkgsNew.callPackage ./twitterBootstrap.nix { };
 
-    try-dhall-static = pkgsNew.runCommand "try-dhall-static" {} ''
+    try-dhall = pkgsNew.runCommand "try-dhall" {} ''
       ${pkgsNew.coreutils}/bin/mkdir $out
       ${pkgsNew.coreutils}/bin/mkdir $out/{css,img,js}
       ${pkgsNew.coreutils}/bin/cp ${../dhall-try/index.html} $out/index.html
@@ -254,15 +254,15 @@ let
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.kubernetes} $out/img/kubernetes-logo.svg
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.json} $out/img/json-logo.svg
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.nix} $out/img/nix-logo.png
-      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.stackOverflow} $out/img/stack-overflow-logo.png
-      ${pkgsNew.coreutils}/bin/ln --symbolic '${pkgsNew.logo.twitter}/Twitter Logos/Twitter Logos/Twitter_Logo_Blue/Twitter_Logo_Blue.svg' $out/img/twitter-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.stackOverflow} $out/img/stack-overflow-logo.svg
+      ${pkgsNew.coreutils}/bin/ln --symbolic '${pkgsNew.logo.twitter}/Twitter Logos/Twitter Logos/Twitter_Logo_Blue/Twitter_Logo_Blue.svg' $out/img/twitter-logo.svg
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.yaml} $out/img/yaml-logo.png
       ${pkgsNew.coreutils}/bin/mkdir $out/nix-support
       ${pkgsNew.coreutils}/bin/echo "doc none $out/index.html" > $out/nix-support/hydra-build-products
     '';
 
     tarball-try-dhall = pkgsStaticLinux.releaseTools.binaryTarball rec {
-      src = pkgsNew.try-dhall-static;
+      src = pkgsNew.try-dhall;
 
       installPhase = ''
         releaseName=try-dhall
@@ -531,7 +531,7 @@ in
     tarball-dhall-json = makeTarball "dhall-json";
     tarball-dhall-text = makeTarball "dhall-text";
 
-    inherit (pkgs) tarball-try-dhall try-dhall-server try-dhall-static;
+    inherit (pkgs) tarball-try-dhall try-dhall-server try-dhall;
 
     inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-text dhall-try;
 

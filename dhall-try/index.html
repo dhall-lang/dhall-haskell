@@ -41,6 +41,7 @@
 
       .navbar {
         margin-bottom: 20px;
+        border-bottom: 1px solid black;
       };
     </style>
     <link rel="stylesheet" href="./css/codemirror.css">
@@ -54,7 +55,7 @@
     <script language="javascript" src="./js/js-yaml.min.js"></script>
   </head>
   <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <nav class="navbar sticky-top navbar-expand-lg navbar-light bg-light">
       <a class="navbar-left" href="https://dhall-lang.org"><img src="./img/dhall-small-logo.png" height="31px"></a>
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -141,10 +142,10 @@
             <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/blob/master/README.md"><img src = "./img/github-logo.png" height="25px"></a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="https://twitter.com/dhall_lang"><img src = "./img/twitter-logo.png" height="32px"></a>
+            <a class="nav-link" href="https://twitter.com/dhall_lang"><img src = "./img/twitter-logo.svg" height="32px"></a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="https://stackoverflow.com/questions/tagged/dhall"><img src = "./img/stack-overflow-logo.png" height="32px"></a>
+            <a class="nav-link" href="https://stackoverflow.com/questions/tagged/dhall"><img src = "./img/stack-overflow-logo.svg" height="32px"></a>
           </li>
         </ul>
       </div>
@@ -190,6 +191,47 @@
         <textarea id="dhall-output"></textarea>
       </div>
     </div>
+    <div class="container jumbotron" style="background-color: #c5eccf">
+      <h1 class="display-4">Human-friendly</h1>
+      <p class="lead">Dhall supports comments, multi-line string literals and
+      string interpolation with non-technical users in mind.</p>
+      <textarea id="highlight0"></textarea>
+      <p>You can also automatically remove all indirection in any Dhall code,
+      converting the file to a logic-free normal form for non-programmers to
+      understand.</p>
+      <a href="https://github.com/dhall-lang/dhall-lang/wiki/Programmable-configuration-files"class="btn btn-lg btn-outline-dark bg-light">Learn More</a>
+    </div>
+    <div class="container jumbotron" style="background-color: #fbf3c8">
+      <h1 class="display-4">Tired of YAML?</h1>
+      <p class="lead">Dhall eliminates the YAML quirks that software engineers
+      dread.  The language standard learns from the mistakes of the past.</p>
+      <textarea id="highlight1"></textarea>
+      <p>You can also generate either YAML or JSON from Dhall configuration
+      files using tiny statically-linked binaries.  Dhall can cheaply fit right
+      in with your existing tools and infrastructure.</p>
+      <a href="https://github.com/dhall-lang/dhall-lang/wiki/Getting-started%3A-Generate-JSON-or-YAML" class="btn btn-lg btn-outline-dark bg-light">Get Started</a>
+    </div>
+    <div class="container jumbotron" style="background-color: #fbecf1">
+      <h1 class="display-4">Turing-completeness is not a feature</h1>
+      <p class="lead">Dhall is programmable, but <b>NOT</b> Turing-complete.</p>
+      <hr class="my-4">
+      <p>We take language security seriously so that your Dhall programs
+      never fail, hang, crash, leak secrets, or compromise your system.</p>
+      <p>You can safely import and evaluate untrusted Dhall code, even code
+      authored by malicious users.</p>
+      <a href="https://github.com/dhall-lang/dhall-lang/wiki/Safety-guarantees"class="btn btn-lg btn-outline-dark bg-light">Learn More</a>
+    </div>
+    <div class="container jumbotron" style="background-color: #cfebfb">
+      <h1 class="display-4">Tough on messes</h1>
+      <p class="lead">Dhall is built for large and weird configuration
+      schemas.</p>
+      <hr class="my-4">
+      <p>Don't let the types fool you: Dhall can integrate with messy APIs and
+      tools.  You can even convert Dhall to ad-hoc and non-standard
+      configuration file formats.</p>
+      <a href="https://github.com/dhall-lang/dhall-nethack" class="btn btn-lg btn-outline-dark bg-light">See an Example</a>
+    </div>
+    <hr class="my-4">
     <p class="text-center">This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</p>
   </body>
   <script>
@@ -347,6 +389,50 @@ in  {- Try generating 20 users instead of 10 -}
     };
 
     input.setValue(example0);
+
+
+    let highlight0 = document.getElementById("highlight0");
+
+    h0 = CodeMirror.fromTextArea(highlight0, {
+      lineNumbers: true,
+      mode: "haskell",
+      readOnly: true
+    });
+
+    h0.setValue(`let input =
+      { relative = "daughter"
+      , movies   = [ "Boss Baby", "Frozen", "Moana" ]
+      }
+
+let concatSep = https://prelude.dhall-lang.org/Text/concatSep
+
+    -- Dhall strips leading indentation for you
+in  ''
+    My \${input.relative} loves to watch \${concatSep ", " input.movies}
+    
+    How about you?
+    ''`);
+
+    let highlight1 = document.getElementById("highlight1");
+
+    h1 = CodeMirror.fromTextArea(highlight1, {
+      lineNumbers: true,
+      mode: "haskell",
+      readOnly: true
+    });
+
+    h1.setValue(`{ -- Unlike YAML, Dhall does not accept YES|NO|ON|OFF
+  validDhallBools = [ True, False ]
+    , someNumbers = [ 1
+  ,
+-- Dhall is not indentation-sensitive
+2, 3 ]
+  -- Field names that conflict with reserved identifiers must be quoted
+, \`True\` = True
+, version = "9.3"  {- Strings must be quoted
+
+                      All Dhall literals have unambiguous types -}
+}`);
   </script>
   <script language="javascript" src="./js/all.min.js" defer></script>
 </html>
