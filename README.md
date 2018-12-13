@@ -104,12 +104,12 @@ Building the website from source is currently only supported for Nix on Linux.
 You can build the static assets by running:
 
 ```bash
-$ nix-build --attr try-dhall-static
+$ nix-build --attr try-dhall
 ```
 
 ... then open `./result/index.html` in your browser.
 
-You can also download archive containing the pre-built website from CI using
+You can also download an archive containing the pre-built website from CI using
 this link:
 
 * [try-dhall.tar.bz2](http://hydra.dhall-lang.org/job/dhall-haskell/master/tarball-try-dhall/latest/download-by-type/file/binary-dist)
