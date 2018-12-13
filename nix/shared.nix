@@ -254,8 +254,8 @@ let
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.kubernetes} $out/img/kubernetes-logo.svg
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.json} $out/img/json-logo.svg
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.nix} $out/img/nix-logo.png
-      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.stackOverflow} $out/img/stack-overflow-logo.png
-      ${pkgsNew.coreutils}/bin/ln --symbolic '${pkgsNew.logo.twitter}/Twitter Logos/Twitter Logos/Twitter_Logo_Blue/Twitter_Logo_Blue.svg' $out/img/twitter-logo.png
+      ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.stackOverflow} $out/img/stack-overflow-logo.svg
+      ${pkgsNew.coreutils}/bin/ln --symbolic '${pkgsNew.logo.twitter}/Twitter Logos/Twitter Logos/Twitter_Logo_Blue/Twitter_Logo_Blue.svg' $out/img/twitter-logo.svg
       ${pkgsNew.coreutils}/bin/ln --symbolic ${pkgsNew.logo.yaml} $out/img/yaml-logo.png
       ${pkgsNew.coreutils}/bin/mkdir $out/nix-support
       ${pkgsNew.coreutils}/bin/echo "doc none $out/index.html" > $out/nix-support/hydra-build-products
