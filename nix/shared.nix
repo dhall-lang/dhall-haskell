@@ -1,4 +1,4 @@
-{ compiler ? "ghc843", coverage ? false }:
+{ compiler ? "ghc843", coverage ? false, system ? builtins.currentSystem }:
 
 let
   fetchNixpkgs = import ./fetchNixpkgs.nix;
@@ -396,7 +396,10 @@ let
   };
 
   pkgs = import nixpkgs {
+    inherit system;
+
     config = {};
+
     overlays =
           [ overlayShared overlayCabal2nix ]
       ++  (if compiler == "ghc7103" then [ overlayGHC7103 ] else []);
