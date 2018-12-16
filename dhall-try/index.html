@@ -49,7 +49,11 @@
       .navbar {
         margin-bottom: 20px;
         border-bottom: 1px solid black;
-      };
+      }
+
+      header {
+        margin-bottom: 2rem;
+      }
     </style>
     <link rel="stylesheet" href="./css/codemirror.css">
     <link rel="stylesheet" href="./css/bootstrap.min.css">
@@ -152,8 +156,10 @@
         </ul>
       </div>
     </nav>
-    <header><h1 class="text-center">The Dhall configuration language</h1></header>
+    <header>
+    <h1 class="text-center">The Dhall configuration language</h1>
     <p class="text-center">A non-repetitive alternative to YAML</p>
+    </header>
     <div id="editor">
       <div id="input-pane">
         <ul class="nav nav-tabs example-tab">
