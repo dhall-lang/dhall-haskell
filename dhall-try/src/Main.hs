@@ -87,7 +87,7 @@ data Mode = Dhall | Type | JSON | YAML deriving (Show)
 
 main :: IO ()
 main = do
-    modeRef <- Data.IORef.newIORef Dhall
+    modeRef <- Data.IORef.newIORef YAML
 
     let prettyExpression =
               Pretty.renderStrict
