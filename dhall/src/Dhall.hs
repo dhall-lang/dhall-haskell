@@ -671,7 +671,7 @@ maybe (Type extractIn expectedIn) = Type extractOut expectedOut
     expectedOut = App Optional expectedIn
 
 {-| Decode a `Seq`
- -
+
 >>> input (sequence natural) "[1, 2, 3]"
 fromList [1,2,3]
 -}
