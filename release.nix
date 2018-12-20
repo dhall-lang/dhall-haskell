@@ -41,7 +41,7 @@ in
           shared.tarball-dhall-json
           shared.tarball-dhall-text
 
-          shared_ghcjs.tarball-try-dhall
+          shared_ghcjs.tarball-website
 
           # This is the only `dhall` build that runs the test suite
           coverage.dhall
@@ -52,7 +52,7 @@ in
 
     "coverage-dhall" = coverage.dhall;
 
-    inherit (shared_ghcjs) tarball-try-dhall;
+    inherit (shared_ghcjs) tarball-website;
 
     inherit (shared)
       tarball-dhall

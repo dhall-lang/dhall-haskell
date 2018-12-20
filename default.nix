@@ -11,5 +11,5 @@ in
 
     inherit (shared_ghcjs) dhall-try;
 
-    inherit (shared_ghcjs_linux) try-dhall;
+    inherit (shared_ghcjs_linux) website;
   }
