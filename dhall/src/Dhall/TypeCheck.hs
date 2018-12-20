@@ -553,14 +553,37 @@ typeWithA tpa = loop
                 kts <- Dhall.Map.traverseWithKey process kvs
                 return (Record kts)
     loop ctx e@(Union     kts   ) = do
-        let process k t = do
-                s <- fmap Dhall.Core.normalize (loop ctx t)
-                case s of
-                    Const Type -> return ()
-                    Const Kind -> return ()
-                    _          -> Left (TypeError ctx e (InvalidAlternativeType k t))
-        Dhall.Map.unorderedTraverseWithKey_ process kts
-        return (Const Type)
+        case Dhall.Map.uncons kts of
+            Nothing -> do
+                return (Const Type)
+
+            Just (k0, t0, rest) -> do
+                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
+
+                c0 <- case s0 of
+                    Const c0 -> do
+                        return c0
+
+                    _ -> do
+                        Left (TypeError ctx e (InvalidAlternativeType k0 t0))
+
+                let process k t = do
+                        s <- fmap Dhall.Core.normalize (loop ctx t)
+
+                        c <- case s of
+                            Const c -> do
+                                return c
+
+                            _ -> do
+                                Left (TypeError ctx e (InvalidAlternativeType k t))
+
+                        if c0 == c
+                            then return ()
+                            else Left (TypeError ctx e (AlternativeAnnotationMismatch k t c k0 t0 c0))
+
+                Dhall.Map.unorderedTraverseWithKey_ process rest
+
+                return (Const c0)
     loop ctx e@(UnionLit k v kts) = do
         case Dhall.Map.lookup k kts of
             Just _  -> Left (TypeError ctx e (DuplicateAlternative k))
@@ -864,6 +887,7 @@ data TypeMessage s a
     | FieldMismatch Text (Expr s a) Const Text (Expr s a) Const
     | InvalidAlternative Text (Expr s a)
     | InvalidAlternativeType Text (Expr s a)
+    | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
     | DuplicateAlternative Text
     | MustCombineARecord Char (Expr s a) (Expr s a)
@@ -2307,69 +2331,7 @@ prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
 
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
-    short = "Invalid alternative"
-
-    long =
-        "Explanation: Every union literal begins by selecting one alternative and        \n\
-        \specifying the value for that alternative, like this:                           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \        Select the ❰Left❱ alternative, whose value is ❰True❱                    \n\
-        \        ⇩                                                                       \n\
-        \    ┌──────────────────────────────────┐                                        \n\
-        \    │ < Left = True, Right : Natural > │  A union literal with two alternatives \n\
-        \    └──────────────────────────────────┘                                        \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, this value must be a term and not a type.  For example, the following  \n\
-        \values are " <> _NOT <> " valid:                                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────────┐                                        \n\
-        \    │ < Left = Text, Right : Natural > │  Invalid union literal                 \n\
-        \    └──────────────────────────────────┘                                        \n\
-        \               ⇧                                                                \n\
-        \               This is a type and not a term                                    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────┐                                           \n\
-        \    │ < Left = Type, Right : Type > │  Invalid union type                       \n\
-        \    └───────────────────────────────┘                                           \n\
-        \               ⇧                                                                \n\
-        \               This is a kind and not a term                                    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Some common reasons why you might get this error:                               \n\
-        \                                                                                \n\
-        \● You accidentally typed ❰=❱ instead of ❰:❱ for a union literal with one        \n\
-        \  alternative:                                                                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────┐                                                      \n\
-        \    │ < Example = Text > │                                                      \n\
-        \    └────────────────────┘                                                      \n\
-        \                ⇧                                                               \n\
-        \                This could be ❰:❱ instead                                       \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \────────────────────────────────────────────────────────────────────────────────\n\
-        \                                                                                \n\
-        \You provided a union literal with an alternative named:                         \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... whose value is:                                                             \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is not a term                                                         \n"
-      where
-        txt0 = insert k
-        txt1 = insert expr0
-
-prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
-  where
-    short = "Invalid alternative"
+    short = "Invalid alternative type"
 
     long =
         "Explanation: Every union type specifies the type of each alternative, like this:\n\
@@ -2384,22 +2346,16 @@ prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
         \                             The type of the second alternative is ❰Natural❱    \n\
         \                                                                                \n\
         \                                                                                \n\
-        \However, these alternatives can only be annotated with types.  For example, the \n\
-        \following union types are " <> _NOT <> " valid:                                 \n\
+        \However, these alternatives can only be annotated with ❰Type❱s, ❰Kind❱s, or     \n\
+        \❰Sort❱s.  For example, the following union types are " <> _NOT <> " valid:      \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────┐                                              \n\
         \    │ < Left : Bool, Right : 1 > │  Invalid union type                          \n\
         \    └────────────────────────────┘                                              \n\
         \                             ⇧                                                  \n\
-        \                             This is a term and not a type                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────┐                                           \n\
-        \    │ < Left : Bool, Right : Type > │  Invalid union type                       \n\
-        \    └───────────────────────────────┘                                           \n\
-        \                             ⇧                                                  \n\
-        \                             This is a kind and not a type                      \n\
+        \                             This is a ❰Natural❱ and not a ❰Type❱, ❰Kind❱, or   \n\
+        \                             ❰Sort❱                                             \n\
         \                                                                                \n\
         \                                                                                \n\
         \Some common reasons why you might get this error:                               \n\
@@ -2420,12 +2376,119 @@ prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt0 <> "\n\
         \                                                                                \n\
-        \... annotated with the following expression which is not a type:                \n\
+        \... annotated with the following expression which is not a ❰Type❱, ❰Kind❱, or   \n\
+        \❰Sort❱:                                                                         \n\
         \                                                                                \n\
         \" <> txt1 <> "\n"
       where
         txt0 = insert k
         txt1 = insert expr0
+
+prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
+  where
+    short = "Invalid alternative"
+
+    long =
+        "Explanation: Every union literal begins by selecting one alternative and        \n\
+        \specifying the value for that alternative, like this:                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \        Select the ❰Left❱ alternative, whose value is ❰True❱                    \n\
+        \        ⇩                                                                       \n\
+        \    ┌──────────────────────────────────┐                                        \n\
+        \    │ < Left = True, Right : Natural > │  A union literal with two alternatives \n\
+        \    └──────────────────────────────────┘                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, this value must be a term, type, or kind.  For example, the following  \n\
+        \values are " <> _NOT <> " valid:                                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────┐                                                         \n\
+        \    │ < Left = Sort > │  Invalid union literal                                  \n\
+        \    └─────────────────┘                                                         \n\
+        \               ⇧                                                                \n\
+        \               This is not a term, type, or kind                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You provided a union literal with an alternative named:                         \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... whose value is:                                                             \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... which is not a term, type, or kind.                                         \n"
+      where
+        txt0 = insert k
+        txt1 = insert expr0
+
+prettyTypeMessage (AlternativeAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
+  where
+    short = "Alternative annotation mismatch"
+
+    long =
+        "Explanation: Every union type annotates each alternative with a ❰Type❱ or a     \n\
+        \❰Kind❱, like this:                                                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────┐                                       \n\
+        \    │ < Left : Natural | Right : Bool > │  Every alternative is annotated with a\n\
+        \    └───────────────────────────────────┘  ❰Type❱                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────┐                                      \n\
+        \    │ < Foo : Type → Type | Bar : Type > │  Every alternative is annotated with \n\
+        \    └────────────────────────────────────┘  a ❰Kind❱                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ < Baz : Kind > │  Every alternative is annotated with a ❰Sort❱            \n\
+        \    └────────────────┘                                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, you cannot have a union type that mixes ❰Type❱s, ❰Kind❱s, or ❰Sort❱s   \n\
+        \for the annotations:                                                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \              This is a ❰Type❱ annotation                                       \n\
+        \              ⇩                                                                 \n\
+        \    ┌───────────────────────────────┐                                           \n\
+        \    │ { foo : Natural, bar : Type } │  Invalid union type                       \n\
+        \    └───────────────────────────────┘                                           \n\
+        \                             ⇧                                                  \n\
+        \                             ... but this is a ❰Kind❱ annotation                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You provided a union type with an alternative named:                            \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... annotated with the following expression:                                    \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... which is a " <> level c0 <> " whereas another alternative named:            \n\
+        \                                                                                \n\
+        \" <> txt2 <> "\n\
+        \                                                                                \n\
+        \... annotated with the following expression:                                    \n\
+        \                                                                                \n\
+        \" <> txt3 <> "\n\
+        \                                                                                \n\
+        \... is a " <> level c1 <> ", which does not match                               \n"
+      where
+        txt0 = insert k0
+        txt1 = insert expr0
+        txt2 = insert k1
+        txt3 = insert expr1
+
+        level Type = "❰Type❱"
+        level Kind = "❰Kind❱"
+        level Sort = "❰Sort❱"
 
 prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
   where
