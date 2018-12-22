@@ -62,6 +62,12 @@ tests =
         , should
             "allow a record of a record of types"
             "success/recordOfRecordOfTypes"
+        , should
+            "allow a union of types of of mixed kinds"
+            "success/simple/unionsOfTypes"
+        , shouldNotTypeCheck
+            "Unions mixing terms and and types"
+            "failure/mixedUnions"
         ]
 
 preludeExamples :: TestTree
