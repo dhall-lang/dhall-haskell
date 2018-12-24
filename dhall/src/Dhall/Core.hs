@@ -1714,15 +1714,18 @@ normalizeWithM ctx e0 = loop (denote e0)
                         case res2 of
                             Nothing -> pure (App f' a')
                             Just app' -> loop app'
-    Let (Binding x _ a₀ :| ls₀) b₀ -> loop b₂
-      where
-        rest = case ls₀ of
-            []       -> b₀
-            l₁ : ls₁ -> Let (l₁ :| ls₁) b₀
+    Let (Binding x _ a₀ :| ls₀) b₀ -> do
+        a₁ <- loop a₀
 
-        a₁ = shift 1 (V x 0) a₀
-        b₁ = subst (V x 0) a₁ rest
-        b₂ = shift (-1) (V x 0) b₁
+        let rest = case ls₀ of
+                []       -> b₀
+                l₁ : ls₁ -> Let (l₁ :| ls₁) b₀
+
+        let a₂ = shift 1 (V x 0) a₁
+        let b₁ = subst (V x 0) a₂ rest
+        let b₂ = shift (-1) (V x 0) b₁
+
+        loop b₂
     Annot x _ -> loop x
     Bool -> pure Bool
     BoolLit b -> pure (BoolLit b)
