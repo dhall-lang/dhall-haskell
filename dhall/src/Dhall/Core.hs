@@ -1587,14 +1587,16 @@ normalizeWithM ctx e0 = loop (denote e0)
           Just e1 -> loop e1
           Nothing -> do
               f' <- loop f
+              a' <- loop a
               case f' of
-                Lam x _A b -> loop b''
-                  where
-                    a'  = shift   1  (V x 0) a
-                    b'  = subst (V x 0) a' b
-                    b'' = shift (-1) (V x 0) b'
+                Lam x _A b₀ -> do
+
+                    let a₂ = shift 1 (V x 0) a'
+                    let b₁ = subst (V x 0) a₂ b₀
+                    let b₂ = shift (-1) (V x 0) b₁
+
+                    loop b₂
                 _ -> do
-                  a' <- loop a
                   case App f' a' of
                     -- build/fold fusion for `List`
                     App (App ListBuild _) (App (App ListFold _) e') -> loop e'
@@ -1714,15 +1716,18 @@ normalizeWithM ctx e0 = loop (denote e0)
                         case res2 of
                             Nothing -> pure (App f' a')
                             Just app' -> loop app'
-    Let (Binding x _ a₀ :| ls₀) b₀ -> loop b₂
-      where
-        rest = case ls₀ of
-            []       -> b₀
-            l₁ : ls₁ -> Let (l₁ :| ls₁) b₀
+    Let (Binding x _ a₀ :| ls₀) b₀ -> do
+        a₁ <- loop a₀
 
-        a₁ = shift 1 (V x 0) a₀
-        b₁ = subst (V x 0) a₁ rest
-        b₂ = shift (-1) (V x 0) b₁
+        rest <- case ls₀ of
+                []       -> loop b₀
+                l₁ : ls₁ -> loop (Let (l₁ :| ls₁) b₀)
+
+        let a₂ = shift 1 (V x 0) a₁
+        let b₁ = subst (V x 0) a₂ rest
+        let b₂ = shift (-1) (V x 0) b₁
+
+        loop b₂
     Annot x _ -> loop x
     Bool -> pure Bool
     BoolLit b -> pure (BoolLit b)
