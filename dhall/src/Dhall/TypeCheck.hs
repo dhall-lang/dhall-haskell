@@ -3488,7 +3488,7 @@ prettyTypeMessage (CantEQ expr0 expr1) =
         buildBooleanOperator "==" expr0 expr1
 
 prettyTypeMessage (CantNE expr0 expr1) =
-        buildBooleanOperator "/=" expr0 expr1
+        buildBooleanOperator "!=" expr0 expr1
 
 prettyTypeMessage (CantInterpolate expr0 expr1) = ErrorMessages {..}
   where
