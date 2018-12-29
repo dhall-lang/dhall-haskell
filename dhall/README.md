@@ -1,4 +1,4 @@
-# `dhall 1.19.1`
+# `dhall`
 
 For installation or development instructions, see:
 

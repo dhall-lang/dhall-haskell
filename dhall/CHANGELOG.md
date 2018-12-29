@@ -1,3 +1,72 @@
+1.20.0
+
+* Supports version 5.0.0 of the language standard
+    * See: https://github.com/dhall-lang/dhall-lang/releases/tag/v5.0.0
+* BREAKING CHANGE TO THE LANGUAGE: Implement standardized support for multi-line
+  literals
+    * This updates the multi-line support to match the standard
+    * This is a breaking change because empty lines within the multi-line
+      literal now require leading whitespace whereas previously they did not
+    * This is also a breaking change because now a newline is required after
+      the opening `''` quotes whereas previously it was not required
+    * If you use `dhall format` then your multi-line literals already have the
+      necessary leading whitespace
+* BREAKING CHANGE TO THE LANGUAGE: `constructors x = x`
+    * Now the `constructors` keyword behaves like an identity function, since
+      constructors can already be accessed as fields off the original union
+      type.
+    * This is a breaking change since any record of terms that contains a
+      `constructors` field will now be a forbidden mixed record of types and
+      terms.
+    * This is also a breaking change if you annotated the type of what used to
+      be a `constructors` record.
+    * `dhall lint` will now remove the obsolete `constructors` keyword for you
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/693
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/701
+* BREAKING CHANGE TO THE API: Restore `Parent` constructor for `Local` type
+    * This more closely matches the standard and also enables `dhall format` to
+      produce a leading `../` for imports instead of `./../`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/718
+* BUG FIX: Fix type-checking bug for unions
+    * The first fix was that the inferred type was wrong for unions where
+      alternatives were types or kinds
+    * The second fix was that unions that mixed terms/types/kinds were not
+      properly rejected
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/763
+* BUG FIX: Change how `dhall repl` handles prior definitions
+    * This changes the REPL to handle previous bindings as if they were
+      defined using a large `let` expression instead of adding them to the
+      context
+    * This fixes some type-checking false negatives
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/729
+* Feature: Autocomplete for `dhall repl`
+    * You can now auto-complete record fields, union constructors, and
+      identifiers that are in scope
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/727
+* Feature: GHCJS support
+    * `dhall` can now be built using GHCJS, although some features are still
+      not supported for GHCJS, such as:
+        * Semantic integrity checks
+        * Custom HTTP headers
+    * Also, HTTP imports only work for URLs that support CORS
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/739
+* Feature: Add support for records of records of types
+    * You can now nest records of types
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/700
+* Feature: Add `:quit` command for `dhall repl`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/719
+* Feature: Add `--json` flag for `dhall {encode,decode}`
+    * You can now produce/consume CBOR expressions via JSON instead of binary
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/717
+* Feature: Add decoding logic for `as Text`
+    * You can now preserve the `as Text` qualifier on imports when serializing
+      them
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/712
+* Prenormalize substituted expressions
+    * This is a performance improvement that reduces the time and memory
+      consumption when normalizing expressions
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/765
+
 1.19.1
 
 

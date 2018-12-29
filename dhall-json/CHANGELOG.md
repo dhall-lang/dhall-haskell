@@ -1,3 +1,14 @@
+1.2.6
+
+* Add `--version` flag
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/704
+* Build against `tasty-1.2`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/731
+* Add `--compact` flag to `dhall-to-json`
+    * Eventually `--pretty` will become the default, so this flag provides a
+      way for a user to preserve the old 1-line output when that happens
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/743
+
 1.2.5
 
 * Build against `dhall-1.19.0`

@@ -1,4 +1,4 @@
-# `dhall-text 1.0.14`
+# `dhall-text`
 
 For installation or development instructions, see:
 

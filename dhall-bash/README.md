@@ -1,4 +1,4 @@
-# `dhall-bash 1.0.17`
+# `dhall-bash`
 
 For installation or development instructions, see:
 

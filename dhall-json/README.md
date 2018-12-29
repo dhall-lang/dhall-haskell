@@ -1,4 +1,4 @@
-# `dhall-json 1.2.5`
+# `dhall-json`
 
 For installation or development instructions, see:
 
