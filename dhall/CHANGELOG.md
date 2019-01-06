@@ -1,3 +1,12 @@
+1.20.1
+
+* BUG FIX: Fix binary encoding to use correct standard version
+    * This fixes computed hashes to correctly match standard version 5.0.0
+    * This is not marked as a breaking change since it is a bug fix.  The
+      1.20.0 release will be blacklisted on Hackage and users should upgrade
+      from 1.19.* directly to 1.20.1
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/771
+
 1.20.0
 
 * Supports version 5.0.0 of the language standard
