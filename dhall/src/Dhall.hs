@@ -74,6 +74,10 @@ module Dhall
     , inputFieldWith
     , inputField
     , inputRecord
+    , UnionInputType(..)
+    , inputConstructorWith
+    , inputConstructor
+    , inputUnion
 
     -- * Miscellaneous
     , rawInput
@@ -95,6 +99,7 @@ import Control.Monad (guard)
 import Data.Coerce (coerce)
 import Data.Functor.Contravariant (Contravariant(..), (>$<))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
@@ -1518,4 +1523,84 @@ inputRecord (RecordInputType inputTypeRecord) = InputType makeRecordLit recordTy
     recordType = Record $ declared <$> inputTypeRecord
     makeRecordLit x = RecordLit $ (($ x) . embed) <$> inputTypeRecord
 
+{-| The 'UnionInputType' monoid allows you to build
+    an 'InputType' injector for a Dhall record.
 
+    For example, let's take the following Haskell data type:
+
+> data Status = Queued Natural
+>             | Result Text
+>             | Errored Text
+
+    And assume that we have the following Dhall union that we would like to
+    parse as a @Status@:
+
+> < Result = "Finish succesfully"
+> | Queued : Natural
+> | Errored : Text
+> >
+
+    Our injector has type 'InputType' @Status@, but we can't build that out of any
+    smaller injectors, as 'InputType's cannot be combined.
+    However, we can use an 'InputUnionType' to build an 'InputType' for @Status@:
+
+> injectStatus :: InputType Status
+> injectStatus =
+>   inputUnion
+>     ( inputConstructorWith "Queued"  inject (\case Queued n  -> Just n; _ -> Nothing)
+>    <> inputConstructorWith "Result"  inject (\case Result t  -> Just t; _ -> Nothing)
+>    <> inputConstructorWith "Errored" inject (\case Errored e -> Just e; _ -> Nothing)
+>     )
+
+    Or, since we are simply using the `Inject` instance to inject each branch, we could write
+
+> injectStatus :: InputType Status
+> injectStatus =
+>   inputUnion
+>     ( inputConstructor "Queued"  (\case Queued n  -> Just n; _ -> Nothing)
+>    <> inputConstructor "Result"  (\case Result t  -> Just t; _ -> Nothing)
+>    <> inputConstructor "Errored" (\case Errored e -> Just e; _ -> Nothing)
+>     )
+
+    Note that the resulting 'InputType' is __not total__ unless we
+    appropriately aggregate each possibility.  If we forgot to handle
+    a branch, the 'InputType' will throw a runtime exception when used on
+    an unhandled branch.
+-}
+newtype UnionInputType a
+  = UnionInputType (Dhall.Map.Map Text (Expr Src X, a -> Maybe (Expr Src X)))
+
+instance Contravariant UnionInputType where
+    contramap f (UnionInputType u) = UnionInputType $ (fmap . flip (.)) f <$> u
+
+instance Semigroup (UnionInputType a) where
+    UnionInputType x <> UnionInputType y = UnionInputType (x <> y)
+
+instance Monoid (UnionInputType a) where
+    mempty = UnionInputType mempty
+
+inputUnion :: UnionInputType a -> InputType a
+inputUnion (UnionInputType inputTypeUnion) = InputType makeUnionLit (Union declare)
+  where
+    declare = fst <$> inputTypeUnion
+    makeUnionLit x = fromMaybe (errorWithoutStackTrace unmatched)
+                   . listToMaybe
+                   . mapMaybe (uncurry (match x))
+                   $ Dhall.Map.toList inputTypeUnion
+    unmatched = "inputUnion: UnionInputType is incomplete"
+    match x fd (_, p) = (\r -> UnionLit fd r (Dhall.Map.delete fd declare)) <$> p x
+
+inputConstructorWith
+    :: Text
+    -> InputType b
+    -> (a -> Maybe b)
+    -> UnionInputType a
+inputConstructorWith name inputType projector = UnionInputType $
+    Dhall.Map.singleton name (declared inputType, fmap (embed inputType) . projector)
+
+inputConstructor
+    :: Inject b
+    => Text
+    -> (a -> Maybe b)
+    -> UnionInputType a
+inputConstructor name = inputConstructorWith name inject
