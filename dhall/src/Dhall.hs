@@ -39,6 +39,7 @@ module Dhall
     -- * Types
     , Type(..)
     , RecordType(..)
+    , UnionType(..)
     , InputType(..)
     , Interpret(..)
     , InvalidType(..)
@@ -62,6 +63,8 @@ module Dhall
     , pair
     , record
     , field
+    , union
+    , constructor
     , GenericInterpret(..)
     , GenericInject(..)
 
@@ -88,6 +91,8 @@ module Dhall
 import Control.Applicative (empty, liftA2, (<|>), Alternative)
 import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
+import Control.Monad (guard)
+import Data.Coerce (coerce)
 import Data.Functor.Contravariant (Contravariant(..), (>$<))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
 import Data.Monoid ((<>))
@@ -1370,6 +1375,66 @@ field key valueType =
           )
           ( Data.Functor.Compose.Compose extractBody )
       )
+
+{-| The 'UnionType' monoid allows you to build a 'Type' parser
+    from a Dhall union
+
+    For example, let's take the following Haskell data type:
+
+> data Status = Queued Natural
+>             | Result Text
+>             | Errored Text
+
+    And assume that we have the following Dhall union that we would like to
+    parse as a @Status@:
+
+> < Result = "Finish succesfully"
+> | Queued : Natural
+> | Errored : Text
+> >
+
+    Our parser has type 'Type' @Status@, but we can't build that out of any
+    smaller parsers, as 'Type's cannot be combined (they are only 'Functor's).
+    However, we can use a 'UnionType' to build a 'Type' for @Status@:
+
+> status :: Type Status
+> status =
+>   union
+>     ( Queued  <$> constructor "Queued"  natural
+>    <> Result  <$> constructor "Result"  string
+>    <> Errored <$> constructor "Errored" string
+>     )
+
+-}
+newtype UnionType a =
+    UnionType
+      ( Data.Functor.Compose.Compose (Dhall.Map.Map Text) Type a )
+  deriving (Functor)
+
+instance Semigroup (UnionType a) where
+    (<>) = coerce ((<>) :: Dhall.Map.Map Text (Type a) -> Dhall.Map.Map Text (Type a) -> Dhall.Map.Map Text (Type a))
+
+instance Monoid (UnionType a) where
+    mempty = coerce (mempty :: Dhall.Map.Map Text (Type a))
+
+-- | Run a 'UnionType' parser to build a 'Type' parser.
+union :: Dhall.Map.Map Text (Type a) -> Type a
+union mp = Type
+    { extract  = extractF
+    , expected = Union expect
+    }
+  where
+    expect = Dhall.expected <$> mp
+    extractF e0 = do
+      UnionLit fld e1 rest <- Just e0
+      t <- Dhall.Map.lookup fld mp
+      guard $ rest == Dhall.Map.delete fld expect
+      Dhall.extract t e1
+
+-- | Parse a single constructor of a union
+constructor :: Text -> Type a -> UnionType a
+constructor key valueType = UnionType
+    ( Data.Functor.Compose.Compose (Dhall.Map.singleton key valueType) )
 
 {-| The 'RecordInputType' divisible (contravariant) functor allows you to build
     an 'InputType' injector for a Dhall record.
