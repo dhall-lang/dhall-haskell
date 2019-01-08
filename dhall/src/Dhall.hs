@@ -97,7 +97,7 @@ import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
 import Control.Monad (guard)
 import Data.Coerce (coerce)
-import Data.Functor.Contravariant (Contravariant(..), (>$<))
+import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
@@ -124,6 +124,7 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
+import qualified Data.Monoid
 import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
@@ -1423,8 +1424,8 @@ instance Monoid (UnionType a) where
     mempty = coerce (mempty :: Dhall.Map.Map Text (Type a))
 
 -- | Run a 'UnionType' parser to build a 'Type' parser.
-union :: Dhall.Map.Map Text (Type a) -> Type a
-union mp = Type
+union :: UnionType a -> Type a
+union (UnionType (Data.Functor.Compose.Compose mp)) = Type
     { extract  = extractF
     , expected = Union expect
     }
@@ -1567,28 +1568,41 @@ inputRecord (RecordInputType inputTypeRecord) = InputType makeRecordLit recordTy
     a branch, the 'InputType' will throw a runtime exception when used on
     an unhandled branch.
 -}
-newtype UnionInputType a
-  = UnionInputType (Dhall.Map.Map Text (Expr Src X, a -> Maybe (Expr Src X)))
+newtype UnionInputType a =
+  UnionInputType
+    ( Data.Functor.Product.Product
+        ( Control.Applicative.Const
+            ( Dhall.Map.Map
+                Text
+                ( Expr Src X )
+            )
+        )
+        ( Op (Data.Monoid.First (Expr Src X)) )
+        a
+    )
+  deriving (Contravariant)
 
-instance Contravariant UnionInputType where
-    contramap f (UnionInputType u) = UnionInputType $ (fmap . flip (.)) f <$> u
-
+-- As of base 4.12, we can use :*: to derive this instance automatically
 instance Semigroup (UnionInputType a) where
-    UnionInputType x <> UnionInputType y = UnionInputType (x <> y)
+    UnionInputType (Data.Functor.Product.Pair mx fx)
+      <> UnionInputType (Data.Functor.Product.Pair my fy)
+        = UnionInputType (Data.Functor.Product.Pair (mx <> my) (fx <> fy))
 
+-- As of base 4.12, we can use :*: to derive this instance automatically
 instance Monoid (UnionInputType a) where
-    mempty = UnionInputType mempty
+    mempty = UnionInputType (Data.Functor.Product.Pair mempty mempty)
 
 inputUnion :: UnionInputType a -> InputType a
-inputUnion (UnionInputType inputTypeUnion) = InputType makeUnionLit (Union declare)
+inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Op embedF ) ) ) =
+    InputType 
+      { embed =
+          embedder
+      , declared =
+          Union fields
+      }
   where
-    declare = fst <$> inputTypeUnion
-    makeUnionLit x = fromMaybe (errorWithoutStackTrace unmatched)
-                   . listToMaybe
-                   . mapMaybe (uncurry (match x))
-                   $ Dhall.Map.toList inputTypeUnion
+    embedder = fromMaybe (errorWithoutStackTrace unmatched) . Data.Monoid.getFirst . embedF
     unmatched = "inputUnion: UnionInputType is incomplete"
-    match x fd (_, p) = (\r -> UnionLit fd r (Dhall.Map.delete fd declare)) <$> p x
 
 inputConstructorWith
     :: Text
@@ -1596,7 +1610,16 @@ inputConstructorWith
     -> (a -> Maybe b)
     -> UnionInputType a
 inputConstructorWith name inputType projector = UnionInputType $
-    Dhall.Map.singleton name (declared inputType, fmap (embed inputType) . projector)
+    Data.Functor.Product.Pair
+      ( Control.Applicative.Const
+          ( Dhall.Map.singleton
+              name
+              (declared inputType)
+          )
+      )
+      ( Op
+          ( Data.Monoid.First . fmap (embed inputType) . projector )
+      )
 
 inputConstructor
     :: Inject b
