@@ -78,6 +78,7 @@ module Dhall
     , inputConstructorWith
     , inputConstructor
     , inputUnion
+    , (>|<)
 
     -- * Miscellaneous
     , rawInput
@@ -1547,26 +1548,27 @@ inputRecord (RecordInputType inputTypeRecord) = InputType makeRecordLit recordTy
 
 > injectStatus :: InputType Status
 > injectStatus =
->   inputUnion
->     ( inputConstructorWith "Queued"  inject (\case Queued n  -> Just n; _ -> Nothing)
->    <> inputConstructorWith "Result"  inject (\case Result t  -> Just t; _ -> Nothing)
->    <> inputConstructorWith "Errored" inject (\case Errored e -> Just e; _ -> Nothing)
->     )
+>           adapt
+>     >$< inputConstructorWith "Queued"  inject
+>     >|< inputConstructorWith "Result"  inject
+>     >|< inputConstructorWith "Errored" inject
+>   where
+>     adapt (Queued  n) = Left (Left  n)
+>     adapt (Result  t) = Left (Right t)
+>     adapt (Errored e) = Right e
 
     Or, since we are simply using the `Inject` instance to inject each branch, we could write
 
 > injectStatus :: InputType Status
 > injectStatus =
->   inputUnion
->     ( inputConstructor "Queued"  (\case Queued n  -> Just n; _ -> Nothing)
->    <> inputConstructor "Result"  (\case Result t  -> Just t; _ -> Nothing)
->    <> inputConstructor "Errored" (\case Errored e -> Just e; _ -> Nothing)
->     )
-
-    Note that the resulting 'InputType' is __not total__ unless we
-    appropriately aggregate each possibility.  If we forgot to handle
-    a branch, the 'InputType' will throw a runtime exception when used on
-    an unhandled branch.
+>           adapt
+>     >$< inputConstructor "Queued"
+>     >|< inputConstructor "Result"
+>     >|< inputConstructor "Errored"
+>   where
+>     adapt (Queued  n) = Left (Left  n)
+>     adapt (Result  t) = Left (Right t)
+>     adapt (Errored e) = Right e
 -}
 newtype UnionInputType a =
   UnionInputType
@@ -1577,53 +1579,54 @@ newtype UnionInputType a =
                 ( Expr Src X )
             )
         )
-        ( Op (Data.Monoid.First (Expr Src X)) )
+        ( Op (Expr Src X) )
         a
     )
   deriving (Contravariant)
 
--- As of base 4.12, we can use :*: to derive this instance automatically
-instance Semigroup (UnionInputType a) where
-    UnionInputType (Data.Functor.Product.Pair mx fx)
-      <> UnionInputType (Data.Functor.Product.Pair my fy)
-        = UnionInputType (Data.Functor.Product.Pair (mx <> my) (fx <> fy))
+-- | Combines two 'UnionInputType' values.  See 'UnionInputType' for usage
+-- notes.
+--
+-- Ideally, this matches 'Data.Functor.Contravariant.Divisible.chosen';
+-- however, this allows 'UnionInputType' to not need a 'Divisible' instance
+-- itself (since no instance is possible).
+(>|<) :: UnionInputType a -> UnionInputType b -> UnionInputType (Either a b)
+UnionInputType (Data.Functor.Product.Pair (Control.Applicative.Const mx) (Op fx))
+    >|< UnionInputType (Data.Functor.Product.Pair (Control.Applicative.Const my) (Op fy)) = 
+    UnionInputType
+      ( Data.Functor.Product.Pair
+          ( Control.Applicative.Const (mx <> my) )
+          ( Op (either fx fy) )
+      )
 
--- As of base 4.12, we can use :*: to derive this instance automatically
-instance Monoid (UnionInputType a) where
-    mempty = UnionInputType (Data.Functor.Product.Pair mempty mempty)
+infixr 5 >|<
 
 inputUnion :: UnionInputType a -> InputType a
 inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Op embedF ) ) ) =
     InputType 
       { embed =
-          embedder
+          embedF
       , declared =
           Union fields
       }
-  where
-    embedder = fromMaybe (errorWithoutStackTrace unmatched) . Data.Monoid.getFirst . embedF
-    unmatched = "inputUnion: UnionInputType is incomplete"
 
 inputConstructorWith
     :: Text
-    -> InputType b
-    -> (a -> Maybe b)
+    -> InputType a
     -> UnionInputType a
-inputConstructorWith name inputType projector = UnionInputType $
+inputConstructorWith name inputType = UnionInputType $
     Data.Functor.Product.Pair
       ( Control.Applicative.Const
           ( Dhall.Map.singleton
               name
-              (declared inputType)
+              ( declared inputType )
           )
       )
-      ( Op
-          ( Data.Monoid.First . fmap (embed inputType) . projector )
+      ( Op ( embed inputType )
       )
 
 inputConstructor
-    :: Inject b
+    :: Inject a
     => Text
-    -> (a -> Maybe b)
     -> UnionInputType a
 inputConstructor name = inputConstructorWith name inject
