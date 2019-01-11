@@ -10,6 +10,7 @@
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE TupleSections              #-}
 
 {-| Please read the "Dhall.Tutorial" module, which contains a tutorial explaining
     how to use the language, the compiler, and this library
@@ -1579,7 +1580,7 @@ newtype UnionInputType a =
                 ( Expr Src X )
             )
         )
-        ( Op (Expr Src X) )
+        ( Op (Text, Expr Src X) )
         a
     )
   deriving (Contravariant)
@@ -1592,7 +1593,7 @@ newtype UnionInputType a =
 -- itself (since no instance is possible).
 (>|<) :: UnionInputType a -> UnionInputType b -> UnionInputType (Either a b)
 UnionInputType (Data.Functor.Product.Pair (Control.Applicative.Const mx) (Op fx))
-    >|< UnionInputType (Data.Functor.Product.Pair (Control.Applicative.Const my) (Op fy)) = 
+    >|< UnionInputType (Data.Functor.Product.Pair (Control.Applicative.Const my) (Op fy)) =
     UnionInputType
       ( Data.Functor.Product.Pair
           ( Control.Applicative.Const (mx <> my) )
@@ -1603,9 +1604,10 @@ infixr 5 >|<
 
 inputUnion :: UnionInputType a -> InputType a
 inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Op embedF ) ) ) =
-    InputType 
-      { embed =
-          embedF
+    InputType
+      { embed = \x ->
+          let (name, y) = embedF x
+          in  UnionLit name y (Dhall.Map.delete name fields)
       , declared =
           Union fields
       }
@@ -1622,7 +1624,7 @@ inputConstructorWith name inputType = UnionInputType $
               ( declared inputType )
           )
       )
-      ( Op ( embed inputType )
+      ( Op ( (name,) . embed inputType )
       )
 
 inputConstructor
