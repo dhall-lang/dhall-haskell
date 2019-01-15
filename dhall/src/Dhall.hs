@@ -812,7 +812,9 @@ instance Interpret a => Interpret (Vector a) where
 instance (Inject a, Interpret b) => Interpret (a -> b) where
     autoWith opts = Type extractOut expectedOut
       where
-        extractOut e = Just (\i -> case extractIn (Dhall.Core.normalize (App e (embed i))) of
+        normalizer_ = Dhall.Core.getReifiedNormalizer (inputNormalizer opts)
+
+        extractOut e = Just (\i -> case extractIn (Dhall.Core.normalizeWith normalizer_ (App e (embed i))) of
             Just o  -> o
             Nothing -> error "Interpret: You cannot decode a function if it does not have the correct type" )
 
@@ -849,6 +851,10 @@ data InterpretOptions = InterpretOptions
     , constructorModifier :: Text -> Text
     -- ^ Function used to transform Haskell constructor names into their
     --   corresponding Dhall alternative names
+    , inputNormalizer     :: Dhall.Core.ReifiedNormalizer X
+    -- ^ This is only used by the `Interpret` instance for functions in order
+    --   to normalize the function input before marshaling the input into a
+    --   Dhall expression
     }
 
 {-| Default interpret options, which you can tweak or override, like this:
@@ -860,6 +866,7 @@ defaultInterpretOptions :: InterpretOptions
 defaultInterpretOptions = InterpretOptions
     { fieldModifier       = id
     , constructorModifier = id
+    , inputNormalizer     = Dhall.Core.ReifiedNormalizer (const (pure Nothing))
     }
 
 {-| This is the underlying class that powers the `Interpret` class's support
