@@ -22,6 +22,9 @@ tests =
         [ should
             "correctly handle multi-let expressions"
             "success/multilet"
+        , should
+            "not fail when an inner expression removes all `let` bindings"
+            "success/regression0"
         ]
 
 should :: Text -> Text -> TestTree

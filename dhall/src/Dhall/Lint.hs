@@ -56,15 +56,17 @@ lint expression = loop (Dhall.Core.denote expression)
 
         d' = loop d
     loop (Let (Binding a b c :| (l : ls)) d)
-        | not (V a 0 `Dhall.Core.freeIn` Let (l' :| ls') d') =
-            Let (l' :| ls') d'
+        | not (V a 0 `Dhall.Core.freeIn` e) =
+            e
         | otherwise =
-            Let (Binding a b' c' :| (l' : ls'))  d'
+            case e of
+                Let (l' :| ls') d' -> Let (Binding a b' c' :| (l' : ls'))  d'
+                _                  -> Let (Binding a b' c' :| []) e
       where
         b' = fmap loop b
         c' =      loop c
 
-        Let (l' :| ls') d' = loop (Let (l :| ls) d)
+        e = loop (Let (l :| ls) d)
 
     loop (Annot a b) =
         Annot a' b'
