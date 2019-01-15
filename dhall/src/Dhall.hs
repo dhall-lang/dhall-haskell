@@ -127,6 +127,7 @@ import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
 import qualified Data.Monoid
+import qualified Data.Semigroup
 import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
@@ -1419,11 +1420,12 @@ newtype UnionType a =
       ( Data.Functor.Compose.Compose (Dhall.Map.Map Text) Type a )
   deriving (Functor)
 
-instance Semigroup (UnionType a) where
+instance Data.Semigroup.Semigroup (UnionType a) where
     (<>) = coerce ((<>) :: Dhall.Map.Map Text (Type a) -> Dhall.Map.Map Text (Type a) -> Dhall.Map.Map Text (Type a))
 
 instance Monoid (UnionType a) where
     mempty = coerce (mempty :: Dhall.Map.Map Text (Type a))
+    mappend = (Data.Semigroup.<>)
 
 -- | Run a 'UnionType' parser to build a 'Type' parser.
 union :: UnionType a -> Type a
