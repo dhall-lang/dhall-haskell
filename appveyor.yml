@@ -18,7 +18,7 @@ install:
 
 cache:
   - "C:\\sr"
-  - ".stack-work"
+  - ".stack-work" -> 
 
 build_script:
   - cmd: stack build
