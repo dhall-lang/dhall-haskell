@@ -6,22 +6,35 @@ branches:
   - /.*appveyor.*/
 
 environment:
+  STACK_ROOT: "c:\\sr"
   STACK_VERSION: 1.9.3
   STACK_YAML: stack.yaml
 
 install:
   - cmd: >-
       choco install -y haskell-stack --version %STACK_VERSION%
-      stack setup
+      stack setup > nul
+      stack path
 
 cache:
-  - C:\sr
-  - .stack-work
+  - "C:\\sr"
+  - ".stack-work"
 
 build_script:
   - cmd: stack build
 
 test_script:
   - cmd: >-
-      chcp 65001
-      stack test
+      stack test dhall:tasty
+      stack test dhall-json
+      stack test dhall-text
+      stack test dhall-bash
+
+before_deploy:
+  - cmd: stack install
+
+deploy:
+  - provider: GitHub
+    auth_token:
+      secure: Gs/tiz6Jtg/Zjd4zGHDhuSv4Y9a+zJ574LWwzOe2bvZNGX/M8XupkxdGmBpDlnOf
+    artifact: "%APPDATA%\local\bin\dhall.exe"
