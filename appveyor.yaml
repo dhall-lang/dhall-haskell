@@ -1,0 +1,21 @@
+branches:
+  only:
+    - master
+    - appveyor
+
+environment:
+  global:
+    STACK_VERSION: "1.9.3"
+    STACK_YAML: "stack.yaml"
+
+install:
+  - choco install -y haskell-stack --version %STACK_VERSION%
+
+cache:
+  - ".stack-work"
+  - "C:\\sr"
+
+build_script:
+  - stack setup
+  - stack build
+  - stack test
