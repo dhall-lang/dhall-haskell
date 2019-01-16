@@ -11,10 +11,9 @@ environment:
   STACK_YAML: stack.yaml
 
 install:
-  - cmd: >-
-      choco install -y haskell-stack --version %STACK_VERSION%
-      stack setup > nul
-      stack path
+  - choco install -y haskell-stack --version %STACK_VERSION%
+  - stack setup > nul
+  - stack path
 
 cache:
   - C:\sr
@@ -24,14 +23,13 @@ build_script:
   - cmd: stack build
 
 test_script:
-  - cmd: >-
-      stack test dhall:tasty
-      stack test dhall-json
-      stack test dhall-text
-      stack test dhall-bash
+  - stack test dhall:tasty
+  - stack test dhall-json
+  - stack test dhall-text
+  - stack test dhall-bash
 
 before_deploy:
-  - cmd: stack install
+  - stack install
 
 artifacts:
 - path: '%APPDATA%\local\bin\dhall.exe'
@@ -42,6 +40,6 @@ deploy:
   - provider: GitHub
     auth_token:
       secure: Gs/tiz6Jtg/Zjd4zGHDhuSv4Y9a+zJ574LWwzOe2bvZNGX/M8XupkxdGmBpDlnOf
-    artifact: "dhall"
+    artifact: dhall
     on:
       APPVEYOR_REPO_TAG: true
