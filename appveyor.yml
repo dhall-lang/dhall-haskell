@@ -33,8 +33,15 @@ test_script:
 before_deploy:
   - cmd: stack install
 
+artifacts:
+- path: '%APPDATA%\local\bin\dhall.exe'
+  name: dhall
+
+    
 deploy:
   - provider: GitHub
     auth_token:
       secure: Gs/tiz6Jtg/Zjd4zGHDhuSv4Y9a+zJ574LWwzOe2bvZNGX/M8XupkxdGmBpDlnOf
-    artifact: "%%APPDATA%%\local\bin\dhall.exe"
+    artifact: "dhall"
+    on:
+      APPVEYOR_REPO_TAG: true
