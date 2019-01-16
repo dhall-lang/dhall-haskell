@@ -6,7 +6,7 @@ branches:
   - /.*appveyor.*/
 
 environment:
-  STACK_ROOT: "c:\\sr"
+  STACK_ROOT: C:\sr
   STACK_VERSION: 1.9.3
   STACK_YAML: stack.yaml
 
@@ -17,8 +17,8 @@ install:
       stack path
 
 cache:
-  - "C:\\sr"
-  - ".stack-work" -> 
+  - C:\sr
+  - .stack-work
 
 build_script:
   - cmd: stack build
