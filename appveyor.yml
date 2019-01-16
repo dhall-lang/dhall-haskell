@@ -37,4 +37,4 @@ deploy:
   - provider: GitHub
     auth_token:
       secure: Gs/tiz6Jtg/Zjd4zGHDhuSv4Y9a+zJ574LWwzOe2bvZNGX/M8XupkxdGmBpDlnOf
-    artifact: %APPDATA%\local\bin\dhall.exe
+    artifact: "%%APPDATA%%\local\bin\dhall.exe"
