@@ -35,6 +35,7 @@ allTests =
 
 main :: IO ()
 main = do
+
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
     pwd <- System.Directory.getCurrentDirectory
     System.Environment.setEnv "XDG_CACHE_HOME" (pwd </> ".cache")
