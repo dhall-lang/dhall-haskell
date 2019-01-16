@@ -13,26 +13,23 @@ environment:
 install:
   - choco install -y haskell-stack --version %STACK_VERSION%
   - stack setup > nul
-  - stack path
 
 cache:
   - C:\sr
   - .stack-work
 
 build_script:
-  - cmd: stack build
-
+  - stack build
+  - stack install --local-bin-path bin
+  
 test_script:
   - stack test dhall:tasty
   - stack test dhall-json
   - stack test dhall-text
   - stack test dhall-bash
 
-before_deploy:
-  - stack install
-
 artifacts:
-- path: '%APPDATA%\local\bin\dhall.exe'
+- path: 'bin\dhall.exe'
   name: dhall
 
     
