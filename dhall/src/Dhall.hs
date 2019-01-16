@@ -101,7 +101,6 @@ import Control.Monad (guard)
 import Data.Coerce (coerce)
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
@@ -126,7 +125,6 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
-import qualified Data.Monoid
 import qualified Data.Semigroup
 import qualified Data.Scientific
 import qualified Data.Sequence
