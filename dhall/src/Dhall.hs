@@ -10,6 +10,7 @@
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE TupleSections              #-}
 
 {-| Please read the "Dhall.Tutorial" module, which contains a tutorial explaining
     how to use the language, the compiler, and this library
@@ -39,6 +40,7 @@ module Dhall
     -- * Types
     , Type(..)
     , RecordType(..)
+    , UnionType(..)
     , InputType(..)
     , Interpret(..)
     , InvalidType(..)
@@ -62,6 +64,8 @@ module Dhall
     , pair
     , record
     , field
+    , union
+    , constructor
     , GenericInterpret(..)
     , GenericInject(..)
 
@@ -71,6 +75,11 @@ module Dhall
     , inputFieldWith
     , inputField
     , inputRecord
+    , UnionInputType(..)
+    , inputConstructorWith
+    , inputConstructor
+    , inputUnion
+    , (>|<)
 
     -- * Miscellaneous
     , rawInput
@@ -88,7 +97,9 @@ module Dhall
 import Control.Applicative (empty, liftA2, (<|>), Alternative)
 import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
-import Data.Functor.Contravariant (Contravariant(..), (>$<))
+import Control.Monad (guard)
+import Data.Coerce (coerce)
+import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
@@ -114,6 +125,7 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
+import qualified Data.Semigroup
 import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
@@ -1378,6 +1390,67 @@ field key valueType =
           ( Data.Functor.Compose.Compose extractBody )
       )
 
+{-| The 'UnionType' monoid allows you to build a 'Type' parser
+    from a Dhall union
+
+    For example, let's take the following Haskell data type:
+
+> data Status = Queued Natural
+>             | Result Text
+>             | Errored Text
+
+    And assume that we have the following Dhall union that we would like to
+    parse as a @Status@:
+
+> < Result = "Finish succesfully"
+> | Queued : Natural
+> | Errored : Text
+> >
+
+    Our parser has type 'Type' @Status@, but we can't build that out of any
+    smaller parsers, as 'Type's cannot be combined (they are only 'Functor's).
+    However, we can use a 'UnionType' to build a 'Type' for @Status@:
+
+> status :: Type Status
+> status =
+>   union
+>     ( Queued  <$> constructor "Queued"  natural
+>    <> Result  <$> constructor "Result"  string
+>    <> Errored <$> constructor "Errored" string
+>     )
+
+-}
+newtype UnionType a =
+    UnionType
+      ( Data.Functor.Compose.Compose (Dhall.Map.Map Text) Type a )
+  deriving (Functor)
+
+instance Data.Semigroup.Semigroup (UnionType a) where
+    (<>) = coerce ((<>) :: Dhall.Map.Map Text (Type a) -> Dhall.Map.Map Text (Type a) -> Dhall.Map.Map Text (Type a))
+
+instance Monoid (UnionType a) where
+    mempty = coerce (mempty :: Dhall.Map.Map Text (Type a))
+    mappend = (Data.Semigroup.<>)
+
+-- | Run a 'UnionType' parser to build a 'Type' parser.
+union :: UnionType a -> Type a
+union (UnionType (Data.Functor.Compose.Compose mp)) = Type
+    { extract  = extractF
+    , expected = Union expect
+    }
+  where
+    expect = Dhall.expected <$> mp
+    extractF e0 = do
+      UnionLit fld e1 rest <- Just e0
+      t <- Dhall.Map.lookup fld mp
+      guard $ rest == Dhall.Map.delete fld expect
+      Dhall.extract t e1
+
+-- | Parse a single constructor of a union
+constructor :: Text -> Type a -> UnionType a
+constructor key valueType = UnionType
+    ( Data.Functor.Compose.Compose (Dhall.Map.singleton key valueType) )
+
 {-| The 'RecordInputType' divisible (contravariant) functor allows you to build
     an 'InputType' injector for a Dhall record.
 
@@ -1460,4 +1533,109 @@ inputRecord (RecordInputType inputTypeRecord) = InputType makeRecordLit recordTy
     recordType = Record $ declared <$> inputTypeRecord
     makeRecordLit x = RecordLit $ (($ x) . embed) <$> inputTypeRecord
 
+{-| The 'UnionInputType' monoid allows you to build
+    an 'InputType' injector for a Dhall record.
 
+    For example, let's take the following Haskell data type:
+
+> data Status = Queued Natural
+>             | Result Text
+>             | Errored Text
+
+    And assume that we have the following Dhall union that we would like to
+    parse as a @Status@:
+
+> < Result = "Finish succesfully"
+> | Queued : Natural
+> | Errored : Text
+> >
+
+    Our injector has type 'InputType' @Status@, but we can't build that out of any
+    smaller injectors, as 'InputType's cannot be combined.
+    However, we can use an 'InputUnionType' to build an 'InputType' for @Status@:
+
+> injectStatus :: InputType Status
+> injectStatus =
+>           adapt
+>     >$< inputConstructorWith "Queued"  inject
+>     >|< inputConstructorWith "Result"  inject
+>     >|< inputConstructorWith "Errored" inject
+>   where
+>     adapt (Queued  n) = Left (Left  n)
+>     adapt (Result  t) = Left (Right t)
+>     adapt (Errored e) = Right e
+
+    Or, since we are simply using the `Inject` instance to inject each branch, we could write
+
+> injectStatus :: InputType Status
+> injectStatus =
+>           adapt
+>     >$< inputConstructor "Queued"
+>     >|< inputConstructor "Result"
+>     >|< inputConstructor "Errored"
+>   where
+>     adapt (Queued  n) = Left (Left  n)
+>     adapt (Result  t) = Left (Right t)
+>     adapt (Errored e) = Right e
+-}
+newtype UnionInputType a =
+  UnionInputType
+    ( Data.Functor.Product.Product
+        ( Control.Applicative.Const
+            ( Dhall.Map.Map
+                Text
+                ( Expr Src X )
+            )
+        )
+        ( Op (Text, Expr Src X) )
+        a
+    )
+  deriving (Contravariant)
+
+-- | Combines two 'UnionInputType' values.  See 'UnionInputType' for usage
+-- notes.
+--
+-- Ideally, this matches 'Data.Functor.Contravariant.Divisible.chosen';
+-- however, this allows 'UnionInputType' to not need a 'Divisible' instance
+-- itself (since no instance is possible).
+(>|<) :: UnionInputType a -> UnionInputType b -> UnionInputType (Either a b)
+UnionInputType (Data.Functor.Product.Pair (Control.Applicative.Const mx) (Op fx))
+    >|< UnionInputType (Data.Functor.Product.Pair (Control.Applicative.Const my) (Op fy)) =
+    UnionInputType
+      ( Data.Functor.Product.Pair
+          ( Control.Applicative.Const (mx <> my) )
+          ( Op (either fx fy) )
+      )
+
+infixr 5 >|<
+
+inputUnion :: UnionInputType a -> InputType a
+inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Op embedF ) ) ) =
+    InputType
+      { embed = \x ->
+          let (name, y) = embedF x
+          in  UnionLit name y (Dhall.Map.delete name fields)
+      , declared =
+          Union fields
+      }
+
+inputConstructorWith
+    :: Text
+    -> InputType a
+    -> UnionInputType a
+inputConstructorWith name inputType = UnionInputType $
+    Data.Functor.Product.Pair
+      ( Control.Applicative.Const
+          ( Dhall.Map.singleton
+              name
+              ( declared inputType )
+          )
+      )
+      ( Op ( (name,) . embed inputType )
+      )
+
+inputConstructor
+    :: Inject a
+    => Text
+    -> UnionInputType a
+inputConstructor name = inputConstructorWith name inject

@@ -333,7 +333,7 @@ Library
     if flag(with-http)
       Build-Depends:
         http-types                  >= 0.7.0    && < 0.13,
-        http-client                 >= 0.4.30   && < 0.6 ,
+        http-client                 >= 0.4.30   && < 0.7 ,
         http-client-tls             >= 0.2.0    && < 0.4
     if !impl(ghc >= 8.0) && !impl(eta >= 0.8.4)
       Build-Depends: semigroups == 0.18.*
