@@ -24,11 +24,7 @@ cache:
 build_script:
   - stack build
   - stack install --local-bin-path bin
-  - cmd: >-
-      if /I "%APPVEYOR_REPO_TAG%" EQU "true"
-        ( set DEPLOY_TAG=APPVEYOR_REPO_TAG_NAME )
-      else
-        ( set DEPLOY_TAG=%APPVEYOR_REPO_COMMIT:~0,5% )
+  - if /I "%APPVEYOR_REPO_TAG%" EQU "true" ( set DEPLOY_TAG=APPVEYOR_REPO_TAG_NAME ) else ( set DEPLOY_TAG=%APPVEYOR_REPO_COMMIT:~0,5% )
   - set DEPLOY_SUFFIX=%DEPLOY_TAG%-x86_64-windows.zip
   - 7z a bin\main\dhall-%DEPLOY_SUFFIX% %APPVEYOR_BUILD_FOLDER%\bin\dhall.exe
   - 7z a bin\dhall-json-%DEPLOY_SUFFIX% %APPVEYOR_BUILD_FOLDER%\bin\dhall-to-json.exe
