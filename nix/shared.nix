@@ -152,7 +152,7 @@ let
                   ];
 
                 failOnAllWarningsExtension =
-                  mass pkgsNew.haskell.lib.failOnAllWarnings [
+                  mass failOnAllWarnings [
                     "dhall"
                     "dhall-bash"
                     "dhall-json"
@@ -210,9 +210,9 @@ let
                   pkgsNew.lib.composeExtensions
                   (old.overrides or (_: _: {}))
                   [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./.; })
+                    extension
                     dontCheckExtension
                     failOnAllWarningsExtension
-                    extension
                   ];
           }
         );

@@ -29,6 +29,9 @@ extra-deps:
 - cborg-0.2.1.0
 - serialise-0.2.1.0
 - shell-escape-0.2.0
+- cborg-json-0.2.1.0
+- dotgen-0.4.2
+- aeson-pretty-0.8.7
 nix:
   packages:
     - ncurses
