@@ -14,7 +14,7 @@ import Control.Exception ( SomeException(SomeException), displayException, throw
 import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
-import Data.List ( elemIndex, isPrefixOf, nub )
+import Data.List ( isPrefixOf, nub )
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup ((<>))
 import Dhall.Binary (StandardVersion(..))
@@ -202,20 +202,15 @@ typeCheck expression = do
 -- Separate the equal sign to be its own word in order to simplify parsing
 -- This is intended to be used with the options that require assignment
 separateEqual :: [String] -> [String]
-separateEqual [] = []
-separateEqual (x:xs)
-  -- Handle the case where there is no space between the var and "="
-  | Just i <- elemIndex '=' x
-  = let (a, _:b) = splitAt i x
-    in  a : "=" : b : xs
-
-  -- Handle the case where there is no space between the "=" and the expression
-  | ('=':y):ys <- xs
-  = x : "=" : y : ys
-
-  | otherwise
-  = x : xs
-
+separateEqual [] =
+    []
+separateEqual (str₀ : ('=' : str₁) : strs) =
+    str₀ : "=" : str₁ : strs
+separateEqual (str : strs)
+    | (str₀, '=' : str₁) <- break (== '=') str =
+        str₀ : "=" : str₁ : strs
+    | otherwise =
+        str : strs
 
 addBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
 addBinding (k : "=" : srcs) = do
@@ -318,11 +313,9 @@ completeFunc reversedPrev word
   = listCompletion . fmap fst <$> liftIO getEnvironment
 
   -- Complete record fields and union alternatives
-  | '.' `elem` word
+  | var : subFields <- Text.split (== '.') (Text.pack word)
   = do
     Env { envBindings } <- get
-
-    let var:subFields = Text.split (== '.') (Text.pack word)
 
     case Dhall.Context.lookup var 0 envBindings of
 
