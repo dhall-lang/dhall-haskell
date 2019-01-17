@@ -374,7 +374,7 @@ Library
       Other-Modules:
         Dhall.Import.HTTP
 
-    GHC-Options: -Wall
+    GHC-Options: -Wall -fwarn-incomplete-uni-patterns
     Default-Language: Haskell2010
 
 Executable dhall

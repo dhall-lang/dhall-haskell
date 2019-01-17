@@ -828,14 +828,15 @@ shift d (V x₀ n₀) (Let (Binding x₁ mA₀ a₀ :| []) b₀) =
 
     b₁  =       shift d (V x₀ n₁)   b₀
 shift d (V x₀ n₀) (Let (Binding x₁ mA₀ a₀ :| (l₀ : ls₀)) b₀) =
-    Let (Binding x₁ mA₁ a₁ :| (l₁ : ls₁)) b₁
+    case shift d (V x₀ n₁) (Let (l₀ :| ls₀) b₀) of
+        Let (l₁ :| ls₁) b₁ -> Let (Binding x₁ mA₁ a₁ :| (l₁ : ls₁)) b₁
+        e                  -> Let (Binding x₁ mA₁ a₁ :|       []  ) e
   where
     n₁ = if x₀ == x₁ then n₀ + 1 else n₀
 
     mA₁ = fmap (shift d (V x₀ n₀)) mA₀
     a₁  =       shift d (V x₀ n₀)   a₀
 
-    Let (l₁ :| ls₁) b₁ = shift d (V x₀ n₁) (Let (l₀ :| ls₀) b₀)
 shift d v (Annot a b) = Annot a' b'
   where
     a' = shift d v a
@@ -1005,7 +1006,9 @@ subst (V x₀ n₀) e₀ (Let (Binding x₁ mA₀ a₀ :| []) b₀) =
 
     b₁  =       subst (V x₀ n₁) e₁   b₀
 subst (V x₀ n₀) e₀ (Let (Binding x₁ mA₀ a₀ :| (l₀ : ls₀)) b₀) =
-    Let (Binding x₁ mA₁ a₁ :| (l₁ : ls₁)) b₁
+    case subst (V x₀ n₁) e₁ (Let (l₀ :| ls₀) b₀) of
+        Let (l₁ :| ls₁) b₁ -> Let (Binding x₁ mA₁ a₁ :| (l₁ : ls₁)) b₁
+        e                  -> Let (Binding x₁ mA₁ a₁ :|       []  ) e
   where
     n₁ = if x₀ == x₁ then n₀ + 1 else n₀
 
@@ -1014,7 +1017,6 @@ subst (V x₀ n₀) e₀ (Let (Binding x₁ mA₀ a₀ :| (l₀ : ls₀)) b₀) 
     mA₁ = fmap (subst (V x₀ n₀) e₀) mA₀
     a₁  =       subst (V x₀ n₀) e₀   a₀
 
-    Let (l₁ :| ls₁) b₁ = subst (V x₀ n₁) e₁ (Let (l₀ :| ls₀) b₀)
 subst x e (Annot a b) = Annot a' b'
   where
     a' = subst x e a
@@ -1201,12 +1203,12 @@ alphaNormalize (Let (Binding "_" mA₀ a₀ :| []) b₀) =
 
     b₁  =      alphaNormalize b₀
 alphaNormalize (Let (Binding "_" mA₀ a₀ :| (l₀ : ls₀)) b₀) =
-    Let (Binding "_" mA₁ a₁ :| (l₁ : ls₁)) b₁
+    case alphaNormalize (Let (l₀ :| ls₀) b₀) of
+        Let (l₁ :| ls₁) b₁ -> Let (Binding "_" mA₁ a₁ :| (l₁ : ls₁)) b₁
+        e                  -> Let (Binding "_" mA₁ a₁ :|       []  ) e
   where
     mA₁ = fmap alphaNormalize mA₀
     a₁  =      alphaNormalize  a₀
-
-    Let (l₁ :| ls₁) b₁ = alphaNormalize (Let (l₀ :| ls₀) b₀)
 alphaNormalize (Let (Binding x mA₀ a₀ :| []) b₀) =
     Let (Binding "_" mA₁ a₁ :| []) b₄
   where
@@ -1218,7 +1220,9 @@ alphaNormalize (Let (Binding x mA₀ a₀ :| []) b₀) =
     b₃ = shift (-1) (V x 0) b₂
     b₄ = alphaNormalize b₃
 alphaNormalize (Let (Binding x mA₀ a₀ :| (l₀ : ls₀)) b₀) =
-    Let (Binding "_" mA₁ a₁ :| (l₁ : ls₁)) b₄
+    case alphaNormalize (Let (l₀ :| ls₀) b₃) of
+        Let (l₁ :| ls₁) b₄ -> Let (Binding "_" mA₁ a₁ :| (l₁ : ls₁)) b₄
+        e                  -> Let (Binding "_" mA₁ a₁ :|       []  ) e
   where
     mA₁ = fmap alphaNormalize mA₀
     a₁  =      alphaNormalize a₀
@@ -1226,8 +1230,6 @@ alphaNormalize (Let (Binding x mA₀ a₀ :| (l₀ : ls₀)) b₀) =
     b₁ = shift 1 (V "_" 0) b₀
     b₂ = subst (V x 0) (Var (V "_" 0)) b₁
     b₃ = shift (-1) (V x 0) b₂
-
-    Let (l₁ :| ls₁) b₄ = alphaNormalize (Let (l₀ :| ls₀) b₃)
 alphaNormalize (Annot t₀ _T₀) =
     Annot t₁ _T₁
   where
