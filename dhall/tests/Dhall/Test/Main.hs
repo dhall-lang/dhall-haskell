@@ -11,8 +11,10 @@ import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
 import qualified Dhall.Test.Tutorial
 import qualified Dhall.Test.TypeCheck
+import qualified GHC.IO.Encoding
 import qualified System.Directory
 import qualified System.Environment
+import qualified System.IO
 import qualified Test.Tasty
 
 import System.FilePath ((</>))
@@ -33,6 +35,8 @@ allTests =
 
 main :: IO ()
 main = do
+
+    GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
     pwd <- System.Directory.getCurrentDirectory
     System.Environment.setEnv "XDG_CACHE_HOME" (pwd </> ".cache")
     Test.Tasty.defaultMain allTests
