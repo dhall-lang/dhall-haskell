@@ -134,8 +134,9 @@ completeExpression embedded = completeExpression_
                     case (shallowDenote a, shallowDenote b) of
                         (ListLit _ xs, App f c) ->
                             case shallowDenote f of
-                                List     ->
-                                    return (ListLit (Just c) xs)
+                                List     -> case xs of
+                                    [] -> return (ListLit (Just c) xs)
+                                    _  -> return (Annot a b)
                                 Optional -> case xs of
                                     [x] -> return (OptionalLit c (Just x))
                                     []  -> return (OptionalLit c Nothing)
