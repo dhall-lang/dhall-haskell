@@ -12,8 +12,6 @@
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE TupleSections              #-}
 
-{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
-
 {-| Please read the "Dhall.Tutorial" module, which contains a tutorial explaining
     how to use the language, the compiler, and this library
 -}
@@ -887,6 +885,35 @@ instance GenericInterpret V1 where
 
         expected = Union mempty
 
+unsafeExpectUnion :: Text -> Expr Src X -> Dhall.Map.Map Text (Expr Src X)
+unsafeExpectUnion _ (Union kts) =
+    kts
+unsafeExpectUnion name expression =
+    Dhall.Core.internalError
+        (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
+
+unsafeExpectRecord :: Text -> Expr Src X -> Dhall.Map.Map Text (Expr Src X)
+unsafeExpectRecord _ (Record kts) =
+    kts
+unsafeExpectRecord name expression =
+    Dhall.Core.internalError
+        (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
+
+unsafeExpectUnionLit
+    :: Text -> Expr Src X -> (Text, Expr Src X, Dhall.Map.Map Text (Expr Src X))
+unsafeExpectUnionLit _ (UnionLit k v kts) =
+    (k, v, kts)
+unsafeExpectUnionLit name expression =
+    Dhall.Core.internalError
+        (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
+
+unsafeExpectRecordLit :: Text -> Expr Src X -> Dhall.Map.Map Text (Expr Src X)
+unsafeExpectRecordLit _ (RecordLit kvs) =
+    kvs
+unsafeExpectRecordLit name expression =
+    Dhall.Core.internalError
+        (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
+
 instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret f2) => GenericInterpret (M1 C c1 f1 :+: M1 C c2 f2) where
     genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
       where
@@ -925,10 +952,12 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
         extract _ = Nothing
 
         expected =
-            Union (Dhall.Map.insert name expectedR expectedL)
+            Union (Dhall.Map.insert name expectedR ktsL)
 
-        Type extractL (Union expectedL) = evalState (genericAutoWith options) 1
-        Type extractR        expectedR  = evalState (genericAutoWith options) 1
+        Type extractL expectedL = evalState (genericAutoWith options) 1
+        Type extractR expectedR = evalState (genericAutoWith options) 1
+
+        ktsL = unsafeExpectUnion "genericAutoWith (:+:)" expectedL
 
 instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => GenericInterpret (M1 C c f :+: (g :+: h)) where
     genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
@@ -944,20 +973,25 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
         extract _ = Nothing
 
         expected =
-            Union (Dhall.Map.insert name expectedL expectedR)
+            Union (Dhall.Map.insert name expectedL ktsR)
 
-        Type extractL        expectedL  = evalState (genericAutoWith options) 1
-        Type extractR (Union expectedR) = evalState (genericAutoWith options) 1
+        Type extractL expectedL = evalState (genericAutoWith options) 1
+        Type extractR expectedR = evalState (genericAutoWith options) 1
+
+        ktsR = unsafeExpectUnion "genericAutoWith (:+:)" expectedR
 
 instance (GenericInterpret (f :+: g), GenericInterpret (h :+: i)) => GenericInterpret ((f :+: g) :+: (h :+: i)) where
     genericAutoWith options = pure (Type {..})
       where
         extract e = fmap L1 (extractL e) <|> fmap R1 (extractR e)
 
-        expected = Union (Dhall.Map.union expectedL expectedR)
+        expected = Union (Dhall.Map.union ktsL ktsR)
 
-        Type extractL (Union expectedL) = evalState (genericAutoWith options) 1
-        Type extractR (Union expectedR) = evalState (genericAutoWith options) 1
+        Type extractL expectedL = evalState (genericAutoWith options) 1
+        Type extractR expectedR = evalState (genericAutoWith options) 1
+
+        ktsL = unsafeExpectUnion "genericAutoWith (:+:)" expectedL
+        ktsR = unsafeExpectUnion "genericAutoWith (:+:)" expectedR
 
 instance GenericInterpret f => GenericInterpret (M1 C c f) where
     genericAutoWith options = do
@@ -975,8 +1009,8 @@ instance (GenericInterpret f, GenericInterpret g) => GenericInterpret (f :*: g) 
     genericAutoWith options = do
         Type extractL expectedL <- genericAutoWith options
         Type extractR expectedR <- genericAutoWith options
-        let Record ktsL = expectedL
-        let Record ktsR = expectedR
+        let ktsL = unsafeExpectRecord "genericAutoWith (:*:)"expectedL
+        let ktsR = unsafeExpectRecord "genericAutoWith (:*:)"expectedR
         pure
             (Type
                 { extract = liftA2 (liftA2 (:*:)) extractL extractR
@@ -1216,7 +1250,8 @@ instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInj
         embed (L1 l) =
             UnionLit keyL valL (Dhall.Map.insert keyR declaredR ktsL')
           where
-            UnionLit keyL valL ktsL' = embedL l
+            (keyL, valL, ktsL') =
+              unsafeExpectUnionLit "genericInjectWith (:+:)" (embedL l)
         embed (R1 (M1 r)) = UnionLit keyR (embedR r) ktsL
 
         nR :: M1 i c h a
@@ -1226,8 +1261,10 @@ instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInj
 
         declared = Union (Dhall.Map.insert keyR declaredR ktsL)
 
-        InputType embedL (Union ktsL) = evalState (genericInjectWith options) 1
-        InputType embedR  declaredR   = evalState (genericInjectWith options) 1
+        InputType embedL  declaredL = evalState (genericInjectWith options) 1
+        InputType embedR  declaredR = evalState (genericInjectWith options) 1
+
+        ktsL = unsafeExpectUnion "genericInjectWith (:+:)" declaredL
 
 instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInject (M1 C c f :+: (g :+: h)) where
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
@@ -1236,7 +1273,8 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
         embed (R1 r) =
             UnionLit keyR valR (Dhall.Map.insert keyL declaredL ktsR')
           where
-            UnionLit keyR valR ktsR' = embedR r
+            (keyR, valR, ktsR') =
+                unsafeExpectUnionLit "genericInjectWith (:+:)" (embedR r)
 
         nL :: M1 i c f a
         nL = undefined
@@ -1245,25 +1283,32 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
 
         declared = Union (Dhall.Map.insert keyL declaredL ktsR)
 
-        InputType embedL  declaredL   = evalState (genericInjectWith options) 1
-        InputType embedR (Union ktsR) = evalState (genericInjectWith options) 1
+        InputType embedL declaredL = evalState (genericInjectWith options) 1
+        InputType embedR declaredR = evalState (genericInjectWith options) 1
+
+        ktsR = unsafeExpectUnion "genericInjectWith (:+:)" declaredR
 
 instance (GenericInject (f :+: g), GenericInject (h :+: i)) => GenericInject ((f :+: g) :+: (h :+: i)) where
     genericInjectWith options = pure (InputType {..})
       where
         embed (L1 l) =
-            UnionLit keyL valR (Dhall.Map.union ktsL' ktsR)
+            UnionLit keyL valL (Dhall.Map.union ktsL' ktsR)
           where
-            UnionLit keyL valR ktsL' = embedL l
+            (keyL, valL, ktsL') =
+                unsafeExpectUnionLit "genericInjectWith (:+:)" (embedL l)
         embed (R1 r) =
             UnionLit keyR valR (Dhall.Map.union ktsL ktsR')
           where
-            UnionLit keyR valR ktsR' = embedR r
+            (keyR, valR, ktsR') =
+                unsafeExpectUnionLit "genericInjectWith (:+:)" (embedR r)
 
         declared = Union (Dhall.Map.union ktsL ktsR)
 
-        InputType embedL (Union ktsL) = evalState (genericInjectWith options) 1
-        InputType embedR (Union ktsR) = evalState (genericInjectWith options) 1
+        InputType embedL declaredL = evalState (genericInjectWith options) 1
+        InputType embedR declaredR = evalState (genericInjectWith options) 1
+
+        ktsL = unsafeExpectUnion "genericInjectWith (:+:)" declaredL
+        ktsR = unsafeExpectUnion "genericInjectWith (:+:)" declaredR
 
 instance (GenericInject f, GenericInject g) => GenericInject (f :*: g) where
     genericInjectWith options = do
@@ -1273,13 +1318,16 @@ instance (GenericInject f, GenericInject g) => GenericInject (f :*: g) where
         let embed (l :*: r) =
                 RecordLit (Dhall.Map.union mapL mapR)
               where
-                RecordLit mapL = embedInL l
-                RecordLit mapR = embedInR r
+                mapL =
+                    unsafeExpectRecordLit "genericInjectWith (:*:)" (embedInL l)
+
+                mapR =
+                    unsafeExpectRecordLit "genericInjectWith (:*:)" (embedInR r)
 
         let declared = Record (Dhall.Map.union mapL mapR)
               where
-                Record mapL = declaredInL
-                Record mapR = declaredInR
+                mapL = unsafeExpectRecord "genericInjectWith (:*:)" declaredInL
+                mapR = unsafeExpectRecord "genericInjectWith (:*:)" declaredInR
 
         pure (InputType {..})
 
