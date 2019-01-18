@@ -43,7 +43,7 @@ for:
   matrix:
     except:
       - STACK_YAML: stack-lts-6.yaml
-      
+
   test_script:
     - stack test dhall:tasty
     - stack test dhall-json
