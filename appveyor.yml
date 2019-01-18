@@ -19,7 +19,7 @@ install:
   - stack setup > nul
 
 cache:
-  - '%STACK_ROOT%' -> '%STACK_YAML%'
+  - C:\sr -> '%STACK_YAML%'
   - .stack-work -> '%STACK_YAML%'
   - dhall\.stack-work -> '%STACK_YAML%'
   - dhall-json\.stack-work -> '%STACK_YAML%'
