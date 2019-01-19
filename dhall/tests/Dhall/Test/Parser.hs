@@ -18,155 +18,152 @@ tests =
         [ Test.Tasty.testGroup "whitespace"
             [ shouldParse
                 "prefix/suffix"
-                "./tests/parser/success/whitespace"
+                "./dhall-lang/tests/parser/success/whitespace"
             , shouldParse
                 "block comment"
-                "./tests/parser/success/blockComment"
+                "./dhall-lang/tests/parser/success/blockComment"
             , shouldParse
                 "nested block comment"
-                "./tests/parser/success/nestedBlockComment"
+                "./dhall-lang/tests/parser/success/nestedBlockComment"
             , shouldParse
                 "line comment"
-                "./tests/parser/success/lineComment"
+                "./dhall-lang/tests/parser/success/lineComment"
             , shouldParse
                 "Unicode comment"
-                "./tests/parser/success/unicodeComment"
+                "./dhall-lang/tests/parser/success/unicodeComment"
             , shouldParse
                 "whitespace buffet"
-                "./tests/parser/success/whitespaceBuffet"
+                "./dhall-lang/tests/parser/success/whitespaceBuffet"
             ]
         , shouldParse
             "label"
-            "./tests/parser/success/label"
+            "./dhall-lang/tests/parser/success/label"
         , shouldParse
             "quoted label"
-            "./tests/parser/success/quotedLabel"
+            "./dhall-lang/tests/parser/success/quotedLabel"
         , shouldParse
             "double quoted string"
-            "./tests/parser/success/doubleQuotedString"
+            "./dhall-lang/tests/parser/success/doubleQuotedString"
         , shouldParse
             "Unicode double quoted string"
-            "./tests/parser/success/unicodeDoubleQuotedString"
+            "./dhall-lang/tests/parser/success/unicodeDoubleQuotedString"
         , shouldParse
             "escaped double quoted string"
-            "./tests/parser/success/escapedDoubleQuotedString"
+            "./dhall-lang/tests/parser/success/escapedDoubleQuotedString"
         , shouldParse
             "interpolated double quoted string"
-            "./tests/parser/success/interpolatedDoubleQuotedString"
+            "./dhall-lang/tests/parser/success/interpolatedDoubleQuotedString"
         , shouldParse
             "single quoted string"
-            "./tests/parser/success/singleQuotedString"
+            "./dhall-lang/tests/parser/success/singleQuotedString"
         , shouldParse
             "escaped single quoted string"
-            "./tests/parser/success/escapedSingleQuotedString"
+            "./dhall-lang/tests/parser/success/escapedSingleQuotedString"
         , shouldParse
             "interpolated single quoted string"
-            "./tests/parser/success/interpolatedSingleQuotedString"
+            "./dhall-lang/tests/parser/success/interpolatedSingleQuotedString"
         , shouldParse
             "double"
-            "./tests/parser/success/double"
+            "./dhall-lang/tests/parser/success/double"
         , shouldParse
             "natural"
-            "./tests/parser/success/natural"
+            "./dhall-lang/tests/parser/success/natural"
         , shouldParse
             "identifier"
-            "./tests/parser/success/identifier"
+            "./dhall-lang/tests/parser/success/identifier"
         , shouldParse
             "paths"
-            "./tests/parser/success/paths"
+            "./dhall-lang/tests/parser/success/paths"
         , shouldParse
             "path termination"
-            "./tests/parser/success/pathTermination"
+            "./dhall-lang/tests/parser/success/pathTermination"
         , shouldParse
             "urls"
-            "./tests/parser/success/urls"
+            "./dhall-lang/tests/parser/success/urls"
         , shouldParse
             "environmentVariables"
-            "./tests/parser/success/environmentVariables"
+            "./dhall-lang/tests/parser/success/environmentVariables"
         , shouldParse
             "lambda"
-            "./tests/parser/success/lambda"
+            "./dhall-lang/tests/parser/success/lambda"
         , shouldParse
             "if then else"
-            "./tests/parser/success/ifThenElse"
+            "./dhall-lang/tests/parser/success/ifThenElse"
         , shouldParse
             "let"
-            "./tests/parser/success/let"
+            "./dhall-lang/tests/parser/success/let"
         , shouldParse
             "forall"
-            "./tests/parser/success/forall"
+            "./dhall-lang/tests/parser/success/forall"
         , shouldParse
             "function type"
-            "./tests/parser/success/functionType"
+            "./dhall-lang/tests/parser/success/functionType"
         , shouldParse
             "operators"
-            "./tests/parser/success/operators"
+            "./dhall-lang/tests/parser/success/operators"
         , shouldParse
             "annotations"
-            "./tests/parser/success/annotations"
+            "./dhall-lang/tests/parser/success/annotations"
         , shouldParse
             "merge"
-            "./tests/parser/success/merge"
+            "./dhall-lang/tests/parser/success/merge"
         , shouldParse
             "constructors"
-            "./tests/parser/success/constructors"
+            "./dhall-lang/tests/parser/success/constructors"
         , shouldParse
             "fields"
-            "./tests/parser/success/fields"
+            "./dhall-lang/tests/parser/success/fields"
         , shouldParse
             "record"
-            "./tests/parser/success/record"
+            "./dhall-lang/tests/parser/success/record"
         , shouldParse
             "union"
-            "./tests/parser/success/union"
+            "./dhall-lang/tests/parser/success/union"
         , shouldParse
             "list"
-            "./tests/parser/success/list"
+            "./dhall-lang/tests/parser/success/list"
         , shouldParse
             "builtins"
-            "./tests/parser/success/builtins"
+            "./dhall-lang/tests/parser/success/builtins"
         , shouldParse
             "import alternatives"
-            "./tests/parser/success/importAlt"
+            "./dhall-lang/tests/parser/success/importAlt"
         , shouldParse
             "large expression"
-            "./tests/parser/success/largeExpression"
+            "./dhall-lang/tests/parser/success/largeExpression"
         , shouldParse
             "names that begin with reserved identifiers"
-            "./tests/parser/success/reservedPrefix"
+            "./dhall-lang/tests/parser/success/reservedPrefix"
         , shouldParse
             "interpolated expressions with leading whitespace"
-            "./tests/parser/success/template"
+            "./dhall-lang/tests/parser/success/template"
         , shouldParse
             "collections with type annotations containing imports"
-            "./tests/parser/success/collectionImportType"
+            "./dhall-lang/tests/parser/success/collectionImportType"
         , shouldParse
             "a parenthesized custom header import"
-            "./tests/parser/success/parenthesizeUsing"
+            "./dhall-lang/tests/parser/success/parenthesizeUsing"
         , shouldNotParse
             "accessing a field of an import without parentheses"
-            "./tests/parser/failure/importAccess.dhall"
+            "./dhall-lang/tests/parser/failure/importAccess.dhall"
         , shouldParse
             "Sort"
-            "./tests/parser/success/sort"
+            "./dhall-lang/tests/parser/success/sort"
         , shouldParse
             "quoted path components"
-            "./tests/parser/success/quotedPaths"
+            "./dhall-lang/tests/parser/success/quotedPaths"
         , shouldNotParse
             "positive double out of bounds"
-            "./tests/parser/failure/doubleBoundsPos.dhall"
+            "./dhall-lang/tests/parser/failure/doubleBoundsPos.dhall"
         , shouldNotParse
             "negative double out of bounds"
-            "./tests/parser/failure/doubleBoundsNeg.dhall"
+            "./dhall-lang/tests/parser/failure/doubleBoundsNeg.dhall"
         , shouldParse
             "as Text"
-            "./tests/parser/success/asText"
-        , shouldParse
-            "custom headers"
-            "./tests/parser/success/customHeaders"
+            "./dhall-lang/tests/parser/success/asText"
         , shouldNotParse
             "a multi-line literal without an initial newline"
-            "./tests/parser/failure/mandatoryNewline.dhall"
+            "./dhall-lang/tests/parser/failure/mandatoryNewline.dhall"
         ]
 
 shouldParse :: Text -> FilePath -> TestTree

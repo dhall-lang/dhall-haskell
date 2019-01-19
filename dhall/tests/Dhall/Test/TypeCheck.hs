@@ -96,8 +96,8 @@ accessTypeChecks =
 should :: Text -> Text -> TestTree
 should name basename =
     Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
-        let actualCode   = "./tests/typecheck/" <> basename <> "A.dhall"
-        let expectedCode = "./tests/typecheck/" <> basename <> "B.dhall"
+        let actualCode   = "./dhall-lang/tests/typecheck/" <> basename <> "A.dhall"
+        let expectedCode = "./dhall-lang/tests/typecheck/" <> basename <> "B.dhall"
 
         actualExpr <- case Dhall.Parser.exprFromText mempty actualCode of
             Left  err  -> Control.Exception.throwIO err
@@ -116,7 +116,7 @@ should name basename =
 shouldNotTypeCheck :: Text -> Text -> TestTree
 shouldNotTypeCheck name basename =
     Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
-        let code = "./tests/typecheck/" <> basename <> ".dhall"
+        let code = "./dhall-lang/tests/typecheck/" <> basename <> ".dhall"
 
         expression <- case Dhall.Parser.exprFromText mempty code of
             Left  exception  -> Control.Exception.throwIO exception
