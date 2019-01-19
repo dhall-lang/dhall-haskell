@@ -1,1 +1,0 @@
-{ x = Text, y = List }

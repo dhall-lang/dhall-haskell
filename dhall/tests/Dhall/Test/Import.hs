@@ -44,10 +44,6 @@ tests =
             ]
         , Test.Tasty.testGroup "import relative to argument"
             [ shouldNotFailRelative
-                "works"
-                "./tests/import/data/foo/bar"
-                "./tests/import/success/relative.dhall"
-            , shouldNotFailRelative
                 "a semantic integrity check if fields are reordered"
                 "./tests/import/success/"
                 "./tests/import/success/fieldOrderA.dhall"

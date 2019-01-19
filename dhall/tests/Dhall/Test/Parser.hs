@@ -161,9 +161,6 @@ tests =
         , shouldParse
             "as Text"
             "./tests/parser/success/asText"
-        , shouldParse
-            "custom headers"
-            "./tests/parser/success/customHeaders"
         , shouldNotParse
             "a multi-line literal without an initial newline"
             "./tests/parser/failure/mandatoryNewline.dhall"
