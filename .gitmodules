@@ -1,0 +1,3 @@
+[submodule "dhall/dhall-lang"]
+	path = dhall/dhall-lang
+	url = https://github.com/dhall-lang/dhall-lang.git

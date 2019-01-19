@@ -276,8 +276,8 @@ nestedReduction = testCase "doubleReduction" $ do
 should :: Text -> Text -> TestTree
 should name basename =
     Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
-        let actualCode   = "./tests/normalization/" <> basename <> "A.dhall"
-        let expectedCode = "./tests/normalization/" <> basename <> "B.dhall"
+        let actualCode   = "./dhall-lang/tests/normalization/" <> basename <> "A.dhall"
+        let expectedCode = "./dhall-lang/tests/normalization/" <> basename <> "B.dhall"
 
         actualExpr <- case Dhall.Parser.exprFromText mempty actualCode of
             Left  err  -> Control.Exception.throwIO err
