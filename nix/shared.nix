@@ -476,6 +476,13 @@ let
   # pull request builder always posts a GitHub status on each revision
   pwd = pkgs.runCommand "pwd" { here = ../.; } "touch $out";
 
+  makeStaticIfPossible = name:
+    if pkgs.stdenv.isLinux
+    then
+      pkgsStaticLinux.pkgsMusl.haskell.packages."${compiler}"."${name}-static"
+    else
+      pkgs.haskell.packages."${compiler}"."${name}";
+
   makeTarball = name:
     pkgsStaticLinux.releaseTools.binaryTarball rec {
       src = pkgsStaticLinux.pkgsMusl.haskell.packages."${compiler}"."${name}-static";
@@ -498,6 +505,13 @@ let
 in
   rec {
     inherit pwd;
+
+    possibly-static = {
+      dhall      = makeStaticIfPossible "dhall"     ;
+      dhall-bash = makeStaticIfPossible "dhall-bash";
+      dhall-json = makeStaticIfPossible "dhall-json";
+      dhall-text = makeStaticIfPossible "dhall-text";
+    };
 
     tarball-dhall      = makeTarball "dhall"     ;
     tarball-dhall-bash = makeTarball "dhall-bash";
