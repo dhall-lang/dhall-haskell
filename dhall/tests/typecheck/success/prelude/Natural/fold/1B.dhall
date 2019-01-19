@@ -1,1 +1,0 @@
-∀(zero : Natural) → Natural
