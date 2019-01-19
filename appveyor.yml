@@ -31,7 +31,7 @@ build_script:
   - stack install --local-bin-path bin
   - if /I "%APPVEYOR_REPO_TAG%" EQU "true" (set DEPLOY_TAG=%APPVEYOR_REPO_TAG_NAME%) else (set DEPLOY_TAG=%APPVEYOR_REPO_COMMIT:~0,5%)
   - set DEPLOY_SUFFIX=%DEPLOY_TAG%-x86_64-windows.zip
-  - 7z a "bin\main\dhall-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall.exe"
+  - 7z a "bin\dhall-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall.exe"
   # dhall-json cannot be built with lts-6
   - if exist "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-json.exe" ( 7z a "bin\dhall-json-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-json.exe" )
   - if exist "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-yaml.exe" ( 7z a "bin\dhall-json-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-yaml.exe" )
@@ -51,13 +51,13 @@ for:
     - stack test dhall-bash
 
 artifacts:
-  - path: bin\main\dhall-*.zip
+  - path: bin\dhall-%DEPLOY_SUFFIX%.zip
     name: dhall
-  - path: bin\dhall-json-*.zip
+  - path: bin\dhall-json-%DEPLOY_SUFFIX%.zip
     name: dhall-json
-  - path: bin\dhall-text-*.zip
+  - path: bin\dhall-text-%DEPLOY_SUFFIX%.zip
     name: dhall-text
-  - path: bin\dhall-bash-*.zip
+  - path: bin\dhall-bash-%DEPLOY_SUFFIX%.zip
     name: dhall-bash
     
 deploy:
