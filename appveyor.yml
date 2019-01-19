@@ -51,15 +51,15 @@ for:
     - stack test dhall-bash
 
 artifacts:
-  - path: bin\dhall-%DEPLOY_SUFFIX%.zip
+  - path: bin\dhall-%DEPLOY_SUFFIX%
     name: dhall
-  - path: bin\dhall-json-%DEPLOY_SUFFIX%.zip
+  - path: bin\dhall-json-%DEPLOY_SUFFIX%
     name: dhall-json
-  - path: bin\dhall-text-%DEPLOY_SUFFIX%.zip
+  - path: bin\dhall-text-%DEPLOY_SUFFIX%
     name: dhall-text
-  - path: bin\dhall-bash-%DEPLOY_SUFFIX%.zip
+  - path: bin\dhall-bash-%DEPLOY_SUFFIX%
     name: dhall-bash
-    
+
 deploy:
   - provider: GitHub
     auth_token:
