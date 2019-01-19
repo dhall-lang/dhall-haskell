@@ -23,34 +23,34 @@ tests =
             [ shouldFail
                 3
                 "alternative of several unset env variables"
-                "./tests/import/failure/alternativeEnv.dhall"
+                "./dhall-lang/tests/import/failure/alternativeEnv.dhall"
             , shouldFail
                 1
                 "alternative of env variable and missing"
-                "./tests/import/failure/alternativeEnvMissing.dhall"
+                "./dhall-lang/tests/import/failure/alternativeEnvMissing.dhall"
             , shouldFail
                 0
                 "just missing"
-                "./tests/import/failure/missing.dhall"
+                "./dhall-lang/tests/import/failure/missing.dhall"
             , shouldNotFail
                 "alternative of env variable, missing, and a Natural"
-                "./tests/import/success/alternativeEnvNaturalA.dhall"
+                "./dhall-lang/tests/import/success/alternativeEnvNaturalA.dhall"
             , shouldNotFail
                 "alternative of env variable and a Natural"
-                "./tests/import/success/alternativeEnvSimpleA.dhall"
+                "./dhall-lang/tests/import/success/alternativeEnvSimpleA.dhall"
             , shouldNotFail
                 "alternative of a Natural and missing"
-                "./tests/import/success/alternativeNaturalA.dhall"
+                "./dhall-lang/tests/import/success/alternativeNaturalA.dhall"
             ]
         , Test.Tasty.testGroup "import relative to argument"
             [ shouldNotFailRelative
                 "a semantic integrity check if fields are reordered"
-                "./tests/import/success/"
-                "./tests/import/success/fieldOrderA.dhall"
+                "./dhall-lang/tests/import/success/"
+                "./dhall-lang/tests/import/success/fieldOrderA.dhall"
             , shouldNotFailRelative
                 "a semantic integrity check when importing an expression using `constructors`"
-                "./tests/import/success/"
-                "./tests/import/success/issue553B.dhall"
+                "./dhall-lang/tests/import/success/"
+                "./dhall-lang/tests/import/success/issue553B.dhall"
             ]
         ]
 
