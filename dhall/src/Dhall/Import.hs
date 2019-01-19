@@ -572,8 +572,6 @@ getCacheFile hash = do
 
     cacheDirectory <- getCacheDirectory
 
-    assertDirectory cacheDirectory
-
     let dhallDirectory = cacheDirectory </> "dhall"
 
     assertDirectory dhallDirectory
@@ -582,22 +580,23 @@ getCacheFile hash = do
 
     return cacheFile
 
-getCacheDirectory :: MonadIO io => io FilePath
-#if MIN_VERSION_directory(1,2,3)
-getCacheDirectory = liftIO (Directory.getXdgDirectory Directory.XdgCache "")
-#else
-getCacheDirectory = liftIO $ do
-    maybeXDGCacheHome <- System.Environment.lookupEnv "XDG_CACHE_HOME"
+getCacheDirectory :: (Alternative m, MonadIO m) => m FilePath
+getCacheDirectory = alternative₀ <|> alternative₁
+  where
+    alternative₀ = do
+        maybeXDGCacheHome <- do
+          liftIO (System.Environment.lookupEnv "XDG_CACHE_HOME")
 
-    case maybeXDGCacheHome of
-        Nothing -> do
-            homeDirectory <- Directory.getHomeDirectory
+        case maybeXDGCacheHome of
+            Just xdgCacheHome -> return xdgCacheHome
+            Nothing           -> empty
 
-            return (homeDirectory </> ".cache")
+    alternative₁ = do
+        maybeHomeDirectory <- liftIO (System.Environment.lookupEnv "HOME")
 
-        Just xdgCacheHome -> do
-            return xdgCacheHome
-#endif
+        case maybeHomeDirectory of
+            Just homeDirectory -> return (homeDirectory </> ".cache")
+            Nothing            -> empty
 
 exprFromUncachedImport :: Import -> StateT (Status IO) IO (Expr Src Import)
 exprFromUncachedImport (Import {..}) = do
