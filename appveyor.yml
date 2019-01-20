@@ -17,6 +17,8 @@ environment:
 install:
   - choco install -y haskell-stack --version %STACK_VERSION%
   - stack setup > nul
+  - cd %APPVEYOR_BUILD_FOLDER%
+  - git submodule update --init --recursive
 
 cache:
   - C:\sr -> '%STACK_YAML%'
