@@ -27,7 +27,7 @@ cache:
   - dhall-json\.stack-work -> '%STACK_YAML%'
   - dhall-text\.stack-work -> '%STACK_YAML%'
   - dhall-bash\.stack-work -> '%STACK_YAML%'
-  
+
 build_script:
   - stack build
   - stack install --local-bin-path bin
