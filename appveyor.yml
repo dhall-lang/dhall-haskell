@@ -44,6 +44,7 @@ for:
 -
   matrix:
     except:
+      # stack is not able to build test dependencies with lts-6
       - STACK_YAML: stack-lts-6.yaml
 
   test_script:
