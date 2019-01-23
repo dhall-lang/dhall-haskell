@@ -1628,7 +1628,7 @@ import Dhall
 -- > z) (y.diff (n + List/length { index : Natural, value : a } kvs)) }) { count = 
 -- > 0, diff = λ(_ : Natural) → nil }).diff 0)
 --
--- ... and run the expression through the the formatter:
+-- ... and run the expression through the formatter:
 --
 -- > $ dhall format < ./unformatted
 -- >   λ(a : Type)
