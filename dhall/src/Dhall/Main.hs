@@ -287,7 +287,14 @@ command (Options {..}) = do
 
     handle $ case mode of
         Version -> do
-            putStrLn (showVersion Meta.version)
+            let line₀ = "Haskell package version: "
+                    <>  Data.Text.pack (showVersion Meta.version)
+
+            let line₁ = "Standard version: "
+                    <>  Dhall.Binary.renderStandardVersion Dhall.Binary.defaultStandardVersion
+
+            Data.Text.IO.putStrLn line₀
+            Data.Text.IO.putStrLn line₁
 
         Default {..} -> do
             expression <- getExpression
