@@ -11,6 +11,7 @@ module Dhall.Binary
       StandardVersion(..)
     , defaultStandardVersion
     , parseStandardVersion
+    , renderStandardVersion
 
     -- * Encoding and decoding
     , encodeWithVersion
@@ -82,6 +83,9 @@ parseStandardVersion =
         case string :: Text of
             "5.0.0" -> return V_5_0_0
             _       -> fail "Unsupported version"
+
+renderStandardVersion :: StandardVersion -> Text
+renderStandardVersion V_5_0_0 = "5.0.0";
 
 {-| Convert a function applied to multiple arguments to the base function and
     the list of arguments
