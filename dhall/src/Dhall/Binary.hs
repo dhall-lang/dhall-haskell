@@ -833,6 +833,8 @@ decodeWithVersion term = do
     case version of
         "5.0.0" -> do
             return ()
+        "4.0.0" -> do
+            return ()
         _ -> do
             fail ("This decoded version is not supported: " <> Data.Text.unpack version)
 
