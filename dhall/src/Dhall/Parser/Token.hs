@@ -330,7 +330,7 @@ quotedPathCharacter :: Char -> Bool
 quotedPathCharacter c =
         ('\x20' <= c && c <= '\x21')
     ||  ('\x23' <= c && c <= '\x2E')
-    ||  ('\x30' <= c && c <= '\x7E')
+    ||  ('\x30' <= c && c <= '\x10FFFF')
 
 pathComponent :: Parser Text
 pathComponent = do
