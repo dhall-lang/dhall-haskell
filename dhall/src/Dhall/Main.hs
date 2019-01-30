@@ -70,6 +70,7 @@ import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.IO
 import qualified Text.Dot
+import qualified Data.Map
 
 -- | Top-level program options
 data Options = Options
@@ -84,7 +85,7 @@ data Options = Options
 data Mode
     = Default { annotate :: Bool }
     | Version
-    | Resolve { dot :: Bool }
+    | Resolve { resolveMode :: Maybe ResolveMode }
     | Type
     | Normalize
     | Repl
@@ -95,6 +96,11 @@ data Mode
     | Lint { inplace :: Maybe FilePath }
     | Encode { json :: Bool }
     | Decode { json :: Bool }
+
+data ResolveMode 
+    = Dot
+    | ListDependencies
+    
 
 -- | `Parser` for the `Options` type
 parseOptions :: Parser Options
@@ -134,7 +140,7 @@ parseMode =
     <|> subcommand
             "resolve"
             "Resolve an expression's imports"
-            (Resolve <$> parseDot)
+            (Resolve <$> parseResolveMode)
     <|> subcommand
             "type"
             "Infer an expression's type"
@@ -186,12 +192,19 @@ parseMode =
         Options.Applicative.switch
             (Options.Applicative.long "annotate")
 
-    parseDot =
-        Options.Applicative.switch
-        (   Options.Applicative.long "dot"
-        <>  Options.Applicative.help
-              "Output import dependency graph in dot format"
-        )
+    parseResolveMode =
+          Options.Applicative.flag' (Just Dot)
+              (   Options.Applicative.long "dot"
+              <>  Options.Applicative.help
+                    "Output import dependency graph in dot format"
+              )
+        <|>
+          Options.Applicative.flag' (Just ListDependencies)
+              (   Options.Applicative.long "list"
+              <>  Options.Applicative.help
+                    "List transitive import dependencies"
+              )
+        <|> pure Nothing
 
     parseInplace =
         Options.Applicative.strOption
@@ -312,17 +325,28 @@ command (Options {..}) = do
 
             render System.IO.stdout annotatedExpression
 
-        Resolve dot -> do
+        Resolve rMode -> do
             expression <- getExpression
 
-            (resolvedExpression, Dhall.Import.Types.Status { _dot }) <-
+            (resolvedExpression, Dhall.Import.Types.Status { _dot, _cache}) <-
                 State.runStateT (Dhall.Import.loadWith expression) status
+            
+            case rMode of
+                Just Dot -> 
+                    putStr . ("strict " <>) . Text.Dot.showDot $
+                    Text.Dot.attribute ("rankdir", "LR") >> 
+                    _dot
 
-            if   dot
-            then putStr . ("strict " <>) . Text.Dot.showDot $
-                 Text.Dot.attribute ("rankdir", "LR") >> _dot
-            else render System.IO.stdout resolvedExpression
+                Just ListDependencies -> 
+                        mapM_ print 
+                    .   fmap (   Pretty.pretty 
+                             .   Dhall.Core.importType 
+                             .   Dhall.Core.importHashed ) 
+                    .   Data.Map.keys 
+                    $   _cache
 
+                Nothing -> 
+                     render System.IO.stdout resolvedExpression
         Normalize -> do
             expression <- getExpression
 
