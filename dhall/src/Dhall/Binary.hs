@@ -100,6 +100,7 @@ unApply e = (baseFunction₀, diffArguments₀ [])
         ~(baseFunction, diffArguments) = go f
     go baseFunction = (baseFunction, id)
 
+-- | Encode a Dhall expression to a CBOR `Term`
 encode :: Expr s Import -> Term
 encode (Var (V "_" n)) =
     TInteger n
@@ -817,6 +818,7 @@ decodeMaybe (TList [ TInt 26, t₁, _T₁ ]) = do
 decodeMaybe _ =
     empty
 
+-- | Decode a Dhall expression from a CBOR `Term`
 decode :: Term -> Either DecodingFailure (Expr s Import)
 decode term =
     case decodeWithoutVersion <|> decodeWithVersion of
