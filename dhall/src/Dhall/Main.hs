@@ -90,7 +90,7 @@ data Mode
     | Normalize
     | Repl
     | Format { inplace :: Maybe FilePath }
-    | Freeze { inplace :: Maybe FilePath }
+    | Freeze { inplace :: Maybe FilePath, everything :: Bool }
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Maybe FilePath }
@@ -172,7 +172,7 @@ parseMode =
     <|> subcommand
             "freeze"
             "Add hashes to all import statements of an expression"
-            (Freeze <$> optional parseInplace)
+            (Freeze <$> optional parseInplace <*> parseEverythingFlag)
     <|> subcommand
             "encode"
             "Encode a Dhall expression to binary"
@@ -217,6 +217,12 @@ parseMode =
         Options.Applicative.switch
         (   Options.Applicative.long "json"
         <>  Options.Applicative.help "Use JSON representation of CBOR"
+        )
+
+    parseEverythingFlag =
+        Options.Applicative.switch
+        (   Options.Applicative.long "everything"
+        <>  Options.Applicative.help "Freeze all imports (not just remote imports)"
         )
 
 throws :: Exception e => Either e a -> IO a
@@ -381,7 +387,7 @@ command (Options {..}) = do
             Dhall.Format.format characterSet inplace
 
         Freeze {..} -> do
-            Dhall.Freeze.freeze inplace standardVersion
+            Dhall.Freeze.freeze inplace everything standardVersion
 
         Hash -> do
             Dhall.Hash.hash standardVersion

@@ -124,9 +124,11 @@ freeze
     :: Maybe FilePath
     -- ^ Modify file in-place if present, otherwise read from @stdin@ and write
     --   to @stdout@
+    -> Bool
+    -- ^ If `True` then freeze all imports, otherwise freeze only remote imports
     -> StandardVersion
     -> IO ()
-freeze inplace _standardVersion = do
+freeze inplace everything _standardVersion = do
     (text, directory) <- case inplace of
         Nothing -> do
             text <- Data.Text.IO.getContents
@@ -139,7 +141,10 @@ freeze inplace _standardVersion = do
             return (text, System.FilePath.takeDirectory file)
 
     (header, parsedExpression) <- parseExpr srcInfo text
-    frozenExpression <- traverse (freezeRemoteImport directory _standardVersion) parsedExpression
+
+    let freezeFunction = if everything then freezeImport else freezeRemoteImport
+
+    frozenExpression <- traverse (freezeFunction directory _standardVersion) parsedExpression
     writeExpr inplace (header, frozenExpression)
         where
             srcInfo = fromMaybe "(stdin)" inplace
