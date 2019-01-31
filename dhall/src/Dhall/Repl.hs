@@ -19,7 +19,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup ((<>))
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Context (Context)
-import Dhall.Import (standardVersion)
+import Dhall.Import (hashExpressionToCode, standardVersion)
 import Dhall.Pretty (CharacterSet(..))
 import Lens.Family (set)
 import System.Console.Haskeline (Interrupt(..))
@@ -29,6 +29,7 @@ import System.Environment ( getEnvironment )
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.HashSet
 import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
 import qualified Dhall
@@ -245,6 +246,20 @@ addBinding (k : "=" : srcs) = do
 addBinding _ =
   liftIO ( fail ":let should be of the form `:let x = y`" )
 
+hashBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
+hashBinding [] = fail ":hash should be of the form `:hash expr"
+hashBinding tokens = do
+  loadedExpression <- parseAndLoad (unwords tokens)
+
+  _ <- typeCheck loadedExpression
+
+  normalizedExpression <- normalize loadedExpression
+
+  Env{_standardVersion} <- get
+
+  liftIO . Text.putStrLn $
+    hashExpressionToCode _standardVersion normalizedExpression
+
 saveBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
 saveBinding (file : "=" : tokens) = do
   loadedExpression <- parseAndLoad (unwords tokens)
@@ -277,6 +292,7 @@ options
 options =
   [ ( "type", dontCrash . typeOf )
   , ( "let", dontCrash . addBinding . separateEqual )
+  , ( "hash", dontCrash . hashBinding )
   , ( "save", dontCrash . saveBinding . separateEqual )
   , ( "quit", cmdQuit )
   ]
