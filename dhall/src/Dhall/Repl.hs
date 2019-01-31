@@ -11,11 +11,13 @@ module Dhall.Repl
     ) where
 
 import Control.Exception ( SomeException(SomeException), displayException, throwIO )
+import Control.Monad ( forM )
 import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
 import Data.List ( isPrefixOf, nub )
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Maybe ( mapMaybe )
 import Data.Semigroup ((<>))
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Context (Context)
@@ -24,10 +26,12 @@ import Dhall.Pretty (CharacterSet(..))
 import Lens.Family (set)
 import System.Console.Haskeline (Interrupt(..))
 import System.Console.Haskeline.Completion ( Completion, simpleCompletion )
+import System.Directory (listDirectory)
 import System.Environment ( getEnvironment )
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.HashSet
+import qualified Data.Map
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Text.Prettyprint.Doc as Pretty
@@ -260,7 +264,108 @@ hashBinding tokens = do
   liftIO . Text.putStrLn $
     hashExpressionToCode _standardVersion normalizedExpression
 
+saveFilePrefix :: FilePath
+saveFilePrefix = ".dhall-repl"
+
+-- | Find the index for the current _active_ dhall save file
+currentSaveFileIndex :: MonadIO m => m (Maybe Int)
+currentSaveFileIndex = do
+  files <- liftIO $ listDirectory "."
+
+  let parseIndex file
+        | saveFilePrefix `isPrefixOf` file
+        , '-':index <- drop (length saveFilePrefix) file
+        , [(x, "")] <- reads index -- safe version of read
+        = Just x
+
+        | otherwise
+        = Nothing
+
+  pure $ case mapMaybe parseIndex files of
+    [] -> Nothing
+    xs -> Just $ maximum xs
+
+-- | Find the name for the current _active_ dhall save file
+currentSaveFile :: MonadIO m => m (Maybe FilePath)
+currentSaveFile =
+  (fmap . fmap) (\i -> saveFilePrefix <> "-" <> show i) currentSaveFileIndex
+
+-- | Find the name for the next dhall save file
+nextSaveFile :: MonadIO m => m FilePath
+nextSaveFile = do
+  mIndex <- currentSaveFileIndex
+
+  let nextIndex = maybe 0 succ mIndex
+
+  pure $ saveFilePrefix <> "-" <> show nextIndex
+
+loadBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
+loadBinding [] = do
+  mFile <- currentSaveFile
+
+  case mFile of
+    Just file -> loadBinding [file]
+    Nothing   ->
+      fail $ ":load couldn't find any `" <> saveFilePrefix <> "-*` files"
+
+loadBinding [file] = do
+  loadedExpression <- parseAndLoad =<< liftIO (readFile file)
+
+  -- Typecheck and normalize to support modified save files
+  _ <- typeCheck loadedExpression
+  normalizedExpression <- normalize loadedExpression
+
+  case normalizedExpression of
+    Expr.RecordLit fields -> do
+
+      bindings <- forM (Map.toMap fields) $ \expr -> do
+        type' <- typeCheck expr
+        pure $ Binding { bindingType = type', bindingExpr = expr }
+
+      modify
+        ( \e ->
+            e
+              { envBindings =
+                  Data.Map.foldrWithKey Dhall.Context.insert (envBindings e) bindings
+              }
+        )
+
+      liftIO . putStrLn $ "\nLoaded `" <> file <> "`\n"
+
+    _  -> fail ":load expects a file that contains a record"
+
+loadBinding _ = fail ":load should be of the form `:load` or `:load file`"
+
 saveBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
+-- Save all the bindings into a big record
+saveBinding [] = do
+  file <- nextSaveFile
+
+  saveBinding [file]
+
+-- Save all the bindings into a big record into `file`
+saveBinding [file] = do
+  env <- get
+
+  let -- All the environment bindings in a single record
+      -- Note: each binding was normalized when added to the context so we don't
+      -- have to worry about bindings depending on one another.
+      bindings
+        = Expr.RecordLit
+        . Map.fromList
+        . reverse -- reversing in order to only keep the last binding
+        . (fmap . fmap) bindingExpr
+        . Dhall.Context.toList
+        $ envBindings env
+
+      handler handle =
+          State.evalStateT (output handle bindings) env
+
+  liftIO (System.IO.withFile file System.IO.WriteMode handler)
+
+  liftIO . putStrLn $ "\nContext saved to `" <> file <> "`\n"
+
+-- Save a single expression to `file`
 saveBinding (file : "=" : tokens) = do
   loadedExpression <- parseAndLoad (unwords tokens)
 
@@ -274,7 +379,10 @@ saveBinding (file : "=" : tokens) = do
           State.evalStateT (output handle normalizedExpression) env
 
   liftIO (System.IO.withFile file System.IO.WriteMode handler)
-saveBinding _ = fail ":save should be of the form `:save x = y`"
+
+  liftIO . putStrLn $ "\nExpression saved to `" <> file <> "`\n"
+
+saveBinding _ = fail ":save should be of the form `:save`, `:save file`, or `:save file = expr`"
 
 cmdQuit :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
 cmdQuit _ = do
@@ -291,8 +399,9 @@ options
   => Repline.Options m
 options =
   [ ( "type", dontCrash . typeOf )
-  , ( "let", dontCrash . addBinding . separateEqual )
   , ( "hash", dontCrash . hashBinding )
+  , ( "let", dontCrash . addBinding . separateEqual )
+  , ( "load", dontCrash . loadBinding )
   , ( "save", dontCrash . saveBinding . separateEqual )
   , ( "quit", cmdQuit )
   ]
