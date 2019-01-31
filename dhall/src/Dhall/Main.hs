@@ -99,7 +99,7 @@ data Mode
 
 data ResolveMode
     = Dot
-    | ListDependencies
+    | ListTransitiveDependencies
     | ListImmediateDependencies
 
 
@@ -201,13 +201,13 @@ parseMode =
               )
         <|>
           Options.Applicative.flag' (Just ListImmediateDependencies)
-              (   Options.Applicative.long "immediate"
+              (   Options.Applicative.long "immediate-dependencies"
               <>  Options.Applicative.help
                     "List immediate import dependencies"
               )
         <|>
-          Options.Applicative.flag' (Just ListDependencies)
-              (   Options.Applicative.long "list"
+          Options.Applicative.flag' (Just ListTransitiveDependencies)
+              (   Options.Applicative.long "transitive-dependencies"
               <>  Options.Applicative.help
                     "List transitive import dependencies"
               )
@@ -349,7 +349,7 @@ command (Options {..}) = do
                         . Pretty.pretty
                         . Dhall.Core.importHashed) expression
 
-        Resolve (Just ListDependencies) -> do
+        Resolve (Just ListTransitiveDependencies) -> do
             expression <- getExpression
 
             (Dhall.Import.Types.Status { _cache }) <-
