@@ -490,7 +490,7 @@ exprFromImport here@(Import {..}) = do
 
         term <- throws (Codec.Serialise.deserialiseOrFail bytesLazy)
 
-        throws (Dhall.Binary.decodeWithVersion term)
+        throws (Dhall.Binary.decode term)
 
     case result of
         Just expression -> return expression
@@ -920,10 +920,7 @@ encodeExpression _standardVersion expression = bytesStrict
     intermediateExpression = fmap absurd expression
 
     term :: Term
-    term =
-        Dhall.Binary.encodeWithVersion
-            _standardVersion
-            intermediateExpression
+    term = Dhall.Binary.encode intermediateExpression
 
     bytesLazy = Codec.Serialise.serialise term
 
