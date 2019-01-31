@@ -5,7 +5,8 @@
 module Dhall.Freeze
     ( -- * Freeze
       freeze
-    , hashImport
+    , freezeImport
+    , freezeRemoteImport
     ) where
 
 import Control.Exception (SomeException)
@@ -13,7 +14,7 @@ import Data.Monoid ((<>))
 import Data.Maybe (fromMaybe)
 import Data.Text
 import Dhall.Binary (StandardVersion(..))
-import Dhall.Core (Expr(..), Import(..), ImportHashed(..))
+import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Import (standardVersion)
 import Dhall.Parser (exprAndHeaderFromText, Src)
 import Dhall.Pretty (annToAnsiStyle, layoutOpts)
@@ -33,13 +34,13 @@ import qualified System.FilePath
 import qualified System.IO
 
 -- | Retrieve an `Import` and update the hash to match the latest contents
-hashImport
+freezeImport
     :: FilePath
     -- ^ Current working directory
     -> StandardVersion
     -> Import
     -> IO Import
-hashImport directory _standardVersion import_ = do
+freezeImport directory _standardVersion import_ = do
     let unprotectedImport =
             import_
                 { importHashed =
@@ -47,7 +48,11 @@ hashImport directory _standardVersion import_ = do
                         { hash = Nothing
                         }
                 }
-    let status = set standardVersion _standardVersion (Dhall.Import.emptyStatus directory)
+
+    let status =
+            set standardVersion
+                _standardVersion
+                (Dhall.Import.emptyStatus directory)
 
     let download =
             State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
@@ -76,6 +81,18 @@ hashImport directory _standardVersion import_ = do
     State.evalStateT (Dhall.Import.exprToImport newImport normalizedExpression) status
 
     return newImport
+
+-- | Freeze an import only if the import is a `Remote` import
+freezeRemoteImport
+    :: FilePath
+    -- ^ Current working directory
+    -> StandardVersion
+    -> Import
+    -> IO Import
+freezeRemoteImport directory _standardVersion import_ = do
+    case importType (importHashed import_) of
+        Remote {} -> freezeImport directory _standardVersion import_
+        _         -> return import_
 
 parseExpr :: String -> Text -> IO (Text, Expr Src Import)
 parseExpr src txt =
@@ -122,7 +139,7 @@ freeze inplace _standardVersion = do
             return (text, System.FilePath.takeDirectory file)
 
     (header, parsedExpression) <- parseExpr srcInfo text
-    frozenExpression <- traverse (hashImport directory _standardVersion) parsedExpression
+    frozenExpression <- traverse (freezeRemoteImport directory _standardVersion) parsedExpression
     writeExpr inplace (header, frozenExpression)
         where
             srcInfo = fromMaybe "(stdin)" inplace
