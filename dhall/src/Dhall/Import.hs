@@ -541,7 +541,7 @@ exprToImport here expression = do
 
                 liftIO (Control.Exception.throwIO (HashMismatch {..}))
 
-        Data.Foldable.asum (map check [ NoVersion , V_5_0_0 ]) <|> fallback
+        Data.Foldable.asum (map check [ minBound .. maxBound ]) <|> fallback
 
     return ()
 
@@ -839,7 +839,7 @@ loadWith expr₀ = case expr₀ of
 
                     in  expectedHash == actualHash
 
-            if any matches [ NoVersion, V_5_0_0 ]
+            if any matches [ minBound .. maxBound ]
                 then return ()
                 else do
                     let actualHash =
