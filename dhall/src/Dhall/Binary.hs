@@ -63,11 +63,22 @@ import qualified Options.Applicative
 
 -- | Supported version strings
 data StandardVersion
-    = V_5_0_0
+    = NoVersion
+    -- ^ No version string
+    | V_5_0_0
     -- ^ Version "5.0.0"
+    | V_4_0_0
+    -- ^ Version "4.0.0"
+    | V_3_0_0
+    -- ^ Version "3.0.0"
+    | V_2_0_0
+    -- ^ Version "2.0.0"
+    | V_1_0_0
+    -- ^ Version "1.0.0"
+    deriving (Enum, Bounded)
 
 defaultStandardVersion :: StandardVersion
-defaultStandardVersion = V_5_0_0
+defaultStandardVersion = NoVersion
 
 parseStandardVersion :: Parser StandardVersion
 parseStandardVersion =
@@ -81,11 +92,21 @@ parseStandardVersion =
     readVersion = do
         string <- Options.Applicative.str
         case string :: Text of
+            "none"  -> return NoVersion
+            "1.0.0" -> return V_1_0_0
+            "2.0.0" -> return V_2_0_0
+            "3.0.0" -> return V_3_0_0
+            "4.0.0" -> return V_4_0_0
             "5.0.0" -> return V_5_0_0
             _       -> fail "Unsupported version"
 
 renderStandardVersion :: StandardVersion -> Text
-renderStandardVersion V_5_0_0 = "5.0.0";
+renderStandardVersion NoVersion = "none"
+renderStandardVersion V_1_0_0   = "1.0.0"
+renderStandardVersion V_2_0_0   = "2.0.0"
+renderStandardVersion V_3_0_0   = "3.0.0"
+renderStandardVersion V_4_0_0   = "4.0.0"
+renderStandardVersion V_5_0_0   = "5.0.0"
 
 {-| Convert a function applied to multiple arguments to the base function and
     the list of arguments
