@@ -22,7 +22,7 @@ module Dhall.Binary
     ) where
 
 import Codec.CBOR.Term (Term(..))
-import Control.Applicative (empty)
+import Control.Applicative (empty, (<|>))
 import Control.Exception (Exception)
 import Dhall.Core
     ( Binding(..)
@@ -818,9 +818,19 @@ decodeMaybe _ =
     empty
 
 decode :: Term -> Either DecodingFailure (Expr s Import)
-decode term = case decodeMaybe term of
-    Nothing         -> Left (CBORIsNotDhall term)
-    Just expression -> Right expression
+decode term =
+    case decodeWithoutVersion <|> decodeWithVersion of
+        Just expression -> Right expression
+        Nothing         -> Left (CBORIsNotDhall term)
+  where
+    -- This is the behavior specified by the standard
+    decodeWithoutVersion = decodeMaybe term
+
+    -- For backwards compatibility with older expressions that have a version
+    -- tag to ease the migration
+    decodeWithVersion = do
+        TList [ TString _, taggedTerm ] <- return term
+        decodeMaybe taggedTerm
 
 data DecodingFailure = CBORIsNotDhall Term
     deriving (Eq)
