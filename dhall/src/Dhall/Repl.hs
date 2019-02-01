@@ -26,7 +26,7 @@ import Dhall.Pretty (CharacterSet(..))
 import Lens.Family (set)
 import System.Console.Haskeline (Interrupt(..))
 import System.Console.Haskeline.Completion ( Completion, simpleCompletion )
-import System.Directory (listDirectory)
+import System.Directory ( getDirectoryContents )
 import System.Environment ( getEnvironment )
 
 import qualified Control.Monad.Trans.State.Strict as State
@@ -270,7 +270,7 @@ saveFilePrefix = ".dhall-repl"
 -- | Find the index for the current _active_ dhall save file
 currentSaveFileIndex :: MonadIO m => m (Maybe Int)
 currentSaveFileIndex = do
-  files <- liftIO $ listDirectory "."
+  files <- liftIO $ getDirectoryContents "."
 
   let parseIndex file
         | saveFilePrefix `isPrefixOf` file
