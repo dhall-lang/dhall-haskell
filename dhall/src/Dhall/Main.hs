@@ -97,10 +97,11 @@ data Mode
     | Encode { json :: Bool }
     | Decode { json :: Bool }
 
-data ResolveMode 
+data ResolveMode
     = Dot
-    | ListDependencies
-    
+    | ListTransitiveDependencies
+    | ListImmediateDependencies
+
 
 -- | `Parser` for the `Options` type
 parseOptions :: Parser Options
@@ -199,8 +200,14 @@ parseMode =
                     "Output import dependency graph in dot format"
               )
         <|>
-          Options.Applicative.flag' (Just ListDependencies)
-              (   Options.Applicative.long "list"
+          Options.Applicative.flag' (Just ListImmediateDependencies)
+              (   Options.Applicative.long "immediate-dependencies"
+              <>  Options.Applicative.help
+                    "List immediate import dependencies"
+              )
+        <|>
+          Options.Applicative.flag' (Just ListTransitiveDependencies)
+              (   Options.Applicative.long "transitive-dependencies"
               <>  Options.Applicative.help
                     "List transitive import dependencies"
               )
@@ -331,28 +338,43 @@ command (Options {..}) = do
 
             render System.IO.stdout annotatedExpression
 
-        Resolve rMode -> do
+        Resolve (Just Dot) -> do
             expression <- getExpression
 
-            (resolvedExpression, Dhall.Import.Types.Status { _dot, _cache}) <-
+            (Dhall.Import.Types.Status { _dot}) <-
+                State.execStateT (Dhall.Import.loadWith expression) status
+
+            putStr . ("strict " <>) . Text.Dot.showDot $
+                   Text.Dot.attribute ("rankdir", "LR") >>
+                   _dot
+
+        Resolve (Just ListImmediateDependencies) -> do
+            expression <- getExpression
+
+            mapM_ (print
+                        . Pretty.pretty
+                        . Dhall.Core.importHashed) expression
+
+        Resolve (Just ListTransitiveDependencies) -> do
+            expression <- getExpression
+
+            (Dhall.Import.Types.Status { _cache }) <-
+                State.execStateT (Dhall.Import.loadWith expression) status
+
+            mapM_ print
+                 .   fmap (   Pretty.pretty
+                          .   Dhall.Core.importType
+                          .   Dhall.Core.importHashed )
+                 .   Data.Map.keys
+                 $   _cache
+
+        Resolve (Nothing) -> do
+            expression <- getExpression
+
+            (resolvedExpression, _) <-
                 State.runStateT (Dhall.Import.loadWith expression) status
-            
-            case rMode of
-                Just Dot -> 
-                    putStr . ("strict " <>) . Text.Dot.showDot $
-                    Text.Dot.attribute ("rankdir", "LR") >> 
-                    _dot
+            render System.IO.stdout resolvedExpression
 
-                Just ListDependencies -> 
-                        mapM_ print 
-                    .   fmap (   Pretty.pretty 
-                             .   Dhall.Core.importType 
-                             .   Dhall.Core.importHashed ) 
-                    .   Data.Map.keys 
-                    $   _cache
-
-                Nothing -> 
-                     render System.IO.stdout resolvedExpression
         Normalize -> do
             expression <- getExpression
 

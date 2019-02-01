@@ -110,6 +110,7 @@ import qualified Data.List.NonEmpty
 import qualified Data.Text
 import qualified Dhall.Set
 import qualified Text.Megaparsec
+import qualified Text.Megaparsec.Char.Lexer
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 
@@ -159,13 +160,15 @@ doubleInfinity = (do
 integerLiteral :: Parser Integer
 integerLiteral = (do
     sign <- signPrefix
-    a <- Text.Parser.Token.natural
+    a <- Text.Megaparsec.Char.Lexer.decimal
+    whitespace
     return (sign a) ) <?> "integer literal"
 
 naturalLiteral :: Parser Natural
 naturalLiteral = (do
-    a <- Text.Parser.Token.natural
-    return (fromIntegral a) ) <?> "natural literal"
+    a <- Text.Megaparsec.Char.Lexer.decimal
+    whitespace
+    return a ) <?> "natural literal"
 
 identifier :: Parser Var
 identifier = do
@@ -173,7 +176,9 @@ identifier = do
 
     let indexed = do
             _ <- Text.Parser.Char.char '@'
-            Text.Parser.Token.natural
+            n <- Text.Megaparsec.Char.Lexer.decimal
+            whitespace
+            return n
 
     n <- indexed <|> pure 0
     return (V x n)
