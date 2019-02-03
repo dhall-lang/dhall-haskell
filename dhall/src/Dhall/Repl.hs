@@ -13,12 +13,13 @@ module Dhall.Repl
 import Control.Exception ( SomeException(SomeException), displayException, throwIO )
 import Control.Monad ( forM_ )
 import Control.Monad.IO.Class ( MonadIO, liftIO )
-import Control.Monad.State.Class ( MonadState, get, modify, put)
+import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
 import Data.List ( isPrefixOf, nub )
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe ( mapMaybe )
 import Data.Semigroup ((<>))
+import Data.Text ( Text )
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Context (Context)
 import Dhall.Import (hashExpressionToCode, standardVersion)
@@ -32,6 +33,7 @@ import System.Environment ( getEnvironment )
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.HashSet
 import qualified Data.Text as Text
+import qualified Data.Text.IO as Text.IO
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
 import qualified Dhall
@@ -77,7 +79,7 @@ data Env = Env
   , explain          :: Bool
   , characterSet     :: CharacterSet
   , _standardVersion :: StandardVersion
-  , outputHandle     :: System.IO.Handle
+  , outputHandle     :: Maybe System.IO.Handle
   }
 
 
@@ -89,7 +91,7 @@ emptyEnv =
     , explain = False
     , _standardVersion = Dhall.Binary.defaultStandardVersion
     , characterSet = Unicode
-    , outputHandle = System.IO.stdout
+    , outputHandle = Just System.IO.stdout
     }
 
 
@@ -254,10 +256,9 @@ hashBinding tokens = do
 
   normalizedExpression <- normalize loadedExpression
 
-  Env{_standardVersion, outputHandle} <- get
+  Env{_standardVersion} <- get
 
-  liftIO . System.IO.hPutStrLn outputHandle . Text.unpack $
-    hashExpressionToCode _standardVersion normalizedExpression
+  writeOutputHandle $ hashExpressionToCode _standardVersion normalizedExpression
 
 saveFilePrefix :: FilePath
 saveFilePrefix = ".dhall-repl"
@@ -309,9 +310,6 @@ loadBinding [file] = do
   -- Read commands from the save file
   replLines <- map words . lines <$> liftIO (readFile file)
 
-  -- Keep current handle in scope
-  env@Env { outputHandle } <- get
-
   let runCommand ((c:cmd):opts)
         | c == optionsPrefix
         , Just action <- lookup cmd options
@@ -319,20 +317,19 @@ loadBinding [file] = do
       runCommand _ = fail $
         ":load expects `" <> file <> "` to contain one command per line"
 
-      -- Run all the commands
-      handler nullHandle =
-          State.execStateT
-            (forM_ replLines runCommand)
-            (env { outputHandle = nullHandle })
+  -- Keep current handle in scope
+  Env { outputHandle } <- get
 
-  -- Use a null handle (to discard output) to run all the commands
-  newEnv <- liftIO $ System.IO.withFile "/dev/null" System.IO.WriteMode handler
+  -- Discard output
+  modify (\e -> e { outputHandle = Nothing })
 
-  -- Setup the new environment and restore the previous handle
-  put (newEnv { outputHandle = outputHandle })
+  -- Run all the commands
+  forM_ replLines runCommand
 
-  liftIO . System.IO.hPutStrLn outputHandle $
-    "\nLoaded `" <> file <> "`\n"
+  -- Restore the previous handle
+  modify (\e -> e { outputHandle = outputHandle })
+
+  writeOutputHandle $ "Loaded `" <> Text.pack file <> "`\n"
 
 loadBinding _ = fail ":load should be of the form `:load` or `:load file`"
 
@@ -345,7 +342,7 @@ saveBinding [] = do
 
 -- Save all the bindings into `file`
 saveBinding [file] = do
-  env@Env { outputHandle } <- get
+  env <- get
 
   let bindings
         = reverse
@@ -358,12 +355,11 @@ saveBinding [file] = do
             (forM_ bindings $ \(name, expr) -> do
               liftIO (System.IO.hPutStr handle $ ":let " <> Text.unpack name <> " = ")
               outputWithoutSpacing expr)
-            (env { outputHandle = handle })
+            (env { outputHandle = Just handle })
 
   liftIO (System.IO.withFile file System.IO.WriteMode handler)
 
-  liftIO . System.IO.hPutStrLn outputHandle $
-    "\nContext saved to `" <> file <> "`\n"
+  writeOutputHandle $ "Context saved to `" <> Text.pack file <> "`\n"
 
 -- Save a single expression to `file`
 saveBinding (file : "=" : tokens) = do
@@ -373,17 +369,16 @@ saveBinding (file : "=" : tokens) = do
 
   normalizedExpression <- normalize loadedExpression
 
-  env@Env { outputHandle } <- get
+  env <- get
 
   let handler handle =
           State.evalStateT
             (output normalizedExpression)
-            (env { outputHandle = handle })
+            (env { outputHandle = Just handle })
 
   liftIO (System.IO.withFile file System.IO.WriteMode handler)
 
-  liftIO . System.IO.hPutStrLn outputHandle $
-    "\nExpression saved to `" <> file <> "`\n"
+  writeOutputHandle $ "Expression saved to `" <> Text.pack file <> "`\n"
 
 saveBinding _ = fail ":save should be of the form `:save`, `:save file`, or `:save file = expr`"
 
@@ -503,18 +498,23 @@ dontCrash m =
     m
     ( \ e@SomeException{} -> liftIO ( putStrLn ( displayException e ) ) )
 
+writeOutputHandle :: (MonadIO m, MonadState Env m) => Text -> m ()
+writeOutputHandle txt = do
+  Env { outputHandle } <- get
+
+  case outputHandle of
+    Just handle -> liftIO $ Text.IO.hPutStrLn handle txt
+    Nothing     -> pure ()
 
 output
   :: (Pretty.Pretty a, MonadState Env m, MonadIO m)
   => Dhall.Expr s a -> m ()
 output expr = do
-  Env { outputHandle } <- get
-
-  liftIO (System.IO.hPutStrLn outputHandle "")  -- Visual spacing
+  writeOutputHandle "" -- Visual spacing
 
   outputWithoutSpacing expr
 
-  liftIO (System.IO.hPutStrLn outputHandle "")  -- Visual spacing
+  writeOutputHandle "" -- Visual spacing
 
 outputWithoutSpacing
   :: (Pretty.Pretty a, MonadState Env m, MonadIO m)
@@ -522,15 +522,18 @@ outputWithoutSpacing
 outputWithoutSpacing expr = do
   Env { characterSet, outputHandle } <- get
 
-  let stream =
-          Pretty.layoutSmart Dhall.Pretty.layoutOpts
-              (Dhall.Pretty.prettyCharacterSet characterSet expr)
+  case outputHandle of
+    Nothing     -> pure ()
+    Just handle -> do
+      let stream =
+              Pretty.layoutSmart Dhall.Pretty.layoutOpts
+                  (Dhall.Pretty.prettyCharacterSet characterSet expr)
 
-  supportsANSI <- liftIO (System.Console.ANSI.hSupportsANSI outputHandle)
-  let ansiStream =
-          if supportsANSI
-          then fmap Dhall.Pretty.annToAnsiStyle stream
-          else Pretty.unAnnotateS stream
+      supportsANSI <- liftIO (System.Console.ANSI.hSupportsANSI handle)
+      let ansiStream =
+              if supportsANSI
+              then fmap Dhall.Pretty.annToAnsiStyle stream
+              else Pretty.unAnnotateS stream
 
-  liftIO (Pretty.renderIO outputHandle ansiStream)
-  liftIO (System.IO.hPutStrLn outputHandle "") -- Pretty printing doesn't end with a new line
+      liftIO (Pretty.renderIO handle ansiStream)
+      liftIO (System.IO.hPutStrLn handle "") -- Pretty printing doesn't end with a new line
