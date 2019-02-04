@@ -444,7 +444,7 @@ command (Options {..}) = do
         Encode {..} -> do
             expression <- getExpression
 
-            let term = Dhall.Binary.encodeWithVersion standardVersion expression
+            let term = Dhall.Binary.encode expression
 
             let bytes = Codec.Serialise.serialise term
 
@@ -478,7 +478,7 @@ command (Options {..}) = do
                     else do
                         throws (Codec.Serialise.deserialiseOrFail bytes)
 
-            expression <- throws (Dhall.Binary.decodeWithVersion term)
+            expression <- throws (Dhall.Binary.decode term)
 
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 

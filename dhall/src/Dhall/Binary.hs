@@ -14,15 +14,15 @@ module Dhall.Binary
     , renderStandardVersion
 
     -- * Encoding and decoding
-    , encodeWithVersion
-    , decodeWithVersion
+    , encode
+    , decode
 
     -- * Exceptions
     , DecodingFailure(..)
     ) where
 
 import Codec.CBOR.Term (Term(..))
-import Control.Applicative (empty)
+import Control.Applicative (empty, (<|>))
 import Control.Exception (Exception)
 import Dhall.Core
     ( Binding(..)
@@ -63,11 +63,22 @@ import qualified Options.Applicative
 
 -- | Supported version strings
 data StandardVersion
-    = V_5_0_0
+    = NoVersion
+    -- ^ No version string
+    | V_5_0_0
     -- ^ Version "5.0.0"
+    | V_4_0_0
+    -- ^ Version "4.0.0"
+    | V_3_0_0
+    -- ^ Version "3.0.0"
+    | V_2_0_0
+    -- ^ Version "2.0.0"
+    | V_1_0_0
+    -- ^ Version "1.0.0"
+    deriving (Enum, Bounded)
 
 defaultStandardVersion :: StandardVersion
-defaultStandardVersion = V_5_0_0
+defaultStandardVersion = NoVersion
 
 parseStandardVersion :: Parser StandardVersion
 parseStandardVersion =
@@ -81,11 +92,21 @@ parseStandardVersion =
     readVersion = do
         string <- Options.Applicative.str
         case string :: Text of
+            "none"  -> return NoVersion
+            "1.0.0" -> return V_1_0_0
+            "2.0.0" -> return V_2_0_0
+            "3.0.0" -> return V_3_0_0
+            "4.0.0" -> return V_4_0_0
             "5.0.0" -> return V_5_0_0
             _       -> fail "Unsupported version"
 
 renderStandardVersion :: StandardVersion -> Text
-renderStandardVersion V_5_0_0 = "5.0.0";
+renderStandardVersion NoVersion = "none"
+renderStandardVersion V_1_0_0   = "1.0.0"
+renderStandardVersion V_2_0_0   = "2.0.0"
+renderStandardVersion V_3_0_0   = "3.0.0"
+renderStandardVersion V_4_0_0   = "4.0.0"
+renderStandardVersion V_5_0_0   = "5.0.0"
 
 {-| Convert a function applied to multiple arguments to the base function and
     the list of arguments
@@ -100,6 +121,7 @@ unApply e = (baseFunction₀, diffArguments₀ [])
         ~(baseFunction, diffArguments) = go f
     go baseFunction = (baseFunction, id)
 
+-- | Encode a Dhall expression to a CBOR `Term`
 encode :: Expr s Import -> Term
 encode (Var (V "_" n)) =
     TInteger n
@@ -459,100 +481,100 @@ importToTerm import_ =
 
     ImportHashed {..} = importHashed
 
-decode :: Term -> Maybe (Expr s Import)
-decode (TInt n) =
+decodeMaybe :: Term -> Maybe (Expr s Import)
+decodeMaybe (TInt n) =
     return (Var (V "_" (fromIntegral n)))
-decode (TInteger n) =
+decodeMaybe (TInteger n) =
     return (Var (V "_" n))
-decode (TString "Natural/build") =
+decodeMaybe (TString "Natural/build") =
     return NaturalBuild
-decode (TString "Natural/fold") =
+decodeMaybe (TString "Natural/fold") =
     return NaturalFold
-decode (TString "Natural/isZero") =
+decodeMaybe (TString "Natural/isZero") =
     return NaturalIsZero
-decode (TString "Natural/even") =
+decodeMaybe (TString "Natural/even") =
     return NaturalEven
-decode (TString "Natural/odd") =
+decodeMaybe (TString "Natural/odd") =
     return NaturalOdd
-decode (TString "Natural/toInteger") =
+decodeMaybe (TString "Natural/toInteger") =
     return NaturalToInteger
-decode (TString "Natural/show") =
+decodeMaybe (TString "Natural/show") =
     return NaturalShow
-decode (TString "Integer/toDouble") =
+decodeMaybe (TString "Integer/toDouble") =
     return IntegerToDouble
-decode (TString "Integer/show") =
+decodeMaybe (TString "Integer/show") =
     return IntegerShow
-decode (TString "Double/show") =
+decodeMaybe (TString "Double/show") =
     return DoubleShow
-decode (TString "List/build") =
+decodeMaybe (TString "List/build") =
     return ListBuild
-decode (TString "List/fold") =
+decodeMaybe (TString "List/fold") =
     return ListFold
-decode (TString "List/length") =
+decodeMaybe (TString "List/length") =
     return ListLength
-decode (TString "List/head") =
+decodeMaybe (TString "List/head") =
     return ListHead
-decode (TString "List/last") =
+decodeMaybe (TString "List/last") =
     return ListLast
-decode (TString "List/indexed") =
+decodeMaybe (TString "List/indexed") =
     return ListIndexed
-decode (TString "List/reverse") =
+decodeMaybe (TString "List/reverse") =
     return ListReverse
-decode (TString "Optional/fold") =
+decodeMaybe (TString "Optional/fold") =
     return OptionalFold
-decode (TString "Optional/build") =
+decodeMaybe (TString "Optional/build") =
     return OptionalBuild
-decode (TString "Bool") =
+decodeMaybe (TString "Bool") =
     return Bool
-decode (TString "Optional") =
+decodeMaybe (TString "Optional") =
     return Optional
-decode (TString "None") =
+decodeMaybe (TString "None") =
     return None
-decode (TString "Natural") =
+decodeMaybe (TString "Natural") =
     return Natural
-decode (TString "Integer") =
+decodeMaybe (TString "Integer") =
     return Integer
-decode (TString "Double") =
+decodeMaybe (TString "Double") =
     return Double
-decode (TString "Text") =
+decodeMaybe (TString "Text") =
     return Text
-decode (TString "List") =
+decodeMaybe (TString "List") =
     return List
-decode (TString "Type") =
+decodeMaybe (TString "Type") =
     return (Const Type)
-decode (TString "Kind") =
+decodeMaybe (TString "Kind") =
     return (Const Kind)
-decode (TString "Sort") =
+decodeMaybe (TString "Sort") =
     return (Const Sort)
-decode (TString x) =
+decodeMaybe (TString x) =
     return (Var (V x 0))
-decode (TList [ TString x, TInt n ]) =
+decodeMaybe (TList [ TString x, TInt n ]) =
     return (Var (V x (fromIntegral n)))
-decode (TList [ TString x, TInteger n ]) =
+decodeMaybe (TList [ TString x, TInteger n ]) =
     return (Var (V x n))
-decode (TList (TInt 0 : f₁ : xs₁)) = do
-    f₀  <- decode f₁
-    xs₀ <- traverse decode xs₁
+decodeMaybe (TList (TInt 0 : f₁ : xs₁)) = do
+    f₀  <- decodeMaybe f₁
+    xs₀ <- traverse decodeMaybe xs₁
     return (foldl App f₀ xs₀)
-decode (TList [ TInt 1, _A₁, b₁ ]) = do
-    _A₀ <- decode _A₁
-    b₀  <- decode b₁
+decodeMaybe (TList [ TInt 1, _A₁, b₁ ]) = do
+    _A₀ <- decodeMaybe _A₁
+    b₀  <- decodeMaybe b₁
     return (Lam "_" _A₀ b₀)
-decode (TList [ TInt 1, TString x, _A₁, b₁ ]) = do
-    _A₀ <- decode _A₁
-    b₀  <- decode b₁
+decodeMaybe (TList [ TInt 1, TString x, _A₁, b₁ ]) = do
+    _A₀ <- decodeMaybe _A₁
+    b₀  <- decodeMaybe b₁
     return (Lam x _A₀ b₀)
-decode (TList [ TInt 2, _A₁, _B₁ ]) = do
-    _A₀ <- decode _A₁
-    _B₀ <- decode _B₁
+decodeMaybe (TList [ TInt 2, _A₁, _B₁ ]) = do
+    _A₀ <- decodeMaybe _A₁
+    _B₀ <- decodeMaybe _B₁
     return (Pi "_" _A₀ _B₀)
-decode (TList [ TInt 2, TString x, _A₁, _B₁ ]) = do
-    _A₀ <- decode _A₁
-    _B₀ <- decode _B₁
+decodeMaybe (TList [ TInt 2, TString x, _A₁, _B₁ ]) = do
+    _A₀ <- decodeMaybe _A₁
+    _B₀ <- decodeMaybe _B₁
     return (Pi x _A₀ _B₀)
-decode (TList [ TInt 3, TInt n, l₁, r₁ ]) = do
-    l₀ <- decode l₁
-    r₀ <- decode r₁
+decodeMaybe (TList [ TInt 3, TInt n, l₁, r₁ ]) = do
+    l₀ <- decodeMaybe l₁
+    r₀ <- decodeMaybe r₁
     op <- case n of
             0  -> return BoolOr
             1  -> return BoolAnd
@@ -568,34 +590,34 @@ decode (TList [ TInt 3, TInt n, l₁, r₁ ]) = do
             11 -> return ImportAlt
             _  -> empty
     return (op l₀ r₀)
-decode (TList [ TInt 4, _T₁ ]) = do
-    _T₀ <- decode _T₁
+decodeMaybe (TList [ TInt 4, _T₁ ]) = do
+    _T₀ <- decodeMaybe _T₁
     return (ListLit (Just _T₀) empty)
-decode (TList (TInt 4 : TNull : xs₁ )) = do
-    xs₀ <- traverse decode xs₁
+decodeMaybe (TList (TInt 4 : TNull : xs₁ )) = do
+    xs₀ <- traverse decodeMaybe xs₁
     return (ListLit Nothing (Data.Sequence.fromList xs₀))
-decode (TList [ TInt 5, _T₁ ]) = do
-    _T₀ <- decode _T₁
+decodeMaybe (TList [ TInt 5, _T₁ ]) = do
+    _T₀ <- decodeMaybe _T₁
     return (OptionalLit _T₀ Nothing)
-decode (TList [ TInt 5, TNull, t₁ ]) = do
-    t₀ <- decode t₁
+decodeMaybe (TList [ TInt 5, TNull, t₁ ]) = do
+    t₀ <- decodeMaybe t₁
     return (Some t₀)
-decode (TList [ TInt 5, _T₁, t₁ ]) = do
-    _T₀ <- decode _T₁
-    t₀  <- decode t₁
+decodeMaybe (TList [ TInt 5, _T₁, t₁ ]) = do
+    _T₀ <- decodeMaybe _T₁
+    t₀  <- decodeMaybe t₁
     return (OptionalLit _T₀ (Just t₀))
-decode (TList [ TInt 6, t₁, u₁ ]) = do
-    t₀ <- decode t₁
-    u₀ <- decode u₁
+decodeMaybe (TList [ TInt 6, t₁, u₁ ]) = do
+    t₀ <- decodeMaybe t₁
+    u₀ <- decodeMaybe u₁
     return (Merge t₀ u₀ Nothing)
-decode (TList [ TInt 6, t₁, u₁, _T₁ ]) = do
-    t₀  <- decode t₁
-    u₀  <- decode u₁
-    _T₀ <- decode _T₁
+decodeMaybe (TList [ TInt 6, t₁, u₁, _T₁ ]) = do
+    t₀  <- decodeMaybe t₁
+    u₀  <- decodeMaybe u₁
+    _T₀ <- decodeMaybe _T₁
     return (Merge t₀ u₀ (Just _T₀))
-decode (TList [ TInt 7, TMap xTs₁ ]) = do
+decodeMaybe (TList [ TInt 7, TMap xTs₁ ]) = do
     let process (TString x, _T₁) = do
-            _T₀ <- decode _T₁
+            _T₀ <- decodeMaybe _T₁
 
             return (x, _T₀)
         process _ =
@@ -604,9 +626,9 @@ decode (TList [ TInt 7, TMap xTs₁ ]) = do
     xTs₀ <- traverse process xTs₁
 
     return (Record (Dhall.Map.fromList xTs₀))
-decode (TList [ TInt 8, TMap xts₁ ]) = do
+decodeMaybe (TList [ TInt 8, TMap xts₁ ]) = do
     let process (TString x, t₁) = do
-           t₀ <- decode t₁
+           t₀ <- decodeMaybe t₁
 
            return (x, t₀)
         process _ =
@@ -615,12 +637,12 @@ decode (TList [ TInt 8, TMap xts₁ ]) = do
     xts₀ <- traverse process xts₁
 
     return (RecordLit (Dhall.Map.fromList xts₀))
-decode (TList [ TInt 9, t₁, TString x ]) = do
-    t₀ <- decode t₁
+decodeMaybe (TList [ TInt 9, t₁, TString x ]) = do
+    t₀ <- decodeMaybe t₁
 
     return (Field t₀ x)
-decode (TList (TInt 10 : t₁ : xs₁)) = do
-    t₀ <- decode t₁
+decodeMaybe (TList (TInt 10 : t₁ : xs₁)) = do
+    t₀ <- decodeMaybe t₁
 
     let process (TString x) = return x
         process  _          = empty
@@ -628,9 +650,9 @@ decode (TList (TInt 10 : t₁ : xs₁)) = do
     xs₀ <- traverse process xs₁
 
     return (Project t₀ (Dhall.Set.fromList xs₀))
-decode (TList [ TInt 11, TMap xTs₁ ]) = do
+decodeMaybe (TList [ TInt 11, TMap xTs₁ ]) = do
     let process (TString x, _T₁) = do
-            _T₀ <- decode _T₁
+            _T₀ <- decodeMaybe _T₁
 
             return (x, _T₀)
         process _ =
@@ -639,11 +661,11 @@ decode (TList [ TInt 11, TMap xTs₁ ]) = do
     xTs₀ <- traverse process xTs₁
 
     return (Union (Dhall.Map.fromList xTs₀))
-decode (TList [ TInt 12, TString x, t₁, TMap yTs₁ ]) = do
-    t₀ <- decode t₁
+decodeMaybe (TList [ TInt 12, TString x, t₁, TMap yTs₁ ]) = do
+    t₀ <- decodeMaybe t₁
 
     let process (TString y, _T₁) = do
-            _T₀ <- decode _T₁
+            _T₀ <- decodeMaybe _T₁
 
             return (y, _T₀)
         process _ =
@@ -652,35 +674,35 @@ decode (TList [ TInt 12, TString x, t₁, TMap yTs₁ ]) = do
     yTs₀ <- traverse process yTs₁
 
     return (UnionLit x t₀ (Dhall.Map.fromList yTs₀))
-decode (TList [ TInt 13, u₁ ]) = do
-    u₀ <- decode u₁
+decodeMaybe (TList [ TInt 13, u₁ ]) = do
+    u₀ <- decodeMaybe u₁
 
     return (Constructors u₀)
-decode (TBool b) = do
+decodeMaybe (TBool b) = do
     return (BoolLit b)
-decode (TList [ TInt 14, t₁, l₁, r₁ ]) = do
-    t₀ <- decode t₁
-    l₀ <- decode l₁
-    r₀ <- decode r₁
+decodeMaybe (TList [ TInt 14, t₁, l₁, r₁ ]) = do
+    t₀ <- decodeMaybe t₁
+    l₀ <- decodeMaybe l₁
+    r₀ <- decodeMaybe r₁
 
     return (BoolIf t₀ l₀ r₀)
-decode (TList [ TInt 15, TInt n ]) = do
+decodeMaybe (TList [ TInt 15, TInt n ]) = do
     return (NaturalLit (fromIntegral n))
-decode (TList [ TInt 15, TInteger n ]) = do
+decodeMaybe (TList [ TInt 15, TInteger n ]) = do
     return (NaturalLit (fromInteger n))
-decode (TList [ TInt 16, TInt n ]) = do
+decodeMaybe (TList [ TInt 16, TInt n ]) = do
     return (IntegerLit (fromIntegral n))
-decode (TList [ TInt 16, TInteger n ]) = do
+decodeMaybe (TList [ TInt 16, TInteger n ]) = do
     return (IntegerLit n)
-decode (THalf n) = do
+decodeMaybe (THalf n) = do
     return (DoubleLit (float2Double n))
-decode (TFloat n) = do
+decodeMaybe (TFloat n) = do
     return (DoubleLit (float2Double n))
-decode (TDouble n) = do
+decodeMaybe (TDouble n) = do
     return (DoubleLit n)
-decode (TList (TInt 18 : xs)) = do
+decodeMaybe (TList (TInt 18 : xs)) = do
     let process (TString x : y₁ : zs) = do
-            y₀ <- decode y₁
+            y₀ <- decodeMaybe y₁
 
             ~(xys, z) <- process zs
 
@@ -693,7 +715,7 @@ decode (TList (TInt 18 : xs)) = do
     (xys, z) <- process xs
 
     return (TextLit (Chunks xys z))
-decode (TList (TInt 24 : h : TInt mode : TInt n : xs)) = do
+decodeMaybe (TList (TInt 24 : h : TInt mode : TInt n : xs)) = do
     hash <- case h of
         TNull -> do
             return Nothing
@@ -737,7 +759,7 @@ decode (TList (TInt 24 : h : TInt mode : TInt n : xs)) = do
                     headers₁ <- case headers₀ of
                         TNull -> return Nothing
                         _     -> do
-                            Embed (Import { importHashed = headers }) <- decode headers₀
+                            Embed (Import { importHashed = headers }) <- decodeMaybe headers₀
                             return (Just headers)
                     (paths, file, query, fragment) <- process ys
                     return (headers₁, authority, paths, file, query, fragment)
@@ -787,19 +809,19 @@ decode (TList (TInt 24 : h : TInt mode : TInt n : xs)) = do
     let importHashed = ImportHashed {..}
 
     return (Embed (Import {..}))
-decode (TList (TInt 25 : xs)) = do
+decodeMaybe (TList (TInt 25 : xs)) = do
     let process (TString x : _A₁ : a₁ : ls₁) = do
             mA₀ <- case _A₁ of
                 TNull -> return Nothing
-                _     -> fmap Just (decode _A₁)
+                _     -> fmap Just (decodeMaybe _A₁)
 
-            a₀  <- decode a₁
+            a₀  <- decodeMaybe a₁
 
             let binding = Binding x mA₀ a₀
 
             case ls₁ of
                 [ b₁ ] -> do
-                    b₀ <- decode b₁
+                    b₀ <- decodeMaybe b₁
 
                     return (Let (binding :| []) b₀)
                 _ -> do
@@ -810,47 +832,30 @@ decode (TList (TInt 25 : xs)) = do
             empty
 
     process xs
-decode (TList [ TInt 26, t₁, _T₁ ]) = do
-    t₀  <- decode t₁
-    _T₀ <- decode _T₁
+decodeMaybe (TList [ TInt 26, t₁, _T₁ ]) = do
+    t₀  <- decodeMaybe t₁
+    _T₀ <- decodeMaybe _T₁
     return (Annot t₀ _T₀)
-decode _ =
+decodeMaybe _ =
     empty
 
-{-| Decode a Dhall expression
+-- | Decode a Dhall expression from a CBOR `Term`
+decode :: Term -> Either DecodingFailure (Expr s Import)
+decode term =
+    case decodeWithoutVersion <|> decodeWithVersion of
+        Just expression -> Right expression
+        Nothing         -> Left (CBORIsNotDhall term)
+  where
+    -- This is the behavior specified by the standard
+    decodeWithoutVersion = decodeMaybe term
 
-    This auto-detects which standard version to decode based on the included
-    standard version string in the decoded expression
--}
-decodeWithVersion :: Term -> Either DecodingFailure (Expr s Import)
-decodeWithVersion term = do
-    (version, subTerm) <- case term of
-        TList [ TString version, subTerm ] ->
-            return (version, subTerm)
-        _ ->
-            fail ("Cannot decode the version from this decoded CBOR expression: " <> show term)
+    -- For backwards compatibility with older expressions that have a version
+    -- tag to ease the migration
+    decodeWithVersion = do
+        TList [ TString _, taggedTerm ] <- return term
+        decodeMaybe taggedTerm
 
-    case version of
-        "5.0.0" -> do
-            return ()
-        _ -> do
-            fail ("This decoded version is not supported: " <> Data.Text.unpack version)
-
-    case decode subTerm of
-        Nothing ->
-            fail ("This decoded CBOR expression does not represent a valid Dhall expression: " <> show subTerm)
-        Just expression ->
-            return expression
-
--- | Encode a Dhall expression using the specified `Version`
-encodeWithVersion :: StandardVersion -> Expr s Import -> Term
-encodeWithVersion V_5_0_0 expression =
-    TList [ TString "5.0.0", encode expression ]
-
-data DecodingFailure
-    = CannotDecodeVersionString Term
-    | UnsupportedVersionString Text
-    | CBORIsNotDhall Term
+data DecodingFailure = CBORIsNotDhall Term
     deriving (Eq)
 
 instance Exception DecodingFailure
@@ -859,25 +864,6 @@ _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
 instance Show DecodingFailure where
-    show (CannotDecodeVersionString term) =
-            _ERROR <> ": Cannot decode version string\n"
-        <>  "\n"
-        <>  "This CBOR expression does not contain a version string in any\n"
-        <>  "recognizable format\n"
-        <>  "\n"
-        <>  "↳ " <> show term <> "\n"
-    show (UnsupportedVersionString version) =
-            _ERROR <> ": Unsupported version string\n"
-        <>  "\n"
-        <>  "The encoded Dhall expression was tagged with a version string of:\n"
-        <>  "\n"
-        <>  "↳ " <> show version <> "\n"
-        <>  "\n"
-        <>  "... but this implementation cannot decode that version\n"
-        <>  "\n"
-        <>  "Some common reasons why you might get this error:\n"
-        <>  "\n"
-        <>  "● You are using an old version of the interpreter and need to upgrade\n"
     show (CBORIsNotDhall term) =
             _ERROR <> ": Cannot decode CBOR to Dhall\n"
         <>  "\n"
