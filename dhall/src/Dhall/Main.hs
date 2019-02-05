@@ -70,6 +70,7 @@ import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.IO
 import qualified Text.Dot
+import qualified Data.Map
 
 -- | Top-level program options
 data Options = Options
@@ -84,17 +85,23 @@ data Options = Options
 data Mode
     = Default { annotate :: Bool }
     | Version
-    | Resolve { dot :: Bool }
+    | Resolve { resolveMode :: Maybe ResolveMode }
     | Type
     | Normalize
     | Repl
     | Format { inplace :: Maybe FilePath }
-    | Freeze { inplace :: Maybe FilePath }
+    | Freeze { inplace :: Maybe FilePath, all_ :: Bool }
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Maybe FilePath }
     | Encode { json :: Bool }
     | Decode { json :: Bool }
+
+data ResolveMode
+    = Dot
+    | ListTransitiveDependencies
+    | ListImmediateDependencies
+
 
 -- | `Parser` for the `Options` type
 parseOptions :: Parser Options
@@ -134,7 +141,7 @@ parseMode =
     <|> subcommand
             "resolve"
             "Resolve an expression's imports"
-            (Resolve <$> parseDot)
+            (Resolve <$> parseResolveMode)
     <|> subcommand
             "type"
             "Infer an expression's type"
@@ -165,8 +172,8 @@ parseMode =
             (Format <$> optional parseInplace)
     <|> subcommand
             "freeze"
-            "Add hashes to all import statements of an expression"
-            (Freeze <$> optional parseInplace)
+            "Add integrity checks to remote import statements of an expression"
+            (Freeze <$> optional parseInplace <*> parseAllFlag)
     <|> subcommand
             "encode"
             "Encode a Dhall expression to binary"
@@ -186,12 +193,25 @@ parseMode =
         Options.Applicative.switch
             (Options.Applicative.long "annotate")
 
-    parseDot =
-        Options.Applicative.switch
-        (   Options.Applicative.long "dot"
-        <>  Options.Applicative.help
-              "Output import dependency graph in dot format"
-        )
+    parseResolveMode =
+          Options.Applicative.flag' (Just Dot)
+              (   Options.Applicative.long "dot"
+              <>  Options.Applicative.help
+                    "Output import dependency graph in dot format"
+              )
+        <|>
+          Options.Applicative.flag' (Just ListImmediateDependencies)
+              (   Options.Applicative.long "immediate-dependencies"
+              <>  Options.Applicative.help
+                    "List immediate import dependencies"
+              )
+        <|>
+          Options.Applicative.flag' (Just ListTransitiveDependencies)
+              (   Options.Applicative.long "transitive-dependencies"
+              <>  Options.Applicative.help
+                    "List transitive import dependencies"
+              )
+        <|> pure Nothing
 
     parseInplace =
         Options.Applicative.strOption
@@ -204,6 +224,12 @@ parseMode =
         Options.Applicative.switch
         (   Options.Applicative.long "json"
         <>  Options.Applicative.help "Use JSON representation of CBOR"
+        )
+
+    parseAllFlag =
+        Options.Applicative.switch
+        (   Options.Applicative.long "all"
+        <>  Options.Applicative.help "Add integrity checks to all imports (not just remote imports)"
         )
 
 throws :: Exception e => Either e a -> IO a
@@ -312,16 +338,42 @@ command (Options {..}) = do
 
             render System.IO.stdout annotatedExpression
 
-        Resolve dot -> do
+        Resolve (Just Dot) -> do
             expression <- getExpression
 
-            (resolvedExpression, Dhall.Import.Types.Status { _dot }) <-
-                State.runStateT (Dhall.Import.loadWith expression) status
+            (Dhall.Import.Types.Status { _dot}) <-
+                State.execStateT (Dhall.Import.loadWith expression) status
 
-            if   dot
-            then putStr . ("strict " <>) . Text.Dot.showDot $
-                 Text.Dot.attribute ("rankdir", "LR") >> _dot
-            else render System.IO.stdout resolvedExpression
+            putStr . ("strict " <>) . Text.Dot.showDot $
+                   Text.Dot.attribute ("rankdir", "LR") >>
+                   _dot
+
+        Resolve (Just ListImmediateDependencies) -> do
+            expression <- getExpression
+
+            mapM_ (print
+                        . Pretty.pretty
+                        . Dhall.Core.importHashed) expression
+
+        Resolve (Just ListTransitiveDependencies) -> do
+            expression <- getExpression
+
+            (Dhall.Import.Types.Status { _cache }) <-
+                State.execStateT (Dhall.Import.loadWith expression) status
+
+            mapM_ print
+                 .   fmap (   Pretty.pretty
+                          .   Dhall.Core.importType
+                          .   Dhall.Core.importHashed )
+                 .   Data.Map.keys
+                 $   _cache
+
+        Resolve (Nothing) -> do
+            expression <- getExpression
+
+            (resolvedExpression, _) <-
+                State.runStateT (Dhall.Import.loadWith expression) status
+            render System.IO.stdout resolvedExpression
 
         Normalize -> do
             expression <- getExpression
@@ -357,7 +409,7 @@ command (Options {..}) = do
             Dhall.Format.format characterSet inplace
 
         Freeze {..} -> do
-            Dhall.Freeze.freeze inplace standardVersion
+            Dhall.Freeze.freeze inplace all_ standardVersion
 
         Hash -> do
             Dhall.Hash.hash standardVersion
@@ -392,7 +444,7 @@ command (Options {..}) = do
         Encode {..} -> do
             expression <- getExpression
 
-            let term = Dhall.Binary.encodeWithVersion standardVersion expression
+            let term = Dhall.Binary.encode expression
 
             let bytes = Codec.Serialise.serialise term
 
@@ -426,7 +478,7 @@ command (Options {..}) = do
                     else do
                         throws (Codec.Serialise.deserialiseOrFail bytes)
 
-            expression <- throws (Dhall.Binary.decodeWithVersion term)
+            expression <- throws (Dhall.Binary.decode term)
 
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 
