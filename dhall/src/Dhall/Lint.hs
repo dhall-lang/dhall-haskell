@@ -156,6 +156,8 @@ lint expression = loop (Dhall.Core.denote expression)
       where
         a' = loop a
         b' = loop b
+    loop TextShow =
+        TextShow
     loop List =
         List
     loop (ListLit a b) =

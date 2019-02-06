@@ -347,7 +347,8 @@ completeExpression embedded = completeExpression_
                     'S' ->    Const Sort       <$ _Sort
                     'T' ->
                         choice
-                            [ Text             <$ _Text
+                            [ TextShow         <$ _TextShow
+                            , Text             <$ _Text
                             , BoolLit True     <$ _True
                             , Const Type       <$ _Type
                             ]

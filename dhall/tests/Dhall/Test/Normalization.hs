@@ -184,6 +184,8 @@ preludeExamples =
         , shouldNormalize "Text/concatMapSep" "./success/prelude/Text/concatMapSep/1"
         , shouldNormalize "Text/concatSep" "./success/prelude/Text/concatSep/0"
         , shouldNormalize "Text/concatSep" "./success/prelude/Text/concatSep/1"
+        , shouldNormalize "Text/show" "./success/prelude/Text/show/0"
+        , shouldNormalize "Text/show" "./success/prelude/Text/show/1"
         ]
 
 simplifications :: TestTree

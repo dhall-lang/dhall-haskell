@@ -181,6 +181,8 @@ encode Double =
     TString "Double"
 encode Text =
     TString "Text"
+encode TextShow =
+    TString "Text/show"
 encode List =
     TString "List"
 encode (Const Type) =
@@ -538,6 +540,8 @@ decodeMaybe (TString "Double") =
     return Double
 decodeMaybe (TString "Text") =
     return Text
+decodeMaybe (TString "Text/show") =
+    return TextShow
 decodeMaybe (TString "List") =
     return List
 decodeMaybe (TString "Type") =

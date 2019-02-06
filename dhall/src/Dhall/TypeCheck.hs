@@ -359,6 +359,8 @@ typeWithA tpa = loop
             Text -> return ()
             _    -> Left (TypeError ctx e (CantTextAppend r tr))
         return Text
+    loop _      TextShow          = do
+        return (Pi "_" Text Text)
     loop _      List              = do
         return (Pi "_" (Const Type) (Const Type))
     loop ctx e@(ListLit  Nothing  xs) = do
