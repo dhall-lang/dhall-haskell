@@ -100,6 +100,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/concatMapSep
     dhall-lang/Prelude/Text/concatSep
     dhall-lang/Prelude/Text/package.dhall
+    dhall-lang/Prelude/Text/show
     dhall-lang/tests/import/data/fieldOrder/*.dhall
     dhall-lang/tests/import/failure/*.dhall
     dhall-lang/tests/import/success/*.dhall
