@@ -12,6 +12,7 @@ module Dhall.Parser (
 
     -- * Types
     , Src(..)
+    , SourcedException(..)
     , ParseError(..)
     , Parser(..)
     ) where

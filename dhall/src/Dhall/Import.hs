@@ -167,7 +167,7 @@ import Dhall.Import.HTTP
 import Dhall.Import.Types
 import Text.Dot ((.->.), userNodeId)
 
-import Dhall.Parser (Parser(..), ParseError(..), Src(..))
+import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
 import Dhall.TypeCheck (X(..))
 import Lens.Family.State.Strict (zoom)
 
@@ -919,7 +919,11 @@ loadWith expr₀ = case expr₀ of
   Constructors a       -> Constructors <$> loadWith a
   Field a b            -> Field <$> loadWith a <*> pure b
   Project a b          -> Project <$> loadWith a <*> pure b
-  Note a b             -> Note <$> pure a <*> loadWith b
+  Note a b             -> do
+      let handler e =
+              throwM (SourcedException a (toException (e :: MissingImports)))
+
+      (Note <$> pure a <*> loadWith b) `catch` handler
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
