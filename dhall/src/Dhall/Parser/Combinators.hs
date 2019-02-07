@@ -45,7 +45,8 @@ data Src = Src !Text.Megaparsec.SourcePos !Text.Megaparsec.SourcePos Text
   deriving (Data, Eq, Show)
 
 data SourcedException e = SourcedException Src e
-    deriving (Exception)
+
+instance Exception e => Exception (SourcedException e)
 
 instance Show e => Show (SourcedException e) where
     show (SourcedException source exception) =
