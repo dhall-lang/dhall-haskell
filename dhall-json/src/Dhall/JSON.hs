@@ -518,6 +518,9 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Dhall.Core.normalize e0)
             a' = loop a
             b' = loop b
 
+        Dhall.Core.TextShow ->
+            Dhall.Core.TextShow
+
         Dhall.Core.List ->
             Dhall.Core.List
 
