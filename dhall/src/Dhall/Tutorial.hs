@@ -426,6 +426,7 @@ import Dhall
 --   ↳ ./file2
 -- ...
 -- Cyclic import: ./file1
+-- ...
 --
 -- You can also import expressions by URL.  For example, you can find a Dhall
 -- expression hosted at this GitHub URL:
