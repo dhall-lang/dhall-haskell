@@ -7,7 +7,7 @@ module Dhall.Parser.Combinators where
 
 
 import           Control.Applicative        (Alternative (..), liftA2)
-import           Control.Exception          (Exception, SomeException)
+import           Control.Exception          (Exception)
 import           Control.Monad              (MonadPlus (..))
 import           Data.Data                  (Data)
 import           Data.Semigroup             (Semigroup (..))
@@ -44,12 +44,13 @@ data Src = Src !Text.Megaparsec.SourcePos !Text.Megaparsec.SourcePos Text
   -- Text field is intentionally lazy
   deriving (Data, Eq, Show)
 
-data SourcedException = SourcedException Src SomeException
+data SourcedException e = SourcedException Src e
     deriving (Exception)
 
-instance Show SourcedException where
+instance Show e => Show (SourcedException e) where
     show (SourcedException source exception) =
             show exception
+        <>  "\n"
         <>  "\n"
         <>  Pretty.renderString
                 (Pretty.layoutPretty Dhall.Pretty.layoutOpts (pretty source))
