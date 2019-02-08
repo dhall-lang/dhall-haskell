@@ -167,7 +167,7 @@ import Dhall.Import.HTTP
 import Dhall.Import.Types
 import Text.Dot ((.->.), userNodeId)
 
-import Dhall.Parser (Parser(..), ParseError(..), Src(..))
+import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
 import Dhall.TypeCheck (X(..))
 import Lens.Family.State.Strict (zoom)
 
@@ -278,7 +278,6 @@ instance Show MissingFile where
             "\n"
         <>  "\ESC[1;31mError\ESC[0m: Missing file "
         <>  path
-        <>  "\n"
 
 -- | Exception thrown when an environment variable is missing
 newtype MissingEnvironmentVariable = MissingEnvironmentVariable { name :: Text }
@@ -302,18 +301,15 @@ instance Show MissingImports where
     show (MissingImports []) =
             "\n"
         <>  "\ESC[1;31mError\ESC[0m: No valid imports"
-        <>  "\n"
     show (MissingImports [e]) = show e
     show (MissingImports es) =
             "\n"
         <>  "\ESC[1;31mError\ESC[0m: Failed to resolve imports. Error list:"
         <>  "\n"
         <>  concatMap (\e -> "\n" <> show e <> "\n") es
-        <>  "\n"
 
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
 throwMissingImport e = throwM (MissingImports [(toException e)])
-
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
@@ -850,11 +846,12 @@ loadWith expr₀ = case expr₀ of
     return expr
   ImportAlt a b -> loadWith a `catch` handler₀
     where
-      handler₀ (MissingImports es₀) =
-        loadWith b `catch` handler₁
+      handler₀ (SourcedException (Src begin _ text) (MissingImports es₀)) =
+          loadWith b `catch` handler₁
         where
-          handler₁ (MissingImports es₁) =
-            throwM (MissingImports (es₀ ++ es₁))
+          handler₁ (SourcedException (Src _ end _) (MissingImports es₁)) =
+            throwM (SourcedException (Src begin end text) (MissingImports (es₀ ++ es₁)))
+ 
   Const a              -> pure (Const a)
   Var a                -> pure (Var a)
   Lam a b c            -> Lam <$> pure a <*> loadWith b <*> loadWith c
@@ -919,7 +916,15 @@ loadWith expr₀ = case expr₀ of
   Constructors a       -> Constructors <$> loadWith a
   Field a b            -> Field <$> loadWith a <*> pure b
   Project a b          -> Project <$> loadWith a <*> pure b
-  Note a b             -> Note <$> pure a <*> loadWith b
+  Note a b             -> do
+      let handler₀ e = throwM (SourcedException a (e :: MissingImports))
+
+      let handler₁ (SourcedException _ e) =
+              throwM (SourcedException a (e :: MissingImports))
+
+      let handlers = [ Handler handler₀, Handler handler₁ ]
+
+      (Note <$> pure a <*> loadWith b) `catches` handlers
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
