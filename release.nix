@@ -19,14 +19,15 @@ in
       { name = "dhall";
 
         constituents = [
-          # Eta only requires the `dhall` package to build using GHC 7.10.3.
-          # This is why we don't need to test the other `dhall-*` packages on
-          # GHC 7.10.3
+          # Verify that the packages build against the oldest supported version
+          # of the compiler
           shared_7_10_3.dhall
+          shared_7_10_3.dhall-bash
+          shared_7_10_3.dhall-json
+          shared_7_10_3.dhall-text
 
-          # Verify that the packages build against the latest version of the
-          # compiler
-          shared_8_6_1.dhall
+          # Verify that the packages build against the latest supported version
+          # of the compiler
           shared_8_6_1.dhall
           shared_8_6_1.dhall-bash
           shared_8_6_1.dhall-json

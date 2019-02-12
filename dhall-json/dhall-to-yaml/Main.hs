@@ -1,4 +1,3 @@
-{-# LANGUAGE ApplicativeDo     #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -29,12 +28,12 @@ data Options = Options
     }
 
 parseOptions :: Parser Options
-parseOptions = Options.Applicative.helper <*> do
-    explain    <- parseExplain
-    omitNull   <- parseOmitNull
-    documents  <- parseDocuments
-    conversion <- Dhall.JSON.parseConversion
-    return (Options {..})
+parseOptions =
+        Options
+    <$> parseExplain
+    <*> parseOmitNull
+    <*> parseDocuments
+    <*> Dhall.JSON.parseConversion
   where
     parseExplain =
         Options.Applicative.switch
@@ -57,7 +56,7 @@ parseOptions = Options.Applicative.helper <*> do
 parserInfo :: ParserInfo Options
 parserInfo =
     Options.Applicative.info
-        parseOptions
+        (Options.Applicative.helper <*> parseOptions)
         (   Options.Applicative.fullDesc
         <>  Options.Applicative.progDesc "Compile Dhall to YAML"
         )
