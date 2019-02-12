@@ -164,6 +164,9 @@ tests =
         , shouldNotParse
             "a multi-line literal without an initial newline"
             "./dhall-lang/tests/parser/failure/mandatoryNewline.dhall"
+        , shouldParse
+            "a Unicode path component"
+            "./dhall-lang/tests/parser/success/unicodePaths"
         ]
 
 shouldParse :: Text -> FilePath -> TestTree

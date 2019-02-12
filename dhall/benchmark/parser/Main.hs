@@ -72,7 +72,7 @@ benchExprFromBytes name bytes = bench name (whnf f bytes)
         term <- case Codec.Serialise.deserialiseOrFail bytes of
             Left  _    -> Nothing
             Right term -> return term
-        case Dhall.Binary.decodeWithVersion term of
+        case Dhall.Binary.decode term of
             Left  _          -> Nothing
             Right expression -> return expression
 

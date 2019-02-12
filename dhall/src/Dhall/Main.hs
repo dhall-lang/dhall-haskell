@@ -89,7 +89,7 @@ data Mode
     | Type
     | Normalize
     | Repl
-    | Format { inplace :: Maybe FilePath }
+    | Format { formatMode :: Dhall.Format.FormatMode }
     | Freeze { inplace :: Maybe FilePath, all_ :: Bool }
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
@@ -169,7 +169,7 @@ parseMode =
     <|> subcommand
             "format"
             "Formatter for the Dhall language"
-            (Format <$> optional parseInplace)
+            (Format <$> parseFormatMode)
     <|> subcommand
             "freeze"
             "Add integrity checks to remote import statements of an expression"
@@ -232,6 +232,17 @@ parseMode =
         <>  Options.Applicative.help "Add integrity checks to all imports (not just remote imports)"
         )
 
+    parseCheck =
+        Options.Applicative.switch
+        (   Options.Applicative.long "check"
+        <>  Options.Applicative.help "Only check if the input is formatted"
+        )
+
+    parseFormatMode = adapt <$> parseCheck <*> optional parseInplace
+      where
+        adapt True  path    = Dhall.Format.Check {..}
+        adapt False inplace = Dhall.Format.Modify {..}
+
 throws :: Exception e => Either e a -> IO a
 throws (Left  e) = Control.Exception.throwIO e
 throws (Right a) = return a
@@ -288,8 +299,12 @@ command (Options {..}) = do
                         Control.Exception.throwIO (Imported ps e)
 
             handler2 e = do
-                let _ = e :: SomeException
-                System.IO.hPrint System.IO.stderr e
+                let string = show (e :: SomeException)
+
+                if not (null string)
+                    then System.IO.hPutStrLn System.IO.stderr string
+                    else return ()
+
                 System.Exit.exitFailure
 
     let renderDoc :: Handle -> Doc Ann -> IO ()
@@ -406,7 +421,7 @@ command (Options {..}) = do
             renderDoc System.IO.stdout diff
 
         Format {..} -> do
-            Dhall.Format.format characterSet inplace
+            Dhall.Format.format (Dhall.Format.Format {..})
 
         Freeze {..} -> do
             Dhall.Freeze.freeze inplace all_ standardVersion
@@ -444,7 +459,7 @@ command (Options {..}) = do
         Encode {..} -> do
             expression <- getExpression
 
-            let term = Dhall.Binary.encodeWithVersion standardVersion expression
+            let term = Dhall.Binary.encode expression
 
             let bytes = Codec.Serialise.serialise term
 
@@ -478,7 +493,7 @@ command (Options {..}) = do
                     else do
                         throws (Codec.Serialise.deserialiseOrFail bytes)
 
-            expression <- throws (Dhall.Binary.decodeWithVersion term)
+            expression <- throws (Dhall.Binary.decode term)
 
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 

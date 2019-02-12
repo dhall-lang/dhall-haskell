@@ -1,63 +1,113 @@
+{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 -- | This module contains the implementation of the @dhall format@ subcommand
 
 module Dhall.Format
     ( -- * Format
-      format
+      Format(..)
+    , FormatMode(..)
+    , format
     ) where
 
+import Control.Exception (Exception)
+import Control.Monad.IO.Class (MonadIO(..))
 import Dhall.Parser (exprAndHeaderFromText)
 import Dhall.Pretty (CharacterSet(..), annToAnsiStyle, layoutOpts)
 
 import Data.Monoid ((<>))
 
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
+import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Control.Exception
 import qualified Data.Text.IO
 import qualified Dhall.Pretty
 import qualified System.Console.ANSI
 import qualified System.IO
 
+data NotFormatted = NotFormatted
+    deriving (Exception)
+
+instance Show NotFormatted where
+    show _ = ""
+
+-- | Arguments to the `format` subcommand
+data Format = Format
+    { characterSet :: CharacterSet
+    , formatMode   :: FormatMode
+    }
+
+{-| The `format` subcommand can either `Modify` its input or simply `Check`
+    that the input is already formatted
+-}
+data FormatMode
+    = Modify
+        { inplace :: Maybe FilePath
+          -- ^ Modify file in-place if present, otherwise read from @stdin@ and
+          --   write to @stdout@
+        }
+    | Check
+        { path :: Maybe FilePath
+          -- ^ Read from the given file if present, otherwise read from @stdin@
+        }
+
 -- | Implementation of the @dhall format@ subcommand
 format
-    :: CharacterSet
-    -> Maybe FilePath
-    -- ^ Modify file in-place if present, otherwise read from @stdin@ and write
-    --   to @stdout@
+    :: Format
     -> IO ()
-format characterSet inplace = do
-        case inplace of
-            Just file -> do
-                text <- Data.Text.IO.readFile file
-                (header, expr) <- case exprAndHeaderFromText "(stdin)" text of
-                    Left  err -> Control.Exception.throwIO err
-                    Right x   -> return x
+format (Format {..}) =
+    case formatMode of
+        Modify {..} ->
+            case inplace of
+                Just file -> do
+                    text <- Data.Text.IO.readFile file
 
-                let doc =   Pretty.pretty header
-                        <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
-                System.IO.withFile file System.IO.WriteMode (\handle -> do
-                    Pretty.renderIO handle (Pretty.layoutSmart layoutOpts doc)
-                    Data.Text.IO.hPutStrLn handle "" )
-            Nothing -> do
-                inText <- Data.Text.IO.getContents
+                    (header, expr) <- throws (exprAndHeaderFromText "(stdin)" text)
 
-                (header, expr) <- case exprAndHeaderFromText "(stdin)" inText of
-                    Left  err -> Control.Exception.throwIO err
-                    Right x   -> return x
+                    let doc =   Pretty.pretty header
+                            <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
+                    System.IO.withFile file System.IO.WriteMode (\handle -> do
+                        Pretty.Terminal.renderIO handle (Pretty.layoutSmart layoutOpts doc)
+                        Data.Text.IO.hPutStrLn handle "" )
+                Nothing -> do
+                    inText <- Data.Text.IO.getContents
 
-                let doc =   Pretty.pretty header
-                        <>  Dhall.Pretty.prettyCharacterSet characterSet expr
+                    (header, expr) <- throws (exprAndHeaderFromText "(stdin)" inText)
 
-                supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
+                    let doc =   Pretty.pretty header
+                            <>  Dhall.Pretty.prettyCharacterSet characterSet expr
 
-                if supportsANSI
-                  then
-                    Pretty.renderIO
-                      System.IO.stdout
-                      (fmap annToAnsiStyle (Pretty.layoutSmart layoutOpts doc))
-                  else
-                    Pretty.renderIO
-                      System.IO.stdout
-                      (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc))
+                    supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
+
+                    if supportsANSI
+                      then
+                        Pretty.Terminal.renderIO
+                          System.IO.stdout
+                          (fmap annToAnsiStyle (Pretty.layoutSmart layoutOpts doc))
+                      else
+                        Pretty.Terminal.renderIO
+                          System.IO.stdout
+                          (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc))
+        Check {..} -> do
+            originalText <- case path of
+                Just file -> Data.Text.IO.readFile file
+                Nothing   -> Data.Text.IO.getContents
+
+            (header, expr) <- throws (exprAndHeaderFromText "(stdin)" originalText)
+
+            let doc =   Pretty.pretty header
+                    <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
+                    <>  "\n"
+
+            let formattedText =
+                    Pretty.Text.renderStrict (Pretty.layoutSmart layoutOpts doc)
+
+            if originalText == formattedText
+                then return ()
+                else Control.Exception.throwIO NotFormatted
+
+throws :: (Exception e, MonadIO io) => Either e a -> io a
+throws (Left  e) = liftIO (Control.Exception.throwIO e)
+throws (Right a) = return a
