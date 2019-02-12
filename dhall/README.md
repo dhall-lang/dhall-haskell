@@ -107,4 +107,14 @@ False
 
 Now go read the [Dhall tutorial][haskell-tutorial] to learn more.
 
+## Standard-compatibility table
+
+| Haskell package version | Supported standard version |
+|-------------------------|----------------------------|
+| `1.20.*`                | `5.0.0`                    |
+| `1.19.*`                | `4.0.0`                    |
+| `1.18.*`                | `3.0.0`                    |
+| `1.17.*`                | `2.0.0`                    |
+| `1.16.*`                | `1.0.0`                    |
+
 [haskell-tutorial]: https://hackage.haskell.org/package/dhall/docs/Dhall-Tutorial.html
