@@ -296,12 +296,22 @@ let
                           haskellPackagesNew.fail
                         ];
 
+                    blaze-builder =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.blaze-builder
+                        haskellPackagesNew.semigroups;
+
                     cborg =
                       pkgsNew.haskell.lib.addBuildDepends
                         haskellPackagesOld.cborg
                         [ haskellPackagesNew.fail
                           haskellPackagesNew.semigroups
                         ];
+
+                    conduit =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.conduit
+                        haskellPackagesNew.semigroups;
 
                     contravariant =
                       pkgsNew.haskell.lib.addBuildDepends
@@ -317,14 +327,25 @@ let
                           haskellPackagesNew.mockery
                         ];
 
+                    generic-deriving =
+                      pkgsNew.haskell.lib.dontCheck
+                        haskellPackagesOld.generic-deriving;
+
+                    haskell-src =
+                      pkgsNew.haskell.lib.addBuildDepends
+                        haskellPackagesOld.haskell-src
+                        [ haskellPackagesNew.fail
+                          haskellPackagesNew.semigroups
+                        ];
+
                     megaparsec =
                       pkgsNew.haskell.lib.addBuildDepend
                         haskellPackagesOld.megaparsec
                         haskellPackagesNew.fail;
 
-                    generic-deriving =
-                      pkgsNew.haskell.lib.dontCheck
-                        haskellPackagesOld.generic-deriving;
+                    neat-interpolation =
+                      pkgsNew.haskell.lib.doJailbreak
+                        haskellPackagesOld.neat-interpolation;
 
                     prettyprinter =
                       pkgsNew.haskell.lib.addBuildDepend
@@ -345,6 +366,9 @@ let
                     wcwidth =
                       pkgsNew.haskell.lib.appendPatch
                         haskellPackagesOld.wcwidth ./wcwidth.patch;
+
+                    yaml =
+                      pkgsNew.haskell.lib.doJailbreak haskellPackagesOld.yaml;
                   };
 
               in

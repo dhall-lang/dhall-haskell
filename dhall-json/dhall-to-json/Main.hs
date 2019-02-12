@@ -1,4 +1,3 @@
-{-# LANGUAGE ApplicativeDo     #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -35,13 +34,13 @@ data Options = Options
     }
 
 parseOptions :: Parser Options
-parseOptions = Options.Applicative.helper <*> do
-    explain    <- parseExplain
-    pretty     <- parsePretty
-    omitNull   <- parseOmitNull
-    version    <- parseVersion
-    conversion <- Dhall.JSON.parseConversion
-    return (Options {..})
+parseOptions =
+        Options
+    <$> parseExplain
+    <*> parsePretty
+    <*> parseOmitNull
+    <*> parseVersion
+    <*> Dhall.JSON.parseConversion
   where
     parseExplain =
         Options.Applicative.switch
@@ -84,7 +83,7 @@ parseOptions = Options.Applicative.helper <*> do
 parserInfo :: ParserInfo Options
 parserInfo =
     Options.Applicative.info
-        parseOptions
+        (Options.Applicative.helper <*> parseOptions)
         (   Options.Applicative.fullDesc
         <>  Options.Applicative.progDesc "Compile Dhall to JSON"
         )
