@@ -846,11 +846,13 @@ loadWith expr₀ = case expr₀ of
     return expr
   ImportAlt a b -> loadWith a `catch` handler₀
     where
-      handler₀ (SourcedException (Src begin _ text) (MissingImports es₀)) =
+      handler₀ (SourcedException (Src begin _ text₀) (MissingImports es₀)) =
           loadWith b `catch` handler₁
         where
-          handler₁ (SourcedException (Src _ end _) (MissingImports es₁)) =
-            throwM (SourcedException (Src begin end text) (MissingImports (es₀ ++ es₁)))
+          handler₁ (SourcedException (Src _ end text₁) (MissingImports es₁)) =
+              throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
+            where
+              text₂ = text₀ <> " ? " <> text₁
  
   Const a              -> pure (Const a)
   Var a                -> pure (Var a)
@@ -917,14 +919,9 @@ loadWith expr₀ = case expr₀ of
   Field a b            -> Field <$> loadWith a <*> pure b
   Project a b          -> Project <$> loadWith a <*> pure b
   Note a b             -> do
-      let handler₀ e = throwM (SourcedException a (e :: MissingImports))
+      let handler e = throwM (SourcedException a (e :: MissingImports))
 
-      let handler₁ (SourcedException _ e) =
-              throwM (SourcedException a (e :: MissingImports))
-
-      let handlers = [ Handler handler₀, Handler handler₁ ]
-
-      (Note <$> pure a <*> loadWith b) `catches` handlers
+      (Note <$> pure a <*> loadWith b) `catch` handler
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
