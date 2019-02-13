@@ -1,4 +1,3 @@
-{-# LANGUAGE ApplicativeDo      #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE OverloadedStrings  #-}
@@ -702,10 +701,7 @@ parseConversion =
         conversion
     <|> noConversion
   where
-    conversion = do
-        mapKey   <- parseKeyField
-        mapValue <- parseValueField
-        return (Conversion {..})
+    conversion = Conversion <$> parseKeyField <*> parseValueField
       where
         parseKeyField =
             Options.Applicative.strOption

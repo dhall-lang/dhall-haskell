@@ -5,6 +5,7 @@ module Dhall.Test.Import where
 import Data.Text (Text)
 import Test.Tasty (TestTree)
 import Dhall.Import (MissingImports(..))
+import Dhall.Parser (SourcedException(..))
 import Control.Exception (catch, throwIO)
 import Data.Monoid ((<>))
 
@@ -84,9 +85,13 @@ shouldFail failures name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name
       (do
           _ <- Dhall.Import.load actualExpr
           fail "Import should have failed, but it succeeds")
-      (\(MissingImports es) -> case length es == failures of
-                                True -> pure ()
-                                False -> fail ("Should have failed "
-                                               <> show failures
-                                               <> " times, but failed with: \n"
-                                               <> show es)) )
+      (\(SourcedException _ (MissingImports es)) ->
+          case length es == failures of
+              True -> pure ()
+              False -> fail
+                  (   "Should have failed "
+                  <>  show failures
+                  <>  " times, but failed with: \n"
+                  <>  show es
+                  )
+      ) )

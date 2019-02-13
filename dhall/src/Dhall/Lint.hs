@@ -3,12 +3,17 @@
 module Dhall.Lint
     ( -- * Lint
       lint
+    , removeLetInLet
+    , removeUnusedBindings
+    , optionalLitToSomeNone
+    , dropConstructorsKeyword
     ) where
 
-import Dhall.Core (Binding(..), Chunks(..), Expr(..), Import, Var(..))
-import Data.Semigroup ((<>))
+import Control.Monad (mplus)
 import Data.List.NonEmpty (NonEmpty(..))
-import Dhall.TypeCheck (X(..))
+import Data.Semigroup ((<>))
+import Dhall.Core (Binding(..), Expr(..), Import, Var(..), subExpressions)
+import Lens.Family (ASetter, over)
 
 import qualified Dhall.Core
 
@@ -16,244 +21,56 @@ import qualified Dhall.Core
 
     Currently this:
 
-    * removes unused @let@ bindings
-    * consolidates nested @let@ bindings to use a multiple-@let@ binding
-    * switches legacy @List@-like @Optional@ literals to use @Some@ / @None@ instead
-    * removes the `constructors` keyword
+    * removes unused @let@ bindings with 'removeLetInLet'.
+    * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeUnusedBindings'.
+    * switches legacy @List@-like @Optional@ literals to use @Some@ / @None@ instead with 'optionalLitToSomeNone'
+    * removes the `constructors` keyword with 'dropConstructorsKeyword'
 -}
 lint :: Expr s Import -> Expr t Import
-lint expression = loop (Dhall.Core.denote expression)
+lint =
+  rewriteOf
+    subExpressions
+    ( \e ->
+                removeLetInLet e
+        `mplus` removeUnusedBindings e
+        `mplus` optionalLitToSomeNone e
+        `mplus` dropConstructorsKeyword e
+    )
+    . Dhall.Core.denote
+
+removeLetInLet :: Eq a => Expr s a -> Maybe (Expr s a)
+removeLetInLet (Let a (Let b c)) = Just (Let (a <> b) c)
+removeLetInLet _ = Nothing
+
+removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
+removeUnusedBindings (Let (Binding a _ _ :| []) d)
+    | not (V a 0 `Dhall.Core.freeIn` d) =
+        Just d
+    | otherwise =
+        Nothing
+removeUnusedBindings (Let (Binding a _ _ :| (l : ls)) d)
+    | not (V a 0 `Dhall.Core.freeIn` e) =
+        Just e
+    | otherwise =
+        Nothing
   where
-    loop (Const a) =
-        Const a
-    loop (Var a) =
-        Var a
-    loop (Lam a b c) = Lam a b' c'
-      where
-        b' = loop b
-        c' = loop c
-    loop (Pi a b c) = Pi a b' c'
-      where
-        b' = loop b
-        c' = loop c
-    loop (App a b) = App a' b'
-      where
-        a' = loop a
-        b' = loop b
+    e = Let (l :| ls) d
+removeUnusedBindings _ = Nothing
 
-    -- Consolidate nested `let` expresssions
-    loop (Let a (Let b c)) = loop (Let (a <> b) c)
 
-    -- Remove unused bindings
-    loop (Let (Binding a b c :| []) d)
-        | not (V a 0 `Dhall.Core.freeIn` d') =
-            d'
-        | otherwise =
-            Let (Binding a b' c' :| [])  d'
-      where
-        b' = fmap loop b
-        c' =      loop c
+optionalLitToSomeNone :: Expr s a -> Maybe (Expr s a)
+optionalLitToSomeNone (OptionalLit _ (Just b)) = Just (Some b)
+optionalLitToSomeNone (OptionalLit a Nothing) = Just (App None a)
+optionalLitToSomeNone _ = Nothing
 
-        d' = loop d
-    loop (Let (Binding a b c :| (l : ls)) d)
-        | not (V a 0 `Dhall.Core.freeIn` e) =
-            e
-        | otherwise =
-            case e of
-                Let (l' :| ls') d' -> Let (Binding a b' c' :| (l' : ls'))  d'
-                _                  -> Let (Binding a b' c' :| []) e
-      where
-        b' = fmap loop b
-        c' =      loop c
 
-        e = loop (Let (l :| ls) d)
+dropConstructorsKeyword :: Expr s a -> Maybe (Expr s a)
+dropConstructorsKeyword (Constructors a) = Just a
+dropConstructorsKeyword _ = Nothing
 
-    loop (Annot a b) =
-        Annot a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop Bool =
-        Bool
-    loop (BoolLit a) =
-        BoolLit a
-    loop (BoolAnd a b) =
-        BoolAnd a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop (BoolOr a b) =
-        BoolOr a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop (BoolEQ a b) =
-        BoolEQ a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop (BoolNE a b) =
-        BoolNE a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop (BoolIf a b c) =
-        BoolIf a' b' c'
-      where
-        a' = loop a
-        b' = loop b
-        c' = loop c
-    loop Natural =
-        Natural
-    loop (NaturalLit a) =
-        NaturalLit a
-    loop NaturalFold =
-        NaturalFold
-    loop NaturalBuild =
-        NaturalBuild
-    loop NaturalIsZero =
-        NaturalIsZero
-    loop NaturalEven =
-        NaturalEven
-    loop NaturalOdd =
-        NaturalOdd
-    loop NaturalToInteger =
-        NaturalToInteger
-    loop NaturalShow =
-        NaturalShow
-    loop (NaturalPlus a b) =
-        NaturalPlus a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop (NaturalTimes a b) =
-        NaturalTimes a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop Integer =
-        Integer
-    loop (IntegerLit a) =
-        IntegerLit a
-    loop IntegerShow =
-        IntegerShow
-    loop IntegerToDouble =
-        IntegerToDouble
-    loop Double =
-        Double
-    loop (DoubleLit a) =
-        DoubleLit a
-    loop DoubleShow =
-        DoubleShow
-    loop Text =
-        Text
-    loop (TextLit (Chunks a b)) =
-        TextLit (Chunks a' b)
-      where
-        a' = fmap (fmap loop) a
-    loop (TextAppend a b) =
-        TextAppend a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop TextShow =
-        TextShow
-    loop List =
-        List
-    loop (ListLit a b) =
-        ListLit a' b'
-      where
-        a' = fmap loop a
-        b' = fmap loop b
-    loop (ListAppend a b) =
-        ListAppend a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop ListBuild =
-        ListBuild
-    loop ListFold =
-        ListFold
-    loop ListLength =
-        ListLength
-    loop ListHead =
-        ListHead
-    loop ListLast =
-        ListLast
-    loop ListIndexed =
-        ListIndexed
-    loop ListReverse =
-        ListReverse
-    loop Optional =
-        Optional
-    loop (Some a) =
-        Some a'
-      where
-        a' = loop a
-    loop None =
-        None
-    loop (OptionalLit _ (Just b)) =
-        loop (Some b)
-    loop (OptionalLit a Nothing) =
-        loop (App None a)
-    loop OptionalFold =
-        OptionalFold
-    loop OptionalBuild =
-        OptionalBuild
-    loop (Record a) =
-        Record a'
-      where
-        a' = fmap loop a
-    loop (RecordLit a) =
-        RecordLit a'
-      where
-        a' = fmap loop a
-    loop (Union a) =
-        Union a'
-      where
-        a' = fmap loop a
-    loop (UnionLit a b c) =
-        UnionLit a b' c'
-      where
-        b' =      loop b
-        c' = fmap loop c
-    loop (Combine a b) =
-        Combine a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop (CombineTypes a b) =
-        CombineTypes a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop (Prefer a b) =
-        Prefer a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop (Merge a b c) =
-        Merge a' b' c'
-      where
-        a' =      loop a
-        b' =      loop b
-        c' = fmap loop c
-    loop (Constructors a) =
-        loop a
-    loop (Field a b) =
-        Field a' b
-      where
-        a' = loop a
-    loop (Project a b) =
-        Project a' b
-      where
-        a' = loop a
-    loop (Note a _) =
-        absurd a
-    loop (ImportAlt a b) =
-        ImportAlt a' b'
-      where
-        a' = loop a
-        b' = loop b
-    loop (Embed a) =
-        Embed a
+
+rewriteOf :: ASetter a b a b -> (b -> Maybe a) -> a -> b
+rewriteOf l f = go where go = transformOf l (\x -> maybe x go (f x))
+
+transformOf :: ASetter a b a b -> (b -> b) -> a -> b
+transformOf l f = go where go = f . over l go

@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP                        #-}
+{-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -6,6 +7,7 @@ module Dhall.Parser.Combinators where
 
 
 import           Control.Applicative        (Alternative (..), liftA2)
+import           Control.Exception          (Exception)
 import           Control.Monad              (MonadPlus (..))
 import           Data.Data                  (Data)
 import           Data.Semigroup             (Semigroup (..))
@@ -25,7 +27,10 @@ import qualified Data.Char
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
+import qualified Data.Text.Prettyprint.Doc               as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Map
+import qualified Dhall.Pretty
 import qualified Dhall.Util
 import qualified Dhall.Set
 import qualified Text.Megaparsec
@@ -38,6 +43,18 @@ import qualified Text.Parser.Token.Style
 data Src = Src !Text.Megaparsec.SourcePos !Text.Megaparsec.SourcePos Text
   -- Text field is intentionally lazy
   deriving (Data, Eq, Show)
+
+data SourcedException e = SourcedException Src e
+
+instance Exception e => Exception (SourcedException e)
+
+instance Show e => Show (SourcedException e) where
+    show (SourcedException source exception) =
+            show exception
+        <>  "\n"
+        <>  "\n"
+        <>  Pretty.renderString
+                (Pretty.layoutPretty Dhall.Pretty.layoutOpts (pretty source))
 
 -- | Doesn't force the 'Text' part
 laxSrcEq :: Src -> Src -> Bool

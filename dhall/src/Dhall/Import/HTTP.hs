@@ -57,19 +57,19 @@ renderPrettyHttpException (HttpExceptionRequest _ e) =
       "\n"
       <>  "\ESC[1;31mError\ESC[0m: Invalid remote host name\n"
       <>  "\n"
-      <>  "↳ " <> show host <> "\n"
+      <>  "↳ " <> show host
     ResponseTimeout ->
       "\n"
-      <>  "\ESC[1;31mError\ESC[0m: The remote host took too long to respond\n"
+      <>  "\ESC[1;31mError\ESC[0m: The remote host took too long to respond"
     StatusCodeException response _
         | statusCode == 404 ->
             "\n"
-            <>  "\ESC[1;31mError\ESC[0m: Remote file not found\n"
+            <>  "\ESC[1;31mError\ESC[0m: Remote file not found"
         | otherwise ->
             "\n"
             <>  "\ESC[1;31mError\ESC[0m: Unexpected HTTP status code:\n"
             <>  "\n"
-            <>  "↳ " <> show statusCode <> "\n"
+            <>  "↳ " <> show statusCode
       where
         statusCode =
             Network.HTTP.Types.Status.statusCode
