@@ -2,8 +2,7 @@ resolver: lts-6.27
 packages:
   - dhall
   - dhall-bash
-#  dhall-json uses ApplicativeDo
-#  - dhall-json
+  - dhall-json
   - dhall-text
 extra-deps:
 - ansi-terminal-0.7.1.1
