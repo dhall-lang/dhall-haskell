@@ -891,6 +891,7 @@ loadWith expr₀ = case expr₀ of
   Text                 -> pure Text
   TextLit (Chunks a b) -> fmap TextLit (Chunks <$> mapM (mapM loadWith) a <*> pure b)
   TextAppend a b       -> TextAppend <$> loadWith a <*> loadWith b
+  TextShow             -> pure TextShow
   List                 -> pure List
   ListLit a b          -> ListLit <$> mapM loadWith a <*> mapM loadWith b
   ListAppend a b       -> ListAppend <$> loadWith a <*> loadWith b

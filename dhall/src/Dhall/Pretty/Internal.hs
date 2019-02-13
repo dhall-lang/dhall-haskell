@@ -751,6 +751,8 @@ prettyCharacterSet characterSet = prettyExpression
         builtin "Double/show"
     prettyPrimitiveExpression Text =
         builtin "Text"
+    prettyPrimitiveExpression TextShow =
+        builtin "Text/show"
     prettyPrimitiveExpression List =
         builtin "List"
     prettyPrimitiveExpression ListBuild =

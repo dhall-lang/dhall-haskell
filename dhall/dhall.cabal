@@ -100,6 +100,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/concatMapSep
     dhall-lang/Prelude/Text/concatSep
     dhall-lang/Prelude/Text/package.dhall
+    dhall-lang/Prelude/Text/show
     dhall-lang/tests/import/data/fieldOrder/*.dhall
     dhall-lang/tests/import/failure/*.dhall
     dhall-lang/tests/import/success/*.dhall
@@ -225,6 +226,8 @@ Extra-Source-Files:
     dhall-lang/tests/normalization/success/prelude/Text/concatMapSep/*.dhall
     dhall-lang/tests/normalization/success/prelude/Text/concatSep/*.dhall
     dhall-lang/tests/normalization/success/prelude/Text/concatSep/*.dhall
+    dhall-lang/tests/normalization/success/prelude/Text/show/*.dhall
+    dhall-lang/tests/normalization/success/prelude/Text/show/*.dhall
     dhall-lang/tests/normalization/success/simple/*.dhall
     dhall-lang/tests/normalization/success/simplifications/*.dhall
     dhall-lang/tests/parser/failure/*.dhall

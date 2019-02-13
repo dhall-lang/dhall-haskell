@@ -87,12 +87,14 @@ import Prelude hiding (succ)
 
 import qualified Control.Monad
 import qualified Crypto.Hash
+import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Map
 import qualified Dhall.Set
+import qualified Text.Printf
 
 {-| Constants for a pure type system
 
@@ -405,6 +407,8 @@ data Expr s a
     | TextLit (Chunks s a)
     -- | > TextAppend x y                           ~  x ++ y
     | TextAppend (Expr s a) (Expr s a)
+    -- | > TextShow                                 ~  Text/show
+    | TextShow
     -- | > List                                     ~  List
     | List
     -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : List t
@@ -510,6 +514,7 @@ instance Functor (Expr s) where
   fmap _ Text = Text
   fmap f (TextLit cs) = TextLit (fmap f cs)
   fmap f (TextAppend e1 e2) = TextAppend (fmap f e1) (fmap f e2)
+  fmap _ TextShow = TextShow
   fmap _ List = List
   fmap f (ListLit maybeE seqE) = ListLit (fmap (fmap f) maybeE) (fmap (fmap f) seqE)
   fmap f (ListAppend e1 e2) = ListAppend (fmap f e1) (fmap f e2)
@@ -587,6 +592,7 @@ instance Monad (Expr s) where
     Text                 >>= _ = Text
     TextLit (Chunks a b) >>= k = TextLit (Chunks (fmap (fmap (>>= k)) a) b)
     TextAppend a b       >>= k = TextAppend (a >>= k) (b >>= k)
+    TextShow             >>= _ = TextShow
     List                 >>= _ = List
     ListLit a b          >>= k = ListLit (fmap (>>= k) a) (fmap (>>= k) b)
     ListAppend a b       >>= k = ListAppend (a >>= k) (b >>= k)
@@ -654,6 +660,7 @@ instance Bifunctor Expr where
     first _  Text                  = Text
     first k (TextLit (Chunks a b)) = TextLit (Chunks (fmap (fmap (first k)) a) b)
     first k (TextAppend a b      ) = TextAppend (first k a) (first k b)
+    first _  TextShow              = TextShow
     first _  List                  = List
     first k (ListLit a b         ) = ListLit (fmap (first k) a) (fmap (first k) b)
     first k (ListAppend a b      ) = ListAppend (first k a) (first k b)
@@ -896,6 +903,7 @@ shift d v (TextAppend a b) = TextAppend a' b'
   where
     a' = shift d v a
     b' = shift d v b
+shift _ _ TextShow = TextShow
 shift _ _ List = List
 shift d v (ListLit a b) = ListLit a' b'
   where
@@ -1076,6 +1084,7 @@ subst x e (TextAppend a b) = TextAppend a' b'
   where
     a' = subst x e a
     b' = subst x e b
+subst _ _ TextShow = TextShow
 subst _ _ List = List
 subst x e (ListLit a b) = ListLit a' b'
   where
@@ -1331,6 +1340,8 @@ alphaNormalize (TextAppend l₀ r₀) =
     l₁ = alphaNormalize l₀
 
     r₁ = alphaNormalize r₀
+alphaNormalize TextShow =
+    TextShow
 alphaNormalize List =
     List
 alphaNormalize (ListLit (Just _T₀) ts₀) =
@@ -1521,6 +1532,7 @@ denote  DoubleShow            = DoubleShow
 denote  Text                  = Text
 denote (TextLit (Chunks a b)) = TextLit (Chunks (fmap (fmap denote) a) b)
 denote (TextAppend a b      ) = TextAppend (denote a) (denote b)
+denote  TextShow              = TextShow
 denote  List                  = List
 denote (ListLit a b         ) = ListLit (fmap denote a) (fmap denote b)
 denote (ListAppend a b      ) = ListAppend (denote a) (denote b)
@@ -1713,6 +1725,10 @@ normalizeWithM ctx e0 = loop (denote e0)
                         loop nothing
                     App (App (App (App (App OptionalFold _) (Some x)) _) just) _ ->
                         loop (App just x)
+                    App TextShow (TextLit (Chunks [] oldText)) ->
+                        loop (TextLit (Chunks [] newText))
+                      where
+                        newText = textShow oldText
                     _ -> do
                         res2 <- ctx (App f' a')
                         case res2 of
@@ -1827,6 +1843,7 @@ normalizeWithM ctx e0 = loop (denote e0)
         decide  l          (TextLit n) | isEmpty n = l
         decide (TextLit m) (TextLit n)             = TextLit (m <> n)
         decide  l           r                      = TextAppend l r
+    TextShow -> pure TextShow
     List -> pure List
     ListLit t es
         | Data.Sequence.null es -> ListLit <$> t' <*> es'
@@ -1953,6 +1970,19 @@ normalizeWithM ctx e0 = loop (denote e0)
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
 
+textShow :: Text -> Text
+textShow text = "\"" <> Data.Text.concatMap f text <> "\""
+  where
+    f '"'  = "\\\""
+    f '$'  = "\\u0024"
+    f '\\' = "\\\\"
+    f '\b' = "\\b"
+    f '\n' = "\\n"
+    f '\r' = "\\r"
+    f '\t' = "\\t"
+    f c | c <= '\x1F' = Data.Text.pack (Text.Printf.printf "\\u%04d" (Data.Char.ord c))
+        | otherwise   = Data.Text.singleton c
+
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise
 -}
@@ -2023,6 +2053,8 @@ isNormalized e0 = loop (denote e0)
           App (App (App (App (App OptionalFold _) (Some _)) _) _) _ ->
               False
           App (App (App (App (App OptionalFold _) (App None _)) _) _) _ ->
+              False
+          App TextShow (TextLit (Chunks [] _)) ->
               False
           _ -> True
       Let _ _ -> False
@@ -2101,6 +2133,7 @@ isNormalized e0 = loop (denote e0)
           decide  _          (TextLit n) | isEmpty n = False
           decide (TextLit _) (TextLit _)             = False
           decide  _           _                      = True
+      TextShow -> True
       List -> True
       ListLit t es -> all loop t && all loop es
       ListAppend x y -> loop x && loop y && decide x y
@@ -2256,6 +2289,7 @@ reservedIdentifiers =
         , "Double"
         , "Double/show"
         , "Text"
+        , "Text/show"
         , "List"
         , "List/build"
         , "List/fold"
@@ -2314,6 +2348,7 @@ subExpressions _ Text = pure Text
 subExpressions f (TextLit (Chunks a b)) =
     TextLit <$> (Chunks <$> traverse (traverse f) a <*> pure b)
 subExpressions f (TextAppend a b) = TextAppend <$> f a <*> f b
+subExpressions _ TextShow = pure TextShow
 subExpressions _ List = pure List
 subExpressions f (ListLit a b) = ListLit <$> traverse f a <*> traverse f b
 subExpressions f (ListAppend a b) = ListAppend <$> f a <*> f b

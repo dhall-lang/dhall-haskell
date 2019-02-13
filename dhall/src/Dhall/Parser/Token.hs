@@ -53,6 +53,7 @@ module Dhall.Parser.Token (
     _Integer,
     _Double,
     _Text,
+    _TextShow,
     _List,
     _True,
     _False,
@@ -625,6 +626,9 @@ _Double = reserved "Double"
 
 _Text :: Parser ()
 _Text = reserved "Text"
+
+_TextShow :: Parser ()
+_TextShow = reserved "Text/show"
 
 _List :: Parser ()
 _List = reserved "List"
