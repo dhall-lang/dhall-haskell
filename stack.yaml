@@ -1,4 +1,4 @@
-resolver: lts-13.3
+resolver: lts-13.5
 packages:
   - dhall
   - dhall-bash
