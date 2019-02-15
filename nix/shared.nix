@@ -434,7 +434,9 @@ let
           (pkgsNew.haskell.lib.disableLibraryProfiling
             (pkgsNew.haskell.lib.disableSharedExecutables
               (pkgsNew.haskell.lib.useFixedCabal
-                 (pkgsNew.haskell.lib.justStaticExecutables drv)
+                (pkgsNew.haskell.lib.dontCheck
+                  (pkgsNew.haskell.lib.justStaticExecutables drv)
+                )
               )
             )
           )
