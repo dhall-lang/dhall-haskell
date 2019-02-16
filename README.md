@@ -26,6 +26,21 @@ For OS X, use `brew` to install the desired package.  For example:
 $ brew install dhall-json
 ```
 
+You can also install pre-built Linux binaries for `master` using Nix by visiting
+one of the following links:
+
+* [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall/latest)
+* [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-bash/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-bash/latest)
+* [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-json/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-json/latest)
+* [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-text/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-text/latest)
+
+... and then clicking the "Help" button in the bottom right corner, which will
+show you a `nix-env` command that you can run to install the prebuilt
+executable.
+
+This also works for any pull request, too, by replacing `master` with the pull
+request number for any of the above links.
+
 ## Building from source
 
 ### [cabal](https://www.haskell.org/cabal)
