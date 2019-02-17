@@ -49,7 +49,6 @@ import Data.Text (Text)
 import Options.Applicative (Parser)
 import Prelude hiding (exponent)
 import GHC.Float (double2Float, float2Double)
-import Codec.CBOR.Magic (floatToWord16, wordToFloat16)
 
 import qualified Crypto.Hash
 import qualified Data.ByteArray.Encoding
