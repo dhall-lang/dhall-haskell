@@ -379,7 +379,7 @@ encode (DoubleLit n64)
     useFloat = n64 == float2Double n32
     -- the other three cases for Half-floats are 0.0 and the infinities
     useHalf  = or $ fmap (n64 ==) [0.0, infinity, -infinity]
-    infinity = (read "Infinity") :: Double
+    infinity = 1/0 :: Double
 encode (TextLit (Chunks xys₀ z₀)) =
     TList ([ TInt 18 ] ++ xys₁ ++ [ z₁ ])
   where
