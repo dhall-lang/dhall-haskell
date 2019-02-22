@@ -11,6 +11,9 @@ let
   shared =
     import ./nix/shared.nix { };
 
+  shared_linux =
+    import ./nix/shared.nix { system = "x86_64-linux"; };
+
   coverage =
     import ./nix/shared.nix { coverage = true; };
 
@@ -61,4 +64,9 @@ in
       tarball-dhall-json
       tarball-dhall-text
     ;
+
+    linux-dhall      = shared_linux.possibly-static.dhall;
+    linux-dhall-bash = shared_linux.possibly-static.dhall-bash;
+    linux-dhall-json = shared_linux.possibly-static.dhall-json;
+    linux-dhall-text = shared_linux.possibly-static.dhall-text;
   }
