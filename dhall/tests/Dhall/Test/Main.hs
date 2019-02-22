@@ -1,7 +1,8 @@
 module Main where
 
-import Test.Tasty (TestTree)
+import           Test.Tasty               (TestTree)
 
+import qualified Dhall.Test.Binary
 import qualified Dhall.Test.Format
 import qualified Dhall.Test.Import
 import qualified Dhall.Test.Lint
@@ -17,13 +18,14 @@ import qualified System.Environment
 import qualified System.IO
 import qualified Test.Tasty
 
-import System.FilePath ((</>))
+import           System.FilePath          ((</>))
 
 allTests :: TestTree
 allTests =
     Test.Tasty.testGroup "Dhall Tests"
         [ Dhall.Test.Normalization.tests
         , Dhall.Test.Parser.tests
+        , Dhall.Test.Binary.tests
         , Dhall.Test.Regression.tests
         , Dhall.Test.Tutorial.tests
         , Dhall.Test.Format.tests

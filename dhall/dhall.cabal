@@ -232,6 +232,7 @@ Extra-Source-Files:
     dhall-lang/tests/normalization/success/simplifications/*.dhall
     dhall-lang/tests/parser/failure/*.dhall
     dhall-lang/tests/parser/success/*.dhall
+    dhall-lang/tests/binary/success/*.dhall
     dhall-lang/tests/typecheck/failure/*.dhall
     dhall-lang/tests/typecheck/success/*.dhall
     dhall-lang/tests/typecheck/success/prelude/Bool/and/*.dhall
@@ -464,6 +465,7 @@ Test-Suite tasty
     Main-Is: Dhall/Test/Main.hs
     GHC-Options: -Wall
     Other-Modules:
+        Dhall.Test.Binary
         Dhall.Test.Format
         Dhall.Test.Import
         Dhall.Test.Lint
@@ -476,6 +478,7 @@ Test-Suite tasty
         Dhall.Test.Util
     Build-Depends:
         base                      >= 4        && < 5   ,
+        bytestring                               < 0.11,
         containers                                     ,
         deepseq                   >= 1.2.0.1  && < 1.5 ,
         dhall                                          ,
