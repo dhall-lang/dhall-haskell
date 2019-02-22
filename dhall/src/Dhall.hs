@@ -365,7 +365,7 @@ inputWithSettings settings (Type {..}) txt = do
     case extract normExpr  of
         Just x  -> return x
         Nothing -> Control.Exception.throwIO
-                     (InvalidType expected normExpr)
+                     (InvalidType expected expr')
 
 {-| Type-check and evaluate a Dhall program that is read from the
     file-system.
