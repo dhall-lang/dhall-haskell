@@ -42,9 +42,11 @@ shouldShowDetailedTypeError = testCase "detailed TypeError" $ do
         \matches the expected type.  You provided a Type that disobeys this contract     \n\
         \                                                                                \n\
         \The Type provided has the expected dhall type:                                  \n\
+        \                                                                                \n\
         \↳ { bar : Natural, foo : Text }\n\
         \                                                                                \n\
-        \but it couldn't extract a value from the well-typed expression:                 \n\
+        \and it couldn't extract a value from the well-typed expression:                 \n\
+        \                                                                                \n\
         \↳ { bar = 0, foo = \"foo\" }\n\
         \                                                                                \n"
 

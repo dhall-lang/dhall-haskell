@@ -160,7 +160,7 @@ throws (Right r) = return r
 -}
 data InvalidType s a = InvalidType
   { invalidTypeExpected :: Expr s a
-  , invalidTypeExpr :: Expr s a
+  , invalidTypeExpression :: Expr s a
   }
   deriving (Typeable)
 
@@ -175,14 +175,16 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (InvalidType s a) 
         \matches the expected type.  You provided a Type that disobeys this contract     \n\
         \                                                                                \n\
         \The Type provided has the expected dhall type:                                  \n\
+        \                                                                                \n\
         \" <> show txt0 <> "\n\
         \                                                                                \n\
-        \but it couldn't extract a value from the well-typed expression:                 \n\
+        \and it couldn't extract a value from the well-typed expression:                 \n\
+        \                                                                                \n\
         \" <> show txt1 <> "\n\
         \                                                                                \n"
         where
           txt0 = Dhall.Util.insert invalidTypeExpected
-          txt1 = Dhall.Util.insert invalidTypeExpr
+          txt1 = Dhall.Util.insert invalidTypeExpression
             
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (InvalidType s a)
