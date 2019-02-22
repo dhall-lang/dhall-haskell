@@ -26,20 +26,32 @@ For OS X, use `brew` to install the desired package.  For example:
 $ brew install dhall-json
 ```
 
-You can also install pre-built Linux binaries for `master` using Nix by visiting
-one of the following links:
+You can also install pre-built Linux binaries for `master` using Nix using
+Nix's channel mechanism by following the instructions at this link:
+
+* [https://hydra.dhall-lang.org/jobset/dhall-haskell/master/channel/latest](https://hydra.dhall-lang.org/jobset/dhall-haskell/master/channel/latest)
+
+If you want to directly install the latest build without a channel, you can
+visit one of the following links:
 
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall/latest)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-bash/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-bash/latest)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-json/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-json/latest)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-text/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-text/latest)
 
-... and then clicking the "Help" button in the bottom right corner, which will
+... and then click the "Help" button in the bottom right corner, which will
 show you a `nix-env` command that you can run to install the prebuilt
 executable.
 
-This also works for any pull request, too, by replacing `master` with the pull
-request number for any of the above links.
+If you have the `jq` command-line tool installed then you can do this in one
+command by running:
+
+```haskell
+$ nix-env -i "$(https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall/latest/api/get-info | jq -r .outPath)"
+```
+
+These instructions also work for any pull request, too, by replacing `master`
+with the pull request number for any of the above URLs.
 
 ## Building from source
 
