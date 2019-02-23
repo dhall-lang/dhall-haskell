@@ -47,7 +47,7 @@ If you have the `jq` command-line tool installed then you can do this in one
 command by running:
 
 ```haskell
-$ nix-env -i "$(https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall/latest/api/get-info | jq -r .outPath)"
+$ nix-env -i "$(curl -L https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall/latest/api/get-info | jq -r .outPath)"
 ```
 
 These instructions also work for any pull request, too, by replacing `master`
