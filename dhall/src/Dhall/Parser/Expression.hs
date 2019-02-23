@@ -176,9 +176,9 @@ completeExpression embedded = completeExpression_
                 CombineTypes <$ _combineTypes
             <|> Prefer       <$ _prefer
             <|> NaturalTimes <$ _times
-            <|> BoolNE       <$ _notEqual
+            <|> BoolEQ       <$ _doubleEqual
 
-    precedence3Operator = BoolEQ <$ _doubleEqual
+    precedence3Operator = BoolNE <$ _notEqual
 
     precedence0Expression =
             makeOperatorExpression precedence1Expression precedence0Operator
