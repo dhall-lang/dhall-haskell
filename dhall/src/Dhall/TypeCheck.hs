@@ -947,8 +947,7 @@ _NOT :: Doc ann
 _NOT = "\ESC[1mnot\ESC[0m"
 
 insert :: Pretty a => a -> Doc Ann
-insert expression =
-    "↳ " <> Pretty.align (Dhall.Util.snipDoc (Pretty.pretty expression))
+insert = Dhall.Util.insert
 
 prettyDiff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
 prettyDiff exprL exprR = Dhall.Diff.diffNormalized exprL exprR

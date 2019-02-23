@@ -5,11 +5,12 @@
 module Dhall.Util
     ( snip
     , snipDoc
+    , insert
     ) where
 
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Data.Text.Prettyprint.Doc (Doc)
+import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Dhall.Pretty (Ann)
 
 import qualified Data.Text
@@ -67,3 +68,8 @@ takeEnd n l = go (drop n l) l
   where
     go (_:xs) (_:ys) = go xs ys
     go _ r = r
+
+-- | Function to insert an aligned pretty expression
+insert :: Pretty a => a -> Doc Ann
+insert expression =
+    "↳ " <> Pretty.align (snipDoc (Pretty.pretty expression))

@@ -467,6 +467,7 @@ Test-Suite tasty
     GHC-Options: -Wall
     Other-Modules:
         Dhall.Test.Binary
+        Dhall.Test.Dhall
         Dhall.Test.Format
         Dhall.Test.Import
         Dhall.Test.Lint

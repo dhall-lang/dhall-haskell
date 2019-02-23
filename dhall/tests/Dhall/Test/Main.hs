@@ -3,6 +3,7 @@ module Main where
 import           Test.Tasty               (TestTree)
 
 import qualified Dhall.Test.Binary
+import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.Format
 import qualified Dhall.Test.Import
 import qualified Dhall.Test.Lint
@@ -33,6 +34,7 @@ allTests =
         , Dhall.Test.Import.tests
         , Dhall.Test.QuickCheck.tests
         , Dhall.Test.Lint.tests
+        , Dhall.Test.Dhall.tests
         ]
 
 main :: IO ()
