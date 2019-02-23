@@ -56,6 +56,14 @@ with the pull request number for any of the above URLs.
 
 ## Building from source
 
+For all of the following instructions, make sure to first check out the
+`dhall-lang` submodule:
+
+```bash
+$ git submodule init
+$ git submodule update
+```
+
 ### [cabal](https://www.haskell.org/cabal)
 
 You can build all of the packages by running:
