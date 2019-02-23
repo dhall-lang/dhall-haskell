@@ -464,6 +464,7 @@ Test-Suite tasty
     Main-Is: Dhall/Test/Main.hs
     GHC-Options: -Wall
     Other-Modules:
+        Dhall.Test.Dhall
         Dhall.Test.Format
         Dhall.Test.Import
         Dhall.Test.Lint
