@@ -105,6 +105,7 @@ import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
+import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Data.Word (Word8, Word16, Word32, Word64)
@@ -141,6 +142,7 @@ import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
+import qualified Dhall.Util
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -156,19 +158,36 @@ throws (Right r) = return r
     This exception indicates that an invalid `Type` was provided to the `input`
     function
 -}
-data InvalidType = InvalidType deriving (Typeable)
+data InvalidType s a = InvalidType
+  { invalidTypeExpected :: Expr s a
+  , invalidTypeExpression :: Expr s a
+  }
+  deriving (Typeable)
 
 _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
-instance Show InvalidType where
-    show InvalidType =
+instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (InvalidType s a) where
+    show InvalidType { .. } =
         _ERROR <> ": Invalid Dhall.Type                                                  \n\
         \                                                                                \n\
         \Every Type must provide an extract function that succeeds if an expression      \n\
-        \matches the expected type.  You provided a Type that disobeys this contract     \n"
+        \matches the expected type.  You provided a Type that disobeys this contract     \n\
+        \                                                                                \n\
+        \The Type provided has the expected dhall type:                                  \n\
+        \                                                                                \n\
+        \" <> show txt0 <> "\n\
+        \                                                                                \n\
+        \and it couldn't extract a value from the well-typed expression:                 \n\
+        \                                                                                \n\
+        \" <> show txt1 <> "\n\
+        \                                                                                \n"
+        where
+          txt0 = Dhall.Util.insert invalidTypeExpected
+          txt1 = Dhall.Util.insert invalidTypeExpression
+            
 
-instance Exception InvalidType
+instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (InvalidType s a)
 
 -- | @since 1.16
 data InputSettings = InputSettings
@@ -341,9 +360,14 @@ inputWithSettings settings (Type {..}) txt = do
             _ ->
                 Annot expr' expected
     _ <- throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
-    case extract (Dhall.Core.normalizeWith (Dhall.Core.getReifiedNormalizer (view normalizer settings)) expr') of
+    let normExpr = Dhall.Core.normalizeWith
+                     (Dhall.Core.getReifiedNormalizer
+                       (view normalizer settings))
+                     expr'
+    case extract normExpr  of
         Just x  -> return x
-        Nothing -> Control.Exception.throwIO InvalidType
+        Nothing -> Control.Exception.throwIO
+                     (InvalidType expected expr')
 
 {-| Type-check and evaluate a Dhall program that is read from the
     file-system.
