@@ -31,7 +31,8 @@ Nix's channel mechanism by following the instructions at this link:
 
 * [https://hydra.dhall-lang.org/jobset/dhall-haskell/master/channel/latest](https://hydra.dhall-lang.org/jobset/dhall-haskell/master/channel/latest)
 
-If you want to directly install the latest build without a channel, you can
+To install the Nix build products without a channel, configure your machine to
+use `cache.dhall-lang.org`, as described in the [nix](#nix) section and then
 visit one of the following links:
 
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall/latest)
@@ -39,7 +40,7 @@ visit one of the following links:
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-json/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-json/latest)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-text/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-text/latest)
 
-... and then click the "Help" button in the bottom right corner, which will
+You can then click the "Help" button in the bottom right corner, which will
 show you a `nix-env` command that you can run to install the prebuilt
 executable.
 
@@ -80,6 +81,40 @@ $ cabal new-build dhall
 ... or you can run `cabal new-build` within each package directory.
 
 ### [nix](https://nixos.org/nix/)
+
+You will probably want to use the shared cache hosted at `cache.dhall-lang.org`
+when doing Nix development.  This is not required, but this will save you a lot
+of time so that you don't have to build as many dependencies from scratch the
+first time.
+
+If your operating system is NixOS then you can add the cache using these NixOS
+configuration options:
+
+```nix
+  nix = {
+    binaryCaches = [ "https://cache.nixos.org" "https://cache.dhall-lang.org" ];
+
+    binaryCachePublicKeys = [
+      "cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM="
+    ];
+  };
+```
+
+If you don't use NixOS but you do use Nix 2.0 or later, then set these options
+in your `/etc/nix/nix.conf` file:
+
+```
+trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM=
+substituters = https://cache.nixos.org https://cache.dhall-lang.org
+```
+
+If you use an older version of Nix (i.e. Nix 1.*) then use these options
+instead:
+
+```
+binary-cache-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM=
+binary-caches = https://cache.nixos.org https://cache.dhall-lang.org
+```
 
 You can build all of the packages by running:
 
