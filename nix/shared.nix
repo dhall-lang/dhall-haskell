@@ -505,7 +505,7 @@ let
     then
       pkgsStaticLinux.pkgsMusl.haskell.packages."${compiler}"."${name}-static"
     else
-      pkgs.haskell.packages."${compiler}"."${name}";
+      pkgs.haskell.lib.justStaticExecutables (pkgs.haskell.packages."${compiler}"."${name}");
 
   makeTarball = name:
     pkgsStaticLinux.releaseTools.binaryTarball rec {

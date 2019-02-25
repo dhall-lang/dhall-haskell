@@ -1,1 +1,1 @@
-(import ../nix/shared.nix {}).dhall-json
+(import ../nix/shared.nix {}).possibly-static.dhall-json

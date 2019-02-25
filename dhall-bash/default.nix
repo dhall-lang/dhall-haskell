@@ -1,1 +1,1 @@
-(import ../nix/shared.nix {}).dhall-bash
+(import ../nix/shared.nix {}).possibly-static.dhall-bash

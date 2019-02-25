@@ -1,1 +1,1 @@
-(import ../nix/shared.nix {}).dhall-text
+(import ../nix/shared.nix {}).possibly-static.dhall-text
