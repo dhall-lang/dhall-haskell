@@ -642,10 +642,6 @@ skeleton (Merge {}) =
     <>  ignore
     <>  " "
     <>  ignore
-skeleton (Constructors {}) =
-        keyword "constructors"
-    <>  " "
-    <>  ignore
 skeleton (Field {}) =
         ignore
     <>  dot
@@ -974,12 +970,6 @@ diffApplicationExpression l@(App {}) r@(App {}) =
   where
     docs (App aL bL) (App aR bR) =
         Data.List.NonEmpty.cons (diffImportExpression bL bR) (docs aL aR)
-    docs (Constructors aL) (Constructors aR) =
-        diffImportExpression aL aR :| [ keyword "constructors" ]
-    docs aL aR@(Constructors {}) =
-        pure (mismatch aL aR)
-    docs aL@(Constructors {}) aR =
-        pure (mismatch aL aR)
     docs (Some aL) (Some aR) =
         diffImportExpression aL aR :| [ builtin "Some" ]
     docs aL aR@(Some {}) =
@@ -991,12 +981,6 @@ diffApplicationExpression l@(App {}) r@(App {}) =
 diffApplicationExpression l@(App {}) r =
     mismatch l r
 diffApplicationExpression l r@(App {}) =
-    mismatch l r
-diffApplicationExpression (Constructors l) (Constructors r) =
-    enclosed' mempty mempty (keyword "constructors" :| [ diffImportExpression l r ])
-diffApplicationExpression l@(Constructors {}) r =
-    mismatch l r
-diffApplicationExpression l r@(Constructors {}) =
     mismatch l r
 diffApplicationExpression (Some l) (Some r) =
     enclosed' mempty mempty (builtin "Some" :| [ diffImportExpression l r ])

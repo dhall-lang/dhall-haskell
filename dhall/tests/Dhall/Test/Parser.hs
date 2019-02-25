@@ -108,9 +108,6 @@ tests =
             "merge"
             "./dhall-lang/tests/parser/success/merge"
         , shouldParse
-            "constructors"
-            "./dhall-lang/tests/parser/success/constructors"
-        , shouldParse
             "fields"
             "./dhall-lang/tests/parser/success/fields"
         , shouldParse

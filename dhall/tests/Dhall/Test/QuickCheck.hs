@@ -237,7 +237,6 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                 , ( 1, lift2 CombineTypes)
                 , ( 1, lift2 Prefer)
                 , ( 1, lift3 Merge)
-                , ( 1, lift1 Constructors)
                 , ( 1, lift2 Field)
                 , ( 1, lift2 Project)
                 , ( 7, lift1 Embed)
