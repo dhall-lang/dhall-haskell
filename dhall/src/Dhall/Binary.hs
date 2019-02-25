@@ -49,7 +49,6 @@ import Data.Text (Text)
 import Options.Applicative (Parser)
 import Prelude hiding (exponent)
 import GHC.Float (double2Float, float2Double)
-import Codec.CBOR.Magic (floatToWord16, wordToFloat16)
 
 import qualified Crypto.Hash
 import qualified Data.ByteArray.Encoding
@@ -377,9 +376,10 @@ encode (DoubleLit n64)
     | otherwise = TDouble n64
   where
     n32      = double2Float n64
-    n16      = floatToWord16 n32
     useFloat = n64 == float2Double n32
-    useHalf  = n64 == (float2Double . wordToFloat16 . fromIntegral) n16
+    -- the other three cases for Half-floats are 0.0 and the infinities
+    useHalf  = or $ fmap (n64 ==) [0.0, infinity, -infinity]
+    infinity = 1/0 :: Double
 encode (TextLit (Chunks xys₀ z₀)) =
     TList ([ TInt 18 ] ++ xys₁ ++ [ z₁ ])
   where
