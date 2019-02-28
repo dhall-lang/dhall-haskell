@@ -6,7 +6,6 @@ module Dhall.Lint
     , removeLetInLet
     , removeUnusedBindings
     , optionalLitToSomeNone
-    , dropConstructorsKeyword
     ) where
 
 import Control.Monad (mplus)
@@ -24,7 +23,6 @@ import qualified Dhall.Core
     * removes unused @let@ bindings with 'removeLetInLet'.
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeUnusedBindings'.
     * switches legacy @List@-like @Optional@ literals to use @Some@ / @None@ instead with 'optionalLitToSomeNone'
-    * removes the `constructors` keyword with 'dropConstructorsKeyword'
 -}
 lint :: Expr s Import -> Expr t Import
 lint =
@@ -34,7 +32,6 @@ lint =
                 removeLetInLet e
         `mplus` removeUnusedBindings e
         `mplus` optionalLitToSomeNone e
-        `mplus` dropConstructorsKeyword e
     )
     . Dhall.Core.denote
 
@@ -62,11 +59,6 @@ optionalLitToSomeNone :: Expr s a -> Maybe (Expr s a)
 optionalLitToSomeNone (OptionalLit _ (Just b)) = Just (Some b)
 optionalLitToSomeNone (OptionalLit a Nothing) = Just (App None a)
 optionalLitToSomeNone _ = Nothing
-
-
-dropConstructorsKeyword :: Expr s a -> Maybe (Expr s a)
-dropConstructorsKeyword (Constructors a) = Just a
-dropConstructorsKeyword _ = Nothing
 
 
 rewriteOf :: ASetter a b a b -> (b -> Maybe a) -> a -> b
