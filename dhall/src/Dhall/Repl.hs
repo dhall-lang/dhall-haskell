@@ -382,6 +382,18 @@ saveBinding (file : "=" : tokens) = do
 
 saveBinding _ = fail ":save should be of the form `:save`, `:save file`, or `:save file = expr`"
 
+setOption :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
+setOption [ "--explain" ] = do
+  modify (\e -> e { explain = True })
+setOption _ = do
+  writeOutputHandle ":set should be of the form `:set <command line option>`"
+
+unsetOption :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
+unsetOption [ "--explain" ] = do
+  modify (\e -> e { explain = False })
+unsetOption _ = do
+  writeOutputHandle ":unset should be of the form `:unset <command line option>`"
+
 cmdQuit :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
 cmdQuit _ = do
   liftIO (putStrLn "Goodbye.")
@@ -401,6 +413,8 @@ options =
   , ( "let", dontCrash . addBinding . separateEqual )
   , ( "load", dontCrash . loadBinding )
   , ( "save", dontCrash . saveBinding . separateEqual )
+  , ( "set", dontCrash . setOption)
+  , ( "unset", dontCrash . unsetOption)
   , ( "quit", cmdQuit )
   ]
 
