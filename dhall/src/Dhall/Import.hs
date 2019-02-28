@@ -137,7 +137,7 @@ import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
 import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Semigroup ((<>))
+import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 #if MIN_VERSION_base(4,8,0)
 #else
