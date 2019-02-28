@@ -137,7 +137,7 @@ import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
 import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Semigroup (sconcat, (<>))
+import Data.Semigroup ((<>))
 import Data.Text (Text)
 #if MIN_VERSION_base(4,8,0)
 #else
@@ -255,14 +255,16 @@ data Imported e = Imported
 instance Exception e => Exception (Imported e)
 
 instance Show e => Show (Imported e) where
-    show (Imported imports e) =
+    show (Imported canonicalizedImports e) =
            concat (zipWith indent [0..] toDisplay)
         ++ "\n"
         ++ show e
       where
         indent n import_ =
             "\n" ++ replicate (2 * n) ' ' ++ "↳ " ++ Dhall.Pretty.Internal.prettyToString import_
-        canonical = NonEmpty.toList (canonicalizeAll imports)
+
+        canonical = NonEmpty.toList canonicalizedImports
+
         -- Tthe final (outermost) import is fake to establish the base
         -- directory. Also, we need outermost-first.
         toDisplay = drop 1 (reverse canonical)
@@ -332,15 +334,12 @@ instance Show CannotImportHTTPURL where
         <>  url
         <>  "\n"
 
-canonicalizeAll :: NonEmpty Import -> NonEmpty Import
-canonicalizeAll = NonEmpty.scanr1 step
-  where
-    step a parent = canonicalizeImport (a :| [parent])
-
 {-|
-> canonicalize (canonicalize x) = canonicalize x
+> canonicalize . canonicalize = canonicalize
+
+> canonicalize (a <> b) = canonicalize a <> canonicalize b
 -}
-class Canonicalize path where
+class Semigroup path => Canonicalize path where
     canonicalize :: path -> path
 
 -- |
@@ -390,10 +389,6 @@ instance Canonicalize ImportHashed where
 instance Canonicalize Import where
     canonicalize (Import importHashed importMode) =
         Import (canonicalize importHashed) importMode
-
-canonicalizeImport :: NonEmpty Import -> Import
-canonicalizeImport imports =
-    canonicalize (sconcat (NonEmpty.reverse imports))
 
 toHeaders
   :: Expr s a
@@ -716,34 +711,38 @@ emptyStatus = emptyStatusWith exprFromImport exprToImport
 -}
 loadWith :: MonadCatch m => Expr Src Import -> StateT (Status m) m (Expr Src X)
 loadWith expr₀ = case expr₀ of
-  Embed import_ -> do
+  Embed import₀ -> do
     Status {..} <- State.get
 
-    let imports = _stack
+    let parent = NonEmpty.head _stack
+
+    let import₁ = parent <> import₀
+
+    let child = canonicalize import₁
 
     let local (Import (ImportHashed _ (Remote  {})) _) = False
         local (Import (ImportHashed _ (Local   {})) _) = True
         local (Import (ImportHashed _ (Env     {})) _) = True
         local (Import (ImportHashed _ (Missing {})) _) = True
 
-    let parent   = canonicalizeImport imports
-    let imports' = NonEmpty.cons import_ imports
-    let here     = canonicalizeImport imports'
+    let referentiallySane = not (local child) || local parent
 
-    if local here && not (local parent)
-        then throwMissingImport (Imported imports (ReferentiallyOpaque import_))
-        else return ()
+    if referentiallySane
+        then return ()
+        else throwMissingImport (Imported _stack (ReferentiallyOpaque import₀))
 
-    expr <- if here `elem` canonicalizeAll imports
-        then throwMissingImport (Imported imports (Cycle import_))
+    let _stack' = NonEmpty.cons child _stack
+
+    expr <- if child `elem` _stack
+        then throwMissingImport (Imported _stack (Cycle import₀))
         else do
-            case Map.lookup here _cache of
-                Just (hereNode, expr) -> do
+            case Map.lookup child _cache of
+                Just (childNode, expr) -> do
                     zoom dot . State.modify $ \getDot -> do
                         parentNode <- getDot
 
-                        -- Add edge between parent and here
-                        parentNode .->. hereNode
+                        -- Add edge between parent and child
+                        parentNode .->. childNode
 
                         -- Return parent NodeId
                         pure parentNode
@@ -765,7 +764,7 @@ loadWith expr₀ = case expr₀ of
                           throwM
                             (MissingImports
                                (map
-                                 (\e -> toException (Imported imports' e))
+                                 (\e -> toException (Imported _stack' e))
                                  es
                                )
                              )
@@ -775,39 +774,39 @@ loadWith expr₀ = case expr₀ of
                             => SomeException
                             -> StateT (Status m) m (Expr Src Import)
                         handler₁ e =
-                          throwMissingImport (Imported imports' e)
+                          throwMissingImport (Imported _stack' e)
 
                     -- This loads a \"dynamic\" expression (i.e. an expression
                     -- that might still contain imports)
-                    let loadDynamic = _resolver here
+                    let loadDynamic = _resolver child
 
                     expr' <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
 
-                    let hereNodeId = userNodeId _nextNodeId
+                    let childNodeId = userNodeId _nextNodeId
 
                     -- Increment the next node id
                     zoom nextNodeId $ State.modify succ
 
                     -- Make current node the dot graph
-                    zoom dot . State.put $ importNode hereNodeId here
+                    zoom dot . State.put $ importNode childNodeId child
 
-                    zoom stack (State.put imports')
+                    zoom stack (State.put _stack')
                     expr'' <- loadWith expr'
-                    zoom stack (State.put imports)
+                    zoom stack (State.put _stack)
 
                     zoom dot . State.modify $ \getSubDot -> do
                         parentNode <- _dot
 
                         -- Get current node back from sub-graph
-                        hereNode <- getSubDot
+                        childNode <- getSubDot
 
-                        -- Add edge between parent and here
-                        parentNode .->. hereNode
+                        -- Add edge between parent and child
+                        parentNode .->. childNode
 
                         -- Return parent NodeId
                         pure parentNode
 
-                    _cacher here expr''
+                    _cacher child expr''
 
                     -- Type-check expressions here for three separate reasons:
                     --
@@ -820,12 +819,12 @@ loadWith expr₀ = case expr₀ of
                     -- There is no need to check expressions that have been
                     -- cached, since they have already been checked
                     expr''' <- case Dhall.TypeCheck.typeWith _startingContext expr'' of
-                        Left  err -> throwM (Imported imports' err)
+                        Left  err -> throwM (Imported _stack' err)
                         Right _   -> return (Dhall.Core.normalizeWith (getReifiedNormalizer _normalizer) expr'')
-                    zoom cache (State.modify' (Map.insert here (hereNodeId, expr''')))
+                    zoom cache (State.modify' (Map.insert child (childNodeId, expr''')))
                     return expr'''
 
-    case hash (importHashed import_) of
+    case hash (importHashed import₀) of
         Nothing -> do
             return ()
         Just expectedHash -> do
@@ -841,7 +840,7 @@ loadWith expr₀ = case expr₀ of
                     let actualHash =
                             hashExpression NoVersion (Dhall.Core.alphaNormalize expr)
 
-                    throwMissingImport (Imported imports' (HashMismatch {..}))
+                    throwMissingImport (Imported _stack' (HashMismatch {..}))
 
     return expr
   ImportAlt a b -> loadWith a `catch` handler₀
