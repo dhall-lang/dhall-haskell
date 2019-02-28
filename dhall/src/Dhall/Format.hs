@@ -68,9 +68,9 @@ format (Format {..}) =
 
                     let doc =   Pretty.pretty header
                             <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
+                            <>  "\n"
                     System.IO.withFile file System.IO.WriteMode (\handle -> do
-                        Pretty.Terminal.renderIO handle (Pretty.layoutSmart layoutOpts doc)
-                        Data.Text.IO.hPutStrLn handle "" )
+                        Pretty.Terminal.renderIO handle (Pretty.layoutSmart layoutOpts doc))
                 Nothing -> do
                     inText <- Data.Text.IO.getContents
 
@@ -78,6 +78,7 @@ format (Format {..}) =
 
                     let doc =   Pretty.pretty header
                             <>  Dhall.Pretty.prettyCharacterSet characterSet expr
+                            <>  "\n"
 
                     supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
 
