@@ -352,10 +352,6 @@ encode (UnionLit x t₀ yTs₀) =
         let y₁  = TString y₀
         let _T₁ = encode _T₀
         return (y₁, _T₁)
-encode (Constructors u₀) =
-    TList [ TInt 13, u₁ ]
-  where
-    u₁ = encode u₀
 encode (BoolLit b) =
     TBool b
 encode (BoolIf t₀ l₀ r₀) =
@@ -678,10 +674,6 @@ decodeMaybe (TList [ TInt 12, TString x, t₁, TMap yTs₁ ]) = do
     yTs₀ <- traverse process yTs₁
 
     return (UnionLit x t₀ (Dhall.Map.fromList yTs₀))
-decodeMaybe (TList [ TInt 13, u₁ ]) = do
-    u₀ <- decodeMaybe u₁
-
-    return (Constructors u₀)
 decodeMaybe (TBool b) = do
     return (BoolLit b)
 decodeMaybe (TList [ TInt 14, t₁, l₁, r₁ ]) = do

@@ -789,13 +789,6 @@ typeWithA tpa = loop
                             _ -> Left (TypeError ctx e (HandlerNotAFunction kY tX))
         mapM_ process (Dhall.Map.toList ktsY)
         return t
-    loop ctx e@(Constructors t  ) = do
-        _ <- loop ctx t
-
-        case Dhall.Core.normalize t of
-            u@(Union _) -> loop ctx u
-            t'          -> Left (TypeError ctx e (ConstructorsRequiresAUnionType t t'))
-
     loop ctx e@(Field r x       ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
 

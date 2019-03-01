@@ -195,12 +195,30 @@ braces docs =
 
 -- | Pretty-print anonymous functions and function types
 arrows :: CharacterSet -> [(Doc Ann, Doc Ann)] -> Doc Ann
-arrows characterSet =
+arrows ASCII =
+    enclose'
+        ""
+        "    "
+        (" " <> rarrow ASCII <> " ")
+        (rarrow ASCII <> "  ")
+arrows Unicode =
     enclose'
         ""
         "  "
-        (" " <> rarrow characterSet <> " ")
-        (rarrow characterSet <> space)
+        (" " <> rarrow Unicode <> " ")
+        (rarrow Unicode <> " ")
+
+combine :: CharacterSet -> Text
+combine ASCII   = "/\\"
+combine Unicode = "∧"
+
+combineTypes :: CharacterSet -> Text
+combineTypes ASCII   = "//\\\\"
+combineTypes Unicode = "⩓"
+
+prefer :: CharacterSet -> Text
+prefer ASCII   = "//"
+prefer Unicode = "⫽"
 
 {-| Format an expression that holds a variable number of elements, such as a
     list, record, or union
@@ -612,7 +630,7 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyCombineExpression :: Pretty a => Expr s a -> Doc Ann
     prettyCombineExpression a0@(Combine _ _) =
-        prettyOperator "∧" (docs a0)
+        prettyOperator (combine characterSet) (docs a0)
       where
         docs (Combine a b) = prettyPreferExpression b : docs a
         docs (Note    _ b) = docs b
@@ -624,7 +642,7 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyPreferExpression :: Pretty a => Expr s a -> Doc Ann
     prettyPreferExpression a0@(Prefer _ _) =
-        prettyOperator "⫽" (docs a0)
+        prettyOperator (prefer characterSet) (docs a0)
       where
         docs (Prefer a b) = prettyCombineTypesExpression b : docs a
         docs (Note   _ b) = docs b
@@ -636,7 +654,7 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyCombineTypesExpression :: Pretty a => Expr s a -> Doc Ann
     prettyCombineTypesExpression a0@(CombineTypes _ _) =
-        prettyOperator "⩓" (docs a0)
+        prettyOperator (combineTypes characterSet) (docs a0)
       where
         docs (CombineTypes a b) = prettyTimesExpression b : docs a
         docs (Note         _ b) = docs b
@@ -684,19 +702,17 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyApplicationExpression :: Pretty a => Expr s a -> Doc Ann
     prettyApplicationExpression a0 = case a0 of
-        App _ _        -> result
-        Constructors _ -> result
-        Some _         -> result
-        Note _ b       -> prettyApplicationExpression b
-        _              -> prettyImportExpression a0
+        App _ _  -> result
+        Some _   -> result
+        Note _ b -> prettyApplicationExpression b
+        _        -> prettyImportExpression a0
       where
         result = enclose' "" "" " " "" (fmap duplicate (reverse (docs a0)))
 
-        docs (App        a b) = prettyImportExpression b : docs a
-        docs (Constructors b) = [ prettyImportExpression b , keyword "constructors" ]
-        docs (Some         a) = [ prettyImportExpression a , builtin "Some"         ]
-        docs (Note       _ b) = docs b
-        docs               b  = [ prettyImportExpression b ]
+        docs (App  a b) = prettyImportExpression b : docs a
+        docs (Some   a) = [ prettyImportExpression a , builtin "Some"         ]
+        docs (Note _ b) = docs b
+        docs         b  = [ prettyImportExpression b ]
 
     prettyImportExpression :: Pretty a => Expr s a -> Doc Ann
     prettyImportExpression (Embed a) =

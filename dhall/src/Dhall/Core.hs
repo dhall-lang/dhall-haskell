@@ -460,8 +460,6 @@ data Expr s a
     -- | > Merge x y (Just t )                      ~  merge x y : t
     --   > Merge x y  Nothing                       ~  merge x y
     | Merge (Expr s a) (Expr s a) (Maybe (Expr s a))
-    -- | > Constructors e                           ~  constructors e
-    | Constructors (Expr s a)
     -- | > Field e x                                ~  e.x
     | Field (Expr s a) Text
     -- | > Project e xs                             ~  e.{ xs }
@@ -539,7 +537,6 @@ instance Functor (Expr s) where
   fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
   fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
   fmap f (Merge e1 e2 maybeE) = Merge (fmap f e1) (fmap f e2) (fmap (fmap f) maybeE)
-  fmap f (Constructors e1) = Constructors (fmap f e1)
   fmap f (Field e1 v) = Field (fmap f e1) v
   fmap f (Project e1 vs) = Project (fmap f e1) vs
   fmap f (Note s e1) = Note s (fmap f e1)
@@ -617,7 +614,6 @@ instance Monad (Expr s) where
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
     Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
     Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
-    Constructors a       >>= k = Constructors (a >>= k)
     Field a b            >>= k = Field (a >>= k) b
     Project a b          >>= k = Project (a >>= k) b
     Note a b             >>= k = Note a (b >>= k)
@@ -685,7 +681,6 @@ instance Bifunctor Expr where
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
     first k (Prefer a b          ) = Prefer (first k a) (first k b)
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
-    first k (Constructors a      ) = Constructors (first k a)
     first k (Field a b           ) = Field (first k a) b
     first k (Project a b         ) = Project (first k a) b
     first k (Note a b            ) = Note (k a) (first k b)
@@ -961,9 +956,6 @@ shift d v (Merge a b c) = Merge a' b' c'
     a' =       shift d v  a
     b' =       shift d v  b
     c' = fmap (shift d v) c
-shift d v (Constructors a) = Constructors a'
-  where
-    a' = shift d v  a
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
@@ -1133,9 +1125,6 @@ subst x e (Merge a b c) = Merge a' b' c'
     a' =       subst x e  a
     b' =       subst x e  b
     c' = fmap (subst x e) c
-subst x e (Constructors a) = Constructors a'
-  where
-    a' = subst x e  a
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
@@ -1434,10 +1423,6 @@ alphaNormalize (Merge t₀ u₀ _T₀) =
     u₁ = alphaNormalize u₀
 
     _T₁ = fmap alphaNormalize _T₀
-alphaNormalize (Constructors u₀) =
-    Constructors u₁
-  where
-    u₁ = alphaNormalize u₀
 alphaNormalize (Field e₀ a) =
     Field e₁ a
   where
@@ -1557,7 +1542,6 @@ denote (Combine a b         ) = Combine (denote a) (denote b)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
 denote (Prefer a b          ) = Prefer (denote a) (denote b)
 denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
-denote (Constructors a      ) = Constructors (denote a)
 denote (Field a b           ) = Field (denote a) b
 denote (Project a b         ) = Project (denote a) b
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
@@ -1930,11 +1914,6 @@ normalizeWithM ctx e0 = loop (denote e0)
             _ -> Merge x' y' <$> t'
       where
         t' = traverse loop t
-    Constructors t   -> do
-        t' <- loop t
-        case t' of
-            u@(Union _) -> pure u
-            _           -> pure $ Constructors t'
     Field r x        -> do
         r' <- loop r
         case r' of
@@ -2187,11 +2166,6 @@ isNormalized e0 = loop (denote e0)
                               Nothing -> True
                       _ -> True
               _ -> True
-      Constructors t -> loop t &&
-          case t of
-              Union _ -> False
-              _       -> True
-
       Field r x -> loop r &&
           case r of
               RecordLit kvs ->
@@ -2373,7 +2347,6 @@ subExpressions f (Combine a b) = Combine <$> f a <*> f b
 subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
 subExpressions f (Prefer a b) = Prefer <$> f a <*> f b
 subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
-subExpressions f (Constructors a) = Constructors <$> f a
 subExpressions f (Field a b) = Field <$> f a <*> pure b
 subExpressions f (Project a b) = Project <$> f a <*> pure b
 subExpressions f (Note a b) = Note a <$> f b
