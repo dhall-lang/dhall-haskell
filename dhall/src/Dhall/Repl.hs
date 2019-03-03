@@ -455,6 +455,7 @@ completeFunc reversedPrev word
 
   -- Complete record fields and union alternatives
   | var : subFields <- Text.split (== '.') (Text.pack word)
+  , not $ null subFields
   = do
     Env { envBindings } <- get
 
