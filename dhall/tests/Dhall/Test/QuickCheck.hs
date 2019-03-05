@@ -36,6 +36,7 @@ import Test.Tasty (TestTree)
 
 import qualified Codec.Serialise
 import qualified Data.Coerce
+import qualified Data.List
 import qualified Dhall.Map
 import qualified Data.Sequence
 import qualified Dhall.Binary
@@ -124,7 +125,8 @@ instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
     arbitrary = do
         n   <- Test.QuickCheck.choose (0, 2)
         kvs <- Test.QuickCheck.vectorOf n ((,) <$> arbitrary <*> arbitrary)
-        return (Dhall.Map.fromList kvs)
+        -- Sorting the fields here because serialization needs them in order
+        return (Dhall.Map.fromList (Data.List.sortOn fst kvs))
 
     shrink =
             map Dhall.Map.fromList

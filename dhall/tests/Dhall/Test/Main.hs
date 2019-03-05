@@ -2,7 +2,6 @@ module Main where
 
 import           Test.Tasty               (TestTree)
 
-import qualified Dhall.Test.Binary
 import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.Format
 import qualified Dhall.Test.Import
@@ -26,7 +25,6 @@ allTests =
     Test.Tasty.testGroup "Dhall Tests"
         [ Dhall.Test.Normalization.tests
         , Dhall.Test.Parser.tests
-        , Dhall.Test.Binary.tests
         , Dhall.Test.Regression.tests
         , Dhall.Test.Tutorial.tests
         , Dhall.Test.Format.tests
