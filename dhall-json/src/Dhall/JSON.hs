@@ -667,11 +667,6 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Dhall.Core.normalize e0)
             b' =      loop b
             c' = fmap loop c
 
-        Dhall.Core.Constructors a ->
-            Dhall.Core.Constructors a'
-          where
-            a' = loop a
-
         Dhall.Core.Field a b ->
             Dhall.Core.Field a' b
           where

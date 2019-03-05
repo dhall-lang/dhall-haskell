@@ -1,1 +1,1 @@
-constructors < Empty : {} | Person : { name : Text, age : Natural } >
+< Empty : {} | Person : { name : Text, age : Natural } >

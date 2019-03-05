@@ -1144,47 +1144,27 @@ import Dhall
 --
 -- > data Example = Empty | Person { name :: Text, age :: Text }
 --
--- You can resemble Haskell further by defining convenient constructors for each
--- alternative, like this:
+-- You could resemble Haskell further by defining convenient constructors for
+-- each alternative, like this:
 --
--- >     let Empty  = < Empty = {=} | Person : { name : Text, age : Natural } >
--- > in  let Person =
--- >         λ(p : { name : Text, age : Natural }) → < Person = p | Empty : {} >
+-- > let Empty  = < Empty = {=} | Person : { name : Text, age : Natural } >
+-- > let Person =
+-- >       λ(p : { name : Text, age : Natural }) → < Person = p | Empty : {} >
 -- > in  [   Empty
 -- >     ,   Person { name = "John", age = 23 }
 -- >     ,   Person { name = "Amy" , age = 25 }
 -- >     ,   Empty
 -- >     ]
 --
--- ... and Dhall even provides the @constructors@ keyword to automate this
--- common pattern:
+-- ... but there is no need to do so, since the Dhall language auto-generates
+-- constructors for each alternative.  You can access each constructor as if it
+-- were a field of the union type:
 --
--- >     let MyType = constructors < Empty : {} | Person : { name : Text, age : Natural } >
+-- > let MyType = < Empty : {} | Person : { name : Text, age : Natural } >
 -- > in  [   MyType.Empty {=}
 -- >     ,   MyType.Person { name = "John", age = 23 }
 -- >     ,   MyType.Person { name = "Amy" , age = 25 }
 -- >     ]
---
--- The @constructors@ keyword takes a union type argument and returns a record
--- with one field per union type constructor:
---
--- > $ dhall
--- > constructors < Empty : {} | Person : { name : Text, age : Natural } >
--- > <Ctrl-D>
--- >
--- > { Empty  :
--- >     ∀(Empty : {}) → < Empty : {} | Person : { age : Natural, name : Text } >
--- > , Person :
--- >       ∀(Person : { age : Natural, name : Text })
--- >     → < Empty : {} | Person : { age : Natural, name : Text } >
--- > }
--- >
--- > { Empty  =
--- >     λ(Empty : {}) → < Empty = Empty | Person : { age : Natural, name : Text } >
--- > , Person =
--- >       λ(Person : { age : Natural, name : Text })
--- >     → < Person = Person | Empty : {} >
--- > }
 --
 -- You can also extract fields during pattern matching such as in the following
 -- function which renders each value to `Text`:

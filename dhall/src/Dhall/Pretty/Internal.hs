@@ -702,19 +702,17 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyApplicationExpression :: Pretty a => Expr s a -> Doc Ann
     prettyApplicationExpression a0 = case a0 of
-        App _ _        -> result
-        Constructors _ -> result
-        Some _         -> result
-        Note _ b       -> prettyApplicationExpression b
-        _              -> prettyImportExpression a0
+        App _ _  -> result
+        Some _   -> result
+        Note _ b -> prettyApplicationExpression b
+        _        -> prettyImportExpression a0
       where
         result = enclose' "" "" " " "" (fmap duplicate (reverse (docs a0)))
 
-        docs (App        a b) = prettyImportExpression b : docs a
-        docs (Constructors b) = [ prettyImportExpression b , keyword "constructors" ]
-        docs (Some         a) = [ prettyImportExpression a , builtin "Some"         ]
-        docs (Note       _ b) = docs b
-        docs               b  = [ prettyImportExpression b ]
+        docs (App  a b) = prettyImportExpression b : docs a
+        docs (Some   a) = [ prettyImportExpression a , builtin "Some"         ]
+        docs (Note _ b) = docs b
+        docs         b  = [ prettyImportExpression b ]
 
     prettyImportExpression :: Pretty a => Expr s a -> Doc Ann
     prettyImportExpression (Embed a) =

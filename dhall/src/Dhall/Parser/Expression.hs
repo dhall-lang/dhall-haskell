@@ -193,8 +193,7 @@ completeExpression embedded = completeExpression_
             makeOperatorExpression applicationExpression precedence3Operator
 
     applicationExpression = do
-            f <-    (do _constructors; return Constructors)
-                <|> (do _Some; return Some)
+            f <-    (do _Some; return Some)
                 <|> return id
             a <- noted importExpression
             b <- Text.Megaparsec.many (noted importExpression)

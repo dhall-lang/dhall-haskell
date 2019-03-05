@@ -313,7 +313,7 @@ encode (Record xTs₀) =
     TList [ TInt 7, TMap xTs₁ ]
   where
     xTs₁ = do
-        (x₀, _T₀) <- Dhall.Map.toList xTs₀
+        (x₀, _T₀) <- Dhall.Map.toList (Dhall.Map.sort xTs₀)
         let x₁  = TString x₀
         let _T₁ = encode _T₀
         return (x₁, _T₁)
@@ -321,7 +321,7 @@ encode (RecordLit xts₀) =
     TList [ TInt 8, TMap xts₁ ]
   where
     xts₁ = do
-        (x₀, t₀) <- Dhall.Map.toList xts₀
+        (x₀, t₀) <- Dhall.Map.toList (Dhall.Map.sort xts₀)
         let x₁ = TString x₀
         let t₁ = encode t₀
         return (x₁, t₁)
@@ -338,7 +338,7 @@ encode (Union xTs₀) =
     TList [ TInt 11, TMap xTs₁ ]
   where
     xTs₁ = do
-        (x₀, _T₀) <- Dhall.Map.toList xTs₀
+        (x₀, _T₀) <- Dhall.Map.toList (Dhall.Map.sort xTs₀)
         let x₁  = TString x₀
         let _T₁ = encode _T₀
         return (x₁, _T₁)
@@ -348,14 +348,10 @@ encode (UnionLit x t₀ yTs₀) =
     t₁ = encode t₀
 
     yTs₁ = do
-        (y₀, _T₀) <- Dhall.Map.toList yTs₀
+        (y₀, _T₀) <- Dhall.Map.toList (Dhall.Map.sort yTs₀)
         let y₁  = TString y₀
         let _T₁ = encode _T₀
         return (y₁, _T₁)
-encode (Constructors u₀) =
-    TList [ TInt 13, u₁ ]
-  where
-    u₁ = encode u₀
 encode (BoolLit b) =
     TBool b
 encode (BoolIf t₀ l₀ r₀) =
@@ -678,10 +674,6 @@ decodeMaybe (TList [ TInt 12, TString x, t₁, TMap yTs₁ ]) = do
     yTs₀ <- traverse process yTs₁
 
     return (UnionLit x t₀ (Dhall.Map.fromList yTs₀))
-decodeMaybe (TList [ TInt 13, u₁ ]) = do
-    u₀ <- decodeMaybe u₁
-
-    return (Constructors u₀)
 decodeMaybe (TBool b) = do
     return (BoolLit b)
 decodeMaybe (TList [ TInt 14, t₁, l₁, r₁ ]) = do
