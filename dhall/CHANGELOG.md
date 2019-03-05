@@ -58,7 +58,7 @@
       environment variables)
     * Now `dhall freeze` only freezes remote imports by default, which is what
       most users want
-    * You can install freeze all imports using the `--everything` flag
+    * You can install freeze all imports using the `--all` flag
     * See: https://github.com/dhall-lang/dhall-haskell/pull/808
 * Feature: `:save` and `:load` REPL state
     * `:save` with no arguments now saves the REPL state to a `.dhall-repl-N`
