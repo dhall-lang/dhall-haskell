@@ -1,3 +1,105 @@
+1.21.0
+
+* Supports version 6.0.0 of the language standard
+    * See: https://github.com/dhall-lang/dhall-lang/releases/tag/v6.0.0
+* BREAKING CHANGE: Remove the `constructors` keyword
+    * ... as standardized in version 6.0.0 of the language standard
+    * The deprecation cycle is over, so the keyword is no longer supported
+    * For more details, see: https://github.com/dhall-lang/dhall-lang/wiki/Migration%3A-Deprecation-of-constructors-keyword
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/829
+* BREAKING CHANGE: CBOR-encode only special `Double`s as half-floats
+    * ... as standardized in version 6.0.0 of the language standard
+    * CBOR `Double`s except `Infinity`/`-Infinity`/`NaN` are now encoded in at
+      least 32 bits
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/822
+* BREAKING CHANGE: Sort record and union fields when CBOR-encoding
+    * Fields and alternatives are now sorted when serialized
+    * This does not affect semantic integrity checks, which already sorted these
+      fields/alternatives before hashing expressions
+    * This does affect the serialization of expressions that have not been
+      normalized (e.g. uninterpreted expressions transmitted over the wire)
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/835
+* BUG FIX: Fix non-exhaustive pattern match in `dhall lint`
+    * This fixes: `Irrefutable pattern failed for pattern Let (l' :| ls') d'`
+    * This bug would cause `dhall lint` to fail on some nested `let`/`in`
+      expressions
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/780
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/784
+* BUG FIX: Don't fail if `$HOME` environment variable is unset
+    * The interpreter was incorrectly throwing an exception if `HOME` was unset
+    * The standard requires that implementations should handle the `HOME`
+      environment variable being missing
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/789
+* Feature: Remove version tag from semantic integrity check
+    * ... as standardized in version 6.0.0 of the language standard
+    * This is not a breaking change because this change also includes
+      backwards-compatible support for semantic integrity checks produced by
+      older versions of the interpreter
+* Feature: Support Unicode path components
+    * ... as standardized in version 6.0.0 of the language standard
+    * You can now use Unicode in path components if they are quoted
+    * i.e. `./families/"禺.dhall"` is now legal
+* Feature: Add `Text/show` built-in
+    * ... as standardized in version 6.0.0 of the language standard
+    * You can now convert a `Text` literal to its equivalent Dhall source code
+      (which is itself a `Text` literal)
+    * This comes in handy when using Dhall code to generate JSON or Dhall code
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/811
+* Feature: Add `--immediate-dependencies`/`--transitive-dependencies` flags for
+  `dhall resolve`
+    * You can now retrieve all of your immediate or transitive dependencies as a
+      textual list
+    * This simplifies integration with other command-line tools (such as file
+      watchers)
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/795
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/803
+* Feature: `dhall freeze` now only freezes remote imports by default
+    * `dhall freeze` used to freeze all imports (including local imports and
+      environment variables)
+    * Now `dhall freeze` only freezes remote imports by default, which is what
+      most users want
+    * You can install freeze all imports using the `--everything` flag
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/808
+* Feature: `:save` and `:load` REPL state
+    * `:save` with no arguments now saves the REPL state to a `.dhall-repl-N`
+       file
+    * The file format is a list of `dhall repl` commands
+    * You can use `:load` to load the saved state back into the REPL
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/807
+* Feature: Add `:hash` command to `dhall repl`
+    * This lets you conveniently hash expressions within the `dhall repl`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/806
+* Feature: Add `--check` flag to `dhall format`
+    * Use this to check if the input is already formatted
+    * Useful for continuous integration when you want to ensure that all code
+      under version control remains formatted
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/810
+* Feature: Add  `UnionInputType` builder for `InputType`s
+    * This is the union analog of `RecordInputType`, letting you build a
+      record explicitly instead of deriving the instance using GHC generics
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/775
+* Feature: Add `:set`/`:unset` commands to `dhall repl`
+    * You can use these commands to set or unset command-line options
+    * Currently only setting/unsetting `--explain` is supported
+* Standards-compliance fixes:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/779
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/804
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/833
+* Documentation fixes:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/792
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/825
+* Test fixes:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/782
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/836
+* Improved error messages:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/812
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/815
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/824
+* Formatting fixes:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/831
+* REPL fixes:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/837
+
 1.20.1
 
 * BUG FIX: Fix binary encoding to use correct standard version

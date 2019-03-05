@@ -1,3 +1,9 @@
+1.2.7
+
+* Build against `dhall-1.21.0`
+* Support GHC 7.10.3
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/814
+
 1.2.6
 
 * Add `--version` flag
