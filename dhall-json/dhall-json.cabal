@@ -63,6 +63,7 @@ Executable dhall-to-yaml
     Main-Is: Main.hs
     Build-Depends:
         base                                   ,
+        aeson                                  ,
         bytestring                       < 0.11,
         dhall                                  ,
         dhall-json                             ,
