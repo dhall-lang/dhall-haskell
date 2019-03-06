@@ -161,6 +161,8 @@ module Dhall.JSON (
     -- * Dhall to JSON
       dhallToJSON
     , omitNull
+    , omitEmpty
+    , parseOmission
     , Conversion(..)
     , convertToHomogeneousMaps
     , parseConversion
@@ -329,8 +331,9 @@ toOrderedList =
 
 -- | Omit record fields that are @null@
 omitNull :: Value -> Value
-omitNull (Object object) =
-    Object (fmap omitNull (Data.HashMap.Strict.filter (/= Null) object))
+omitNull (Object object) = Object fields
+  where
+    fields =Data.HashMap.Strict.filter (/= Null) (fmap omitNull object)
 omitNull (Array array) =
     Array (fmap omitNull array)
 omitNull (String string) =
@@ -341,6 +344,40 @@ omitNull (Bool bool) =
     Bool bool
 omitNull Null =
     Null
+
+{-| Omit record fields that are @null@ or records whose transitive fields are
+    all null
+-}
+omitEmpty :: Value -> Value
+omitEmpty (Object object) =
+    if null fields then Null else Object fields
+  where
+    fields = Data.HashMap.Strict.filter (/= Null) (fmap omitEmpty object)
+omitEmpty (Array array) =
+    Array (fmap omitEmpty array)
+omitEmpty (String string) =
+    String string
+omitEmpty (Number number) =
+    Number number
+omitEmpty (Bool bool) =
+    Bool bool
+omitEmpty Null =
+    Null
+
+-- | Parser for command-line options related to omitting fields
+parseOmission :: Parser (Value -> Value)
+parseOmission =
+        Options.Applicative.flag'
+            omitNull
+            (   Options.Applicative.long "omitNull"
+            <>  Options.Applicative.help "Omit record fields that are null"
+            )
+    <|> Options.Applicative.flag'
+            omitEmpty
+            (   Options.Applicative.long "omitEmpty"
+            <>  Options.Applicative.help "Omit record fields that are null or empty records"
+            )
+    <|> pure id
 
 {-| Specify whether or not to convert association lists of type
     @List { mapKey: Text, mapValue : v }@ to records
@@ -691,6 +728,7 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Dhall.Core.normalize e0)
         Dhall.Core.Embed a ->
             Dhall.Core.Embed a
 
+-- | Parser for command-line options related to homogeneous map support
 parseConversion :: Parser Conversion
 parseConversion =
         conversion
