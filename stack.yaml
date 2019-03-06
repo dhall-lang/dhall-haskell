@@ -4,6 +4,7 @@ packages:
   - dhall-bash
   - dhall-json
   - dhall-text
+  - dhall-lsp-server
 nix:
   packages:
     - ncurses
