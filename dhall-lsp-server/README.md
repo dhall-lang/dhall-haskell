@@ -1,6 +1,6 @@
 
 # dhall-lsp-server
-[![Travis](https://travis-ci.org/PanAeon/dhall-lsp-server.svg?branch=master)](https://travis-ci.org/PanAeon/dhall-lsp-server)
+```[![Travis](https://travis-ci.org/PanAeon/dhall-lsp-server.svg?branch=master)](https://travis-ci.org/PanAeon/dhall-lsp-server)```
 
 **This project is in alpha state !!!**
 
