@@ -9,7 +9,7 @@
     * See: https://github.com/dhall-lang/dhall-haskell/pull/829
 * BREAKING CHANGE: CBOR-encode only special `Double`s as half-floats
     * ... as standardized in version 6.0.0 of the language standard
-    * CBOR `Double`s except `Infinity`/`-Infinity`/`NaN` are now encoded in at
+    * CBOR `Double`s except `Infinity`/`-Infinity`/`NaN`/`0.0` are now encoded in at
       least 32 bits
     * See: https://github.com/dhall-lang/dhall-haskell/pull/822
 * BREAKING CHANGE: Sort record and union fields when CBOR-encoding
