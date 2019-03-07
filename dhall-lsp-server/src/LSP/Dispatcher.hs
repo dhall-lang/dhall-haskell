@@ -13,6 +13,7 @@ import qualified Language.Haskell.LSP.Types.Lens       as J
 
 import LSP.Common
 import LSP.Handlers.Diagnostics
+import LSP.Handlers.DocumentFormatting
 
 import Control.Lens 
 
@@ -25,12 +26,12 @@ dispatcher lf inp = do
     inval <- liftIO $ atomically $ readTChan inp
     case inval of
 
-       (RspFromClient rm) ->
+      (RspFromClient rm) ->
         liftIO $ LSP.Utility.logs $ "reactor:got RspFromClient:" ++ show rm
 
       -- -------------------------------
 
-       (NotInitialized _notification) -> do
+      (NotInitialized _notification) -> do
         liftIO $ LSP.Utility.logm "****** reactor: processing Initialized Notification"
         
         let
@@ -51,7 +52,7 @@ dispatcher lf inp = do
 
       -- -------------------------------
 
-       (NotDidOpenTextDocument notification) -> do
+      (NotDidOpenTextDocument notification) -> do
         liftIO $ LSP.Utility.logm "****** reactor: processing NotDidOpenTextDocument"
         let
             doc  = notification ^. J.params
@@ -66,7 +67,7 @@ dispatcher lf inp = do
 
       
 
-       (NotDidSaveTextDocument notification) -> do
+      (NotDidSaveTextDocument notification) -> do
         liftIO $ LSP.Utility.logm "****** reactor: processing NotDidSaveTextDocument"
         let
             doc  = notification ^. J.params
@@ -78,7 +79,7 @@ dispatcher lf inp = do
         sendDiagnostics doc Nothing
 
       
-       (NotDidCloseTextDocument req) -> do
+      (NotDidCloseTextDocument req) -> do
         liftIO $ LSP.Utility.logm "****** reactor: processing NotDidCloseTextDocument"
         let
             doc  = req ^. J.params
@@ -87,7 +88,36 @@ dispatcher lf inp = do
             fileName = J.uriToFilePath doc
         liftIO $ LSP.Utility.logs $ "********* fileName=" ++ show fileName
         sendEmptyDiagnostics doc Nothing
-       om -> do
-        liftIO $ LSP.Utility.logs $ "\nIGNORING!!!\n HandlerRequest:" ++ show om
 
+
+      (ReqDocumentFormatting req) -> do
+          liftIO $ LSP.Utility.logm "****** reactor: processing ReqDocumentFormatting"
+          let
+            uri = req ^. J.params
+                       . J.textDocument
+                       . J.uri
+            range = req ^. J.params
+                         . J.options
+            tabSize      = range ^. J.tabSize
+            insertSpaces = range ^. J.insertSpaces
+            
+          formattedDocument <- formatDocument uri tabSize insertSpaces
+          publish req RspDocumentFormatting formattedDocument
+
+      unknown -> 
+        liftIO $ LSP.Utility.logs $ "\nIGNORING!!!\n HandlerRequest:" ++ show unknown
+
+       
 -- ---------------------------------------------------------------------
+
+
+publish :: J.RequestMessage J.ClientMethod req resp 
+         -> (J.ResponseMessage resp -> FromServerMessage) 
+         -> resp 
+         -> ReaderT (LSP.Core.LspFuncs ()) IO ()
+publish req unwrap response = 
+  do
+    lf <- ask
+    let 
+      rspMessage = LSP.Core.makeResponseMessage req response 
+    liftIO $ LSP.Core.sendFunc lf (unwrap rspMessage) 

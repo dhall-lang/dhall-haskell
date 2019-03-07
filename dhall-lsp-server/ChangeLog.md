@@ -1,3 +1,6 @@
 # Changelog for dhall-lsp-server
 
-## Unreleased changes
+## unreleased
+  - whole document formatting
+## 0.0.1.0
+  - diagnostic output

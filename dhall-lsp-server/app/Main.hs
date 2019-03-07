@@ -70,7 +70,7 @@ parserInfoOptions =
 
 runCommand :: Options -> IO ()
 runCommand Options{..} = case command of
-  CmdVersion -> putStrLn "0.0.1.0" -- TODO: read from build
+  CmdVersion -> putStrLn "0.0.1.1" -- TODO: read from build
   Default    ->
    run logFile (pure ()) >>= \case
     0 -> exitSuccess
