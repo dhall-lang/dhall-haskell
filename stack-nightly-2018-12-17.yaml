@@ -1,4 +1,4 @@
-resolver: lts-13.5
+resolver: nightly-2018-12-17
 packages:
   - dhall
   - dhall-bash
