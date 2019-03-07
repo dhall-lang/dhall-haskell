@@ -4,6 +4,7 @@
 module Main where
 
 import Control.Exception (SomeException)
+import Data.Aeson (Value)
 import Data.Monoid ((<>))
 import Dhall.JSON (Conversion)
 import Options.Applicative (Parser, ParserInfo)
@@ -22,7 +23,7 @@ import qualified System.IO
 
 data Options = Options
     { explain    :: Bool
-    , omitNull   :: Bool
+    , omission   :: Value -> Value
     , documents  :: Bool
     , conversion :: Conversion
     }
@@ -31,7 +32,7 @@ parseOptions :: Parser Options
 parseOptions =
         Options
     <$> parseExplain
-    <*> parseOmitNull
+    <*> Dhall.JSON.parseOmission
     <*> parseDocuments
     <*> Dhall.JSON.parseConversion
   where
@@ -39,12 +40,6 @@ parseOptions =
         Options.Applicative.switch
             (   Options.Applicative.long "explain"
             <>  Options.Applicative.help "Explain error messages in detail"
-            )
-
-    parseOmitNull =
-        Options.Applicative.switch
-            (   Options.Applicative.long "omitNull"
-            <>  Options.Applicative.help "Omit record fields that are null"
             )
 
     parseDocuments =
@@ -70,11 +65,9 @@ main = do
     handle $ do
         let explaining = if explain then Dhall.detailed else id
 
-        let omittingNull = if omitNull then Dhall.JSON.omitNull else id
-
         stdin <- Data.Text.IO.getContents
 
-        json <- omittingNull <$> explaining (Dhall.JSON.codeToValue conversion "(stdin)" stdin)
+        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion "(stdin)" stdin)
 
         let yaml = case (documents, json) of
               (True, Data.Yaml.Array elems)
