@@ -287,7 +287,9 @@ backtickLabel = do
     _ <- Text.Parser.Char.char '`'
     return t
   where
-    predicate c = alpha c || digit c || elem c ("$-/_:." :: String)
+    predicate c =
+            '\x20' <= c && c <= '\x5F'
+        ||  '\x61' <= c && c <= '\x7E'
 
 labels :: Parser (Set Text)
 labels = do
