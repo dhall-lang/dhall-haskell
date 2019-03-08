@@ -32,10 +32,10 @@ import qualified Dhall.Util
 
 import Dhall.Import.Types
 
+import qualified Control.Exception
 #ifdef __GHCJS__
 import qualified JavaScript.XHR
 #else
-import qualified Control.Exception
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Encoding
 #endif
