@@ -1,7 +1,6 @@
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE DeriveAnyClass      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Dhall.Import.HTTP where
 
@@ -129,7 +128,9 @@ needManager = do
 data NotCORSCompliant = NotCORSCompliant
     { expectedOrigins :: [ByteString]
     , actualOrigin    :: ByteString
-    } deriving (Exception)
+    }
+
+instance Exception NotCORSCompliant
 
 instance Show NotCORSCompliant where
     show (NotCORSCompliant {..}) =
