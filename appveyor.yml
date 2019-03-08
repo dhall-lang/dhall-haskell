@@ -11,7 +11,7 @@ environment:
   STACK_VERSION: 1.9.3
 
   matrix:
-    - STACK_YAML: stack.yaml
+    - STACK_YAML: stack-nightly-2018-12-17.yaml
     - STACK_YAML: stack-lts-6.yaml
 
 install:
