@@ -546,6 +546,8 @@ decodeMaybe (TString "Kind") =
     return (Const Kind)
 decodeMaybe (TString "Sort") =
     return (Const Sort)
+decodeMaybe (TString "_") =
+    empty
 decodeMaybe (TString x) =
     return (Var (V x 0))
 decodeMaybe (TList [ TString x, TInt n ]) =
