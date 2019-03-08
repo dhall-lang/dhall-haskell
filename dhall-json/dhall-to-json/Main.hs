@@ -6,6 +6,7 @@ module Main where
 import Control.Applicative ((<|>))
 import Control.Exception (SomeException)
 import Control.Monad (when)
+import Data.Aeson (Value)
 import Data.Monoid ((<>))
 import Data.Version (showVersion)
 import Dhall.JSON (Conversion)
@@ -28,7 +29,7 @@ import qualified System.IO
 data Options = Options
     { explain    :: Bool
     , pretty     :: Bool
-    , omitNull   :: Bool
+    , omission   :: Value -> Value
     , version    :: Bool
     , conversion :: Conversion
     }
@@ -38,7 +39,7 @@ parseOptions =
         Options
     <$> parseExplain
     <*> parsePretty
-    <*> parseOmitNull
+    <*> Dhall.JSON.parseOmission
     <*> parseVersion
     <*> Dhall.JSON.parseConversion
   where
@@ -67,12 +68,6 @@ parseOptions =
 
         defaultBehavior =
             pure False
-
-    parseOmitNull =
-        Options.Applicative.switch
-            (   Options.Applicative.long "omitNull"
-            <>  Options.Applicative.help "Omit record fields that are null"
-            )
 
     parseVersion =
         Options.Applicative.switch
@@ -111,11 +106,9 @@ main = do
 
         let explaining = if explain then Dhall.detailed else id
 
-        let omittingNull = if omitNull then Dhall.JSON.omitNull else id
-
         stdin <- Data.Text.IO.getContents
 
-        json <- omittingNull <$> explaining (Dhall.JSON.codeToValue conversion "(stdin)" stdin)
+        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion "(stdin)" stdin)
 
         Data.ByteString.Char8.putStrLn $ Data.ByteString.Lazy.toStrict $ encode json
 
