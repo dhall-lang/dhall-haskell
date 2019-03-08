@@ -6,9 +6,11 @@ module Dhall.Util
     ( snip
     , snipDoc
     , insert
+    , _ERROR
     ) where
 
 import Data.Monoid ((<>))
+import Data.String (IsString)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Dhall.Pretty (Ann)
@@ -73,3 +75,7 @@ takeEnd n l = go (drop n l) l
 insert :: Pretty a => a -> Doc Ann
 insert expression =
     "↳ " <> Pretty.align (snipDoc (Pretty.pretty expression))
+
+-- | Prefix used for error messages
+_ERROR :: IsString string => string
+_ERROR = "\ESC[1;31mError\ESC[0m"

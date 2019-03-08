@@ -158,7 +158,6 @@ import Dhall.Core
     , ImportMode(..)
     , Import(..)
     , ReifiedNormalizer(..)
-    , Scheme(..)
     , URL(..)
     )
 #ifdef MIN_VERSION_http_client
@@ -190,7 +189,6 @@ import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
-import qualified Network.URI.Encode
 import qualified System.Environment
 import qualified System.Directory                 as Directory
 import qualified System.FilePath                  as FilePath
@@ -612,28 +610,7 @@ exprFromUncachedImport (Import {..}) = do
 
             return (path, text)
 
-        Remote (URL scheme authority path query fragment maybeHeaders) -> do
-            let prefix =
-                        (case scheme of HTTP -> "http"; HTTPS -> "https")
-                    <>  "://"
-                    <>  authority
-
-            let File {..} = path
-            let Directory {..} = directory
-
-            let pathComponentToText component =
-                    "/" <> Network.URI.Encode.encodeText component
-
-            let fileText =
-                       Text.concat
-                           (map pathComponentToText (reverse components))
-                    <> pathComponentToText file
-
-            let suffix =
-                        (case query    of Nothing -> ""; Just q -> "?" <> q)
-                    <>  (case fragment of Nothing -> ""; Just f -> "#" <> f)
-            let url      = Text.unpack (prefix <> fileText <> suffix)
-
+        Remote url@URL { headers = maybeHeaders } -> do
             mheaders <- case maybeHeaders of
                 Nothing            -> return Nothing
                 Just importHashed_ -> do
@@ -671,7 +648,9 @@ exprFromUncachedImport (Import {..}) = do
 #ifdef MIN_VERSION_http_client
             fetchFromHttpUrl url mheaders
 #else
-            liftIO (throwIO (CannotImportHTTPURL url mheaders))
+            let urlString = Text.unpack (Dhall.Core.pretty url)
+
+            liftIO (throwIO (CannotImportHTTPURL urlString mheaders))
 #endif
 
         Env env -> liftIO $ do

@@ -1,9 +1,11 @@
 {-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 
 module Dhall.Import.HTTP where
 
+import Control.Exception (Exception)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
@@ -13,8 +15,20 @@ import Data.Dynamic (fromDynamic, toDyn)
 import Data.Semigroup ((<>))
 import Lens.Family.State.Strict (zoom)
 
-import qualified Control.Monad.Trans.State.Strict        as State
-import qualified Data.Text                               as Text
+import Dhall.Core
+    ( Import(..)
+    , ImportHashed(..)
+    , ImportType(..)
+    , Scheme(..)
+    , URL(..)
+    )
+
+import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.List.NonEmpty               as NonEmpty
+import qualified Data.Text                        as Text
+import qualified Data.Text.Encoding
+import qualified Dhall.Core
+import qualified Dhall.Util
 
 import Dhall.Import.Types
 
@@ -112,12 +126,87 @@ needManager = do
             zoom manager (State.put (Just (toDyn m)))
             return m
 
+data NotCORSCompliant = NotCORSCompliant
+    { expectedOrigins :: [ByteString]
+    , actualOrigin    :: ByteString
+    } deriving (Exception)
+
+instance Show NotCORSCompliant where
+    show (NotCORSCompliant {..}) =
+            Dhall.Util._ERROR <> ": Not CORS compliant\n"
+        <>  "\n"
+        <>  "Dhall supports transitive imports, meaning that an imported expression can\n"
+        <>  "import other expressions.  However, a remote import (the \"parent\" import)\n"
+        <>  "cannot import another remote import (the \"child\" import) unless the child\n"
+        <>  "import grants permission to do using CORS.  The child import must respond with\n"
+        <>  "an `Access-Control-Allow-Origin` response header that matches the parent\n"
+        <>  "import, otherwise Dhall rejects the import.\n"
+        <>  "\n" <> prologue
+      where
+        prologue =
+            case expectedOrigins of
+                [ expectedOrigin ] ->
+                        "The following parent import:\n"
+                    <>  "\n"
+                    <>  "↳ " <> show actualOrigin <> "\n"
+                    <>  "\n"
+                    <>  "... did not match the expected origin:\n"
+                    <>  "\n"
+                    <>  "↳ " <> show expectedOrigin <> "\n"
+                    <>  "\n"
+                    <>  "... so import resolution failed.\n"
+                [] ->
+                        "The child response did not include any `Access-Control-Allow-Origin` header,\n"
+                    <>  "so import resolution failed.\n"
+                _:_:_ ->
+                        "The child response included more than one `Access-Control-Allow-Origin` header,\n"
+                    <>  "when only one such header should have been present, so import resolution\n"
+                    <>  "failed.\n"
+                    <>  "\n"
+                    <>  "This may indicate that the server for the child import is misconfigured.\n"
+
+corsCompliant
+    :: MonadIO io
+    => ImportType -> URL -> [(CI ByteString, ByteString)] -> io ()
+corsCompliant (Remote parentURL) childURL responseHeaders = liftIO $ do
+    let toOrigin (URL {..}) =
+            Data.Text.Encoding.encodeUtf8 (prefix <> "://" <> authority)
+          where
+            prefix =
+                case scheme of
+                    HTTP  -> "http"
+                    HTTPS -> "https"
+
+    let actualOrigin = toOrigin parentURL
+
+    let childOrigin = toOrigin childURL
+
+    let predicate (header, _) = header == "Access-Control-Allow-Origin"
+
+    let originHeaders = filter predicate responseHeaders
+
+    let expectedOrigins = map snd originHeaders
+
+    case expectedOrigins of
+        [expectedOrigin]
+            | expectedOrigin == "*" ->
+                return ()
+            | expectedOrigin == actualOrigin ->
+                return ()
+        _   | actualOrigin == childOrigin ->
+                return ()
+            | otherwise ->
+                Control.Exception.throwIO (NotCORSCompliant {..})
+corsCompliant _ _ _ = return ()
+
 fetchFromHttpUrl
-    :: String
+    :: URL
     -> Maybe [(CI ByteString, ByteString)]
     -> StateT (Status m) IO (String, Text.Text)
 #ifdef __GHCJS__
 fetchFromHttpUrl url Nothing = do
+    -- No need to add a CORS compliance check when using GHCJS.  The browser
+    -- will already check the CORS compliance of the following XHR
     (statusCode, body) <- liftIO (JavaScript.XHR.get (Text.pack url))
 
     case statusCode of
@@ -128,10 +217,12 @@ fetchFromHttpUrl url Nothing = do
 fetchFromHttpUrl _ _ = do
     fail "Dhall does not yet support custom headers when built using GHCJS"
 #else
-fetchFromHttpUrl url mheaders = do
+fetchFromHttpUrl childURL mheaders = do
+    let childURLString = Text.unpack (Dhall.Core.pretty childURL)
+
     m <- needManager
 
-    request <- liftIO (HTTP.parseUrlThrow url)
+    request <- liftIO (HTTP.parseUrlThrow childURLString)
 
     let requestWithHeaders =
             case mheaders of
@@ -146,9 +237,17 @@ fetchFromHttpUrl url mheaders = do
 
     response <- liftIO (Control.Exception.handle handler io)
 
+    Status {..} <- State.get
+
+    let parentImport = NonEmpty.head _stack
+
+    let parentImportType = importType (importHashed parentImport)
+
+    corsCompliant parentImportType childURL (HTTP.responseHeaders response)
+
     let bytes = HTTP.responseBody response
 
     case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
         Left  err  -> liftIO (Control.Exception.throwIO err)
-        Right text -> return (url, Data.Text.Lazy.toStrict text)
+        Right text -> return (childURLString, Data.Text.Lazy.toStrict text)
 #endif
