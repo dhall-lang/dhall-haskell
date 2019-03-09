@@ -23,7 +23,6 @@ import Dhall.Core
     )
 
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Data.List.NonEmpty               as NonEmpty
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
 import qualified Dhall.Core
@@ -35,6 +34,7 @@ import qualified Control.Exception
 #ifdef __GHCJS__
 import qualified JavaScript.XHR
 #else
+import qualified Data.List.NonEmpty               as NonEmpty
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Encoding
 #endif
@@ -205,16 +205,20 @@ fetchFromHttpUrl
     -> Maybe [(CI ByteString, ByteString)]
     -> StateT (Status m) IO (String, Text.Text)
 #ifdef __GHCJS__
-fetchFromHttpUrl url Nothing = do
+fetchFromHttpUrl childURL Nothing = do
+    let childURLText = Dhall.Core.pretty childURL
+
+    let childURLString = Text.unpack childURLText
+
     -- No need to add a CORS compliance check when using GHCJS.  The browser
     -- will already check the CORS compliance of the following XHR
-    (statusCode, body) <- liftIO (JavaScript.XHR.get (Text.pack url))
+    (statusCode, body) <- liftIO (JavaScript.XHR.get childURLText)
 
     case statusCode of
         200 -> return ()
-        _   -> fail (url <> " returned a non-200 status code: " <> show statusCode)
+        _   -> fail (childURLString <> " returned a non-200 status code: " <> show statusCode)
 
-    return (url, body)
+    return (childURLString, body)
 fetchFromHttpUrl _ _ = do
     fail "Dhall does not yet support custom headers when built using GHCJS"
 #else
