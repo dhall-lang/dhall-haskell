@@ -91,6 +91,7 @@ lspHandlers rin
         , LSP.Core.responseHandler                          = Just $ responseHandlerCb rin
         -- , Core.codeActionHandler                        = Just $ passHandler rin ReqCodeAction
         , LSP.Core.executeCommandHandler                    = Just $ passHandler rin ReqExecuteCommand
+        , LSP.Core.documentFormattingHandler                = Just $ passHandler rin ReqDocumentFormatting
         }
 
 -- ---------------------------------------------------------------------
