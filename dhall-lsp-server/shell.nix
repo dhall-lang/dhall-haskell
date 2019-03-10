@@ -1,1 +1,1 @@
-(import ../nix/shared.nix { coverage = true; }).shell-dhall
+(import ../nix/shared.nix {}).shell-dhall-lsp-server
