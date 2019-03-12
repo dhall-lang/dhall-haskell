@@ -1959,7 +1959,7 @@ textShow text = "\"" <> Data.Text.concatMap f text <> "\""
     f '\n' = "\\n"
     f '\r' = "\\r"
     f '\t' = "\\t"
-    f c | c <= '\x1F' = Data.Text.pack (Text.Printf.printf "\\u%04d" (Data.Char.ord c))
+    f c | c <= '\x1F' = Data.Text.pack (Text.Printf.printf "\\u%04x" (Data.Char.ord c))
         | otherwise   = Data.Text.singleton c
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
