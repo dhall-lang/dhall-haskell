@@ -7,7 +7,6 @@
 module Dhall.Test.QuickCheck where
 
 import Codec.Serialise (DeserialiseFailure(..))
-import Control.Monad (guard)
 import Data.Either (isRight)
 import Data.List.NonEmpty (NonEmpty(..))
 import Dhall.Map (Map)
@@ -266,38 +265,23 @@ instance Arbitrary FilePrefix where
 
 instance Arbitrary ImportType where
     arbitrary =
-        Test.QuickCheck.suchThat
-            (Test.QuickCheck.oneof
-                [ lift2 Local
-                , lift5 (\a b c d e -> Remote (URL a b c d e Nothing))
-                , lift1 Env
-                , lift0 Missing
-                ]
-            )
-            standardizedImportType
+        Test.QuickCheck.oneof
+            [ lift2 Local
+            , lift5 (\a b c d e -> Remote (URL a b c d e))
+            , lift1 Env
+            , lift0 Missing
+            ]
 
-    shrink importType =
-        filter standardizedImportType (genericShrink importType)
-
-standardizedImportType :: ImportType -> Bool
-standardizedImportType (Remote (URL _ _ _ _ _ (Just _))) = False
-standardizedImportType  _                                = True
+    shrink = genericShrink
 
 instance Arbitrary ImportHashed where
     arbitrary =
-        Test.QuickCheck.suchThat
-            (lift1 (ImportHashed Nothing))
-            standardizedImportHashed
+        lift1 (ImportHashed Nothing)
 
     shrink (ImportHashed { importType = oldImportType, .. }) = do
         newImportType <- shrink oldImportType
         let importHashed = ImportHashed { importType = newImportType, .. }
-        guard (standardizedImportHashed importHashed)
         return importHashed
-
-standardizedImportHashed :: ImportHashed -> Bool
-standardizedImportHashed (ImportHashed (Just _) _) = False
-standardizedImportHashed  _                        = True
 
 -- The standard does not yet specify how to encode `as Text`, so don't test it
 -- yet
@@ -317,7 +301,7 @@ instance Arbitrary Scheme where
     shrink = genericShrink
 
 instance Arbitrary URL where
-    arbitrary = lift6 URL
+    arbitrary = lift5 URL
 
     shrink = genericShrink
 

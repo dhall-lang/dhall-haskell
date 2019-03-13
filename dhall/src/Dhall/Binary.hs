@@ -421,7 +421,6 @@ importToTerm import_ =
                 ++  map TString (reverse components)
                 ++  [ TString file ]
                 ++  (case query    of Nothing -> [ TNull ]; Just q -> [ TString q ])
-                ++  (case fragment of Nothing -> [ TNull ]; Just f -> [ TString f ])
                 )
           where
             using = case headers of
@@ -736,31 +735,27 @@ decodeMaybe (TList (TInt 24 : h : TInt mode : TInt n : xs)) = do
         _ -> empty
 
     let remote scheme = do
-            let process [ TString file, q, f ] = do
+            let process [ TString file, q ] = do
                     query <- case q of
                         TNull     -> return Nothing
                         TString x -> return (Just x)
                         _         -> empty
-                    fragment <- case f of
-                        TNull     -> return Nothing
-                        TString x -> return (Just x)
-                        _         -> empty
-                    return ([], file, query, fragment)
+                    return ([], file, query)
                 process (TString path : ys) = do
-                    (paths, file, query, fragment) <- process ys
-                    return (path : paths, file, query, fragment)
+                    (paths, file, query) <- process ys
+                    return (path : paths, file, query)
                 process _ = do
                     empty
 
-            (headers, authority, paths, file, query, fragment) <- case xs of
+            (headers, authority, paths, file, query) <- case xs of
                 headers₀ : TString authority : ys -> do
                     headers₁ <- case headers₀ of
                         TNull -> return Nothing
                         _     -> do
                             Embed (Import { importHashed = headers }) <- decodeMaybe headers₀
                             return (Just headers)
-                    (paths, file, query, fragment) <- process ys
-                    return (headers₁, authority, paths, file, query, fragment)
+                    (paths, file, query) <- process ys
+                    return (headers₁, authority, paths, file, query)
                 _ -> do
                     empty
 

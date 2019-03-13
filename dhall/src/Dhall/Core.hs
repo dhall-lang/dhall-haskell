@@ -178,7 +178,6 @@ data URL = URL
     , authority :: Text
     , path      :: File
     , query     :: Maybe Text
-    , fragment  :: Maybe Text
     , headers   :: Maybe ImportHashed
     } deriving (Eq, Generic, Ord, Show)
 
@@ -189,7 +188,6 @@ instance Pretty URL where
         <>  Pretty.pretty authority
         <>  Pretty.pretty path
         <>  queryDoc
-        <>  fragmentDoc
         <>  foldMap prettyHeaders headers
       where
         prettyHeaders h = " using " <> Pretty.pretty h
@@ -201,10 +199,6 @@ instance Pretty URL where
         queryDoc = case query of
             Nothing -> ""
             Just q  -> "?" <> Pretty.pretty q
-
-        fragmentDoc = case fragment of
-            Nothing -> ""
-            Just f  -> "#" <> Pretty.pretty f
 
 -- | The type of import (i.e. local vs. remote vs. environment)
 data ImportType
