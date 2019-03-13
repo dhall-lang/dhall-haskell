@@ -182,6 +182,30 @@ data URL = URL
     , headers   :: Maybe ImportHashed
     } deriving (Eq, Generic, Ord, Show)
 
+instance Pretty URL where
+    pretty (URL {..}) =
+            schemeDoc
+        <>  "://"
+        <>  Pretty.pretty authority
+        <>  Pretty.pretty path
+        <>  queryDoc
+        <>  fragmentDoc
+        <>  foldMap prettyHeaders headers
+      where
+        prettyHeaders h = " using " <> Pretty.pretty h
+
+        schemeDoc = case scheme of
+            HTTP  -> "http"
+            HTTPS -> "https"
+
+        queryDoc = case query of
+            Nothing -> ""
+            Just q  -> "?" <> Pretty.pretty q
+
+        fragmentDoc = case fragment of
+            Nothing -> ""
+            Just f  -> "#" <> Pretty.pretty f
+
 -- | The type of import (i.e. local vs. remote vs. environment)
 data ImportType
     = Local FilePrefix File
@@ -222,28 +246,7 @@ instance Pretty ImportType where
     pretty (Local prefix file) =
         Pretty.pretty prefix <> Pretty.pretty file
 
-    pretty (Remote (URL {..})) =
-            schemeDoc
-        <>  "://"
-        <>  Pretty.pretty authority
-        <>  Pretty.pretty path
-        <>  queryDoc
-        <>  fragmentDoc
-        <>  foldMap prettyHeaders headers
-      where
-        prettyHeaders h = " using " <> Pretty.pretty h
-
-        schemeDoc = case scheme of
-            HTTP  -> "http"
-            HTTPS -> "https"
-
-        queryDoc = case query of
-            Nothing -> ""
-            Just q  -> "?" <> Pretty.pretty q
-
-        fragmentDoc = case fragment of
-            Nothing -> ""
-            Just f  -> "#" <> Pretty.pretty f
+    pretty (Remote url) = Pretty.pretty url
 
     pretty (Env env) = "env:" <> Pretty.pretty env
 
