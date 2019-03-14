@@ -5,7 +5,7 @@ stdenv.mkDerivation rec {
 
   src = fetchurl {
     name = "twitter-logos.zip";
-    url = "https://about.twitter.com/content/dam/about-twitter/company/brand-resources/en_us/Twitter%20Logos.zip";
+    url = "https://about.twitter.com/content/dam/about-twitter/company/brand-resources/en_us/Twitter-Logos.zip";
     sha256 = "1dhqmj3krhak10yrq0zm89ld40a32ndrfnl6ligaaphf5dkff5m6";
   };
 
