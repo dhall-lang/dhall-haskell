@@ -40,6 +40,8 @@ let
           sha256 = "1lly3yb5szl9n3hszsfzv2mil98cvlidrzyci7vs4wi461s9bhxi";
         };
 
+      discourse = ./img/discourse.svg;
+
       github = pkgsNew.callPackage ./githubLogo.nix { };
 
       haskell =
