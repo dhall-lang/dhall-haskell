@@ -375,7 +375,6 @@ httpRaw = do
     authority <- authority_
     path      <- file_
     query     <- optional (("?" :: Parser Text) *> query_)
-    fragment  <- optional (("#" :: Parser Text) *> fragment_)
 
     let headers = Nothing
 
@@ -494,11 +493,6 @@ pchar = satisfy predicate <|> pctEncoded
 
 query_ :: Parser Text
 query_ = star (pchar <|> satisfy predicate)
-  where
-    predicate c = c == '/' || c == '?'
-
-fragment_ :: Parser Text
-fragment_ = star (pchar <|> satisfy predicate)
   where
     predicate c = c == '/' || c == '?'
 
