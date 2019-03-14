@@ -1,3 +1,5 @@
+{ src ? { rev = ""; }, ... }:
+
 let
   shared_7_10_3 =
     import ./nix/shared.nix { compiler = "ghc7103"; };
@@ -50,7 +52,7 @@ in
           # This is the only `dhall` build that runs the test suite
           coverage.dhall
 
-          shared.pwd
+          (shared.trivial src.rev)
         ];
       };
 
