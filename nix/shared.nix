@@ -505,9 +505,7 @@ let
     system = "x86_64-linux";
   };
 
-  # Derivation that trivially depends on the current directory so that Hydra's
-  # pull request builder always posts a GitHub status on each revision
-  pwd = pkgs.runCommand "pwd" { here = ../.; } "touch $out";
+  trivial = x: pkgs.runCommand "trivial" { inherit x; } "touch $out";
 
   makeStaticIfPossible = name:
     if pkgs.stdenv.isLinux
@@ -537,7 +535,7 @@ let
 
 in
   rec {
-    inherit pwd;
+    inherit trivial;
 
     possibly-static = {
       dhall            = makeStaticIfPossible "dhall"     ;
