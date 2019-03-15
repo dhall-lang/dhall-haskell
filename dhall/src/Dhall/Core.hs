@@ -1941,7 +1941,8 @@ normalizeWithM ctx e0 = loop (denote e0)
                 adapt x = do
                     v <- Dhall.Map.lookup x kvs
                     return (x, v)
-            _ -> pure (Project r' xs)
+            _   | null xs -> pure (RecordLit mempty)
+                | otherwise -> pure (Project r' xs)
     Note _ e' -> loop e'
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
@@ -1956,7 +1957,8 @@ textShow text = "\"" <> Data.Text.concatMap f text <> "\""
     f '\n' = "\\n"
     f '\r' = "\\r"
     f '\t' = "\\t"
-    f c | c <= '\x1F' = Data.Text.pack (Text.Printf.printf "\\u%04d" (Data.Char.ord c))
+    f '\f' = "\\f"
+    f c | c <= '\x1F' = Data.Text.pack (Text.Printf.printf "\\u%04x" (Data.Char.ord c))
         | otherwise   = Data.Text.singleton c
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
@@ -2180,7 +2182,7 @@ isNormalized e0 = loop (denote e0)
                   if all (flip Dhall.Map.member kvs) xs
                       then False
                       else True
-              _ -> True
+              _ -> not (null xs)
       Note _ e' -> loop e'
       ImportAlt l _r -> loop l
       Embed _ -> True
