@@ -231,6 +231,7 @@ Extra-Source-Files:
     dhall-lang/tests/normalization/success/simple/*.dhall
     dhall-lang/tests/normalization/success/simplifications/*.dhall
     dhall-lang/tests/normalization/success/unit/*.dhall
+    dhall-lang/tests/α-normalization/success/unit/*.dhall
     dhall-lang/tests/parser/failure/*.dhall
     dhall-lang/tests/parser/success/*.dhall
     dhall-lang/tests/parser/success/*.dhallb
