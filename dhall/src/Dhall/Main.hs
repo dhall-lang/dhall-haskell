@@ -191,7 +191,9 @@ parseMode =
 
     parseAnnotate =
         Options.Applicative.switch
-            (Options.Applicative.long "annotate")
+            (   Options.Applicative.long "annotate"
+            <>  Options.Applicative.help "Add a type annotation to the output"
+            )
 
     parseResolveMode =
           Options.Applicative.flag' (Just Dot)
