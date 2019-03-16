@@ -1517,7 +1517,8 @@ union (UnionType (Data.Functor.Compose.Compose mp)) = Type
     extractF e0 = do
       UnionLit fld e1 rest <- Just e0
       t <- Dhall.Map.lookup fld mp
-      guard $ rest == Dhall.Map.delete fld expect
+      guard $ Dhall.Core.Union rest `Dhall.Core.judgmentallyEqual`
+                Dhall.Core.Union (Dhall.Map.delete fld expect)
       Dhall.extract t e1
 
 -- | Parse a single constructor of a union
