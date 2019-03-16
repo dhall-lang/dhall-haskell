@@ -83,11 +83,11 @@ data Options = Options
 
 -- | The subcommands for the @dhall@ executable
 data Mode
-    = Default { annotate :: Bool }
+    = Default { annotate :: Bool, alpha :: Bool }
     | Version
     | Resolve { resolveMode :: Maybe ResolveMode }
     | Type
-    | Normalize
+    | Normalize { alpha :: Bool }
     | Repl
     | Format { formatMode :: Dhall.Format.FormatMode }
     | Freeze { inplace :: Maybe FilePath, all_ :: Bool }
@@ -149,7 +149,7 @@ parseMode =
     <|> subcommand
             "normalize"
             "Normalize an expression"
-            (pure Normalize)
+            (Normalize <$> parseAlpha)
     <|> subcommand
             "repl"
             "Interpret expressions in a REPL"
@@ -182,12 +182,18 @@ parseMode =
             "decode"
             "Decode a Dhall expression from binary"
             (Decode <$> parseJSONFlag)
-    <|> (Default <$> parseAnnotate)
+    <|> (Default <$> parseAnnotate <*> parseAlpha)
   where
     argument =
             fmap Data.Text.pack
         .   Options.Applicative.strArgument
         .   Options.Applicative.metavar
+
+    parseAlpha =
+        Options.Applicative.switch
+            (   Options.Applicative.long "alpha"
+            <>  Options.Applicative.help "α-normalize expression"
+            )
 
     parseAnnotate =
         Options.Applicative.switch
@@ -348,10 +354,15 @@ command (Options {..}) = do
 
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
 
+            let alphaNormalizedExpression =
+                    if alpha
+                    then Dhall.Core.alphaNormalize normalizedExpression
+                    else normalizedExpression
+
             let annotatedExpression =
                     if annotate
-                        then Annot normalizedExpression inferredType
-                        else normalizedExpression
+                        then Annot alphaNormalizedExpression inferredType
+                        else alphaNormalizedExpression
 
             render System.IO.stdout annotatedExpression
 
@@ -392,14 +403,21 @@ command (Options {..}) = do
                 State.runStateT (Dhall.Import.loadWith expression) status
             render System.IO.stdout resolvedExpression
 
-        Normalize -> do
+        Normalize {..} -> do
             expression <- getExpression
 
             resolvedExpression <- Dhall.Import.assertNoImports expression
 
             _ <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-            render System.IO.stdout (Dhall.Core.normalize resolvedExpression)
+            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+
+            let alphaNormalizedExpression =
+                    if alpha
+                    then Dhall.Core.alphaNormalize normalizedExpression
+                    else normalizedExpression
+
+            render System.IO.stdout alphaNormalizedExpression
 
         Type -> do
             expression <- getExpression
