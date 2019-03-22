@@ -1060,18 +1060,36 @@ import Dhall
 -- the @Natural@ alternative and the @Right@ tag is used for the @Bool@
 -- alternative.
 --
--- A union literal specifies the value of one alternative and the types of the
--- remaining alternatives.  For example, both of the following union literals
--- have the same type, which is the above union type:
+-- You can specify the value of a union constructor like this:
 --
--- > < Left  = 0    | Right : Bool    >
+-- > let Union = < Left : Natural | Right : Bool>
+-- > 
+-- > [ Union.Left 0, Union.Right True ] : List Union
 --
--- > < Right = True | Left  : Natural >
+-- In other words, you can access a union constructor as a field of a union
+-- type and use that constructor to wrap a value of a type appropriate for
+-- that alternative.  In the above example, the @Left@ constructor can wrap
+-- a @Natural@ value and the @Right@ constructor can wrap a @Bool@ value.  We
+-- can also confirm that by inspecting their type:
+--
+-- > $ echo '< Left : Natural | Right : Bool>' > ./Union
+--
+-- > $ dhall --annotate <<< '(./Union).Left'
+-- >   < Left : Natural | Right : Bool >.Left
+-- > : ∀(Left : Natural) → < Left : Natural | Right : Bool >
+--
+-- > $ dhall --annotate <<< '(./Union).Right'
+-- >   < Left : Natural | Right : Bool >.Right
+-- > : ∀(Right : Bool) → < Left : Natural | Right : Bool >
+--
+-- In other words, the @Left@ constructor is a function from a @Natural@ to a
+-- value of our @Union@ type and the @Right@ constructor is a separate function
+-- from a @Bool@ to that same @Union@ type.
 --
 -- You can consume a union using the built-in @merge@ function.  For example,
 -- suppose we want to convert our union to a @Bool@ but we want to behave
 -- differently depending on whether or not the union is a @Natural@ wrapped in
--- the @Left@ alternative or a @Bool@ wrapped in the @Right@ alternative.  We
+-- the @Left@ constructor or a @Bool@ wrapped in the @Right@ constructor .  We
 -- would write:
 --
 -- > $ cat > process <<EOF
@@ -1085,18 +1103,10 @@ import Dhall
 --
 -- Now our @./process@ function can handle both alternatives:
 --
--- > $ dhall
--- > ./process < Left = 3 | Right : Bool >
--- > <Ctrl-D>
--- > Bool
--- > 
+-- > $ dhall <<< './process ((./Union).Left 3)'
 -- > False
 --
--- > $ dhall
--- > ./process < Right = True | Left : Natural >
--- > <Ctrl-D>
--- > Bool
--- > 
+-- > $ dhall <<< './process ((./Union).Right True)'
 -- > True
 --
 -- Every @merge@ has the following form:
@@ -1112,66 +1122,54 @@ import Dhall
 -- The @merge@ function selects which function to apply from the record based on
 -- which alternative the union selects:
 --
--- > merge { Foo = f, ... } < Foo = x | ... > : t = f x : t
+-- > merge { Foo = f, ... } (< … >.Foo x) = f x
 --
 -- So, for example:
 --
--- > merge { Left = Natural/even, Right = λ(b : Bool) → b } < Left = 3 | Right : Bool > : Bool
--- >     = Natural/even 3 : Bool
+-- > merge { Left = Natural/even, Right = λ(b : Bool) → b } (< Left : Natural | Right : Bool >.Left 3)
+-- >     = Natural/even 3
 -- >     = False
 --
 -- ... and similarly:
 --
--- > merge { Left = Natural/even, Right = λ(b : Bool) → b } < Right = True | Left : Natural > : Bool
--- >     = (λ(b : Bool) → b) True : Bool
+-- > merge { Left = Natural/even, Right = λ(b : Bool) → b } (< Left : Natural | Right : Bool >.Right True)
+-- >     = (λ(b : Bool) → b) True
 -- >     = True
 --
 -- Notice that each handler has to return the same type of result (@Bool@ in
--- this case) which must also match the declared result type of the @merge@.
+-- this case).
 --
--- You can also omit the type annotation when merging a union with one or more
--- alternatives, like this:
---
--- > merge { Left = Natural/even, Right = λ(b : Bool) → b } < Right = True | Left : Natural >
---
--- You can also store more than one value or less than one value within
--- alternatives using Dhall's support for anonymous records.  You can nest an
--- anonymous record within a union such as in this type:
+-- You can also store more than one value within alternatives using Dhall's
+-- support for anonymous records.  You can nest an anonymous record within a
+-- union such as in this type:
 --
 -- > < Empty : {} | Person : { name : Text, age : Natural } >
+--
+-- You can even go a step further and omit the type of an alternative if it
+-- stores no data, like this:
+--
+-- > < Empty | Person : { name : Text, age : Natural } >
+--
 --
 -- This union of records resembles following equivalent Haskell data type:
 --
 -- > data Example = Empty | Person { name :: Text, age :: Text }
 --
--- You could resemble Haskell further by defining convenient constructors for
--- each alternative, like this:
+-- Empty alternatives like @Empty@ require no argument:
 --
--- > let Empty  = < Empty = {=} | Person : { name : Text, age : Natural } >
--- > let Person =
--- >       λ(p : { name : Text, age : Natural }) → < Person = p | Empty : {} >
--- > in  [   Empty
--- >     ,   Person { name = "John", age = 23 }
--- >     ,   Person { name = "Amy" , age = 25 }
--- >     ,   Empty
--- >     ]
---
--- ... but there is no need to do so, since the Dhall language auto-generates
--- constructors for each alternative.  You can access each constructor as if it
--- were a field of the union type:
---
--- > let MyType = < Empty : {} | Person : { name : Text, age : Natural } >
--- > in  [   MyType.Empty {=}
+-- > let MyType = < Empty | Person : { name : Text, age : Natural } >
+-- > 
+-- > in  [   MyType.Empty  -- Note the absence of any argument to `Empty`
 -- >     ,   MyType.Person { name = "John", age = 23 }
 -- >     ,   MyType.Person { name = "Amy" , age = 25 }
 -- >     ]
 --
--- You can also extract fields during pattern matching such as in the following
--- function which renders each value to `Text`:
+-- ... and when you @merge@ an empty alternative the correspond handler takes no
+-- argument:
 --
--- >     λ(x : < Empty : {} | Person : { name : Text, age : Natural } >)
+-- >     λ(x : < Empty | Person : { name : Text, age : Natural } >)
 -- > →   merge
--- >     {   Empty = λ(_ : {}) → "Unknown"
+-- >     {   Empty = "Unknown"  -- Note the absence of a `λ`
 -- >
 -- >     ,   Person =
 -- >             λ(person : { name : Text, age : Natural })

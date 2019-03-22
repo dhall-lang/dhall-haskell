@@ -849,18 +849,20 @@ prettyCharacterSet characterSet = prettyExpression
         | otherwise
             = braces (map (prettyKeyValue equals) (Dhall.Map.toList a))
 
-    prettyUnion :: Pretty a => Map Text (Expr s a) -> Doc Ann
+    prettyAlternative (key, Just val) = prettyKeyValue colon (key, val)
+    prettyAlternative (key, Nothing ) = duplicate (prettyLabel key)
+
+    prettyUnion :: Pretty a => Map Text (Maybe (Expr s a)) -> Doc Ann
     prettyUnion =
-        angles . map (prettyKeyValue colon) . Dhall.Map.toList
+        angles . map prettyAlternative . Dhall.Map.toList
 
     prettyUnionLit
-        :: Pretty a => Text -> Expr s a -> Map Text (Expr s a) -> Doc Ann
+        :: Pretty a
+        => Text -> Expr s a -> Map Text (Maybe (Expr s a)) -> Doc Ann
     prettyUnionLit a b c =
-        angles (front : map adapt (Dhall.Map.toList c))
+        angles (front : map prettyAlternative (Dhall.Map.toList c))
       where
         front = prettyKeyValue equals (a, b)
-
-        adapt = prettyKeyValue colon
 
     prettyChunks :: Pretty a => Chunks s a -> Doc Ann
     prettyChunks (Chunks a b) =

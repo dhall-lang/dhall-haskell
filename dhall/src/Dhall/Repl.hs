@@ -480,23 +480,28 @@ completeFunc reversedPrev word
   where
     listCompletion = map simpleCompletion . filter (word `isPrefixOf`)
 
-    algebraicComplete :: [Text.Text] -> Dhall.Expr Dhall.Src Dhall.X -> [Text.Text]
+    algebraicComplete
+        :: [Text.Text] -> Dhall.Expr Dhall.Src Dhall.X -> [Text.Text]
     algebraicComplete subFields expr =
       let keys = fmap ("." <>) . Map.keys
 
-          withMap m
-            | [] <- subFields   = keys m
-            -- Stop on last subField (we care about the keys at this level)
-            | [_] <- subFields  = keys m
-            | f:fs <- subFields =
-              maybe
-                []
-                (fmap (("." <> f) <>) . algebraicComplete fs)
-                (Map.lookup f m)
+          withMap m =
+              case subFields of
+                  [] -> keys m
+                  -- Stop on last subField (we care about the keys at this level)
+                  [_] -> keys m
+                  f:fs ->
+                      case Map.lookup f m of
+                          Nothing ->
+                              []
+                          Just Nothing ->
+                              keys m
+                          Just (Just e) ->
+                              fmap (("." <> f) <>) (algebraicComplete fs e)
 
       in  case expr of
-            Dhall.Core.Record       m -> withMap m
-            Dhall.Core.RecordLit    m -> withMap m
+            Dhall.Core.Record       m -> withMap (fmap Just m)
+            Dhall.Core.RecordLit    m -> withMap (fmap Just m)
             Dhall.Core.Union        m -> withMap m
             Dhall.Core.UnionLit _ _ m -> withMap m
             _                         -> []
