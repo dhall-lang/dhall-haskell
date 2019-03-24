@@ -26,7 +26,6 @@ module Dhall.Core (
     , ImportMode(..)
     , ImportType(..)
     , URL(..)
-    , Path
     , Scheme(..)
     , Var(..)
     , Binding(..)
@@ -282,11 +281,6 @@ instance Pretty Import where
         suffix = case importMode of
             RawText -> " as Text"
             Code    -> ""
-
--- | Type synonym for `Import`, provided for backwards compatibility
-type Path = Import
-
-{-# DEPRECATED Path "Use Dhall.Core.Import instead" #-}
 
 {-| Label for a bound variable
 
