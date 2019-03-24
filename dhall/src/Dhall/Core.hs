@@ -59,6 +59,7 @@ module Dhall.Core (
     , pathCharacter
     ) where
 
+import Codec.CBOR.Term (Term)
 #if MIN_VERSION_base(4,8,0)
 #else
 import Control.Applicative (Applicative(..), (<$>))
@@ -77,6 +78,7 @@ import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Traversable
+import {-# SOURCE #-} Dhall.Binary
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import {-# SOURCE #-} Dhall.Pretty.Internal
@@ -1443,7 +1445,7 @@ alphaNormalize (Embed a) =
     However, `normalize` will not fail if the expression is ill-typed and will
     leave ill-typed sub-expressions unevaluated.
 -}
-normalize :: Eq a => Expr s a -> Expr t a
+normalize :: ToTerm a => Expr s a -> Expr t a
 normalize = normalizeWith (const (pure Nothing))
 
 {-| This function is used to determine whether folds like @Natural/fold@ or
@@ -1553,10 +1555,11 @@ denote (Embed a             ) = Embed a
     with those functions is not total either.
 
 -}
-normalizeWith :: Eq a => Normalizer a -> Expr s a -> Expr t a
+normalizeWith :: ToTerm a => Normalizer a -> Expr s a -> Expr t a
 normalizeWith ctx = runIdentity . normalizeWithM ctx
 
-normalizeWithM :: (Eq a, Monad m) => NormalizerM m a -> Expr s a -> m (Expr t a)
+normalizeWithM
+    :: (Monad m, ToTerm a) => NormalizerM m a -> Expr s a -> m (Expr t a)
 normalizeWithM ctx e0 = loop (denote e0)
  where
  loop e =  case e of
@@ -1958,11 +1961,14 @@ textShow text = "\"" <> Data.Text.concatMap f text <> "\""
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise
 -}
-judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
-judgmentallyEqual eL0 eR0 = alphaBetaNormalize eL0 == alphaBetaNormalize eR0
+judgmentallyEqual :: ToTerm a => Expr s a -> Expr t a -> Bool
+judgmentallyEqual eL0 eR0 = term eL0 == term eR0
   where
-    alphaBetaNormalize :: Eq a => Expr s a -> Expr () a
+    alphaBetaNormalize :: ToTerm a => Expr s a -> Expr () a
     alphaBetaNormalize = alphaNormalize . normalize
+
+    term :: ToTerm a => Expr s a -> Term
+    term = Dhall.Binary.encode . alphaBetaNormalize
 
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
 --   polymorphic enough to be used.
@@ -1979,11 +1985,11 @@ data ReifiedNormalizer a = ReifiedNormalizer
 --   Unlike `isNormalized`, this will fully normalize and traverse through the expression.
 --
 --   It is much more efficient to use `isNormalized`.
-isNormalizedWith :: (Eq s, Eq a) => Normalizer a -> Expr s a -> Bool
+isNormalizedWith :: (Eq s, Eq a, ToTerm a) => Normalizer a -> Expr s a -> Bool
 isNormalizedWith ctx e = e == normalizeWith ctx e
 
 -- | Quickly check if an expression is in normal form
-isNormalized :: Eq a => Expr s a -> Bool
+isNormalized :: ToTerm a => Expr s a -> Bool
 isNormalized e0 = loop (denote e0)
   where
     loop e = case e of

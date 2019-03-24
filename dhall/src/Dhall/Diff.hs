@@ -27,6 +27,7 @@ import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Dhall.Core (Binding(..), Chunks (..), Const(..), Expr(..), Var(..))
+import Dhall.Binary (ToTerm)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import Dhall.Pretty.Internal (Ann)
@@ -153,7 +154,7 @@ rparen :: Diff
 rparen = token Internal.rparen
 
 -- | Render the difference between the normal form of two expressions
-diffNormalized :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
+diffNormalized :: (Eq a, Pretty a, ToTerm a) => Expr s a -> Expr s a -> Doc Ann
 diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
   where
     l1 = Dhall.Core.alphaNormalize (Dhall.Core.normalize l0)
