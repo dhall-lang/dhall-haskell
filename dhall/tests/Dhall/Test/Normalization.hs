@@ -10,6 +10,7 @@ import Dhall.TypeCheck (X)
 
 import qualified Control.Exception
 import qualified Data.Text
+import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
@@ -26,6 +27,8 @@ tests =
     testGroup "normalization"
         [ tutorialExamples
         , preludeExamples
+        , unitTests
+        , alphaNormalizationTests
         , simplifications
         , constantFolding
         , conversions
@@ -188,6 +191,188 @@ preludeExamples =
         , shouldNormalize "Text/show" "./success/prelude/Text/show/1"
         ]
 
+unitTests :: TestTree
+unitTests =
+    testGroup "Unit tests"
+        [ shouldOnlyNormalize "ListNormalizeElements"
+        , shouldOnlyNormalize "TextNormalizeInterpolations"
+        , shouldOnlyNormalize "RecordTypeEmpty"
+        , shouldOnlyNormalize "MergeNormalizeArguments"
+        , shouldOnlyNormalize "OperatorAndNormalizeArguments"
+        , shouldOnlyNormalize "OperatorEqualEquivalentArguments"
+        , shouldOnlyNormalize "ListIndexedEmpty"
+        , shouldOnlyNormalize "OperatorListConcatenateLhsEmpty"
+        , shouldOnlyNormalize "Variable"
+        , shouldOnlyNormalize "RecursiveRecordTypeMergeRhsEmpty"
+        , shouldOnlyNormalize "NaturalToInteger"
+        , shouldOnlyNormalize "ListReverse"
+        , shouldOnlyNormalize "MergeWithType"
+        , shouldOnlyNormalize "OperatorOrLhsFalse"
+        , shouldOnlyNormalize "IntegerPositive"
+        , shouldOnlyNormalize "OperatorTimesRhsOne"
+        , shouldOnlyNormalize "NaturalOdd"
+        , shouldOnlyNormalize "RecursiveRecordMergeLhsEmpty"
+        , shouldOnlyNormalize "RightBiasedRecordMergeNormalizeArguments"
+        , shouldOnlyNormalize "UnionType"
+        , shouldOnlyNormalize "IntegerNegative"
+        , shouldOnlyNormalize "NaturalEven"
+        , shouldOnlyNormalize "OperatorAndRhsTrue"
+        , shouldOnlyNormalize "NaturalBuildImplementation"
+        , shouldOnlyNormalize "RecursiveRecordMergeCollision"
+        , shouldOnlyNormalize "RecursiveRecordMergeNormalizeArguments"
+        , shouldOnlyNormalize "OperatorAndLhsTrue"
+        , shouldOnlyNormalize "OperatorPlusOneAndOne"
+        , shouldOnlyNormalize "IntegerToDouble12"
+        , shouldOnlyNormalize "IntegerToDouble-12"
+        , shouldOnlyNormalize "IntegerShow-12"
+        , shouldOnlyNormalize "ListLengthOne"
+        , shouldOnlyNormalize "IntegerShow12"
+        , shouldOnlyNormalize "NaturalFoldZero"
+        , shouldOnlyNormalize "RecordType"
+        , shouldOnlyNormalize "IfFalse"
+        , shouldOnlyNormalize "DoubleShow"
+        , shouldOnlyNormalize "OptionalBuildFoldFusion"
+        , shouldOnlyNormalize "NaturalShow"
+        , shouldOnlyNormalize "ListLength"
+        , shouldOnlyNormalize "RecursiveRecordTypeMergeCollision"
+        , shouldOnlyNormalize "RecordEmpty"
+        , shouldOnlyNormalize "TextLiteral"
+        , shouldOnlyNormalize "RecordSelectionNormalizeArguments"
+        , shouldOnlyNormalize "OptionalFold"
+        , shouldOnlyNormalize "IfTrivial"
+        , shouldOnlyNormalize "ListBuild"
+        , shouldOnlyNormalize "OperatorTextConcatenateLhsEmpty"
+        , shouldOnlyNormalize "LetWithType"
+        , shouldOnlyNormalize "OptionalFoldSome"
+        , shouldOnlyNormalize "OptionalBuild"
+        , shouldOnlyNormalize "ListFoldOne"
+        , shouldOnlyNormalize "ListLast"
+        , shouldOnlyNormalize "ListReverseEmpty"
+        , shouldOnlyNormalize "NaturalEvenZero"
+        , shouldOnlyNormalize "RecursiveRecordTypeMergeNoCollision"
+        , shouldOnlyNormalize "NaturalToIntegerOne"
+        , shouldOnlyNormalize "Natural"
+        , shouldOnlyNormalize "ListIndexed"
+        , shouldOnlyNormalize "Integer"
+        , shouldOnlyNormalize "NaturalIsZero"
+        , shouldOnlyNormalize "OperatorNotEqualLhsFalse"
+        , shouldOnlyNormalize "NaturalIsZeroZero"
+        , shouldOnlyNormalize "OperatorPlusNormalizeArguments"
+        , shouldOnlyNormalize "RecordSelection"
+        , shouldOnlyNormalize "OperatorListConcatenateListList"
+        , shouldOnlyNormalize "OperatorTextConcatenateNormalizeArguments"
+        , shouldOnlyNormalize "True"
+        , shouldOnlyNormalize "Bool"
+        , shouldOnlyNormalize "OperatorNotEqualNormalizeArguments"
+        , shouldOnlyNormalize "RightBiasedRecordMergeLhsEmpty"
+        , shouldOnlyNormalize "UnionNormalizeArguments"
+        , shouldOnlyNormalize "OperatorAndLhsFalse"
+        , shouldOnlyNormalize "RecordProjection"
+        , shouldOnlyNormalize "OptionalBuildImplementation"
+        , shouldOnlyNormalize "OperatorEqualNormalizeArguments"
+        , shouldOnlyNormalize "Merge"
+        , shouldOnlyNormalize "Type"
+        , shouldOnlyNormalize "OperatorListConcatenateRhsEmpty"
+        , shouldOnlyNormalize "RightBiasedRecordMergeNoCollision"
+        , shouldOnlyNormalize "RecursiveRecordTypeMergeLhsEmpty"
+        , shouldOnlyNormalize "IfAlternativesIdentical"
+        , shouldOnlyNormalize "NoneNatural"
+        , shouldOnlyNormalize "UnionProjectConstructor"
+        , shouldOnlyNormalize "ListLastOne"
+        , shouldOnlyNormalize "IntegerToDouble"
+        , shouldOnlyNormalize "RightBiasedRecordMergeCollision"
+        , shouldOnlyNormalize "OperatorOrRhsTrue"
+        , shouldOnlyNormalize "IfTrue"
+        , shouldOnlyNormalize "OperatorPlusRhsZero"
+        , shouldOnlyNormalize "ListHeadOne"
+        , shouldOnlyNormalize "FunctionApplicationNoSubstitute"
+        , shouldOnlyNormalize "RecursiveRecordMergeRhsEmpty"
+        , shouldOnlyNormalize "ListReverseTwo"
+        , shouldOnlyNormalize "OperatorOrRhsFalse"
+        , shouldOnlyNormalize "NaturalOddZero"
+        , shouldOnlyNormalize "UnionTypeNormalizeArguments"
+        , shouldOnlyNormalize "TextInterpolate"
+        , shouldOnlyNormalize "Let"
+        , shouldOnlyNormalize "OperatorTimesLhsOne"
+        , shouldOnlyNormalize "OperatorOrLhsTrue"
+        , shouldOnlyNormalize "OperatorPlusLhsZero"
+        , shouldOnlyNormalize "FunctionNormalizeArguments"
+        , shouldOnlyNormalize "ListLastEmpty"
+        , shouldOnlyNormalize "UnionTypeEmpty"
+        , shouldOnlyNormalize "TextShowAllEscapes"
+        , shouldOnlyNormalize "RecursiveRecordMergeNoCollision"
+        , shouldOnlyNormalize "ListNormalizeTypeAnnotation"
+        , shouldOnlyNormalize "NaturalFoldOne"
+        , shouldOnlyNormalize "OperatorAndEquivalentArguments"
+        , shouldOnlyNormalize "SomeNormalizeArguments"
+        , shouldOnlyNormalize "MergeWithTypeNormalizeArguments"
+        , shouldOnlyNormalize "OperatorOrNormalizeArguments"
+        , shouldOnlyNormalize "RecordProjectionNormalizeArguments"
+        , shouldOnlyNormalize "FunctionApplicationSubstitute"
+        , shouldOnlyNormalize "OperatorOrEquivalentArguments"
+        , shouldOnlyNormalize "NaturalFold"
+        , shouldOnlyNormalize "NaturalEvenOne"
+        , shouldOnlyNormalize "OperatorTextConcatenateRhsEmpty"
+        , shouldOnlyNormalize "DoubleLiteral"
+        , shouldOnlyNormalize "ListHeadEmpty"
+        , shouldOnlyNormalize "FunctionApplicationCapture"
+        , shouldOnlyNormalize "RecordProjectionEmpty"
+        , shouldOnlyNormalize "List"
+        , shouldOnlyNormalize "NaturalOddOne"
+        , shouldOnlyNormalize "ListFold"
+        , shouldOnlyNormalize "OperatorEqualRhsTrue"
+        , shouldOnlyNormalize "DoubleShowValue"
+        , shouldOnlyNormalize "OperatorNotEqualEquivalentArguments"
+        , shouldOnlyNormalize "Text"
+        , shouldOnlyNormalize "ListIndexedOne"
+        , shouldOnlyNormalize "IntegerShow"
+        , shouldOnlyNormalize "Optional"
+        , shouldOnlyNormalize "OperatorTimesNormalizeArguments"
+        , shouldOnlyNormalize "NaturalLiteral"
+        , shouldOnlyNormalize "ListHead"
+        , shouldOnlyNormalize "ListBuildFoldFusion"
+        , shouldOnlyNormalize "NaturalIsZeroOne"
+        , shouldOnlyNormalize "OperatorListConcatenateNormalizeArguments"
+        , shouldOnlyNormalize "OperatorTimesRhsZero"
+        , shouldOnlyNormalize "Double"
+        , shouldOnlyNormalize "OperatorTimesLhsZero"
+        , shouldOnlyNormalize "ListFoldEmpty"
+        , shouldOnlyNormalize "FunctionApplicationNormalizeArguments"
+        , shouldOnlyNormalize "NaturalShowOne"
+        , shouldOnlyNormalize "OptionalFoldNone"
+        , shouldOnlyNormalize "TextShow"
+        , shouldOnlyNormalize "Kind"
+        , shouldOnlyNormalize "Sort"
+        , shouldOnlyNormalize "OperatorTextConcatenateTextText"
+        , shouldOnlyNormalize "FunctionTypeNormalizeArguments"
+        , shouldOnlyNormalize "OperatorNotEqualRhsFalse"
+        , shouldOnlyNormalize "NaturalBuild"
+        , shouldOnlyNormalize "NaturalBuildFoldFusion"
+        , shouldOnlyNormalize "TypeAnnotation"
+        , shouldOnlyNormalize "IfNormalizePredicateAndBranches"
+        , shouldOnlyNormalize "OperatorEqualLhsTrue"
+        , shouldOnlyNormalize "Record"
+        , shouldOnlyNormalize "RecursiveRecordTypeMergeNormalizeArguments"
+        , shouldOnlyNormalize "UnionNormalizeAlternatives"
+        , shouldOnlyNormalize "OperatorTimesTwoAndTwo"
+        , shouldOnlyNormalize "ListBuildImplementation"
+        , shouldOnlyNormalize "UnionProjectConstructorNormalizeArguments"
+        , shouldOnlyNormalize "None"
+        , shouldOnlyNormalize "RightBiasedRecordMergeRhsEmpty"
+        , shouldOnlyNormalize "UnionSortAlternatives"
+        , shouldOnlyNormalize "ListLengthEmpty"
+        , shouldOnlyNormalize "OperatorAndRhsFalse"
+        ]
+
+alphaNormalizationTests :: TestTree
+alphaNormalizationTests =
+    testGroup "α-normalization tests"
+        [ shouldOnlyAlphaNormalize "FunctionBindingUnderscore"
+        , shouldOnlyAlphaNormalize "FunctionBindingX"
+        , shouldOnlyAlphaNormalize "FunctionTypeBindingX"
+        , shouldOnlyAlphaNormalize "FunctionTypeNestedBindingX"
+        ]
+
 simplifications :: TestTree
 simplifications =
     testGroup "Simplifications"
@@ -299,6 +484,7 @@ should name basename =
         case Dhall.TypeCheck.typeOf expectedResolved of
             Left  err -> Control.Exception.throwIO err
             Right _   -> return ()
+
         -- Use `denote` instead of `normalize` to enforce that the expected
         -- expression is already in normal form
         let expectedNormalized =
@@ -310,3 +496,62 @@ should name basename =
 
 shouldNormalize :: Text -> Text -> TestTree
 shouldNormalize name = should ("normalize " <> name <> " correctly")
+
+shouldOnlyAlphaNormalize :: String -> TestTree
+shouldOnlyAlphaNormalize name =
+    Test.Tasty.HUnit.testCase ("normalize " <> name <> " correctly") $ do
+
+        let actualPath   = "./dhall-lang/tests/α-normalization/success/unit/" <> name <> "A.dhall"
+        let expectedPath = "./dhall-lang/tests/α-normalization/success/unit/" <> name <> "B.dhall"
+
+        actualCode   <- Data.Text.IO.readFile actualPath
+        expectedCode <- Data.Text.IO.readFile expectedPath
+
+        actualExpr <- case Dhall.Parser.exprFromText mempty actualCode of
+            Left  err  -> Control.Exception.throwIO err
+            Right expr -> return expr
+        actualResolved <- Dhall.Import.assertNoImports actualExpr
+
+        let actualNormalized = Dhall.Core.alphaNormalize (Dhall.Core.denote actualResolved)
+
+        expectedExpr <- case Dhall.Parser.exprFromText mempty expectedCode of
+            Left  err  -> Control.Exception.throwIO err
+            Right expr -> return expr
+        expectedResolved <- Dhall.Import.assertNoImports expectedExpr
+
+        let expectedNormalized = Dhall.Core.denote expectedResolved :: Expr X X
+
+        let message =
+                "The normalized expression did not match the expected output"
+        Test.Tasty.HUnit.assertEqual message expectedNormalized actualNormalized
+
+shouldOnlyNormalize :: String -> TestTree
+shouldOnlyNormalize name =
+    Test.Tasty.HUnit.testCase ("normalize " <> name <> " correctly") $ do
+
+        let actualPath   = "./dhall-lang/tests/normalization/success/unit/" <> name <> "A.dhall"
+        let expectedPath = "./dhall-lang/tests/normalization/success/unit/" <> name <> "B.dhall"
+
+        actualCode   <- Data.Text.IO.readFile actualPath
+        expectedCode <- Data.Text.IO.readFile expectedPath
+
+        actualExpr <- case Dhall.Parser.exprFromText mempty actualCode of
+            Left  err  -> Control.Exception.throwIO err
+            Right expr -> return expr
+        actualResolved <- Dhall.Import.assertNoImports actualExpr
+
+        let actualNormalized =
+                Dhall.Core.alphaNormalize
+                    (Dhall.Core.normalize actualResolved :: Expr X X)
+
+        expectedExpr <- case Dhall.Parser.exprFromText mempty expectedCode of
+            Left  err  -> Control.Exception.throwIO err
+            Right expr -> return expr
+        expectedResolved <- Dhall.Import.assertNoImports expectedExpr
+
+        let expectedNormalized =
+                Dhall.Core.alphaNormalize (Dhall.Core.denote expectedResolved)
+
+        let message =
+                "The normalized expression did not match the expected output"
+        Test.Tasty.HUnit.assertEqual message expectedNormalized actualNormalized
