@@ -272,7 +272,7 @@ dhallToJSON e0 = loop (Dhall.Core.normalize e0)
                             (Dhall.Core.TextLit
                                 (Dhall.Core.Chunks [] nestedField)
                             )
-                            [ ("Inline", Dhall.Core.Record []) ]
+                            [ ("Inline", Just (Dhall.Core.Record [])) ]
                     )
                  ] -> do
                     contents' <- loop contents
@@ -303,7 +303,7 @@ dhallToJSON e0 = loop (Dhall.Core.normalize e0)
                     ,   Dhall.Core.UnionLit
                             "Inline"
                             (Dhall.Core.RecordLit [])
-                            [ ("Nested", Dhall.Core.Text) ]
+                            [ ("Nested", Just Dhall.Core.Text) ]
                     )
                  ] -> do
                     let contents' =
@@ -322,6 +322,8 @@ dhallToJSON e0 = loop (Dhall.Core.normalize e0)
                     a' <- traverse loop a
                     return (Data.Aeson.toJSON (Dhall.Map.toMap a'))
         Dhall.Core.UnionLit _ b _ -> loop b
+        Dhall.Core.App (Dhall.Core.Field (Dhall.Core.Union _) _) b -> loop b
+        Dhall.Core.Field (Dhall.Core.Union _) k -> return (toJSON k)
         _ -> Left (Unsupported e)
 
 toOrderedList :: Ord k => Map k v -> [(k, v)]
@@ -671,13 +673,13 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Dhall.Core.normalize e0)
         Dhall.Core.Union a ->
             Dhall.Core.Union a'
           where
-            a' = fmap loop a
+            a' = fmap (fmap loop) a
 
         Dhall.Core.UnionLit a b c ->
             Dhall.Core.UnionLit a b' c'
           where
-            b' =      loop b
-            c' = fmap loop c
+            b' =            loop  b
+            c' = fmap (fmap loop) c
 
         Dhall.Core.Combine a b ->
             Dhall.Core.Combine a' b'
