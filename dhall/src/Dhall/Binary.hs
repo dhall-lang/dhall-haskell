@@ -111,13 +111,16 @@ renderStandardVersion V_5_0_0   = "5.0.0"
     the list of arguments
 -}
 unApply :: Expr s a -> (Expr s a, [Expr s a])
-unApply e = (baseFunction₀, diffArguments₀ [])
+unApply e₀ = (baseFunction₀, diffArguments₀ [])
   where
-    ~(baseFunction₀, diffArguments₀) = go e
+    ~(baseFunction₀, diffArguments₀) = go e₀
 
     go (App f a) = (baseFunction, diffArguments . (a :))
       where
         ~(baseFunction, diffArguments) = go f
+
+    go (Note _ e) = go e
+
     go baseFunction = (baseFunction, id)
 
 -- | Encode a Dhall expression to a CBOR `Term`
