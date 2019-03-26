@@ -12,7 +12,7 @@ This module is responsible for producing dhall compiler diagnostic (errors, warn
 import qualified Control.Exception
 import qualified Dhall
 import Dhall(rootDirectory, sourceName, defaultInputSettings, inputExprWithSettings)
-import Dhall.Parser(ParseError(..), Src(..))
+import Dhall.Parser(ParseError(..), Src(..), SourcedException(..))
 import qualified Dhall.Core
 import qualified System.Exit
 import qualified System.IO
@@ -21,7 +21,7 @@ import Dhall.TypeCheck (DetailedTypeError(..), TypeError(..), X)
 
 import Dhall.Binary(DecodingFailure(..))
 import Dhall.Import(Imported(..), Cycle(..), ReferentiallyOpaque(..),
-                     MissingFile, MissingEnvironmentVariable, MissingImports )
+                     MissingFile, MissingEnvironmentVariable, MissingImports(..) )
 
 
 import qualified Data.Text as T
@@ -44,34 +44,27 @@ import Language.Haskell.LSP.Types(
     , Position(..)
     )
 
-
-
 defaultDiagnosticSource :: DiagnosticSource
 defaultDiagnosticSource = "dhall-lsp-server"
 
--- FIXME: type errors span across whitespace after the expression
---  Dhall.Binary.DecodingFailure
---  Dhall.Import(Cycle, ReferentiallyOpaque, MissingFile, MissingEnvironmentVariable, MissingImports,
---   HashMismatch, CannotImportHTTPURL)
--- !FIXME: (aside) VSCode multiselection expand selects first world only
-compilerDiagnostics :: FilePath -> Text -> Text -> IO [Diagnostic]
-compilerDiagnostics path filePath txt = handle ast
+-- TODO: type errors span across whitespace after the expression
+-- TODO: don't use show for import msgs (requires alternative typeclass)
+-- TODO: file consisting with only comments shouldn't produce an error msg
+compilerDiagnostics :: FilePath -> Text -> IO [Diagnostic]
+compilerDiagnostics path txt = handle ast
   where
-    -- bufferName = T.unpack $ last $ fromList $ T.split (=='/') filePath
-    -- rootDir    = T.unpack $ T.intercalate "/" $ tail $ fromList $ T.split (=='/') filePath
     (rootDir, bufferName) = System.FilePath.splitFileName path
     settings =  ( set rootDirectory rootDir
                 . set sourceName bufferName) defaultInputSettings
-    isEmpty = T.null $ T.strip txt -- FIXME: file consisting with only comments shouldn't produce an error? handle upstream?
+    isEmpty = T.null $ T.strip txt
     ast =  if isEmpty 
            then pure []
            else [] <$ inputExprWithSettings  settings txt
     handle =   Control.Exception.handle allErrors
              . Control.Exception.handle decodingFailure
-             . handleImportErrors txt
+             . Control.Exception.handle missingImports
              . Control.Exception.handle parseErrors
-             . Control.Exception.handle importErrors
-             . Control.Exception.handle moduleErrors
+             . Control.Exception.handle typeErrors
              
     
     allErrors e = do 
@@ -100,73 +93,52 @@ compilerDiagnostics path filePath txt = handle ast
             errors = errorBundleToDiagnostics $ unwrap e
         System.IO.hPrint System.IO.stderr errors
         pure $ errors
-    importErrors (Imported ps e) = do
-      let _ = e :: TypeError Src X
-          numLines = length $ T.lines txt
-      System.IO.hPrint System.IO.stderr (show ps)
-      pure [ Diagnostic {
-               _range = Range (Position 0 0) (Position numLines 0) -- getSourceRange e
-             , _severity = Just DsError
-             , _source = Just defaultDiagnosticSource
-             , _code = Nothing
-             , _message =  ("import error: " <> (show e)) -- FIXME: simple show for import msgs
-             , _relatedInformation = Nothing
-             }]
-    moduleErrors e = do
+    missingImports (SourcedException src e) = do
+      let _ = e :: MissingImports
+      pure [Diagnostic {
+             _range = sourceToRange src
+           , _severity = Just DsError
+           , _source = Just defaultDiagnosticSource
+           , _code = Nothing
+           , _message = removeAsciiColors $ show e
+           , _relatedInformation = Nothing
+           }]
+    typeErrors e = do
       let _ = e :: TypeError Src X
           (TypeError ctx expr msg) = e
-      -- System.IO.hPrint System.IO.stderr txt    
-      -- System.IO.hPrint System.IO.stderr e
       pure [ Diagnostic {
         _range = getSourceRange e
       , _severity = Just DsError
       , _source = Just defaultDiagnosticSource
       , _code = Nothing
-      , _message =  (simpleTypeMessage msg) -- FIXME: using show for import msgs
+      , _message =  (simpleTypeMessage msg) 
       , _relatedInformation = Nothing
       }] 
 
--- ! FIXME: provide import errors source position (should be handled in the dhall project)
--- * Import Errors provide no source pos info, except import mode and ImportType (which contains actual url)
-handleImportErrors :: Text -> IO [Diagnostic] -> IO [Diagnostic]
-handleImportErrors txt =   Control.Exception.handle (importHandler @Cycle)
-                     . Control.Exception.handle (importHandler @ReferentiallyOpaque)
-                     . Control.Exception.handle (importHandler @MissingFile)
-                     . Control.Exception.handle (importHandler @MissingEnvironmentVariable)
-                     . Control.Exception.handle (importHandler @MissingImports)
-                     
-  where
-    numLines = length $ T.lines txt
-    importHandler:: forall e a. Exception e => (e -> IO [Diagnostic])
-    importHandler e =
-      pure [Diagnostic {
-        _range = Range (Position 0 0) (Position numLines 0)
-      , _severity = Just DsError
-      , _source = Just defaultDiagnosticSource
-      , _code = Nothing
-      , _message = removeAsciiColors $ show e
-      , _relatedInformation = Nothing
-      }]
-    
+
 removeAsciiColors :: Text -> Text
 removeAsciiColors = T.replace "\ESC[1;31m" "" . T.replace "\ESC[0m" ""
---  Dhall.Import(Cycle, ReferentiallyOpaque, MissingFile, MissingEnvironmentVariable, MissingImports,
---   HashMismatch, CannotImportHTTPURL)
+
 
 getSourceRange :: TypeError Src X -> Range
 getSourceRange (TypeError ctx expr msg) =  case expr of
-                Dhall.Core.Note (Src (Text.Megaparsec.SourcePos _ bl bc) (Text.Megaparsec.SourcePos _ el ec) _) _ -> 
-                  Range (Position (unPos bl - 1) (unPos bc - 1)) (Position (unPos el - 1) (unPos ec - 1))
-                _        -> error  "expected note" -- $ Range (Position 0 0) (Position (negate 1) 0) -- FIXME: default case 
+                Dhall.Core.Note src _ -> sourceToRange src
+                _        -> error  "Expected note"  -- FIXME: either justify this error or provide a default case
   where
     unPos = Text.Megaparsec.unPos
 
+sourcePosToRange :: Text.Megaparsec.SourcePos -> Text.Megaparsec.SourcePos -> Range
+sourcePosToRange  (Text.Megaparsec.SourcePos _ bl bc) (Text.Megaparsec.SourcePos _ el ec) =
+    Range (Position (unPos bl - 1) (unPos bc - 1)) (Position (unPos el - 1) (unPos ec - 1))
+  where
+    unPos = Text.Megaparsec.unPos
 
-
+sourceToRange :: Src -> Range
+sourceToRange (Src start end _) = sourcePosToRange start end
 
 ---------------------- Megaparsec utils: ----------------------------------------
 
-
+-- see Text.Megaparsec.Error::errorBundlePretty for reference
 errorBundleToDiagnostics
   :: forall s e. ( Text.Megaparsec.Stream s
   , Text.Megaparsec.Error.ShowErrorComponent e
@@ -216,45 +188,3 @@ errorFancyLength :: Text.Megaparsec.ShowErrorComponent e => Text.Megaparsec.Erro
 errorFancyLength = \case
   Text.Megaparsec.ErrorCustom a -> Text.Megaparsec.errorComponentLen a
   _             -> 1
--- errorBundlePretty
---   :: forall s e. ( Text.Megaparsec.Stream s
---                  , Text.Megaparsec.Error.ShowErrorComponent e
---                  )
---   => Text.Megaparsec.ParseErrorBundle s e -- ^ Parse error bundle to display
---   -> String               -- ^ Textual rendition of the bundle
--- errorBundlePretty Text.Megaparsec.Error.ParseErrorBundle {..} =
---   let (r, _) = foldl' f (id, bundlePosState) bundleErrors
---   in drop 1 (r "")
---   where
---     f :: (ShowS, Text.Megaparsec.PosState s)
---       -> Text.Megaparsec.ParseError s e
---       -> (ShowS, Text.Megaparsec.PosState s)
---     f (o, !pst) e = (o . (outChunk ++), pst')
---       where
---         (epos, sline, pst') = reachOffset (errorOffset e) pst
---         outChunk =
---           "\n" <> sourcePosPretty epos <> ":\n" <>
---           padding <> "|\n" <>
---           lineNumber <> " | " <> sline <> "\n" <>
---           padding <> "| " <> rpadding <> pointer <> "\n" <>
---           Text.Megaparsec.Error.parseErrorTextPretty e
---         lineNumber = (show . unPos . sourceLine) epos
---         padding = replicate (length lineNumber + 1) ' '
---         rpadding =
---           if pointerLen > 0
---             then replicate rpshift ' '
---             else ""
---         rpshift = unPos (sourceColumn epos) - 1
---         pointer = replicate pointerLen '^'
---         pointerLen =
---           if rpshift + elen > slineLen
---             then slineLen - rpshift + 1
---             else elen
---         slineLen = length sline
---         elen =
---           case e of
---             Text.Megaparsec.TrivialError _ Nothing _ -> 1
---             Text.Megaparsec.TrivialError _ (Just x) _ -> errorItemLength x
---             Text.Megaparsec.FancyError _ xs ->
---               Data.Set.foldl' (\a b -> max a (errorFancyLength b)) 1 xs
- 

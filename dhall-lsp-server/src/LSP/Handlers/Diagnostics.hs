@@ -42,7 +42,7 @@ sendDiagnostics fileUri version = do
   let
    filePath = maybe (error "can't convert uri to file path") id $ J.uriToFilePath fileUri -- !FIXME: handle non-file uris
   txt <- lift $ Data.Text.IO.readFile filePath
-  diags' <- lift $ compilerDiagnostics filePath (J.getUri fileUri) txt
+  diags' <- lift $ compilerDiagnostics filePath txt
   lift $ LSP.Utility.logs $ "diagnostic: " <> show diags'
   publishDiagnostics 10 fileUri version (Map.union (partitionBySource diags') defaultDiagnosticBySource)
 
