@@ -102,10 +102,8 @@ simpleTypeMessage (InvalidAlternativeType k expr0) =
 simpleTypeMessage (InvalidAlternative k expr0) = 
     "Invalid alternative"
 
-    
--- ! FIXME: missing AlternativeAnnotationMismatch
--- simpleTypeMessage (AlternativeAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = 
---     "Alternative annotation mismatch"
+simpleTypeMessage (AlternativeAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = 
+    "Alternative annotation mismatch"
 
 simpleTypeMessage (ListAppendMismatch expr0 expr1) = 
     "You can only append ❰List❱s with matching element types\n"
