@@ -341,9 +341,14 @@ encode (Union xTs₀) =
     TList [ TInt 11, TMap xTs₁ ]
   where
     xTs₁ = do
-        (x₀, _T₀) <- Dhall.Map.toList (Dhall.Map.sort xTs₀)
+        (x₀, mT₀) <- Dhall.Map.toList (Dhall.Map.sort xTs₀)
+
         let x₁  = TString x₀
-        let _T₁ = encode _T₀
+
+        let _T₁ = case mT₀ of
+                Nothing  -> TNull
+                Just _T₀ -> encode _T₀
+
         return (x₁, _T₁)
 encode (UnionLit x t₀ yTs₀) =
     TList [ TInt 12, TString x, t₁, TMap yTs₁ ]
@@ -351,9 +356,11 @@ encode (UnionLit x t₀ yTs₀) =
     t₁ = encode t₀
 
     yTs₁ = do
-        (y₀, _T₀) <- Dhall.Map.toList (Dhall.Map.sort yTs₀)
+        (y₀, mT₀) <- Dhall.Map.toList (Dhall.Map.sort yTs₀)
         let y₁  = TString y₀
-        let _T₁ = encode _T₀
+        let _T₁ = case mT₀ of
+                Just _T₀ -> encode _T₀
+                Nothing  -> TNull
         return (y₁, _T₁)
 encode (BoolLit b) =
     TBool b
@@ -656,9 +663,11 @@ decodeMaybe (TList (TInt 10 : t₁ : xs₁)) = do
     return (Project t₀ (Dhall.Set.fromList xs₀))
 decodeMaybe (TList [ TInt 11, TMap xTs₁ ]) = do
     let process (TString x, _T₁) = do
-            _T₀ <- decodeMaybe _T₁
+            mT₀ <- case _T₁ of
+                TNull -> return Nothing
+                _     -> fmap Just (decodeMaybe _T₁)
 
-            return (x, _T₀)
+            return (x, mT₀)
         process _ =
             empty
 
@@ -669,7 +678,9 @@ decodeMaybe (TList [ TInt 12, TString x, t₁, TMap yTs₁ ]) = do
     t₀ <- decodeMaybe t₁
 
     let process (TString y, _T₁) = do
-            _T₀ <- decodeMaybe _T₁
+            _T₀ <- case _T₁ of
+                TNull -> return Nothing
+                _     -> fmap Just (decodeMaybe _T₁)
 
             return (y, _T₀)
         process _ =
