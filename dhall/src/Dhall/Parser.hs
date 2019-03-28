@@ -33,7 +33,7 @@ import Dhall.Parser.Expression
 
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Import)
-expr = exprA import_
+expr = exprA (Text.Megaparsec.try import_)
 
 -- | Parser for a top-level Dhall expression. The expression is parameterized
 -- over any parseable type, allowing the language to be extended as needed.
