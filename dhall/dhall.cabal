@@ -25,6 +25,7 @@ Category: Compiler
 Extra-Source-Files:
     benchmark/deep-nested-large-record/*.dhall
     benchmark/examples/*.dhall
+    benchmark/examples/new-normalize/*.dhall
     CHANGELOG.md
     dhall-lang/Prelude/Bool/and
     dhall-lang/Prelude/Bool/build
@@ -441,7 +442,8 @@ Library
         Dhall.Repl,
         Dhall.TH,
         Dhall.Tutorial,
-        Dhall.TypeCheck
+        Dhall.TypeCheck,
+        Dhall.Eval
     Other-Modules:
         Dhall.Pretty.Internal,
         Dhall.Parser.Expression,
@@ -475,6 +477,7 @@ Test-Suite tasty
         Dhall.Test.Import
         Dhall.Test.Lint
         Dhall.Test.Normalization
+        Dhall.Test.NewNormalization
         Dhall.Test.Parser
         Dhall.Test.QuickCheck
         Dhall.Test.Regression

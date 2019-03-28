@@ -7,6 +7,7 @@ import qualified Dhall.Test.Format
 import qualified Dhall.Test.Import
 import qualified Dhall.Test.Lint
 import qualified Dhall.Test.Normalization
+import qualified Dhall.Test.NewNormalization
 import qualified Dhall.Test.Parser
 import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
@@ -23,7 +24,9 @@ import           System.FilePath          ((</>))
 allTests :: TestTree
 allTests =
     Test.Tasty.testGroup "Dhall Tests"
-        [ Dhall.Test.Normalization.tests
+        [
+          Dhall.Test.Normalization.tests
+        , Dhall.Test.NewNormalization.tests
         , Dhall.Test.Parser.tests
         , Dhall.Test.Regression.tests
         , Dhall.Test.Tutorial.tests

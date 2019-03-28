@@ -54,6 +54,7 @@ import qualified Dhall
 import qualified Dhall.Binary
 import qualified Dhall.Core
 import qualified Dhall.Diff
+import qualified Dhall.Eval
 import qualified Dhall.Format
 import qualified Dhall.Freeze
 import qualified Dhall.Hash
@@ -88,6 +89,7 @@ data Mode
     | Resolve { resolveMode :: Maybe ResolveMode }
     | Type
     | Normalize { alpha :: Bool }
+    | NewNormalize
     | Repl
     | Format { formatMode :: Dhall.Format.FormatMode }
     | Freeze { inplace :: Maybe FilePath, all_ :: Bool }
@@ -150,6 +152,10 @@ parseMode =
             "normalize"
             "Normalize an expression"
             (Normalize <$> parseAlpha)
+    <|> subcommand
+            "new-normalize"
+            "Normalize an expression using the new normalizer"
+            (pure NewNormalize)
     <|> subcommand
             "repl"
             "Interpret expressions in a REPL"
@@ -418,6 +424,17 @@ command (Options {..}) = do
                     else normalizedExpression
 
             render System.IO.stdout alphaNormalizedExpression
+
+        NewNormalize -> do
+            expression <- getExpression
+
+            resolvedExpression <- Dhall.Import.assertNoImports expression
+
+            _ <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
+
+            let normalizedExpression = Dhall.Eval.nf Dhall.Eval.Empty (Dhall.Core.denote resolvedExpression)
+
+            render System.IO.stdout normalizedExpression
 
         Type -> do
             expression <- getExpression
