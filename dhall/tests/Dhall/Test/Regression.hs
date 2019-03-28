@@ -53,12 +53,12 @@ unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
     Test.Tasty.HUnit.assertEqual "Good type" (Dhall.expected ty)
         (Dhall.Core.Union
             (Dhall.Map.fromList
-                [   ("Foo",Dhall.Core.Record (Dhall.Map.fromList [
-                        ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool)]))
-                ,   ("Bar",Dhall.Core.Record (Dhall.Map.fromList [
-                        ("_1",Dhall.Core.Bool),("_2",Dhall.Core.Bool),("_3",Dhall.Core.Bool)]))
-                ,   ("Baz",Dhall.Core.Record (Dhall.Map.fromList [
-                        ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Integer)]))
+                [   ("Foo",Just (Dhall.Core.Record (Dhall.Map.fromList [
+                        ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool)])))
+                ,   ("Bar",Just (Dhall.Core.Record (Dhall.Map.fromList [
+                        ("_1",Dhall.Core.Bool),("_2",Dhall.Core.Bool),("_3",Dhall.Core.Bool)])))
+                ,   ("Baz",Just (Dhall.Core.Record (Dhall.Map.fromList [
+                        ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Integer)])))
                 ]
             )
         )

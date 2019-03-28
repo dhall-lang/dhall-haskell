@@ -909,7 +909,8 @@ instance GenericInterpret V1 where
 
         expected = Union mempty
 
-unsafeExpectUnion :: Text -> Expr Src X -> Dhall.Map.Map Text (Expr Src X)
+unsafeExpectUnion
+    :: Text -> Expr Src X -> Dhall.Map.Map Text (Maybe (Expr Src X))
 unsafeExpectUnion _ (Union kts) =
     kts
 unsafeExpectUnion name expression =
@@ -924,7 +925,9 @@ unsafeExpectRecord name expression =
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
 unsafeExpectUnionLit
-    :: Text -> Expr Src X -> (Text, Expr Src X, Dhall.Map.Map Text (Expr Src X))
+    :: Text
+    -> Expr Src X
+    -> (Text, Expr Src X, Dhall.Map.Map Text (Maybe (Expr Src X)))
 unsafeExpectUnionLit _ (UnionLit k v kts) =
     (k, v, kts)
 unsafeExpectUnionLit name expression =
@@ -937,6 +940,11 @@ unsafeExpectRecordLit _ (RecordLit kvs) =
 unsafeExpectRecordLit name expression =
     Dhall.Core.internalError
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
+
+possible :: Expr s a -> Maybe (Expr s a)
+possible e = case e of
+    RecordLit m | null m -> Nothing
+    _                    -> Just e
 
 instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret f2) => GenericInterpret (M1 C c1 f1 :+: M1 C c2 f2) where
     genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
@@ -957,7 +965,10 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
         extract _ = Nothing
 
         expected =
-            Union (Dhall.Map.fromList [(nameL, expectedL), (nameR, expectedR)])
+            Union
+                (Dhall.Map.fromList
+                    [(nameL, possible expectedL), (nameR, possible expectedR)]
+                )
 
         Type extractL expectedL = evalState (genericAutoWith options) 1
         Type extractR expectedR = evalState (genericAutoWith options) 1
@@ -976,7 +987,7 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
         extract _ = Nothing
 
         expected =
-            Union (Dhall.Map.insert name expectedR ktsL)
+            Union (Dhall.Map.insert name (possible expectedR) ktsL)
 
         Type extractL expectedL = evalState (genericAutoWith options) 1
         Type extractR expectedR = evalState (genericAutoWith options) 1
@@ -997,7 +1008,7 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
         extract _ = Nothing
 
         expected =
-            Union (Dhall.Map.insert name expectedL ktsR)
+            Union (Dhall.Map.insert name (possible expectedL) ktsR)
 
         Type extractL expectedL = evalState (genericAutoWith options) 1
         Type extractR expectedR = evalState (genericAutoWith options) 1
@@ -1248,13 +1259,22 @@ instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) =>
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 (M1 l)) =
-            UnionLit keyL (embedL l) (Dhall.Map.singleton keyR declaredR)
+            UnionLit
+                keyL
+                (embedL l)
+                (Dhall.Map.singleton keyR (possible declaredR))
 
         embed (R1 (M1 r)) =
-            UnionLit keyR (embedR r) (Dhall.Map.singleton keyL declaredL)
+            UnionLit
+                keyR
+                (embedR r)
+                (Dhall.Map.singleton keyL (possible declaredL))
 
         declared =
-            Union (Dhall.Map.fromList [(keyL, declaredL), (keyR, declaredR)])
+            Union
+                (Dhall.Map.fromList
+                    [(keyL, possible declaredL), (keyR, possible declaredR)]
+                )
 
         nL :: M1 i c1 f1 a
         nL = undefined
@@ -1272,7 +1292,10 @@ instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInj
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 l) =
-            UnionLit keyL valL (Dhall.Map.insert keyR declaredR ktsL')
+            UnionLit
+                keyL
+                valL
+                (Dhall.Map.insert keyR (possible declaredR) ktsL')
           where
             (keyL, valL, ktsL') =
               unsafeExpectUnionLit "genericInjectWith (:+:)" (embedL l)
@@ -1283,7 +1306,7 @@ instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInj
 
         keyR = constructorModifier (Data.Text.pack (conName nR))
 
-        declared = Union (Dhall.Map.insert keyR declaredR ktsL)
+        declared = Union (Dhall.Map.insert keyR (possible declaredR) ktsL)
 
         InputType embedL  declaredL = evalState (genericInjectWith options) 1
         InputType embedR  declaredR = evalState (genericInjectWith options) 1
@@ -1295,7 +1318,10 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
       where
         embed (L1 (M1 l)) = UnionLit keyL (embedL l) ktsR
         embed (R1 r) =
-            UnionLit keyR valR (Dhall.Map.insert keyL declaredL ktsR')
+            UnionLit
+                keyR
+                valR
+                (Dhall.Map.insert keyL (possible declaredL) ktsR')
           where
             (keyR, valR, ktsR') =
                 unsafeExpectUnionLit "genericInjectWith (:+:)" (embedR r)
@@ -1305,7 +1331,7 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
 
         keyL = constructorModifier (Data.Text.pack (conName nL))
 
-        declared = Union (Dhall.Map.insert keyL declaredL ktsR)
+        declared = Union (Dhall.Map.insert keyL (possible declaredL) ktsR)
 
         InputType embedL declaredL = evalState (genericInjectWith options) 1
         InputType embedR declaredR = evalState (genericInjectWith options) 1
@@ -1513,7 +1539,7 @@ union (UnionType (Data.Functor.Compose.Compose mp)) = Type
     , expected = Union expect
     }
   where
-    expect = Dhall.expected <$> mp
+    expect = (possible . Dhall.expected) <$> mp
     extractF e0 = do
       UnionLit fld e1 rest <- Just e0
       t <- Dhall.Map.lookup fld mp
@@ -1689,10 +1715,12 @@ inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Co
     InputType
       { embed = \x ->
           let (name, y) = embedF x
-          in  UnionLit name y (Dhall.Map.delete name fields)
+          in  UnionLit name y (Dhall.Map.delete name fields')
       , declared =
-          Union fields
+          Union fields'
       }
+  where
+    fields' = fmap possible fields
 
 inputConstructorWith
     :: Text

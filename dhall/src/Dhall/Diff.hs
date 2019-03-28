@@ -256,7 +256,17 @@ diffKeyVals
     -> Map Text (Expr s a)
     -> Map Text (Expr s a)
     -> [Diff]
-diffKeyVals assign kvsL kvsR =
+diffKeyVals assign = diffKeysWith assign diffVals
+  where
+    diffVals l r = assign <> " " <> diffExpression l r
+
+diffKeysWith
+    :: Diff
+    -> (a -> a -> Diff)
+    -> Map Text a
+    -> Map Text a
+    -> [Diff]
+diffKeysWith assign diffVals kvsL kvsR =
     diffFieldNames <> diffFieldValues <> (if anyEqual then [ ignore ] else [])
   where
     ksL = Data.Set.fromList (Dhall.Map.keys kvsL)
@@ -275,7 +285,7 @@ diffKeyVals assign kvsL kvsR =
             <>  ignore
             ]
 
-    shared = Dhall.Map.intersectionWith diffExpression kvsL kvsR
+    shared = Dhall.Map.intersectionWith diffVals kvsL kvsR
 
     diffFieldValues =
         filter (not . same) (Dhall.Map.foldMapWithKey adapt shared)
@@ -406,8 +416,10 @@ diffRecordLit kvsL kvsR = braced (diffKeyVals equals kvsL kvsR)
 
 diffUnion
     :: (Eq a, Pretty a)
-    => Map Text (Expr s a) -> Map Text (Expr s a) -> Diff
-diffUnion kvsL kvsR = angled (diffKeyVals colon kvsL kvsR)
+    => Map Text (Maybe (Expr s a)) -> Map Text (Maybe (Expr s a)) -> Diff
+diffUnion kvsL kvsR = angled (diffKeysWith colon diffVals kvsL kvsR)
+  where
+    diffVals = diffMaybe (colon <> " ") diffExpression
 
 diffUnionLit
     :: (Eq a, Pretty a)
@@ -415,8 +427,8 @@ diffUnionLit
     -> Text
     -> Expr s a
     -> Expr s a
-    -> Map Text (Expr s a)
-    -> Map Text (Expr s a)
+    -> Map Text (Maybe (Expr s a))
+    -> Map Text (Maybe (Expr s a))
     -> Diff
 diffUnionLit kL kR vL vR kvsL kvsR =
         langle
@@ -425,8 +437,10 @@ diffUnionLit kL kR vL vR kvsL kvsR =
     <>  equals
     <>  " "
     <>  format " " (diffExpression vL vR)
-    <>  halfAngled (diffKeyVals equals kvsL kvsR)
+    <>  halfAngled (diffKeysWith colon diffVals kvsL kvsR)
   where
+    diffVals = diffMaybe (colon <> " ") diffExpression
+
     halfAngled = enclosed (pipe <> " ") (pipe <> " ") rangle
 
 listSkeleton :: Diff

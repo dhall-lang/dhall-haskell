@@ -888,8 +888,8 @@ loadWith expr₀ = case expr₀ of
   OptionalBuild        -> pure OptionalBuild
   Record a             -> Record <$> mapM loadWith a
   RecordLit a          -> RecordLit <$> mapM loadWith a
-  Union a              -> Union <$> mapM loadWith a
-  UnionLit a b c       -> UnionLit <$> pure a <*> loadWith b <*> mapM loadWith c
+  Union a              -> Union <$> mapM (mapM loadWith) a
+  UnionLit a b c       -> UnionLit <$> pure a <*> loadWith b <*> mapM (mapM loadWith) c
   Combine a b          -> Combine <$> loadWith a <*> loadWith b
   CombineTypes a b     -> CombineTypes <$> loadWith a <*> loadWith b
   Prefer a b           -> Prefer <$> loadWith a <*> loadWith b

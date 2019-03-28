@@ -346,9 +346,14 @@ instance ToTerm a => ToTerm (Expr s a) where
         TList [ TInt 11, TMap xTs₁ ]
       where
         xTs₁ = do
-            (x₀, _T₀) <- Dhall.Map.toList (Dhall.Map.sort xTs₀)
+            (x₀, mT₀) <- Dhall.Map.toList (Dhall.Map.sort xTs₀)
+
             let x₁  = TString x₀
-            let _T₁ = encode _T₀
+
+            let _T₁ = case mT₀ of
+                    Nothing  -> TNull
+                    Just _T₀ -> encode _T₀
+
             return (x₁, _T₁)
     encode (UnionLit x t₀ yTs₀) =
         TList [ TInt 12, TString x, t₁, TMap yTs₁ ]
@@ -356,9 +361,11 @@ instance ToTerm a => ToTerm (Expr s a) where
         t₁ = encode t₀
 
         yTs₁ = do
-            (y₀, _T₀) <- Dhall.Map.toList (Dhall.Map.sort yTs₀)
+            (y₀, mT₀) <- Dhall.Map.toList (Dhall.Map.sort yTs₀)
             let y₁  = TString y₀
-            let _T₁ = encode _T₀
+            let _T₁ = case mT₀ of
+                    Just _T₀ -> encode _T₀
+                    Nothing  -> TNull
             return (y₁, _T₁)
     encode (BoolLit b) =
         TBool b
@@ -665,9 +672,11 @@ instance FromTerm a => FromTerm (Expr s a) where
         return (Project t₀ (Dhall.Set.fromList xs₀))
     decode (TList [ TInt 11, TMap xTs₁ ]) = do
         let process (TString x, _T₁) = do
-                _T₀ <- decode _T₁
+                mT₀ <- case _T₁ of
+                    TNull -> return Nothing
+                    _     -> fmap Just (decode _T₁)
 
-                return (x, _T₀)
+                return (x, mT₀)
             process _ =
                 empty
 
@@ -678,7 +687,9 @@ instance FromTerm a => FromTerm (Expr s a) where
         t₀ <- decode t₁
 
         let process (TString y, _T₁) = do
-                _T₀ <- decode _T₁
+                _T₀ <- case _T₁ of
+                    TNull -> return Nothing
+                    _     -> fmap Just (decode _T₁)
 
                 return (y, _T₀)
             process _ =

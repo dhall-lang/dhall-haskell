@@ -93,9 +93,11 @@ executable dhall-lsp-server
 
 test-suite dhall-lsp-server-test
   type: exitcode-stdio-1.0
-  main-is: Spec.hs
+  main-is: Driver.hs
   other-modules:
       Paths_dhall_lsp_server
+      Backend.Dhall.DiagnosticsSpec
+    
   hs-source-dirs:
       test
   default-extensions: LambdaCase OverloadedStrings FlexibleInstances TypeApplications RecordWildCards ScopedTypeVariables

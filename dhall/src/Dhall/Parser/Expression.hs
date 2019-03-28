@@ -578,14 +578,12 @@ completeExpression embedded = completeExpression_
                         kvs <- Text.Megaparsec.many (do
                             _bar
                             c <- label
-                            _colon
-                            d <- expression
+                            d <- optional (do _colon; expression)
                             return (c, d) )
                         return (UnionLit a b, kvs)
 
                 let alternative1 = do
-                        _colon
-                        b <- expression
+                        b <- optional (do _colon; expression)
 
                         let alternative2 = do
                                 _bar
