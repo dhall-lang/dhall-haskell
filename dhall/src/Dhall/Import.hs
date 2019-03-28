@@ -479,7 +479,7 @@ exprFromImport here@(Import {..}) = do
 
         term <- throws (Codec.Serialise.deserialiseOrFail bytesLazy)
 
-        throws (Dhall.Binary.decode term)
+        throws (Dhall.Binary.decodeExpression term)
 
     case result of
         Just expression -> return expression

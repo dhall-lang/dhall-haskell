@@ -513,7 +513,7 @@ command (Options {..}) = do
                     else do
                         throws (Codec.Serialise.deserialiseOrFail bytes)
 
-            expression <- throws (Dhall.Binary.decode term)
+            expression <- throws (Dhall.Binary.decodeExpression term)
 
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 

@@ -21,6 +21,7 @@ module Dhall.TypeCheck (
     , TypeMessage(..)
     ) where
 
+import Control.Applicative (empty)
 import Control.Exception (Exception)
 import Data.Data (Data(..))
 import Data.Foldable (forM_, toList)
@@ -33,6 +34,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Traversable (forM)
 import Data.Typeable (Typeable)
+import Dhall.Binary (FromTerm(..), ToTerm(..))
 import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
@@ -95,7 +97,7 @@ type Typer a = forall s. a -> Expr s a
     constructor with custom logic
 -}
 typeWithA
-    :: Eq a
+    :: ToTerm a
     => Typer a
     -> Context (Expr s a)
     -> Expr s a
@@ -872,6 +874,12 @@ instance Data X where
 instance Pretty X where
     pretty = absurd
 
+instance FromTerm X where
+    decode _ = empty
+
+instance ToTerm X where
+    encode = absurd
+
 -- | The specific type error
 data TypeMessage s a
     = UnboundVariable Text
@@ -930,13 +938,13 @@ data TypeMessage s a
     | NoDependentTypes (Expr s a) (Expr s a)
     deriving (Show)
 
-shortTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> Doc Ann
+shortTypeMessage :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> Doc Ann
 shortTypeMessage msg =
     "\ESC[1;31mError\ESC[0m: " <> short <> "\n"
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
-longTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> Doc Ann
+longTypeMessage :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> Doc Ann
 longTypeMessage msg =
         "\ESC[1;31mError\ESC[0m: " <> short <> "\n"
     <>  "\n"
@@ -957,10 +965,11 @@ _NOT = "\ESC[1mnot\ESC[0m"
 insert :: Pretty a => a -> Doc Ann
 insert = Dhall.Util.insert
 
-prettyDiff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
+prettyDiff :: (Eq a, Pretty a, ToTerm a) => Expr s a -> Expr s a -> Doc Ann
 prettyDiff exprL exprR = Dhall.Diff.diffNormalized exprL exprR
 
-prettyTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> ErrorMessages
+prettyTypeMessage
+    :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> ErrorMessages
 prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
   -- https://github.com/dhall-lang/dhall-haskell/pull/116
@@ -3778,12 +3787,12 @@ data TypeError s a = TypeError
     , typeMessage :: TypeMessage s a
     }
 
-instance (Eq a, Pretty s, Pretty a) => Show (TypeError s a) where
+instance (Eq a, Pretty s, Pretty a, ToTerm a) => Show (TypeError s a) where
     show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
 
-instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (TypeError s a)
+instance (Eq a, Pretty s, Pretty a, ToTerm a, Typeable s, Typeable a) => Exception (TypeError s a)
 
-instance (Eq a, Pretty s, Pretty a) => Pretty (TypeError s a) where
+instance (Eq a, Pretty s, Pretty a, ToTerm a) => Pretty (TypeError s a) where
     pretty (TypeError ctx expr msg)
         = Pretty.unAnnotate
             (   "\n"
@@ -3814,12 +3823,12 @@ instance (Eq a, Pretty s, Pretty a) => Pretty (TypeError s a) where
 newtype DetailedTypeError s a = DetailedTypeError (TypeError s a)
     deriving (Typeable)
 
-instance (Eq a, Pretty s, Pretty a) => Show (DetailedTypeError s a) where
+instance (Eq a, Pretty s, Pretty a, ToTerm a) => Show (DetailedTypeError s a) where
     show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
 
-instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (DetailedTypeError s a)
+instance (Eq a, Pretty s, Pretty a, ToTerm a, Typeable s, Typeable a) => Exception (DetailedTypeError s a)
 
-instance (Eq a, Pretty s, Pretty a) => Pretty (DetailedTypeError s a) where
+instance (Eq a, Pretty s, Pretty a, ToTerm a) => Pretty (DetailedTypeError s a) where
     pretty (DetailedTypeError (TypeError ctx expr msg))
         = Pretty.unAnnotate
             (   "\n"

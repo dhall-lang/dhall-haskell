@@ -3,20 +3,24 @@ module Backend.Dhall.DhallErrors(simpleTypeMessage) where
 {-| This file contains mostly copy-paste error formatting code from <root>/dhall/src/Dhall/TypeCheck.hs
     This had to be necessary as to strip down extra information that standard error formatting provides (location, ascii-formatting).
 -}
+
+import Dhall.Binary (ToTerm)
 import Dhall.TypeCheck
-import qualified Dhall.Diff
 import Dhall.Core(Expr)
+import Dhall.Pretty(Ann(..), layoutOpts)
+
+import qualified Dhall.Diff
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as R
-import Dhall.Pretty(Ann(..), layoutOpts)
 import qualified Data.Text as T
 
-prettyDiff :: (Eq a, Pretty.Pretty a) => Expr s a -> Expr s a -> Text
+prettyDiff :: (Eq a, Pretty.Pretty a, ToTerm a) => Expr s a -> Expr s a -> Text
 prettyDiff exprL exprR = T.pack . R.renderString . Pretty.layoutPretty layoutOpts  . Pretty.unAnnotate $ diff
   where
    diff = Dhall.Diff.diffNormalized exprL exprR
 
-simpleTypeMessage :: (Pretty.Pretty a, Eq a) => TypeMessage s a -> Text
+simpleTypeMessage
+    :: (Eq a, Pretty.Pretty a, ToTerm a) => TypeMessage s a -> Text
 simpleTypeMessage (UnboundVariable x) = 
     "Unbound variable: " <>  x
 
