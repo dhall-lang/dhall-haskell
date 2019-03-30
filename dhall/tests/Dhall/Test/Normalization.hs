@@ -48,7 +48,6 @@ tests =
         , shouldNormalize
             "enums"
             "success/simple/enum"
-        , multiline
         ]
 
 tutorialExamples :: TestTree
@@ -411,32 +410,6 @@ customization =
     testGroup "customization"
         [ simpleCustomization
         , nestedReduction
-        ]
-
-multiline :: TestTree
-multiline =
-    testGroup "Multi-line literals"
-        [ shouldNormalize
-            "multi-line escape sequences"
-            "./success/multiline/escape"
-        , shouldNormalize
-            "a multi-line literal with a hanging indent"
-            "./success/multiline/hangingIndent"
-        , shouldNormalize
-            "a multi-line literal with an interior indent"
-            "./success/multiline/interiorIndent"
-        , shouldNormalize
-            "a multi-line literal with an interpolated expression"
-            "./success/multiline/interpolation"
-        , should
-            "preserve comments within a multi-line literal"
-            "./success/multiline/preserveComment"
-        , shouldNormalize
-            "a multi-line literal with one line"
-            "./success/multiline/singleLine"
-        , shouldNormalize
-            "a multi-line literal with two lines"
-            "./success/multiline/twoLines"
         ]
 
 simpleCustomization :: TestTree
