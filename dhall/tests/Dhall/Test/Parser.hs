@@ -42,6 +42,9 @@ tests =
             "label"
             "./dhall-lang/tests/parser/success/label"
         , shouldParse
+            "builtin name as label"
+            "./dhall-lang/tests/parser/success/builtinNameAsField"
+        , shouldParse
             "quoted label"
             "./dhall-lang/tests/parser/success/quotedLabel"
         , shouldParse

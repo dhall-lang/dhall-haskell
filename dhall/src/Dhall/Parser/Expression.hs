@@ -217,7 +217,7 @@ completeExpression embedded = completeExpression_
 
             let left  x  e = Field   e x
             let right xs e = Project e xs
-            b <- Text.Megaparsec.many (try (do _dot; fmap left label <|> fmap right labels))
+            b <- Text.Megaparsec.many (try (do _dot; fmap left anyLabel <|> fmap right labels))
             return (foldl (\e k -> k e) a b) )
 
     primitiveExpression =
@@ -532,14 +532,14 @@ completeExpression embedded = completeExpression_
             alternative2 = return (Record mempty)
 
     nonEmptyRecordTypeOrLiteral = do
-            a <- label
+            a <- anyLabel
 
             let nonEmptyRecordType = do
                     _colon
                     b <- expression
                     e <- Text.Megaparsec.many (do
                         _comma
-                        c <- label
+                        c <- anyLabel
                         _colon
                         d <- expression
                         return (c, d) )
@@ -551,7 +551,7 @@ completeExpression embedded = completeExpression_
                     b <- expression
                     e <- Text.Megaparsec.many (do
                         _comma
-                        c <- label
+                        c <- anyLabel
                         _equal
                         d <- expression
                         return (c, d) )
@@ -570,14 +570,14 @@ completeExpression embedded = completeExpression_
             return (f m)
           where
             loop = do
-                a <- label
+                a <- anyLabel
 
                 let alternative0 = do
                         _equal
                         b <- expression
                         kvs <- Text.Megaparsec.many (do
                             _bar
-                            c <- label
+                            c <- anyLabel
                             d <- optional (do _colon; expression)
                             return (c, d) )
                         return (UnionLit a b, kvs)
