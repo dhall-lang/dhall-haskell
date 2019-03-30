@@ -347,8 +347,8 @@ omitNull (Bool bool) =
 omitNull Null =
     Null
 
-{-| Omit record fields that are @null@ or records whose transitive fields are
-    all null
+{-| Omit record fields that are @null@, arrays and records whose transitive 
+    fields are all null
 -}
 omitEmpty :: Value -> Value
 omitEmpty (Object object) =
@@ -356,7 +356,9 @@ omitEmpty (Object object) =
   where
     fields = Data.HashMap.Strict.filter (/= Null) (fmap omitEmpty object)
 omitEmpty (Array array) =
-    Array (fmap omitEmpty array)
+    if null elems then Null else Array elems
+  where
+    elems = (fmap omitEmpty array)
 omitEmpty (String string) =
     String string
 omitEmpty (Number number) =

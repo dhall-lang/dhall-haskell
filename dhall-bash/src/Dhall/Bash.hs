@@ -264,6 +264,10 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
                 <>  Data.ByteString.intercalate " " kvs'
                 <>  ")"
         return bytes
+    go (Field (Union m) k) = do
+        e <- first adapt (dhallToExpression (Field (Union m) k))
+        let bytes = "declare -r " <> var <> "=" <> e
+        return bytes
     go (Embed   x) = do
         Dhall.TypeCheck.absurd x
     go (Note  _ e) = do
@@ -353,4 +357,8 @@ dhallToExpression expr0 = go (Dhall.Core.normalize expr0)
     go (TextLit (Chunks [] a)) = do
         let bytes = Data.Text.Encoding.encodeUtf8 a
         return (Text.ShellEscape.bytes (Text.ShellEscape.bash bytes))
+    go e@(Field (Union m) k) =
+        case Dhall.Map.lookup k m of
+            Just Nothing -> go (TextLit (Chunks [] k))
+            _            -> Left (UnsupportedExpression e)
     go e = Left (UnsupportedExpression e)
