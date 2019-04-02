@@ -9,7 +9,12 @@
 
 {-| The tool for converting JSON data to Dhall given a Dhall /type/ expression necessary to make the translation unambiguous.
 
-    Only a subset of Dhall types is used for reading JSON data:
+    Reasonable requirements to the conversion tool are:
+
+    1. The Dhall type expression @/t/@ passed as an argument to @json-to-dhall@ should be a valid type of the resulting Dhall expression
+    2. A JSON data produced by the corresponding @dhall-to-json@ from the Dhall expression of type @/t/@ should (under reasonable assumptions) reproduce the original Dhall expression using @json-to-dhall@ with type argument @/t/@
+
+    Only a subset of Dhall types consisting of all the primitive types as well as @Optional@, @Union@ and @Record@ constructs, is used for reading JSON data:
 
     * @Bool@s
     * @Natural@s
@@ -68,7 +73,7 @@
     If you do need to make sure that Dhall fully reflects JSON record data comprehensively, @--records-strict@ flag should be used:
 
 > $ json-to-dhall --records-strict '{foo : List Integer}' <<< '{"foo": [1, 2, 3], "bar" : "asdf"}'
-> Error: Keys: bar, present in the JSON object but not in the corresponding Dhall record, which is not allowed in presence of --records-strict:
+> Error: Key(s) @bar@ present in the JSON object but not in the corresponding Dhall record. This is not allowed in presence of --records-strict:
 
 
     By default, JSON key-value arrays will be converted to Dhall records:
@@ -80,7 +85,17 @@
     Attempting to do the same with @--no-keyval-arrays@ on will result in error:
 
 > $ json-to-dhall --no-keyval-arrays '{ a : Integer, b : Text }' <<< '[{"key":"a", "value":1}, {"key":"b", "value":"asdf"}]'
-> Error: JSON array cannot be treated as Dhall record with option --no-keyval-arrays on:
+> Error: JSON (key-value) arrays cannot be converted to Dhall records under --no-keyval-arrays flag:
+
+    Conversion of the homogeneous JSON maps to the corresponding Dhall association lists by default:
+
+> $ json-to-dhall 'List { mapKey : Text, mapValue : Text }' <<< '{"foo": "bar"}'
+> [ { mapKey = "foo", mapValue = "bar" } ]
+
+    Flag @--no-keyval-maps@ switches off this mechanism (if one would ever need it):
+
+> $ json-to-dhall --no-keyval-maps 'List { mapKey : Text, mapValue : Text }' <<< '{"foo": "bar"}'
+> Error: Homogeneous JSON map objects cannot be converted to Dhall association lists under --no-keyval-arrays flag
 
 
 == Optional values and unions
@@ -199,9 +214,10 @@ parseOptions = Options <$> parseVersion
 
 -- | JSON-to-dhall translation options
 data Conversion = Conversion
-    { strictRecs :: Bool
-    , noKeyVal   :: Bool
-    , unions     :: UnionConv -- Bool
+    { strictRecs  :: Bool
+    , noKeyValArr :: Bool
+    , noKeyValMap :: Bool
+    , unions      :: UnionConv
     } deriving Show
 
 data UnionConv = UFirst | UNone | UStrict deriving (Show, Read, Eq)
@@ -209,17 +225,22 @@ data UnionConv = UFirst | UNone | UStrict deriving (Show, Read, Eq)
 -- | Parser for command options related to the conversion method
 parseConversion :: Parser Conversion
 parseConversion = Conversion <$> parseStrict
-                             <*> parseNoMap
+                             <*> parseKVArr
+                             <*> parseKVMap
                              <*> parseUnion
   where
     parseStrict =  O.switch
                 (  O.long "records-strict"
                 <> O.help "Parse all fields in records"
                 )
-    parseNoMap  =  O.switch
+    parseKVArr  =  O.switch
                 (  O.long "no-keyval-arrays"
-                <> O.help "Disable conversion of homogeneous maps to association lists"
-            )
+                <> O.help "Disable conversion of key-value arrays to records"
+                )
+    parseKVMap  =  O.switch
+                (  O.long "no-keyval-maps"
+                <> O.help "Disable conversion of homogeneous map objects to association lists"
+                )
 
 -- | Parser for command options related to treating union types
 parseUnion :: Parser UnionConv
@@ -325,6 +346,7 @@ dhallFromJSON
   :: Conversion -> ExprX -> A.Value -> Either CompileError ExprX
 dhallFromJSON (Conversion {..}) = loop
   where
+    -- Union
     loop t@(D.Union tmMay) v = case unions of
       UNone -> Left $ ContainsUnion t
       _     -> case Map.traverseWithKey (const id) tmMay of
@@ -340,6 +362,7 @@ dhallFromJSON (Conversion {..}) = loop
                       UFirst  -> Right x
                       UNone   -> undefined -- can't happen
 
+    -- object ~> Record
     loop (D.Record r) v@(A.Object o)
         | extraKeys <- HM.keys o \\ Map.keys r
         , strictRecs && not (null extraKeys)
@@ -354,16 +377,40 @@ dhallFromJSON (Conversion {..}) = loop
                     = Left (MissingKey k t v)
            in D.RecordLit <$> Map.traverseWithKey f r
 
+    -- key-value list ~> Record
     loop t@(D.Record _) v@(A.Array a)
-        | not noKeyVal
+        | not noKeyValArr
         , os :: [A.Value] <- toList a
         , Just kvs <- traverse keyValMay os
         = loop t (A.Object $ HM.fromList kvs)
-        | noKeyVal
+        | noKeyValArr
         = Left (NoKeyValArray t v)
         | otherwise
         = Left (Mismatch t v)
 
+    -- object ~> List (key, value)
+    loop t@(App D.List (D.Record r)) v@(A.Object o)
+        | not noKeyValMap
+        , ["mapKey", "mapValue"] == Map.keys r
+        , Just D.Text == Map.lookup "mapKey" r
+        , Just mapValue <- Map.lookup "mapValue" r
+        , keyExprMap    :: Either CompileError (HM.HashMap Text ExprX)
+                        <- traverse (loop mapValue) o
+        = let f :: (Text, ExprX) -> ExprX
+              f (key, val) = D.RecordLit ( Map.fromList
+                  [ ("mapKey"  , D.TextLit (Chunks [] key))
+                  , ("mapValue", val)
+                  ] )
+              recs :: Either CompileError (Dhall.Seq ExprX)
+              recs = fmap f . Seq.fromList . HM.toList <$> keyExprMap
+              typeAnn = if HM.null o then Just mapValue else Nothing
+           in D.ListLit typeAnn <$> recs
+        | noKeyValMap
+        = Left (NoKeyValMap t v)
+        | otherwise
+        = Left (Mismatch t v)
+
+    -- array ~> List
     loop (App D.List t) (A.Array a)
         = let f :: [ExprX] -> ExprX
               f es = D.ListLit
@@ -371,12 +418,14 @@ dhallFromJSON (Conversion {..}) = loop
                        (Seq.fromList es)
            in f <$> traverse (loop t) (toList a)
 
+    -- number -> Integer
     loop D.Integer (A.Number x)
         | Right n <- floatingOrInteger @Double @Integer x
         = Right (D.IntegerLit n)
         | otherwise
         = Left (Mismatch D.Integer (A.Number x))
 
+    -- number -> Natural
     loop D.Natural (A.Number x)
         | Right n <- floatingOrInteger @Double @Dhall.Natural x
         , n >= 0
@@ -384,22 +433,27 @@ dhallFromJSON (Conversion {..}) = loop
         | otherwise
         = Left (Mismatch D.Natural (A.Number x))
 
+    -- number ~> Double
     loop D.Double (A.Number x)
         = Right (D.DoubleLit $ toRealFloat x)
 
+    -- string ~> Text
     loop D.Text (A.String t)
         = Right (D.TextLit (Chunks [] t))
 
+    -- bool ~> Bool
     loop D.Bool (A.Bool t)
         = Right (D.BoolLit t)
 
-    loop (App D.Optional expr) A.Null
+    -- null ~> Optional
+    loop (App D.Optional _xpr) A.Null
         = Right D.None
 
+    -- value ~> Optional
     loop (App D.Optional expr) value
         = D.Some <$> loop expr value
 
-    -- otherwise:
+    -- fail
     loop expr value
         = Left (Mismatch expr value)
 
@@ -432,6 +486,7 @@ data CompileError
   | MissingKey     Text  ExprX A.Value
   | UnhandledKeys [Text] ExprX A.Value
   | NoKeyValArray        ExprX A.Value
+  | NoKeyValMap          ExprX A.Value
   -- union specific
   | ContainsUnion        ExprX
   | UndecidableUnion     ExprX A.Value [ExprX]
@@ -478,14 +533,21 @@ instance Show CompileError where
     UnhandledKeys ks e v -> prefix
       <> "Key(s) " <> purple (Text.unpack (Text.intercalate ", " ks))
       <> " present in the JSON object but not in the corresponding Dhall record. This is not allowed in presence of "
-      <> green "--records-strict" <> " option:"
+      <> green "--records-strict" <> " flag:"
       <> "\n\nDhall:\n" <> showExpr e
       <> "\n\nJSON:\n"  <> showJSON v
       <> "\n"
 
     NoKeyValArray e v -> prefix
-      <> "JSON array cannot be treated as Dhall record with option "
-      <> green "--no-keyval-arrays" <> " on:"
+      <> "JSON (key-value) arrays cannot be converted to Dhall records under "
+      <> green "--no-keyval-arrays" <> " flag"
+      <> "\n\nDhall:\n" <> showExpr e
+      <> "\n\nJSON:\n"  <> showJSON v
+      <> "\n"
+
+    NoKeyValMap e v -> prefix
+      <> "Homogeneous JSON map objects cannot be converted to Dhall association lists under "
+      <> green "--no-keyval-arrays" <> " flag"
       <> "\n\nDhall:\n" <> showExpr e
       <> "\n\nJSON:\n"  <> showJSON v
       <> "\n"
