@@ -20,6 +20,7 @@ module Dhall.Pretty.Internal (
 
     , prettyConst
     , prettyLabel
+    , prettyAnyLabel
     , prettyLabels
     , prettyNatural
     , prettyNumber
@@ -300,22 +301,28 @@ headCharacter c = alpha c || c == '_'
 tailCharacter :: Char -> Bool
 tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
 
-prettyLabel :: Text -> Doc Ann
-prettyLabel a = label doc
+prettyLabelShared :: Bool -> Text -> Doc Ann
+prettyLabelShared allowReserved a = label doc
     where
         doc =
             case Text.uncons a of
                 Just (h, t)
-                    | headCharacter h && Text.all tailCharacter t && not (Data.HashSet.member a reservedIdentifiers)
+                    | headCharacter h && Text.all tailCharacter t && (allowReserved || not (Data.HashSet.member a reservedIdentifiers))
                         -> Pretty.pretty a
                 _       -> backtick <> Pretty.pretty a <> backtick
+
+prettyLabel :: Text -> Doc Ann
+prettyLabel = prettyLabelShared False
+
+prettyAnyLabel :: Text -> Doc Ann
+prettyAnyLabel = prettyLabelShared True
 
 prettyLabels :: Set Text -> Doc Ann
 prettyLabels a
     | Data.Set.null (Dhall.Set.toSet a) =
         lbrace <> rbrace
     | otherwise =
-        braces (map (duplicate . prettyLabel) (Dhall.Set.toList a))
+        braces (map (duplicate . prettyAnyLabel) (Dhall.Set.toList a))
 
 prettyNumber :: Integer -> Doc Ann
 prettyNumber = literal . Pretty.pretty
@@ -724,7 +731,7 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettySelectorExpression :: Pretty a => Expr s a -> Doc Ann
     prettySelectorExpression (Field a b) =
-        prettySelectorExpression a <> dot <> prettyLabel b
+        prettySelectorExpression a <> dot <> prettyAnyLabel b
     prettySelectorExpression (Project a b) =
         prettySelectorExpression a <> dot <> prettyLabels b
     prettySelectorExpression (Note _ b) =
@@ -829,8 +836,12 @@ prettyCharacterSet characterSet = prettyExpression
 
     prettyKeyValue :: Pretty a => Doc Ann -> (Text, Expr s a) -> (Doc Ann, Doc Ann)
     prettyKeyValue separator (key, val) =
-        (   prettyLabel key <> " " <> separator <> " " <> prettyExpression val
-        ,       prettyLabel key
+        (       prettyAnyLabel key
+            <>  " "
+            <>  separator
+            <>  " "
+            <>  prettyExpression val
+        ,       prettyAnyLabel key
             <>  " "
             <>  separator
             <>  long
@@ -850,7 +861,7 @@ prettyCharacterSet characterSet = prettyExpression
             = braces (map (prettyKeyValue equals) (Dhall.Map.toList a))
 
     prettyAlternative (key, Just val) = prettyKeyValue colon (key, val)
-    prettyAlternative (key, Nothing ) = duplicate (prettyLabel key)
+    prettyAlternative (key, Nothing ) = duplicate (prettyAnyLabel key)
 
     prettyUnion :: Pretty a => Map Text (Maybe (Expr s a)) -> Doc Ann
     prettyUnion =

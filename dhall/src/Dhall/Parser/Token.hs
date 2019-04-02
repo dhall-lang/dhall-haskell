@@ -8,6 +8,7 @@ module Dhall.Parser.Token (
     posixEnvironmentVariable,
     file_,
     label,
+    anyLabel,
     labels,
     httpRaw,
     hexdig,
@@ -268,12 +269,12 @@ blockCommentContinue = endOfComment <|> continue
         blockCommentChunk
         blockCommentContinue
 
-simpleLabel :: Parser Text
-simpleLabel = try (do
+simpleLabel :: Bool -> Parser Text
+simpleLabel allowReserved = try (do
     c    <- Text.Parser.Char.satisfy headCharacter
     rest <- Dhall.Parser.Combinators.takeWhile tailCharacter
     let text = Data.Text.cons c rest
-    Control.Monad.guard (not (Data.HashSet.member text reservedIdentifiers))
+    Control.Monad.guard (allowReserved || not (Data.HashSet.member text reservedIdentifiers))
     return text )
   where
     headCharacter c = alpha c || c == '_'
@@ -301,16 +302,22 @@ labels = do
     emptyLabels = pure Dhall.Set.empty
 
     nonEmptyLabels = do
-        x  <- label
-        xs <- many (do _ <- _comma; label)
+        x  <- anyLabel
+        xs <- many (do _ <- _comma; anyLabel)
         noDuplicates (x : xs)
 
 
 label :: Parser Text
 label = (do
-    t <- backtickLabel <|> simpleLabel
+    t <- backtickLabel <|> simpleLabel False
     whitespace
     return t ) <?> "label"
+
+anyLabel :: Parser Text
+anyLabel = (do
+    t <- backtickLabel <|> simpleLabel True
+    whitespace
+    return t ) <?> "any label"
 
 bashEnvironmentVariable :: Parser Text
 bashEnvironmentVariable = satisfy predicate0 <> star (satisfy predicate1)
