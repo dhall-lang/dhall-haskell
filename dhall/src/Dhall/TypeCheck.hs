@@ -487,34 +487,16 @@ typeWithA tpa = loop
             Just (k0, t0, rest) -> do
                 s0 <- fmap Dhall.Core.normalize (loop ctx t0)
                 c <- case s0 of
-                    Const Type ->
-                        return Type
-                    Const Kind ->
-                        return Kind
-                    Const Sort
-                        | Dhall.Core.judgmentallyEqual t0 (Const Kind) ->
-                            return Sort
+                    Const c -> pure c
                     _ -> Left (TypeError ctx e (InvalidFieldType k0 t0))
                 let process k t = do
                         s <- fmap Dhall.Core.normalize (loop ctx t)
                         case s of
-                            Const Type ->
-                                if c == Type
+                            Const c' ->
+                                if c == c'
                                 then return ()
-                                else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 Type))
-                            Const Kind ->
-                                if c == Kind
-                                then return ()
-                                else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 Kind))
-                            Const Sort ->
-                                if c == Sort
-                                then
-                                    if Dhall.Core.judgmentallyEqual t (Const Kind)
-                                    then return ()
-                                    else Left (TypeError ctx e (InvalidFieldType k t))
-                                else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 Sort))
-                            _ ->
-                                Left (TypeError ctx e (InvalidFieldType k t))
+                                else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 c'))
+                            _ -> Left (TypeError ctx e (InvalidFieldType k t))
                 Dhall.Map.unorderedTraverseWithKey_ process rest
                 return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
@@ -524,35 +506,17 @@ typeWithA tpa = loop
                 t0 <- loop ctx v0
                 s0 <- fmap Dhall.Core.normalize (loop ctx t0)
                 c <- case s0 of
-                    Const Type ->
-                        return Type
-                    Const Kind ->
-                        return Kind
-                    Const Sort
-                        | Dhall.Core.judgmentallyEqual t0 (Const Kind) ->
-                            return Sort
+                    Const c -> pure c
                     _       -> Left (TypeError ctx e (InvalidField k0 v0))
                 let process k v = do
                         t <- loop ctx v
                         s <- fmap Dhall.Core.normalize (loop ctx t)
                         case s of
-                            Const Type ->
-                                if c == Type
+                            Const c' ->
+                                if c == c'
                                 then return ()
-                                else Left (TypeError ctx e (FieldMismatch k v c k0 v0 Type))
-                            Const Kind ->
-                                if c == Kind
-                                then return ()
-                                else Left (TypeError ctx e (FieldMismatch k v c k0 v0 Kind))
-                            Const Sort ->
-                                if c == Sort
-                                then
-                                    if Dhall.Core.judgmentallyEqual t (Const Kind)
-                                    then return ()
-                                    else Left (TypeError ctx e (InvalidField k t))
-                                else Left (TypeError ctx e (FieldMismatch k v c k0 v0 Sort))
-                            _ ->
-                                Left (TypeError ctx e (InvalidField k t))
+                                else Left (TypeError ctx e (FieldMismatch k v c k0 v0 c'))
+                            _ -> Left (TypeError ctx e (InvalidField k t))
 
                         return t
                 kts <- Dhall.Map.traverseWithKey process kvs
