@@ -132,25 +132,13 @@ let
                   then drv
                   else pkgsNew.haskell.lib.failOnAllWarnings drv;
 
-                dontCheckExtension =
-                  mass pkgsNew.haskell.lib.dontCheck [
-                    "aeson"
-                    "base-compat-batteries"
-                    "comonad"
-                    "conduit"
-                    "distributive"
-                    "doctest"
-                    "Glob"
-                    "half"
-                    "http-types"
-                    "megaparsec"
-                    "prettyprinter"
-                    "prettyprinter-ansi-terminal"
-                    # https://github.com/well-typed/cborg/issues/172
-                    "serialise"
-                    "semigroupoids"
-                    "unordered-containers"
-                    "yaml"
+                doCheckExtension =
+                  mass pkgsNew.haskell.lib.doCheck [
+                    "dhall"
+                    "dhall-bash"
+                    "dhall-json"
+                    "dhall-lsp-server"
+                    "dhall-text"
                   ];
 
                 failOnAllWarningsExtension =
@@ -163,6 +151,12 @@ let
 
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
+                    mkDerivation =
+                      args: haskellPackagesOld.mkDerivation (args // {
+                          doCheck = false;
+                        }
+                      );
+
                     dhall =
                       applyCoverage
                         (haskellPackagesNew.callCabal2nix
@@ -219,7 +213,7 @@ let
                   (old.overrides or (_: _: {}))
                   [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./.; })
                     extension
-                    dontCheckExtension
+                    doCheckExtension
                     failOnAllWarningsExtension
                   ];
           }
