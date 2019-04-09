@@ -153,6 +153,7 @@ import qualified Data.HashMap.Strict as HM
 import           Data.List ((\\))
 import           Data.Monoid ((<>))
 import           Data.Scientific (floatingOrInteger, toRealFloat)
+import           Data.Semigroup (Semigroup)
 import qualified Data.Sequence as Seq
 import qualified Data.String
 import qualified Data.Text    as Text
