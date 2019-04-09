@@ -155,7 +155,7 @@ import           Data.List ((\\))
 import           Data.Monoid ((<>))
 import           Data.Scientific (floatingOrInteger, toRealFloat)
 import qualified Data.Sequence as Seq
-import qualified Data.Text as Text
+import qualified Data.Text    as Text
 import qualified Data.Text.IO as Text
 import           Data.Text (Text)
 import           Data.Version (showVersion)
@@ -221,6 +221,14 @@ data Conversion = Conversion
     } deriving Show
 
 data UnionConv = UFirst | UNone | UStrict deriving (Show, Read, Eq)
+
+defaultConversion :: Conversion
+defaultConversion =  Conversion
+    { strictRecs  = False
+    , noKeyValArr = False
+    , noKeyValMap = False
+    , unions      = UFirst
+    }
 
 -- | Parser for command options related to the conversion method
 parseConversion :: Parser Conversion
@@ -304,18 +312,12 @@ handle = Control.Exception.handle handler
 -- Conversion
 -- ----------
 
--- The 'Expr' type concretization used throughout this module
+-- | The 'Expr' type concretization used throughout this module
 type ExprX = Expr Src X
 
-{-| Parse schema code to a valid Dhall expression and check that its type is actually Type
-
->>> :set -XOverloadedStrings
->>> import Dhall.Core
->>> schemaToExpr "List Natural"
->>> App List Natural
--}
+-- | Parse schema code to a valid Dhall expression and check that its type is actually Type
 resolveSchemaExpr :: Text  -- ^ type code (schema)
-             -> IO ExprX
+                  -> IO ExprX
 resolveSchemaExpr code = do
     parsedExpression <-
       case Dhall.Parser.exprFromText "\n\ESC[1;31mSCHEMA\ESC[0m" code of
@@ -323,7 +325,20 @@ resolveSchemaExpr code = do
         Right parsedExpression -> return parsedExpression
     D.normalize <$> Dhall.Import.load parsedExpression -- IO
 
--- | Check that the Dhall type expression actually has type 'Type'
+{-| Check that the Dhall type expression actually has type 'Type'
+>>> :set -XOverloadedStrings
+>>> import Dhall.Core
+
+>>> typeCheckSchemaExpr =<< resolveSchemaExpr "List Natural"
+App List Natural
+
+>>> typeCheckSchemaExpr =<< resolveSchemaExpr "+1"
+*** Exception:
+Error: Schema expression is succesfully parsed but has Dhall type:
+Integer
+Expected Dhall type: Type
+Parsed expression: +1
+-}
 typeCheckSchemaExpr :: MonadCatch m
                     => ExprX -> m ExprX
 typeCheckSchemaExpr expr =
@@ -331,22 +346,35 @@ typeCheckSchemaExpr expr =
     Left  err -> throwM $ TypeError err
     Right t   -> case t of -- check if the expression has type Type
       D.Const D.Type -> return expr
-      _              -> throwM $ WrongType t expr
+      _              -> throwM $ BadDhallType t expr
 
 keyValMay :: A.Value -> Maybe (Text, A.Value)
 keyValMay (A.Object o) = do
-     A.String k <- HM.lookup "key"   o
+     A.String k <- HM.lookup "key" o
      v <- HM.lookup "value" o
      return (k, v)
 keyValMay _ = Nothing
 
 
--- | The main conversion function. Traversing/zipping Dhall /type/ and Aeson value trees together to produce a Dhall /term/ tree, given 'Conversion' options
+{-| The main conversion function. Traversing/zipping Dhall /type/ and Aeson value trees together to produce a Dhall /term/ tree, given 'Conversion' options:
+
+>>> :set -XOverloadedStrings
+>>> import qualified Dhall.Core as D
+>>> import qualified Dhall.Map as Map
+>>> import qualified Data.Aeson as A
+>>> import qualified Data.HashMap.Strict as HM
+
+>>> s = D.Record (Map.fromList [("foo", D.Integer)])
+>>> v = A.Object (HM.fromList [("foo", A.Number 1)])
+>>> dhallFromJSON defaultConversion s v
+Right (RecordLit (fromList [("foo",IntegerLit 1)]))
+
+-}
 dhallFromJSON
   :: Conversion -> ExprX -> A.Value -> Either CompileError ExprX
 dhallFromJSON (Conversion {..}) = loop
   where
-    -- Union
+    -- any ~> Union
     loop t@(D.Union tmMay) v = case unions of
       UNone -> Left $ ContainsUnion t
       _     -> case Map.traverseWithKey (const id) tmMay of
@@ -418,14 +446,14 @@ dhallFromJSON (Conversion {..}) = loop
                        (Seq.fromList es)
            in f <$> traverse (loop t) (toList a)
 
-    -- number -> Integer
+    -- number ~> Integer
     loop D.Integer (A.Number x)
         | Right n <- floatingOrInteger @Double @Integer x
         = Right (D.IntegerLit n)
         | otherwise
         = Left (Mismatch D.Integer (A.Number x))
 
-    -- number -> Natural
+    -- number ~> Natural
     loop D.Natural (A.Number x)
         | Right n <- floatingOrInteger @Double @Dhall.Natural x
         , n >= 0
@@ -475,7 +503,7 @@ showJSON value = BSL8.unpack (encodePretty value)
 data CompileError
   -- Dhall shema
   = TypeError (D.TypeError Src X)
-  | WrongType
+  | BadDhallType
       ExprX -- Expression type
       ExprX -- Whole expression
   -- generic mismatch (fallback)
@@ -496,7 +524,7 @@ instance Show CompileError where
           in \case
     TypeError e -> show e
 
-    WrongType t e   -> prefix
+    BadDhallType t e -> prefix
       <> "Schema expression is succesfully parsed but has Dhall type:\n"
       <> showExpr t <> "\nExpected Dhall type: Type"
       <> "\nParsed expression: "
