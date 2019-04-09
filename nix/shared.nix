@@ -139,7 +139,8 @@ let
                           "dhall-lsp-server"
                           "dhall-text"
                         ]
-                    ++  pkgsNew.lib.optional (compiler != "ghcjs") "dhall"
+                        # Test suite doesn't work on GHCJS or GHC 7.10.3
+                    ++  pkgsNew.lib.optional (!(compiler == "ghcjs" || compiler == "ghc7103")) "dhall"
                     );
 
                 failOnAllWarningsExtension =
