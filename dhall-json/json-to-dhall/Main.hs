@@ -155,6 +155,7 @@ import           Data.List ((\\))
 import           Data.Monoid ((<>))
 import           Data.Scientific (floatingOrInteger, toRealFloat)
 import qualified Data.Sequence as Seq
+import qualified Data.String
 import qualified Data.Text    as Text
 import qualified Data.Text.IO as Text
 import           Data.Text (Text)
@@ -490,6 +491,8 @@ dhallFromJSON (Conversion {..}) = loop
 -- EXCEPTIONS
 -- ----------
 
+red, purple, green
+    :: (Semigroup a, Data.String.IsString a) => a -> a
 red    s = "\ESC[1;31m" <> s <> "\ESC[0m" -- bold
 purple s = "\ESC[1;35m" <> s <> "\ESC[0m" -- bold
 green  s = "\ESC[0;32m" <> s <> "\ESC[0m" -- plain
