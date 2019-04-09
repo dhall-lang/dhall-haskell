@@ -133,13 +133,14 @@ let
                   else pkgsNew.haskell.lib.failOnAllWarnings drv;
 
                 doCheckExtension =
-                  mass pkgsNew.haskell.lib.doCheck [
-                    "dhall"
-                    "dhall-bash"
-                    "dhall-json"
-                    "dhall-lsp-server"
-                    "dhall-text"
-                  ];
+                  mass pkgsNew.haskell.lib.doCheck
+                    (   [ "dhall-bash"
+                          "dhall-json"
+                          "dhall-lsp-server"
+                          "dhall-text"
+                        ]
+                    ++  pkgsNew.lib.optional (compiler != "ghcjs") "dhall"
+                    );
 
                 failOnAllWarningsExtension =
                   mass failOnAllWarnings [
@@ -521,13 +522,8 @@ let
     };
 
   toShell = drv:
-    if compiler == "ghcjs"
-    then
-        # `doctest` doesn't work with `ghcjs`
-        (pkgs.haskell.lib.dontCheck drv).env
-    else
-        # Benchmark dependencies aren't added by default
-        (pkgs.haskell.lib.doBenchmark drv).env;
+    # Benchmark dependencies aren't added by default
+    (pkgs.haskell.lib.doBenchmark drv).env;
 
 in
   rec {
