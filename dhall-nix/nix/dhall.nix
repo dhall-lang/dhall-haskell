@@ -1,35 +1,37 @@
-{ mkDerivation, ansi-terminal, base, bytestring, case-insensitive
-, cborg, containers, contravariant, criterion, cryptonite, deepseq
-, Diff, directory, doctest, exceptions, filepath, hashable
-, haskeline, http-client, http-client-tls
-, insert-ordered-containers, lens-family-core, megaparsec, memory
+{ mkDerivation, aeson, aeson-pretty, ansi-terminal, base
+, bytestring, case-insensitive, cborg, cborg-json, containers
+, contravariant, criterion, cryptonite, deepseq, Diff, directory
+, doctest, dotgen, exceptions, filepath, haskeline, http-client
+, http-client-tls, http-types, lens-family-core, megaparsec, memory
 , mockery, mtl, optparse-applicative, parsers, prettyprinter
 , prettyprinter-ansi-terminal, QuickCheck, quickcheck-instances
 , repline, scientific, serialise, stdenv, tasty, tasty-hunit
 , tasty-quickcheck, template-haskell, text, transformers
-, unordered-containers, vector
+, unordered-containers, uri-encode, vector
 }:
 mkDerivation {
   pname = "dhall";
-  version = "1.17.0";
-  sha256 = "a029fea856224a79f0b7cc56fbb5c566d0dfd1d915d214f682006cabf1274791";
+  version = "1.21.0";
+  sha256 = "9b22cc6f7694ef2f5d5d6fa66727044622b9905b2a9da0cdf376c75ad3b9df0e";
+  revision = "1";
+  editedCabalFile = "0ap1490jks9hmwf73vlrj7bsfrf4m5yvgqxx3ix57w23ia5gy662";
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    ansi-terminal base bytestring case-insensitive cborg containers
-    contravariant cryptonite Diff directory exceptions filepath
-    hashable haskeline http-client http-client-tls
-    insert-ordered-containers lens-family-core megaparsec memory mtl
+    aeson aeson-pretty ansi-terminal base bytestring case-insensitive
+    cborg cborg-json containers contravariant cryptonite Diff directory
+    dotgen exceptions filepath haskeline http-client http-client-tls
+    http-types lens-family-core megaparsec memory mtl
     optparse-applicative parsers prettyprinter
     prettyprinter-ansi-terminal repline scientific serialise
-    template-haskell text transformers unordered-containers vector
+    template-haskell text transformers unordered-containers uri-encode
+    vector
   ];
   executableHaskellDepends = [ base ];
   testHaskellDepends = [
-    base containers deepseq directory doctest filepath hashable
-    insert-ordered-containers mockery prettyprinter QuickCheck
-    quickcheck-instances serialise tasty tasty-hunit tasty-quickcheck
-    text transformers vector
+    base bytestring cborg containers deepseq directory doctest filepath
+    mockery prettyprinter QuickCheck quickcheck-instances serialise
+    tasty tasty-hunit tasty-quickcheck text transformers vector
   ];
   benchmarkHaskellDepends = [
     base bytestring containers criterion directory serialise text

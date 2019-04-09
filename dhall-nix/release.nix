@@ -9,25 +9,84 @@ let
     outputSha256 = "0xpqc1fhkvvv5dv1zmas2j1q27mi7j7dgyjcdh82mlgl1q63i660";
   };
 
+  mass = function: names: haskellPackagesNew: haskellPackagesOld:
+    let
+      toNameValue = name: {
+        inherit name;
+
+        value = function haskellPackagesOld."${name}";
+      };
+
+    in
+      builtins.listToAttrs (map toNameValue names);
+
   config = {
     packageOverrides = pkgs: {
-      haskellPackages = pkgs.haskellPackages.override {
-        overrides = haskellPackagesNew: haskellPackagesOld: {
-          cryptohash-sha512 =
-            pkgs.haskell.lib.dontCheck haskellPackagesOld.cryptohash-sha512;
+      haskellPackages = pkgs.haskellPackages.override (old: {
+          overrides =
+            let
+              dontCheck =
+                mass pkgs.haskell.lib.dontCheck [
+                  "adjunctions"
+                  "base-orphans"
+                  "base64-bytestring"
+                  "cereal"
+                  "blaze-builder"
+                  "neat-interpolation"
+                  "pureMD5"
+                  "pem"
+                  "lens"
+                  "th-orphans"
+                  "mockery"
+                  "megaparsec"
+                  "lens-family-th"
+                  "network-uri"
+                  "invariant"
+                  "interpolate"
+                  "http-types"
+                  "parsers"
+                  "dhall"
+                  "aeson"
+                  "half"
+                  "generic-deriving"
+                  "distributive"
+                  "deriving-compat"
+                  "monad-control"
+                  "logging-facade"
+                  "bifunctors"
+                  "exceptions"
+                  "cborg-json"
+                  "cryptohash-sha512"
+                  "Diff"
+                  "hashable"
+                  "hnix"
+                  "hnix-store-core"
+                  "optparse-generic"
+                  "serialise"
+                  "SHA"
+                  "these"
+                  "unordered-containers"
+                  "vector"
+                ];
 
-          dhall = haskellPackagesNew.callPackage ./nix/dhall.nix { };
+              extension = haskellPackagesNew: haskellPackagesOld: {
+                dhall-nix =
+                  pkgs.haskell.lib.failOnAllWarnings
+                    (pkgs.haskell.lib.justStaticExecutables
+                      haskellPackagesOld.dhall-nix
+                    );
+              };
 
-          dhall-nix =
-            pkgs.haskell.lib.failOnAllWarnings
-              (pkgs.haskell.lib.justStaticExecutables
-                (haskellPackagesNew.callPackage ./nix/dhall-nix.nix { })
-              );
-
-          serialise =
-            pkgs.haskell.lib.dontCheck haskellPackagesOld.serialise;
-        };
-      };
+            in
+              pkgs.lib.fold
+                pkgs.lib.composeExtensions
+                (old.overrides or (_: _: {}))
+                [ (pkgs.haskell.lib.packagesFromDirectory { directory = ./nix; })
+                  dontCheck
+                  extension
+                ];
+        }
+      );
     };
   };
 
@@ -39,7 +98,7 @@ let
 in
   { dhall-nix = pkgs.haskellPackages.dhall-nix;
 
-    shell = (pkgs.haskell.lib.addBuildTool pkgs.haskellPackages.dhall-nix pkgs.cabal-install).env;
+    shell = pkgs.haskellPackages.dhall-nix.env;
 
     # Test that various Dhall to Nix conversions work
     tests =
@@ -135,6 +194,8 @@ in
             → if b then just 1 else nothing
             )
         '';
+        testNone = dhallToNix "None Natural";
+        testSome = dhallToNix "Some 4";
         testRecord = dhallToNix "{}";
         testRecordLit = dhallToNix "{ foo = 1, bar = True}";
         testUnion = dhallToNix "< Left : Natural | Right : Bool >";

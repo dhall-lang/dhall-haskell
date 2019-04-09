@@ -56,9 +56,6 @@
 > $ dhall-to-nix <<< "< Left = True | Right : Natural >"
 > { Left, Right }: Left true
 
-    `Dhall.Core.Double`s cannot be translated to Nix at all since Nix does not
-    support floating point values.
-
     Also, all Dhall expressions are normalized before translation to Nix:
 
 > $ dhall-to-nix <<< "True == False"
@@ -97,6 +94,7 @@ import Control.Applicative (empty)
 import Control.Exception (Exception)
 import Data.Foldable (toList)
 import Data.Fix (Fix(..))
+import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Dhall.Core (Chunks(..), Const(..), Expr(..), Var(..))
 import Dhall.TypeCheck (X(..))
@@ -109,11 +107,14 @@ import Nix.Expr
     , NKeyName(..)
     , NString(..)
     , Params(..)
+    , (@@)
+    , (==>)
+    , ($+)
     )
 
-import qualified Data.HashMap.Strict.InsOrd
 import qualified Data.Text
 import qualified Dhall.Core
+import qualified Dhall.Map
 import qualified NeatInterpolation
 import qualified Nix
 
@@ -123,8 +124,6 @@ import qualified Nix
 data CompileError
     = CannotReferenceShadowedVariable Var
     -- ^ Nix does not provide a way to reference a shadowed variable
-    | UnexpectedConstructorsKeyword
-    -- ^ The @constructors@ keyword is not yet supported
     deriving (Typeable)
 
 instance Show CompileError where
@@ -180,20 +179,6 @@ Nix
       where
         txt = Dhall.Core.pretty v
 
-    show UnexpectedConstructorsKeyword =
-        Data.Text.unpack [NeatInterpolation.text|
-$_ERROR: Unexpected ❰constructors❱ keyword
-
-Explanation: The dhallToNix Haskell API function has a precondition that the
-Dhall expression to translate to Nix must have already been type-checked.  This
-precondition ensures that the normalized expression will have no remaining
-❰constructors❱ keywords.
-
-However, the dhallToNix Haskell API function was called with a Dhall expression
-that still had a ❰constructors❱ keyword, which indicates that the expression had
-not yet been type-checked.
-|]
-
 _ERROR :: Data.Text.Text
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
@@ -220,14 +205,19 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         c' <- loop c
         return (Fix (NAbs (Param a) c'))
     loop (Pi _ _ _) = return (Fix (NSet []))
+    -- None needs a type to convert to an Optional
+    loop (App None _) = do
+      return (Fix (NConstant NNull))
     loop (App a b) = do
         a' <- loop a
         b' <- loop b
         return (Fix (NBinary NApp a' b'))
-    loop (Let a _ c d) = do
-        c' <- loop c
-        d' <- loop d
-        return (Fix (NLet [NamedVar [StaticKey a] c' Nix.nullPos] d'))
+    loop (Let as b) = do
+        as' <- for as $ \a -> do
+          val <- loop $ Dhall.Core.value a
+          pure $ NamedVar [StaticKey $ Dhall.Core.variable a] val Nix.nullPos
+        b' <- loop b
+        return (Fix (NLet (toList as') b'))
     loop (Annot a _) = loop a
     loop Bool = return (Fix (NSet []))
     loop (BoolLit b) = return (Fix (NConstant (NBool b)))
@@ -330,6 +320,37 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- loop a
         b' <- loop b
         return (Fix (NBinary NPlus a' b'))
+    loop TextShow = do
+        let from =
+                Nix.mkList
+                    [ Nix.mkStr "\""
+                    , Nix.mkStr "$"
+                    , Nix.mkStr "\\"
+                 -- Nix doesn't support \b and \f
+                 -- , Nix.mkStr "\b"
+                 -- , Nix.mkStr "\f"
+                    , Nix.mkStr "\n"
+                    , Nix.mkStr "\r"
+                    , Nix.mkStr "\t"
+                    ]
+
+        let to =
+                Nix.mkList
+                    [ Nix.mkStr "\\\""
+                    , Nix.mkStr "\\u0024"
+                    , Nix.mkStr "\\\\"
+                 -- , Nix.mkStr "\\b"
+                 -- , Nix.mkStr "\\f"
+                    , Nix.mkStr "\\n"
+                    , Nix.mkStr "\\r"
+                    , Nix.mkStr "\\t"
+                    ]
+
+        let replaced = "builtins.replaceStrings" @@ from @@ to @@ "t"
+
+        let quoted = Nix.mkStr "\"" $+ replaced $+ Nix.mkStr "\""
+
+        return ("t" ==> quoted)
     loop List = return (Fix (NAbs "t" (Fix (NSet []))))
     loop (ListAppend a b) = do
         a' <- loop a
@@ -387,6 +408,8 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         case b of
             Nothing -> return (Fix (NConstant NNull))
             Just c  -> loop c
+    loop (Some a) = loop a
+    loop None = return (Fix (NConstant NNull))
     loop OptionalFold = do
         let e0 = Fix (NBinary NEq "x" (Fix (NConstant NNull)))
         let e1 = Fix (NIf e0 "nothing" (Fix (NBinary NApp "just" "x")))
@@ -404,14 +427,14 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop (RecordLit a) = do
         a' <- traverse loop a
         let a'' = do
-                (k, v) <- Data.HashMap.Strict.InsOrd.toList a'
+                (k, v) <- Dhall.Map.toList a'
                 return (NamedVar [StaticKey k] v Nix.nullPos)
         return (Fix (NSet a''))
     loop (Union _) = return (Fix (NSet []))
     loop (UnionLit k v kts) = do
         v' <- loop v
         let e0 = do
-                k' <- k : Data.HashMap.Strict.InsOrd.keys kts
+                k' <- k : Dhall.Map.keys kts
                 return (k', Nothing)
         let e2 = Fix (NBinary NApp (Fix (NSym k)) v')
         return (Fix (NAbs (ParamSet e0 False Nothing) e2))
@@ -461,8 +484,6 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- loop a
         b' <- loop b
         return (Fix (NBinary NApp b' a'))
-    loop (Constructors _) = do
-        Left UnexpectedConstructorsKeyword
     loop (Prefer a b) = do
         a' <- loop a
         b' <- loop b
