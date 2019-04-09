@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-| The tool for converting JSON data to Dhall given a Dhall /type/ expression necessary to make the translation unambiguous.
@@ -449,14 +448,14 @@ dhallFromJSON (Conversion {..}) = loop
 
     -- number ~> Integer
     loop D.Integer (A.Number x)
-        | Right n <- floatingOrInteger @Double @Integer x
+        | Right n <- floatingOrInteger x :: Either Double Integer
         = Right (D.IntegerLit n)
         | otherwise
         = Left (Mismatch D.Integer (A.Number x))
 
     -- number ~> Natural
     loop D.Natural (A.Number x)
-        | Right n <- floatingOrInteger @Double @Dhall.Natural x
+        | Right n <- floatingOrInteger x :: Either Double Dhall.Natural
         , n >= 0
         = Right (D.NaturalLit n)
         | otherwise
