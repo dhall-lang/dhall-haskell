@@ -23,10 +23,11 @@ import qualified System.IO
 
 spec_prelude :: Spec
 spec_prelude = do
-  describe "Backend.Dhall.Diagnostics" $ do
-    
-    runIO $ GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
+  
+  runIO $ GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
+  describe "Backend.Dhall.Diagnostics" $ do
+   
     it "should produce an empty diagnostics for an empty file" $ do
       rs <- compilerDiagnostics "./empty.txt" ""
       rs `shouldBe` ([])
