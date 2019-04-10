@@ -62,16 +62,20 @@ spec_prelude = do
       getDiagnostics "../dhall/dhall-lang/tests/parser/failure/doubleBoundsPos.dhall" `shouldReturn` 
           (mkDiagnostics "double out of bounds\n" (0,0) (0,1))
       getDiagnostics "../dhall/dhall-lang/tests/parser/failure/importAccess.dhall" `shouldReturn` 
-          (mkDiagnostics "unexpected 'h'\nexpecting '/'\n" (0,14) (0,15))
+          (mkDiagnostics ("unexpected '.'\nexpecting \"!=\", \"&&\", \"++\", \"->\", \"//\", \"//\\\\\", " <>
+                          "\"/\\\", \"==\", \"as\", \"sha256:\", \"||\", \"\8594\", \"\8743\", \"\10835\", " <>
+                          "\"\11005\", '#', '*', '+', ':', '?', end of input, or whitespace\n") (0,13) (0,14))
       getDiagnostics "../dhall/dhall-lang/tests/parser/failure/incompleteIf.dhall" `shouldReturn` 
           (mkDiagnostics "unexpected end of input\nexpecting expression or whitespace\n" (10,0) (10,1))
       getDiagnostics "../dhall/dhall-lang/tests/parser/failure/mandatoryNewline.dhall" `shouldReturn` 
           (mkDiagnostics "unexpected \"AB\"\nexpecting crlf newline or newline\n" (1,2) (1,4))
+      
+      {--
       getDiagnostics "../dhall/dhall-lang/tests/parser/failure/missingSpace.dhall" `shouldReturn` 
           (mkDiagnostics ("\n\8627 ./../dhall/dhall-lang/tests/parser/failure/example.dhall\n\n" <> 
                           "Error: Missing file /Users/edevi86/lab/haskell/dhall-haskell/dhall-l" <> 
                           "sp-server/../dhall/dhall-lang/tests/parser/failure/example.dhall") (1,0) (1,15))
-    
+       --}
     it "should produce correct diagnostic for various typecheck errors" $ do
       getDiagnostics "../dhall/dhall-lang/tests/typecheck/failure/combineMixedRecords.dhall" `shouldReturn` 
           (mkDiagnostics "Record mismatch" (0,0) (1,0))
@@ -87,6 +91,8 @@ spec_prelude = do
     it "should produce correct diagnostic for various typecheck errors" $ do
           getDiagnostics "../dhall/dhall-lang/tests/typecheck/failure/preferMixedRecords.dhall" `shouldReturn` 
               (mkDiagnostics "Record mismatch" (0,0) (1,0))
+
+
 getDiagnostics :: FilePath -> IO [Diagnostic]
 getDiagnostics path = do
   text <- Data.Text.IO.readFile path
