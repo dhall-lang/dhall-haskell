@@ -17,12 +17,15 @@ import Backend.Dhall.Diagnostics
 import qualified Data.Text
 import qualified Data.Text.IO
 
-
+import qualified GHC.IO.Encoding
+import qualified System.IO
 
 
 spec_prelude :: Spec
 spec_prelude = do
   describe "Backend.Dhall.Diagnostics" $ do
+    
+    runIO $ GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
     it "should produce an empty diagnostics for an empty file" $ do
       rs <- compilerDiagnostics "./empty.txt" ""
