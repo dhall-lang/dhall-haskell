@@ -360,16 +360,6 @@ let
                       pkgsNew.haskell.lib.doJailbreak
                         haskellPackagesOld.neat-interpolation;
 
-                    optparse-applicative =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.optparse-applicative
-                        haskellPackagesNew.fail;
-
-                    parser-combinators =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.parser-combinators
-                        haskellPackagesNew.semigroups;
-
                     prettyprinter =
                       pkgsNew.haskell.lib.addBuildDepend
                         haskellPackagesOld.prettyprinter
@@ -379,11 +369,6 @@ let
                       pkgsNew.haskell.lib.addBuildDepend
                         haskellPackagesOld.transformers-compat
                         haskellPackagesNew.generic-deriving;
-
-                    vector =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.vector
-                        haskellPackagesNew.semigroups;
 
                     # For some reason, `Cabal-1.22.5` does not respect the
                     # `buildable: False` directive for the executable section
