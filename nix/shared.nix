@@ -132,26 +132,16 @@ let
                   then drv
                   else pkgsNew.haskell.lib.failOnAllWarnings drv;
 
-                dontCheckExtension =
-                  mass pkgsNew.haskell.lib.dontCheck [
-                    "aeson"
-                    "base-compat-batteries"
-                    "comonad"
-                    "conduit"
-                    "distributive"
-                    "doctest"
-                    "Glob"
-                    "half"
-                    "http-types"
-                    "megaparsec"
-                    "prettyprinter"
-                    "prettyprinter-ansi-terminal"
-                    # https://github.com/well-typed/cborg/issues/172
-                    "serialise"
-                    "semigroupoids"
-                    "unordered-containers"
-                    "yaml"
-                  ];
+                doCheckExtension =
+                  mass pkgsNew.haskell.lib.doCheck
+                    (   [ "dhall-bash"
+                          "dhall-json"
+                          "dhall-lsp-server"
+                          "dhall-text"
+                        ]
+                        # Test suite doesn't work on GHCJS or GHC 7.10.3
+                    ++  pkgsNew.lib.optional (!(compiler == "ghcjs" || compiler == "ghc7103")) "dhall"
+                    );
 
                 failOnAllWarningsExtension =
                   mass failOnAllWarnings [
@@ -163,6 +153,12 @@ let
 
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
+                    mkDerivation =
+                      args: haskellPackagesOld.mkDerivation (args // {
+                          doCheck = false;
+                        }
+                      );
+
                     dhall =
                       applyCoverage
                         (haskellPackagesNew.callCabal2nix
@@ -219,7 +215,7 @@ let
                   (old.overrides or (_: _: {}))
                   [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./.; })
                     extension
-                    dontCheckExtension
+                    doCheckExtension
                     failOnAllWarningsExtension
                   ];
           }
@@ -527,13 +523,8 @@ let
     };
 
   toShell = drv:
-    if compiler == "ghcjs"
-    then
-        # `doctest` doesn't work with `ghcjs`
-        (pkgs.haskell.lib.dontCheck drv).env
-    else
-        # Benchmark dependencies aren't added by default
-        (pkgs.haskell.lib.doBenchmark drv).env;
+    # Benchmark dependencies aren't added by default
+    (pkgs.haskell.lib.doBenchmark drv).env;
 
 in
   rec {
