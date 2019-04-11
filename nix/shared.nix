@@ -136,11 +136,9 @@ let
                   mass pkgsNew.haskell.lib.doCheck
                     (   [ "dhall-bash"
                           "dhall-json"
-
                           # The test suite fails due to a relative reference
                           # to ../dhall/dhall-lang/
                           # "dhall-lsp-server"
-
                           "dhall-nix"
                           "dhall-text"
                         ]

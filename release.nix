@@ -30,7 +30,8 @@ in
           shared_7_10_3.dhall-bash
           shared_7_10_3.dhall-json
           shared_7_10_3.dhall-lsp-server
-          shared_7_10_3.dhall-nix
+          # `hnix` depends on `lens-family-th`, which doesn't support GHC 7.10.3
+          # shared_7_10_3.dhall-nix
           shared_7_10_3.dhall-text
 
           # Verify that the packages build against the latest supported version
