@@ -29,7 +29,8 @@ in
           shared_7_10_3.dhall
           shared_7_10_3.dhall-bash
           shared_7_10_3.dhall-json
-          shared_7_10_3.dhall-lsp-server
+          # `base-noprelude` depends on a specific version of `base`
+          # shared_7_10_3.dhall-lsp-server
           # `hnix` depends on `lens-family-th`, which doesn't support GHC 7.10.3
           # shared_7_10_3.dhall-nix
           shared_7_10_3.dhall-text
@@ -39,7 +40,8 @@ in
           shared_8_6_1.dhall
           shared_8_6_1.dhall-bash
           shared_8_6_1.dhall-json
-          shared_8_6_1.dhall-lsp-server
+          # `base-noprelude` depends on a specific version of `base`
+          # shared_8_6_1.dhall-lsp-server
           shared_8_6_1.dhall-nix
           shared_8_6_1.dhall-text
 
