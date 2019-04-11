@@ -136,7 +136,10 @@ let
                   mass pkgsNew.haskell.lib.doCheck
                     (   [ "dhall-bash"
                           "dhall-json"
-                          "dhall-lsp-server"
+                          # The test suite fails due to a relative reference
+                          # to ../dhall/dhall-lang/
+                          # "dhall-lsp-server"
+                          "dhall-nix"
                           "dhall-text"
                         ]
                         # Test suite doesn't work on GHCJS or GHC 7.10.3
@@ -183,6 +186,12 @@ let
                       haskellPackagesNew.callCabal2nix
                         "dhall-lsp-server"
                         ../dhall-lsp-server
+                        { };
+
+                    dhall-nix =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-nix"
+                        ../dhall-nix
                         { };
 
                     dhall-text =
@@ -351,6 +360,16 @@ let
                       pkgsNew.haskell.lib.doJailbreak
                         haskellPackagesOld.neat-interpolation;
 
+                    optparse-applicative =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.optparse-applicative
+                        haskellPackagesNew.fail;
+
+                    parser-combinators =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.parser-combinators
+                        haskellPackagesNew.semigroups;
+
                     prettyprinter =
                       pkgsNew.haskell.lib.addBuildDepend
                         haskellPackagesOld.prettyprinter
@@ -360,6 +379,11 @@ let
                       pkgsNew.haskell.lib.addBuildDepend
                         haskellPackagesOld.transformers-compat
                         haskellPackagesNew.generic-deriving;
+
+                    vector =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.vector
+                        haskellPackagesNew.semigroups;
 
                     # For some reason, `Cabal-1.22.5` does not respect the
                     # `buildable: False` directive for the executable section
@@ -473,6 +497,9 @@ let
                     dhall-lsp-server-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-lsp-server;
 
+                    dhall-nix-static =
+                        pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-nix;
+
                     dhall-text-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-text;
                   };
@@ -531,32 +558,34 @@ in
     inherit trivial;
 
     possibly-static = {
-      dhall            = makeStaticIfPossible "dhall"     ;
-      dhall-bash       = makeStaticIfPossible "dhall-bash";
-      dhall-json       = makeStaticIfPossible "dhall-json";
+      dhall            = makeStaticIfPossible "dhall"           ;
+      dhall-bash       = makeStaticIfPossible "dhall-bash"      ;
+      dhall-json       = makeStaticIfPossible "dhall-json"      ;
       dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
-      dhall-text       = makeStaticIfPossible "dhall-text";
+      dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
+      dhall-text       = makeStaticIfPossible "dhall-text"      ;
     };
 
-    tarball-dhall            = makeTarball "dhall"     ;
-    tarball-dhall-bash       = makeTarball "dhall-bash";
-    tarball-dhall-json       = makeTarball "dhall-json";
+    tarball-dhall            = makeTarball "dhall"           ;
+    tarball-dhall-bash       = makeTarball "dhall-bash"      ;
+    tarball-dhall-json       = makeTarball "dhall-json"      ;
     tarball-dhall-lsp-server = makeTarball "dhall-lsp-server";
-    tarball-dhall-text       = makeTarball "dhall-text";
+    tarball-dhall-nix        = makeTarball "dhall-nix"       ;
+    tarball-dhall-text       = makeTarball "dhall-text"      ;
 
     inherit (pkgs) tarball-website website;
 
-    inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-lsp-server dhall-text dhall-try;
+    inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-lsp-server dhall-nix dhall-text dhall-try;
 
     inherit (pkgs.releaseTools) aggregate;
 
-    shell-dhall            = toShell pkgs.haskell.packages."${compiler}".dhall     ;
-    shell-dhall-bash       = toShell pkgs.haskell.packages."${compiler}".dhall-bash;
-    shell-dhall-json       = toShell pkgs.haskell.packages."${compiler}".dhall-json;
+    shell-dhall            = toShell pkgs.haskell.packages."${compiler}".dhall           ;
+    shell-dhall-bash       = toShell pkgs.haskell.packages."${compiler}".dhall-bash      ;
+    shell-dhall-json       = toShell pkgs.haskell.packages."${compiler}".dhall-json      ;
     shell-dhall-lsp-server = toShell pkgs.haskell.packages."${compiler}".dhall-lsp-server;
-
-    shell-dhall-text       = toShell pkgs.haskell.packages."${compiler}".dhall-text;
-    shell-dhall-try        = toShell pkgs.haskell.packages."${compiler}".dhall-try ;
+    shell-dhall-nix        = toShell pkgs.haskell.packages."${compiler}".dhall-nix       ;
+    shell-dhall-text       = toShell pkgs.haskell.packages."${compiler}".dhall-text      ;
+    shell-dhall-try        = toShell pkgs.haskell.packages."${compiler}".dhall-try       ;
 
     test-dhall =
       pkgs.mkShell

@@ -1,1 +1,1 @@
-(import ./release.nix).shell
+(import ../nix/shared.nix {}).shell-dhall-nix
