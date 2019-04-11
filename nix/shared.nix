@@ -370,6 +370,11 @@ let
                         haskellPackagesOld.transformers-compat
                         haskellPackagesNew.generic-deriving;
 
+                    vector =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.vector
+                        haskellPackagesNew.semigroups;
+
                     # For some reason, `Cabal-1.22.5` does not respect the
                     # `buildable: False` directive for the executable section
                     # even when configured with `-f -cli`.  Fixing this requires
