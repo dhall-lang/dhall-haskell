@@ -480,7 +480,7 @@ let
                     dhall-lsp-server-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-lsp-server;
 
-                    dhall-nix =
+                    dhall-nix-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-nix;
 
                     dhall-text-static =
