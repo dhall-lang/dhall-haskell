@@ -365,6 +365,11 @@ let
                         haskellPackagesOld.optparse-applicative
                         haskellPackagesNew.fail;
 
+                    parser-combinators =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.parser-combinators
+                        haskellPackagesNew.semigroups;
+
                     prettyprinter =
                       pkgsNew.haskell.lib.addBuildDepend
                         haskellPackagesOld.prettyprinter
