@@ -26,6 +26,7 @@ cache:
   - dhall\.stack-work -> '%STACK_YAML%'
   - dhall-json\.stack-work -> '%STACK_YAML%'
   - dhall-text\.stack-work -> '%STACK_YAML%'
+  - dhall-bash\.stack-work -> '%STACK_YAML%'
   - dhall-lsp-server\.stack-work -> '%STACK_YAML%'
 
 build_script:
