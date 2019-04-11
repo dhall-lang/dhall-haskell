@@ -360,6 +360,11 @@ let
                       pkgsNew.haskell.lib.doJailbreak
                         haskellPackagesOld.neat-interpolation;
 
+                    optparse-applicative =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.optparse-applicative
+                        haskellPackagesNew.fail;
+
                     prettyprinter =
                       pkgsNew.haskell.lib.addBuildDepend
                         haskellPackagesOld.prettyprinter
