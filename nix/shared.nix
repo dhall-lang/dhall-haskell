@@ -28,6 +28,12 @@ let
           sha256 = "0mrjzv690g9mxljzxsvay8asyr8vlxhhs9smmax7mp3psd49b43g";
         };
 
+      ruby =
+        pkgsNew.fetchurl {
+          url    = "https://upload.wikimedia.org/wikipedia/commons/7/73/Ruby_logo.svg";
+          sha256 = "l4d3totjlgf0naauip353c4u24i66ek97a77t3pf8vele6befftgk";
+        };
+
       dhallLarge =
         pkgsNew.fetchurl {
           url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-logo.png";
