@@ -626,6 +626,8 @@ typeWithA tpa = loop
                 return Type
             decide Kind Kind =
                 return Kind
+            decide Sort Sort =
+                return Sort
             decide x y =
                 Left (TypeError ctx e (RecordTypeMismatch x y l r))
         c <- decide cL cR
