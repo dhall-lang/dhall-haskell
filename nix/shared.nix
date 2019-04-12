@@ -31,7 +31,7 @@ let
       ruby =
         pkgsNew.fetchurl {
           url    = "https://upload.wikimedia.org/wikipedia/commons/7/73/Ruby_logo.svg";
-          sha256 = "l4d3totjlgf0naauip353c4u24i66ek97a77t3pf8vele6befftgk";
+          sha256 = "1yvvdqcmgpa75y7px3isi4x6690iksq52ilnbslhn7mcngikw6m9";
         };
 
       dhallLarge =
