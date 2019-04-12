@@ -1,8 +1,4 @@
 
--- new-normalize: 0.53s
--- normalize    : 3.85s
--- call-by-value version of new-normalize (rebuild Eval.hs with strict vApp) : 0.23s
-
 let Nat = ∀(N : Type) → (N → N) → N → N
 let n2  = λ(N : Type) → λ(s : N → N) → λ(z : N) → s (s z)
 let n5  = λ(N : Type) → λ(s : N → N) → λ(z : N) → s (s (s (s (s z))))
@@ -21,5 +17,6 @@ let n100k = mul n10 n10k
 let n1M   = mul n10k n100
 let n5M   = mul n1M n5
 let n10M  = mul n1M n10
+let n20M  = mul n10M n2
 
 in n1M Natural (λ (x:Natural) → x + 1) 0

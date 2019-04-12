@@ -1,9 +1,4 @@
 
--- Runs in 0.06s with new-normalize, runs out of memory with "normalize". Old
--- normalize is about 3x faster with old prelude, but extremely slow in either
--- case.
-
-
 let iterate
     =   λ(n : Natural)
       → λ(a : Type)

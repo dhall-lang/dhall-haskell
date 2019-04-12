@@ -157,7 +157,6 @@ import Dhall.Core
     , ImportType(..)
     , ImportMode(..)
     , Import(..)
-    , ReifiedNormalizer(..)
     , URL(..)
     )
 #ifdef MIN_VERSION_http_client
@@ -512,7 +511,7 @@ exprToImport here expression = do
         let normalizedExpression =
                 Dhall.Core.alphaNormalize
                     (Dhall.Core.normalizeWith
-                        (getReifiedNormalizer _normalizer)
+                        _normalizer
                         expression
                     )
 
@@ -799,7 +798,7 @@ loadWith expr₀ = case expr₀ of
                     -- cached, since they have already been checked
                     expr''' <- case Dhall.TypeCheck.typeWith _startingContext expr'' of
                         Left  err -> throwM (Imported _stack' err)
-                        Right _   -> return (Dhall.Core.normalizeWith (getReifiedNormalizer _normalizer) expr'')
+                        Right _   -> return (Dhall.Core.normalizeWith _normalizer expr'')
                     zoom cache (State.modify' (Map.insert child (childNodeId, expr''')))
                     return expr'''
 
@@ -831,7 +830,7 @@ loadWith expr₀ = case expr₀ of
               throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
             where
               text₂ = text₀ <> " ? " <> text₁
- 
+
   Const a              -> pure (Const a)
   Var a                -> pure (Var a)
   Lam a b c            -> Lam <$> pure a <*> loadWith b <*> loadWith c

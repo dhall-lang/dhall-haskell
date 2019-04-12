@@ -1,6 +1,4 @@
 
--- This runs in 0.015s with "new-normalize", runs out of memory with "normalize"
-
 let iterate =
     λ(n : Natural)
   → λ(a : Type)
@@ -11,7 +9,7 @@ let iterate =
 	  (λ (hyp : a → List a → {fst:a, snd:List a}) →
 	   λ (x : a) → λ (xs : List a)
 	   → let tup = hyp x xs
-	     in {fst = f (tup.fst), snd = [tup.fst] # tup.snd})
+	     in {fst = f (tup.fst), snd = tup.snd # [tup.fst]})
 	  (λ (x : a) → λ (xs : List a) → {fst=x, snd=xs})
 	  x ([] : List a)).snd
 
