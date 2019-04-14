@@ -9,9 +9,11 @@ branches:
 environment:
   STACK_ROOT: C:\sr
   STACK_VERSION: 1.9.3
-
+  APPVEYOR_SAVE_CACHE_ON_ERROR: true
+  
   matrix:
     - STACK_YAML: stack.yaml
+    - STACK_YAML: stack-lts-12.yaml
     - STACK_YAML: stack-lts-6.yaml
 
 install:
