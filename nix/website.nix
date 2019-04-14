@@ -19,6 +19,7 @@ runCommand "try-dhall" {} ''
   ${coreutils}/bin/ln --symbolic ${haskell.packages.ghcjs.dhall-try}/bin/dhall-try.jsexe/all.min.js $out/js
   ${coreutils}/bin/ln --symbolic ${logo.bash} $out/img/bash-logo.png
   ${coreutils}/bin/ln --symbolic ${logo.clojure} $out/img/clojure-logo.svg
+  ${coreutils}/bin/ln --symbolic ${logo.ruby} $out/img/ruby-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.discourse} $out/img/discourse-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.dhallLarge} $out/img/dhall-large-logo.png
   ${coreutils}/bin/ln --symbolic ${logo.dhallSmall} $out/img/dhall-small-logo.png
