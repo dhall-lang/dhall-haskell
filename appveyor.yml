@@ -14,7 +14,9 @@ environment:
   TMP: c:\tmp
   
   matrix:
-    - STACK_YAML: stack.yaml
+    # Commenting out for now default stack (lts-13) cause
+    # compilations times are reaching appveyor default build timeout
+    # - STACK_YAML: stack.yaml
     - STACK_YAML: stack-lts-12.yaml
     - STACK_YAML: stack-lts-6.yaml
 
