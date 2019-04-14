@@ -105,7 +105,7 @@
 > Some +1
 
 > $ json-to-dhall "Optional Integer" <<< null
-> None
+> None Integer
 
 > $ json-to-dhall '{ a : Integer, b : Optional Text }' <<< '{ "a": 1 }'
 { a = +1, b = None Text }
@@ -475,8 +475,8 @@ dhallFromJSON (Conversion {..}) = loop
         = Right (D.BoolLit t)
 
     -- null ~> Optional
-    loop (App D.Optional _xpr) A.Null
-        = Right D.None
+    loop (App D.Optional expr) A.Null
+        = Right $ App D.None expr
 
     -- value ~> Optional
     loop (App D.Optional expr) value
