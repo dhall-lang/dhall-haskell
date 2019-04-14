@@ -115,15 +115,17 @@
     For Dhall __union types__ the correct value will be based on matching the type of JSON expression:
 
 > $ json-to-dhall 'List < Left : Text | Right : Integer >' <<< '[1, "bar"]'
-> [ < Right = +1 | Left : Text >, < Left = "bar" | Right : Integer > ]
+> [ < Left : Text | Right : Integer >.Right +1
+  , < Left : Text | Right : Integer >.Left "bar"
+  ]
 
 > $ json-to-dhall '{foo : < Left : Text | Right : Integer >}' <<< '{ "foo": "bar" }'
-> { foo = < Left = "bar" | Right : Integer > }
+> { foo = < Left : Text | Right : Integer >.Left "bar" }
 
     In presence of multiple potential matches, the first will be selected by default:
 
 > $ json-to-dhall '{foo : < Left : Text | Middle : Text | Right : Integer >}' <<< '{ "foo": "bar"}'
-> { foo = < Left = "bar" | Middle : Text | Right : Integer > }
+> { foo = < Left : Text | Middle : Text | Right : Integer >.Left "bar" }
 
     This will result in error if @--unions-strict@ flag is used, with the list of alternative matches being reported (as a Dhall list)
 
@@ -131,10 +133,9 @@
 > Error: More than one union component type matches JSON value
 > ...
 > Possible matches:
-> < Left = "bar" | Middle : Text | Right : Integer >
+< Left : Text | Middle : Text | Right : Integer >.Left "bar"
 > --------
-> < Middle = "bar" | Left : Text | Right : Integer >
-
+< Left : Text | Middle : Text | Right : Integer >.Middle "bar"
 -}
 
 module Main where
@@ -381,8 +382,10 @@ dhallFromJSON (Conversion {..}) = loop
       _     -> case Map.traverseWithKey (const id) tmMay of
           Nothing -> undefined
           Just tm ->
-            let f k a = D.UnionLit k <$> loop a v
-                                     <*> pure (Map.delete k tmMay)
+            -- OLD-STYLE UNION:
+            -- let f k a = D.UnionLit k <$> loop a v
+            --                          <*> pure (Map.delete k tmMay)
+            let f k a = D.App (D.Field t k) <$> loop a v
              in case rights . toList $ Map.mapWithKey f tm of
                   [ ]   -> Left $ Mismatch t v
                   [x]   -> Right x
@@ -542,9 +545,6 @@ instance Show CompileError where
       <> "More than one union component type matches JSON value"
       <> "\n\nDhall:\n" <> showExpr e
       <> "\n\nJSON:\n"  <> showJSON v
-      <> "\n\nPossible matches:\n" -- Showing all the allowed matches
-      <> showExpr (D.ListLit Nothing (Seq.fromList xs))
-      <> "\n"
       <> "\n\nPossible matches:\n\n" -- Showing all the allowed matches
       <> Text.unpack (Text.intercalate sep $ D.pretty <$> xs)
         where sep = red "\n--------\n" :: Text
