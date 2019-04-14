@@ -442,14 +442,14 @@ Library
         Dhall.Repl,
         Dhall.TH,
         Dhall.Tutorial,
-        Dhall.TypeCheck,
-        Dhall.Eval
+        Dhall.TypeCheck
     Other-Modules:
         Dhall.Pretty.Internal,
         Dhall.Parser.Expression,
         Dhall.Parser.Combinators,
         Dhall.Parser.Token,
         Dhall.Import.Types,
+        Dhall.Eval,
         Dhall.Util,
         Paths_dhall
     if flag(with-http)

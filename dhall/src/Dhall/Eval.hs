@@ -58,20 +58,34 @@ module Dhall.Eval (
 import Control.Applicative (Applicative(..), (<$>))
 #endif
 
-import Data.Foldable
-import Data.List.NonEmpty hiding (toList)
+import Data.Foldable (foldr', foldl', toList)
+import Data.List.NonEmpty (NonEmpty(..), cons)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
 import Data.Text (Text)
-import Dhall.Core
+
+import Dhall.Core (
+    Expr(..)
+  , Binding(..)
+  , Chunks(..)
+  , Const(..)
+  , Import
+  , Var(..)
+  , denote
+  )
+
+-- import Control.Exception (throw)
+-- import Dhall.Import.Types (InternalError)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
-import GHC.Natural
-import Unsafe.Coerce
+import GHC.Natural (Natural)
+import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Data.Char
+import qualified Data.List.NonEmpty
 import qualified Data.Sequence
 import qualified Data.Text
+import qualified Dhall.Binary
 import qualified Dhall.Map
 import qualified Text.Printf
 
@@ -85,10 +99,26 @@ data Env a =
 data Void
 
 coeExprVoid :: Expr Void a -> Expr s a
-coeExprVoid t = unsafeCoerce t
+coeExprVoid = unsafeCoerce
 {-# inline coeExprVoid #-}
 
-data Closure a = Cl Text (Env a) (Expr Void a)
+errorMsg :: String
+errorMsg = unlines
+  [ _ERROR <> ": Compiler bug                                                        "
+  , "                                                                                "
+  , "An ill-typed expression was encountered during normalization.                   "
+  , "Explanation: This error message means that there is a bug in the Dhall compiler."
+  , "You didn't do anything wrong, but if you would like to see this problem fixed   "
+  , "then you should report the bug at:                                              "
+  , "                                                                                "
+  , "https://github.com/dhall-lang/dhall-haskell/issues                              "
+  ]
+  where
+    _ERROR :: String
+    _ERROR = "\ESC[1;31mError\ESC[0m"
+
+
+data Closure a = Cl !Text !(Env a) !(Expr Void a)
 data VChunks a = VChunks ![(Text, Val a)] !Text
 
 instance Semigroup (VChunks a) where
@@ -176,13 +206,13 @@ data Val a
   | VOptionalBuild (Val a) !(Val a)
   | VRecord !(Map Text (Val a))
   | VRecordLit !(Map Text (Val a))
-  | VUnion (Map Text (Maybe (Val a)))
-  | VUnionLit Text !(Val a) !(Map Text (Maybe (Val a)))
+  | VUnion !(Map Text (Maybe (Val a)))
+  | VUnionLit !Text !(Val a) !(Map Text (Maybe (Val a)))
   | VCombine !(Val a) !(Val a)
   | VCombineTypes !(Val a) !(Val a)
   | VPrefer !(Val a) !(Val a)
   | VMerge !(Val a) !(Val a) !(Maybe (Val a))
-  | VField !(Val a) Text
+  | VField !(Val a) !Text
   | VInject !(Map Text (Maybe (Val a))) !Text !(Maybe (Val a))
   | VProject !(Val a) !(Set Text)
   | VEmbed a
@@ -242,7 +272,6 @@ vCombine t u = case (t, u) of
   (t, VRecordLit m) | null m    -> t
   (VRecordLit m, VRecordLit m') -> VRecordLit (Dhall.Map.sort (Dhall.Map.unionWith vCombine m m'))
   (t, u)                        -> VCombine t u
-{-# inline vCombine #-}
 
 vCombineTypes :: Val a -> Val a -> Val a
 vCombineTypes t u = case (t, u) of
@@ -250,7 +279,6 @@ vCombineTypes t u = case (t, u) of
   (t, VRecord m) | null m -> t
   (VRecord m, VRecord m') -> VRecord (Dhall.Map.sort (Dhall.Map.unionWith vCombineTypes m m'))
   (t, u)                  -> VCombineTypes t u
-{-# inline vCombineTypes #-}
 
 vListAppend :: Val a -> Val a -> Val a
 vListAppend t u = case (t, u) of
@@ -498,19 +526,19 @@ eval !env t =
     Merge x y ma     -> case (evalE x, evalE y, evalE <$> ma) of
                           (VRecordLit m, VUnionLit k v _, _)
                             | Just f <- Dhall.Map.lookup k m -> f `vApp` v
-                            | otherwise -> error "eval: impossible"
+                            | otherwise -> error errorMsg
                           (VRecordLit m, VInject _ k mt, _)
                             | Just f  <- Dhall.Map.lookup k m -> maybe f (vApp f) mt
-                            | otherwise -> error "eval: impossible"
+                            | otherwise -> error errorMsg
                           (x, y, ma) -> VMerge x y ma
     Field t k        -> case evalE t of
                           VRecordLit m
                             | Just v <- Dhall.Map.lookup k m -> v
-                            | otherwise -> error "eval: impossible"
+                            | otherwise -> error errorMsg
                           VUnion m -> case Dhall.Map.lookup k m of
                             Just (Just _) -> VPrim $ \ ~u -> VInject m k (Just u)
                             Just Nothing  -> VInject m k Nothing
-                            _             -> error "eval: impossible"
+                            _             -> error errorMsg
                           t -> VField t k
     Project t ks     -> if null ks then
                           VRecordLit mempty
@@ -518,7 +546,7 @@ eval !env t =
                           VRecordLit kvs
                             | Just s <- traverse (\k -> (k,) <$> Dhall.Map.lookup k kvs) (toList ks)
                               -> VRecordLit (Dhall.Map.sort (Dhall.Map.fromList s))
-                            | otherwise -> error "eval: impossible"
+                            | otherwise -> error errorMsg
                           t -> VProject t ks
     Note _ e         -> evalE e
     ImportAlt t _    -> evalE t
@@ -619,7 +647,8 @@ conv !env t t' =
     (VIntegerToDouble t , VIntegerToDouble t') -> convE t t'
 
     (VDouble       , VDouble)        -> True
-    (VDoubleLit n  , VDoubleLit n')  -> n == n'
+    (VDoubleLit n  , VDoubleLit n')  -> Dhall.Binary.encode (DoubleLit n  :: Expr Void Import) ==
+                                        Dhall.Binary.encode (DoubleLit n' :: Expr Void Import)
     (VDoubleShow t , VDoubleShow t') -> convE t t'
 
     (VText, VText) -> True
@@ -792,7 +821,7 @@ quote !env !t =
     VInject m k Nothing           -> Field (Union ((quoteE <$>) <$> m)) k
     VInject m k (Just t)          -> Field (Union ((quoteE <$>) <$> m)) k `qApp` t
     VEmbed a                      -> Embed a
-    VPrimVar                      -> error "quote: impossible"
+    VPrimVar                      -> error errorMsg
 
 -- Normalization
 ----------------------------------------------------------------------------------------------------
@@ -833,12 +862,19 @@ alphaNormalize = goEnv NEmpty where
       Lam x t u        -> Lam "_" (go t) (goBind x u)
       Pi x a b         -> Pi "_" (go a) (goBind x b)
       App t u          -> App (go t) (go u)
-      Let ts u         -> case foldl'
-                                 (\(e, bs) (Binding x a t) ->
-                                     (NBind e x, Binding "_" (goEnv e <$> a) (goEnv e t):bs))
-                                 (e, []) ts of
-                           (e', Prelude.reverse -> t':ts') -> Let (t' :| ts') (goEnv e' u)
-                           _ -> error "alphaNormalize.goEnv: impossible"
+
+      Let (b :| bs) u  ->
+        let Binding x a t = b
+
+            nil = (NBind e x, Binding "_" (goEnv e <$> a) (goEnv e t) :| [])
+
+            snoc (e, bs) (Binding x a t) =
+                (NBind e x, cons (Binding "_" (goEnv e <$> a) (goEnv e t)) bs)
+
+            (e', Data.List.NonEmpty.reverse -> bs') = foldl' snoc nil bs
+
+        in Let bs' (goEnv e' u)
+
       Annot t u        -> Annot (go t) (go u)
       Bool             -> Bool
       BoolLit b        -> BoolLit b
