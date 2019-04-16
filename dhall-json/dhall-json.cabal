@@ -93,8 +93,8 @@ Executable json-to-dhall
     Other-Modules:
         Paths_dhall_json
     GHC-Options: -Wall
-    if impl(ghc < 8.0)
-      Buildable: False
+--    if impl(ghc < 8.0)
+--      Buildable: False
 
 Test-Suite tasty
     Type: exitcode-stdio-1.0
