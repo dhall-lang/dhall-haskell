@@ -9,9 +9,15 @@ branches:
 environment:
   STACK_ROOT: C:\sr
   STACK_VERSION: 1.9.3
-
+  # Override the temp directory to avoid sed escaping issues
+  # See https://github.com/haskell/cabal/issues/5386
+  TMP: c:\tmp
+  
   matrix:
-    - STACK_YAML: stack.yaml
+    # Commenting out for now default stack (lts-13) cause
+    # compilations times are reaching appveyor default build timeout
+    # - STACK_YAML: stack.yaml
+    - STACK_YAML: stack-lts-12.yaml
     - STACK_YAML: stack-lts-6.yaml
 
 install:
