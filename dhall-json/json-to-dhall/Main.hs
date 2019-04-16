@@ -154,7 +154,6 @@ import qualified Data.HashMap.Strict as HM
 import           Data.List ((\\))
 import           Data.Monoid ((<>))
 import           Data.Scientific (floatingOrInteger, toRealFloat)
-import           Data.Semigroup (Semigroup)
 import qualified Data.Sequence as Seq
 import qualified Data.String
 import qualified Data.Text    as Text
@@ -495,7 +494,7 @@ dhallFromJSON (Conversion {..}) = loop
 -- ----------
 
 red, purple, green
-    :: (Semigroup a, Data.String.IsString a) => a -> a
+    :: (Monoid a, Data.String.IsString a) => a -> a
 red    s = "\ESC[1;31m" <> s <> "\ESC[0m" -- bold
 purple s = "\ESC[1;35m" <> s <> "\ESC[0m" -- bold
 green  s = "\ESC[0;32m" <> s <> "\ESC[0m" -- plain
