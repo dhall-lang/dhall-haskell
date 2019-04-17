@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-
+{-# LANGUAGE CPP               #-}
 module Main where
 
 import Control.Exception (SomeException)
@@ -12,10 +12,13 @@ import Options.Applicative (Parser, ParserInfo)
 import qualified Control.Exception
 import qualified Data.ByteString
 import qualified Data.Text.IO
-import qualified Data.Vector
-import qualified Data.Yaml
 import qualified Dhall
 import qualified Dhall.JSON
+#ifdef ETA
+import qualified Dhall.Yaml.Eta as Dhall.Yaml
+#else
+import qualified Dhall.Yaml
+#endif
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified System.Exit
@@ -69,12 +72,7 @@ main = do
 
         json <- omission <$> explaining (Dhall.JSON.codeToValue conversion "(stdin)" stdin)
 
-        let yaml = case (documents, json) of
-              (True, Data.Yaml.Array elems)
-                -> Data.ByteString.intercalate "\n---\n"
-                   $ fmap Data.Yaml.encode
-                   $ Data.Vector.toList elems
-              _ -> Data.Yaml.encode json
+        let yaml = Dhall.Yaml.encode documents json
 
         Data.ByteString.putStr yaml
 
