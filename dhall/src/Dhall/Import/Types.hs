@@ -56,7 +56,7 @@ data Status m = Status
 
     , _standardVersion :: StandardVersion
 
-    , _normalizer :: ReifiedNormalizer X
+    , _normalizer :: Maybe (ReifiedNormalizer X)
 
     , _startingContext :: Context (Expr Src X)
 
@@ -85,7 +85,7 @@ emptyStatusWith _resolver _cacher rootDirectory = Status {..}
 
     _standardVersion = Dhall.Binary.defaultStandardVersion
 
-    _normalizer = ReifiedNormalizer (const (pure Nothing))
+    _normalizer = Nothing
 
     _startingContext = Dhall.Context.empty
 
@@ -135,8 +135,8 @@ standardVersion :: Functor f => LensLike' f (Status m) StandardVersion
 standardVersion k s =
     fmap (\x -> s { _standardVersion = x }) (k (_standardVersion s))
 
-normalizer :: Functor f => LensLike' f (Status m) (ReifiedNormalizer X)
-normalizer k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
+normalizer :: Functor f => LensLike' f (Status m) (Maybe (ReifiedNormalizer X))
+normalizer k s = fmap (\x -> s {_normalizer = x}) (k (_normalizer s))
 
 startingContext :: Functor f => LensLike' f (Status m) (Context (Expr Src X))
 startingContext k s =

@@ -23,7 +23,8 @@ import           System.FilePath          ((</>))
 allTests :: TestTree
 allTests =
     Test.Tasty.testGroup "Dhall Tests"
-        [ Dhall.Test.Normalization.tests
+        [
+          Dhall.Test.Normalization.tests
         , Dhall.Test.Parser.tests
         , Dhall.Test.Regression.tests
         , Dhall.Test.Tutorial.tests

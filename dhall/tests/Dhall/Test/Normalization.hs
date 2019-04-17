@@ -370,10 +370,12 @@ unitTests =
 alphaNormalizationTests :: TestTree
 alphaNormalizationTests =
     testGroup "α-normalization tests"
-        [ shouldOnlyAlphaNormalize "FunctionBindingUnderscore"
-        , shouldOnlyAlphaNormalize "FunctionBindingX"
+        [ shouldOnlyAlphaNormalize "FunctionBindingX"
         , shouldOnlyAlphaNormalize "FunctionTypeBindingX"
         , shouldOnlyAlphaNormalize "FunctionTypeNestedBindingX"
+        , shouldOnlyAlphaNormalize "FunctionNestedBindingX"
+        , shouldOnlyAlphaNormalize "FunctionTypeBindingUnderscore"
+        , shouldOnlyAlphaNormalize "FunctionBindingUnderscore"
         ]
 
 simplifications :: TestTree

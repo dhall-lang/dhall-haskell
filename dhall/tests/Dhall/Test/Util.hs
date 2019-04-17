@@ -18,7 +18,7 @@ import qualified Data.Functor
 import           Data.Bifunctor (first)
 import           Data.Text (Text)
 import qualified Dhall.Core
-import           Dhall.Core (Expr, Normalizer)
+import           Dhall.Core (Expr, Normalizer, ReifiedNormalizer(..))
 import qualified Dhall.Context
 import           Dhall.Context (Context)
 import qualified Dhall.Import
@@ -32,7 +32,8 @@ normalize' :: Expr Src X -> Text
 normalize' = Dhall.Core.pretty . Dhall.Core.normalize
 
 normalizeWith' :: Normalizer X -> Expr Src X -> Text
-normalizeWith' ctx = Dhall.Core.pretty . Dhall.Core.normalizeWith ctx
+normalizeWith' ctx t =
+  Dhall.Core.pretty (Dhall.Core.normalizeWith (Just (ReifiedNormalizer ctx)) t)
 
 code :: Text -> IO (Expr Src X)
 code = codeWith Dhall.Context.empty

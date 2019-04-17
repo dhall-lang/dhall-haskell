@@ -97,7 +97,7 @@ type Typer a = forall s. a -> Expr s a
     constructor with custom logic
 -}
 typeWithA
-    :: ToTerm a
+    :: Eq a
     => Typer a
     -> Context (Expr s a)
     -> Expr s a

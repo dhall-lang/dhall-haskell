@@ -185,7 +185,7 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (InvalidType s a) 
         where
           txt0 = Dhall.Util.insert invalidTypeExpected
           txt1 = Dhall.Util.insert invalidTypeExpression
-            
+
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (InvalidType s a)
 
@@ -231,7 +231,7 @@ sourceName k s =
 -- | @since 1.16
 data EvaluateSettings = EvaluateSettings
   { _startingContext :: Dhall.Context.Context (Expr Src X)
-  , _normalizer      :: Dhall.Core.ReifiedNormalizer X
+  , _normalizer      :: Maybe (Dhall.Core.ReifiedNormalizer X)
   , _standardVersion :: StandardVersion
   }
 
@@ -242,7 +242,7 @@ data EvaluateSettings = EvaluateSettings
 defaultEvaluateSettings :: EvaluateSettings
 defaultEvaluateSettings = EvaluateSettings
   { _startingContext = Dhall.Context.empty
-  , _normalizer      = Dhall.Core.ReifiedNormalizer (const (pure Nothing))
+  , _normalizer      = Nothing
   , _standardVersion = Dhall.Binary.defaultStandardVersion
   }
 
@@ -263,11 +263,11 @@ startingContext = evaluateSettings . l
 -- @since 1.16
 normalizer
   :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Dhall.Core.ReifiedNormalizer X)
+  => LensLike' f s (Maybe (Dhall.Core.ReifiedNormalizer X))
 normalizer = evaluateSettings . l
   where
     l :: (Functor f)
-      => LensLike' f EvaluateSettings (Dhall.Core.ReifiedNormalizer X)
+      => LensLike' f EvaluateSettings (Maybe (Dhall.Core.ReifiedNormalizer X))
     l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
 
 -- | Access the standard version (used primarily when encoding or decoding
@@ -360,10 +360,8 @@ inputWithSettings settings (Type {..}) txt = do
             _ ->
                 Annot expr' expected
     _ <- throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
-    let normExpr = Dhall.Core.normalizeWith
-                     (Dhall.Core.getReifiedNormalizer
-                       (view normalizer settings))
-                     expr'
+    let normExpr = Dhall.Core.normalizeWith (view normalizer settings) expr'
+
     case extract normExpr  of
         Just x  -> return x
         Nothing -> Control.Exception.throwIO
@@ -450,7 +448,7 @@ inputExprWithSettings settings txt = do
     expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
 
     _ <- throws (Dhall.TypeCheck.typeWith (view startingContext settings) expr')
-    pure (Dhall.Core.normalizeWith (Dhall.Core.getReifiedNormalizer (view normalizer settings)) expr')
+    pure (Dhall.Core.normalizeWith (view normalizer settings) expr')
 
 -- | Use this function to extract Haskell values directly from Dhall AST.
 --   The intended use case is to allow easy extraction of Dhall values for
@@ -834,7 +832,7 @@ instance Interpret a => Interpret (Vector a) where
 instance (Inject a, Interpret b) => Interpret (a -> b) where
     autoWith opts = Type extractOut expectedOut
       where
-        normalizer_ = Dhall.Core.getReifiedNormalizer (inputNormalizer opts)
+        normalizer_ = Just (inputNormalizer opts)
 
         extractOut e = Just (\i -> case extractIn (Dhall.Core.normalizeWith normalizer_ (App e (embed i))) of
             Just o  -> o

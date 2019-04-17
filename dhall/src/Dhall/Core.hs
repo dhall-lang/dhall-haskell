@@ -33,7 +33,7 @@ module Dhall.Core (
     , Expr(..)
 
     -- * Normalization
-    , alphaNormalize
+    , Dhall.Core.alphaNormalize
     , normalize
     , normalizeWith
     , normalizeWithM
@@ -59,7 +59,6 @@ module Dhall.Core (
     , pathCharacter
     ) where
 
-import Codec.CBOR.Term (Term)
 #if MIN_VERSION_base(4,8,0)
 #else
 import Control.Applicative (Applicative(..), (<$>))
@@ -78,7 +77,6 @@ import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Traversable
-import {-# SOURCE #-} Dhall.Binary
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import {-# SOURCE #-} Dhall.Pretty.Internal
@@ -89,6 +87,7 @@ import Prelude hiding (succ)
 import qualified Control.Monad
 import qualified Crypto.Hash
 import qualified Data.Char
+import {-# SOURCE #-} qualified Dhall.Eval
 import qualified Data.HashSet
 import qualified Data.Sequence
 import qualified Data.Text
@@ -96,6 +95,7 @@ import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Text.Printf
+
 
 {-| Constants for a pure type system
 
@@ -1157,293 +1157,7 @@ Var (V "x" 0)
 
 -}
 alphaNormalize :: Expr s a -> Expr s a
-alphaNormalize (Const c) =
-    Const c
-alphaNormalize (Var v) =
-    Var v
-alphaNormalize (Lam "_" _A₀ b₀) =
-    Lam "_" _A₁ b₁
-  where
-    _A₁ = alphaNormalize _A₀
-    b₁  = alphaNormalize b₀
-alphaNormalize (Lam x _A₀ b₀) =
-    Lam "_" _A₁ b₄
-  where
-    _A₁ = alphaNormalize _A₀
-
-    b₁ = shift 1 (V "_" 0) b₀
-    b₂ = subst (V x 0) (Var (V "_" 0)) b₁
-    b₃ = shift (-1) (V x 0) b₂
-    b₄ = alphaNormalize b₃
-alphaNormalize (Pi "_" _A₀ _B₀) =
-    Pi "_" _A₁ _B₁
-  where
-    _A₁ = alphaNormalize _A₀
-    _B₁ = alphaNormalize _B₀
-alphaNormalize (Pi x _A₀ _B₀) =
-    Pi "_" _A₁ _B₄
-  where
-    _A₁ = alphaNormalize _A₀
-
-    _B₁ = shift 1 (V "_" 0) _B₀
-    _B₂ = subst (V x 0) (Var (V "_" 0)) _B₁
-    _B₃ = shift (-1) (V x 0) _B₂
-    _B₄ = alphaNormalize _B₃
-alphaNormalize (App f₀ a₀) =
-    App f₁ a₁
-  where
-    f₁ = alphaNormalize f₀
-
-    a₁ = alphaNormalize a₀
-alphaNormalize (Let (Binding "_" mA₀ a₀ :| []) b₀) =
-    Let (Binding "_" mA₁ a₁ :| []) b₁
-  where
-    mA₁ = fmap alphaNormalize mA₀
-    a₁  =      alphaNormalize a₀
-
-    b₁  =      alphaNormalize b₀
-alphaNormalize (Let (Binding "_" mA₀ a₀ :| (l₀ : ls₀)) b₀) =
-    case alphaNormalize (Let (l₀ :| ls₀) b₀) of
-        Let (l₁ :| ls₁) b₁ -> Let (Binding "_" mA₁ a₁ :| (l₁ : ls₁)) b₁
-        e                  -> Let (Binding "_" mA₁ a₁ :|       []  ) e
-  where
-    mA₁ = fmap alphaNormalize mA₀
-    a₁  =      alphaNormalize  a₀
-alphaNormalize (Let (Binding x mA₀ a₀ :| []) b₀) =
-    Let (Binding "_" mA₁ a₁ :| []) b₄
-  where
-    mA₁ = fmap alphaNormalize mA₀
-    a₁  =      alphaNormalize a₀
-
-    b₁ = shift 1 (V "_" 0) b₀
-    b₂ = subst (V x 0) (Var (V "_" 0)) b₁
-    b₃ = shift (-1) (V x 0) b₂
-    b₄ = alphaNormalize b₃
-alphaNormalize (Let (Binding x mA₀ a₀ :| (l₀ : ls₀)) b₀) =
-    case alphaNormalize (Let (l₀ :| ls₀) b₃) of
-        Let (l₁ :| ls₁) b₄ -> Let (Binding "_" mA₁ a₁ :| (l₁ : ls₁)) b₄
-        e                  -> Let (Binding "_" mA₁ a₁ :|       []  ) e
-  where
-    mA₁ = fmap alphaNormalize mA₀
-    a₁  =      alphaNormalize a₀
-
-    b₁ = shift 1 (V "_" 0) b₀
-    b₂ = subst (V x 0) (Var (V "_" 0)) b₁
-    b₃ = shift (-1) (V x 0) b₂
-alphaNormalize (Annot t₀ _T₀) =
-    Annot t₁ _T₁
-  where
-    t₁ = alphaNormalize t₀
-
-    _T₁ = alphaNormalize _T₀
-alphaNormalize Bool =
-    Bool
-alphaNormalize (BoolLit b) =
-    BoolLit b
-alphaNormalize (BoolAnd l₀ r₀) =
-    BoolAnd l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
-alphaNormalize (BoolOr l₀ r₀) =
-    BoolOr l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
-alphaNormalize (BoolEQ l₀ r₀) =
-    BoolEQ l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
-alphaNormalize (BoolNE l₀ r₀) =
-    BoolNE l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
-alphaNormalize (BoolIf t₀ l₀ r₀) =
-    BoolIf t₁ l₁ r₁
-  where
-    t₁ = alphaNormalize t₀
-
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
-alphaNormalize Natural =
-    Natural
-alphaNormalize (NaturalLit n) =
-    NaturalLit n
-alphaNormalize NaturalFold =
-    NaturalFold
-alphaNormalize NaturalBuild =
-    NaturalBuild
-alphaNormalize NaturalIsZero =
-    NaturalIsZero
-alphaNormalize NaturalEven =
-    NaturalEven
-alphaNormalize NaturalOdd =
-    NaturalOdd
-alphaNormalize NaturalToInteger =
-    NaturalToInteger
-alphaNormalize NaturalShow =
-    NaturalShow
-alphaNormalize (NaturalPlus l₀ r₀) =
-    NaturalPlus l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
-alphaNormalize (NaturalTimes l₀ r₀) =
-    NaturalTimes l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
-alphaNormalize Integer =
-    Integer
-alphaNormalize (IntegerLit n) =
-    IntegerLit n
-alphaNormalize IntegerShow =
-    IntegerShow
-alphaNormalize IntegerToDouble =
-    IntegerToDouble
-alphaNormalize Double =
-    Double
-alphaNormalize (DoubleLit n) =
-    DoubleLit n
-alphaNormalize DoubleShow =
-    DoubleShow
-alphaNormalize Text =
-    Text
-alphaNormalize (TextLit (Chunks xys₀ z)) =
-    TextLit (Chunks xys₁ z)
-  where
-    xys₁ = do
-        (x, y₀) <- xys₀
-        let y₁ = alphaNormalize y₀
-        return (x, y₁)
-alphaNormalize (TextAppend l₀ r₀) =
-    TextAppend l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
-alphaNormalize TextShow =
-    TextShow
-alphaNormalize List =
-    List
-alphaNormalize (ListLit (Just _T₀) ts₀) =
-    ListLit (Just _T₁) ts₁
-  where
-    _T₁ = alphaNormalize _T₀
-
-    ts₁ = fmap alphaNormalize ts₀
-alphaNormalize (ListLit Nothing ts₀) =
-    ListLit Nothing ts₁
-  where
-    ts₁ = fmap alphaNormalize ts₀
-alphaNormalize (ListAppend l₀ r₀) =
-    ListAppend l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
-alphaNormalize ListBuild =
-    ListBuild
-alphaNormalize ListFold =
-    ListFold
-alphaNormalize ListLength =
-    ListLength
-alphaNormalize ListHead =
-    ListHead
-alphaNormalize ListLast =
-    ListLast
-alphaNormalize ListIndexed =
-    ListIndexed
-alphaNormalize ListReverse =
-    ListReverse
-alphaNormalize Optional =
-    Optional
-alphaNormalize (OptionalLit _T₀ ts₀) =
-    OptionalLit _T₁ ts₁
-  where
-    _T₁ = alphaNormalize _T₀
-
-    ts₁ = fmap alphaNormalize ts₀
-alphaNormalize (Some a₀) = Some a₁
-  where
-    a₁ = alphaNormalize a₀
-alphaNormalize None = None
-alphaNormalize OptionalFold =
-    OptionalFold
-alphaNormalize OptionalBuild =
-    OptionalBuild
-alphaNormalize (Record kts₀) =
-    Record kts₁
-  where
-    kts₁ = fmap alphaNormalize kts₀
-alphaNormalize (RecordLit kvs₀) =
-    RecordLit kvs₁
-  where
-    kvs₁ = fmap alphaNormalize kvs₀
-alphaNormalize (Union kts₀) =
-    Union kts₁
-  where
-    kts₁ = fmap (fmap alphaNormalize) kts₀
-alphaNormalize (UnionLit k v₀ kts₀) =
-    UnionLit k v₁ kts₁
-  where
-    v₁ = alphaNormalize v₀
-
-    kts₁ = fmap (fmap alphaNormalize) kts₀
-alphaNormalize (Combine l₀ r₀) =
-    Combine l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
-alphaNormalize (CombineTypes l₀ r₀) =
-    CombineTypes l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
-alphaNormalize (Prefer l₀ r₀) =
-    Prefer l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-
-    r₁ = alphaNormalize r₀
-alphaNormalize (Merge t₀ u₀ _T₀) =
-    Merge t₁ u₁ _T₁
-  where
-    t₁ = alphaNormalize t₀
-
-    u₁ = alphaNormalize u₀
-
-    _T₁ = fmap alphaNormalize _T₀
-alphaNormalize (Field e₀ a) =
-    Field e₁ a
-  where
-    e₁ = alphaNormalize e₀
-alphaNormalize (Project e₀ a) =
-    Project e₁ a
-  where
-    e₁ = alphaNormalize e₀
-alphaNormalize (Note s e₀) =
-    Note s e₁
-  where
-    e₁ = alphaNormalize e₀
-alphaNormalize (ImportAlt l₀ r₀) =
-    ImportAlt l₁ r₁
-  where
-    l₁ = alphaNormalize l₀
-    r₁ = alphaNormalize r₀
-alphaNormalize (Embed a) =
-    Embed a
+alphaNormalize = Dhall.Eval.alphaNormalize
 
 {-| Reduce an expression to its normal form, performing beta reduction
 
@@ -1454,8 +1168,10 @@ alphaNormalize (Embed a) =
     However, `normalize` will not fail if the expression is ill-typed and will
     leave ill-typed sub-expressions unevaluated.
 -}
-normalize :: ToTerm a => Expr s a -> Expr t a
-normalize = normalizeWith (const (pure Nothing))
+
+normalize :: Eq a => Expr s a -> Expr t a
+normalize = Dhall.Eval.nfEmpty
+
 
 {-| This function is used to determine whether folds like @Natural/fold@ or
     @List/fold@ should be lazy or strict in their accumulator based on the type
@@ -1564,11 +1280,12 @@ denote (Embed a             ) = Embed a
     with those functions is not total either.
 
 -}
-normalizeWith :: ToTerm a => Normalizer a -> Expr s a -> Expr t a
-normalizeWith ctx = runIdentity . normalizeWithM ctx
+normalizeWith :: Eq a => Maybe (ReifiedNormalizer a) -> Expr s a -> Expr t a
+normalizeWith (Just ctx) t = runIdentity (normalizeWithM (getReifiedNormalizer ctx) t)
+normalizeWith _          t = Dhall.Eval.nfEmpty t
 
 normalizeWithM
-    :: (Monad m, ToTerm a) => NormalizerM m a -> Expr s a -> m (Expr t a)
+    :: (Monad m, Eq a) => NormalizerM m a -> Expr s a -> m (Expr t a)
 normalizeWithM ctx e0 = loop (denote e0)
  where
  loop e =  case e of
@@ -1979,14 +1696,8 @@ textShow text = "\"" <> Data.Text.concatMap f text <> "\""
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise
 -}
-judgmentallyEqual :: ToTerm a => Expr s a -> Expr t a -> Bool
-judgmentallyEqual eL0 eR0 = term eL0 == term eR0
-  where
-    alphaBetaNormalize :: ToTerm a => Expr s a -> Expr () a
-    alphaBetaNormalize = alphaNormalize . normalize
-
-    term :: ToTerm a => Expr s a -> Term
-    term = Dhall.Binary.encode . alphaBetaNormalize
+judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
+judgmentallyEqual = Dhall.Eval.convEmpty
 
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
 --   polymorphic enough to be used.
@@ -1996,18 +1707,18 @@ type Normalizer a = NormalizerM Identity a
 
 -- | A reified 'Normalizer', which can be stored in structures without
 -- running into impredicative polymorphism.
-data ReifiedNormalizer a = ReifiedNormalizer
+newtype ReifiedNormalizer a = ReifiedNormalizer
   { getReifiedNormalizer :: Normalizer a }
 
 -- | Check if an expression is in a normal form given a context of evaluation.
 --   Unlike `isNormalized`, this will fully normalize and traverse through the expression.
 --
 --   It is much more efficient to use `isNormalized`.
-isNormalizedWith :: (Eq s, Eq a, ToTerm a) => Normalizer a -> Expr s a -> Bool
-isNormalizedWith ctx e = e == normalizeWith ctx e
+isNormalizedWith :: (Eq s, Eq a) => Normalizer a -> Expr s a -> Bool
+isNormalizedWith ctx e = e == normalizeWith (Just (ReifiedNormalizer ctx)) e
 
 -- | Quickly check if an expression is in normal form
-isNormalized :: ToTerm a => Expr s a -> Bool
+isNormalized :: Eq a => Expr s a -> Bool
 isNormalized e0 = loop (denote e0)
   where
     loop e = case e of

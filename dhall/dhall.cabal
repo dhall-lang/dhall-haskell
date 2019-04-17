@@ -25,6 +25,7 @@ Category: Compiler
 Extra-Source-Files:
     benchmark/deep-nested-large-record/*.dhall
     benchmark/examples/*.dhall
+    benchmark/examples/normalize/*.dhall
     CHANGELOG.md
     dhall-lang/Prelude/Bool/and
     dhall-lang/Prelude/Bool/build
@@ -448,6 +449,7 @@ Library
         Dhall.Parser.Combinators,
         Dhall.Parser.Token,
         Dhall.Import.Types,
+        Dhall.Eval,
         Dhall.Util,
         Paths_dhall
     if flag(with-http)
