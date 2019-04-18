@@ -1,7 +1,6 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedLists    #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE OverloadedLists   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 {-| This library only exports a single `dhallToJSON` function for translating a
     Dhall syntax tree to a JSON syntax tree (i.e. a `Value`) for the @aeson@
@@ -178,7 +177,6 @@ import Control.Exception (Exception, throwIO)
 import Data.Aeson (Value(..), ToJSON(..))
 import Data.Monoid ((<>), mempty)
 import Data.Text (Text)
-import Data.Typeable (Typeable)
 import Dhall.Core (Expr)
 import Dhall.TypeCheck (X)
 import Dhall.Map (Map)
@@ -202,19 +200,43 @@ import qualified Options.Applicative
     Because the majority of Dhall language features do not translate to JSON
     this just returns the expression that failed
 -}
-data CompileError = Unsupported (Expr X X) deriving (Typeable)
+data CompileError
+    = Unsupported (Expr X X)
+    | BareNone
 
 instance Show CompileError where
+    show BareNone =
+       Data.Text.unpack $
+            _ERROR <> ": A bare ❰None❱ is not valid                                          \n\
+            \                                                                                \n\
+            \Explanation: The conversion to JSON/YAML does not accept ❰None❱ in isolation as \n\
+            \a valid way to represent ❰null❱.  In Dhall, ❰None❱ is a function whose input is \n\
+            \a type and whose output is an absent value of that type.                        \n\
+            \                                                                                \n\
+            \For example:                                                                    \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \    ┌─────────────────────────────────┐  This is a function whose result is an  \n\
+            \    │ None : ∀(a : Type) → Optional a │  ❰Optional❱ value, but the function     \n\
+            \    └─────────────────────────────────┘  itself is not a valid ❰Optional❱ value \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \    ┌─────────────────────────────────┐                                         \n\
+            \    │ None Natural : Optional Natural │  This is a valid ❰Optional❱ value (an   \n\
+            \    └─────────────────────────────────┘  absent ❰Natural❱ number in this case)  \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \The conversion to JSON/YAML only translates the latter form to ❰null❱.          "
     show (Unsupported e) =
         Data.Text.unpack $
-            "" <> _ERROR <> ": Cannot translate to JSON                                     \n\
-            \                                                                               \n\
-            \Explanation: Only primitive values, records, unions, ❰List❱s, and ❰Optional❱   \n\
-            \values can be translated from Dhall to JSON                                    \n\
-            \                                                                               \n\
-            \The following Dhall expression could not be translated to JSON:                \n\
-            \                                                                               \n\
-            \↳ " <> txt <> "                                                                "
+            _ERROR <> ": Cannot translate to JSON                                            \n\
+            \                                                                                \n\
+            \Explanation: Only primitive values, records, unions, ❰List❱s, and ❰Optional❱    \n\
+            \values can be translated from Dhall to JSON                                     \n\
+            \                                                                                \n\
+            \The following Dhall expression could not be translated to JSON:                 \n\
+            \                                                                                \n\
+            \↳ " <> txt <> "                                                                 "
       where
         txt = Dhall.Core.pretty e
 
@@ -257,6 +279,11 @@ dhallToJSON e0 = loop (Dhall.Core.normalize e0)
             return (toJSON a')
         Dhall.Core.App Dhall.Core.None _ -> do
             return Data.Aeson.Null
+        -- Provide a nicer error message for a common user mistake.
+        --
+        -- See: https://github.com/dhall-lang/dhall-lang/issues/492
+        Dhall.Core.None -> do
+            Left BareNone
         Dhall.Core.RecordLit a ->
             case toOrderedList a of
                 [   (   "contents"
