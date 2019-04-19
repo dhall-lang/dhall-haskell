@@ -563,7 +563,7 @@ in
   rec {
     inherit trivial;
 
-    nixpkgs = pkgs;
+    inherit pkgs;
 
     possibly-static = {
       dhall            = makeStaticIfPossible "dhall"           ;
