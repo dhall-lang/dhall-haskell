@@ -15,6 +15,7 @@ extra-deps:
   - base-noprelude-4.11.1.0
   - haskell-lsp-0.8.1.0
   - haskell-lsp-types-0.8.0.1
+  - turtle-1.5.14
 nix:
   packages:
     - ncurses
