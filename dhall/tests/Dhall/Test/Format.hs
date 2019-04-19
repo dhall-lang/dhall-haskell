@@ -7,108 +7,59 @@ import Data.Text (Text)
 import Dhall.Pretty (CharacterSet(..))
 import Test.Tasty (TestTree)
 
-import qualified Control.Exception
-import qualified Data.Text
-import qualified Data.Text.IO
-import qualified Data.Text.Prettyprint.Doc
-import qualified Data.Text.Prettyprint.Doc.Render.Text
-import qualified Dhall.Parser
-import qualified Dhall.Pretty
-import qualified Test.Tasty
-import qualified Test.Tasty.HUnit
+import qualified Control.Monad                         as Monad
+import qualified Data.Text                             as Text
+import qualified Data.Text.IO                          as Text.IO
+import qualified Data.Text.Prettyprint.Doc             as Doc
+import qualified Data.Text.Prettyprint.Doc.Render.Text as Doc.Render.Text
+import qualified Dhall.Core                            as Core
+import qualified Dhall.Parser                          as Parser
+import qualified Dhall.Pretty                          as Pretty
+import qualified Dhall.Test.Util                       as Test.Util
+import qualified Test.Tasty                            as Tasty
+import qualified Test.Tasty.HUnit                      as Tasty.HUnit
+import qualified Turtle
 
-tests :: TestTree
-tests =
-    Test.Tasty.testGroup "format tests"
-        [ should
-            Unicode
-            "prefer multi-line strings when newlines present"
-            "multiline"
-        , should
-            Unicode
-            "escape ${ for single-quoted strings"
-            "escapeSingleQuotedOpenInterpolation"
-        , should
-            Unicode
-            "preserve the original order of fields"
-            "fieldOrder"
-        , should
-            Unicode
-            "preserve the original order of projections"
-            "projectionOrder"
-        , should
-            Unicode
-            "escape numeric labels correctly"
-            "escapeNumericLabel"
-        , should
-            Unicode
-            "correctly handle scientific notation with a large exponent"
-            "largeExponent"
-        , should
-            Unicode
-            "round a double to the nearest representable value. Ties go to even least significant bit"
-            "doubleRound"
-        , should
-            Unicode
-            "correctly format the empty record literal"
-            "emptyRecord"
-        , should
-            Unicode
-            "indent then/else to the same column"
-            "ifThenElse"
-        , should
-            Unicode
-            "handle indenting long imports correctly without trailing space per line"
-            "importLines"
-        , should
-            Unicode
-            "handle indenting small imports correctly without trailing space inline"
-            "importLines2"
-        , should
-            Unicode
-            "not remove parentheses when accessing a field of a record"
-            "importAccess"
-        , should
-            Unicode
-            "handle formatting sha256 imports correctly"
-            "sha256Printing"
-        , should
-            Unicode
-            "handle formatting of Import suffix correctly"
-            "importSuffix"
-        , should
-            ASCII
-            "be able to format with ASCII characters"
-            "ascii"
-        , should
-            Unicode
-            "preserve Unicode characters"
-            "unicode"
-        , should
-            Unicode
-            "not replace `../` with `./../`"
-            "parent"
-        ]
+getTests :: IO TestTree
+getTests = do
+    let unicodeFiles = do
+            path <- Turtle.lstree "./tests/format"
 
-should :: CharacterSet -> Text -> Text -> TestTree
-should characterSet name basename =
-    Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
-        let inputFile =
-                Data.Text.unpack ("./tests/format/" <> basename <> "A.dhall")
-        let outputFile =
-                Data.Text.unpack ("./tests/format/" <> basename <> "B.dhall")
-        inputText <- Data.Text.IO.readFile inputFile
+            let skip = [ "./tests/format/asciiA.dhall" ]
 
-        expr <- case Dhall.Parser.exprFromText mempty inputText of
-            Left  err  -> Control.Exception.throwIO err
-            Right expr -> return expr
+            Monad.guard (path `notElem` skip)
 
-        let doc        = Dhall.Pretty.prettyCharacterSet characterSet  expr
-        let docStream  = Data.Text.Prettyprint.Doc.layoutSmart Dhall.Pretty.layoutOpts doc
-        let actualText = Data.Text.Prettyprint.Doc.Render.Text.renderStrict docStream
+            return path
 
-        expectedText <- Data.Text.IO.readFile outputFile
+    unicodeTests <- Test.Util.discover (Turtle.chars <* "A.dhall") (formatTest Unicode) unicodeFiles
+
+    asciiTests <- Test.Util.discover (Turtle.chars <* "A.dhall") (formatTest ASCII) (pure "./tests/format/asciiA.dhall")
+
+    let testTree =
+            Tasty.testGroup "format tests"
+                [ unicodeTests
+                , asciiTests
+                ]
+
+    return testTree
+
+formatTest :: CharacterSet -> Text -> TestTree
+formatTest characterSet prefix =
+    Tasty.HUnit.testCase (Text.unpack prefix) $ do
+        let inputFile  = Text.unpack (prefix <> "A.dhall")
+        let outputFile = Text.unpack (prefix <> "B.dhall")
+
+        inputText <- Text.IO.readFile inputFile
+
+        expr <- Core.throws (Parser.exprFromText mempty inputText)
+
+        let doc        = Pretty.prettyCharacterSet characterSet  expr
+        let docStream  = Doc.layoutSmart Pretty.layoutOpts doc
+        let actualText = Doc.Render.Text.renderStrict docStream
+
+        expectedText <- Text.IO.readFile outputFile
 
         let message =
                 "The formatted expression did not match the expected output"
-        Test.Tasty.HUnit.assertEqual message expectedText actualText
+
+        Tasty.HUnit.assertEqual message expectedText actualText

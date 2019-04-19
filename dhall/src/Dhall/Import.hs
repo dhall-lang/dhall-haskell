@@ -476,9 +476,9 @@ exprFromImport here@(Import {..}) = do
 
         let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
 
-        term <- throws (Codec.Serialise.deserialiseOrFail bytesLazy)
+        term <- Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytesLazy)
 
-        throws (Dhall.Binary.decodeExpression term)
+        Dhall.Core.throws (Dhall.Binary.decodeExpression term)
 
     case result of
         Just expression -> return expression
@@ -506,7 +506,7 @@ exprToImport here expression = do
         Just expectedHash  <- return hash
         cacheFile          <- getCacheFile expectedHash
 
-        _ <- throws (Dhall.TypeCheck.typeWith _startingContext expression)
+        _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith _startingContext expression)
 
         let normalizedExpression =
                 Dhall.Core.alphaNormalize
@@ -955,8 +955,4 @@ instance Show ImportResolutionDisabled where
 -- | Assert than an expression is import-free
 assertNoImports :: MonadIO io => Expr Src Import -> io (Expr Src X)
 assertNoImports expression =
-    throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
-
-throws :: (Exception e, MonadIO io) => Either e a -> io a
-throws (Left  e) = liftIO (Control.Exception.throwIO e)
-throws (Right a) = return a
+    Dhall.Core.throws (traverse (\_ -> Left ImportResolutionDisabled) expression)

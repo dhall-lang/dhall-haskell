@@ -4,58 +4,54 @@ module Dhall.Test.Lint where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
+import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
+import Turtle (FilePath)
 
-import qualified Control.Exception
-import qualified Data.Text
-import qualified Data.Text.IO
-import qualified Dhall.Core
-import qualified Dhall.Import
-import qualified Dhall.Lint
-import qualified Dhall.Parser
-import qualified Test.Tasty
-import qualified Test.Tasty.HUnit
+import qualified Data.Text        as Text
+import qualified Data.Text.IO     as Text.IO
+import qualified Dhall.Core       as Core
+import qualified Dhall.Import     as Import
+import qualified Dhall.Lint       as Lint
+import qualified Dhall.Parser     as Parser
+import qualified Dhall.Test.Util  as Test.Util
+import qualified Test.Tasty       as Tasty
+import qualified Test.Tasty.HUnit as Tasty.HUnit
+import qualified Turtle
 
-tests :: TestTree
-tests =
-    Test.Tasty.testGroup "format tests"
-        [ should
-            "correctly handle multi-let expressions"
-            "success/multilet"
-        , should
-            "not fail when an inner expression removes all `let` bindings"
-            "success/regression0"
-        ]
+lintDirectory :: FilePath
+lintDirectory = "./tests/lint"
 
-should :: Text -> Text -> TestTree
-should name basename =
-    Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
-        let inputFile =
-                Data.Text.unpack ("./tests/lint/" <> basename <> "A.dhall")
-        let outputFile =
-                Data.Text.unpack ("./tests/lint/" <> basename <> "B.dhall")
+getTests :: IO TestTree
+getTests = do
+    formatTests <- Test.Util.discover (Turtle.chars <* "A.dhall") lintTest (Turtle.lstree lintDirectory)
 
-        inputText <- Data.Text.IO.readFile inputFile
+    let testTree = Tasty.testGroup "format tests" [ formatTests ]
 
-        parsedInput <- case Dhall.Parser.exprFromText mempty inputText of
-            Left  exception  -> Control.Exception.throwIO exception
-            Right expression -> return expression
+    return testTree
 
-        let lintedInput = Dhall.Lint.lint parsedInput
+lintTest :: Text -> TestTree
+lintTest prefix =
+    Tasty.HUnit.testCase (Text.unpack prefix) $ do
+        let inputFile  = Text.unpack (prefix <> "A.dhall")
+        let outputFile = Text.unpack (prefix <> "B.dhall")
 
-        actualExpression <- Dhall.Import.load lintedInput
+        inputText <- Text.IO.readFile inputFile
 
-        outputText <- Data.Text.IO.readFile outputFile
+        parsedInput <- Core.throws (Parser.exprFromText mempty inputText)
 
-        parsedOutput <- case Dhall.Parser.exprFromText mempty outputText of
-            Left  exception  -> Control.Exception.throwIO exception
-            Right expression -> return expression
+        let lintedInput = Lint.lint parsedInput
 
-        resolvedOutput <- Dhall.Import.load parsedOutput
+        actualExpression <- Import.load lintedInput
 
-        let expectedExpression = Dhall.Core.denote resolvedOutput
+        outputText <- Text.IO.readFile outputFile
 
-        let message =
-                "The linted expression did not match the expected output"
+        parsedOutput <- Core.throws (Parser.exprFromText mempty outputText)
 
-        Test.Tasty.HUnit.assertEqual message expectedExpression actualExpression
+        resolvedOutput <- Import.load parsedOutput
+
+        let expectedExpression = Core.denote resolvedOutput
+
+        let message = "The linted expression did not match the expected output"
+
+        Tasty.HUnit.assertEqual message expectedExpression actualExpression

@@ -57,6 +57,7 @@ module Dhall.Core (
     , escapeText
     , subExpressions
     , pathCharacter
+    , throws
     ) where
 
 #if MIN_VERSION_base(4,8,0)
@@ -64,6 +65,8 @@ module Dhall.Core (
 import Control.Applicative (Applicative(..), (<$>))
 #endif
 import Control.Applicative (empty)
+import Control.Exception (Exception)
+import Control.Monad.IO.Class (MonadIO(..))
 import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Data (Data)
@@ -84,6 +87,7 @@ import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 
+import qualified Control.Exception
 import qualified Control.Monad
 import qualified Crypto.Hash
 import qualified Data.Char
@@ -2106,3 +2110,10 @@ prettyPathComponent text
         "/" <> Pretty.pretty text
     | otherwise =
         "/\"" <> Pretty.pretty text <> "\""
+
+{-| Convenience utility for converting `Either`-based exceptions to `IO`-based
+    exceptions
+-}
+throws :: (Exception e, MonadIO io) => Either e a -> io a
+throws (Left  e) = liftIO (Control.Exception.throwIO e)
+throws (Right r) = return r
