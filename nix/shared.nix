@@ -563,6 +563,8 @@ in
   rec {
     inherit trivial;
 
+    nixpkgs = pkgs;
+
     possibly-static = {
       dhall            = makeStaticIfPossible "dhall"           ;
       dhall-bash       = makeStaticIfPossible "dhall-bash"      ;
