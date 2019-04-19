@@ -147,10 +147,6 @@ import qualified Dhall.Util
 -- $setup
 -- >>> :set -XOverloadedStrings
 
-throws :: Exception e => Either e a -> IO a
-throws (Left  e) = Control.Exception.throwIO e
-throws (Right r) = return r
-
 {-| Every `Type` must obey the contract that if an expression's type matches the
     the `expected` type then the `extract` function must succeed.  If not, then
     this exception is thrown
@@ -336,7 +332,7 @@ inputWithSettings
     -> IO a
     -- ^ The decoded value in Haskell
 inputWithSettings settings (Type {..}) txt = do
-    expr  <- throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
+    expr  <- Dhall.Core.throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
 
     let InputSettings {..} = settings
 
@@ -359,7 +355,7 @@ inputWithSettings settings (Type {..}) txt = do
                 bytes' = bytes <> " : " <> suffix
             _ ->
                 Annot expr' expected
-    _ <- throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
+    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
     let normExpr = Dhall.Core.normalizeWith (view normalizer settings) expr'
 
     case extract normExpr  of
@@ -432,7 +428,7 @@ inputExprWithSettings
     -> IO (Expr Src X)
     -- ^ The fully normalized AST
 inputExprWithSettings settings txt = do
-    expr  <- throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
+    expr  <- Dhall.Core.throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
 
     let InputSettings {..} = settings
 
@@ -447,7 +443,7 @@ inputExprWithSettings settings txt = do
 
     expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
 
-    _ <- throws (Dhall.TypeCheck.typeWith (view startingContext settings) expr')
+    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) expr')
     pure (Dhall.Core.normalizeWith (view normalizer settings) expr')
 
 -- | Use this function to extract Haskell values directly from Dhall AST.

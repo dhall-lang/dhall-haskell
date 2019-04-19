@@ -20,7 +20,7 @@ module Dhall.Main
     ) where
 
 import Control.Applicative (optional, (<|>))
-import Control.Exception (Exception, SomeException)
+import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
@@ -251,15 +251,11 @@ parseMode =
         adapt True  path    = Dhall.Format.Check {..}
         adapt False inplace = Dhall.Format.Modify {..}
 
-throws :: Exception e => Either e a -> IO a
-throws (Left  e) = Control.Exception.throwIO e
-throws (Right a) = return a
-
 getExpression :: IO (Expr Src Import)
 getExpression = do
     inText <- Data.Text.IO.getContents
 
-    throws (Dhall.Parser.exprFromText "(stdin)" inText)
+    Dhall.Core.throws (Dhall.Parser.exprFromText "(stdin)" inText)
 
 -- | `ParserInfo` for the `Options` type
 parserInfoOptions :: ParserInfo Options
@@ -350,7 +346,7 @@ command (Options {..}) = do
 
             resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) status
 
-            inferredType <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
 
@@ -408,7 +404,7 @@ command (Options {..}) = do
 
             resolvedExpression <- Dhall.Import.assertNoImports expression
 
-            _ <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
 
@@ -424,7 +420,7 @@ command (Options {..}) = do
 
             resolvedExpression <- Dhall.Import.assertNoImports expression
 
-            inferredType <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
             render System.IO.stdout (Dhall.Core.normalize inferredType)
 
@@ -454,7 +450,7 @@ command (Options {..}) = do
                 Just file -> do
                     text <- Data.Text.IO.readFile file
 
-                    (header, expression) <- throws (Dhall.Parser.exprAndHeaderFromText file text)
+                    (header, expression) <- Dhall.Core.throws (Dhall.Parser.exprAndHeaderFromText file text)
 
                     let lintedExpression = Dhall.Lint.lint expression
 
@@ -467,7 +463,7 @@ command (Options {..}) = do
                 Nothing -> do
                     text <- Data.Text.IO.getContents
 
-                    (header, expression) <- throws (Dhall.Parser.exprAndHeaderFromText "(stdin)" text)
+                    (header, expression) <- Dhall.Core.throws (Dhall.Parser.exprAndHeaderFromText "(stdin)" text)
 
                     let lintedExpression = Dhall.Lint.lint expression
 
@@ -487,7 +483,7 @@ command (Options {..}) = do
                 then do
                     let decoder = Codec.CBOR.JSON.decodeValue False
 
-                    (_, value) <- throws (Codec.CBOR.Read.deserialiseFromBytes decoder bytes)
+                    (_, value) <- Dhall.Core.throws (Codec.CBOR.Read.deserialiseFromBytes decoder bytes)
 
                     let jsonBytes = Data.Aeson.Encode.Pretty.encodePretty value
 
@@ -509,11 +505,11 @@ command (Options {..}) = do
                         let encoding = Codec.CBOR.JSON.encodeValue value
 
                         let cborBytes = Codec.CBOR.Write.toLazyByteString encoding
-                        throws (Codec.Serialise.deserialiseOrFail cborBytes)
+                        Dhall.Core.throws (Codec.Serialise.deserialiseOrFail cborBytes)
                     else do
-                        throws (Codec.Serialise.deserialiseOrFail bytes)
+                        Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytes)
 
-            expression <- throws (Dhall.Binary.decodeExpression term)
+            expression <- Dhall.Core.throws (Dhall.Binary.decodeExpression term)
 
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 

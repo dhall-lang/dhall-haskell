@@ -11,22 +11,30 @@ module Dhall.Test.Util
     , assertNormalizesToWith
     , assertNormalized
     , assertTypeChecks
+    , discover
     ) where
 
+import Data.Bifunctor (first)
+import Data.Text (Text)
+import Dhall.Context (Context)
+import Dhall.Core (Expr, Normalizer, ReifiedNormalizer(..))
+import Dhall.Parser (Src)
+import Dhall.TypeCheck (X)
+import Prelude hiding (FilePath)
+import Test.Tasty.HUnit
+import Test.Tasty (TestTree)
+import Turtle (FilePath, Pattern, Shell, fp)
+
 import qualified Control.Exception
+import qualified Control.Foldl     as Foldl
 import qualified Data.Functor
-import           Data.Bifunctor (first)
-import           Data.Text (Text)
-import qualified Dhall.Core
-import           Dhall.Core (Expr, Normalizer, ReifiedNormalizer(..))
 import qualified Dhall.Context
-import           Dhall.Context (Context)
+import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
-import           Dhall.Parser (Src)
 import qualified Dhall.TypeCheck
-import           Dhall.TypeCheck (X)
-import           Test.Tasty.HUnit
+import qualified Test.Tasty        as Tasty
+import qualified Turtle
 
 normalize' :: Expr Src X -> Text
 normalize' = Dhall.Core.pretty . Dhall.Core.normalize
@@ -76,3 +84,23 @@ assertNormalized e = do
 
 assertTypeChecks :: Text -> IO ()
 assertTypeChecks text = Data.Functor.void (code text)
+
+{-| Automatically run a test on all files in a directory tree that end in
+    @A.dhall@
+-}
+discover :: Pattern Text -> (Text -> TestTree) -> Shell FilePath -> IO TestTree
+discover pattern buildTest paths = do
+    let shell = do
+            path <- paths
+
+            let pathText = Turtle.format fp path
+
+            prefix : _ <- return (Turtle.match pattern pathText)
+
+            return (buildTest prefix)
+
+    tests <- Turtle.fold shell Foldl.list
+
+    return (Tasty.testGroup "discover" tests)
+
+
