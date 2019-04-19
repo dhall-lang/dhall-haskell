@@ -3,7 +3,7 @@ let
   shared = import ./nix/shared.nix args;
   static = shared.possibly-static;
 in
-shared.pkgs.runCommand "dhall-shell-bash" {
+shared.pkgs.runCommand "dhall-shell-${shell}" {
   buildInputs = [
     static.dhall
     static.dhall-json
