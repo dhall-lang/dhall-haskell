@@ -111,7 +111,7 @@ trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDS
 substituters = https://cache.nixos.org https://cache.dhall-lang.org
 ```
 
-If you use an older version of Nix (i.e. Nix 1.*) then use these options
+If you use an older version of Nix (i.e. Nix `1.*`) then use these options
 instead:
 
 ```
@@ -136,6 +136,9 @@ $ nix-env --install --file default.nix
 
 ... or you can run the same command within each package's respective directory
 to install just that one package.
+
+If you prefer installing the binaries locally in a nix shell environment instead, just run `nix-shell` in the top-level directory.
+This option provides additional flexibility with respect to overriding some of the default parameters e.g. the compiler version, which makes it particularly useful for developers.
 
 You can develop any package by navigating to that package's directory and
 running:
