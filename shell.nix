@@ -17,7 +17,7 @@ shared.pkgs.runCommand "dhall-shell-bash" {
     echo "    Default (GHC version ${(import ./nix/shared.nix {}).pkgs.haskellPackages.ghc.version}, option completions shell - bash):"
     echo "        $ nix-shell"
     echo "    Overriding default GHC compiler (see ./nix/shared.nix for available options):"
-    echo "        $ nix-shell --arg args '{ compiler = \"ghc7103\"; }'"
+    echo "        $ nix-shell --arg args '{ compiler = "ghc7103"; }'"
     echo "    Overriding option completion shell flavor:"
     echo "        $ nix-shell --argstr shell zsh"
 
