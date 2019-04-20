@@ -13,6 +13,8 @@ prettyConst :: Const -> Doc Ann
 
 prettyExpr :: Pretty a => Expr s a -> Doc Ann
 
+prettyPathComponent :: Text -> Doc ann
+
 pretty :: Pretty a => a -> Text
 
 escapeText :: Text -> Text

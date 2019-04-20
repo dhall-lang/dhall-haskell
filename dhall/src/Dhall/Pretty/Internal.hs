@@ -28,6 +28,7 @@ module Dhall.Pretty.Internal (
     , prettyDouble
     , prettyToStrictText
     , prettyToString
+    , prettyPathComponent
 
     , docToStrictText
 
@@ -67,6 +68,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
+import {-# SOURCE #-} Dhall.Parser.Token (pathCharacter)
 import {-# SOURCE #-} Dhall.Parser.Token (reservedIdentifiers)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
@@ -315,6 +317,13 @@ prettyLabelShared allowReserved a = label doc
 
 prettyLabel :: Text -> Doc Ann
 prettyLabel = prettyLabelShared False
+
+prettyPathComponent :: Text -> Doc ann
+prettyPathComponent text
+    | Text.all pathCharacter text =
+        "/" <> Pretty.pretty text
+    | otherwise =
+        "/\"" <> Pretty.pretty text <> "\""
 
 prettyAnyLabel :: Text -> Doc Ann
 prettyAnyLabel = prettyLabelShared True

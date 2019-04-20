@@ -4,6 +4,7 @@
 ---  module is useful for keeping some small parsing utilities.
 module Dhall.Parser.Token (
     reservedIdentifiers,
+    pathCharacter,
     whitespace,
     bashEnvironmentVariable,
     posixEnvironmentVariable,
@@ -175,6 +176,18 @@ reservedIdentifiers =
         , "Infinity"
         ]
 
+pathCharacter :: Char -> Bool
+pathCharacter c =
+         '\x21' == c
+    ||  ('\x24' <= c && c <= '\x27')
+    ||  ('\x2A' <= c && c <= '\x2B')
+    ||  ('\x2D' <= c && c <= '\x2E')
+    ||  ('\x30' <= c && c <= '\x3B')
+    ||  c == '\x3D'
+    ||  ('\x40' <= c && c <= '\x5A')
+    ||  ('\x5E' <= c && c <= '\x7A')
+    ||  c == '\x7C'
+    ||  c == '\x7E'
 
 whitespace :: Parser ()
 whitespace = Text.Parser.Combinators.skipMany whitespaceChunk
@@ -405,7 +418,7 @@ pathComponent :: Parser Text
 pathComponent = do
     _      <- "/" :: Parser Text
 
-    let pathData = Text.Megaparsec.takeWhile1P Nothing Dhall.Core.pathCharacter
+    let pathData = Text.Megaparsec.takeWhile1P Nothing pathCharacter
 
     let quotedPathData = do
             _    <- Text.Parser.Char.char '"'

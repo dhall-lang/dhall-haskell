@@ -50,7 +50,6 @@ module Dhall.Core (
 
     -- * Miscellaneous
     , escapeText
-    , pathCharacter
     ) where
 
 #if MIN_VERSION_base(4,8,0)
@@ -69,7 +68,7 @@ import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
 import Data.String (IsString(..))
 import Data.Text (Text)
-import Data.Text.Prettyprint.Doc (Doc, Pretty)
+import Data.Text.Prettyprint.Doc (Pretty)
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import {-# SOURCE #-} Dhall.Binary (ToTerm(..), FromTerm(..))
 import Dhall.Map (Map)
@@ -81,7 +80,6 @@ import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Crypto.Hash
 import {-# SOURCE #-} qualified Dhall.Eval
-import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 
 
@@ -584,6 +582,8 @@ normalizeWith _        t = Dhall.Eval.nfEmpty t
 judgmentallyEqual :: Expr X Resolved -> Expr X Resolved -> Bool
 judgmentallyEqual = Dhall.Eval.convEmpty
 
+--------------------------------------------------------------------------------
+
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
 --   polymorphic enough to be used.
 type NormalizerM m a = forall s. Expr s a -> m (Maybe (Expr s a))
@@ -593,6 +593,10 @@ type Normalizer a = NormalizerM Identity a
 -- running into impredicative polymorphism.
 newtype ReifiedNormalizer a = ReifiedNormalizer
   { getReifiedNormalizer :: Normalizer a }
+
+
+
+--------------------------------------------------------------------------------
 
 {-| Detect if the given variable is free within the given expression
 
@@ -612,22 +616,3 @@ freeIn = undefined
 
     This is exported for reuse within the @"Dhall.Parser.Token"@ module
 -}
-pathCharacter :: Char -> Bool
-pathCharacter c =
-         '\x21' == c
-    ||  ('\x24' <= c && c <= '\x27')
-    ||  ('\x2A' <= c && c <= '\x2B')
-    ||  ('\x2D' <= c && c <= '\x2E')
-    ||  ('\x30' <= c && c <= '\x3B')
-    ||  c == '\x3D'
-    ||  ('\x40' <= c && c <= '\x5A')
-    ||  ('\x5E' <= c && c <= '\x7A')
-    ||  c == '\x7C'
-    ||  c == '\x7E'
-
-prettyPathComponent :: Text -> Doc ann
-prettyPathComponent text
-    | Data.Text.all pathCharacter text =
-        "/" <> Pretty.pretty text
-    | otherwise =
-        "/\"" <> Pretty.pretty text <> "\""
