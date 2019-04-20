@@ -18,15 +18,16 @@ import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Dhall.Diff
 import qualified Dhall.Util
 
-type Raw = Expr Src Import
+type Raw  = Expr Src Import
 type Core = Expr X Resolved
+type Nf   = Expr X X
 
 data TypeMessage
     = UnboundVariable !Text
-    | InvalidInputType !Raw
-    | InvalidOutputType !Raw
-    | NotAFunction !Raw !Raw
-    | TypeMismatch !Raw !Core !Raw !Core
+    | InvalidInputType !Core
+    | InvalidOutputType !Core
+    | NotAFunction !Core !Nf
+    | TypeMismatch !Core !Nf !Core !Nf
     | AnnotMismatch !Raw !Core  !Core
     | Untyped
     | MissingListType
@@ -75,7 +76,7 @@ data TypeMessage
     | CantListAppend !Raw !Raw
     | CantAdd !Raw !Raw
     | CantMultiply !Raw !Raw
-    | NoDependentTypes !Raw !Raw
+    | NoDependentTypes !Core !Core
     deriving (Show)
 
 shortTypeMessage :: TypeMessage -> Doc Ann
@@ -508,7 +509,7 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
     short = "Wrong type of function argument\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr3
+        <>  prettyDiffNf expr1 expr3
 
     long =
         "Explanation: Every function declares what type or kind of argument to accept    \n\
@@ -2918,3 +2919,6 @@ insert = Dhall.Util.insert
 
 prettyDiff :: Expr X Resolved -> Expr X Resolved -> Doc Ann
 prettyDiff exprL exprR = Dhall.Diff.diffNormalized exprL exprR
+
+prettyDiffNf :: Nf -> Nf -> Doc Ann
+prettyDiffNf = Dhall.Diff.diff

@@ -753,9 +753,9 @@ quote !env !t =
     qVar !x !i = Var (V x (fromIntegral (countName' x env - i - 1)))
     {-# inline qVar #-}
 
-    quoteE :: Val -> Expr X X
-    quoteE = quote env
-    {-# inline quoteE #-}
+    quote_ :: Val -> Expr X X
+    quote_ = quote env
+    {-# inline quote_ #-}
 
     quoteBind :: Text -> Val -> Expr X X
     quoteBind x = quote (NBind env x)
@@ -763,31 +763,31 @@ quote !env !t =
 
     qApp :: Expr X X -> Val -> Expr X X
     qApp t VPrimVar = t
-    qApp t u        = App t (quoteE u)
+    qApp t u        = App t (quote_ u)
     {-# inline qApp #-}
 
   in case t of
     VConst k                      -> Const k
     VVar x i                      -> qVar x i
-    VApp t u                      -> quoteE t `qApp` u
-    VLam a (freshCl -> (x, v, t)) -> Lam x (quoteE a) (quoteBind x (inst t v))
+    VApp t u                      -> quote_ t `qApp` u
+    VLam a (freshCl -> (x, v, t)) -> Lam x (quote_ a) (quoteBind x (inst t v))
     VHLam i t                     -> case i of
-                                       Typed (fresh -> (x, v)) a -> Lam x (quoteE a) (quoteBind x (t v))
+                                       Typed (fresh -> (x, v)) a -> Lam x (quote_ a) (quoteBind x (t v))
                                        Prim                      -> quote env (t VPrimVar)
                                        NaturalFoldCl{}           -> quote env (t VPrimVar)
                                        ListFoldCl{}              -> quote env (t VPrimVar)
                                        OptionalFoldCl{}          -> quote env (t VPrimVar)
 
-    VPi a (freshCl -> (x, v, b))  -> Pi x (quoteE a) (quoteBind x (inst b v))
-    VHPi (fresh -> (x, v)) a b    -> Pi x (quoteE a) (quoteBind x (b v))
+    VPi a (freshCl -> (x, v, b))  -> Pi x (quote_ a) (quoteBind x (inst b v))
+    VHPi (fresh -> (x, v)) a b    -> Pi x (quote_ a) (quoteBind x (b v))
 
     VBool                         -> Bool
     VBoolLit b                    -> BoolLit b
-    VBoolAnd t u                  -> BoolAnd (quoteE t) (quoteE u)
-    VBoolOr t u                   -> BoolOr (quoteE t) (quoteE u)
-    VBoolEQ t u                   -> BoolEQ (quoteE t) (quoteE u)
-    VBoolNE t u                   -> BoolNE (quoteE t) (quoteE u)
-    VBoolIf t u v                 -> BoolIf (quoteE t) (quoteE u) (quoteE v)
+    VBoolAnd t u                  -> BoolAnd (quote_ t) (quote_ u)
+    VBoolOr t u                   -> BoolOr (quote_ t) (quote_ u)
+    VBoolEQ t u                   -> BoolEQ (quote_ t) (quote_ u)
+    VBoolNE t u                   -> BoolNE (quote_ t) (quote_ u)
+    VBoolIf t u v                 -> BoolIf (quote_ t) (quote_ u) (quote_ v)
 
     VNatural                      -> Natural
     VNaturalLit n                 -> NaturalLit n
@@ -798,8 +798,8 @@ quote !env !t =
     VNaturalOdd t                 -> NaturalOdd `qApp` t
     VNaturalToInteger t           -> NaturalToInteger `qApp` t
     VNaturalShow t                -> NaturalShow `qApp` t
-    VNaturalPlus t u              -> NaturalPlus (quoteE t) (quoteE u)
-    VNaturalTimes t u             -> NaturalTimes (quoteE t) (quoteE u)
+    VNaturalPlus t u              -> NaturalPlus (quote_ t) (quote_ u)
+    VNaturalTimes t u             -> NaturalTimes (quote_ t) (quote_ u)
 
     VInteger                      -> Integer
     VIntegerLit n                 -> IntegerLit n
@@ -811,13 +811,13 @@ quote !env !t =
     VDoubleShow t                 -> DoubleShow `qApp` t
 
     VText                         -> Text
-    VTextLit (VChunks xys z)      -> TextLit (Chunks ((quoteE <$>) <$> xys) z)
-    VTextAppend t u               -> TextAppend (quoteE t) (quoteE u)
+    VTextLit (VChunks xys z)      -> TextLit (Chunks ((quote_ <$>) <$> xys) z)
+    VTextAppend t u               -> TextAppend (quote_ t) (quote_ u)
     VTextShow t                   -> TextShow `qApp` t
 
     VList t                       -> List `qApp` t
-    VListLit ma ts                -> ListLit (quoteE <$> ma) (quoteE <$> ts)
-    VListAppend t u               -> ListAppend (quoteE t) (quoteE u)
+    VListLit ma ts                -> ListLit (quote_ <$> ma) (quote_ <$> ts)
+    VListAppend t u               -> ListAppend (quote_ t) (quote_ u)
     VListBuild a t                -> ListBuild `qApp` a `qApp` t
     VListFold a l t u v           -> ListFold `qApp` a `qApp` l `qApp` t `qApp` u `qApp` v
     VListLength a t               -> ListLength `qApp` a `qApp` t
@@ -827,22 +827,22 @@ quote !env !t =
     VListReverse a t              -> ListReverse `qApp` a `qApp` t
 
     VOptional a                   -> Optional `qApp` a
-    VSome t                       -> Some (quoteE t)
+    VSome t                       -> Some (quote_ t)
     VNone t                       -> None `qApp` t
     VOptionalFold a o t u v       -> OptionalFold `qApp` a `qApp` o `qApp` t `qApp` u `qApp` v
     VOptionalBuild a t            -> OptionalBuild `qApp` a `qApp` t
-    VRecord m                     -> Record (quoteE <$> m)
-    VRecordLit m                  -> RecordLit (quoteE <$> m)
-    VUnion m                      -> Union ((quoteE <$>) <$> m)
-    VUnionLit k v m               -> UnionLit k (quoteE v) ((quoteE <$>) <$> m)
-    VCombine t u                  -> Combine (quoteE t) (quoteE u)
-    VCombineTypes t u             -> CombineTypes (quoteE t) (quoteE u)
-    VPrefer t u                   -> Prefer (quoteE t) (quoteE u)
-    VMerge t u ma                 -> Merge (quoteE t) (quoteE u) (quoteE <$> ma)
-    VField t k                    -> Field (quoteE t) k
-    VProject t ks                 -> Project (quoteE t) ks
-    VInject m k Nothing           -> Field (Union ((quoteE <$>) <$> m)) k
-    VInject m k (Just t)          -> Field (Union ((quoteE <$>) <$> m)) k `qApp` t
+    VRecord m                     -> Record (quote_ <$> m)
+    VRecordLit m                  -> RecordLit (quote_ <$> m)
+    VUnion m                      -> Union ((quote_ <$>) <$> m)
+    VUnionLit k v m               -> UnionLit k (quote_ v) ((quote_ <$>) <$> m)
+    VCombine t u                  -> Combine (quote_ t) (quote_ u)
+    VCombineTypes t u             -> CombineTypes (quote_ t) (quote_ u)
+    VPrefer t u                   -> Prefer (quote_ t) (quote_ u)
+    VMerge t u ma                 -> Merge (quote_ t) (quote_ u) (quote_ <$> ma)
+    VField t k                    -> Field (quote_ t) k
+    VProject t ks                 -> Project (quote_ t) ks
+    VInject m k Nothing           -> Field (Union ((quote_ <$>) <$> m)) k
+    VInject m k (Just t)          -> Field (Union ((quote_ <$>) <$> m)) k `qApp` t
     VPrimVar                      -> error errorMsg
 
 -- Normalization
