@@ -67,6 +67,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
+import {-# SOURCE #-} Dhall.Parser.Token (reservedIdentifiers)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal

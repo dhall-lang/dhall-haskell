@@ -3,6 +3,7 @@
 -- | Parse Dhall tokens. Even though we don't have a tokenizer per-se this
 ---  module is useful for keeping some small parsing utilities.
 module Dhall.Parser.Token (
+    reservedIdentifiers,
     whitespace,
     bashEnvironmentVariable,
     posixEnvironmentVariable,
@@ -100,6 +101,7 @@ import Control.Applicative (Alternative(..), optional)
 import Data.Functor (void)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
+import Data.HashSet (HashSet)
 import Dhall.Core
 import Dhall.Set (Set)
 import Prelude hiding (const, pi)
@@ -120,6 +122,58 @@ import Numeric.Natural (Natural)
 import Prelude hiding (const, pi)
 
 import qualified Text.Parser.Token
+
+-- | The set of reserved identifiers for the Dhall language
+reservedIdentifiers :: HashSet Text
+reservedIdentifiers =
+    Data.HashSet.fromList
+        [ "let"
+        , "in"
+        , "Type"
+        , "Kind"
+        , "Sort"
+        , "forall"
+        , "Bool"
+        , "True"
+        , "False"
+        , "merge"
+        , "if"
+        , "then"
+        , "else"
+        , "as"
+        , "using"
+        , "constructors"
+        , "Natural"
+        , "Natural/fold"
+        , "Natural/build"
+        , "Natural/isZero"
+        , "Natural/even"
+        , "Natural/odd"
+        , "Natural/toInteger"
+        , "Natural/show"
+        , "Integer"
+        , "Integer/show"
+        , "Integer/toDouble"
+        , "Double"
+        , "Double/show"
+        , "Text"
+        , "Text/show"
+        , "List"
+        , "List/build"
+        , "List/fold"
+        , "List/length"
+        , "List/head"
+        , "List/last"
+        , "List/indexed"
+        , "List/reverse"
+        , "Optional"
+        , "Some"
+        , "None"
+        , "Optional/build"
+        , "Optional/fold"
+        , "NaN"
+        , "Infinity"
+        ]
 
 
 whitespace :: Parser ()

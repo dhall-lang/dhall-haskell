@@ -49,8 +49,6 @@ module Dhall.Core (
     , pretty
 
     -- * Miscellaneous
-    , internalError
-    , reservedIdentifiers
     , escapeText
     , pathCharacter
     ) where
@@ -66,7 +64,6 @@ import Data.Data (Data(..))
 import {-# SOURCE #-} Dhall.Eval (Resolved)
 import Data.Foldable
 import Data.Functor.Identity (Identity(..))
-import Data.HashSet (HashSet)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
@@ -84,7 +81,6 @@ import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Crypto.Hash
 import {-# SOURCE #-} qualified Dhall.Eval
-import qualified Data.HashSet
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 
@@ -609,81 +605,6 @@ False
 -}
 freeIn :: Eq a => Var -> Expr s a -> Bool
 freeIn = undefined
-
-_ERROR :: String
-_ERROR = "\ESC[1;31mError\ESC[0m"
-
-{-| Utility function used to throw internal errors that should never happen
-    (in theory) but that are not enforced by the type system
--}
-internalError :: Data.Text.Text -> forall b . b
-internalError text = error (unlines
-    [ _ERROR <> ": Compiler bug                                                        "
-    , "                                                                                "
-    , "Explanation: This error message means that there is a bug in the Dhall compiler."
-    , "You didn't do anything wrong, but if you would like to see this problem fixed   "
-    , "then you should report the bug at:                                              "
-    , "                                                                                "
-    , "https://github.com/dhall-lang/dhall-haskell/issues                              "
-    , "                                                                                "
-    , "Please include the following text in your bug report:                           "
-    , "                                                                                "
-    , "```                                                                             "
-    , Data.Text.unpack text <> "                                                       "
-    , "```                                                                             "
-    ] )
-
--- | The set of reserved identifiers for the Dhall language
-reservedIdentifiers :: HashSet Text
-reservedIdentifiers =
-    Data.HashSet.fromList
-        [ "let"
-        , "in"
-        , "Type"
-        , "Kind"
-        , "Sort"
-        , "forall"
-        , "Bool"
-        , "True"
-        , "False"
-        , "merge"
-        , "if"
-        , "then"
-        , "else"
-        , "as"
-        , "using"
-        , "constructors"
-        , "Natural"
-        , "Natural/fold"
-        , "Natural/build"
-        , "Natural/isZero"
-        , "Natural/even"
-        , "Natural/odd"
-        , "Natural/toInteger"
-        , "Natural/show"
-        , "Integer"
-        , "Integer/show"
-        , "Integer/toDouble"
-        , "Double"
-        , "Double/show"
-        , "Text"
-        , "Text/show"
-        , "List"
-        , "List/build"
-        , "List/fold"
-        , "List/length"
-        , "List/head"
-        , "List/last"
-        , "List/indexed"
-        , "List/reverse"
-        , "Optional"
-        , "Some"
-        , "None"
-        , "Optional/build"
-        , "Optional/fold"
-        , "NaN"
-        , "Infinity"
-        ]
 
 
 {-| Returns `True` if the given `Char` is valid within an unquoted path
