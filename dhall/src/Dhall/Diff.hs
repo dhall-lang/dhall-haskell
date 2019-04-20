@@ -26,8 +26,8 @@ import Data.Sequence (Seq)
 import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Dhall.Core (Binding(..), Chunks (..), Const(..), Expr(..), Var(..))
-import Dhall.Binary (ToTerm)
+import Dhall.Core (Binding(..), Chunks (..), Const(..), Expr(..), Var(..), X(..))
+import Dhall.Eval (Resolved(..))
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import Dhall.Pretty.Internal (Ann)
@@ -154,7 +154,7 @@ rparen :: Diff
 rparen = token Internal.rparen
 
 -- | Render the difference between the normal form of two expressions
-diffNormalized :: (Eq a, Pretty a, ToTerm a) => Expr s a -> Expr s a -> Doc Ann
+diffNormalized :: Expr X Resolved -> Expr X Resolved -> Doc Ann
 diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
   where
     l1 = Dhall.Core.alphaNormalize (Dhall.Core.normalize l0)
@@ -204,15 +204,17 @@ diffBool = diffPrimitive bool
     bool True  = builtin "True"
     bool False = builtin "False"
 
+diffInt :: Int -> Int -> Diff
+diffInt = diffPrimitive (token . Internal.prettyInt)
+
 diffInteger :: Integer -> Integer -> Diff
-diffInteger = diffPrimitive (token . Internal.prettyNumber)
+diffInteger = diffPrimitive (token . Internal.prettyInteger)
 
 diffVar :: Var -> Var -> Diff
 diffVar (V xL nL) (V xR nR) = format mempty label <> "@" <> natural
   where
     label = diffLabel xL xR
-
-    natural = diffInteger nL nR
+    natural = diffInt nL nR
 
 diffPretty :: (Eq a, Pretty a) => a -> a -> Diff
 diffPretty = diffPrimitive (token . Pretty.pretty)
@@ -360,7 +362,7 @@ diffChunks cL cR
 
     diffTextSkeleton = difference textSkeleton textSkeleton
 
-    chunks = zipWith chunkDiff (toEitherList cL) (toEitherList cR) 
+    chunks = zipWith chunkDiff (toEitherList cL) (toEitherList cR)
 
     chunkDiff a b =
       case (a, b) of

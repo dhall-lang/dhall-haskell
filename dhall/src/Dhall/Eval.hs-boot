@@ -3,6 +3,8 @@ module Dhall.Eval where
 
 import {-# SOURCE #-} Dhall.Core
 
-convEmpty      :: Eq a => Expr s a -> Expr t a -> Bool
-nfEmpty        :: Eq a => Expr s a -> Expr t a
-alphaNormalize :: Expr s a -> Expr s a
+data Resolved
+
+convEmpty      :: Expr X Resolved -> Expr X Resolved -> Bool
+nfEmpty        :: Expr X Resolved -> Expr X X
+alphaNormalize :: Expr s X -> Expr s X

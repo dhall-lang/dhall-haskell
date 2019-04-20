@@ -3,6 +3,7 @@
 module Dhall.Lint
     ( -- * Lint
       lint
+    , denote
     , removeLetInLet
     , removeUnusedBindings
     , optionalLitToSomeNone
@@ -13,6 +14,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup ((<>))
 import Dhall.Core (Binding(..), Expr(..), Import, Var(..), subExpressions)
 import Lens.Family (ASetter, over)
+import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Dhall.Core
 
@@ -26,14 +28,15 @@ import qualified Dhall.Core
 -}
 lint :: Expr s Import -> Expr t Import
 lint =
+  unsafeCoerce .
   rewriteOf
     subExpressions
     ( \e ->
                 removeLetInLet e
         `mplus` removeUnusedBindings e
         `mplus` optionalLitToSomeNone e
+        `mplus` denote e
     )
-    . Dhall.Core.denote
 
 removeLetInLet :: Eq a => Expr s a -> Maybe (Expr s a)
 removeLetInLet (Let a (Let b c)) = Just (Let (a <> b) c)
@@ -53,6 +56,10 @@ removeUnusedBindings (Let (Binding a _ _ :| (l : ls)) d)
   where
     e = Let (l :| ls) d
 removeUnusedBindings _ = Nothing
+
+denote :: Expr s a -> Maybe (Expr s a)
+denote (Note _ t) = Just t
+denote _          = Nothing
 
 
 optionalLitToSomeNone :: Expr s a -> Maybe (Expr s a)

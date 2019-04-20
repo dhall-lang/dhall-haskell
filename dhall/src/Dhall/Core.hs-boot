@@ -1,3 +1,5 @@
+{-# LANGUAGE RankNTypes #-}
+
 module Dhall.Core where
 
 data Const
@@ -8,4 +10,4 @@ data Expr s a
 
 data Import
 
-denote :: Expr s a -> Expr t a
+newtype X = X { absurd :: forall a . a }

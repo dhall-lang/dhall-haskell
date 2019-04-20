@@ -23,7 +23,8 @@ module Dhall.Pretty.Internal (
     , prettyAnyLabel
     , prettyLabels
     , prettyNatural
-    , prettyNumber
+    , prettyInt
+    , prettyInteger
     , prettyDouble
     , prettyToStrictText
     , prettyToString
@@ -324,8 +325,11 @@ prettyLabels a
     | otherwise =
         braces (map (duplicate . prettyAnyLabel) (Dhall.Set.toList a))
 
-prettyNumber :: Integer -> Doc Ann
-prettyNumber = literal . Pretty.pretty
+prettyInt :: Int -> Doc Ann
+prettyInt = literal . Pretty.pretty
+
+prettyInteger :: Integer -> Doc Ann
+prettyInteger = literal . Pretty.pretty
 
 prettyNatural :: Natural -> Doc Ann
 prettyNatural = literal . Pretty.pretty
@@ -340,7 +344,7 @@ prettyConst Sort = builtin "Sort"
 
 prettyVar :: Var -> Doc Ann
 prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
-prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyNumber n))
+prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyInt n))
 
 prettyCharacterSet :: Pretty a => CharacterSet -> Expr s a -> Doc Ann
 prettyCharacterSet characterSet = prettyExpression
@@ -805,8 +809,8 @@ prettyCharacterSet characterSet = prettyExpression
     prettyPrimitiveExpression (BoolLit False) =
         builtin "False"
     prettyPrimitiveExpression (IntegerLit a)
-        | 0 <= a    = literal "+" <> prettyNumber a
-        | otherwise = prettyNumber a
+        | 0 <= a    = literal "+" <> prettyInteger a
+        | otherwise = prettyInteger a
     prettyPrimitiveExpression (NaturalLit a) =
         prettyNatural a
     prettyPrimitiveExpression (DoubleLit a) =

@@ -31,6 +31,7 @@ module Dhall.Map
     , lookup
     , member
     , uncons
+    , cons
 
       -- * Combine
     , union
@@ -44,6 +45,7 @@ module Dhall.Map
     , traverseWithKey
     , traverseWithKey_
     , unorderedTraverseWithKey_
+    , unorderedTraverseWithKey
     , foldMapWithKey
 
       -- * Conversions
@@ -309,6 +311,10 @@ uncons (Map _ [])     = Nothing
 uncons (Map m (k:ks)) = Just (k, m Data.Map.! k, Map (Data.Map.delete k m) ks)
 {-# INLINABLE uncons #-}
 
+cons :: Ord k => k -> v -> Map k v -> Map k v
+cons k v (Map m ks) = Map (Data.Map.insert k v m) (k:ks)
+{-# INLINE cons #-}
+
 {-| Check if a key belongs to a `Map`
 
 > member k mempty = False
@@ -476,6 +482,12 @@ unorderedTraverseWithKey_
 unorderedTraverseWithKey_ f = Data.Functor.void . traverse_ (uncurry f) . toList
 {-# INLINABLE unorderedTraverseWithKey_ #-}
 
+unorderedTraverseWithKey
+    :: Ord k => Applicative f => (k -> a -> f b) -> Map k a -> f (Map k b)
+unorderedTraverseWithKey f (Map m ks) =
+  (\m' -> Map m' ks) <$> Data.Map.traverseWithKey f m
+{-# INLINE unorderedTraverseWithKey #-}
+
 {-| Convert a `Map` to a list of key-value pairs in the original order of keys
 
 >>> toList (fromList [("B",1),("A",2)])
@@ -492,7 +504,7 @@ fromList [("A",2),("B",1)]
 -}
 toMap :: Map k v -> Data.Map.Map k v
 toMap (Map m _) = m
-{-# INLINABLE toMap #-}
+{-# INLINE toMap #-}
 
 {-| Return the keys from a `Map` in their original order
 
@@ -501,4 +513,4 @@ toMap (Map m _) = m
 -}
 keys :: Map k v -> [k]
 keys (Map _ ks) = ks
-{-# INLINABLE keys #-}
+{-# INLINE keys #-}

@@ -8,3 +8,6 @@ class ToTerm a where
     encode :: a -> Term
 
 instance ToTerm a => ToTerm (Expr s a)
+
+class FromTerm a where
+    decode :: Term -> Maybe a
