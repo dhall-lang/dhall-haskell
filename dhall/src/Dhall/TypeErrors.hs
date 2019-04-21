@@ -7,9 +7,8 @@ import Data.Semigroup (Semigroup(..))
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
-import Dhall.Core (Const(..), Expr(..), Import(..), X(..))
-import Dhall.Eval (Resolved(..))
-import Dhall.Parser (Src(..))
+import Dhall.Core (Const(..), Expr(..))
+import Dhall.Eval (Raw, Core, Nf, nfEmpty)
 import Dhall.Pretty (Ann)
 
 import qualified Data.Set
@@ -18,17 +17,13 @@ import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Dhall.Diff
 import qualified Dhall.Util
 
-type Raw  = Expr Src Import
-type Core = Expr X Resolved
-type Nf   = Expr X X
-
 data TypeMessage
     = UnboundVariable !Text
     | InvalidInputType !Core
     | InvalidOutputType !Core
     | NotAFunction !Core !Nf
     | TypeMismatch !Core !Nf !Core !Nf
-    | AnnotMismatch !Raw !Core  !Core
+    | AnnotMismatch !Core !Core !Nf
     | Untyped
     | MissingListType
     | MismatchedListElements !Int !Core !Raw !Core
@@ -643,7 +638,7 @@ prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
     short = "Expression doesn't match annotation\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr2
+        <>  prettyDiffNf (nfEmpty expr1) expr2
     long =
         "Explanation: You can annotate an expression with its type or kind using the     \n\
         \❰:❱ symbol, like this:                                                          \n\
@@ -2917,7 +2912,7 @@ buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
 insert :: Pretty a => a -> Doc Ann
 insert = Dhall.Util.insert
 
-prettyDiff :: Expr X Resolved -> Expr X Resolved -> Doc Ann
+prettyDiff :: Core -> Core -> Doc Ann
 prettyDiff exprL exprR = Dhall.Diff.diffNormalized exprL exprR
 
 prettyDiffNf :: Nf -> Nf -> Doc Ann

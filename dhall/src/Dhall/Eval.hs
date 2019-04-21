@@ -8,7 +8,8 @@
   RankNTypes,
   ScopedTypeVariables,
   TupleSections,
-  ViewPatterns
+  ViewPatterns,
+  ExplicitNamespaces
   #-}
 
 {-# OPTIONS_GHC
@@ -44,6 +45,12 @@ module Dhall.Eval (
   , Val(..)
   , pattern VAnyPi
   , Resolved(..)
+  , type Raw
+  , type Core
+  , type Nf
+  , type RawBinding
+  , type CoreBinding
+  , type NfBinding
   , inst
   , eval
   , envNames
@@ -51,6 +58,7 @@ module Dhall.Eval (
   , convEmpty
   , countName
   , quote
+  , freeIn
   , nf
   , nfEmpty
   , alphaNormalize
@@ -85,6 +93,7 @@ import Dhall.Set (Set)
 import GHC.Natural (Natural)
 import GHC.Prim (reallyUnsafePtrEquality#)
 import Data.Text.Prettyprint.Doc (Pretty(..))
+import Dhall.Parser.Combinators (Src)
 
 import qualified Data.Char
 import qualified Data.List.NonEmpty
@@ -95,6 +104,14 @@ import qualified Dhall.Map
 import qualified Text.Printf
 
 ----------------------------------------------------------------------------------------------------
+
+type Raw         = Expr Src Import
+type Core        = Expr X Resolved
+type Nf          = Expr X X
+
+type RawBinding  = Binding Src Import
+type CoreBinding = Binding X Resolved
+type NfBinding   = Binding X X
 
 ptrEq :: a -> a -> Bool
 ptrEq !a !a' = case reallyUnsafePtrEquality# a a' of
@@ -131,7 +148,7 @@ errorMsg = unlines
     _ERROR = "\ESC[1;31mError\ESC[0m"
 
 
-data Closure = Cl !Text !Env !(Expr X Resolved)
+data Closure = Cl !Text !Env !Core
 data VChunks = VChunks ![(Text, Val)] !Text
 
 instance Semigroup VChunks where
@@ -319,10 +336,10 @@ vNaturalPlus t u = case (t, u) of
   (t,             u            ) -> VNaturalPlus t u
 {-# inline vNaturalPlus #-}
 
-eval :: Env -> Expr X Resolved -> Val
+eval :: Env -> Core -> Val
 eval !env t =
   let
-    evalE :: Expr X Resolved -> Val
+    evalE :: Core -> Val
     evalE = eval env
     {-# inline evalE #-}
 
@@ -572,7 +589,7 @@ eval !env t =
                             | otherwise -> error errorMsg
                           t -> VProject t ks
     Embed (Resolved _ v) -> v
-    ImportAlt t _        -> evalE t
+    ImportAlt t _        -> error errorMsg -- ImportAlt is removed by import resolution
     Note{}               -> error errorMsg
 
 
@@ -716,7 +733,7 @@ conv !env t t' =
 
     (_, _) -> False
 
-convEmpty :: Expr X Resolved -> Expr X Resolved -> Bool
+convEmpty :: Core -> Core -> Bool
 convEmpty t u = conv Empty (eval Empty t) (eval Empty u)
 
 -- Quoting
@@ -724,7 +741,7 @@ convEmpty t u = conv Empty (eval Empty t) (eval Empty u)
 
 data Names
   = NEmpty
-  | NBind !Names {-# unpack #-} !Text
+  | NBind !Names {-# UNPACK #-} !Text
   deriving Show
 
 envNames :: Env -> Names
@@ -738,7 +755,7 @@ countName' x = go 0 where
   go  acc (NBind env x') = go (if x == x' then acc + 1 else acc) env
 
 -- | Quote a value into beta-normal form.
-quote :: Names -> Val -> Expr X X
+quote :: Names -> Val -> Nf
 quote !env !t =
   let
     fresh :: Text -> (Text, Val)
@@ -753,15 +770,15 @@ quote !env !t =
     qVar !x !i = Var (V x (fromIntegral (countName' x env - i - 1)))
     {-# inline qVar #-}
 
-    quote_ :: Val -> Expr X X
+    quote_ :: Val -> Nf
     quote_ = quote env
     {-# inline quote_ #-}
 
-    quoteBind :: Text -> Val -> Expr X X
+    quoteBind :: Text -> Val -> Nf
     quoteBind x = quote (NBind env x)
     {-# inline quoteBind #-}
 
-    qApp :: Expr X X -> Val -> Expr X X
+    qApp :: Nf -> Val -> Nf
     qApp t VPrimVar = t
     qApp t u        = App t (quote_ u)
     {-# inline qApp #-}
@@ -850,17 +867,28 @@ quote !env !t =
 
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
-nf :: Env -> Expr X Resolved -> Expr X X
+nf :: Env -> Core -> Nf
 nf !env = quote (envNames env) . eval env
 
 -- | Normalize an expression in an empty environment.
-nfEmpty :: Expr X Resolved -> Expr X X
+nfEmpty :: Core -> Nf
 nfEmpty = nf Empty
 
 -- Alpha-renaming
 --------------------------------------------------------------------------------
 
--- | Rename all binders to "_".
+{-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
+    using De Bruijn indices to distinguish them
+
+>>> alphaNormalize (Lam "a" (Const Type) (Lam "b" (Const Type) (Lam "x" "a" (Lam "y" "b" "x"))))
+Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
+
+    α-normalization does not affect free variables:
+
+>>> alphaNormalize "x"
+Var (V "x" 0)
+
+-}
 alphaNormalize :: Expr s X -> Expr s X
 alphaNormalize = goEnv NEmpty where
 
@@ -956,3 +984,88 @@ alphaNormalize = goEnv NEmpty where
       Note s e         -> Note s (go e)
       ImportAlt t u    -> ImportAlt (go t) (go u)
       Embed a          -> Embed a
+
+{-| Detect if the given variable is free within the given expression
+
+>>> "x" `freeIn` "x"
+True
+>>> "x" `freeIn` "y"
+False
+>>> "x" `freeIn` Lam "x" (Const Type) "x"
+False
+-}
+freeIn :: Var -> Expr s a -> Bool
+freeIn (V x i) = go NEmpty where
+  go :: Names -> Expr s a -> Bool
+  go !ns t = let
+    go_ = go ns
+    in case t of
+      Const _          -> False
+      Var (V x' i')    -> x == x' && (i' - countName' x' ns == i)
+      Lam x a u        -> go_ a || go (NBind ns x) u
+      Pi x a b         -> go_ a || go (NBind ns x) b
+      App t u          -> go_ t || go_ u
+      Let (b :| bs) u  -> gobs ns (b:bs) where
+                            gobs ns []                   = go ns u
+                            gobs ns (Binding x a t : bs) =
+                              maybe False (go ns) a || go ns t || gobs (NBind ns x) bs
+
+      Annot t u        -> go_ t || go_ u
+      Bool             -> False
+      BoolLit _        -> False
+      BoolAnd t u      -> go_ t || go_ u
+      BoolOr t u       -> go_ t || go_ u
+      BoolEQ t u       -> go_ t || go_ u
+      BoolNE t u       -> go_ t || go_ u
+      BoolIf b t f     -> go_ b || go_ t || go_ f
+      Natural          -> False
+      NaturalLit _     -> False
+      NaturalFold      -> False
+      NaturalBuild     -> False
+      NaturalIsZero    -> False
+      NaturalEven      -> False
+      NaturalOdd       -> False
+      NaturalToInteger -> False
+      NaturalShow      -> False
+      NaturalPlus t u  -> go_ t || go_ u
+      NaturalTimes t u -> go_ t || go_ u
+      Integer          -> False
+      IntegerLit _     -> False
+      IntegerShow      -> False
+      IntegerToDouble  -> False
+      Double           -> False
+      DoubleLit _      -> False
+      DoubleShow       -> False
+      Text             -> False
+      TextLit cs       -> case cs of Chunks xys _ -> any (any go_) xys
+      TextAppend t u   -> go_ t || go_ u
+      TextShow         -> False
+      List             -> False
+      ListLit ma ts    -> maybe False go_ ma || any go_ ts
+      ListAppend t u   -> go_ t || go_ u
+      ListBuild        -> False
+      ListFold         -> False
+      ListLength       -> False
+      ListHead         -> False
+      ListLast         -> False
+      ListIndexed      -> False
+      ListReverse      -> False
+      Optional         -> False
+      OptionalLit a mt -> go_ a || maybe False go_ mt
+      Some t           -> go_ t
+      None             -> False
+      OptionalFold     -> False
+      OptionalBuild    -> False
+      Record kts       -> any go_ kts
+      RecordLit kts    -> any go_ kts
+      Union kts        -> any (maybe False go_) kts
+      UnionLit _ v kts -> go_ v || any (maybe False go_) kts
+      Combine t u      -> go_ t || go_ u
+      CombineTypes t u -> go_ t || go_ u
+      Prefer t u       -> go_ t || go_ u
+      Merge t u ma     -> go_ t || go_ u || maybe False go_ ma
+      Field t _        -> go_ t
+      Project t _      -> go_ t
+      Note _ e         -> go_ e
+      ImportAlt t u    -> go_ t || go_ u
+      Embed _          -> False

@@ -3,11 +3,12 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveTraversable  #-}
+{-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE UnicodeSyntax      #-}
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wall -fno-warn-name-shadowing #-}
 
 {-| This module contains the core calculus for the Dhall language.
 
@@ -36,7 +37,7 @@ module Dhall.Core (
     , coerceNote
 
     -- * Normalization
-    , Dhall.Core.alphaNormalize
+    , alphaNormalize
     , normalize
     , normalizeWith
     , Normalizer
@@ -60,7 +61,7 @@ import Control.Applicative (Applicative(..), (<$>))
 import Control.Applicative (empty)
 import Crypto.Hash (SHA256)
 import Data.Data (Data(..))
-import {-# SOURCE #-} Dhall.Eval (Resolved)
+import {-# SOURCE #-} Dhall.Eval (Resolved, Core, Nf, freeIn, alphaNormalize)
 import Data.Foldable
 import Data.Functor.Identity (Identity(..))
 import Data.List.NonEmpty (NonEmpty(..))
@@ -528,20 +529,6 @@ instance IsString (Chunks s a) where
 instance Pretty a => Pretty (Expr s a) where
     pretty = Pretty.unAnnotate . prettyExpr
 
-{-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
-    using De Bruijn indices to distinguish them
-
->>> alphaNormalize (Lam "a" (Const Type) (Lam "b" (Const Type) (Lam "x" "a" (Lam "y" "b" "x"))))
-Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
-
-    α-normalization does not affect free variables:
-
->>> alphaNormalize "x"
-Var (V "x" 0)
-
--}
-alphaNormalize :: Expr s X -> Expr s X
-alphaNormalize = Dhall.Eval.alphaNormalize
 
 {-| Reduce an expression to its normal form, performing beta reduction
 
@@ -552,8 +539,7 @@ alphaNormalize = Dhall.Eval.alphaNormalize
     However, `normalize` will not fail if the expression is ill-typed and will
     leave ill-typed sub-expressions unevaluated.
 -}
-
-normalize :: Expr X Resolved -> Expr X X
+normalize :: Core -> Nf
 normalize = Dhall.Eval.nfEmpty
 
 
@@ -572,16 +558,18 @@ normalize = Dhall.Eval.nfEmpty
     with those functions is not total either.
 
 -}
-normalizeWith :: Maybe (ReifiedNormalizer Resolved) -> Expr X Resolved -> Expr X X
+normalizeWith :: Maybe (ReifiedNormalizer Resolved) -> Core -> Nf
 normalizeWith (Just _) _ = error "custom normalization not yet implemented"
 normalizeWith _        t = Dhall.Eval.nfEmpty t
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise
 -}
-judgmentallyEqual :: Expr X Resolved -> Expr X Resolved -> Bool
+judgmentallyEqual :: Core -> Core -> Bool
 judgmentallyEqual = Dhall.Eval.convEmpty
 
+
+-- Custom normalization
 --------------------------------------------------------------------------------
 
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
@@ -593,26 +581,3 @@ type Normalizer a = NormalizerM Identity a
 -- running into impredicative polymorphism.
 newtype ReifiedNormalizer a = ReifiedNormalizer
   { getReifiedNormalizer :: Normalizer a }
-
-
-
---------------------------------------------------------------------------------
-
-{-| Detect if the given variable is free within the given expression
-
->>> "x" `freeIn` "x"
-True
->>> "x" `freeIn` "y"
-False
->>> "x" `freeIn` Lam "x" (Const Type) "x"
-False
--}
-freeIn :: Eq a => Var -> Expr s a -> Bool
-freeIn = undefined
-
-
-{-| Returns `True` if the given `Char` is valid within an unquoted path
-    component
-
-    This is exported for reuse within the @"Dhall.Parser.Token"@ module
--}
