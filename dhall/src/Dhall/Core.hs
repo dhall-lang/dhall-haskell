@@ -32,7 +32,7 @@ module Dhall.Core (
     , Binding(..)
     , Chunks(..)
     , Expr(..)
-    , X(..)
+    , X
     , coerceEmbed
     , coerceNote
 
@@ -85,27 +85,27 @@ import qualified Data.Text.Prettyprint.Doc  as Pretty
 
 
 -- | Like `Data.Void.Void`, except with a shorter inferred type
-newtype X = X { absurd :: forall a . a }
+data X
 
 instance Show X where
-    show = absurd
+    show _ = undefined
 
 instance Eq X where
   _ == _ = True
 
 instance Data X where
-    dataTypeOf = absurd
+    dataTypeOf _ = undefined
     gunfold _ _ _ = undefined
-    toConstr = absurd
+    toConstr _ = undefined
 
 instance Pretty X where
-    pretty = absurd
+    pretty _ = undefined
 
 instance FromTerm X where
     decode _ = empty
 
 instance ToTerm X where
-    encode = absurd
+    encode _ = undefined
 
 
 {-| Constants for a pure type system

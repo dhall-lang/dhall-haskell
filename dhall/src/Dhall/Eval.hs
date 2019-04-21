@@ -85,7 +85,7 @@ import Dhall.Core (
   , Const(..)
   , Import
   , Var(..)
-  , X(..)
+  , X
   )
 
 import Dhall.Map (Map)

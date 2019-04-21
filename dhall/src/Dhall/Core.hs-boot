@@ -10,4 +10,4 @@ data Expr s a
 
 data Import
 
-newtype X = X { absurd :: forall a . a }
+data X
