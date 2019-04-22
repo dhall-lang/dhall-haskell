@@ -5,16 +5,16 @@ module Dhall.Test.TypeCheck where
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
 import Dhall.Import (Imported)
-import Dhall.Parser (Src)
-import Dhall.TypeCheck (TypeError, X)
+-- import Dhall.Parser (Src)
 import Test.Tasty (TestTree)
+import Dhall.Eval
+import Dhall.Elaboration
 
 import qualified Control.Exception
 import qualified Data.Text
-import qualified Dhall.Core
-import qualified Dhall.Import
+-- import qualified Dhall.Core
+-- import qualified Dhall.Import
 import qualified Dhall.Parser
-import qualified Dhall.TypeCheck
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
@@ -106,12 +106,19 @@ should name basename =
             Left  err  -> Control.Exception.throwIO err
             Right expr -> return expr
 
-        let annotatedExpr = Dhall.Core.Annot actualExpr expectedExpr
+        (expectedExpr, _) <- infer0 "." expectedExpr
 
-        resolvedExpr <- Dhall.Import.load annotatedExpr
-        case Dhall.TypeCheck.typeOf resolvedExpr of
-            Left  err -> Control.Exception.throwIO err
-            Right _   -> return ()
+        _ <- check0 "." actualExpr (eval Empty expectedExpr)
+        pure ()
+
+
+
+        -- let annotatedExpr = Dhall.Core.Annot actualExpr expectedExpr
+
+        -- resolvedExpr <- Dhall.Import.load annotatedExpr
+        -- case Dhall.TypeCheck.typeOf resolvedExpr of
+        --     Left  err -> Control.Exception.throwIO err
+        --     Right _   -> return ()
 
 shouldNotTypeCheck :: Text -> Text -> TestTree
 shouldNotTypeCheck name basename =
@@ -124,10 +131,10 @@ shouldNotTypeCheck name basename =
 
         let io :: IO Bool
             io = do
-                _ <- Dhall.Import.load expression
+                _ <- infer0 "." expression
                 return True
 
-        let handler :: Imported (TypeError Src X)-> IO Bool
+        let handler :: Imported TypeError -> IO Bool
             handler _ = return False
 
         typeChecked <- Control.Exception.handle handler io

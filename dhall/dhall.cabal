@@ -430,6 +430,8 @@ Library
         Dhall.Context,
         Dhall.Core,
         Dhall.Diff,
+        Dhall.Elaboration,
+        Dhall.Eval,
         Dhall.Format,
         Dhall.Freeze,
         Dhall.Hash,
@@ -437,10 +439,10 @@ Library
         Dhall.Lint,
         Dhall.Main,
         Dhall.Map,
-        Dhall.Set,
         Dhall.Parser,
         Dhall.Pretty,
         Dhall.Repl,
+        Dhall.Set,
         Dhall.TH,
         Dhall.Tutorial
     Other-Modules:
@@ -448,8 +450,6 @@ Library
         Dhall.Parser.Expression,
         Dhall.Parser.Combinators,
         Dhall.Parser.Token,
-        Dhall.Eval,
-        Dhall.Elaboration,
         Dhall.TypeErrors,
         Dhall.Util,
         Paths_dhall

@@ -423,64 +423,25 @@ rawFromImport (Import {..}) = do
             path   <- localToPath prefix file
             exists <- Directory.doesFileExist path
 
-            if exists
-                then return ()
-                else throwMissingImport (MissingFile path)
+            unless exists $ throwMissingImport (MissingFile path)
 
             text <- Data.Text.IO.readFile path
-
-            return (path, text)
+            pure (path, text)
 
         Remote url@URL { headers = maybeHeaders } -> do
-            mheaders <- case maybeHeaders of
-                Nothing            -> return Nothing
-                Just importHashed_ -> error "headers not yet supported"
-
-                  -- Resolved <- resolve (Import importHashed_ Code)
-
-                    -- expr <- loadWith (Embed (Import importHashed_ Code))
-
-                    -- let expected :: Expr Src X
-                    --     expected =
-                    --         App List
-                    --             ( Record
-                    --                 ( Dhall.Map.fromList
-                    --                     [("header", Text), ("value", Text)]
-                    --                 )
-                    --             )
-                    -- let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
-                    -- let annot = case expr of
-                    --         Note (Src begin end bytes) _ ->
-                    --             Note (Src begin end bytes') (Annot expr expected)
-                    --           where
-                    --             bytes' = bytes <> " : " <> suffix_
-                    --         _ ->
-                    --             Annot expr expected
-
-                    -- case Dhall.TypeCheck.typeOf annot of
-                    --     Left err -> liftIO (throwIO err)
-                    --     Right _  -> return ()
-
-                    -- let expr' = Dhall.Core.normalize expr
-
-                    -- case toHeaders expr' of
-                    --     Just headers -> do
-                    --         return (Just headers)
-                    --     Nothing      -> do
-                    --         liftIO (throwIO InternalError)
+            mheaders <- forM maybeHeaders $ \_ -> error "headers not yet supported"
 
 #ifdef MIN_VERSION_http_client
             fetchFromHttpUrl url mheaders
 #else
             let urlString = Text.unpack (Dhall.Core.pretty url)
-
             liftIO (throwIO (CannotImportHTTPURL urlString mheaders))
 #endif
 
         Env env -> liftIO $ do
             x <- System.Environment.lookupEnv (Text.unpack env)
             case x of
-                Just string -> return (Text.unpack env, Text.pack string)
+                Just string -> pure (Text.unpack env, Text.pack string)
                 Nothing     -> throwMissingImport (MissingEnvironmentVariable env)
 
         Missing -> liftIO $ do
@@ -492,16 +453,16 @@ rawFromImport (Import {..}) = do
                     Text.Parser.Token.whiteSpace
                     r <- Dhall.Parser.expr
                     Text.Parser.Combinators.eof
-                    return r
+                    pure r
 
             case Text.Megaparsec.parse parser path text of
                 Left errInfo -> do
                     liftIO (throwIO (ParseError errInfo text))
                 Right expr -> do
-                    return expr
+                    pure expr
 
         RawText -> do
-            return (TextLit (Chunks [] text))
+            pure (TextLit (Chunks [] text))
 
 resolve :: Import -> ElabM (Core, Val, VType)
 resolve import0 = do

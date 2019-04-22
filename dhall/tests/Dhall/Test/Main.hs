@@ -26,14 +26,14 @@ allTests =
         [
           Dhall.Test.Normalization.tests
         , Dhall.Test.Parser.tests
-        , Dhall.Test.Regression.tests
-        , Dhall.Test.Tutorial.tests
+        -- , Dhall.Test.Regression.tests
+        -- , Dhall.Test.Tutorial.tests
         , Dhall.Test.Format.tests
         , Dhall.Test.TypeCheck.tests
-        , Dhall.Test.Import.tests
-        , Dhall.Test.QuickCheck.tests
-        , Dhall.Test.Lint.tests
-        , Dhall.Test.Dhall.tests
+        -- , Dhall.Test.Import.tests
+        -- , Dhall.Test.QuickCheck.tests
+        -- , Dhall.Test.Lint.tests
+        -- , Dhall.Test.Dhall.tests
         ]
 
 main :: IO ()

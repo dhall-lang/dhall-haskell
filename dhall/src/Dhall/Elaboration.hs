@@ -243,7 +243,7 @@ check cxt@Cxt{..} t a err = case (t, a) of
 
   (e@(Let bs t), a) -> do
     (bs, cxt) <- inferBindings cxt bs e
-    check cxt t a Nothing
+    Let bs <$> check cxt t a Nothing
 
   (Note s t, a) ->
     addNote s (check cxt t a err)
@@ -474,7 +474,7 @@ infer cxt@Cxt{..} t =
 
     TextShow -> pure (TextShow, vFun VText VText)
 
-    List -> pure (List, VConst Type)
+    List -> pure (List, vFun vType vType)
 
     ListLit Nothing Data.Sequence.Empty -> throwM TmpError
     ListLit Nothing (t :<| ts) -> do
@@ -502,18 +502,19 @@ infer cxt@Cxt{..} t =
     ListLength ->
       pure (ListLength, VHPi "a" vType $ \a -> vFun (VList a) VNatural)
     ListHead ->
-      pure (ListHead, VHPi "a" vType $ \a -> vFun (VList a) a)
+      pure (ListHead, VHPi "a" vType $ \a -> vFun (VList a) (VOptional a))
     ListLast ->
-      pure (ListLast, VHPi "a" vType $ \a -> vFun (VList a) a)
+      pure (ListLast, VHPi "a" vType $ \a -> vFun (VList a) (VOptional a))
     ListIndexed ->
       pure (ListIndexed,
             VHPi "a" vType $ \a ->
             vFun (VList a)
-                 (VRecord (Dhall.Map.fromList [("index", VNatural), ("value", a)])))
+                 (VList $
+                    VRecord (Dhall.Map.fromList [("index", VNatural), ("value", a)])))
     ListReverse ->
       pure (ListReverse, VHPi "a" vType $ \a -> vFun (VList a) (VList a))
 
-    Optional -> pure (Optional, vType)
+    Optional -> pure (Optional, vFun vType vType)
     None     -> pure (None, VHPi "a" vType VOptional)
 
     OptionalLit a t -> do
@@ -657,4 +658,13 @@ infer cxt@Cxt{..} t =
       (t, tv, a) <- resolve imp `catch` \e -> throwM (ImportError e)
       pure (Embed (Resolved imp t tv), a)
 
-    ImportAlt t u -> infer_ t -- import alternatives not yet supported
+    ImportAlt t u -> do
+      infer_ t `catch` \e -> case e of
+        ImportError{} -> infer_ u       -- TODO: accumulation of import errors
+        err           -> throwM err
+
+infer0 :: FilePath -> Raw -> IO (Core, Val)
+infer0 path t = runReaderT (infer emptyCxt t) =<< emptyImportState path
+
+check0 :: FilePath -> Raw -> Val -> IO Core
+check0 path t a = runReaderT (check emptyCxt t a Nothing) =<< emptyImportState path
