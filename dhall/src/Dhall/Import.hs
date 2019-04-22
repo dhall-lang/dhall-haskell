@@ -422,9 +422,7 @@ rawFromImport (Import {..}) = do
         Local prefix file -> liftIO $ do
             path   <- localToPath prefix file
             exists <- Directory.doesFileExist path
-
             unless exists $ throwMissingImport (MissingFile path)
-
             text <- Data.Text.IO.readFile path
             pure (path, text)
 
@@ -485,7 +483,7 @@ resolve import0 = do
   (Map.lookup child <$> liftIO (readIORef _cache)) >>= \case
     Just (t, tv, a) -> pure (t, tv, a)
     Nothing     -> do
-      t      <- rawFromImport import0
+      t      <- rawFromImport child
       (t, a) <- local (\s -> s {_stack = NonEmpty.cons child _stack})
                       (infer emptyCxt t)
       let ~tv = eval Empty t

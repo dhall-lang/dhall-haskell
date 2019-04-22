@@ -13,7 +13,9 @@ import qualified Data.Text.IO
 -- import qualified Dhall.Core
 -- import qualified Dhall.Import
 import qualified Dhall.Parser
+import Unsafe.Coerce
 
+import Dhall.Lint
 import Dhall.Eval
 import Dhall.Elaboration
 -- import Dhall.Core
@@ -497,6 +499,8 @@ shouldNormalize name = should ("normalize " <> name <> " correctly")
 --                 "The normalized expression did not match the expected output"
 --         Test.Tasty.HUnit.assertEqual message expectedResolved actualNormalized
 
+
+
 shouldOnlyNormalize :: String -> TestTree
 shouldOnlyNormalize name =
     Test.Tasty.HUnit.testCase ("normalize " <> name <> " correctly") $ do
@@ -510,7 +514,7 @@ shouldOnlyNormalize name =
         actualExpr <- case Dhall.Parser.exprFromText mempty actualCode of
             Left  err  -> Control.Exception.throwIO err
             Right expr -> return expr
-        actualResolved <- fst <$> infer0 "." actualExpr
+        let actualResolved = unsafeCoerce (denote actualExpr) -- TODO: fix unsafeCoerces
 
         let actualNormalized =
                 alphaNormalize $ nfEmpty actualResolved
@@ -518,7 +522,8 @@ shouldOnlyNormalize name =
         expectedExpr <- case Dhall.Parser.exprFromText mempty expectedCode of
             Left  err  -> Control.Exception.throwIO err
             Right expr -> return expr
-        expectedResolved <- fst <$> infer0 "." expectedExpr
+
+        let expectedResolved = unsafeCoerce (denote expectedExpr) -- TODO: fix unsafeCoerces
 
         let expectedNormalized =
                 alphaNormalize $ nfEmpty expectedResolved

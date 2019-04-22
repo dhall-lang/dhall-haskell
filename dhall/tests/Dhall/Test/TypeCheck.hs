@@ -1,10 +1,11 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module Dhall.Test.TypeCheck where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
-import Dhall.Import (Imported)
+-- import Dhall.Import (Imported)
 -- import Dhall.Parser (Src)
 import Test.Tasty (TestTree)
 import Dhall.Eval
@@ -134,10 +135,8 @@ shouldNotTypeCheck name basename =
                 _ <- infer0 "." expression
                 return True
 
-        let handler :: Imported TypeError -> IO Bool
-            handler _ = return False
-
-        typeChecked <- Control.Exception.handle handler io
+        typeChecked <-
+          io `Control.Exception.catch` \(_ :: TypeError) -> pure False
 
         if typeChecked
             then fail (Data.Text.unpack code <> " should not have type-checked")

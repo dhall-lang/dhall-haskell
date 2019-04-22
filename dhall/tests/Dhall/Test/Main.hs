@@ -2,15 +2,15 @@ module Main where
 
 import           Test.Tasty               (TestTree)
 
-import qualified Dhall.Test.Dhall
+-- import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.Format
-import qualified Dhall.Test.Import
-import qualified Dhall.Test.Lint
+-- import qualified Dhall.Test.Import
+-- import qualified Dhall.Test.Lint
 import qualified Dhall.Test.Normalization
 import qualified Dhall.Test.Parser
-import qualified Dhall.Test.QuickCheck
-import qualified Dhall.Test.Regression
-import qualified Dhall.Test.Tutorial
+-- import qualified Dhall.Test.QuickCheck
+-- import qualified Dhall.Test.Regression
+-- import qualified Dhall.Test.Tutorial
 import qualified Dhall.Test.TypeCheck
 import qualified GHC.IO.Encoding
 import qualified System.Directory

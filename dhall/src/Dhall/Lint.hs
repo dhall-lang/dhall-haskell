@@ -12,7 +12,7 @@ module Dhall.Lint
 import Control.Monad (mplus)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup ((<>))
-import Dhall.Core (Binding(..), Expr(..), Import, Var(..), Chunks(..))
+import Dhall.Core (Binding(..), Expr(..), Import, Var(..), Chunks(..), X)
 import Lens.Family (ASetter, over)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -35,8 +35,11 @@ lint =
                 removeLetInLet e
         `mplus` removeUnusedBindings e
         `mplus` optionalLitToSomeNone e
-        `mplus` denote e
+        `mplus` denoteRule e
     )
+
+denote :: Expr s a -> Expr X a
+denote t = unsafeCoerce (rewriteOf subExpressions denoteRule t)
 
 removeLetInLet :: Eq a => Expr s a -> Maybe (Expr s a)
 removeLetInLet (Let a (Let b c)) = Just (Let (a <> b) c)
@@ -57,10 +60,9 @@ removeUnusedBindings (Let (Binding a _ _ :| (l : ls)) d)
     e = Let (l :| ls) d
 removeUnusedBindings _ = Nothing
 
-denote :: Expr s a -> Maybe (Expr s a)
-denote (Note _ t) = Just t
-denote _          = Nothing
-
+denoteRule :: Expr s a -> Maybe (Expr s a)
+denoteRule (Note _ t) = Just t
+denoteRule _          = Nothing
 
 optionalLitToSomeNone :: Expr s a -> Maybe (Expr s a)
 optionalLitToSomeNone (OptionalLit _ (Just b)) = Just (Some b)

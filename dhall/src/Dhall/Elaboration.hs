@@ -81,7 +81,7 @@ data TypeError = TypeError
     , current     :: Raw
     , typeMessage :: TypeMessage
     }
-    | TmpError
+    | TmpError (Maybe Src)
     | ImportError MissingImports
 
 instance Show TypeError where
@@ -113,7 +113,7 @@ instance Pretty TypeError where
         source = case expr of
             Note s _ -> pretty s
             _        -> mempty
-    pretty TmpError = "temporary error"
+    pretty (TmpError s)    = "temporary error:\n" <> pretty s
     pretty (ImportError e) = fromString (show e)
 
 {-| Newtype used to wrap error messages so that they render with a more
@@ -153,7 +153,7 @@ instance Pretty DetailedTypeError where
         source = case expr of
             Note s _ -> pretty s
             _        -> mempty
-    pretty (DetailedTypeError TmpError) = "temporary error"
+    pretty (DetailedTypeError (TmpError s)) = "temporary error:\n" <> pretty s
     pretty (DetailedTypeError (ImportError e)) = fromString (show e)
 
 -- Elaboration
@@ -175,24 +175,25 @@ rule Sort Sort = Just Sort
 -- path in the type inference for lambdas becomes unsound.
 rule _    _    = Nothing
 
+tmpError :: ElabM a
+tmpError = throwM (TmpError Nothing)
 
 fresh :: Cxt -> Text -> (Text, Val)
 fresh Cxt{..} x = (x, VVar x (countName x _values))
 {-# inline fresh #-}
 
 unify :: Cxt -> Val -> Val -> ElabM ()
-unify Cxt{..} t u = unless (conv _values t u) (throwM TmpError)
+unify Cxt{..} t u = unless (conv _values t u) (tmpError)
 {-# inline unify #-}
 
 addNote :: Src -> ElabM a -> ElabM a
 addNote s ma = ma `catch` \(err :: TypeError) -> case err of
   TypeError _ Note{} _ -> throwM err
   TypeError cxt' t' m  -> throwM (TypeError cxt' (Note s t') m)
-  TmpError             -> do
-    liftIO $ print $ pretty s
-    throwM TmpError
+  TmpError (Just s')   -> throwM (TmpError (Just s'))
+  TmpError Nothing     -> throwM (TmpError (Just s))
   ImportError e -> do
-    liftIO $ print $ pretty s
+    -- liftIO $ print $ pretty s
     throwM (ImportError e)
 
 checkTy ::
@@ -206,7 +207,7 @@ checkTy cxt t err = do
     VConst c -> pure (t, c)
     _        -> case err of
       Just err -> throwM (err t)
-      _        -> throwM TmpError
+      _        -> tmpError
 {-# inline checkTy #-}
 
 check ::
@@ -226,7 +227,7 @@ check cxt@Cxt{..} t a err = case (t, a) of
 
   (RecordLit ts, VRecord as) -> do
     ts <- flip Dhall.Map.unorderedTraverseWithKey ts $ \k t ->
-      maybe (throwM TmpError) (\a -> check cxt t a Nothing) (Dhall.Map.lookup k as)
+      maybe (tmpError) (\a -> check cxt t a Nothing) (Dhall.Map.lookup k as)
     pure (RecordLit ts)
 
   (Merge t u ma, a) -> do
@@ -236,8 +237,8 @@ check cxt@Cxt{..} t a err = case (t, a) of
       pure a'
     (u, ut) <- infer cxt u
     handlersTy <- case ut of
-      VUnion as -> pure (VRecord (maybe a (\a -> vFun ut a) <$> as))
-      _         -> throwM TmpError
+      VUnion as -> pure (VRecord (maybe a (\b -> vFun b a) <$> as))
+      _         -> tmpError
     t <- check cxt t handlersTy Nothing
     pure (Merge t u ma)
 
@@ -251,7 +252,7 @@ check cxt@Cxt{..} t a err = case (t, a) of
   (t, a) -> do
     (t, a') <- infer cxt t
     unless (conv _values a a') $ do
-      maybe (throwM TmpError)
+      maybe (tmpError)
             (\err -> throwM (err t a'))
             err
     pure t
@@ -307,7 +308,7 @@ optionalFoldTy :: Val ->  Val
 optionalFoldTy a =
   VHPi "optional" vType $ \optional ->
   VHPi "some" (vFun a optional) $ \some ->
-  VHPi "none" a $ \none ->
+  VHPi "none" optional $ \none ->
   optional
 {-# inline optionalFoldTy #-}
 
@@ -315,7 +316,7 @@ checkCombine :: Cxt -> Val -> Val -> ElabM ()
 checkCombine cxt = go where
   go (VRecord as) (VRecord bs) =
     forM_ (Dhall.Map.intersectionWith (,) as bs) (uncurry go)
-  go _ _ = throwM TmpError
+  go _ _ = tmpError
 
 inferUnion ::
      Cxt
@@ -356,10 +357,10 @@ infer cxt@Cxt{..} t =
   in case t of
     Const k -> (\k' -> (Const k, VConst k')) <$> axiom k
 
-    e@(Var (V x i)) -> go _types i where
-      go TEmpty          !_ = throwM (TypeError cxt e (UnboundVariable x))
-      go (TBind ts x' a) i
-        | x == x'   = if i == 0 then pure (Var (V x i), a) else go ts (i - 1)
+    e@(Var (V topX topI)) -> go _types topI where
+      go TEmpty          !_ = throwM (TypeError cxt e (UnboundVariable topX))
+      go (TBind ts x a) i
+        | x == topX = if i == 0 then pure (Var (V topX topI), a) else go ts (i - 1)
         | otherwise = go ts i
 
     -- Inefficient. Checking lambdas is greatly preferable.
@@ -476,7 +477,7 @@ infer cxt@Cxt{..} t =
 
     List -> pure (List, vFun vType vType)
 
-    ListLit Nothing Data.Sequence.Empty -> throwM TmpError
+    ListLit Nothing Data.Sequence.Empty -> tmpError
     ListLit Nothing (t :<| ts) -> do
       (t, a) <- infer_ t
       ts <- forM ts $ \t -> check_ t a Nothing
@@ -493,7 +494,7 @@ infer cxt@Cxt{..} t =
         VList a -> do
           u <- check_ u (VList a) Nothing
           pure (ListAppend t u, VList a)
-        _ -> throwM TmpError
+        _ -> tmpError
 
     ListBuild ->
       pure (ListBuild, VHPi "a" vType $ \a -> vFun (listFoldTy a) (VList a))
@@ -562,14 +563,16 @@ infer cxt@Cxt{..} t =
 
     Union ts -> inferUnion cxt Nothing ts
 
-    UnionLit k t ts -> do
-      case Dhall.Map.lookup k ts of
-        Just _  -> throwM TmpError -- duplicate alternative
+    UnionLit k t as -> do
+      case Dhall.Map.lookup k as of
+        Just _  -> tmpError -- duplicate alternative
         Nothing -> pure ()
-      (t, a)        <- infer_ t
-      ak            <- tyOfTy_ a
-      (Union ts, _) <- inferUnion cxt (Just ak) ts
-      pure (UnionLit k t ts, VUnion ((eval_ <$>) <$> Dhall.Map.insert k (Just t) ts))
+      (t, a) <- infer_ t
+      let na = coerceNote $ coerceEmbed $ quote_ a
+      (_, ak)       <- checkTy_ na Nothing
+      (Union as, _) <- inferUnion cxt (Just ak) as
+      pure (UnionLit k t as,
+            VUnion ((eval_ <$>) <$> Dhall.Map.insert k (Just na) as))
 
     Combine t u -> do
       (t, tt) <- infer_ t
@@ -590,7 +593,7 @@ infer cxt@Cxt{..} t =
       (u, ut) <- infer_ u
       ty <- case (tt, ut) of
         (VRecord as, VRecord bs) -> pure (VRecord (Dhall.Map.union as bs))
-        _                        -> throwM TmpError
+        _                        -> tmpError
       ak <- tyOfTy_ tt
       checkTyOfTy_ ut ak
       pure (Prefer t u, ty)
@@ -607,21 +610,21 @@ infer cxt@Cxt{..} t =
       (u, ut) <- infer_ u
       (handle, union) <- case (tt, ut) of
         (VRecord ts, VUnion us) -> pure (ts, us)
-        _                       -> throwM TmpError
+        _                       -> tmpError
       a <- case Dhall.Map.uncons handle of
-        Nothing -> throwM TmpError -- missing return type
+        Nothing -> tmpError -- missing return type
         Just (k, a, _) ->
           case Dhall.Map.lookup k union of
-            Nothing           -> throwM TmpError -- unused handler
+            Nothing           -> tmpError -- unused handler
             Just Nothing      -> pure a
             Just (Just field) -> case a of
               VAnyPi (fresh cxt -> (_, VVar x i)) field' b -> do
                 let bv = b (VVar x i)
                 when (freeIn (V x i) (quoteBind_ x bv)) $
-                  throwM TmpError   -- can't be a dependent function
+                  tmpError   -- can't be a dependent function
                 unify_ field field'
                 pure bv
-              _ -> throwM TmpError
+              _ -> tmpError
       let tt' = VRecord (maybe a (\field -> vFun field a) <$> union)
       unify_ tt tt'
       pure (Merge t u Nothing, a)
@@ -631,14 +634,14 @@ infer cxt@Cxt{..} t =
       case tt of
         VRecord ts -> case Dhall.Map.lookup k ts of
           Just a -> pure (Field t k, a)
-          _      -> throwM TmpError
+          _      -> tmpError
         VConst _ -> case eval_ t of
           VUnion ts -> case Dhall.Map.lookup k ts of
-            Nothing       -> throwM TmpError
+            Nothing       -> tmpError
             Just Nothing  -> pure (Field t k, VUnion ts)
             Just (Just a) -> pure (Field t k, vFun a (VUnion ts))
-          _ -> throwM TmpError
-        _ -> throwM TmpError
+          _ -> tmpError
+        _ -> tmpError
 
     Project t ks -> do
       (t, tt) <- infer_ t
@@ -647,9 +650,9 @@ infer cxt@Cxt{..} t =
           as <- fmap Dhall.Map.fromList $ forM (toList ks) $ \k ->
             case Dhall.Map.lookup k as of
               Just a  -> pure (k, a)
-              Nothing -> throwM TmpError
+              Nothing -> tmpError
           pure (Project t ks, VRecord as)
-        _ -> throwM TmpError
+        _ -> tmpError
 
     Note s t -> do
       addNote s (infer_ t)
