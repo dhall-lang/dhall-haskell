@@ -513,6 +513,7 @@ command (Options {..}) = do
 
         _ -> do
           putStrLn "unsupported option"
+          putStrLn "only \"dhall\" and \"dhall type\" are supported currently"
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()

@@ -4,7 +4,7 @@ import           Test.Tasty               (TestTree)
 
 -- import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.Format
--- import qualified Dhall.Test.Import
+import qualified Dhall.Test.Import
 -- import qualified Dhall.Test.Lint
 import qualified Dhall.Test.Normalization
 import qualified Dhall.Test.Parser
@@ -30,7 +30,7 @@ allTests =
         -- , Dhall.Test.Tutorial.tests
         , Dhall.Test.Format.tests
         , Dhall.Test.TypeCheck.tests
-        -- , Dhall.Test.Import.tests
+        , Dhall.Test.Import.tests
         -- , Dhall.Test.QuickCheck.tests
         -- , Dhall.Test.Lint.tests
         -- , Dhall.Test.Dhall.tests
