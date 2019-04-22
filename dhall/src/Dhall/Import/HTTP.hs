@@ -1,18 +1,19 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
 module Dhall.Import.HTTP where
 
+import Control.Monad.Reader
 import Control.Exception (Exception)
-import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString (ByteString)
 import Data.CaseInsensitive (CI)
-import Data.Dynamic (fromDynamic, toDyn)
+import Data.Dynamic (Dynamic, Typeable, toDyn)
 import Data.Semigroup ((<>))
-import Lens.Family.State.Strict (zoom)
+import Dhall.Context
+import Data.IORef
 
 import Dhall.Core
     ( Import(..)
@@ -22,13 +23,10 @@ import Dhall.Core
     , URL(..)
     )
 
-import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
 import qualified Dhall.Core
 import qualified Dhall.Util
-
-import Dhall.Import.Types
 
 import qualified Control.Exception
 #ifdef __GHCJS__
@@ -49,6 +47,19 @@ import Network.HTTP.Client (HttpException(..), Manager)
 import qualified Network.HTTP.Client                     as HTTP
 import qualified Network.HTTP.Client.TLS                 as HTTP
 import qualified Network.HTTP.Types.Status
+
+-- | Wrapper around `HttpException`s with a prettier `Show` instance.
+--
+-- In order to keep the library API constant even when the @with-http@ Cabal
+-- flag is disabled the pretty error message is pre-rendered and the real
+-- 'HttpExcepion' is stored in a 'Dynamic'
+data PrettyHttpException = PrettyHttpException String Dynamic
+    deriving (Typeable)
+
+instance Exception PrettyHttpException
+
+instance Show PrettyHttpException where
+  show (PrettyHttpException msg _) = msg
 
 mkPrettyHttpException :: HttpException -> PrettyHttpException
 mkPrettyHttpException ex =
@@ -106,24 +117,25 @@ renderPrettyHttpException e = case e of
         <> show e'
 #endif
 
-needManager :: StateT (Status m) IO Manager
+needManager :: ElabM Manager
 needManager = do
-    x <- zoom manager State.get
-    case join (fmap fromDynamic x) of
-        Just m  -> return m
-        Nothing -> do
-            let settings = HTTP.tlsManagerSettings
-
+  mref <- asks _manager
+  liftIO (readIORef mref) >>= \case
+    Just m  -> pure m
+    Nothing -> do
+      let settings = HTTP.tlsManagerSettings
 #ifdef MIN_VERSION_http_client
 #if MIN_VERSION_http_client(0,5,0)
-                    { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (30 * 1000 * 1000) }  -- 30 seconds
+            -- 30 seconds
+            { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (30 * 1000 * 1000) }
 #else
-                    { HTTP.managerResponseTimeout = Just (30 * 1000 * 1000) }  -- 30 seconds
+            -- 30 seconds
+            { HTTP.managerResponseTimeout = Just (30 * 1000 * 1000) }
 #endif
 #endif
-            m <- liftIO (HTTP.newManager settings)
-            zoom manager (State.put (Just (toDyn m)))
-            return m
+      m <- liftIO (HTTP.newManager settings)
+      liftIO (writeIORef mref (Just m))
+      pure m
 
 data NotCORSCompliant = NotCORSCompliant
     { expectedOrigins :: [ByteString]
@@ -203,7 +215,7 @@ corsCompliant _ _ _ = return ()
 fetchFromHttpUrl
     :: URL
     -> Maybe [(CI ByteString, ByteString)]
-    -> StateT (Status m) IO (String, Text.Text)
+    -> ElabM (String, Text.Text)
 #ifdef __GHCJS__
 fetchFromHttpUrl childURL Nothing = do
     let childURLText = Dhall.Core.pretty childURL
@@ -242,7 +254,7 @@ fetchFromHttpUrl childURL mheaders = do
 
     response <- liftIO (Control.Exception.handle handler io)
 
-    Status {..} <- State.get
+    ImportState {..} <- ask
 
     let parentImport = NonEmpty.head _stack
 

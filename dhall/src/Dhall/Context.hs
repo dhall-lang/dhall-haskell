@@ -1,78 +1,98 @@
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings #-}
 
--- | This is a utility module that consolidates all `Context`-related operations
+module Dhall.Context where
 
-module Dhall.Context (
-    -- * Context
-      Context
-    , empty
-    , insert
-    , match
-    , lookup
-    , toList
-    ) where
-
+import Control.Monad.Reader
+import Data.IORef
+import Data.List.NonEmpty
+import Data.Map.Strict (Map)
 import Data.Text (Text)
-import Prelude hiding (lookup)
+import Dhall.Binary
+import Dhall.Core
+import Dhall.Eval
+import Network.HTTP.Client (Manager)
+import System.FilePath
 
-{-| A @(Context a)@ associates `Text` labels with values of type @a@.  Each
-    `Text` label can correspond to multiple values of type @a@
+import qualified Data.Text
 
-    The `Context` is used for type-checking when @(a = Expr X)@
 
-    * You create a `Context` using `empty` and `insert`
-    * You transform a `Context` using `fmap`
-    * You consume a `Context` using `lookup` and `toList`
+-- | An import which has been previously resolved during elaboration. The
+--   contained 'Val' is the lazy value of the imported expression.
+data ResolvedImport = ResolvedImport !Import Val
 
-    The difference between a `Context` and a `Data.Map.Map` is that a `Context`
-    lets you have multiple ordered occurrences of the same key and you can
-    query for the @n@th occurrence of a given key.
--}
-newtype Context a = Context { getContext :: [(Text, a)] }
-    deriving (Functor)
+-- | Types of local bindings.
+data Types = TEmpty | TBind !Types {-# unpack #-} !Text Val
 
--- | An empty context with no key-value pairs
-empty :: Context a
-empty = Context []
+typesNames :: Types -> Names
+typesNames TEmpty         = NEmpty
+typesNames (TBind ts x _) = NBind (typesNames ts) x
 
--- | Add a key-value pair to the `Context`
-insert :: Text -> a -> Context a -> Context a
-insert k v (Context kvs) = Context ((k, v) : kvs)
-{-# INLINABLE insert #-}
+-- | Normal types of local bindings.
+typesToList :: Types -> [(Text, Nf)]
+typesToList TEmpty         = []
+typesToList (TBind ts x v) = (x, quote (typesNames ts) v): typesToList ts
 
-{-| \"Pattern match\" on a `Context`
+data Cxt = Cxt {
+    _values :: !Env
+  , _types  :: !Types
+  }
 
-> match (insert k v ctx) = Just (k, v, ctx)
-> match  empty           = Nothing
--}
-match :: Context a -> Maybe (Text, a, Context a)
-match (Context ((k, v) : kvs)) = Just (k, v, Context kvs)
-match (Context           []  ) = Nothing
-{-# INLINABLE match #-}
+emptyCxt :: Cxt
+emptyCxt = Cxt Empty TEmpty
 
-{-| Look up a key by name and index
+quoteCxt :: Cxt -> Val -> Nf
+quoteCxt Cxt{..} = quote (envNames _values)
+{-# inline quoteCxt #-}
 
-> lookup _ _         empty  = Nothing
-> lookup k 0 (insert k v c) = Just v
-> lookup k n (insert k v c) = lookup k (n - 1) c
-> lookup k n (insert j v c) = lookup k  n      c  -- k /= j
--}
-lookup :: Text -> Integer -> Context a -> Maybe a
-lookup _ _ (Context         []  ) =
-    Nothing
-lookup x n (Context ((k, v):kvs)) =
-    if x == k
-    then if n == 0
-         then Just v
-         else lookup x (n - 1) (Context kvs)
-    else lookup x n (Context kvs)
-{-# INLINABLE lookup #-}
+define :: Text -> Val -> Val -> Cxt -> Cxt
+define x t a (Cxt ts as) = Cxt (Extend ts x t) (TBind as x a)
+{-# inline define #-}
 
-{-| Return all key-value associations as a list
+bind :: Text -> Val -> Cxt -> Cxt
+bind x a (Cxt ts as) = Cxt (Skip ts x) (TBind as x a)
+{-# inline bind #-}
 
-> toList           empty  = []
-> toList (insert k v ctx) = (k, v) : toList ctx
--}
-toList :: Context a -> [(Text, a)]
-toList = getContext
-{-# INLINABLE toList #-}
+
+data ImportState = ImportState
+  { _stack :: !(NonEmpty Import)
+    -- ^ Stack of `Import`s that we've imported along the way to get to the
+    -- current point
+
+  , _cache :: !(IORef (Map Import (Core, Val, VType)))
+    -- ^ Cache of imported expressions in order to avoid importing the same
+    --   expression twice with different values
+
+  , _manager :: !(IORef (Maybe Manager))
+    -- ^ Cache for the HTTP `Manager` so that we only acquire it once
+
+  , _standardVersion :: !StandardVersion
+  }
+
+type ElabM = ReaderT ImportState IO
+
+emptyImportState :: FilePath -> IO ImportState
+emptyImportState rootDirectory = do
+  let
+    prefix = if isRelative rootDirectory then Here else Absolute
+
+    pathComponents =
+      Data.Text.pack <$> Prelude.reverse (splitDirectories rootDirectory)
+
+    dirAsFile = File (Directory pathComponents) "."
+
+    -- Fake import to set the directory we're relative to.
+    rootImport = Import
+      { importHashed = ImportHashed
+        { hash = Nothing
+        , importType = Local prefix dirAsFile
+        }
+      , importMode = Code
+      }
+
+    _stack           = pure rootImport
+    _manager         = Nothing
+    _standardVersion = defaultStandardVersion
+
+  _manager <- newIORef Nothing
+  _cache   <- newIORef mempty
+  pure (ImportState{..})

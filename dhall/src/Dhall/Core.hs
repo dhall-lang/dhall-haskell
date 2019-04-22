@@ -39,10 +39,6 @@ module Dhall.Core (
     -- * Normalization
     , alphaNormalize
     , normalize
-    , normalizeWith
-    , Normalizer
-    , NormalizerM
-    , ReifiedNormalizer (..)
     , judgmentallyEqual
     , freeIn
 
@@ -61,9 +57,8 @@ import Control.Applicative (Applicative(..), (<$>))
 import Control.Applicative (empty)
 import Crypto.Hash (SHA256)
 import Data.Data (Data(..))
-import {-# SOURCE #-} Dhall.Eval (Resolved, Core, Nf, freeIn, alphaNormalize)
+import {-# SOURCE #-} Dhall.Eval (Core, Nf, freeIn, alphaNormalize)
 import Data.Foldable
-import Data.Functor.Identity (Identity(..))
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
@@ -542,42 +537,8 @@ instance Pretty a => Pretty (Expr s a) where
 normalize :: Core -> Nf
 normalize = Dhall.Eval.nfEmpty
 
-
-{-| Reduce an expression to its normal form, performing beta reduction and applying
-    any custom definitions.
-
-    `normalizeWith` is designed to be used with function `typeWith`. The `typeWith`
-    function allows typing of Dhall functions in a custom typing context whereas
-    `normalizeWith` allows evaluating Dhall expressions in a custom context.
-
-    To be more precise `normalizeWith` applies the given normalizer when it finds an
-    application term that it cannot reduce by other means.
-
-    Note that the context used in normalization will determine the properties of normalization.
-    That is, if the functions in custom context are not total then the Dhall language, evaluated
-    with those functions is not total either.
-
--}
-normalizeWith :: Maybe (ReifiedNormalizer Resolved) -> Core -> Nf
-normalizeWith (Just _) _ = error "custom normalization not yet implemented"
-normalizeWith _        t = Dhall.Eval.nfEmpty t
-
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
-    `False` otherwise
+    `False` otherwise.
 -}
 judgmentallyEqual :: Core -> Core -> Bool
 judgmentallyEqual = Dhall.Eval.convEmpty
-
-
--- Custom normalization
---------------------------------------------------------------------------------
-
--- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
---   polymorphic enough to be used.
-type NormalizerM m a = forall s. Expr s a -> m (Maybe (Expr s a))
-type Normalizer a = NormalizerM Identity a
-
--- | A reified 'Normalizer', which can be stored in structures without
--- running into impredicative polymorphism.
-newtype ReifiedNormalizer a = ReifiedNormalizer
-  { getReifiedNormalizer :: Normalizer a }

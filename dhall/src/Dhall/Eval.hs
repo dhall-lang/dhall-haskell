@@ -45,6 +45,7 @@ module Dhall.Eval (
   , Val(..)
   , pattern VAnyPi
   , Resolved(..)
+  , type VType
   , type Raw
   , type Core
   , type Nf
@@ -108,6 +109,7 @@ import qualified Text.Printf
 type Raw         = Expr Src Import
 type Core        = Expr X Resolved
 type Nf          = Expr X X
+type VType       = Val
 
 type RawBinding  = Binding Src Import
 type CoreBinding = Binding X Resolved
@@ -119,13 +121,13 @@ ptrEq !a !a' = case reallyUnsafePtrEquality# a a' of
   _  -> False
 {-# inline ptrEq #-}
 
-data Resolved = Resolved !Import Val
+data Resolved = Resolved !Import !Core Val
 
 instance Show Resolved where
-  show (Resolved i _) = show i
+  show (Resolved i _ _) = show i
 
 instance Pretty Resolved where
-  pretty (Resolved i _) = pretty i
+  pretty (Resolved i _ _) = pretty i
 
 data Env =
     Empty
@@ -588,7 +590,7 @@ eval !env t =
                               -> VRecordLit (Dhall.Map.sort (Dhall.Map.fromList s))
                             | otherwise -> error errorMsg
                           t -> VProject t ks
-    Embed (Resolved _ v) -> v
+    Embed (Resolved _ _ v) -> v
     ImportAlt t _        -> error errorMsg -- ImportAlt is removed by import resolution
     Note{}               -> error errorMsg
 

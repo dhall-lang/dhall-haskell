@@ -25,13 +25,16 @@ Elaboration outputs expressions which
 
 - are well-typed
 - are stripped of `Note`-s.
-- contain imports which are resolved and type-checked, with `Import`-s annotated
+- contain imports which are resolved and type-checked, with imports annotated
   with lazy values of imported expressions.
 
-Since elaboration includes import resolution, we need to carry around state for
-imports.
+Not supported currently:
+- informative type errors in most cases
+- local import caches
+- hash integrity checks
+- Dot import graphs
+- import alternatives
 -}
-
 
 module Dhall.Elaboration where
 
@@ -40,7 +43,6 @@ import Dhall.Core
     , Binding(..)
     , Chunks(..)
     , Const(..)
-    , Import(..)
     , Var(..)
     , coerceEmbed
     , coerceNote
@@ -52,108 +54,23 @@ import Control.Monad.Reader
 import Control.Monad.State.Strict
 import Data.Dynamic
 import Data.Foldable
-import Data.IORef
+import Data.String
+import Dhall.Import
 import Data.List.NonEmpty (NonEmpty(..), cons)
-import Data.Map (Map)
 import Data.Sequence (pattern (:<|))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty(..))
-import Dhall.Binary (StandardVersion(..))
 import Dhall.Eval
 import Dhall.Pretty (layoutOpts)
 import Dhall.TypeErrors
 import Dhall.Parser.Combinators (Src)
-import Text.Dot
+import Dhall.Context
 
 import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Map
 import qualified Dhall.Util
 import qualified Data.Sequence
-
--- Elaboration context
---------------------------------------------------------------------------------
-
--- | An import which has been previously resolved during elaboration. The
---   contained 'Val' is the lazy value of the imported expression.
-data ResolvedImport = ResolvedImport !Import Val
-
--- | Types of local bindings.
-data Types = TEmpty | TBind !Types {-# unpack #-} !Text Val
-
-typesNames :: Types -> Names
-typesNames TEmpty         = NEmpty
-typesNames (TBind ts x _) = NBind (typesNames ts) x
-
--- | Normal types of local bindings.
-typesToList :: Types -> [(Text, Nf)]
-typesToList TEmpty         = []
-typesToList (TBind ts x v) = (x, quote (typesNames ts) v): typesToList ts
-
-data Cxt = Cxt {
-    _values :: !Env
-  , _types  :: !Types
-  }
-
-emptyCxt :: Cxt
-emptyCxt = Cxt Empty TEmpty
-
-quoteCxt :: Cxt -> Val -> Nf
-quoteCxt Cxt{..} = quote (envNames _values)
-
-define :: Text -> Val -> Val -> Cxt -> Cxt
-define x t a (Cxt ts as) = Cxt (Extend ts x t) (TBind as x a)
-{-# inline define #-}
-
-bind :: Text -> Val -> Cxt -> Cxt
-bind x a (Cxt ts as) = Cxt (Skip ts x) (TBind as x a)
-{-# inline bind #-}
-
-data ImportState = ImportState
-  { _stack :: ![Import]
-    -- ^ Stack of `Import`s that we've imported along the way to get to the
-    -- current point
-
-  , _dot :: !(Dot NodeId)
-    -- ^ Graph of all the imports visited so far
-
-  , _nextNodeId :: !Int
-    -- ^ Next node id to be used for the dot graph generation
-
-  , _cache :: !(Map Import (NodeId, Val))
-    -- ^ Cache of imported expressions with their node id in order to avoid
-    --   importing the same expression twice with different values
-
-  , _manager :: !(Maybe Dynamic)
-    -- ^ Cache for the HTTP `Manager` so that we only acquire it once
-
-  , _standardVersion :: !StandardVersion
-  }
-
-emptyImportState :: ImportState
-emptyImportState = ImportState
-  [] (pure (userNodeId 0)) 0 mempty Nothing NoVersion
-
-type ElabM = ReaderT (IORef ImportState) IO
-
-getState :: ElabM ImportState
-getState = do
-  ref <- ask
-  liftIO $ readIORef ref
-{-# inline getState #-}
-
-putState :: ImportState -> ElabM ()
-putState s = do
-  ref <- ask
-  liftIO $ writeIORef ref s
-{-# inline putState #-}
-
-modifyState :: (ImportState -> ImportState) -> ElabM ()
-modifyState f = do
-  ref <- ask
-  liftIO $ modifyIORef' ref f
-{-# inline modifyState #-}
-
 
 -- Type errors
 --------------------------------------------------------------------------------
@@ -165,6 +82,7 @@ data TypeError = TypeError
     , typeMessage :: TypeMessage
     }
     | TmpError
+    | ImportError MissingImports
 
 instance Show TypeError where
     show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
@@ -175,10 +93,9 @@ instance Pretty TypeError where
     pretty (TypeError ctx expr msg)
         = Pretty.unAnnotate
             (   "\n"
-            <>  (   if null (typesToList $ _types ctx)
-                    then ""
-                    else prettyContext ctx <> "\n\n"
-                )
+            <>  (if null (typesToList $ _types ctx)
+                 then ""
+                 else prettyContext ctx <> "\n\n")
             <>  shortTypeMessage msg <> "\n"
             <>  source
             )
@@ -197,6 +114,7 @@ instance Pretty TypeError where
             Note s _ -> pretty s
             _        -> mempty
     pretty TmpError = "temporary error"
+    pretty (ImportError e) = fromString (show e)
 
 {-| Newtype used to wrap error messages so that they render with a more
     detailed explanation of what went wrong
@@ -213,10 +131,9 @@ instance Pretty DetailedTypeError where
     pretty (DetailedTypeError (TypeError ctx expr msg))
         = Pretty.unAnnotate
             (   "\n"
-            <>  (   if null (typesToList $ _types ctx)
-                    then ""
-                    else prettyContext ctx <> "\n\n"
-                )
+            <>  (if null (typesToList $ _types ctx)
+                 then ""
+                 else prettyContext ctx <> "\n\n")
             <>  longTypeMessage msg <> "\n"
             <>  "────────────────────────────────────────────────────────────────────────────────\n"
             <>  "\n"
@@ -237,6 +154,7 @@ instance Pretty DetailedTypeError where
             Note s _ -> pretty s
             _        -> mempty
     pretty (DetailedTypeError TmpError) = "temporary error"
+    pretty (DetailedTypeError (ImportError e)) = fromString (show e)
 
 -- Elaboration
 --------------------------------------------------------------------------------
@@ -273,6 +191,9 @@ addNote s ma = ma `catch` \(err :: TypeError) -> case err of
   TmpError             -> do
     liftIO $ print $ pretty s
     throwM TmpError
+  ImportError e -> do
+    liftIO $ print $ pretty s
+    throwM (ImportError e)
 
 checkTy ::
      Cxt
@@ -359,12 +280,12 @@ inferBindings cxt topBs topT = go cxt topBs where
 
 tyOfTy :: Cxt -> Val -> ElabM Const
 tyOfTy cxt@Cxt{..} a =
-  snd <$> checkTy cxt (coerceNote $ coerceEmbed $ quote (envNames _values) a) Nothing
+  snd <$> checkTy cxt (coerceNote $ coerceEmbed $ quoteCxt cxt a) Nothing
 {-# inline tyOfTy #-}
 
 checkTyOfTy :: Cxt -> Val -> Const -> ElabM ()
 checkTyOfTy cxt@Cxt{..} a k =
-  () <$ check cxt (coerceNote $ coerceEmbed $ quote (envNames _values) a) (VConst k) Nothing
+  () <$ check cxt (coerceNote $ coerceEmbed $ quoteCxt cxt a) (VConst k) Nothing
 {-# inline checkTyOfTy #-}
 
 natFoldTy :: Val
@@ -732,5 +653,8 @@ infer cxt@Cxt{..} t =
     Note s t -> do
       addNote s (infer_ t)
 
-    Embed imp     -> undefined
-    ImportAlt t u -> undefined
+    Embed imp -> do
+      (t, tv, a) <- resolve imp `catch` \e -> throwM (ImportError e)
+      pure (Embed (Resolved imp t tv), a)
+
+    ImportAlt t u -> infer_ t -- import alternatives not yet supported

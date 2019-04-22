@@ -7,6 +7,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+
 module Dhall.Main
     ( -- * Options
       Options(..)
@@ -19,58 +21,62 @@ module Dhall.Main
     , main
     ) where
 
+
 import Control.Applicative (optional, (<|>))
 import Control.Exception (Exception, SomeException)
 import Data.Monoid ((<>))
+import Control.Monad.Reader
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
 import Dhall.Binary (StandardVersion)
 import Dhall.Core (Expr(..), Import)
+import Dhall.Elaboration
+import Dhall.Context
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src)
+import Dhall.Eval
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
-import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
-import Lens.Family (set)
+-- import Lens.Family (set)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
 
-import qualified Codec.CBOR.JSON
-import qualified Codec.CBOR.Read
-import qualified Codec.CBOR.Write
-import qualified Codec.Serialise
+-- import qualified Codec.CBOR.JSON
+-- import qualified Codec.CBOR.Read
+-- import qualified Codec.CBOR.Write
+-- import qualified Codec.Serialise
 import qualified Control.Exception
-import qualified Control.Monad.Trans.State.Strict          as State
-import qualified Data.Aeson
-import qualified Data.Aeson.Encode.Pretty
-import qualified Data.ByteString.Lazy
-import qualified Data.ByteString.Lazy.Char8
+-- import qualified Control.Monad.Trans.State.Strict          as State
+-- import qualified Data.Aeson
+-- import qualified Data.Aeson.Encode.Pretty
+-- import qualified Data.ByteString.Lazy
+-- import qualified Data.ByteString.Lazy.Char8
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
-import qualified Dhall
+-- import qualified Dhall
 import qualified Dhall.Binary
-import qualified Dhall.Core
-import qualified Dhall.Diff
+-- import qualified Dhall.Core
+-- import qualified Dhall.Diff
 import qualified Dhall.Format
-import qualified Dhall.Freeze
-import qualified Dhall.Hash
-import qualified Dhall.Import
-import qualified Dhall.Import.Types
+-- import qualified Dhall.Freeze
+-- import qualified Dhall.Hash
+-- import qualified Dhall.Import
+
+-- import qualified Dhall.Import.Types
 import qualified Dhall.Lint
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Dhall.Repl
-import qualified Dhall.TypeCheck
+-- import qualified Dhall.Repl
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.IO
-import qualified Text.Dot
-import qualified Data.Map
+-- import qualified Text.Dot
+-- import qualified Data.Map
 
 -- | Top-level program options
 data Options = Options
@@ -279,9 +285,8 @@ command (Options {..}) = do
 
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
-    let status =
-            set Dhall.Import.standardVersion standardVersion (Dhall.Import.emptyStatus ".")
-
+    status <- (\s -> s {_standardVersion = standardVersion})
+          <$> Dhall.Context.emptyImportState "."
 
     let handle =
                 Control.Exception.handle handler2
@@ -289,7 +294,7 @@ command (Options {..}) = do
             .   Control.Exception.handle handler0
           where
             handler0 e = do
-                let _ = e :: TypeError Src X
+                let _ = e :: Dhall.Elaboration.TypeError
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
                     then Control.Exception.throwIO (DetailedTypeError e)
@@ -298,7 +303,7 @@ command (Options {..}) = do
                         Control.Exception.throwIO e
 
             handler1 (Imported ps e) = do
-                let _ = e :: TypeError Src X
+                let _ = e :: Dhall.Elaboration.TypeError
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
                     then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
@@ -347,107 +352,94 @@ command (Options {..}) = do
 
         Default {..} -> do
             expression <- getExpression
+            (t, a) <- runReaderT (infer emptyCxt expression) status
 
-            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) status
+            let normalForm =
+                 (if annotate then (\t -> Annot t (quote NEmpty a)) else id) $
+                 (if alpha then alphaNormalize else id) $
+                 (nfEmpty t)
 
-            inferredType <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            render System.IO.stdout normalForm
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+        -- Resolve (Just Dot) -> do
+        --     expression <- getExpression
 
-            let alphaNormalizedExpression =
-                    if alpha
-                    then Dhall.Core.alphaNormalize normalizedExpression
-                    else normalizedExpression
+        --     (Dhall.Import.Types.Status { _dot}) <-
+        --         State.execStateT (Dhall.Import.loadWith expression) status
 
-            let annotatedExpression =
-                    if annotate
-                        then Annot alphaNormalizedExpression inferredType
-                        else alphaNormalizedExpression
+        --     putStr . ("strict " <>) . Text.Dot.showDot $
+        --            Text.Dot.attribute ("rankdir", "LR") >>
+        --            _dot
 
-            render System.IO.stdout annotatedExpression
+        -- Resolve (Just ListImmediateDependencies) -> do
+        --     expression <- getExpression
 
-        Resolve (Just Dot) -> do
-            expression <- getExpression
+        --     mapM_ (print
+        --                 . Pretty.pretty
+        --                 . Dhall.Core.importHashed) expression
 
-            (Dhall.Import.Types.Status { _dot}) <-
-                State.execStateT (Dhall.Import.loadWith expression) status
+        -- Resolve (Just ListTransitiveDependencies) -> do
+        --     expression <- getExpression
 
-            putStr . ("strict " <>) . Text.Dot.showDot $
-                   Text.Dot.attribute ("rankdir", "LR") >>
-                   _dot
+        --     (Dhall.Import.Types.Status { _cache }) <-
+        --         State.execStateT (Dhall.Import.loadWith expression) status
 
-        Resolve (Just ListImmediateDependencies) -> do
-            expression <- getExpression
+        --     mapM_ print
+        --          .   fmap (   Pretty.pretty
+        --                   .   Dhall.Core.importType
+        --                   .   Dhall.Core.importHashed )
+        --          .   Data.Map.keys
+        --          $   _cache
 
-            mapM_ (print
-                        . Pretty.pretty
-                        . Dhall.Core.importHashed) expression
+        -- Resolve (Nothing) -> do
+        --     expression <- getExpression
 
-        Resolve (Just ListTransitiveDependencies) -> do
-            expression <- getExpression
+        --     (resolvedExpression, _) <-
+        --         State.runStateT (Dhall.Import.loadWith expression) status
+        --     render System.IO.stdout resolvedExpression
 
-            (Dhall.Import.Types.Status { _cache }) <-
-                State.execStateT (Dhall.Import.loadWith expression) status
+        -- Normalize {..} -> do
+        --     expression <- getExpression
 
-            mapM_ print
-                 .   fmap (   Pretty.pretty
-                          .   Dhall.Core.importType
-                          .   Dhall.Core.importHashed )
-                 .   Data.Map.keys
-                 $   _cache
+        --     resolvedExpression <- Dhall.Import.assertNoImports expression
 
-        Resolve (Nothing) -> do
-            expression <- getExpression
+        --     _ <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-            (resolvedExpression, _) <-
-                State.runStateT (Dhall.Import.loadWith expression) status
-            render System.IO.stdout resolvedExpression
+        --     let normalizedExpression = Dhall.Core.normalize resolvedExpression
 
-        Normalize {..} -> do
-            expression <- getExpression
+        --     let alphaNormalizedExpression =
+        --             if alpha
+        --             then Dhall.Core.alphaNormalize normalizedExpression
+        --             else normalizedExpression
 
-            resolvedExpression <- Dhall.Import.assertNoImports expression
-
-            _ <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
-
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
-
-            let alphaNormalizedExpression =
-                    if alpha
-                    then Dhall.Core.alphaNormalize normalizedExpression
-                    else normalizedExpression
-
-            render System.IO.stdout alphaNormalizedExpression
+        --     render System.IO.stdout alphaNormalizedExpression
 
         Type -> do
-            expression <- getExpression
+          expression <- getExpression
+          (_, ty) <- runReaderT (infer emptyCxt expression) status
+          render System.IO.stdout (quote NEmpty ty)
 
-            resolvedExpression <- Dhall.Import.assertNoImports expression
 
-            inferredType <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
+        -- Repl -> do
+        --     Dhall.Repl.repl characterSet explain standardVersion
 
-            render System.IO.stdout (Dhall.Core.normalize inferredType)
+        -- Diff {..} -> do
+        --     expression1 <- Dhall.inputExpr expr1
 
-        Repl -> do
-            Dhall.Repl.repl characterSet explain standardVersion
+        --     expression2 <- Dhall.inputExpr expr2
 
-        Diff {..} -> do
-            expression1 <- Dhall.inputExpr expr1
+        --     let diff = Dhall.Diff.diffNormalized expression1 expression2
 
-            expression2 <- Dhall.inputExpr expr2
-
-            let diff = Dhall.Diff.diffNormalized expression1 expression2
-
-            renderDoc System.IO.stdout diff
+        --     renderDoc System.IO.stdout diff
 
         Format {..} -> do
             Dhall.Format.format (Dhall.Format.Format {..})
 
-        Freeze {..} -> do
-            Dhall.Freeze.freeze inplace all_ standardVersion
+        -- Freeze {..} -> do
+        --     Dhall.Freeze.freeze inplace all_ standardVersion
 
-        Hash -> do
-            Dhall.Hash.hash standardVersion
+        -- Hash -> do
+        --     Dhall.Hash.hash standardVersion
 
         Lint {..} -> do
             case inplace of
@@ -476,48 +468,51 @@ command (Options {..}) = do
 
                     renderDoc System.IO.stdout doc
 
-        Encode {..} -> do
-            expression <- getExpression
+        -- Encode {..} -> do
+        --     expression <- getExpression
 
-            let term = Dhall.Binary.encode expression
+        --     let term = Dhall.Binary.encode expression
 
-            let bytes = Codec.Serialise.serialise term
+        --     let bytes = Codec.Serialise.serialise term
 
-            if json
-                then do
-                    let decoder = Codec.CBOR.JSON.decodeValue False
+        --     if json
+        --         then do
+        --             let decoder = Codec.CBOR.JSON.decodeValue False
 
-                    (_, value) <- throws (Codec.CBOR.Read.deserialiseFromBytes decoder bytes)
+        --             (_, value) <- throws (Codec.CBOR.Read.deserialiseFromBytes decoder bytes)
 
-                    let jsonBytes = Data.Aeson.Encode.Pretty.encodePretty value
+        --             let jsonBytes = Data.Aeson.Encode.Pretty.encodePretty value
 
-                    Data.ByteString.Lazy.Char8.putStrLn jsonBytes
+        --             Data.ByteString.Lazy.Char8.putStrLn jsonBytes
 
-                else do
-                    Data.ByteString.Lazy.putStr bytes
+        --         else do
+        --             Data.ByteString.Lazy.putStr bytes
 
-        Decode {..} -> do
-            bytes <- Data.ByteString.Lazy.getContents
+        -- Decode {..} -> do
+        --     bytes <- Data.ByteString.Lazy.getContents
 
-            term <- do
-                if json
-                    then do
-                        value <- case Data.Aeson.eitherDecode' bytes of
-                            Left  string -> fail string
-                            Right value  -> return value
+        --     term <- do
+        --         if json
+        --             then do
+        --                 value <- case Data.Aeson.eitherDecode' bytes of
+        --                     Left  string -> fail string
+        --                     Right value  -> return value
 
-                        let encoding = Codec.CBOR.JSON.encodeValue value
+        --                 let encoding = Codec.CBOR.JSON.encodeValue value
 
-                        let cborBytes = Codec.CBOR.Write.toLazyByteString encoding
-                        throws (Codec.Serialise.deserialiseOrFail cborBytes)
-                    else do
-                        throws (Codec.Serialise.deserialiseOrFail bytes)
+        --                 let cborBytes = Codec.CBOR.Write.toLazyByteString encoding
+        --                 throws (Codec.Serialise.deserialiseOrFail cborBytes)
+        --             else do
+        --                 throws (Codec.Serialise.deserialiseOrFail bytes)
 
-            expression <- throws (Dhall.Binary.decodeExpression term)
+        --     expression <- throws (Dhall.Binary.decodeExpression term)
 
-            let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
+        --     let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 
-            renderDoc System.IO.stdout doc
+        --     renderDoc System.IO.stdout doc
+
+        _ -> do
+          putStrLn "unsupported option"
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()
