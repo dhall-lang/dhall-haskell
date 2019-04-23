@@ -207,26 +207,27 @@ data CompileError
 instance Show CompileError where
     show BareNone =
        Data.Text.unpack $
-            _ERROR <> ": A bare ❰None❱ is not valid                                          \n\
+            _ERROR <> ": ❰None❱ is not valid on its own                                      \n\
             \                                                                                \n\
             \Explanation: The conversion to JSON/YAML does not accept ❰None❱ in isolation as \n\
             \a valid way to represent ❰null❱.  In Dhall, ❰None❱ is a function whose input is \n\
-            \a type and whose output is an absent value of that type.                        \n\
+            \a type and whose output is an ❰Optional❱ of that type.                          \n\
             \                                                                                \n\
             \For example:                                                                    \n\
             \                                                                                \n\
             \                                                                                \n\
-            \    ┌─────────────────────────────────┐  This is a function whose result is an  \n\
-            \    │ None : ∀(a : Type) → Optional a │  ❰Optional❱ value, but the function     \n\
+            \    ┌─────────────────────────────────┐  ❰None❱ is a function whose result is   \n\
+            \    │ None : ∀(a : Type) → Optional a │  an ❰Optional❱ value, but the function  \n\
             \    └─────────────────────────────────┘  itself is not a valid ❰Optional❱ value \n\
             \                                                                                \n\
             \                                                                                \n\
-            \    ┌─────────────────────────────────┐                                         \n\
-            \    │ None Natural : Optional Natural │  This is a valid ❰Optional❱ value (an   \n\
-            \    └─────────────────────────────────┘  absent ❰Natural❱ number in this case)  \n\
+            \    ┌─────────────────────────────────┐  ❰None Natural❱ is a valid ❰Optional❱   \n\
+            \    │ None Natural : Optional Natural │  value (an absent ❰Natural❱ number in   \n\
+            \    └─────────────────────────────────┘  this case)                             \n\
             \                                                                                \n\
             \                                                                                \n\
-            \The conversion to JSON/YAML only translates the latter form to ❰null❱.          "
+            \                                                                                \n\
+            \The conversion to JSON/YAML only translates the fully applied form to ❰null❱.   "
     show (Unsupported e) =
         Data.Text.unpack $
             _ERROR <> ": Cannot translate to JSON                                            \n\
