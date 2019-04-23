@@ -227,7 +227,7 @@ instance Show CompileError where
             \                                                                                \n\
             \                                                                                \n\
             \                                                                                \n\
-            \The conversion to JSON/YAML only translates fully applied form to ❰null❱.       "
+            \The conversion to JSON/YAML only translates the fully applied form to ❰null❱.   "
     show (Unsupported e) =
         Data.Text.unpack $
             _ERROR <> ": Cannot translate to JSON                                            \n\
