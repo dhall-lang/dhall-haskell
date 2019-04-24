@@ -5,16 +5,13 @@ module Dhall.Test.TypeCheck where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
--- import Dhall.Import (Imported)
--- import Dhall.Parser (Src)
 import Test.Tasty (TestTree)
 import Dhall.Eval
 import Dhall.Elaboration
+import Dhall.Errors (ElabError(..))
 
 import qualified Control.Exception
 import qualified Data.Text
--- import qualified Dhall.Core
--- import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
@@ -112,15 +109,6 @@ should name basename =
         _ <- check0 "." actualExpr (eval Empty expectedExpr)
         pure ()
 
-
-
-        -- let annotatedExpr = Dhall.Core.Annot actualExpr expectedExpr
-
-        -- resolvedExpr <- Dhall.Import.load annotatedExpr
-        -- case Dhall.TypeCheck.typeOf resolvedExpr of
-        --     Left  err -> Control.Exception.throwIO err
-        --     Right _   -> return ()
-
 shouldNotTypeCheck :: Text -> Text -> TestTree
 shouldNotTypeCheck name basename =
     Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
@@ -130,13 +118,9 @@ shouldNotTypeCheck name basename =
             Left  exception  -> Control.Exception.throwIO exception
             Right expression -> return expression
 
-        let io :: IO Bool
-            io = do
-                _ <- infer0 "." expression
-                return True
-
-        typeChecked <-
-          io `Control.Exception.catch` \(_ :: TypeError) -> pure False
+        typeChecked <- (True <$ infer0 "." expression)
+                       `Control.Exception.catch`
+                       \(ElabError _ _ _ Left{}) -> pure False
 
         if typeChecked
             then fail (Data.Text.unpack code <> " should not have type-checked")

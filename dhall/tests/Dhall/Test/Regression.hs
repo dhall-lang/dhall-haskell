@@ -15,14 +15,14 @@ module Dhall.Test.Regression where
 -- import qualified Dhall.Parser
 -- import qualified Dhall.Pretty
 -- import qualified Dhall.Test.Util as Util
--- import qualified Dhall.TypeCheck
+-- import qualified Dhall.Elaboration
 -- import qualified System.Timeout
 -- import qualified Test.Tasty
 -- import qualified Test.Tasty.HUnit
 
--- import Dhall.Import (Imported)
 -- import Dhall.Parser (Src)
--- import Dhall.TypeCheck (TypeError, X)
+-- import Dhall.Core (X)
+-- import Dhall.Errors (ElabError(..))
 -- import Test.Tasty (TestTree)
 -- import Test.Tasty.HUnit ((@?=))
 

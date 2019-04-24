@@ -17,22 +17,6 @@
   -fno-warn-unused-matches
   #-}
 
-{-|
-
-NbE-style elaboration.
-
-Elaboration outputs expressions which
-- are well-typed
-- are stripped of `Note`-s.
-- contain imports which are resolved and type-checked, with imports annotated
-  with lazy values of imported expressions.
-
-Not supported currently:
-- local import caches
-- hash integrity checks
-- Dot import graphs
--}
-
 module Dhall.Elaboration where
 
 import Dhall.Core
@@ -41,123 +25,39 @@ import Dhall.Core
     , Chunks(..)
     , Const(..)
     , Var(..)
+    , X
+    , absurd
     , coerceEmbed
     , coerceNote
-    , freeIn
     )
 
 import Control.Applicative ((<|>))
 import Control.Monad.Catch
 import Control.Monad.Reader
 import Control.Monad.State.Strict
-import Data.Dynamic
 import Data.Foldable
-import Data.String
 import Dhall.Import
 import Data.List.NonEmpty (NonEmpty(..), cons)
 import Data.Sequence (pattern (:<|))
 import Data.Text (Text)
-import Data.Text.Prettyprint.Doc (Pretty(..))
 import Dhall.Eval
-import Dhall.Pretty (layoutOpts)
-import Dhall.TypeErrors
+import Dhall.Errors
 import Dhall.Parser.Combinators (Src)
 import Dhall.Context
 
 import qualified Data.Set as Set
-import qualified Data.Text.Prettyprint.Doc               as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Map
-import qualified Dhall.Util
 import qualified Data.Sequence
-
--- Type errors
---------------------------------------------------------------------------------
-
--- | A structured type error that includes context
-data TypeError = TypeError
-    { context     :: Cxt
-    , pos         :: Maybe Src
-    , typeMessage :: TypeMessage
-    }
-    | ImportError MissingImports
-
-instance Show TypeError where
-    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
-
-instance Exception TypeError
-
-instance Pretty TypeError where
-    pretty (TypeError ctx pos msg)
-        = Pretty.unAnnotate
-            (   "\n"
-            <>  (if null (typesToList $ _types ctx)
-                 then ""
-                 else prettyContext ctx <> "\n\n")
-            <>  shortTypeMessage msg <> "\n"
-            <>  source
-            )
-      where
-        prettyKV (key, val) =
-            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
-
-        prettyContext =
-                Pretty.vsep
-            .   map prettyKV
-            .   reverse
-            .   typesToList
-            .   _types
-
-        source = maybe mempty pretty pos
-
-    pretty (ImportError e) = fromString (show e)
-
-{-| Newtype used to wrap error messages so that they render with a more
-    detailed explanation of what went wrong
--}
-newtype DetailedTypeError = DetailedTypeError TypeError
-    deriving (Typeable)
-
-instance Show DetailedTypeError where
-    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
-
-instance Exception DetailedTypeError
-
-instance Pretty DetailedTypeError where
-    pretty (DetailedTypeError (TypeError ctx pos msg))
-        = Pretty.unAnnotate
-            (   "\n"
-            <>  (if null (typesToList $ _types ctx)
-                 then ""
-                 else prettyContext ctx <> "\n\n")
-            <>  longTypeMessage msg <> "\n"
-            <>  "────────────────────────────────────────────────────────────────────────────────\n"
-            <>  "\n"
-            <>  source
-            )
-      where
-        prettyKV (key, val) =
-            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
-
-        prettyContext =
-                Pretty.vsep
-            .   map prettyKV
-            .   reverse
-            .   typesToList
-            .   _types
-
-        source = maybe mempty pretty pos
-
-    pretty (DetailedTypeError (ImportError e)) = fromString (show e)
 
 -- Elaboration
 --------------------------------------------------------------------------------
 
-axiom :: Const -> ElabM Const
-axiom Type = pure Kind
-axiom Kind = pure Sort
-axiom Sort = throwM (TypeError emptyCxt Nothing Untyped)
+axiom :: Cxt -> Const -> ElabM Const
+axiom cxt = \case
+   Type -> pure Kind
+   Kind -> pure Sort
+   Sort -> typeError cxt Untyped
 
 rule :: Const -> Const -> Maybe Const
 rule Type Type = Just Type
@@ -177,43 +77,42 @@ fresh Cxt{..} x = (x, VVar x (countName x _values))
 unify :: Cxt -> Val -> Val -> ElabM ()
 unify cxt@Cxt{..} t u =
   unless (conv _values t u)
-    (throwM (TypeError cxt Nothing (ConvError (quoteCxt cxt t) (quoteCxt cxt u))))
+    (typeError cxt (ConvError (quoteCxt cxt t) (quoteCxt cxt u)))
 {-# inline unify #-}
 
 addNote :: Src -> ElabM a -> ElabM a
-addNote s ma = ma `catch` \(err :: TypeError) -> case err of
-  TypeError cxt ms e -> throwM (TypeError cxt (ms <|> Just s) e)
-  ImportError e      ->  throwM (ImportError e)
+addNote s ma = ma `catch` \(ElabError imports cxt ms err) ->
+  throwM (ElabError imports cxt (ms <|> Just s) err)
 
 checkTy ::
      Cxt
   -> Raw
-  -> Maybe (Core -> TypeError)
+  -> Maybe (Core -> ElabM X)
   -> ElabM (Core, Const)
 checkTy cxt topT err = do
   (t, a) <- infer cxt topT
   case a of
     VConst c -> pure (t, c)
     _        -> case err of
-      Just err -> throwM (err t)
-      _        -> throwM $ TypeError cxt Nothing (ExpectedAType (quoteCxt cxt a))
+      Just err -> absurd <$> err t
+      _        -> typeError cxt (ExpectedAType (quoteCxt cxt a))
 {-# inline checkTy #-}
 
 check ::
      Cxt
   -> Raw
   -> Val
-  -> Maybe (Core -> Val -> TypeError)
+  -> Maybe (Core -> Val -> ElabM X)
   -> ElabM Core
 check cxt@Cxt{..} t a err =
   let
-    quote_   = quote (envNames _values)
-    infer_   = infer cxt
-    check_   = check cxt
-    checkTy_ = checkTy cxt
-    unify_   = unify cxt
-    eval_    = eval _values
-    err_     = TypeError cxt Nothing
+    quote_     = quote (envNames _values)
+    infer_     = infer cxt
+    check_     = check cxt
+    checkTy_   = checkTy cxt
+    unify_     = unify cxt
+    eval_      = eval _values
+    typeError_ = typeError cxt
 
   in case (t, a) of
     (Lam x a t, VAnyPi x' a' b) -> do
@@ -226,7 +125,7 @@ check cxt@Cxt{..} t a err =
 
     (RecordLit ts, VRecord as) -> do
       ts <- flip Dhall.Map.unorderedTraverseWithKey ts $ \k t ->
-        maybe (throwM (err_ (UnexpectedRecordField k (quote_ (VRecord as)))))
+        maybe (typeError_ (UnexpectedRecordField k (quote_ (VRecord as))))
               (\a -> check_ t a Nothing)
               (Dhall.Map.lookup k as)
       pure (RecordLit ts)
@@ -239,7 +138,7 @@ check cxt@Cxt{..} t a err =
       (u, ut) <- infer_ u
       handlersTy <- case ut of
         VUnion as -> pure (VRecord (maybe a (\b -> vFun b a) <$> as))
-        _         -> throwM (err_ (MustMergeUnion u (quote_ ut)))
+        _         -> typeError_ (MustMergeUnion u (quote_ ut))
       t <- check_ t handlersTy Nothing
       pure (Merge t u ma)
 
@@ -264,8 +163,8 @@ check cxt@Cxt{..} t a err =
     (t, a) -> do
       (t, a') <- infer_ t
       unless (conv _values a a') $ do
-        maybe (throwM (err_ (ConvError (quote_ a') (quote_ a))))
-              (\err -> throwM (err t a'))
+        maybe (typeError_ (ConvError (quote_ a') (quote_ a)))
+              (\err -> absurd <$> err t a')
               err
       pure t
 
@@ -280,8 +179,7 @@ inferBindings cxt topBs = go cxt topBs where
         (a, ak) <- checkTy cxt a Nothing
         let ~av = eval _values a
         t <- check cxt t av
-           (Just $ \t a' ->
-               TypeError cxt Nothing (AnnotMismatch t a (quoteCxt cxt a')))
+           (Just $ \t a' -> typeError cxt (AnnotMismatch t a (quoteCxt cxt a')))
         pure (Binding x (Just a) t, define x (eval _values t) av cxt)
   go cxt (b :| (b':bs')) = do
     (b, cxt) <- goBinding cxt b
@@ -324,12 +222,12 @@ optionalFoldTy a =
   optional
 {-# inline optionalFoldTy #-}
 
-checkCombine :: Core -> Core -> (Core -> Val -> TypeError) -> Cxt -> Val -> Val -> ElabM ()
+checkCombine :: Core -> Core -> (Core -> Val -> ElabM X) -> Cxt -> Val -> Val -> ElabM ()
 checkCombine t u err cxt = go where
   go (VRecord as) (VRecord bs) =
     forM_ (Dhall.Map.intersectionWith (,) as bs) (uncurry go)
-  go a VRecord{} = throwM (err t a)
-  go _ b         = throwM (err u b)
+  go a VRecord{} = absurd <$> err t a
+  go _ b         = absurd <$> err u b
 
 inferUnion ::
      Cxt
@@ -357,27 +255,27 @@ infer cxt@Cxt{..} t =
     checkTyOfTy_ = checkTyOfTy cxt
     tyOfTy_      = tyOfTy cxt
     unify_       = unify cxt
-    err_         = TypeError cxt Nothing
+    typeError_   = typeError cxt
 
   in case t of
-    Const k -> (\k' -> (Const k, VConst k')) <$> axiom k
+    Const k -> (\k' -> (Const k, VConst k')) <$> axiom cxt k
 
     Var (V topX topI) -> go _types topI where
-      go TEmpty         !_ = throwM (err_ (UnboundVariable topX))
+      go TEmpty         !_ = typeError_ (UnboundVariable topX)
       go (TBind ts x a) i
         | x == topX = if i == 0 then pure (Var (V topX topI), a) else go ts (i - 1)
         | otherwise = go ts i
 
     -- Inefficient. Checking lambdas is greatly preferable.
     Lam x a t -> do
-      (a, ak) <- checkTy_ a (Just (err_ . InvalidInputType))
+      (a, ak) <- checkTy_ a (Just (typeError_ . InvalidInputType))
       let ~av = eval_ a
       (t, b) <- infer (bind x av cxt) t
       let ~nb = coerceEmbed $ quoteBind_ x b
       bk <- snd <$> checkTy (bind x av cxt) (coerceNote nb) Nothing
       case rule ak bk of
         Just{}  -> pure ()
-        Nothing -> throwM (err_ (NoDependentTypes a nb))
+        Nothing -> typeError_ (NoDependentTypes a nb)
       case ak of
         -- Fast path for inferring return type, when it cannot be dependent.
         Type -> pure (Lam x a t, vFun av b)
@@ -388,22 +286,21 @@ infer cxt@Cxt{..} t =
               eval (Extend _values x u) nb)
 
     Pi x a b -> do
-      (a, ak) <- checkTy_ a (Just (err_ . InvalidInputType))
+      (a, ak) <- checkTy_ a (Just (typeError_ . InvalidInputType))
       let ~av = eval_ a
-      (b, bk) <- checkTy (bind x av cxt) b (Just (err_ . InvalidOutputType))
+      (b, bk) <- checkTy (bind x av cxt) b (Just (typeError_ . InvalidOutputType))
       case rule ak bk of
         Just k' -> pure (Pi x a b, VConst k')
-        Nothing -> throwM (err_ (NoDependentTypes a b))
+        Nothing -> typeError_ (NoDependentTypes a b)
 
     App t u -> do
       (t, tt) <- infer_ t
       case tt of
         VAnyPi x a b -> do
           u <- check_ u a
-                 (Just $ \u a' -> err_
-                   (TypeMismatch t (quote_ a) u (quote_ a')))
+                 (Just $ \u a' -> typeError_ (TypeMismatch t (quote_ a) u (quote_ a')))
           pure (App t u, b (eval_ u))
-        tt -> throwM (err_ (NotAFunction t (quote_ tt)))
+        tt -> typeError_ (NotAFunction t (quote_ tt))
 
     Let bs t -> do
       (bs, cxt) <- inferBindings cxt bs
@@ -482,7 +379,7 @@ infer cxt@Cxt{..} t =
 
     List -> pure (List, vFun vType vType)
 
-    ListLit Nothing Data.Sequence.Empty -> throwM (err_ MissingListType)
+    ListLit Nothing Data.Sequence.Empty -> typeError_ MissingListType
     ListLit Nothing (t :<| ts) -> do
       (t, a) <- infer_ t
       ts <- forM ts $ \t -> check_ t a Nothing
@@ -498,10 +395,9 @@ infer cxt@Cxt{..} t =
       case tt of
         VList a -> do
           u <- check_ u (VList a)
-            (Just $ \t tt -> err_ (CantListAppend t (quote_ tt)))
+            (Just $ \t tt -> typeError_ (CantListAppend t (quote_ tt)))
           pure (ListAppend t u, VList a)
-        _ -> throwM (err_ (CantListAppend t (quote_ tt)))
-
+        _ -> typeError_ (CantListAppend t (quote_ tt))
 
     ListBuild ->
       pure (ListBuild, VHPi "a" vType $ \a -> vFun (listFoldTy a) (VList a))
@@ -572,7 +468,7 @@ infer cxt@Cxt{..} t =
 
     UnionLit k t as -> do
       case Dhall.Map.lookup k as of
-        Just _  -> throwM $ err_ (DuplicateAlternative k)
+        Just _  -> typeError_ (DuplicateAlternative k)
         Nothing -> pure ()
       (t, a) <- infer_ t
       let na = coerceNote $ coerceEmbed $ quote_ a
@@ -584,7 +480,7 @@ infer cxt@Cxt{..} t =
     Combine t u -> do
       (t, tt) <- infer_ t
       (u, ut) <- infer_ u
-      checkCombine t u (\t tt -> err_ (MustCombineARecord '∧' t (quote_ tt)))
+      checkCombine t u (\t tt -> typeError_ (MustCombineARecord '∧' t (quote_ tt)))
         cxt tt ut
       ak <- tyOfTy_ tt
       checkTyOfTy_ ut ak
@@ -593,7 +489,7 @@ infer cxt@Cxt{..} t =
     CombineTypes a b -> do
       (a, ak) <- checkTy_ a Nothing
       b <- check_ b (VConst ak) Nothing
-      checkCombine a b (\a ak -> err_ (CombineTypesRequiresRecordType a (quote_ ak)))
+      checkCombine a b (\a ak -> typeError_ (CombineTypesRequiresRecordType a (quote_ ak)))
         cxt (eval_ a) (eval_ b)
       pure (CombineTypes a b, VConst ak)
 
@@ -602,8 +498,8 @@ infer cxt@Cxt{..} t =
       (u, ut) <- infer_ u
       ty <- case (tt, ut) of
         (VRecord as, VRecord bs) -> pure (VRecord (Dhall.Map.union as bs))
-        (_, VRecord{}) -> throwM (err_ (MustCombineARecord '⫽' t (quote_ tt)))
-        _              -> throwM (err_ (MustCombineARecord '⫽' u (quote_ ut)))
+        (_, VRecord{}) -> typeError_ (MustCombineARecord '⫽' t (quote_ tt))
+        _              -> typeError_ (MustCombineARecord '⫽' u (quote_ ut))
       ak <- tyOfTy_ tt
       checkTyOfTy_ ut ak
       pure (Prefer t u, ty)
@@ -620,22 +516,22 @@ infer cxt@Cxt{..} t =
       (u, ut) <- infer_ u
       (handle, union) <- case (tt, ut) of
         (VRecord ts, VUnion us) -> pure (ts, us)
-        (_ , VUnion{}) -> throwM (err_ (MustMergeARecord t (quote_ tt)))
-        _              -> throwM (err_ (MustMergeUnion u (quote_ ut)))
+        (_ , VUnion{}) -> typeError_ (MustMergeARecord t (quote_ tt))
+        _              -> typeError_ (MustMergeUnion u (quote_ ut))
       a <- case Dhall.Map.uncons handle of
-        Nothing -> throwM (err_ MissingMergeType)
+        Nothing -> typeError_ MissingMergeType
         Just (k, a, _) ->
           case Dhall.Map.lookup k union of
-            Nothing           -> throwM (err_ (UnusedHandler (Set.singleton k)))
+            Nothing           -> typeError_ (UnusedHandler (Set.singleton k))
             Just Nothing      -> pure a
             Just (Just field) -> case a of
               VAnyPi (fresh cxt -> (_, VVar x i)) field' b -> do
                 let bv = b (VVar x i)
                 when (freeIn (V x i) (quoteBind_ x bv)) $
-                  throwM (err_ (MergeDependentHandler k (quote_ a)))
+                  typeError_ (MergeDependentHandler k (quote_ a))
                 unify_ field field'
                 pure bv
-              _ -> throwM (err_ (ExpectedFunctionHandler k (quote_ a)))
+              _ -> typeError_ (ExpectedFunctionHandler k (quote_ a))
       let tt' = VRecord (maybe a (\field -> vFun field a) <$> union)
       unify_ tt tt'
       pure (Merge t u Nothing, a)
@@ -645,14 +541,14 @@ infer cxt@Cxt{..} t =
       case tt of
         VRecord ts -> case Dhall.Map.lookup k ts of
           Just a -> pure (Field t k, a)
-          _      -> throwM (err_ (MissingField k (quote_ tt)))
+          _      -> typeError_ (MissingField k (quote_ tt))
         VConst _ -> case eval_ t of
           VUnion ts -> case Dhall.Map.lookup k ts of
-            Nothing       -> throwM (err_ (MissingAlternative k (quote_ tt)))
+            Nothing       -> typeError_ (MissingAlternative k (quote_ tt))
             Just Nothing  -> pure (Field t k, VUnion ts)
             Just (Just a) -> pure (Field t k, vFun a (VUnion ts))
-          _ -> throwM (err_ (CantAccess k t (quote_ tt)))
-        _ -> throwM (err_ (CantAccess k t (quote_ tt)))
+          _ -> typeError_ (CantAccess k t (quote_ tt))
+        _ -> typeError_ (CantAccess k t (quote_ tt))
 
     Project t ks -> do
       (t, tt) <- infer_ t
@@ -661,23 +557,23 @@ infer cxt@Cxt{..} t =
           as <- fmap Dhall.Map.fromList $ forM (toList ks) $ \k ->
             case Dhall.Map.lookup k as of
               Just a  -> pure (k, a)
-              Nothing -> throwM (err_ (MissingField k (quote_ tt)))
+              Nothing -> typeError_ (MissingField k (quote_ tt))
           pure (Project t ks, VRecord as)
         _ -> let text = Dhall.Pretty.Internal.docToStrictText
                    (Dhall.Pretty.Internal.prettyLabels ks)
-             in throwM (err_ (CantProject text t (quote_ tt)))
+             in typeError_ (CantProject text t (quote_ tt))
 
     Note s t -> do
       addNote s (infer_ t)
 
     Embed imp -> do
-      (t, tv, a) <- resolve imp `catch` \e -> throwM (ImportError e)
+      (t, tv, a) <- resolve cxt imp
       pure (Embed (Resolved imp t tv), a)
 
     ImportAlt t u -> do
       infer_ t `catch` \e -> case e of
-        ImportError{} -> infer_ u       -- TODO: accumulation of import errors
-        err           -> throwM err
+        ElabError _ _ _ (Right _) -> infer_ u
+        e                         -> throwM e
 
 infer0 :: FilePath -> Raw -> IO (Core, Val)
 infer0 path t = runReaderT (infer emptyCxt t) =<< emptyImportState path

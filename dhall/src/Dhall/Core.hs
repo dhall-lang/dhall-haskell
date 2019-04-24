@@ -8,6 +8,7 @@
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE UnicodeSyntax      #-}
+{-# LANGUAGE EmptyCase          #-}
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing #-}
 
 {-| This module contains the core calculus for the Dhall language.
@@ -19,28 +20,23 @@
 module Dhall.Core (
     -- * Syntax
       Const(..)
+    , Binding(..)
+    , Chunks(..)
     , Directory(..)
+    , Expr(..)
     , File(..)
     , FilePrefix(..)
     , Import(..)
     , ImportHashed(..)
     , ImportMode(..)
     , ImportType(..)
-    , URL(..)
     , Scheme(..)
+    , URL(..)
     , Var(..)
-    , Binding(..)
-    , Chunks(..)
-    , Expr(..)
     , X
+    , absurd
     , coerceEmbed
     , coerceNote
-
-    -- * Normalization
-    , alphaNormalize
-    , normalize
-    , judgmentallyEqual
-    , freeIn
 
     -- * Pretty-printing
     , pretty
@@ -57,7 +53,6 @@ import Control.Applicative (Applicative(..), (<$>))
 import Control.Applicative (empty)
 import Crypto.Hash (SHA256)
 import Data.Data (Data(..))
-import {-# SOURCE #-} Dhall.Eval (Core, Nf, freeIn, alphaNormalize)
 import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
@@ -75,12 +70,14 @@ import Prelude hiding (succ)
 import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Crypto.Hash
-import {-# SOURCE #-} qualified Dhall.Eval
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 
 
 -- | Like `Data.Void.Void`, except with a shorter inferred type
 data X
+
+absurd :: X -> a
+absurd x = case x of
 
 instance Show X where
     show _ = undefined
@@ -523,22 +520,3 @@ instance IsString (Chunks s a) where
 -- | Generates a syntactically valid Dhall program
 instance Pretty a => Pretty (Expr s a) where
     pretty = Pretty.unAnnotate . prettyExpr
-
-
-{-| Reduce an expression to its normal form, performing beta reduction
-
-    `normalize` does not type-check the expression.  You may want to type-check
-    expressions before normalizing them since normalization can convert an
-    ill-typed expression into a well-typed expression.
-
-    However, `normalize` will not fail if the expression is ill-typed and will
-    leave ill-typed sub-expressions unevaluated.
--}
-normalize :: Core -> Nf
-normalize = Dhall.Eval.nfEmpty
-
-{-| Returns `True` if two expressions are α-equivalent and β-equivalent and
-    `False` otherwise.
--}
-judgmentallyEqual :: Core -> Core -> Bool
-judgmentallyEqual = Dhall.Eval.convEmpty

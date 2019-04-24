@@ -106,33 +106,25 @@
 
 module Dhall.Import (
     -- * Import
-      Cycle(..)
-    , ReferentiallyOpaque(..)
-    , Imported(..)
-    , ImportResolutionDisabled(..)
-    , PrettyHttpException(..)
-    , MissingFile(..)
-    , MissingEnvironmentVariable(..)
-    , MissingImports(..)
-    , rawFromImport
+      rawFromImport
     , resolve
     ) where
 
 import Control.Monad
 import Control.Monad.Reader
 import Control.Applicative (Alternative(..))
-import Control.Exception (Exception, SomeException, throwIO, toException)
-import Control.Monad.Catch (throwM, MonadCatch)
+import Control.Exception (throwIO)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.CaseInsensitive (CI)
-import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
-import Data.Text (Text)
+import {-# SOURCE #-} Dhall.Elaboration
+import Dhall.Parser (Parser(..), ParseError(..))
+import Dhall.Errors
+
 #if MIN_VERSION_base(4,8,0)
 #else
 import Data.Traversable (traverse)
 #endif
-import Data.Typeable (Typeable)
 import Data.IORef
 import System.FilePath ((</>))
 import Dhall.Context
@@ -153,163 +145,26 @@ import Dhall.Core
 import Dhall.Import.HTTP
 #endif
 
-import {-# SOURCE #-} Dhall.Elaboration
-
-import Dhall.Parser (Parser(..), ParseError(..))
-
 import qualified Data.ByteString
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
 import qualified Data.List.NonEmpty               as NonEmpty
-import qualified Data.Text.Encoding
-import qualified Data.Text                        as Text
-import qualified Data.Text.IO
 import qualified Data.Map.Strict                  as Map
+import qualified Data.Text                        as Text
+import qualified Data.Text.Encoding
+import qualified Data.Text.IO
 import qualified Dhall.Map
 import qualified Dhall.Parser
-import qualified Dhall.Pretty.Internal
-import qualified System.Environment
 import qualified System.Directory                 as Directory
+import qualified System.Environment
 import qualified System.FilePath                  as FilePath
 import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 
--- | An import failed because of a cycle in the import graph
-newtype Cycle = Cycle
-    { cyclicImport :: Import  -- ^ The offending cyclic import
-    }
-  deriving (Typeable)
 
-instance Exception Cycle
-
-instance Show Cycle where
-    show (Cycle import_) =
-        "\nCyclic import: " ++ Dhall.Pretty.Internal.prettyToString import_
-
-{-| Dhall tries to ensure that all expressions hosted on network endpoints are
-    weakly referentially transparent, meaning roughly that any two clients will
-    compile the exact same result given the same URL.
-
-    To be precise, a strong interpretaton of referential transparency means that
-    if you compiled a URL you could replace the expression hosted at that URL
-    with the compiled result.  Let's call this \"static linking\".  Dhall (very
-    intentionally) does not satisfy this stronger interpretation of referential
-    transparency since \"statically linking\" an expression (i.e. permanently
-    resolving all imports) means that the expression will no longer update if
-    its dependencies change.
-
-    In general, either interpretation of referential transparency is not
-    enforceable in a networked context since one can easily violate referential
-    transparency with a custom DNS, but Dhall can still try to guard against
-    common unintentional violations.  To do this, Dhall enforces that a
-    non-local import may not reference a local import.
-
-    Local imports are defined as:
-
-    * A file
-
-    * A URL with a host of @localhost@ or @127.0.0.1@
-
-    All other imports are defined to be non-local
--}
-newtype ReferentiallyOpaque = ReferentiallyOpaque
-    { opaqueImport :: Import  -- ^ The offending opaque import
-    } deriving (Typeable)
-
-instance Exception ReferentiallyOpaque
-
-instance Show ReferentiallyOpaque where
-    show (ReferentiallyOpaque import_) =
-        "\nReferentially opaque import: " ++ Dhall.Pretty.Internal.prettyToString import_
-
--- | Extend another exception with the current import stack
-data Imported e = Imported
-    { importStack :: NonEmpty Import -- ^ Imports resolved so far, in reverse order
-    , nested      :: e               -- ^ The nested exception
-    } deriving (Typeable)
-
-instance Exception e => Exception (Imported e)
-
-instance Show e => Show (Imported e) where
-    show (Imported canonicalizedImports e) =
-           concat (zipWith indent [0..] toDisplay)
-        ++ "\n"
-        ++ show e
-      where
-        indent n import_ =
-            "\n" ++ replicate (2 * n) ' ' ++ "↳ " ++ Dhall.Pretty.Internal.prettyToString import_
-
-        canonical = NonEmpty.toList canonicalizedImports
-
-        -- Tthe final (outermost) import is fake to establish the base
-        -- directory. Also, we need outermost-first.
-        toDisplay = drop 1 (reverse canonical)
-
--- | Exception thrown when an imported file is missing
-data MissingFile = MissingFile FilePath
-    deriving (Typeable)
-
-instance Exception MissingFile
-
-instance Show MissingFile where
-    show (MissingFile path) =
-            "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Missing file "
-        <>  path
-
--- | Exception thrown when an environment variable is missing
-newtype MissingEnvironmentVariable = MissingEnvironmentVariable { name :: Text }
-    deriving (Typeable)
-
-instance Exception MissingEnvironmentVariable
-
-instance Show MissingEnvironmentVariable where
-    show (MissingEnvironmentVariable {..}) =
-            "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Missing environment variable\n"
-        <>  "\n"
-        <>  "↳ " <> Text.unpack name
-
--- | List of Exceptions we encounter while resolving Import Alternatives
-newtype MissingImports = MissingImports [SomeException]
-
-instance Exception MissingImports
-
-instance Show MissingImports where
-    show (MissingImports []) =
-            "\n"
-        <>  "\ESC[1;31mError\ESC[0m: No valid imports"
-    show (MissingImports [e]) = show e
-    show (MissingImports es) =
-            "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Failed to resolve imports. Error list:"
-        <>  "\n"
-        <>  concatMap (\e -> "\n" <> show e <> "\n") es
-
-throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
-throwMissingImport e = throwM (MissingImports [toException e])
-
--- | Exception thrown when a HTTP url is imported but dhall was built without
--- the @with-http@ Cabal flag.
-data CannotImportHTTPURL =
-    CannotImportHTTPURL
-        String
-        (Maybe [(CI Data.ByteString.ByteString, Data.ByteString.ByteString)])
-    deriving (Typeable)
-
-instance Exception CannotImportHTTPURL
-
-instance Show CannotImportHTTPURL where
-    show (CannotImportHTTPURL url _mheaders) =
-            "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Cannot import HTTP URL.\n"
-        <>  "\n"
-        <>  "Dhall was compiled without the 'with-http' flag.\n"
-        <>  "\n"
-        <>  "The requested URL was: "
-        <>  url
-        <>  "\n"
+-- Canonicalization
+--------------------------------------------------------------------------------
 
 {-|
 > canonicalize . canonicalize = canonicalize
@@ -367,6 +222,9 @@ instance Canonicalize Import where
     canonicalize (Import importHashed importMode) =
         Import (canonicalize importHashed) importMode
 
+-- Resolution
+--------------------------------------------------------------------------------
+
 toHeaders
   :: Expr s a
   -> Maybe [(CI Data.ByteString.ByteString, Data.ByteString.ByteString)]
@@ -390,44 +248,39 @@ toHeader _ = do
 
 localToPath :: MonadIO io => FilePrefix -> File -> io FilePath
 localToPath prefix file_ = liftIO $ do
-    let File {..} = file_
-
+    let File {..}      = file_
     let Directory {..} = directory
 
     prefixPath <- case prefix of
         Home -> do
             Directory.getHomeDirectory
-
         Absolute -> do
-            return "/"
-
+            pure "/"
         Parent -> do
             pwd <- Directory.getCurrentDirectory
             return (FilePath.takeDirectory pwd)
-
         Here -> do
             Directory.getCurrentDirectory
 
     let cs = map Text.unpack (file : components)
-
     let cons component dir = dir </> component
+    pure (foldr cons prefixPath cs)
 
-    return (foldr cons prefixPath cs)
-
-rawFromImport :: Import -> ElabM Raw
-rawFromImport (Import {..}) = do
+rawFromImport :: Cxt -> Import -> ElabM Raw
+rawFromImport cxt (Import {..}) = do
     let ImportHashed {..} = importHashed
 
     (path, text) <- case importType of
-        Local prefix file -> liftIO $ do
-            path   <- localToPath prefix file
-            exists <- Directory.doesFileExist path
-            unless exists $ throwMissingImport (MissingFile path)
-            text <- Data.Text.IO.readFile path
+        Local prefix file -> do
+            path   <- liftIO $ localToPath prefix file
+            exists <- liftIO $ Directory.doesFileExist path
+            unless exists $ importError cxt (MissingFile path)
+            text <- liftIO $ Data.Text.IO.readFile path
             pure (path, text)
 
         Remote url@URL { headers = maybeHeaders } -> do
-            mheaders <- forM maybeHeaders $ \_ -> error "headers not yet supported"
+            mheaders <- forM maybeHeaders $ \_ -> do
+              error "headers not yet supported"
 
 #ifdef MIN_VERSION_http_client
             fetchFromHttpUrl url mheaders
@@ -436,14 +289,14 @@ rawFromImport (Import {..}) = do
             liftIO (throwIO (CannotImportHTTPURL urlString mheaders))
 #endif
 
-        Env env -> liftIO $ do
-            x <- System.Environment.lookupEnv (Text.unpack env)
+        Env env -> do
+            x <- liftIO $ System.Environment.lookupEnv (Text.unpack env)
             case x of
                 Just string -> pure (Text.unpack env, Text.pack string)
-                Nothing     -> throwMissingImport (MissingEnvironmentVariable env)
+                Nothing     -> importError cxt (MissingEnvironmentVariable env)
 
-        Missing -> liftIO $ do
-            throwM (MissingImports [])
+        Missing -> do
+          importError cxt MissingImport
 
     case importMode of
         Code -> do
@@ -462,8 +315,8 @@ rawFromImport (Import {..}) = do
         RawText -> do
             pure (TextLit (Chunks [] text))
 
-resolve :: Import -> ElabM (Core, Val, VType)
-resolve import0 = do
+resolve :: Cxt -> Import -> ElabM (Core, Val, VType)
+resolve cxt import0 = do
   ImportState {..} <- ask
 
   let parent  = NonEmpty.head _stack
@@ -475,23 +328,17 @@ resolve import0 = do
         _        -> True
 
   when (localImport child && not (localImport parent)) $
-    throwMissingImport (Imported _stack (ReferentiallyOpaque import0))
+    importError cxt (ReferentiallyOpaque import0)
 
   when (child `elem` _stack) $
-    throwMissingImport (Imported _stack (Cycle import0))
+    importError cxt (Cycle import0)
 
   (Map.lookup child <$> liftIO (readIORef _cache)) >>= \case
     Just (t, tv, a) -> pure (t, tv, a)
     Nothing     -> do
-      t      <- rawFromImport child
+      t      <- rawFromImport cxt child
       (t, a) <- local (\s -> s {_stack = NonEmpty.cons child _stack})
                       (infer emptyCxt t)
       let ~tv = eval Empty t
       liftIO $ modifyIORef' _cache $ Map.insert child (t, tv, a)
       pure (t, tv, a)
-
--- | A call to `assertNoImports` failed because there was at least one import
-data ImportResolutionDisabled = ImportResolutionDisabled deriving (Exception)
-
-instance Show ImportResolutionDisabled where
-    show _ = "\nImport resolution is disabled"

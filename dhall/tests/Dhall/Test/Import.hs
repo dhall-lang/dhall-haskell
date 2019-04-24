@@ -18,21 +18,19 @@ import qualified Test.Tasty.HUnit
 import Control.Monad.Reader
 import Dhall.Context
 import Dhall.Elaboration
+import Dhall.Errors (ElabError(..))
 
 tests :: TestTree
 tests =
     Test.Tasty.testGroup "import tests"
         [ Test.Tasty.testGroup "import alternatives"
             [ shouldFail
-                3
                 "alternative of several unset env variables"
                 "./dhall-lang/tests/import/failure/alternativeEnv.dhall"
             , shouldFail
-                1
                 "alternative of env variable and missing"
                 "./dhall-lang/tests/import/failure/alternativeEnvMissing.dhall"
             , shouldFail
-                0
                 "just missing"
                 "./dhall-lang/tests/import/failure/missing.dhall"
             , shouldNotFail
@@ -71,23 +69,13 @@ shouldNotFailRelative name dir path = Test.Tasty.HUnit.testCase (Data.Text.unpac
     _ <- runReaderT (infer emptyCxt expr) =<< emptyImportState dir
     return ()
 
-shouldFail :: Int -> Text -> FilePath -> TestTree
-shouldFail _ name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
+shouldFail :: Text -> FilePath -> TestTree
+shouldFail name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
     text <- Data.Text.IO.readFile path
     actualExpr <- case Dhall.Parser.exprFromText mempty text of
                      Left  err  -> throwIO err
                      Right expr -> return expr
     catch
-      (do
-          _ <- infer0 "." actualExpr
+      (do _ <- infer0 "." actualExpr
           fail "Import should have failed, but it succeeds")
-      (\(ImportError _) -> pure ()
-          -- case length es == failures of
-          --     True -> pure ()
-          --     False -> fail
-          --         (   "Should have failed "
-          --         <>  show failures
-          --         <>  " times, but failed with: \n"
-          --         <>  show es
-          --         )
-      )
+      (\(ElabError _ _ _ (Right _)) -> pure ())

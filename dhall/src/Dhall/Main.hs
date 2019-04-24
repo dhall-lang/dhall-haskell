@@ -33,9 +33,9 @@ import Dhall.Binary (StandardVersion)
 import Dhall.Core (Expr(..), Import)
 import Dhall.Elaboration
 import Dhall.Context
-import Dhall.Import (Imported(..))
 import Dhall.Parser (Src)
 import Dhall.Eval
+import Dhall.Errors
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 -- import Lens.Family (set)
 import Options.Applicative (Parser, ParserInfo)
@@ -294,22 +294,22 @@ command (Options {..}) = do
             .   Control.Exception.handle handler0
           where
             handler0 e = do
-                let _ = e :: Dhall.Elaboration.TypeError
+                let _ = e :: Dhall.Errors.ElabError
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
-                    then Control.Exception.throwIO (DetailedTypeError e)
+                    then Control.Exception.throwIO (DetailedElabError e)
                     else do
                         Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO e
 
-            handler1 (Imported ps e) = do
-                let _ = e :: Dhall.Elaboration.TypeError
+            handler1 e = do
+                let _ = e :: Dhall.Errors.ElabError
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
-                    then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
+                    then Control.Exception.throwIO (DetailedElabError e)
                     else do
                         Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
-                        Control.Exception.throwIO (Imported ps e)
+                        Control.Exception.throwIO e
 
             handler2 e = do
                 let string = show (e :: SomeException)

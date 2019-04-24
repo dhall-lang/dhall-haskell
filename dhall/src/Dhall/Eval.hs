@@ -891,7 +891,7 @@ Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Va
 Var (V "x" 0)
 
 -}
-alphaNormalize :: Expr s X -> Expr s X
+alphaNormalize :: Expr s a -> Expr s a
 alphaNormalize = goEnv NEmpty where
 
   goVar :: Names -> Text -> Int -> Expr s a

@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 -- | This module contains the implementation of the @dhall lint@ command
 
 module Dhall.Lint
@@ -7,16 +8,16 @@ module Dhall.Lint
     , removeLetInLet
     , removeUnusedBindings
     , optionalLitToSomeNone
+    , assertNoImports
     ) where
 
 import Control.Monad (mplus)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup ((<>))
 import Dhall.Core (Binding(..), Expr(..), Import, Var(..), Chunks(..), X)
+import Dhall.Eval (freeIn)
 import Lens.Family (ASetter, over)
 import Unsafe.Coerce (unsafeCoerce)
-
-import qualified Dhall.Core
 
 {-| Automatically improve a Dhall expression
 
@@ -41,21 +42,22 @@ lint =
 denote :: Expr s a -> Expr X a
 denote t = unsafeCoerce (rewriteOf subExpressions denoteRule t)
 
+assertNoImports :: Expr s Import -> Expr s a
+assertNoImports = unsafeCoerce . rewriteOf subExpressions $
+  \case Embed{} -> error "assertNoImports: imports"
+        _       -> Nothing
+
 removeLetInLet :: Eq a => Expr s a -> Maybe (Expr s a)
 removeLetInLet (Let a (Let b c)) = Just (Let (a <> b) c)
 removeLetInLet _ = Nothing
 
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
 removeUnusedBindings (Let (Binding a _ _ :| []) d)
-    | not (V a 0 `Dhall.Core.freeIn` d) =
-        Just d
-    | otherwise =
-        Nothing
+    | not (V a 0 `freeIn` d) = Just d
+    | otherwise              = Nothing
 removeUnusedBindings (Let (Binding a _ _ :| (l : ls)) d)
-    | not (V a 0 `Dhall.Core.freeIn` e) =
-        Just e
-    | otherwise =
-        Nothing
+    | not (V a 0 `freeIn` e) = Just e
+    | otherwise                         = Nothing
   where
     e = Let (l :| ls) d
 removeUnusedBindings _ = Nothing
@@ -68,7 +70,6 @@ optionalLitToSomeNone :: Expr s a -> Maybe (Expr s a)
 optionalLitToSomeNone (OptionalLit _ (Just b)) = Just (Some b)
 optionalLitToSomeNone (OptionalLit a Nothing) = Just (App None a)
 optionalLitToSomeNone _ = Nothing
-
 
 rewriteOf :: ASetter a b a b -> (b -> Maybe a) -> a -> b
 rewriteOf l f = go where go = transformOf l (\x -> maybe x go (f x))

@@ -431,6 +431,7 @@ Library
         Dhall.Core,
         Dhall.Diff,
         Dhall.Elaboration,
+        Dhall.Errors,
         Dhall.Eval,
         Dhall.Format,
         Dhall.Freeze,
@@ -450,7 +451,6 @@ Library
         Dhall.Parser.Expression,
         Dhall.Parser.Combinators,
         Dhall.Parser.Token,
-        Dhall.TypeErrors,
         Dhall.Util,
         Paths_dhall
     if flag(with-http)
