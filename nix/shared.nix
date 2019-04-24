@@ -598,6 +598,8 @@ in
   rec {
     inherit trivial;
 
+    inherit pkgs;
+
     possibly-static = {
       dhall            = makeStaticIfPossible "dhall"           ;
       dhall-bash       = makeStaticIfPossible "dhall-bash"      ;
