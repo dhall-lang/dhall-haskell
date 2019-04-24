@@ -44,13 +44,13 @@ data TypeMessage
     | AlternativeAnnotationMismatch !Text !Raw !Const !Text !Raw !Const
     | ListAppendMismatch !Core !Core
     | DuplicateAlternative !Text
-    | MustCombineARecord Char !Raw !Raw
+    | MustCombineARecord Char !Core !Nf
     | RecordMismatch Char !Raw !Raw !Const !Const
-    | CombineTypesRequiresRecordType !Raw !Raw
+    | CombineTypesRequiresRecordType !Core !Nf
     | RecordTypeMismatch !Const !Const !Raw !Raw
     | FieldCollision !Text
-    | MustMergeARecord !Raw !Raw
-    | MustMergeUnion !Raw !Raw
+    | MustMergeARecord !Core !Nf
+    | MustMergeUnion !Core !Nf
     | UnusedHandler !(Set Text)
     | MissingHandler !(Set Text)
     | HandlerInputTypeMismatch !Text !Core !Core
@@ -58,20 +58,26 @@ data TypeMessage
     | InvalidHandlerOutputType !Text !Core !Core
     | MissingMergeType
     | HandlerNotAFunction !Text !Raw
-    | ConstructorsRequiresAUnionType !Raw !Raw
-    | CantAccess !Text !Raw !Raw
-    | CantProject !Text !Raw !Raw
-    | MissingField !Text !Raw
+    | CantAccess !Text !Core !Nf
+    | CantProject !Text !Core !Nf
+    | MissingField !Text !Nf
+    | MissingAlternative !Text !Nf
     | CantAnd !Raw !Raw
     | CantOr !Raw !Raw
     | CantEQ !Raw !Raw
     | CantNE !Raw !Raw
     | CantInterpolate !Raw !Raw
     | CantTextAppend !Raw !Raw
-    | CantListAppend !Raw !Raw
+    | CantListAppend !Core !Nf
     | CantAdd !Raw !Raw
     | CantMultiply !Raw !Raw
     | NoDependentTypes !Core !Core
+
+    | ExpectedAType !Nf
+    | UnexpectedRecordField !Text !Nf
+    | ConvError !Nf !Nf
+    | MergeDependentHandler !Text !Nf
+    | ExpectedFunctionHandler !Text !Nf
     deriving (Show)
 
 shortTypeMessage :: TypeMessage -> Doc Ann
@@ -216,7 +222,7 @@ prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
 
 prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
   where
-    short = "Invalid function input"
+    short = "Expected a type for function input"
 
     long =
         "Explanation: A function can accept an input “term” that has a given “type”, like\n\
@@ -1046,10 +1052,10 @@ prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
 prettyTypeMessage MissingListType = do
     ErrorMessages {..}
   where
-    short = "An empty list requires a type annotation"
+    short = "Empty list requires a type annotation"
 
     long =
-        "Explanation: Lists do not require a type annotation if they have at least one   \n\
+        "Explanation: Lists never require a type annotation if they have at least one   \n\
         \element:                                                                        \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1058,15 +1064,15 @@ prettyTypeMessage MissingListType = do
         \    └───────────┘                                                               \n\
         \                                                                                \n\
         \                                                                                \n\
-        \However, empty lists still require a type annotation:                           \n\
+        \However, empty lists may require a type annotation, if the element type is not  \n\
+        \inferable from program context:                                                 \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────┐                                                       \n\
         \    │ [] : List Natural │  This type annotation is mandatory                    \n\
         \    └───────────────────┘                                                       \n\
         \                                                                                \n\
-        \                                                                                \n\
-        \You cannot supply an empty list without a type annotation                       \n"
+        \                                                                                \n"
 
 prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
     ErrorMessages {..}
@@ -2163,7 +2169,7 @@ prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
 prettyTypeMessage MissingMergeType =
     ErrorMessages {..}
   where
-    short = "An empty ❰merge❱ requires a type annotation"
+    short = "Empty ❰merge❱ requires a type annotation"
 
     long =
         "Explanation: A ❰merge❱ does not require a type annotation if the union has at   \n\
@@ -2177,7 +2183,8 @@ prettyTypeMessage MissingMergeType =
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
         \                                                                                \n\
-        \However, you must provide a type annotation when merging an empty union:        \n\
+        \However, you may need to provide a type annotation when merging an empty union  \n\
+        \if the return type is not inferable from context:                               \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────────┐                                          \n\
@@ -2188,7 +2195,7 @@ prettyTypeMessage MissingMergeType =
         \                                                                                \n\
         \                                                                                \n\
         \You can provide any type at all as the annotation, since merging an empty       \n\
-        \union can produce any type of output                                            \n"
+        \union can produce output of any type                                            \n"
 
 prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -2414,58 +2421,6 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
         txt0 = insert k
         txt1 = insert expr0
 
-prettyTypeMessage (ConstructorsRequiresAUnionType expr0 expr1) = ErrorMessages {..}
-  where
-    short = "❰constructors❱ requires a union type"
-
-    long =
-        "Explanation: You can only use the ❰constructors❱ keyword on an argument that is \n\
-        \a union type literal, like this:                                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────────────────┐                           \n\
-        \    │ constructors < Left : Natural, Right : Bool > │                           \n\
-        \    └───────────────────────────────────────────────┘                           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you cannot use the ❰constructors❱ keyword on any other type of argument.\n\
-        \For example, you cannot use a variable argument:                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────┐                                            \n\
-        \    │ λ(t : Type) → constructors t │  Invalid: ❰t❱ might not be a union type    \n\
-        \    └──────────────────────────────┘                                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────────────────────┐                         \n\
-        \    │ let t : Type = < Left : Natural, Right : Bool > │  Invalid: Type-checking \n\
-        \    │ in  constructors t                              │  precedes normalization \n\
-        \    └─────────────────────────────────────────────────┘                         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, you can import the union type argument:                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────┐                                          \n\
-        \    │ constructors ./unionType.dhall │ Valid: Import resolution precedes        \n\
-        \    └────────────────────────────────┘ type-checking                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \────────────────────────────────────────────────────────────────────────────────\n\
-        \                                                                                \n\
-        \You tried to supply the following argument:                                     \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... which normalized to:                                                        \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is not a union type literal                                           \n"
-      where
-        txt0 = insert expr0
-        txt1 = insert expr1
-
 prettyTypeMessage (CantAccess lazyText0 expr0 expr1) = ErrorMessages {..}
   where
     short = "Not a record or a union"
@@ -2526,7 +2481,7 @@ prettyTypeMessage (CantAccess lazyText0 expr0 expr1) = ErrorMessages {..}
 
 prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
   where
-    short = "Not a record"
+    short = "Expected a record for projection"
 
     long =
         "Explanation: You can only project fields on records, like this:                 \n\
@@ -2585,45 +2540,49 @@ prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
         txt1 = insert expr0
         txt2 = insert expr1
 
-prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
+prettyTypeMessage (MissingAlternative k _) = ErrorMessages short short
   where
-    short = "Missing record field"
+    short = "Missing union constructor: " <> pretty k
 
-    long =
-        "Explanation: You can only access fields on records, like this:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────┐                                         \n\
-        \    │ { foo = True, bar = \"ABC\" }.foo │  This is valid ...                    \n\
-        \    └─────────────────────────────────┘                                         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────────────┐                               \n\
-        \    │ λ(r : { foo : Bool, bar : Text }) → r.foo │  ... and so is this           \n\
-        \    └───────────────────────────────────────────┘                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you can only access fields if they are present                          \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────┐                                         \n\
-        \    │ { foo = True, bar = \"ABC\" }.qux │                                       \n\
-        \    └─────────────────────────────────┘                                         \n\
-        \                                  ⇧                                             \n\
-        \                                  Invalid: the record has no ❰qux❱ field        \n\
-        \                                                                                \n\
-        \You tried to access a field named:                                              \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... but the field is missing because the record only defines the following      \n\
-        \fields:                                                                         \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n"
-      where
-        txt0 = insert k
-        txt1 = insert expr0
+prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
+        where
+          short = "Missing record field: " <> pretty k
+
+          long =
+              "Explanation: You can only access fields on records, like this:                  \n\
+              \                                                                                \n\
+              \                                                                                \n\
+              \    ┌─────────────────────────────────┐                                         \n\
+              \    │ { foo = True, bar = \"ABC\" }.foo │  This is valid ...                    \n\
+              \    └─────────────────────────────────┘                                         \n\
+              \                                                                                \n\
+              \                                                                                \n\
+              \    ┌───────────────────────────────────────────┐                               \n\
+              \    │ λ(r : { foo : Bool, bar : Text }) → r.foo │  ... and so is this           \n\
+              \    └───────────────────────────────────────────┘                               \n\
+              \                                                                                \n\
+              \                                                                                \n\
+              \... but you can only access fields if they are present                          \n\
+              \                                                                                \n\
+              \For example, the following expression is " <> _NOT <> " valid:                  \n\
+              \                                                                                \n\
+              \    ┌─────────────────────────────────┐                                         \n\
+              \    │ { foo = True, bar = \"ABC\" }.qux │                                       \n\
+              \    └─────────────────────────────────┘                                         \n\
+              \                                  ⇧                                             \n\
+              \                                  Invalid: the record has no ❰qux❱ field        \n\
+              \                                                                                \n\
+              \You tried to access a field named:                                              \n\
+              \                                                                                \n\
+              \" <> txt0 <> "\n\
+              \                                                                                \n\
+              \... but the field is missing because the record only defines the following      \n\
+              \fields:                                                                         \n\
+              \                                                                                \n\
+              \" <> txt1 <> "\n"
+            where
+              txt0 = insert k
+              txt1 = insert expr0
 
 prettyTypeMessage (CantAnd expr0 expr1) =
         buildBooleanOperator "&&" expr0 expr1
@@ -2818,6 +2777,36 @@ prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
       where
         txt0 = insert expr0
         txt1 = insert expr1
+
+prettyTypeMessage (ExpectedAType got) = ErrorMessages short short where
+  short = "Expected a type or a kind\n"
+      <>  "\n"
+      <>  "inferred type:\n\n"
+      <>  "    " <> pretty got
+
+prettyTypeMessage (UnexpectedRecordField k a) = ErrorMessages short short where
+  short = "Unexpected record field: " <> pretty k
+      <>  "\n\n"
+      <>  "Expected an expression with type:\n\n"
+      <>  "    " <> pretty a
+
+prettyTypeMessage (ConvError has want) = ErrorMessages short short where
+  short =  "type mismatch\n"
+        <> "expected type:\n\n"
+        <> "    " <> pretty want
+        <> "\n\ninferred type:\n\n"
+        <> "    " <> pretty has
+
+prettyTypeMessage (MergeDependentHandler k a) = ErrorMessages short short where
+  short =  "Merge handler cannot have dependent function type.\n"
+        <> "Inferred type for handler of alternative " <> pretty k <> ":\n\n"
+        <> "    " <> pretty a
+
+prettyTypeMessage (ExpectedFunctionHandler k a) = ErrorMessages short short where
+  short =  "Expected a function type for merge handler.\n"
+        <> "Inferred type for handler of alternative " <> pretty k <> ":\n\n"
+        <> "    " <> pretty a
+
 
 buildBooleanOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
 buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
