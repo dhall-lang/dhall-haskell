@@ -53,8 +53,8 @@ getTests = do
 successTest :: Text -> TestTree
 successTest prefix =
     Tasty.HUnit.testCase (Text.unpack prefix) $ do
-        let actualCode   = prefix <> "A.dhall"
-        let expectedCode = prefix <> "B.dhall"
+        let actualCode   = Test.Util.toDhallPath (prefix <> "A.dhall")
+        let expectedCode = Test.Util.toDhallPath (prefix <> "B.dhall")
 
         actualExpr <- Core.throws (Parser.exprFromText mempty actualCode)
 
@@ -71,7 +71,9 @@ successTest prefix =
 failureTest :: Text -> TestTree
 failureTest path = do
     Tasty.HUnit.testCase (Text.unpack path) $ do
-        expression <- Core.throws (Parser.exprFromText mempty path)
+        let dhallPath = Test.Util.toDhallPath path
+
+        expression <- Core.throws (Parser.exprFromText mempty dhallPath)
 
         let io :: IO Bool
             io = do

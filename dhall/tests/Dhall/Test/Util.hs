@@ -12,6 +12,7 @@ module Dhall.Test.Util
     , assertNormalized
     , assertTypeChecks
     , discover
+    , toDhallPath
     ) where
 
 import Data.Bifunctor (first)
@@ -28,6 +29,7 @@ import Turtle (FilePath, Pattern, Shell, fp)
 import qualified Control.Exception
 import qualified Control.Foldl     as Foldl
 import qualified Data.Functor
+import qualified Data.Text         as Text
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
@@ -104,3 +106,9 @@ discover pattern buildTest paths = do
     return (Tasty.testGroup "discover" tests)
 
 
+{-| Path names on Windows are not valid Dhall paths due to using backslashes
+    instead of forwardslashes to separate path components.  This utility fixes
+    them if necessary
+-}
+toDhallPath :: Text -> Text
+toDhallPath = Text.replace "\\" "/"

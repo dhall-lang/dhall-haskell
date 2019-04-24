@@ -180,8 +180,8 @@ unitTest prefix = do
 betaNormalizationTest :: Text -> TestTree
 betaNormalizationTest prefix =
     Tasty.HUnit.testCase (Text.unpack prefix) $ do
-        let actualCode   = prefix <> "A.dhall"
-        let expectedCode = prefix <> "B.dhall"
+        let actualCode   = Test.Util.toDhallPath (prefix <> "A.dhall")
+        let expectedCode = Test.Util.toDhallPath (prefix <> "B.dhall")
 
         actualExpr <- throws (Parser.exprFromText mempty actualCode)
 
