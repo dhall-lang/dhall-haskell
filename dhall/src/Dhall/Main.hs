@@ -23,35 +23,36 @@ module Dhall.Main
 
 
 import Control.Applicative (optional, (<|>))
-import Control.Exception (Exception, SomeException)
+import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Control.Monad.Reader
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
 import Dhall.Binary (StandardVersion)
-import Dhall.Core (Expr(..), Import)
+import Dhall.Core (Expr(..), Import, coerceEmbed)
 import Dhall.Elaboration
 import Dhall.Context
-import Dhall.Parser (Src)
+import Dhall.Import
+import Dhall.Parser (Src, exprAndHeaderFromText)
 import Dhall.Eval
 import Dhall.Errors
+import Dhall.Util (throws)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 -- import Lens.Family (set)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
 
--- import qualified Codec.CBOR.JSON
--- import qualified Codec.CBOR.Read
--- import qualified Codec.CBOR.Write
--- import qualified Codec.Serialise
+import qualified Codec.CBOR.JSON
+import qualified Codec.CBOR.Read
+import qualified Codec.CBOR.Write
+import qualified Codec.Serialise
 import qualified Control.Exception
--- import qualified Control.Monad.Trans.State.Strict          as State
--- import qualified Data.Aeson
--- import qualified Data.Aeson.Encode.Pretty
--- import qualified Data.ByteString.Lazy
--- import qualified Data.ByteString.Lazy.Char8
+import qualified Data.Aeson
+import qualified Data.Aeson.Encode.Pretty
+import qualified Data.ByteString.Lazy
+import qualified Data.ByteString.Lazy.Char8
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
@@ -257,14 +258,9 @@ parseMode =
         adapt True  path    = Dhall.Format.Check {..}
         adapt False inplace = Dhall.Format.Modify {..}
 
-throws :: Exception e => Either e a -> IO a
-throws (Left  e) = Control.Exception.throwIO e
-throws (Right a) = return a
-
 getExpression :: IO (Expr Src Import)
 getExpression = do
     inText <- Data.Text.IO.getContents
-
     throws (Dhall.Parser.exprFromText "(stdin)" inText)
 
 -- | `ParserInfo` for the `Options` type
@@ -336,7 +332,6 @@ command (Options {..}) = do
     let render :: Pretty a => Handle -> Expr s a -> IO ()
         render h expression = do
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
-
             renderDoc h doc
 
     handle $ case mode of
@@ -354,12 +349,11 @@ command (Options {..}) = do
             expression <- getExpression
             (t, a) <- runReaderT (infer emptyCxt expression) status
 
-            let normalForm =
-                 (if annotate then (\t -> Annot t (quote NEmpty a)) else id) $
-                 (if alpha then alphaNormalize else id) $
-                 (nfEmpty t)
+            let processed =
+                 (if annotate then (\t -> Annot t (coerceEmbed $ quote NEmpty a)) else id)
+                 (if alpha then alphaNormalize t else t)
 
-            render System.IO.stdout normalForm
+            render System.IO.stdout processed
 
         -- Resolve (Just Dot) -> do
         --     expression <- getExpression
@@ -398,27 +392,10 @@ command (Options {..}) = do
         --         State.runStateT (Dhall.Import.loadWith expression) status
         --     render System.IO.stdout resolvedExpression
 
-        -- Normalize {..} -> do
-        --     expression <- getExpression
-
-        --     resolvedExpression <- Dhall.Import.assertNoImports expression
-
-        --     _ <- throws (Dhall.TypeCheck.typeOf resolvedExpression)
-
-        --     let normalizedExpression = Dhall.Core.normalize resolvedExpression
-
-        --     let alphaNormalizedExpression =
-        --             if alpha
-        --             then Dhall.Core.alphaNormalize normalizedExpression
-        --             else normalizedExpression
-
-        --     render System.IO.stdout alphaNormalizedExpression
-
         Type -> do
           expression <- getExpression
           (_, ty) <- runReaderT (infer emptyCxt expression) status
           render System.IO.stdout (quote NEmpty ty)
-
 
         -- Repl -> do
         --     Dhall.Repl.repl characterSet explain standardVersion
@@ -435,85 +412,100 @@ command (Options {..}) = do
         Format {..} -> do
             Dhall.Format.format (Dhall.Format.Format {..})
 
-        -- Freeze {..} -> do
-        --     Dhall.Freeze.freeze inplace all_ standardVersion
+        Freeze {..} -> do
 
-        -- Hash -> do
-        --     Dhall.Hash.hash standardVersion
+          let freezing = if all_ then FreezeAll else FreezeRemote
+          status <- pure (status {_freezing = freezing})
+
+          case inplace of
+            Just file -> do
+              text <- Data.Text.IO.readFile file
+
+              (header, expr) <- throws (exprAndHeaderFromText file text)
+              (t, _) <- runReaderT (infer emptyCxt expr) status
+
+              let doc    = Pretty.pretty header <> Pretty.pretty t
+              let stream = Pretty.layoutSmart layoutOpts doc
+
+              System.IO.withFile file System.IO.WriteMode $ \handle -> do
+                  Pretty.renderIO handle (annToAnsiStyle <$> stream)
+                  Data.Text.IO.hPutStrLn handle ""
+
+            Nothing -> do
+              expr   <- getExpression
+              (t, _) <- runReaderT (infer emptyCxt expr) status
+              render System.IO.stdout t
+
+
+        Normalize{..} -> do
+            expression <- getExpression
+            (t, _) <- runReaderT (infer emptyCxt expression) status
+            let normalForm = (if alpha then alphaNormalize else id) (nfEmpty t)
+            render System.IO.stdout normalForm
+
+        Hash -> do
+            exp <- getExpression
+            exp <- fst <$> runReaderT (infer emptyCxt exp) status
+            let nf = alphaNormalize (nfEmpty exp)
+            Data.Text.IO.putStrLn (hashExpressionToCode standardVersion nf)
 
         Lint {..} -> do
             case inplace of
                 Just file -> do
                     text <- Data.Text.IO.readFile file
-
-                    (header, expression) <- throws (Dhall.Parser.exprAndHeaderFromText file text)
-
+                    (header, expression) <- throws (exprAndHeaderFromText file text)
                     let lintedExpression = Dhall.Lint.lint expression
 
                     let doc =   Pretty.pretty header
                             <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
 
-                    System.IO.withFile file System.IO.WriteMode (\h -> do
-                        renderDoc h doc )
+                    System.IO.withFile file System.IO.WriteMode (\h -> renderDoc h doc)
 
                 Nothing -> do
                     text <- Data.Text.IO.getContents
-
-                    (header, expression) <- throws (Dhall.Parser.exprAndHeaderFromText "(stdin)" text)
+                    (header, expression) <- throws (exprAndHeaderFromText "(stdin)" text)
 
                     let lintedExpression = Dhall.Lint.lint expression
 
-                    let doc =   Pretty.pretty header
-                            <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
-
+                    let doc = Pretty.pretty header
+                           <> Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
                     renderDoc System.IO.stdout doc
 
-        -- Encode {..} -> do
-        --     expression <- getExpression
+        Encode {..} -> do
+          expression <- getExpression
+          let term = Dhall.Binary.encode expression
+          let bytes = Codec.Serialise.serialise term
+          if json
+            then do
+              let decoder = Codec.CBOR.JSON.decodeValue False
+              (_, value) <- throws (Codec.CBOR.Read.deserialiseFromBytes decoder bytes)
+              let jsonBytes = Data.Aeson.Encode.Pretty.encodePretty value
+              Data.ByteString.Lazy.Char8.putStrLn jsonBytes
+            else do
+              Data.ByteString.Lazy.putStr bytes
 
-        --     let term = Dhall.Binary.encode expression
+        Decode {..} -> do
+            bytes <- Data.ByteString.Lazy.getContents
+            term <- do
+              if json
+                then do
+                  value <- case Data.Aeson.eitherDecode' bytes of
+                      Left  string -> fail string
+                      Right value  -> return value
 
-        --     let bytes = Codec.Serialise.serialise term
+                  let encoding = Codec.CBOR.JSON.encodeValue value
 
-        --     if json
-        --         then do
-        --             let decoder = Codec.CBOR.JSON.decodeValue False
+                  let cborBytes = Codec.CBOR.Write.toLazyByteString encoding
+                  throws (Codec.Serialise.deserialiseOrFail cborBytes)
+                else do
+                  throws (Codec.Serialise.deserialiseOrFail bytes)
 
-        --             (_, value) <- throws (Codec.CBOR.Read.deserialiseFromBytes decoder bytes)
-
-        --             let jsonBytes = Data.Aeson.Encode.Pretty.encodePretty value
-
-        --             Data.ByteString.Lazy.Char8.putStrLn jsonBytes
-
-        --         else do
-        --             Data.ByteString.Lazy.putStr bytes
-
-        -- Decode {..} -> do
-        --     bytes <- Data.ByteString.Lazy.getContents
-
-        --     term <- do
-        --         if json
-        --             then do
-        --                 value <- case Data.Aeson.eitherDecode' bytes of
-        --                     Left  string -> fail string
-        --                     Right value  -> return value
-
-        --                 let encoding = Codec.CBOR.JSON.encodeValue value
-
-        --                 let cborBytes = Codec.CBOR.Write.toLazyByteString encoding
-        --                 throws (Codec.Serialise.deserialiseOrFail cborBytes)
-        --             else do
-        --                 throws (Codec.Serialise.deserialiseOrFail bytes)
-
-        --     expression <- throws (Dhall.Binary.decodeExpression term)
-
-        --     let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
-
-        --     renderDoc System.IO.stdout doc
+            expression <- throws (Dhall.Binary.decodeExpression term)
+            let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
+            renderDoc System.IO.stdout doc
 
         _ -> do
           putStrLn "unsupported option"
-          putStrLn "only \"dhall\" and \"dhall type\" are supported currently"
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()

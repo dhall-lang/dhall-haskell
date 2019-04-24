@@ -25,6 +25,9 @@ import Dhall.Core
     , Chunks(..)
     , Const(..)
     , Var(..)
+    , Import(..)
+    , ImportType(..)
+    , ImportHashed(..)
     , X
     , absurd
     , coerceEmbed
@@ -566,9 +569,19 @@ infer cxt@Cxt{..} t =
     Note s t -> do
       addNote s (infer_ t)
 
-    Embed imp -> do
-      (t, tv, a) <- resolve cxt imp
-      pure (Embed (Resolved imp t tv), a)
+    Embed imp@Import{..} -> do
+      (t, tv, a, hsh) <- resolve cxt imp
+      ImportState{..} <- ask
+
+      let hashedImp = imp {importHashed = importHashed {hash = Just hsh}}
+
+      -- length _stack check: no recursive freezing! We only freeze the root expression.
+      let newImp = case (length _stack, _freezing, importType importHashed) of
+            (1, FreezeRemote, Remote{}) -> hashedImp
+            (1, FreezeAll,    _       ) -> hashedImp
+            _                           -> imp
+
+      pure (Embed (Resolved newImp t tv), a)
 
     ImportAlt t u -> do
       infer_ t `catch` \e -> case e of

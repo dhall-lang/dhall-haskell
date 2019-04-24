@@ -12,9 +12,9 @@ module Dhall.Format
     ) where
 
 import Control.Exception (Exception)
-import Control.Monad.IO.Class (MonadIO(..))
 import Dhall.Parser (exprAndHeaderFromText)
 import Dhall.Pretty (CharacterSet(..), annToAnsiStyle, layoutOpts)
+import Dhall.Util (throws)
 
 import Data.Monoid ((<>))
 
@@ -108,7 +108,3 @@ format (Format {..}) =
             if originalText == formattedText
                 then return ()
                 else Control.Exception.throwIO NotFormatted
-
-throws :: (Exception e, MonadIO io) => Either e a -> io a
-throws (Left  e) = liftIO (Control.Exception.throwIO e)
-throws (Right a) = return a

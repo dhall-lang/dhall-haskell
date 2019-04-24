@@ -434,8 +434,6 @@ Library
         Dhall.Errors,
         Dhall.Eval,
         Dhall.Format,
-        Dhall.Freeze,
-        Dhall.Hash,
         Dhall.Import,
         Dhall.Lint,
         Dhall.Main,

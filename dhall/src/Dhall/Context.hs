@@ -3,6 +3,7 @@
 module Dhall.Context where
 
 import Control.Monad.Reader
+import Crypto.Hash (SHA256, Digest)
 import Data.IORef
 import Data.List.NonEmpty
 import Data.Map.Strict (Map)
@@ -52,13 +53,15 @@ bind :: Text -> Val -> Cxt -> Cxt
 bind x a (Cxt ts as) = Cxt (Skip ts x) (TBind as x a)
 {-# inline bind #-}
 
+data Freezing = NoFreezing | FreezeRemote | FreezeAll
+  deriving Show
 
 data ImportState = ImportState
   { _stack :: !(NonEmpty Import)
     -- ^ Stack of `Import`s that we've imported along the way to get to the
     -- current point
 
-  , _cache :: !(IORef (Map Import (Core, Val, VType)))
+  , _cache :: !(IORef (Map Import (Core, Val, VType, Digest SHA256)))
     -- ^ Cache of imported expressions in order to avoid importing the same
     --   expression twice with different values
 
@@ -66,6 +69,9 @@ data ImportState = ImportState
     -- ^ Cache for the HTTP `Manager` so that we only acquire it once
 
   , _standardVersion :: !StandardVersion
+
+    -- ^ Options for freezing imports.
+  , _freezing :: !Freezing
   }
 
 type ElabM = ReaderT ImportState IO
@@ -92,6 +98,7 @@ emptyImportState rootDirectory = do
     _stack           = pure rootImport
     _manager         = Nothing
     _standardVersion = defaultStandardVersion
+    _freezing        = NoFreezing
 
   _manager <- newIORef Nothing
   _cache   <- newIORef mempty

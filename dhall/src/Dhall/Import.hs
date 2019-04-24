@@ -105,8 +105,11 @@
 -}
 
 module Dhall.Import (
-    -- * Import
-      rawFromImport
+    -- * Hashing
+      hashExpressionToCode
+
+    -- * Resolution
+    , rawFromImport
     , resolve
     ) where
 
@@ -120,6 +123,10 @@ import Data.Semigroup (Semigroup(..))
 import {-# SOURCE #-} Dhall.Elaboration
 import Dhall.Parser (Parser(..), ParseError(..))
 import Dhall.Errors
+import Dhall.Binary (StandardVersion(..))
+import Crypto.Hash (SHA256, Digest)
+import Data.Text (Text)
+import Codec.CBOR.Term (Term(..))
 
 #if MIN_VERSION_base(4,8,0)
 #else
@@ -145,6 +152,8 @@ import Dhall.Core
 import Dhall.Import.HTTP
 #endif
 
+import qualified Data.ByteString.Lazy
+import qualified Codec.Serialise
 import qualified Data.ByteString
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
@@ -155,12 +164,14 @@ import qualified Data.Text.Encoding
 import qualified Data.Text.IO
 import qualified Dhall.Map
 import qualified Dhall.Parser
+import qualified Dhall.Binary
 import qualified System.Directory                 as Directory
 import qualified System.Environment
 import qualified System.FilePath                  as FilePath
 import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
+import qualified Crypto.Hash
 
 
 -- Canonicalization
@@ -221,6 +232,39 @@ instance Canonicalize ImportHashed where
 instance Canonicalize Import where
     canonicalize (Import importHashed importMode) =
         Import (canonicalize importHashed) importMode
+
+-- Hashing & encoding
+--------------------------------------------------------------------------------
+
+encodeExpression :: StandardVersion -> Nf -> Data.ByteString.ByteString
+encodeExpression _standardVersion expression = bytesStrict
+  where
+    term :: Term
+    term = Dhall.Binary.encode expression
+
+    taggedTerm :: Term
+    taggedTerm = case _standardVersion of
+      NoVersion -> term
+      s         -> TList [ TString (Dhall.Binary.renderStandardVersion s), term ]
+
+    bytesLazy   = Codec.Serialise.serialise taggedTerm
+    bytesStrict = Data.ByteString.Lazy.toStrict bytesLazy
+
+
+-- | Hash an expression in normal form.
+hashExpression :: StandardVersion -> Nf -> Crypto.Hash.Digest SHA256
+hashExpression _standardVersion expression =
+    Crypto.Hash.hash (encodeExpression _standardVersion expression)
+
+{-| Convenience utility to hash a fully resolved expression and return the
+    base-16 encoded hash with the @sha256:@ prefix
+    In other words, the output of this function can be pasted into Dhall
+    source code to add an integrity check to an import
+-}
+hashExpressionToCode :: StandardVersion -> Nf -> Text
+hashExpressionToCode _standardVersion expr =
+    "sha256:" <> Text.pack (show (hashExpression _standardVersion expr))
+
 
 -- Resolution
 --------------------------------------------------------------------------------
@@ -315,7 +359,9 @@ rawFromImport cxt (Import {..}) = do
         RawText -> do
             pure (TextLit (Chunks [] text))
 
-resolve :: Cxt -> Import -> ElabM (Core, Val, VType)
+-- | Resolve an import to an elaborated expression, its lazy value, its type and its
+--   lazy hash.
+resolve :: Cxt -> Import -> ElabM (Core, Val, VType, Digest SHA256)
 resolve cxt import0 = do
   ImportState {..} <- ask
 
@@ -334,11 +380,23 @@ resolve cxt import0 = do
     importError cxt (Cycle import0)
 
   (Map.lookup child <$> liftIO (readIORef _cache)) >>= \case
-    Just (t, tv, a) -> pure (t, tv, a)
-    Nothing     -> do
+    Just res -> pure res
+    Nothing -> do
       t      <- rawFromImport cxt child
       (t, a) <- local (\s -> s {_stack = NonEmpty.cons child _stack})
                       (infer emptyCxt t)
-      let ~tv = eval Empty t
-      liftIO $ modifyIORef' _cache $ Map.insert child (t, tv, a)
-      pure (t, tv, a)
+      let ~tv  = eval Empty t
+      let ~nf  = alphaNormalize $ quote NEmpty tv
+      let ~hsh = hashExpression _standardVersion nf
+
+      liftIO $ modifyIORef' _cache $ Map.insert child (t, tv, a, hsh)
+
+      case hash (importHashed import0) of
+        Nothing -> pure ()
+        Just expectedHash -> do
+          let matches version = expectedHash == hashExpression version nf
+          unless (any matches [minBound .. maxBound]) $ do
+            let actualHash = hashExpression NoVersion nf
+            importError cxt HashMismatch{..}
+
+      pure (t, tv, a, hsh)

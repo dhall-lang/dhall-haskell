@@ -7,8 +7,11 @@ module Dhall.Util
     , snipDoc
     , insert
     , _ERROR
+    , throws
     ) where
 
+import Control.Exception (Exception(..), throwIO)
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.Monoid ((<>))
 import Data.String (IsString)
 import Data.Text (Text)
@@ -79,3 +82,7 @@ insert expression =
 -- | Prefix used for error messages
 _ERROR :: IsString string => string
 _ERROR = "\ESC[1;31mError\ESC[0m"
+
+throws :: (Exception e, MonadIO io) => Either e a -> io a
+throws (Left  e) = liftIO (Control.Exception.throwIO e)
+throws (Right a) = return a
