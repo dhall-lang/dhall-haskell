@@ -12,10 +12,13 @@ import Data.ByteString (ByteString)
 import Data.CaseInsensitive (CI)
 import Data.Dynamic (fromDynamic, toDyn)
 import Data.Semigroup ((<>))
+import Data.Text (Text)
 import Lens.Family.State.Strict (zoom)
 
 import Dhall.Core
-    ( Import(..)
+    ( Directory(..)
+    , File(..)
+    , Import(..)
     , ImportHashed(..)
     , ImportType(..)
     , Scheme(..)
@@ -27,6 +30,7 @@ import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
 import qualified Dhall.Core
 import qualified Dhall.Util
+import qualified Network.URI.Encode               as URI.Encode
 
 import Dhall.Import.Types
 
@@ -199,6 +203,35 @@ corsCompliant (Remote parentURL) childURL responseHeaders = liftIO $ do
             | otherwise ->
                 Control.Exception.throwIO (NotCORSCompliant {..})
 corsCompliant _ _ _ = return ()
+
+renderComponent :: Text -> Text
+renderComponent component = "/" <> URI.Encode.encodeText component
+
+renderQuery :: Text -> Text
+renderQuery query = "?" <> query
+
+renderURL :: URL -> Text
+renderURL url =
+        schemeText
+    <>  authority
+    <>  pathText
+    <>  queryText
+  where
+    URL {..} = url
+
+    File {..} = path
+
+    Directory {..} = directory
+
+    schemeText = case scheme of
+        HTTP  -> "http://"
+        HTTPS -> "https://"
+
+    pathText =
+            foldMap renderComponent (reverse components)
+        <>  renderComponent file
+
+    queryText = foldMap renderQuery query
 
 fetchFromHttpUrl
     :: URL

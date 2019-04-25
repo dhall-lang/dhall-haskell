@@ -48,6 +48,8 @@ getTests = do
 
             let skip =
                     [ normalizationDirectory </> "unit/EmptyAlternativeA.dhall"
+                    -- https://github.com/dhall-lang/dhall-lang/issues/505
+                    , normalizationDirectory </> "unit/OperatorTextConcatenateLhsEmptyA.dhall"
                     ]
 
             Monad.guard (path `notElem` skip)

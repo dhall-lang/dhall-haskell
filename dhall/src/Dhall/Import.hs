@@ -308,7 +308,7 @@ instance Show MissingImports where
         <>  concatMap (\e -> "\n" <> show e <> "\n") es
 
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
-throwMissingImport e = throwM (MissingImports [(toException e)])
+throwMissingImport e = throwM (MissingImports [toException e])
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
@@ -461,6 +461,8 @@ exprFromImport :: Import -> StateT (Status IO) IO (Expr Src Import)
 exprFromImport here@(Import {..}) = do
     let ImportHashed {..} = importHashed
 
+    Status {..} <- State.get
+
     result <- Maybe.runMaybeT $ do
         Just expectedHash <- return hash
         cacheFile         <- getCacheFile expectedHash
@@ -472,7 +474,7 @@ exprFromImport here@(Import {..}) = do
 
         if expectedHash == actualHash
             then return ()
-            else liftIO (Control.Exception.throwIO (HashMismatch {..}))
+            else throwMissingImport (Imported _stack (HashMismatch {..}))
 
         let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
 
@@ -527,7 +529,7 @@ exprToImport here expression = do
         let fallback = do
                 let actualHash = hashExpression NoVersion normalizedExpression
 
-                liftIO (Control.Exception.throwIO (HashMismatch {..}))
+                throwMissingImport (Imported _stack (HashMismatch {..}))
 
         Data.Foldable.asum (map check [ minBound .. maxBound ]) <|> fallback
 
