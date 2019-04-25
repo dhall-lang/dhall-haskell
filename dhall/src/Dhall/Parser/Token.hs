@@ -111,6 +111,7 @@ import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Text
 import qualified Dhall.Set
+import qualified Network.URI.Encode         as URI.Encode
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char.Lexer
 import qualified Text.Parser.Char
@@ -380,8 +381,18 @@ httpRaw :: Parser URL
 httpRaw = do
     scheme    <- scheme_
     authority <- authority_
-    path      <- file_
+    oldPath   <- file_
     query     <- optional (("?" :: Parser Text) *> query_)
+
+    let path =
+            oldPath
+                { file = URI.Encode.decodeText (file oldPath)
+                , directory =
+                    (directory oldPath)
+                        { components =
+                            map URI.Encode.decodeText (components (directory oldPath))
+                        }
+                }
 
     let headers = Nothing
 

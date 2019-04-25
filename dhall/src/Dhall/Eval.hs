@@ -419,11 +419,7 @@ eval !env t =
     TextLit cs       -> case evalChunks cs of
                           VChunks [("", t)] "" -> t
                           vcs                  -> VTextLit vcs
-    TextAppend t u   -> case (evalE t, evalE u) of
-                          (VTextLit (VChunks [] ""), u) -> u
-                          (t, VTextLit (VChunks [] "")) -> t
-                          (VTextLit x, VTextLit y)      -> VTextLit (x <> y)
-                          (t, u)                        -> VTextAppend t u
+    TextAppend t u   -> evalE (TextLit (Chunks [("", t), ("", u)] ""))
     TextShow         -> VPrim $ \case
                           VTextLit (VChunks [] x) -> VTextLit (VChunks [] (textShow x))
                           t                       -> VTextShow t

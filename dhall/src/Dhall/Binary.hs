@@ -132,8 +132,6 @@ class ToTerm a where
 instance ToTerm a => ToTerm (Expr s a) where
     encode (Var (V "_" n)) =
         TInteger n
-    encode (Var (V x 0)) =
-        TString x
     encode (Var (V x n)) =
         TList [ TString x, TInteger n ]
     encode NaturalBuild =
@@ -566,8 +564,6 @@ instance FromTerm a => FromTerm (Expr s a) where
         return (Const Sort)
     decode (TString "_") =
         empty
-    decode (TString x) =
-        return (Var (V x 0))
     decode (TList [ TString x, TInt n ]) =
         return (Var (V x (fromIntegral n)))
     decode (TList [ TString x, TInteger n ]) =

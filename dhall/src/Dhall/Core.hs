@@ -98,6 +98,7 @@ import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Map
 import qualified Dhall.Set
+import qualified Network.URI.Encode         as URI.Encode
 import qualified Text.Printf
 
 
@@ -191,11 +192,19 @@ instance Pretty URL where
             schemeDoc
         <>  "://"
         <>  Pretty.pretty authority
-        <>  Pretty.pretty path
+        <>  pathDoc
         <>  queryDoc
         <>  foldMap prettyHeaders headers
       where
         prettyHeaders h = " using " <> Pretty.pretty h
+
+        File {..} = path
+
+        Directory {..} = directory
+
+        pathDoc =
+                foldMap prettyURIComponent (reverse components)
+            <>  prettyURIComponent file
 
         schemeDoc = case scheme of
             HTTP  -> "http"
@@ -1542,15 +1551,7 @@ normalizeWithM ctx e0 = loop (denote e0)
           case y' of
             TextLit c -> pure [Chunks [] x, c]
             _         -> pure [Chunks [(x, y')] mempty]
-    TextAppend x y -> decide <$> loop x <*> loop y
-      where
-        isEmpty (Chunks [] "") = True
-        isEmpty  _             = False
-
-        decide (TextLit m)  r          | isEmpty m = r
-        decide  l          (TextLit n) | isEmpty n = l
-        decide (TextLit m) (TextLit n)             = TextLit (m <> n)
-        decide  l           r                      = TextAppend l r
+    TextAppend x y -> loop (TextLit (Chunks [("", x), ("", y)] ""))
     TextShow -> pure TextShow
     List -> pure List
     ListLit t es
@@ -1835,15 +1836,7 @@ isNormalized e0 = loop (denote e0)
           check y = loop y && case y of
               TextLit _ -> False
               _         -> True
-      TextAppend x y -> loop x && loop y && decide x y
-        where
-          isEmpty (Chunks [] "") = True
-          isEmpty  _             = False
-
-          decide (TextLit m)  _          | isEmpty m = False
-          decide  _          (TextLit n) | isEmpty n = False
-          decide (TextLit _) (TextLit _)             = False
-          decide  _           _                      = True
+      TextAppend _ _ -> False
       TextShow -> True
       List -> True
       ListLit t es -> all loop t && all loop es
@@ -2107,6 +2100,13 @@ pathCharacter c =
 prettyPathComponent :: Text -> Doc ann
 prettyPathComponent text
     | Data.Text.all pathCharacter text =
+        "/" <> Pretty.pretty text
+    | otherwise =
+        "/\"" <> Pretty.pretty text <> "\""
+
+prettyURIComponent :: Text -> Doc ann
+prettyURIComponent text
+    | Data.Text.all (\c -> pathCharacter c && URI.Encode.isAllowed c) text =
         "/" <> Pretty.pretty text
     | otherwise =
         "/\"" <> Pretty.pretty text <> "\""
