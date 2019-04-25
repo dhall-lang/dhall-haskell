@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards, OverloadedStrings #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -33,34 +34,39 @@ import qualified Crypto.Hash
 -- Elaboration errors
 --------------------------------------------------------------------------------
 
--- | A structured elaboration error that includes import stack and local context
-data ElabError =
-  ElabError !(NonEmpty Import) !Cxt !(Maybe Src) !(Either TypeError ImportError)
+-- | An elaboration error that includes import stack, source position and local context
+data ContextualError =
+  ContextualError !(NonEmpty Import) !Cxt !(Maybe Src) !ElabError
+
+-- We distinguish disabled import resolution from the other import errors, because we don't want
+-- to recover from the former when elaborating import alternatives.
+data ElabError = TypeError !TypeError | ImportError !ImportError | ImportResolutionDisabled
+
+elabError :: Cxt -> ElabError -> ElabM a
+elabError cxt err = do
+  stack <- asks _stack
+  throwM (ContextualError stack cxt Nothing err)
 
 typeError :: Cxt -> TypeError -> ElabM a
-typeError cxt err = do
-  stack <- asks _stack
-  throwM (ElabError stack cxt Nothing (Left err))
+typeError cxt = elabError cxt . TypeError
 
 importError :: Cxt -> ImportError -> ElabM a
-importError cxt err = do
-  stack <- asks _stack
-  throwM (ElabError stack cxt Nothing (Right err))
+importError cxt = elabError cxt . ImportError
 
-instance Show ElabError where
+instance Show ContextualError where
     show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
 
-instance Exception ElabError
+instance Exception ContextualError
 
-prettyElabError :: (Either TypeError ImportError -> Doc ann) -> ElabError -> Doc xxx
-prettyElabError prettyMsg (ElabError imports ctx pos msg) =
+prettyContextualError :: (ElabError -> Doc ann) -> ContextualError -> Doc xxx
+prettyContextualError prettyElab (ContextualError imports ctx pos msg) =
   fromString (concat (zipWith indent [0..] toDisplay) ++ "\n") <>
   Pretty.unAnnotate
       (   "\n"
       <>  (if null (typesToList $ _types ctx)
           then ""
           else prettyContext ctx <> "\n\n")
-      <>  prettyMsg msg
+      <>  prettyElab msg
       <>  source)
   where
     indent n import_ =
@@ -80,27 +86,32 @@ prettyElabError prettyMsg (ElabError imports ctx pos msg) =
 
     source = maybe mempty pretty pos
 
-instance Pretty ElabError where
-    pretty = prettyElabError (\msg -> either shortTypeMessage (fromString . show) msg <> "\n")
+instance Pretty ContextualError where
+    pretty = prettyContextualError $ \case
+      TypeError err            -> shortTypeMessage err <> "\n"
+      ImportError err          -> fromString (show err) <> "\n"
+      ImportResolutionDisabled -> "Import resolution is disabled\n"
 
 {-| Newtype used to wrap error messages so that they render with a more
     detailed explanation of what went wrong
 -}
-newtype DetailedElabError = DetailedElabError ElabError
+newtype DetailedContextualError = DetailedContextualError ContextualError
     deriving (Typeable)
 
-instance Show DetailedElabError where
+instance Show DetailedContextualError where
     show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
 
-instance Exception DetailedElabError
+instance Exception DetailedContextualError
 
-instance Pretty DetailedElabError where
-    pretty (DetailedElabError err) = prettyElabError
-      (\msg ->
-              either longTypeMessage (fromString . show) msg <> "\n"
+instance Pretty DetailedContextualError where
+    pretty (DetailedContextualError cxtErr) = prettyContextualError (
+      \m -> (case m of
+              TypeError err            -> longTypeMessage err <> "\n"
+              ImportError err          -> fromString (show err) <> "\n"
+              ImportResolutionDisabled -> "Import resolution is disabled\n")
           <>  "────────────────────────────────────────────────────────────────────────────────\n"
           <>  "\n")
-      err
+      cxtErr
 
 -- Import errors
 --------------------------------------------------------------------------------

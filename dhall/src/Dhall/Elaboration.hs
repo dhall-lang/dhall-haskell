@@ -83,9 +83,9 @@ unify cxt@Cxt{..} t u =
     (typeError cxt (ConvError (quoteCxt cxt t) (quoteCxt cxt u)))
 {-# inline unify #-}
 
-addNote :: Src -> ElabM a -> ElabM a
-addNote s ma = ma `catch` \(ElabError imports cxt ms err) ->
-  throwM (ElabError imports cxt (ms <|> Just s) err)
+addSrc :: Src -> ElabM a -> ElabM a
+addSrc s ma = ma `catch` \(ContextualError imports cxt ms err) ->
+  throwM (ContextualError imports cxt (ms <|> Just s) err)
 
 checkTy ::
      Cxt
@@ -161,7 +161,7 @@ check cxt@Cxt{..} t a err =
       Some <$> check_ t a Nothing
 
     (Note s t, a) ->
-      addNote s (check_ t a err)
+      addSrc s (check_ t a err)
 
     (t, a) -> do
       (t, a') <- infer_ t
@@ -567,29 +567,31 @@ infer cxt@Cxt{..} t =
              in typeError_ (CantProject text t (quote_ tt))
 
     Note s t -> do
-      addNote s (infer_ t)
+      addSrc s (infer_ t)
 
     Embed imp@Import{..} -> do
-      (t, tv, a, hsh) <- resolve cxt imp
       ImportState{..} <- ask
+      case _importOptions of
+        ImportsDisabled -> elabError cxt ImportResolutionDisabled
+        _               -> pure ()
 
+      CacheEntry t tv a nf hsh <- resolve cxt imp
       let hashedImp = imp {importHashed = importHashed {hash = Just hsh}}
 
-      -- length _stack check: no recursive freezing! We only freeze the root expression.
-      let newImp = case (length _stack, _freezing, importType importHashed) of
-            (1, FreezeRemote, Remote{}) -> hashedImp
-            (1, FreezeAll,    _       ) -> hashedImp
-            _                           -> imp
-
-      pure (Embed (Resolved newImp t tv), a)
+      -- _stack check: freezing and unfolding only in the root expression!
+      case (_stack, _importOptions, importType importHashed) of
+        (_ :| [], FreezeRemote, Remote{}) -> pure (Embed (Resolved hashedImp t tv), a)
+        (_ :| [], FreezeAll,    _       ) -> pure (Embed (Resolved hashedImp t tv), a)
+        (_ :| [], OldResolve,   _       ) -> pure (coerceEmbed nf, a)
+        _                            -> pure (Embed (Resolved imp t tv), a)
 
     ImportAlt t u -> do
-      infer_ t `catch` \e -> case e of
-        ElabError _ _ _ (Right _) -> infer_ u
-        e                         -> throwM e
+      infer_ t `catch` \case
+        ContextualError _ _ _ ImportError{} -> infer_ u
+        e -> throwM e
 
-infer0 :: FilePath -> Raw -> IO (Core, Val)
-infer0 path t = runReaderT (infer emptyCxt t) =<< emptyImportState path
+inferRoot :: FilePath -> Raw -> IO (Core, Val)
+inferRoot path t = runReaderT (infer emptyCxt t) =<< rootState path
 
-check0 :: FilePath -> Raw -> Val -> IO Core
-check0 path t a = runReaderT (check emptyCxt t a Nothing) =<< emptyImportState path
+checkRoot :: FilePath -> Raw -> Val -> IO Core
+checkRoot path t a = runReaderT (check emptyCxt t a Nothing) =<< rootState path

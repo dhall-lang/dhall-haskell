@@ -2,7 +2,6 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
@@ -467,7 +466,6 @@ data Expr s a
     -- | > Embed import                             ~  import
     | Embed a
     deriving (Eq, Show)
-
 
 coerceNote :: Expr X a -> Expr s a
 coerceNote = unsafeCoerce

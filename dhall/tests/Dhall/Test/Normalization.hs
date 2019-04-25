@@ -411,14 +411,14 @@ should name basename =
             Left  err  -> Control.Exception.throwIO err
             Right expr -> pure expr
 
-        (actualResolved, _) <- infer0 "." actualExpr
+        (actualResolved, _) <- inferRoot "." actualExpr
 
         let actualNormalized = alphaNormalize $ nfEmpty actualResolved
 
         expectedExpr <- case Dhall.Parser.exprFromText mempty expectedCode of
             Left  err  -> Control.Exception.throwIO err
             Right expr -> pure expr
-        (expectedResolved, _) <- infer0 "." expectedExpr
+        (expectedResolved, _) <- inferRoot "." expectedExpr
 
         let expectedNormalized = alphaNormalize $ nfEmpty expectedResolved
 

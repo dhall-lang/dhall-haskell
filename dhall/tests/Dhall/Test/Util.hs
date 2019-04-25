@@ -28,7 +28,7 @@ code src = do
   expr <- case Dhall.Parser.exprFromText mempty src of
     Left parseError -> Control.Exception.throwIO parseError
     Right expr      -> pure expr
-  fst <$> infer0 "." expr
+  fst <$> inferRoot "." expr
 
 -- equivalent :: Text -> Text -> IO ()
 -- equivalent text0 text1 = do

@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-| This module contains the top-level entrypoint and options parsing for the
     @dhall@ executable
 -}
@@ -21,7 +22,6 @@ module Dhall.Main
     , main
     ) where
 
-
 import Control.Applicative (optional, (<|>))
 import Control.Exception (SomeException)
 import Data.Monoid ((<>))
@@ -29,8 +29,9 @@ import Control.Monad.Reader
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
+import Data.IORef (readIORef)
 import Dhall.Binary (StandardVersion)
-import Dhall.Core (Expr(..), Import, coerceEmbed)
+import Dhall.Core (Expr(..), Import(..), ImportHashed(..), coerceEmbed)
 import Dhall.Elaboration
 import Dhall.Context
 import Dhall.Import
@@ -43,6 +44,10 @@ import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
+
+import Data.Map.Strict (Map)
+import Data.Set (Set)
+import Text.Dot (Dot, NodeId, userNode, userNodeId, (.->.))
 
 import qualified Codec.CBOR.JSON
 import qualified Codec.CBOR.Read
@@ -76,8 +81,9 @@ import qualified Options.Applicative
 import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.IO
--- import qualified Text.Dot
--- import qualified Data.Map
+import qualified Text.Dot
+import qualified Data.Map.Strict as Map
+import qualified Data.Set        as Set
 
 -- | Top-level program options
 data Options = Options
@@ -281,8 +287,8 @@ command (Options {..}) = do
 
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
-    status <- (\s -> s {_standardVersion = standardVersion})
-          <$> Dhall.Context.emptyImportState "."
+    state <- (\s -> s {_standardVersion = standardVersion})
+          <$> Dhall.Context.rootState "."
 
     let handle =
                 Control.Exception.handle handler2
@@ -290,21 +296,23 @@ command (Options {..}) = do
             .   Control.Exception.handle handler0
           where
             handler0 e = do
-                let _ = e :: Dhall.Errors.ElabError
+                let _ = e :: Dhall.Errors.ContextualError
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
-                    then Control.Exception.throwIO (DetailedElabError e)
+                    then Control.Exception.throwIO (DetailedContextualError e)
                     else do
-                        Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                        Data.Text.IO.hPutStrLn System.IO.stderr
+                           "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO e
 
             handler1 e = do
-                let _ = e :: Dhall.Errors.ElabError
+                let _ = e :: Dhall.Errors.ContextualError
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
-                    then Control.Exception.throwIO (DetailedElabError e)
+                    then Control.Exception.throwIO (DetailedContextualError e)
                     else do
-                        Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                        Data.Text.IO.hPutStrLn System.IO.stderr
+                          "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO e
 
             handler2 e = do
@@ -347,54 +355,67 @@ command (Options {..}) = do
 
         Default {..} -> do
             expression <- getExpression
-            (t, a) <- runReaderT (infer emptyCxt expression) status
-
+            (t, a) <- runReaderT (infer emptyCxt expression) state
             let processed =
-                 (if annotate then (\t -> Annot t (coerceEmbed $ quote NEmpty a)) else id)
-                 (if alpha then alphaNormalize t else t)
-
+                 (if alpha then alphaNormalize else id) $
+                 (if annotate then (\t -> Annot t (coerceEmbed $ quote NEmpty a)) else id) $
+                 (nfEmpty t)
             render System.IO.stdout processed
 
-        -- Resolve (Just Dot) -> do
-        --     expression <- getExpression
+        Resolve (Just Dot) -> do
+            let graphToDot :: Map Import (Int, Set Import) -> Dot NodeId
+                graphToDot graph = do
+                  forM_ (Map.assocs graph) $ \(imp, (i, _)) -> do
+                    userNode
+                        (userNodeId i)
+                        [ ("label", show $ Pretty.pretty imp)
+                        , ("shape", "box")
+                        , ("style", "rounded")
+                        ]
+                  forM_ (Map.assocs graph) $ \(_, (i, imps)) -> do
+                    forM_ (Set.elems imps) $ \imp' ->
+                      userNodeId i .->. userNodeId (fst $ graph Map.! imp')
+                  pure (userNodeId 0)
 
-        --     (Dhall.Import.Types.Status { _dot}) <-
-        --         State.execStateT (Dhall.Import.loadWith expression) status
+            expression <- getExpression
+            (`runReaderT` state) $ do
+              _ <- infer emptyCxt expression
+              graph <- liftIO . readIORef =<< asks _graph
+              liftIO $ putStr $ ("strict " <>) $ Text.Dot.showDot $ do
+                Text.Dot.attribute ("rankdir", "LR")
+                graphToDot graph
 
-        --     putStr . ("strict " <>) . Text.Dot.showDot $
-        --            Text.Dot.attribute ("rankdir", "LR") >>
-        --            _dot
+        Resolve (Just ListImmediateDependencies) -> do
+            expression <- getExpression
+            (`runReaderT` state) $ do
+              _ <- infer emptyCxt expression
+              graph <- liftIO . readIORef =<< asks _graph
+              liftIO $ forM_ (Set.elems (snd $ graph Map.! rootImport ".")) $ \imp ->
+                print $ Pretty.pretty $ importHashed imp
 
-        -- Resolve (Just ListImmediateDependencies) -> do
-        --     expression <- getExpression
+        Resolve (Just ListTransitiveDependencies) -> do
+          expression <- getExpression
+          (`runReaderT` state) $ do
+            _ <- infer emptyCxt expression
+            cache <- liftIO . readIORef =<< asks _cache
+            liftIO $
+              mapM_ print
+                 .   fmap (   Pretty.pretty
+                          .   Dhall.Core.importType
+                          .   Dhall.Core.importHashed )
+                 .   Map.keys
+                 $   cache
 
-        --     mapM_ (print
-        --                 . Pretty.pretty
-        --                 . Dhall.Core.importHashed) expression
-
-        -- Resolve (Just ListTransitiveDependencies) -> do
-        --     expression <- getExpression
-
-        --     (Dhall.Import.Types.Status { _cache }) <-
-        --         State.execStateT (Dhall.Import.loadWith expression) status
-
-        --     mapM_ print
-        --          .   fmap (   Pretty.pretty
-        --                   .   Dhall.Core.importType
-        --                   .   Dhall.Core.importHashed )
-        --          .   Data.Map.keys
-        --          $   _cache
-
-        -- Resolve (Nothing) -> do
-        --     expression <- getExpression
-
-        --     (resolvedExpression, _) <-
-        --         State.runStateT (Dhall.Import.loadWith expression) status
-        --     render System.IO.stdout resolvedExpression
+        Resolve Nothing -> do
+          expression <- getExpression
+          state <- pure $ state {_importOptions = OldResolve}
+          (t, _) <- runReaderT (infer emptyCxt expression) state
+          render System.IO.stdout t
 
         Type -> do
           expression <- getExpression
-          (_, ty) <- runReaderT (infer emptyCxt expression) status
+          state     <- pure $ state {_importOptions = ImportsDisabled}
+          (_, ty)    <- runReaderT (infer emptyCxt expression) state
           render System.IO.stdout (quote NEmpty ty)
 
         -- Repl -> do
@@ -413,16 +434,15 @@ command (Options {..}) = do
             Dhall.Format.format (Dhall.Format.Format {..})
 
         Freeze {..} -> do
-
-          let freezing = if all_ then FreezeAll else FreezeRemote
-          status <- pure (status {_freezing = freezing})
+          let importOptions = if all_ then FreezeAll else FreezeRemote
+          state <- pure $ state {_importOptions = importOptions}
 
           case inplace of
             Just file -> do
               text <- Data.Text.IO.readFile file
 
               (header, expr) <- throws (exprAndHeaderFromText file text)
-              (t, _) <- runReaderT (infer emptyCxt expr) status
+              (t, _) <- runReaderT (infer emptyCxt expr) state
 
               let doc    = Pretty.pretty header <> Pretty.pretty t
               let stream = Pretty.layoutSmart layoutOpts doc
@@ -433,19 +453,19 @@ command (Options {..}) = do
 
             Nothing -> do
               expr   <- getExpression
-              (t, _) <- runReaderT (infer emptyCxt expr) status
+              (t, _) <- runReaderT (infer emptyCxt expr) state
               render System.IO.stdout t
-
 
         Normalize{..} -> do
             expression <- getExpression
-            (t, _) <- runReaderT (infer emptyCxt expression) status
+            state     <- pure $ state {_importOptions = ImportsDisabled}
+            (t, _) <- runReaderT (infer emptyCxt expression) state
             let normalForm = (if alpha then alphaNormalize else id) (nfEmpty t)
             render System.IO.stdout normalForm
 
         Hash -> do
             exp <- getExpression
-            exp <- fst <$> runReaderT (infer emptyCxt exp) status
+            exp <- fst <$> runReaderT (infer emptyCxt exp) state
             let nf = alphaNormalize (nfEmpty exp)
             Data.Text.IO.putStrLn (hashExpressionToCode standardVersion nf)
 

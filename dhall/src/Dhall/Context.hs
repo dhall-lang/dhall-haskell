@@ -5,15 +5,17 @@ module Dhall.Context where
 import Control.Monad.Reader
 import Crypto.Hash (SHA256, Digest)
 import Data.IORef
-import Data.List.NonEmpty
 import Data.Map.Strict (Map)
+import Data.Set (Set)
 import Data.Text (Text)
 import Dhall.Binary
 import Dhall.Core
 import Dhall.Eval
 import Network.HTTP.Client (Manager)
+import Data.List.NonEmpty
 import System.FilePath
 
+import qualified Data.Map.Strict as Map
 import qualified Data.Text
 
 
@@ -53,15 +55,33 @@ bind :: Text -> Val -> Cxt -> Cxt
 bind x a (Cxt ts as) = Cxt (Skip ts x) (TBind as x a)
 {-# inline bind #-}
 
-data Freezing = NoFreezing | FreezeRemote | FreezeAll
+data ImportOptions
+    -- ^ Imports are disabled.
+  = ImportsDisabled
+    -- ^ Freeze the remote imports in the root expression.
+  | FreezeRemote
+    -- ^ Free all imports in the root expression.
+  | FreezeAll
+    -- ^ Resolve imports without freezing.
+  | NoFreezing
+    -- ^ Resolve, normalize and unfold every import in the root expression.
+  | OldResolve
   deriving Show
 
-data ImportState = ImportState
-  { _stack :: !(NonEmpty Import)
+data CacheEntry = CacheEntry {
+    _core    :: !Core
+  , _value   :: Val
+  , _type    :: VType
+  , _nf      :: Nf
+  , _hash    :: Digest SHA256
+  }
+
+data ImportState = ImportState {
+    _stack :: !(NonEmpty Import)
     -- ^ Stack of `Import`s that we've imported along the way to get to the
     -- current point
 
-  , _cache :: !(IORef (Map Import (Core, Val, VType, Digest SHA256)))
+  , _cache :: !(IORef (Map Import CacheEntry))
     -- ^ Cache of imported expressions in order to avoid importing the same
     --   expression twice with different values
 
@@ -70,36 +90,34 @@ data ImportState = ImportState
 
   , _standardVersion :: !StandardVersion
 
-    -- ^ Options for freezing imports.
-  , _freezing :: !Freezing
+    -- ^ Options for imports.
+  , _importOptions :: !ImportOptions
+
+    -- ^ Import graph.
+  , _graph :: !(IORef (Map Import (Int, Set Import)))
   }
 
 type ElabM = ReaderT ImportState IO
 
-emptyImportState :: FilePath -> IO ImportState
-emptyImportState rootDirectory = do
-  let
-    prefix = if isRelative rootDirectory then Here else Absolute
+rootImport :: FilePath -> Import
+rootImport rootDir =
+  let prefix = if isRelative rootDir then Here else Absolute
+      pathComponents =
+        Data.Text.pack <$> Prelude.reverse (splitDirectories rootDir)
+      dirAsFile = File (Directory pathComponents) "."
+  in Import
+       (ImportHashed
+         Nothing
+         (Local prefix dirAsFile))
+       Code
 
-    pathComponents =
-      Data.Text.pack <$> Prelude.reverse (splitDirectories rootDirectory)
-
-    dirAsFile = File (Directory pathComponents) "."
-
-    -- Fake import to set the directory we're relative to.
-    rootImport = Import
-      { importHashed = ImportHashed
-        { hash = Nothing
-        , importType = Local prefix dirAsFile
-        }
-      , importMode = Code
-      }
-
-    _stack           = pure rootImport
-    _manager         = Nothing
-    _standardVersion = defaultStandardVersion
-    _freezing        = NoFreezing
-
-  _manager <- newIORef Nothing
+rootState :: FilePath -> IO ImportState
+rootState rootDir = do
+  let root             = rootImport rootDir
+      _stack           = pure root
+      _standardVersion = defaultStandardVersion
+      _importOptions   = NoFreezing
   _cache   <- newIORef mempty
-  pure (ImportState{..})
+  _manager <- newIORef Nothing
+  _graph   <- newIORef (Map.singleton root (0, mempty))
+  pure ImportState{..}

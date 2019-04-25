@@ -8,7 +8,7 @@ import Data.Text (Text)
 import Test.Tasty (TestTree)
 import Dhall.Eval
 import Dhall.Elaboration
-import Dhall.Errors (ElabError(..))
+import Dhall.Errors (ContextualError(..), ElabError(..))
 
 import qualified Control.Exception
 import qualified Data.Text
@@ -104,9 +104,9 @@ should name basename =
             Left  err  -> Control.Exception.throwIO err
             Right expr -> return expr
 
-        (expectedExpr, _) <- infer0 "." expectedExpr
+        (expectedExpr, _) <- inferRoot "." expectedExpr
 
-        _ <- check0 "." actualExpr (eval Empty expectedExpr)
+        _ <- checkRoot "." actualExpr (eval Empty expectedExpr)
         pure ()
 
 shouldNotTypeCheck :: Text -> Text -> TestTree
@@ -118,9 +118,9 @@ shouldNotTypeCheck name basename =
             Left  exception  -> Control.Exception.throwIO exception
             Right expression -> return expression
 
-        typeChecked <- (True <$ infer0 "." expression)
+        typeChecked <- (True <$ inferRoot "." expression)
                        `Control.Exception.catch`
-                       \(ElabError _ _ _ Left{}) -> pure False
+                       \(ContextualError _ _ _ TypeError{}) -> pure False
 
         if typeChecked
             then fail (Data.Text.unpack code <> " should not have type-checked")

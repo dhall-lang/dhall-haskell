@@ -159,10 +159,12 @@ import qualified Data.CaseInsensitive
 import qualified Data.Foldable
 import qualified Data.List.NonEmpty               as NonEmpty
 import qualified Data.Map.Strict                  as Map
+import qualified Data.Set                         as Set
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.IO
 import qualified Dhall.Map
+
 import qualified Dhall.Parser
 import qualified Dhall.Binary
 import qualified System.Directory                 as Directory
@@ -359,37 +361,45 @@ rawFromImport cxt (Import {..}) = do
         RawText -> do
             pure (TextLit (Chunks [] text))
 
--- | Resolve an import to an elaborated expression, its lazy value, its type and its
---   lazy hash.
-resolve :: Cxt -> Import -> ElabM (Core, Val, VType, Digest SHA256)
+resolve :: Cxt -> Import -> ElabM CacheEntry
 resolve cxt import0 = do
-  ImportState {..} <- ask
+  ImportState{..} <- ask
 
   let parent  = NonEmpty.head _stack
-      import1 = parent <> import0
+  let import1 = parent <> import0
       child   = canonicalize import1
 
   let localImport (Import (ImportHashed _ ty) _) = case ty of
         Remote{} -> False
         _        -> True
 
+  -- referential sanity
   when (localImport child && not (localImport parent)) $
     importError cxt (ReferentiallyOpaque import0)
 
+  -- cyclic import check
   when (child `elem` _stack) $
     importError cxt (Cycle import0)
 
+  let addEdge =
+        liftIO $ modifyIORef' _graph $ Map.adjust (Set.insert child <$>) parent
+      newNode =
+        liftIO $ modifyIORef' _graph $ \m -> Map.insert child (length m, mempty) m
+
   (Map.lookup child <$> liftIO (readIORef _cache)) >>= \case
-    Just res -> pure res
+    Just entry -> do
+      addEdge
+      pure entry
     Nothing -> do
-      t      <- rawFromImport cxt child
+      t <- rawFromImport cxt child
+      addEdge
+      newNode
       (t, a) <- local (\s -> s {_stack = NonEmpty.cons child _stack})
                       (infer emptyCxt t)
-      let ~tv  = eval Empty t
-      let ~nf  = alphaNormalize $ quote NEmpty tv
-      let ~hsh = hashExpression _standardVersion nf
-
-      liftIO $ modifyIORef' _cache $ Map.insert child (t, tv, a, hsh)
+      let ~tv   = eval Empty t
+      let ~nf   = quote NEmpty tv
+      let ~hsh  = hashExpression _standardVersion $ alphaNormalize nf
+      let entry = CacheEntry t tv a nf hsh
 
       case hash (importHashed import0) of
         Nothing -> pure ()
@@ -399,4 +409,5 @@ resolve cxt import0 = do
             let actualHash = hashExpression NoVersion nf
             importError cxt HashMismatch{..}
 
-      pure (t, tv, a, hsh)
+      liftIO $ modifyIORef' _cache $ Map.insert child entry
+      pure entry

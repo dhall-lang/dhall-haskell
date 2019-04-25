@@ -18,7 +18,7 @@ import qualified Test.Tasty.HUnit
 import Control.Monad.Reader
 import Dhall.Context
 import Dhall.Elaboration
-import Dhall.Errors (ElabError(..))
+import Dhall.Errors (ContextualError(..), ElabError(..))
 
 tests :: TestTree
 tests =
@@ -57,7 +57,7 @@ shouldNotFail name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
     actualExpr <- case Dhall.Parser.exprFromText mempty text of
                      Left  err  -> throwIO err
                      Right expr -> return expr
-    _ <- infer0 "." actualExpr
+    _ <- inferRoot "." actualExpr
     return ()
 
 shouldNotFailRelative :: Text -> FilePath -> FilePath -> TestTree
@@ -66,7 +66,7 @@ shouldNotFailRelative name dir path = Test.Tasty.HUnit.testCase (Data.Text.unpac
     expr <- case Dhall.Parser.exprFromText mempty text of
                      Left  err  -> throwIO err
                      Right expr -> return expr
-    _ <- runReaderT (infer emptyCxt expr) =<< emptyImportState dir
+    _ <- runReaderT (infer emptyCxt expr) =<< rootState dir
     return ()
 
 shouldFail :: Text -> FilePath -> TestTree
@@ -76,6 +76,6 @@ shouldFail name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
                      Left  err  -> throwIO err
                      Right expr -> return expr
     catch
-      (do _ <- infer0 "." actualExpr
+      (do _ <- inferRoot "." actualExpr
           fail "Import should have failed, but it succeeds")
-      (\(ElabError _ _ _ (Right _)) -> pure ())
+      (\(ContextualError _ _ _ ImportError{}) -> pure ())
