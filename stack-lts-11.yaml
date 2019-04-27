@@ -3,6 +3,7 @@ packages:
   - dhall
   - dhall-bash
   - dhall-json
+  - dhall-nix
   - dhall-text
 extra-deps:
   - cborg-0.2.1.0
