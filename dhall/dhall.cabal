@@ -572,4 +572,4 @@ Benchmark map-operations
         criterion                 >= 1.1      && < 1.6,
         dhall
     Default-Language: Haskell2010
---    ghc-options: -rtsopts -O2
+    ghc-options: -rtsopts -O2
