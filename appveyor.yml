@@ -31,6 +31,7 @@ cache:
   - .stack-work -> '%STACK_YAML%'
   - dhall\.stack-work -> '%STACK_YAML%'
   - dhall-json\.stack-work -> '%STACK_YAML%'
+  - dhall-nix\.stack-work -> '%STACK_YAML%'
   - dhall-text\.stack-work -> '%STACK_YAML%'
   - dhall-bash\.stack-work -> '%STACK_YAML%'
   - dhall-lsp-server\.stack-work -> '%STACK_YAML%'
@@ -44,6 +45,7 @@ build_script:
   - 7z a "bin\dhall-json-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-json.exe"
   - 7z a "bin\dhall-json-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-yaml.exe"
   - 7z a "bin\dhall-json-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\json-to-dhall.exe"
+  - 7z a "bin\dhall-nix-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-nix.exe"
   - 7z a "bin\dhall-text-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-text.exe"
   - 7z a "bin\dhall-bash-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-bash.exe"
   # dhall-lsp-server can't be built with lts-6
@@ -59,6 +61,7 @@ for:
   test_script:
     - stack test dhall:tasty
     - stack test dhall-json
+    - stack test dhall-nix
     - stack test dhall-text
     - stack test dhall-bash
     - stack test dhall-lsp-server
@@ -68,6 +71,8 @@ artifacts:
     name: dhall
   - path: bin\dhall-json-%DEPLOY_SUFFIX%
     name: dhall-json
+  - path: bin\dhall-nix-%DEPLOY_SUFFIX%
+    name: dhall-nix
   - path: bin\dhall-text-%DEPLOY_SUFFIX%
     name: dhall-text
   - path: bin\dhall-bash-%DEPLOY_SUFFIX%
@@ -79,7 +84,7 @@ deploy:
   - provider: GitHub
     auth_token:
       secure: Gs/tiz6Jtg/Zjd4zGHDhuSv4Y9a+zJ574LWwzOe2bvZNGX/M8XupkxdGmBpDlnOf
-    artifact: dhall, dhall-json, dhall-text, dhall-bash, dhall-lsp-server
+    artifact: dhall, dhall-json, dhall-nix, dhall-text, dhall-bash, dhall-lsp-server
     on:
       APPVEYOR_REPO_TAG: true
       STACK_YAML: stack.yaml
