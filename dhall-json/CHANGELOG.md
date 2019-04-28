@@ -1,3 +1,14 @@
+1.2.8
+
+* New `json-to-dhall` command-line utility
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/884
+* `--omitEmpty` now also omits empty arrays
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/872
+* Build against `dhall-1.22.0`
+* Improved error messages:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/895
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/900
+
 1.2.7
 
 * Build against `dhall-1.21.0`
