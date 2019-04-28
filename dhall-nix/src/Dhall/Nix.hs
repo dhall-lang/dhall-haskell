@@ -208,6 +208,13 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     -- None needs a type to convert to an Optional
     loop (App None _) = do
       return (Fix (NConstant NNull))
+    loop (App (Field (Union kts) k) v) = do
+        v' <- loop v
+        let e0 = do
+                k' <- Dhall.Map.keys kts
+                return (k', Nothing)
+        let e2 = Fix (NBinary NApp (Fix (NSym k)) v')
+        return (Fix (NAbs (ParamSet e0 False Nothing) e2))
     loop (App a b) = do
         a' <- loop a
         b' <- loop b
@@ -488,6 +495,26 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- loop a
         b' <- loop b
         return (Fix (NBinary NUpdate a' b'))
+    loop (Field (Union kts) k) =
+        case Dhall.Map.lookup k kts of
+            -- If the selected alternative has an associated payload, then we
+            -- need introduce the partial application through an extra abstraction
+            -- (here "x").
+            --
+            -- This translates `< Foo : T >.Foo` to `x: { Foo }: Foo x`
+            Just ( Just _ ) -> do
+                let e0 = do
+                        k' <- Dhall.Map.keys kts
+                        return (k', Nothing)
+                let e2 = Fix (NBinary NApp (Fix (NSym k)) (Fix (NSym "x")))
+                return (Fix (NAbs (Param "x") (Fix (NAbs (ParamSet e0 False Nothing) e2))))
+
+            _ -> do
+                let e0 = do
+                        k' <- Dhall.Map.keys kts
+                        return (k', Nothing)
+                let e2 = Fix (NSym k)
+                return (Fix (NAbs (ParamSet e0 False Nothing) e2))
     loop (Field a b) = do
         a' <- loop a
         return (Fix (NSelect a' [StaticKey b] Nothing))
