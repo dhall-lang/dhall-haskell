@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, RankNTypes #-}
 
 -- | Shared utility functions
 
@@ -7,6 +7,7 @@ module Dhall.Util
     , snipDoc
     , insert
     , _ERROR
+    , internalError
     , throws
     ) where
 
@@ -86,3 +87,24 @@ _ERROR = "\ESC[1;31mError\ESC[0m"
 throws :: (Exception e, MonadIO io) => Either e a -> io a
 throws (Left  e) = liftIO (Control.Exception.throwIO e)
 throws (Right a) = return a
+
+
+{-| Utility function used to throw internal errors that should never happen
+    (in theory) but that are not enforced by the type system
+-}
+internalError :: Data.Text.Text -> forall b . b
+internalError text = error (unlines
+    [ _ERROR <> ": Compiler bug                                                        "
+    , "                                                                                "
+    , "Explanation: This error message means that there is a bug in the Dhall compiler."
+    , "You didn't do anything wrong, but if you would like to see this problem fixed   "
+    , "then you should report the bug at:                                              "
+    , "                                                                                "
+    , "https://github.com/dhall-lang/dhall-haskell/issues                              "
+    , "                                                                                "
+    , "Please include the following text in your bug report:                           "
+    , "                                                                                "
+    , "```                                                                             "
+    , Data.Text.unpack text <> "                                                       "
+    , "```                                                                             "
+    ] )

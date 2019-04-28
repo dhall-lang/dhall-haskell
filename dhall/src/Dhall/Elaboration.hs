@@ -583,7 +583,7 @@ infer cxt@Cxt{..} t =
         (_ :| [], FreezeRemote, Remote{}) -> pure (Embed (Resolved hashedImp t tv), a)
         (_ :| [], FreezeAll,    _       ) -> pure (Embed (Resolved hashedImp t tv), a)
         (_ :| [], OldResolve,   _       ) -> pure (coerceEmbed nf, a)
-        _                            -> pure (Embed (Resolved imp t tv), a)
+        _                                 -> pure (Embed (Resolved imp t tv), a)
 
     ImportAlt t u -> do
       infer_ t `catch` \case

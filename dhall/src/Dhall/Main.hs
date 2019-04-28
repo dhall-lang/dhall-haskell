@@ -3,10 +3,11 @@
     @dhall@ executable
 -}
 
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE DeriveAnyClass      #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
@@ -62,10 +63,10 @@ import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
--- import qualified Dhall
+import qualified Dhall
 import qualified Dhall.Binary
 -- import qualified Dhall.Core
--- import qualified Dhall.Diff
+import qualified Dhall.Diff
 import qualified Dhall.Format
 -- import qualified Dhall.Freeze
 -- import qualified Dhall.Hash
@@ -291,12 +292,10 @@ command (Options {..}) = do
           <$> Dhall.Context.rootState "."
 
     let handle =
-                Control.Exception.handle handler2
-            .   Control.Exception.handle handler1
-            .   Control.Exception.handle handler0
+              Control.Exception.handle handler1
+            . Control.Exception.handle handler0
           where
-            handler0 e = do
-                let _ = e :: Dhall.Errors.ContextualError
+            handler0 (e :: Dhall.Errors.ContextualError) = do
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
                     then Control.Exception.throwIO (DetailedContextualError e)
@@ -305,23 +304,11 @@ command (Options {..}) = do
                            "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO e
 
-            handler1 e = do
-                let _ = e :: Dhall.Errors.ContextualError
-                System.IO.hPutStrLn System.IO.stderr ""
-                if explain
-                    then Control.Exception.throwIO (DetailedContextualError e)
-                    else do
-                        Data.Text.IO.hPutStrLn System.IO.stderr
-                          "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
-                        Control.Exception.throwIO e
-
-            handler2 e = do
-                let string = show (e :: SomeException)
-
+            handler1 (e :: SomeException) = do
+                let string = show e
                 if not (null string)
                     then System.IO.hPutStrLn System.IO.stderr string
                     else return ()
-
                 System.Exit.exitFailure
 
     let renderDoc :: Handle -> Doc Ann -> IO ()
@@ -414,24 +401,21 @@ command (Options {..}) = do
 
         Type -> do
           expression <- getExpression
-          state     <- pure $ state {_importOptions = ImportsDisabled}
+          state      <- pure $ state {_importOptions = ImportsDisabled}
           (_, ty)    <- runReaderT (infer emptyCxt expression) state
           render System.IO.stdout (quote NEmpty ty)
 
         -- Repl -> do
         --     Dhall.Repl.repl characterSet explain standardVersion
 
-        -- Diff {..} -> do
-        --     expression1 <- Dhall.inputExpr expr1
-
-        --     expression2 <- Dhall.inputExpr expr2
-
-        --     let diff = Dhall.Diff.diffNormalized expression1 expression2
-
-        --     renderDoc System.IO.stdout diff
+        Diff {..} -> do
+          expression1 <- Dhall.inputExpr expr1
+          expression2 <- Dhall.inputExpr expr2
+          let diff = Dhall.Diff.diff expression1 expression2
+          renderDoc System.IO.stdout diff
 
         Format {..} -> do
-            Dhall.Format.format (Dhall.Format.Format {..})
+          Dhall.Format.format (Dhall.Format.Format {..})
 
         Freeze {..} -> do
           let importOptions = if all_ then FreezeAll else FreezeRemote
