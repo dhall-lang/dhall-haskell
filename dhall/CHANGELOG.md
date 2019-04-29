@@ -2,6 +2,15 @@
 
 * Supports version 7.0.0 of the standard
     * See: https://github.com/dhall-lang/dhall-lang/releases/tag/v7.0.0
+* BREAKING CHANGE: Add support for empty alternatives
+    * The `Union` type now has an optional (`Maybe`) type for each alternative
+    * See the changelog for standard version 7.0.0 for more details
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/863
+* BREAKING CHANGE: Remove support for URL fragments
+    * The `URL` type no longer has a field for a URL fragment since the language
+      no longer supports fragments
+    * See the changelog for standard version 7.0.0 for more details
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/851
 * BREAKING CHANGE: Remove deprecated `Path` type synonym
     * See: https://github.com/dhall-lang/dhall-haskell/pull/858
 * BUG FIX: Correctly parse identifiers beginning with `http`
