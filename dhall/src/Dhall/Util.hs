@@ -23,15 +23,17 @@ import qualified Dhall.Pretty
 -- | Utility function to cut out the interior of a large text block
 snip :: Text -> Text
 snip text
-    | length ls <= 7 = text
+    | length ls <= numberOfLinesOfContext * 2 + 1 = text
     | otherwise =
          if Data.Text.last text == '\n' then preview else Data.Text.init preview
   where
+    numberOfLinesOfContext = 20
+
     ls = Data.Text.lines text
 
-    header = take 3 ls
+    header = take numberOfLinesOfContext ls
 
-    footer = takeEnd 3 ls
+    footer = takeEnd numberOfLinesOfContext ls
 
     excerpt = filter (Data.Text.any (/= ' ')) (header <> footer)
 
