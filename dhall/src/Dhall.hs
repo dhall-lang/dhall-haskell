@@ -1506,12 +1506,10 @@ field key valueType =
     However, we can use a 'UnionType' to build a 'Type' for @Status@:
 
 > status :: Type Status
-> status =
->   union
->     ( Queued  <$> constructor "Queued"  natural
->    <> Result  <$> constructor "Result"  string
->    <> Errored <$> constructor "Errored" string
->     )
+> status = union
+>    $  ( Queued  <$> constructor "Queued"  natural )
+>    <> ( Result  <$> constructor "Result"  strictText )
+>    <> ( Errored <$> constructor "Errored" strictText )
 
 -}
 newtype UnionType a =
