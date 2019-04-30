@@ -15,7 +15,9 @@ import qualified Dhall.Map
 tests :: TestTree
 tests =
     testGroup "Input"
-     [ shouldShowDetailedTypeError ]
+     [ shouldShowDetailedTypeError
+     , shouldHandleBothUnionLiterals
+     ]
 
 data MyType = MyType { foo :: String , bar :: Natural }
 
@@ -55,5 +57,13 @@ shouldShowDetailedTypeError = testCase "detailed TypeError" $ do
   case inputEx of
     Left ex -> assertEqual assertMsg expectedMsg (show ex)
     Right _ -> fail "The extraction using a wrong type succeded"
- 
-        
+
+license :: Dhall.Type ()
+license = Dhall.union (Dhall.constructor "AllRightsReserved" Dhall.unit)
+
+-- https://github.com/dhall-lang/dhall-haskell/issues/915
+shouldHandleBothUnionLiterals :: TestTree
+shouldHandleBothUnionLiterals = testCase "Marshal union literals" $ do
+    _ <- Dhall.input license "< AllRightsReserved : {} >.AllRightsReserved {=}"
+    _ <- Dhall.input license "< AllRightsReserved = {=} >"
+    return ()
