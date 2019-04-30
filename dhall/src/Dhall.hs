@@ -1505,11 +1505,15 @@ field key valueType =
     smaller parsers, as 'Type's cannot be combined (they are only 'Functor's).
     However, we can use a 'UnionType' to build a 'Type' for @Status@:
 
-> status :: Type Status
-> status = union
->    $  ( Queued  <$> constructor "Queued"  natural )
->    <> ( Result  <$> constructor "Result"  strictText )
->    <> ( Errored <$> constructor "Errored" strictText )
+>>> data Status = Queued Natural | Result Text | Errored Text
+>>> :{
+  status :: Type Status
+  status = union
+      (  ( Queued  <$> constructor "Queued"  natural )
+      <> ( Result  <$> constructor "Result"  strictText )
+      <> ( Errored <$> constructor "Errored" strictText )
+      )
+:}
 
 -}
 newtype UnionType a =
