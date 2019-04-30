@@ -14,6 +14,20 @@ This `dhall-nix` package provides a Dhall to Nix compiler.  You can use this
 compiler to program Nix using the Dhall language.  This package targets people
 who wish Nix had a type system.
 
+Note that this is a proof-of-concept illustration of how Dhall language
+constructs map onto the Nix language.  You might get value out of this on small
+Nix expressions, but you will likely run into friction using this in a larger
+scale with Nixpkgs or NixOS, because Dhall cannot encode many common
+Nixpkgs/NixOS idioms, such as:
+
+* general recursion (such as `pkgs.callPackages`, the overlay system, and the
+  NixOS module system)
+* weakly-typed conversions (such as `builtins.listToAttrs`)
+* row polymorphism (i.e. the `...` in `{ foo, bar, ... }`)
+
+You can use this project to embed existing Dhall code with Nix, but probably
+not as a general-purpose Nix replacement.
+
 ## Quick start
 
 If you have Nix installed then you can build and run this package using:

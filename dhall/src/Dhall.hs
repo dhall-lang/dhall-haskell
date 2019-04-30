@@ -1535,7 +1535,15 @@ union (UnionType (Data.Functor.Compose.Compose mp)) = Type
   where
     expect = (possible . Dhall.expected) <$> mp
     extractF e0 = do
-      UnionLit fld e1 rest <- Just e0
+      (fld, e1, rest) <- do
+        case e0 of
+          UnionLit fld e1 rest ->
+            return (fld, e1, rest)
+          App (Field (Union kts) fld) e1 ->
+            return (fld, e1, Dhall.Map.delete fld kts)
+          _ ->
+            empty
+
       t <- Dhall.Map.lookup fld mp
       guard $ Dhall.Core.Union rest `Dhall.Core.judgmentallyEqual`
                 Dhall.Core.Union (Dhall.Map.delete fld expect)

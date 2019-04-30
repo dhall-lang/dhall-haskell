@@ -1,3 +1,32 @@
+1.22.0
+
+* Supports version 7.0.0 of the standard
+    * See: https://github.com/dhall-lang/dhall-lang/releases/tag/v7.0.0
+* BREAKING CHANGE: Remove deprecated `Path` type synonym
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/858
+* BUG FIX: Correctly parse identifiers beginning with `http`
+    * i.e. `httpPort` was supposed to be a valid identifier name and now is
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/870
+* BUG FIX: Fix `dhall encode` bug
+    * `dhall encode` bug was generating binary expressions that were valid
+      (i.e. they would decode correctly) but were non-standard (i.e. hashing
+      them would not match the hash you would normally get from a semantic
+      integrity check)
+    * Semantic integrity checks were not affected by this bug since they used
+      a slightly different code path that generated the correct binary input to
+      the hash.  Only the `dhall decode` subcommand was affected
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/859
+* BUG FIX: Fix for `Dhall.UnionType`
+    * This fixes some expressions that would previously fail to marshal into
+      Haskell, specifically those were the marshalling logic was built using
+      the `UnionType` utilities
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/857
+* Feature: New `--alpha` flag to α-normalize command-line output
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/855
+* Performance improvements
+    * The normalizer is now *much* faster
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/876
+
 1.21.0
 
 * Supports version 6.0.0 of the language standard
