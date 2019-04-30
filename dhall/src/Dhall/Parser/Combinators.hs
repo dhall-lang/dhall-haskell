@@ -38,6 +38,7 @@ import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token.Style
+import qualified Text.Printf
 
 -- | Source code extract
 data Src = Src !Text.Megaparsec.SourcePos !Text.Megaparsec.SourcePos Text
@@ -68,13 +69,35 @@ laxSrcEq (Src p q _) (Src p' q' _) = eq p  p' && eq q q'
 
 instance Pretty Src where
     pretty (Src begin _ text) =
-            pretty (Dhall.Util.snip (prefix <> text))
+            pretty (Dhall.Util.snip numberedLines)
         <>  "\n"
         <>  pretty (Text.Megaparsec.sourcePosPretty begin)
       where
         prefix = Data.Text.replicate (n - 1) " "
           where
             n = Text.Megaparsec.unPos (Text.Megaparsec.sourceColumn begin)
+
+        ls = Data.Text.lines (prefix <> text)
+
+        numberOfLines = length ls
+
+        minimumNumber =
+            Text.Megaparsec.unPos (Text.Megaparsec.sourceLine begin)
+
+        maximumNumber = minimumNumber + numberOfLines - 1
+
+        numberWidth :: Int
+        numberWidth =
+            truncate (logBase (10 :: Double) (fromIntegral maximumNumber)) + 1
+
+        adapt n line = Data.Text.pack outputString
+          where
+            inputString = Data.Text.unpack line
+
+            outputString =
+                Text.Printf.printf ("%" <> show numberWidth <> "d: %s") n inputString
+
+        numberedLines = Data.Text.unlines (zipWith adapt [minimumNumber..] ls)
 
 {-| A `Parser` that is almost identical to
     @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
