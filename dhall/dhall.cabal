@@ -2,7 +2,7 @@ Name: dhall
 Version: 1.22.0
 Cabal-Version: >=1.10
 Build-Type: Simple
-Tested-With: GHC == 7.10.3, GHC == 8.4.3, GHC == 8.6.1
+Tested-With: GHC == 7.10.3, GHC == 8.4.3, GHC == 8.6.5
 License: BSD3
 License-File: LICENSE
 Copyright: 2017 Gabriel Gonzalez

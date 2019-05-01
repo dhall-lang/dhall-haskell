@@ -415,7 +415,7 @@ let
     };
   };
 
-  overlayGHC861 = pkgsNew: pkgsOld: {
+  overlayGHC865 = pkgsNew: pkgsOld: {
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
         "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
@@ -423,16 +423,6 @@ let
               let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
-                    # GHC 8.6.1 accidentally shipped with an unpublished
-                    # unix-2.8 package.  Normally we'd deal with that by
-                    # using `pkgsNew.haskell.lib.jailbreak` but it doesn't
-                    # work for dependencies guarded by conditions.  See:
-                    # 
-                    # https://github.com/peti/jailbreak-cabal/issues/7
-                    turtle =
-                      pkgsNew.haskell.lib.appendPatch
-                        haskellPackagesOld.turtle
-                        ./turtle.patch;
                   };
 
               in
@@ -463,7 +453,7 @@ let
     overlays =
           [ overlayShared overlayCabal2nix ]
       ++  (      if compiler == "ghc7103" then [ overlayGHC7103 ]
-            else if compiler == "ghc861"  then [ overlayGHC861  ]
+            else if compiler == "ghc865"  then [ overlayGHC865  ]
             else                               [                ]
           );
   };
