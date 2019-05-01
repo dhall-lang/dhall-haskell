@@ -17,7 +17,6 @@ module Dhall.Set (
     , difference
     ) where
 
-import Prelude
 import Data.List (foldl')
 import Data.Sequence (Seq, (|>))
 import Data.Data (Data)

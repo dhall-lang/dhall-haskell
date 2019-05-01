@@ -52,21 +52,21 @@ import Control.Applicative (Applicative(..), (<$>))
 import Control.Applicative (empty)
 import Crypto.Hash (SHA256)
 import Data.Data (Data(..))
-import Data.Foldable
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
 import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
-import {-# SOURCE #-} Dhall.Pretty.Internal
-import {-# SOURCE #-} Dhall.Binary (ToTerm(..), FromTerm(..))
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 import Unsafe.Coerce (unsafeCoerce)
+import {-# SOURCE #-} Dhall.Binary (ToTerm(..), FromTerm(..))
+import {-# SOURCE #-} Dhall.Pretty.Internal (
+  prettyConst, prettyPathComponent, prettyVar, prettyExpr, escapeText, pretty)
 
 import qualified Crypto.Hash
 import qualified Data.Text.Prettyprint.Doc  as Pretty
@@ -465,7 +465,7 @@ data Expr s a
     | ImportAlt !(Expr s a) !(Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Eq, Show)
+    deriving (Eq, Show, Data)
 
 coerceNote :: Expr X a -> Expr s a
 coerceNote = unsafeCoerce
@@ -482,11 +482,11 @@ data Binding s a = Binding
     { variable   :: Text
     , annotation :: Maybe (Expr s a)
     , value      :: Expr s a
-    } deriving (Show, Eq)
+    } deriving (Show, Eq, Data)
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks ![(Text, Expr s a)] !Text
-    deriving (Show, Eq)
+    deriving (Show, Eq, Data)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =

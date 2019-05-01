@@ -224,8 +224,8 @@ True
 
     This uses the settings from 'defaultInputSettings'.
 -}
-input
-    :: Type a
+input ::
+       Type a
     -- ^ The type of value to decode from Dhall to Haskell
     -> Text
     -- ^ The Dhall program
@@ -240,8 +240,8 @@ input =
 
 @since 1.16
 -}
-inputWithSettings
-    :: InputSettings
+inputWithSettings ::
+       InputSettings
     -> Type a
     -- ^ The type of value to decode from Dhall to Haskell
     -> Text
@@ -261,8 +261,8 @@ inputWithSettings InputSettings{..} Type{..} txt = do
 
     Uses the settings from 'defaultInputSettings'.
 -}
-inputExpr
-    :: Text
+inputExpr ::
+       Text
     -- ^ The Dhall program
     -> IO Nf
     -- ^ The fully normalized AST
@@ -274,8 +274,8 @@ inputExpr = inputExprWithSettings defaultInputSettings
 
 @since 1.16
 -}
-inputExprWithSettings
-    :: InputSettings
+inputExprWithSettings ::
+       InputSettings
     -> Text
     -- ^ The Dhall program
     -> IO Nf
@@ -291,8 +291,8 @@ inputExprWithSettings InputSettings{..} txt = do
 --
 --   For other use cases, use `input` from `Dhall` module. It will give you
 --   a much better user experience.
-rawInput
-    :: Alternative f
+rawInput ::
+       Alternative f
     => Type a
     -- ^ The type of value to decode from Dhall to Haskell
     -> Raw
@@ -733,14 +733,14 @@ unsafeExpectUnion
 unsafeExpectUnion _ (Union kts) =
     kts
 unsafeExpectUnion name expression =
-    internalError
+    error $ internalError
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
 unsafeExpectRecord :: Text -> Core -> Dhall.Map.Map Text Core
 unsafeExpectRecord _ (Record kts) =
     kts
 unsafeExpectRecord name expression =
-    internalError
+    error $ internalError
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
 unsafeExpectUnionLit
@@ -750,14 +750,14 @@ unsafeExpectUnionLit
 unsafeExpectUnionLit _ (UnionLit k v kts) =
     (k, v, kts)
 unsafeExpectUnionLit name expression =
-    internalError
+    error $ internalError
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
 unsafeExpectRecordLit :: Text -> Core -> Dhall.Map.Map Text Core
 unsafeExpectRecordLit _ (RecordLit kvs) =
     kvs
 unsafeExpectRecordLit name expression =
-    internalError
+    error $ internalError
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
 possible :: Expr s a -> Maybe (Expr s a)
@@ -1056,7 +1056,7 @@ instance Inject a => Inject (Vector a) where
 instance Inject a => Inject (Data.Set.Set a) where
     injectWith = fmap (contramap Data.Set.toList) injectWith
 
--- instance (Inject a, Inject b) => Inject (a, b)
+instance (Inject a, Inject b) => Inject (a, b)
 
 {-| This is the underlying class that powers the `Interpret` class's support
     for automatically deriving a generic implementation
@@ -1226,11 +1226,13 @@ instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
 
     For example, let's take the following Haskell data type:
 
-> data Project = Project
->   { projectName :: Text
->   , projectDescription :: Text
->   , projectStars :: Natural
->   }
+>>> :{
+data Project = Project
+  { projectName :: Text
+  , projectDescription :: Text
+  , projectStars :: Natural
+  }
+:}
 
     And assume that we have the following Dhall record that we would like to
     parse as a @Project@:
@@ -1247,13 +1249,15 @@ instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
     smaller parsers, as 'Type's cannot be combined (they are only 'Functor's).
     However, we can use a 'RecordType' to build a 'Type' for @Project@:
 
-> project :: Type Project
-> project =
->   record
->     ( Project <$> field "name" string
->               <*> field "description" string
->               <*> field "stars" natural
->     )
+>>> :{
+project :: Type Project
+project =
+  record
+    ( Project <$> field "name" strictText
+              <*> field "description" strictText
+              <*> field "stars" natural
+    )
+:}
 
 -}
 
@@ -1296,9 +1300,11 @@ field key valueType =
 
     For example, let's take the following Haskell data type:
 
-> data Status = Queued Natural
->             | Result Text
->             | Errored Text
+>>> :{
+data Status = Queued Natural
+            | Result Text
+            | Errored Text
+:}
 
     And assume that we have the following Dhall union that we would like to
     parse as a @Status@:
@@ -1312,13 +1318,14 @@ field key valueType =
     smaller parsers, as 'Type's cannot be combined (they are only 'Functor's).
     However, we can use a 'UnionType' to build a 'Type' for @Status@:
 
-> status :: Type Status
-> status =
->   union
->     ( Queued  <$> constructor "Queued"  natural
->    <> Result  <$> constructor "Result"  string
->    <> Errored <$> constructor "Errored" string
->     )
+>>> :{
+status :: Type Status
+status = union
+  (  ( Queued  <$> constructor "Queued"  natural )
+  <> ( Result  <$> constructor "Result"  strictText )
+  <> ( Errored <$> constructor "Errored" strictText )
+  )
+:}
 
 -}
 newtype UnionType a = UnionType (Compose (Dhall.Map.Map Text) Type a)
@@ -1364,11 +1371,13 @@ constructor key valueType = UnionType
 
     For example, let's take the following Haskell data type:
 
-> data Project = Project
->   { projectName :: Text
->   , projectDescription :: Text
->   , projectStars :: Natural
->   }
+>>> :{
+data Project = Project
+  { projectName :: Text
+  , projectDescription :: Text
+  , projectStars :: Natural
+  }
+:}
 
     And assume that we have the following Dhall record that we would like to
     parse as a @Project@:
@@ -1385,27 +1394,31 @@ constructor key valueType = UnionType
     smaller injectors, as 'InputType's cannot be combined (they are only 'Contravariant's).
     However, we can use an 'InputRecordType' to build an 'InputType' for @Project@:
 
-> injectProject :: InputType Project
-> injectProject =
->   inputRecord
->     (  adapt >$< inputFieldWith "name" inject
->              >*< inputFieldWith "description" inject
->              >*< inputFieldWith "stars" inject
->     )
->   where
->     adapt (Project{..}) = (projectName, (projectDescription, projectStars))
+>>> :{
+injectProject :: InputType Project
+injectProject =
+  inputRecord
+    ( adapt >$< inputFieldWith "name" inject
+            >*< inputFieldWith "description" inject
+            >*< inputFieldWith "stars" inject
+    )
+  where
+    adapt (Project{..}) = (projectName, (projectDescription, projectStars))
+:}
 
     Or, since we are simply using the `Inject` instance to inject each field, we could write
 
-> injectProject :: InputType Project
-> injectProject =
->   inputRecord
->     (  adapt >$< inputField "name"
->              >*< inputField "description"
->              >*< inputField "stars"
->     )
->   where
->     adapt (Project{..}) = (projectName, (projectDescription, projectStars))
+>>> :{
+injectProject :: InputType Project
+injectProject =
+  inputRecord
+    ( adapt >$< inputField "name"
+            >*< inputField "description"
+            >*< inputField "stars"
+    )
+  where
+    adapt (Project{..}) = (projectName, (projectDescription, projectStars))
+:}
 
 -}
 
@@ -1446,9 +1459,11 @@ inputRecord (RecordInputType inputTypeRecord) = InputType makeRecordLit recordTy
 
     For example, let's take the following Haskell data type:
 
-> data Status = Queued Natural
->             | Result Text
->             | Errored Text
+>>> :{
+data Status = Queued Natural
+            | Result Text
+            | Errored Text
+:}
 
     And assume that we have the following Dhall union that we would like to
     parse as a @Status@:
@@ -1462,29 +1477,34 @@ inputRecord (RecordInputType inputTypeRecord) = InputType makeRecordLit recordTy
     smaller injectors, as 'InputType's cannot be combined.
     However, we can use an 'InputUnionType' to build an 'InputType' for @Status@:
 
-> injectStatus :: InputType Status
-> injectStatus =
->           adapt
->     >$< inputConstructorWith "Queued"  inject
->     >|< inputConstructorWith "Result"  inject
->     >|< inputConstructorWith "Errored" inject
->   where
->     adapt (Queued  n) = Left (Left  n)
->     adapt (Result  t) = Left (Right t)
->     adapt (Errored e) = Right e
+>>> :{
+injectStatus :: InputType Status
+injectStatus = adapt >$< inputUnion
+  (   inputConstructorWith "Queued"  inject
+  >|< inputConstructorWith "Result"  inject
+  >|< inputConstructorWith "Errored" inject
+  )
+  where
+    adapt (Queued  n) = Left n
+    adapt (Result  t) = Right (Left t)
+    adapt (Errored e) = Right (Right e)
+:}
 
     Or, since we are simply using the `Inject` instance to inject each branch, we could write
 
-> injectStatus :: InputType Status
-> injectStatus =
->           adapt
->     >$< inputConstructor "Queued"
->     >|< inputConstructor "Result"
->     >|< inputConstructor "Errored"
->   where
->     adapt (Queued  n) = Left (Left  n)
->     adapt (Result  t) = Left (Right t)
->     adapt (Errored e) = Right e
+>>> :{
+injectStatus :: InputType Status
+injectStatus = adapt >$< inputUnion
+  (   inputConstructor "Queued"
+  >|< inputConstructor "Result"
+  >|< inputConstructor "Errored"
+  )
+  where
+    adapt (Queued  n) = Left n
+    adapt (Result  t) = Right (Left t)
+    adapt (Errored e) = Right (Right e)
+:}
+
 -}
 newtype UnionInputType a =
   UnionInputType
@@ -1523,8 +1543,8 @@ inputUnion (UnionInputType (Pair (Control.Applicative.Const fields) (Op embedF))
   where
     fields' = fmap possible fields
 
-inputConstructorWith
-    :: Text
+inputConstructorWith ::
+       Text
     -> InputType a
     -> UnionInputType a
 inputConstructorWith name inputType = UnionInputType $
@@ -1535,8 +1555,8 @@ inputConstructorWith name inputType = UnionInputType $
               (declared inputType)))
       (Op ((name,) . embed inputType))
 
-inputConstructor
-    :: Inject a
+inputConstructor ::
+       Inject a
     => Text
     -> UnionInputType a
 inputConstructor name = inputConstructorWith name inject

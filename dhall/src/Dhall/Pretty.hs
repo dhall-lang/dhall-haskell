@@ -13,7 +13,8 @@ module Dhall.Pretty
     , layoutOpts
     ) where
 
-import Dhall.Pretty.Internal
+import Dhall.Pretty.Internal (
+  Ann(..), annToAnsiStyle, prettyExpr, CharacterSet(..), prettyCharacterSet)
 import qualified Data.Text.Prettyprint.Doc as Pretty
 
 -- | Default layout options

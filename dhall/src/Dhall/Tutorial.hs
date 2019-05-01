@@ -177,35 +177,35 @@ import Dhall
 -- The simplest way to use Dhall is to ignore the programming language features
 -- and use it as a strongly typed configuration format.  For example, suppose
 -- that you create the following configuration file:
--- 
+--
 -- > $ cat ./config
 -- > { foo = 1
 -- > , bar = [3.0, 4.0, 5.0]
 -- > }
--- 
+--
 -- You can read the above configuration file into Haskell using the following
 -- code:
--- 
+--
 -- > -- example.hs
--- > 
+-- >
 -- > {-# LANGUAGE DeriveGeneric     #-}
 -- > {-# LANGUAGE OverloadedStrings #-}
--- > 
+-- >
 -- > import Dhall
--- > 
+-- >
 -- > data Example = Example { foo :: Natural, bar :: Vector Double }
 -- >     deriving (Generic, Show)
--- > 
+-- >
 -- > instance Interpret Example
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >     x <- input auto "./config"
 -- >     print (x :: Example)
--- 
+--
 -- If you compile and run the above example, the program prints the corresponding
 -- Haskell record:
--- 
+--
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
 --
@@ -227,7 +227,7 @@ import Dhall
 -- ... and we can either specify an explicit type like `bool`:
 --
 -- > bool :: Type Bool
--- > 
+-- >
 -- > input bool :: Text -> IO Bool
 -- >
 -- > input bool "True" :: IO Bool
@@ -276,14 +276,14 @@ import Dhall
 --
 -- > {-# LANGUAGE DeriveGeneric     #-}
 -- > {-# LANGUAGE OverloadedStrings #-}
--- > 
+-- >
 -- > import Dhall
--- > 
+-- >
 -- > data Person = Person { age :: Natural, name :: Text }
 -- >     deriving (Generic, Show)
--- > 
+-- >
 -- > instance Interpret Person
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >     x <- input auto "./config"
@@ -292,12 +292,12 @@ import Dhall
 -- __Exercise:__ Create a @./config@ file that the following program can decode:
 --
 -- > {-# LANGUAGE OverloadedStrings #-}
--- > 
+-- >
 -- > import Data.Functor.Identity
 -- > import Dhall
--- > 
+-- >
 -- > instance Interpret a => Interpret (Identity a)
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >     x <- input auto "./config"
@@ -314,7 +314,7 @@ import Dhall
 -- - Bool
 -- + Natural
 -- ...
--- 1 : Bool
+-- 1: 1 : Bool
 -- ...
 -- (input):1:1
 -- ...
@@ -383,13 +383,13 @@ import Dhall
 -- expressions by their file path.
 --
 -- To illustrate this, let's create three files:
--- 
+--
 -- > $ echo "True"  > bool1
 -- > $ echo "False" > bool2
 -- > $ echo "./bool1 && ./bool2" > both
 --
 -- ... and read in all three files in a single expression:
--- 
+--
 -- >>> input auto "[ ./bool1 , ./bool2 , ./both ]" :: IO (Vector Bool)
 -- [True,False,False]
 --
@@ -421,7 +421,7 @@ import Dhall
 -- ... then the interpreter will reject the import:
 --
 -- >>> input auto "./file1" :: IO Natural
--- *** Exception: 
+-- *** Exception:
 -- ↳ ./file1
 --   ↳ ./file2
 -- ...
@@ -440,7 +440,7 @@ import Dhall
 --
 -- >>> input auto "https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
 -- True
--- 
+--
 -- ... or inside of a larger expression:
 --
 -- >>> input auto "False == https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
@@ -474,8 +474,8 @@ import Dhall
 --
 -- >>> writeFile "baz" "2.0"
 -- >>> input auto "./baz: Double" :: IO Double
--- *** Exception: 
--- ↳ ./baz: 
+-- *** Exception:
+-- ↳ ./baz:
 -- ...
 -- ...Error...: Missing file ...baz:
 -- ...
@@ -514,7 +514,8 @@ import Dhall
 -- *** Exception:
 -- ...Error...: An empty list requires a type annotation
 -- ...
--- []
+-- 1: []
+-- ...
 -- (input):1:1
 --
 -- Also, list elements must all have the same type.  You will get an error if
@@ -527,7 +528,7 @@ import Dhall
 -- - Natural
 -- + Bool
 -- ...
---     True
+-- 1:     True
 -- ...
 -- (input):1:5
 -- ...
@@ -589,14 +590,14 @@ import Dhall
 -- > {=}
 -- > <Ctrl-D>
 -- > {}
--- > 
+-- >
 -- > {=}
 --
 -- > $ dhall
 -- > {}
 -- > <Ctrl-D>
 -- > Type
--- > 
+-- >
 -- > {}
 --
 -- You can access a field of a record using the following syntax:
@@ -620,7 +621,7 @@ import Dhall
 -- > { x = 1, y = True, z = "ABC" }.{ x, y }
 -- > <Ctrl-D>
 -- > { x : Natural, y : Bool }
--- > 
+-- >
 -- > { x = 1, y = True }
 --
 -- __Exercise__: What is the type of this record:
@@ -690,14 +691,14 @@ import Dhall
 -- > {-# LANGUAGE DeriveAnyClass    #-}
 -- > {-# LANGUAGE DeriveGeneric     #-}
 -- > {-# LANGUAGE OverloadedStrings #-}
--- > 
+-- >
 -- > module Main where
--- > 
+-- >
 -- > import Dhall
--- > 
+-- >
 -- > data Example0 = Example0 { foo :: Bool, bar :: Bool }
 -- >     deriving (Generic, Inject)
--- > 
+-- >
 -- > main = do
 -- >     f <- input auto "λ(r : { foo : Bool, bar : Bool }) → r.foo && r.bar"
 -- >     print (f (Example0 { foo = True, bar = False }) :: Bool)
@@ -720,7 +721,7 @@ import Dhall
 -- > ./makeBools
 -- > <Ctrl-D>
 -- > ∀(n : Bool) → List Bool
--- > 
+-- >
 -- > λ(n : Bool) → [ n, False, True, n ]
 --
 -- The first line says that @makeBools@ is a function of one argument named @n@
@@ -728,14 +729,14 @@ import Dhall
 -- (U+2200) symbol is shorthand for the ASCII @forall@ keyword:
 --
 -- > ∀(x : a) → b        -- This type ...
--- > 
+-- >
 -- > forall (x : a) → b  -- ... is the same as this type
 --
 -- ... and Dhall's @forall@ keyword behaves the same way as Haskell's @forall@
 -- keyword for input values that are @Type@s:
 --
 -- > forall (x : Type) → b  -- This Dhall type ...
--- 
+--
 -- > forall x . b           -- ... is the same as this Haskell type
 --
 -- The part where Dhall differs from Haskell is that you can also use
@@ -766,17 +767,17 @@ import Dhall
 -- > ./makeBools True
 -- > <Ctrl-D>
 -- > List Bool
--- > 
+-- >
 -- > [True, False, True, True]
 --
 -- Remember that file paths are synonymous with their contents, so the above
 -- code is exactly equivalent to:
--- 
+--
 -- > $ dhall
 -- > (λ(n : Bool) → [n && True, n && False, n || True, n || False]) True
 -- > <Ctrl-D>
 -- > List Bool
--- > 
+-- >
 -- > [True, False, True, True]
 --
 -- When you apply an anonymous function to an argument, you substitute the
@@ -835,7 +836,7 @@ import Dhall
 -- > dhall
 -- > ''
 -- >     #!/bin/bash
--- >     
+-- >
 -- >     echo "Hi!"
 -- > ''
 -- > <Ctrl-D>
@@ -888,13 +889,13 @@ import Dhall
 -- > { foo = 1, bar = "ABC" } // { baz = True }
 -- > <Ctrl-D>
 -- > { bar : Text, baz : Bool, foo : Natural }
--- > 
+-- >
 -- > { bar = "ABC", baz = True, foo = 1 }
 -- > $ dhall
 -- > { foo = 1, bar = "ABC" } ⫽ { bar = True }  -- Fancy unicode
 -- > <Ctrl-D>
 -- > { bar : Bool, foo : Natural }
--- > 
+-- >
 -- > { bar = True, foo = 1 }
 --
 -- Note that the order of record fields does not matter.  The compiler
@@ -908,7 +909,7 @@ import Dhall
 -- > { foo = { bar = True }, baz = "ABC" } /\ { foo = { qux = 1.0 } }
 -- > <Ctrl-D>
 -- > { baz : Text, foo : { bar : Bool, qux : Double } }
--- > 
+-- >
 -- > { baz = "ABC", foo = { bar = True, qux = 1.0 } }
 --
 -- ... but fails with a type error if either shared field is not a record:
@@ -917,11 +918,11 @@ import Dhall
 -- > { foo = 1, bar = "ABC" } ∧ { foo = True }
 -- > <Ctrl-D>
 -- > Use "dhall --explain" for detailed errors
--- > 
+-- >
 -- > Error: Field collision
--- > 
+-- >
 -- > { foo = 1, bar = "ABC" } ∧ { foo = True }
--- > 
+-- >
 -- > (stdin):1:1
 --
 -- __Exercise__: Combine any record with the empty record.  What do you expect
@@ -973,7 +974,7 @@ import Dhall
 -- > in  x ++ y
 -- > <Ctrl-D>
 -- > Text
--- > 
+-- >
 -- > "Hello, world!"
 --
 -- Dhall is whitespace-insensitive, so feel free to format things over multiple
@@ -986,7 +987,7 @@ import Dhall
 -- > let twice = λ(x : Text) → x ++ x in twice "ha"
 -- > <Ctrl-D>
 -- > Text
--- > 
+-- >
 -- > "haha"
 --
 -- Unlike Haskell, Dhall does not support function arguments on the left-hand
@@ -996,7 +997,7 @@ import Dhall
 -- > let twice (x : Text) = x ++ x in twice "ha"
 -- > <Ctrl-D>
 -- > Error: Invalid input
--- > 
+-- >
 -- > (stdin):1:11:
 -- >   |
 -- > 1 | let twice (x : Text) = x ++ x in twice "ha"
@@ -1015,14 +1016,14 @@ import Dhall
 -- > in  not True
 -- > <Ctrl-D>
 -- > Bool
--- > 
+-- >
 -- > False
 --
 -- ... or to define synonyms for types:
 --
 -- > $ dhall <<< 'let Name : Type = Text in [ "John", "Mary" ] : List Name'
 -- > List Text
--- > 
+-- >
 -- > [ "John", "Mary" ]
 --
 -- __Exercise:__ What do you think the following code will normalize to?
@@ -1063,7 +1064,7 @@ import Dhall
 -- You can specify the value of a union constructor like this:
 --
 -- > let Union = < Left : Natural | Right : Bool>
--- > 
+-- >
 -- > [ Union.Left 0, Union.Right True ] : List Union
 --
 -- In other words, you can access a union constructor as a field of a union
@@ -1113,7 +1114,7 @@ import Dhall
 --
 -- > merge handlers union : type
 --
--- ... where: 
+-- ... where:
 --
 -- * @union@ is the union you want to consume
 -- * @handlers@ is a record with one function per alternative of the union
@@ -1158,7 +1159,7 @@ import Dhall
 -- Empty alternatives like @Empty@ require no argument:
 --
 -- > let MyType = < Empty | Person : { name : Text, age : Natural } >
--- > 
+-- >
 -- > in  [   MyType.Empty  -- Note the absence of any argument to `Empty`
 -- >     ,   MyType.Person { name = "John", age = 23 }
 -- >     ,   MyType.Person { name = "Amy" , age = 25 }
@@ -1216,12 +1217,12 @@ import Dhall
 --
 -- If we supply the function alone to the compiler we get the inferred type as
 -- the first line:
--- 
+--
 -- > $ dhall
 -- > ./id
 -- > <Ctrl-D>
 -- > ∀(a : Type) → ∀(x : a) → a
--- > 
+-- >
 -- > λ(a : Type) → λ(x : a) → x
 --
 -- You can read the type @(∀(a : Type) → ∀(x : a) → a)@ as saying: \"This is the
@@ -1237,7 +1238,7 @@ import Dhall
 -- > ./id Natural
 -- > <Ctrl-D>
 -- > ∀(x : Natural) → Natural
--- > 
+-- >
 -- > λ(x : Natural) → x
 --
 -- Similarly, when we apply @./id@ to @Bool@, we create a function that expects a
@@ -1247,7 +1248,7 @@ import Dhall
 -- > ./id Bool
 -- > <Ctrl-D>
 -- > ∀(x : Bool) → Bool
--- > 
+-- >
 -- > λ(x : Bool) → x
 --
 -- We can then supply the final argument to each of those functions to show
@@ -1257,14 +1258,14 @@ import Dhall
 -- > ./id Natural 4
 -- > <Ctrl-D>
 -- > Natural
--- > 
+-- >
 -- > 4
 --
 -- > $ dhall
 -- > ./id Bool True
 -- > <Ctrl-D>
 -- > Bool
--- > 
+-- >
 -- > True
 --
 -- Built-in functions can also be polymorphic, too.  For example, we can ask
@@ -1275,7 +1276,7 @@ import Dhall
 -- > List/reverse
 -- > <Ctrl-D>
 -- > ∀(a : Type) → List a → List a
--- > 
+-- >
 -- > List/reverse
 --
 -- The first argument to @List/reverse@ is the type of the list to reverse:
@@ -1284,7 +1285,7 @@ import Dhall
 -- > List/reverse Bool
 -- > <Ctrl-D>
 -- > List Bool → List Bool
--- > 
+-- >
 -- > List/reverse Bool
 --
 -- ... and the second argument is the list to reverse:
@@ -1293,7 +1294,7 @@ import Dhall
 -- > List/reverse Bool [True, False]
 -- > <Ctrl-D>
 -- > List Bool
--- > 
+-- >
 -- > [False, True] : List Bool
 --
 -- Note that the second argument has no name.  This type:
@@ -1312,7 +1313,7 @@ import Dhall
 -- > λ(_ : Text) → 1
 -- > <Ctrl-D>
 -- > Text → Natural
--- > 
+-- >
 -- > λ(_ : Text) → 1
 --
 -- The type @(Text → Natural)@ is the same as @(∀(_ : Text) → Natural)@
@@ -1336,7 +1337,7 @@ import Dhall
 -- > \(n : Bool) -> 10 * 10
 -- > <Ctrl-D>
 -- > ∀(n : Bool) → Natural
--- > 
+-- >
 -- > λ(n : Bool) → 100
 --
 -- ... and even though the function is still missing the first argument named
@@ -1351,7 +1352,7 @@ import Dhall
 -- > in  λ(f : Natural → Natural) → Prelude/List/map Natural Natural f [1, 2, 3]
 -- > <Ctrl-D>
 -- > ∀(f : Natural → Natural) → List Natural
--- > 
+-- >
 -- > λ(f : Natural → Natural) → [f 1, f 2, f 3] : List Natural
 --
 -- Dhall can apply our function to each element of the list even before we specify
@@ -1365,7 +1366,7 @@ import Dhall
 -- > List/head Natural ([] : List Natural)
 -- > <Ctrl-D>
 -- > Optional Natural
--- > 
+-- >
 -- > None Natural
 --
 -- __Exercise__: The Dhall Prelude provides a @replicate@ function which you can
@@ -1420,9 +1421,9 @@ import Dhall
 -- Dhall will forward imports if you import an expression from a URL that
 -- contains a relative import.  For example, if you import an expression like
 -- this:
--- 
+--
 -- > http://example.com/example.dhall using ./headers
--- 
+--
 -- ... and @http:\/\/example.com/example.dhall@ contains a relative import of @./foo@
 -- then Dhall will import @http:\/\/example.com/foo@ using the same @./headers@ file.
 
@@ -1456,7 +1457,7 @@ import Dhall
 --
 -- > $ dhall <<< './foo'
 -- > Natural
--- > 
+-- >
 -- > 1
 --
 -- This implies that the hash only changes if the Dhall value changes.  For
@@ -1472,10 +1473,10 @@ import Dhall
 --
 -- > $ dhall <<< './foo'  # This still succeeds
 -- > Natural
--- > 
+-- >
 -- > 1
 --
--- You can compute the Hash for any import by using the hash subcommand 
+-- You can compute the Hash for any import by using the hash subcommand
 -- of this package.  For example:
 --
 -- > dhall hash <<< './bar'
@@ -1492,15 +1493,15 @@ import Dhall
 -- text of the @./bar@ file technically never changed:
 --
 -- > dhall <<< './foo'
--- > 
+-- >
 -- > Error: Import integrity check failed
--- > 
+-- >
 -- > Expected hash:
--- > 
+-- >
 -- > ↳ 6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b
--- > 
+-- >
 -- > Actual hash:
--- > 
+-- >
 -- > ↳ d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35
 --
 -- This is because the @./bar@ file now represents a new value (@2@ instead of
@@ -1539,7 +1540,7 @@ import Dhall
 -- > cat ./foo.dhall
 -- ''
 -- let replicate =
---       https://raw.githubusercontent.com/dhall-lang/Prelude/c79c2bc3c46f129cc5b6d594ce298a381bcae92c/List/replicate sha256:b0e3ec1797b32c80c0bcb7e8254b08c7e9e35e75e6b410c7ac21477ab90167ad 
+--       https://raw.githubusercontent.com/dhall-lang/Prelude/c79c2bc3c46f129cc5b6d594ce298a381bcae92c/List/replicate sha256:b0e3ec1797b32c80c0bcb7e8254b08c7e9e35e75e6b410c7ac21477ab90167ad
 -- in  replicate 5
 -- ''
 --
@@ -1561,7 +1562,7 @@ import Dhall
 -- > ''
 -- > Copyright (c) 2017 Gabriel Gonzalez
 -- > All rights reserved.
--- > 
+-- >
 -- > ...
 -- > (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 -- > SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
@@ -1583,28 +1584,28 @@ import Dhall
 -- > $ cat LICENSE
 -- > Copyright (c) 2017 Gabriel Gonzalez
 -- > All rights reserved.
--- > 
+-- >
 -- > ...
 -- > (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 -- > SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 -- $format
 --
--- A format subcommand is also available that you can use to 
+-- A format subcommand is also available that you can use to
 -- automatically format Dhall expressions.  For example, we can take the
 -- following unformatted Dhall expression:
 --
 -- > $ cat ./unformatted
--- > λ(a : Type) → λ(kvss : List (List { index : Natural, value : a })) → 
--- > List/build { index : Natural, value : a } (λ(list : Type) → λ(cons : { 
--- > index : Natural, value : a } → list → list) → λ(nil : list) → 
--- > (List/fold (List { index : Natural, value : a }) kvss { count : Natural, diff : 
--- > Natural → list } (λ(kvs : List { index : Natural, value : a }) → λ(y : { 
--- > count : Natural, diff : Natural → list }) → { count = y.count + List/length 
--- > { index : Natural, value : a } kvs, diff = λ(n : Natural) → List/fold { 
--- > index : Natural, value : a } kvs list (λ(kvOld : { index : Natural, value : a 
--- > }) → λ(z : list) → cons { index = kvOld.index + n, value = kvOld.value } 
--- > z) (y.diff (n + List/length { index : Natural, value : a } kvs)) }) { count = 
+-- > λ(a : Type) → λ(kvss : List (List { index : Natural, value : a })) →
+-- > List/build { index : Natural, value : a } (λ(list : Type) → λ(cons : {
+-- > index : Natural, value : a } → list → list) → λ(nil : list) →
+-- > (List/fold (List { index : Natural, value : a }) kvss { count : Natural, diff :
+-- > Natural → list } (λ(kvs : List { index : Natural, value : a }) → λ(y : {
+-- > count : Natural, diff : Natural → list }) → { count = y.count + List/length
+-- > { index : Natural, value : a } kvs, diff = λ(n : Natural) → List/fold {
+-- > index : Natural, value : a } kvs list (λ(kvOld : { index : Natural, value : a
+-- > }) → λ(z : list) → cons { index = kvOld.index + n, value = kvOld.value }
+-- > z) (y.diff (n + List/length { index : Natural, value : a } kvs)) }) { count =
 -- > 0, diff = λ(_ : Natural) → nil }).diff 0)
 --
 -- ... and run the expression through the formatter:
@@ -1646,12 +1647,12 @@ import Dhall
 -- normalizing them:
 --
 -- > $ dhall format
--- > let replicate = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/replicate 
+-- > let replicate = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/replicate
 -- > in replicate 5 (List (List Natural)) (replicate 5 (List Natural) (replicate 5 Natural 1))
 -- > <Ctrl-D>
 -- >     let replicate =
--- >           https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/replicate 
--- > 
+-- >           https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/replicate
+-- >
 -- > in  replicate
 -- >     5
 -- >     (List (List Natural))
@@ -1713,11 +1714,11 @@ import Dhall
 -- multi-line expressions, too:
 --
 -- > $ dhall
--- > let replicate = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/replicate 
+-- > let replicate = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/replicate
 -- > in replicate 5 (List (List Natural)) (replicate 5 (List Natural) (replicate 5 Natural 1))
 -- > <Ctrl-D>
 -- > List (List (List Natural))
--- > 
+-- >
 -- >   [   [ [ 1, 1, 1, 1, 1 ] : List Natural
 -- >       , [ 1, 1, 1, 1, 1 ] : List Natural
 -- >       , [ 1, 1, 1, 1, 1 ] : List Natural
@@ -1804,11 +1805,11 @@ import Dhall
 -- > +2 + +2
 -- > <Ctrl-D>
 -- > Use "dhall --explain" for detailed errors
--- > 
+-- >
 -- > Error: ❰+❱ only works on ❰Natural❱s
--- > 
+-- >
 -- > +2 + +2
--- > 
+-- >
 -- > (stdin):1:1
 --
 -- In fact, there are no built-in functions for @Integer@s (or @Double@s).  As
@@ -1882,7 +1883,7 @@ import Dhall
 -- > True || False
 -- > <Ctrl-D>
 -- > Bool
--- > 
+-- >
 -- > True
 --
 -- Type:
@@ -1894,15 +1895,15 @@ import Dhall
 -- Rules:
 --
 -- > (x || y) || z = x || (y || z)
--- > 
+-- >
 -- > x || False = x
--- > 
+-- >
 -- > False || x = x
 -- >
 -- > x || (y && z) = (x || y) && (x || z)
--- > 
+-- >
 -- > x || True = True
--- > 
+-- >
 -- > True || x = True
 
 -- $and
@@ -1913,7 +1914,7 @@ import Dhall
 -- > True && False
 -- > <Ctrl-D>
 -- > Bool
--- > 
+-- >
 -- > False
 --
 -- Type:
@@ -1925,15 +1926,15 @@ import Dhall
 -- Rules:
 --
 -- > (x && y) && z = x && (y && z)
--- > 
+-- >
 -- > x && True = x
--- > 
+-- >
 -- > True && x = x
 -- >
 -- > x && (y || z) = (x && y) || (x && z)
--- > 
+-- >
 -- > x && False = False
--- > 
+-- >
 -- > False && x = False
 
 -- $equal
@@ -1944,7 +1945,7 @@ import Dhall
 -- > True == False
 -- > <Ctrl-D>
 -- > Bool
--- > 
+-- >
 -- > False
 --
 -- Type:
@@ -1956,9 +1957,9 @@ import Dhall
 -- Rules:
 --
 -- > (x == y) == z = x == (y == z)
--- > 
+-- >
 -- > x == True = x
--- > 
+-- >
 -- > True == x = x
 -- >
 -- > x == x = True
@@ -1971,7 +1972,7 @@ import Dhall
 -- > True != False
 -- > <Ctrl-D>
 -- > Bool
--- > 
+-- >
 -- > True
 --
 -- Type:
@@ -1983,9 +1984,9 @@ import Dhall
 -- Rules:
 --
 -- > (x != y) != z = x != (y != z)
--- > 
+-- >
 -- > x != False = x
--- > 
+-- >
 -- > False != x = x
 -- >
 -- > x != x = False
@@ -1998,7 +1999,7 @@ import Dhall
 -- > if True then 3 else 5
 -- > <Ctrl-D>
 -- > Natural
--- > 
+-- >
 -- > 3
 --
 -- Type:
@@ -2012,9 +2013,9 @@ import Dhall
 -- Rules:
 --
 -- > if b then True else False = b
--- > 
+-- >
 -- > if True  then l else r = l
--- > 
+-- >
 -- > if False then l else r = r
 
 -- $natural
@@ -2035,7 +2036,7 @@ import Dhall
 -- > 2 + 3
 -- > <Ctrl-D>
 -- > Natural
--- > 
+-- >
 -- > 5
 --
 -- Type:
@@ -2060,7 +2061,7 @@ import Dhall
 -- > 2 * 3
 -- > <Ctrl-D>
 -- > Natural
--- > 
+-- >
 -- > 6
 --
 -- Type:
@@ -2093,7 +2094,7 @@ import Dhall
 -- > Natural/even 6
 -- > <Ctrl-D>
 -- > Bool
--- > 
+-- >
 -- > True
 --
 -- Type:
@@ -2119,7 +2120,7 @@ import Dhall
 -- > Natural/odd 6
 -- > <Ctrl-D>
 -- > Bool
--- > 
+-- >
 -- > False
 --
 -- Type:
@@ -2145,7 +2146,7 @@ import Dhall
 -- > Natural/isZero 6
 -- > <Ctrl-D>
 -- > Bool
--- > 
+-- >
 -- > False
 --
 -- Type:
@@ -2171,7 +2172,7 @@ import Dhall
 -- > Natural/fold 40 Text (λ(t : Text) → t ++ "!") "You're welcome"
 -- > <Ctrl-D>
 -- > Text
--- > 
+-- >
 -- > "You're welcome!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 --
 -- Type:
@@ -2180,13 +2181,13 @@ import Dhall
 -- > Γ ⊢ Natural/fold : Natural → ∀(natural : Type) → ∀(succ : natural → natural) → ∀(zero : natural) → natural
 --
 -- Rules:
--- 
+--
 -- > Natural/fold (x + y) n s z = Natural/fold x n s (Natural/fold y n s z)
--- > 
+-- >
 -- > Natural/fold 0 n s z = z
--- > 
+-- >
 -- > Natural/fold (x * y) n s = Natural/fold x n (Natural/fold y n s)
--- > 
+-- >
 -- > Natural/fold 1 n s = s
 
 -- $naturalBuild
@@ -2197,7 +2198,7 @@ import Dhall
 -- > Natural/build (λ(natural : Type) → λ(succ : natural → natural) → λ(zero : natural) → succ (succ zero))
 -- > <Ctrl-D>
 -- > Natural
--- > 
+-- >
 -- > 2
 --
 -- Type:
@@ -2252,7 +2253,7 @@ import Dhall
 -- > "Hello, " ++ "world!"
 -- > <Ctrl-D>
 -- > Text
--- > 
+-- >
 -- > "Hello, world!"
 --
 -- Type:
@@ -2264,9 +2265,9 @@ import Dhall
 -- Rules:
 --
 -- > (x ++ y) ++ z = x ++ (y ++ z)
--- > 
+-- >
 -- > x ++ "" = x
--- > 
+-- >
 -- > "" ++ x = x
 
 -- $list
@@ -2317,7 +2318,7 @@ import Dhall
 -- > List/fold Bool [True, False, True] Bool (λ(x : Bool) → λ(y : Bool) → x && y) True
 -- > <Ctrl-D>
 -- > Bool
--- > 
+-- >
 -- > False
 --
 -- Type:
@@ -2344,7 +2345,7 @@ import Dhall
 -- > List/build Natural (λ(list : Type) → λ(cons : Natural → list → list) → λ(nil : list) → cons 1 (cons 2 (cons 3 nil)))
 -- > <Ctrl-D>
 -- > List Natural
--- > 
+-- >
 -- > [1, 2, 3] : List Natural
 --
 -- Type:
@@ -2366,7 +2367,7 @@ import Dhall
 -- > List/length Natural [1, 2, 3]
 -- > <Ctrl-D>
 -- > Natural
--- > 
+-- >
 -- > 3
 --
 -- Type:
@@ -2386,7 +2387,7 @@ import Dhall
 -- > List/head Natural [1, 2, 3]
 -- > <Ctrl-D>
 -- > Optional Natural
--- > 
+-- >
 -- > Some 1
 --
 -- Type:
@@ -2400,12 +2401,12 @@ import Dhall
 -- > let Prelude/List/concat    = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concat
 -- > let Prelude/List/concatMap = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concatMap
 -- > let Prelude/List/map       = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/map
--- > 
+-- >
 -- > List/head a (Prelude/List/concat a xss) =
 -- >     Prelude/Optional/head a (Prelude/List/map (List a) (Optional a) (List/head a) xss)
--- > 
+-- >
 -- > List/head a ([x] : List a) = Some x
--- > 
+-- >
 -- > List/head b (Prelude/List/concatMap a b f m)
 -- >     = Prelude/Optional/concatMap a b (λ(x : a) → List/head b (f x)) (List/head a m)
 
@@ -2417,7 +2418,7 @@ import Dhall
 -- > List/last Natural [1, 2, 3]
 -- > <Ctrl-D>
 -- > Optional Natural
--- > 
+-- >
 -- > Some 1
 --
 -- Type:
@@ -2431,12 +2432,12 @@ import Dhall
 -- > let Prelude/List/concat    = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concat
 -- > let Prelude/List/concatMap = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concatMap
 -- > let Prelude/List/map       = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/map
--- > 
+-- >
 -- > List/last a (Prelude/List/concat a xss) =
 -- >     Prelude/Optional/last a (Prelude/List/map (List a) (Optional a) (List/last a) xss)
--- > 
+-- >
 -- > List/last a ([x] : List a) = Some x
--- > 
+-- >
 -- > List/last b (Prelude/List/concatMap a b f m)
 -- >     = Prelude/Optional/concatMap a b (λ(x : a) → List/last b (f x)) (List/last a m)
 
@@ -2448,7 +2449,7 @@ import Dhall
 -- > List/indexed Text ["ABC", "DEF", "GHI"]
 -- > <Ctrl-D>
 -- > List { index : Natural, value : Text }
--- > 
+-- >
 -- > [{ index = 0, value = "ABC" }, { index = 1, value = "DEF" }, { index = 2, value = "GHI" }] : List { index : Natural, value : Text }
 --
 -- Type:
@@ -2461,7 +2462,7 @@ import Dhall
 -- > let Prelude/List/shifted = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/shifted
 -- > let Prelude/List/concat  = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concat
 -- > let Prelude/List/map     = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/map
--- > 
+-- >
 -- > List/indexed a (Prelude/List/concat a xss) =
 -- >     Prelude/List/shifted a (Prelude/List/map (List a) (List { index : Natural, value : a }) (List/indexed a) xss)
 
@@ -2473,7 +2474,7 @@ import Dhall
 -- > List/reverse Natural [1, 2, 3]
 -- > <Ctrl-D>
 -- > List Natural
--- > 
+-- >
 -- > [3, 2, 1] : List Natural
 --
 -- Type:
@@ -2486,7 +2487,7 @@ import Dhall
 -- > let Prelude/List/map       = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/map
 -- > let Prelude/List/concat    = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concat
 -- > let Prelude/List/concatMap = https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/List/concatMap
--- > 
+-- >
 -- > List/reverse a (Prelude/List/concat a xss)
 -- >     = Prelude/List/concat a (List/reverse (List a) (Prelude/List/map (List a) (List a) (List/reverse a) xss))
 -- >
@@ -2522,7 +2523,7 @@ import Dhall
 -- > Optional/fold Text (Some "ABC") Text (λ(t : Text) → t) ""
 -- > <Ctrl-D>
 -- > Text
--- > 
+-- >
 -- > "ABC"
 --
 -- Type:
@@ -2563,18 +2564,18 @@ import Dhall
 -- > $ curl https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Bool/not
 -- > {-
 -- > Flip the value of a `Bool`
--- > 
+-- >
 -- > Examples:
--- > 
+-- >
 -- > ```
 -- > ./not True = False
--- > 
+-- >
 -- > ./not False = True
 -- > ```
 -- > -}
 -- > let not : Bool → Bool
 -- >     =   λ(b : Bool) → b == False
--- > 
+-- >
 -- > in  not
 --
 -- The file could have been much shorter, like this:
@@ -2596,7 +2597,7 @@ import Dhall
 -- > https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Bool/not True
 -- > <Ctrl-D>
 -- > Bool
--- > 
+-- >
 -- > False
 --
 -- ... or assign the URL to a shorter name:
@@ -2606,7 +2607,7 @@ import Dhall
 -- > in  Bool/not True
 -- > <Ctrl-D>
 -- > Bool
--- > 
+-- >
 -- > False
 --
 -- Some functions in the Prelude just re-export built-in functions for
@@ -2616,18 +2617,18 @@ import Dhall
 -- > $ curl https://raw.githubusercontent.com/dhall-lang/Prelude/35deff0d41f2bf86c42089c6ca16665537f54d75/Natural/even
 -- > {-
 -- > Returns `True` if a number if even and returns `False` otherwise
--- > 
+-- >
 -- > Examples:
--- > 
+-- >
 -- > ```
 -- > ./even 3 = False
--- > 
+-- >
 -- > ./even 0 = True
 -- > ```
 -- > -}
 -- > let even : Natural → Bool
 -- >     =   Natural/even
--- > 
+-- >
 -- > in  even
 --
 -- You can also clone the Prelude locally to your filesystem if you prefer
@@ -2637,84 +2638,84 @@ import Dhall
 -- > $ tree Prelude
 -- > Prelude
 -- > ├── Bool
--- > │   ├── and
--- > │   ├── build
--- > │   ├── even
--- > │   ├── fold
--- > │   ├── not
--- > │   ├── odd
--- > │   ├── or
--- > │   ├── package.dhall
--- > │   └── show
+-- > │   ├── and
+-- > │   ├── build
+-- > │   ├── even
+-- > │   ├── fold
+-- > │   ├── not
+-- > │   ├── odd
+-- > │   ├── or
+-- > │   ├── package.dhall
+-- > │   └── show
 -- > ├── Double
--- > │   ├── package.dhall
--- > │   └── show
+-- > │   ├── package.dhall
+-- > │   └── show
 -- > ├── Integer
--- > │   ├── package.dhall
--- > │   └── show
+-- > │   ├── package.dhall
+-- > │   └── show
 -- > ├── List
--- > │   ├── all
--- > │   ├── any
--- > │   ├── build
--- > │   ├── concat
--- > │   ├── concatMap
--- > │   ├── filter
--- > │   ├── fold
--- > │   ├── generate
--- > │   ├── head
--- > │   ├── indexed
--- > │   ├── iterate
--- > │   ├── last
--- > │   ├── length
--- > │   ├── map
--- > │   ├── null
--- > │   ├── package.dhall
--- > │   ├── replicate
--- > │   ├── reverse
--- > │   ├── shifted
--- > │   └── unzip
+-- > │   ├── all
+-- > │   ├── any
+-- > │   ├── build
+-- > │   ├── concat
+-- > │   ├── concatMap
+-- > │   ├── filter
+-- > │   ├── fold
+-- > │   ├── generate
+-- > │   ├── head
+-- > │   ├── indexed
+-- > │   ├── iterate
+-- > │   ├── last
+-- > │   ├── length
+-- > │   ├── map
+-- > │   ├── null
+-- > │   ├── package.dhall
+-- > │   ├── replicate
+-- > │   ├── reverse
+-- > │   ├── shifted
+-- > │   └── unzip
 -- > ├── Monoid
 -- > ├── Natural
--- > │   ├── build
--- > │   ├── enumerate
--- > │   ├── even
--- > │   ├── fold
--- > │   ├── isZero
--- > │   ├── odd
--- > │   ├── package.dhall
--- > │   ├── product
--- > │   ├── show
--- > │   ├── sum
--- > │   └── toInteger
+-- > │   ├── build
+-- > │   ├── enumerate
+-- > │   ├── even
+-- > │   ├── fold
+-- > │   ├── isZero
+-- > │   ├── odd
+-- > │   ├── package.dhall
+-- > │   ├── product
+-- > │   ├── show
+-- > │   ├── sum
+-- > │   └── toInteger
 -- > ├── Optional
--- > │   ├── None
--- > │   ├── Some
--- > │   ├── all
--- > │   ├── any
--- > │   ├── build
--- > │   ├── concat
--- > │   ├── filter
--- > │   ├── fold
--- > │   ├── head
--- > │   ├── last
--- > │   ├── length
--- > │   ├── map
--- > │   ├── null
--- > │   ├── package.dhall
--- > │   ├── toList
--- > │   └── unzip
+-- > │   ├── None
+-- > │   ├── Some
+-- > │   ├── all
+-- > │   ├── any
+-- > │   ├── build
+-- > │   ├── concat
+-- > │   ├── filter
+-- > │   ├── fold
+-- > │   ├── head
+-- > │   ├── last
+-- > │   ├── length
+-- > │   ├── map
+-- > │   ├── null
+-- > │   ├── package.dhall
+-- > │   ├── toList
+-- > │   └── unzip
 -- > ├── Record
--- > │   ├── keyText
--- > │   ├── keyValue
--- > │   └── package.dhall
+-- > │   ├── keyText
+-- > │   ├── keyValue
+-- > │   └── package.dhall
 -- > ├── Text
--- > │   ├── concat
--- > │   ├── concatMap
--- > │   ├── concatMapSep
--- > │   ├── concatSep
--- > │   └── package.dhall
+-- > │   ├── concat
+-- > │   ├── concatMap
+-- > │   ├── concatMapSep
+-- > │   ├── concatSep
+-- > │   └── package.dhall
 -- > └── package.dhall
--- > 
+-- >
 -- > 8 directories, 70 files
 --
 -- Browse the Prelude online to learn more by seeing what functions are
@@ -2774,7 +2775,7 @@ import Dhall
 -- the above polymorphic function then you'd get the unexpected behavior where
 -- a list literal is a function if the list has 0 elements but not a function
 -- otherwise.
--- 
+--
 -- * Does Dhall support user-defined recursive types?
 --
 -- No, but you can translate recursive code to non-recursive code by following

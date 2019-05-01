@@ -57,7 +57,7 @@ module Dhall.Map
 import Control.Applicative ((<|>))
 import Data.Data (Data)
 import Data.Foldable (traverse_)
-import Data.Semigroup
+import Data.Semigroup (Semigroup(..))
 import Prelude hiding (filter, lookup)
 
 import qualified Data.Functor

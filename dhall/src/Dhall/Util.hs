@@ -27,15 +27,17 @@ import qualified Dhall.Pretty
 -- | Utility function to cut out the interior of a large text block
 snip :: Text -> Text
 snip text
-    | length ls <= 7 = text
+    | length ls <= numberOfLinesOfContext * 2 + 1 = text
     | otherwise =
          if Data.Text.last text == '\n' then preview else Data.Text.init preview
   where
+    numberOfLinesOfContext = 20
+
     ls = Data.Text.lines text
 
-    header = take 3 ls
+    header = take numberOfLinesOfContext ls
 
-    footer = takeEnd 3 ls
+    footer = takeEnd numberOfLinesOfContext ls
 
     excerpt = filter (Data.Text.any (/= ' ')) (header <> footer)
 
@@ -92,8 +94,8 @@ throws (Right a) = return a
 {-| Utility function used to throw internal errors that should never happen
     (in theory) but that are not enforced by the type system
 -}
-internalError :: Data.Text.Text -> forall b . b
-internalError text = error (unlines
+internalError :: Data.Text.Text -> String
+internalError text = unlines
     [ _ERROR <> ": Compiler bug                                                        "
     , "                                                                                "
     , "Explanation: This error message means that there is a bug in the Dhall compiler."
@@ -107,4 +109,4 @@ internalError text = error (unlines
     , "```                                                                             "
     , Data.Text.unpack text <> "                                                       "
     , "```                                                                             "
-    ] )
+    ]

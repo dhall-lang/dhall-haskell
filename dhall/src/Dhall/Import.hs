@@ -8,7 +8,6 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# OPTIONS_GHC
-  -Wall
   -fno-warn-unused-matches
   -fno-warn-unused-top-binds
   -fno-warn-name-shadowing
@@ -113,29 +112,29 @@ module Dhall.Import (
     , resolve
     ) where
 
-import Control.Monad
-import Control.Monad.Reader
+import Codec.CBOR.Term (Term(..))
 import Control.Applicative (Alternative(..))
 import Control.Exception (throwIO)
+import Control.Monad (unless, when, forM)
 import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Reader (ask, local)
+import Crypto.Hash (SHA256, Digest)
 import Data.CaseInsensitive (CI)
 import Data.Semigroup (Semigroup(..))
-import {-# SOURCE #-} Dhall.Elaboration
-import Dhall.Parser (Parser(..), ParseError(..))
-import Dhall.Errors
-import Dhall.Binary (StandardVersion(..))
-import Crypto.Hash (SHA256, Digest)
 import Data.Text (Text)
-import Codec.CBOR.Term (Term(..))
+import Dhall.Binary (StandardVersion(..))
+import Dhall.Errors (ImportError(..), importError)
+import Dhall.Parser (Parser(..), ParseError(..))
+import {-# SOURCE #-} Dhall.Elaboration (infer)
 
 #if MIN_VERSION_base(4,8,0)
 #else
 import Data.Traversable (traverse)
 #endif
-import Data.IORef
+import Data.IORef (modifyIORef', readIORef)
 import System.FilePath ((</>))
-import Dhall.Context
-import Dhall.Eval
+import Dhall.Context (Cxt(..), ElabM, CacheEntry(..), ImportState(..), emptyCxt)
+import Dhall.Eval (Nf, Raw, eval, Env(..), quote, Names(..), alphaNormalize)
 import Dhall.Core
     ( Expr(..)
     , Chunks(..)
@@ -149,7 +148,7 @@ import Dhall.Core
     , URL(..)
     )
 #ifdef MIN_VERSION_http_client
-import Dhall.Import.HTTP
+import Dhall.Import.HTTP (fetchFromHttpUrl)
 #endif
 
 import qualified Data.ByteString.Lazy

@@ -25,29 +25,27 @@ module Dhall.Main
 
 import Control.Applicative (optional, (<|>))
 import Control.Exception (SomeException)
+import Control.Monad.Reader (runReaderT, forM_, liftIO, asks)
+import Data.IORef (readIORef)
+import Data.Map.Strict (Map)
 import Data.Monoid ((<>))
-import Control.Monad.Reader
+import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
-import Data.IORef (readIORef)
 import Dhall.Binary (StandardVersion)
+import Dhall.Context (ImportState(..), rootState, emptyCxt, rootImport, ImportOptions(..))
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..), coerceEmbed)
-import Dhall.Elaboration
-import Dhall.Context
-import Dhall.Import
+import Dhall.Elaboration (infer)
+import Dhall.Errors (ContextualError(..), DetailedContextualError(..))
+import Dhall.Eval (alphaNormalize, quote, Names(..), nfEmpty)
+import Dhall.Import (hashExpressionToCode)
 import Dhall.Parser (Src, exprAndHeaderFromText)
-import Dhall.Eval
-import Dhall.Errors
-import Dhall.Util (throws)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
--- import Lens.Family (set)
+import Dhall.Util (throws)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
-
-import Data.Map.Strict (Map)
-import Data.Set (Set)
 import Text.Dot (Dot, NodeId, userNode, userNodeId, (.->.))
 
 import qualified Codec.CBOR.JSON
@@ -59,32 +57,25 @@ import qualified Data.Aeson
 import qualified Data.Aeson.Encode.Pretty
 import qualified Data.ByteString.Lazy
 import qualified Data.ByteString.Lazy.Char8
+import qualified Data.Map.Strict as Map
+import qualified Data.Set        as Set
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Dhall
 import qualified Dhall.Binary
--- import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Format
--- import qualified Dhall.Freeze
--- import qualified Dhall.Hash
--- import qualified Dhall.Import
-
--- import qualified Dhall.Import.Types
 import qualified Dhall.Lint
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
--- import qualified Dhall.Repl
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.IO
 import qualified Text.Dot
-import qualified Data.Map.Strict as Map
-import qualified Data.Set        as Set
 
 -- | Top-level program options
 data Options = Options

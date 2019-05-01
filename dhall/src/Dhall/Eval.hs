@@ -62,6 +62,8 @@ module Dhall.Eval (
   , freeIn
   , nf
   , nfEmpty
+  , nfToCore
+  , nfToRaw
   , alphaNormalize
   , vFun
   , vType
@@ -95,6 +97,7 @@ import GHC.Natural (Natural)
 import GHC.Prim (reallyUnsafePtrEquality#)
 import Data.Text.Prettyprint.Doc (Pretty(..))
 import Dhall.Parser.Combinators (Src)
+import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Data.Char
 import qualified Data.List.NonEmpty
@@ -114,6 +117,14 @@ type VType       = Val
 type RawBinding  = Binding Src Import
 type CoreBinding = Binding X Resolved
 type NfBinding   = Binding X X
+
+nfToCore :: Nf -> Core
+nfToCore = unsafeCoerce
+{-# inline nfToCore #-}
+
+nfToRaw :: Nf -> Raw
+nfToRaw = unsafeCoerce
+{-# inline nfToRaw #-}
 
 ptrEq :: a -> a -> Bool
 ptrEq !a !a' = case reallyUnsafePtrEquality# a a' of

@@ -5,20 +5,20 @@
 module Dhall.Errors where
 
 import Control.Exception (Exception(..))
-import Control.Monad.Catch
-import Control.Monad.Reader
+import Control.Monad.Catch (throwM)
+import Control.Monad.Reader (asks)
 import Crypto.Hash (SHA256)
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Semigroup (Semigroup(..))
 import Data.Set (Set)
-import Data.String
+import Data.String (fromString)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
-import Data.Typeable
+import Data.Typeable (Typeable)
 import Dhall.Context (Cxt(..), ElabM, ImportState(..), typesToList)
-import Dhall.Core (Const(..), Expr(..), Import(..))
-import Dhall.Eval (Raw, Core, Nf, nfEmpty)
+import Dhall.Core (Const(..), Import(..))
+import Dhall.Eval (Core)
 import Dhall.Parser.Combinators (Src)
 import Dhall.Pretty (Ann, layoutOpts)
 
@@ -212,63 +212,62 @@ data TypeError
     = UnboundVariable !Text
     | InvalidInputType !Core
     | InvalidOutputType !Core
-    | NotAFunction !Core !Nf
-    | TypeMismatch !Core !Nf !Core !Nf
-    | AnnotMismatch !Core !Core !Nf
+    | NotAFunction !Core !Core
+    | TypeMismatch !Core !Core !Core !Core
+    | AnnotMismatch !Core !Core !Core
     | Untyped
     | MissingListType
-    | MismatchedListElements !Int !Core !Raw !Core
-    | InvalidListElement !Int !Core !Raw !Core
-    | InvalidListType !Raw
-    | InvalidOptionalElement !Core  !Raw !Core
-    | InvalidOptionalType !Raw
-    | InvalidSome !Raw !Raw !Raw
-    | InvalidPredicate !Raw !Raw
-    | IfBranchMismatch !Raw !Core !Raw !Core
-    | IfBranchMustBeTerm Bool !Raw !Raw !Raw
-    | InvalidField !Text !Raw
-    | InvalidFieldType !Text !Raw
-    | FieldAnnotationMismatch !Text !Raw !Const !Text !Raw !Const
-    | FieldMismatch !Text !Raw !Const !Text !Raw !Const
-    | InvalidAlternative !Text !Raw
-    | InvalidAlternativeType !Text !Raw
-    | AlternativeAnnotationMismatch !Text !Raw !Const !Text !Raw !Const
+    | MismatchedListElements !Int !Core !Core !Core
+    | InvalidListElement !Int !Core !Core !Core
+    | InvalidListType !Core
+    | InvalidOptionalElement !Core  !Core !Core
+    | InvalidOptionalType !Core
+    | InvalidSome !Core !Core !Core
+    | InvalidPredicate !Core !Core
+    | IfBranchMismatch !Core !Core !Core !Core
+    | IfBranchMustBeTerm Bool !Core !Core !Core
+    | InvalidField !Text !Core
+    | InvalidFieldType !Text !Core
+    | FieldAnnotationMismatch !Text !Core !Const !Text !Core !Const
+    | FieldMismatch !Text !Core !Const !Text !Core !Const
+    | InvalidAlternative !Text !Core
+    | InvalidAlternativeType !Text !Core
+    | AlternativeAnnotationMismatch !Text !Core !Const !Text !Core !Const
     | ListAppendMismatch !Core !Core
     | DuplicateAlternative !Text
-    | MustCombineARecord Char !Core !Nf
-    | RecordMismatch Char !Raw !Raw !Const !Const
-    | CombineTypesRequiresRecordType !Core !Nf
-    | RecordTypeMismatch !Const !Const !Raw !Raw
+    | MustCombineARecord Char !Core !Core
+    | RecordMismatch Char !Core !Core !Const !Const
+    | CombineTypesRequiresRecordType !Core !Core
+    | RecordTypeMismatch !Const !Const !Core !Core
     | FieldCollision !Text
-    | MustMergeARecord !Core !Nf
-    | MustMergeUnion !Core !Nf
+    | MustMergeARecord !Core !Core
+    | MustMergeUnion !Core !Core
     | UnusedHandler !(Set Text)
     | MissingHandler !(Set Text)
     | HandlerInputTypeMismatch !Text !Core !Core
     | HandlerOutputTypeMismatch !Text !Core  !Text !Core
     | InvalidHandlerOutputType !Text !Core !Core
     | MissingMergeType
-    | HandlerNotAFunction !Text !Raw
-    | CantAccess !Text !Core !Nf
-    | CantProject !Text !Core !Nf
-    | MissingField !Text !Nf
-    | MissingAlternative !Text !Nf
-    | CantAnd !Raw !Raw
-    | CantOr !Raw !Raw
-    | CantEQ !Raw !Raw
-    | CantNE !Raw !Raw
-    | CantInterpolate !Raw !Raw
-    | CantTextAppend !Raw !Raw
-    | CantListAppend !Core !Nf
-    | CantAdd !Raw !Raw
-    | CantMultiply !Raw !Raw
+    | HandlerNotAFunction !Text !Core
+    | CantAccess !Text !Core !Core
+    | CantProject !Text !Core !Core
+    | MissingField !Text !Core
+    | MissingAlternative !Text !Core
+    | CantAnd !Core !Core
+    | CantOr !Core !Core
+    | CantEQ !Core !Core
+    | CantNE !Core !Core
+    | CantInterpolate !Core !Core
+    | CantTextAppend !Core !Core
+    | CantListAppend !Core !Core
+    | CantAdd !Core !Core
+    | CantMultiply !Core !Core
     | NoDependentTypes !Core !Core
 
-    | ExpectedAType !Nf
-    | UnexpectedRecordField !Text !Nf
-    | ConvError !Nf !Nf
-    | MergeDependentHandler !Text !Nf
-    | ExpectedFunctionHandler !Text !Nf
+    | ExpectedAType !Core
+    | UnexpectedRecordField !Text !Core
+    | ConvError !Core !Core
+    | MergeDependentHandler !Text !Core
     deriving (Show)
 
 shortTypeMessage :: TypeError -> Doc Ann
@@ -701,7 +700,7 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
     short = "Wrong type of function argument\n"
         <>  "\n"
-        <>  prettyDiffNf expr1 expr3
+        <>  prettyDiff expr1 expr3
 
     long =
         "Explanation: Every function declares what type or kind of argument to accept    \n\
@@ -835,7 +834,7 @@ prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
     short = "Expression doesn't match annotation\n"
         <>  "\n"
-        <>  prettyDiffNf (nfEmpty expr1) expr2
+        <>  prettyDiff expr1 expr2
     long =
         "Explanation: You can annotate an expression with its type or kind using the     \n\
         \❰:❱ symbol, like this:                                                          \n\
@@ -1029,7 +1028,7 @@ prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
 prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "❰if❱ branch is not a term"
+    short = "❰if❱ branch cannot be a type"
 
     long =
         "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
@@ -1118,7 +1117,7 @@ prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
   where
     short = "❰if❱ branches must have matching types\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr3
+        <>  prettyDiff expr2 expr3
 
     long =
         "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
@@ -1580,7 +1579,7 @@ prettyTypeMessage (FieldAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessa
 
 prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
   where
-    short = "Field mismatch"
+    short = "Field kind mismatch"
 
     long =
         "Explanation: Every record has fields that can be either terms or types, like    \n\
@@ -2993,13 +2992,8 @@ prettyTypeMessage (MergeDependentHandler k a) = ErrorMessages short "" where
         <> "Inferred type for handler of alternative " <> pretty k <> ":\n\n"
         <> "    " <> pretty a
 
-prettyTypeMessage (ExpectedFunctionHandler k a) = ErrorMessages short "" where
-  short =  "Expected a function type for merge handler.\n"
-        <> "Inferred type for handler of alternative " <> pretty k <> ":\n\n"
-        <> "    " <> pretty a
 
-
-buildBooleanOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
+buildBooleanOperator :: Text -> Core -> Core -> ErrorMessages
 buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
   where
     short = "❰" <> txt2 <> "❱ only works on ❰Bool❱s"
@@ -3028,7 +3022,7 @@ buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
 
     txt2 = pretty operator
 
-buildNaturalOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
+buildNaturalOperator :: Text -> Core -> Core -> ErrorMessages
 buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
   where
     short = "❰" <> txt2 <> "❱ only works on ❰Natural❱s"
@@ -3094,6 +3088,3 @@ insert = Dhall.Util.insert
 
 prettyDiff :: Core -> Core -> Doc Ann
 prettyDiff exprL exprR = Dhall.Diff.diffNormalized exprL exprR
-
-prettyDiffNf :: Nf -> Nf -> Doc Ann
-prettyDiffNf = Dhall.Diff.diff

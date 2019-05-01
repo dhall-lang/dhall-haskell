@@ -5,6 +5,8 @@
 {-# language OverloadedStrings #-}
 {-# language RecordWildCards   #-}
 
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
+
 module Dhall.Repl
     ( -- * Repl
       -- repl
@@ -21,8 +23,10 @@ module Dhall.Repl
 -- import Data.Semigroup ((<>))
 -- import Data.Text ( Text )
 -- import Dhall.Binary (StandardVersion(..))
--- import Dhall.Context (Context)
--- import Dhall.Import (hashExpressionToCode, standardVersion)
+-- import Dhall.Context (Cxt)
+-- import Dhall.Core (X)
+-- import Dhall.Elaboration
+-- import Dhall.Import (hashExpressionToCode)
 -- import Dhall.Pretty (CharacterSet(..))
 -- import Lens.Family (set)
 -- import System.Console.Haskeline (Interrupt(..))
@@ -39,14 +43,15 @@ module Dhall.Repl
 -- import qualified Dhall
 -- import qualified Dhall.Binary
 -- import qualified Dhall.Context
+-- import qualified Dhall.Context as Cxt
 -- import qualified Dhall.Core
--- import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize )
--- import qualified Dhall.Pretty
+-- import qualified Dhall.Core as Dhall ( Var(V), Expr, X)
 -- import qualified Dhall.Core as Expr ( Expr(..) )
+-- import qualified Dhall.Eval as Eval
 -- import qualified Dhall.Import as Dhall
 -- import qualified Dhall.Map as Map
 -- import qualified Dhall.Parser as Dhall
--- import qualified Dhall.TypeCheck as Dhall
+-- import qualified Dhall.Pretty
 -- import qualified System.Console.ANSI
 -- import qualified System.Console.Haskeline.Completion as Haskeline
 -- import qualified System.Console.Haskeline.MonadException as Haskeline
@@ -74,7 +79,7 @@ module Dhall.Repl
 
 
 -- data Env = Env
---   { envBindings      :: Dhall.Context.Context Binding
+--   { _cxt             :: Cxt.Cxt
 --   , envIt            :: Maybe Binding
 --   , explain          :: Bool
 --   , characterSet     :: CharacterSet
@@ -86,7 +91,7 @@ module Dhall.Repl
 -- emptyEnv :: Env
 -- emptyEnv =
 --   Env
---     { envBindings = Dhall.Context.empty
+--     { _cxt = Cxt.emptyCxt
 --     , envIt = Nothing
 --     , explain = False
 --     , _standardVersion = Dhall.Binary.defaultStandardVersion
@@ -100,36 +105,37 @@ module Dhall.Repl
 --   , bindingType :: Dhall.Expr Dhall.Src Dhall.X
 --   }
 
+-- -- envToContext :: Env -> Dhall.Context.Context Binding
+-- -- envToContext Env{ envBindings, envIt } =
+-- --   case envIt of
+-- --     Nothing ->
+-- --       envBindings
 
--- envToContext :: Env -> Dhall.Context.Context Binding
--- envToContext Env{ envBindings, envIt } =
---   case envIt of
---     Nothing ->
---       envBindings
-
---     Just it ->
---       Dhall.Context.insert "it" it envBindings
+-- --     Just it ->
+-- --       Dhall.Context.insert "it" it envBindings
 
 
 -- parseAndLoad
 --   :: ( MonadIO m, MonadState Env m )
 --   => String -> m ( Dhall.Expr Dhall.Src Dhall.X )
 -- parseAndLoad src = do
---   env <-
---     get
+--   undefined
 
---   parsed <-
---     case Dhall.exprFromText "(stdin)" ( Text.pack src ) of
---       Left e ->
---         liftIO ( throwIO e )
+--   -- env <-
+--   --   get
 
---       Right a ->
---         return a
+--   -- parsed <-
+--   --   case Dhall.exprFromText "(stdin)" ( Text.pack src ) of
+--   --     Left e ->
+--   --       liftIO ( throwIO e )
 
---   let status =
---         set standardVersion (_standardVersion env) (Dhall.emptyStatus ".")
+--   --     Right a ->
+--   --       return a
 
---   liftIO ( State.evalStateT (Dhall.loadWith parsed) status )
+--   -- let status =
+--   --       set standardVersion (_standardVersion env) (Dhall.emptyStatus ".")
+
+--   -- liftIO ( State.evalStateT (Dhall.loadWith parsed) status )
 
 
 -- eval :: ( MonadIO m, MonadState Env m ) => String -> m ()
