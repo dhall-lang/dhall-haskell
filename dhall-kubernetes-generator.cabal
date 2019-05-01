@@ -1,0 +1,35 @@
+cabal-version:  >=1.10
+name:           dhall-kubernetes-generator
+version:        0.1.0.0
+category:       Code Generation
+homepage:       https://github.com/dhall-lang/dhall-kubernetes#readme
+author:         Fabrizio Ferrai
+maintainer:     fabrizio@ferrai.io
+copyright:      2019 Fabrizio Ferrai
+license:        BSD3
+build-type:     Simple
+
+executable dhall-kubernetes-generator
+  main-is: Main.hs
+  other-modules:
+      Dhall.Kubernetes.Convert
+      Dhall.Kubernetes.Data
+      Dhall.Kubernetes.Types
+  hs-source-dirs:
+      src
+  default-extensions: DeriveDataTypeable DeriveGeneric DerivingStrategies DuplicateRecordFields GeneralizedNewtypeDeriving LambdaCase RecordWildCards ScopedTypeVariables OverloadedStrings FlexibleInstances ConstraintKinds ApplicativeDo TupleSections
+  ghc-options: -Wall
+  build-depends:
+    base          >= 4.8.2.0   && < 5    ,
+    aeson         >= 1.0.0.0   && < 1.5  ,
+    containers    >= 0.5.0.0   && < 0.7  ,
+    dhall         >= 1.22.0    && < 1.23 ,
+    prettyprinter >= 1.2.0.1   && < 1.3  ,
+    text          >= 0.11.1.0  && < 1.3  ,
+    turtle        >= 1.5.0     && < 1.6  ,
+    vector        >= 0.11.0.0  && < 0.13
+  default-language: Haskell2010
+
+source-repository head
+  type: git
+  location: https://github.com/dhall-lang/dhall-kubernetes/tree/master
