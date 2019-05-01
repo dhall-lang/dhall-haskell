@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiWayIf                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
@@ -941,6 +942,16 @@ possible e = case e of
     RecordLit m | null m -> Nothing
     _                    -> Just e
 
+extractUnionConstructor
+  :: Expr Src X
+  -> Maybe (Text, Expr Src X, Dhall.Map.Map Text (Maybe (Expr Src X)))
+extractUnionConstructor (UnionLit fld e rest) =
+  return (fld, e, rest)
+extractUnionConstructor (App (Field (Union kts) fld) e) =
+  return (fld, e, Dhall.Map.delete fld kts)
+extractUnionConstructor _ =
+  empty
+
 instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret f2) => GenericInterpret (M1 C c1 f1 :+: M1 C c2 f2) where
     genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
       where
@@ -953,11 +964,12 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
         nameL = constructorModifier (Data.Text.pack (conName nL))
         nameR = constructorModifier (Data.Text.pack (conName nR))
 
-        extract (UnionLit name e _)
-            | name == nameL = fmap (L1 . M1) (extractL e)
-            | name == nameR = fmap (R1 . M1) (extractR e)
-            | otherwise     = Nothing
-        extract _ = Nothing
+        extract e0 = do
+          (name, e1, _) <- extractUnionConstructor e0
+          if
+            | name == nameL -> fmap (L1 . M1) (extractL e1)
+            | name == nameR -> fmap (R1 . M1) (extractR e1)
+            | otherwise     -> Nothing
 
         expected =
             Union
@@ -976,10 +988,11 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
 
         name = constructorModifier (Data.Text.pack (conName n))
 
-        extract u@(UnionLit name' e _)
-            | name == name' = fmap (R1 . M1) (extractR e)
-            | otherwise     = fmap  L1       (extractL u)
-        extract _ = Nothing
+        extract u = do
+          (name', e, _) <- extractUnionConstructor u
+          if
+            | name == name' -> fmap (R1 . M1) (extractR e)
+            | otherwise     -> fmap  L1       (extractL u)
 
         expected =
             Union (Dhall.Map.insert name (possible expectedR) ktsL)
@@ -997,10 +1010,11 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
 
         name = constructorModifier (Data.Text.pack (conName n))
 
-        extract u@(UnionLit name' e _)
-            | name == name' = fmap (L1 . M1) (extractL e)
-            | otherwise     = fmap  R1       (extractR u)
-        extract _ = Nothing
+        extract u = do
+          (name', e, _) <- extractUnionConstructor u
+          if
+            | name == name' -> fmap (L1 . M1) (extractL e)
+            | otherwise     -> fmap  R1       (extractR u)
 
         expected =
             Union (Dhall.Map.insert name (possible expectedL) ktsR)
@@ -1542,14 +1556,7 @@ union (UnionType (Data.Functor.Compose.Compose mp)) = Type
   where
     expect = (possible . Dhall.expected) <$> mp
     extractF e0 = do
-      (fld, e1, rest) <- do
-        case e0 of
-          UnionLit fld e1 rest ->
-            return (fld, e1, rest)
-          App (Field (Union kts) fld) e1 ->
-            return (fld, e1, Dhall.Map.delete fld kts)
-          _ ->
-            empty
+      (fld, e1, rest) <- extractUnionConstructor e0
 
       t <- Dhall.Map.lookup fld mp
       guard $ Dhall.Core.Union rest `Dhall.Core.judgmentallyEqual`

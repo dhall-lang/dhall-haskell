@@ -1,9 +1,11 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Dhall.Test.Dhall where
 
 import Control.Exception (SomeException, try)
+import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -17,6 +19,7 @@ tests =
     testGroup "Input"
      [ shouldShowDetailedTypeError
      , shouldHandleBothUnionLiterals
+     , shouldHaveWorkingGenericAuto
      ]
 
 data MyType = MyType { foo :: String , bar :: Natural }
@@ -67,3 +70,23 @@ shouldHandleBothUnionLiterals = testCase "Marshal union literals" $ do
     _ <- Dhall.input license "< AllRightsReserved : {} >.AllRightsReserved {=}"
     _ <- Dhall.input license "< AllRightsReserved = {=} >"
     return ()
+
+data CompilerFlavor3 =
+  GHC3 | GHCJS3 | Helium3
+  deriving (Generic, Show, Eq)
+
+data CompilerFlavor2 =
+  GHC2 | GHCJS2
+  deriving (Generic, Show, Eq)
+
+-- https://github.com/dhall-lang/dhall-haskell/issues/926
+shouldHaveWorkingGenericAuto :: TestTree
+shouldHaveWorkingGenericAuto = testGroup "genericAuto"
+  [ testCase "works for a three-constructor enum" $ do
+      compiler <- Dhall.input Dhall.genericAuto "< GHC3 : {} | GHCJS3 : {} | Helium3 : {} >.GHC3 {=}"
+      assertEqual "genericAuto didn't give us what we wanted" GHC3 compiler
+
+    , testCase "works for a two-constructor enum" $ do
+      compiler <- Dhall.input Dhall.genericAuto "< GHC2 : {} | GHCJS2 : {} >.GHC2 {=}"
+      assertEqual "genericAuto didn't give us what we wanted" GHC2 compiler
+  ]
