@@ -376,6 +376,11 @@ Flag with-http
   Default:     True
   Manual:      True
 
+Flag cross
+  Description: Disable TemplateHaskell to make cross-compiling eaiser
+  Default:     False
+  Manual:      True
+
 Library
     Hs-Source-Dirs: src
     Build-Depends:
@@ -442,9 +447,11 @@ Library
         Dhall.Parser,
         Dhall.Pretty,
         Dhall.Repl,
-        Dhall.TH,
         Dhall.Tutorial,
         Dhall.TypeCheck
+    if !flag(cross)
+        Exposed-Modules:
+            Dhall.TH
     Other-Modules:
         Dhall.Pretty.Internal,
         Dhall.Parser.Expression,
