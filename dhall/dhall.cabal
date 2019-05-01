@@ -430,6 +430,35 @@ Library
     if impl(ghcjs)
       Build-Depends: ghcjs-xhr
 
+    Other-Extensions:
+        BangPatterns
+        CPP
+        DefaultSignatures
+        DeriveAnyClass
+        DeriveDataTypeable
+        DeriveFunctor
+        DeriveGeneric
+        DeriveTraversable
+        FlexibleContexts
+        FlexibleInstances
+        GeneralizedNewtypeDeriving
+        MultiParamTypeClasses
+        NamedFieldPuns
+        OverloadedLists
+        OverloadedStrings
+        RankNTypes
+        RecordWildCards
+        ScopedTypeVariables
+        StandaloneDeriving
+        TupleSections
+        TypeApplications
+        TypeFamilies
+        TypeOperators
+        UnicodeSyntax
+    if !flag(cross)
+        Other-Extensions:
+            TemplateHaskell
+
     Exposed-Modules:
         Dhall,
         Dhall.Binary,
