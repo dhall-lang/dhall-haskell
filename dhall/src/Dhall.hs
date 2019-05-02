@@ -943,8 +943,8 @@ possible e = case e of
     _                    -> Just e
 
 extractUnionConstructor
-  :: Expr Src X
-  -> Maybe (Text, Expr Src X, Dhall.Map.Map Text (Maybe (Expr Src X)))
+  :: Expr s a
+  -> Maybe (Text, Expr s a, Dhall.Map.Map Text (Maybe (Expr s a)))
 extractUnionConstructor (UnionLit fld e rest) =
   return (fld, e, rest)
 extractUnionConstructor (App (Field (Union kts) fld) e) =
