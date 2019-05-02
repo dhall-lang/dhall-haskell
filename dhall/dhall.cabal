@@ -376,6 +376,11 @@ Flag with-http
   Default:     True
   Manual:      True
 
+Flag cross
+  Description: Disable TemplateHaskell to make cross-compiling easier
+  Default:     False
+  Manual:      True
+
 Library
     Hs-Source-Dirs: src
     Build-Depends:
@@ -426,6 +431,34 @@ Library
     if impl(ghcjs)
       Build-Depends: ghcjs-xhr
 
+    Other-Extensions:
+        BangPatterns
+        CPP
+        DefaultSignatures
+        DeriveAnyClass
+        DeriveDataTypeable
+        DeriveFunctor
+        DeriveGeneric
+        DeriveTraversable
+        FlexibleContexts
+        FlexibleInstances
+        GeneralizedNewtypeDeriving
+        MultiParamTypeClasses
+        NamedFieldPuns
+        OverloadedLists
+        OverloadedStrings
+        RankNTypes
+        RecordWildCards
+        ScopedTypeVariables
+        StandaloneDeriving
+        TupleSections
+        TypeFamilies
+        TypeOperators
+        UnicodeSyntax
+    if !flag(cross)
+        Other-Extensions:
+            TemplateHaskell
+
     Exposed-Modules:
         Dhall,
         Dhall.Binary,
@@ -443,9 +476,11 @@ Library
         Dhall.Parser,
         Dhall.Pretty,
         Dhall.Repl,
-        Dhall.TH,
         Dhall.Tutorial,
         Dhall.TypeCheck
+    if !flag(cross)
+        Exposed-Modules:
+            Dhall.TH
     Other-Modules:
         Dhall.Pretty.Internal,
         Dhall.Parser.Expression,
@@ -541,6 +576,8 @@ Benchmark dhall-parser
         serialise                                     ,
         text                      >= 0.11.1.0 && < 1.3
     Default-Language: Haskell2010
+    Other-Extensions:
+        TypeApplications
     ghc-options: -rtsopts
 
 Benchmark deep-nested-large-record
