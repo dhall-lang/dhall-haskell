@@ -945,7 +945,7 @@ alphaNormalize = goEnv NEmpty where
       BoolOr t u       -> BoolOr  (go t) (go u)
       BoolEQ t u       -> BoolEQ  (go t) (go u)
       BoolNE t u       -> BoolNE  (go t) (go u)
-      BoolIf b t f     -> BoolIf  (go t) (go t) (go f)
+      BoolIf b t f     -> BoolIf  (go b) (go t) (go f)
       Natural          -> Natural
       NaturalLit n     -> NaturalLit n
       NaturalFold      -> NaturalFold
