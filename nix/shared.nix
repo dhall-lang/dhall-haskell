@@ -382,9 +382,11 @@ let
                         haskellPackagesNew.semigroups;
 
                     transformers-compat =
-                      pkgsNew.haskell.lib.addBuildDepend
+                      pkgsNew.haskell.lib.addBuildDepends
                         haskellPackagesOld.transformers-compat
-                        haskellPackagesNew.generic-deriving;
+                        [ haskellPackagesNew.fail
+                          haskellPackagesNew.generic-deriving
+                        ];
 
                     vector =
                       pkgsNew.haskell.lib.addBuildDepend
