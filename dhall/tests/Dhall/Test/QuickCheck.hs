@@ -39,7 +39,6 @@ import qualified Data.List
 import qualified Dhall.Map
 import qualified Data.Sequence
 import qualified Dhall.Binary
-import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
@@ -308,9 +307,9 @@ instance Arbitrary URL where
 instance Arbitrary Var where
     arbitrary =
         Test.QuickCheck.oneof
-            [ fmap (V "_") natural
+            [ fmap (V "_") (fromIntegral <$> (natural :: Gen Int))
             , lift1 (\t -> V t 0)
-            , lift1 V <*> natural
+            , lift1 V <*> (fromIntegral <$> (natural :: Gen Int))
             ]
 
     shrink = genericShrink
@@ -333,10 +332,10 @@ binaryRoundtrip expression =
         -> Either DeserialiseFailureWithEq a
     wrap = Data.Coerce.coerce
 
-isNormalizedIsConsistentWithNormalize :: Expr () Import -> Property
-isNormalizedIsConsistentWithNormalize expression =
-        Dhall.Core.isNormalized expression
-    === (Dhall.Core.normalize expression == expression)
+-- isNormalizedIsConsistentWithNormalize :: Expr () Import -> Property
+-- isNormalizedIsConsistentWithNormalize expression =
+--         Dhall.Core.isNormalized expression
+--     === (Dhall.Core.normalize expression == expression)
 
 isSameAsSelf :: Expr () Import -> Property
 isSameAsSelf expression =
@@ -353,10 +352,10 @@ tests =
         [ ( "Binary serialization should round-trip"
           , Test.QuickCheck.property binaryRoundtrip
           )
-        , ( "isNormalized should be consistent with normalize"
-          , Test.QuickCheck.property
-              (Test.QuickCheck.withMaxSuccess 10000 isNormalizedIsConsistentWithNormalize)
-          )
+        -- , ( "isNormalized should be consistent with normalize"
+        --   , Test.QuickCheck.property
+        --       (Test.QuickCheck.withMaxSuccess 10000 isNormalizedIsConsistentWithNormalize)
+        --   )
         , ( "An expression should have no difference with itself"
           , Test.QuickCheck.property
               (Test.QuickCheck.withMaxSuccess 10000 isSameAsSelf)

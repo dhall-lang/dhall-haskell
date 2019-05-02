@@ -7,131 +7,84 @@ import Data.Text (Text)
 import Dhall.Import (Imported)
 import Dhall.Parser (Src)
 import Dhall.TypeCheck (TypeError, X)
+import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
+import Turtle (FilePath, (</>))
 
-import qualified Control.Exception
-import qualified Data.Text
-import qualified Dhall.Core
-import qualified Dhall.Import
-import qualified Dhall.Parser
-import qualified Dhall.TypeCheck
-import qualified Test.Tasty
-import qualified Test.Tasty.HUnit
+import qualified Control.Exception as Exception
+import qualified Control.Monad     as Monad
+import qualified Data.Text         as Text
+import qualified Dhall.Core        as Core
+import qualified Dhall.Import      as Import
+import qualified Dhall.Parser      as Parser
+import qualified Dhall.Test.Util   as Test.Util
+import qualified Dhall.TypeCheck   as TypeCheck
+import qualified Test.Tasty        as Tasty
+import qualified Test.Tasty.HUnit  as Tasty.HUnit
+import qualified Turtle
 
-tests :: TestTree
-tests =
-    Test.Tasty.testGroup "typecheck tests"
-        [ preludeExamples
-        , accessTypeChecks
-        , should
-            "allow type-valued fields in a record"
-            "success/simple/fieldsAreTypes"
-        , should
-            "allow type-valued alternatives in a union"
-            "success/simple/alternativesAreTypes"
-        , should
-            "allow anonymous functions in types to be judgmentally equal"
-            "success/simple/anonymousFunctionsInTypes"
-        , should
-            "correctly handle α-equivalent merge alternatives"
-            "success/simple/mergeEquivalence"
-        , should
-            "allow Kind variables"
-            "success/simple/kindParameter"
-        , shouldNotTypeCheck
-            "combining records of terms and types"
-            "failure/combineMixedRecords"
-        , shouldNotTypeCheck
-            "preferring a record of types over a record of terms"
-            "failure/preferMixedRecords"
-        , should
-            "allow records of types of mixed kinds"
-            "success/recordOfTypes"
-        , should
-            "allow accessing a type from a record"
-            "success/accessType"
-        , should
-            "allow accessing a type from a Boehm-Berarducci-encoded record"
-            "success/accessEncodedType"
-        , shouldNotTypeCheck
-            "Hurkens' paradox"
-            "failure/hurkensParadox"
-        , should
-            "allow accessing a constructor from a type stored inside a record"
-            "success/simple/mixedFieldAccess"
-        , should
-            "allow a record of a record of types"
-            "success/recordOfRecordOfTypes"
-        , should
-            "allow a union of types of of mixed kinds"
-            "success/simple/unionsOfTypes"
-        , shouldNotTypeCheck
-            "Unions mixing terms and and types"
-            "failure/mixedUnions"
-        ]
+typecheckDirectory :: FilePath
+typecheckDirectory = "./dhall-lang/tests/typecheck"
 
-preludeExamples :: TestTree
-preludeExamples =
-    Test.Tasty.testGroup "Prelude examples"
-        [ should "Monoid" "./success/prelude/Monoid/00"
-        , should "Monoid" "./success/prelude/Monoid/01"
-        , should "Monoid" "./success/prelude/Monoid/02"
-        , should "Monoid" "./success/prelude/Monoid/03"
-        , should "Monoid" "./success/prelude/Monoid/04"
-        , should "Monoid" "./success/prelude/Monoid/05"
-        , should "Monoid" "./success/prelude/Monoid/06"
-        , should "Monoid" "./success/prelude/Monoid/07"
-        , should "Monoid" "./success/prelude/Monoid/08"
-        , should "Monoid" "./success/prelude/Monoid/09"
-        , should "Monoid" "./success/prelude/Monoid/10"
-        ]
+getTests :: IO TestTree
+getTests = do
+    successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (Turtle.lstree (typecheckDirectory </> "success"))
 
-accessTypeChecks :: TestTree
-accessTypeChecks =
-    Test.Tasty.testGroup "typecheck access"
-        [ should "record" "./success/simple/access/0"
-        , should "record" "./success/simple/access/1"
-        ]
+    let failureTestFiles = do
+            path <- Turtle.lstree (typecheckDirectory </> "failure")
 
-should :: Text -> Text -> TestTree
-should name basename =
-    Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
-        let actualCode   = "./dhall-lang/tests/typecheck/" <> basename <> "A.dhall"
-        let expectedCode = "./dhall-lang/tests/typecheck/" <> basename <> "B.dhall"
+            let skip =
+                    [ typecheckDirectory </> "failure/duplicateFields.dhall"
+                    ]
 
-        actualExpr <- case Dhall.Parser.exprFromText mempty actualCode of
-            Left  err  -> Control.Exception.throwIO err
-            Right expr -> return expr
-        expectedExpr <- case Dhall.Parser.exprFromText mempty expectedCode of
-            Left  err  -> Control.Exception.throwIO err
-            Right expr -> return expr
+            Monad.guard (path `notElem` skip)
 
-        let annotatedExpr = Dhall.Core.Annot actualExpr expectedExpr
+            return path
 
-        resolvedExpr <- Dhall.Import.load annotatedExpr
-        case Dhall.TypeCheck.typeOf resolvedExpr of
-            Left  err -> Control.Exception.throwIO err
-            Right _   -> return ()
+    failureTests <- Test.Util.discover (Turtle.chars <> ".dhall") failureTest failureTestFiles
 
-shouldNotTypeCheck :: Text -> Text -> TestTree
-shouldNotTypeCheck name basename =
-    Test.Tasty.HUnit.testCase (Data.Text.unpack name) $ do
-        let code = "./dhall-lang/tests/typecheck/" <> basename <> ".dhall"
+    let testTree = Tasty.testGroup "typecheck tests"
+            [ successTests
+            , failureTests
+            ]
 
-        expression <- case Dhall.Parser.exprFromText mempty code of
-            Left  exception  -> Control.Exception.throwIO exception
-            Right expression -> return expression
+    return testTree
+
+successTest :: Text -> TestTree
+successTest prefix =
+    Tasty.HUnit.testCase (Text.unpack prefix) $ do
+        let actualCode   = Test.Util.toDhallPath (prefix <> "A.dhall")
+        let expectedCode = Test.Util.toDhallPath (prefix <> "B.dhall")
+
+        actualExpr <- Core.throws (Parser.exprFromText mempty actualCode)
+
+        expectedExpr <- Core.throws (Parser.exprFromText mempty expectedCode)
+
+        let annotatedExpr = Core.Annot actualExpr expectedExpr
+
+        resolvedExpr <- Import.load annotatedExpr
+
+        _ <- Core.throws (TypeCheck.typeOf resolvedExpr)
+
+        return ()
+
+failureTest :: Text -> TestTree
+failureTest path = do
+    Tasty.HUnit.testCase (Text.unpack path) $ do
+        let dhallPath = Test.Util.toDhallPath path
+
+        expression <- Core.throws (Parser.exprFromText mempty dhallPath)
 
         let io :: IO Bool
             io = do
-                _ <- Dhall.Import.load expression
+                _ <- Import.load expression
                 return True
 
         let handler :: Imported (TypeError Src X)-> IO Bool
             handler _ = return False
 
-        typeChecked <- Control.Exception.handle handler io
+        typeChecked <- Exception.handle handler io
 
         if typeChecked
-            then fail (Data.Text.unpack code <> " should not have type-checked")
+            then fail (Text.unpack path <> " should not have type-checked")
             else return ()

@@ -12,7 +12,6 @@ module Dhall.Format
     ) where
 
 import Control.Exception (Exception)
-import Control.Monad.IO.Class (MonadIO(..))
 import Dhall.Parser (exprAndHeaderFromText)
 import Dhall.Pretty (CharacterSet(..), annToAnsiStyle, layoutOpts)
 
@@ -23,6 +22,7 @@ import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Control.Exception
 import qualified Data.Text.IO
+import qualified Dhall.Core
 import qualified Dhall.Pretty
 import qualified System.Console.ANSI
 import qualified System.IO
@@ -64,7 +64,7 @@ format (Format {..}) =
                 Just file -> do
                     text <- Data.Text.IO.readFile file
 
-                    (header, expr) <- throws (exprAndHeaderFromText "(stdin)" text)
+                    (header, expr) <- Dhall.Core.throws (exprAndHeaderFromText "(stdin)" text)
 
                     let doc =   Pretty.pretty header
                             <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
@@ -74,7 +74,7 @@ format (Format {..}) =
                 Nothing -> do
                     inText <- Data.Text.IO.getContents
 
-                    (header, expr) <- throws (exprAndHeaderFromText "(stdin)" inText)
+                    (header, expr) <- Dhall.Core.throws (exprAndHeaderFromText "(stdin)" inText)
 
                     let doc =   Pretty.pretty header
                             <>  Dhall.Pretty.prettyCharacterSet characterSet expr
@@ -96,7 +96,7 @@ format (Format {..}) =
                 Just file -> Data.Text.IO.readFile file
                 Nothing   -> Data.Text.IO.getContents
 
-            (header, expr) <- throws (exprAndHeaderFromText "(stdin)" originalText)
+            (header, expr) <- Dhall.Core.throws (exprAndHeaderFromText "(stdin)" originalText)
 
             let doc =   Pretty.pretty header
                     <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
@@ -108,7 +108,3 @@ format (Format {..}) =
             if originalText == formattedText
                 then return ()
                 else Control.Exception.throwIO NotFormatted
-
-throws :: (Exception e, MonadIO io) => Either e a -> io a
-throws (Left  e) = liftIO (Control.Exception.throwIO e)
-throws (Right a) = return a

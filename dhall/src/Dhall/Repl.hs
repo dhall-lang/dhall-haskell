@@ -12,9 +12,12 @@ module Dhall.Repl
 
 import Control.Exception ( SomeException(SomeException), displayException, throwIO )
 import Control.Monad ( forM_ )
+import Control.Monad.Fail ( MonadFail )
 import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
+-- For the MonadFail instance for StateT.
+import Control.Monad.Trans.Instances ()
 import Data.List ( isPrefixOf, nub )
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe ( mapMaybe )
@@ -30,6 +33,7 @@ import System.Console.Haskeline.Completion ( Completion, simpleCompletion )
 import System.Directory ( getDirectoryContents )
 import System.Environment ( getEnvironment )
 
+import qualified Control.Monad.Fail as Fail
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.HashSet
 import qualified Data.Text as Text
@@ -149,8 +153,8 @@ eval src = do
 
 
 
-typeOf :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
-typeOf [] = fail ":type requires an argument to check the type of"
+typeOf :: ( MonadFail m, MonadIO m, MonadState Env m ) => [String] -> m ()
+typeOf [] = Fail.fail ":type requires an argument to check the type of"
 
 typeOf srcs = do
   loaded <-
@@ -217,7 +221,7 @@ separateEqual (str : strs)
     | otherwise =
         str : strs
 
-addBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
+addBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => [String] -> m ()
 addBinding (k : "=" : srcs) = do
   let
     varName =
@@ -245,10 +249,10 @@ addBinding (k : "=" : srcs) = do
 
   output ( Expr.Annot ( Expr.Var ( Dhall.V varName 0 ) ) t )
 
-addBinding _ = fail ":let should be of the form `:let x = y`"
+addBinding _ = Fail.fail ":let should be of the form `:let x = y`"
 
-hashBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
-hashBinding [] = fail ":hash should be of the form `:hash expr"
+hashBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => [String] -> m ()
+hashBinding [] = Fail.fail ":hash should be of the form `:hash expr"
 hashBinding tokens = do
   loadedExpression <- parseAndLoad (unwords tokens)
 
@@ -296,7 +300,7 @@ nextSaveFile = do
   pure $ saveFilePrefix <> "-" <> show nextIndex
 
 loadBinding
-  :: ( MonadIO m, MonadState Env m, Haskeline.MonadException m )
+  :: ( MonadFail m, MonadIO m, MonadState Env m, Haskeline.MonadException m )
   => [String] -> m ()
 loadBinding [] = do
   mFile <- currentSaveFile
@@ -304,7 +308,7 @@ loadBinding [] = do
   case mFile of
     Just file -> loadBinding [file]
     Nothing   ->
-      fail $ ":load couldn't find any `" <> saveFilePrefix <> "-*` files"
+      Fail.fail $ ":load couldn't find any `" <> saveFilePrefix <> "-*` files"
 
 loadBinding [file] = do
   -- Read commands from the save file
@@ -314,7 +318,7 @@ loadBinding [file] = do
         | c == optionsPrefix
         , Just action <- lookup cmd options
         = action opts
-      runCommand _ = fail $
+      runCommand _ = Fail.fail $
         ":load expects `" <> file <> "` to contain one command per line"
 
   -- Keep current handle in scope
@@ -331,9 +335,9 @@ loadBinding [file] = do
 
   writeOutputHandle $ "Loaded `" <> Text.pack file <> "`\n"
 
-loadBinding _ = fail ":load should be of the form `:load` or `:load file`"
+loadBinding _ = Fail.fail ":load should be of the form `:load` or `:load file`"
 
-saveBinding :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
+saveBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => [String] -> m ()
 -- Save all the bindings into a context save file
 saveBinding [] = do
   file <- nextSaveFile
@@ -380,7 +384,7 @@ saveBinding (file : "=" : tokens) = do
 
   writeOutputHandle $ "Expression saved to `" <> Text.pack file <> "`\n"
 
-saveBinding _ = fail ":save should be of the form `:save`, `:save file`, or `:save file = expr`"
+saveBinding _ = Fail.fail ":save should be of the form `:save`, `:save file`, or `:save file = expr`"
 
 setOption :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
 setOption [ "--explain" ] = do
@@ -405,7 +409,7 @@ optionsPrefix = ':'
 
 
 options
-  :: ( Haskeline.MonadException m, MonadIO m, MonadState Env m )
+  :: ( Haskeline.MonadException m, MonadFail m, MonadIO m, MonadState Env m )
   => Repline.Options m
 options =
   [ ( "type", dontCrash . typeOf )
@@ -420,7 +424,7 @@ options =
 
 
 completer
-  :: (Monad m, MonadIO m, MonadState Env m)
+  :: (Monad m, MonadFail m, MonadIO m, MonadState Env m)
   => Repline.CompleterStyle m
 completer =
   Repline.Prefix
@@ -433,7 +437,7 @@ completer =
     separators = " \t[(,=+*&|}#?>:"
 
 completeFunc
-  :: (Monad m, MonadIO m, MonadState Env m)
+  :: (Monad m, MonadFail m, MonadIO m, MonadState Env m)
   => String -> String -> m [Completion]
 completeFunc reversedPrev word
 

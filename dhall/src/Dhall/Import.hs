@@ -157,7 +157,6 @@ import Dhall.Core
     , ImportType(..)
     , ImportMode(..)
     , Import(..)
-    , ReifiedNormalizer(..)
     , URL(..)
     )
 #ifdef MIN_VERSION_http_client
@@ -309,7 +308,7 @@ instance Show MissingImports where
         <>  concatMap (\e -> "\n" <> show e <> "\n") es
 
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
-throwMissingImport e = throwM (MissingImports [(toException e)])
+throwMissingImport e = throwM (MissingImports [toException e])
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
@@ -462,6 +461,8 @@ exprFromImport :: Import -> StateT (Status IO) IO (Expr Src Import)
 exprFromImport here@(Import {..}) = do
     let ImportHashed {..} = importHashed
 
+    Status {..} <- State.get
+
     result <- Maybe.runMaybeT $ do
         Just expectedHash <- return hash
         cacheFile         <- getCacheFile expectedHash
@@ -473,13 +474,13 @@ exprFromImport here@(Import {..}) = do
 
         if expectedHash == actualHash
             then return ()
-            else liftIO (Control.Exception.throwIO (HashMismatch {..}))
+            else throwMissingImport (Imported _stack (HashMismatch {..}))
 
         let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
 
-        term <- throws (Codec.Serialise.deserialiseOrFail bytesLazy)
+        term <- Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytesLazy)
 
-        throws (Dhall.Binary.decodeExpression term)
+        Dhall.Core.throws (Dhall.Binary.decodeExpression term)
 
     case result of
         Just expression -> return expression
@@ -507,12 +508,12 @@ exprToImport here expression = do
         Just expectedHash  <- return hash
         cacheFile          <- getCacheFile expectedHash
 
-        _ <- throws (Dhall.TypeCheck.typeWith _startingContext expression)
+        _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith _startingContext expression)
 
         let normalizedExpression =
                 Dhall.Core.alphaNormalize
                     (Dhall.Core.normalizeWith
-                        (getReifiedNormalizer _normalizer)
+                        _normalizer
                         expression
                     )
 
@@ -528,7 +529,7 @@ exprToImport here expression = do
         let fallback = do
                 let actualHash = hashExpression NoVersion normalizedExpression
 
-                liftIO (Control.Exception.throwIO (HashMismatch {..}))
+                throwMissingImport (Imported _stack (HashMismatch {..}))
 
         Data.Foldable.asum (map check [ minBound .. maxBound ]) <|> fallback
 
@@ -799,7 +800,7 @@ loadWith expr₀ = case expr₀ of
                     -- cached, since they have already been checked
                     expr''' <- case Dhall.TypeCheck.typeWith _startingContext expr'' of
                         Left  err -> throwM (Imported _stack' err)
-                        Right _   -> return (Dhall.Core.normalizeWith (getReifiedNormalizer _normalizer) expr'')
+                        Right _   -> return (Dhall.Core.normalizeWith _normalizer expr'')
                     zoom cache (State.modify' (Map.insert child (childNodeId, expr''')))
                     return expr'''
 
@@ -831,7 +832,7 @@ loadWith expr₀ = case expr₀ of
               throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
             where
               text₂ = text₀ <> " ? " <> text₁
- 
+
   Const a              -> pure (Const a)
   Var a                -> pure (Var a)
   Lam a b c            -> Lam <$> pure a <*> loadWith b <*> loadWith c
@@ -956,8 +957,4 @@ instance Show ImportResolutionDisabled where
 -- | Assert than an expression is import-free
 assertNoImports :: MonadIO io => Expr Src Import -> io (Expr Src X)
 assertNoImports expression =
-    throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
-
-throws :: (Exception e, MonadIO io) => Either e a -> io a
-throws (Left  e) = liftIO (Control.Exception.throwIO e)
-throws (Right a) = return a
+    Dhall.Core.throws (traverse (\_ -> Left ImportResolutionDisabled) expression)

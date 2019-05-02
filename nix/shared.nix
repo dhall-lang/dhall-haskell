@@ -28,6 +28,12 @@ let
           sha256 = "0mrjzv690g9mxljzxsvay8asyr8vlxhhs9smmax7mp3psd49b43g";
         };
 
+      ruby =
+        pkgsNew.fetchurl {
+          url    = "https://upload.wikimedia.org/wikipedia/commons/7/73/Ruby_logo.svg";
+          sha256 = "1yvvdqcmgpa75y7px3isi4x6690iksq52ilnbslhn7mcngikw6m9";
+        };
+
       dhallLarge =
         pkgsNew.fetchurl {
           url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-logo.png";
@@ -376,9 +382,11 @@ let
                         haskellPackagesNew.semigroups;
 
                     transformers-compat =
-                      pkgsNew.haskell.lib.addBuildDepend
+                      pkgsNew.haskell.lib.addBuildDepends
                         haskellPackagesOld.transformers-compat
-                        haskellPackagesNew.generic-deriving;
+                        [ haskellPackagesNew.fail
+                          haskellPackagesNew.generic-deriving
+                        ];
 
                     vector =
                       pkgsNew.haskell.lib.addBuildDepend
@@ -409,6 +417,38 @@ let
     };
   };
 
+  overlayGHC861 = pkgsNew: pkgsOld: {
+    haskell = pkgsOld.haskell // {
+      packages = pkgsOld.haskell.packages // {
+        "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
+            overrides =
+              let
+                extension =
+                  haskellPackagesNew: haskellPackagesOld: {
+                    # GHC 8.6.1 accidentally shipped with an unpublished
+                    # unix-2.8 package.  Normally we'd deal with that by
+                    # using `pkgsNew.haskell.lib.jailbreak` but it doesn't
+                    # work for dependencies guarded by conditions.  See:
+                    # 
+                    # https://github.com/peti/jailbreak-cabal/issues/7
+                    turtle =
+                      pkgsNew.haskell.lib.appendPatch
+                        haskellPackagesOld.turtle
+                        ./turtle.patch;
+                  };
+
+              in
+                pkgsNew.lib.composeExtensions
+                  (old.overrides or (_: _: {}))
+                  extension;
+          }
+        );
+      };
+    };
+  };
+
+
+
   nixpkgs = fetchNixpkgs {
     rev = "1d4de0d552ae9aa66a5b8dee5fb0650a4372d148";
 
@@ -424,7 +464,10 @@ let
 
     overlays =
           [ overlayShared overlayCabal2nix ]
-      ++  (if compiler == "ghc7103" then [ overlayGHC7103 ] else []);
+      ++  (      if compiler == "ghc7103" then [ overlayGHC7103 ]
+            else if compiler == "ghc861"  then [ overlayGHC861  ]
+            else                               [                ]
+          );
   };
 
   overlayStaticLinux = pkgsNew: pkgsOld: {
@@ -556,6 +599,8 @@ let
 in
   rec {
     inherit trivial;
+
+    inherit pkgs;
 
     possibly-static = {
       dhall            = makeStaticIfPossible "dhall"           ;

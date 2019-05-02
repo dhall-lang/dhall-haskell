@@ -4,13 +4,22 @@ packages:
   - dhall-bash
   - dhall-json
   - dhall-text
+  - dhall-lsp-server
 extra-deps:
-  - megaparsec-7.0.3
-  - repline-0.2.0.0
+  - megaparsec-7.0.4
+  - repline-0.2.1.0
   - serialise-0.2.1.0
   - neat-interpolation-0.3.2.4
-  - dotgen-0.4.2@sha256:309b7cc8a3593a8e48bee7b53020d5f72db156d58edf78a0214f58fbb84b292b
+  - dotgen-0.4.2
   - cborg-json-0.2.1.0
+  - base-noprelude-4.11.1.0
+  - haskell-lsp-0.8.1.0
+  - haskell-lsp-types-0.8.0.1
+  - turtle-1.5.14
+  - transformers-compat-0.6.4
+flags:
+  transformers-compat:
+    five-three: true
 nix:
   packages:
     - ncurses

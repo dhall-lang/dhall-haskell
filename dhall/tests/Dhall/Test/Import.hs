@@ -2,92 +2,71 @@
 
 module Dhall.Test.Import where
 
+import Control.Exception (catch)
+import Data.Monoid ((<>))
 import Data.Text (Text)
-import Test.Tasty (TestTree)
 import Dhall.Import (MissingImports(..))
 import Dhall.Parser (SourcedException(..))
-import Control.Exception (catch, throwIO)
-import Data.Monoid ((<>))
+import Prelude hiding (FilePath)
+import Test.Tasty (TestTree)
+import Turtle (FilePath, (</>))
 
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Data.Text
-import qualified Data.Text.IO
-import qualified Dhall.Parser
-import qualified Dhall.Import
-import qualified Test.Tasty
-import qualified Test.Tasty.HUnit
+import qualified Data.Text                        as Text
+import qualified Data.Text.IO                     as Text.IO
+import qualified Dhall.Core                       as Core
+import qualified Dhall.Import                     as Import
+import qualified Dhall.Parser                     as Parser
+import qualified Dhall.Test.Util                  as Test.Util
+import qualified System.FilePath                  as FilePath
+import qualified Test.Tasty                       as Tasty
+import qualified Test.Tasty.HUnit                 as Tasty.HUnit
+import qualified Turtle
 
-tests :: TestTree
-tests =
-    Test.Tasty.testGroup "import tests"
-        [ Test.Tasty.testGroup "import alternatives"
-            [ shouldFail
-                3
-                "alternative of several unset env variables"
-                "./dhall-lang/tests/import/failure/alternativeEnv.dhall"
-            , shouldFail
-                1
-                "alternative of env variable and missing"
-                "./dhall-lang/tests/import/failure/alternativeEnvMissing.dhall"
-            , shouldFail
-                0
-                "just missing"
-                "./dhall-lang/tests/import/failure/missing.dhall"
-            , shouldNotFail
-                "alternative of env variable, missing, and a Natural"
-                "./dhall-lang/tests/import/success/alternativeEnvNaturalA.dhall"
-            , shouldNotFail
-                "alternative of env variable and a Natural"
-                "./dhall-lang/tests/import/success/alternativeEnvSimpleA.dhall"
-            , shouldNotFail
-                "alternative of a Natural and missing"
-                "./dhall-lang/tests/import/success/alternativeNaturalA.dhall"
-            ]
-        , Test.Tasty.testGroup "import relative to argument"
-            [ shouldNotFailRelative
-                "a semantic integrity check if fields are reordered"
-                "./dhall-lang/tests/import/success/"
-                "./dhall-lang/tests/import/success/fieldOrderA.dhall"
-            ]
-        ]
+importDirectory :: FilePath
+importDirectory = "./dhall-lang/tests/import"
 
-shouldNotFail :: Text -> FilePath -> TestTree
-shouldNotFail name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) (do
-    text <- Data.Text.IO.readFile path
-    actualExpr <- case Dhall.Parser.exprFromText mempty text of
-                     Left  err  -> throwIO err
-                     Right expr -> return expr
-    _ <- Dhall.Import.load actualExpr
-    return ())
+getTests :: IO TestTree
+getTests = do
+    successTests <- Test.Util.discover (Turtle.chars <> "A.dhall") successTest (Turtle.lstree (importDirectory </> "success"))
 
-shouldNotFailRelative :: Text -> FilePath -> FilePath -> TestTree
-shouldNotFailRelative name dir path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) (do
-    text <- Data.Text.IO.readFile path
-    expr <- case Dhall.Parser.exprFromText mempty text of
-                     Left  err  -> throwIO err
-                     Right expr -> return expr
+    failureTests <- Test.Util.discover (Turtle.chars <> ".dhall") failureTest (Turtle.lstree (importDirectory </> "failure"))
 
-    _ <- State.evalStateT (Dhall.Import.loadWith expr) (Dhall.Import.emptyStatus dir)
+    let testTree =
+            Tasty.testGroup "import tests"
+                [ successTests
+                , failureTests
+                ]
 
-    return ())
+    return testTree
 
-shouldFail :: Int -> Text -> FilePath -> TestTree
-shouldFail failures name path = Test.Tasty.HUnit.testCase (Data.Text.unpack name) (do
-    text <- Data.Text.IO.readFile path
-    actualExpr <- case Dhall.Parser.exprFromText mempty text of
-                     Left  err  -> throwIO err
-                     Right expr -> return expr
-    catch
-      (do
-          _ <- Dhall.Import.load actualExpr
-          fail "Import should have failed, but it succeeds")
-      (\(SourcedException _ (MissingImports es)) ->
-          case length es == failures of
-              True -> pure ()
-              False -> fail
-                  (   "Should have failed "
-                  <>  show failures
-                  <>  " times, but failed with: \n"
-                  <>  show es
-                  )
-      ) )
+successTest :: Text -> TestTree
+successTest path = do
+    let pathString = Text.unpack path
+
+    let directoryString = FilePath.takeDirectory pathString
+
+    Tasty.HUnit.testCase pathString (do
+
+        text <- Text.IO.readFile pathString
+
+        actualExpr <- Core.throws (Parser.exprFromText mempty text)
+
+        _ <- State.evalStateT (Import.loadWith actualExpr) (Import.emptyStatus directoryString)
+
+        return () )
+
+failureTest :: Text -> TestTree
+failureTest path = do
+    let pathString = Text.unpack path
+
+    Tasty.HUnit.testCase pathString (do
+        text <- Text.IO.readFile pathString
+
+        actualExpr <- Core.throws (Parser.exprFromText mempty text)
+
+        catch
+          (do _ <- Import.load actualExpr
+
+              fail "Import should have failed, but it succeeds")
+          (\(SourcedException _ (MissingImports _)) -> pure ()) )

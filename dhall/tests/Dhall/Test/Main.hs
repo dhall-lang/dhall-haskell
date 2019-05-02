@@ -1,6 +1,7 @@
 module Main where
 
-import           Test.Tasty               (TestTree)
+import System.FilePath ((</>))
+import Test.Tasty      (TestTree)
 
 import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.Format
@@ -18,27 +19,44 @@ import qualified System.Environment
 import qualified System.IO
 import qualified Test.Tasty
 
-import           System.FilePath          ((</>))
+getAllTests :: IO TestTree
+getAllTests = do
+    normalizationTests <- Dhall.Test.Normalization.getTests
 
-allTests :: TestTree
-allTests =
-    Test.Tasty.testGroup "Dhall Tests"
-        [ Dhall.Test.Normalization.tests
-        , Dhall.Test.Parser.tests
-        , Dhall.Test.Regression.tests
-        , Dhall.Test.Tutorial.tests
-        , Dhall.Test.Format.tests
-        , Dhall.Test.TypeCheck.tests
-        , Dhall.Test.Import.tests
-        , Dhall.Test.QuickCheck.tests
-        , Dhall.Test.Lint.tests
-        , Dhall.Test.Dhall.tests
-        ]
+    parsingTests <- Dhall.Test.Parser.getTests
+
+    formattingTests <- Dhall.Test.Format.getTests
+
+    typecheckingTests <- Dhall.Test.TypeCheck.getTests
+
+    importingTests <- Dhall.Test.Import.getTests
+
+    lintTests <- Dhall.Test.Lint.getTests
+
+    let testTree =
+            Test.Tasty.testGroup "Dhall Tests"
+                [ normalizationTests
+                , parsingTests
+                , importingTests
+                , typecheckingTests
+                , formattingTests
+                , lintTests
+                , Dhall.Test.Regression.tests
+                , Dhall.Test.Tutorial.tests
+                , Dhall.Test.QuickCheck.tests
+                , Dhall.Test.Dhall.tests
+                ]
+
+    return testTree
 
 main :: IO ()
 main = do
-
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
+
     pwd <- System.Directory.getCurrentDirectory
+
     System.Environment.setEnv "XDG_CACHE_HOME" (pwd </> ".cache")
+
+    allTests <- getAllTests
+
     Test.Tasty.defaultMain allTests

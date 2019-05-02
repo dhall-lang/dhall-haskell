@@ -1,0 +1,12 @@
+diff -Naur turtle-1.5.14.old/turtle.cabal turtle-1.5.14.new/turtle.cabal
+--- turtle-1.5.14.old/turtle.cabal	2019-04-18 10:54:21.000000000 -0700
++++ turtle-1.5.14.new/turtle.cabal	2019-04-24 11:27:46.000000000 -0700
+@@ -75,7 +75,7 @@
+     if os(windows)
+         Build-Depends: Win32 >= 2.2.0.1 && < 2.9
+     else
+-        Build-Depends: unix  >= 2.5.1.0 && < 2.8
++        Build-Depends: unix  >= 2.5.1.0 && < 2.9
+     Exposed-Modules:
+         Turtle,
+         Turtle.Bytes,
