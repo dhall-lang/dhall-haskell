@@ -377,7 +377,7 @@ Flag with-http
   Manual:      True
 
 Flag cross
-  Description: Disable TemplateHaskell to make cross-compiling eaiser
+  Description: Disable TemplateHaskell to make cross-compiling easier
   Default:     False
   Manual:      True
 
