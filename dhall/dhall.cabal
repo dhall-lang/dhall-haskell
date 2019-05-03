@@ -376,6 +376,11 @@ Flag with-http
   Default:     True
   Manual:      True
 
+Flag cross
+  Description: Disable TemplateHaskell to make cross-compiling easier
+  Default:     False
+  Manual:      True
+
 Library
     Hs-Source-Dirs: src
     Build-Depends:
@@ -404,12 +409,13 @@ Library
         parsers                     >= 0.12.4   && < 0.13,
         prettyprinter               >= 1.2.0.1  && < 1.3 ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
-        repline                     >= 0.2.0.0  && < 0.3 ,
+        repline                     >= 0.2.1.0  && < 0.3 ,
         serialise                   >= 0.2.0.0  && < 0.3 ,
         scientific                  >= 0.3.0.0  && < 0.4 ,
         template-haskell                           < 2.15,
         text                        >= 0.11.1.0 && < 1.3 ,
         transformers                >= 0.2.0.0  && < 0.6 ,
+        transformers-compat         >= 0.6.4    && < 0.7 ,
         unordered-containers        >= 0.1.3.0  && < 0.3 ,
         uri-encode                                 < 1.6 ,
         vector                      >= 0.11.0.0 && < 0.13
@@ -424,6 +430,34 @@ Library
       Build-Depends: fail == 4.9.*
     if impl(ghcjs)
       Build-Depends: ghcjs-xhr
+
+    Other-Extensions:
+        BangPatterns
+        CPP
+        DefaultSignatures
+        DeriveAnyClass
+        DeriveDataTypeable
+        DeriveFunctor
+        DeriveGeneric
+        DeriveTraversable
+        FlexibleContexts
+        FlexibleInstances
+        GeneralizedNewtypeDeriving
+        MultiParamTypeClasses
+        NamedFieldPuns
+        OverloadedLists
+        OverloadedStrings
+        RankNTypes
+        RecordWildCards
+        ScopedTypeVariables
+        StandaloneDeriving
+        TupleSections
+        TypeFamilies
+        TypeOperators
+        UnicodeSyntax
+    if !flag(cross)
+        Other-Extensions:
+            TemplateHaskell
 
     Exposed-Modules:
         Dhall,
@@ -442,9 +476,11 @@ Library
         Dhall.Parser,
         Dhall.Pretty,
         Dhall.Repl,
-        Dhall.TH,
         Dhall.Tutorial,
         Dhall.TypeCheck
+    if !flag(cross)
+        Exposed-Modules:
+            Dhall.TH
     Other-Modules:
         Dhall.Pretty.Internal,
         Dhall.Parser.Expression,
@@ -540,6 +576,8 @@ Benchmark dhall-parser
         serialise                                     ,
         text                      >= 0.11.1.0 && < 1.3
     Default-Language: Haskell2010
+    Other-Extensions:
+        TypeApplications
     ghc-options: -rtsopts
 
 Benchmark deep-nested-large-record
@@ -572,4 +610,4 @@ Benchmark map-operations
         criterion                 >= 1.1      && < 1.6,
         dhall
     Default-Language: Haskell2010
---    ghc-options: -rtsopts -O2
+    ghc-options: -rtsopts -O2
