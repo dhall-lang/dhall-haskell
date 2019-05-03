@@ -440,7 +440,7 @@ command (Options {..}) = do
             Dhall.Format.format (Dhall.Format.Format {..})
 
         Freeze {..} -> do
-            Dhall.Freeze.freeze inplace all_ standardVersion
+            Dhall.Freeze.freeze inplace all_ characterSet standardVersion
 
         Hash -> do
             Dhall.Hash.hash standardVersion
