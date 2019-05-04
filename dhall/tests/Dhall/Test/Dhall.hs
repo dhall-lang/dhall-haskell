@@ -3,12 +3,16 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving  #-}
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Dhall.Test.Dhall where
 
 import Control.Exception (SomeException, try)
 import Data.Text (Text)
 import Dhall (Inject, Interpret)
+import Dhall.Core (Expr(..))
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Test.Tasty
@@ -27,6 +31,7 @@ tests =
      , shouldHandleBothUnionLiterals
      , shouldHaveWorkingGenericAuto
      , shouldHandleUnionsCorrectly
+     , shouldTreatAConstructorStoringUnitAsEmptyAlternative
      ]
 
 data MyType = MyType { foo :: String , bar :: Natural }
@@ -79,6 +84,18 @@ shouldHandleBothUnionLiterals = testCase "Marshal union literals" $ do
 
     return ()
 
+shouldTreatAConstructorStoringUnitAsEmptyAlternative :: TestTree
+shouldTreatAConstructorStoringUnitAsEmptyAlternative = testCase "Handle unit constructors" $ do
+    let exampleType :: Dhall.Type ()
+        exampleType = Dhall.union (Dhall.constructor "A" Dhall.unit)
+
+    () <- Dhall.input exampleType "< A >.A"
+
+    let exampleInputType :: Dhall.InputType ()
+        exampleInputType = Dhall.inputUnion (Dhall.inputConstructor "A")
+
+    Dhall.embed exampleInputType () @=? Field (Union (Dhall.Map.singleton "A" Nothing)) "A"
+
 data CompilerFlavor3 =
   GHC3 | GHCJS3 | Helium3
   deriving (Generic, Show, Eq)
@@ -94,7 +111,7 @@ shouldHaveWorkingGenericAuto = testGroup "genericAuto"
       compiler <- Dhall.input Dhall.genericAuto "< GHC3 | GHCJS3 | Helium3 >.GHC3"
       assertEqual "genericAuto didn't give us what we wanted" GHC3 compiler
 
-    , testCase "works for a two-constructor enum" $ do
+  , testCase "works for a two-constructor enum" $ do
       compiler <- Dhall.input Dhall.genericAuto "< GHC2 | GHCJS2 >.GHC2"
       assertEqual "genericAuto didn't give us what we wanted" GHC2 compiler
   ]
@@ -105,8 +122,10 @@ data NonEmptyUnion = N0 Bool | N1 Natural | N2 Text
 data Enum = E0 | E1 | E2
     deriving (Eq, Generic, Inject, Interpret, Show)
 
-data Mixed = M0 Bool | M1 | M2
+data Mixed = M0 Bool | M1 | M2 ()
     deriving (Eq, Generic, Inject, Interpret, Show)
+
+deriving instance Interpret ()
 
 shouldHandleUnionsCorrectly :: TestTree
 shouldHandleUnionsCorrectly =
@@ -115,8 +134,8 @@ shouldHandleUnionsCorrectly =
         `shouldPassThrough` [ N0 True, N1 5, N2 "ABC" ]
     , "λ(x : < E0 | E1 | E2 >) → x"
         `shouldPassThrough` [ E0, E1, E2 ]
-    , "λ(x : < M0 : { _1 : Bool } | M1 | M2 >) → x"
-        `shouldPassThrough` [ M0 True, M1, M2 ]
+    , "λ(x : < M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >) → x"
+        `shouldPassThrough` [ M0 True, M1, M2 () ]
 
     , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N0 { _1 = True }"
         `shouldMarshalInto` N0 True
@@ -136,30 +155,33 @@ shouldHandleUnionsCorrectly =
     , "(< E0 | E1 | E2>).E1" `shouldMarshalInto` E1
     , "(< E0 | E1 | E2>).E2" `shouldMarshalInto` E2
 
-    , "(< M0 : { _1 : Bool } | M1 | M2 >).M0 { _1 = True }"
+    , "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M0 { _1 = True }"
         `shouldMarshalInto` M0 True
-    , "(< M0 : { _1 : Bool } | M1 | M2 >).M1"
+    , "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M1"
         `shouldMarshalInto` M1
-    , "(< M0 : { _1 : Bool } | M1 | M2 >).M2"
-        `shouldMarshalInto` M2
+    , "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M2 { _1 = {=} }"
+        `shouldMarshalInto` M2 ()
 
-    , "< M0 = { _1 = True } | M1 | M2 >"
+    , "< M0 = { _1 = True } | M1 | M2 : { _1 : {} } >"
         `shouldMarshalInto` M0 True
 
     , N0 True
-        `shouldInjectInto` "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N0 { _1 = True }"
+        `shouldInjectInto`
+        "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N0 { _1 = True }"
     , N1 5
-        `shouldInjectInto` "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N1 { _1 = 5 }"
+        `shouldInjectInto`
+        "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N1 { _1 = 5 }"
     , N2 "ABC"
-        `shouldInjectInto` "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N2 { _1 = \"ABC\" }"
+        `shouldInjectInto`
+        "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N2 { _1 = \"ABC\" }"
 
     , E0 `shouldInjectInto` "< E0 | E1 | E2 >.E0"
     , E1 `shouldInjectInto` "< E0 | E1 | E2 >.E1"
     , E2 `shouldInjectInto` "< E0 | E1 | E2 >.E2"
 
-    , M0 True `shouldInjectInto` "(< M0 : { _1 : Bool } | M1 | M2 >).M0 { _1 = True }"
-    , M1 `shouldInjectInto` "(< M0 : { _1 : Bool } | M1 | M2 >).M1"
-    , M2 `shouldInjectInto` "(< M0 : { _1 : Bool } | M1 | M2 >).M2"
+    , M0 True `shouldInjectInto` "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M0 { _1 = True }"
+    , M1 `shouldInjectInto` "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M1"
+    , M2 () `shouldInjectInto` "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M2 { _1 = {=} }"
     ]
   where
     code `shouldPassThrough` values = testCase "Pass through" $ do

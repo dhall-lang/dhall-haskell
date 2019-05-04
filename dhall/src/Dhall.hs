@@ -1768,7 +1768,9 @@ inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Co
     InputType
       { embed = \x ->
           let (name, y) = embedF x
-          in  UnionLit name y (Dhall.Map.delete name fields')
+          in  case notEmptyRecordLit y of
+                  Nothing  -> Field (Union fields') name
+                  Just val -> App (Field (Union fields') name) val
       , declared =
           Union fields'
       }
