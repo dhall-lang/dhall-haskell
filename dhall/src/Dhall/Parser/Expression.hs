@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE OverloadedLists     #-}
@@ -27,16 +28,47 @@ import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Encoding
 import qualified Text.Megaparsec
+#if !MIN_VERSION_megaparsec(7, 0, 0)
+import qualified Text.Megaparsec.Char as Text.Megaparsec
+#endif
 import qualified Text.Parser.Char
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
 
+getSourcePos :: Text.Megaparsec.MonadParsec e s m =>
+                m Text.Megaparsec.SourcePos
+getSourcePos =
+#if MIN_VERSION_megaparsec(7, 0, 0)
+    Text.Megaparsec.getSourcePos
+#else
+    Text.Megaparsec.getPosition
+#endif
+{-# INLINE getSourcePos #-}
+
+getOffset :: Text.Megaparsec.MonadParsec e s m => m Int
+#if MIN_VERSION_megaparsec(7, 0, 0)
+getOffset = Text.Megaparsec.stateOffset <$> Text.Megaparsec.getParserState
+#else
+getOffset = Text.Megaparsec.stateTokensProcessed <$> Text.Megaparsec.getParserState
+#endif
+{-# INLINE getOffset #-}
+
+setOffset :: Text.Megaparsec.MonadParsec e s m => Int -> m ()
+#if MIN_VERSION_megaparsec(7, 0, 0)
+setOffset o = Text.Megaparsec.updateParserState $ \(Text.Megaparsec.State s _ pst) ->
+  Text.Megaparsec.State s o pst
+#else
+setOffset o = Text.Megaparsec.updateParserState $ \(Text.Megaparsec.State s p _ stw) ->
+  Text.Megaparsec.State s p o stw
+#endif
+{-# INLINE setOffset #-}
+
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
-    before      <- Text.Megaparsec.getSourcePos
+    before      <- getSourcePos
     (tokens, e) <- Text.Megaparsec.match parser
-    after       <- Text.Megaparsec.getSourcePos
+    after       <- getSourcePos
     let src₀ = Src before after tokens
     case e of
         Note src₁ _ | laxSrcEq src₀ src₁ -> return e
@@ -240,10 +272,10 @@ completeExpression embedded = completeExpression_
             <|> alternative38
           where
             alternative00 = do
-                n <- Text.Megaparsec.getOffset
+                n <- getOffset
                 a <- try doubleLiteral
                 b <- if isInfinite a
-                       then Text.Megaparsec.setOffset n *> fail "double out of bounds"
+                       then setOffset n *> fail "double out of bounds"
                        else return a
                 return (DoubleLit b)
 
@@ -390,7 +422,7 @@ completeExpression embedded = completeExpression_
                     ) && c /= '$'
 
             unescapedCharacterSlow = do
-                _ <- Text.Megaparsec.single '$'
+                _ <- Text.Parser.Char.char '$'
                 return (Chunks [] "$")
 
             escapedCharacter = do

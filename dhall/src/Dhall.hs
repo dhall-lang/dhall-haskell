@@ -923,9 +923,11 @@ unsafeExpectRecord name expression =
 unsafeExpectUnionLit
     :: Text
     -> Expr Src X
-    -> (Text, Expr Src X, Dhall.Map.Map Text (Maybe (Expr Src X)))
-unsafeExpectUnionLit _ (UnionLit k v kts) =
-    (k, v, kts)
+    -> (Text, Maybe (Expr Src X))
+unsafeExpectUnionLit _ (Field (Union _) k) =
+    (k, Nothing)
+unsafeExpectUnionLit _ (App (Field (Union _) k) v) =
+    (k, Just v)
 unsafeExpectUnionLit name expression =
     Dhall.Core.internalError
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
@@ -937,18 +939,23 @@ unsafeExpectRecordLit name expression =
     Dhall.Core.internalError
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
-possible :: Expr s a -> Maybe (Expr s a)
-possible e = case e of
+notEmptyRecordLit :: Expr s a -> Maybe (Expr s a)
+notEmptyRecordLit e = case e of
     RecordLit m | null m -> Nothing
     _                    -> Just e
 
+notEmptyRecord :: Expr s a -> Maybe (Expr s a)
+notEmptyRecord e = case e of
+    Record m | null m -> Nothing
+    _                 -> Just e
 extractUnionConstructor
-  :: Expr s a
-  -> Maybe (Text, Expr s a, Dhall.Map.Map Text (Maybe (Expr s a)))
+    :: Expr s a -> Maybe (Text, Expr s a, Dhall.Map.Map Text (Maybe (Expr s a)))
 extractUnionConstructor (UnionLit fld e rest) =
   return (fld, e, rest)
 extractUnionConstructor (App (Field (Union kts) fld) e) =
   return (fld, e, Dhall.Map.delete fld kts)
+extractUnionConstructor (Field (Union kts) fld) =
+  return (fld, RecordLit mempty, Dhall.Map.delete fld kts)
 extractUnionConstructor _ =
   empty
 
@@ -974,7 +981,9 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
         expected =
             Union
                 (Dhall.Map.fromList
-                    [(nameL, possible expectedL), (nameR, possible expectedR)]
+                    [ (nameL, notEmptyRecord expectedL)
+                    , (nameR, notEmptyRecord expectedR)
+                    ]
                 )
 
         Type extractL expectedL = evalState (genericAutoWith options) 1
@@ -995,7 +1004,7 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
             | otherwise     -> fmap  L1       (extractL u)
 
         expected =
-            Union (Dhall.Map.insert name (possible expectedR) ktsL)
+            Union (Dhall.Map.insert name (notEmptyRecord expectedR) ktsL)
 
         Type extractL expectedL = evalState (genericAutoWith options) 1
         Type extractR expectedR = evalState (genericAutoWith options) 1
@@ -1017,7 +1026,7 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
             | otherwise     -> fmap  R1       (extractR u)
 
         expected =
-            Union (Dhall.Map.insert name (possible expectedL) ktsR)
+            Union (Dhall.Map.insert name (notEmptyRecord expectedL) ktsR)
 
         Type extractL expectedL = evalState (genericAutoWith options) 1
         Type extractR expectedR = evalState (genericAutoWith options) 1
@@ -1268,21 +1277,25 @@ instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) =>
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 (M1 l)) =
-            UnionLit
-                keyL
-                (embedL l)
-                (Dhall.Map.singleton keyR (possible declaredR))
+            case notEmptyRecordLit (embedL l) of
+                Nothing ->
+                    Field declared keyL
+                Just valL ->
+                    App (Field declared keyL) valL
 
         embed (R1 (M1 r)) =
-            UnionLit
-                keyR
-                (embedR r)
-                (Dhall.Map.singleton keyL (possible declaredL))
+            case notEmptyRecordLit (embedR r) of
+                Nothing ->
+                    Field declared keyR
+                Just valR ->
+                    App (Field declared keyR) valR
 
         declared =
             Union
                 (Dhall.Map.fromList
-                    [(keyL, possible declaredL), (keyR, possible declaredR)]
+                    [ (keyL, notEmptyRecord declaredL)
+                    , (keyR, notEmptyRecord declaredR)
+                    ]
                 )
 
         nL :: M1 i c1 f1 a
@@ -1301,38 +1314,42 @@ instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInj
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 l) =
-            UnionLit
-                keyL
-                valL
-                (Dhall.Map.insert keyR (possible declaredR) ktsL')
+            case maybeValL of
+                Nothing   -> Field declared keyL
+                Just valL -> App (Field declared keyL) valL
           where
-            (keyL, valL, ktsL') =
+            (keyL, maybeValL) =
               unsafeExpectUnionLit "genericInjectWith (:+:)" (embedL l)
-        embed (R1 (M1 r)) = UnionLit keyR (embedR r) ktsL
+        embed (R1 (M1 r)) =
+            case notEmptyRecordLit (embedR r) of
+                Nothing   -> Field declared keyR
+                Just valR -> App (Field declared keyR) valR
 
         nR :: M1 i c h a
         nR = undefined
 
         keyR = constructorModifier (Data.Text.pack (conName nR))
 
-        declared = Union (Dhall.Map.insert keyR (possible declaredR) ktsL)
+        declared = Union (Dhall.Map.insert keyR (notEmptyRecord declaredR) ktsL)
 
-        InputType embedL  declaredL = evalState (genericInjectWith options) 1
-        InputType embedR  declaredR = evalState (genericInjectWith options) 1
+        InputType embedL declaredL = evalState (genericInjectWith options) 1
+        InputType embedR declaredR = evalState (genericInjectWith options) 1
 
         ktsL = unsafeExpectUnion "genericInjectWith (:+:)" declaredL
 
 instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInject (M1 C c f :+: (g :+: h)) where
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
-        embed (L1 (M1 l)) = UnionLit keyL (embedL l) ktsR
+        embed (L1 (M1 l)) =
+            case notEmptyRecordLit (embedL l) of
+                Nothing   -> Field declared keyL
+                Just valL -> App (Field declared keyL) valL
         embed (R1 r) =
-            UnionLit
-                keyR
-                valR
-                (Dhall.Map.insert keyL (possible declaredL) ktsR')
+            case maybeValR of
+                Nothing   -> Field declared keyR
+                Just valR -> App (Field declared keyR) valR
           where
-            (keyR, valR, ktsR') =
+            (keyR, maybeValR) =
                 unsafeExpectUnionLit "genericInjectWith (:+:)" (embedR r)
 
         nL :: M1 i c f a
@@ -1340,7 +1357,7 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
 
         keyL = constructorModifier (Data.Text.pack (conName nL))
 
-        declared = Union (Dhall.Map.insert keyL (possible declaredL) ktsR)
+        declared = Union (Dhall.Map.insert keyL (notEmptyRecord declaredL) ktsR)
 
         InputType embedL declaredL = evalState (genericInjectWith options) 1
         InputType embedR declaredR = evalState (genericInjectWith options) 1
@@ -1351,14 +1368,18 @@ instance (GenericInject (f :+: g), GenericInject (h :+: i)) => GenericInject ((f
     genericInjectWith options = pure (InputType {..})
       where
         embed (L1 l) =
-            UnionLit keyL valL (Dhall.Map.union ktsL' ktsR)
+            case maybeValL of
+                Nothing   -> Field declared keyL
+                Just valL -> App (Field declared keyL) valL
           where
-            (keyL, valL, ktsL') =
+            (keyL, maybeValL) =
                 unsafeExpectUnionLit "genericInjectWith (:+:)" (embedL l)
         embed (R1 r) =
-            UnionLit keyR valR (Dhall.Map.union ktsL ktsR')
+            case maybeValR of
+                Nothing   -> Field declared keyR
+                Just valR -> App (Field declared keyR) valR
           where
-            (keyR, valR, ktsR') =
+            (keyR, maybeValR) =
                 unsafeExpectUnionLit "genericInjectWith (:+:)" (embedR r)
 
         declared = Union (Dhall.Map.union ktsL ktsR)
@@ -1554,14 +1575,17 @@ union (UnionType (Data.Functor.Compose.Compose mp)) = Type
     , expected = Union expect
     }
   where
-    expect = (possible . Dhall.expected) <$> mp
+    expect = (notEmptyRecord . Dhall.expected) <$> mp
+
     extractF e0 = do
       (fld, e1, rest) <- extractUnionConstructor e0
 
       t <- Dhall.Map.lookup fld mp
+
       guard $ Dhall.Core.Union rest `Dhall.Core.judgmentallyEqual`
                 Dhall.Core.Union (Dhall.Map.delete fld expect)
-      Dhall.extract t e1
+
+      extract t e1
 
 -- | Parse a single constructor of a union
 constructor :: Text -> Type a -> UnionType a
@@ -1744,12 +1768,14 @@ inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Co
     InputType
       { embed = \x ->
           let (name, y) = embedF x
-          in  UnionLit name y (Dhall.Map.delete name fields')
+          in  case notEmptyRecordLit y of
+                  Nothing  -> Field (Union fields') name
+                  Just val -> App (Field (Union fields') name) val
       , declared =
           Union fields'
       }
   where
-    fields' = fmap possible fields
+    fields' = fmap notEmptyRecord fields
 
 inputConstructorWith
     :: Text
