@@ -34,6 +34,9 @@ import qualified Dhall.Pretty
 import qualified Dhall.Util
 import qualified Dhall.Set
 import qualified Text.Megaparsec
+#if !MIN_VERSION_megaparsec(7, 0, 0)
+import qualified Text.Megaparsec.Char as Text.Megaparsec (satisfy)
+#endif
 import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
@@ -233,7 +236,11 @@ instance Text.Parser.Char.CharParsing Parser where
 
   notChar = Text.Megaparsec.Char.char
 
+#if MIN_VERSION_megaparsec(7, 0, 0)
   anyChar = Text.Megaparsec.anySingle
+#else
+  anyChar = Text.Megaparsec.Char.anyChar
+#endif
 
   string = fmap Data.Text.unpack . Text.Megaparsec.Char.string . fromString
 
