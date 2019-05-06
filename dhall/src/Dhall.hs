@@ -72,6 +72,7 @@ module Dhall
 
     , Inject(..)
     , inject
+    , genericInject
     , RecordInputType(..)
     , inputFieldWith
     , inputField
@@ -1139,6 +1140,17 @@ class Inject a where
 -}
 inject :: Inject a => InputType a
 inject = injectWith defaultInterpretOptions
+
+{-| Use the default options for injecting a value, whose structure is
+determined generically.
+
+This can be used when you want to use 'Inject' on types that you don't
+want to define orphan instances for.
+-}
+genericInject
+  :: (Generic a, GenericInject (Rep a)) => InputType a
+genericInject
+    = contramap GHC.Generics.from (evalState (genericInjectWith defaultInterpretOptions) 1)
 
 instance Inject Bool where
     injectWith _ = InputType {..}
