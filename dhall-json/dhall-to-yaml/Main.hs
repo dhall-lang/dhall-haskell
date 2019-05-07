@@ -12,6 +12,7 @@ import Options.Applicative (Parser, ParserInfo)
 import qualified Control.Exception
 import qualified Data.ByteString
 import qualified Data.Text.IO
+import qualified Data.Text
 import qualified Data.Vector
 import qualified Data.Yaml
 import qualified Text.Libyaml
@@ -90,7 +91,13 @@ main = do
     where
         encodeYaml = Data.Yaml.encodeWith
 
-        customStyle = \_ -> ( Text.Libyaml.NoTag, Text.Libyaml.SingleQuoted )
+        customStyle = \s -> case () of
+            ()
+                | "\n" `Data.Text.isInfixOf` s -> ( noTag, literal )
+                | otherwise -> ( noTag, Text.Libyaml.SingleQuoted )
+            where
+                noTag = Text.Libyaml.NoTag
+                literal = Text.Libyaml.Literal
 
         quotedOptions = Data.Yaml.setStringStyle
                             customStyle
