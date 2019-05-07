@@ -14,6 +14,7 @@ import qualified Data.ByteString
 import qualified Data.Text.IO
 import qualified Data.Vector
 import qualified Data.Yaml
+import qualified Text.Libyaml
 import qualified Dhall
 import qualified Dhall.JSON
 import qualified GHC.IO.Encoding
@@ -25,6 +26,7 @@ data Options = Options
     { explain    :: Bool
     , omission   :: Value -> Value
     , documents  :: Bool
+    , quoted     :: Bool
     , conversion :: Conversion
     }
 
@@ -34,6 +36,7 @@ parseOptions =
     <$> parseExplain
     <*> Dhall.JSON.parseOmission
     <*> parseDocuments
+    <*> parseQuoted
     <*> Dhall.JSON.parseConversion
   where
     parseExplain =
@@ -48,6 +51,12 @@ parseOptions =
             <>  Options.Applicative.help "If given a Dhall list, output a document for every element"
             )
 
+    parseQuoted =
+        Options.Applicative.switch
+            (   Options.Applicative.long "quoted"
+            <>  Options.Applicative.help "Prevent from generating not quoted scalars"
+            )
+
 parserInfo :: ParserInfo Options
 parserInfo =
     Options.Applicative.info
@@ -55,6 +64,8 @@ parserInfo =
         (   Options.Applicative.fullDesc
         <>  Options.Applicative.progDesc "Compile Dhall to YAML"
         )
+
+customStyle = \s -> ( Text.Libyaml.NoTag, Text.Libyaml.SingleQuoted )
 
 main :: IO ()
 main = do
@@ -64,6 +75,7 @@ main = do
 
     handle $ do
         let explaining = if explain then Dhall.detailed else id
+        let encodeOptions = if quoted then quotedOptions else Data.Yaml.defaultEncodeOptions
 
         stdin <- Data.Text.IO.getContents
 
@@ -72,11 +84,16 @@ main = do
         let yaml = case (documents, json) of
               (True, Data.Yaml.Array elems)
                 -> Data.ByteString.intercalate "\n---\n"
-                   $ fmap Data.Yaml.encode
+                   $ fmap (encodeYaml encodeOptions)
                    $ Data.Vector.toList elems
-              _ -> Data.Yaml.encode json
+              _ -> encodeYaml encodeOptions json
 
         Data.ByteString.putStr yaml
+    where
+        encodeYaml = Data.Yaml.encodeWith
+        quotedOptions = Data.Yaml.setStringStyle
+                            customStyle
+                            Data.Yaml.defaultEncodeOptions
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler

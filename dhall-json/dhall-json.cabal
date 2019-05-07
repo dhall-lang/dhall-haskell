@@ -69,6 +69,7 @@ Executable dhall-to-yaml
         dhall-json                             ,
         optparse-applicative                   ,
         yaml                 >= 0.5.0 && < 0.12,
+        libyaml                                ,
         vector                                 ,
         text
     GHC-Options: -Wall
