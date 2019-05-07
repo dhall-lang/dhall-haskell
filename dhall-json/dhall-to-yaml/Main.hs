@@ -65,8 +65,6 @@ parserInfo =
         <>  Options.Applicative.progDesc "Compile Dhall to YAML"
         )
 
-customStyle = \s -> ( Text.Libyaml.NoTag, Text.Libyaml.SingleQuoted )
-
 main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
@@ -91,6 +89,9 @@ main = do
         Data.ByteString.putStr yaml
     where
         encodeYaml = Data.Yaml.encodeWith
+
+        customStyle = \_ -> ( Text.Libyaml.NoTag, Text.Libyaml.SingleQuoted )
+
         quotedOptions = Data.Yaml.setStringStyle
                             customStyle
                             Data.Yaml.defaultEncodeOptions
