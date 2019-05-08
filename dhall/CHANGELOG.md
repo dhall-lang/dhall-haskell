@@ -1,3 +1,49 @@
+1.22.1
+
+* BUG FIX: Fix marshaling union literals
+    * 1.22.0 introduced two separate bugs in marshaling union literals between
+      Dhall and Haskell, which this release fixes:
+        * Dhall enums did not correctly map onto Haskell enums
+        * New-style union literals (i.e. `< A : T >.A x`) were not correctly
+          supported
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/918
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/927
+* BUG FIX: Fix α-normalization
+    * Version 1.22.0 introduced a new faster evaluation algorithm, but the new
+      algorithm introduced two α-normalization regression, which this release
+      fixes
+    * The primary effect of this bug was that semantic integrity checks would
+      fail for expressions that contain an `if`/`then`/else` expression in their
+      normal form
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/931
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/938
+* BUG FIX: Fix merging of sort-level record types
+    * The language standard requires that `{ a : Kind } ⩓ { b : Kind }` is
+      valid, which this change fixes
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/891
+* BUG FIX: `dhall freeze` respects the `--ascii` flag
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/934
+* BUG FIX: Don't autocomplete fields for record types
+    * This prevents the REPL from expanding `{ x : T }.<TAB>` to `{ x : T }.x`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/937
+* Support GHC 8.8
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/912
+* Add `cross` flag to simplify cross-compilation
+    * This allows the `dhall` package to be built without using
+      `TemplateHaskell`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/928
+* Increase lines of context for error messages 
+    * Error messages now provide at least 20 lines of context instead of 3
+      before truncating large expressions
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/916
+* Add line numbers to error messages
+    * The bottom of every Dhall type error includes the original source code,
+      which now has line numbers on the left margin
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/919
+* Expand lower bounds on `megaparsec`/`transformers-compat` dependencies
+    * This is to support `dhall` on Debian Sid
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/939
+
 1.22.0
 
 * Supports version 7.0.0 of the standard
