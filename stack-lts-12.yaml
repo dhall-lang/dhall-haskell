@@ -17,6 +17,7 @@ extra-deps:
   - haskell-lsp-types-0.8.0.1
   - turtle-1.5.14
   - transformers-compat-0.6.4
+  - yaml-0.10.4.0
 flags:
   transformers-compat:
     five-three: true
