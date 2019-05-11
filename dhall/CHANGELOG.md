@@ -1,6 +1,6 @@
-1.22.1
+1.23.0
 
-* BUG FIX: Fix marshaling union literals
+* BREAKING CHANGE: Fix marshaling union literals
     * 1.22.0 introduced two separate bugs in marshaling union literals between
       Dhall and Haskell, which this release fixes:
         * Dhall enums did not correctly map onto Haskell enums
