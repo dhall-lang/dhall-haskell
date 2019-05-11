@@ -9,7 +9,7 @@ import Control.Monad (when)
 import Data.Aeson (Value)
 import Data.Monoid ((<>))
 import Data.Version (showVersion)
-import Dhall.JSON (Conversion)
+import Dhall.JSON (Conversion, SpecialDoubleMode(..))
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
@@ -27,11 +27,12 @@ import qualified System.Exit
 import qualified System.IO
 
 data Options = Options
-    { explain    :: Bool
-    , pretty     :: Bool
-    , omission   :: Value -> Value
-    , version    :: Bool
-    , conversion :: Conversion
+    { explain                   :: Bool
+    , pretty                    :: Bool
+    , omission                  :: Value -> Value
+    , version                   :: Bool
+    , conversion                :: Conversion
+    , approximateSpecialDoubles :: Bool
     }
 
 parseOptions :: Parser Options
@@ -42,6 +43,7 @@ parseOptions =
     <*> Dhall.JSON.parseOmission
     <*> parseVersion
     <*> Dhall.JSON.parseConversion
+    <*> parseApproximateSpecialDoubles
   where
     parseExplain =
         Options.Applicative.switch
@@ -75,6 +77,12 @@ parseOptions =
             <>  Options.Applicative.help "Display version"
             )
 
+    parseApproximateSpecialDoubles =
+        Options.Applicative.switch
+            (   Options.Applicative.long "approximate-special-doubles"
+            <>  Options.Applicative.help "Use approximate representation for NaN/±Infinity"
+            )
+
 parserInfo :: ParserInfo Options
 parserInfo =
     Options.Applicative.info
@@ -106,9 +114,14 @@ main = do
 
         let explaining = if explain then Dhall.detailed else id
 
+        let specialDoubleMode =
+                if approximateSpecialDoubles
+                then ApproximateWithinJSON
+                else ForbidWithinJSON
+
         stdin <- Data.Text.IO.getContents
 
-        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion "(stdin)" stdin)
+        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode "(stdin)" stdin)
 
         Data.ByteString.Char8.putStrLn $ Data.ByteString.Lazy.toStrict $ encode json
 
