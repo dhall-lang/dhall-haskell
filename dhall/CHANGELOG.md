@@ -8,6 +8,7 @@
           supported
     * See: https://github.com/dhall-lang/dhall-haskell/pull/918
     * See: https://github.com/dhall-lang/dhall-haskell/pull/927
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/936
 * BUG FIX: Fix α-normalization
     * Version 1.22.0 introduced a new faster evaluation algorithm, but the new
       algorithm introduced two α-normalization regression, which this release
