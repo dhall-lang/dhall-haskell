@@ -27,7 +27,7 @@
 * BUG FIX: Don't autocomplete fields for record types
     * This prevents the REPL from expanding `{ x : T }.<TAB>` to `{ x : T }.x`
     * See: https://github.com/dhall-lang/dhall-haskell/pull/937
-* Support GHC 8.8
+* Support `MonadFail`-related changes in GHC 8.8
     * See: https://github.com/dhall-lang/dhall-haskell/pull/912
 * Add `cross` flag to simplify cross-compilation
     * This allows the `dhall` package to be built without using
