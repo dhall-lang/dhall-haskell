@@ -102,6 +102,8 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/concatSep
     dhall-lang/Prelude/Text/package.dhall
     dhall-lang/Prelude/Text/show
+    dhall-lang/tests/binary-decode/success/unit/*.dhall
+    dhall-lang/tests/binary-decode/success/unit/*.dhallb
     dhall-lang/tests/import/data/*.txt
     dhall-lang/tests/import/data/*.dhall
     dhall-lang/tests/import/data/fieldOrder/*.dhall
