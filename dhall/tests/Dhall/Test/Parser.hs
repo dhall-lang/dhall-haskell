@@ -3,6 +3,8 @@
 module Dhall.Test.Parser where
 
 import Data.Text (Text)
+import Dhall.Core (Expr, Import)
+import Dhall.TypeCheck (X)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
@@ -22,6 +24,9 @@ import qualified Turtle
 
 parseDirectory :: FilePath
 parseDirectory = "./dhall-lang/tests/parser"
+
+binaryDecodeDirectory :: FilePath
+binaryDecodeDirectory = "./dhall-lang/tests/binary-decode"
 
 getTests :: IO TestTree
 getTests = do
@@ -72,10 +77,17 @@ getTests = do
     failureTests <- do
         Test.Util.discover (Turtle.chars <> ".dhall") shouldNotParse failureFiles
 
+    let binaryDecodeFiles =
+            Turtle.lstree (binaryDecodeDirectory </> "success")
+
+    binaryDecodeTests <- do
+        Test.Util.discover (Turtle.chars <* "A.dhallb") shouldDecode binaryDecodeFiles
+
     let testTree =
             Tasty.testGroup "parser tests"
                 [ successTests
                 , failureTests
+                , binaryDecodeTests
                 ]
 
     return testTree
@@ -108,3 +120,26 @@ shouldNotParse path = do
         case Parser.exprFromText mempty text of
             Left  _ -> return ()
             Right _ -> fail "Unexpected successful parser" )
+
+shouldDecode :: Text -> TestTree
+shouldDecode pathText = do
+    let pathString = Text.unpack pathText
+
+    Tasty.HUnit.testCase pathString (do
+        bytes <- ByteString.Lazy.readFile (pathString <> "A.dhallb")
+
+        term <- Core.throws (Serialise.deserialiseOrFail bytes)
+
+        decodedExpression <- Core.throws (Binary.decodeExpression term)
+
+        text <- Text.IO.readFile (pathString <> "B.dhall")
+
+        parsedExpression <- Core.throws (Parser.exprFromText mempty text)
+
+        let strippedExpression :: Expr X Import
+            strippedExpression = Core.denote parsedExpression
+
+        let message =
+                "The decoded expression didn't match the parsed expression"
+
+        Tasty.HUnit.assertEqual message decodedExpression strippedExpression )
