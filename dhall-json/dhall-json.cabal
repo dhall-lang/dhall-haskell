@@ -35,10 +35,13 @@ Library
     Build-Depends:
         base                      >= 4.8.0.0  && < 5   ,
         aeson                     >= 1.0.0.0  && < 1.5 ,
+        bytestring                               < 0.11,
         dhall                     >= 1.22.0   && < 1.24,
         optparse-applicative      >= 0.14.0.0 && < 0.15,
         text                      >= 0.11.1.0 && < 1.3 ,
-        unordered-containers                     < 0.3
+        unordered-containers                     < 0.3 ,
+        vector                                         ,
+        yaml                      >= 0.5.0    && < 0.12
     Exposed-Modules: Dhall.JSON
     GHC-Options: -Wall
 
@@ -68,8 +71,6 @@ Executable dhall-to-yaml
         dhall                                  ,
         dhall-json                             ,
         optparse-applicative                   ,
-        yaml                 >= 0.5.0 && < 0.12,
-        vector                                 ,
         text
     GHC-Options: -Wall
 

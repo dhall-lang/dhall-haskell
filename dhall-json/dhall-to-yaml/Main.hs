@@ -12,10 +12,6 @@ import Options.Applicative (Parser, ParserInfo)
 import qualified Control.Exception
 import qualified Data.ByteString
 import qualified Data.Text.IO
-import qualified Data.Text
-import qualified Data.Vector
-import qualified Data.Yaml
-import qualified Text.Libyaml
 import qualified Dhall
 import qualified Dhall.JSON
 import qualified GHC.IO.Encoding
@@ -74,34 +70,14 @@ main = do
 
     handle $ do
         let explaining = if explain then Dhall.detailed else id
-        let encodeOptions = if quoted then quotedOptions else Data.Yaml.defaultEncodeOptions
 
         stdin <- Data.Text.IO.getContents
 
         json <- omission <$> explaining (Dhall.JSON.codeToValue conversion "(stdin)" stdin)
 
-        let yaml = case (documents, json) of
-              (True, Data.Yaml.Array elems)
-                -> Data.ByteString.intercalate "\n---\n"
-                   $ fmap (encodeYaml encodeOptions)
-                   $ Data.Vector.toList elems
-              _ -> encodeYaml encodeOptions json
+        let yaml = Dhall.JSON.jsonToYaml json documents quoted
 
         Data.ByteString.putStr yaml
-    where
-        encodeYaml = Data.Yaml.encodeWith
-
-        customStyle = \s -> case () of
-            ()
-                | "\n" `Data.Text.isInfixOf` s -> ( noTag, literal )
-                | otherwise -> ( noTag, Text.Libyaml.SingleQuoted )
-            where
-                noTag = Text.Libyaml.NoTag
-                literal = Text.Libyaml.Literal
-
-        quotedOptions = Data.Yaml.setStringStyle
-                            customStyle
-                            Data.Yaml.defaultEncodeOptions
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler
