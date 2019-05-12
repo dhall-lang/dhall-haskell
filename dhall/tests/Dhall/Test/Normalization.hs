@@ -41,7 +41,7 @@ getTests = do
 
     alphaNormalizationTests <- do
         Test.Util.discover pattern alphaNormalizationTest
-            (Turtle.lstree "./dhall-lang/tests/α-normalization/success/")
+            (Turtle.lstree "./dhall-lang/tests/alpha-normalization/success/")
 
     let unitTestFiles = do
             path <- Turtle.lstree "./dhall-lang/tests/normalization/success/unit"
