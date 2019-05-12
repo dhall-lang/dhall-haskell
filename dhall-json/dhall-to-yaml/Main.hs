@@ -12,8 +12,6 @@ import Options.Applicative (Parser, ParserInfo)
 import qualified Control.Exception
 import qualified Data.ByteString
 import qualified Data.Text.IO
-import qualified Data.Vector
-import qualified Data.Yaml
 import qualified Dhall
 import qualified Dhall.JSON
 import qualified GHC.IO.Encoding
@@ -25,6 +23,7 @@ data Options = Options
     { explain    :: Bool
     , omission   :: Value -> Value
     , documents  :: Bool
+    , quoted     :: Bool
     , conversion :: Conversion
     }
 
@@ -34,6 +33,7 @@ parseOptions =
     <$> parseExplain
     <*> Dhall.JSON.parseOmission
     <*> parseDocuments
+    <*> parseQuoted
     <*> Dhall.JSON.parseConversion
   where
     parseExplain =
@@ -46,6 +46,12 @@ parseOptions =
         Options.Applicative.switch
             (   Options.Applicative.long "documents"
             <>  Options.Applicative.help "If given a Dhall list, output a document for every element"
+            )
+
+    parseQuoted =
+        Options.Applicative.switch
+            (   Options.Applicative.long "quoted"
+            <>  Options.Applicative.help "Prevent from generating not quoted scalars"
             )
 
 parserInfo :: ParserInfo Options
@@ -69,12 +75,7 @@ main = do
 
         json <- omission <$> explaining (Dhall.JSON.codeToValue conversion UseYAMLEncoding "(stdin)" stdin)
 
-        let yaml = case (documents, json) of
-              (True, Data.Yaml.Array elems)
-                -> Data.ByteString.intercalate "\n---\n"
-                   $ fmap Data.Yaml.encode
-                   $ Data.Vector.toList elems
-              _ -> Data.Yaml.encode json
+        let yaml = Dhall.JSON.jsonToYaml json documents quoted
 
         Data.ByteString.putStr yaml
 

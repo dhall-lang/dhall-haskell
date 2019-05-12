@@ -2,7 +2,6 @@ resolver: lts-6.27
 packages:
   - dhall
   - dhall-bash
-  - dhall-json
   - dhall-text
 extra-deps:
 - ansi-terminal-0.7.1.1
@@ -38,6 +37,7 @@ extra-deps:
 - resourcet-1.1.11
 - turtle-1.5.14
 - unliftio-core-0.1.2.0
+- yaml-0.10.4.0
 flags:
   transformers-compat:
     four: true
