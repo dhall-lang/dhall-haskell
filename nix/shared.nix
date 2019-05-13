@@ -605,16 +605,21 @@ let
     dhall-text       = makeStaticIfPossible "dhall-text"      ;
   };
 
-  toDockerImage = package:
+  toDockerImage = name:
     let
-      drv = possibly-static."${package}";
+      image =
+        pkgs.dockerTools.buildImage {
+          inherit name;
+
+          contents = [ possibly-static."${name}" ];
+        };
 
     in
-      pkgs.dockerTools.buildImage {
-        name = package;
-
-        contents = [ drv ];
-      };
+      pkgs.runCommand "image-${name}" {} ''
+        ${pkgs.coreutils}/bin/mkdir --parents "$out/nix-support"
+        ${pkgs.coreutils}/bin/ln --symbolic '${image}' "$out/docker-image-${name}.tar.gz"
+        echo "file source-dist ${image}" >> $out/nix-support/hydra-build-products
+      '';
 
 in
   rec {
