@@ -37,6 +37,9 @@ tests =
             , example 3 "./tests/tutorial/unions3A.dhall" "./tests/tutorial/unions3B.dhall"
             , example 4 "./tests/tutorial/unions4A.dhall" "./tests/tutorial/unions4B.dhall"
             ]
+        , Test.Tasty.testGroup "Dependent Types"
+            [ example 0 "./tests/tutorial/dependent0A.dhall" "./tests/tutorial/dependent0B.dhall"
+            ]
         ]
 
 _Interpolation_0 :: TestTree

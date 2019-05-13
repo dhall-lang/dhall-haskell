@@ -62,16 +62,12 @@ axiom Type = return Kind
 axiom Kind = return Sort
 axiom Sort = Left (TypeError Dhall.Context.empty (Const Sort) Untyped)
 
-rule :: Const -> Const -> Either () Const
-rule Type Type = return Type
-rule Kind Type = return Type
-rule Sort Type = return Type
-rule Kind Kind = return Kind
-rule Sort Kind = return Sort
-rule Sort Sort = return Sort
--- This forbids dependent types. If this ever changes, then the fast
--- path in the Let case of typeWithA will become unsound.
-rule _    _    = Left ()
+rule :: Const -> Const -> Const
+rule _ Type = Type
+rule Sort _ = Sort
+rule _ Sort = Sort
+rule Kind _ = Kind
+rule _ Kind = Kind
 
 {-| Type-check an expression and return the expression's type if type-checking
     succeeds or an error if type-checking fails
@@ -131,10 +127,7 @@ typeWithA tpa = loop
         kB <- case tB of
             Const k -> return k
             _       -> Left (TypeError ctx' e (InvalidOutputType _B))
-
-        case rule kA kB of
-            Left () -> Left (TypeError ctx e (NoDependentTypes _A _B))
-            Right k -> Right (Const k)
+        return (Const (rule kA kB))
     loop ctx e@(App f a         ) = do
         tf <- fmap Dhall.Core.normalize (loop ctx f)
         (x, _A, _B) <- case tf of
@@ -163,8 +156,6 @@ typeWithA tpa = loop
                     else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
             Nothing -> return ()
 
-        t <- loop ctx _A1
-
         let a1 = Dhall.Core.normalize a0
         let a2 = Dhall.Core.shift 1 (V x 0) a1
 
@@ -172,27 +163,9 @@ typeWithA tpa = loop
                 []       -> b0
                 l' : ls' -> Let (l' :| ls') b0
 
-        -- The catch-all branch directly implements the Dhall
-        -- specification as written; it is necessary to substitute in
-        -- types in order to get 'dependent let' behaviour and to
-        -- allow type synonyms (see #69). However, doing a full
-        -- substitution is slow if the value is large and used many
-        -- times. If the value being substitued in is a term (i.e.,
-        -- its type is a Type), then we can get a very significant
-        -- speed-up by doing the type-checking once at binding-time,
-        -- as opposed to doing it at every use site (see #412).
-        case Dhall.Core.normalize t of
-          Const Type -> do
-            let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A1) ctx)
-            _B0 <- loop ctx' rest
-            let _B1 = Dhall.Core.subst (V x 0) a2 _B0
-            let _B2 = Dhall.Core.shift (-1) (V x 0) _B1
-            return _B2
-
-          _ -> do
-            let b1 = Dhall.Core.subst (V x 0) a2 rest
-            let b2 = Dhall.Core.shift (-1) (V x 0) b1
-            loop ctx b2
+        let b1 = Dhall.Core.subst (V x 0) a2 rest
+        let b2 = Dhall.Core.shift (-1) (V x 0) b1
+        loop ctx b2
 
     loop ctx e@(Annot x t       ) = do
         _ <- loop ctx t
@@ -262,18 +235,8 @@ typeWithA tpa = loop
         case tx of
             Bool -> return ()
             _    -> Left (TypeError ctx e (InvalidPredicate x tx))
-        ty  <- fmap Dhall.Core.normalize (loop ctx y )
-        tty <- fmap Dhall.Core.normalize (loop ctx ty)
-        case tty of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (IfBranchMustBeTerm True y ty tty))
-
+        ty <- fmap Dhall.Core.normalize (loop ctx y)
         tz <- fmap Dhall.Core.normalize (loop ctx z)
-        ttz <- fmap Dhall.Core.normalize (loop ctx tz)
-        case ttz of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (IfBranchMustBeTerm False z tz ttz))
-
         if Dhall.Core.judgmentallyEqual ty tz
             then return ()
             else Left (TypeError ctx e (IfBranchMismatch y z ty tz))
@@ -864,7 +827,6 @@ data TypeMessage s a
     | InvalidSome (Expr s a) (Expr s a) (Expr s a)
     | InvalidPredicate (Expr s a) (Expr s a)
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
-    | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
     | InvalidField Text (Expr s a)
     | InvalidFieldType Text (Expr s a)
     | FieldAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
@@ -901,7 +863,6 @@ data TypeMessage s a
     | CantListAppend (Expr s a) (Expr s a)
     | CantAdd (Expr s a) (Expr s a)
     | CantMultiply (Expr s a) (Expr s a)
-    | NoDependentTypes (Expr s a) (Expr s a)
     deriving (Show)
 
 shortTypeMessage :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> Doc Ann
@@ -1665,93 +1626,6 @@ prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
       where
         txt0 = insert expr0
         txt1 = insert expr1
-
-prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
-    ErrorMessages {..}
-  where
-    short = "❰if❱ branch is not a term"
-
-    long =
-        "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
-        \is an expression:                                                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \                   Expression for ❰then❱ branch                                 \n\
-        \                   ⇩                                                            \n\
-        \    ┌────────────────────────────────┐                                          \n\
-        \    │ if True then \"Hello, world!\"   │                                        \n\
-        \    │         else \"Goodbye, world!\" │                                        \n\
-        \    └────────────────────────────────┘                                          \n\
-        \                   ⇧                                                            \n\
-        \                   Expression for ❰else❱ branch                                 \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \These expressions must be a “term”, where a “term” is defined as an expression  \n\
-        \that has a type thas has kind ❰Type❱                                            \n\
-        \                                                                                \n\
-        \For example, the following expressions are all valid “terms”:                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────┐                                                      \n\
-        \    │ 1 : Natural : Type │  ❰1❱ is a term with a type (❰Natural❱) of kind ❰Type❱\n\
-        \    └────────────────────┘                                                      \n\
-        \      ⇧                                                                         \n\
-        \      term                                                                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────────┐                                     \n\
-        \    │ Natural/odd : Natural → Bool : Type │  ❰Natural/odd❱ is a term with a type\n\
-        \    └─────────────────────────────────────┘  (❰Natural → Bool❱) of kind ❰Type❱  \n\
-        \      ⇧                                                                         \n\
-        \      term                                                                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, the following expressions are " <> _NOT <> " valid terms:              \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────┐                                                      \n\
-        \    │ Text : Type : Kind │  ❰Text❱ has kind (❰Type❱) of sort ❰Kind❱ and is      \n\
-        \    └────────────────────┘  therefore not a term                                \n\
-        \      ⇧                                                                         \n\
-        \      type                                                                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ List : Type → Type : Kind │  ❰List❱ has kind (❰Type → Type❱) of sort      \n\
-        \    └───────────────────────────┘  ❰Kind❱ and is therefore not a term           \n\
-        \      ⇧                                                                         \n\
-        \      type-level function                                                       \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \This means that you cannot define an ❰if❱ expression that returns a type.  For  \n\
-        \example, the following ❰if❱ expression is " <> _NOT <> " valid:                 \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────┐                                             \n\
-        \    │ if True then Text else Bool │  Invalid ❰if❱ expression                    \n\
-        \    └─────────────────────────────┘                                             \n\
-        \                   ⇧         ⇧                                                  \n\
-        \                   type      type                                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Your ❰" <> txt0 <> "❱ branch of your ❰if❱ expression is:                        \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which has kind:                                                             \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n\
-        \                                                                                \n\
-        \... of sort:                                                                    \n\
-        \                                                                                \n\
-        \" <> txt3 <> "\n\
-        \                                                                                \n\
-        \... and is not a term.  Therefore your ❰if❱ expression is not valid             \n"
-      where
-        txt0 = if b then "then" else "else"
-        txt1 = insert expr0
-        txt2 = insert expr1
-        txt3 = insert expr2
 
 prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     ErrorMessages {..}
@@ -3615,46 +3489,6 @@ prettyTypeMessage (CantAdd expr0 expr1) =
 
 prettyTypeMessage (CantMultiply expr0 expr1) =
         buildNaturalOperator "*" expr0 expr1
-
-prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
-  where
-    short = "No dependent types"
-
-    long =
-        "Explanation: The Dhall programming language does not allow functions from terms \n\
-        \to types.  These function types are also known as “dependent function types”    \n\
-        \because you have a type whose value “depends” on the value of a term.           \n\
-        \                                                                                \n\
-        \For example, this is " <> _NOT <> " a legal function type:                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────┐                                                             \n\
-        \    │ Bool → Type │                                                             \n\
-        \    └─────────────┘                                                             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Similarly, this is " <> _NOT <> " legal code:                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────────────────────┐                       \n\
-        \    │ λ(Vector : Natural → Type → Type) → Vector 0 Text │                       \n\
-        \    └───────────────────────────────────────────────────┘                       \n\
-        \                 ⇧                                                              \n\
-        \                 Invalid dependent type                                         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Your function type is invalid because the input has type:                       \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... and the output has kind:                                                    \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which makes this a forbidden dependent function type                        \n"
-      where
-        txt0 = insert expr0
-        txt1 = insert expr1
 
 buildBooleanOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
 buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
