@@ -618,7 +618,7 @@ let
       pkgs.runCommand "image-${name}" {} ''
         ${pkgs.coreutils}/bin/mkdir --parents "$out/nix-support"
         ${pkgs.coreutils}/bin/ln --symbolic '${image}' "$out/docker-image-${name}.tar.gz"
-        echo "file source-dist $out/docker-image-${name}.tar.gz" >> $out/nix-support/hydra-build-products
+        echo "file binary-dist $out/docker-image-${name}.tar.gz" >> $out/nix-support/hydra-build-products
       '';
 
 in
