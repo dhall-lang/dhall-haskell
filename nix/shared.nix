@@ -596,20 +596,29 @@ let
     # Benchmark dependencies aren't added by default
     (pkgs.haskell.lib.doBenchmark drv).env;
 
+  possibly-static = {
+    dhall            = makeStaticIfPossible "dhall"           ;
+    dhall-bash       = makeStaticIfPossible "dhall-bash"      ;
+    dhall-json       = makeStaticIfPossible "dhall-json"      ;
+    dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
+    dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
+    dhall-text       = makeStaticIfPossible "dhall-text"      ;
+  };
+
+  toDockerImage = package:
+    let
+      drv = possibly-static."${package}";
+
+    in
+      pkgs.dockerTools.buildImage {
+        name = package;
+
+        contents = [ drv ];
+      };
+
 in
   rec {
-    inherit trivial;
-
-    inherit pkgs;
-
-    possibly-static = {
-      dhall            = makeStaticIfPossible "dhall"           ;
-      dhall-bash       = makeStaticIfPossible "dhall-bash"      ;
-      dhall-json       = makeStaticIfPossible "dhall-json"      ;
-      dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
-      dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
-      dhall-text       = makeStaticIfPossible "dhall-text"      ;
-    };
+    inherit trivial pkgs possibly-static;
 
     tarball-dhall            = makeTarball "dhall"           ;
     tarball-dhall-bash       = makeTarball "dhall-bash"      ;
@@ -631,6 +640,13 @@ in
     shell-dhall-nix        = toShell pkgs.haskell.packages."${compiler}".dhall-nix       ;
     shell-dhall-text       = toShell pkgs.haskell.packages."${compiler}".dhall-text      ;
     shell-dhall-try        = toShell pkgs.haskell.packages."${compiler}".dhall-try       ;
+
+    image-dhall            = toDockerImage "dhall"           ;
+    image-dhall-bash       = toDockerImage "dhall-bash"      ;
+    image-dhall-json       = toDockerImage "dhall-json"      ;
+    image-dhall-lsp-server = toDockerImage "dhall-lsp-server";
+    image-dhall-nix        = toDockerImage "dhall-nix"       ;
+    image-dhall-text       = toDockerImage "dhall-text"      ;
 
     test-dhall =
       pkgs.mkShell
