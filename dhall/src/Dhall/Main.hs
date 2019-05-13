@@ -262,6 +262,7 @@ getExpression :: Maybe FilePath -> IO (Expr Src Import)
 getExpression maybeFile = do
     inText <- do
         case maybeFile of
+            Just "-"  -> Data.Text.IO.getContents
             Just file -> Data.Text.IO.readFile file
             Nothing   -> Data.Text.IO.getContents
 
@@ -290,8 +291,9 @@ command (Options {..}) = do
                 (Dhall.Import.emptyStatus file)
           where
             file = case maybeFile of
-                Just f  -> f
-                Nothing -> "."
+                Just "-" -> "."
+                Just f   -> f
+                Nothing  -> "."
 
     let handle =
                 Control.Exception.handle handler2
