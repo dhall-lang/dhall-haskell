@@ -28,7 +28,6 @@ import Dhall.Core
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
-import qualified Dhall.Core
 import qualified Dhall.Util
 import qualified Network.URI.Encode               as URI.Encode
 
@@ -239,7 +238,7 @@ fetchFromHttpUrl
     -> StateT (Status m) IO (String, Text.Text)
 #ifdef __GHCJS__
 fetchFromHttpUrl childURL Nothing = do
-    let childURLText = Dhall.Core.pretty childURL
+    let childURLText = renderURL childURL
 
     let childURLString = Text.unpack childURLText
 
@@ -256,7 +255,7 @@ fetchFromHttpUrl _ _ = do
     fail "Dhall does not yet support custom headers when built using GHCJS"
 #else
 fetchFromHttpUrl childURL mheaders = do
-    let childURLString = Text.unpack (Dhall.Core.pretty childURL)
+    let childURLString = Text.unpack (renderURL childURL)
 
     m <- needManager
 
