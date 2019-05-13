@@ -57,6 +57,36 @@ $ nix-env -i "$(curl -L https://hydra.dhall-lang.org/job/dhall-haskell/master/li
 These instructions also work for any pull request, too, by replacing `master`
 with the pull request number for any of the above URLs.
 
+## Pre-built containers
+
+You can download pre-built `docker` image archives for each package using the
+following URLs:
+
+* [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall/latest/download/1/docker-image-dhall.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall/latest/download/1/docker-image-dhall.tar.gz)
+* [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-bash/latest/download/1/docker-image-dhall-bash.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-bash/latest/download/1/docker-image-dhall-bash.tar.gz)
+* [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-json/latest/download/1/docker-image-dhall-json.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-json/latest/download/1/docker-image-dhall-json.tar.gz)
+* [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-lsp-server/latest/download/1/docker-image-dhall-lsp-server.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-lsp-server/latest/download/1/docker-image-dhall-lsp-server.tar.gz)
+* [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-nix/latest/download/1/docker-image-dhall-nix.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-nix/latest/download/1/docker-image-dhall-nix.tar.gz)
+* [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-text/latest/download/1/docker-image-dhall-text.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-text/latest/download/1/docker-image-dhall-text.tar.gz)
+
+You can then load and run one of these archives like so:
+
+```
+$ NAME="dhall"
+
+$ curl --location --remote-name "https://hydra.dhall-lang.org/job/dhall-haskell/master/image-${NAME}/latest/download/1/docker-image-${NAME}.tar.gz"
+
+$ docker load < "docker-image-${NAME}.tar.gz"
+...
+Loaded image: dhall:vx95jiijmp2i07f5ynl8h6sllf34jggz
+
+$ docker run -i dhall:vx95jiijmp2i07f5ynl8h6sllf34jggz dhall <<< '2 + 2'
+4
+```
+
+These instructions also work for any pull request, too, by replacing `master`
+with the pull request number for any of the above URLs.
+
 ## Building from source
 
 For all of the following instructions, make sure to first check out the
