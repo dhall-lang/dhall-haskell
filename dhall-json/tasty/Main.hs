@@ -23,6 +23,8 @@ testTree :: TestTree
 testTree =
     Test.Tasty.testGroup "dhall-json"
         [ issue48
+        , yamlQuotedStrings
+        , yaml
         ]
 
 issue48 :: TestTree
@@ -58,5 +60,61 @@ issue48 = Test.Tasty.HUnit.testCase "Issue #48" assertion
 
         let message =
                 "Conversion to homogeneous maps did not generate the expected JSON output"
+
+        Test.Tasty.HUnit.assertEqual message expectedValue actualValue
+
+yamlQuotedStrings :: TestTree
+yamlQuotedStrings = Test.Tasty.HUnit.testCase "Yaml: quoted string style" assertion
+  where
+    assertion = do
+        let file = "./tasty/data/yaml.dhall"
+
+        code <- Data.Text.IO.readFile file
+
+        parsedExpression <- case Dhall.Parser.exprFromText file code of
+            Left  exception        -> Control.Exception.throwIO exception
+            Right parsedExpression -> return parsedExpression
+
+        resolvedExpression <- Dhall.Import.load parsedExpression
+
+        jsonValue <- case Dhall.JSON.dhallToJSON resolvedExpression of
+            Left  exception   -> Control.Exception.throwIO exception
+            Right jsonValue -> return jsonValue
+
+        let actualValue = Dhall.JSON.jsonToYaml jsonValue False True
+
+        bytes <- Data.ByteString.Lazy.readFile "./tasty/data/quoted.yaml"
+        let expectedValue = Data.ByteString.Lazy.toStrict bytes
+
+        let message =
+                "Conversion to quoted yaml did not generate the expected output"
+
+        Test.Tasty.HUnit.assertEqual message expectedValue actualValue
+
+yaml :: TestTree
+yaml = Test.Tasty.HUnit.testCase "Yaml: normal string style" assertion
+  where
+    assertion = do
+        let file = "./tasty/data/yaml.dhall"
+
+        code <- Data.Text.IO.readFile file
+
+        parsedExpression <- case Dhall.Parser.exprFromText file code of
+            Left  exception        -> Control.Exception.throwIO exception
+            Right parsedExpression -> return parsedExpression
+
+        resolvedExpression <- Dhall.Import.load parsedExpression
+
+        jsonValue <- case Dhall.JSON.dhallToJSON resolvedExpression of
+            Left  exception   -> Control.Exception.throwIO exception
+            Right jsonValue -> return jsonValue
+
+        let actualValue = Dhall.JSON.jsonToYaml jsonValue False False
+
+        bytes <- Data.ByteString.Lazy.readFile "./tasty/data/normal.yaml"
+        let expectedValue = Data.ByteString.Lazy.toStrict bytes
+
+        let message =
+                "Conversion to normal yaml did not generate the expected output"
 
         Test.Tasty.HUnit.assertEqual message expectedValue actualValue

@@ -165,7 +165,10 @@ module Dhall.JSON (
     , Conversion(..)
     , convertToHomogeneousMaps
     , parseConversion
+    , SpecialDoubleMode(..)
+    , handleSpecialDoubles
     , codeToValue
+    , jsonToYaml
 
     -- * Exceptions
     , CompileError(..)
@@ -182,17 +185,22 @@ import Dhall.TypeCheck (X)
 import Dhall.Map (Map)
 import Options.Applicative (Parser)
 
+import qualified Control.Lens
+import qualified Data.ByteString
 import qualified Data.Foldable
 import qualified Data.HashMap.Strict
 import qualified Data.List
 import qualified Data.Ord
 import qualified Data.Text
+import qualified Data.Vector
+import qualified Data.Yaml
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
+import qualified Text.Libyaml
 
 {-| This is the exception type for errors that might arise when translating
     Dhall to JSON
@@ -202,6 +210,7 @@ import qualified Options.Applicative
 -}
 data CompileError
     = Unsupported (Expr X X)
+    | SpecialDouble Double
     | BareNone
 
 instance Show CompileError where
@@ -228,6 +237,26 @@ instance Show CompileError where
             \                                                                                \n\
             \                                                                                \n\
             \The conversion to JSON/YAML only translates the fully applied form to ❰null❱.   "
+
+    show (SpecialDouble n) =
+       Data.Text.unpack $
+            _ERROR <> ": " <> special <> " disallowed in JSON                                         \n\
+            \                                                                                \n\
+            \Explanation: The JSON standard does not define a canonical way to encode        \n\
+            \❰NaN❱/❰Infinity❱/❰-Infinity❱.  You can fix this error by either:                \n\
+            \                                                                                \n\
+            \● Using ❰dhall-to-yaml❱ instead of ❰dhall-to-json❱, since YAML does support     \n\
+            \  ❰NaN❱/❰Infinity❱/❰-Infinity❱                                                  \n\
+            \                                                                                \n\
+            \● Enabling the ❰--approximate-special-doubles❱ flag which will encode ❰NaN❱ as  \n\
+            \  ❰null❱, ❰Infinity❱ as the maximum ❰Double❱, and ❰-Infinity❱ as the minimum    \n\
+            \❰Double❱                                                                        \n\
+            \                                                                                \n\
+            \● See if there is a way to remove ❰NaN❱/❰Infinity❱/❰-Infinity❱ from the         \n\
+            \  expression that you are converting to JSON                                    "
+      where
+        special = Data.Text.pack (show n)
+
     show (Unsupported e) =
         Data.Text.unpack $
             _ERROR <> ": Cannot translate to JSON                                            \n\
@@ -256,17 +285,16 @@ Right (Object (fromList [("foo",Number 1.0),("bar",String "ABC")]))
 >>> fmap Data.Aeson.encode it
 Right "{\"foo\":1,\"bar\":\"ABC\"}"
 -}
-dhallToJSON :: Expr s X -> Either CompileError Value
+dhallToJSON
+    :: Expr s X
+    -> Either CompileError Value
 dhallToJSON e0 = loop (Dhall.Core.normalize e0)
   where
     loop e = case e of 
         Dhall.Core.BoolLit a -> return (toJSON a)
         Dhall.Core.NaturalLit a -> return (toJSON a)
         Dhall.Core.IntegerLit a -> return (toJSON a)
-        Dhall.Core.DoubleLit a
-          | isInfinite a && a > 0 -> return (toJSON ( 1.7976931348623157e308 :: Double))
-          | isInfinite a && a < 0 -> return (toJSON (-1.7976931348623157e308 :: Double))
-          | otherwise -> return (toJSON a)
+        Dhall.Core.DoubleLit a -> return (toJSON a)
         Dhall.Core.TextLit (Dhall.Core.Chunks [] a) -> do
             return (toJSON a)
         Dhall.Core.ListLit _ a -> do
@@ -791,6 +819,55 @@ parseConversion =
             <>  Options.Applicative.help "Disable conversion of association lists to homogeneous maps"
             )
 
+-- | This option specifies how to encode @NaN@\/@Infinity@\/@-Infinity@
+data SpecialDoubleMode
+    = UseYAMLEncoding
+    -- ^ YAML natively supports @NaN@\/@Infinity@\/@-Infinity@
+    | ForbidWithinJSON
+    -- ^ Forbid @NaN@\/@Infinity@\/@-Infinity@ because JSON doesn't support them
+    | ApproximateWithinJSON
+    -- ^ Encode @NaN@\/@Infinity@\/@-Infinity@ as
+    --   @null@\/@1.7976931348623157e308@\/@-1.7976931348623157e308@,
+    --   respectively
+
+{-| Pre-process an expression containing @NaN@\/@Infinity@\/@-Infinity@,
+    handling them as specified according to the `SpecialDoubleMode`
+-}
+handleSpecialDoubles
+    :: SpecialDoubleMode -> Expr s X -> Either CompileError (Expr s X)
+handleSpecialDoubles specialDoubleMode =
+    Control.Lens.rewriteMOf Dhall.Core.subExpressions rewrite
+  where
+    rewrite =
+        case specialDoubleMode of
+            UseYAMLEncoding       -> useYAMLEncoding
+            ForbidWithinJSON      -> forbidWithinJSON
+            ApproximateWithinJSON -> approximateWithinJSON
+
+    useYAMLEncoding (Dhall.Core.DoubleLit n)
+        | isInfinite n && 0 < n =
+            return (Just (Dhall.Core.TextLit (Dhall.Core.Chunks [] "inf")))
+        | isInfinite n && n < 0 =
+            return (Just (Dhall.Core.TextLit (Dhall.Core.Chunks [] "-inf")))
+        | isNaN n =
+            return (Just (Dhall.Core.TextLit (Dhall.Core.Chunks [] "nan")))
+    useYAMLEncoding _ =
+        return Nothing
+
+    forbidWithinJSON (Dhall.Core.DoubleLit n)
+        | isInfinite n || isNaN n =
+            Left (SpecialDouble n)
+    forbidWithinJSON _ =
+        return Nothing
+
+    approximateWithinJSON (Dhall.Core.DoubleLit n)
+        | isInfinite n && n > 0 =
+            return (Just (Dhall.Core.DoubleLit ( 1.7976931348623157e308 :: Double)))
+        | isInfinite n && n < 0 =
+            return (Just (Dhall.Core.DoubleLit (-1.7976931348623157e308 :: Double)))
+        -- Do nothing for @NaN@, which already encodes to @null@
+    approximateWithinJSON _ =
+        return Nothing
 
 {-| Convert a piece of Text carrying a Dhall inscription to an equivalent JSON Value
 
@@ -801,23 +878,53 @@ parseConversion =
 -}
 codeToValue
   :: Conversion
+  -> SpecialDoubleMode
   -> Text  -- ^ Describe the input for the sake of error location.
   -> Text  -- ^ Input text.
   -> IO Value
-codeToValue conversion name code = do
-    parsedExpression <- case Dhall.Parser.exprFromText (Data.Text.unpack name) code of
-      Left  err              -> Control.Exception.throwIO err
-      Right parsedExpression -> return parsedExpression
+codeToValue conversion specialDoubleMode name code = do
+    parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Data.Text.unpack name) code)
 
     resolvedExpression <- Dhall.Import.load parsedExpression
 
-    case Dhall.TypeCheck.typeOf resolvedExpression  of
-      Left  err -> Control.Exception.throwIO err
-      Right _   -> return ()
+    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
     let convertedExpression =
             convertToHomogeneousMaps conversion resolvedExpression
 
-    case dhallToJSON convertedExpression of
+    specialDoubleExpression <- Dhall.Core.throws (handleSpecialDoubles specialDoubleMode convertedExpression)
+
+    case dhallToJSON specialDoubleExpression of
       Left  err  -> Control.Exception.throwIO err
       Right json -> return json
+
+-- | Transform json representation into yaml
+jsonToYaml
+    :: Value
+    -> Bool
+    -> Bool
+    -> Data.ByteString.ByteString
+jsonToYaml json documents quoted = case (documents, json) of
+  (True, Data.Yaml.Array elems)
+    -> Data.ByteString.intercalate "\n---\n"
+       $ fmap (encodeYaml encodeOptions)
+       $ Data.Vector.toList elems
+  _ -> encodeYaml encodeOptions json
+  where
+    encodeYaml = Data.Yaml.encodeWith
+
+    customStyle = \s -> case () of
+        ()
+            | "\n" `Data.Text.isInfixOf` s -> ( noTag, literal )
+            | otherwise -> ( noTag, Text.Libyaml.SingleQuoted )
+        where
+            noTag = Text.Libyaml.NoTag
+            literal = Text.Libyaml.Literal
+
+    quotedOptions = Data.Yaml.setStringStyle
+                        customStyle
+                        Data.Yaml.defaultEncodeOptions
+
+    encodeOptions = if quoted
+        then quotedOptions
+        else Data.Yaml.defaultEncodeOptions

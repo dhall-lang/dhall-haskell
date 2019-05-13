@@ -1,0 +1,5 @@
+bool_value: true
+text: |
+  Plain text
+string_value: 2000-01-01
+int_value: 1
