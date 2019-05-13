@@ -856,6 +856,50 @@ instance FromTerm Import where
 
     decode _ = empty
 
+strip55799Tag :: Term -> Term
+strip55799Tag term =
+    case term of
+        TInt a ->
+            TInt a
+        TInteger a ->
+            TInteger a
+        TBytes a ->
+            TBytes a
+        TBytesI a ->
+            TBytesI a
+        TString a ->
+            TString a
+        TStringI a ->
+            TStringI a
+        TList as ->
+            TList (fmap strip55799Tag as)
+        TListI as ->
+            TListI (fmap strip55799Tag as)
+        TMap as ->
+            TMap (fmap adapt as)
+          where
+            adapt (a, b) = (strip55799Tag a, strip55799Tag b)
+        TMapI as ->
+            TMapI (fmap adapt as)
+          where
+            adapt (a, b) = (strip55799Tag a, strip55799Tag b)
+        TTagged 55799 b ->
+            strip55799Tag b
+        TTagged a b->
+            TTagged a (strip55799Tag b)
+        TBool a ->
+            TBool a
+        TNull ->
+            TNull
+        TSimple a ->
+            TSimple a
+        THalf a ->
+            THalf a
+        TFloat a ->
+            TFloat a
+        TDouble a ->
+            TDouble a
+
 -- | Encode a Dhall expression as a CBOR `Term`
 encodeExpression :: Expr s Import -> Term
 encodeExpression = encode
@@ -867,13 +911,14 @@ decodeExpression term =
         Just expression -> Right expression
         Nothing         -> Left (CBORIsNotDhall term)
   where
+    strippedTerm = strip55799Tag term
     -- This is the behavior specified by the standard
-    decodeWithoutVersion = decode term
+    decodeWithoutVersion = decode strippedTerm
 
     -- For backwards compatibility with older expressions that have a version
     -- tag to ease the migration
     decodeWithVersion = do
-        TList [ TString _, taggedTerm ] <- return term
+        TList [ TString _, taggedTerm ] <- return strippedTerm
         decode taggedTerm
 
 data DecodingFailure = CBORIsNotDhall Term

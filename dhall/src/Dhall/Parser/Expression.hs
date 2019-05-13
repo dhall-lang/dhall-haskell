@@ -660,24 +660,24 @@ localRaw =
   where
     parentPath = do
         _    <- ".." :: Parser Text
-        file <- file_
+        file <- file_ FileComponent
 
         return (Local Parent file)
 
     herePath = do
         _    <- "." :: Parser Text
-        file <- file_
+        file <- file_ FileComponent
 
         return (Local Here file)
 
     homePath = do
         _    <- "~" :: Parser Text
-        file <- file_
+        file <- file_ FileComponent
 
         return (Local Home file)
 
     absolutePath = do
-        file <- file_
+        file <- file_ FileComponent
 
         return (Local Absolute file)
 
@@ -778,10 +778,15 @@ unlinesLiteral :: NonEmpty (Chunks s a) -> Chunks s a
 unlinesLiteral chunks =
     Data.Foldable.fold (Data.List.NonEmpty.intersperse "\n" chunks)
 
-leadingSpaces :: Chunks s a -> Int
-leadingSpaces chunks =
-    Data.Text.length (Data.Text.takeWhile Data.Char.isSpace firstText)
+emptyLine :: Chunks s a -> Bool
+emptyLine (Chunks [] "") = True
+emptyLine  _             = False
+
+leadingSpaces :: Chunks s a -> Text
+leadingSpaces chunks = Data.Text.takeWhile isSpace firstText
   where
+    isSpace c = c == '\x20' || c == '\x09'
+
     firstText =
         case chunks of
             Chunks                []  suffix -> suffix
@@ -799,6 +804,26 @@ toDoubleQuoted literal =
   where
     literals = linesLiteral literal
 
-    l :| ls = literals
+    sharedPrefix ab ac =
+        case Data.Text.commonPrefixes ab ac of
+            Just (a, _b, _c) -> a
+            Nothing          -> ""
 
-    indent = Data.Foldable.foldl' min (leadingSpaces l) (fmap leadingSpaces ls)
+    -- The standard specifies to filter out blank lines for all lines *except*
+    -- for the last line
+    filteredLines = newInit <> pure oldLast
+      where
+        oldInit = Data.List.NonEmpty.init literals
+
+        oldLast = Data.List.NonEmpty.last literals
+
+        newInit = filter (not . emptyLine) oldInit
+
+    longestSharedPrefix =
+        case filteredLines of
+            l : ls ->
+                Data.Foldable.foldl' sharedPrefix (leadingSpaces l) (fmap leadingSpaces ls)
+            [] ->
+                ""
+
+    indent = Data.Text.length longestSharedPrefix
