@@ -6,7 +6,7 @@ module Main where
 import Control.Exception (SomeException)
 import Data.Aeson (Value)
 import Data.Monoid ((<>))
-import Dhall.JSON (Conversion)
+import Dhall.JSON (Conversion, SpecialDoubleMode(..))
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
@@ -73,7 +73,7 @@ main = do
 
         stdin <- Data.Text.IO.getContents
 
-        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion "(stdin)" stdin)
+        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion UseYAMLEncoding "(stdin)" stdin)
 
         let yaml = Dhall.JSON.jsonToYaml json documents quoted
 
