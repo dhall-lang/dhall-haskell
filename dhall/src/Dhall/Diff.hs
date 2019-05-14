@@ -256,9 +256,7 @@ diffKeyVals
     -> Map Text (Expr s a)
     -> Map Text (Expr s a)
     -> [Diff]
-diffKeyVals assign = diffKeysWith assign diffVals
-  where
-    diffVals l r = assign <> " " <> diffExpression l r
+diffKeyVals assign = diffKeysWith assign diffExpression
 
 diffKeysWith
     :: Diff
