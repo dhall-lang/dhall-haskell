@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -35,7 +36,7 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Traversable (forM)
 import Data.Typeable (Typeable)
 import Dhall.Binary (FromTerm(..), ToTerm(..))
-import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
+import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..), pattern Type)
 import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
 
@@ -57,21 +58,17 @@ traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
 traverseWithIndex_ k xs =
     Data.Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
 
-axiom :: Const -> Either (TypeError s a) Const
-axiom Type = return Kind
-axiom Kind = return Sort
-axiom Sort = Left (TypeError Dhall.Context.empty (Const Sort) Untyped)
+axiom :: Const -> Const
+axiom (Universe n) = Universe (succ n)
 
 rule :: Const -> Const -> Either () Const
-rule Type Type = return Type
-rule Kind Type = return Type
-rule Sort Type = return Type
-rule Kind Kind = return Kind
-rule Sort Kind = return Sort
-rule Sort Sort = return Sort
--- This forbids dependent types. If this ever changes, then the fast
--- path in the Let case of typeWithA will become unsound.
-rule _    _    = Left ()
+rule (Universe _) (Universe 0) = return (Universe 0)
+rule (Universe m) (Universe n) =
+  if n <= m
+  then return (Universe (max m n))
+  -- This forbids dependent types. If this ever changes, then the fast
+  -- path in the Let case of typeWithA will become unsound.
+  else Left ()
 
 {-| Type-check an expression and return the expression's type if type-checking
     succeeds or an error if type-checking fails
@@ -105,7 +102,7 @@ typeWithA
 typeWithA tpa = loop
   where
     loop _     (Const c         ) = do
-        fmap Const (axiom c)
+        return (Const (axiom c))
     loop ctx e@(Var (V x n)     ) = do
         case Dhall.Context.lookup x n ctx of
             Nothing -> Left (TypeError ctx e (UnboundVariable x))
@@ -622,14 +619,10 @@ typeWithA tpa = loop
         cR <- case tR of
             Const cR -> return cR
             _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
-        let decide Type Type =
-                return Type
-            decide Kind Kind =
-                return Kind
-            decide Sort Sort =
-                return Sort
-            decide x y =
-                Left (TypeError ctx e (RecordTypeMismatch x y l r))
+        let decide x y =
+                if x == y
+                then return x
+                else Left (TypeError ctx e (RecordTypeMismatch x y l r))
         c <- decide cL cR
 
         ktsL0 <- case l' of
@@ -854,7 +847,6 @@ data TypeMessage s a
     | NotAFunction (Expr s a) (Expr s a)
     | TypeMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | AnnotMismatch (Expr s a) (Expr s a) (Expr s a)
-    | Untyped
     | MissingListType
     | MismatchedListElements Int (Expr s a) (Expr s a) (Expr s a)
     | InvalidListElement Int (Expr s a) (Expr s a) (Expr s a)
@@ -869,7 +861,6 @@ data TypeMessage s a
     | InvalidFieldType Text (Expr s a)
     | FieldAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | FieldMismatch Text (Expr s a) Const Text (Expr s a) Const
-    | InvalidAlternative Text (Expr s a)
     | InvalidAlternativeType Text (Expr s a)
     | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
@@ -1568,42 +1559,6 @@ prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
         txt1 = insert expr1
         txt2 = insert expr2
 
-prettyTypeMessage Untyped = ErrorMessages {..}
-  where
-    short = "❰Sort❱ has no type, kind, or sort"
-
-    long =
-        "Explanation: There are five levels of expressions that form a hierarchy:        \n\
-        \                                                                                \n\
-        \● terms                                                                         \n\
-        \● types                                                                         \n\
-        \● kinds                                                                         \n\
-        \● sorts                                                                         \n\
-        \● orders                                                                        \n\
-        \                                                                                \n\
-        \The following example illustrates this hierarchy:                               \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────┐                                       \n\
-        \    │ \"ABC\" : Text : Type : Kind : Sort │                                     \n\
-        \    └───────────────────────────────────┘                                       \n\
-        \       ⇧      ⇧      ⇧      ⇧      ⇧                                            \n\
-        \       term   type   kind   sort   order                                        \n\
-        \                                                                                \n\
-        \There is nothing above ❰Sort❱ in this hierarchy, so if you try to type check any\n\
-        \expression containing ❰Sort❱ anywhere in the expression then type checking fails\n\
-        \                                                                                \n\
-        \Some common reasons why you might get this error:                               \n\
-        \                                                                                \n\
-        \● You supplied a sort where a kind was expected                                 \n\
-        \                                                                                \n\
-        \  For example, the following expression will fail to type check:                \n\
-        \                                                                                \n\
-        \    ┌──────────────────┐                                                        \n\
-        \    │ f : Type -> Kind │                                                        \n\
-        \    └──────────────────┘                                                        \n\
-        \                  ⇧                                                             \n\
-        \                  ❰Kind❱ is a sort, not a kind                                  \n"
-
 prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
   where
     short = "Invalid predicate for ❰if❱"
@@ -2214,9 +2169,7 @@ prettyTypeMessage (FieldAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessa
         txt2 = insert k1
         txt3 = insert expr1
 
-        level Type = "❰Type❱"
-        level Kind = "❰Kind❱"
-        level Sort = "❰Sort❱"
+        level c = "❰" <> Dhall.Pretty.Internal.prettyConst c <> "❱"
 
 prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
   where
@@ -2272,9 +2225,10 @@ prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
         txt2 = insert k1
         txt3 = insert expr1
 
-        level Type = "term"
-        level Kind = "type"
-        level Sort = "kind"
+        level (Universe 0) = "term"
+        level (Universe 1) = "type"
+        level (Universe 2) = "kind"
+        level (Universe n) = "sort " <> Dhall.Pretty.Internal.prettyNatural n
 
 prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
   where
@@ -2368,48 +2322,6 @@ prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
         txt0 = insert k
         txt1 = insert expr0
 
-prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
-  where
-    short = "Invalid alternative"
-
-    long =
-        "Explanation: Every union literal begins by selecting one alternative and        \n\
-        \specifying the value for that alternative, like this:                           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \        Select the ❰Left❱ alternative, whose value is ❰True❱                    \n\
-        \        ⇩                                                                       \n\
-        \    ┌──────────────────────────────────┐                                        \n\
-        \    │ < Left = True, Right : Natural > │  A union literal with two alternatives \n\
-        \    └──────────────────────────────────┘                                        \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, this value must be a term, type, or kind.  For example, the following  \n\
-        \values are " <> _NOT <> " valid:                                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────┐                                                         \n\
-        \    │ < Left = Sort > │  Invalid union literal                                  \n\
-        \    └─────────────────┘                                                         \n\
-        \               ⇧                                                                \n\
-        \               This is not a term, type, or kind                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \────────────────────────────────────────────────────────────────────────────────\n\
-        \                                                                                \n\
-        \You provided a union literal with an alternative named:                         \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... whose value is:                                                             \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is not a term, type, or kind.                                         \n"
-      where
-        txt0 = insert k
-        txt1 = insert expr0
-
 prettyTypeMessage (AlternativeAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
   where
     short = "Alternative annotation mismatch"
@@ -2470,9 +2382,7 @@ prettyTypeMessage (AlternativeAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = Erro
         txt2 = insert k1
         txt3 = insert expr1
 
-        level Type = "❰Type❱"
-        level Kind = "❰Kind❱"
-        level Sort = "❰Sort❱"
+        level c = "❰" <> Dhall.Pretty.Internal.prettyConst c <> "❱"
 
 prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
   where
@@ -2648,9 +2558,10 @@ prettyTypeMessage (RecordMismatch c expr0 expr1 const0 const1) = ErrorMessages {
         txt0 = insert expr0
         txt1 = insert expr1
 
-        toClass Type = "terms"
-        toClass Kind = "types"
-        toClass Sort = "kinds"
+        toClass (Universe 0) = "terms"
+        toClass (Universe 1) = "types"
+        toClass (Universe 2) = "kinds"
+        toClass (Universe n) = "sorts " <> Dhall.Pretty.Internal.prettyNatural n
 
         class0 = toClass const0
         class1 = toClass const1

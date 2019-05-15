@@ -334,9 +334,9 @@ prettyDouble :: Double -> Doc Ann
 prettyDouble = literal . Pretty.pretty
 
 prettyConst :: Const -> Doc Ann
-prettyConst Type = builtin "Type"
-prettyConst Kind = builtin "Kind"
-prettyConst Sort = builtin "Sort"
+prettyConst (Universe 0) = builtin "Type"
+prettyConst (Universe 1) = builtin "Kind"
+prettyConst (Universe n) = builtin "Sort" <> prettyNatural n
 
 prettyVar :: Var -> Doc Ann
 prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))

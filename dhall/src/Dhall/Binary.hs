@@ -190,12 +190,12 @@ instance ToTerm a => ToTerm (Expr s a) where
         TString "Text/show"
     encode List =
         TString "List"
-    encode (Const Type) =
-        TString "Type"
-    encode (Const Kind) =
-        TString "Kind"
-    encode (Const Sort) =
-        TString "Sort"
+    encode (Const (Universe n)) =
+        case n of
+            0 -> TString "Type"
+            1 -> TString "Kind"
+            2 -> TString "Sort"
+            u -> TList [ TInt 27, TInteger (fromIntegral u) ]
     encode e@(App _ _) =
         TList ([ TInt 0, f₁ ] ++ map encode arguments)
       where
@@ -557,11 +557,15 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TString "List") =
         return List
     decode (TString "Type") =
-        return (Const Type)
+        return (Const (Universe 0))
     decode (TString "Kind") =
-        return (Const Kind)
+        return (Const (Universe 1))
     decode (TString "Sort") =
-        return (Const Sort)
+        return (Const (Universe 2))
+    decode (TList [ TInt 27, TInt n ]) = do
+        return (Const (Universe (fromIntegral n)))
+    decode (TList [ TInt 27, TInteger n ]) =
+        return (Const (Universe (fromInteger n)))
     decode (TString "_") =
         empty
     decode (TList [ TString x, TInt n ]) =

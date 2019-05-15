@@ -71,6 +71,7 @@ import Dhall.Core (
   , Const(..)
   , Import
   , Var(..)
+  , pattern Type
   , denote
   )
 

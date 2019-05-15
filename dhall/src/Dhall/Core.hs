@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE UnicodeSyntax      #-}
@@ -31,6 +32,7 @@ module Dhall.Core (
     , Binding(..)
     , Chunks(..)
     , Expr(..)
+    , pattern Type
 
     -- * Normalization
     , Dhall.Core.alphaNormalize
@@ -104,24 +106,26 @@ import qualified Text.Printf
 
 {-| Constants for a pure type system
 
-    The axioms are:
+    The axiom is:
 
-> ⊦ Type : Kind
-> ⊦ Kind : Sort
+> ⊦ Universe n : Universe (n + 1)
 
     ... and the valid rule pairs are:
 
-> ⊦ Type ↝ Type : Type  -- Functions from terms to terms (ordinary functions)
-> ⊦ Kind ↝ Type : Type  -- Functions from types to terms (type-polymorphic functions)
-> ⊦ Sort ↝ Type : Type  -- Functions from kinds to terms
-> ⊦ Kind ↝ Kind : Kind  -- Functions from types to types (type-level functions)
-> ⊦ Sort ↝ Kind : Sort  -- Functions from kinds to types (kind-polymorphic functions)
-> ⊦ Sort ↝ Sort : Sort  -- Functions from kinds to kinds (kind-level functions)
+> ⊦ Universe _ ↝ Type       : Type       -- predicative functions
+> ⊦ Universe m ↝ Universe n : Universe m -- impredicative functions
+   (when m ≥ n)
 
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
 -}
-data Const = Type | Kind | Sort deriving (Show, Eq, Data, Bounded, Enum, Generic)
+newtype Const = Universe Natural deriving (Show, Eq, Data, Generic)
+
+{-| Universe 0 is the only universe we ever refer to directly (other than for
+    historical compatibility).
+-}
+pattern Type :: Const
+pattern Type = Universe 0
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
