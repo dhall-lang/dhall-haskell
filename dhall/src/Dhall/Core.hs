@@ -1164,8 +1164,8 @@ subst _ _ (Embed p) = Embed p
 {-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
     using De Bruijn indices to distinguish them
 
->>> alphaNormalize (Lam "a" (Const Type) (Lam "b" (Const Type) (Lam "x" "a" (Lam "y" "b" "x"))))
-Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
+>>> alphaNormalize (Lam "a" (Const (Universe 0)) (Lam "b" (Const (Universe 0)) (Lam "x" "a" (Lam "y" "b" "x"))))
+Lam "_" (Const (Universe 0)) (Lam "_" (Const (Universe 0)) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
 
     α-normalization does not affect free variables:
 
