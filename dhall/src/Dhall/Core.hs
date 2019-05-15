@@ -56,6 +56,7 @@ module Dhall.Core (
     , reservedIdentifiers
     , escapeText
     , subExpressions
+    , chunkExprs
     , pathCharacter
     , throws
     ) where
@@ -2044,8 +2045,8 @@ subExpressions _ Double = pure Double
 subExpressions _ (DoubleLit n) = pure (DoubleLit n)
 subExpressions _ DoubleShow = pure DoubleShow
 subExpressions _ Text = pure Text
-subExpressions f (TextLit (Chunks a b)) =
-    TextLit <$> (Chunks <$> traverse (traverse f) a <*> pure b)
+subExpressions f (TextLit chunks) =
+    TextLit <$> chunkExprs f chunks
 subExpressions f (TextAppend a b) = TextAppend <$> f a <*> f b
 subExpressions _ TextShow = pure TextShow
 subExpressions _ List = pure List
@@ -2078,6 +2079,14 @@ subExpressions f (Project a b) = Project <$> f a <*> pure b
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 subExpressions _ (Embed a) = pure (Embed a)
+
+-- | A traversal over the immediate sub-expressions in 'Chunks'.
+chunkExprs
+  :: Applicative f
+  => (Expr s a -> f (Expr t b))
+  -> Chunks s a -> f (Chunks t b)
+chunkExprs f (Chunks chunks final) =
+  flip Chunks final <$> traverse (traverse f) chunks
 
 {-| Returns `True` if the given `Char` is valid within an unquoted path
     component
