@@ -2228,7 +2228,7 @@ prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
         level (Universe 0) = "term"
         level (Universe 1) = "type"
         level (Universe 2) = "kind"
-        level (Universe n) = "sort " <> Dhall.Pretty.Internal.prettyNatural n
+        level (Universe n) = "sort " <> Dhall.Pretty.Internal.prettyNatural (n - 1)
 
 prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
   where
@@ -2561,7 +2561,7 @@ prettyTypeMessage (RecordMismatch c expr0 expr1 const0 const1) = ErrorMessages {
         toClass (Universe 0) = "terms"
         toClass (Universe 1) = "types"
         toClass (Universe 2) = "kinds"
-        toClass (Universe n) = "sorts " <> Dhall.Pretty.Internal.prettyNatural n
+        toClass (Universe n) = "sorts " <> Dhall.Pretty.Internal.prettyNatural (n - 1)
 
         class0 = toClass const0
         class1 = toClass const1
