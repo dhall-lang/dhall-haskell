@@ -12,11 +12,13 @@ module Dhall.Format
     ) where
 
 import Control.Exception (Exception)
+import Control.Monad.IO.Class (MonadIO)
 import Dhall.Parser (exprAndHeaderFromText)
 import Dhall.Pretty (CharacterSet(..), annToAnsiStyle, layoutOpts)
 
 import Data.Monoid ((<>))
 
+import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
@@ -62,49 +64,42 @@ format (Format {..}) =
         Modify {..} ->
             case inplace of
                 Just file -> do
-                    text <- Data.Text.IO.readFile file
+                    prettyPrinted <- Data.Text.IO.readFile file >>= prettyExprSource
 
-                    (header, expr) <- Dhall.Core.throws (exprAndHeaderFromText "(stdin)" text)
-
-                    let doc =   Pretty.pretty header
-                            <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
-                            <>  "\n"
                     System.IO.withFile file System.IO.WriteMode (\handle -> do
-                        Pretty.Terminal.renderIO handle (Pretty.layoutSmart layoutOpts doc))
+                        Pretty.Terminal.renderIO handle prettyPrinted)
                 Nothing -> do
-                    inText <- Data.Text.IO.getContents
-
-                    (header, expr) <- Dhall.Core.throws (exprAndHeaderFromText "(stdin)" inText)
-
-                    let doc =   Pretty.pretty header
-                            <>  Dhall.Pretty.prettyCharacterSet characterSet expr
-                            <>  "\n"
+                    prettyPrinted <- Data.Text.IO.getContents >>= prettyExprSource
 
                     supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
 
-                    if supportsANSI
-                      then
-                        Pretty.Terminal.renderIO
-                          System.IO.stdout
-                          (fmap annToAnsiStyle (Pretty.layoutSmart layoutOpts doc))
-                      else
-                        Pretty.Terminal.renderIO
-                          System.IO.stdout
-                          (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc))
+                    Pretty.Terminal.renderIO
+                      System.IO.stdout
+                      (if supportsANSI
+                           then fmap annToAnsiStyle prettyPrinted
+                           else Pretty.unAnnotateS prettyPrinted)
         Check {..} -> do
             originalText <- case path of
                 Just file -> Data.Text.IO.readFile file
                 Nothing   -> Data.Text.IO.getContents
 
-            (header, expr) <- Dhall.Core.throws (exprAndHeaderFromText "(stdin)" originalText)
-
-            let doc =   Pretty.pretty header
-                    <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
-                    <>  "\n"
+            prettyPrinted <- prettyExprSource originalText
 
             let formattedText =
-                    Pretty.Text.renderStrict (Pretty.layoutSmart layoutOpts doc)
+                    Pretty.Text.renderStrict prettyPrinted
 
             if originalText == formattedText
                 then return ()
                 else Control.Exception.throwIO NotFormatted
+
+  where
+
+    prettyExprSource :: MonadIO m => Data.Text.Text -> m (Pretty.SimpleDocStream ann)
+    prettyExprSource text = do
+        (header, expr) <- Dhall.Core.throws (exprAndHeaderFromText "(stdin)" text)
+    
+        let doc =   Pretty.pretty header
+                <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
+                                <>  "\n"
+    
+        return (Pretty.removeTrailingWhitespace (Pretty.layoutSmart layoutOpts doc))
