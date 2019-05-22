@@ -335,11 +335,16 @@ instance ToTerm a => ToTerm (Expr s a) where
         TList [ TInt 9, t₁, TString x ]
       where
         t₁ = encode t₀
-    encode (Project t₀ xs₀) =
+    encode (Project t₀ (Left xs₀)) =
         TList ([ TInt 10, t₁ ] ++ xs₁)
       where
         t₁  = encode t₀
         xs₁ = map TString (Dhall.Set.toList xs₀)
+    encode (Project t₀ (Right _T₀)) =
+        TList [ TInt 10, t₁, _T₁ ]
+      where
+        _T₁ = encode _T₀
+        t₁  = encode t₀
     encode (Union xTs₀) =
         TList [ TInt 11, TMap xTs₁ ]
       where
@@ -660,12 +665,26 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TList (TInt 10 : t₁ : xs₁)) = do
         t₀ <- decode t₁
 
-        let process (TString x) = return x
-            process  _          = empty
+        let expectString (TString x) = return x
+            expectString  _          = empty
 
-        xs₀ <- traverse process xs₁
+        let decodeLeft = do
+                strings <- traverse expectString xs₁
 
-        return (Project t₀ (Dhall.Set.fromList xs₀))
+                return (Left (Dhall.Set.fromList strings))
+
+        let decodeRight =
+                case xs₁ of
+                    [ _T₁ ] -> do
+                        _T₀ <- decode _T₁
+
+                        return (Right _T₀)
+                    _ -> do
+                        empty
+
+        xs₀ <- decodeLeft <|> decodeRight
+
+        return (Project t₀ xs₀)
     decode (TList [ TInt 11, TMap xTs₁ ]) = do
         let process (TString x, _T₁) = do
                 mT₀ <- case _T₁ of

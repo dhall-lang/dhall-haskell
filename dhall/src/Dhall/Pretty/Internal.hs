@@ -732,8 +732,14 @@ prettyCharacterSet characterSet = prettyExpression
     prettySelectorExpression :: Pretty a => Expr s a -> Doc Ann
     prettySelectorExpression (Field a b) =
         prettySelectorExpression a <> dot <> prettyAnyLabel b
-    prettySelectorExpression (Project a b) =
+    prettySelectorExpression (Project a (Left b)) =
         prettySelectorExpression a <> dot <> prettyLabels b
+    prettySelectorExpression (Project a (Right b)) =
+            prettySelectorExpression a
+        <>  dot
+        <>  lparen
+        <>  prettyExpression b
+        <>  rparen
     prettySelectorExpression (Note _ b) =
         prettySelectorExpression b
     prettySelectorExpression a0 =
