@@ -21,6 +21,8 @@ extra-deps:
 flags:
   transformers-compat:
     five-three: true
+  dhall-json:
+    yaml-pre-0_11: true
 nix:
   packages:
     - ncurses
