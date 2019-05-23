@@ -138,8 +138,10 @@ instance Monad Parser where
     Parser n >>= k = Parser (n >>= unParser . k)
     {-# INLINE (>>=) #-}
 
+#if !(MIN_VERSION_base(4,13,0))
     fail = Control.Monad.Fail.fail
     {-# INLINE fail #-}
+#endif
 
 instance Control.Monad.Fail.MonadFail Parser where
     fail = Parser . Control.Monad.Fail.fail
