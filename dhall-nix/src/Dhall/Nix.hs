@@ -124,6 +124,8 @@ import qualified Nix
 data CompileError
     = CannotReferenceShadowedVariable Var
     -- ^ Nix does not provide a way to reference a shadowed variable
+    | CannotProjectByType
+    -- ^ We currently do not support threading around type information
     deriving (Typeable)
 
 instance Show CompileError where
@@ -178,6 +180,15 @@ Nix
 |]
       where
         txt = Dhall.Core.pretty v
+
+    show CannotProjectByType =
+        Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: Cannot project by type
+
+The ❰dhall-to-nix❱ compiler does not support projecting out a subset of a record
+by the expected type (i.e. ❰someRecord.(someType)❱ 
+    |]
+
 
 _ERROR :: Data.Text.Text
 _ERROR = "\ESC[1;31mError\ESC[0m"
@@ -518,10 +529,12 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop (Field a b) = do
         a' <- loop a
         return (Fix (NSelect a' [StaticKey b] Nothing))
-    loop (Project a b) = do
+    loop (Project a (Left b)) = do
         a' <- loop a
         let b' = fmap StaticKey (toList b)
         return (Fix (NSet [Inherit (Just a') b' Nix.nullPos]))
+    loop (Project _ (Right _)) = do
+        Left CannotProjectByType
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
     loop (Embed (X x)) = x
