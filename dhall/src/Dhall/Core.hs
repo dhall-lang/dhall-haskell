@@ -83,6 +83,7 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Traversable
 import Dhall.Map (Map)
 import Dhall.Set (Set)
+import Dhall.Src (Src)
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
@@ -122,7 +123,8 @@ import qualified Text.Printf
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
 -}
-data Const = Type | Kind | Sort deriving (Show, Eq, Data, Bounded, Enum, Generic)
+data Const = Type | Kind | Sort
+    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic)
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -185,7 +187,7 @@ data URL = URL
     , authority :: Text
     , path      :: File
     , query     :: Maybe Text
-    , headers   :: Maybe ImportHashed
+    , headers   :: Maybe (Expr Src Import)
     } deriving (Eq, Generic, Ord, Show)
 
 instance Pretty URL where
@@ -244,9 +246,9 @@ instance Semigroup ImportType where
     import₀ <> Remote (URL { headers = headers₀, .. }) =
         Remote (URL { headers = headers₁, .. })
       where
-        importHashed₀ = ImportHashed Nothing import₀
+        importHashed₀ = Import (ImportHashed Nothing import₀) Code
 
-        headers₁ = fmap (importHashed₀ <>) headers₀
+        headers₁ = fmap (fmap (importHashed₀ <>)) headers₀
 
     _ <> import₁ =
         import₁
@@ -331,7 +333,7 @@ instance Pretty Import where
     appear as a numeric suffix.
 -}
 data Var = V Text !Integer
-    deriving (Data, Generic, Eq, Show)
+    deriving (Data, Generic, Eq, Ord, Show)
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -477,7 +479,7 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Eq, Foldable, Generic, Traversable, Show, Data)
+    deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data)
 
 -- This instance is hand-written due to the fact that deriving
 -- it does not give us an INLINABLE pragma. We annotate this fmap
@@ -703,7 +705,7 @@ data Binding s a = Binding
     { variable   :: Text
     , annotation :: Maybe (Expr s a)
     , value      :: Expr s a
-    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
+    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data)
 
 instance Bifunctor Binding where
     first k (Binding a b c) = Binding a (fmap (first k) b) (first k c)
@@ -712,7 +714,7 @@ instance Bifunctor Binding where
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =

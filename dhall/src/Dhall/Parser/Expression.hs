@@ -15,6 +15,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Dhall.Core
+import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
@@ -693,7 +694,7 @@ http = do
     whitespace
     headers <- optional (do
         _using
-        (importHashed_ <|> (_openParens *> importHashed_ <* _closeParens)) )
+        (completeExpression import_ <|> (_openParens *> completeExpression import_ <* _closeParens)) )
     return (Remote (url { headers }))
 
 missing :: Parser ImportType

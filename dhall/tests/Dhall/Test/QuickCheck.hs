@@ -26,12 +26,15 @@ import Dhall.Core
     , URL(..)
     , Var(..)
     )
+
 import Dhall.Set (Set)
+import Dhall.Src (Src(..))
 import Numeric.Natural (Natural)
 import Test.QuickCheck
-    (Arbitrary(..), Gen, Property, genericShrink, (===), (==>))
+    (Arbitrary(..), Gen, Positive(..), Property, genericShrink, (===), (==>))
 import Test.QuickCheck.Instances ()
 import Test.Tasty (TestTree)
+import Text.Megaparsec (SourcePos(..), Pos)
 
 import qualified Codec.Serialise
 import qualified Data.Coerce
@@ -44,6 +47,7 @@ import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Test.QuickCheck
 import qualified Test.Tasty.QuickCheck
+import qualified Text.Megaparsec       as Megaparsec
 
 newtype DeserialiseFailureWithEq = D DeserialiseFailure
     deriving (Show)
@@ -261,6 +265,19 @@ instance Arbitrary FilePrefix where
     arbitrary = Test.QuickCheck.oneof [ pure Absolute, pure Here, pure Home ]
 
     shrink = genericShrink
+
+instance Arbitrary Src where
+    arbitrary = lift3 Src
+
+    shrink = genericShrink
+
+instance Arbitrary SourcePos where
+    arbitrary = lift3 SourcePos
+
+    shrink = genericShrink
+
+instance Arbitrary Pos where
+    arbitrary = lift1 (Megaparsec.mkPos . getPositive)
 
 instance Arbitrary ImportType where
     arbitrary =

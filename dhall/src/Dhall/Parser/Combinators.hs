@@ -1,15 +1,13 @@
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DeriveAnyClass             #-}
-{-# LANGUAGE DeriveDataTypeable         #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
 module Dhall.Parser.Combinators where
 
 
 import           Control.Applicative        (Alternative (..), liftA2)
 import           Control.Exception          (Exception)
 import           Control.Monad              (MonadPlus (..))
-import           Data.Data                  (Data)
 import           Data.Semigroup             (Semigroup (..))
 import           Data.Sequence              (ViewL (..))
 import           Data.String                (IsString (..))
@@ -18,6 +16,7 @@ import           Data.Text.Prettyprint.Doc  (Pretty (..))
 import           Data.Void                  (Void)
 import           Dhall.Map                  (Map)
 import           Dhall.Set                  (Set)
+import           Dhall.Src                  (Src(..))
 import           Prelude                    hiding (const, pi)
 import           Text.Parser.Combinators    (try, (<?>))
 import           Text.Parser.Token          (TokenParsing (..))
@@ -31,7 +30,6 @@ import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Map
 import qualified Dhall.Pretty
-import qualified Dhall.Util
 import qualified Dhall.Set
 import qualified Text.Megaparsec
 #if !MIN_VERSION_megaparsec(7, 0, 0)
@@ -41,12 +39,6 @@ import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token.Style
-import qualified Text.Printf
-
--- | Source code extract
-data Src = Src !Text.Megaparsec.SourcePos !Text.Megaparsec.SourcePos Text
-  -- Text field is intentionally lazy
-  deriving (Data, Eq, Show)
 
 data SourcedException e = SourcedException Src e
 
@@ -69,38 +61,6 @@ laxSrcEq (Src p q _) (Src p' q' _) = eq p  p' && eq q q'
     eq (Text.Megaparsec.SourcePos _ a b) (Text.Megaparsec.SourcePos _ a' b') =
         a == a' && b == b'
 {-# INLINE laxSrcEq #-}
-
-instance Pretty Src where
-    pretty (Src begin _ text) =
-            pretty (Dhall.Util.snip numberedLines)
-        <>  "\n"
-        <>  pretty (Text.Megaparsec.sourcePosPretty begin)
-      where
-        prefix = Data.Text.replicate (n - 1) " "
-          where
-            n = Text.Megaparsec.unPos (Text.Megaparsec.sourceColumn begin)
-
-        ls = Data.Text.lines (prefix <> text)
-
-        numberOfLines = length ls
-
-        minimumNumber =
-            Text.Megaparsec.unPos (Text.Megaparsec.sourceLine begin)
-
-        maximumNumber = minimumNumber + numberOfLines - 1
-
-        numberWidth :: Int
-        numberWidth =
-            truncate (logBase (10 :: Double) (fromIntegral maximumNumber)) + 1
-
-        adapt n line = Data.Text.pack outputString
-          where
-            inputString = Data.Text.unpack line
-
-            outputString =
-                Text.Printf.printf ("%" <> show numberWidth <> "d: %s") n inputString
-
-        numberedLines = Data.Text.unlines (zipWith adapt [minimumNumber..] ls)
 
 {-| A `Parser` that is almost identical to
     @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
