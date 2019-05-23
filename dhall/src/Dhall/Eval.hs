@@ -559,6 +559,12 @@ eqListBy f = go where
   go _  _  = False
 {-# inline eqListBy #-}
 
+eqMapsBy :: Ord k => (v -> v -> Bool) -> Map k v -> Map k v -> Bool
+eqMapsBy f mL mR = eqListBy eq (Dhall.Map.toList mL) (Dhall.Map.toList mR)
+  where
+    eq (kL, vL) (kR, vR) = kL == kR && f vL vR
+{-# inline eqMapsBy #-}
+
 eqMaybeBy :: (a -> a -> Bool) -> Maybe a -> Maybe a -> Bool
 eqMaybeBy f = go where
   go (Just x) (Just y) = f x y
@@ -670,18 +676,18 @@ conv !env t t' =
     (VSome t                 , VSome t'                    ) -> convE t t'
     (VNone _                 , VNone _                     ) -> True
     (VOptionalBuild _ t      , VOptionalBuild _ t'         ) -> convE t t'
-    (VRecord m               , VRecord m'                  ) -> eqListBy convE (toList m) (toList m')
-    (VRecordLit m            , VRecordLit m'               ) -> eqListBy convE (toList m) (toList m')
-    (VUnion m                , VUnion m'                   ) -> eqListBy (eqMaybeBy convE) (toList m) (toList m')
+    (VRecord m               , VRecord m'                  ) -> eqMapsBy convE m m'
+    (VRecordLit m            , VRecordLit m'               ) -> eqMapsBy convE m m'
+    (VUnion m                , VUnion m'                   ) -> eqMapsBy (eqMaybeBy convE) m m'
     (VUnionLit k v m         , VUnionLit k' v' m'          ) -> k == k' && convE v v' &&
-                                                                  eqListBy (eqMaybeBy convE) (toList m) (toList m')
+                                                                  eqMapsBy (eqMaybeBy convE)  m m'
     (VCombine t u            , VCombine t' u'              ) -> convE t t' && convE u u'
     (VCombineTypes t u       , VCombineTypes t' u'         ) -> convE t t' && convE u u'
     (VPrefer  t u            , VPrefer t' u'               ) -> convE t t' && convE u u'
     (VMerge t u _            , VMerge t' u' _              ) -> convE t t' && convE u u'
     (VField t k              , VField t' k'                ) -> convE t t' && k == k'
     (VProject t ks           , VProject t' ks'             ) -> convE t t' && ks == ks'
-    (VInject m k mt          , VInject m' k' mt'           ) -> eqListBy (eqMaybeBy convE) (toList m) (toList m')
+    (VInject m k mt          , VInject m' k' mt'           ) -> eqMapsBy (eqMaybeBy convE) m m'
                                                                   && k == k' && eqMaybeBy convE mt mt'
     (VEmbed a                , VEmbed a'                   ) -> a == a'
     (VOptionalFold a t _ u v , VOptionalFold a' t' _ u' v' ) ->
