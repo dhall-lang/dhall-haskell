@@ -15,6 +15,8 @@ import           Language.Haskell.LSP.Messages
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.SortedList
+import Control.Monad.Trans (lift)
+import Control.Monad.Reader (ReaderT)
 
 -- TODO: implement tabSize and spaces/tabs options
 -- * Note: any formatting errors would be swallowed. I think this is fine in this case, but generally we'd like to send user a notification

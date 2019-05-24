@@ -15,7 +15,12 @@ import LSP.Common
 import LSP.Handlers.Diagnostics
 import LSP.Handlers.DocumentFormatting
 
-import Control.Lens 
+import Control.Lens
+import Control.Monad (forever)
+import Control.Monad.Trans (liftIO)
+import Control.Monad.Reader (ReaderT, runReaderT)
+import Control.Monad.Reader.Class (ask)
+import GHC.Conc (atomically)
 
 -- ! FIXME: replace logs/logm (which are just utilities) with own logging functions to make intent clearer
 -- | A basic router, which reads from Client messages queue `inp` and executes appropriate actions

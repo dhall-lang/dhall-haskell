@@ -9,6 +9,7 @@ module Backend.Dhall.Diagnostics( compilerDiagnostics
 This module is responsible for producing dhall compiler diagnostic (errors, warns, etc ...)
 -}
 
+import Control.Exception (SomeException)
 import qualified Control.Exception
 import qualified Dhall
 import Dhall(rootDirectory, sourceName, defaultInputSettings, inputExprWithSettings)
@@ -24,6 +25,7 @@ import Dhall.Import(Imported(..), Cycle(..), ReferentiallyOpaque(..),
                      MissingFile, MissingEnvironmentVariable, MissingImports(..) )
 
 
+import Data.Text (Text)
 import qualified Data.Text as T
 
 
@@ -31,6 +33,7 @@ import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Error
 import Text.Show(ShowS)
 import qualified Data.Set
+import Data.Foldable (foldl')
 import qualified System.FilePath
 
 import Backend.Dhall.DhallErrors(simpleTypeMessage)
@@ -43,6 +46,9 @@ import Language.Haskell.LSP.Types(
     , DiagnosticRelatedInformation(..)
     , Position(..)
     )
+
+tshow :: Show a => a -> Text
+tshow = T.pack . show
 
 defaultDiagnosticSource :: DiagnosticSource
 defaultDiagnosticSource = "dhall-lsp-server"
@@ -75,7 +81,7 @@ compilerDiagnostics path txt = handle ast
             , _severity = Just DsError
             , _source = Just defaultDiagnosticSource
             , _code = Nothing
-            , _message = "Internal error has occurred: " <> (show e)
+            , _message = "Internal error has occurred: " <> (tshow e)
             , _relatedInformation = Nothing
             }]
     decodingFailure e = do
@@ -85,7 +91,7 @@ compilerDiagnostics path txt = handle ast
       , _severity = Just DsError
       , _source = Just defaultDiagnosticSource
       , _code = Nothing
-      , _message = "Cannot decode CBOR to Dhall " <> (show term)
+      , _message = "Cannot decode CBOR to Dhall " <> (tshow term)
       , _relatedInformation = Nothing
       }]
     parseErrors e = do
@@ -100,7 +106,7 @@ compilerDiagnostics path txt = handle ast
            , _severity = Just DsError
            , _source = Just defaultDiagnosticSource
            , _code = Nothing
-           , _message = removeAsciiColors $ show e
+           , _message = removeAsciiColors $ tshow e
            , _relatedInformation = Nothing
            }]
     typeErrors e = do
