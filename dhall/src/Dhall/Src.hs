@@ -10,6 +10,7 @@ module Dhall.Src
     ) where
 
 import Data.Data (Data)
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc  (Pretty (..))
 import GHC.Generics (Generic)
