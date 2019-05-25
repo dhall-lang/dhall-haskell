@@ -178,6 +178,7 @@ import Control.Applicative (empty, (<|>))
 import Control.Monad (guard)
 import Control.Exception (Exception, throwIO)
 import Data.Aeson (Value(..), ToJSON(..))
+import Data.Maybe (isNothing)
 import Data.Monoid ((<>), mempty)
 import Data.Text (Text)
 import Dhall.Core (Expr)
@@ -380,6 +381,14 @@ dhallToJSON e0 = loop (Dhall.Core.normalize e0)
         Dhall.Core.UnionLit _ b _ -> loop b
         Dhall.Core.App (Dhall.Core.Field (Dhall.Core.Union _) _) b -> loop b
         Dhall.Core.Field (Dhall.Core.Union _) k -> return (toJSON k)
+        Dhall.Core.Lam _ ut@(Dhall.Core.Union alts) _
+            | all isNothing alts ->
+                dhallToJSON $
+                Dhall.Core.normalize $
+                Dhall.Core.RecordLit $
+                Dhall.Map.mapWithKey (\key _ ->
+                    Dhall.Core.App e (Dhall.Core.Field ut key)
+                ) alts
         _ -> Left (Unsupported e)
 
 toOrderedList :: Ord k => Map k v -> [(k, v)]
