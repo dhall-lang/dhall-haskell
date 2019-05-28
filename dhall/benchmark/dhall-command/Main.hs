@@ -8,7 +8,7 @@ import           Dhall.Binary (defaultStandardVersion)
 
 options :: Main.Options
 options = Main.Options
-  { Main.mode = Main.Default False False
+  { Main.mode = Main.Default Nothing False False
   , Main.explain = False
   , Main.plain = False
   , Main.ascii = False
