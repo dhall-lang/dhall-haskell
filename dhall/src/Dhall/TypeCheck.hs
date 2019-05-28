@@ -97,7 +97,7 @@ type Typer a = forall s. a -> Expr s a
     constructor with custom logic
 -}
 typeWithA
-    :: Eq a
+    :: (Eq a, Pretty a)
     => Typer a
     -> Context (Expr s a)
     -> Expr s a
@@ -793,8 +793,9 @@ typeWithA tpa = loop
                   r' -> Left (TypeError ctx e (CantAccess text r' t))
             _ -> do
                 Left (TypeError ctx e (CantAccess text r t))
-    loop ctx e@(Project r xs    ) = do
+    loop ctx e@(Project r (Left xs)) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
+
         case t of
             Record kts -> do
                 _ <- loop ctx t
@@ -803,10 +804,38 @@ typeWithA tpa = loop
                         case Dhall.Map.lookup k kts of
                             Just t' -> return (k, t')
                             Nothing -> Left (TypeError ctx e (MissingField k t))
+
                 let adapt = Record . Dhall.Map.fromList
+
                 fmap adapt (traverse process (Dhall.Set.toList xs))
             _ -> do
-                let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
+                let text =
+                        Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
+
+                Left (TypeError ctx e (CantProject text r t))
+    loop ctx e@(Project r (Right t)) = do
+        _R <- loop ctx r
+
+        case _R of
+            Record ktsR -> do
+                _ <- fmap Dhall.Core.normalize (loop ctx t)
+
+                case Dhall.Core.normalize t of
+                    Record ktsT -> do
+                        let keysR = Dhall.Set.fromList (Dhall.Map.keys ktsR)
+                        let keysT = Dhall.Set.fromList (Dhall.Map.keys ktsT)
+
+                        case Dhall.Set.difference keysT keysR of
+                            k : _ -> do
+                                Left (TypeError ctx e (MissingField k t))
+                            [] -> do
+                                return (Record ktsT)
+                    _ -> do
+                        Left (TypeError ctx e (CantProjectByExpression t))
+
+            _ -> do
+                let text = Dhall.Core.pretty t
+
                 Left (TypeError ctx e (CantProject text r t))
     loop ctx   (Note s e'       ) = case loop ctx e' of
         Left (TypeError ctx' (Note s' e'') m) -> Left (TypeError ctx' (Note s' e'') m)
@@ -891,6 +920,7 @@ data TypeMessage s a
     | ConstructorsRequiresAUnionType (Expr s a) (Expr s a)
     | CantAccess Text (Expr s a) (Expr s a)
     | CantProject Text (Expr s a) (Expr s a)
+    | CantProjectByExpression (Expr s a)
     | MissingField Text (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
     | CantOr (Expr s a) (Expr s a)
@@ -3406,7 +3436,7 @@ prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
-        \You tried to access the fields:                                               \n\
+        \You tried to access the fields:                                                 \n\
         \                                                                                \n\
         \" <> txt0 <> "\n\
         \                                                                                \n\
@@ -3421,6 +3451,65 @@ prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
         txt0 = insert lazyText0
         txt1 = insert expr0
         txt2 = insert expr1
+
+prettyTypeMessage (CantProjectByExpression expr) = ErrorMessages {..}
+  where
+    short = "Selector is not a record type"
+
+    long =
+        "Explanation: You can project by an expression if that expression is a record    \n\
+        \type:                                                                           \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ { foo = True }.({ foo : Bool }) │  This is valid ...                      \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────┐                                \n\
+        \    │ λ(r : { foo : Bool }) → r.{ foo : Bool } │  ... and so is this            \n\
+        \    └──────────────────────────────────────────┘                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot project by any other type of expression:                     \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ { foo = True }.(True) │                                                   \n\
+        \    └───────────────────────┘                                                   \n\
+        \                      ⇧                                                         \n\
+        \                      Invalid: Not a record type                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You accidentally try to project by a record value instead of a record type,   \n\
+        \  like this:                                                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ let T = { foo : Bool }          │                                         \n\
+        \    │                                 │                                         \n\
+        \    │ let x = { foo = True , bar = 1} │                                         \n\
+        \    │                                 │                                         \n\
+        \    │ let y = { foo = False, bar = 2} │                                         \n\
+        \    │                                 │                                         \n\
+        \    │ in  x.(y)                       │                                         \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \             ⇧                                                                  \n\
+        \             The user might have meant ❰T❱ here                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to project out the following type:                                    \n\
+        \                                                                                \n\
+        \" <> txt <> "\n\
+        \                                                                                \n\
+        \... which is not a record type                                                  \n"
+      where
+        txt = insert expr
 
 prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
   where

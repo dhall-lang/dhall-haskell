@@ -1020,8 +1020,10 @@ diffSelectorExpression l@(Field {}) r@(Field {}) =
   where
     docs (Field aL bL) (Field aR bR) =
         Data.List.NonEmpty.cons (diffLabel bL bR) (docs aL aR)
-    docs (Project aL bL) (Project aR bR) =
+    docs (Project aL (Left bL)) (Project aR (Left bR)) =
         Data.List.NonEmpty.cons (diffLabels bL bR) (docs aL aR)
+    docs (Project aL (Right bL)) (Project aR (Right bR)) =
+        Data.List.NonEmpty.cons (diffExpression bL bR) (docs aL aR)
     docs aL aR =
         pure (diffPrimitiveExpression aL aR)
 diffSelectorExpression l@(Field {}) r =
@@ -1033,8 +1035,10 @@ diffSelectorExpression l@(Project {}) r@(Project {}) =
   where
     docs (Field aL bL) (Field aR bR) =
         Data.List.NonEmpty.cons (diffLabel bL bR) (docs aL aR)
-    docs (Project aL bL) (Project aR bR) =
+    docs (Project aL (Left bL)) (Project aR (Left bR)) =
         Data.List.NonEmpty.cons (diffLabels bL bR) (docs aL aR)
+    docs (Project aL (Right bL)) (Project aR (Right bR)) =
+        Data.List.NonEmpty.cons (diffExpression bL bR) (docs aL aR)
     docs aL aR =
         pure (diffPrimitiveExpression aL aR)
 diffSelectorExpression l@(Project {}) r =
