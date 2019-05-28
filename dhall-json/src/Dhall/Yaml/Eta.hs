@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
-module Dhall.Yaml.Eta (encode) where
+module Dhall.Yaml.Eta ( jsonToYaml ) where
 
 import Data.ByteString (ByteString)
 
@@ -10,13 +10,13 @@ import qualified Data.ByteString.Lazy
 import qualified Data.ByteString.UTF8
 import qualified Data.Vector
 
-foreign import java unsafe "@static Utils.jsonToYaml" jsonToYaml
+foreign import java unsafe "@static Utils.jsonToYaml" javaJsonToYaml
   :: String -> String
 
-encode :: Bool -> Data.Aeson.Value -> ByteString
-encode multipleDocs json =
+jsonToYaml :: Data.Aeson.Value -> Bool -> Bool -> ByteString
+encode json documents quoted =
 
-  case (multipleDocs, json) of
+  case (documents, json) of
     (True,  Data.Aeson.Array elems)
       -> Data.ByteString.intercalate "\n---\n"
          $ fmap aesonToYaml
@@ -25,7 +25,7 @@ encode multipleDocs json =
     
   where aesonToYaml =
            Data.ByteString.UTF8.fromString 
-         . jsonToYaml
+         . javaJsonToYaml
          . Data.ByteString.UTF8.toString
          . Data.ByteString.Lazy.toStrict
          . Data.Aeson.encode

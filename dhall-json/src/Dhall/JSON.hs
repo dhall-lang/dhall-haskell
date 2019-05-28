@@ -168,7 +168,6 @@ module Dhall.JSON (
     , SpecialDoubleMode(..)
     , handleSpecialDoubles
     , codeToValue
-    , jsonToYaml
 
     -- * Exceptions
     , CompileError(..)
@@ -192,15 +191,12 @@ import qualified Data.HashMap.Strict
 import qualified Data.List
 import qualified Data.Ord
 import qualified Data.Text
-import qualified Data.Vector
-import qualified Data.Yaml
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
-import qualified Text.Libyaml
 
 {-| This is the exception type for errors that might arise when translating
     Dhall to JSON
@@ -898,33 +894,3 @@ codeToValue conversion specialDoubleMode name code = do
       Left  err  -> Control.Exception.throwIO err
       Right json -> return json
 
--- | Transform json representation into yaml
-jsonToYaml
-    :: Value
-    -> Bool
-    -> Bool
-    -> Data.ByteString.ByteString
-jsonToYaml json documents quoted = case (documents, json) of
-  (True, Data.Yaml.Array elems)
-    -> Data.ByteString.intercalate "\n---\n"
-       $ fmap (encodeYaml encodeOptions)
-       $ Data.Vector.toList elems
-  _ -> encodeYaml encodeOptions json
-  where
-    encodeYaml = Data.Yaml.encodeWith
-
-    customStyle = \s -> case () of
-        ()
-            | "\n" `Data.Text.isInfixOf` s -> ( noTag, literal )
-            | otherwise -> ( noTag, Text.Libyaml.SingleQuoted )
-        where
-            noTag = Text.Libyaml.NoTag
-            literal = Text.Libyaml.Literal
-
-    quotedOptions = Data.Yaml.setStringStyle
-                        customStyle
-                        Data.Yaml.defaultEncodeOptions
-
-    encodeOptions = if quoted
-        then quotedOptions
-        else Data.Yaml.defaultEncodeOptions
