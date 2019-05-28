@@ -102,6 +102,8 @@ test-suite dhall-lsp-server-test
       test
   default-extensions: LambdaCase OverloadedStrings FlexibleInstances TypeApplications RecordWildCards ScopedTypeVariables
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-tool-depends:
+      tasty-discover:tasty-discover
   build-depends:
       aeson
     , base-noprelude >=4.7 && <5

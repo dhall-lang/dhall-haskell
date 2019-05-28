@@ -382,9 +382,11 @@ let
                         haskellPackagesNew.semigroups;
 
                     transformers-compat =
-                      pkgsNew.haskell.lib.addBuildDepend
+                      pkgsNew.haskell.lib.addBuildDepends
                         haskellPackagesOld.transformers-compat
-                        haskellPackagesNew.generic-deriving;
+                        [ haskellPackagesNew.fail
+                          haskellPackagesNew.generic-deriving
+                        ];
 
                     vector =
                       pkgsNew.haskell.lib.addBuildDepend
@@ -594,20 +596,34 @@ let
     # Benchmark dependencies aren't added by default
     (pkgs.haskell.lib.doBenchmark drv).env;
 
+  possibly-static = {
+    dhall            = makeStaticIfPossible "dhall"           ;
+    dhall-bash       = makeStaticIfPossible "dhall-bash"      ;
+    dhall-json       = makeStaticIfPossible "dhall-json"      ;
+    dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
+    dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
+    dhall-text       = makeStaticIfPossible "dhall-text"      ;
+  };
+
+  toDockerImage = name:
+    let
+      image =
+        pkgs.dockerTools.buildImage {
+          inherit name;
+
+          contents = [ possibly-static."${name}" ];
+        };
+
+    in
+      pkgs.runCommand "image-${name}" {} ''
+        ${pkgs.coreutils}/bin/mkdir --parents "$out/nix-support"
+        ${pkgs.coreutils}/bin/ln --symbolic '${image}' "$out/docker-image-${name}.tar.gz"
+        echo "file binary-dist $out/docker-image-${name}.tar.gz" >> $out/nix-support/hydra-build-products
+      '';
+
 in
   rec {
-    inherit trivial;
-
-    inherit pkgs;
-
-    possibly-static = {
-      dhall            = makeStaticIfPossible "dhall"           ;
-      dhall-bash       = makeStaticIfPossible "dhall-bash"      ;
-      dhall-json       = makeStaticIfPossible "dhall-json"      ;
-      dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
-      dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
-      dhall-text       = makeStaticIfPossible "dhall-text"      ;
-    };
+    inherit trivial pkgs possibly-static;
 
     tarball-dhall            = makeTarball "dhall"           ;
     tarball-dhall-bash       = makeTarball "dhall-bash"      ;
@@ -629,6 +645,13 @@ in
     shell-dhall-nix        = toShell pkgs.haskell.packages."${compiler}".dhall-nix       ;
     shell-dhall-text       = toShell pkgs.haskell.packages."${compiler}".dhall-text      ;
     shell-dhall-try        = toShell pkgs.haskell.packages."${compiler}".dhall-try       ;
+
+    image-dhall            = toDockerImage "dhall"           ;
+    image-dhall-bash       = toDockerImage "dhall-bash"      ;
+    image-dhall-json       = toDockerImage "dhall-json"      ;
+    image-dhall-lsp-server = toDockerImage "dhall-lsp-server";
+    image-dhall-nix        = toDockerImage "dhall-nix"       ;
+    image-dhall-text       = toDockerImage "dhall-text"      ;
 
     test-dhall =
       pkgs.mkShell

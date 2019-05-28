@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE OverloadedLists     #-}
@@ -27,16 +28,47 @@ import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Encoding
 import qualified Text.Megaparsec
+#if !MIN_VERSION_megaparsec(7, 0, 0)
+import qualified Text.Megaparsec.Char as Text.Megaparsec
+#endif
 import qualified Text.Parser.Char
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
 
+getSourcePos :: Text.Megaparsec.MonadParsec e s m =>
+                m Text.Megaparsec.SourcePos
+getSourcePos =
+#if MIN_VERSION_megaparsec(7, 0, 0)
+    Text.Megaparsec.getSourcePos
+#else
+    Text.Megaparsec.getPosition
+#endif
+{-# INLINE getSourcePos #-}
+
+getOffset :: Text.Megaparsec.MonadParsec e s m => m Int
+#if MIN_VERSION_megaparsec(7, 0, 0)
+getOffset = Text.Megaparsec.stateOffset <$> Text.Megaparsec.getParserState
+#else
+getOffset = Text.Megaparsec.stateTokensProcessed <$> Text.Megaparsec.getParserState
+#endif
+{-# INLINE getOffset #-}
+
+setOffset :: Text.Megaparsec.MonadParsec e s m => Int -> m ()
+#if MIN_VERSION_megaparsec(7, 0, 0)
+setOffset o = Text.Megaparsec.updateParserState $ \(Text.Megaparsec.State s _ pst) ->
+  Text.Megaparsec.State s o pst
+#else
+setOffset o = Text.Megaparsec.updateParserState $ \(Text.Megaparsec.State s p _ stw) ->
+  Text.Megaparsec.State s p o stw
+#endif
+{-# INLINE setOffset #-}
+
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
-    before      <- Text.Megaparsec.getSourcePos
+    before      <- getSourcePos
     (tokens, e) <- Text.Megaparsec.match parser
-    after       <- Text.Megaparsec.getSourcePos
+    after       <- getSourcePos
     let src₀ = Src before after tokens
     case e of
         Note src₁ _ | laxSrcEq src₀ src₁ -> return e
@@ -215,9 +247,18 @@ completeExpression embedded = completeExpression_
     selectorExpression = noted (do
             a <- primitiveExpression
 
-            let left  x  e = Field   e x
-            let right xs e = Project e xs
-            b <- Text.Megaparsec.many (try (do _dot; fmap left anyLabel <|> fmap right labels))
+            let recordType = _openParens *> expression <* _closeParens
+
+            let field               x  e = Field   e  x
+            let projectBySet        xs e = Project e (Left  xs)
+            let projectByExpression xs e = Project e (Right xs)
+
+            let alternatives =
+                        fmap field               anyLabel
+                    <|> fmap projectBySet        labels
+                    <|> fmap projectByExpression recordType
+
+            b <- Text.Megaparsec.many (try (do _dot; alternatives))
             return (foldl (\e k -> k e) a b) )
 
     primitiveExpression =
@@ -240,10 +281,10 @@ completeExpression embedded = completeExpression_
             <|> alternative38
           where
             alternative00 = do
-                n <- Text.Megaparsec.getOffset
+                n <- getOffset
                 a <- try doubleLiteral
                 b <- if isInfinite a
-                       then Text.Megaparsec.setOffset n *> fail "double out of bounds"
+                       then setOffset n *> fail "double out of bounds"
                        else return a
                 return (DoubleLit b)
 
@@ -390,7 +431,7 @@ completeExpression embedded = completeExpression_
                     ) && c /= '$'
 
             unescapedCharacterSlow = do
-                _ <- Text.Megaparsec.single '$'
+                _ <- Text.Parser.Char.char '$'
                 return (Chunks [] "$")
 
             escapedCharacter = do
@@ -628,24 +669,24 @@ localRaw =
   where
     parentPath = do
         _    <- ".." :: Parser Text
-        file <- file_
+        file <- file_ FileComponent
 
         return (Local Parent file)
 
     herePath = do
         _    <- "." :: Parser Text
-        file <- file_
+        file <- file_ FileComponent
 
         return (Local Here file)
 
     homePath = do
         _    <- "~" :: Parser Text
-        file <- file_
+        file <- file_ FileComponent
 
         return (Local Home file)
 
     absolutePath = do
-        file <- file_
+        file <- file_ FileComponent
 
         return (Local Absolute file)
 
@@ -746,10 +787,15 @@ unlinesLiteral :: NonEmpty (Chunks s a) -> Chunks s a
 unlinesLiteral chunks =
     Data.Foldable.fold (Data.List.NonEmpty.intersperse "\n" chunks)
 
-leadingSpaces :: Chunks s a -> Int
-leadingSpaces chunks =
-    Data.Text.length (Data.Text.takeWhile Data.Char.isSpace firstText)
+emptyLine :: Chunks s a -> Bool
+emptyLine (Chunks [] "") = True
+emptyLine  _             = False
+
+leadingSpaces :: Chunks s a -> Text
+leadingSpaces chunks = Data.Text.takeWhile isSpace firstText
   where
+    isSpace c = c == '\x20' || c == '\x09'
+
     firstText =
         case chunks of
             Chunks                []  suffix -> suffix
@@ -767,6 +813,26 @@ toDoubleQuoted literal =
   where
     literals = linesLiteral literal
 
-    l :| ls = literals
+    sharedPrefix ab ac =
+        case Data.Text.commonPrefixes ab ac of
+            Just (a, _b, _c) -> a
+            Nothing          -> ""
 
-    indent = Data.Foldable.foldl' min (leadingSpaces l) (fmap leadingSpaces ls)
+    -- The standard specifies to filter out blank lines for all lines *except*
+    -- for the last line
+    filteredLines = newInit <> pure oldLast
+      where
+        oldInit = Data.List.NonEmpty.init literals
+
+        oldLast = Data.List.NonEmpty.last literals
+
+        newInit = filter (not . emptyLine) oldInit
+
+    longestSharedPrefix =
+        case filteredLines of
+            l : ls ->
+                Data.Foldable.foldl' sharedPrefix (leadingSpaces l) (fmap leadingSpaces ls)
+            [] ->
+                ""
+
+    indent = Data.Text.length longestSharedPrefix

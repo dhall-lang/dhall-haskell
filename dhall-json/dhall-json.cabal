@@ -30,17 +30,43 @@ Source-Repository head
     Type: git
     Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-json
 
+Flag yaml-pre-0_11
+  Default: False
+  Manual: False
+
 Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.8.0.0  && < 5   ,
         aeson                     >= 1.0.0.0  && < 1.5 ,
-        dhall                     >= 1.22.0   && < 1.23,
+        bytestring                               < 0.11,
+        dhall                     >= 1.22.0   && < 1.24,
+        lens                      >= 2.5      && < 4.18,
         optparse-applicative      >= 0.14.0.0 && < 0.15,
         text                      >= 0.11.1.0 && < 1.3 ,
-        unordered-containers                     < 0.3
-    Exposed-Modules: Dhall.JSON
+        unordered-containers                     < 0.3 ,
+        vector
+    Exposed-Modules: Dhall.JSON,
+                     Dhall.Yaml
     GHC-Options: -Wall
+    if impl(eta)
+        Build-Depends:
+            utf8-string >= 1.0 && <= 1.1
+        Maven-Depends:
+          com.fasterxml.jackson.core:jackson-core:2.9.6,
+          com.fasterxml.jackson.core:jackson-databind:2.9.6,
+          com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.6
+        Other-Modules: Dhall.Yaml.Eta
+        Java-Sources: java/Utils.java
+        Cpp-Options: -DETA
+    else
+      if flag(yaml-pre-0_11)
+        Build-Depends:
+            yaml >= 0.5.0 && < 0.11
+      else
+        Build-Depends:
+            libyaml >= 0.1.1.0 && < 0.2 ,
+            yaml    >= 0.11.0  && < 0.12
 
 Executable dhall-to-json
     Hs-Source-Dirs: dhall-to-json
@@ -68,22 +94,7 @@ Executable dhall-to-yaml
         dhall                                  ,
         dhall-json                             ,
         optparse-applicative                   ,
-        vector                                 ,
         text
-    if !impl(eta)
-      Build-Depends:
-          yaml                 >= 0.5.0 && < 0.12
-      Other-Modules: Dhall.Yaml
-    if impl(eta)
-      Build-Depends:
-          utf8-string          >= 1.0   && <= 1.1
-      Maven-Depends:
-          com.fasterxml.jackson.core:jackson-core:2.9.6,
-          com.fasterxml.jackson.core:jackson-databind:2.9.6,
-          com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.6
-      Other-Modules: Dhall.Yaml.Eta
-      Java-Sources: java/Utils.java
-      cpp-options: -DETA                         
     GHC-Options: -Wall
 
 Executable json-to-dhall

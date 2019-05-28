@@ -335,11 +335,16 @@ instance ToTerm a => ToTerm (Expr s a) where
         TList [ TInt 9, t₁, TString x ]
       where
         t₁ = encode t₀
-    encode (Project t₀ xs₀) =
+    encode (Project t₀ (Left xs₀)) =
         TList ([ TInt 10, t₁ ] ++ xs₁)
       where
         t₁  = encode t₀
         xs₁ = map TString (Dhall.Set.toList xs₀)
+    encode (Project t₀ (Right _T₀)) =
+        TList [ TInt 10, t₁, TList [ _T₁ ] ]
+      where
+        _T₁ = encode _T₀
+        t₁  = encode t₀
     encode (Union xTs₀) =
         TList [ TInt 11, TMap xTs₁ ]
       where
@@ -660,12 +665,26 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TList (TInt 10 : t₁ : xs₁)) = do
         t₀ <- decode t₁
 
-        let process (TString x) = return x
-            process  _          = empty
+        let expectString (TString x) = return x
+            expectString  _          = empty
 
-        xs₀ <- traverse process xs₁
+        let decodeLeft = do
+                strings <- traverse expectString xs₁
 
-        return (Project t₀ (Dhall.Set.fromList xs₀))
+                return (Left (Dhall.Set.fromList strings))
+
+        let decodeRight =
+                case xs₁ of
+                    [ TList [ _T₁ ] ] -> do
+                        _T₀ <- decode _T₁
+
+                        return (Right _T₀)
+                    _ -> do
+                        empty
+
+        xs₀ <- decodeLeft <|> decodeRight
+
+        return (Project t₀ xs₀)
     decode (TList [ TInt 11, TMap xTs₁ ]) = do
         let process (TString x, _T₁) = do
                 mT₀ <- case _T₁ of
@@ -856,6 +875,50 @@ instance FromTerm Import where
 
     decode _ = empty
 
+strip55799Tag :: Term -> Term
+strip55799Tag term =
+    case term of
+        TInt a ->
+            TInt a
+        TInteger a ->
+            TInteger a
+        TBytes a ->
+            TBytes a
+        TBytesI a ->
+            TBytesI a
+        TString a ->
+            TString a
+        TStringI a ->
+            TStringI a
+        TList as ->
+            TList (fmap strip55799Tag as)
+        TListI as ->
+            TListI (fmap strip55799Tag as)
+        TMap as ->
+            TMap (fmap adapt as)
+          where
+            adapt (a, b) = (strip55799Tag a, strip55799Tag b)
+        TMapI as ->
+            TMapI (fmap adapt as)
+          where
+            adapt (a, b) = (strip55799Tag a, strip55799Tag b)
+        TTagged 55799 b ->
+            strip55799Tag b
+        TTagged a b->
+            TTagged a (strip55799Tag b)
+        TBool a ->
+            TBool a
+        TNull ->
+            TNull
+        TSimple a ->
+            TSimple a
+        THalf a ->
+            THalf a
+        TFloat a ->
+            TFloat a
+        TDouble a ->
+            TDouble a
+
 -- | Encode a Dhall expression as a CBOR `Term`
 encodeExpression :: Expr s Import -> Term
 encodeExpression = encode
@@ -867,13 +930,14 @@ decodeExpression term =
         Just expression -> Right expression
         Nothing         -> Left (CBORIsNotDhall term)
   where
+    strippedTerm = strip55799Tag term
     -- This is the behavior specified by the standard
-    decodeWithoutVersion = decode term
+    decodeWithoutVersion = decode strippedTerm
 
     -- For backwards compatibility with older expressions that have a version
     -- tag to ease the migration
     decodeWithVersion = do
-        TList [ TString _, taggedTerm ] <- return term
+        TList [ TString _, taggedTerm ] <- return strippedTerm
         decode taggedTerm
 
 data DecodingFailure = CBORIsNotDhall Term

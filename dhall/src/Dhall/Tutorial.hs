@@ -65,6 +65,9 @@ module Dhall.Tutorial (
     -- ** Caveats
     -- $caveats
 
+    -- ** Extending the language
+    -- $extending
+
     -- ** Overview
     -- $builtinOverview
 
@@ -1529,20 +1532,16 @@ import Dhall
 -- or you changed some of the imports and want to update the hashes you can use the
 -- freeze command to either add or update hashes:
 --
--- > cat foo.dhall
--- ''
--- let replicate =
---       https://raw.githubusercontent.com/dhall-lang/Prelude/c79c2bc3c46f129cc5b6d594ce298a381bcae92c/List/replicate
---
--- in  replicate 5
--- ''
--- > dhall freeze --inplace ./foo.dhall
--- > cat ./foo.dhall
--- ''
--- let replicate =
---       https://raw.githubusercontent.com/dhall-lang/Prelude/c79c2bc3c46f129cc5b6d594ce298a381bcae92c/List/replicate sha256:b0e3ec1797b32c80c0bcb7e8254b08c7e9e35e75e6b410c7ac21477ab90167ad 
--- in  replicate 5
--- ''
+-- > $ cat foo.dhall
+-- > let replicate =
+-- >       https://raw.githubusercontent.com/dhall-lang/Prelude/c79c2bc3c46f129cc5b6d594ce298a381bcae92c/List/replicate
+-- > in  replicate 5
+-- > $
+-- > $ dhall freeze --inplace ./foo.dhall
+-- > $ cat ./foo.dhall
+-- > let replicate =
+-- >       https://raw.githubusercontent.com/dhall-lang/Prelude/c79c2bc3c46f129cc5b6d594ce298a381bcae92c/List/replicate sha256:b0e3ec1797b32c80c0bcb7e8254b08c7e9e35e75e6b410c7ac21477ab90167ad
+-- > in  replicate 5
 --
 -- $rawText
 --
@@ -1819,6 +1818,92 @@ import Dhall
 --
 -- Second, the equality @(==)@ and inequality @(!=)@ operators only work on
 -- @Bool@s.  You cannot test any other types of values for equality.
+--
+-- However, you can extend the language with your own built-ins using the
+-- Haskell API, as described in the next section.
+
+-- $extending
+--
+-- You can use the Haskell API to extend the Dhall configuration language with
+-- new built-in functions.  This section contains a simple Haskell recipe to add
+-- a new @Natural/equal@ built-in function of type:
+--
+-- > Natural/equal : Natural → Natural → Bool
+--
+-- To do so, we:
+-- 
+-- * extend the type-checking context to include the type of @Natural/equal@
+-- * extend the normalizer to evaluate all occurrences of @Natural/equal@
+--
+-- ... like this:
+--
+-- > -- example.hs
+-- > 
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- > 
+-- > module Main where
+-- > 
+-- > import Dhall.Core (Expr(..), ReifiedNormalizer(..))
+-- > 
+-- > import qualified Data.Text.IO
+-- > import qualified Dhall
+-- > import qualified Dhall.Context
+-- > import qualified Lens.Family   as Lens
+-- > 
+-- > main :: IO ()
+-- > main = do
+-- >     text <- Data.Text.IO.getContents
+-- > 
+-- >     let startingContext = transform Dhall.Context.empty
+-- >           where
+-- >             transform = Dhall.Context.insert "Natural/equal" naturalEqualType
+-- > 
+-- >             naturalEqualType =
+-- >                 Pi "_" Natural (Pi "_" Natural Bool)
+-- > 
+-- >     let normalizer (App (App (Var "Natural/equal") (NaturalLit x)) (NaturalLit y)) =
+-- >             Just (BoolLit (x == y))
+-- >         normalizer _ =
+-- >             Nothing
+-- > 
+-- >     let inputSettings = transform Dhall.defaultInputSettings
+-- >           where
+-- >             transform =
+-- >                   Lens.set Dhall.normalizer      (ReifiedNormalizer (pure . normalizer))
+-- >                 . Lens.set Dhall.startingContext startingContext
+-- > 
+-- >     x <- Dhall.inputWithSettings inputSettings Dhall.auto text
+-- > 
+-- >     Data.Text.IO.putStrLn x
+--
+-- Here is an example use of the above program:
+--
+-- > $ ./example <<< 'if Natural/equal 2 (1 + 1) then "Equal" else "Not equal"'
+-- > Equal
+--
+-- Note that existing Dhall tools that type-check expressions will reject
+-- expressions containing unexpected free variable such as @Natural/equal@:
+--
+-- > $ dhall <<< 'Natural/equal 2 (1 + 1)'
+-- > 
+-- > Use "dhall --explain" for detailed errors
+-- > 
+-- > Error: Unbound variable
+-- > 
+-- > Natural/equal 
+-- > 
+-- > (stdin):1:1
+--
+-- You will need to either:
+-- 
+-- * create your own parallel versions of these tools, or:
+-- * < https://github.com/dhall-lang/dhall-lang/blob/master/.github/CONTRIBUTING.md#how-do-i-change-the-language try to upstream your built-ins into the language>
+-- 
+-- The general guidelines for adding new built-ins to the language are:
+-- 
+-- * Keep built-ins easy to implement across language bindings
+-- * Prefer general purpose built-ins or built-ins appropriate for the task of program configuration
+-- * Design built-ins to catch errors as early as possible (i.e. when type-checking the configuration)
 
 -- $builtinOverview
 --

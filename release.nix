@@ -85,4 +85,13 @@ in
     linux-dhall-lsp-server = shared_linux.possibly-static.dhall-lsp-server;
     linux-dhall-nix        = shared_linux.possibly-static.dhall-nix;
     linux-dhall-text       = shared_linux.possibly-static.dhall-text;
+
+    inherit (shared_linux)
+      image-dhall
+      image-dhall-bash
+      image-dhall-json
+      image-dhall-lsp-server
+      image-dhall-nix
+      image-dhall-text
+    ;
   }

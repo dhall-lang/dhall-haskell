@@ -56,6 +56,7 @@ module Dhall.Core (
     , reservedIdentifiers
     , escapeText
     , subExpressions
+    , chunkExprs
     , pathCharacter
     , throws
     ) where
@@ -468,8 +469,9 @@ data Expr s a
     | Merge (Expr s a) (Expr s a) (Maybe (Expr s a))
     -- | > Field e x                                ~  e.x
     | Field (Expr s a) Text
-    -- | > Project e xs                             ~  e.{ xs }
-    | Project (Expr s a) (Set Text)
+    -- | > Project e (Left xs)                      ~  e.{ xs }
+    -- | > Project e (Right t)                      ~  e.(t)
+    | Project (Expr s a) (Either (Set Text) (Expr s a))
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
     -- | > ImportAlt                                ~  e1 ? e2
@@ -544,7 +546,7 @@ instance Functor (Expr s) where
   fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
   fmap f (Merge e1 e2 maybeE) = Merge (fmap f e1) (fmap f e2) (fmap (fmap f) maybeE)
   fmap f (Field e1 v) = Field (fmap f e1) v
-  fmap f (Project e1 vs) = Project (fmap f e1) vs
+  fmap f (Project e1 vs) = Project (fmap f e1) (fmap (fmap f) vs)
   fmap f (Note s e1) = Note s (fmap f e1)
   fmap f (ImportAlt e1 e2) = ImportAlt (fmap f e1) (fmap f e2)
   fmap f (Embed a) = Embed (f a)
@@ -621,7 +623,7 @@ instance Monad (Expr s) where
     Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
     Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
     Field a b            >>= k = Field (a >>= k) b
-    Project a b          >>= k = Project (a >>= k) b
+    Project a b          >>= k = Project (a >>= k) (fmap (>>= k) b)
     Note a b             >>= k = Note a (b >>= k)
     ImportAlt a b        >>= k = ImportAlt (a >>= k) (b >>= k)
     Embed a              >>= k = k a
@@ -688,7 +690,7 @@ instance Bifunctor Expr where
     first k (Prefer a b          ) = Prefer (first k a) (first k b)
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
     first k (Field a b           ) = Field (first k a) b
-    first k (Project a b         ) = Project (first k a) b
+    first k (Project a b         ) = Project (first k a) (fmap (first k) b)
     first k (Note a b            ) = Note (k a) (first k b)
     first k (ImportAlt a b       ) = ImportAlt (first k a) (first k b)
     first _ (Embed a             ) = Embed a
@@ -1274,7 +1276,7 @@ denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
 denote (Prefer a b          ) = Prefer (denote a) (denote b)
 denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (Field a b           ) = Field (denote a) b
-denote (Project a b         ) = Project (denote a) b
+denote (Project a b         ) = Project (denote a) (fmap denote b)
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
@@ -1663,7 +1665,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                     Just v  -> loop v
                     Nothing -> Field <$> (RecordLit <$> traverse loop kvs) <*> pure x
             _ -> pure (Field r' x)
-    Project r xs     -> do
+    Project r (Left xs)-> do
         r' <- loop r
         case r' of
             RecordLit kvs ->
@@ -1673,13 +1675,22 @@ normalizeWithM ctx e0 = loop (denote e0)
                       where
                         kvs' = Dhall.Map.fromList s
                     Nothing ->
-                        Project <$> (RecordLit <$> traverse loop kvs) <*> pure xs
+                        Project <$> (RecordLit <$> traverse loop kvs) <*> pure (Left xs)
               where
                 adapt x = do
                     v <- Dhall.Map.lookup x kvs
                     return (x, v)
             _   | null xs -> pure (RecordLit mempty)
-                | otherwise -> pure (Project r' xs)
+                | otherwise -> pure (Project r' (Left xs))
+    Project r (Right e1) -> do
+        e2 <- loop e1
+
+        case e2 of
+            Record kts -> do
+                loop (Project r (Left (Dhall.Set.fromList (Dhall.Map.keys kts))))
+            _ -> do
+                r' <- loop r
+                pure (Project r' (Right e2))
     Note _ e' -> loop e'
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
@@ -1905,9 +1916,14 @@ isNormalized e0 = loop (denote e0)
       Project r xs -> loop r &&
           case r of
               RecordLit kvs ->
-                  if all (flip Dhall.Map.member kvs) xs
-                      then False
-                      else True
+                  case xs of
+                      Left  s -> not (all (flip Dhall.Map.member kvs) s)
+                      Right e' ->
+                          case e' of
+                              Record kts ->
+                                  loop (Project r (Left (Dhall.Set.fromList (Dhall.Map.keys kts))))
+                              _ ->
+                                  False
               _ -> not (null xs)
       Note _ e' -> loop e'
       ImportAlt l _r -> loop l
@@ -2044,8 +2060,8 @@ subExpressions _ Double = pure Double
 subExpressions _ (DoubleLit n) = pure (DoubleLit n)
 subExpressions _ DoubleShow = pure DoubleShow
 subExpressions _ Text = pure Text
-subExpressions f (TextLit (Chunks a b)) =
-    TextLit <$> (Chunks <$> traverse (traverse f) a <*> pure b)
+subExpressions f (TextLit chunks) =
+    TextLit <$> chunkExprs f chunks
 subExpressions f (TextAppend a b) = TextAppend <$> f a <*> f b
 subExpressions _ TextShow = pure TextShow
 subExpressions _ List = pure List
@@ -2078,6 +2094,14 @@ subExpressions f (Project a b) = Project <$> f a <*> pure b
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 subExpressions _ (Embed a) = pure (Embed a)
+
+-- | A traversal over the immediate sub-expressions in 'Chunks'.
+chunkExprs
+  :: Applicative f
+  => (Expr s a -> f (Expr t b))
+  -> Chunks s a -> f (Chunks t b)
+chunkExprs f (Chunks chunks final) =
+  flip Chunks final <$> traverse (traverse f) chunks
 
 {-| Returns `True` if the given `Char` is valid within an unquoted path
     component

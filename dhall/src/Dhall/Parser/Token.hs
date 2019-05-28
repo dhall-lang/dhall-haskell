@@ -6,6 +6,7 @@ module Dhall.Parser.Token (
     whitespace,
     bashEnvironmentVariable,
     posixEnvironmentVariable,
+    ComponentType(..),
     file_,
     label,
     anyLabel,
@@ -332,9 +333,24 @@ posixEnvironmentVariable = plus posixEnvironmentVariableCharacter
 
 posixEnvironmentVariableCharacter :: Parser Text
 posixEnvironmentVariableCharacter =
-    ("\\" <> satisfy predicate0) <|> satisfy predicate1
+    escapeCharacter <|> satisfy predicate1
   where
-    predicate0 c = c `elem` ("\"\\abfnrtv" :: String)
+    escapeCharacter = do
+        _ <- Text.Parser.Char.char '\\'
+
+        c <- Text.Parser.Char.satisfy (`elem` ("\"\\abfnrtv" :: String))
+
+        case c of
+            '"'  -> return "\""
+            '\\' -> return "\\"
+            'a'  -> return "\a"
+            'b'  -> return "\b"
+            'f'  -> return "\f"
+            'n'  -> return "\n"
+            'r'  -> return "\r"
+            't'  -> return "\t"
+            'v'  -> return "\v"
+            _    -> empty
 
     predicate1 c =
             ('\x20' <= c && c <= '\x21')
@@ -348,23 +364,31 @@ quotedPathCharacter c =
     ||  ('\x23' <= c && c <= '\x2E')
     ||  ('\x30' <= c && c <= '\x10FFFF')
 
-pathComponent :: Parser Text
-pathComponent = do
-    _      <- "/" :: Parser Text
+data ComponentType = URLComponent | FileComponent
 
-    let pathData = Text.Megaparsec.takeWhile1P Nothing Dhall.Core.pathCharacter
+pathComponent :: ComponentType -> Parser Text
+pathComponent componentType = do
+    _ <- "/" :: Parser Text
+
+    let pathData = do
+            text <- Text.Megaparsec.takeWhile1P Nothing Dhall.Core.pathCharacter
+
+            case componentType of
+                FileComponent -> return text
+                URLComponent  -> return (URI.Encode.decodeText text)
 
     let quotedPathData = do
             _    <- Text.Parser.Char.char '"'
             text <- Text.Megaparsec.takeWhile1P Nothing quotedPathCharacter
             _    <- Text.Parser.Char.char '"'
+
             return text
 
     pathData <|> quotedPathData
 
-file_ :: Parser File
-file_ = do
-    path <- Data.List.NonEmpty.some1 pathComponent
+file_ :: ComponentType -> Parser File
+file_ componentType = do
+    path <- Data.List.NonEmpty.some1 (pathComponent componentType)
 
     let directory = Directory (reverse (Data.List.NonEmpty.init path))
     let file      = Data.List.NonEmpty.last path
@@ -381,18 +405,8 @@ httpRaw :: Parser URL
 httpRaw = do
     scheme    <- scheme_
     authority <- authority_
-    oldPath   <- file_
+    path      <- file_ URLComponent
     query     <- optional (("?" :: Parser Text) *> query_)
-
-    let path =
-            oldPath
-                { file = URI.Encode.decodeText (file oldPath)
-                , directory =
-                    (directory oldPath)
-                        { components =
-                            map URI.Encode.decodeText (components (directory oldPath))
-                        }
-                }
 
     let headers = Nothing
 
@@ -441,28 +455,32 @@ ipV6Address =
     alternative2 = option h16 <> "::" <> count 4 (h16 <> ":") <> ls32
 
     alternative3 =
-            option (range 0 1 (h16 <> ":") <> h16)
+            option (h16 <> range 0 1 (try (":" <> h16)))
         <>  "::"
         <>  count 3 (h16 <> ":")
         <>  ls32
 
     alternative4 =
-            option (range 0 2 (h16 <> ":") <> h16)
+            option (h16 <> range 0 2 (try (":" <> h16)))
         <>  "::"
         <>  count 2 (h16 <> ":")
         <>  ls32
 
     alternative5 =
-        option (range 0 3 (h16 <> ":") <> h16) <> "::" <> h16 <> ":" <> ls32
+            option (h16 <> range 0 3 (try (":" <> h16)))
+        <>  "::"
+        <>  h16
+        <>  ":"
+        <>  ls32
 
     alternative6 =
-        option (range 0 4 (h16 <> ":") <> h16) <> "::" <> ls32
+        option (h16 <> range 0 4 (try (":" <> h16))) <> "::" <> ls32
 
     alternative7 =
-        option (range 0 5 (h16 <> ":") <> h16) <> "::" <> h16
+        option (h16 <> range 0 5 (try (":" <> h16))) <> "::" <> h16
 
     alternative8 =
-        option (range 0 6 (h16 <> ":") <> h16) <> "::"
+        option (h16 <> range 0 6 (try (":" <> h16))) <> "::"
 
 h16 :: Parser Text
 h16 = range 1 3 (satisfy hexdig)

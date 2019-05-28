@@ -6,7 +6,7 @@ module Main where
 import Control.Exception (SomeException)
 import Data.Aeson (Value)
 import Data.Monoid ((<>))
-import Dhall.JSON (Conversion)
+import Dhall.JSON (Conversion, SpecialDoubleMode(..))
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
@@ -14,11 +14,7 @@ import qualified Data.ByteString
 import qualified Data.Text.IO
 import qualified Dhall
 import qualified Dhall.JSON
-#ifdef ETA
-import qualified Dhall.Yaml.Eta as Dhall.Yaml
-#else
 import qualified Dhall.Yaml
-#endif
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified System.Exit
@@ -28,6 +24,7 @@ data Options = Options
     { explain    :: Bool
     , omission   :: Value -> Value
     , documents  :: Bool
+    , quoted     :: Bool
     , conversion :: Conversion
     }
 
@@ -37,6 +34,7 @@ parseOptions =
     <$> parseExplain
     <*> Dhall.JSON.parseOmission
     <*> parseDocuments
+    <*> parseQuoted
     <*> Dhall.JSON.parseConversion
   where
     parseExplain =
@@ -49,6 +47,12 @@ parseOptions =
         Options.Applicative.switch
             (   Options.Applicative.long "documents"
             <>  Options.Applicative.help "If given a Dhall list, output a document for every element"
+            )
+
+    parseQuoted =
+        Options.Applicative.switch
+            (   Options.Applicative.long "quoted"
+            <>  Options.Applicative.help "Prevent from generating not quoted scalars"
             )
 
 parserInfo :: ParserInfo Options
@@ -70,9 +74,9 @@ main = do
 
         stdin <- Data.Text.IO.getContents
 
-        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion "(stdin)" stdin)
+        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion UseYAMLEncoding "(stdin)" stdin)
 
-        let yaml = Dhall.Yaml.encode documents json
+        let yaml = Dhall.Yaml.jsonToYaml json documents quoted
 
         Data.ByteString.putStr yaml
 

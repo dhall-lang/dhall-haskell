@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | This module contains Dhall's parsing logic
 
@@ -42,13 +43,21 @@ exprA = completeExpression
 
 -- | A parsing error
 data ParseError = ParseError
+#if MIN_VERSION_megaparsec(7, 0, 0)
     { unwrap :: Text.Megaparsec.ParseErrorBundle Text Void
+#else
+    { unwrap :: Text.Megaparsec.ParseError Char Void
+#endif
     , input  :: Text
     }
 
 instance Show ParseError where
     show (ParseError {..}) =
+#if MIN_VERSION_megaparsec(7, 0, 0)
       "\n\ESC[1;31mError\ESC[0m: Invalid input\n\n" <> Text.Megaparsec.errorBundlePretty unwrap
+#else
+      "\n\ESC[1;31mError\ESC[0m: Invalid input\n\n" <> Text.Megaparsec.parseErrorPretty unwrap
+#endif
 
 instance Exception ParseError
 

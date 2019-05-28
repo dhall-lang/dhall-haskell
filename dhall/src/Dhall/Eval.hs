@@ -87,6 +87,7 @@ import qualified Data.Sequence
 import qualified Data.Text
 import qualified Dhall.Binary
 import qualified Dhall.Map
+import qualified Dhall.Set
 import qualified Text.Printf
 
 ----------------------------------------------------------------------------------------------------
@@ -214,7 +215,7 @@ data Val a
   | VMerge !(Val a) !(Val a) !(Maybe (Val a))
   | VField !(Val a) !Text
   | VInject !(Map Text (Maybe (Val a))) !Text !(Maybe (Val a))
-  | VProject !(Val a) !(Set Text)
+  | VProject !(Val a) !(Either (Set Text) (Val a))
   | VEmbed a
 
 vFun :: Val a -> Val a -> Val a
@@ -536,14 +537,20 @@ eval !env t =
                             Just Nothing  -> VInject m k Nothing
                             _             -> error errorMsg
                           t -> VField t k
-    Project t ks     -> if null ks then
+    Project t (Left ks) ->
+                        if null ks then
                           VRecordLit mempty
                         else case evalE t of
                           VRecordLit kvs
                             | Just s <- traverse (\k -> (k,) <$> Dhall.Map.lookup k kvs) (toList ks)
                               -> VRecordLit (Dhall.Map.sort (Dhall.Map.fromList s))
                             | otherwise -> error errorMsg
-                          t -> VProject t ks
+                          t -> VProject t (Left ks)
+    Project t (Right e) ->
+                        case evalE e of
+                          VRecord kts ->
+                            evalE (Project t (Left (Dhall.Set.fromList (Dhall.Map.keys kts))))
+                          e' -> VProject (evalE t) (Right e')
     Note _ e         -> evalE e
     ImportAlt t _    -> evalE t
     Embed a          -> VEmbed a
@@ -558,6 +565,12 @@ eqListBy f = go where
   go [] [] = True
   go _  _  = False
 {-# inline eqListBy #-}
+
+eqMapsBy :: Ord k => (v -> v -> Bool) -> Map k v -> Map k v -> Bool
+eqMapsBy f mL mR = eqListBy eq (Dhall.Map.toList mL) (Dhall.Map.toList mR)
+  where
+    eq (kL, vL) (kR, vR) = kL == kR && f vL vR
+{-# inline eqMapsBy #-}
 
 eqMaybeBy :: (a -> a -> Bool) -> Maybe a -> Maybe a -> Bool
 eqMaybeBy f = go where
@@ -670,18 +683,19 @@ conv !env t t' =
     (VSome t                 , VSome t'                    ) -> convE t t'
     (VNone _                 , VNone _                     ) -> True
     (VOptionalBuild _ t      , VOptionalBuild _ t'         ) -> convE t t'
-    (VRecord m               , VRecord m'                  ) -> eqListBy convE (toList m) (toList m')
-    (VRecordLit m            , VRecordLit m'               ) -> eqListBy convE (toList m) (toList m')
-    (VUnion m                , VUnion m'                   ) -> eqListBy (eqMaybeBy convE) (toList m) (toList m')
+    (VRecord m               , VRecord m'                  ) -> eqMapsBy convE m m'
+    (VRecordLit m            , VRecordLit m'               ) -> eqMapsBy convE m m'
+    (VUnion m                , VUnion m'                   ) -> eqMapsBy (eqMaybeBy convE) m m'
     (VUnionLit k v m         , VUnionLit k' v' m'          ) -> k == k' && convE v v' &&
-                                                                  eqListBy (eqMaybeBy convE) (toList m) (toList m')
+                                                                  eqMapsBy (eqMaybeBy convE)  m m'
     (VCombine t u            , VCombine t' u'              ) -> convE t t' && convE u u'
     (VCombineTypes t u       , VCombineTypes t' u'         ) -> convE t t' && convE u u'
     (VPrefer  t u            , VPrefer t' u'               ) -> convE t t' && convE u u'
     (VMerge t u _            , VMerge t' u' _              ) -> convE t t' && convE u u'
     (VField t k              , VField t' k'                ) -> convE t t' && k == k'
-    (VProject t ks           , VProject t' ks'             ) -> convE t t' && ks == ks'
-    (VInject m k mt          , VInject m' k' mt'           ) -> eqListBy (eqMaybeBy convE) (toList m) (toList m')
+    (VProject t (Left ks)    , VProject t' (Left ks')      ) -> convE t t' && ks == ks'
+    (VProject t (Right e)    , VProject t' (Right e')      ) -> convE t t' && convE e e'
+    (VInject m k mt          , VInject m' k' mt'           ) -> eqMapsBy (eqMaybeBy convE) m m'
                                                                   && k == k' && eqMaybeBy convE mt mt'
     (VEmbed a                , VEmbed a'                   ) -> a == a'
     (VOptionalFold a t _ u v , VOptionalFold a' t' _ u' v' ) ->
@@ -813,7 +827,7 @@ quote !env !t =
     VPrefer t u                   -> Prefer (quoteE t) (quoteE u)
     VMerge t u ma                 -> Merge (quoteE t) (quoteE u) (quoteE <$> ma)
     VField t k                    -> Field (quoteE t) k
-    VProject t ks                 -> Project (quoteE t) ks
+    VProject t p                  -> Project (quoteE t) (fmap quoteE p)
     VInject m k Nothing           -> Field (Union ((quoteE <$>) <$> m)) k
     VInject m k (Just t)          -> Field (Union ((quoteE <$>) <$> m)) k `qApp` t
     VEmbed a                      -> Embed a
@@ -843,7 +857,7 @@ alphaNormalize = goEnv NEmpty where
     go !acc (NBind env x) !i
       | x == topX = if i == 0 then Var (V "_" acc) else go (acc + 1) env (i - 1)
       | otherwise = go (acc + 1) env i
-    go acc NEmpty i = Var (V topX topI)
+    go acc NEmpty i = Var (V topX i)
 
   goEnv :: Names -> Expr s a -> Expr s a
   goEnv !e t = let
@@ -878,7 +892,7 @@ alphaNormalize = goEnv NEmpty where
       BoolOr t u       -> BoolOr  (go t) (go u)
       BoolEQ t u       -> BoolEQ  (go t) (go u)
       BoolNE t u       -> BoolNE  (go t) (go u)
-      BoolIf b t f     -> BoolIf  (go t) (go t) (go f)
+      BoolIf b t f     -> BoolIf  (go b) (go t) (go f)
       Natural          -> Natural
       NaturalLit n     -> NaturalLit n
       NaturalFold      -> NaturalFold

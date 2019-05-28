@@ -7,7 +7,7 @@ packages:
   - dhall-lsp-server
 extra-deps:
   - megaparsec-7.0.4
-  - repline-0.2.0.0
+  - repline-0.2.1.0
   - serialise-0.2.1.0
   - neat-interpolation-0.3.2.4
   - dotgen-0.4.2
@@ -16,6 +16,13 @@ extra-deps:
   - haskell-lsp-0.8.1.0
   - haskell-lsp-types-0.8.0.1
   - turtle-1.5.14
+  - transformers-compat-0.6.4
+  - yaml-0.10.4.0
+flags:
+  transformers-compat:
+    five-three: true
+  dhall-json:
+    yaml-pre-0_11: true
 nix:
   packages:
     - ncurses
