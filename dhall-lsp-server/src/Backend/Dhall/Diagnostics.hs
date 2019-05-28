@@ -24,7 +24,6 @@ import Dhall.Binary(DecodingFailure(..))
 import Dhall.Import(Imported(..), Cycle(..), ReferentiallyOpaque(..),
                      MissingFile, MissingEnvironmentVariable, MissingImports(..) )
 
-
 import Data.Text (Text)
 import qualified Data.Text as T
 
@@ -53,7 +52,6 @@ tshow = T.pack . show
 defaultDiagnosticSource :: DiagnosticSource
 defaultDiagnosticSource = "dhall-lsp-server"
 
--- TODO: type errors span across whitespace after the expression
 -- TODO: don't use show for import msgs (requires alternative typeclass)
 -- TODO: file consisting with only comments shouldn't produce an error msg
 compilerDiagnostics :: FilePath -> Text -> IO [Diagnostic]
@@ -102,7 +100,7 @@ compilerDiagnostics path txt = handle ast
     missingImports (SourcedException src e) = do
       let _ = e :: MissingImports
       pure [Diagnostic {
-             _range = sourceToRange src
+             _range = sanitiseRange (sourceToRange src) txt
            , _severity = Just DsError
            , _source = Just defaultDiagnosticSource
            , _code = Nothing
@@ -113,7 +111,7 @@ compilerDiagnostics path txt = handle ast
       let _ = e :: TypeError Src X
           (TypeError ctx expr msg) = e
       pure [ Diagnostic {
-        _range = getSourceRange e
+        _range = sanitiseRange (getSourceRange e) txt
       , _severity = Just DsError
       , _source = Just defaultDiagnosticSource
       , _code = Nothing
@@ -194,3 +192,40 @@ errorFancyLength :: Text.Megaparsec.ShowErrorComponent e => Text.Megaparsec.Erro
 errorFancyLength = \case
   Text.Megaparsec.ErrorCustom a -> Text.Megaparsec.errorComponentLen a
   _             -> 1
+
+-- sanitise range to exclude surrounding whitespace
+-- makes sure that the resulting range is well-formed
+sanitiseRange :: Range -> Text -> Range
+sanitiseRange (Range l r) text = Range l (max l r')
+  where r' = trimEndPosition r text
+
+-- Variants of T.lines and T.unlines that are inverses of one another.
+lines' :: Text -> [Text]
+lines' = T.split (=='\n')
+
+unlines' :: [Text] -> Text
+unlines' = T.intercalate "\n"
+
+-- Convert a (line,column) position into the corresponding character offset
+-- and back, such that the two are inverses of eachother.
+positionToOffset :: Text -> Position -> Int
+positionToOffset txt (Position line col) =
+    if line < length ls
+      then T.length . unlines' $ take line ls ++ [T.take col (ls !! line)]
+      else T.length txt  -- position lies outside txt
+  where
+    ls = lines' txt
+
+offsetToPosition :: Text -> Int -> Position
+offsetToPosition txt off =
+    if null ls
+       then Position 0 0
+       else Position (length ls - 1) (T.length (last ls))
+  where ls = lines' (T.take off txt)
+
+
+-- adjust a given position to exclude any trailing whitespace
+trimEndPosition :: Position -> Text -> Position
+trimEndPosition pos txt =
+    offsetToPosition txt (T.length . T.stripEnd . T.take off $ txt)
+  where off = positionToOffset txt pos
