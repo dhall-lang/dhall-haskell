@@ -341,7 +341,7 @@ instance ToTerm a => ToTerm (Expr s a) where
         t₁  = encode t₀
         xs₁ = map TString (Dhall.Set.toList xs₀)
     encode (Project t₀ (Right _T₀)) =
-        TList [ TInt 10, t₁, _T₁ ]
+        TList [ TInt 10, t₁, TList [ _T₁ ] ]
       where
         _T₁ = encode _T₀
         t₁  = encode t₀
@@ -675,7 +675,7 @@ instance FromTerm a => FromTerm (Expr s a) where
 
         let decodeRight =
                 case xs₁ of
-                    [ _T₁ ] -> do
+                    [ TList [ _T₁ ] ] -> do
                         _T₀ <- decode _T₁
 
                         return (Right _T₀)
