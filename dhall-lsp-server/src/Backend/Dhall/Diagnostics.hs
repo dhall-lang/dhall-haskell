@@ -9,6 +9,7 @@ module Backend.Dhall.Diagnostics( compilerDiagnostics
 This module is responsible for producing dhall compiler diagnostic (errors, warns, etc ...)
 -}
 
+import Control.Exception (SomeException)
 import qualified Control.Exception
 import qualified Dhall
 import Dhall(rootDirectory, sourceName, defaultInputSettings, inputExprWithSettings)
@@ -23,14 +24,17 @@ import Dhall.Binary(DecodingFailure(..))
 import Dhall.Import(Imported(..), Cycle(..), ReferentiallyOpaque(..),
                      MissingFile, MissingEnvironmentVariable, MissingImports(..) )
 
-
+import Data.Text (Text)
 import qualified Data.Text as T
+import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.List.NonEmpty as NonEmpty
 
 
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Error
 import Text.Show(ShowS)
 import qualified Data.Set
+import Data.Foldable (foldl')
 import qualified System.FilePath
 
 import Backend.Dhall.DhallErrors(simpleTypeMessage)
@@ -44,10 +48,12 @@ import Language.Haskell.LSP.Types(
     , Position(..)
     )
 
+tshow :: Show a => a -> Text
+tshow = T.pack . show
+
 defaultDiagnosticSource :: DiagnosticSource
 defaultDiagnosticSource = "dhall-lsp-server"
 
--- TODO: type errors span across whitespace after the expression
 -- TODO: don't use show for import msgs (requires alternative typeclass)
 -- TODO: file consisting with only comments shouldn't produce an error msg
 compilerDiagnostics :: FilePath -> Text -> IO [Diagnostic]
@@ -75,7 +81,7 @@ compilerDiagnostics path txt = handle ast
             , _severity = Just DsError
             , _source = Just defaultDiagnosticSource
             , _code = Nothing
-            , _message = "Internal error has occurred: " <> (show e)
+            , _message = "Internal error has occurred: " <> (tshow e)
             , _relatedInformation = Nothing
             }]
     decodingFailure e = do
@@ -85,7 +91,7 @@ compilerDiagnostics path txt = handle ast
       , _severity = Just DsError
       , _source = Just defaultDiagnosticSource
       , _code = Nothing
-      , _message = "Cannot decode CBOR to Dhall " <> (show term)
+      , _message = "Cannot decode CBOR to Dhall " <> (tshow term)
       , _relatedInformation = Nothing
       }]
     parseErrors e = do
@@ -96,18 +102,18 @@ compilerDiagnostics path txt = handle ast
     missingImports (SourcedException src e) = do
       let _ = e :: MissingImports
       pure [Diagnostic {
-             _range = sourceToRange src
+             _range = sanitiseRange (sourceToRange src) txt
            , _severity = Just DsError
            , _source = Just defaultDiagnosticSource
            , _code = Nothing
-           , _message = removeAsciiColors $ show e
+           , _message = removeAsciiColors $ tshow e
            , _relatedInformation = Nothing
            }]
     typeErrors e = do
       let _ = e :: TypeError Src X
           (TypeError ctx expr msg) = e
       pure [ Diagnostic {
-        _range = getSourceRange e
+        _range = sanitiseRange (getSourceRange e) txt
       , _severity = Just DsError
       , _source = Just defaultDiagnosticSource
       , _code = Nothing
@@ -188,3 +194,41 @@ errorFancyLength :: Text.Megaparsec.ShowErrorComponent e => Text.Megaparsec.Erro
 errorFancyLength = \case
   Text.Megaparsec.ErrorCustom a -> Text.Megaparsec.errorComponentLen a
   _             -> 1
+
+-- sanitise range to exclude surrounding whitespace
+-- makes sure that the resulting range is well-formed
+sanitiseRange :: Range -> Text -> Range
+sanitiseRange (Range l r) text = Range l (max l r')
+  where r' = trimEndPosition r text
+
+-- Variants of T.lines and T.unlines that are inverses of one another.
+-- T.lines always returns at least the empty line!
+lines' :: Text -> NonEmpty Text
+lines' text =
+    case T.split (== '\n') text of
+      []     -> "" :| []  -- this case never occurs!
+      l : ls -> l  :| ls
+
+unlines' :: [Text] -> Text
+unlines' = T.intercalate "\n"
+
+-- Convert a (line,column) position into the corresponding character offset
+-- and back, such that the two are inverses of eachother.
+positionToOffset :: Text -> Position -> Int
+positionToOffset txt (Position line col) =
+    if line < length ls
+      then T.length . unlines' $ take line ls ++ [T.take col (ls !! line)]
+      else T.length txt  -- position lies outside txt
+  where
+    ls = NonEmpty.toList (lines' txt)
+
+offsetToPosition :: Text -> Int -> Position
+offsetToPosition txt off = Position (length ls - 1) (T.length (NonEmpty.last ls))
+  where ls = lines' (T.take off txt)
+
+
+-- adjust a given position to exclude any trailing whitespace
+trimEndPosition :: Position -> Text -> Position
+trimEndPosition pos txt =
+    offsetToPosition txt (T.length . T.stripEnd . T.take off $ txt)
+  where off = positionToOffset txt pos

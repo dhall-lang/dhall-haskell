@@ -3,7 +3,7 @@ module Backend.Dhall.Formatting(formatDocument) where
 import Dhall.Pretty (CharacterSet(..), layoutOpts)
 import Dhall.Parser(exprAndHeaderFromText, ParseError(..))
 
-import qualified Data.Text
+import Data.Text (Text)
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall.Pretty

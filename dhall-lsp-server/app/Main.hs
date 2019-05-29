@@ -17,8 +17,10 @@ import qualified System.IO
 import qualified Data.Map as Map
 import Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative
+import Control.Applicative ((<|>))
 
 import qualified System.IO.Unsafe
+import System.Exit (exitSuccess, exitWith)
 
 import LSP.Server(run)
 
