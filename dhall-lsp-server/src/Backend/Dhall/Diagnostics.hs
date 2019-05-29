@@ -1,234 +1,189 @@
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE BangPatterns            #-}
-module Backend.Dhall.Diagnostics( compilerDiagnostics
-                                , defaultDiagnosticSource
-                                ) where
+-- TODO: Structuring/ordering!
 
+{-# LANGUAGE RecordWildCards #-}
 
-{-|
-This module is responsible for producing dhall compiler diagnostic (errors, warns, etc ...)
--}
-
-import Control.Exception (SomeException)
-import qualified Control.Exception
-import qualified Dhall
-import Dhall(rootDirectory, sourceName, defaultInputSettings, inputExprWithSettings)
-import Dhall.Parser(ParseError(..), Src(..), SourcedException(..))
-import qualified Dhall.Core
-import qualified System.Exit
-import qualified System.IO
-import Lens.Family (LensLike', set, view)
-import Dhall.TypeCheck (DetailedTypeError(..), TypeError(..), X)
-
-import Dhall.Binary(DecodingFailure(..))
-import Dhall.Import(Imported(..), Cycle(..), ReferentiallyOpaque(..),
-                     MissingFile, MissingEnvironmentVariable, MissingImports(..) )
-
-import Data.Text (Text)
-import qualified Data.Text as T
-import Data.List.NonEmpty (NonEmpty (..))
-import qualified Data.List.NonEmpty as NonEmpty
-
-
-import qualified Text.Megaparsec
-import qualified Text.Megaparsec.Error
-import Text.Show(ShowS)
-import qualified Data.Set
-import Data.Foldable (foldl')
-import qualified System.FilePath
-
-import Backend.Dhall.DhallErrors(simpleTypeMessage)
-
-import Language.Haskell.LSP.Types(
-      Diagnostic(..)
-    , Range(..)
-    , DiagnosticSeverity(..)
-    , DiagnosticSource(..)
-    , DiagnosticRelatedInformation(..)
-    , Position(..)
-    )
-
-tshow :: Show a => a -> Text
-tshow = T.pack . show
-
-defaultDiagnosticSource :: DiagnosticSource
-defaultDiagnosticSource = "dhall-lsp-server"
-
--- TODO: don't use show for import msgs (requires alternative typeclass)
--- TODO: file consisting with only comments shouldn't produce an error msg
-compilerDiagnostics :: FilePath -> Text -> IO [Diagnostic]
-compilerDiagnostics path txt = handle ast
-  where
-    (rootDir, bufferName) = System.FilePath.splitFileName path
-    settings =  ( set rootDirectory rootDir
-                . set sourceName bufferName) defaultInputSettings
-    isEmpty = T.null $ T.strip txt
-    ast =  if isEmpty 
-           then pure []
-           else [] <$ inputExprWithSettings  settings txt
-    handle =   Control.Exception.handle allErrors
-             . Control.Exception.handle decodingFailure
-             . Control.Exception.handle missingImports
-             . Control.Exception.handle parseErrors
-             . Control.Exception.handle typeErrors
-             
-    
-    allErrors e = do 
-      let _ = e :: SomeException
-          numLines = length $ T.lines txt
-      pure [Diagnostic {
-              _range = Range (Position 0 0) (Position numLines 0)
-            , _severity = Just DsError
-            , _source = Just defaultDiagnosticSource
-            , _code = Nothing
-            , _message = "Internal error has occurred: " <> (tshow e)
-            , _relatedInformation = Nothing
-            }]
-    decodingFailure e = do
-      let (CBORIsNotDhall term) = e
-      pure [Diagnostic {
-        _range = Range (Position 0 0) (Position 1 0)
-      , _severity = Just DsError
-      , _source = Just defaultDiagnosticSource
-      , _code = Nothing
-      , _message = "Cannot decode CBOR to Dhall " <> (tshow term)
-      , _relatedInformation = Nothing
-      }]
-    parseErrors e = do
-        let _ = e :: ParseError
-            errors = errorBundleToDiagnostics $ unwrap e
-        System.IO.hPrint System.IO.stderr errors
-        pure $ errors
-    missingImports (SourcedException src e) = do
-      let _ = e :: MissingImports
-      pure [Diagnostic {
-             _range = sanitiseRange (sourceToRange src) txt
-           , _severity = Just DsError
-           , _source = Just defaultDiagnosticSource
-           , _code = Nothing
-           , _message = removeAsciiColors $ tshow e
-           , _relatedInformation = Nothing
-           }]
-    typeErrors e = do
-      let _ = e :: TypeError Src X
-          (TypeError ctx expr msg) = e
-      pure [ Diagnostic {
-        _range = sanitiseRange (getSourceRange e) txt
-      , _severity = Just DsError
-      , _source = Just defaultDiagnosticSource
-      , _code = Nothing
-      , _message =  (simpleTypeMessage msg) 
-      , _relatedInformation = Nothing
-      }] 
-
-
-removeAsciiColors :: Text -> Text
-removeAsciiColors = T.replace "\ESC[1;31m" "" . T.replace "\ESC[0m" ""
-
-
-getSourceRange :: TypeError Src X -> Range
-getSourceRange (TypeError ctx expr msg) =  case expr of
-                Dhall.Core.Note src _ -> sourceToRange src
-                _        -> error  "Expected note"  -- FIXME: either justify this error or provide a default case
-  where
-    unPos = Text.Megaparsec.unPos
-
-sourcePosToRange :: Text.Megaparsec.SourcePos -> Text.Megaparsec.SourcePos -> Range
-sourcePosToRange  (Text.Megaparsec.SourcePos _ bl bc) (Text.Megaparsec.SourcePos _ el ec) =
-    Range (Position (unPos bl - 1) (unPos bc - 1)) (Position (unPos el - 1) (unPos ec - 1))
-  where
-    unPos = Text.Megaparsec.unPos
-
-sourceToRange :: Src -> Range
-sourceToRange (Src start end _) = sourcePosToRange start end
-
----------------------- Megaparsec utils: ----------------------------------------
-
--- see Text.Megaparsec.Error::errorBundlePretty for reference
-errorBundleToDiagnostics
-  :: forall s e. ( Text.Megaparsec.Stream s
-  , Text.Megaparsec.Error.ShowErrorComponent e
+module Backend.Dhall.Diagnostics
+  ( DhallException
+  , runDhall
+  , diagnose
+  , explain
+  , Position
+  , Range(..)
+  , Diagnosis(..)
   )
-  => Text.Megaparsec.ParseErrorBundle s e
-  -> [Diagnostic]
-errorBundleToDiagnostics  Text.Megaparsec.Error.ParseErrorBundle {..}  = 
-    fst $ foldl' f ([], bundlePosState) bundleErrors
+where
+
+import Dhall.Binary (DecodingFailure)
+import Dhall.Parser (ParseError, SourcedException(..), Src(..), unwrap)
+import Dhall.Import (MissingImports)
+import Dhall.TypeCheck (DetailedTypeError(..), TypeError(..), X)
+import Dhall.Core (Expr(Note))
+import Dhall
+  (rootDirectory, sourceName, defaultInputSettings, inputExprWithSettings)
+
+import Util
+
+import Data.Text (Text, pack)
+import qualified Data.Text as Text
+import Control.Exception (handle, SomeException, Exception)
+import Lens.Family (set)
+import System.FilePath (splitFileName)
+import Data.List
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NonEmpty
+import qualified Text.Megaparsec as Megaparsec
+import qualified Text.Megaparsec.Error as Megaparsec
+import qualified Data.Set as Set
+
+
+-- | An exception that occurred while trying to parse, type-check and normalise
+--   the input.
+data DhallException
+  = ExceptionInternal SomeException
+  | ExceptionCBOR DecodingFailure  -- CBOR decoding failure (not relevant?)
+  | ExceptionImport (SourcedException MissingImports)  -- Failure to resolve an import statement
+  | ExceptionTypecheck (TypeError Src X)  -- Input does not type-check
+  | ExceptionParse ParseError  -- Input does not parse
+
+
+-- | A (line, col) pair representing a position in a source file; 0-based.
+type Position = (Int, Int)
+-- | A source code range.
+data Range = Range {left, right :: Position}
+-- | A diagnosis, optionally tagged with a source code range.
+data Diagnosis = Diagnosis {
+    -- | Where the diagnosis came from, e.g. Dhall.TypeCheck.
+    doctor :: Text,
+    range :: Maybe Range,  -- ^ The range of code the diagnosis concerns
+    diagnosis :: Text
+    }
+
+
+-- | Parse, type-check and normalise the given Dhall code, collecting any
+--   occurring errors.
+runDhall :: FilePath -> Text -> IO [DhallException]
+runDhall path txt =
+  (handle' ExceptionInternal
+    . handle' ExceptionCBOR
+    . handle' ExceptionImport
+    . handle' ExceptionTypecheck
+    . handle' ExceptionParse
+    )
+    go
   where
-    f :: forall s e. ( Text.Megaparsec.Stream s, Text.Megaparsec.Error.ShowErrorComponent e)
-      => ([Diagnostic], Text.Megaparsec.PosState s)
-      -> Text.Megaparsec.ParseError s e
-      -> ([Diagnostic], Text.Megaparsec.PosState s)  
-    f (r, !pst) e = (diagnostics:r, pst')
-      where
-        (epos, line, pst') = Text.Megaparsec.reachOffset (Text.Megaparsec.errorOffset e) pst
-        errorText = Text.Megaparsec.Error.parseErrorTextPretty e
-        lineNumber = (Text.Megaparsec.unPos . Text.Megaparsec.sourceLine) epos - 1
-        startColumn = Text.Megaparsec.unPos (Text.Megaparsec.sourceColumn epos) - 1
-        diagnostics = Diagnostic {
-            _range = Range (Position lineNumber startColumn) (Position lineNumber endColumn)
-          , _severity = Just DsError
-          , _source = Just defaultDiagnosticSource
-          , _code = Nothing
-          , _message = T.pack errorText
-          , _relatedInformation = Nothing
-          }
-        
-        endColumn = startColumn + errorLength
-         
-        lineLength = length line
-        errorLength =
-          case e of
-            Text.Megaparsec.TrivialError _ Nothing _ -> 1
-            Text.Megaparsec.TrivialError _ (Just x) _ -> errorItemLength x
-            Text.Megaparsec.FancyError _ xs ->
-              Data.Set.foldl' (\a b -> max a (errorFancyLength b)) 1 xs
+    handle' con = handle (return . return . con)
+    -- we need to tell Dhall the path in order for relative imports to be resolved correctly
+    (dir, file) = splitFileName path
+    dhallparams =
+      (set rootDirectory "" . set sourceName "") defaultInputSettings
+    go :: IO [DhallException]
+    go = do
+      inputExprWithSettings dhallparams txt
+      return []  -- If we got this far the input was a valid Dhall program.
 
--- | Get length of the “pointer” to display under a given 'ErrorItem'.
 
-errorItemLength :: Text.Megaparsec.ErrorItem t -> Int
-errorItemLength = \case
-  Text.Megaparsec.Tokens ts -> length ts
-  _         -> 1
+-- | Give a short diagnosis for a given error that can be shown to the end user.
+diagnose :: Text -> DhallException -> [Diagnosis]
+diagnose _ (ExceptionInternal e) = [Diagnosis { .. }]
+  where
+    doctor = "Dhall"
+    range = Nothing
+    diagnosis =
+      "An internal error has occurred while trying to process the Dhall file: "
+        <> tshow e
 
-errorFancyLength :: Text.Megaparsec.ShowErrorComponent e => Text.Megaparsec.ErrorFancy e -> Int  
-errorFancyLength = \case
-  Text.Megaparsec.ErrorCustom a -> Text.Megaparsec.errorComponentLen a
-  _             -> 1
+diagnose _ (ExceptionCBOR t) = [Diagnosis { .. }]
+  where
+    doctor = "Dhall.Binary"
+    range = Nothing
+    diagnosis = "Failed to decode CBOR Dhall representation: " <> tshow t
 
--- sanitise range to exclude surrounding whitespace
--- makes sure that the resulting range is well-formed
-sanitiseRange :: Range -> Text -> Range
-sanitiseRange (Range l r) text = Range l (max l r')
-  where r' = trimEndPosition r text
+diagnose txt (ExceptionImport (SourcedException src e)) = [Diagnosis { .. }]
+  where
+    doctor = "Dhall.Import"
+    range = (Just . sanitiseRange txt . rangeFromDhall) src
+    diagnosis = tshow e
 
--- Variants of T.lines and T.unlines that are inverses of one another.
--- T.lines always returns at least the empty line!
-lines' :: Text -> NonEmpty Text
-lines' text =
-    case T.split (== '\n') text of
-      []     -> "" :| []  -- this case never occurs!
-      l : ls -> l  :| ls
+diagnose txt (ExceptionTypecheck e@(TypeError _ exp _)) = [Diagnosis { .. }]
+  where
+    doctor = "Dhall.TypeCheck"
+    range = fmap (sanitiseRange txt . rangeFromDhall) (note exp)
+    diagnosis = tshow e
 
-unlines' :: [Text] -> Text
-unlines' = T.intercalate "\n"
+diagnose txt (ExceptionParse e) =
+  [ Diagnosis { .. } | (diagnosis, range) <- zip diagnoses (map Just ranges) ]
+  where
+    doctor = "Dhall.Parser"
+    errors = (NonEmpty.toList . Megaparsec.bundleErrors . unwrap) e
+    diagnoses = map (Text.pack . Megaparsec.parseErrorTextPretty) errors
+    positions =
+      map (positionFromMegaparsec . snd) . fst $ Megaparsec.attachSourcePos
+        Megaparsec.errorOffset
+        errors
+        (Megaparsec.bundlePosState (unwrap e))
+    lengths = map parseErrorLength errors
+    ranges =
+      [ Range pos r
+      | (pos, len) <- zip positions lengths
+      , let r = offsetToPosition txt $ positionToOffset txt pos + len
+      ]
+    {- Since Dhall doesn't use custom errors (corresponding to the FancyError
+       ParseError constructor) we only need to handle the case of plain
+       Megaparsec errors (i.e. TrivialError), and only those who actually
+       include a list of tokens that we can compute the length of. -}
+    parseErrorLength :: Megaparsec.ParseError s e -> Int
+    parseErrorLength (Megaparsec.TrivialError _ (Just (Megaparsec.Tokens ts)) _)
+      = length ts
+    parseErrorLength _ = 0
+
+
+-- | Give a detailed explanation for the given error; if no detailed explanation
+--   is available return @Nothing@ instead.
+explain :: Text -> DhallException -> Maybe Diagnosis
+explain txt (ExceptionTypecheck e@(TypeError _ exp _)) = Just
+  (Diagnosis { .. })
+  where
+    doctor = "Dhall.TypeCheck"
+    range = fmap (sanitiseRange txt . rangeFromDhall) (note exp)
+    diagnosis = tshow (DetailedTypeError e)
+explain _ _ = Nothing  -- only type errors have detailed explanations so far
+
+
+-- Adjust a given range to exclude any trailing whitespace.
+sanitiseRange :: Text -> Range -> Range
+sanitiseRange txt (Range l r) = Range l (max l r')
+  where
+    off = positionToOffset txt r
+    r' =
+      (offsetToPosition txt . Text.length . Text.stripEnd . Text.take off) txt
+
+
+-- Given an annotated AST return the note at the top-most node.
+note :: Expr s a -> Maybe s
+note (Note s _) = Just s
+note _ = Nothing
+
+
+-- Megaparsec's positions are 1-based while ours are 0-based.
+positionFromMegaparsec :: Megaparsec.SourcePos -> Position
+positionFromMegaparsec (Megaparsec.SourcePos _ line col) =
+  (Megaparsec.unPos line - 1, Megaparsec.unPos col - 1)
+
+
+-- Convert a source range from Dhalls @Src@ format.
+rangeFromDhall :: Src -> Range
+rangeFromDhall (Src left right _) =
+  Range (positionFromMegaparsec left) (positionFromMegaparsec right)
+
 
 -- Convert a (line,column) position into the corresponding character offset
 -- and back, such that the two are inverses of eachother.
 positionToOffset :: Text -> Position -> Int
-positionToOffset txt (Position line col) =
-    if line < length ls
-      then T.length . unlines' $ take line ls ++ [T.take col (ls !! line)]
-      else T.length txt  -- position lies outside txt
-  where
-    ls = NonEmpty.toList (lines' txt)
+positionToOffset txt (line, col) = if line < length ls
+  then Text.length . unlines' $ take line ls ++ [Text.take col (ls !! line)]
+  else Text.length txt  -- position lies outside txt
+  where ls = NonEmpty.toList (lines' txt)
 
 offsetToPosition :: Text -> Int -> Position
-offsetToPosition txt off = Position (length ls - 1) (T.length (NonEmpty.last ls))
-  where ls = lines' (T.take off txt)
-
-
--- adjust a given position to exclude any trailing whitespace
-trimEndPosition :: Position -> Text -> Position
-trimEndPosition pos txt =
-    offsetToPosition txt (T.length . T.stripEnd . T.take off $ txt)
-  where off = positionToOffset txt pos
+offsetToPosition txt off = (length ls - 1, Text.length (NonEmpty.last ls))
+  where ls = lines' (Text.take off txt)
