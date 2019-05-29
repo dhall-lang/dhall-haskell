@@ -26,6 +26,8 @@ import Dhall.Import(Imported(..), Cycle(..), ReferentiallyOpaque(..),
 
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.List.NonEmpty as NonEmpty
 
 
 import qualified Text.Megaparsec
@@ -200,8 +202,12 @@ sanitiseRange (Range l r) text = Range l (max l r')
   where r' = trimEndPosition r text
 
 -- Variants of T.lines and T.unlines that are inverses of one another.
-lines' :: Text -> [Text]
-lines' = T.split (=='\n')
+-- T.lines always returns at least the empty line!
+lines' :: Text -> NonEmpty Text
+lines' text =
+    case T.split (== '\n') text of
+      []     -> "" :| []  -- this case never occurs!
+      l : ls -> l  :| ls
 
 unlines' :: [Text] -> Text
 unlines' = T.intercalate "\n"
@@ -214,13 +220,10 @@ positionToOffset txt (Position line col) =
       then T.length . unlines' $ take line ls ++ [T.take col (ls !! line)]
       else T.length txt  -- position lies outside txt
   where
-    ls = lines' txt
+    ls = NonEmpty.toList (lines' txt)
 
 offsetToPosition :: Text -> Int -> Position
-offsetToPosition txt off =
-    if null ls
-       then Position 0 0
-       else Position (length ls - 1) (T.length (last ls))
+offsetToPosition txt off = Position (length ls - 1) (T.length (NonEmpty.last ls))
   where ls = lines' (T.take off txt)
 
 
