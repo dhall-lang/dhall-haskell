@@ -26,6 +26,9 @@ Extra-Source-Files:
     CHANGELOG.md
     tasty/data/*.dhall
     tasty/data/*.json
+    java/*.java
+    jsbits/*.js
+                                   
 Source-Repository head
     Type: git
     Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-json
@@ -49,7 +52,15 @@ Library
     Exposed-Modules: Dhall.JSON,
                      Dhall.Yaml
     GHC-Options: -Wall
-    if impl(eta)
+    if impl(ghcjs)
+        Build-Depends:
+           ghcjs-base  >= 0.2.0.0  && < 0.3 ,
+           utf8-string >= 1.0 && <= 1.1           
+        Other-Modules: Dhall.Yaml.GHCJS               
+        Js-Sources: jsbits/Dhall.Yaml.js 
+        GHC-Options: -Wall -dedupe
+    else
+      if impl(eta)
         Build-Depends:
             utf8-string >= 1.0 && <= 1.1
         Maven-Depends:
@@ -59,12 +70,12 @@ Library
         Other-Modules: Dhall.Yaml.Eta
         Java-Sources: java/Utils.java
         Cpp-Options: -DETA
-    else
-      if flag(yaml-pre-0_11)
-        Build-Depends:
-            yaml >= 0.5.0 && < 0.11
       else
-        Build-Depends:
+        if flag(yaml-pre-0_11)
+          Build-Depends:
+              yaml >= 0.5.0 && < 0.11
+        else
+          Build-Depends:
             libyaml >= 0.1.1.0 && < 0.2 ,
             yaml    >= 0.11.0  && < 0.12
 
