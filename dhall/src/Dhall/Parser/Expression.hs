@@ -248,9 +248,18 @@ completeExpression embedded = completeExpression_
     selectorExpression = noted (do
             a <- primitiveExpression
 
-            let left  x  e = Field   e x
-            let right xs e = Project e xs
-            b <- Text.Megaparsec.many (try (do _dot; fmap left anyLabel <|> fmap right labels))
+            let recordType = _openParens *> expression <* _closeParens
+
+            let field               x  e = Field   e  x
+            let projectBySet        xs e = Project e (Left  xs)
+            let projectByExpression xs e = Project e (Right xs)
+
+            let alternatives =
+                        fmap field               anyLabel
+                    <|> fmap projectBySet        labels
+                    <|> fmap projectByExpression recordType
+
+            b <- Text.Megaparsec.many (try (do _dot; alternatives))
             return (foldl (\e k -> k e) a b) )
 
     primitiveExpression =
