@@ -147,12 +147,11 @@ import qualified Data.Aeson as A
 import           Data.Aeson.Encode.Pretty (encodePretty)
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import           Data.Monoid ((<>))
-import qualified Data.String
 import qualified Data.Text.IO as Text
 import           Data.Version (showVersion)
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative as O
-import           Options.Applicative (Parser, ParserInfo)
+import           Options.Applicative (ParserInfo)
 import qualified System.Exit
 import qualified System.IO
 
@@ -180,10 +179,12 @@ parserInfo = O.info
 showJSON :: A.Value -> String
 showJSON value = BSL8.unpack (encodePretty value)
 
-instance Show CompileError where
-    show = showCompileError "JSON" showJSON
+data JSONCompileError = JSONCompileError CompileError
 
-instance Exception CompileError
+instance Show JSONCompileError where
+    show (JSONCompileError e) = showCompileError "JSON" showJSON e
+
+instance Exception JSONCompileError
 
 -- ----------
 -- Main
@@ -205,10 +206,10 @@ main = do
           Left err -> throwIO (userError err)
           Right v -> pure v
 
-        expr <- typeCheckSchemaExpr id =<< resolveSchemaExpr schema
+        expr <- typeCheckSchemaExpr JSONCompileError =<< resolveSchemaExpr schema
 
         case dhallFromJSON conversion expr value of
-          Left err -> throwIO err
+          Left err -> throwIO $ JSONCompileError err
           Right res -> Text.putStr (D.pretty res)
 
 handle :: IO a -> IO a

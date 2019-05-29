@@ -15,13 +15,12 @@ import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import           Data.Monoid ((<>))
-import qualified Data.String
 import qualified Data.Text.IO as Text
 import           Data.Version (showVersion)
 import qualified Data.Yaml as Y
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative as O
-import           Options.Applicative (Parser, ParserInfo)
+import           Options.Applicative (ParserInfo)
 import qualified System.Exit
 import qualified System.IO
 
@@ -29,8 +28,6 @@ import qualified Dhall.Core as D
 import           Dhall.JSONToDhall
 
 import qualified Paths_dhall_json as Meta
-
-import           Dhall.JSONToDhall
 
 -- ---------------
 -- Command options
@@ -51,10 +48,12 @@ parserInfo = O.info
 showYAML :: A.Value -> String
 showYAML value = BS8.unpack (Y.encode value)
 
-instance Show CompileError where
-    show = showCompileError "YAML" showYAML
+data YAMLCompileError = YAMLCompileError CompileError
 
-instance Exception CompileError
+instance Show YAMLCompileError where
+    show (YAMLCompileError e) = showCompileError "YAML" showYAML e
+
+instance Exception YAMLCompileError
 
 -- ----------
 -- Main
@@ -77,10 +76,10 @@ main = do
           Left err -> throwIO (userError $ Y.prettyPrintParseException err)
           Right v -> pure v
 
-        expr <- typeCheckSchemaExpr id =<< resolveSchemaExpr schema
+        expr <- typeCheckSchemaExpr YAMLCompileError =<< resolveSchemaExpr schema
 
         case dhallFromJSON conversion expr value of
-          Left err -> throwIO err
+          Left err -> throwIO $ YAMLCompileError err
           Right res -> Text.putStr (D.pretty res)
 
 handle :: IO a -> IO a
