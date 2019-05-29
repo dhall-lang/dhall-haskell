@@ -20,7 +20,6 @@ source-repository head
 
 library
   exposed-modules:
-      Backend.Dhall.DhallErrors
       Backend.Dhall.Diagnostics
       Backend.Dhall.Formatting
       LSP.Common
@@ -30,6 +29,7 @@ library
       LSP.Server
   other-modules:
       Paths_dhall_lsp_server
+      Util
   hs-source-dirs:
       src
   default-extensions: LambdaCase OverloadedStrings FlexibleInstances TypeApplications RecordWildCards ScopedTypeVariables
