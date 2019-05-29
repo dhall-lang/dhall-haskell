@@ -83,7 +83,7 @@ lspHandlers :: TChan FromClientMessage -> LSP.Core.Handlers
 lspHandlers rin
   = def { LSP.Core.initializedHandler                       = Just $ passHandler rin NotInitialized
         -- , Core.renameHandler                            = Just $ passHandler rin ReqRename
-        -- , Core.hoverHandler                             = Just $ passHandler rin ReqHover
+        , LSP.Core.hoverHandler                             = Just $ passHandler rin ReqHover
         , LSP.Core.didOpenTextDocumentNotificationHandler   = Just $ passHandler rin NotDidOpenTextDocument
         , LSP.Core.didSaveTextDocumentNotificationHandler   = Just $ passHandler rin NotDidSaveTextDocument
         , LSP.Core.didChangeTextDocumentNotificationHandler = Just $ passHandler rin NotDidChangeTextDocument

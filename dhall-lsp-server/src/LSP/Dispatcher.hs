@@ -14,13 +14,17 @@ import qualified Language.Haskell.LSP.Types.Lens       as J
 import LSP.Common
 import LSP.Handlers.Diagnostics
 import LSP.Handlers.DocumentFormatting
+import Backend.Dhall.Diagnostics
 
 import Control.Lens
 import Control.Monad (forever)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Reader (ReaderT, runReaderT)
 import Control.Monad.Reader.Class (ask)
+import Control.Monad.IO.Class
 import GHC.Conc (atomically)
+import qualified Data.Text.IO
+import Data.Maybe (mapMaybe)
 
 -- ! FIXME: replace logs/logm (which are just utilities) with own logging functions to make intent clearer
 -- | A basic router, which reads from Client messages queue `inp` and executes appropriate actions
@@ -108,6 +112,31 @@ dispatcher lf inp = do
             
           formattedDocument <- formatDocument uri tabSize insertSpaces
           publish req RspDocumentFormatting formattedDocument
+
+      ReqHover req -> do
+          liftIO $ LSP.Utility.logm "****** reactor: processing ReqHover"
+          let (J.Position line col) = req ^. (J.params . J.position)
+              doc = req ^. (J.params . J.textDocument . J.uri)
+              Just fileName = J.uriToFilePath doc
+          txt <- liftIO $ Data.Text.IO.readFile fileName
+          errors <- liftIO $ runDhall fileName txt
+          let explanations = mapMaybe (explain txt) errors
+              explanations' = filter (\(Diagnosis _ range _) ->
+                case range of
+                  Nothing -> False
+                  Just (Range left right) -> left <= (line,col) && (line,col) <= right) explanations
+              diagnosisToHover :: Diagnosis -> J.Hover
+              diagnosisToHover Diagnosis{..} = J.Hover{..}
+                where
+                  _range = case range of
+                    Just (Range (line1, col1) (line2, col2)) ->
+                      Just $ J.Range (J.Position line1 col1) (J.Position line2 col2)
+                    Nothing -> Nothing
+                  _contents = J.List [J.PlainString diagnosis]
+              hover = case explanations' of
+                [] -> Nothing
+                (diag : _) -> Just (diagnosisToHover diag)
+          publish req RspHover hover
 
       unknown -> 
         liftIO $ LSP.Utility.logs $ "\nIGNORING!!!\n HandlerRequest:" ++ show unknown
