@@ -6,7 +6,18 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Dhall.JSONToDhall where
+module Dhall.JSONToDhall (
+    -- * JSON to Dhall
+      Options(..)
+    , parseOptions
+    , resolveSchemaExpr
+    , typeCheckSchemaExpr
+    , dhallFromJSON
+
+    -- * Exceptions
+    , CompileError(..)
+    , showCompileError
+    ) where
 
 import           Control.Applicative ((<|>))
 import           Control.Exception (Exception, throwIO)
