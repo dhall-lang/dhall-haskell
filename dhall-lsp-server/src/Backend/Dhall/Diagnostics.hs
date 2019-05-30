@@ -75,7 +75,7 @@ runDhall path txt =
     -- we need to tell Dhall the path in order for relative imports to be resolved correctly
     (dir, file) = splitFileName path
     dhallparams =
-      (set rootDirectory "" . set sourceName "") defaultInputSettings
+      (set rootDirectory dir . set sourceName file) defaultInputSettings
     go :: IO [DhallException]
     go = do
       inputExprWithSettings dhallparams txt
