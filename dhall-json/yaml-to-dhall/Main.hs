@@ -15,12 +15,13 @@ import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import           Data.Monoid ((<>))
+import           Data.Text (Text)
 import qualified Data.Text.IO as Text
 import           Data.Version (showVersion)
 import qualified Data.Yaml as Y
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative as O
-import           Options.Applicative (ParserInfo)
+import           Options.Applicative (Parser, ParserInfo)
 import qualified System.Exit
 import qualified System.IO
 
@@ -40,6 +41,29 @@ parserInfo = O.info
           (  O.fullDesc
           <> O.progDesc "Populate Dhall value given its Dhall type (schema) from a YAML expression"
           )
+
+-- | All the command arguments and options
+data Options = Options
+    { version    :: Bool
+    , schema     :: Text
+    , conversion :: Conversion
+    } deriving Show
+
+-- | Parser for all the command arguments and options
+parseOptions :: Parser Options
+parseOptions = Options <$> parseVersion
+                       <*> parseSchema
+                       <*> parseConversion
+  where
+    parseSchema  =  O.strArgument
+                 (  O.metavar "SCHEMA"
+                 <> O.help "Dhall type expression (schema)"
+                 )
+    parseVersion =  O.switch
+                 (  O.long "version"
+                 <> O.short 'V'
+                 <> O.help "Display version"
+                 )
 
 -- ----------
 -- YAML

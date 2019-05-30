@@ -39,6 +39,7 @@ Library
     Build-Depends:
         base                      >= 4.8.0.0  && < 5   ,
         aeson                     >= 1.0.0.0  && < 1.5 ,
+        aeson-pretty                             < 0.9 ,
         bytestring                               < 0.11,
         containers                                     ,
         dhall                     >= 1.22.0   && < 1.24,
@@ -97,7 +98,6 @@ Executable json-to-dhall
     Build-Depends:
         base                                       ,
         aeson                                      ,
-        aeson-pretty                        < 0.9  ,
         bytestring                          < 0.11 ,
         dhall                                      ,
         dhall-json                                 ,
