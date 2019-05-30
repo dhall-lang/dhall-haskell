@@ -145,9 +145,7 @@ hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) = Just J.Ho
   where
     _range = Just $ J.Range (uncurry J.Position left) (uncurry J.Position right)
     encodedDiag = URI.encode (Text.unpack diagnosis)
-    args = J.List [encodedDiag]
-    args' = Text.Lazy.toStrict (Aeson.Text.encodeToLazyText args)
-    command = "[Explain error](command:dhallLSPClient.explain?" <> args' <> ")"
+    command = "[Explain error](dhall-explain:?" <> Text.pack encodedDiag <> ")"
     _contents = J.List [J.PlainString command]
 
 -- ---------------------------------------------------------------------
