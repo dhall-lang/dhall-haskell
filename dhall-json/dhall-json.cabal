@@ -26,6 +26,8 @@ Extra-Source-Files:
     CHANGELOG.md
     tasty/data/*.dhall
     tasty/data/*.json
+    java/*.java
+
 Source-Repository head
     Type: git
     Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-json
@@ -58,7 +60,6 @@ Library
           com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.6
         Other-Modules: Dhall.Yaml.Eta
         Java-Sources: java/Utils.java
-        Cpp-Options: -DETA
     else
       if flag(yaml-pre-0_11)
         Build-Depends:
