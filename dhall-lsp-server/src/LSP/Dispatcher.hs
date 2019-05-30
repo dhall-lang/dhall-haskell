@@ -25,6 +25,10 @@ import Control.Monad.IO.Class
 import GHC.Conc (atomically)
 import qualified Data.Text.IO
 import Data.Maybe (mapMaybe)
+import qualified Network.URI.Encode as URI
+import qualified Data.Text as Text
+import qualified Data.Text.Lazy as Text.Lazy
+import qualified Data.Aeson.Text as Aeson.Text
 
 -- ! FIXME: replace logs/logm (which are just utilities) with own logging functions to make intent clearer
 -- | A basic router, which reads from Client messages queue `inp` and executes appropriate actions
@@ -121,27 +125,31 @@ dispatcher lf inp = do
           txt <- liftIO $ Data.Text.IO.readFile fileName
           errors <- liftIO $ runDhall fileName txt
           let explanations = mapMaybe (explain txt) errors
-              explanations' = filter (\(Diagnosis _ range _) ->
-                case range of
-                  Nothing -> False
-                  Just (Range left right) -> left <= (line,col) && (line,col) <= right) explanations
-              diagnosisToHover :: Diagnosis -> J.Hover
-              diagnosisToHover Diagnosis{..} = J.Hover{..}
-                where
-                  _range = case range of
-                    Just (Range (line1, col1) (line2, col2)) ->
-                      Just $ J.Range (J.Position line1 col1) (J.Position line2 col2)
-                    Nothing -> Nothing
-                  _contents = J.List [J.PlainString diagnosis]
-              hover = case explanations' of
+              isHovered :: Diagnosis -> Bool
+              isHovered (Diagnosis _ Nothing _) = False
+              isHovered (Diagnosis _ (Just (Range left right)) _)
+                = left <= (line,col) && (line,col) <= right
+              hover = case filter isHovered explanations of
                 [] -> Nothing
-                (diag : _) -> Just (diagnosisToHover diag)
+                (diag : _) -> hoverFromDiagnosis diag
+              -- J.encode
           publish req RspHover hover
+          -- "command:dhallLSPClient.explain?" ++ 
 
       unknown -> 
         liftIO $ LSP.Utility.logs $ "\nIGNORING!!!\n HandlerRequest:" ++ show unknown
 
-       
+hoverFromDiagnosis :: Diagnosis -> Maybe J.Hover
+hoverFromDiagnosis (Diagnosis _ Nothing _) = Nothing 
+hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) = Just J.Hover{..}
+  where
+    _range = Just $ J.Range (uncurry J.Position left) (uncurry J.Position right)
+    encodedDiag = URI.encode (Text.unpack diagnosis)
+    args = J.List [encodedDiag]
+    args' = Text.Lazy.toStrict (Aeson.Text.encodeToLazyText args)
+    command = "[Explain error](command:dhallLSPClient.explain?" <> args' <> ")"
+    _contents = J.List [J.PlainString command]
+
 -- ---------------------------------------------------------------------
 
 
