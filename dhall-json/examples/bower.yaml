@@ -1,0 +1,14 @@
+name: purescript-package
+description: A simple PS package
+keywords:
+- purescript
+license: MIT
+repository:
+  type: git
+  url: git://github.com/purescript/purescript-package.git
+dependencies:
+  purescript-prelude: ^4.0.0
+  purescript-effect: ^2.0.0
+devDependencies:
+  purescript-math: ^2.1.1
+  purescript-integers: ^4.0.0
