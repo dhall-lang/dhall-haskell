@@ -43,7 +43,6 @@ import Dhall.Core
     , Var(..)
     )
 
-import Data.ByteArray.Encoding (Base(..))
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
@@ -53,11 +52,9 @@ import Prelude hiding (exponent)
 import GHC.Float (double2Float, float2Double)
 
 import qualified Crypto.Hash
-import qualified Data.ByteArray.Encoding
+import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.Sequence
-import qualified Data.Text
-import qualified Data.Text.Encoding
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Options.Applicative
@@ -487,8 +484,7 @@ instance ToTerm Import where
                 Nothing ->
                     TNull
                 Just digest ->
-                    TList
-                        [ TString "sha256", TString (Data.Text.pack (show digest)) ]
+                    TBytes ("\x12\x20" <> Data.ByteArray.convert digest)
 
             m = TInt (case importMode of Code -> 0; RawText -> 1)
 
@@ -787,13 +783,17 @@ instance FromTerm Import where
             TNull -> do
                 return Nothing
 
-            TList [ TString "sha256", TString base16Text ] -> do
-                let base16Bytes = Data.Text.Encoding.encodeUtf8 base16Text
-                digestBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 base16Bytes of
-                    Left  _           -> empty
-                    Right digestBytes -> return (digestBytes :: Data.ByteString.ByteString)
+            TBytes bytes -> do
+                let (prefix, suffix) = Data.ByteString.splitAt 2 bytes
 
-                digest <- Crypto.Hash.digestFromByteString digestBytes
+                case prefix of
+                    "\x12\x20" -> return ()
+                    _          -> empty
+
+                digest <- case Crypto.Hash.digestFromByteString suffix of
+                    Nothing     -> empty
+                    Just digest -> return digest
+
                 return (Just digest)
 
             _ -> do

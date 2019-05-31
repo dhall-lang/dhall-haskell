@@ -2,9 +2,7 @@
 {-# LANGUAGE CPP               #-}
 module Dhall.Yaml ( jsonToYaml ) where
 
-#if defined(__GHCJS__)
-import Dhall.Yaml.GHCJS ( jsonToYaml )
-#elif defined(ETA)
+#if defined(ETA_VERSION)
 import Dhall.Yaml.Eta ( jsonToYaml )
 #else 
 import Data.ByteString (ByteString)

@@ -783,7 +783,7 @@ typeWithA tpa = loop
                 case Dhall.Map.lookup x kts of
                     Just t' -> return t'
                     Nothing -> Left (TypeError ctx e (MissingField x t))
-            Const Type -> do
+            _ -> do
                 case Dhall.Core.normalize r of
                   Union kts ->
                     case Dhall.Map.lookup x kts of
@@ -791,8 +791,6 @@ typeWithA tpa = loop
                         Just Nothing   -> return (Union kts)
                         Nothing -> Left (TypeError ctx e (MissingField x t))
                   r' -> Left (TypeError ctx e (CantAccess text r' t))
-            _ -> do
-                Left (TypeError ctx e (CantAccess text r t))
     loop ctx e@(Project r (Left xs)) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
 
