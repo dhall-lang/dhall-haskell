@@ -28,7 +28,6 @@ library
       LSP.Handlers.Diagnostics
       LSP.Handlers.DocumentFormatting
       LSP.Server
-      Prelude
   other-modules:
       Paths_dhall_lsp_server
   hs-source-dirs:
@@ -36,7 +35,7 @@ library
   default-extensions: LambdaCase OverloadedStrings FlexibleInstances TypeApplications RecordWildCards ScopedTypeVariables
   build-depends:
       aeson
-    , base-noprelude >=4.7 && <5
+    , base >=4.7 && <5
     , containers
     , data-default
     , dhall
@@ -49,7 +48,6 @@ library
     , mtl
     , optparse-applicative
     , prettyprinter
-    , relude
     , sorted-list
     , stm
     , text
@@ -68,7 +66,7 @@ executable dhall-lsp-server
   ghc-options: -rtsopts
   build-depends:
       aeson
-    , base-noprelude >=4.7 && <5
+    , base >=4.7 && <5
     , containers
     , data-default
     , dhall
@@ -82,7 +80,6 @@ executable dhall-lsp-server
     , mtl
     , optparse-applicative
     , prettyprinter
-    , relude
     , sorted-list
     , stm
     , text
@@ -106,7 +103,7 @@ test-suite dhall-lsp-server-test
       tasty-discover:tasty-discover
   build-depends:
       aeson
-    , base-noprelude >=4.7 && <5
+    , base >=4.7 && <5
     , containers
     , data-default
     , dhall
@@ -120,7 +117,6 @@ test-suite dhall-lsp-server-test
     , mtl
     , optparse-applicative
     , prettyprinter
-    , relude
     , sorted-list
     , stm
     , tasty

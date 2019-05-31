@@ -19,6 +19,9 @@ import qualified System.IO.Unsafe
 import qualified Data.Text.IO
 import qualified Data.SortedList
 import qualified Data.Map.Strict as Map
+import Control.Monad.Reader (ReaderT)
+import Control.Monad.Reader.Class (ask)
+import Control.Monad.Trans (lift, liftIO)
 
 import Backend.Dhall.Diagnostics
 

@@ -19,6 +19,7 @@ import qualified Language.Haskell.LSP.Types            as J
 import qualified Language.Haskell.LSP.Types.Lens       as J
 
 import qualified System.Log.Logger
+import GHC.Conc (atomically)
 
 import LSP.Dispatcher(dispatcher) 
 

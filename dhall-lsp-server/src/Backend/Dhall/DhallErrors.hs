@@ -12,6 +12,7 @@ import Dhall.Pretty(Ann(..), layoutOpts)
 import qualified Dhall.Diff
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as R
+import Data.Text (Text)
 import qualified Data.Text as T
 
 prettyDiff :: (Eq a, Pretty.Pretty a, ToTerm a) => Expr s a -> Expr s a -> Text
