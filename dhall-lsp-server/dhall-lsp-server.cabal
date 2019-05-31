@@ -57,7 +57,9 @@ library
     , unordered-containers
     , yi-rope
   default-language: Haskell2010
-
+  if impl(eta)
+     buildable: False
+     
 executable dhall-lsp-server
   main-is: Main.hs
   other-modules:
@@ -90,7 +92,9 @@ executable dhall-lsp-server
     , unordered-containers
     , yi-rope
   default-language: Haskell2010
-
+  if impl(eta)
+     buildable: False
+     
 test-suite dhall-lsp-server-test
   type: exitcode-stdio-1.0
   main-is: Driver.hs
@@ -132,3 +136,5 @@ test-suite dhall-lsp-server-test
     , unordered-containers
     , yi-rope
   default-language: Haskell2010
+  if impl(eta)
+     buildable: False
