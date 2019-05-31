@@ -23,6 +23,7 @@ library
       Backend.Dhall.DhallErrors
       Backend.Dhall.Diagnostics
       Backend.Dhall.Formatting
+      Backend.Dhall.Linting
       LSP.Common
       LSP.Dispatcher
       LSP.Handlers.Diagnostics

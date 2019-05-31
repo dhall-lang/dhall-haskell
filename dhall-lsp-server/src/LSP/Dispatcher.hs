@@ -14,7 +14,12 @@ import qualified Language.Haskell.LSP.Types.Lens       as J
 import LSP.Common
 import LSP.Handlers.Diagnostics
 import LSP.Handlers.DocumentFormatting
+import Backend.Dhall.Linting
 
+import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
+import Data.Maybe (fromMaybe)
 import Control.Lens
 import Control.Monad (forever)
 import Control.Monad.Trans (liftIO)
@@ -38,7 +43,7 @@ dispatcher lf inp = do
 
       (NotInitialized _notification) -> do
         liftIO $ LSP.Utility.logm "****** reactor: processing Initialized Notification"
-        
+
         let
           registration = J.Registration "dhall-lsp-server-registered" J.WorkspaceExecuteCommand Nothing
         let registrations = J.RegistrationParams (J.List [registration])
@@ -70,7 +75,7 @@ dispatcher lf inp = do
         liftIO $ LSP.Utility.logs $ "********* fileName=" <> show fileName <> "version: " <> show v
         sendDiagnostics doc (Just v)
 
-      
+
 
       (NotDidSaveTextDocument notification) -> do
         liftIO $ LSP.Utility.logm "****** reactor: processing NotDidSaveTextDocument"
@@ -83,7 +88,7 @@ dispatcher lf inp = do
         liftIO $ LSP.Utility.logs $ "********* fileName=" ++ show fileName
         sendDiagnostics doc Nothing
 
-      
+
       (NotDidCloseTextDocument req) -> do
         liftIO $ LSP.Utility.logm "****** reactor: processing NotDidCloseTextDocument"
         let
@@ -105,24 +110,44 @@ dispatcher lf inp = do
                          . J.options
             tabSize      = range ^. J.tabSize
             insertSpaces = range ^. J.insertSpaces
-            
+
           formattedDocument <- formatDocument uri tabSize insertSpaces
           publish req RspDocumentFormatting formattedDocument
 
-      unknown -> 
+      ReqExecuteCommand req | req ^. (J.params . J.command) == "dhall.lint" ->
+        case req ^. (J.params . J.arguments) of
+          Just (J.List (x:_)) ->
+            case J.fromJSON x of
+              J.Success uri -> do
+                let path = fromMaybe (error "can't convert uri to file path") $ J.uriToFilePath uri
+                txt <- liftIO $ Text.readFile path
+                (edit :: J.List J.TextEdit) <- case lintDocument txt of
+                  Right linted ->
+                    let  range = J.Range (J.Position 0 0) (J.Position (Text.length linted) 0)
+                    in return (J.List [J.TextEdit range linted])
+                  _ -> return (J.List [])
+                lf <- ask
+                lid <- nextLspReqId
+                let req' = fmServerApplyWorkspaceEditRequest lid $
+                             J.ApplyWorkspaceEditParams (J.WorkspaceEdit (Just $ HashMap.singleton uri edit) Nothing)
+                liftIO $ LSP.Core.sendFunc lf (ReqApplyWorkspaceEdit req')
+              _ -> return ()
+          _ -> return ()
+
+      unknown ->
         liftIO $ LSP.Utility.logs $ "\nIGNORING!!!\n HandlerRequest:" ++ show unknown
 
-       
+
 -- ---------------------------------------------------------------------
 
 
-publish :: J.RequestMessage J.ClientMethod req resp 
-         -> (J.ResponseMessage resp -> FromServerMessage) 
-         -> resp 
+publish :: J.RequestMessage J.ClientMethod req resp
+         -> (J.ResponseMessage resp -> FromServerMessage)
+         -> resp
          -> ReaderT (LSP.Core.LspFuncs ()) IO ()
-publish req unwrap response = 
+publish req unwrap response =
   do
     lf <- ask
-    let 
-      rspMessage = LSP.Core.makeResponseMessage req response 
-    liftIO $ LSP.Core.sendFunc lf (unwrap rspMessage) 
+    let
+      rspMessage = LSP.Core.makeResponseMessage req response
+    liftIO $ LSP.Core.sendFunc lf (unwrap rspMessage)
