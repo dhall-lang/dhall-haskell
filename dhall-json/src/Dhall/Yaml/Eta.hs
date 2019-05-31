@@ -2,13 +2,19 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 module Dhall.Yaml.Eta ( jsonToYaml ) where
 
+import Data.Bifunctor (bimap)
+import Control.Exception (try)
 import Data.ByteString (ByteString)
+import Java
+import Java.Exception
+import System.IO.Unsafe (unsafePerformIO)
 
 import qualified Data.Aeson
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.ByteString.UTF8
 import qualified Data.Vector
+
 
 foreign import java unsafe "@static Utils.jsonToYaml" javaJsonToYaml
   :: String -> String
@@ -29,3 +35,16 @@ jsonToYaml json documents _quoted =
          . Data.ByteString.UTF8.toString
          . Data.ByteString.Lazy.toStrict
          . Data.Aeson.encode
+
+foreign import java unsafe "@static Utils.yamlToJson" javaYamlToJson
+  :: String -> IO String
+
+javaTryYamlToJson :: String -> Either JException String
+javaTryYamlToJson = unsafePerformIO . try . javaYamlToJson
+
+yamlToJson :: ByteString -> Either String Data.Aeson.Value
+yamlToJson bs =   (  >>= Data.Aeson.eitherDecode )
+                . bimap ( unsafePerformJava . getLocalizedMessage)
+                         Data.ByteString.UTF8.fromString
+                . javaTryYamlToJson
+                . Data.ByteString.UTF8.toString

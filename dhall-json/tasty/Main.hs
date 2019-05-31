@@ -13,6 +13,7 @@ import qualified Data.Text.IO
 import qualified Dhall.Import
 import qualified Dhall.JSON
 import qualified Dhall.Parser
+import qualified Dhall.Yaml
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
@@ -81,7 +82,7 @@ yamlQuotedStrings = Test.Tasty.HUnit.testCase "Yaml: quoted string style" assert
             Left  exception   -> Control.Exception.throwIO exception
             Right jsonValue -> return jsonValue
 
-        let actualValue = Dhall.JSON.jsonToYaml jsonValue False True
+        let actualValue = Dhall.Yaml.jsonToYaml jsonValue False True
 
         bytes <- Data.ByteString.Lazy.readFile "./tasty/data/quoted.yaml"
         let expectedValue = Data.ByteString.Lazy.toStrict bytes
@@ -109,7 +110,7 @@ yaml = Test.Tasty.HUnit.testCase "Yaml: normal string style" assertion
             Left  exception   -> Control.Exception.throwIO exception
             Right jsonValue -> return jsonValue
 
-        let actualValue = Dhall.JSON.jsonToYaml jsonValue False False
+        let actualValue = Dhall.Yaml.jsonToYaml jsonValue False False
 
         bytes <- Data.ByteString.Lazy.readFile "./tasty/data/normal.yaml"
         let expectedValue = Data.ByteString.Lazy.toStrict bytes

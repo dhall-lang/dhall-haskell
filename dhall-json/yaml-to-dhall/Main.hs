@@ -18,7 +18,6 @@ import           Data.Monoid ((<>))
 import           Data.Text (Text)
 import qualified Data.Text.IO as Text
 import           Data.Version (showVersion)
-import qualified Data.Yaml as Y
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative as O
 import           Options.Applicative (Parser, ParserInfo)
@@ -27,7 +26,7 @@ import qualified System.IO
 
 import qualified Dhall.Core as D
 import           Dhall.JSONToDhall
-
+import           Dhall.Yaml (yamlToJson, jsonToYaml)
 import qualified Paths_dhall_json as Meta
 
 -- ---------------
@@ -70,7 +69,7 @@ parseOptions = Options <$> parseVersion
 -- ----------
 
 showYAML :: A.Value -> String
-showYAML value = BS8.unpack (Y.encode value)
+showYAML value = BS8.unpack (jsonToYaml value False False)
 
 data YAMLCompileError = YAMLCompileError CompileError
 
@@ -96,9 +95,8 @@ main = do
     handle $ do
         stdin <- BSL8.getContents
 
-        value :: A.Value <- case Y.decodeEither' . BS8.concat $ BSL8.toChunks stdin of
-          Left err -> throwIO (userError $ Y.prettyPrintParseException err)
-          Right v -> pure v
+        value <- either (throwIO . userError) pure
+                        (yamlToJson . BS8.concat $ BSL8.toChunks stdin)
 
         expr <- typeCheckSchemaExpr YAMLCompileError =<< resolveSchemaExpr schema
 

@@ -13,5 +13,11 @@ public class Utils {
         String jsonAsYaml = new YAMLMapper().writeValueAsString(jsonNodeTree);
         return jsonAsYaml;
     }
-    
+
+     public static String yamlToJson (String yamlString) throws
+        JsonProcessingException, IOException {
+        JsonNode jsonNodeTree = new YAMLMapper().readTree(yamlString);
+        String yamlAsJson = new ObjectMapper().writeValueAsString(jsonNodeTree);
+        return yamlAsJson;
+    }
 }
