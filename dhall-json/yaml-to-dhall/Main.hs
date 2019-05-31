@@ -9,14 +9,16 @@
 module Main where
 
 import qualified Control.Exception
-import           Control.Exception (SomeException, throwIO)
+import           Control.Exception (Exception, SomeException, throwIO)
 import           Control.Monad (when)
 import qualified Data.Aeson as A
+import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import           Data.Monoid ((<>))
 import           Data.Text (Text)
 import qualified Data.Text.IO as Text
 import           Data.Version (showVersion)
+import qualified Data.Yaml as Y
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative as O
 import           Options.Applicative (Parser, ParserInfo)
@@ -37,7 +39,7 @@ parserInfo :: ParserInfo Options
 parserInfo = O.info
           (  O.helper <*> parseOptions)
           (  O.fullDesc
-          <> O.progDesc "Populate Dhall value given its Dhall type (schema) from a JSON expression"
+          <> O.progDesc "Populate Dhall value given its Dhall type (schema) from a YAML expression"
           )
 
 -- | All the command arguments and options
@@ -64,6 +66,20 @@ parseOptions = Options <$> parseVersion
                  )
 
 -- ----------
+-- YAML
+-- ----------
+
+showYAML :: A.Value -> String
+showYAML value = BS8.unpack (Y.encode value)
+
+data YAMLCompileError = YAMLCompileError CompileError
+
+instance Show YAMLCompileError where
+    show (YAMLCompileError e) = showCompileError "YAML" showYAML e
+
+instance Exception YAMLCompileError
+
+-- ----------
 -- Main
 -- ----------
 
@@ -79,14 +95,15 @@ main = do
 
     handle $ do
         stdin <- BSL8.getContents
-        value :: A.Value <- case A.eitherDecode stdin of
-          Left err -> throwIO (userError err)
+
+        value :: A.Value <- case Y.decodeEither' . BS8.concat $ BSL8.toChunks stdin of
+          Left err -> throwIO (userError $ Y.prettyPrintParseException err)
           Right v -> pure v
 
-        expr <- typeCheckSchemaExpr id =<< resolveSchemaExpr schema
+        expr <- typeCheckSchemaExpr YAMLCompileError =<< resolveSchemaExpr schema
 
         case dhallFromJSON conversion expr value of
-          Left err -> throwIO err
+          Left err -> throwIO $ YAMLCompileError err
           Right res -> Text.putStr (D.pretty res)
 
 handle :: IO a -> IO a
