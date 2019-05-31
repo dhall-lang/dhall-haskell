@@ -789,8 +789,9 @@ unlinesLiteral chunks =
     Data.Foldable.fold (Data.List.NonEmpty.intersperse "\n" chunks)
 
 emptyLine :: Chunks s a -> Bool
-emptyLine (Chunks [] "") = True
-emptyLine  _             = False
+emptyLine (Chunks [] ""  ) = True
+emptyLine (Chunks [] "\r") = True  -- So that `\r\n` is treated as a blank line
+emptyLine  _               = False
 
 leadingSpaces :: Chunks s a -> Text
 leadingSpaces chunks = Data.Text.takeWhile isSpace firstText
