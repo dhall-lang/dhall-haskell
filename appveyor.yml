@@ -21,7 +21,7 @@ environment:
     - STACK_YAML: stack-lts-6.yaml
 
 install:
-  - choco install -dv -y haskell-stack --version %STACK_VERSION%
+  - choco install -y haskell-stack --version %STACK_VERSION%
   - stack setup > nul
   - cd %APPVEYOR_BUILD_FOLDER%
   - git submodule update --init --recursive
