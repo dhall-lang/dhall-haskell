@@ -35,6 +35,14 @@ import qualified Dhall.Context
 import qualified Data.Map      as Map
 import qualified Data.Text
 
+data Resolved = Resolved
+    { resolvedExpression :: Expr Src Import
+    -- ^ Expression with its immediate imports resolved
+    , newImport          :: Import
+    -- ^ New import to use in place of the original import for chaining
+    --   downstream imports
+    }
+
 -- | State threaded throughout the import process
 data Status m = Status
     { _stack :: NonEmpty Import
@@ -60,14 +68,14 @@ data Status m = Status
 
     , _startingContext :: Context (Expr Src X)
 
-    , _resolver :: Import -> StateT (Status m) m (Expr Src Import)
+    , _resolver :: Import -> StateT (Status m) m Resolved
 
     , _cacher :: Import -> Expr Src X -> StateT (Status m) m ()
     }
 
 -- | Default starting `Status` that is polymorphic in the base `Monad`
 emptyStatusWith
-    :: (Import -> StateT (Status m) m (Expr Src Import))
+    :: (Import -> StateT (Status m) m Resolved)
     -> (Import -> Expr Src X -> StateT (Status m) m ())
     -> FilePath
     -> Status m
@@ -144,7 +152,7 @@ startingContext k s =
 
 resolver
     :: Functor f
-    => LensLike' f (Status m) (Import -> StateT (Status m) m (Expr Src Import))
+    => LensLike' f (Status m) (Import -> StateT (Status m) m Resolved)
 resolver k s = fmap (\x -> s { _resolver = x }) (k (_resolver s))
 
 cacher

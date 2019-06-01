@@ -23,6 +23,7 @@ import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Data.Void (Void)
 import Dhall.Core
+import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
 
 import qualified Data.Text

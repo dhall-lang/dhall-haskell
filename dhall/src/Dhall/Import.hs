@@ -372,7 +372,7 @@ instance Canonicalize ImportType where
         Local prefix (canonicalize file)
 
     canonicalize (Remote (URL {..})) =
-        Remote (URL { path = canonicalize path, headers = fmap canonicalize headers, ..})
+        Remote (URL { path = canonicalize path, headers = fmap (fmap canonicalize) headers, ..})
 
     canonicalize (Env name) =
         Env name
@@ -458,7 +458,7 @@ localToPath prefix file_ = liftIO $ do
     return (foldr cons prefixPath cs)
 
 -- | Parse an expression from a `Import` containing a Dhall program
-exprFromImport :: Import -> StateT (Status IO) IO (Expr Src Import)
+exprFromImport :: Import -> StateT (Status IO) IO Resolved
 exprFromImport here@(Import {..}) = do
     let ImportHashed {..} = importHashed
 
@@ -484,8 +484,12 @@ exprFromImport here@(Import {..}) = do
         Dhall.Core.throws (Dhall.Binary.decodeExpression term)
 
     case result of
-        Just expression -> return expression
-        Nothing         -> exprFromUncachedImport here
+        Just resolvedExpression -> do
+            let newImport = here
+
+            return (Resolved {..})
+        Nothing -> do
+            exprFromUncachedImport here
 
 {-| Save an expression to the specified `Import`
 
@@ -595,11 +599,11 @@ getCacheDirectory = alternative₀ <|> alternative₁
             Just homeDirectory -> return (homeDirectory </> ".cache")
             Nothing            -> empty
 
-exprFromUncachedImport :: Import -> StateT (Status IO) IO (Expr Src Import)
-exprFromUncachedImport (Import {..}) = do
+exprFromUncachedImport :: Import -> StateT (Status IO) IO Resolved
+exprFromUncachedImport import_@(Import {..}) = do
     let ImportHashed {..} = importHashed
 
-    (path, text) <- case importType of
+    (path, text, newImport) <- case importType of
         Local prefix file -> liftIO $ do
             path   <- localToPath prefix file
             exists <- Directory.doesFileExist path
@@ -610,13 +614,14 @@ exprFromUncachedImport (Import {..}) = do
 
             text <- Data.Text.IO.readFile path
 
-            return (path, text)
+            return (path, text, import_)
 
-        Remote url@URL { headers = maybeHeaders } -> do
-            mheaders <- case maybeHeaders of
-                Nothing            -> return Nothing
-                Just importHashed_ -> do
-                    expr <- loadWith (Embed (Import importHashed_ Code))
+        Remote url@URL { headers = maybeHeadersExpression } -> do
+            maybeHeadersAndExpression <- case maybeHeadersExpression of
+                Nothing -> do
+                    return Nothing
+                Just headersExpression -> do
+                    expr <- loadWith headersExpression
 
                     let expected :: Expr Src X
                         expected =
@@ -643,12 +648,28 @@ exprFromUncachedImport (Import {..}) = do
 
                     case toHeaders expr' of
                         Just headers -> do
-                            return (Just headers)
+                            return (Just (headers, expr'))
                         Nothing      -> do
                             liftIO (throwIO InternalError)
 
 #ifdef MIN_VERSION_http_client
-            fetchFromHttpUrl url mheaders
+            let maybeHeaders = fmap fst maybeHeadersAndExpression
+
+            let newHeaders =
+                    fmap (fmap absurd . snd) maybeHeadersAndExpression
+
+            (path, text) <- fetchFromHttpUrl url maybeHeaders
+
+            let newImport = Import
+                    { importHashed = ImportHashed
+                        { importType =
+                            Remote (url { headers = newHeaders })
+                        , ..
+                        }
+                    , ..
+                    }
+
+            return (path, text, newImport)
 #else
             let urlString = Text.unpack (Dhall.Core.pretty url)
 
@@ -658,8 +679,10 @@ exprFromUncachedImport (Import {..}) = do
         Env env -> liftIO $ do
             x <- System.Environment.lookupEnv (Text.unpack env)
             case x of
-                Just string -> return (Text.unpack env, Text.pack string)
-                Nothing     -> throwMissingImport (MissingEnvironmentVariable env)
+                Just string -> do
+                    return (Text.unpack env, Text.pack string, import_)
+                Nothing -> do
+                    throwMissingImport (MissingEnvironmentVariable env)
 
         Missing -> liftIO $ do
             throwM (MissingImports [])
@@ -675,11 +698,13 @@ exprFromUncachedImport (Import {..}) = do
             case Text.Megaparsec.parse parser path text of
                 Left errInfo -> do
                     liftIO (throwIO (ParseError errInfo text))
-                Right expr -> do
-                    return expr
+                Right resolvedExpression -> do
+                    return (Resolved {..})
 
         RawText -> do
-            return (TextLit (Chunks [] text))
+            let resolvedExpression = TextLit (Chunks [] text)
+
+            return (Resolved {..})
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status IO
@@ -740,7 +765,7 @@ loadWith expr₀ = case expr₀ of
                     let handler₀
                             :: (MonadCatch m)
                             => MissingImports
-                            -> StateT (Status m) m (Expr Src Import)
+                            -> StateT (Status m) m Resolved
                         handler₀ (MissingImports es) =
                           throwM
                             (MissingImports
@@ -753,7 +778,7 @@ loadWith expr₀ = case expr₀ of
                         handler₁
                             :: (MonadCatch m)
                             => SomeException
-                            -> StateT (Status m) m (Expr Src Import)
+                            -> StateT (Status m) m Resolved
                         handler₁ e =
                           throwMissingImport (Imported _stack' e)
 
@@ -761,7 +786,9 @@ loadWith expr₀ = case expr₀ of
                     -- that might still contain imports)
                     let loadDynamic = _resolver child
 
-                    expr' <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
+                    Resolved {..} <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
+
+                    let stackWithNewImport = NonEmpty.cons newImport _stack
 
                     let childNodeId = userNodeId _nextNodeId
 
@@ -771,8 +798,8 @@ loadWith expr₀ = case expr₀ of
                     -- Make current node the dot graph
                     zoom dot . State.put $ importNode childNodeId child
 
-                    zoom stack (State.put _stack')
-                    expr'' <- loadWith expr'
+                    zoom stack (State.put stackWithNewImport)
+                    expr'' <- loadWith resolvedExpression
                     zoom stack (State.put _stack)
 
                     zoom dot . State.modify $ \getSubDot -> do
