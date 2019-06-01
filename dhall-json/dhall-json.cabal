@@ -53,6 +53,8 @@ Library
     Exposed-Modules:
         Dhall.JSON
         Dhall.JSONToDhall
+    Other-Modules:
+        Dhall.JSON.Compat
     GHC-Options: -Wall
 
     if flag(yaml-pre-0_11)
