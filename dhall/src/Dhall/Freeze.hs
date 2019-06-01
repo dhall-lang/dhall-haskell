@@ -103,7 +103,6 @@ writeExpr :: Maybe FilePath -> (Text, Expr s Import) -> CharacterSet -> IO ()
 writeExpr inplace (header, expr) characterSet = do
     let doc =  Pretty.pretty header
             <> Dhall.Pretty.prettyCharacterSet characterSet expr
-            <> "\n"
 
     let unAnnotated = Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc)
 
