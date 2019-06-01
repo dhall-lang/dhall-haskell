@@ -27,6 +27,7 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
 import Dhall.Binary (StandardVersion)
 import Dhall.Core (Expr(..), Import)
+import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
@@ -90,7 +91,7 @@ data Mode
     | Normalize { file :: Maybe FilePath, alpha :: Bool }
     | Repl
     | Format { formatMode :: Dhall.Format.FormatMode }
-    | Freeze { inplace :: Maybe FilePath, all_ :: Bool }
+    | Freeze { inplace :: Maybe FilePath, all_ :: Bool, cache :: Bool }
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Maybe FilePath }
@@ -173,7 +174,7 @@ parseMode =
     <|> subcommand
             "freeze"
             "Add integrity checks to remote import statements of an expression"
-            (Freeze <$> optional parseInplace <*> parseAllFlag)
+            (Freeze <$> optional parseInplace <*> parseAllFlag <*> parseCacheFlag)
     <|> subcommand
             "encode"
             "Encode a Dhall expression to binary"
@@ -245,6 +246,12 @@ parseMode =
         Options.Applicative.switch
         (   Options.Applicative.long "all"
         <>  Options.Applicative.help "Add integrity checks to all imports (not just remote imports)"
+        )
+
+    parseCacheFlag =
+        Options.Applicative.switch
+        (   Options.Applicative.long "cache"
+        <>  Options.Applicative.help "Add fallback unprotected imports when using integrity checks purely for caching purposes"
         )
 
     parseCheck =
@@ -456,7 +463,11 @@ command (Options {..}) = do
             Dhall.Format.format (Dhall.Format.Format {..})
 
         Freeze {..} -> do
-            Dhall.Freeze.freeze inplace all_ characterSet standardVersion
+            let scope = if all_ then AllImports else OnlyRemoteImports
+
+            let intent = if cache then Cache else Secure
+
+            Dhall.Freeze.freeze inplace scope intent characterSet standardVersion
 
         Hash -> do
             Dhall.Hash.hash standardVersion

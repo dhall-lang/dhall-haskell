@@ -125,6 +125,7 @@ module Dhall.Import (
     , MissingFile(..)
     , MissingEnvironmentVariable(..)
     , MissingImports(..)
+    , HashMismatch(..)
     ) where
 
 import Control.Applicative (Alternative(..))
