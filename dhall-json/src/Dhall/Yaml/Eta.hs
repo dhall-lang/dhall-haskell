@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
-module Dhall.Yaml.Eta ( jsonToYaml ) where
+module Dhall.Yaml.Eta ( jsonToYaml, yamlToJson ) where
 
 import Data.Bifunctor (bimap)
 import Control.Exception (try)
@@ -28,7 +28,7 @@ jsonToYaml json documents _quoted =
          $ fmap aesonToYaml
          $ Data.Vector.toList elems
     _ -> aesonToYaml json
-    
+
   where aesonToYaml =
            Data.ByteString.UTF8.fromString 
          . javaJsonToYaml
@@ -39,12 +39,18 @@ jsonToYaml json documents _quoted =
 foreign import java unsafe "@static Utils.yamlToJson" javaYamlToJson
   :: String -> IO String
 
-javaTryYamlToJson :: String -> Either JException String
-javaTryYamlToJson = unsafePerformIO . try . javaYamlToJson
-
 yamlToJson :: ByteString -> Either String Data.Aeson.Value
-yamlToJson bs =   (  >>= Data.Aeson.eitherDecode )
-                . bimap ( unsafePerformJava . getLocalizedMessage)
-                         Data.ByteString.UTF8.fromString
-                . javaTryYamlToJson
-                . Data.ByteString.UTF8.toString
+yamlToJson =   (>>= Data.Aeson.eitherDecode)
+             . bimap getExceptionMessage
+                     (  Data.ByteString.Lazy.fromStrict
+                      . Data.ByteString.UTF8.fromString)
+             . javaTryYamlToJson
+             . Data.ByteString.UTF8.toString
+
+  where javaTryYamlToJson :: String -> Either JException String
+        javaTryYamlToJson = unsafePerformIO . try . javaYamlToJson
+
+        getExceptionMessage :: JException -> String
+        getExceptionMessage ex =
+          unsafePerformJava $ ex <.> getLocalizedMessage
+
