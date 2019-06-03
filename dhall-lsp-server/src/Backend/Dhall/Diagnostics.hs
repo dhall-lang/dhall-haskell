@@ -1,5 +1,3 @@
--- TODO: Structuring/ordering!
-
 {-# LANGUAGE RecordWildCards #-}
 
 module Backend.Dhall.Diagnostics
