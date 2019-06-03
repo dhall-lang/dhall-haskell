@@ -51,19 +51,28 @@ module Dhall.Core (
     -- * Pretty-printing
     , pretty
 
+    -- * Optics
+    , subExpressions
+    , chunkExprs
+    , rewriteOf
+    , transformOf
+    , over
+    , rewriteMOf
+    , transformMOf
+    , mapMOf
+
     -- * Miscellaneous
     , internalError
     , reservedIdentifiers
     , escapeText
-    , subExpressions
-    , chunkExprs
     , pathCharacter
     , throws
     ) where
 
 #if MIN_VERSION_base(4,8,0)
+import Control.Applicative (WrappedMonad(..))
 #else
-import Control.Applicative (Applicative(..), (<$>))
+import Control.Applicative (Applicative(..), WrappedMonad(..), (<$>))
 #endif
 import Control.Applicative (empty)
 import Control.Exception (Exception)
@@ -75,6 +84,7 @@ import Data.Foldable
 import Data.Functor.Identity (Identity(..))
 import Data.HashSet (HashSet)
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Profunctor.Unsafe ((#.))
 import Data.String (IsString(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
@@ -83,8 +93,10 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Traversable
 import Dhall.Map (Map)
 import Dhall.Set (Set)
+import Dhall.Src (Src)
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import GHC.Generics (Generic)
+import Lens.Family (ASetter, LensLike, over)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 
@@ -122,7 +134,8 @@ import qualified Text.Printf
     Note that Dhall does not support functions from terms to types and therefore
     Dhall is not a dependently typed language
 -}
-data Const = Type | Kind | Sort deriving (Show, Eq, Data, Bounded, Enum, Generic)
+data Const = Type | Kind | Sort
+    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic)
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -185,7 +198,7 @@ data URL = URL
     , authority :: Text
     , path      :: File
     , query     :: Maybe Text
-    , headers   :: Maybe ImportHashed
+    , headers   :: Maybe (Expr Src Import)
     } deriving (Eq, Generic, Ord, Show)
 
 instance Pretty URL where
@@ -244,9 +257,9 @@ instance Semigroup ImportType where
     import₀ <> Remote (URL { headers = headers₀, .. }) =
         Remote (URL { headers = headers₁, .. })
       where
-        importHashed₀ = ImportHashed Nothing import₀
+        importHashed₀ = Import (ImportHashed Nothing import₀) Code
 
-        headers₁ = fmap (importHashed₀ <>) headers₀
+        headers₁ = fmap (fmap (importHashed₀ <>)) headers₀
 
     _ <> import₁ =
         import₁
@@ -331,7 +344,7 @@ instance Pretty Import where
     appear as a numeric suffix.
 -}
 data Var = V Text !Integer
-    deriving (Data, Generic, Eq, Show)
+    deriving (Data, Generic, Eq, Ord, Show)
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -478,7 +491,7 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Eq, Foldable, Generic, Traversable, Show, Data)
+    deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data)
 
 -- This instance is hand-written due to the fact that deriving
 -- it does not give us an INLINABLE pragma. We annotate this fmap
@@ -704,7 +717,7 @@ data Binding s a = Binding
     { variable   :: Text
     , annotation :: Maybe (Expr s a)
     , value      :: Expr s a
-    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
+    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data)
 
 instance Bifunctor Binding where
     first k (Binding a b c) = Binding a (fmap (first k) b) (first k c)
@@ -713,7 +726,7 @@ instance Bifunctor Binding where
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Data)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =
@@ -2141,3 +2154,49 @@ prettyURIComponent text
 throws :: (Exception e, MonadIO io) => Either e a -> io a
 throws (Left  e) = liftIO (Control.Exception.throwIO e)
 throws (Right r) = return r
+
+{-| Convenience utility identical to @"Control.Lens".`Control.Lens.rewriteOf`@
+    re-exported for convenience in order to minimize dependencies on @lens@
+-}
+rewriteOf :: ASetter a b a b -> (b -> Maybe a) -> a -> b
+rewriteOf l f = go
+  where
+    go = transformOf l (\x -> maybe x go (f x))
+{-# INLINE rewriteOf #-}
+
+{-| Convenience utility identical to @"Control.Lens".`Control.Lens.transformOf`@
+    re-exported for convenience in order to minimize dependencies on @lens@
+-}
+transformOf :: ASetter a b a b -> (b -> b) -> a -> b
+transformOf l f = go
+  where
+    go = f . over l go
+{-# INLINE transformOf #-}
+
+{-| Convenience utility identical to @"Control.Lens".`Control.Lens.rewriteMOf`@
+    re-exported for convenience in order to minimize dependencies on @lens@
+-}
+rewriteMOf
+    :: Monad m
+    => LensLike (WrappedMonad m) a b a b -> (b -> m (Maybe a)) -> a -> m b
+rewriteMOf l f = go
+  where
+    go = transformMOf l (\x -> f x >>= maybe (return x) go)
+{-# INLINE rewriteMOf #-}
+
+{-| Convenience utility identical to @"Control.Lens".`Control.Lens.transformMOf`@
+    re-exported for convenience in order to minimize dependencies on @lens@
+-}
+transformMOf
+    :: Monad m => LensLike (WrappedMonad m) a b a b -> (b -> m b) -> a -> m b
+transformMOf l f = go
+  where
+    go t = mapMOf l go t >>= f
+{-# INLINE transformMOf #-}
+
+{-| Convenience utility identical to @"Control.Lens".`Control.Lens.mapMOf`@
+    re-exported for convenience in order to minimize dependencies on @lens@
+-}
+mapMOf :: LensLike (WrappedMonad m) s t a b -> (a -> m b) -> s -> m t
+mapMOf l cmd = unwrapMonad #. l (WrapMonad #. cmd)
+{-# INLINE mapMOf #-}

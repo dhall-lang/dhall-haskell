@@ -196,11 +196,11 @@ import qualified Data.Vector
 import qualified Data.Yaml
 import qualified Dhall.Core
 import qualified Dhall.Import
+import qualified Dhall.JSON.Compat
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
-import qualified Text.Libyaml
 
 {-| This is the exception type for errors that might arise when translating
     Dhall to JSON
@@ -907,24 +907,8 @@ jsonToYaml
 jsonToYaml json documents quoted = case (documents, json) of
   (True, Data.Yaml.Array elems)
     -> Data.ByteString.intercalate "\n---\n"
-       $ fmap (encodeYaml encodeOptions)
+       $ fmap encodeYaml
        $ Data.Vector.toList elems
-  _ -> encodeYaml encodeOptions json
+  _ -> encodeYaml json
   where
-    encodeYaml = Data.Yaml.encodeWith
-
-    customStyle = \s -> case () of
-        ()
-            | "\n" `Data.Text.isInfixOf` s -> ( noTag, literal )
-            | otherwise -> ( noTag, Text.Libyaml.SingleQuoted )
-        where
-            noTag = Text.Libyaml.NoTag
-            literal = Text.Libyaml.Literal
-
-    quotedOptions = Data.Yaml.setStringStyle
-                        customStyle
-                        Data.Yaml.defaultEncodeOptions
-
-    encodeOptions = if quoted
-        then quotedOptions
-        else Data.Yaml.defaultEncodeOptions
+    encodeYaml = Dhall.JSON.Compat.encodeYaml quoted

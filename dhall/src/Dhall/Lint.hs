@@ -12,7 +12,6 @@ import Control.Monad (mplus)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup ((<>))
 import Dhall.Core (Binding(..), Expr(..), Import, Var(..), subExpressions)
-import Lens.Family (ASetter, over)
 
 import qualified Dhall.Core
 
@@ -26,7 +25,7 @@ import qualified Dhall.Core
 -}
 lint :: Expr s Import -> Expr t Import
 lint =
-  rewriteOf
+  Dhall.Core.rewriteOf
     subExpressions
     ( \e ->
                 removeLetInLet e
@@ -59,10 +58,3 @@ optionalLitToSomeNone :: Expr s a -> Maybe (Expr s a)
 optionalLitToSomeNone (OptionalLit _ (Just b)) = Just (Some b)
 optionalLitToSomeNone (OptionalLit a Nothing) = Just (App None a)
 optionalLitToSomeNone _ = Nothing
-
-
-rewriteOf :: ASetter a b a b -> (b -> Maybe a) -> a -> b
-rewriteOf l f = go where go = transformOf l (\x -> maybe x go (f x))
-
-transformOf :: ASetter a b a b -> (b -> b) -> a -> b
-transformOf l f = go where go = f . over l go

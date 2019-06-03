@@ -1,4 +1,4 @@
-resolver: lts-13.16
+resolver: lts-13.19
 packages:
   - dhall
   - dhall-bash
@@ -7,7 +7,6 @@ packages:
   - dhall-lsp-server
 extra-deps:
   - repline-0.2.1.0
-  - yaml-0.10.4.0
 nix:
   packages:
     - ncurses

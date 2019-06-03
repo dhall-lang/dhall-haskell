@@ -39,7 +39,6 @@ for:
 -
   matrix:
     except:
-      # dhall-json is not supported for LTS 6
       - STACK_YAML: stack-lts-6.yaml
 
   build_script:
@@ -51,10 +50,10 @@ for:
     - 7z a "bin\dhall-json-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-json.exe"
     - 7z a "bin\dhall-json-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-yaml.exe"
     - 7z a "bin\dhall-json-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\json-to-dhall.exe"
+    - 7z a "bin\dhall-json-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\yaml-to-dhall.exe"
     - 7z a "bin\dhall-text-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-text.exe"
     - 7z a "bin\dhall-bash-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-bash.exe"
-    # dhall-lsp-server can't be built with lts-6
-    - if exist "%APPVEYOR_BUILD_FOLDER%\bin\dhall-lsp-server.exe" ( 7z a "bin\dhall-lsp-server-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-lsp-server.exe" )
+    - 7z a "bin\dhall-lsp-server-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-lsp-server.exe"
 -
   matrix:
     only:
@@ -65,13 +64,11 @@ for:
     - stack install --local-bin-path bin
     - if /I "%APPVEYOR_REPO_TAG%" EQU "true" (set DEPLOY_TAG=%APPVEYOR_REPO_TAG_NAME%) else (set DEPLOY_TAG=%APPVEYOR_REPO_COMMIT:~0,5%)
     - set DEPLOY_SUFFIX=%DEPLOY_TAG%-x86_64-windows.zip
-    # dhall-json is not supported for LTS 6, so do not try to copy the
+    # dhall-json and dhall-lsp-server is not supported for LTS 6, so do not try to copy the
     # corresponding binaries
     - 7z a "bin\dhall-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall.exe"
     - 7z a "bin\dhall-text-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-text.exe"
     - 7z a "bin\dhall-bash-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-to-bash.exe"
-    # dhall-lsp-server can't be built with lts-6
-    - if exist "%APPVEYOR_BUILD_FOLDER%\bin\dhall-lsp-server.exe" ( 7z a "bin\dhall-lsp-server-%DEPLOY_SUFFIX%" "%APPVEYOR_BUILD_FOLDER%\bin\dhall-lsp-server.exe" )
 
 -
   matrix:

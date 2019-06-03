@@ -2,11 +2,9 @@
 
 module Dhall.Test.TypeCheck where
 
+import Control.Exception (SomeException)
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
-import Dhall.Import (Imported)
-import Dhall.Parser (Src)
-import Dhall.TypeCheck (TypeError, X)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
@@ -80,7 +78,7 @@ failureTest path = do
                 _ <- Import.load expression
                 return True
 
-        let handler :: Imported (TypeError Src X)-> IO Bool
+        let handler :: SomeException -> IO Bool
             handler _ = return False
 
         typeChecked <- Exception.handle handler io

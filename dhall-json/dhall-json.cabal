@@ -53,6 +53,8 @@ Library
     Exposed-Modules:
         Dhall.JSON
         Dhall.JSONToDhall
+    Other-Modules:
+        Dhall.JSON.Compat
     GHC-Options: -Wall
 
     if flag(yaml-pre-0_11)
@@ -69,7 +71,7 @@ Executable dhall-to-json
     Build-Depends:
         base                       ,
         aeson                      ,
-        aeson-pretty         < 0.9 ,
+        aeson-pretty         >= 0.8.5 && < 0.9 ,
         bytestring           < 0.11,
         dhall                      ,
         dhall-json                 ,
