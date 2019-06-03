@@ -442,8 +442,7 @@ instance ToTerm Import where
                     Nothing ->
                         TNull
                     Just h ->
-                        encode
-                            (Import { importHashed = h, importMode = Code })
+                        encode h
 
                 scheme₁ = case scheme₀ of
                     HTTP  -> 0
@@ -820,9 +819,11 @@ instance FromTerm Import where
                 (headers, authority, paths, file, query) <- case xs of
                     headers₀ : TString authority : ys -> do
                         headers₁ <- case headers₀ of
-                            TNull -> return Nothing
+                            TNull -> do
+                                return Nothing
                             _     -> do
-                                Embed (Import { importHashed = headers }) <- decode headers₀
+                                headers <- decode headers₀
+
                                 return (Just headers)
                         (paths, file, query) <- process ys
                         return (headers₁, authority, paths, file, query)

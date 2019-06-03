@@ -75,8 +75,11 @@ data Map k v = Map (Data.Map.Map k v) [k]
     deriving (Data)
 
 instance (Eq k, Eq v) => Eq (Map k v) where
-  (Map m1 ks) == (Map m2 ks') = m1 == m2 && ks == ks'
+  Map m1 ks == Map m2 ks' = m1 == m2 && ks == ks'
   {-# INLINABLE (==) #-}
+
+instance (Ord k, Ord v) => Ord (Map k v) where
+  compare (Map mL ksL) (Map mR ksR) = compare mL mR <> compare ksL ksR
 
 instance Functor (Map k) where
   fmap f (Map m ks) = Map (fmap f m) ks

@@ -193,6 +193,7 @@ import qualified Data.Ord
 import qualified Data.Text
 import qualified Dhall.Core
 import qualified Dhall.Import
+import qualified Dhall.JSON.Compat
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck

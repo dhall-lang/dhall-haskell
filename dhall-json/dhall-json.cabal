@@ -140,15 +140,6 @@ Executable yaml-to-dhall
         Paths_dhall_json
     GHC-Options: -Wall
 
-    if !impl(eta)
-      if flag(yaml-pre-0_11)
-        Build-Depends:
-            yaml >= 0.5.0 && < 0.11
-      else
-        Build-Depends:
-            libyaml >= 0.1.1.0 && < 0.2 ,
-            yaml    >= 0.11.0  && < 0.12
-
 Test-Suite tasty
     Type: exitcode-stdio-1.0
     Hs-Source-Dirs: tasty
