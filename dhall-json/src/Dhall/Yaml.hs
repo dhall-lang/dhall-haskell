@@ -48,6 +48,7 @@ jsonToYaml json documents quoted = case (documents, json) of
         else Data.Yaml.defaultEncodeOptions
 
 
+-- | Transform yaml representation into dhall
 yamlToJson :: ByteString -> Either String Data.Aeson.Value
 yamlToJson  =
   bimap Data.Yaml.prettyPrintParseException id . Data.Yaml.decodeEither'
