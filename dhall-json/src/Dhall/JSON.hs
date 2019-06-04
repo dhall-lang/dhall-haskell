@@ -185,7 +185,6 @@ import Dhall.Map (Map)
 import Options.Applicative (Parser)
 
 import qualified Control.Lens
-import qualified Data.ByteString
 import qualified Data.Foldable
 import qualified Data.HashMap.Strict
 import qualified Data.List
@@ -193,7 +192,6 @@ import qualified Data.Ord
 import qualified Data.Text
 import qualified Dhall.Core
 import qualified Dhall.Import
-import qualified Dhall.JSON.Compat
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
