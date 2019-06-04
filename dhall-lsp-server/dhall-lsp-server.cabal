@@ -20,7 +20,6 @@ source-repository head
 
 library
   exposed-modules:
-      Backend.Dhall.DhallErrors
       Backend.Dhall.Diagnostics
       Backend.Dhall.Formatting
       LSP.Common
@@ -30,6 +29,7 @@ library
       LSP.Server
   other-modules:
       Paths_dhall_lsp_server
+      Util
   hs-source-dirs:
       src
   default-extensions: LambdaCase OverloadedStrings FlexibleInstances TypeApplications RecordWildCards ScopedTypeVariables
@@ -53,8 +53,10 @@ library
     , text
     , transformers
     , unordered-containers
+    , uri-encode
     , yi-rope
   default-language: Haskell2010
+  GHC-Options: -Wall -fwarn-incomplete-uni-patterns
 
 executable dhall-lsp-server
   main-is: Main.hs
@@ -87,6 +89,7 @@ executable dhall-lsp-server
     , unordered-containers
     , yi-rope
   default-language: Haskell2010
+  GHC-Options: -Wall -fwarn-incomplete-uni-patterns
 
 test-suite dhall-lsp-server-test
   type: exitcode-stdio-1.0
@@ -98,7 +101,7 @@ test-suite dhall-lsp-server-test
   hs-source-dirs:
       test
   default-extensions: LambdaCase OverloadedStrings FlexibleInstances TypeApplications RecordWildCards ScopedTypeVariables
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
   build-tool-depends:
       tasty-discover:tasty-discover
   build-depends:
