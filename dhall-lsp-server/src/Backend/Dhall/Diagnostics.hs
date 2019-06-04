@@ -30,7 +30,8 @@ import qualified Data.List.NonEmpty as NonEmpty
 import qualified Text.Megaparsec as Megaparsec
 
 -- | An exception that occurred while trying to parse, type-check and normalise
---   the input.
+--   the input. TODO: make this list exhaustive! We currently report too many
+--   exceptions as "internal errors".
 data DhallException
   = ExceptionInternal SomeException
   | ExceptionCBOR DecodingFailure  -- CBOR decoding failure (not relevant?)
@@ -64,7 +65,7 @@ runDhall path txt =
     )
     go
   where
-    handle' con = handle (return . return . con)
+    handle' constructor = handle (return . return . constructor)
     -- we need to tell Dhall the path in order for relative imports to be resolved correctly
     (dir, file) = splitFileName path
     dhallparams =

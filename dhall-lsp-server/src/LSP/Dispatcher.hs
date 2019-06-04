@@ -112,11 +112,15 @@ dispatcher lf inp = do
           formattedDocument <- formatDocument uri tabSize insertSpaces
           publish req RspDocumentFormatting formattedDocument
 
+      -- This is a quick-and-dirty prototype implementation that will be
+      -- completely rewritten!
       ReqHover req -> do
           liftIO $ LSP.Utility.logm "****** reactor: processing ReqHover"
           let (J.Position line col) = req ^. (J.params . J.position)
               doc = req ^. (J.params . J.textDocument . J.uri)
-              Just fileName = J.uriToFilePath doc
+              fileName = case J.uriToFilePath doc of
+                Nothing       -> fail "Failed to parse URI in ReqHover."
+                Just path -> path
           txt <- liftIO $ Data.Text.IO.readFile fileName
           errors <- liftIO $ runDhall fileName txt
           let explanations = mapMaybe (explain txt) errors
@@ -127,9 +131,7 @@ dispatcher lf inp = do
               hover = case filter isHovered explanations of
                 [] -> Nothing
                 (diag : _) -> hoverFromDiagnosis diag
-              -- J.encode
           publish req RspHover hover
-          -- "command:dhallLSPClient.explain?" ++ 
 
       unknown -> 
         liftIO $ LSP.Utility.logs $ "\nIGNORING!!!\n HandlerRequest:" ++ show unknown
