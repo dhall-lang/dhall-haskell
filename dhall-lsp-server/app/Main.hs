@@ -1,25 +1,11 @@
 
 module Main (main) where
 
-
-
-
-import           Data.Default
-import qualified Data.HashMap.Strict                   as H
-import qualified Data.Text                             as T
 import qualified System.Exit
-import qualified System.Log.Logger                     as L
-
-
-
-import qualified Data.Text.IO
-import qualified System.IO
-import qualified Data.Map as Map
 import Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative
 import Control.Applicative ((<|>))
 
-import qualified System.IO.Unsafe
 import System.Exit (exitSuccess, exitWith)
 
 import LSP.Server(run)

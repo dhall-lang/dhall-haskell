@@ -3,18 +3,18 @@ module LSP.Handlers.Diagnostics( sendEmptyDiagnostics
                                , sendDiagnostics
                                ) where
 
-import           Language.Haskell.LSP.Messages
+-- import           Language.Haskell.LSP.Messages
 import           Language.Haskell.LSP.Diagnostics
-import qualified Language.Haskell.LSP.Control as LSP.Control
+-- import qualified Language.Haskell.LSP.Control as LSP.Control
 import qualified Language.Haskell.LSP.Core as LSP.Core
 import qualified Language.Haskell.LSP.Types as LSP.Types
 import qualified Language.Haskell.LSP.Utility  as LSP.Utility
 
 
 import qualified Language.Haskell.LSP.Types            as LSP
-import qualified Language.Haskell.LSP.Types.Lens       as LSP
+-- import qualified Language.Haskell.LSP.Types.Lens       as LSP
 
-import qualified System.IO.Unsafe
+-- import qualified System.IO.Unsafe
 import qualified Data.Text.IO
 import qualified Data.SortedList
 import qualified Data.Map.Strict as Map

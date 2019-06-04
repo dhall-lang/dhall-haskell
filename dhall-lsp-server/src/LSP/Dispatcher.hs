@@ -2,12 +2,10 @@ module LSP.Dispatcher(dispatcher) where
 
 import           Control.Concurrent.STM.TChan
 import           Language.Haskell.LSP.Messages
-import qualified Language.Haskell.LSP.Control as LSP.Control
 import qualified Language.Haskell.LSP.Core as LSP.Core
 import qualified Language.Haskell.LSP.Types as LSP.Types
 import qualified Language.Haskell.LSP.Utility  as LSP.Utility
 
-import qualified Data.Aeson                            as J
 import qualified Language.Haskell.LSP.Types            as J
 import qualified Language.Haskell.LSP.Types.Lens       as J
 
@@ -21,14 +19,11 @@ import Control.Monad (forever)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Reader (ReaderT, runReaderT)
 import Control.Monad.Reader.Class (ask)
-import Control.Monad.IO.Class
 import GHC.Conc (atomically)
 import qualified Data.Text.IO
 import Data.Maybe (mapMaybe)
 import qualified Network.URI.Encode as URI
 import qualified Data.Text as Text
-import qualified Data.Text.Lazy as Text.Lazy
-import qualified Data.Aeson.Text as Aeson.Text
 
 -- ! FIXME: replace logs/logm (which are just utilities) with own logging functions to make intent clearer
 -- | A basic router, which reads from Client messages queue `inp` and executes appropriate actions

@@ -6,15 +6,11 @@ import qualified Backend.Dhall.Formatting as Formatting
 
 import qualified Language.Haskell.LSP.Core as LSP.Core
 
-import qualified Data.Aeson                            as J
 import qualified Language.Haskell.LSP.Types            as J
-import qualified Language.Haskell.LSP.Types.Lens       as J
 import qualified Language.Haskell.LSP.Utility  as LSP.Utility
-import           Language.Haskell.LSP.Messages
 
 import qualified Data.Text
 import qualified Data.Text.IO
-import qualified Data.SortedList
 import Control.Monad.Trans (lift)
 import Control.Monad.Reader (ReaderT)
 
@@ -22,7 +18,7 @@ import Control.Monad.Reader (ReaderT)
 -- * Note: any formatting errors would be swallowed. I think this is fine in this case, but generally we'd like to send user a notification
 -- (e.g. the error occurred in the formatter itself, and user requests format constantly and nothing happens)
 formatDocument :: J.Uri -> Int -> Bool -> ReaderT (LSP.Core.LspFuncs ()) IO (J.List J.TextEdit)
-formatDocument fileUri tabSize insertSpaces = do
+formatDocument fileUri _ {-tabSize-} _ {-insertSpaces-} = do
     let
       filePath = maybe (error "can't convert uri to file path") id $ J.uriToFilePath fileUri -- !FIXME: handle non-file uris
     txt <- lift $ Data.Text.IO.readFile filePath

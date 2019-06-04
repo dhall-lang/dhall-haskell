@@ -21,18 +21,13 @@ import Dhall
 
 import Util
 
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import qualified Data.Text as Text
-import Control.Exception (handle, SomeException, Exception)
+import Control.Exception (handle, SomeException)
 import Lens.Family (set)
 import System.FilePath (splitFileName)
-import Data.List
-import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Text.Megaparsec as Megaparsec
-import qualified Text.Megaparsec.Error as Megaparsec
-import qualified Data.Set as Set
-
 
 -- | An exception that occurred while trying to parse, type-check and normalise
 --   the input.
@@ -76,7 +71,7 @@ runDhall path txt =
       (set rootDirectory dir . set sourceName file) defaultInputSettings
     go :: IO [DhallException]
     go = do
-      inputExprWithSettings dhallparams txt
+      _ <- inputExprWithSettings dhallparams txt
       return []  -- If we got this far the input was a valid Dhall program.
 
 
@@ -102,10 +97,10 @@ diagnose txt (ExceptionImport (SourcedException src e)) = [Diagnosis { .. }]
     range = (Just . sanitiseRange txt . rangeFromDhall) src
     diagnosis = tshow e
 
-diagnose txt (ExceptionTypecheck e@(TypeError _ exp _)) = [Diagnosis { .. }]
+diagnose txt (ExceptionTypecheck e@(TypeError _ expr _)) = [Diagnosis { .. }]
   where
     doctor = "Dhall.TypeCheck"
-    range = fmap (sanitiseRange txt . rangeFromDhall) (note exp)
+    range = fmap (sanitiseRange txt . rangeFromDhall) (note expr)
     diagnosis = tshow e
 
 diagnose txt (ExceptionParse e) =
@@ -138,11 +133,11 @@ diagnose txt (ExceptionParse e) =
 -- | Give a detailed explanation for the given error; if no detailed explanation
 --   is available return @Nothing@ instead.
 explain :: Text -> DhallException -> Maybe Diagnosis
-explain txt (ExceptionTypecheck e@(TypeError _ exp _)) = Just
+explain txt (ExceptionTypecheck e@(TypeError _ expr _)) = Just
   (Diagnosis { .. })
   where
     doctor = "Dhall.TypeCheck"
-    range = fmap (sanitiseRange txt . rangeFromDhall) (note exp)
+    range = fmap (sanitiseRange txt . rangeFromDhall) (note expr)
     diagnosis = tshow (DetailedTypeError e)
 explain _ _ = Nothing  -- only type errors have detailed explanations so far
 
