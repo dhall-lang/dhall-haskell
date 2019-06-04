@@ -18,7 +18,7 @@ import Control.Monad.Reader (ReaderT)
 -- * Note: any formatting errors would be swallowed. I think this is fine in this case, but generally we'd like to send user a notification
 -- (e.g. the error occurred in the formatter itself, and user requests format constantly and nothing happens)
 formatDocument :: J.Uri -> Int -> Bool -> ReaderT (LSP.Core.LspFuncs ()) IO (J.List J.TextEdit)
-formatDocument fileUri _ {-tabSize-} _ {-insertSpaces-} = do
+formatDocument fileUri _tabSize _insertSpaces = do
     let
       filePath = maybe (error "can't convert uri to file path") id $ J.uriToFilePath fileUri -- !FIXME: handle non-file uris
     txt <- lift $ Data.Text.IO.readFile filePath
