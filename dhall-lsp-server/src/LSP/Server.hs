@@ -6,7 +6,6 @@ module LSP.Server(run) where
 
 import           Control.Concurrent(forkIO)
 import           Control.Concurrent.STM.TChan
-import qualified GHC.IO.Exception
 import qualified Control.Exception
 import           Data.Default
 import           Language.Haskell.LSP.Messages
@@ -14,9 +13,7 @@ import qualified Language.Haskell.LSP.Control as LSP.Control
 import qualified Language.Haskell.LSP.Core as LSP.Core
 import qualified Language.Haskell.LSP.Utility  as LSP.Utility
 
-import qualified Data.Aeson                            as J
 import qualified Language.Haskell.LSP.Types            as J
-import qualified Language.Haskell.LSP.Types.Lens       as J
 
 import qualified System.Log.Logger
 import GHC.Conc (atomically)
@@ -83,7 +80,7 @@ lspHandlers :: TChan FromClientMessage -> LSP.Core.Handlers
 lspHandlers rin
   = def { LSP.Core.initializedHandler                       = Just $ passHandler rin NotInitialized
         -- , Core.renameHandler                            = Just $ passHandler rin ReqRename
-        -- , Core.hoverHandler                             = Just $ passHandler rin ReqHover
+        , LSP.Core.hoverHandler                             = Just $ passHandler rin ReqHover
         , LSP.Core.didOpenTextDocumentNotificationHandler   = Just $ passHandler rin NotDidOpenTextDocument
         , LSP.Core.didSaveTextDocumentNotificationHandler   = Just $ passHandler rin NotDidSaveTextDocument
         , LSP.Core.didChangeTextDocumentNotificationHandler = Just $ passHandler rin NotDidChangeTextDocument
