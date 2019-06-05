@@ -12,7 +12,7 @@ import Language.Haskell.LSP.Types(
     , Position(..)
     )
 
-import Backend.Dhall.Diagnostics
+import Backend.Dhall.Diagnostics hiding (Range)
 
 import qualified Data.Text
 import qualified Data.Text.IO
