@@ -1,18 +1,70 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP               #-}
-module Dhall.Yaml ( jsonToYaml, yamlToJson ) where
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
-import Data.Bifunctor (bimap)
+module Dhall.Yaml ( Options(..), defaultOptions, dhallToYaml ) where
+
 import Data.ByteString (ByteString)
+import Data.Text (Text)
+import Dhall.JSON (Conversion(..), SpecialDoubleMode(..),codeToValue)
+import Options.Applicative (Parser)
 
 import qualified Data.Aeson
 import qualified Data.ByteString
 import qualified Data.Vector
 import qualified Data.Yaml
+import qualified Dhall
+import qualified Options.Applicative
 #if MIN_VERSION_yaml(0,10,2)
 import qualified Data.Text
 import qualified Text.Libyaml
 #endif
+
+data Options = Options
+    { explain    :: Bool
+    , omission   :: Data.Aeson.Value -> Data.Aeson.Value
+    , documents  :: Bool
+    , quoted     :: Bool
+    , conversion :: Conversion
+    }
+
+defaultOptions :: Options
+defaultOptions =
+  Options { explain = False
+          , omission = id
+          , documents = False
+          , quoted = False
+          , conversion = NoConversion
+          }
+
+parseDocuments :: Parser Bool
+parseDocuments =
+  Options.Applicative.switch
+            (   Options.Applicative.long "documents"
+            <>  Options.Applicative.help "If given a Dhall list, output a document for every element"
+            )
+
+parseQuoted :: Parser Bool
+parseQuoted =
+  Options.Applicative.switch
+            (   Options.Applicative.long "quoted"
+            <>  Options.Applicative.help "Prevent from generating not quoted scalars"
+            )
+                           
+{-| Convert a piece of Text carrying a Dhall inscription to an equivalent YAML ByteString
+-}
+dhallToYaml
+  :: Options
+  -> Text  -- ^ Describe the input for the sake of error location.
+  -> Text  -- ^ Input text.
+  -> IO ByteString
+dhallToYaml Options{..} name code = do
+  
+  let explaining = if explain then Dhall.detailed else id
+
+  json <- omission <$> explaining (codeToValue conversion UseYAMLEncoding name code)
+
+  return $ jsonToYaml json documents quoted
 
 -- | Transform json representation into yaml
 jsonToYaml
@@ -49,8 +101,5 @@ jsonToYaml json documents quoted = case (documents, json) of
         else Data.Yaml.defaultEncodeOptions
 #endif
 
--- | Transform yaml representation into dhall
-yamlToJson :: ByteString -> Either String Data.Aeson.Value
-yamlToJson  =
-  bimap Data.Yaml.prettyPrintParseException id . Data.Yaml.decodeEither'
+
 

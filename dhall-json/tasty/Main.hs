@@ -72,19 +72,12 @@ yamlQuotedStrings = Test.Tasty.HUnit.testCase "Yaml: quoted string style" assert
 
         code <- Data.Text.IO.readFile file
 
-        parsedExpression <- case Dhall.Parser.exprFromText file code of
-            Left  exception        -> Control.Exception.throwIO exception
-            Right parsedExpression -> return parsedExpression
+        let options = defaultOptions { Dhall.Yaml.quoted = True }
 
-        resolvedExpression <- Dhall.Import.load parsedExpression
-
-        jsonValue <- case Dhall.JSON.dhallToJSON resolvedExpression of
-            Left  exception   -> Control.Exception.throwIO exception
-            Right jsonValue -> return jsonValue
-
-        let actualValue = Dhall.Yaml.jsonToYaml jsonValue False True
+        let actualValue = Dhall.Yaml.dhallToYaml options file code
 
         bytes <- Data.ByteString.Lazy.readFile "./tasty/data/quoted.yaml"
+
         let expectedValue = Data.ByteString.Lazy.toStrict bytes
 
         let message =
@@ -100,19 +93,10 @@ yaml = Test.Tasty.HUnit.testCase "Yaml: normal string style" assertion
 
         code <- Data.Text.IO.readFile file
 
-        parsedExpression <- case Dhall.Parser.exprFromText file code of
-            Left  exception        -> Control.Exception.throwIO exception
-            Right parsedExpression -> return parsedExpression
-
-        resolvedExpression <- Dhall.Import.load parsedExpression
-
-        jsonValue <- case Dhall.JSON.dhallToJSON resolvedExpression of
-            Left  exception   -> Control.Exception.throwIO exception
-            Right jsonValue -> return jsonValue
-
-        let actualValue = Dhall.Yaml.jsonToYaml jsonValue False False
+        actualValue <- Dhall.Yaml.dhallToYaml defaultOptions file code
 
         bytes <- Data.ByteString.Lazy.readFile "./tasty/data/normal.yaml"
+
         let expectedValue = Data.ByteString.Lazy.toStrict bytes
 
         let message =
