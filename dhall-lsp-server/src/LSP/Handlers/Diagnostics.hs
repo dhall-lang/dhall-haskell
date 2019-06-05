@@ -1,5 +1,6 @@
 {-| This module contains everything related on how LSP server handles diagnostic messages. -}
-module LSP.Handlers.Diagnostics( sendEmptyDiagnostics
+module LSP.Handlers.Diagnostics( compilerDiagnostics
+                               , sendEmptyDiagnostics
                                , sendDiagnostics
                                ) where
 
