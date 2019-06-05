@@ -2,12 +2,8 @@
 {-# LANGUAGE CPP               #-}
 module Dhall.Yaml ( jsonToYaml, yamlToJson ) where
 
-#if defined(ETA_VERSION)
-import Dhall.Yaml.Eta ( jsonToYaml , yamlToJson )
-#else 
 import Data.Bifunctor (bimap)
 import Data.ByteString (ByteString)
-
 
 import qualified Data.Aeson
 import qualified Data.ByteString
@@ -57,4 +53,4 @@ jsonToYaml json documents quoted = case (documents, json) of
 yamlToJson :: ByteString -> Either String Data.Aeson.Value
 yamlToJson  =
   bimap Data.Yaml.prettyPrintParseException id . Data.Yaml.decodeEither'
-#endif
+
