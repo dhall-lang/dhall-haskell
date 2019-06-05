@@ -4,7 +4,10 @@ module Dhall.Yaml ( jsonToYaml, yamlToJson ) where
 
 #if defined(ETA_VERSION)
 import Dhall.Yaml.Eta ( jsonToYaml , yamlToJson )
-#else 
+#else
+import Data.Bifunctor ( bimap )
+import Data.ByteString ( ByteString )
+
 import qualified Data.Aeson
 import qualified Data.ByteString
 import qualified Data.Vector
