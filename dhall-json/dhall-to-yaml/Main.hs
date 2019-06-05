@@ -14,6 +14,7 @@ import qualified Data.ByteString
 import qualified Data.Text.IO
 import qualified Dhall
 import qualified Dhall.JSON
+import qualified Dhall.Yaml
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified System.Exit
@@ -75,7 +76,7 @@ main = do
 
         json <- omission <$> explaining (Dhall.JSON.codeToValue conversion UseYAMLEncoding "(stdin)" stdin)
 
-        let yaml = Dhall.JSON.jsonToYaml json documents quoted
+        let yaml = Dhall.Yaml.jsonToYaml json documents quoted
 
         Data.ByteString.putStr yaml
 

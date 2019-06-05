@@ -168,7 +168,6 @@ module Dhall.JSON (
     , SpecialDoubleMode(..)
     , handleSpecialDoubles
     , codeToValue
-    , jsonToYaml
 
     -- * Exceptions
     , CompileError(..)
@@ -186,17 +185,13 @@ import Dhall.Map (Map)
 import Options.Applicative (Parser)
 
 import qualified Control.Lens
-import qualified Data.ByteString
 import qualified Data.Foldable
 import qualified Data.HashMap.Strict
 import qualified Data.List
 import qualified Data.Ord
 import qualified Data.Text
-import qualified Data.Vector
-import qualified Data.Yaml
 import qualified Dhall.Core
 import qualified Dhall.Import
-import qualified Dhall.JSON.Compat
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
@@ -898,17 +893,3 @@ codeToValue conversion specialDoubleMode name code = do
       Left  err  -> Control.Exception.throwIO err
       Right json -> return json
 
--- | Transform json representation into yaml
-jsonToYaml
-    :: Value
-    -> Bool
-    -> Bool
-    -> Data.ByteString.ByteString
-jsonToYaml json documents quoted = case (documents, json) of
-  (True, Data.Yaml.Array elems)
-    -> Data.ByteString.intercalate "\n---\n"
-       $ fmap encodeYaml
-       $ Data.Vector.toList elems
-  _ -> encodeYaml json
-  where
-    encodeYaml = Dhall.JSON.Compat.encodeYaml quoted
