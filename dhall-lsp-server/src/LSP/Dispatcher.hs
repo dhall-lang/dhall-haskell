@@ -2,18 +2,17 @@ module LSP.Dispatcher(dispatcher) where
 
 import           Control.Concurrent.STM.TChan
 import           Language.Haskell.LSP.Messages
-import qualified Language.Haskell.LSP.Control as LSP.Control
 import qualified Language.Haskell.LSP.Core as LSP.Core
 import qualified Language.Haskell.LSP.Types as LSP.Types
 import qualified Language.Haskell.LSP.Utility  as LSP.Utility
 
-import qualified Data.Aeson                            as J
 import qualified Language.Haskell.LSP.Types            as J
 import qualified Language.Haskell.LSP.Types.Lens       as J
 
 import LSP.Common
 import LSP.Handlers.Diagnostics
 import LSP.Handlers.DocumentFormatting
+import Backend.Dhall.Diagnostics
 
 import Control.Lens
 import Control.Monad (forever)
@@ -21,6 +20,10 @@ import Control.Monad.Trans (liftIO)
 import Control.Monad.Reader (ReaderT, runReaderT)
 import Control.Monad.Reader.Class (ask)
 import GHC.Conc (atomically)
+import qualified Data.Text.IO
+import Data.Maybe (mapMaybe)
+import qualified Network.URI.Encode as URI
+import qualified Data.Text as Text
 
 -- ! FIXME: replace logs/logm (which are just utilities) with own logging functions to make intent clearer
 -- | A basic router, which reads from Client messages queue `inp` and executes appropriate actions
@@ -109,10 +112,39 @@ dispatcher lf inp = do
           formattedDocument <- formatDocument uri tabSize insertSpaces
           publish req RspDocumentFormatting formattedDocument
 
+      -- This is a quick-and-dirty prototype implementation that will be
+      -- completely rewritten!
+      ReqHover req -> do
+          liftIO $ LSP.Utility.logm "****** reactor: processing ReqHover"
+          let (J.Position line col) = req ^. (J.params . J.position)
+              doc = req ^. (J.params . J.textDocument . J.uri)
+              fileName = case J.uriToFilePath doc of
+                Nothing       -> fail "Failed to parse URI in ReqHover."
+                Just path -> path
+          txt <- liftIO $ Data.Text.IO.readFile fileName
+          errors <- liftIO $ runDhall fileName txt
+          let explanations = mapMaybe (explain txt) errors
+              isHovered :: Diagnosis -> Bool
+              isHovered (Diagnosis _ Nothing _) = False
+              isHovered (Diagnosis _ (Just (Range left right)) _)
+                = left <= (line,col) && (line,col) <= right
+              hover = case filter isHovered explanations of
+                [] -> Nothing
+                (diag : _) -> hoverFromDiagnosis diag
+          publish req RspHover hover
+
       unknown -> 
         liftIO $ LSP.Utility.logs $ "\nIGNORING!!!\n HandlerRequest:" ++ show unknown
 
-       
+hoverFromDiagnosis :: Diagnosis -> Maybe J.Hover
+hoverFromDiagnosis (Diagnosis _ Nothing _) = Nothing 
+hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) = Just J.Hover{..}
+  where
+    _range = Just $ J.Range (uncurry J.Position left) (uncurry J.Position right)
+    encodedDiag = URI.encode (Text.unpack diagnosis)
+    command = "[Explain error](dhall-explain:?" <> Text.pack encodedDiag <> ")"
+    _contents = J.List [J.PlainString command]
+
 -- ---------------------------------------------------------------------
 
 

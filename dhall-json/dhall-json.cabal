@@ -26,6 +26,7 @@ Extra-Source-Files:
     CHANGELOG.md
     tasty/data/*.dhall
     tasty/data/*.json
+
 Source-Repository head
     Type: git
     Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-json
@@ -53,10 +54,8 @@ Library
     Exposed-Modules:
         Dhall.JSON
         Dhall.JSONToDhall
-    Other-Modules:
-        Dhall.JSON.Compat
+        Dhall.Yaml            
     GHC-Options: -Wall
-
     if flag(yaml-pre-0_11)
         Build-Depends:
             yaml >= 0.5.0 && < 0.11
@@ -129,14 +128,6 @@ Executable yaml-to-dhall
     Other-Modules:
         Paths_dhall_json
     GHC-Options: -Wall
-
-    if flag(yaml-pre-0_11)
-        Build-Depends:
-            yaml >= 0.5.0 && < 0.11
-    else
-        Build-Depends:
-            libyaml >= 0.1.1.0 && < 0.2 ,
-            yaml    >= 0.11.0  && < 0.12
 
 Test-Suite tasty
     Type: exitcode-stdio-1.0
