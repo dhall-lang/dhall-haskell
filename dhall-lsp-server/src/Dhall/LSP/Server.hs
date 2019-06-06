@@ -2,7 +2,7 @@
 {-| This is the entry point for the LSP server. All calls are delegated to the haskell-lsp library
     which does the heavy lifting.
 -}
-module LSP.Server(run) where
+module Dhall.LSP.Server(run) where
 
 import           Control.Concurrent.STM.TVar
 import           Data.Default
@@ -15,7 +15,7 @@ import Data.Text (Text)
 import qualified System.Log.Logger
 import GHC.Conc (atomically)
 
-import qualified LSP.Handlers as Handlers
+import qualified Dhall.LSP.Handlers as Handlers
 
 -- | The main entry point for the LSP server.
 run :: Maybe FilePath -> IO ()

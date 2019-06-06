@@ -11,7 +11,7 @@ import Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative
 import Control.Applicative ((<|>))
 
-import qualified LSP.Server
+import qualified Dhall.LSP.Server
 
 -- | Top-level program options
 data Options = Options {
@@ -56,7 +56,7 @@ parserInfoOptions = Options.Applicative.info
 runCommand :: Options -> IO ()
 runCommand Options {..} = case command of
   Version -> putStrLn ("0.0.1.1" :: String)
-  LSPServer -> LSP.Server.run logFile
+  LSPServer -> Dhall.LSP.Server.run logFile
 
 -- | Entry point for the @dhall-lsp-server@ executable
 main :: IO ()

@@ -1,4 +1,4 @@
-module LSP.Handlers where
+module Dhall.LSP.Handlers where
 
 import qualified Language.Haskell.LSP.Core as LSP
 import qualified Language.Haskell.LSP.Messages as LSP
@@ -6,9 +6,9 @@ import qualified Language.Haskell.LSP.Utility as LSP
 import qualified Language.Haskell.LSP.Types as J
 import qualified Language.Haskell.LSP.Types.Lens as J
 
-import qualified LSP.Handlers.Diagnostics as Handlers
-import qualified LSP.Handlers.DocumentFormatting as Handlers
-import Backend.Dhall.Diagnostics
+import qualified Dhall.LSP.Handlers.Diagnostics as Handlers
+import qualified Dhall.LSP.Handlers.DocumentFormatting as Handlers
+import Dhall.LSP.Backend.Diagnostics
 
 import Control.Lens ((^.))
 import Control.Monad.Reader (runReaderT)
