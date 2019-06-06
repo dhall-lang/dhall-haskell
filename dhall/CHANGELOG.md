@@ -36,6 +36,10 @@
     * This change fixes that by forwarding custom headers by value instead of
       by reference
     * See: https://github.com/dhall-lang/dhall-haskell/pull/967
+* BUG FIX: Fix GHCJS support
+    * `Natural/fold` was broken in version 1.22, which this change fixes
+    * Specifically, it would hang for `Natural` numbers greater than 1
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/985
 * BUG FIX: `dhall diff` no longer double-prints key-value separators
     * See: https://github.com/dhall-lang/dhall-haskell/pull/952
 * Feature: Record projection by expression
@@ -63,12 +67,16 @@
     * This automates the idiom used by the Prelude to optimistically cache
       imports but gracefully degrade if the semantic integrity check fails
     * See: https://github.com/dhall-lang/dhall-haskell/pull/980
-* Add `:clear` command to `dhall repl`
+* Feature: Add `:clear` command to `dhall repl`
     * This deletes previous bindings from the history so that they can be
       garbage collected
     * See: https://github.com/dhall-lang/dhall-haskell/pull/966
 * Feature: New `chunkExprs` `Traversal` added to `Dhall.Core`
     * See: https://github.com/dhall-lang/dhall-haskell/pull/954
+* Feature: New `Dhall.Optics` module
+    * This re-exports some convenient @lens@ utilities used internally for
+      packages trying to avoid a @lens@ dependency
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/986
 * More GHC 8.8 support
     * See: https://github.com/dhall-lang/dhall-haskell/pull/961
 

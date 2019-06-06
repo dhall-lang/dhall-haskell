@@ -4,6 +4,10 @@
     * They are now encoded as the standard `"nan"`/`"inf"`/`"-inf"`
       representations instead of `null`/`MIN_DOUBLE/`/`MAX_DOUBLE`
     * See: https://github.com/dhall-lang/dhall-haskell/pull/946
+* BREAKING CHANGE: Isolate YAML code to one modulee
+    * This is a breaking change because it moves `Dhall.JSON.jsonToYaml` to
+      `Dhall.YAML.jsonToYaml`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/989/files
 * New `yaml-to-dhall` command-line utility
     * See: https://github.com/dhall-lang/dhall-haskell/pull/977
 * Add `--quoted` flag to force quoting of YAML string literals
