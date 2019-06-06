@@ -4,46 +4,42 @@
 -}
 module LSP.Server(run) where
 
-import           Control.Concurrent(forkIO)
-import           Control.Concurrent.STM.TChan
-import qualified Control.Exception
+import           Control.Concurrent.STM.TVar
 import           Data.Default
-import           Language.Haskell.LSP.Messages
 import qualified Language.Haskell.LSP.Control as LSP.Control
 import qualified Language.Haskell.LSP.Core as LSP.Core
-import qualified Language.Haskell.LSP.Utility  as LSP.Utility
 
 import qualified Language.Haskell.LSP.Types            as J
 
+import Data.Text (Text)
 import qualified System.Log.Logger
 import GHC.Conc (atomically)
 
-import LSP.Dispatcher(dispatcher) 
+import qualified LSP.Handlers as Handlers
 
-run :: Maybe String -> IO () -> IO Int
-run maybeLog dispatcherProc = flip  Control.Exception.catches handlers $ do
-
-  rin  <- atomically newTChan :: IO (TChan FromClientMessage)
-
-  let
-    dp lf = do
-      _rpid  <- forkIO $ dispatcher lf rin
-      dispatcherProc
-      pure Nothing
-
-  flip Control.Exception.finally finalProc $ do
-    setupLogger maybeLog
-    LSP.Control.run (pure (Right ()), dp) (lspHandlers rin) lspOptions Nothing
+-- | The main entry point for the LSP server.
+run :: Maybe FilePath -> IO ()
+run mlog = do
+  setupLogger mlog
+  vlsp <- newTVarIO Nothing
+  _    <- LSP.Control.run (makeConfig, initCallback vlsp) (lspHandlers vlsp)
+                          lspOptions Nothing
+  return ()
   where
-    handlers = [ Control.Exception.Handler ioExcept
-               , Control.Exception.Handler someExcept
-               ]
-    finalProc = System.Log.Logger.removeAllHandlers
-    ioExcept   (e :: Control.Exception.IOException)       = error $ show $ e -- print e >> pure 1
-    someExcept (e :: Control.Exception.SomeException)     = error $ show $ e -- print e >> pure 1
+    -- Callback that is called when the LSP server is started; makes the lsp
+    -- state (LspFuncs) available to the message handlers through the vlsp TVar.
+    initCallback
+      :: TVar (Maybe (LSP.Core.LspFuncs ()))
+      -> LSP.Core.LspFuncs ()
+      -> IO (Maybe J.ResponseError)
+    initCallback vlsp lsp = do
+      atomically $ writeTVar vlsp (Just lsp)
+      return Nothing
 
--- ---------------------------------------------------------------------
-
+    -- Interpret DidChangeConfigurationNotification; pointless at the moment
+    -- since we don't use a configuration.
+    makeConfig :: J.DidChangeConfigurationNotification -> Either Text ()
+    makeConfig _ = Right ()
 
 -- | sets the output logger.
 -- | if no filename is provided then logger is disabled, if input is string `[OUTPUT]` then log goes to stderr,
@@ -54,51 +50,49 @@ setupLogger (Just "[OUTPUT]") = LSP.Core.setupLogger Nothing [] System.Log.Logge
 setupLogger file              = LSP.Core.setupLogger file [] System.Log.Logger.DEBUG
 
 
-
+-- Tells the LSP client to notify us about file changes. Handled behind the
+-- scenes by haskell-lsp (in Language.Haskell.LSP.VFS); we don't handle the
+-- corresponding notifications ourselves.
 syncOptions :: J.TextDocumentSyncOptions
 syncOptions = J.TextDocumentSyncOptions
   { J._openClose         = Just True
-  , J._change            = Just J.TdSyncNone--J.TdSyncIncremental
+  , J._change            = Just J.TdSyncIncremental
   , J._willSave          = Just False
   , J._willSaveWaitUntil = Just False
   , J._save              = Just $ J.SaveOptions $ Just False
   }
 
--- Capabilities entry point
+-- Server capabilities. Tells the LSP client that we can execute commands etc.
 lspOptions :: LSP.Core.Options
 lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
-                 -- , Core.executeCommandProvider = Just (J.ExecuteCommandOptions (J.List ["lsp-hello-command"]))
-                 -- , Core.codeLensProvider = Just (J.CodeLensOptions (Just False))
+                 , LSP.Core.executeCommandProvider = Just (J.ExecuteCommandOptions (J.List []))  -- no commands implemented
                  }
 
-lspHandlers :: TChan FromClientMessage -> LSP.Core.Handlers
-lspHandlers rin
-  = def { LSP.Core.initializedHandler                       = Just $ passHandler rin NotInitialized
-        -- , Core.renameHandler                            = Just $ passHandler rin ReqRename
-        , LSP.Core.hoverHandler                             = Just $ passHandler rin ReqHover
-        , LSP.Core.didOpenTextDocumentNotificationHandler   = Just $ passHandler rin NotDidOpenTextDocument
-        , LSP.Core.didSaveTextDocumentNotificationHandler   = Just $ passHandler rin NotDidSaveTextDocument
-        , LSP.Core.didChangeTextDocumentNotificationHandler = Just $ passHandler rin NotDidChangeTextDocument
-        , LSP.Core.didCloseTextDocumentNotificationHandler  = Just $ passHandler rin NotDidCloseTextDocument
-        , LSP.Core.cancelNotificationHandler                = Just $ passHandler rin NotCancelRequestFromClient
-        , LSP.Core.responseHandler                          = Just $ responseHandlerCb rin
-        -- , Core.codeActionHandler                        = Just $ passHandler rin ReqCodeAction
-        , LSP.Core.executeCommandHandler                    = Just $ passHandler rin ReqExecuteCommand
-        , LSP.Core.documentFormattingHandler                = Just $ passHandler rin ReqDocumentFormatting
+lspHandlers :: TVar (Maybe (LSP.Core.LspFuncs ())) -> LSP.Core.Handlers
+lspHandlers lsp
+  = def { LSP.Core.initializedHandler                       = Just $ wrapHandler lsp Handlers.initializedHandler
+        , LSP.Core.hoverHandler                             = Just $ wrapHandler lsp Handlers.hoverHandler
+        , LSP.Core.didOpenTextDocumentNotificationHandler   = Just $ wrapHandler lsp Handlers.didOpenTextDocumentNotificationHandler
+        , LSP.Core.didChangeTextDocumentNotificationHandler = Just $ wrapHandler lsp Handlers.nullHandler
+        , LSP.Core.didSaveTextDocumentNotificationHandler   = Just $ wrapHandler lsp Handlers.didSaveTextDocumentNotificationHandler
+        , LSP.Core.didCloseTextDocumentNotificationHandler  = Just $ wrapHandler lsp Handlers.didCloseTextDocumentNotificationHandler
+        , LSP.Core.cancelNotificationHandler                = Just $ wrapHandler lsp Handlers.nullHandler
+        , LSP.Core.responseHandler                          = Just $ wrapHandler lsp Handlers.responseHandler
+        , LSP.Core.executeCommandHandler                    = Just $ wrapHandler lsp Handlers.executeCommandHandler
+        , LSP.Core.documentFormattingHandler                = Just $ wrapHandler lsp Handlers.documentFormattingHandler
         }
 
--- ---------------------------------------------------------------------
-
-passHandler :: TChan FromClientMessage -> (a -> FromClientMessage) -> LSP.Core.Handler a
-passHandler rin convert notification =
-  atomically $ writeTChan rin  (convert notification)
-
--- ---------------------------------------------------------------------
-
-responseHandlerCb :: TChan FromClientMessage -> LSP.Core.Handler J.BareResponseMessage
-responseHandlerCb _rin resp =
-  LSP.Utility.logs $ ">>> got ignoring ResponseMessage:" ++ show resp
-
--- ---------------------------------------------------------------------
-
-
+-- Workaround to make our single-threaded LSP fit dhall-lsp's API, which
+-- expects a multi-threaded implementation.
+wrapHandler
+  :: TVar (Maybe (LSP.Core.LspFuncs ()))
+  -> (LSP.Core.LspFuncs () -> a -> IO ())
+  -> a
+  -> IO ()
+wrapHandler vlsp handle message = do
+  mlsp <- readTVarIO vlsp
+  case mlsp of
+    Just lsp -> handle lsp message
+    Nothing ->
+      fail "A handler was called before the LSP was initialized properly.\
+          \ This should never happen."

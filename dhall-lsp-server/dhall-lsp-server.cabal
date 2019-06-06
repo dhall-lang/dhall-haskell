@@ -22,8 +22,7 @@ library
   exposed-modules:
       Backend.Dhall.Diagnostics
       Backend.Dhall.Formatting
-      LSP.Common
-      LSP.Dispatcher
+      LSP.Handlers
       LSP.Handlers.Diagnostics
       LSP.Handlers.DocumentFormatting
       LSP.Server

@@ -7,11 +7,9 @@ module Main
   )
 where
 
-import qualified System.Exit
 import Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative
 import Control.Applicative ((<|>))
-import System.Exit (exitSuccess, exitWith)
 
 import qualified LSP.Server
 
@@ -58,9 +56,7 @@ parserInfoOptions = Options.Applicative.info
 runCommand :: Options -> IO ()
 runCommand Options {..} = case command of
   Version -> putStrLn ("0.0.1.1" :: String)
-  LSPServer -> LSP.Server.run logFile (pure ()) >>= \case
-    0 -> exitSuccess
-    c -> exitWith . System.Exit.ExitFailure $ c
+  LSPServer -> LSP.Server.run logFile
 
 -- | Entry point for the @dhall-lsp-server@ executable
 main :: IO ()
