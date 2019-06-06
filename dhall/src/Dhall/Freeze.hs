@@ -34,6 +34,7 @@ import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
+import qualified Dhall.Optics
 import qualified Dhall.TypeCheck
 import qualified System.FilePath
 import qualified System.IO
@@ -208,7 +209,7 @@ freeze inplace scope intent characterSet _standardVersion = do
                 Secure ->
                     traverse freezeFunction expression
                 Cache  ->
-                    Dhall.Core.transformMOf
+                    Dhall.Optics.transformMOf
                         Dhall.Core.subExpressions
                         cache
                         (Dhall.Core.denote expression)

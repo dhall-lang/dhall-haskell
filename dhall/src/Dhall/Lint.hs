@@ -14,6 +14,7 @@ import Data.Semigroup ((<>))
 import Dhall.Core (Binding(..), Expr(..), Import, Var(..), subExpressions)
 
 import qualified Dhall.Core
+import qualified Dhall.Optics
 
 {-| Automatically improve a Dhall expression
 
@@ -25,7 +26,7 @@ import qualified Dhall.Core
 -}
 lint :: Expr s Import -> Expr t Import
 lint =
-  Dhall.Core.rewriteOf
+  Dhall.Optics.rewriteOf
     subExpressions
     ( \e ->
                 removeLetInLet e
