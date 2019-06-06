@@ -24,7 +24,7 @@ nullHandler :: LSP.LspFuncs () -> a -> IO ()
 nullHandler _ _ = return ()
 
 initializedHandler :: LSP.LspFuncs () -> J.InitializedNotification -> IO ()
-initializedHandler lsp _notification = do
+initializedHandler _lsp _notification = do
   LSP.logs "LSP Handler: processing InitializedNotification"
   return ()
 
