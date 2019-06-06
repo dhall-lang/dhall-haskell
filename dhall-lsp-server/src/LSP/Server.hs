@@ -34,11 +34,6 @@ run maybeLog dispatcherProc = flip  Control.Exception.catches handlers $ do
   flip Control.Exception.finally finalProc $ do
     setupLogger maybeLog
     LSP.Control.run (pure (Right ()), dp) (lspHandlers rin) lspOptions Nothing
-    -- TODO: CTRL.run takes logger as the last option, and should write LSP log into it
-    -- TODO: 1. make upstream logger write in the format which lsp-inspector can read
-    -- TODO: 2. it would be cool, if we start writing log on file creation, e.g.
-    -- TODO:    e.g. "touch file /var/log/dhall-lsp-server/log-2018-03-12-12-45-34-fe5dk3.log to enable LSP logging"
-
   where
     handlers = [ Control.Exception.Handler ioExcept
                , Control.Exception.Handler someExcept
