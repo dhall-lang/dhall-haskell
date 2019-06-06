@@ -26,17 +26,7 @@ nullHandler _ _ = return ()
 initializedHandler :: LSP.LspFuncs () -> J.InitializedNotification -> IO ()
 initializedHandler lsp _notification = do
   LSP.logs "LSP Handler: processing InitializedNotification"
-  let
-    registration = J.Registration
-      "dhall-lsp-server-registered"
-      J.WorkspaceExecuteCommand
-      Nothing
-    registrations = J.RegistrationParams (J.List [registration])
-  rid <- LSP.getNextReqId lsp
-  -- client/registerCapability 
-  LSP.sendFunc lsp
-    $ LSP.ReqRegisterCapability
-    $ LSP.fmServerRegisterCapabilityRequest rid registrations
+  return ()
 
 -- This is a quick-and-dirty prototype implementation that will be completely
 -- rewritten!
