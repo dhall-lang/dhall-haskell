@@ -75,7 +75,7 @@ lspHandlers lsp
         , LSP.Core.didOpenTextDocumentNotificationHandler   = Just $ wrapHandler lsp Handlers.didOpenTextDocumentNotificationHandler
         , LSP.Core.didChangeTextDocumentNotificationHandler = Just $ wrapHandler lsp Handlers.nullHandler
         , LSP.Core.didSaveTextDocumentNotificationHandler   = Just $ wrapHandler lsp Handlers.didSaveTextDocumentNotificationHandler
-        , LSP.Core.didCloseTextDocumentNotificationHandler  = Just $ wrapHandler lsp Handlers.didCloseTextDocumentNotificationHandler
+        , LSP.Core.didCloseTextDocumentNotificationHandler  = Just $ wrapHandler lsp Handlers.nullHandler
         , LSP.Core.cancelNotificationHandler                = Just $ wrapHandler lsp Handlers.nullHandler
         , LSP.Core.responseHandler                          = Just $ wrapHandler lsp Handlers.nullHandler
         , LSP.Core.executeCommandHandler                    = Just $ wrapHandler lsp Handlers.nullHandler

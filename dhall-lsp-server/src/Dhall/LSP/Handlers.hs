@@ -30,6 +30,9 @@ initializedHandler :: LSP.LspFuncs () -> J.InitializedNotification -> IO ()
 didChangeTextDocumentNotificationHandler
   :: LSP.LspFuncs () -> J.DidChangeTextDocumentNotification -> IO ()
 
+didCloseTextDocumentNotificationHandler
+  :: LSP.LspFuncs () -> J.DidCloseTextDocumentNotification -> IO ()
+
 cancelNotificationHandler
   :: LSP.LspFuncs () -> J.CancelNotification -> IO ()
 
@@ -96,20 +99,13 @@ didOpenTextDocumentNotificationHandler lsp notification = do
   let uri = notification ^. J.params . J.textDocument . J.uri
   diagnosticsHandler lsp uri
 
+
 didSaveTextDocumentNotificationHandler
   :: LSP.LspFuncs () -> J.DidSaveTextDocumentNotification -> IO ()
 didSaveTextDocumentNotificationHandler lsp notification = do
   LSP.logs "LSP Handler: processing DidSaveTextDocumentNotification"
   let uri = notification ^. J.params . J.textDocument . J.uri
   diagnosticsHandler lsp uri
-
-
-didCloseTextDocumentNotificationHandler
-  :: LSP.LspFuncs () -> J.DidCloseTextDocumentNotification -> IO ()
-didCloseTextDocumentNotificationHandler lsp notification = do
-  LSP.logs "LSP Handler: processing DidCloseTextDocumentNotification"
-  let uri = notification ^. J.params . J.textDocument . J.uri
-  Diagnostics.publishDiagnostics lsp uri []
 
 
 documentFormattingHandler
