@@ -2,7 +2,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Dhall.Yaml ( Options(..), defaultOptions, dhallToYaml ) where
+module Dhall.Yaml
+  ( Options(..)
+  , parseDocuments
+  , parseQuoted
+  , defaultOptions
+  , dhallToYaml ) where
 
 import Data.ByteString (ByteString)
 import Data.Text (Text)
