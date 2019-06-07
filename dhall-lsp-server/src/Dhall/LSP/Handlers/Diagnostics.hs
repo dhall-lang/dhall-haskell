@@ -10,7 +10,6 @@ import qualified Language.Haskell.LSP.Messages as LSP
 import qualified Language.Haskell.LSP.Core     as LSP
 
 import qualified Language.Haskell.LSP.Types    as J
-import qualified Data.Text.IO
 
 import           Data.Text                      ( Text )
 
