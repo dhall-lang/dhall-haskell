@@ -10,6 +10,7 @@ module Dhall.Yaml
   , dhallToYaml ) where
 
 import Data.ByteString (ByteString)
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Dhall.JSON (Conversion(..), SpecialDoubleMode(..),codeToValue)
 import Options.Applicative (Parser)
