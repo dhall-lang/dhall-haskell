@@ -52,7 +52,6 @@ main = do
 
         Data.ByteString.putStr =<< dhallToYaml options "(stdin)" stdin
 
-
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler
   where

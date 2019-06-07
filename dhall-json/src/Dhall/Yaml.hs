@@ -100,6 +100,3 @@ jsonToYaml json documents quoted = case (documents, json) of
         then quotedOptions
         else Data.Yaml.defaultEncodeOptions
 #endif
-
-
-
