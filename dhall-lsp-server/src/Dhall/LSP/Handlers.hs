@@ -85,7 +85,7 @@ didOpenTextDocumentNotificationHandler lsp notification = do
     uri = notification ^. J.params . J.textDocument . J.uri
     version = notification ^. J.params . J.textDocument . J.version
   LSP.logs $ "\turi=" <> show uri <> " version: " <> show version
-  flip runReaderT lsp $ Handlers.sendDiagnostics uri (Just version)
+  Handlers.sendDiagnostics lsp uri
 
 
 didSaveTextDocumentNotificationHandler
@@ -95,7 +95,7 @@ didSaveTextDocumentNotificationHandler lsp notification = do
   let
     uri = notification ^. J.params . J.textDocument . J.uri
   LSP.logs $ "\turi=" <> show uri
-  flip runReaderT lsp $ Handlers.sendDiagnostics uri Nothing
+  Handlers.sendDiagnostics lsp uri
 
 
 didCloseTextDocumentNotificationHandler
@@ -105,7 +105,7 @@ didCloseTextDocumentNotificationHandler lsp notification = do
   let
     uri = notification ^. J.params . J.textDocument . J.uri
   LSP.logs $ "\turi=" <> show uri
-  flip runReaderT lsp $ Handlers.sendEmptyDiagnostics uri Nothing
+  Handlers.sendEmptyDiagnostics lsp uri
 
 
 documentFormattingHandler
