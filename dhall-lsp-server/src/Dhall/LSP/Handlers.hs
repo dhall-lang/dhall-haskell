@@ -23,10 +23,21 @@ import Data.Maybe (mapMaybe)
 nullHandler :: LSP.LspFuncs () -> a -> IO ()
 nullHandler _ _ = return ()
 
+
+{- Currently implemented by the dummy nullHandler:
 initializedHandler :: LSP.LspFuncs () -> J.InitializedNotification -> IO ()
-initializedHandler _lsp _notification = do
-  LSP.logs "LSP Handler: processing InitializedNotification"
-  return ()
+
+didChangeTextDocumentNotificationHandler
+  :: LSP.LspFuncs () -> J.DidChangeTextDocumentNotification -> IO ()
+
+cancelNotificationHandler
+  :: LSP.LspFuncs () -> J.CancelNotification -> IO ()
+
+responseHandler :: LSP.LspFuncs () -> J.BareResponseMessage -> IO ()
+
+executeCommandHandler :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
+-}
+
 
 -- This is a quick-and-dirty prototype implementation that will be completely
 -- rewritten!
@@ -65,6 +76,7 @@ hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) = Just
       "[Explain error](dhall-explain:?" <> Text.pack encodedDiag <> " )"
     _contents = J.List [J.PlainString command]
 
+
 didOpenTextDocumentNotificationHandler
   :: LSP.LspFuncs () -> J.DidOpenTextDocumentNotification -> IO ()
 didOpenTextDocumentNotificationHandler lsp notification = do
@@ -85,9 +97,6 @@ didSaveTextDocumentNotificationHandler lsp notification = do
   LSP.logs $ "\turi=" <> show uri
   flip runReaderT lsp $ Handlers.sendDiagnostics uri Nothing
 
-{- didChangeTextDocumentNotificationHandler
-  :: LSP.LspFuncs () -> J.DidChangeTextDocumentNotification -> IO ()
--}
 
 didCloseTextDocumentNotificationHandler
   :: LSP.LspFuncs () -> J.DidCloseTextDocumentNotification -> IO ()
@@ -98,17 +107,6 @@ didCloseTextDocumentNotificationHandler lsp notification = do
   LSP.logs $ "\turi=" <> show uri
   flip runReaderT lsp $ Handlers.sendEmptyDiagnostics uri Nothing
 
-{- cancelNotificationHandler
-  :: LSP.LspFuncs () -> J.CancelNotification -> IO ()
--}
-
-responseHandler :: LSP.LspFuncs () -> J.BareResponseMessage -> IO ()
-responseHandler _lsp response =
-  LSP.logs $ "LSP Handler: Ignoring ResponseMessage: " ++ show response
-
-executeCommandHandler :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
-executeCommandHandler _lsp request =
-  LSP.logs $ "LSP Handler: Ignoring ExecuteCommandRequest: " ++ show request
 
 documentFormattingHandler
   :: LSP.LspFuncs () -> J.DocumentFormattingRequest -> IO ()

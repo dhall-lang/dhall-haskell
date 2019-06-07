@@ -70,15 +70,15 @@ lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
 
 lspHandlers :: TVar (Maybe (LSP.Core.LspFuncs ())) -> LSP.Core.Handlers
 lspHandlers lsp
-  = def { LSP.Core.initializedHandler                       = Just $ wrapHandler lsp Handlers.initializedHandler
+  = def { LSP.Core.initializedHandler                       = Just $ wrapHandler lsp Handlers.nullHandler
         , LSP.Core.hoverHandler                             = Just $ wrapHandler lsp Handlers.hoverHandler
         , LSP.Core.didOpenTextDocumentNotificationHandler   = Just $ wrapHandler lsp Handlers.didOpenTextDocumentNotificationHandler
         , LSP.Core.didChangeTextDocumentNotificationHandler = Just $ wrapHandler lsp Handlers.nullHandler
         , LSP.Core.didSaveTextDocumentNotificationHandler   = Just $ wrapHandler lsp Handlers.didSaveTextDocumentNotificationHandler
         , LSP.Core.didCloseTextDocumentNotificationHandler  = Just $ wrapHandler lsp Handlers.didCloseTextDocumentNotificationHandler
         , LSP.Core.cancelNotificationHandler                = Just $ wrapHandler lsp Handlers.nullHandler
-        , LSP.Core.responseHandler                          = Just $ wrapHandler lsp Handlers.responseHandler
-        , LSP.Core.executeCommandHandler                    = Just $ wrapHandler lsp Handlers.executeCommandHandler
+        , LSP.Core.responseHandler                          = Just $ wrapHandler lsp Handlers.nullHandler
+        , LSP.Core.executeCommandHandler                    = Just $ wrapHandler lsp Handlers.nullHandler
         , LSP.Core.documentFormattingHandler                = Just $ wrapHandler lsp Handlers.documentFormattingHandler
         }
 
