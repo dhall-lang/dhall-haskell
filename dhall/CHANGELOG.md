@@ -1,3 +1,85 @@
+1.24.0
+
+* Supports version 8.0.0 of the standard
+    * See: https://github.com/dhall-lang/dhall-lang/releases/tag/v8.0.0
+* BREAKING CHANGE: Allow tabs and blank lines in multi-line strings
+    * Blank lines are now ignored for the purpose of dedenting multiline strings
+    * Lines with leading tabs (or mixed tabs and spaces) are now dedented, too,
+      so long as they all share the same prefix
+    * This is technically a breaking change, but unlikely to affect programs
+      in practice, especially if they were formatted with `dhall format`.  This
+      change mainly affects programs that were not indented correctly.
+    * See the changelog for standard version 8.0.0 for more details
+* BREAKING CHANGE: Simplify bare interpolations
+    * Expressions like `λ(x : Text) → "${x}"` now simplify to `λ(x : Text) → x`
+    * This is a technically breaking change because it changes how these sorts
+      of expressions are serialized.  This does not affect semantic integrity
+      checks and the new simplified expressions are extensionally equivalent to
+      their older counterpart expressions.
+    * See the changelog for standard version 8.0.0 for more details
+* BREAKING CHANGE: Encode integrity check as multihash
+    * Semantic integrity checks are now encoded using the multihash spec
+    * This is a technically breaking change that does not perturb the hash for
+      user-facing semantic integrity checks.  This only affects how expressions
+      with unresolved imports are serialized, but semantic integrity checks are
+      only computed for fully-resolved imports.
+    * See the changelog for standard version 8.0.0 for more details
+* BUG FIX: Fix type-checker to reject invalid record type annotations
+    * e.g. `{ x = 1 } : { x : Text }` was not properly rejected by the type
+      checker
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/965
+* BUG FIX: Custom header forwarding fixed
+    * Forwarding custom headers could previously fail in various ways, such as:
+        * Cyclic imports leading to endless network requests
+        * Resolving a non-existent import for the custom headers
+        * Resolving an existing but incorrect import for the custom headers
+    * This change fixes that by forwarding custom headers by value instead of
+      by reference
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/967
+* BUG FIX: Fix GHCJS support
+    * `Natural/fold` was broken in version 1.22, which this change fixes
+    * Specifically, it would hang for `Natural` numbers greater than 1
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/985
+* BUG FIX: `dhall diff` no longer double-prints key-value separators
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/952
+* Feature: Record projection by expression
+    * You can now project out a subset of record fields by the expected type
+    * `let t = { x : Natural } let p = { x = 1, y = 2 } in p.(t) = { x = 1 }`
+    * See the changelog for standard version 8.0.0 for more details
+* Feature: Inline headers
+    * You no longer need to specify custom headers in a separate import.  You
+      can now specify them inline within the same file.
+    * e.g.: `https://example.com/x using [ { header = "Foo", value = "Bar" } ]`
+    * See the changelog for standard version 8.0.0 for more details
+* Feature: Allow `Sort` as a type annotation
+    * An expression such as `Kind → Kind : Sort` will now type-check
+    * `Sort` is still disallowed outside of a type annotation
+    * See the changelog for standard version 8.0.0 for more details
+* Feature: Allow self-describe-cbor when decoding
+    * Dhall expressions serialized as CBOR can be tagged to describe themselves
+      as CBOR without affecting decoding
+    * See the changelog for standard version 8.0.0 for more details
+* Feature: New `--file` option for `dhall` commands
+    * In other words, instead of `dhall <<< './some/file` you can now use
+      `dhall --file some/file`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/949
+* Feature: New `--cache` flag for `dhall freeze` command
+    * This automates the idiom used by the Prelude to optimistically cache
+      imports but gracefully degrade if the semantic integrity check fails
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/980
+* Feature: Add `:clear` command to `dhall repl`
+    * This deletes previous bindings from the history so that they can be
+      garbage collected
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/966
+* Feature: New `chunkExprs` `Traversal` added to `Dhall.Core`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/954
+* Feature: New `Dhall.Optics` module
+    * This re-exports some convenient @lens@ utilities used internally for
+      packages trying to avoid a @lens@ dependency
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/986
+* More GHC 8.8 support
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/961
+
 1.23.0
 
 * BREAKING CHANGE: Fix marshaling union literals
