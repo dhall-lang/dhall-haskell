@@ -22,14 +22,9 @@ import           Options.Applicative (Parser, ParserInfo)
 import qualified System.Exit
 import qualified System.IO
 
-<<<<<<< HEAD
 import           Dhall.JSONToDhall (Conversion, parseConversion)
 import           Dhall.YamlToDhall (Options(..), dhallFromYaml)
-=======
-import qualified Dhall.Core as D
-import           Dhall.JSONToDhall
-import           Dhall.Yaml (yamlToJson, jsonToYaml)
->>>>>>> master
+
 import qualified Paths_dhall_json as Meta
 
 -- ---------------
