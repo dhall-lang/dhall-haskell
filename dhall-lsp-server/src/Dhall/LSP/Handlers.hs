@@ -6,7 +6,7 @@ import qualified Language.Haskell.LSP.Utility as LSP
 import qualified Language.Haskell.LSP.Types as J
 import qualified Language.Haskell.LSP.Types.Lens as J
 
-import qualified Dhall.LSP.Handlers.Diagnostics as Handlers
+import qualified Dhall.LSP.Handlers.Diagnostics as Diagnostics
 import qualified Dhall.LSP.Handlers.DocumentFormatting as Handlers
 import Dhall.LSP.Backend.Diagnostics
 
@@ -77,35 +77,39 @@ hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) = Just
     _contents = J.List [J.PlainString command]
 
 
+-- | Called by @didOpenTextDocumentNotificationHandler@ and
+--   @didSaveTextDocumentNotificationHandler@.
+diagnosticsHandler :: LSP.LspFuncs () -> J.Uri -> IO ()
+diagnosticsHandler lsp uri = do
+  LSP.logs $ "LSP Handler: processing diagnostics for " <> show uri
+  let fileName = case J.uriToFilePath uri of
+        Nothing -> fail "Failed to parse URI when computing diagnostics."
+        Just path -> path
+  txt <- Data.Text.IO.readFile fileName
+  diags <- Diagnostics.compilerDiagnostics fileName txt
+  Diagnostics.publishDiagnostics lsp uri diags
+
 didOpenTextDocumentNotificationHandler
   :: LSP.LspFuncs () -> J.DidOpenTextDocumentNotification -> IO ()
 didOpenTextDocumentNotificationHandler lsp notification = do
   LSP.logs "LSP Handler: processing DidOpenTextDocumentNotification"
-  let
-    uri = notification ^. J.params . J.textDocument . J.uri
-    version = notification ^. J.params . J.textDocument . J.version
-  LSP.logs $ "\turi=" <> show uri <> " version: " <> show version
-  Handlers.sendDiagnostics lsp uri
-
+  let uri = notification ^. J.params . J.textDocument . J.uri
+  diagnosticsHandler lsp uri
 
 didSaveTextDocumentNotificationHandler
   :: LSP.LspFuncs () -> J.DidSaveTextDocumentNotification -> IO ()
 didSaveTextDocumentNotificationHandler lsp notification = do
   LSP.logs "LSP Handler: processing DidSaveTextDocumentNotification"
-  let
-    uri = notification ^. J.params . J.textDocument . J.uri
-  LSP.logs $ "\turi=" <> show uri
-  Handlers.sendDiagnostics lsp uri
+  let uri = notification ^. J.params . J.textDocument . J.uri
+  diagnosticsHandler lsp uri
 
 
 didCloseTextDocumentNotificationHandler
   :: LSP.LspFuncs () -> J.DidCloseTextDocumentNotification -> IO ()
 didCloseTextDocumentNotificationHandler lsp notification = do
   LSP.logs "LSP Handler: processing DidCloseTextDocumentNotification"
-  let
-    uri = notification ^. J.params . J.textDocument . J.uri
-  LSP.logs $ "\turi=" <> show uri
-  Handlers.sendEmptyDiagnostics lsp uri
+  let uri = notification ^. J.params . J.textDocument . J.uri
+  Diagnostics.publishDiagnostics lsp uri []
 
 
 documentFormattingHandler
