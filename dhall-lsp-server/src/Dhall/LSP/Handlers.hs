@@ -3,6 +3,7 @@ module Dhall.LSP.Handlers where
 import qualified Language.Haskell.LSP.Core as LSP
 import qualified Language.Haskell.LSP.Messages as LSP
 import qualified Language.Haskell.LSP.Utility as LSP
+import qualified Language.Haskell.LSP.VFS as LSP
 import qualified Language.Haskell.LSP.Types as J
 import qualified Language.Haskell.LSP.Types.Lens as J
 
@@ -12,10 +13,11 @@ import Dhall.LSP.Backend.Diagnostics
 
 import Control.Lens ((^.))
 import Control.Monad.Reader (runReaderT)
-import qualified Data.Text.IO
 import qualified Network.URI.Encode as URI
 import qualified Data.Text as Text
+import Data.Text (Text)
 import Data.Maybe (mapMaybe)
+import qualified Yi.Rope as Rope
 
 -- handler that doesn't do anything. Useful for example to make haskell-lsp shut
 -- up about unhandled DidChangeTextDocument notifications (which are already
@@ -53,7 +55,7 @@ hoverHandler lsp request = do
     fileName = case J.uriToFilePath uri of
       Nothing -> fail "Failed to parse URI in ReqHover."
       Just path -> path
-  txt <- Data.Text.IO.readFile fileName
+  txt <- readUri lsp uri
   errors <- runDhall fileName txt
   let
     explanations = mapMaybe (explain txt) errors
@@ -88,7 +90,7 @@ diagnosticsHandler lsp uri = do
   let fileName = case J.uriToFilePath uri of
         Nothing -> fail "Failed to parse URI when computing diagnostics."
         Just path -> path
-  txt <- Data.Text.IO.readFile fileName
+  txt <- readUri lsp uri
   diags <- Diagnostics.compilerDiagnostics fileName txt
   Diagnostics.publishDiagnostics lsp uri diags
 
@@ -118,3 +120,11 @@ documentFormattingHandler lsp request = do
   LSP.sendFunc lsp $ LSP.RspDocumentFormatting $ LSP.makeResponseMessage
     request
     formattedDocument
+
+-- helper function to query haskell-lsp's VFS
+readUri :: LSP.LspFuncs () -> J.Uri -> IO Text
+readUri lsp uri = do
+  asd <- LSP.getVirtualFileFunc lsp uri
+  case asd of
+    Just (LSP.VirtualFile _ rope) -> return (Rope.toText rope)
+    Nothing -> fail $ "Could not find " <> show uri <> " in VFS."
