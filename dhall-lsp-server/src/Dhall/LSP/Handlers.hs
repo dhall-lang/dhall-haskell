@@ -3,19 +3,21 @@ module Dhall.LSP.Handlers where
 import qualified Language.Haskell.LSP.Core as LSP
 import qualified Language.Haskell.LSP.Messages as LSP
 import qualified Language.Haskell.LSP.Utility as LSP
+import qualified Language.Haskell.LSP.VFS as LSP
 import qualified Language.Haskell.LSP.Types as J
 import qualified Language.Haskell.LSP.Types.Lens as J
 
-import qualified Dhall.LSP.Handlers.Diagnostics as Handlers
+import qualified Dhall.LSP.Handlers.Diagnostics as Diagnostics
 import qualified Dhall.LSP.Handlers.DocumentFormatting as Handlers
 import Dhall.LSP.Backend.Diagnostics
 
 import Control.Lens ((^.))
 import Control.Monad.Reader (runReaderT)
-import qualified Data.Text.IO
 import qualified Network.URI.Encode as URI
 import qualified Data.Text as Text
+import Data.Text (Text)
 import Data.Maybe (mapMaybe)
+import qualified Yi.Rope as Rope
 
 -- handler that doesn't do anything. Useful for example to make haskell-lsp shut
 -- up about unhandled DidChangeTextDocument notifications (which are already
@@ -23,10 +25,24 @@ import Data.Maybe (mapMaybe)
 nullHandler :: LSP.LspFuncs () -> a -> IO ()
 nullHandler _ _ = return ()
 
+
+{- Currently implemented by the dummy nullHandler:
 initializedHandler :: LSP.LspFuncs () -> J.InitializedNotification -> IO ()
-initializedHandler _lsp _notification = do
-  LSP.logs "LSP Handler: processing InitializedNotification"
-  return ()
+
+didChangeTextDocumentNotificationHandler
+  :: LSP.LspFuncs () -> J.DidChangeTextDocumentNotification -> IO ()
+
+didCloseTextDocumentNotificationHandler
+  :: LSP.LspFuncs () -> J.DidCloseTextDocumentNotification -> IO ()
+
+cancelNotificationHandler
+  :: LSP.LspFuncs () -> J.CancelNotification -> IO ()
+
+responseHandler :: LSP.LspFuncs () -> J.BareResponseMessage -> IO ()
+
+executeCommandHandler :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
+-}
+
 
 -- This is a quick-and-dirty prototype implementation that will be completely
 -- rewritten!
@@ -39,7 +55,7 @@ hoverHandler lsp request = do
     fileName = case J.uriToFilePath uri of
       Nothing -> fail "Failed to parse URI in ReqHover."
       Just path -> path
-  txt <- Data.Text.IO.readFile fileName
+  txt <- readUri lsp uri
   errors <- runDhall fileName txt
   let
     explanations = mapMaybe (explain txt) errors
@@ -65,50 +81,34 @@ hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) = Just
       "[Explain error](dhall-explain:?" <> Text.pack encodedDiag <> " )"
     _contents = J.List [J.PlainString command]
 
+
+-- | Called by @didOpenTextDocumentNotificationHandler@ and
+--   @didSaveTextDocumentNotificationHandler@.
+diagnosticsHandler :: LSP.LspFuncs () -> J.Uri -> IO ()
+diagnosticsHandler lsp uri = do
+  LSP.logs $ "LSP Handler: processing diagnostics for " <> show uri
+  let fileName = case J.uriToFilePath uri of
+        Nothing -> fail "Failed to parse URI when computing diagnostics."
+        Just path -> path
+  txt <- readUri lsp uri
+  diags <- Diagnostics.compilerDiagnostics fileName txt
+  Diagnostics.publishDiagnostics lsp uri diags
+
 didOpenTextDocumentNotificationHandler
   :: LSP.LspFuncs () -> J.DidOpenTextDocumentNotification -> IO ()
 didOpenTextDocumentNotificationHandler lsp notification = do
   LSP.logs "LSP Handler: processing DidOpenTextDocumentNotification"
-  let
-    uri = notification ^. J.params . J.textDocument . J.uri
-    version = notification ^. J.params . J.textDocument . J.version
-  LSP.logs $ "\turi=" <> show uri <> " version: " <> show version
-  flip runReaderT lsp $ Handlers.sendDiagnostics uri (Just version)
+  let uri = notification ^. J.params . J.textDocument . J.uri
+  diagnosticsHandler lsp uri
 
 
 didSaveTextDocumentNotificationHandler
   :: LSP.LspFuncs () -> J.DidSaveTextDocumentNotification -> IO ()
 didSaveTextDocumentNotificationHandler lsp notification = do
   LSP.logs "LSP Handler: processing DidSaveTextDocumentNotification"
-  let
-    uri = notification ^. J.params . J.textDocument . J.uri
-  LSP.logs $ "\turi=" <> show uri
-  flip runReaderT lsp $ Handlers.sendDiagnostics uri Nothing
+  let uri = notification ^. J.params . J.textDocument . J.uri
+  diagnosticsHandler lsp uri
 
-{- didChangeTextDocumentNotificationHandler
-  :: LSP.LspFuncs () -> J.DidChangeTextDocumentNotification -> IO ()
--}
-
-didCloseTextDocumentNotificationHandler
-  :: LSP.LspFuncs () -> J.DidCloseTextDocumentNotification -> IO ()
-didCloseTextDocumentNotificationHandler lsp notification = do
-  LSP.logs "LSP Handler: processing DidCloseTextDocumentNotification"
-  let
-    uri = notification ^. J.params . J.textDocument . J.uri
-  LSP.logs $ "\turi=" <> show uri
-  flip runReaderT lsp $ Handlers.sendEmptyDiagnostics uri Nothing
-
-{- cancelNotificationHandler
-  :: LSP.LspFuncs () -> J.CancelNotification -> IO ()
--}
-
-responseHandler :: LSP.LspFuncs () -> J.BareResponseMessage -> IO ()
-responseHandler _lsp response =
-  LSP.logs $ "LSP Handler: Ignoring ResponseMessage: " ++ show response
-
-executeCommandHandler :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
-executeCommandHandler _lsp request =
-  LSP.logs $ "LSP Handler: Ignoring ExecuteCommandRequest: " ++ show request
 
 documentFormattingHandler
   :: LSP.LspFuncs () -> J.DocumentFormattingRequest -> IO ()
@@ -120,3 +120,11 @@ documentFormattingHandler lsp request = do
   LSP.sendFunc lsp $ LSP.RspDocumentFormatting $ LSP.makeResponseMessage
     request
     formattedDocument
+
+-- helper function to query haskell-lsp's VFS
+readUri :: LSP.LspFuncs () -> J.Uri -> IO Text
+readUri lsp uri = do
+  asd <- LSP.getVirtualFileFunc lsp uri
+  case asd of
+    Just (LSP.VirtualFile _ rope) -> return (Rope.toText rope)
+    Nothing -> fail $ "Could not find " <> show uri <> " in VFS."
