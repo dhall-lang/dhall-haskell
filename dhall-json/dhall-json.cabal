@@ -54,7 +54,10 @@ Library
     Exposed-Modules:
         Dhall.JSON
         Dhall.JSONToDhall
-        Dhall.Yaml            
+        Dhall.Yaml
+        Dhall.YamlToDhall
+
+        
     GHC-Options: -Wall
     if flag(yaml-pre-0_11)
         Build-Depends:
