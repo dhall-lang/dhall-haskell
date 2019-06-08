@@ -1,6 +1,6 @@
 -- | Miscellaneous utility functions
 
-module Util (
+module Dhall.LSP.Util (
   tshow,
   lines',
   unlines'

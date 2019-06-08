@@ -1,5 +1,5 @@
 {-| This module contains everything related on how LSP server handles diagnostic messages. -}
-module LSP.Handlers.Diagnostics( compilerDiagnostics
+module Dhall.LSP.Handlers.Diagnostics( compilerDiagnostics
                                , sendEmptyDiagnostics
                                , sendDiagnostics
                                ) where
@@ -25,7 +25,7 @@ import Control.Monad.Trans (lift, liftIO)
 
 import Data.Text (Text)
 
-import Backend.Dhall.Diagnostics
+import Dhall.LSP.Backend.Diagnostics
 
 
 

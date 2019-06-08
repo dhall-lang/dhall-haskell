@@ -1,8 +1,8 @@
-module LSP.Handlers.DocumentFormatting(formatDocument) where
+module Dhall.LSP.Handlers.DocumentFormatting(formatDocument) where
 
 
 
-import qualified Backend.Dhall.Formatting as Formatting
+import qualified Dhall.LSP.Backend.Formatting as Formatting
 
 import qualified Language.Haskell.LSP.Core as LSP.Core
 
