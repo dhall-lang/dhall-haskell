@@ -482,7 +482,14 @@ completeExpression embedded = completeExpression_
                     let bracedEscapeSequence = do
                             _  <- Text.Parser.Char.char '{'
                             ns <- some hexNumber
+
+                            let number = toNumber ns
+
+                            Control.Monad.guard (number <= 0x10FFFF)
+                                <|> fail "Invalid Unicode code point"
+
                             _  <- Text.Parser.Char.char '}'
+
                             return (toNumber ns)
 
                     n <- bracedEscapeSequence <|> fourCharacterEscapeSequence
