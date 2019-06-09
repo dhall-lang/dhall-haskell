@@ -1,4 +1,4 @@
-module Backend.Dhall.Formatting(formatDocument) where
+module Dhall.LSP.Backend.Formatting(formatDocument) where
 
 import Dhall.Pretty (CharacterSet(..), layoutOpts)
 import Dhall.Parser(exprAndHeaderFromText, ParseError(..))

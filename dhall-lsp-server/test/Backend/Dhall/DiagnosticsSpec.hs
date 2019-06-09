@@ -11,7 +11,7 @@ import Language.Haskell.LSP.Types(
     )
 
 import Data.Foldable (traverse_)
-import LSP.Handlers.Diagnostics (compilerDiagnostics)
+import Dhall.LSP.Handlers.Diagnostics (compilerDiagnostics)
 
 import qualified Data.Text
 import qualified Data.Text.IO

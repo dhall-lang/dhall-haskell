@@ -26,6 +26,8 @@ Extra-Source-Files:
     CHANGELOG.md
     tasty/data/*.dhall
     tasty/data/*.json
+    tasty/data/*.txt
+    tasty/data/*.yaml
 
 Source-Repository head
     Type: git
@@ -54,7 +56,10 @@ Library
     Exposed-Modules:
         Dhall.JSON
         Dhall.JSONToDhall
-        Dhall.Yaml            
+        Dhall.Yaml
+        Dhall.YamlToDhall
+
+        
     GHC-Options: -Wall
     if flag(yaml-pre-0_11)
         Build-Depends:
