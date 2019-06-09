@@ -538,10 +538,6 @@ prettyCharacterSet characterSet = prettyExpression
             list (map prettyExpression (Data.Foldable.toList b))
         <>  " : "
         <>  prettyApplicationExpression (App List a)
-    prettyAnnotatedExpression (OptionalLit a b) =
-            list (map prettyExpression (Data.Foldable.toList b))
-        <>  " : "
-        <>  prettyApplicationExpression (App Optional a)
     prettyAnnotatedExpression (Note _ a) =
         prettyAnnotatedExpression a
     prettyAnnotatedExpression a0 =

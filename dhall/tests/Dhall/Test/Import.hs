@@ -11,6 +11,7 @@ import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
 
+import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
@@ -51,6 +52,14 @@ successTest path = do
         text <- Text.IO.readFile pathString
 
         actualExpr <- Core.throws (Parser.exprFromText mempty text)
+
+        let open = Turtle.export "XDG_CACHE_HOME" "dhall-lang/tests/import/cache"
+
+        let close _ = Turtle.unset "XDG_CACHE_HOME"
+
+        if pathString == "./dhall-lang/tests/import/success/hashFromCacheA.dhall"
+            then Turtle.managed (Exception.bracket open close)
+            else return ()
 
         _ <- State.evalStateT (Import.loadWith actualExpr) (Import.emptyStatus directoryString)
 

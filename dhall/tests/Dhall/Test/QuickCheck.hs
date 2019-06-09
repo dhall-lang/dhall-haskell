@@ -230,7 +230,6 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                 , ( 7, lift0 ListIndexed)
                 , ( 7, lift0 ListReverse)
                 , ( 7, lift0 Optional)
-                , ( 1, lift2 OptionalLit)
                 , ( 7, lift0 OptionalFold)
                 , ( 7, lift0 OptionalBuild)
                 , ( 1, lift1 Record)

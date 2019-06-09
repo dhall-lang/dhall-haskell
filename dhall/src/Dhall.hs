@@ -1240,10 +1240,8 @@ instance Inject () where
 instance Inject a => Inject (Maybe a) where
     injectWith options = InputType embedOut declaredOut
       where
-        embedOut (Just x) =
-            OptionalLit declaredIn (pure (embedIn x))
-        embedOut Nothing =
-            OptionalLit declaredIn  empty
+        embedOut (Just x ) = Some (embedIn x)
+        embedOut  Nothing  = App None declaredIn
 
         InputType embedIn declaredIn = injectWith options
 
