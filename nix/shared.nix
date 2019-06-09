@@ -90,23 +90,7 @@ let
         };
     };
 
-    dhall-sdist =
-      let
-        predicate = path: type:
-          let
-            base = baseNameOf path;
-
-          in
-             !( pkgsNew.lib.hasSuffix ".nix" base
-             || base == "dist"
-             || base == "result"
-             || base == ".git"
-             );
-
-        src = builtins.filterSource predicate ../dhall;
-
-      in
-        pkgsNew.callPackage (import ./dhall-sdist.nix src) { };
+    sdist = pkgsNew.callPackage ./sdist.nix { };
 
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
@@ -172,48 +156,45 @@ let
                       applyCoverage
                         (haskellPackagesNew.callCabal2nix
                           "dhall"
-                          pkgsNew.dhall-sdist
+                          (pkgsNew.sdist ../dhall)
                           { }
                         );
 
                     dhall-bash =
                       haskellPackagesNew.callCabal2nix
                         "dhall-bash"
-                        ../dhall-bash
+                        (pkgsNew.sdist ../dhall-bash)
                         { };
 
                     dhall-json =
                       haskellPackagesNew.callCabal2nix
                         "dhall-json"
-                        ../dhall-json
+                        (pkgsNew.sdist ../dhall-json)
                         { };
 
                     dhall-lsp-server =
                       haskellPackagesNew.callCabal2nix
                         "dhall-lsp-server"
-                        ../dhall-lsp-server
+                        (pkgsNew.sdist ../dhall-lsp-server)
                         { };
 
                     dhall-nix =
                       haskellPackagesNew.callCabal2nix
                         "dhall-nix"
-                        ../dhall-nix
+                        (pkgsNew.sdist ../dhall-nix)
                         { };
 
                     dhall-text =
                       haskellPackagesNew.callCabal2nix
                         "dhall-text"
-                        ../dhall-text
+                        (pkgsNew.sdist ../dhall-text)
                         { };
 
                     dhall-try =
                       pkgsNew.haskell.lib.overrideCabal
                         (haskellPackagesNew.callCabal2nix
                           "dhall-try"
-                          (builtins.filterSource
-                            (path: _: baseNameOf path != "index.html")
-                            ../dhall-try
-                          )
+                          (pkgsNew.sdist ../dhall-try)
                           { }
                         )
                         (old: {
