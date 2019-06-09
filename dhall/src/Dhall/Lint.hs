@@ -5,7 +5,6 @@ module Dhall.Lint
       lint
     , removeLetInLet
     , removeUnusedBindings
-    , optionalLitToSomeNone
     ) where
 
 import Control.Monad (mplus)
@@ -22,7 +21,6 @@ import qualified Dhall.Optics
 
     * removes unused @let@ bindings with 'removeLetInLet'.
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeUnusedBindings'.
-    * switches legacy @List@-like @Optional@ literals to use @Some@ / @None@ instead with 'optionalLitToSomeNone'
 -}
 lint :: Expr s Import -> Expr t Import
 lint =
@@ -31,7 +29,6 @@ lint =
     ( \e ->
                 removeLetInLet e
         `mplus` removeUnusedBindings e
-        `mplus` optionalLitToSomeNone e
     )
     . Dhall.Core.denote
 
@@ -53,9 +50,3 @@ removeUnusedBindings (Let (Binding a _ _ :| (l : ls)) d)
   where
     e = Let (l :| ls) d
 removeUnusedBindings _ = Nothing
-
-
-optionalLitToSomeNone :: Expr s a -> Maybe (Expr s a)
-optionalLitToSomeNone (OptionalLit _ (Just b)) = Just (Some b)
-optionalLitToSomeNone (OptionalLit a Nothing) = Just (App None a)
-optionalLitToSomeNone _ = Nothing

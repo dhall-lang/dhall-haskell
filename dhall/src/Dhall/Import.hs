@@ -912,7 +912,6 @@ loadWith expr₀ = case expr₀ of
   Optional             -> pure Optional
   None                 -> pure None
   Some a               -> Some <$> loadWith a
-  OptionalLit a b      -> OptionalLit <$> loadWith a <*> mapM loadWith b
   OptionalFold         -> pure OptionalFold
   OptionalBuild        -> pure OptionalBuild
   Record a             -> Record <$> mapM loadWith a
