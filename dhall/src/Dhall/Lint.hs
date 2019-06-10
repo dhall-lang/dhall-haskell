@@ -28,17 +28,18 @@ lint :: Expr s Import -> Expr t Import
 lint =
   Dhall.Optics.rewriteOf
     subExpressions
-    ( \e ->
-                removeLetInLet e
-        `mplus` removeUnusedBindings e
+    ( \e -> removeLetInLet e
         `mplus` optionalLitToSomeNone e
     )
+    . Dhall.Optics.rewriteOf subExpressions removeUnusedBindings
+    . Dhall.Optics.rewriteOf subExpressions unfoldNestedLets
     . Dhall.Core.denote
 
 removeLetInLet :: Eq a => Expr s a -> Maybe (Expr s a)
 removeLetInLet (Let a (Let b c)) = Just (Let (a <> b) c)
 removeLetInLet _ = Nothing
 
+-- todo: need to adjust de Bruijn indices!
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
 removeUnusedBindings (Let (Binding a _ _ :| []) d)
     | not (V a 0 `Dhall.Core.freeIn` d) =
@@ -54,6 +55,10 @@ removeUnusedBindings (Let (Binding a _ _ :| (l : ls)) d)
     e = Let (l :| ls) d
 removeUnusedBindings _ = Nothing
 
+-- helper to make removing unused bindings easer
+unfoldNestedLets :: Expr s a -> Maybe (Expr s a)
+unfoldNestedLets (Let (b :| (l : ls)) d) = Just (Let (b :| []) (Let (l :| ls) d))
+unfoldNestedLets _ = Nothing
 
 optionalLitToSomeNone :: Expr s a -> Maybe (Expr s a)
 optionalLitToSomeNone (OptionalLit _ (Just b)) = Just (Some b)
