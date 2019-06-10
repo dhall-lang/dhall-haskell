@@ -1,5 +1,5 @@
 Name: dhall-json
-Version: 1.2.8
+Version: 1.3.0
 Cabal-Version: >=1.8.0.2
 Build-Type: Simple
 Tested-With: GHC == 7.10.3, GHC == 8.4.3, GHC == 8.6.1
@@ -24,9 +24,12 @@ Description:
 Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
+    java/*.java
     tasty/data/*.dhall
     tasty/data/*.json
-    java/*.java
+    tasty/data/*.txt
+    tasty/data/*.yaml
+
 
 Source-Repository head
     Type: git
@@ -44,7 +47,7 @@ Library
         aeson-pretty                             < 0.9 ,
         bytestring                               < 0.11,
         containers                                     ,
-        dhall                     >= 1.22.0   && < 1.24,
+        dhall                     >= 1.22.0   && < 1.25,
         exceptions                >= 0.8.3    && < 0.11,
         lens                      >= 2.5      && < 4.18,
         optparse-applicative      >= 0.14.0.0 && < 0.15,
@@ -55,7 +58,10 @@ Library
     Exposed-Modules:
         Dhall.JSON
         Dhall.JSONToDhall
-        Dhall.Yaml            
+        Dhall.Yaml
+        Dhall.YamlToDhall
+
+        
     GHC-Options: -Wall
     if impl(eta)
         Build-Depends:

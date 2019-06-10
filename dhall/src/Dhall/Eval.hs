@@ -368,7 +368,7 @@ eval !env t =
                             VHLam (Typed "zero" natural) $ \zero ->
                               let go !acc 0 = acc
                                   go  acc n = go (vApp succ acc) (n - 1)
-                              in go zero n
+                              in go zero (fromIntegral n :: Integer)
                           n ->
                             VHLam (NaturalFoldCl n) $ \natural -> VPrim $ \succ -> VPrim $ \zero ->
                               VNaturalFold n natural succ zero

@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
-module Dhall.Yaml.Eta ( jsonToYaml, yamlToJson ) where
+
+module Dhall.Yaml.Eta ( jsonToYaml, showYaml, yamlToJson ) where
 
 import Data.Bifunctor (bimap)
 import Control.Exception (try)
@@ -54,3 +55,6 @@ yamlToJson =   (>>= Data.Aeson.eitherDecode)
         getExceptionMessage ex =
           unsafePerformJava $ ex <.> getLocalizedMessage
 
+showYaml :: Data.Aeson.Value -> String
+showYaml value =
+  Data.ByteString.UTF8.toString (jsonToYaml value False False)
