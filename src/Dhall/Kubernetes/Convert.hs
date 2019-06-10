@@ -277,4 +277,4 @@ getImportsMap objectNames folder toInclude
 
         namespaced = case filter filterFn namespacedNames of
           [name] -> name
-          wrong  -> error $ "Got more than one key! See:\n" <> show wrong
+          wrong  -> error $ "Got more than one key for "++ show kind ++"! See:\n" <> show wrong
