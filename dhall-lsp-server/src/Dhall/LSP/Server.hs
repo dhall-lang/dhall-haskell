@@ -17,10 +17,12 @@ import GHC.Conc (atomically)
 
 import qualified Dhall.LSP.Handlers as Handlers
 
--- | The main entry point for the LSP server.
-run :: Maybe FilePath -> IO ()
-run mlog = do
-  setupLogger mlog
+-- | The main entry point for the LSP server. Optionally redirect log output to
+--   a supplied file path, otherwise logs to stderr. Note that VSCode listens for
+--   error messages on stderr and shows them in the output pane.
+run :: Maybe FilePath -> System.Log.Logger.Priority -> IO ()
+run mlog logLevel = do
+  LSP.Core.setupLogger mlog [] logLevel
   vlsp <- newTVarIO Nothing
   _    <- LSP.Control.run (makeConfig, initCallback vlsp) (lspHandlers vlsp)
                           lspOptions Nothing
@@ -40,14 +42,6 @@ run mlog = do
     -- since we don't use a configuration.
     makeConfig :: J.DidChangeConfigurationNotification -> Either Text ()
     makeConfig _ = Right ()
-
--- | sets the output logger.
--- | if no filename is provided then logger is disabled, if input is string `[OUTPUT]` then log goes to stderr,
--- | which then redirects inside VSCode to the output pane of the plugin.
-setupLogger :: Maybe FilePath -> IO () -- TODO: ADD verbosity
-setupLogger Nothing          = pure ()
-setupLogger (Just "[OUTPUT]") = LSP.Core.setupLogger Nothing [] System.Log.Logger.DEBUG
-setupLogger file              = LSP.Core.setupLogger file [] System.Log.Logger.DEBUG
 
 
 -- Tells the LSP client to notify us about file changes. Handled behind the
