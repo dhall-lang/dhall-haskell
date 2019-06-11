@@ -1,10 +1,11 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Backend.Dhall.Diagnostics
+module Dhall.LSP.Backend.Diagnostics
   ( DhallException
   , runDhall
   , diagnose
   , explain
+  , rangeFromDhall
   , Position
   , Range(..)
   , Diagnosis(..)
@@ -19,7 +20,7 @@ import Dhall.Core (Expr(Note))
 import Dhall
   (rootDirectory, sourceName, defaultInputSettings, inputExprWithSettings)
 
-import Util
+import Dhall.LSP.Util
 
 import Data.Text (Text)
 import qualified Data.Text as Text

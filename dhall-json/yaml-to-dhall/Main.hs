@@ -9,24 +9,21 @@
 module Main where
 
 import qualified Control.Exception
-import           Control.Exception (Exception, SomeException, throwIO)
+import           Control.Exception (SomeException)
 import           Control.Monad (when)
-import qualified Data.Aeson as A
-import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import           Data.Monoid ((<>))
 import           Data.Text (Text)
 import qualified Data.Text.IO as Text
 import           Data.Version (showVersion)
-import qualified Data.Yaml as Y
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative as O
 import           Options.Applicative (Parser, ParserInfo)
 import qualified System.Exit
 import qualified System.IO
 
-import qualified Dhall.Core as D
-import           Dhall.JSONToDhall
+import           Dhall.JSONToDhall (Conversion, parseConversion)
+import           Dhall.YamlToDhall (Options(..), dhallFromYaml)
 
 import qualified Paths_dhall_json as Meta
 
@@ -34,26 +31,27 @@ import qualified Paths_dhall_json as Meta
 -- Command options
 -- ---------------
 
+data CommandOptions = CommandOptions
+    { version    :: Bool
+    , schema     :: Text
+    , conversion :: Conversion
+    } deriving Show
+
 -- | Command info and description
-parserInfo :: ParserInfo Options
+parserInfo :: ParserInfo CommandOptions
 parserInfo = O.info
           (  O.helper <*> parseOptions)
           (  O.fullDesc
           <> O.progDesc "Populate Dhall value given its Dhall type (schema) from a YAML expression"
           )
 
--- | All the command arguments and options
-data Options = Options
-    { version    :: Bool
-    , schema     :: Text
-    , conversion :: Conversion
-    } deriving Show
+
 
 -- | Parser for all the command arguments and options
-parseOptions :: Parser Options
-parseOptions = Options <$> parseVersion
-                       <*> parseSchema
-                       <*> parseConversion
+parseOptions :: Parser CommandOptions
+parseOptions = CommandOptions <$> parseVersion
+                              <*> parseSchema
+                              <*> parseConversion
   where
     parseSchema  =  O.strArgument
                  (  O.metavar "SCHEMA"
@@ -66,20 +64,6 @@ parseOptions = Options <$> parseVersion
                  )
 
 -- ----------
--- YAML
--- ----------
-
-showYAML :: A.Value -> String
-showYAML value = BS8.unpack (Y.encode value)
-
-data YAMLCompileError = YAMLCompileError CompileError
-
-instance Show YAMLCompileError where
-    show (YAMLCompileError e) = showCompileError "YAML" showYAML e
-
-instance Exception YAMLCompileError
-
--- ----------
 -- Main
 -- ----------
 
@@ -87,7 +71,7 @@ main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
-    Options {..} <- O.execParser parserInfo
+    CommandOptions{..} <- O.execParser parserInfo
 
     when version $ do
       putStrLn (showVersion Meta.version)
@@ -96,15 +80,8 @@ main = do
     handle $ do
         stdin <- BSL8.getContents
 
-        value :: A.Value <- case Y.decodeEither' . BS8.concat $ BSL8.toChunks stdin of
-          Left err -> throwIO (userError $ Y.prettyPrintParseException err)
-          Right v -> pure v
+        Text.putStr =<< dhallFromYaml (Options schema conversion) stdin
 
-        expr <- typeCheckSchemaExpr YAMLCompileError =<< resolveSchemaExpr schema
-
-        case dhallFromJSON conversion expr value of
-          Left err -> throwIO $ YAMLCompileError err
-          Right res -> Text.putStr (D.pretty res)
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler

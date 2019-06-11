@@ -59,8 +59,12 @@ with the pull request number for any of the above URLs.
 
 ## Pre-built containers
 
-You can download pre-built `docker` image archives for each package using the
-following URLs:
+Prebuilt containers for the latest release available from Docker Hub:
+
+* [Docker Hub - `dhallhaskell`](https://hub.docker.com/u/dhallhaskell)
+
+... but if you want to obtain containers for bleeding-edge builds, you can
+download image archives for each package using the following URLs:
 
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall/latest/download/1/docker-image-dhall.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall/latest/download/1/docker-image-dhall.tar.gz)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-bash/latest/download/1/docker-image-dhall-bash.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-bash/latest/download/1/docker-image-dhall-bash.tar.gz)
@@ -121,7 +125,7 @@ of time so that you don't have to build as many dependencies from scratch the
 first time.
 
 If your operating system is NixOS then you can add the cache using these NixOS
-configuration options:
+configuration options to access dhall packages from your declarative configuration file:
 
 ```nix
   nix = {
@@ -133,16 +137,18 @@ configuration options:
   };
 ```
 
-If you don't use NixOS but you do use Nix 2.0 or later, then set these options
-in your `/etc/nix/nix.conf` file:
+If you want to install these packages imperatively using `nix-env`,
+regardless of whether you use NixOS, set the following options in your
+`/etc/nix/nix.conf` file.
+
+Using Nix 2.0 or later:
 
 ```
 trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM=
 substituters = https://cache.nixos.org https://cache.dhall-lang.org
 ```
 
-If you use an older version of Nix (i.e. Nix `1.*`) then use these options
-instead:
+Using earlier Nix versions (i.e. Nix `1.*`):
 
 ```
 binary-cache-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM=
