@@ -38,23 +38,13 @@ removeLetInLet :: Eq a => Expr s a -> Maybe (Expr s a)
 removeLetInLet (Let a (Let b c)) = Just (Let (a <> b) c)
 removeLetInLet _ = Nothing
 
--- Remove unused Let bindings. Only considers the first variable in each Let
--- block -- unfold Let blocks first to make sure we don't miss any rewrite
+-- Remove unused Let bindings. Only considers Let blocks binding a single
+-- variable -- unfold Let blocks first to make sure we don't miss any rewrite
 -- opportunities!
--- todo: need to adjust de Bruijn indices!
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
 removeUnusedBindings (Let (Binding a _ _ :| []) d)
     | not (V a 0 `Dhall.Core.freeIn` d) =
-        Just d
-    | otherwise =
-        Nothing
-removeUnusedBindings (Let (Binding a _ _ :| (l : ls)) d)
-    | not (V a 0 `Dhall.Core.freeIn` e) =
-        Just e
-    | otherwise =
-        Nothing
-  where
-    e = Let (l :| ls) d
+        Just (Dhall.Core.shift (-1) (V a 0) d)
 removeUnusedBindings _ = Nothing
 
 -- Unfold Let blocks into nested Let bindings binding a single variable each.
