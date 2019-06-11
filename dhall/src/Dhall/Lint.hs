@@ -25,20 +25,25 @@ import qualified Dhall.Optics
     * switches legacy @List@-like @Optional@ literals to use @Some@ / @None@ instead with 'optionalLitToSomeNone'
 -}
 lint :: Expr s Import -> Expr t Import
-lint =
-  Dhall.Optics.rewriteOf
-    subExpressions
-    ( \e -> removeLetInLet e
-        `mplus` optionalLitToSomeNone e
-    )
-    . Dhall.Optics.rewriteOf subExpressions removeUnusedBindings
-    . Dhall.Optics.rewriteOf subExpressions unfoldNestedLets
-    . Dhall.Core.denote
+lint = postproc . linting . preproc
+  where
+    -- pre-processing: remove Note constructors and unfold Let blocks
+    preproc = Dhall.Optics.rewriteOf subExpressions unfoldNestedLets . Dhall.Core.denote
+    -- main linting step: remove unused let bindings and update optional syntax
+    linting = Dhall.Optics.rewriteOf subExpressions
+      (\e -> removeUnusedBindings e `mplus` optionalLitToSomeNone e)
+    -- post-processing: fold nested Lets into Let blocks
+    postproc = Dhall.Optics.rewriteOf subExpressions removeLetInLet
 
+-- Merge nested Let blocks. Only finds immediately nested blocks -- use
+-- Dhall.Core.denote to make sure there aren't any Note constructors in the way!
 removeLetInLet :: Eq a => Expr s a -> Maybe (Expr s a)
 removeLetInLet (Let a (Let b c)) = Just (Let (a <> b) c)
 removeLetInLet _ = Nothing
 
+-- Remove unused Let bindings. Only considers the first variable in each Let
+-- block -- unfold Let blocks first to make sure we don't miss any rewrite
+-- opportunities!
 -- todo: need to adjust de Bruijn indices!
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
 removeUnusedBindings (Let (Binding a _ _ :| []) d)
@@ -55,7 +60,8 @@ removeUnusedBindings (Let (Binding a _ _ :| (l : ls)) d)
     e = Let (l :| ls) d
 removeUnusedBindings _ = Nothing
 
--- helper to make removing unused bindings easer
+-- Unfold Let blocks into nested Let bindings binding a single variable each.
+-- Pre-processing step before applying the removeUnusedBindings rule.
 unfoldNestedLets :: Expr s a -> Maybe (Expr s a)
 unfoldNestedLets (Let (b :| (l : ls)) d) = Just (Let (b :| []) (Let (l :| ls) d))
 unfoldNestedLets _ = Nothing
