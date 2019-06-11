@@ -59,8 +59,12 @@ with the pull request number for any of the above URLs.
 
 ## Pre-built containers
 
-You can download pre-built `docker` image archives for each package using the
-following URLs:
+Prebuilt containers for the latest release available from Docker Hub:
+
+* [Docker Hub - `dhallhaskell`](https://hub.docker.com/u/dhallhaskell)
+
+... but if you want to obtain containers for bleeding-edge builds, you can
+download image archives for each package using the following URLs:
 
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall/latest/download/1/docker-image-dhall.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall/latest/download/1/docker-image-dhall.tar.gz)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-bash/latest/download/1/docker-image-dhall-bash.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-bash/latest/download/1/docker-image-dhall-bash.tar.gz)

@@ -1925,8 +1925,9 @@ False
 False
 -}
 freeIn :: Eq a => Var -> Expr s a -> Bool
-variable `freeIn` expression =
-    Dhall.Core.shift 1 variable strippedExpression /= strippedExpression
+variable@(V var i) `freeIn` expression =
+    Dhall.Core.subst variable (Var (V var (i + 1))) strippedExpression
+      /= strippedExpression
   where
     denote' :: Expr t b -> Expr () b
     denote' = denote

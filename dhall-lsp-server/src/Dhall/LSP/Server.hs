@@ -65,7 +65,13 @@ syncOptions = J.TextDocumentSyncOptions
 -- Server capabilities. Tells the LSP client that we can execute commands etc.
 lspOptions :: LSP.Core.Options
 lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
-                 , LSP.Core.executeCommandProvider = Just (J.ExecuteCommandOptions (J.List []))  -- no commands implemented
+                 , LSP.Core.executeCommandProvider =
+                     -- Note that this registers the dhall.server.lint command
+                     -- with VSCode, which means that our plugin can't expose a
+                     -- command of the same name. In the case of dhall.lint we
+                     -- name the server-side command dhall.server.lint to work
+                     -- around peculiarity.
+                     Just (J.ExecuteCommandOptions (J.List ["dhall.server.lint"]))
                  }
 
 lspHandlers :: TVar (Maybe (LSP.Core.LspFuncs ())) -> LSP.Core.Handlers
@@ -78,7 +84,7 @@ lspHandlers lsp
         , LSP.Core.didCloseTextDocumentNotificationHandler  = Just $ wrapHandler lsp Handlers.nullHandler
         , LSP.Core.cancelNotificationHandler                = Just $ wrapHandler lsp Handlers.nullHandler
         , LSP.Core.responseHandler                          = Just $ wrapHandler lsp Handlers.nullHandler
-        , LSP.Core.executeCommandHandler                    = Just $ wrapHandler lsp Handlers.nullHandler
+        , LSP.Core.executeCommandHandler                    = Just $ wrapHandler lsp Handlers.executeCommandHandler
         , LSP.Core.documentFormattingHandler                = Just $ wrapHandler lsp Handlers.documentFormattingHandler
         }
 
