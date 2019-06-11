@@ -31,8 +31,8 @@ diagLetInLet _ = []
 unusedBindings :: Eq a => Expr s a -> [Text]
 unusedBindings (Note _ (Let bindings d)) = concatMap
   (\case
-    Binding var _ _ : [] | V var 0 `freeIn` d -> [var]
-    Binding var _ _ : (b : bs) | V var 0 `freeIn` Let (b :| bs) d -> [var]
+    Binding var _ _ : [] | not (V var 0 `freeIn` d) -> [var]
+    Binding var _ _ : (b : bs) | not (V var 0 `freeIn` Let (b :| bs) d) -> [var]
     _ -> [])
   (toList $ tails bindings)
 unusedBindings _ = []
