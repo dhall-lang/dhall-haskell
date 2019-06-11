@@ -23,8 +23,8 @@ data Suggestion = Suggestion {
 
 -- Diagnose nested Let blocks.
 diagLetInLet :: Expr Src a -> [Suggestion]
-diagLetInLet (Note src (Let _ (Note _ (Let _ _)))) =
-  [Suggestion (rangeFromDhall src) "Superfluous 'in' between let bindings"]
+diagLetInLet (Note _ (Let _ (Note src (Let _ _)))) =
+  [Suggestion (rangeFromDhall src) "Superfluous 'in' before nested let binding"]
 diagLetInLet _ = []
 
 -- Given a (noted) Let block compute all unused variables in the block.
