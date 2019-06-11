@@ -5,7 +5,7 @@ module Dhall.LSP.Backend.Linting
   )
 where
 
-import Dhall.Parser (Src, ParseError, exprAndHeaderFromText)
+import Dhall.Parser (Src, ParseError, exprFromText, exprAndHeaderFromText)
 import Dhall.Core (Expr(..), Binding(..), Var(..), subExpressions, freeIn)
 import Dhall.Lint (lint)
 
@@ -45,11 +45,13 @@ diagUnusedBinding e@(Note src (Let _ _)) = map
   (unusedBindings e)
 diagUnusedBinding _ = []
 
--- | Given an expressions suggest all the possible improvements that would be
---   made by the linter.
-suggest :: Eq a => Expr Src a -> [Suggestion]
-suggest expr = concat [ diagLetInLet e ++ diagUnusedBinding e | e <- subExps ]
-  where subExps = universeOf subExpressions expr
+-- | Given an dhall expression suggest all the possible improvements that would
+--   be made by the linter.
+suggest :: Text -> [Suggestion]
+suggest txt = case exprFromText "" txt of
+  Right expr -> concat [ diagLetInLet e ++ diagUnusedBinding e
+                       | e <- universeOf subExpressions expr ]
+  _ -> []
 
 lintAndFormatDocument :: Text -> Either ParseError Text
 lintAndFormatDocument text = do

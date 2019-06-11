@@ -91,8 +91,9 @@ diagnosticsHandler lsp uri = do
         Nothing -> fail "Failed to parse URI when computing diagnostics."
         Just path -> path
   txt <- readUri lsp uri
-  diags <- Diagnostics.compilerDiagnostics fileName txt
-  Diagnostics.publishDiagnostics lsp uri diags
+  let lintDiags = Diagnostics.linterDiagnostics txt
+  compDiags <- Diagnostics.compilerDiagnostics fileName txt
+  Diagnostics.publishDiagnostics lsp uri (compDiags ++ lintDiags)
 
 didOpenTextDocumentNotificationHandler
   :: LSP.LspFuncs () -> J.DidOpenTextDocumentNotification -> IO ()
