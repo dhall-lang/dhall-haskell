@@ -3,9 +3,6 @@
 module Dhall.Lint
     ( -- * Lint
       lint
-    , removeLetInLet
-    , removeUnusedBindings
-    , optionalLitToSomeNone
     ) where
 
 import Control.Monad (mplus)
