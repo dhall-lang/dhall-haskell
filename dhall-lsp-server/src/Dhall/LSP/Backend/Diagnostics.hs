@@ -5,6 +5,7 @@ module Dhall.LSP.Backend.Diagnostics
   , runDhall
   , diagnose
   , explain
+  , rangeFromDhall
   , Position
   , Range(..)
   , Diagnosis(..)
