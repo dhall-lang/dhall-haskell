@@ -1166,10 +1166,6 @@ diffPrimitiveExpression l r@List =
 diffPrimitiveExpression (ListLit Nothing bL) (ListLit Nothing bR) = align doc
   where
     doc = format " " (diffList bL bR)
-diffPrimitiveExpression l@(ListLit {}) r =
-    mismatch l r
-diffPrimitiveExpression l r@(ListLit {}) =
-    mismatch l r
 diffPrimitiveExpression ListBuild ListBuild =
     "…"
 diffPrimitiveExpression l@ListBuild r =
