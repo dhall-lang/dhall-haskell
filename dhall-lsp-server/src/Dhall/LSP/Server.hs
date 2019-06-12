@@ -16,6 +16,7 @@ import qualified System.Log.Logger
 import GHC.Conc (atomically)
 
 import qualified Dhall.LSP.Handlers as Handlers
+import qualified Dhall.LSP.Handlers.Command as Handlers
 
 -- | The main entry point for the LSP server.
 run :: Maybe FilePath -> IO ()
@@ -71,7 +72,7 @@ lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
                      -- command of the same name. In the case of dhall.lint we
                      -- name the server-side command dhall.server.lint to work
                      -- around peculiarity.
-                     Just (J.ExecuteCommandOptions (J.List ["dhall.server.lint"]))
+                     Just (J.ExecuteCommandOptions (J.List ["dhall.server.lint", "dhall.server.toJSON"]))
                  }
 
 lspHandlers :: TVar (Maybe (LSP.Core.LspFuncs ())) -> LSP.Core.Handlers

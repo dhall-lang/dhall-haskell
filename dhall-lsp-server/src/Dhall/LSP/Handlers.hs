@@ -5,16 +5,13 @@ import qualified Language.Haskell.LSP.Messages as LSP
 import qualified Language.Haskell.LSP.Utility as LSP
 import qualified Language.Haskell.LSP.VFS as LSP
 
-import qualified Data.Aeson as J
 import qualified Language.Haskell.LSP.Types as J
 import qualified Language.Haskell.LSP.Types.Lens as J
 
 import qualified Dhall.LSP.Handlers.Diagnostics as Diagnostics
 import qualified Dhall.LSP.Handlers.DocumentFormatting as Formatting
-import qualified Dhall.LSP.Backend.Linting as Linting
 import Dhall.LSP.Backend.Diagnostics
 
-import Data.HashMap.Strict (singleton)
 import Control.Lens ((^.))
 import Control.Monad.Reader (runReaderT)
 import qualified Network.URI.Encode as URI
@@ -123,33 +120,6 @@ documentFormattingHandler lsp request = do
   LSP.sendFunc lsp $ LSP.RspDocumentFormatting $ LSP.makeResponseMessage
     request
     formattedDocument
-
-executeCommandHandler :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
-executeCommandHandler lsp request
-  | command == "dhall.server.lint" = do
-    LSP.logs "LSP Handler: executing dhall.lint"
-    case request ^. J.params . J.arguments of
-      Just (J.List (x : _)) -> case J.fromJSON x of
-        J.Success uri -> do
-          txt                         <- readUri lsp uri
-          (edit :: J.List J.TextEdit) <-
-            case Linting.lintAndFormatDocument txt of
-              Right linted ->
-                let range = J.Range (J.Position 0 0)
-                                    (J.Position (Text.length linted) 0)
-                in  return (J.List [J.TextEdit range linted])
-              _ -> return (J.List [])
-          lid <- LSP.getNextReqId lsp
-          LSP.sendFunc lsp $ LSP.ReqApplyWorkspaceEdit
-                           $ LSP.fmServerApplyWorkspaceEditRequest lid
-                           $ J.ApplyWorkspaceEditParams
-                           $ J.WorkspaceEdit (Just (singleton uri edit)) Nothing
-        _ -> return ()
-      _ -> return ()
-  | otherwise = LSP.logs
-    ("LSP Handler: asked to execute unknown command: " ++ show command)
-  where command = request ^. J.params . J.command
-
 
 -- helper function to query haskell-lsp's VFS
 readUri :: LSP.LspFuncs () -> J.Uri -> IO Text
