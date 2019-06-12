@@ -17,6 +17,7 @@ import GHC.Conc (atomically)
 
 import qualified Dhall.LSP.Handlers as Handlers
 import qualified Dhall.LSP.Handlers.Command as Handlers
+import qualified Dhall.LSP.Handlers.Hover as Handlers
 
 -- | The main entry point for the LSP server.
 run :: Maybe FilePath -> IO ()

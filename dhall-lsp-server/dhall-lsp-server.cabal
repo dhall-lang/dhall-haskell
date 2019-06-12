@@ -23,6 +23,7 @@ library
       Dhall.LSP.Backend.Dhall
       Dhall.LSP.Backend.Diagnostics
       Dhall.LSP.Backend.Formatting
+      Dhall.LSP.Backend.Hover
       Dhall.LSP.Backend.Linting
       Dhall.LSP.Backend.ToJSON
       Dhall.LSP.Handlers

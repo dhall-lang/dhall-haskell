@@ -10,7 +10,7 @@ import qualified Language.Haskell.LSP.Types.Lens as J
 
 import qualified Dhall.LSP.Backend.Linting as Linting
 import qualified Dhall.LSP.Backend.ToJSON as ToJSON
-import Dhall.LSP.Handlers (readUri)
+import Dhall.LSP.Util (readUri)
 
 import System.FilePath (replaceExtension)
 import Data.HashMap.Strict (singleton)
