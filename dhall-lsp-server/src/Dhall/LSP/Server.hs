@@ -71,7 +71,7 @@ lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
                      -- with VSCode, which means that our plugin can't expose a
                      -- command of the same name. In the case of dhall.lint we
                      -- name the server-side command dhall.server.lint to work
-                     -- around peculiarity.
+                     -- around this peculiarity.
                      Just (J.ExecuteCommandOptions (J.List ["dhall.server.lint", "dhall.server.toJSON"]))
                  }
 
