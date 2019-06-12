@@ -19,11 +19,13 @@ import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
+import qualified Control.Monad
 import qualified Crypto.Hash
 import qualified Data.ByteArray.Encoding
 import qualified Data.ByteString
 import qualified Data.Char
 import qualified Data.Foldable
+import qualified Data.List
 import qualified Data.List.NonEmpty
 import qualified Data.Sequence
 import qualified Data.Text
@@ -471,11 +473,27 @@ completeExpression embedded = completeExpression_
 
                 unicode = do
                     _  <- Text.Parser.Char.char 'u';
-                    n0 <- hexNumber
-                    n1 <- hexNumber
-                    n2 <- hexNumber
-                    n3 <- hexNumber
-                    let n = ((n0 * 16 + n1) * 16 + n2) * 16 + n3
+
+                    let toNumber = Data.List.foldl' (\x y -> x * 16 + y) 0
+
+                    let fourCharacterEscapeSequence =
+                            fmap toNumber (Control.Monad.replicateM 4 hexNumber)
+
+                    let bracedEscapeSequence = do
+                            _  <- Text.Parser.Char.char '{'
+                            ns <- some hexNumber
+
+                            let number = toNumber ns
+
+                            Control.Monad.guard (number <= 0x10FFFF)
+                                <|> fail "Invalid Unicode code point"
+
+                            _  <- Text.Parser.Char.char '}'
+
+                            return (toNumber ns)
+
+                    n <- bracedEscapeSequence <|> fourCharacterEscapeSequence
+
                     return (Data.Char.chr n)
 
     doubleQuotedLiteral = do
