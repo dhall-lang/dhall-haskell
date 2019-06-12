@@ -1,4 +1,4 @@
-module Dhall.LSP.Handlers.Command where
+module Dhall.LSP.Handlers.Command (executeCommandHandler) where
 
 import qualified Language.Haskell.LSP.Core as LSP
 import qualified Language.Haskell.LSP.Messages as LSP
@@ -21,12 +21,7 @@ import qualified Data.Text as Text
 executeCommandHandler :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
 executeCommandHandler lsp request
   | command == "dhall.server.lint" = do
-    LSP.logs "LSP Handler: executing dhall.lint"
-    let uri = parseUriArgument request
-    txt <- readUri lsp uri
-    case Linting.lintAndFormatDocument txt of
-      Right linted -> overwriteContents lsp uri linted
-      _ -> LSP.logs "LSP Handler: linting failed"
+    executeLintAndFormat lsp (parseUriArgument request)
   | command == "dhall.server.toJSON" =
     executeDhallToJSON lsp (parseUriArgument request)
   | otherwise = LSP.logs
@@ -64,10 +59,10 @@ executeLintAndFormat lsp uri = do
   txt <- readUri lsp uri
   case Linting.lintAndFormatDocument txt of
     Right linted -> do
-      let endline = length $ Text.lines oldcontent
+      let endline = length $ Text.lines txt
       let edit = J.List [ J.TextEdit
                            (J.Range (J.Position 0 0) (J.Position endline 0))
-                           newcontent ]
+                           linted ]
       lid <- LSP.getNextReqId lsp
       LSP.sendFunc lsp $ LSP.ReqApplyWorkspaceEdit
                    $ LSP.fmServerApplyWorkspaceEditRequest lid
