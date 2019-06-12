@@ -32,7 +32,7 @@ diagnosisToLSP Diagnosis{..} = J.Diagnostic {..}
 
 compilerDiagnostics :: FilePath -> Text -> IO [J.Diagnostic]
 compilerDiagnostics path txt = do
-  errors <- runDhall path txt
+  errors <- checkDhall path txt
   let diagnoses = concatMap (diagnose txt) errors
   return (map diagnosisToLSP diagnoses)
 

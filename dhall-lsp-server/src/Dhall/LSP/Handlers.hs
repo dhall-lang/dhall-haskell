@@ -58,7 +58,7 @@ hoverHandler lsp request = do
       Nothing -> fail "Failed to parse URI in ReqHover."
       Just path -> path
   txt <- readUri lsp uri
-  errors <- runDhall fileName txt
+  errors <- checkDhall fileName txt
   let
     explanations = mapMaybe (explain txt) errors
     isHovered :: Diagnosis -> Bool
