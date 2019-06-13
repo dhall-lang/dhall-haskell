@@ -20,7 +20,7 @@ import qualified Data.Text as Text
 
 executeCommandHandler :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
 executeCommandHandler lsp request
-  | command == "dhall.server.lint" = do
+  | command == "dhall.server.lint" =
     executeLintAndFormat lsp (parseUriArgument request)
   | command == "dhall.server.toJSON" =
     executeDhallToJSON lsp (parseUriArgument request)
