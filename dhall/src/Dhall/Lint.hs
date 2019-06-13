@@ -5,7 +5,6 @@ module Dhall.Lint
       lint
     ) where
 
-import Control.Monad (mplus)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup ((<>))
 import Dhall.Core (Binding(..), Expr(..), Import, Var(..), subExpressions)
