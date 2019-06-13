@@ -20,10 +20,12 @@ import qualified Data.Text as Text
 
 executeCommandHandler :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
 executeCommandHandler lsp request
-  | command == "dhall.server.lint" =
-    executeLintAndFormat lsp (parseUriArgument request)
-  | command == "dhall.server.toJSON" =
-    executeDhallToJSON lsp (parseUriArgument request)
+  | command == "dhall.server.lint" = case parseUriArgument request of
+      Right uri -> executeLintAndFormat lsp uri
+      Left msg -> LSP.logs msg
+  | command == "dhall.server.toJSON" = case parseUriArgument request of
+      Right uri -> executeDhallToJSON lsp uri
+      Left msg -> LSP.logs msg
   | otherwise = LSP.logs
     ("LSP Handler: asked to execute unknown command: " ++ show command)
   where command = request ^. J.params . J.command
@@ -42,7 +44,9 @@ executeDhallToJSON lsp uri = do
                                      converted ]
           -- TODO: this doesn't work; we need to fix haskell-lsp-types to
           -- support file creation!
-          edits = Just (singleton (appendSuffixToUri uri ".json") edit)
+          edits = case appendSuffixToUri uri ".json" of
+            Right uri' -> Just (singleton uri' edit)
+            _ -> Nothing
       lid <- LSP.getNextReqId lsp
       LSP.sendFunc lsp $ LSP.ReqApplyWorkspaceEdit
                        $ LSP.fmServerApplyWorkspaceEditRequest lid
@@ -65,24 +69,24 @@ executeLintAndFormat lsp uri = do
                            linted ]
       lid <- LSP.getNextReqId lsp
       LSP.sendFunc lsp $ LSP.ReqApplyWorkspaceEdit
-                   $ LSP.fmServerApplyWorkspaceEditRequest lid
-                   $ J.ApplyWorkspaceEditParams
-                   $ J.WorkspaceEdit (Just (singleton uri edit)) Nothing
+                       $ LSP.fmServerApplyWorkspaceEditRequest lid
+                       $ J.ApplyWorkspaceEditParams
+                       $ J.WorkspaceEdit (Just (singleton uri edit)) Nothing
     _ -> LSP.logs "LSP Handler: linting failed"
 
 -- Helper that appends a suffix to a uri. Fails if the uri does not represent a
 -- file path.
-appendSuffixToUri :: J.Uri -> Text -> J.Uri
+appendSuffixToUri :: J.Uri -> Text -> Either String J.Uri
 appendSuffixToUri uri suffix = case J.uriToFilePath uri of
-  Just path -> J.filePathToUri $ replaceExtension path (show suffix)
-  Nothing -> error $ "failed to append suffix to uri " ++ show uri
-                     ++ " because it's not a valid file path"
+  Just path -> Right . J.filePathToUri $ replaceExtension path (show suffix)
+  Nothing -> Left $ "failed to append suffix to uri " ++ show uri
+                    ++ " because it's not a valid file path"
 
-parseUriArgument :: J.ExecuteCommandRequest -> J.Uri
+parseUriArgument :: J.ExecuteCommandRequest -> Either String J.Uri
 parseUriArgument request = case request ^. J.params . J.arguments of
   Just (J.List (x : _)) -> case J.fromJSON x of
-    J.Success uri -> uri
-    _             -> error $ "unable to parse uri argument to " <> show
-      (request ^. J.params . J.command)
-  _ -> error $ "unable to parse uri argument to " <> show
-    (request ^. J.params . J.command)
+    J.Success uri -> Right uri
+    _ -> Left $ "unable to parse uri argument to "
+                <> show (request ^. J.params . J.command)
+  _ -> Left $ "unable to parse uri argument to "
+              <> show (request ^. J.params . J.command)
