@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
 
 {-| This library only exports a single `dhallToJSON` function for translating a
@@ -149,6 +150,24 @@
 >   }
 > }
 
+    You can also translate Dhall expressions encoding weakly-typed JSON
+    (see: <https://prelude.dhall-lang.org/JSON/Type>):
+
+> $ cat ./example.dhall
+> let JSON = https://prelude.dhall-lang.org/JSON/package.dhall
+> 
+> in  JSON.object
+>     [ { mapKey = "foo", mapValue = JSON.null }
+>     , { mapKey =
+>           "bar"
+>       , mapValue =
+>           JSON.array [ JSON.number 1.0, JSON.bool True ]
+>       }
+>     ]
+
+> $ dhall-to-json <<< './example.dhall'
+> {"foo":null,"bar":[1,true]}
+
     Also, all Dhall expressions are normalized before translation to JSON:
 
 > $ dhall-to-json <<< "True == False"
@@ -182,15 +201,18 @@ import Data.Text (Text)
 import Dhall.Core (Expr)
 import Dhall.TypeCheck (X)
 import Dhall.Map (Map)
+import Dhall.JSON.Util (pattern V)
 import Options.Applicative (Parser)
 
 import qualified Control.Lens
-import qualified Data.Foldable
-import qualified Data.HashMap.Strict
+import qualified Data.Aeson          as Aeson
+import qualified Data.Foldable       as Foldable
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.List
 import qualified Data.Ord
 import qualified Data.Text
-import qualified Dhall.Core
+import qualified Data.Vector         as Vector
+import qualified Dhall.Core          as Core
 import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Parser
@@ -263,7 +285,7 @@ instance Show CompileError where
             \                                                                                \n\
             \↳ " <> txt <> "                                                                 "
       where
-        txt = Dhall.Core.pretty e
+        txt = Core.pretty e
 
 _ERROR :: Data.Text.Text
 _ERROR = "\ESC[1;31mError\ESC[0m"
@@ -274,56 +296,56 @@ instance Exception CompileError
 
 >>> :set -XOverloadedStrings
 >>> :set -XOverloadedLists
->>> import Dhall.Core
+>>> import Core
 >>> dhallToJSON (RecordLit [("foo", IntegerLit 1), ("bar", TextLit "ABC")])
 Right (Object (fromList [("foo",Number 1.0),("bar",String "ABC")]))
->>> fmap Data.Aeson.encode it
+>>> fmap Aeson.encode it
 Right "{\"foo\":1,\"bar\":\"ABC\"}"
 -}
 dhallToJSON
     :: Expr s X
     -> Either CompileError Value
-dhallToJSON e0 = loop (Dhall.Core.normalize e0)
+dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
   where
     loop e = case e of 
-        Dhall.Core.BoolLit a -> return (toJSON a)
-        Dhall.Core.NaturalLit a -> return (toJSON a)
-        Dhall.Core.IntegerLit a -> return (toJSON a)
-        Dhall.Core.DoubleLit a -> return (toJSON a)
-        Dhall.Core.TextLit (Dhall.Core.Chunks [] a) -> do
+        Core.BoolLit a -> return (toJSON a)
+        Core.NaturalLit a -> return (toJSON a)
+        Core.IntegerLit a -> return (toJSON a)
+        Core.DoubleLit a -> return (toJSON a)
+        Core.TextLit (Core.Chunks [] a) -> do
             return (toJSON a)
-        Dhall.Core.ListLit _ a -> do
+        Core.ListLit _ a -> do
             a' <- traverse loop a
             return (toJSON a')
-        Dhall.Core.OptionalLit _ a -> do
+        Core.OptionalLit _ a -> do
             a' <- traverse loop a
             return (toJSON a')
-        Dhall.Core.Some a -> do
+        Core.Some a -> do
             a' <- loop a
             return (toJSON a')
-        Dhall.Core.App Dhall.Core.None _ -> do
-            return Data.Aeson.Null
+        Core.App Core.None _ -> do
+            return Aeson.Null
         -- Provide a nicer error message for a common user mistake.
         --
         -- See: https://github.com/dhall-lang/dhall-lang/issues/492
-        Dhall.Core.None -> do
+        Core.None -> do
             Left BareNone
-        Dhall.Core.RecordLit a ->
+        Core.RecordLit a ->
             case toOrderedList a of
                 [   (   "contents"
-                    ,   Dhall.Core.UnionLit alternativeName contents _
+                    ,   Core.UnionLit alternativeName contents _
                     )
                  ,  (   "field"
-                    ,   Dhall.Core.TextLit
-                            (Dhall.Core.Chunks [] field)
+                    ,   Core.TextLit
+                            (Core.Chunks [] field)
                     )
                  ,  (   "nesting"
-                    ,   Dhall.Core.UnionLit
+                    ,   Core.UnionLit
                             "Nested"
-                            (Dhall.Core.TextLit
-                                (Dhall.Core.Chunks [] nestedField)
+                            (Core.TextLit
+                                (Core.Chunks [] nestedField)
                             )
-                            [ ("Inline", Just (Dhall.Core.Record [])) ]
+                            [ ("Inline", Just (Core.Record [])) ]
                     )
                  ] -> do
                     contents' <- loop contents
@@ -338,43 +360,75 @@ dhallToJSON e0 = loop (Dhall.Core.normalize e0)
                                     )
                                 ]
 
-                    return (Data.Aeson.toJSON ( Dhall.Map.toMap taggedValue ))
+                    return (Aeson.toJSON ( Dhall.Map.toMap taggedValue ))
 
                 [   (   "contents"
-                    ,   Dhall.Core.UnionLit
+                    ,   Core.UnionLit
                             alternativeName
-                            (Dhall.Core.RecordLit contents)
+                            (Core.RecordLit contents)
                             _
                     )
                  ,  (   "field"
-                    ,   Dhall.Core.TextLit
-                            (Dhall.Core.Chunks [] field)
+                    ,   Core.TextLit
+                            (Core.Chunks [] field)
                     )
                  ,  (   "nesting"
-                    ,   Dhall.Core.UnionLit
+                    ,   Core.UnionLit
                             "Inline"
-                            (Dhall.Core.RecordLit [])
-                            [ ("Nested", Just Dhall.Core.Text) ]
+                            (Core.RecordLit [])
+                            [ ("Nested", Just Core.Text) ]
                     )
                  ] -> do
                     let contents' =
                             Dhall.Map.insert
                                 field
-                                (Dhall.Core.TextLit
-                                    (Dhall.Core.Chunks
+                                (Core.TextLit
+                                    (Core.Chunks
                                         []
                                         alternativeName
                                     )
                                 )
                                 contents
 
-                    loop (Dhall.Core.RecordLit contents')
+                    loop (Core.RecordLit contents')
                 _ -> do
                     a' <- traverse loop a
-                    return (Data.Aeson.toJSON (Dhall.Map.toMap a'))
-        Dhall.Core.UnionLit _ b _ -> loop b
-        Dhall.Core.App (Dhall.Core.Field (Dhall.Core.Union _) _) b -> loop b
-        Dhall.Core.Field (Dhall.Core.Union _) k -> return (toJSON k)
+                    return (Aeson.toJSON (Dhall.Map.toMap a'))
+        Core.UnionLit _ b _ -> loop b
+        Core.App (Core.Field (Core.Union _) _) b -> loop b
+        Core.Field (Core.Union _) k -> return (Aeson.toJSON k)
+        Core.Lam _ (Core.Const Core.Type)
+            (Core.Lam _ (Core.Pi _ Core.Text (V 1))
+            (Core.Lam _ (Core.Pi _ Core.Double (V 2))
+            (Core.Lam _ (Core.Pi _ (Core.App Core.List (Core.Record [ ("mapKey", Core.Text), ("mapValue", V 2)])) (V 3))
+            (Core.Lam _ (Core.Pi _ (Core.App Core.List (V 3)) (V 4))
+            (Core.Lam _ (Core.Pi _ Core.Bool (V 5))
+            (Core.Lam _ (V 5) value)))))) -> do
+                let outer (V 0) = do
+                        return Aeson.Null
+                    outer (Core.App (V 1) (Core.BoolLit b)) = do
+                        return (Aeson.Bool b)
+                    outer (Core.App (V 2) (Core.ListLit _ xs)) = do
+                        ys <- traverse outer (Foldable.toList xs)
+
+                        return (Aeson.Array (Vector.fromList ys))
+                    outer (Core.App (V 3) (Core.ListLit _ xs)) = do
+                        let inner (Core.RecordLit [("mapKey", Core.TextLit (Core.Chunks [] mapKey)), ("mapValue", mapExpression)]) = do
+                                mapValue <- outer mapExpression
+
+                                return (mapKey, mapValue)
+                            inner _ = Left (Unsupported e)
+
+                        ys <- traverse inner (Foldable.toList xs)
+
+                        return (Aeson.Object (HashMap.fromList ys))
+                    outer (Core.App (V 4) (Core.DoubleLit n)) = do
+                        return (Aeson.toJSON n)
+                    outer (Core.App (V 5) (Core.TextLit (Core.Chunks [] text))) = do
+                        return (toJSON text)
+                    outer _ = Left (Unsupported e)
+
+                outer value
         _ -> Left (Unsupported e)
 
 toOrderedList :: Ord k => Map k v -> [(k, v)]
@@ -386,7 +440,7 @@ toOrderedList =
 omitNull :: Value -> Value
 omitNull (Object object) = Object fields
   where
-    fields =Data.HashMap.Strict.filter (/= Null) (fmap omitNull object)
+    fields =HashMap.filter (/= Null) (fmap omitNull object)
 omitNull (Array array) =
     Array (fmap omitNull array)
 omitNull (String string) =
@@ -405,7 +459,7 @@ omitEmpty :: Value -> Value
 omitEmpty (Object object) =
     if null fields then Null else Object fields
   where
-    fields = Data.HashMap.Strict.filter (/= Null) (fmap omitEmpty object)
+    fields = HashMap.filter (/= Null) (fmap omitEmpty object)
 omitEmpty (Array array) =
     if null elems then Null else Array elems
   where
@@ -453,37 +507,39 @@ data Conversion
 -}
 convertToHomogeneousMaps :: Conversion -> Expr s X -> Expr s X
 convertToHomogeneousMaps NoConversion e0 = e0
-convertToHomogeneousMaps (Conversion {..}) e0 = loop (Dhall.Core.normalize e0)
+convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
   where
     loop e = case e of
-        Dhall.Core.Const a ->
-            Dhall.Core.Const a
+        Core.Const a ->
+            Core.Const a
 
-        Dhall.Core.Var v ->
-            Dhall.Core.Var v
+        Core.Var v ->
+            Core.Var v
 
-        Dhall.Core.Lam a b c ->
-            Dhall.Core.Lam a b' c'
+        {- Minor hack: Don't descend into lambda, since the only thing it can
+           possibly encode is a Boehm-Berarducci-encoded JSON value.  In such a
+           case we do *not* want to perform this rewrite since it will
+           interfere with decoding the value.
+        -}
+        Core.Lam a b c ->
+            Core.Lam a b c
+
+        Core.Pi a b c ->
+            Core.Pi a b' c'
           where
             b' = loop b
             c' = loop c
 
-        Dhall.Core.Pi a b c ->
-            Dhall.Core.Pi a b' c'
-          where
-            b' = loop b
-            c' = loop c
-
-        Dhall.Core.App a b ->
-            Dhall.Core.App a' b'
+        Core.App a b ->
+            Core.App a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.Let as b ->
-            Dhall.Core.Let as' b'
+        Core.Let as b ->
+            Core.Let as' b'
           where
-            f (Dhall.Core.Binding x y z) = Dhall.Core.Binding x y' z'
+            f (Core.Binding x y z) = Core.Binding x y' z'
               where
                 y' = fmap loop y
                 z' =      loop z
@@ -492,145 +548,145 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Dhall.Core.normalize e0)
 
             b' = loop b
 
-        Dhall.Core.Annot a b ->
-            Dhall.Core.Annot a' b'
+        Core.Annot a b ->
+            Core.Annot a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.Bool ->
-            Dhall.Core.Bool
+        Core.Bool ->
+            Core.Bool
 
-        Dhall.Core.BoolLit a ->
-            Dhall.Core.BoolLit a
+        Core.BoolLit a ->
+            Core.BoolLit a
 
-        Dhall.Core.BoolAnd a b ->
-            Dhall.Core.BoolAnd a' b'
+        Core.BoolAnd a b ->
+            Core.BoolAnd a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.BoolOr a b ->
-            Dhall.Core.BoolOr a' b'
+        Core.BoolOr a b ->
+            Core.BoolOr a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.BoolEQ a b ->
-            Dhall.Core.BoolEQ a' b'
+        Core.BoolEQ a b ->
+            Core.BoolEQ a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.BoolNE a b ->
-            Dhall.Core.BoolNE a' b'
+        Core.BoolNE a b ->
+            Core.BoolNE a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.BoolIf a b c ->
-            Dhall.Core.BoolIf a' b' c'
+        Core.BoolIf a b c ->
+            Core.BoolIf a' b' c'
           where
             a' = loop a
             b' = loop b
             c' = loop c
 
-        Dhall.Core.Natural ->
-            Dhall.Core.Natural
+        Core.Natural ->
+            Core.Natural
 
-        Dhall.Core.NaturalLit a ->
-            Dhall.Core.NaturalLit a
+        Core.NaturalLit a ->
+            Core.NaturalLit a
 
-        Dhall.Core.NaturalFold ->
-            Dhall.Core.NaturalFold
+        Core.NaturalFold ->
+            Core.NaturalFold
 
-        Dhall.Core.NaturalBuild ->
-            Dhall.Core.NaturalBuild
+        Core.NaturalBuild ->
+            Core.NaturalBuild
 
-        Dhall.Core.NaturalIsZero ->
-            Dhall.Core.NaturalIsZero
+        Core.NaturalIsZero ->
+            Core.NaturalIsZero
 
-        Dhall.Core.NaturalEven ->
-            Dhall.Core.NaturalEven
+        Core.NaturalEven ->
+            Core.NaturalEven
 
-        Dhall.Core.NaturalOdd ->
-            Dhall.Core.NaturalOdd
+        Core.NaturalOdd ->
+            Core.NaturalOdd
 
-        Dhall.Core.NaturalToInteger ->
-            Dhall.Core.NaturalToInteger
+        Core.NaturalToInteger ->
+            Core.NaturalToInteger
 
-        Dhall.Core.NaturalShow ->
-            Dhall.Core.NaturalShow
+        Core.NaturalShow ->
+            Core.NaturalShow
 
-        Dhall.Core.NaturalPlus a b ->
-            Dhall.Core.NaturalPlus a' b'
+        Core.NaturalPlus a b ->
+            Core.NaturalPlus a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.NaturalTimes a b ->
-            Dhall.Core.NaturalTimes a' b'
+        Core.NaturalTimes a b ->
+            Core.NaturalTimes a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.Integer ->
-            Dhall.Core.Integer
+        Core.Integer ->
+            Core.Integer
 
-        Dhall.Core.IntegerLit a ->
-            Dhall.Core.IntegerLit a
+        Core.IntegerLit a ->
+            Core.IntegerLit a
 
-        Dhall.Core.IntegerShow ->
-            Dhall.Core.IntegerShow
+        Core.IntegerShow ->
+            Core.IntegerShow
 
-        Dhall.Core.IntegerToDouble ->
-            Dhall.Core.IntegerToDouble
+        Core.IntegerToDouble ->
+            Core.IntegerToDouble
 
-        Dhall.Core.Double ->
-            Dhall.Core.Double
+        Core.Double ->
+            Core.Double
 
-        Dhall.Core.DoubleLit a ->
-            Dhall.Core.DoubleLit a
+        Core.DoubleLit a ->
+            Core.DoubleLit a
 
-        Dhall.Core.DoubleShow ->
-            Dhall.Core.DoubleShow
+        Core.DoubleShow ->
+            Core.DoubleShow
 
-        Dhall.Core.Text ->
-            Dhall.Core.Text
+        Core.Text ->
+            Core.Text
 
-        Dhall.Core.TextLit (Dhall.Core.Chunks a b) ->
-            Dhall.Core.TextLit (Dhall.Core.Chunks a' b)
+        Core.TextLit (Core.Chunks a b) ->
+            Core.TextLit (Core.Chunks a' b)
           where
             a' = fmap (fmap loop) a
 
-        Dhall.Core.TextAppend a b ->
-            Dhall.Core.TextAppend a' b'
+        Core.TextAppend a b ->
+            Core.TextAppend a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.TextShow ->
-            Dhall.Core.TextShow
+        Core.TextShow ->
+            Core.TextShow
 
-        Dhall.Core.List ->
-            Dhall.Core.List
+        Core.List ->
+            Core.List
 
-        Dhall.Core.ListLit a b ->
+        Core.ListLit a b ->
             case transform of
                 Just c  -> loop c
-                Nothing -> Dhall.Core.ListLit a' b'
+                Nothing -> Core.ListLit a' b'
           where
-            elements = Data.Foldable.toList b
+            elements = Foldable.toList b
 
             toKeyValue :: Expr s X -> Maybe (Text, Expr s X)
-            toKeyValue (Dhall.Core.RecordLit m) = do
-                guard (Data.Foldable.length m == 2)
+            toKeyValue (Core.RecordLit m) = do
+                guard (Foldable.length m == 2)
 
                 key   <- Dhall.Map.lookup mapKey   m
                 value <- Dhall.Map.lookup mapValue m
 
                 keyText <- case key of
-                    Dhall.Core.TextLit (Dhall.Core.Chunks [] keyText) ->
+                    Core.TextLit (Core.Chunks [] keyText) ->
                         return keyText
 
                     _ ->
@@ -644,11 +700,11 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Dhall.Core.normalize e0)
                 case elements of
                     [] ->
                         case a of
-                            Just (Dhall.Core.Record m) -> do
-                                guard (Data.Foldable.length m == 2)
+                            Just (Core.Record m) -> do
+                                guard (Foldable.length m == 2)
                                 guard (Dhall.Map.member mapKey   m)
                                 guard (Dhall.Map.member mapValue m)
-                                return (Dhall.Core.RecordLit mempty)
+                                return (Core.RecordLit mempty)
                             _ -> do
                                 empty
 
@@ -658,130 +714,130 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Dhall.Core.normalize e0)
                         let recordLiteral =
                                 Dhall.Map.fromList keyValues
 
-                        return (Dhall.Core.RecordLit recordLiteral)
+                        return (Core.RecordLit recordLiteral)
 
             a' = fmap loop a
             b' = fmap loop b
 
-        Dhall.Core.ListAppend a b ->
-            Dhall.Core.ListAppend a' b'
+        Core.ListAppend a b ->
+            Core.ListAppend a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.ListBuild ->
-            Dhall.Core.ListBuild
+        Core.ListBuild ->
+            Core.ListBuild
 
-        Dhall.Core.ListFold ->
-            Dhall.Core.ListFold
+        Core.ListFold ->
+            Core.ListFold
 
-        Dhall.Core.ListLength ->
-            Dhall.Core.ListLength
+        Core.ListLength ->
+            Core.ListLength
 
-        Dhall.Core.ListHead ->
-            Dhall.Core.ListHead
+        Core.ListHead ->
+            Core.ListHead
 
-        Dhall.Core.ListLast ->
-            Dhall.Core.ListLast
+        Core.ListLast ->
+            Core.ListLast
 
-        Dhall.Core.ListIndexed ->
-            Dhall.Core.ListIndexed
+        Core.ListIndexed ->
+            Core.ListIndexed
 
-        Dhall.Core.ListReverse ->
-            Dhall.Core.ListReverse
+        Core.ListReverse ->
+            Core.ListReverse
 
-        Dhall.Core.Optional ->
-            Dhall.Core.Optional
+        Core.Optional ->
+            Core.Optional
 
-        Dhall.Core.OptionalLit a b ->
-            Dhall.Core.OptionalLit a' b'
+        Core.OptionalLit a b ->
+            Core.OptionalLit a' b'
           where
             a' =      loop a
             b' = fmap loop b
 
-        Dhall.Core.Some a ->
-            Dhall.Core.Some a'
+        Core.Some a ->
+            Core.Some a'
           where
             a' = loop a
 
-        Dhall.Core.None ->
-            Dhall.Core.None
+        Core.None ->
+            Core.None
 
-        Dhall.Core.OptionalFold ->
-            Dhall.Core.OptionalFold
+        Core.OptionalFold ->
+            Core.OptionalFold
 
-        Dhall.Core.OptionalBuild ->
-            Dhall.Core.OptionalBuild
+        Core.OptionalBuild ->
+            Core.OptionalBuild
 
-        Dhall.Core.Record a ->
-            Dhall.Core.Record a'
+        Core.Record a ->
+            Core.Record a'
           where
             a' = fmap loop a
 
-        Dhall.Core.RecordLit a ->
-            Dhall.Core.RecordLit a'
+        Core.RecordLit a ->
+            Core.RecordLit a'
           where
             a' = fmap loop a
 
-        Dhall.Core.Union a ->
-            Dhall.Core.Union a'
+        Core.Union a ->
+            Core.Union a'
           where
             a' = fmap (fmap loop) a
 
-        Dhall.Core.UnionLit a b c ->
-            Dhall.Core.UnionLit a b' c'
+        Core.UnionLit a b c ->
+            Core.UnionLit a b' c'
           where
             b' =            loop  b
             c' = fmap (fmap loop) c
 
-        Dhall.Core.Combine a b ->
-            Dhall.Core.Combine a' b'
+        Core.Combine a b ->
+            Core.Combine a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.CombineTypes a b ->
-            Dhall.Core.CombineTypes a' b'
+        Core.CombineTypes a b ->
+            Core.CombineTypes a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.Prefer a b ->
-            Dhall.Core.Prefer a' b'
+        Core.Prefer a b ->
+            Core.Prefer a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.Merge a b c ->
-            Dhall.Core.Merge a' b' c'
+        Core.Merge a b c ->
+            Core.Merge a' b' c'
           where
             a' =      loop a
             b' =      loop b
             c' = fmap loop c
 
-        Dhall.Core.Field a b ->
-            Dhall.Core.Field a' b
+        Core.Field a b ->
+            Core.Field a' b
           where
             a' = loop a
 
-        Dhall.Core.Project a b ->
-            Dhall.Core.Project a' b
+        Core.Project a b ->
+            Core.Project a' b
           where
             a' = loop a
 
-        Dhall.Core.ImportAlt a b ->
-            Dhall.Core.ImportAlt a' b'
+        Core.ImportAlt a b ->
+            Core.ImportAlt a' b'
           where
             a' = loop a
             b' = loop b
 
-        Dhall.Core.Note a b ->
-            Dhall.Core.Note a b'
+        Core.Note a b ->
+            Core.Note a b'
           where
             b' = loop b
 
-        Dhall.Core.Embed a ->
-            Dhall.Core.Embed a
+        Core.Embed a ->
+            Core.Embed a
 
 -- | Parser for command-line options related to homogeneous map support
 parseConversion :: Parser Conversion
@@ -831,7 +887,7 @@ data SpecialDoubleMode
 handleSpecialDoubles
     :: SpecialDoubleMode -> Expr s X -> Either CompileError (Expr s X)
 handleSpecialDoubles specialDoubleMode =
-    Control.Lens.rewriteMOf Dhall.Core.subExpressions rewrite
+    Control.Lens.rewriteMOf Core.subExpressions rewrite
   where
     rewrite =
         case specialDoubleMode of
@@ -839,27 +895,27 @@ handleSpecialDoubles specialDoubleMode =
             ForbidWithinJSON      -> forbidWithinJSON
             ApproximateWithinJSON -> approximateWithinJSON
 
-    useYAMLEncoding (Dhall.Core.DoubleLit n)
+    useYAMLEncoding (Core.DoubleLit n)
         | isInfinite n && 0 < n =
-            return (Just (Dhall.Core.TextLit (Dhall.Core.Chunks [] "inf")))
+            return (Just (Core.TextLit (Core.Chunks [] "inf")))
         | isInfinite n && n < 0 =
-            return (Just (Dhall.Core.TextLit (Dhall.Core.Chunks [] "-inf")))
+            return (Just (Core.TextLit (Core.Chunks [] "-inf")))
         | isNaN n =
-            return (Just (Dhall.Core.TextLit (Dhall.Core.Chunks [] "nan")))
+            return (Just (Core.TextLit (Core.Chunks [] "nan")))
     useYAMLEncoding _ =
         return Nothing
 
-    forbidWithinJSON (Dhall.Core.DoubleLit n)
+    forbidWithinJSON (Core.DoubleLit n)
         | isInfinite n || isNaN n =
             Left (SpecialDouble n)
     forbidWithinJSON _ =
         return Nothing
 
-    approximateWithinJSON (Dhall.Core.DoubleLit n)
+    approximateWithinJSON (Core.DoubleLit n)
         | isInfinite n && n > 0 =
-            return (Just (Dhall.Core.DoubleLit ( 1.7976931348623157e308 :: Double)))
+            return (Just (Core.DoubleLit ( 1.7976931348623157e308 :: Double)))
         | isInfinite n && n < 0 =
-            return (Just (Dhall.Core.DoubleLit (-1.7976931348623157e308 :: Double)))
+            return (Just (Core.DoubleLit (-1.7976931348623157e308 :: Double)))
         -- Do nothing for @NaN@, which already encodes to @null@
     approximateWithinJSON _ =
         return Nothing
@@ -867,7 +923,7 @@ handleSpecialDoubles specialDoubleMode =
 {-| Convert a piece of Text carrying a Dhall inscription to an equivalent JSON Value
 
 >>> :set -XOverloadedStrings
->>> import Dhall.Core
+>>> import Core
 >>> Dhall.JSON.codeToValue "(stdin)" "{ a = 1 }"
 >>> Object (fromList [("a",Number 1.0)])
 -}
@@ -878,16 +934,16 @@ codeToValue
   -> Text  -- ^ Input text.
   -> IO Value
 codeToValue conversion specialDoubleMode name code = do
-    parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Data.Text.unpack name) code)
+    parsedExpression <- Core.throws (Dhall.Parser.exprFromText (Data.Text.unpack name) code)
 
     resolvedExpression <- Dhall.Import.load parsedExpression
 
-    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+    _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
     let convertedExpression =
             convertToHomogeneousMaps conversion resolvedExpression
 
-    specialDoubleExpression <- Dhall.Core.throws (handleSpecialDoubles specialDoubleMode convertedExpression)
+    specialDoubleExpression <- Core.throws (handleSpecialDoubles specialDoubleMode convertedExpression)
 
     case dhallToJSON specialDoubleExpression of
       Left  err  -> Control.Exception.throwIO err
