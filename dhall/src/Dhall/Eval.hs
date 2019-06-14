@@ -481,7 +481,6 @@ eval !env t =
                           t             -> VListReverse a t
 
     Optional         -> VPrim VOptional
-    OptionalLit a mt -> maybe (VNone (evalE a)) (\t -> VSome (evalE t)) mt
     Some t           -> VSome (evalE t)
     None             -> VPrim $ \ ~a -> VNone a
 
@@ -926,7 +925,6 @@ alphaNormalize = goEnv NEmpty where
       ListIndexed      -> ListIndexed
       ListReverse      -> ListReverse
       Optional         -> Optional
-      OptionalLit a mt -> OptionalLit (go a) (go <$> mt)
       Some t           -> Some (go t)
       None             -> None
       OptionalFold     -> OptionalFold
