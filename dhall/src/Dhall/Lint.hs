@@ -5,7 +5,6 @@ module Dhall.Lint
       lint
     ) where
 
-import Control.Monad (mplus)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup ((<>))
 import Dhall.Core (Binding(..), Expr(..), Import, Var(..), subExpressions)
@@ -19,7 +18,6 @@ import qualified Dhall.Optics
 
     * removes unused @let@ bindings with 'removeLetInLet'.
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeUnusedBindings'.
-    * switches legacy @List@-like @Optional@ literals to use @Some@ / @None@ instead with 'optionalLitToSomeNone'
 -}
 lint :: Expr s Import -> Expr t Import
 lint = postproc . linting . preproc
@@ -27,8 +25,7 @@ lint = postproc . linting . preproc
     -- pre-processing: remove Note constructors and unfold Let blocks
     preproc = Dhall.Optics.rewriteOf subExpressions unfoldNestedLets . Dhall.Core.denote
     -- main linting step: remove unused let bindings and update optional syntax
-    linting = Dhall.Optics.rewriteOf subExpressions
-      (\e -> removeUnusedBindings e `mplus` optionalLitToSomeNone e)
+    linting = Dhall.Optics.rewriteOf subExpressions removeUnusedBindings
     -- post-processing: fold nested Lets into Let blocks
     postproc = Dhall.Optics.rewriteOf subExpressions removeLetInLet
 
@@ -52,8 +49,3 @@ removeUnusedBindings _ = Nothing
 unfoldNestedLets :: Expr s a -> Maybe (Expr s a)
 unfoldNestedLets (Let (b :| (l : ls)) d) = Just (Let (b :| []) (Let (l :| ls) d))
 unfoldNestedLets _ = Nothing
-
-optionalLitToSomeNone :: Expr s a -> Maybe (Expr s a)
-optionalLitToSomeNone (OptionalLit _ (Just b)) = Just (Some b)
-optionalLitToSomeNone (OptionalLit a Nothing) = Just (App None a)
-optionalLitToSomeNone _ = Nothing
