@@ -90,7 +90,6 @@ module Dhall.Nix (
     , CompileError(..)
     ) where
 
-import Control.Applicative (empty)
 import Control.Exception (Exception)
 import Data.Foldable (toList)
 import Data.Fix (Fix(..))
@@ -422,10 +421,6 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e6 = Fix (NAbs "xs" (Fix (NLet [NamedVar ["n"] e5 Nix.nullPos] e4)))
         return (Fix (NAbs "t" e6))
     loop Optional = return (Fix (NAbs "t" (Fix (NSet []))))
-    loop (OptionalLit _ b) =
-        case b of
-            Nothing -> return (Fix (NConstant NNull))
-            Just c  -> loop c
     loop (Some a) = loop a
     loop None = return (Fix (NConstant NNull))
     loop OptionalFold = do
@@ -437,8 +432,8 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e0 = Pi "nothing" "optional" "optional"
         let e1 = Pi "just" (Pi "_" "a" "optional") e0
         let e2 = Pi "optional" (Const Type) e1
-        let e3 = OptionalLit "a" empty
-        let e4 = Lam "x" "a" (OptionalLit "a" (pure "x"))
+        let e3 = App None "a"
+        let e4 = Lam "x" "a" (Some "x")
         let e5 = App (App (App "f" (App Optional "a")) e4) e3
         loop (Lam "a" (Const Type) (Lam "f" e2 e5))
     loop (Record _) = return (Fix (NSet []))
