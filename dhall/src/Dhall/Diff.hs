@@ -579,18 +579,6 @@ skeleton (ListAppend {}) =
     <>  operator "#"
     <>  " "
     <>  ignore
-skeleton (OptionalLit {}) =
-        lbracket
-    <>  " "
-    <>  ignore
-    <>  " "
-    <>  rbracket
-    <>  " "
-    <>  colon
-    <>  " "
-    <>  builtin "Optional"
-    <>  " "
-    <>  ignore
 skeleton (Record {}) =
         lbrace
     <>  " "
@@ -778,21 +766,6 @@ diffAnnotatedExpression (ListLit aL bL) (ListLit aR@(Just _) bR) = align doc
   where
     doc =   format " " (diffList bL bR)
         <>  format " " (diffMaybe (colon <> " ") (diffApplicationExpression `on` App List) aL aR)
-diffAnnotatedExpression (OptionalLit aL bL) (OptionalLit aR bR) =
-    align doc
-  where
-    doc =   lbracket
-        <>  " "
-        <>  format " " (diffMaybe mempty diffExpression bL bR)
-        <>  rbracket
-        <>  " "
-        <>  colon
-        <>  " "
-        <>  diffApplicationExpression (App Optional aL) (App Optional aR)
-diffAnnotatedExpression l@(OptionalLit {}) r =
-    mismatch l r
-diffAnnotatedExpression l r@(OptionalLit {}) =
-    mismatch l r
 diffAnnotatedExpression l@(Annot {}) r@(Annot {}) =
     enclosed' "  " (colon <> " ") (docs l r)
   where

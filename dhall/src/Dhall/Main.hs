@@ -70,6 +70,7 @@ import qualified Options.Applicative
 import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.IO
+import qualified System.FilePath
 import qualified Text.Dot
 import qualified Data.Map
 
@@ -299,7 +300,7 @@ command (Options {..}) = do
           where
             file = case maybeFile of
                 Just "-" -> "."
-                Just f   -> f
+                Just f   -> System.FilePath.takeDirectory f
                 Nothing  -> "."
 
     let handle =
