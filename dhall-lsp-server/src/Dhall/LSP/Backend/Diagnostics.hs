@@ -4,11 +4,15 @@ module Dhall.LSP.Backend.Diagnostics
   ( DhallException
   , checkDhall
   , diagnose
-  , explain
-  , rangeFromDhall
-  , Position
-  , Range(..)
   , Diagnosis(..)
+  , explain
+  , offsetToPosition
+  , Position
+  , positionFromMegaparsec
+  , positionToOffset
+  , Range(..)
+  , rangeFromDhall
+  , sanitiseRange
   )
 where
 
