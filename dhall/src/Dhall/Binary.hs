@@ -288,15 +288,6 @@ instance ToTerm a => ToTerm (Expr s a) where
             Just t  -> encode t
 
         xs₁ = map encode (Data.Foldable.toList xs₀)
-    encode (OptionalLit _T₀ Nothing) =
-        TList [ TInt 5, _T₁ ]
-      where
-        _T₁ = encode _T₀
-    encode (OptionalLit _T₀ (Just t₀)) =
-        TList [ TInt 5, _T₁, t₁ ]
-      where
-        _T₁ = encode _T₀
-        t₁  = encode t₀
     encode (Some t₀) =
         TList [ TInt 5, TNull, t₁ ]
       where
@@ -612,16 +603,9 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TList (TInt 4 : TNull : xs₁ )) = do
         xs₀ <- traverse decode xs₁
         return (ListLit Nothing (Data.Sequence.fromList xs₀))
-    decode (TList [ TInt 5, _T₁ ]) = do
-        _T₀ <- decode _T₁
-        return (OptionalLit _T₀ Nothing)
     decode (TList [ TInt 5, TNull, t₁ ]) = do
         t₀ <- decode t₁
         return (Some t₀)
-    decode (TList [ TInt 5, _T₁, t₁ ]) = do
-        _T₀ <- decode _T₁
-        t₀  <- decode t₁
-        return (OptionalLit _T₀ (Just t₀))
     decode (TList [ TInt 6, t₁, u₁ ]) = do
         t₀ <- decode t₁
         u₀ <- decode u₁

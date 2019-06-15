@@ -443,9 +443,6 @@ data Expr s a
     | ListReverse
     -- | > Optional                                 ~  Optional
     | Optional
-    -- | > OptionalLit t (Just e)                   ~  [e] : Optional t
-    --   > OptionalLit t Nothing                    ~  []  : Optional t
-    | OptionalLit (Expr s a) (Maybe (Expr s a))
     -- | > Some e                                   ~  Some e
     | Some (Expr s a)
     -- | > None                                     ~  None
@@ -536,7 +533,6 @@ instance Functor (Expr s) where
   fmap _ ListIndexed = ListIndexed
   fmap _ ListReverse = ListReverse
   fmap _ Optional = Optional
-  fmap f (OptionalLit e maybeE) = OptionalLit (fmap f e) (fmap (fmap f) maybeE)
   fmap f (Some e) = Some (fmap f e)
   fmap _ None = None
   fmap _ OptionalFold = OptionalFold
@@ -613,7 +609,6 @@ instance Monad (Expr s) where
     ListIndexed          >>= _ = ListIndexed
     ListReverse          >>= _ = ListReverse
     Optional             >>= _ = Optional
-    OptionalLit a b      >>= k = OptionalLit (a >>= k) (fmap (>>= k) b)
     Some a               >>= k = Some (a >>= k)
     None                 >>= _ = None
     OptionalFold         >>= _ = OptionalFold
@@ -680,7 +675,6 @@ instance Bifunctor Expr where
     first _  ListIndexed           = ListIndexed
     first _  ListReverse           = ListReverse
     first _  Optional              = Optional
-    first k (OptionalLit a b     ) = OptionalLit (first k a) (fmap (first k) b)
     first k (Some a              ) = Some (first k a)
     first _  None                  = None
     first _  OptionalFold          = OptionalFold
@@ -928,10 +922,6 @@ shift _ _ ListLast = ListLast
 shift _ _ ListIndexed = ListIndexed
 shift _ _ ListReverse = ListReverse
 shift _ _ Optional = Optional
-shift d v (OptionalLit a b) = OptionalLit a' b'
-  where
-    a' =       shift d v  a
-    b' = fmap (shift d v) b
 shift d v (Some a) = Some a'
   where
     a' = shift d v a
@@ -1106,10 +1096,6 @@ subst _ _ ListLast = ListLast
 subst _ _ ListIndexed = ListIndexed
 subst _ _ ListReverse = ListReverse
 subst _ _ Optional = Optional
-subst x e (OptionalLit a b) = OptionalLit a' b'
-  where
-    a' =       subst x e  a
-    b' = fmap (subst x e) b
 subst x e (Some a) = Some a'
   where
     a' = subst x e a
@@ -1266,7 +1252,6 @@ denote  ListLast              = ListLast
 denote  ListIndexed           = ListIndexed
 denote  ListReverse           = ListReverse
 denote  Optional              = Optional
-denote (OptionalLit a b     ) = OptionalLit (denote a) (fmap denote b)
 denote (Some a              ) = Some (denote a)
 denote  None                  = None
 denote  OptionalFold          = OptionalFold
@@ -1580,8 +1565,6 @@ normalizeWithM ctx e0 = loop (denote e0)
     ListIndexed -> pure ListIndexed
     ListReverse -> pure ListReverse
     Optional -> pure Optional
-    OptionalLit _A Nothing -> loop (App None _A)
-    OptionalLit _ (Just a) -> loop (Some a)
     Some a -> Some <$> a'
       where
         a' = loop a
@@ -1869,7 +1852,6 @@ isNormalized e0 = loop (denote e0)
       ListIndexed -> True
       ListReverse -> True
       Optional -> True
-      OptionalLit _ _ -> False
       Some a -> loop a
       None -> True
       OptionalFold -> True
@@ -2080,7 +2062,6 @@ subExpressions _ ListLast = pure ListLast
 subExpressions _ ListIndexed = pure ListIndexed
 subExpressions _ ListReverse = pure ListReverse
 subExpressions _ Optional = pure Optional
-subExpressions f (OptionalLit a b) = OptionalLit <$> f a <*> traverse f b
 subExpressions f (Some a) = Some <$> f a
 subExpressions _ None = pure None
 subExpressions _ OptionalFold = pure OptionalFold

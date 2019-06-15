@@ -4,6 +4,7 @@ import System.FilePath ((</>))
 import Test.Tasty      (TestTree)
 
 import qualified Dhall.Test.Dhall
+import qualified Dhall.Test.Diff
 import qualified Dhall.Test.Format
 import qualified Dhall.Test.Import
 import qualified Dhall.Test.Lint
@@ -33,6 +34,8 @@ getAllTests = do
 
     lintTests <- Dhall.Test.Lint.getTests
 
+    diffTests <- Dhall.Test.Diff.getTests
+
     let testTree =
             Test.Tasty.testGroup "Dhall Tests"
                 [ normalizationTests
@@ -41,6 +44,7 @@ getAllTests = do
                 , typecheckingTests
                 , formattingTests
                 , lintTests
+                , diffTests
                 , Dhall.Test.Regression.tests
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests
