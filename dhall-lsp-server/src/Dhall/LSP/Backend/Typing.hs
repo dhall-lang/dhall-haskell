@@ -52,14 +52,23 @@ typeAt' pos ctx expr = do
     (t:_) -> typeAt' pos ctx t  -- continue with leaf-expression
 
 
--- | Find the smallest Src annotation containing the given position.
-srcAt :: Position -> Expr Src X -> Maybe Src
-srcAt pos (Note src expr) = srcAt pos expr <|> Just src
-srcAt pos expr =
+-- | Find the smallest Note-wrapped expression at the given position.
+exprAt :: Position -> Expr Src X -> Maybe (Expr Src X)
+exprAt pos e@(Note _ expr) = exprAt pos expr <|> Just e
+exprAt pos expr =
   let subExprs = toListOf subExpressions expr
   in case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
     [] -> Nothing
-    ((src, e) : _) -> srcAt pos e <|> Just src
+    ((src,e) : _) -> exprAt pos e <|> Just (Note src e)
+
+
+-- | Find the smallest Src annotation containing the given position.
+srcAt :: Position -> Expr Src X -> Maybe Src
+srcAt pos expr = do e <- exprAt pos expr
+                    case e of
+                      Note src _ -> Just src
+                      _ -> Nothing
+
 
 
 -- Check if range lies completely inside a given subexpression.
