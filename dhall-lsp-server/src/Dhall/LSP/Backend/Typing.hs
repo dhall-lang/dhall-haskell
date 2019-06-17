@@ -8,6 +8,7 @@ import Dhall.Parser (Src(..))
 import Data.List.NonEmpty (NonEmpty (..))
 import Control.Lens (toListOf)
 import qualified Data.Text as Text
+import Control.Applicative ((<|>))
 
 import Dhall.LSP.Backend.Diagnostics (Position, positionFromMegaparsec, offsetToPosition)
 
@@ -53,16 +54,12 @@ typeAt' pos ctx expr = do
 
 -- | Find the smallest Src annotation containing the given position.
 srcAt :: Position -> Expr Src X -> Maybe Src
-srcAt pos (Note src expr) = case srcAt pos expr of
-  Just src' -> Just src'
-  Nothing   -> Just src
+srcAt pos (Note src expr) = srcAt pos expr <|> Just src
 srcAt pos expr =
   let subExprs = toListOf subExpressions expr
   in case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
     [] -> Nothing
-    ((src, e) : _) -> case srcAt pos e of
-                 Nothing -> Just src
-                 Just src' -> Just src'
+    ((src, e) : _) -> srcAt pos e <|> Just src
 
 
 -- Check if range lies completely inside a given subexpression.
