@@ -8,8 +8,7 @@ module Dhall.YamlToDhall
   , dhallFromYaml
   ) where
 
-import Data.Bifunctor (bimap)
-import Data.ByteString.Lazy (ByteString, toStrict)
+import Data.ByteString (ByteString)
 
 import Dhall.JSONToDhall
   ( CompileError(..)
@@ -22,15 +21,16 @@ import Dhall.JSONToDhall
   )
 
 import Control.Exception (Exception, throwIO)
-import Data.Aeson (Value)
 import Data.Text (Text)
-import Dhall.Yaml (jsonToYaml)
 
-import qualified Data.ByteString.Char8 as BS8
 import qualified Dhall.Core as Dhall
+
 #if defined(ETA_VERSION)
 import Dhall.Yaml.Eta ( yamlToJson, showYaml )
 #else
+import Data.Aeson (Value)
+import Data.Bifunctor (bimap)
+import qualified Data.ByteString.Char8 as BS8
 import qualified Data.Yaml
 #endif
 
@@ -69,9 +69,9 @@ dhallFromYaml Options{..} yaml = do
 #if !defined(ETA_VERSION)
 yamlToJson :: ByteString -> Either String Data.Aeson.Value
 yamlToJson =
-  bimap Data.Yaml.prettyPrintParseException id . Data.Yaml.decodeEither' . toStrict
+  bimap Data.Yaml.prettyPrintParseException id . Data.Yaml.decodeEither'
 
 showYaml :: Value -> String
-showYaml value = BS8.unpack (jsonToYaml False False value)
+showYaml value = BS8.unpack (Data.Yaml.encode value)
 #endif
 
