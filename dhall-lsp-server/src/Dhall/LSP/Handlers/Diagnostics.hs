@@ -16,6 +16,7 @@ import           Dhall.LSP.Backend.Diagnostics
 import           Dhall.LSP.Backend.Linting
 import           Dhall.LSP.Util (readUri)
 
+import           Data.List                      ( find )
 import           Data.Maybe                     ( mapMaybe )
 
 -- | Called by @didOpenTextDocumentNotificationHandler@ and
@@ -66,9 +67,7 @@ explainDiagnosis :: FilePath -> Text -> Position -> IO (Maybe Diagnosis)
 explainDiagnosis path txt pos = do
   errors <- checkDhall path txt
   let explanations = mapMaybe (explain txt) errors
-  case filter (isHovered pos) explanations of
-    [] -> return Nothing
-    (diag : _) -> return (Just diag)
+  return $ find (isHovered pos) explanations
 
 isHovered :: Position -> Diagnosis -> Bool
 isHovered _ (Diagnosis _ Nothing _) = False
