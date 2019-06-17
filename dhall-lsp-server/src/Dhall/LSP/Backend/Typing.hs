@@ -9,7 +9,7 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Control.Lens (toListOf)
 import qualified Data.Text as Text
 
-import Dhall.LSP.Backend.Diagnostics (Position, positionFromMegaparsec, offsetToPosition, positionToOffset)
+import Dhall.LSP.Backend.Diagnostics (Position, positionFromMegaparsec, offsetToPosition)
 
 -- | Find the type of the subexpression at the given position.
 typeAt :: Position -> Expr Src X -> Maybe (Expr Src X)
@@ -68,22 +68,14 @@ srcAt pos expr =
                  Just src' -> Just src'
 
 
-{-
+-- Check if range lies completely inside a given subexpression.
+-- This version takes trailing whitespace into account
+-- (c.f. `sanitiseRange` from Backend.Diangostics).
 inside :: Position -> Src -> Bool
-inside pos (Src left' right' _) =
-  positionFromMegaparsec left' <= pos && pos <= positionFromMegaparsec right'
--}
--- check if range lies completely inside a given subexpression
--- this version takes trailing whitespace into account
--- (c.f. `sanitiseRange` from Backend.Diangostics)
-inside :: Position -> Src -> Bool
-inside pos (Src left right txt) =
+inside pos (Src left _right txt) =
   let (x1,y1) = positionFromMegaparsec left
-      (x2,y2) = positionFromMegaparsec right
-      off | x1 == x2 = positionToOffset txt (0, y2 - y1)
-          | otherwise = positionToOffset txt (x2 - x1, y2)
-      (dx2,dy2) = (offsetToPosition txt . Text.length . Text.stripEnd
-                   . Text.take off) txt
-      (x2',y2') | dx2 == 0 = (x1, y1 + dy2)
-                | otherwise = (x1 + dx2, dy2)
-  in (x1,y1) <= pos && pos < (x2',y2')
+      txt' = Text.stripEnd txt
+      (dx2,dy2) = (offsetToPosition txt . Text.length) txt'
+      (x2,y2) | dx2 == 0 = (x1, y1 + dy2)
+              | otherwise = (x1 + dx2, dy2)
+  in (x1,y1) <= pos && pos < (x2,y2)
