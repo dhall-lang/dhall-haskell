@@ -73,7 +73,10 @@ lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
                      -- command of the same name. In the case of dhall.lint we
                      -- name the server-side command dhall.server.lint to work
                      -- around this peculiarity.
-                     Just (J.ExecuteCommandOptions (J.List ["dhall.server.lint", "dhall.server.toJSON"]))
+                     Just (J.ExecuteCommandOptions
+                       (J.List ["dhall.server.lint",
+                                "dhall.server.toJSON",
+                                "dhall.server.annotateLet"]))
                  }
 
 lspHandlers :: TVar (Maybe (LSP.Core.LspFuncs ())) -> LSP.Core.Handlers

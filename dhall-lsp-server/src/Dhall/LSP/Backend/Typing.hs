@@ -1,4 +1,4 @@
-module Dhall.LSP.Backend.Typing (typeAt, srcAt) where
+module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
 
 import Dhall.Context (Context, insert, empty)
 import Dhall.Core (Expr(..), Binding(..), subExpressions, normalize, shift, Var(..))
@@ -53,7 +53,7 @@ typeAt' pos ctx expr = do
 
 
 -- | Find the smallest Note-wrapped expression at the given position.
-exprAt :: Position -> Expr Src X -> Maybe (Expr Src X)
+exprAt :: Position -> Expr Src a -> Maybe (Expr Src a)
 exprAt pos e@(Note _ expr) = exprAt pos expr <|> Just e
 exprAt pos expr =
   let subExprs = toListOf subExpressions expr
@@ -63,11 +63,63 @@ exprAt pos expr =
 
 
 -- | Find the smallest Src annotation containing the given position.
-srcAt :: Position -> Expr Src X -> Maybe Src
+srcAt :: Position -> Expr Src a -> Maybe Src
 srcAt pos expr = do e <- exprAt pos expr
                     case e of
                       Note src _ -> Just src
                       _ -> Nothing
+
+
+-- assume input to be well-typed; assume only singleton lets
+annotateLet :: Position -> Expr Src X -> Maybe (Expr Src X)
+annotateLet pos expr = case annotateLet' pos empty expr of
+  Right typ -> Just typ
+  _        -> Nothing
+
+annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
+-- not yet annotated
+annotateLet' pos ctx (Let (Binding x Nothing a :| []) (Note src e))
+  | not (pos `inside` src) = do
+    _A <- typeWithA absurd ctx a
+    return (Let (Binding x (Just _A) a :| []) (Note src e))
+
+-- replace existing annotation with normal form
+annotateLet' pos ctx (Let (Binding x (Just (Note src _A)) a :| []) (Note src' e))
+  | not (pos `inside` src) && not (pos `inside` src') = do
+    _A' <- typeWithA absurd ctx a
+    return (Let (Binding x (Just _A') a :| []) (Note src' e))
+
+-- binders
+annotateLet' pos ctx (Let (Binding x mA a :| []) (Note src e))
+  | pos `inside` src = do
+    _A <- typeWithA absurd ctx a
+    let ctx' = fmap (shift 1 (V x 0)) (insert x _A ctx)
+    e' <- annotateLet' pos ctx' e
+    return (Let (Binding x mA a :| []) (Note src e'))
+
+annotateLet' pos ctx (Lam x _A (Note src b))
+  | pos `inside` src = do
+    let _A' = Dhall.Core.normalize _A
+        ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
+    b' <- annotateLet' pos ctx' b
+    return (Lam x _A (Note src b'))
+
+annotateLet' pos ctx (Pi x _A (Note src _B))
+  | pos `inside` src = do
+    let _A' = Dhall.Core.normalize _A
+        ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
+    _B' <- annotateLet' pos ctx' _B
+    return (Pi x _A (Note src _B'))
+
+-- need to catch Notes since the catch-all would remove two layers at once
+annotateLet' pos ctx (Note src expr) = do
+  Note src <$> annotateLet' pos ctx expr
+
+-- catch-all
+annotateLet' pos ctx expr = subExpressions goInside expr
+  where
+    goInside (Note src e) | pos `inside` src = Note src <$> annotateLet' pos ctx e
+    goInside e = return e
 
 
 

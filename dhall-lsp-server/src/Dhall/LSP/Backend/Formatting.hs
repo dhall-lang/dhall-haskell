@@ -1,6 +1,6 @@
 module Dhall.LSP.Backend.Formatting (formatDocument, formatExpr) where
 
-import Dhall.Core (Expr, Import)
+import Dhall.Core (Expr)
 import Dhall.Pretty (CharacterSet(..), layoutOpts, prettyCharacterSet)
 import Dhall.Parser(exprAndHeaderFromText, ParseError(..))
 
@@ -13,7 +13,7 @@ formatDocument text = do
   (header, expr) <- exprAndHeaderFromText "" text
   pure (formatExpr header expr)
 
-formatExpr :: Text -> Expr a Import -> Text
+formatExpr :: Pretty.Pretty b => Text -> Expr a b -> Text
 formatExpr header expr = Pretty.renderStrict
   (Pretty.layoutSmart layoutOpts doc)
   where

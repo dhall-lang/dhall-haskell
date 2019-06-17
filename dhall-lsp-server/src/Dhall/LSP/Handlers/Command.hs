@@ -8,9 +8,13 @@ import qualified Data.Aeson as J
 import qualified Language.Haskell.LSP.Types as J
 import qualified Language.Haskell.LSP.Types.Lens as J
 
+import Dhall.LSP.Backend.Dhall
 import qualified Dhall.LSP.Backend.Linting as Linting
 import qualified Dhall.LSP.Backend.ToJSON as ToJSON
 import Dhall.LSP.Util (readUri)
+import Dhall.LSP.Backend.Formatting (formatExpr)
+import Dhall.LSP.Backend.Typing (annotateLet)
+import Dhall.Parser (exprAndHeaderFromText)
 
 import System.FilePath (replaceExtension)
 import Data.HashMap.Strict (singleton)
@@ -26,6 +30,7 @@ executeCommandHandler lsp request
   | command == "dhall.server.toJSON" = case parseUriArgument request of
       Right uri -> executeDhallToJSON lsp uri
       Left msg -> LSP.logs msg
+  | command == "dhall.server.annotateLet" = executeAnnotateLet lsp request
   | otherwise = LSP.logs
     ("LSP Handler: asked to execute unknown command: " ++ show command)
   where command = request ^. J.params . J.command
@@ -90,3 +95,24 @@ parseUriArgument request = case request ^. J.params . J.arguments of
                 <> show (request ^. J.params . J.command)
   _ -> Left $ "unable to parse uri argument to "
               <> show (request ^. J.params . J.command)
+
+executeAnnotateLet :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
+executeAnnotateLet lsp request = do
+  LSP.logs "LSP Handler: executing AnnotateLet"
+  let Just (J.List (arg1 : _)) = request ^. J.params . J.arguments
+      J.Success textDocPos = J.fromJSON arg1 :: J.Result J.TextDocumentPositionParams
+      uri = textDocPos ^. J.textDocument . J.uri
+      (J.Position line col) = textDocPos ^. J.position
+      Just fileName = J.uriToFilePath uri
+  txt <- readUri lsp uri
+  Just expr <- loadDhallExprSafe fileName txt
+  let Right (header, _) = exprAndHeaderFromText "" txt
+      Just expr' = annotateLet (line, col) expr
+      txt' = formatExpr header expr'
+      endline = length (Text.lines txt)
+      edit = J.List [ J.TextEdit (J.Range (J.Position 0 0) (J.Position endline 0)) txt' ]
+  lid <- LSP.getNextReqId lsp
+  LSP.sendFunc lsp $ LSP.ReqApplyWorkspaceEdit
+                   $ LSP.fmServerApplyWorkspaceEditRequest lid
+                   $ J.ApplyWorkspaceEditParams
+                   $ J.WorkspaceEdit (Just (singleton uri edit)) Nothing
