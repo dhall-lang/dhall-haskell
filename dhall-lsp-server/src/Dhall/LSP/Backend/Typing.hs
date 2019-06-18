@@ -90,17 +90,17 @@ annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
        return (srcAnnot, ": " <> printExpr _A <> " ")
 
 -- binders
-annotateLet' pos ctx (Let (Binding x _ a :| []) (Note src e))
+annotateLet' pos ctx (Let (Binding x _ a :| []) e@(Note src _))
   | pos `inside` src = do
     _A <- rightToMaybe $ typeWithA absurd ctx a
     let ctx' = fmap (shift 1 (V x 0)) (insert x _A ctx)
     annotateLet' pos ctx' e
-annotateLet' pos ctx (Lam x _A (Note src b))
+annotateLet' pos ctx (Lam x _A b@(Note src _))
   | pos `inside` src = do
     let _A' = Dhall.Core.normalize _A
         ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
     annotateLet' pos ctx' b
-annotateLet' pos ctx (Pi x _A (Note src _B))
+annotateLet' pos ctx (Pi x _A _B@(Note src _))
   | pos `inside` src = do
     let _A' = Dhall.Core.normalize _A
         ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
