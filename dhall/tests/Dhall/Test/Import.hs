@@ -2,7 +2,6 @@
 
 module Dhall.Test.Import where
 
-import Control.Exception (catch)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Dhall.Import (MissingImports(..))
@@ -11,6 +10,7 @@ import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
 
+import qualified Control.Exception                as Exception
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
@@ -52,7 +52,22 @@ successTest path = do
 
         actualExpr <- Core.throws (Parser.exprFromText mempty text)
 
-        _ <- State.evalStateT (Import.loadWith actualExpr) (Import.emptyStatus directoryString)
+        let setCache =
+                Turtle.export "XDG_CACHE_HOME" "dhall-lang/tests/import/cache"
+
+        let unsetCache = Turtle.unset "XDG_CACHE_HOME"
+
+        let load =
+                State.evalStateT (Import.loadWith actualExpr) (Import.emptyStatus directoryString)
+
+        if pathString == "./dhall-lang/tests/import/success/hashFromCacheA.dhall"
+            then do
+                setCache
+                _ <- load
+                unsetCache
+            else do
+                _ <- load
+                return ()
 
         return () )
 
@@ -65,7 +80,7 @@ failureTest path = do
 
         actualExpr <- Core.throws (Parser.exprFromText mempty text)
 
-        catch
+        Exception.catch
           (do _ <- Import.load actualExpr
 
               fail "Import should have failed, but it succeeds")

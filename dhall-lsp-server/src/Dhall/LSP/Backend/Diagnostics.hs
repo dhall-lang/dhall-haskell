@@ -2,13 +2,17 @@
 
 module Dhall.LSP.Backend.Diagnostics
   ( DhallException
-  , runDhall
+  , checkDhall
   , diagnose
-  , explain
-  , rangeFromDhall
-  , Position
-  , Range(..)
   , Diagnosis(..)
+  , explain
+  , offsetToPosition
+  , Position
+  , positionFromMegaparsec
+  , positionToOffset
+  , Range(..)
+  , rangeFromDhall
+  , sanitiseRange
   )
 where
 
@@ -17,16 +21,13 @@ import Dhall.Parser (ParseError, SourcedException(..), Src(..), unwrap)
 import Dhall.Import (MissingImports)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError(..), X)
 import Dhall.Core (Expr(Note))
-import Dhall
-  (rootDirectory, sourceName, defaultInputSettings, inputExprWithSettings)
 
 import Dhall.LSP.Util
+import Dhall.LSP.Backend.Dhall (runDhall)
 
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Control.Exception (handle, SomeException)
-import Lens.Family (set)
-import System.FilePath (splitFileName)
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Text.Megaparsec as Megaparsec
 
@@ -56,26 +57,17 @@ data Diagnosis = Diagnosis {
 
 -- | Parse, type-check and normalise the given Dhall code, collecting any
 --   occurring errors.
-runDhall :: FilePath -> Text -> IO [DhallException]
-runDhall path txt =
+checkDhall :: FilePath -> Text -> IO [DhallException]
+checkDhall path txt =
   (handle' ExceptionInternal
     . handle' ExceptionCBOR
     . handle' ExceptionImport
     . handle' ExceptionTypecheck
     . handle' ExceptionParse
     )
-    go
+    (const [] <$> runDhall path txt)
   where
     handle' constructor = handle (return . return . constructor)
-    -- we need to tell Dhall the path in order for relative imports to be resolved correctly
-    (dir, file) = splitFileName path
-    dhallparams =
-      (set rootDirectory dir . set sourceName file) defaultInputSettings
-    go :: IO [DhallException]
-    go = do
-      _ <- inputExprWithSettings dhallparams txt
-      return []  -- If we got this far the input was a valid Dhall program.
-
 
 -- | Give a short diagnosis for a given error that can be shown to the end user.
 diagnose :: Text -> DhallException -> [Diagnosis]

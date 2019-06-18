@@ -317,9 +317,6 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
         Core.ListLit _ a -> do
             a' <- traverse loop a
             return (toJSON a')
-        Core.OptionalLit _ a -> do
-            a' <- traverse loop a
-            return (toJSON a')
         Core.Some a -> do
             a' <- loop a
             return (toJSON a')
@@ -754,12 +751,6 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
 
         Core.Optional ->
             Core.Optional
-
-        Core.OptionalLit a b ->
-            Core.OptionalLit a' b'
-          where
-            a' =      loop a
-            b' = fmap loop b
 
         Core.Some a ->
             Core.Some a'

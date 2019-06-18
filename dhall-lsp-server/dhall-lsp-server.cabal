@@ -20,12 +20,17 @@ source-repository head
 
 library
   exposed-modules:
+      Dhall.LSP.Backend.Dhall
       Dhall.LSP.Backend.Diagnostics
       Dhall.LSP.Backend.Formatting
       Dhall.LSP.Backend.Linting
+      Dhall.LSP.Backend.ToJSON
+      Dhall.LSP.Backend.Typing
       Dhall.LSP.Handlers
+      Dhall.LSP.Handlers.Command
       Dhall.LSP.Handlers.Diagnostics
       Dhall.LSP.Handlers.DocumentFormatting
+      Dhall.LSP.Handlers.Hover
       Dhall.LSP.Server
   other-modules:
       Paths_dhall_lsp_server
@@ -35,10 +40,13 @@ library
   default-extensions: LambdaCase OverloadedStrings FlexibleInstances TypeApplications RecordWildCards ScopedTypeVariables
   build-depends:
       aeson
+    , aeson-pretty
     , base >=4.7 && <5
+    , bytestring
     , containers
     , data-default
     , dhall
+    , dhall-json
     , filepath
     , haskell-lsp
     , hslogger
@@ -97,7 +105,7 @@ test-suite dhall-lsp-server-test
   other-modules:
       Paths_dhall_lsp_server
       Backend.Dhall.DiagnosticsSpec
-    
+
   hs-source-dirs:
       test
   default-extensions: LambdaCase OverloadedStrings FlexibleInstances TypeApplications RecordWildCards ScopedTypeVariables
