@@ -406,8 +406,7 @@ inputWithSettings settings (Type {..}) txt = do
 
     case extract normExpr  of
         Success x  -> return x
-        Failure e -> Control.Exception.throwIO
-                     e
+        Failure e -> Control.Exception.throwIO e
 
 {-| Type-check and evaluate a Dhall program that is read from the
     file-system.
