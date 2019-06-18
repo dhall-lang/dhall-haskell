@@ -9,8 +9,10 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Control.Lens (toListOf)
 import qualified Data.Text as Text
 import Control.Applicative ((<|>))
+import Data.Functor.Identity (Identity(..))
 
 import Dhall.LSP.Util (rightToMaybe)
+import Dhall.LSP.Backend.Parsing (getLetInner)
 import Dhall.LSP.Backend.Diagnostics (Position, positionFromMegaparsec, offsetToPosition)
 
 -- | Find the type of the subexpression at the given position. Assumes that the
@@ -71,7 +73,7 @@ srcAt pos expr = do e <- exprAt pos expr
 
 -- assume input to be well-typed; assume only singleton lets
 annotateLet :: Position -> Expr Src X -> Maybe (Expr Src X)
-annotateLet pos expr = rightToMaybe (annotateLet' pos empty (expr))
+annotateLet pos expr = rightToMaybe (annotateLet' pos empty (splitLets expr))
 
 annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
 -- not yet annotated
@@ -118,6 +120,16 @@ annotateLet' pos ctx expr = subExpressions goInside expr
     goInside (Note src e) | pos `inside` src = Note src <$> annotateLet' pos ctx e
     goInside e = return e
 
+
+-- Split all multilets into single lets in an expression
+splitLets :: Expr Src a -> Expr Src a
+splitLets (Note src (Let (b :| (b' : bs)) e)) =
+  splitLets (Note src (Let (b :| []) (Note src' (Let (b' :| bs) e))))
+  where src' = case getLetInner src of
+                 Just x -> x
+                 Nothing -> error "The impossible happened: failed\
+                                  \ to re-parse a Let expression."
+splitLets expr = runIdentity (subExpressions (Identity . splitLets) expr)
 
 
 -- Check if range lies completely inside a given subexpression.

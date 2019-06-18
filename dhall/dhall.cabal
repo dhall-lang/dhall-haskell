@@ -485,6 +485,9 @@ Library
         Dhall.Set,
         Dhall.Src,
         Dhall.Parser,
+        Dhall.Parser.Expression,
+        Dhall.Parser.Combinators,
+        Dhall.Parser.Token,
         Dhall.Pretty,
         Dhall.Repl,
         Dhall.Tutorial,
@@ -494,9 +497,6 @@ Library
             Dhall.TH
     Other-Modules:
         Dhall.Pretty.Internal,
-        Dhall.Parser.Expression,
-        Dhall.Parser.Combinators,
-        Dhall.Parser.Token,
         Dhall.Import.Types,
         Dhall.Eval,
         Dhall.Util,
