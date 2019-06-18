@@ -480,15 +480,23 @@ dhallFromJSON (Conversion {..}) expressionType =
     loop (App D.Optional expr) value
         = D.Some <$> loop expr value
 
+    -- Arbitrary JSON ~> https://prelude.dhall-lang.org/JSON/Type
     loop
       (D.Pi _ (D.Const D.Type)
-      (D.Pi _ (D.Pi _ D.Text (V 1))
-      (D.Pi _ (D.Pi _ D.Double (V 2))
-      (D.Pi _ (D.Pi _ (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", V 2) ])) (V 3))
-      (D.Pi _ (D.Pi _ (D.App D.List (V 3)) (V 4))
-      (D.Pi _ (D.Pi _ D.Bool (V 5))
-      (D.Pi _ (V 5)
-      (V 6)))))))) value = do
+          (D.Pi _
+              (D.Record
+                  [ ("array" , D.Pi _ (D.App D.List (V 0)) (V 1))
+                  , ("bool"  , D.Pi _ D.Bool (V 1))
+                  , ("null"  , V 0)
+                  , ("number", D.Pi _ D.Double (V 1))
+                  , ("object", D.Pi _ (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", V 0)])) (V 1))
+                  , ("string", D.Pi _ D.Text (V 1))
+                  ]
+              )
+              (V 1)
+          )
+      )
+      value = do
           let outer (A.Object o) =
                   let inner (key, val) =
                           D.RecordLit
@@ -506,7 +514,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 
                       keyValues = D.ListLit elementType elements
 
-                  in  (D.App "object" keyValues)
+                  in  (D.App (D.Field "json" "object") keyValues)
               outer (A.Array a) =
                   let elements = Seq.fromList (fmap outer (Vector.toList a))
 
@@ -514,25 +522,30 @@ dhallFromJSON (Conversion {..}) expressionType =
                           | null elements = Just "JSON"
                           | otherwise     = Nothing
 
-                  in  D.App "array" (D.ListLit elementType elements)
+                  in  D.App (D.Field "json" "array") (D.ListLit elementType elements)
               outer (A.String s) =
-                  D.App "string" (D.TextLit (D.Chunks [] s))
+                  D.App (D.Field "json" "string") (D.TextLit (D.Chunks [] s))
               outer (A.Number n) =
-                  D.App "number" (D.DoubleLit (toRealFloat n))
+                  D.App (D.Field "json" "number") (D.DoubleLit (toRealFloat n))
               outer (A.Bool b) =
-                  D.App "bool" (D.BoolLit b)
+                  D.App (D.Field "json" "bool") (D.BoolLit b)
               outer A.Null =
-                  "null"
+                  D.Field "json" "null"
 
           let result =
-                   D.Lam "JSON" (D.Const D.Type)
-                  (D.Lam "string" (D.Pi "_" D.Text "JSON")
-                  (D.Lam "number" (D.Pi "_" D.Double "JSON")
-                  (D.Lam "object" (D.Pi "_" (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON") ])) "JSON")
-                  (D.Lam "array" (D.Pi "_" (D.App D.List "JSON") "JSON")
-                  (D.Lam "bool" (D.Pi "_" D.Bool "JSON")
-                  (D.Lam "null" "JSON"
-                  (outer value) ))))))
+                D.Lam "JSON" (D.Const D.Type)
+                    (D.Lam "json"
+                        (D.Record
+                            [ ("array" , D.Pi "_" (D.App D.List "JSON") "JSON")
+                            , ("bool"  , D.Pi "_" D.Bool "JSON")
+                            , ("null"  , "JSON")
+                            , ("number", D.Pi "_" D.Double "JSON")
+                            , ("object", D.Pi "_" (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON")])) "JSON")
+                            , ("string", D.Pi "_" D.Text "JSON")
+                            ]
+                        )
+                        (outer value)
+                    )
 
           return result
 
