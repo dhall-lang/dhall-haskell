@@ -39,7 +39,7 @@ module Dhall
     , detailed
 
     -- * Types
-    , Type
+    , Type (..)
     , validate
     , RecordType(..)
     , UnionType(..)
@@ -47,6 +47,7 @@ module Dhall
     , Interpret(..)
     , InvalidType(..)
     , ExtractErrors(..)
+    , typeError
     , extractError
     , auto
     , genericAuto
