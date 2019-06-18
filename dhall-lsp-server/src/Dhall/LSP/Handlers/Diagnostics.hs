@@ -1,7 +1,7 @@
 {-| This module contains everything related to how the LSP server handles
     diagnostic messages. -}
 module Dhall.LSP.Handlers.Diagnostics
-  ( diagnosticsHandler
+  ( diagnosticsHandler, explainDiagnosis
   )
 where
 
@@ -16,6 +16,8 @@ import           Dhall.LSP.Backend.Diagnostics
 import           Dhall.LSP.Backend.Linting
 import           Dhall.LSP.Util (readUri)
 
+import           Data.List                      ( find )
+import           Data.Maybe                     ( mapMaybe )
 
 -- | Called by @didOpenTextDocumentNotificationHandler@ and
 --   @didSaveTextDocumentNotificationHandler@.
@@ -60,6 +62,17 @@ suggestionToDiagnostic Suggestion {..} = J.Diagnostic {..}
     _code = Nothing
     _message = suggestion
     _relatedInformation = Nothing
+
+explainDiagnosis :: FilePath -> Text -> Position -> IO (Maybe Diagnosis)
+explainDiagnosis path txt pos = do
+  errors <- checkDhall path txt
+  let explanations = mapMaybe (explain txt) errors
+  return $ find (isHovered pos) explanations
+
+isHovered :: Position -> Diagnosis -> Bool
+isHovered _ (Diagnosis _ Nothing _) = False
+isHovered pos (Diagnosis _ (Just (Range left right)) _) =
+  left <= pos && pos <= right
 
 -- | Compute the list of possible improvements, as would be carried out by
 --   @Dhall.Lint@.

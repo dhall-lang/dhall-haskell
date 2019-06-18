@@ -25,6 +25,7 @@ library
       Dhall.LSP.Backend.Formatting
       Dhall.LSP.Backend.Linting
       Dhall.LSP.Backend.ToJSON
+      Dhall.LSP.Backend.Typing
       Dhall.LSP.Handlers
       Dhall.LSP.Handlers.Command
       Dhall.LSP.Handlers.Diagnostics
