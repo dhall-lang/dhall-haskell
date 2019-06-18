@@ -18,15 +18,10 @@ import Dhall.LSP.Backend.Diagnostics (Position, positionFromMegaparsec, offsetTo
 -- | Find the type of the subexpression at the given position. Assumes that the
 --   input expression is well-typed.
 typeAt :: Position -> Expr Src X -> Maybe (Expr Src X)
-typeAt pos expr = rightToMaybe (typeAt' pos empty expr)
+typeAt pos expr = rightToMaybe (typeAt' pos empty (splitLets expr))
 
 typeAt' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
--- unfold lets to make things simpler
--- need to match on outer Note to recover the range
-typeAt' pos ctx (Note src (Let (b :| (b' : bs)) e)) =
-  typeAt' pos ctx (Note src (Let (b :| []) (Note src (Let (b' :| bs) e))))
-
--- only handle singleton lets explicitly
+-- the input only contains singleton lets
 typeAt' pos ctx (Let (Binding x _ a :| []) (Note src e)) | pos `inside` src = do
   _A <- typeWithA absurd ctx a
   let ctx' = fmap (shift 1 (V x 0)) (insert x _A ctx)
