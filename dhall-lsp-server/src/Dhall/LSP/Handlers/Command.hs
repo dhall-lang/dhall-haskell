@@ -12,7 +12,6 @@ import Dhall.LSP.Backend.Dhall
 import qualified Dhall.LSP.Backend.Linting as Linting
 import qualified Dhall.LSP.Backend.ToJSON as ToJSON
 import Dhall.LSP.Util (readUri)
-import Dhall.LSP.Backend.Formatting (formatExpr)
 import Dhall.LSP.Backend.Typing (annotateLet)
 import Dhall.Parser (exprAndHeaderFromText)
 
@@ -21,6 +20,9 @@ import Data.HashMap.Strict (singleton)
 import Control.Lens ((^.))
 import Data.Text (Text)
 import qualified Data.Text as Text
+
+import Text.Megaparsec (SourcePos(..), unPos)
+import Dhall.Parser (Src(..))
 
 executeCommandHandler :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
 executeCommandHandler lsp request
@@ -96,6 +98,11 @@ parseUriArgument request = case request ^. J.params . J.arguments of
   _ -> Left $ "unable to parse uri argument to "
               <> show (request ^. J.params . J.command)
 
+srcToRange :: Src -> J.Range
+srcToRange (Src (SourcePos _ x1 y1) (SourcePos _ x2 y2) _) =
+  J.Range (J.Position (unPos x1 - 1) (unPos y1 - 1))
+          (J.Position (unPos x2 - 1) (unPos y2 - 1))
+
 executeAnnotateLet :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
 executeAnnotateLet lsp request = do
   LSP.logs "LSP Handler: executing AnnotateLet"
@@ -107,10 +114,8 @@ executeAnnotateLet lsp request = do
   txt <- readUri lsp uri
   Just expr <- loadDhallExprSafe fileName txt
   let Right (header, _) = exprAndHeaderFromText "" txt
-      Just expr' = annotateLet (line, col) expr
-      txt' = formatExpr header expr'
-      endline = length (Text.lines txt)
-      edit = J.List [ J.TextEdit (J.Range (J.Position 0 0) (J.Position endline 0)) txt' ]
+      Just (src, txt') = annotateLet (line, col) expr
+      edit = J.List [ J.TextEdit (srcToRange src) txt' ]
   lid <- LSP.getNextReqId lsp
   LSP.sendFunc lsp $ LSP.ReqApplyWorkspaceEdit
                    $ LSP.fmServerApplyWorkspaceEditRequest lid

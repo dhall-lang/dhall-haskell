@@ -7,13 +7,20 @@ import Dhall.Parser (Src(..))
 
 import Data.List.NonEmpty (NonEmpty (..))
 import Control.Lens (toListOf)
+import Data.Text (Text)
 import qualified Data.Text as Text
 import Control.Applicative ((<|>))
 import Data.Functor.Identity (Identity(..))
+import Data.Maybe (listToMaybe)
+import Control.Monad (join)
 
 import Dhall.LSP.Util (rightToMaybe)
-import Dhall.LSP.Backend.Parsing (getLetInner)
+import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot)
 import Dhall.LSP.Backend.Diagnostics (Position, positionFromMegaparsec, offsetToPosition)
+
+import qualified Data.Text.Prettyprint.Doc                 as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty
+import Dhall.Pretty (CharacterSet(..), prettyCharacterSet)
 
 -- | Find the type of the subexpression at the given position. Assumes that the
 --   input expression is well-typed.
@@ -66,54 +73,51 @@ srcAt pos expr = do e <- exprAt pos expr
                       _ -> Nothing
 
 
--- assume input to be well-typed; assume only singleton lets
-annotateLet :: Position -> Expr Src X -> Maybe (Expr Src X)
-annotateLet pos expr = rightToMaybe (annotateLet' pos empty (splitLets expr))
+-- | Given a well-typed expression and a position find the let binder at that
+--   position (if there is one) and return a textual update to the source code
+--   that inserts the type annotation (or replaces the existing one).
+annotateLet :: Position -> Expr Src X -> Maybe (Src, Text)
+annotateLet pos expr = annotateLet' pos empty (splitLets expr)
 
-annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
--- not yet annotated
-annotateLet' pos ctx (Let (Binding x Nothing a@(Note src _) :| []) e@(Note src' _))
-  | not (pos `inside` src) && not (pos `inside` src') = do
-    _A <- typeWithA absurd ctx a
-    return (Let (Binding x (Just _A) a :| []) e)
-
--- replace existing annotation with normal form
-annotateLet' pos ctx (Let (Binding x (Just _A@(Note src _)) a@(Note src' _) :| []) e@(Note src'' _))
-  | not (pos `inside` src) && not (pos `inside` src') && not (pos `inside` src'') = do
-    _A' <- typeWithA absurd ctx a
-    return (Let (Binding x (Just _A') a :| []) (Note src' e))
+annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Maybe (Src, Text)
+annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
+  | not $ any (pos `inside`) [ src' | Note src' _ <- toListOf subExpressions e ]
+  = do _A <- rightToMaybe $ typeWithA absurd ctx a
+       let srcAnnot = case getLetAnnot src of
+                        Just x -> x
+                        Nothing -> error "The impossible happened: failed\
+                                         \ to re-parse a Let expression."
+       return (srcAnnot, ": " <> printExpr _A <> " ")
 
 -- binders
-annotateLet' pos ctx (Let (Binding x mA a :| []) (Note src e))
+annotateLet' pos ctx (Let (Binding x _ a :| []) (Note src e))
   | pos `inside` src = do
-    _A <- typeWithA absurd ctx a
+    _A <- rightToMaybe $ typeWithA absurd ctx a
     let ctx' = fmap (shift 1 (V x 0)) (insert x _A ctx)
-    e' <- annotateLet' pos ctx' e
-    return (Let (Binding x mA a :| []) (Note src e'))
-
+    annotateLet' pos ctx' e
 annotateLet' pos ctx (Lam x _A (Note src b))
   | pos `inside` src = do
     let _A' = Dhall.Core.normalize _A
         ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
-    b' <- annotateLet' pos ctx' b
-    return (Lam x _A (Note src b'))
-
+    annotateLet' pos ctx' b
 annotateLet' pos ctx (Pi x _A (Note src _B))
   | pos `inside` src = do
     let _A' = Dhall.Core.normalize _A
         ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
-    _B' <- annotateLet' pos ctx' _B
-    return (Pi x _A (Note src _B'))
+    annotateLet' pos ctx' _B
 
--- need to catch Notes since the catch-all would remove two layers at once
-annotateLet' pos ctx (Note src expr) = do
-  Note src <$> annotateLet' pos ctx expr
+-- we need to unfold Notes to make progress
+annotateLet' pos ctx (Note _ expr) = do
+  annotateLet' pos ctx expr
 
 -- catch-all
-annotateLet' pos ctx expr = subExpressions goInside expr
-  where
-    goInside (Note src e) | pos `inside` src = Note src <$> annotateLet' pos ctx e
-    goInside e = return e
+annotateLet' pos ctx expr =
+  let subExprs = toListOf subExpressions expr
+  in join $ annotateLet' pos ctx <$> listToMaybe [ Note src e | (Note src e) <- subExprs, pos `inside` src ]
+
+
+printExpr :: Pretty.Pretty b => Expr a b -> Text
+printExpr expr = Pretty.renderStrict $ Pretty.layoutCompact (Pretty.unAnnotate (prettyCharacterSet Unicode expr))
 
 
 -- Split all multilets into single lets in an expression
