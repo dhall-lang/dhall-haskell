@@ -46,7 +46,7 @@ wrongDhallType = Dhall.Type { .. }
               , ( "foo", Dhall.Core.Text )
               ]
             )
-        extract _ = Nothing
+        extract _ = Dhall.extractError "wrong type"
 
 shouldShowDetailedTypeError :: TestTree
 shouldShowDetailedTypeError = testCase "detailed TypeError" $ do
