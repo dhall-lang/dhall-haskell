@@ -10,14 +10,13 @@ import Control.Lens (toListOf)
 import qualified Data.Text as Text
 import Control.Applicative ((<|>))
 
+import Dhall.LSP.Util (rightToMaybe)
 import Dhall.LSP.Backend.Diagnostics (Position, positionFromMegaparsec, offsetToPosition)
 
 -- | Find the type of the subexpression at the given position. Assumes that the
 --   input expression is well-typed.
 typeAt :: Position -> Expr Src X -> Maybe (Expr Src X)
-typeAt pos expr = case typeAt' pos empty expr of
-  Right typ -> Just typ
-  _        -> Nothing
+typeAt pos expr = rightToMaybe (typeAt' pos empty expr)
 
 typeAt' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
 -- unfold lets to make things simpler
@@ -72,9 +71,7 @@ srcAt pos expr = do e <- exprAt pos expr
 
 -- assume input to be well-typed; assume only singleton lets
 annotateLet :: Position -> Expr Src X -> Maybe (Expr Src X)
-annotateLet pos expr = case annotateLet' pos empty expr of
-  Right typ -> Just typ
-  _        -> Nothing
+annotateLet pos expr = rightToMaybe (annotateLet' pos empty (expr))
 
 annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
 -- not yet annotated
