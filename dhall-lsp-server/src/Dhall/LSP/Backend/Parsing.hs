@@ -2,7 +2,6 @@ module Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot) where
 
 import Dhall.Src (Src(..))
 import Dhall.Parser
--- import Dhall.Parser.Combinators
 import Dhall.Parser.Token
 import Dhall.Parser.Expression
 
