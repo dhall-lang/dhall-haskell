@@ -173,10 +173,10 @@ newtype ExtractErrors s a =
   } deriving Semigroup
 
 typeError :: Expr s a -> Expr s a -> Extractor s a b
-typeError expected actual = Failure . ExtractErrors . (:| []) . TypeMismatch $ InvalidType expected actual
+typeError expected actual = Failure . ExtractErrors . pure . TypeMismatch $ InvalidType expected actual
 
 extractError :: Text -> Extractor s a b
-extractError = Failure . ExtractErrors . (:| []) . ExtractError
+extractError = Failure . ExtractErrors . pure . ExtractError
 
 -- | opt-in monadic composition for `Extractor`. This is done this way to
 -- keep applicative behaviour on @ExtractErrors@
