@@ -961,9 +961,10 @@ shift d v (Merge a b c) = Merge a' b' c'
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
-shift d v (Project a b) = Project a' b
+shift d v (Project a b) = Project a' b'
   where
-    a' = shift d v a
+    a' =       shift d v  a
+    b' = fmap (shift d v) b
 shift d v (Note a b) = Note a b'
   where
     b' = shift d v b
@@ -1135,9 +1136,10 @@ subst x e (Merge a b c) = Merge a' b' c'
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
-subst x e (Project a b) = Project a' b
+subst x e (Project a b) = Project a' b'
   where
-    a' = subst x e a
+    a' =       subst x e  a
+    b' = fmap (subst x e) b
 subst x e (Note a b) = Note a b'
   where
     b' = subst x e b
@@ -2076,7 +2078,7 @@ subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
 subExpressions f (Prefer a b) = Prefer <$> f a <*> f b
 subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 subExpressions f (Field a b) = Field <$> f a <*> pure b
-subExpressions f (Project a b) = Project <$> f a <*> pure b
+subExpressions f (Project a b) = Project <$> f a <*> traverse f b
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 subExpressions _ (Embed a) = pure (Embed a)
