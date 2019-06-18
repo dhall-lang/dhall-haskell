@@ -72,14 +72,14 @@ annotateLet pos expr = rightToMaybe (annotateLet' pos empty (splitLets expr))
 
 annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
 -- not yet annotated
-annotateLet' pos ctx (Let (Binding x Nothing a :| []) (Note src e))
-  | not (pos `inside` src) = do
+annotateLet' pos ctx (Let (Binding x Nothing a@(Note src _) :| []) e@(Note src' _))
+  | not (pos `inside` src) && not (pos `inside` src') = do
     _A <- typeWithA absurd ctx a
-    return (Let (Binding x (Just _A) a :| []) (Note src e))
+    return (Let (Binding x (Just _A) a :| []) e)
 
 -- replace existing annotation with normal form
-annotateLet' pos ctx (Let (Binding x (Just (Note src _A)) a :| []) (Note src' e))
-  | not (pos `inside` src) && not (pos `inside` src') = do
+annotateLet' pos ctx (Let (Binding x (Just _A@(Note src _)) a@(Note src' _) :| []) e@(Note src'' _))
+  | not (pos `inside` src) && not (pos `inside` src') && not (pos `inside` src'') = do
     _A' <- typeWithA absurd ctx a
     return (Let (Binding x (Just _A') a :| []) (Note src' e))
 
