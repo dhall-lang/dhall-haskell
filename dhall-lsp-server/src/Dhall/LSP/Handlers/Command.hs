@@ -13,13 +13,14 @@ import qualified Dhall.LSP.Backend.Linting as Linting
 import qualified Dhall.LSP.Backend.ToJSON as ToJSON
 import Dhall.LSP.Util (readUri)
 import Dhall.LSP.Backend.Typing (annotateLet)
-import Dhall.Parser (exprAndHeaderFromText)
 
 import System.FilePath (replaceExtension)
 import Data.HashMap.Strict (singleton)
 import Control.Lens ((^.))
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Except (runExceptT, except, ExceptT)
 
 import Text.Megaparsec (SourcePos(..), unPos)
 import Dhall.Parser (Src(..))
@@ -106,18 +107,36 @@ srcToRange (Src (SourcePos _ x1 y1) (SourcePos _ x2 y2) _) =
 executeAnnotateLet :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
 executeAnnotateLet lsp request = do
   LSP.logs "LSP Handler: executing AnnotateLet"
-  let Just (J.List (arg1 : _)) = request ^. J.params . J.arguments
-      J.Success textDocPos = J.fromJSON arg1 :: J.Result J.TextDocumentPositionParams
-      uri = textDocPos ^. J.textDocument . J.uri
-      (J.Position line col) = textDocPos ^. J.position
-      Just fileName = J.uriToFilePath uri
-  txt <- readUri lsp uri
-  Just expr <- loadDhallExprSafe fileName txt
-  let Right (header, _) = exprAndHeaderFromText "" txt
-      Just (src, txt') = annotateLet (line, col) expr
-      edit = J.List [ J.TextEdit (srcToRange src) txt' ]
-  lid <- LSP.getNextReqId lsp
-  LSP.sendFunc lsp $ LSP.ReqApplyWorkspaceEdit
-                   $ LSP.fmServerApplyWorkspaceEditRequest lid
-                   $ J.ApplyWorkspaceEditParams
-                   $ J.WorkspaceEdit (Just (singleton uri edit)) Nothing
+  err <- runExceptT (executeAnnotateLet' lsp request)
+  case err of
+    Left msg -> LSP.logs ("AnnotateLet failed: " ++ msg)
+    _ -> return ()
+
+executeAnnotateLet' :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> ExceptT String IO ()
+executeAnnotateLet' lsp request = do
+    args <- case request ^. J.params . J.arguments of
+      Just (J.List (x : _)) -> return x
+      _ -> except $ Left "arguments missing"
+    (uri, line, col) <- case J.fromJSON args :: J.Result J.TextDocumentPositionParams of
+      J.Success textDocPos -> return (textDocPos ^. J.textDocument . J.uri,
+                                      textDocPos ^. J.position . J.line,
+                                      textDocPos ^. J.position . J.character)
+      _ -> except $ Left "failed to parse arguments"
+    path <- case J.uriToFilePath uri of
+      Just x -> return x
+      _ -> except $ Left "unable to parse uri argument into file path"
+    txt <- lift $ readUri lsp uri
+    mexpr <- lift $ loadDhallExprSafe path txt
+    expr <- case mexpr of
+      Just e -> return e
+      _ -> except $ Left "failed to parse dhall file"
+    (src, txt') <- case annotateLet (line, col) expr of
+      Just x -> return x
+      _ -> except $ Left "there is no let binder at the selected position"
+    let edit = J.List [ J.TextEdit (srcToRange src) txt' ]
+    lid <- lift $ LSP.getNextReqId lsp
+    lift $ LSP.sendFunc lsp
+         $ LSP.ReqApplyWorkspaceEdit
+         $ LSP.fmServerApplyWorkspaceEditRequest lid
+         $ J.ApplyWorkspaceEditParams
+         $ J.WorkspaceEdit (Just (singleton uri edit)) Nothing
