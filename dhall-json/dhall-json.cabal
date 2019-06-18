@@ -71,7 +71,7 @@ Library
           com.fasterxml.jackson.core:jackson-databind:2.9.6,
           com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.6
         Other-Modules: Dhall.Yaml.Eta
-        Java-Sources: java/Utils.class
+        Java-Sources: java/Utils.java
     else
       if flag(yaml-pre-0_11)
         Build-Depends:
