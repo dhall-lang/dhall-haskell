@@ -65,6 +65,9 @@ library
     , yi-rope
   default-language: Haskell2010
   GHC-Options: -Wall -fwarn-incomplete-uni-patterns
+  if impl(eta)
+     buildable: False
+
 
 executable dhall-lsp-server
   main-is: Main.hs
@@ -98,6 +101,8 @@ executable dhall-lsp-server
     , yi-rope
   default-language: Haskell2010
   GHC-Options: -Wall -fwarn-incomplete-uni-patterns
+  if impl(eta)
+     buildable: False
 
 test-suite dhall-lsp-server-test
   type: exitcode-stdio-1.0
@@ -139,3 +144,5 @@ test-suite dhall-lsp-server-test
     , unordered-containers
     , yi-rope
   default-language: Haskell2010
+  if impl(eta)
+     buildable: False

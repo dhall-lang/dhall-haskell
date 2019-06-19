@@ -24,10 +24,12 @@ Description:
 Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
+    java/*.java
     tasty/data/*.dhall
     tasty/data/*.json
     tasty/data/*.txt
     tasty/data/*.yaml
+
 
 Source-Repository head
     Type: git
@@ -63,10 +65,20 @@ Library
 
         
     GHC-Options: -Wall
-    if flag(yaml-pre-0_11)
+    if impl(eta)
+        Build-Depends:
+            utf8-string >= 1.0 && <= 1.1
+        Maven-Depends:
+          com.fasterxml.jackson.core:jackson-core:2.9.6,
+          com.fasterxml.jackson.core:jackson-databind:2.9.6,
+          com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.6
+        Other-Modules: Dhall.Yaml.Eta
+        Java-Sources: java/Utils.java
+    else
+      if flag(yaml-pre-0_11)
         Build-Depends:
             yaml >= 0.5.0 && < 0.11
-    else
+      else
         Build-Depends:
             libyaml >= 0.1.1.0 && < 0.2 ,
             yaml    >= 0.11.0  && < 0.12

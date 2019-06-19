@@ -11,7 +11,7 @@ module Main where
 import qualified Control.Exception
 import           Control.Exception (SomeException)
 import           Control.Monad (when)
-import qualified Data.ByteString.Lazy.Char8 as BSL8
+import qualified Data.ByteString.Char8 as BSL8
 import           Data.Monoid ((<>))
 import           Data.Text (Text)
 import qualified Data.Text.IO as Text

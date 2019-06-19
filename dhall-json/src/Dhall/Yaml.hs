@@ -12,19 +12,24 @@ module Dhall.Yaml
 import Data.ByteString (ByteString)
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Dhall.JSON (Conversion(..), SpecialDoubleMode(..),codeToValue)
+import Dhall.JSON (Conversion(..), SpecialDoubleMode(..), codeToValue)
 import Options.Applicative (Parser)
 
 import qualified Data.Aeson
 import qualified Data.ByteString
 import qualified Data.Vector
-import qualified Data.Yaml
 import qualified Dhall
 import qualified Options.Applicative
-#if MIN_VERSION_yaml(0,10,2)
+#if defined(ETA_VERSION)
+import Dhall.Yaml.Eta ( jsonToYaml )
+#else
+import qualified Data.Yaml
+# if MIN_VERSION_yaml(0,10,2)
 import qualified Data.Text
 import qualified Text.Libyaml
+# endif
 #endif
+
 
 data Options = Options
     { explain    :: Bool
@@ -72,22 +77,26 @@ dhallToYaml Options{..} name code = do
 
   return $ jsonToYaml json documents quoted
 
+#if !defined(ETA_VERSION)
 -- | Transform json representation into yaml
 jsonToYaml
     :: Data.Aeson.Value
     -> Bool
     -> Bool
     -> ByteString
-jsonToYaml json documents quoted = case (documents, json) of
-  (True, Data.Yaml.Array elems)
-    -> Data.ByteString.intercalate "\n---\n"
-       $ fmap (encodeYaml encodeOptions)
-       $ Data.Vector.toList elems
-  _ -> encodeYaml encodeOptions json
+jsonToYaml json documents quoted =
+
+  case (documents, json) of
+    (True, Data.Yaml.Array elems)
+      -> Data.ByteString.intercalate "\n---\n"
+         $ fmap (encodeYaml encodeOptions)
+         $ Data.Vector.toList elems
+    _ -> encodeYaml encodeOptions json
+
   where
-#if !MIN_VERSION_yaml(0,10,2)
+# if !MIN_VERSION_yaml(0,10,2)
     encodeYaml = Data.Yaml.encode
-#else
+# else
     encodeYaml = Data.Yaml.encodeWith
 
     customStyle = \s -> case () of
@@ -105,4 +114,5 @@ jsonToYaml json documents quoted = case (documents, json) of
     encodeOptions = if quoted
         then quotedOptions
         else Data.Yaml.defaultEncodeOptions
+# endif
 #endif
