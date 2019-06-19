@@ -20,7 +20,7 @@ import Control.Lens ((^.))
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Except (runExceptT, except, ExceptT)
+import Control.Monad.Trans.Except (runExceptT, throwE, ExceptT)
 
 import Text.Megaparsec (SourcePos(..), unPos)
 import Dhall.Parser (Src(..))
@@ -116,23 +116,23 @@ executeAnnotateLet' :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> ExceptT Str
 executeAnnotateLet' lsp request = do
     args <- case request ^. J.params . J.arguments of
       Just (J.List (x : _)) -> return x
-      _ -> except $ Left "arguments missing"
+      _ -> throwE "arguments missing"
     (uri, line, col) <- case J.fromJSON args :: J.Result J.TextDocumentPositionParams of
       J.Success textDocPos -> return (textDocPos ^. J.textDocument . J.uri,
                                       textDocPos ^. J.position . J.line,
                                       textDocPos ^. J.position . J.character)
-      _ -> except $ Left "failed to parse arguments"
+      _ -> throwE "failed to parse arguments"
     path <- case J.uriToFilePath uri of
       Just x -> return x
-      _ -> except $ Left "unable to parse uri argument into file path"
+      _ -> throwE "unable to parse uri argument into file path"
     txt <- lift $ readUri lsp uri
     mexpr <- lift $ loadDhallExprSafe path txt
     expr <- case mexpr of
       Just e -> return e
-      _ -> except $ Left "failed to parse dhall file"
+      _ -> throwE  "failed to parse dhall file"
     (src, txt') <- case annotateLet (line, col) expr of
       Just x -> return x
-      _ -> except $ Left "there is no let binder at the selected position"
+      _ -> throwE "there is no let binder at the selected position"
     let edit = J.List [ J.TextEdit (srcToRange src) txt' ]
     lid <- lift $ LSP.getNextReqId lsp
     lift $ LSP.sendFunc lsp
