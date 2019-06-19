@@ -67,10 +67,8 @@ exprAt pos expr =
 
 -- | Find the smallest Src annotation containing the given position.
 srcAt :: Position -> Expr Src a -> Maybe Src
-srcAt pos expr = do e <- exprAt pos expr
-                    case e of
-                      Note src _ -> Just src
-                      _ -> Nothing
+srcAt pos expr = do Note src _ <- exprAt pos expr
+                    return src
 
 
 -- | Given a well-typed expression and a position find the let binder at that
