@@ -10,7 +10,6 @@ import Control.Lens (toListOf)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Control.Applicative ((<|>))
-import Data.Functor.Identity (Identity(..))
 import Data.Maybe (listToMaybe)
 import Control.Monad (join)
 
@@ -25,7 +24,11 @@ import Dhall.Pretty (CharacterSet(..), prettyCharacterSet)
 -- | Find the type of the subexpression at the given position. Assumes that the
 --   input expression is well-typed.
 typeAt :: Position -> Expr Src X -> Maybe (Expr Src X)
-typeAt pos expr = rightToMaybe (typeAt' pos empty (splitLets expr))
+typeAt pos expr = rightToMaybe (typeAt' pos empty expr')
+  where expr' = case splitLets expr of
+                  Just e -> e
+                  Nothing -> error "The impossible happened: failed to split\
+                                   \ let blocks when preprocessing for typeAt'."
 
 typeAt' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
 -- the input only contains singleton lets
@@ -75,7 +78,11 @@ srcAt pos expr = do Note src _ <- exprAt pos expr
 --   position (if there is one) and return a textual update to the source code
 --   that inserts the type annotation (or replaces the existing one).
 annotateLet :: Position -> Expr Src X -> Maybe (Src, Text)
-annotateLet pos expr = annotateLet' pos empty (splitLets expr)
+annotateLet pos expr = annotateLet' pos empty expr'
+  where expr' = case splitLets expr of
+                  Just e -> e
+                  Nothing -> error "The impossible happened: failed to split\
+                              \ let blocks when preprocessing for annotateLet'."
 
 annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Maybe (Src, Text)
 annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
@@ -119,14 +126,11 @@ printExpr expr = Pretty.renderStrict $ Pretty.layoutCompact (Pretty.unAnnotate (
 
 
 -- Split all multilets into single lets in an expression
-splitLets :: Expr Src a -> Expr Src a
-splitLets (Note src (Let (b :| (b' : bs)) e)) =
+splitLets :: Expr Src a -> Maybe (Expr Src a)
+splitLets (Note src (Let (b :| (b' : bs)) e)) = do
+  src' <- getLetInner src
   splitLets (Note src (Let (b :| []) (Note src' (Let (b' :| bs) e))))
-  where src' = case getLetInner src of
-                 Just x -> x
-                 Nothing -> error "The impossible happened: failed\
-                                  \ to re-parse a Let expression."
-splitLets expr = runIdentity (subExpressions (Identity . splitLets) expr)
+splitLets expr = subExpressions splitLets expr
 
 
 -- Check if range lies completely inside a given subexpression.
