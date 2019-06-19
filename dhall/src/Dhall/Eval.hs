@@ -938,7 +938,7 @@ alphaNormalize = goEnv NEmpty where
       Prefer t u       -> Prefer (go t) (go u)
       Merge x y ma     -> Merge (go x) (go y) (go <$> ma)
       Field t k        -> Field (go t) k
-      Project t ks     -> Project (go t) ks
+      Project t ks     -> Project (go t) (go <$> ks)
       Note s e         -> Note s (go e)
       ImportAlt t u    -> ImportAlt (go t) (go u)
       Embed a          -> Embed a
