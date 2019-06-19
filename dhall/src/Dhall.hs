@@ -186,7 +186,12 @@ validate (Success a) f = f a
 validate (Failure es) _ = Failure es
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractErrors s a) where
-    show (ExtractErrors es)  = unlines . Data.List.NonEmpty.toList . fmap show $ es
+    show (ExtractErrors (e :| [])) = show e
+    show (ExtractErrors es) = prefix <> (unlines . Data.List.NonEmpty.toList . fmap show $ es)
+      where
+        prefix =
+            "Multiple errors were encountered during extraction: \n\
+            \                                                    \n"
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractErrors s a)
 
@@ -202,7 +207,14 @@ data InvalidType s a = InvalidType
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractError s a) where
     show (TypeMismatch e)  = show e
-    show (ExtractError es) = show es -- ToDo
+    show (ExtractError es) =
+        _ERROR <> ": Failed extraction                                                   \n\
+        \                                                                                \n\
+        \The expression type-checked successfully but the transformation to the target   \n\
+        \type failed with the following error:                                           \n\
+        \                                                                                \n\
+        \" <> Data.Text.unpack es <> "\n\
+        \                                                                                \n"
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractError s a)
 
