@@ -60,6 +60,8 @@ Library
         Dhall.JSONToDhall
         Dhall.Yaml
         Dhall.YamlToDhall
+    Other-Modules:
+        Dhall.JSON.Util
 
         
     GHC-Options: -Wall

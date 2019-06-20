@@ -4,6 +4,8 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedLists     #-}
+{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-| Convert JSON data to Dhall given a Dhall /type/ expression necessary to make the translation unambiguous.
@@ -24,6 +26,10 @@
     * @Optional@ values
     * unions
     * records
+
+    Additionally, you can read in arbitrary JSON data into a Dhall value of
+    type @https://prelude.dhall-lang.org/JSON/Type@ if you don't know the
+    schema of the JSON data in advance.
 
     This library can be used to implement an executable which takes any data
     serialisation format which can be parsed as an Aeson @Value@ and converts
@@ -141,6 +147,53 @@
 < Left : Text | Middle : Text | Right : Integer >.Left "bar"
 > --------
 < Left : Text | Middle : Text | Right : Integer >.Middle "bar"
+
+== Weakly-typed JSON
+
+If you don't know the JSON's schema in advance, you can decode into the most
+general schema possible:
+
+> $ cat ./schema.dhall
+> https://prelude.dhall-lang.org/JSON/Type
+
+> $ json-to-dhall ./schema.dhall <<< '[ { "foo": null, "bar": [ 1.0, true ] } ]'
+>   λ(JSON : Type)
+> → λ(string : Text → JSON)
+> → λ(number : Double → JSON)
+> → λ(object : List { mapKey : Text, mapValue : JSON } → JSON)
+> → λ(array : List JSON → JSON)
+> → λ(bool : Bool → JSON)
+> → λ(null : JSON)
+> → array
+>   [ object
+>     [ { mapKey = "foo", mapValue = null }
+>     , { mapKey = "bar", mapValue = array [ number 1.0, bool True ] }
+>     ]
+>   ]
+
+You can also mix and match JSON fields whose schemas are known or unknown:
+
+> $ cat ./mixed.dhall
+> List
+> { foo : Optional Natural
+> , bar : https://prelude.dhall-lang.org/JSON/Type
+> }
+
+> $ json-to-dhall ./mixed.dhall <<< '[ { "foo": null, "bar": [ 1.0, true ] } ]'
+> [ { bar =
+>         λ(JSON : Type)
+>       → λ(string : Text → JSON)
+>       → λ(number : Double → JSON)
+>       → λ(object : List { mapKey : Text, mapValue : JSON } → JSON)
+>       → λ(array : List JSON → JSON)
+>       → λ(bool : Bool → JSON)
+>       → λ(null : JSON)
+>       → array [ number 1.0, bool True ]
+>   , foo =
+>       None Natural
+>   }
+> ]
+
 -}
 
 module Dhall.JSONToDhall (
@@ -173,9 +226,11 @@ import qualified Data.Sequence as Seq
 import qualified Data.String
 import qualified Data.Text as Text
 import           Data.Text (Text)
+import qualified Data.Vector as Vector
 import qualified Options.Applicative as O
 import           Options.Applicative (Parser)
 
+import           Dhall.JSON.Util (pattern V)
 import qualified Dhall
 import qualified Dhall.Core as D
 import           Dhall.Core (Expr(App), Chunks(..))
@@ -297,7 +352,6 @@ keyValMay (A.Object o) = do
      return (k, v)
 keyValMay _ = Nothing
 
-
 {-| The main conversion function. Traversing/zipping Dhall /type/ and Aeson value trees together to produce a Dhall /term/ tree, given 'Conversion' options:
 
 >>> :set -XOverloadedStrings
@@ -314,7 +368,8 @@ Right (RecordLit (fromList [("foo",IntegerLit 1)]))
 -}
 dhallFromJSON
   :: Conversion -> ExprX -> A.Value -> Either CompileError ExprX
-dhallFromJSON (Conversion {..}) = loop
+dhallFromJSON (Conversion {..}) expressionType =
+    loop (D.alphaNormalize (D.normalize expressionType))
   where
     -- any ~> Union
     loop t@(D.Union tmMay) v = case unions of
@@ -424,6 +479,75 @@ dhallFromJSON (Conversion {..}) = loop
     -- value ~> Optional
     loop (App D.Optional expr) value
         = D.Some <$> loop expr value
+
+    -- Arbitrary JSON ~> https://prelude.dhall-lang.org/JSON/Type
+    loop
+      (D.Pi _ (D.Const D.Type)
+          (D.Pi _
+              (D.Record
+                  [ ("array" , D.Pi _ (D.App D.List (V 0)) (V 1))
+                  , ("bool"  , D.Pi _ D.Bool (V 1))
+                  , ("null"  , V 0)
+                  , ("number", D.Pi _ D.Double (V 1))
+                  , ("object", D.Pi _ (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", V 0)])) (V 1))
+                  , ("string", D.Pi _ D.Text (V 1))
+                  ]
+              )
+              (V 1)
+          )
+      )
+      value = do
+          let outer (A.Object o) =
+                  let inner (key, val) =
+                          D.RecordLit
+                              [ ("mapKey"  , D.TextLit (D.Chunks [] key))
+                              , ("mapValue", outer val                  )
+                              ]
+
+                      elements = Seq.fromList (fmap inner (HM.toList o))
+
+                      elementType
+                          | null elements =
+                              Just (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON") ])
+                          | otherwise =
+                              Nothing
+
+                      keyValues = D.ListLit elementType elements
+
+                  in  (D.App (D.Field "json" "object") keyValues)
+              outer (A.Array a) =
+                  let elements = Seq.fromList (fmap outer (Vector.toList a))
+
+                      elementType
+                          | null elements = Just "JSON"
+                          | otherwise     = Nothing
+
+                  in  D.App (D.Field "json" "array") (D.ListLit elementType elements)
+              outer (A.String s) =
+                  D.App (D.Field "json" "string") (D.TextLit (D.Chunks [] s))
+              outer (A.Number n) =
+                  D.App (D.Field "json" "number") (D.DoubleLit (toRealFloat n))
+              outer (A.Bool b) =
+                  D.App (D.Field "json" "bool") (D.BoolLit b)
+              outer A.Null =
+                  D.Field "json" "null"
+
+          let result =
+                D.Lam "JSON" (D.Const D.Type)
+                    (D.Lam "json"
+                        (D.Record
+                            [ ("array" , D.Pi "_" (D.App D.List "JSON") "JSON")
+                            , ("bool"  , D.Pi "_" D.Bool "JSON")
+                            , ("null"  , "JSON")
+                            , ("number", D.Pi "_" D.Double "JSON")
+                            , ("object", D.Pi "_" (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON")])) "JSON")
+                            , ("string", D.Pi "_" D.Text "JSON")
+                            ]
+                        )
+                        (outer value)
+                    )
+
+          return result
 
     -- fail
     loop expr value
