@@ -242,9 +242,6 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (InvalidType s a) 
           txt0 = Dhall.Util.insert invalidTypeExpected
           txt1 = Dhall.Util.insert invalidTypeExpression
 
-
-instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (InvalidType s a)
-
 -- | @since 1.16
 data InputSettings = InputSettings
   { _rootDirectory :: FilePath
