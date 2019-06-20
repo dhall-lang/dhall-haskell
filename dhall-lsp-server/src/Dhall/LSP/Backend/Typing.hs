@@ -10,10 +10,8 @@ import Control.Lens (toListOf)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Control.Applicative ((<|>))
-import Data.Maybe (listToMaybe)
-import Control.Monad (join)
+import Data.Bifunctor (first)
 
-import Dhall.LSP.Util (rightToMaybe)
 import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot)
 import Dhall.LSP.Backend.Diagnostics (Position, positionFromMegaparsec, offsetToPosition)
 
@@ -23,12 +21,13 @@ import Dhall.Pretty (CharacterSet(..), prettyCharacterSet)
 
 -- | Find the type of the subexpression at the given position. Assumes that the
 --   input expression is well-typed.
-typeAt :: Position -> Expr Src X -> Maybe (Expr Src X)
-typeAt pos expr = rightToMaybe (typeAt' pos empty expr')
-  where expr' = case splitLets expr of
-                  Just e -> e
-                  Nothing -> error "The impossible happened: failed to split\
-                                   \ let blocks when preprocessing for typeAt'."
+typeAt :: Position -> Expr Src X -> Either String (Expr Src X)
+typeAt pos expr = do
+  expr' <- case splitLets expr of
+             Just e -> return e
+             Nothing -> Left "The impossible happened: failed to split let\
+                              \ blocks when preprocessing for typeAt'."
+  first show $ typeAt' pos empty expr'
 
 typeAt' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
 -- the input only contains singleton lets
@@ -76,28 +75,30 @@ srcAt pos expr = do Note src _ <- exprAt pos expr
 
 -- | Given a well-typed expression and a position find the let binder at that
 --   position (if there is one) and return a textual update to the source code
---   that inserts the type annotation (or replaces the existing one).
-annotateLet :: Position -> Expr Src X -> Maybe (Src, Text)
-annotateLet pos expr = annotateLet' pos empty expr'
-  where expr' = case splitLets expr of
-                  Just e -> e
-                  Nothing -> error "The impossible happened: failed to split\
-                              \ let blocks when preprocessing for annotateLet'."
+--   that inserts the type annotation (or replaces the existing one). If
+--   something goes wrong returns a textual error message.
+annotateLet :: Position -> Expr Src X -> Either String (Src, Text)
+annotateLet pos expr = do
+  expr' <- case splitLets expr of
+             Just e -> return e
+             Nothing -> Left "The impossible happened: failed to split let\
+                              \ blocks when preprocessing for annotateLet'."
+  annotateLet' pos empty expr'
 
-annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Maybe (Src, Text)
+annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Either String (Src, Text)
 annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
   | not $ any (pos `inside`) [ src' | Note src' _ <- toListOf subExpressions e ]
-  = do _A <- rightToMaybe $ typeWithA absurd ctx a
-       let srcAnnot = case getLetAnnot src of
-                        Just x -> x
-                        Nothing -> error "The impossible happened: failed\
-                                         \ to re-parse a Let expression."
+  = do _A <- first show $ typeWithA absurd ctx a
+       srcAnnot <- case getLetAnnot src of
+                     Just x -> return x
+                     Nothing -> Left "The impossible happened: failed\
+                                     \ to re-parse a Let expression."
        return (srcAnnot, ": " <> printExpr _A <> " ")
 
 -- binders
 annotateLet' pos ctx (Let (Binding x _ a :| []) e@(Note src _))
   | pos `inside` src = do
-    _A <- rightToMaybe $ typeWithA absurd ctx a
+    _A <- first show $ typeWithA absurd ctx a
     let ctx' = fmap (shift 1 (V x 0)) (insert x _A ctx)
     annotateLet' pos ctx' e
 annotateLet' pos ctx (Lam x _A b@(Note src _))
@@ -116,9 +117,12 @@ annotateLet' pos ctx (Note _ expr) = do
   annotateLet' pos ctx expr
 
 -- catch-all
-annotateLet' pos ctx expr =
+annotateLet' pos ctx expr = do
   let subExprs = toListOf subExpressions expr
-  in join $ annotateLet' pos ctx <$> listToMaybe [ Note src e | (Note src e) <- subExprs, pos `inside` src ]
+  inner <- case [ Note src e | (Note src e) <- subExprs, pos `inside` src ] of
+    (e:[]) -> return e
+    _ -> Left "You weren't pointing at a let binder!"
+  annotateLet' pos ctx inner
 
 
 printExpr :: Pretty.Pretty b => Expr a b -> Text

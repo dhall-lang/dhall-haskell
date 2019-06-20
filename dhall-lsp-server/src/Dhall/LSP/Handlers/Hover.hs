@@ -45,14 +45,14 @@ hoverHandler lsp request = do
                                     $ LSP.makeResponseMessage request Nothing
         Just expr ->
           case typeAt pos expr of
-            Just typ ->
+            Right typ ->
               let _range = fmap (rangeToJSON . sanitiseRange txt . rangeFromDhall)
                                 (srcAt pos expr)
                   _contents = J.List [J.PlainString (pretty typ)]
                   hover = J.Hover{..}
               in LSP.sendFunc lsp $ LSP.RspHover
                                   $ LSP.makeResponseMessage request (Just hover)
-            Nothing -> LSP.sendFunc lsp $ LSP.RspHover
+            _ -> LSP.sendFunc lsp $ LSP.RspHover
                                         $ LSP.makeResponseMessage request Nothing
 
 

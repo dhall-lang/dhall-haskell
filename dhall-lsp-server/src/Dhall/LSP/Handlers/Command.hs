@@ -131,8 +131,8 @@ executeAnnotateLet' lsp request = do
       Just e -> return e
       _ -> throwE  "failed to parse dhall file"
     (src, txt') <- case annotateLet (line, col) expr of
-      Just x -> return x
-      _ -> throwE "there is no let binder at the selected position"
+      Right x -> return x
+      Left err -> throwE err
     let edit = J.List [ J.TextEdit (srcToRange src) txt' ]
     lid <- lift $ LSP.getNextReqId lsp
     lift $ LSP.sendFunc lsp
