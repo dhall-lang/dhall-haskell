@@ -108,8 +108,7 @@ import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
 import Control.Monad (guard)
 import Data.Coerce (coerce)
-import Data.Either.Validation (Validation(..), eitherToValidation, validationToEither)
-import Data.Functor.Alt ((<!>))
+import Data.Either.Validation (Validation(..), ealt, eitherToValidation, validationToEither)
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -1106,7 +1105,7 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
 instance (GenericInterpret (f :+: g), GenericInterpret (h :+: i)) => GenericInterpret ((f :+: g) :+: (h :+: i)) where
     genericAutoWith options = pure (Type {..})
       where
-        extract e = fmap L1 (extractL e) <!> fmap R1 (extractR e)
+        extract e = fmap L1 (extractL e) `ealt` fmap R1 (extractR e)
 
         expected = Union (Dhall.Map.union ktsL ktsR)
 

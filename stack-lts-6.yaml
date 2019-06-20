@@ -30,7 +30,7 @@ extra-deps:
 - cborg-json-0.2.1.0
 - dotgen-0.4.2
 - aeson-pretty-0.8.7
-- transformers-compat-0.5.1.4
+- transformers-compat-0.6.4
 - exceptions-0.8.3
 - mmorph-1.0.9
 - monad-control-1.0.2.3
