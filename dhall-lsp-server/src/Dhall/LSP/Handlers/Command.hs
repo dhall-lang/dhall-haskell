@@ -8,15 +8,22 @@ import qualified Data.Aeson as J
 import qualified Language.Haskell.LSP.Types as J
 import qualified Language.Haskell.LSP.Types.Lens as J
 
+import Dhall.LSP.Backend.Dhall
 import qualified Dhall.LSP.Backend.Linting as Linting
 import qualified Dhall.LSP.Backend.ToJSON as ToJSON
 import Dhall.LSP.Util (readUri)
+import Dhall.LSP.Backend.Typing (annotateLet)
 
 import System.FilePath (replaceExtension)
 import Data.HashMap.Strict (singleton)
 import Control.Lens ((^.))
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Except (runExceptT, throwE, ExceptT)
+
+import Text.Megaparsec (SourcePos(..), unPos)
+import Dhall.Parser (Src(..))
 
 executeCommandHandler :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
 executeCommandHandler lsp request
@@ -26,6 +33,7 @@ executeCommandHandler lsp request
   | command == "dhall.server.toJSON" = case parseUriArgument request of
       Right uri -> executeDhallToJSON lsp uri
       Left msg -> LSP.logs msg
+  | command == "dhall.server.annotateLet" = executeAnnotateLet lsp request
   | otherwise = LSP.logs
     ("LSP Handler: asked to execute unknown command: " ++ show command)
   where command = request ^. J.params . J.command
@@ -90,3 +98,45 @@ parseUriArgument request = case request ^. J.params . J.arguments of
                 <> show (request ^. J.params . J.command)
   _ -> Left $ "unable to parse uri argument to "
               <> show (request ^. J.params . J.command)
+
+srcToRange :: Src -> J.Range
+srcToRange (Src (SourcePos _ x1 y1) (SourcePos _ x2 y2) _) =
+  J.Range (J.Position (unPos x1 - 1) (unPos y1 - 1))
+          (J.Position (unPos x2 - 1) (unPos y2 - 1))
+
+executeAnnotateLet :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> IO ()
+executeAnnotateLet lsp request = do
+  LSP.logs "LSP Handler: executing AnnotateLet"
+  err <- runExceptT (executeAnnotateLet' lsp request)
+  case err of
+    Left msg -> LSP.logs ("AnnotateLet failed: " ++ msg)
+    _ -> return ()
+
+executeAnnotateLet' :: LSP.LspFuncs () -> J.ExecuteCommandRequest -> ExceptT String IO ()
+executeAnnotateLet' lsp request = do
+    args <- case request ^. J.params . J.arguments of
+      Just (J.List (x : _)) -> return x
+      _ -> throwE "arguments missing"
+    (uri, line, col) <- case J.fromJSON args :: J.Result J.TextDocumentPositionParams of
+      J.Success textDocPos -> return (textDocPos ^. J.textDocument . J.uri,
+                                      textDocPos ^. J.position . J.line,
+                                      textDocPos ^. J.position . J.character)
+      _ -> throwE "failed to parse arguments"
+    path <- case J.uriToFilePath uri of
+      Just x -> return x
+      _ -> throwE "unable to parse uri argument into file path"
+    txt <- lift $ readUri lsp uri
+    mexpr <- lift $ loadDhallExprSafe path txt
+    expr <- case mexpr of
+      Just e -> return e
+      _ -> throwE  "failed to parse dhall file"
+    (src, txt') <- case annotateLet (line, col) expr of
+      Right x -> return x
+      Left err -> throwE err
+    let edit = J.List [ J.TextEdit (srcToRange src) txt' ]
+    lid <- lift $ LSP.getNextReqId lsp
+    lift $ LSP.sendFunc lsp
+         $ LSP.ReqApplyWorkspaceEdit
+         $ LSP.fmServerApplyWorkspaceEditRequest lid
+         $ J.ApplyWorkspaceEditParams
+         $ J.WorkspaceEdit (Just (singleton uri edit)) Nothing
