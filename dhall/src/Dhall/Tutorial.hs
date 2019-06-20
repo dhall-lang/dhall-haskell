@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
 {-| Dhall is a programming language specialized for configuration files.  This
-    module contains a tutorial explaning how to author configuration files using
+    module contains a tutorial explaining how to author configuration files using
     this language
 -}
 module Dhall.Tutorial (
