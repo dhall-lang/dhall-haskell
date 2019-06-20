@@ -40,15 +40,18 @@ module Dhall
 
     -- * Types
     , Type (..)
-    , validate
     , RecordType(..)
     , UnionType(..)
     , InputType(..)
     , Interpret(..)
     , InvalidType(..)
     , ExtractErrors(..)
+    , Extractor
+    , MonadicExtractor
     , typeError
     , extractError
+    , toMonadic
+    , fromMonadic
     , auto
     , genericAuto
     , InterpretOptions(..)
@@ -105,7 +108,7 @@ import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
 import Control.Monad (guard)
 import Data.Coerce (coerce)
-import Data.Either.Validation (Validation(..))
+import Data.Either.Validation (Validation(..), eitherToValidation, validationToEither)
 import Data.Functor.Alt ((<!>))
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
@@ -160,19 +163,9 @@ import qualified Dhall.Util
 -- >>> :set -XOverloadedStrings
 -- >>> :set -XRecordWildCards
 
-{-| Every `Type` must obey the contract that if an expression's type matches the
-    the `expected` type then the `extract` function must succeed.  If not, then
-    this exception is thrown
-
-    This exception indicates that an invalid `Type` was provided to the `input`
-    function
--}
 type Extractor s a = Validation (ExtractErrors s a)
+type MonadicExtractor s a = Either (ExtractErrors s a)
 
-newtype ExtractErrors s a =
-    ExtractErrors
-  { getErrors :: NonEmpty (ExtractError s a)
-  } deriving Semigroup
 
 typeError :: Expr s a -> Expr s a -> Extractor s a b
 typeError expected actual = Failure . ExtractErrors . pure . TypeMismatch $ InvalidType expected actual
@@ -180,11 +173,19 @@ typeError expected actual = Failure . ExtractErrors . pure . TypeMismatch $ Inva
 extractError :: Text -> Extractor s a b
 extractError = Failure . ExtractErrors . pure . ExtractError
 
--- | opt-in monadic composition for `Extractor`. This is done this way to
--- keep applicative behaviour on @ExtractErrors@
-validate :: Extractor s a b -> (b -> Extractor s a c) -> Extractor s a c
-validate (Success a) f = f a
-validate (Failure es) _ = Failure es
+-- | Switches from an @Applicative@ extraction result, able to accumulate errors,
+-- to a @Monad@ extraction result, able to chain sequential operations
+toMonadic :: Extractor s a b -> MonadicExtractor s a b
+toMonadic = validationToEither
+
+-- | Switches from a @Monad@ extraction result, able to chain sequential errors,
+-- to an @Applicative@ extraction result, able to accumulate errors
+fromMonadic :: MonadicExtractor s a b -> Extractor s a b
+fromMonadic = eitherToValidation
+
+newtype ExtractErrors s a = ExtractErrors
+   { getErrors :: NonEmpty (ExtractError s a)
+   } deriving Semigroup
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractErrors s a) where
     show (ExtractErrors (e :| [])) = show e
@@ -196,29 +197,39 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractErrors s a
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractErrors s a)
 
+{-| Extraction of a value can fail for two reasons, either a type mismatch (which should not happen,
+    as expressions are type-checked against the expected type before being passed to @extract@), or
+    a term-level error, described with a freeform text value.
+-}
 data ExtractError s a =
     TypeMismatch (InvalidType s a)
   | ExtractError Text
 
+instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractError s a) where
+  show (TypeMismatch e)  = show e
+  show (ExtractError es) =
+      _ERROR <> ": Failed extraction                                                   \n\
+      \                                                                                \n\
+      \The expression type-checked successfully but the transformation to the target   \n\
+      \type failed with the following error:                                           \n\
+      \                                                                                \n\
+      \" <> Data.Text.unpack es <> "\n\
+      \                                                                                \n"
+
+instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractError s a)
+
+{-| Every `Type` must obey the contract that if an expression's type matches the
+    the `expected` type then the `extract` function must not fail with a type error.
+    If not, then this value is returned.
+
+    This value indicates that an invalid `Type` was provided to the `input`
+    function
+-}
 data InvalidType s a = InvalidType
   { invalidTypeExpected   :: Expr s a
   , invalidTypeExpression :: Expr s a
   }
   deriving (Typeable)
-
-instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractError s a) where
-    show (TypeMismatch e)  = show e
-    show (ExtractError es) =
-        _ERROR <> ": Failed extraction                                                   \n\
-        \                                                                                \n\
-        \The expression type-checked successfully but the transformation to the target   \n\
-        \type failed with the following error:                                           \n\
-        \                                                                                \n\
-        \" <> Data.Text.unpack es <> "\n\
-        \                                                                                \n"
-
-instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractError s a)
-
 
 _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
