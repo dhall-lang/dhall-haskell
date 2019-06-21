@@ -31,30 +31,31 @@ typeAt pos expr = do
 
 typeAt' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
 -- the input only contains singleton lets
-typeAt' pos ctx (Let (Binding x _ a :| []) (Note src e)) | pos `inside` src = do
+typeAt' pos ctx (Let (Binding x _ a :| []) e@(Note src _)) | pos `inside` src = do
   _A <- typeWithA absurd ctx a
   let ctx' = fmap (shift 1 (V x 0)) (insert x _A ctx)
   typeAt' pos ctx' e
 
-typeAt' pos ctx (Lam x _A (Note src b)) | pos `inside` src = do
+typeAt' pos ctx (Lam x _A b@(Note src _)) | pos `inside` src = do
   let _A' = Dhall.Core.normalize _A
       ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
   typeAt' pos ctx' b
 
-typeAt' pos ctx (Pi x _A  (Note src _B)) | pos `inside` src = do
+typeAt' pos ctx (Pi x _A  _B@(Note src _)) | pos `inside` src = do
   let _A' = Dhall.Core.normalize _A
       ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
   typeAt' pos ctx' _B
 
--- need to catch Notes since the catch-all would remove two layers at once
+-- peel of a single Note constructor
 typeAt' pos ctx (Note _ expr) = typeAt' pos ctx expr
 
 -- catch-all
 typeAt' pos ctx expr = do
   let subExprs = toListOf subExpressions expr
-  case [ e | (Note src e) <- subExprs, pos `inside` src ] of
+  case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
     [] -> typeWithA absurd ctx expr  -- return type of whole subexpression
-    (t:_) -> typeAt' pos ctx t  -- continue with leaf-expression
+    ((src, e):_) -> typeAt' pos ctx (Note src e)  -- continue with leaf-expression
+
 
 
 -- | Find the smallest Note-wrapped expression at the given position.
