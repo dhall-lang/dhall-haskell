@@ -1,7 +1,7 @@
 module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
 
 import Dhall.Context (Context, insert, empty)
-import Dhall.Core (Expr(..), Binding(..), subExpressions, normalize, shift, Var(..))
+import Dhall.Core (Expr(..), Binding(..), Const(..), subExpressions, normalize, shift, subst, Var(..))
 import Dhall.TypeCheck (typeWithA, X(..), TypeError(..))
 import Dhall.Parser (Src(..))
 
@@ -31,30 +31,38 @@ typeAt pos expr = do
 
 typeAt' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
 -- the input only contains singleton lets
-typeAt' pos ctx (Let (Binding x _ a :| []) (Note src e)) | pos `inside` src = do
+typeAt' pos ctx (Let (Binding x _ a :| []) e@(Note src _)) | pos `inside` src = do
   _A <- typeWithA absurd ctx a
-  let ctx' = fmap (shift 1 (V x 0)) (insert x _A ctx)
-  typeAt' pos ctx' e
+  t <- fmap normalize (typeWithA absurd ctx _A)
+  case t of
+    Const Type -> do  -- we don't have types depending on values
+      let ctx' = fmap (shift 1 (V x 0)) (insert x (normalize _A) ctx)
+      _B <- typeAt' pos ctx' e
+      return (shift (-1) (V x 0) _B)
+    _ -> do  -- but we do have types depending on types
+      let a' = shift 1 (V x 0) (normalize a)
+      typeAt' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
 
-typeAt' pos ctx (Lam x _A (Note src b)) | pos `inside` src = do
+typeAt' pos ctx (Lam x _A b@(Note src _)) | pos `inside` src = do
   let _A' = Dhall.Core.normalize _A
       ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
   typeAt' pos ctx' b
 
-typeAt' pos ctx (Pi x _A  (Note src _B)) | pos `inside` src = do
+typeAt' pos ctx (Pi x _A  _B@(Note src _)) | pos `inside` src = do
   let _A' = Dhall.Core.normalize _A
       ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
   typeAt' pos ctx' _B
 
--- need to catch Notes since the catch-all would remove two layers at once
+-- peel of a single Note constructor
 typeAt' pos ctx (Note _ expr) = typeAt' pos ctx expr
 
 -- catch-all
 typeAt' pos ctx expr = do
   let subExprs = toListOf subExpressions expr
-  case [ e | (Note src e) <- subExprs, pos `inside` src ] of
+  case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
     [] -> typeWithA absurd ctx expr  -- return type of whole subexpression
-    (t:_) -> typeAt' pos ctx t  -- continue with leaf-expression
+    ((src, e):_) -> typeAt' pos ctx (Note src e)  -- continue with leaf-expression
+
 
 
 -- | Find the smallest Note-wrapped expression at the given position.
@@ -86,6 +94,7 @@ annotateLet pos expr = do
   annotateLet' pos empty expr'
 
 annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Either String (Src, Text)
+-- the input only contains singleton lets
 annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
   | not $ any (pos `inside`) [ src' | Note src' _ <- toListOf subExpressions e ]
   = do _A <- first show $ typeWithA absurd ctx a
@@ -95,22 +104,27 @@ annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
                                      \ to re-parse a Let expression."
        return (srcAnnot, ": " <> printExpr _A <> " ")
 
--- binders
-annotateLet' pos ctx (Let (Binding x _ a :| []) e@(Note src _))
-  | pos `inside` src = do
-    _A <- first show $ typeWithA absurd ctx a
-    let ctx' = fmap (shift 1 (V x 0)) (insert x _A ctx)
-    annotateLet' pos ctx' e
-annotateLet' pos ctx (Lam x _A b@(Note src _))
-  | pos `inside` src = do
-    let _A' = Dhall.Core.normalize _A
-        ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
-    annotateLet' pos ctx' b
-annotateLet' pos ctx (Pi x _A _B@(Note src _))
-  | pos `inside` src = do
-    let _A' = Dhall.Core.normalize _A
-        ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
-    annotateLet' pos ctx' _B
+-- binders, see typeAt'
+annotateLet' pos ctx (Let (Binding x _ a :| []) e@(Note src _)) | pos `inside` src = do
+  _A <- first show $ typeWithA absurd ctx a
+  t <- first show $ fmap normalize (typeWithA absurd ctx _A)
+  case t of
+    Const Type -> do  -- we don't have types depending on values
+      let ctx' = fmap (shift 1 (V x 0)) (insert x (normalize _A) ctx)
+      annotateLet' pos ctx' e
+    _ -> do  -- but we do have types depending on types
+      let a' = shift 1 (V x 0) (normalize a)
+      annotateLet' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
+
+annotateLet' pos ctx (Lam x _A b@(Note src _)) | pos `inside` src = do
+  let _A' = Dhall.Core.normalize _A
+      ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
+  annotateLet' pos ctx' b
+
+annotateLet' pos ctx (Pi x _A _B@(Note src _)) | pos `inside` src = do
+  let _A' = Dhall.Core.normalize _A
+      ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
+  annotateLet' pos ctx' _B
 
 -- we need to unfold Notes to make progress
 annotateLet' pos ctx (Note _ expr) = do
@@ -119,10 +133,9 @@ annotateLet' pos ctx (Note _ expr) = do
 -- catch-all
 annotateLet' pos ctx expr = do
   let subExprs = toListOf subExpressions expr
-  inner <- case [ Note src e | (Note src e) <- subExprs, pos `inside` src ] of
-    (e:[]) -> return e
+  case [ Note src e | (Note src e) <- subExprs, pos `inside` src ] of
+    (e:[]) -> annotateLet' pos ctx e
     _ -> Left "You weren't pointing at a let binder!"
-  annotateLet' pos ctx inner
 
 
 printExpr :: Pretty.Pretty b => Expr a b -> Text
