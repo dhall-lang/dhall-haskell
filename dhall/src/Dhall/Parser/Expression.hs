@@ -314,7 +314,7 @@ completeExpression embedded = completeExpression_
             alternative07 = do
                 _merge
                 a <- importExpression
-                b <- importExpression
+                b <- importExpression <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
 
             alternative09 = do
