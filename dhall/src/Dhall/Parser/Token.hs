@@ -28,6 +28,7 @@ module Dhall.Parser.Token (
     _as,
     _using,
     _merge,
+    _toMap,
     _constructors,
     _Some,
     _None,
@@ -574,6 +575,9 @@ _using = keyword "using"
 
 _merge :: Parser ()
 _merge = keyword "merge"
+
+_toMap :: Parser ()
+_toMap = keyword "toMap"
 
 _constructors :: Parser ()
 _constructors = keyword "constructors"

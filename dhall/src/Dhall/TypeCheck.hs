@@ -27,7 +27,7 @@ import Data.Data (Data(..))
 import Data.Foldable (forM_, toList)
 import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid (First(..))
+import Data.Monoid (Endo(..), First(..))
 import Data.Sequence (Seq, ViewL(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Set (Set)
@@ -760,6 +760,34 @@ typeWithA tpa = loop
         Dhall.Map.unorderedTraverseWithKey_ process ktsY
 
         return _T₁
+
+    loop ctx e@(ToMap kvsX mT₁) = do
+        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
+
+        ktsX <- case tKvsX of
+            Record kts -> return kts
+            _          -> Left (TypeError ctx e (MustMapARecord kvsX tKvsX))
+
+        let ktX = appEndo (foldMap (Endo . compareFieldTypes) ktsX) Nothing
+            mapType fieldType = App List (Record $ Dhall.Map.fromList [("mapKey", Text),
+                                                                       ("mapValue", fieldType)])
+            compareFieldTypes t Nothing = Just (Right t)
+            compareFieldTypes t r@(Just (Right t'))
+               | Dhall.Core.judgmentallyEqual t t' = r
+               | otherwise = Just (Left $ TypeError ctx e (HeterogenousRecordToMap tKvsX t t'))
+            compareFieldTypes _ r@(Just Left{}) = r
+
+        case (ktX, mT₁) of
+            (Nothing, Nothing) -> Left (TypeError ctx e MissingToMapType)
+            (Just err@Left{}, _) -> err
+            (Just (Right t), Nothing) -> pure (mapType t)
+            (Nothing, Just t@(App List (Record mapItemType)))
+               | Just fieldType <- Dhall.Map.lookup "mapValue" mapItemType,
+                 Dhall.Core.judgmentallyEqual t (mapType fieldType) -> pure t
+            (Nothing, Just t) -> Left (TypeError ctx e $ InvalidToMapType t)
+            (Just (Right t₁), Just t₂)
+               | Dhall.Core.judgmentallyEqual (mapType t₁) t₂ -> pure t₂
+               | otherwise -> Left (TypeError ctx e $ MapTypeMismatch (mapType t₁) t₂)
     loop ctx e@(Field r x       ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
 
@@ -907,6 +935,11 @@ data TypeMessage s a
     | FieldCollision Text
     | MustMergeARecord (Expr s a) (Expr s a)
     | MustMergeUnion (Expr s a) (Expr s a)
+    | MustMapARecord (Expr s a) (Expr s a)
+    | HeterogenousRecordToMap (Expr s a) (Expr s a) (Expr s a)
+    | InvalidToMapType (Expr s a)
+    | MapTypeMismatch (Expr s a) (Expr s a)
+    | MissingToMapType
     | UnusedHandler (Set Text)
     | MissingHandler (Set Text)
     | HandlerInputTypeMismatch Text (Expr s a) (Expr s a)
@@ -3238,6 +3271,100 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
       where
         txt0 = insert k
         txt1 = insert expr0
+
+prettyTypeMessage (MustMapARecord _expr0 _expr1) = ErrorMessages {..}
+  where
+    short = "❰toMap❱ expects a record"
+
+    long =
+        "Explanation: You can apply ❰toMap❱ to any homogenous record, like this:         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ in  toMap record : List { mapKey : Text, mapValue : Natural}        │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the argument to ❰toMap❱ must be a record and not some other type.       \n"
+
+prettyTypeMessage (HeterogenousRecordToMap _expr0 _expr1 _expr2) = ErrorMessages {..}
+  where
+    short = "❰toMap❱ expects a homogenous record"
+
+    long =
+        "Explanation: You can apply ❰toMap❱ to any homogenous record, like this:         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ in  toMap record : List { mapKey : Text, mapValue : Natural}        │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but every field of the record must have the same type.                      \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────┐                                 \n\
+        \    │ toMap { Foo = True, Bar = 0 }           │                                 \n\
+        \    └─────────────────────────────────────────┘                                 \n\
+        \                    ⇧           ⇧                                               \n\
+        \                    Bool        Natural                                         \n"
+
+prettyTypeMessage (MapTypeMismatch expr0 expr1) = ErrorMessages {..}
+  where
+    short = "❰toMap❱ result type doesn't match annotation"
+        <>  "\n"
+        <>  prettyDiff expr0 expr1
+
+    long =
+        "Explanation: a ❰toMap❱ application has been annotated with a type that doesn't  \n\
+        \match its inferred type.                                                        \n"
+
+prettyTypeMessage (InvalidToMapType expr) =
+    ErrorMessages {..}
+  where
+    short = "An empty ❰toMap❱ was annotated with an invalid type"
+        <>  "\n"
+        <>  insert expr
+
+    long =
+        "Explanation: A ❰toMap❱ applied to an empty record must have a type annotation:  \n\
+        \that matches a list of key-value pairs, like this                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │ toMap {=} : List { mapKey : Text, mapValue : Natural}               │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \The type you have provided doesn't match the expected form.                     \n\
+        \                                                                                \n"
+
+prettyTypeMessage MissingToMapType =
+    ErrorMessages {..}
+  where
+    short = "An empty ❰toMap❱ requires a type annotation"
+
+    long =
+        "Explanation: A ❰toMap❱ does not require a type annotation if the record has at  \n\
+        \least one field, like this                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ in  toMap record                                                    │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, you must provide a type annotation with an empty record:               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │ toMap {=} : List { mapKey : Text, mapValue : Natural}               │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n"
 
 prettyTypeMessage (ConstructorsRequiresAUnionType expr0 expr1) = ErrorMessages {..}
   where

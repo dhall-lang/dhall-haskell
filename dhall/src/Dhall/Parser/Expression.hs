@@ -176,6 +176,8 @@ completeExpression embedded = completeExpression_
                                     return (Annot a b)
                         (Merge c d _, e) ->
                             return (Merge c d (Just e))
+                        (ToMap c _, d) ->
+                            return (ToMap c (Just d))
                         _ -> return (Annot a b)
 
             alternative4A <|> alternative4B <|> pure a
@@ -271,6 +273,7 @@ completeExpression embedded = completeExpression_
                     , alternative05
                     , alternative06
                     , alternative07
+                    , alternative08
                     , alternative37
                     , alternative09
 
@@ -316,6 +319,11 @@ completeExpression embedded = completeExpression_
                 a <- importExpression
                 b <- importExpression <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
+
+            alternative08 = do
+                _toMap
+                a <- importExpression
+                return (ToMap a Nothing)
 
             alternative09 = do
                 a <- try doubleInfinity
