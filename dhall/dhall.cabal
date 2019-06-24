@@ -406,6 +406,7 @@ Library
         Diff                        >= 0.2      && < 0.4 ,
         directory                   >= 1.2.2.0  && < 1.4 ,
         dotgen                      >= 0.4.2    && < 0.5 ,
+        either,
         exceptions                  >= 0.8.3    && < 0.11,
         filepath                    >= 1.4      && < 1.5 ,
         haskeline                   >= 0.7.2.1  && < 0.8 ,

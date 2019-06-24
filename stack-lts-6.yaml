@@ -5,6 +5,7 @@ packages:
   - dhall-text
 extra-deps:
 - ansi-terminal-0.7.1.1
+- either-5
 - ansi-wl-pprint-0.6.8.2
 - cryptonite-0.24
 - formatting-6.3.2
@@ -45,3 +46,4 @@ nix:
   packages:
     - ncurses
     - zlib
+allow-newer: true
