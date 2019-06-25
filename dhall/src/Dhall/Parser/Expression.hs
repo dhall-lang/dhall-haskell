@@ -759,9 +759,8 @@ import_ = (do
     return (Import {..}) ) <?> "import"
   where
     alternative = do
-        _as
-        _Text
-        return RawText
+      _as
+      (_Text >> pure RawText) <|> (_Location >> pure Location)
 
 -- | Similar to `Dhall.Core.renderChunks` except that this doesn't bother to
 -- render interpolated expressions to avoid a `Buildable a` constraint.  The
