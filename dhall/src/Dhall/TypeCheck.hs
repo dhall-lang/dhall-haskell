@@ -806,14 +806,10 @@ typeWithA tpa = loop
 
                 case Dhall.Core.normalize t of
                     Record ktsT -> do
-                        let keysR = Dhall.Set.fromList (Dhall.Map.keys ktsR)
-                        let keysT = Dhall.Set.fromList (Dhall.Map.keys ktsT)
+                        let projection = Dhall.Map.intersection ktsR ktsT
 
-                        case Dhall.Set.difference keysT keysR of
-                            k : _ -> do
-                                Left (TypeError ctx e (MissingField k t))
-                            [] -> do
-                                return (Record ktsT)
+                        loop ctx (Annot (Record projection) (Record ktsT))
+
                     _ -> do
                         Left (TypeError ctx e (CantProjectByExpression t))
 
