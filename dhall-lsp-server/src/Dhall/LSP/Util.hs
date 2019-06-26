@@ -13,6 +13,7 @@ import qualified Language.Haskell.LSP.VFS as LSP
 import qualified Language.Haskell.LSP.Types as J
 import qualified Yi.Rope as Rope
 
+import Data.Monoid ((<>))
 import Data.Text
 import Data.List.NonEmpty
 

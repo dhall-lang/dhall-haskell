@@ -10,6 +10,7 @@ import qualified Language.Haskell.LSP.Core     as LSP
 import qualified Language.Haskell.LSP.Utility  as LSP
 import qualified Language.Haskell.LSP.Types    as J
 
+import           Data.Monoid                    ((<>))
 import           Data.Text                      ( Text )
 
 import           Dhall.LSP.Backend.Diagnostics

@@ -17,6 +17,7 @@ import Dhall.LSP.Backend.Typing (annotateLet)
 import System.FilePath (replaceExtension)
 import Data.HashMap.Strict (singleton)
 import Control.Lens ((^.))
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Control.Monad.Trans (lift)

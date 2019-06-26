@@ -2,6 +2,7 @@
 
 module Dhall.Test.Parser where
 
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Dhall.Core (Expr, Import)
 import Dhall.TypeCheck (X)

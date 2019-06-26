@@ -25,6 +25,7 @@ import Dhall.Core (Expr(Note))
 import Dhall.LSP.Util
 import Dhall.LSP.Backend.Dhall (runDhall)
 
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Control.Exception (handle, SomeException)

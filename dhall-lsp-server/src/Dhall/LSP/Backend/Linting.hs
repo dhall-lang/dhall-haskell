@@ -12,6 +12,7 @@ import Dhall.Lint (lint)
 import Dhall.LSP.Backend.Formatting
 import Dhall.LSP.Backend.Diagnostics
 
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.List.NonEmpty (NonEmpty(..), tails, toList)
 import Control.Lens (universeOf)

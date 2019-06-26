@@ -16,6 +16,7 @@ import Dhall.LSP.Backend.Typing
 import Dhall.LSP.Util (readUri)
 
 import Control.Lens ((^.))
+import Data.Monoid ((<>))
 import qualified Network.URI.Encode as URI
 import qualified Data.Text as Text
 
