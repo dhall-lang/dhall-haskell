@@ -37,14 +37,16 @@ successTest prefix =
         let actualCode   = Test.Util.toDhallPath (prefix <> "A.dhall")
         let expectedCode = Test.Util.toDhallPath (prefix <> "B.dhall")
 
-        actualExpr <- Core.throws (Parser.exprFromText mempty actualCode)
+        value <- Core.throws (Parser.exprFromText mempty actualCode)
 
-        expectedExpr <- Core.throws (Parser.exprFromText mempty expectedCode)
+        resolvedValue <- Import.load value
 
-        let annotatedExpr = Core.Annot actualExpr expectedExpr
+        inferredType <- Core.throws (TypeCheck.typeOf resolvedValue)
 
-        resolvedExpr <- Import.load annotatedExpr
+        expectedType <- Core.throws (Parser.exprFromText mempty expectedCode)
 
-        _ <- Core.throws (TypeCheck.typeOf resolvedExpr)
+        resolvedExpectedType <- Core.denote <$> Import.load expectedType
 
-        return ()
+        let message = "The inferred type did not match the expected type"
+
+        Tasty.HUnit.assertEqual message resolvedExpectedType inferredType
