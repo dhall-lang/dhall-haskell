@@ -30,10 +30,10 @@ getTests = do
 
 successTest :: Text -> TestTree
 successTest prefix = do
-    Tasty.HUnit.testCase prefixS $ do
-        value <- expr (prefixS <> "A.dhall")
+    Tasty.HUnit.testCase (Text.unpack prefix) $ do
+        value <- expr "A.dhall"
 
-        expectedType <- expr (prefixS <> "B.dhall")
+        expectedType <- expr "B.dhall"
 
         inferredType <- Core.throws (TypeCheck.typeOf value)
 
@@ -41,9 +41,9 @@ successTest prefix = do
 
         Tasty.HUnit.assertEqual message expectedType inferredType
   where
-    expr filepath = do
-        code <- Text.IO.readFile filepath
-        e <- Core.throws (Parser.exprFromText mempty code)
-        Import.assertNoImports (Core.denote e)
+    expr suffix = do
+        code <- Text.IO.readFile (Text.unpack prefix <> suffix)
 
-    prefixS = Text.unpack prefix
+        e <- Core.throws (Parser.exprFromText mempty code)
+
+        Import.assertNoImports (Core.denote e)
