@@ -18,12 +18,9 @@ import qualified Test.Tasty        as Tasty
 import qualified Test.Tasty.HUnit  as Tasty.HUnit
 import qualified Turtle
 
-typecheckDirectory :: FilePath
-typecheckDirectory = "./dhall-lang/tests/type-inference"
-
 getTests :: IO TestTree
 getTests = do
-    successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (Turtle.lstree (typecheckDirectory </> "success"))
+    successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (Turtle.lstree "./dhall-lang/tests/type-inference/success")
 
     let testTree = Tasty.testGroup "type-inference tests"
             [ successTests
