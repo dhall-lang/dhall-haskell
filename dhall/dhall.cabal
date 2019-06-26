@@ -533,6 +533,7 @@ Test-Suite tasty
         Dhall.Test.Regression
         Dhall.Test.Tutorial
         Dhall.Test.TypeCheck
+        Dhall.Test.TypeInference
         Dhall.Test.Util
     Build-Depends:
         base                      >= 4        && < 5   ,
