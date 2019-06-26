@@ -414,6 +414,15 @@ instance ToTerm a => ToTerm (Expr s a) where
       where
         t₁  = encode t₀
         _T₁ = encode _T₀
+    encode (ToMap t₀ Nothing) =
+        TList [ TInt 27, t₁ ]
+      where
+        t₁ = encode t₀
+    encode (ToMap t₀ (Just _T₀)) =
+        TList [ TInt 27, t₁, _T₁ ]
+      where
+        t₁  = encode t₀
+        _T₁ = encode _T₀
     encode (Note _ e) =
         encode e
 

@@ -1664,12 +1664,12 @@ normalizeWithM ctx e0 = loop (denote e0)
     ToMap x t        -> do
         x' <- loop x
         case x' of
-            RecordLit kvsX -> ListLit <$> (fmap listItemType <$> t') <*> pure (Dhall.Map.foldMapWithKey entry kvsX)
+            RecordLit kvsX -> ListLit <$> ((>>= listItemType) <$> t') <*> pure (Dhall.Map.foldMapWithKey entry kvsX)
             _ -> ToMap x' <$> t'
       where
         t' = traverse loop t
-        listItemType (App List t) = t
-        fieldToListType ft = Record (Dhall.Map.fromList [("mapKey", Text), ("mapValue", ft)])
+        listItemType (App List itemType) = Just itemType
+        listItemType _ = Nothing
         entry key value = Data.Sequence.singleton (RecordLit (Dhall.Map.fromList [("mapKey", TextLit $ Chunks [] key),
                                                                                   ("mapValue", value)]))
     Field r x        -> do
