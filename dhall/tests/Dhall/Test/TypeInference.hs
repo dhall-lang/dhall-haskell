@@ -6,9 +6,9 @@ import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
-import Turtle (FilePath, (</>))
 
 import qualified Data.Text         as Text
+import qualified Data.Text.IO      as Text.IO
 import qualified Dhall.Core        as Core
 import qualified Dhall.Import      as Import
 import qualified Dhall.Parser      as Parser
@@ -29,21 +29,21 @@ getTests = do
     return testTree
 
 successTest :: Text -> TestTree
-successTest prefix =
-    Tasty.HUnit.testCase (Text.unpack prefix) $ do
-        let actualCode   = Test.Util.toDhallPath (prefix <> "A.dhall")
-        let expectedCode = Test.Util.toDhallPath (prefix <> "B.dhall")
+successTest prefix = do
+    Tasty.HUnit.testCase prefixS $ do
+        value <- expr (prefixS <> "A.dhall")
 
-        value <- Core.throws (Parser.exprFromText mempty actualCode)
+        expectedType <- expr (prefixS <> "B.dhall")
 
-        resolvedValue <- Import.load value
-
-        inferredType <- Core.throws (TypeCheck.typeOf resolvedValue)
-
-        expectedType <- Core.throws (Parser.exprFromText mempty expectedCode)
-
-        resolvedExpectedType <- Core.denote <$> Import.load expectedType
+        inferredType <- Core.throws (TypeCheck.typeOf value)
 
         let message = "The inferred type did not match the expected type"
 
-        Tasty.HUnit.assertEqual message resolvedExpectedType inferredType
+        Tasty.HUnit.assertEqual message expectedType inferredType
+  where
+    expr filepath = do
+        code <- Text.IO.readFile filepath
+        e <- Core.throws (Parser.exprFromText mempty code)
+        Import.assertNoImports (Core.denote e)
+
+    prefixS = Text.unpack prefix
