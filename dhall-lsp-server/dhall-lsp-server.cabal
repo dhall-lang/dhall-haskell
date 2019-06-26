@@ -49,7 +49,7 @@ library
     , dhall
     , dhall-json
     , filepath
-    , haskell-lsp
+    , haskell-lsp < 0.9
     , hslogger
     , lens
     , lens-family-core
