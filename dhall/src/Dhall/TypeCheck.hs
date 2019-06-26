@@ -802,13 +802,19 @@ typeWithA tpa = loop
 
         case _R of
             Record ktsR -> do
-                _ <- fmap Dhall.Core.normalize (loop ctx t)
+                _ <- loop ctx t
 
                 case Dhall.Core.normalize t of
-                    Record ktsT -> do
-                        let projection = Dhall.Map.intersection ktsR ktsT
+                    nf_t@(Record ktsT) -> do
+                        let projection = Record (Dhall.Map.intersection ktsR ktsT)
 
-                        loop ctx (Annot (Record projection) (Record ktsT))
+                        t' <- loop ctx projection
+                        if Dhall.Core.judgmentallyEqual t t'
+                            then do
+                                return nf_t
+                            else do
+                                let nf_t' = Dhall.Core.normalize t'
+                                Left (TypeError ctx e (AnnotMismatch projection nf_t nf_t')) -- TODO
 
                     _ -> do
                         Left (TypeError ctx e (CantProjectByExpression t))
