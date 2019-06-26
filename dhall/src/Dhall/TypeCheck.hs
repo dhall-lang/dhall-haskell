@@ -25,6 +25,7 @@ import Control.Applicative (empty)
 import Control.Exception (Exception)
 import Data.Data (Data(..))
 import Data.Foldable (forM_, toList)
+import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (First(..))
 import Data.Sequence (Seq, ViewL(..))
@@ -195,7 +196,9 @@ typeWithA tpa = loop
             loop ctx b2
 
     loop ctx e@(Annot x t       ) = do
-        _ <- loop ctx t
+        case Dhall.Core.denote t of
+            Const Sort -> return ()
+            _          -> void (loop ctx t)
 
         t' <- loop ctx x
         if Dhall.Core.judgmentallyEqual t t'
