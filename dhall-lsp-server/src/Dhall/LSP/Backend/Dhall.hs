@@ -1,4 +1,4 @@
-module Dhall.LSP.Backend.Dhall {-(
+module Dhall.LSP.Backend.Dhall (
   FileIdentifier,
   fileIdentifierFromURI,
   WellTyped,
@@ -15,16 +15,12 @@ module Dhall.LSP.Backend.Dhall {-(
   load,
   typecheck,
   normalize
- )-} where
+ ) where
 
-import Dhall.Import (loadWith, emptyStatus)
-import Dhall.Parser (Src, exprFromText)
+import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
 import Dhall.Core (Expr)
-import Dhall
-  (rootDirectory, sourceName, defaultInputSettings, inputExprWithSettings)
 
-import qualified Dhall.Binary as Dhall
 import qualified Dhall.Core as Dhall
 import qualified Dhall.Import as Dhall
 import qualified Dhall.Parser.Token as Dhall
@@ -37,42 +33,17 @@ import qualified Network.URI as URI
 import qualified Language.Haskell.LSP.Types as LSP.Types
 import qualified Data.Text as Text
 import qualified Text.Megaparsec as Megaparsec
+
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Crypto.Hash (Digest, SHA256)
-
 import Data.Text (Text)
-import System.FilePath (splitFileName, splitDirectories)
+import System.FilePath (splitDirectories)
 import Lens.Family (view, set)
-import Control.Exception (handle, SomeException, catch)
-import Control.Monad.Trans.State.Strict (evalStateT, runStateT)
+import Control.Exception (SomeException, catch)
+import Control.Monad.Trans.State.Strict (runStateT)
 import Network.URI (URI)
 import Data.Bifunctor (first, second)
 
--- legacy, due to be removed
-runDhall :: FilePath -> Text -> IO (Expr Src X)
-runDhall path = inputExprWithSettings dhallparams
-  where
-    dhallparams = (set rootDirectory dir . set sourceName file)
-                  defaultInputSettings
-    (dir, file) = splitFileName path
-
--- legacy, due to be removed
-runDhallSafe :: FilePath -> Text -> IO (Maybe (Expr Src X))
-runDhallSafe path text = handle (\(_ :: SomeException) -> return Nothing)
-                                (Just <$> runDhall path text)
-
--- legacy, due to be removed
-loadDhallExprSafe :: FilePath -> Text -> IO (Maybe (Expr Src X))
-loadDhallExprSafe filePath txt =
-  case exprFromText filePath txt of
-    Right expr ->
-      let (dir, _) = splitFileName filePath
-      in handle (\(_ :: SomeException) -> return Nothing)
-                (Just <$> evalStateT (loadWith expr) (emptyStatus dir))
-    Left _ -> return Nothing
-
-
--- new code
 -- TODO: use record syntax for records!
 
 -- | A @FileIdentifier@ represents either a local file or a remote url.
