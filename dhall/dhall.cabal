@@ -368,6 +368,8 @@ Extra-Source-Files:
     dhall-lang/tests/typecheck/success/prelude/Text/concatSep/*.dhall
     dhall-lang/tests/typecheck/success/simple/access/*.dhall
     dhall-lang/tests/typecheck/success/simple/*.dhall
+    dhall-lang/tests/type-inference/success/simple/*.dhall
+    dhall-lang/tests/type-inference/success/unit/*.dhall
     tests/format/*.dhall
     tests/lint/success/*.dhall
     tests/diff/*.dhall
@@ -533,6 +535,7 @@ Test-Suite tasty
         Dhall.Test.Regression
         Dhall.Test.Tutorial
         Dhall.Test.TypeCheck
+        Dhall.Test.TypeInference
         Dhall.Test.Util
     Build-Depends:
         base                      >= 4        && < 5   ,
