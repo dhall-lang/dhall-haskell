@@ -805,7 +805,7 @@ typeWithA tpa = loop
                 _ <- loop ctx t
 
                 case Dhall.Core.normalize t of
-                    Record ktsT -> do
+                    nf_t@(Record ktsT) -> do
                         let process k tT = do
                                 case Dhall.Map.lookup k ktsR of
                                     Nothing -> do
@@ -815,7 +815,7 @@ typeWithA tpa = loop
                                             then do
                                                 return ()
                                             else do
-                                                Left (TypeError ctx e (ProjectionTypeMismatch k tT tR))
+                                                Left (TypeError ctx e (ProjectionTypeMismatch k tT tR _R nf_t))
 
                         Dhall.Map.unorderedTraverseWithKey_ process ktsT
 
@@ -912,7 +912,7 @@ data TypeMessage s a
     | CantProject Text (Expr s a) (Expr s a)
     | CantProjectByExpression (Expr s a)
     | MissingField Text (Expr s a)
-    | ProjectionTypeMismatch Text (Expr s a) (Expr s a)
+    | ProjectionTypeMismatch Text (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
     | CantOr (Expr s a) (Expr s a)
     | CantEQ (Expr s a) (Expr s a)
@@ -3544,11 +3544,11 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
         txt0 = insert k
         txt1 = insert expr0
 
-prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1) = ErrorMessages {..}
+prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
     short = "Projection type mismatch\n"
         <>  "\n"
-        <>  prettyDiff expr0 expr1
+        <>  prettyDiff expr2 expr3
 
     long =
         "Explanation: You can project a subset of fields from a record by specifying the \n\
