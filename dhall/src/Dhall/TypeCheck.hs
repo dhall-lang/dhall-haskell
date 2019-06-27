@@ -3546,7 +3546,9 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
 
 prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1) = ErrorMessages {..}
   where
-    short = "Projection type mismatch"
+    short = "Projection type mismatch\n"
+        <>  "\n"
+        <>  prettyDiff expr0 expr1
 
     long =
         "Explanation: You can project a subset of fields from a record by specifying the \n\
