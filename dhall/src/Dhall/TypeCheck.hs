@@ -798,7 +798,7 @@ typeWithA tpa = loop
 
                 Left (TypeError ctx e (CantProject text r t))
     loop ctx e@(Project r (Right t)) = do
-        _R <- loop ctx r
+        _R <- fmap Dhall.Core.normalize (loop ctx r)
 
         case _R of
             Record ktsR -> do
