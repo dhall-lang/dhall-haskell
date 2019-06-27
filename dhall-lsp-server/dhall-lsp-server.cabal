@@ -45,9 +45,11 @@ library
     , base >=4.7 && <5
     , bytestring
     , containers
+    , cryptonite
     , data-default
     , dhall
     , dhall-json
+    , dotgen
     , filepath
     , haskell-lsp
     , hslogger
@@ -55,6 +57,7 @@ library
     , lens-family-core
     , megaparsec
     , mtl
+    , network-uri
     , optparse-applicative
     , prettyprinter
     , sorted-list
