@@ -812,9 +812,16 @@ typeWithA tpa = loop
                             then do
                                 return nf_t
                             else do
-                                let nf_t' = Dhall.Core.normalize t'
+                                let keysR = Dhall.Set.fromList (Dhall.Map.keys ktsR)
+                                let keysT = Dhall.Set.fromList (Dhall.Map.keys ktsT)
 
-                                Left (TypeError ctx e (AnnotMismatch e nf_t nf_t')) -- TODO
+                                case Dhall.Set.difference keysT keysR of
+                                    k : _ -> do
+                                        Left (TypeError ctx e (MissingField k t))
+                                    [] -> do
+                                        let nf_t' = Dhall.Core.normalize t'
+
+                                        Left (TypeError ctx e (ProjectionByTypeMismatch nf_t' nf_t))
 
                     _ -> do
                         Left (TypeError ctx e (CantProjectByExpression t))
@@ -907,6 +914,7 @@ data TypeMessage s a
     | CantAccess Text (Expr s a) (Expr s a)
     | CantProject Text (Expr s a) (Expr s a)
     | CantProjectByExpression (Expr s a)
+    | ProjectionByTypeMismatch (Expr s a) (Expr s a)
     | MissingField Text (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
     | CantOr (Expr s a) (Expr s a)
@@ -3496,6 +3504,13 @@ prettyTypeMessage (CantProjectByExpression expr) = ErrorMessages {..}
         \... which is not a record type                                                  \n"
       where
         txt = insert expr
+
+prettyTypeMessage (ProjectionByTypeMismatch selector intersection) = ErrorMessages {..}
+  where
+    short = "Selector field types don't match record field types\n"
+        <>  "\n"
+        <>  prettyDiff intersection selector
+    long = "TODO"
 
 prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
   where
