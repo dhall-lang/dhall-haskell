@@ -468,7 +468,7 @@ traverseWithKey_
 traverseWithKey_ f m = Data.Functor.void (traverseWithKey f m)
 {-# INLINABLE traverseWithKey_ #-}
 
-{-| Travese all of the key-value pairs in a 'Map', not preserving their
+{-| Traverse all of the key-value pairs in a 'Map', not preserving their
     original order, where the result of the computation can be forgotten.
 
     Note that this is an optimisation over 'traverseWithKey_' since we do
