@@ -57,7 +57,6 @@ import Data.Foldable (traverse_)
 import Data.Semigroup
 import Prelude hiding (filter, lookup)
 
-import qualified Data.Functor
 import qualified Data.Map
 import qualified Data.Set
 import qualified GHC.Exts
