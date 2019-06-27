@@ -802,18 +802,24 @@ typeWithA tpa = loop
 
         case _R of
             Record ktsR -> do
-                _ <- fmap Dhall.Core.normalize (loop ctx t)
+                _ <- loop ctx t
 
                 case Dhall.Core.normalize t of
                     Record ktsT -> do
-                        let keysR = Dhall.Set.fromList (Dhall.Map.keys ktsR)
-                        let keysT = Dhall.Set.fromList (Dhall.Map.keys ktsT)
+                        let process k tT = do
+                                case Dhall.Map.lookup k ktsR of
+                                    Nothing -> do
+                                        Left (TypeError ctx e (MissingField k _R))
+                                    Just tR -> do
+                                        if Dhall.Core.judgmentallyEqual tT tR
+                                            then do
+                                                return ()
+                                            else do
+                                                Left (TypeError ctx e (ProjectionTypeMismatch k tT tR))
 
-                        case Dhall.Set.difference keysT keysR of
-                            k : _ -> do
-                                Left (TypeError ctx e (MissingField k t))
-                            [] -> do
-                                return (Record ktsT)
+                        Dhall.Map.traverseWithKey_ process ktsT
+
+                        return (Record ktsT)
                     _ -> do
                         Left (TypeError ctx e (CantProjectByExpression t))
 
@@ -906,6 +912,7 @@ data TypeMessage s a
     | CantProject Text (Expr s a) (Expr s a)
     | CantProjectByExpression (Expr s a)
     | MissingField Text (Expr s a)
+    | ProjectionTypeMismatch Text (Expr s a) (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
     | CantOr (Expr s a) (Expr s a)
     | CantEQ (Expr s a) (Expr s a)
@@ -3517,11 +3524,13 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \For example, the following expression is " <> _NOT <> " valid:                  \n\
         \                                                                                \n\
+        \                                                                                \n\
         \    ┌─────────────────────────────────┐                                         \n\
         \    │ { foo = True, bar = \"ABC\" }.qux │                                       \n\
         \    └─────────────────────────────────┘                                         \n\
         \                                  ⇧                                             \n\
         \                                  Invalid: the record has no ❰qux❱ field        \n\
+        \                                                                                \n\
         \                                                                                \n\
         \You tried to access a field named:                                              \n\
         \                                                                                \n\
@@ -3534,6 +3543,51 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
       where
         txt0 = insert k
         txt1 = insert expr0
+
+prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1) = ErrorMessages {..}
+  where
+    short = "Projection type mismatch"
+
+    long =
+        "Explanation: You can project a subset of fields from a record by specifying the \n\
+        \desired type of the final record, like this:                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────┐                             \n\
+        \    │ { foo = 1, bar = True }.({ foo : Natural }) │  This is valid              \n\
+        \    └─────────────────────────────────────────────┘                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the expected type for each desired field must match the actual type of  \n\
+        \the corresponding field in the original record.                                 \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \              Invalid: The ❰foo❱ field contains ❰1❱, which has type ❰Natural❱...\n\
+        \              ⇩                                                                 \n\
+        \    ┌──────────────────────────────────────────┐                                \n\
+        \    │ { foo = 1, bar = True }.({ foo : Text }) │                                \n\
+        \    └──────────────────────────────────────────┘                                \n\
+        \                                       ⇧                                        \n\
+        \                                       ... but we requested that the ❰foo❱ field\n\
+        \                                       must contain a value of type ❰Text❱      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You tried to project out a field named:                                         \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... that should have type:                                                      \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... but that field instead had a value of type:                                 \n\
+        \                                                                                \n\
+        \" <> txt2 <> "\n"
+      where
+        txt0 = insert k
+        txt1 = insert expr0
+        txt2 = insert expr1
 
 prettyTypeMessage (CantAnd expr0 expr1) =
         buildBooleanOperator "&&" expr0 expr1
