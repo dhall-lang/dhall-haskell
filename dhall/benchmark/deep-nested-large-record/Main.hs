@@ -1,13 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main (main) where
 
-import Criterion.Main (defaultMain)
+import Gauge(defaultMain)
 
-import qualified Criterion as Criterion
 import qualified Data.Sequence as Seq
 import qualified Dhall.Core as Core
 import qualified Dhall.Import as Import
 import qualified Dhall.TypeCheck as TypeCheck
+import qualified Gauge
 
 dhallPreludeImport :: Core.Import
 dhallPreludeImport = Core.Import
@@ -21,8 +21,8 @@ dhallPreludeImport = Core.Import
     }
   }
 
-issue412 :: Core.Expr s TypeCheck.X -> Criterion.Benchmarkable
-issue412 prelude = Criterion.whnf TypeCheck.typeOf expr
+issue412 :: Core.Expr s TypeCheck.X -> Gauge.Benchmarkable
+issue412 prelude = Gauge.whnf TypeCheck.typeOf expr
   where
     expr
       = Core.Let (pure (Core.Binding "prelude" Nothing prelude))
@@ -30,8 +30,8 @@ issue412 prelude = Criterion.whnf TypeCheck.typeOf expr
       $ Seq.replicate 5
       $ Core.Var (Core.V "prelude" 0) `Core.Field` "types" `Core.Field` "Little" `Core.Field` "Foo"
 
-unionPerformance :: Core.Expr s TypeCheck.X -> Criterion.Benchmarkable
-unionPerformance prelude = Criterion.whnf TypeCheck.typeOf expr
+unionPerformance :: Core.Expr s TypeCheck.X -> Gauge.Benchmarkable
+unionPerformance prelude = Gauge.whnf TypeCheck.typeOf expr
   where
     innerBinding =
         Core.Binding "big" Nothing
@@ -47,6 +47,6 @@ main :: IO ()
 main = do
   prelude <- Import.load (Core.Embed dhallPreludeImport)
   defaultMain
-    [ Criterion.bench "issue 412" (issue412 prelude)
-    , Criterion.bench "union performance" (unionPerformance prelude)
+    [ Gauge.bench "issue 412" (issue412 prelude)
+    , Gauge.bench "union performance" (unionPerformance prelude)
     ]
