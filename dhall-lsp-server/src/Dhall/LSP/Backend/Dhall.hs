@@ -139,7 +139,6 @@ invalidate (FileIdentifier fileid) (Cache cache) =
 -- | A Dhall error. Covers parsing, resolving of imports, typechecking and
 --   normalisation.
 data DhallError = ErrorInternal SomeException
-                | ErrorCBOR Dhall.DecodingFailure
                 | ErrorImportSourced (Dhall.SourcedException Dhall.MissingImports)
                 | ErrorTypecheck (Dhall.TypeError Src X)
                 | ErrorParse Dhall.ParseError
