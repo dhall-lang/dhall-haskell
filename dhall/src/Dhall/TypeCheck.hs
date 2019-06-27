@@ -817,7 +817,7 @@ typeWithA tpa = loop
                                             else do
                                                 Left (TypeError ctx e (ProjectionTypeMismatch k tT tR))
 
-                        Dhall.Map.traverseWithKey_ process ktsT
+                        Dhall.Map.unorderedTraverseWithKey_ process ktsT
 
                         return (Record ktsT)
                     _ -> do
