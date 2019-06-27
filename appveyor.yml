@@ -73,7 +73,7 @@ for:
 -
   matrix:
     except:
-      # stack is not able to build test dependencies with lts-6
+      # stack is not able to build test or benchmark dependencies with lts-6
       - STACK_YAML: stack-lts-6.yaml
 
   test_script:
@@ -82,6 +82,7 @@ for:
     - stack test dhall-text
     - stack test dhall-bash
     - stack test dhall-lsp-server
+    - stack bench --benchmark-arguments "--time-limit 1" dhall
 
 artifacts:
   - path: bin\dhall-%DEPLOY_SUFFIX%
