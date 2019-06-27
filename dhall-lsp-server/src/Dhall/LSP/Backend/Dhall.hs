@@ -1,17 +1,21 @@
-module Dhall.LSP.Backend.Dhall {- (
+module Dhall.LSP.Backend.Dhall {-(
+  FileIdentifier,
+  fileIdentifierFromURI,
+  WellTyped,
+  fromWellTyped,
+  Normal,
+  fromNormal,
+  Cache,
+  emptyCache,
+  cacheExpr,
+  invalidate,
   DhallError(..),
   parse,
   parseWithHeader,
-  Cache,
-  invalidate,
   load,
   typecheck,
-  normalize,
-  -- old stuff
-  loadDhallExprSafe,
-  runDhall,
-  runDhallSafe
- ) -} where
+  normalize
+ )-} where
 
 import Dhall.Import (loadWith, emptyStatus)
 import Dhall.Parser (Src, exprFromText)
@@ -71,66 +75,8 @@ loadDhallExprSafe filePath txt =
 -- new code
 -- TODO: use record syntax for records!
 
--- | A Dhall error. Covers parsing, resolving of imports, typechecking and
---   normalisation.
-data DhallError = ErrorInternal SomeException
-                | ErrorCBOR Dhall.DecodingFailure
-                | ErrorImportSourced (Dhall.SourcedException Dhall.MissingImports)
-                | ErrorTypecheck (Dhall.TypeError Src X)
-                | ErrorParse Dhall.ParseError
-
--- | Parse a Dhall expression.
-parse :: Text -> Either DhallError (Expr Src Dhall.Import)
-parse = fmap snd . parseWithHeader
-
--- | Parse a Dhall expression along with its "header", i.e. whitespace and
---   comments prefixing the actual code.
-parseWithHeader :: Text -> Either DhallError (Text, Expr Src Dhall.Import)
-parseWithHeader = first ErrorParse . Dhall.exprAndHeaderFromText ""
-
--- | A cache maps Dhall imports to fully normalised expressions. By reusing
---   caches we can speeds up diagnostics etc. significantly!
-newtype Cache = Cache (Map.Map Dhall.Import (Dot.NodeId, Expr Src X))
-
--- | The initial cache.
-emptyCache :: Cache
-emptyCache = Cache Map.empty
-
 -- | A @FileIdentifier@ represents either a local file or a remote url.
 newtype FileIdentifier = FileIdentifier Dhall.ImportType
-
--- | A well-typed expression.
-newtype WellTyped = WellTyped {fromWellTyped :: Expr Src X}
-
--- | A fully normalised expression.
-newtype Normal = Normal {fromNormal :: Expr Src X}
-
--- | Cache a given normal expression.
-cacheExpr :: FileIdentifier -> Normal -> Cache -> Cache
-cacheExpr fileid (Normal expr) (Cache c) =
-  let unhashedImport = importFromFileIdentifier fileid
-      alpha = Dhall.alphaNormalize expr  -- we need to alpha-normalise before
-      hash = Dhall.hashExpression maxBound alpha  -- calculating the hash
-      hashedImport = hashedImportFromFileIdentifier fileid hash
-  in Cache $ Map.insert unhashedImport (Dot.userNodeId 0, expr)
-           $ Map.insert hashedImport (Dot.userNodeId 0, expr) c
-
--- | Invalidate all imports of a file (unhashed, as well as any hashed
---   versions).
-invalidate :: FileIdentifier -> Cache -> Cache
-invalidate (FileIdentifier fileid) (Cache cache) =
-  Cache $ Map.filterWithKey
-    (\(Dhall.Import (Dhall.ImportHashed _ t) _) _ -> fileid /= t) cache
-
--- Construct the unhashed import corresponding to the given file.
-importFromFileIdentifier :: FileIdentifier -> Dhall.Import
-importFromFileIdentifier (FileIdentifier importType) =
-  Dhall.Import (Dhall.ImportHashed Nothing importType) Dhall.Code
-
--- Construct the hashed import corresponding to the given file.
-hashedImportFromFileIdentifier :: FileIdentifier -> Digest SHA256 -> Dhall.Import
-hashedImportFromFileIdentifier (FileIdentifier importType) hash =
-  Dhall.Import (Dhall.ImportHashed (Just hash) importType) Dhall.Code
 
 -- | Construct a FileIdentifier from a given URI. Supports "file:", "http:" and
 --   "https:" URI schemes.
@@ -149,6 +95,64 @@ fileIdentifierFromURI uri
              $ URI.uriToString id uri ""
     return $ FileIdentifier (Dhall.Remote url)
 
+-- | A well-typed expression.
+newtype WellTyped = WellTyped {fromWellTyped :: Expr Src X}
+
+-- | A fully normalised expression.
+newtype Normal = Normal {fromNormal :: Expr Src X}
+
+-- | A cache maps Dhall imports to fully normalised expressions. By reusing
+--   caches we can speeds up diagnostics etc. significantly!
+newtype Cache = Cache (Map.Map Dhall.Import (Dot.NodeId, Expr Src X))
+
+-- | The initial cache.
+emptyCache :: Cache
+emptyCache = Cache Map.empty
+
+-- | Cache a given normal expression.
+cacheExpr :: FileIdentifier -> Normal -> Cache -> Cache
+cacheExpr fileid (Normal expr) (Cache c) =
+  let unhashedImport = importFromFileIdentifier fileid
+      alpha = Dhall.alphaNormalize expr  -- we need to alpha-normalise before
+      hash = Dhall.hashExpression maxBound alpha  -- calculating the hash
+      hashedImport = hashedImportFromFileIdentifier fileid hash
+  in Cache $ Map.insert unhashedImport (Dot.userNodeId 0, expr)
+           $ Map.insert hashedImport (Dot.userNodeId 0, expr) c
+
+-- Construct the unhashed import corresponding to the given file.
+importFromFileIdentifier :: FileIdentifier -> Dhall.Import
+importFromFileIdentifier (FileIdentifier importType) =
+  Dhall.Import (Dhall.ImportHashed Nothing importType) Dhall.Code
+
+-- Construct the hashed import corresponding to the given file.
+hashedImportFromFileIdentifier :: FileIdentifier -> Digest SHA256 -> Dhall.Import
+hashedImportFromFileIdentifier (FileIdentifier importType) hash =
+  Dhall.Import (Dhall.ImportHashed (Just hash) importType) Dhall.Code
+
+-- | Invalidate all imports of a file (unhashed, as well as any hashed
+--   versions).
+invalidate :: FileIdentifier -> Cache -> Cache
+invalidate (FileIdentifier fileid) (Cache cache) =
+  Cache $ Map.filterWithKey
+    (\(Dhall.Import (Dhall.ImportHashed _ t) _) _ -> fileid /= t) cache
+
+-- | A Dhall error. Covers parsing, resolving of imports, typechecking and
+--   normalisation.
+data DhallError = ErrorInternal SomeException
+                | ErrorCBOR Dhall.DecodingFailure
+                | ErrorImportSourced (Dhall.SourcedException Dhall.MissingImports)
+                | ErrorTypecheck (Dhall.TypeError Src X)
+                | ErrorParse Dhall.ParseError
+
+-- | Parse a Dhall expression.
+parse :: Text -> Either DhallError (Expr Src Dhall.Import)
+parse = fmap snd . parseWithHeader
+
+-- | Parse a Dhall expression along with its "header", i.e. whitespace and
+--   comments prefixing the actual code.
+parseWithHeader :: Text -> Either DhallError (Text, Expr Src Dhall.Import)
+parseWithHeader = first ErrorParse . Dhall.exprAndHeaderFromText ""
+
 -- | Resolve all imports in an expression.
 load :: FileIdentifier -> Expr Src Dhall.Import -> Cache ->
   IO (Either DhallError (Cache, Expr Src X))
@@ -165,8 +169,10 @@ load fileid expr (Cache cache) = do
     `catch` (\e -> return . Left $ ErrorImportSourced e)
     `catch` (\e -> return . Left $ ErrorInternal e)
 
+-- | Typecheck a fully resolved expression.
 typecheck :: Expr Src X -> Either DhallError WellTyped
 typecheck = first ErrorTypecheck . second WellTyped . Dhall.typeOf
 
+-- | Normalise a well-typed expression.
 normalize :: WellTyped -> Normal
 normalize (WellTyped expr) = Normal $ Dhall.normalize expr
