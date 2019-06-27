@@ -4,14 +4,14 @@
 module Main where
 
 import Control.Monad (forM)
-import Criterion.Main (defaultMain, bgroup, bench, whnf, nfIO)
 import Data.Map (Map, foldrWithKey, singleton, unions)
 import Data.Monoid ((<>))
+import Gauge (defaultMain, bgroup, bench, whnf, nfIO)
 
 import System.Directory
 
 import qualified Codec.Serialise
-import qualified Criterion.Main as Criterion
+import qualified Gauge
 import qualified Data.ByteString.Lazy
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -55,17 +55,17 @@ loadPreludeFiles = loadDirectory "Prelude"
         loadFile :: FilePath -> IO PreludeFiles
         loadFile path = singleton path <$> TIO.readFile path
 
-benchParser :: PreludeFiles -> Criterion.Benchmark
+benchParser :: PreludeFiles -> Gauge.Benchmark
 benchParser =
       bgroup "exprFromText"
     . foldrWithKey (\name expr -> (benchExprFromText name expr :)) []
 
-benchExprFromText :: String -> T.Text -> Criterion.Benchmark
+benchExprFromText :: String -> T.Text -> Gauge.Benchmark
 benchExprFromText name expr =
     bench name $ whnf (Dhall.exprFromText "(input)") expr
 
 benchExprFromBytes
-    :: String -> Data.ByteString.Lazy.ByteString -> Criterion.Benchmark
+    :: String -> Data.ByteString.Lazy.ByteString -> Gauge.Benchmark
 benchExprFromBytes name bytes = bench name (whnf f bytes)
   where
     f bytes = do
