@@ -53,7 +53,6 @@ module Dhall.Map
 
 import Control.Applicative ((<|>))
 import Data.Data (Data)
-import Data.Foldable (traverse_)
 import Data.Semigroup
 import Prelude hiding (filter, lookup)
 
@@ -459,7 +458,8 @@ traverseWithKey f m =
 -}
 unorderedTraverseWithKey_
     :: Ord k => Applicative f => (k -> a -> f ()) -> Map k a -> f ()
-unorderedTraverseWithKey_ f = traverse_ (uncurry f) . toList
+unorderedTraverseWithKey_ f (Map m _) =
+    Data.Map.foldlWithKey' (\acc k v -> acc *> f k v) (pure ()) m
 {-# INLINABLE unorderedTraverseWithKey_ #-}
 
 {-| Convert a `Map` to a list of key-value pairs in the original order of keys
