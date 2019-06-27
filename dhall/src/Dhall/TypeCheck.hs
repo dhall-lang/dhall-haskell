@@ -197,8 +197,8 @@ typeWithA tpa = loop
 
     loop ctx e@(Annot x t       ) = do
         case Dhall.Core.denote t of
-            Const Sort -> return ()
-            _          -> void (loop ctx t)
+            Const _ -> return ()
+            _       -> void (loop ctx t)
 
         t' <- loop ctx x
         if Dhall.Core.judgmentallyEqual t t'
