@@ -805,7 +805,12 @@ typeWithA tpa = loop
                 _ <- loop ctx t
 
                 case Dhall.Core.normalize t of
-                    nf_t@(Record ktsT) -> do
+                    Record ktsT -> do
+                        let actualSubset =
+                                Record (Dhall.Map.intersection ktsR ktsT)
+
+                        let expectedSubset = t
+
                         let process k tT = do
                                 case Dhall.Map.lookup k ktsR of
                                     Nothing -> do
@@ -815,7 +820,7 @@ typeWithA tpa = loop
                                             then do
                                                 return ()
                                             else do
-                                                Left (TypeError ctx e (ProjectionTypeMismatch k tT tR _R nf_t))
+                                                Left (TypeError ctx e (ProjectionTypeMismatch k tT tR expectedSubset actualSubset))
 
                         Dhall.Map.unorderedTraverseWithKey_ process ktsT
 
