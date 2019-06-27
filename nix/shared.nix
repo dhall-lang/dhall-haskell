@@ -1,6 +1,15 @@
 { compiler ? "ghc843", coverage ? false, system ? builtins.currentSystem }:
 
 let
+  allDhallPackages = [
+    "dhall"
+    "dhall-bash"
+    "dhall-json"
+    "dhall-lsp-server"
+    "dhall-nix"
+    "dhall-text"
+  ];
+
   fetchNixpkgs = import ./fetchNixpkgs.nix;
 
   mass = function: names: haskellPackagesNew: haskellPackagesOld:
@@ -136,6 +145,9 @@ let
                     ++  pkgsNew.lib.optional (!(compiler == "ghcjs" || compiler == "ghc7103")) "dhall"
                     );
 
+                doBenchmarkExtension =
+                  mass pkgsNew.haskell.lib.doBenchmark allDhallPackages;
+
                 failOnAllWarningsExtension =
                   mass failOnAllWarnings [
                     "dhall"
@@ -212,6 +224,7 @@ let
                   [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./.; })
                     extension
                     doCheckExtension
+                    doBenchmarkExtension
                     failOnAllWarningsExtension
                   ];
           }
@@ -573,9 +586,7 @@ let
       '';
     };
 
-  toShell = drv:
-    # Benchmark dependencies aren't added by default
-    (pkgs.haskell.lib.doBenchmark drv).env;
+  toShell = drv: drv.env;
 
   possibly-static = {
     dhall            = makeStaticIfPossible "dhall"           ;
@@ -619,13 +630,13 @@ in
 
     inherit (pkgs.releaseTools) aggregate;
 
-    shell-dhall            = toShell pkgs.haskell.packages."${compiler}".dhall           ;
-    shell-dhall-bash       = toShell pkgs.haskell.packages."${compiler}".dhall-bash      ;
-    shell-dhall-json       = toShell pkgs.haskell.packages."${compiler}".dhall-json      ;
-    shell-dhall-lsp-server = toShell pkgs.haskell.packages."${compiler}".dhall-lsp-server;
-    shell-dhall-nix        = toShell pkgs.haskell.packages."${compiler}".dhall-nix       ;
-    shell-dhall-text       = toShell pkgs.haskell.packages."${compiler}".dhall-text      ;
-    shell-dhall-try        = toShell pkgs.haskell.packages."${compiler}".dhall-try       ;
+    shell-dhall            = pkgs.haskell.packages."${compiler}".dhall.env           ;
+    shell-dhall-bash       = pkgs.haskell.packages."${compiler}".dhall-bash.env      ;
+    shell-dhall-json       = pkgs.haskell.packages."${compiler}".dhall-json.env      ;
+    shell-dhall-lsp-server = pkgs.haskell.packages."${compiler}".dhall-lsp-server.env;
+    shell-dhall-nix        = pkgs.haskell.packages."${compiler}".dhall-nix.env       ;
+    shell-dhall-text       = pkgs.haskell.packages."${compiler}".dhall-text.env      ;
+    shell-dhall-try        = pkgs.haskell.packages."${compiler}".dhall-try.env       ;
 
     image-dhall            = toDockerImage "dhall"           ;
     image-dhall-bash       = toDockerImage "dhall-bash"      ;
