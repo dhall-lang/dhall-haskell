@@ -317,7 +317,7 @@ import Dhall
 -- - Bool
 -- + Natural
 -- ...
--- 1: 1 : Bool
+-- 1│ 1 : Bool
 -- ...
 -- (input):1:1
 -- ...
@@ -517,7 +517,7 @@ import Dhall
 -- *** Exception:
 -- ...Error...: An empty list requires a type annotation
 -- ...
--- 1: []
+-- 1│ []
 -- ...
 -- (input):1:1
 --
@@ -531,7 +531,7 @@ import Dhall
 -- - Natural
 -- + Bool
 -- ...
--- 1:     True
+-- 1│     True
 -- ...
 -- (input):1:5
 -- ...
