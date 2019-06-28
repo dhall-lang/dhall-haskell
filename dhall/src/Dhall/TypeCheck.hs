@@ -3515,7 +3515,7 @@ prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1 expr2 expr3) = ErrorMess
   where
     short = "Projection type mismatch\n"
         <>  "\n"
-        <>  prettyDiff expr2 expr3
+        <>  Dhall.Diff.diffNormalized expr2 expr3
 
     long =
         "Explanation: You can project a subset of fields from a record by specifying the \n\
