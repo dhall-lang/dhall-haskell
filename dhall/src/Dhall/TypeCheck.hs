@@ -947,9 +947,6 @@ _NOT = "\ESC[1mnot\ESC[0m"
 insert :: Pretty a => a -> Doc Ann
 insert = Dhall.Util.insert
 
-prettyDiff :: (Eq a, Pretty a, ToTerm a) => Expr s a -> Expr s a -> Doc Ann
-prettyDiff exprL exprR = Dhall.Diff.diffNormalized exprL exprR
-
 prettyTypeMessage
     :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> ErrorMessages
 prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
@@ -1357,7 +1354,7 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
     short = "Wrong type of function argument\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr3
+        <>  Dhall.Diff.diffNormalized expr1 expr3
 
     long =
         "Explanation: Every function declares what type or kind of argument to accept    \n\
@@ -1491,7 +1488,7 @@ prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
     short = "Expression doesn't match annotation\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr2
+        <>  Dhall.Diff.diffNormalized expr1 expr2
     long =
         "Explanation: You can annotate an expression with its type or kind using the     \n\
         \❰:❱ symbol, like this:                                                          \n\
@@ -1774,7 +1771,7 @@ prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
   where
     short = "❰if❱ branches must have matching types\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr3
+        <>  Dhall.Diff.diffNormalized expr1 expr3
 
     long =
         "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
@@ -1926,7 +1923,7 @@ prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
   where
     short = "List elements should all have the same type\n"
         <>  "\n"
-        <>  prettyDiff expr0 expr2
+        <>  Dhall.Diff.diffNormalized expr0 expr2
 
     long =
         "Explanation: Every element in a list must have the same type                    \n\
@@ -1964,7 +1961,7 @@ prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
   where
     short = "List element has the wrong type\n"
         <>  "\n"
-        <>  prettyDiff expr0 expr2
+        <>  Dhall.Diff.diffNormalized expr0 expr2
 
     long =
         "Explanation: Every element in the list must have a type matching the type       \n\
@@ -2054,7 +2051,7 @@ prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..
   where
     short = "❰Optional❱ element has the wrong type\n"
         <>  "\n"
-        <>  prettyDiff expr0 expr2
+        <>  Dhall.Diff.diffNormalized expr0 expr2
 
     long =
         "Explanation: An ❰Optional❱ element must have a type matching the type annotation\n\
@@ -2457,7 +2454,7 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
   where
     short = "You can only append ❰List❱s with matching element types\n"
         <>  "\n"
-        <>  prettyDiff expr0 expr1
+        <>  Dhall.Diff.diffNormalized expr0 expr1
 
     long =
         "Explanation: You can append two ❰List❱s using the ❰#❱ operator, like this:      \n\
@@ -3011,7 +3008,7 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
   where
     short = "Wrong handler input type\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr2
+        <>  Dhall.Diff.diffNormalized expr1 expr2
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -3073,7 +3070,7 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
   where
     short = "Wrong handler output type\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr2
+        <>  Dhall.Diff.diffNormalized expr1 expr2
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -3137,7 +3134,7 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
   where
     short = "Handlers should have the same output type\n"
         <>  "\n"
-        <>  prettyDiff expr0 expr1
+        <>  Dhall.Diff.diffNormalized expr0 expr1
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
