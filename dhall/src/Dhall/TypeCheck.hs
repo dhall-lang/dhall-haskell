@@ -3318,7 +3318,7 @@ prettyTypeMessage (MapTypeMismatch expr0 expr1) = ErrorMessages {..}
   where
     short = "❰toMap❱ result type doesn't match annotation"
         <>  "\n"
-        <>  prettyDiff expr0 expr1
+        <>  Dhall.Diff.diffNormalized expr0 expr1
 
     long =
         "Explanation: a ❰toMap❱ application has been annotated with a type that doesn't  \n\
