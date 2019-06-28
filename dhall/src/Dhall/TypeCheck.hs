@@ -496,7 +496,7 @@ typeWithA tpa = loop
                 s0 <- fmap Dhall.Core.normalize (loop ctx t0)
                 c <- case s0 of
                     Const c -> pure c
-                    _       -> Left (TypeError ctx e (InvalidField k0 v0))
+                    _       -> Left (TypeError ctx e (InvalidFieldType k0 v0))
                 let process k v = do
                         t <- loop ctx v
                         s <- fmap Dhall.Core.normalize (loop ctx t)
@@ -505,7 +505,7 @@ typeWithA tpa = loop
                                 if c == c'
                                 then return ()
                                 else Left (TypeError ctx e (FieldMismatch k v c k0 v0 c'))
-                            _ -> Left (TypeError ctx e (InvalidField k t))
+                            _ -> Left (TypeError ctx e (InvalidFieldType k t))
 
                         return t
                 kts <- Dhall.Map.traverseWithKey process kvs
@@ -881,7 +881,6 @@ data TypeMessage s a
     | InvalidPredicate (Expr s a) (Expr s a)
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
-    | InvalidField Text (Expr s a)
     | InvalidFieldType Text (Expr s a)
     | FieldAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | FieldMismatch Text (Expr s a) Const Text (Expr s a) Const
@@ -2292,43 +2291,6 @@ prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
         level Type = "term"
         level Kind = "type"
         level Sort = "kind"
-
-prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
-  where
-    short = "Invalid field"
-
-    long =
-        "Explanation: Every record literal is a set of fields assigned to values, like   \n\
-        \this:                                                                           \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────────────┐                                  \n\
-        \    │ { foo = 100, bar = True, baz = \"ABC\" } │                                \n\
-        \    └────────────────────────────────────────┘                                  \n\
-        \                                                                                \n\
-        \However, fields can only be terms and or ❰Type❱s and not ❰Kind❱s                \n\
-        \                                                                                \n\
-        \For example, the following record literal is " <> _NOT <> " valid:              \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────┐                                                          \n\
-        \    │ { foo = Type } │                                                          \n\
-        \    └────────────────┘                                                          \n\
-        \              ⇧                                                                 \n\
-        \              ❰Type❱ is a ❰Kind❱, which is not allowed                          \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a record literal with a field named:                               \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... whose value is:                                                             \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is not a term or ❰Type❱                                               \n"
-      where
-        txt0 = insert k
-        txt1 = insert expr0
 
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
