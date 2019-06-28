@@ -28,7 +28,7 @@ data Severity = Error
 
 data ServerState = ServerState
   { _importCache :: Cache  -- ^ The dhall import cache
-  , _errors :: Map J.Uri [DhallError]  -- ^ Map from dhall files to their errors
+  , _errors :: Map J.Uri DhallError  -- ^ Map from dhall files to their errors
   , _httpManager :: Maybe Dynamic
   -- ^ The http manager used by dhall's import infrastructure
   , _lspFuncs :: LSP.LspFuncs ()
@@ -46,7 +46,7 @@ initialState lsp = ServerState {..}
 importCache :: Functor f => LensLike' f ServerState Cache
 importCache k s = fmap (\x -> s {_importCache = x}) (k (_importCache s))
 
-errors :: Functor f => LensLike' f ServerState (Map J.Uri [DhallError])
+errors :: Functor f => LensLike' f ServerState (Map J.Uri DhallError)
 errors k s = fmap (\x -> s {_errors = x}) (k (_errors s))
 
 httpManager :: Functor f => LensLike' f ServerState (Maybe Dynamic)

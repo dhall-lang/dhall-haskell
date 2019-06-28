@@ -31,9 +31,8 @@ import Control.Monad.Trans.Except (throwE, catchE, runExceptT)
 import Control.Monad.Trans.State.Strict (execStateT)
 import Control.Monad.Trans.State.Strict (gets, modify)
 import qualified Data.HashMap.Strict as HashMap
-import Data.List (find)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (mapMaybe, maybeToList)
+import Data.Maybe (maybeToList)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Lens.Family (view, set, over)
@@ -144,7 +143,7 @@ hoverExplain request = do
   let uri = request ^. J.params . J.textDocument . J.uri
       (J.Position line col) = request ^. (J.params . J.position)
   txt <- readUri uri
-  errs <- lift $ gets (Map.findWithDefault [] uri . view errors)
+  mError <- lift $ gets (Map.lookup uri . view errors)
   let isHovered (Diagnosis _ (Just (Range left right)) _) =
         left <= (line,col) && (line,col) <= right
       isHovered _ = False
@@ -159,9 +158,9 @@ hoverExplain request = do
         in Just J.Hover { .. }
       hoverFromDiagnosis _ = Nothing
 
-      explanations = mapMaybe (explain txt) errs
-      mExplanation = find isHovered explanations
-      mHover = do explanation <- mExplanation
+      mHover = do err <- mError
+                  explanation <- explain txt err
+                  True <- return $ isHovered explanation
                   hoverFromDiagnosis explanation
   lspRespond LSP.RspHover request mHover
 
@@ -242,6 +241,7 @@ diagnosticsHandler uri = do
       diagnostics = concatMap (map diagnosisToDiagnostic . diagnose txt) (maybeToList errs)
                      ++ map suggestionToDiagnostic suggestions
 
+  lift $ modify (over errors (Map.alter (const errs) uri))  -- cache errors
   lspSendNotification LSP.NotPublishDiagnostics J.TextDocumentPublishDiagnostics
                       (J.PublishDiagnosticsParams uri (J.List diagnostics))
 
