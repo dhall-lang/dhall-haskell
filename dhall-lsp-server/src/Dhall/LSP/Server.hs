@@ -1,7 +1,4 @@
-
-{-| This is the entry point for the LSP server. All calls are delegated to the haskell-lsp library
-    which does the heavy lifting.
--}
+{-| This is the entry point for the LSP server. -}
 module Dhall.LSP.Server(run) where
 
 import           Control.Concurrent.STM.TVar
@@ -9,33 +6,34 @@ import           Data.Default
 import qualified Language.Haskell.LSP.Control as LSP.Control
 import qualified Language.Haskell.LSP.Core as LSP.Core
 
-import qualified Language.Haskell.LSP.Types            as J
+import qualified Language.Haskell.LSP.Types as J
 
 import Data.Text (Text)
 import qualified System.Log.Logger
 import GHC.Conc (atomically)
 
-import qualified Dhall.LSP.Handlers as Handlers
-import qualified Dhall.LSP.Handlers.Command as Handlers
-import qualified Dhall.LSP.Handlers.Hover as Handlers
+import Dhall.LSP.State
+import Dhall.LSP.Handlers (nullHandler, wrapHandler, hoverHandler,
+  didOpenTextDocumentNotificationHandler, didSaveTextDocumentNotificationHandler,
+  executeCommandHandler, documentFormattingHandler)
 
 -- | The main entry point for the LSP server.
 run :: Maybe FilePath -> IO ()
 run mlog = do
   setupLogger mlog
-  vlsp <- newTVarIO Nothing
-  _    <- LSP.Control.run (makeConfig, initCallback vlsp) (lspHandlers vlsp)
+  state <- newTVarIO Nothing
+  _    <- LSP.Control.run (makeConfig, initCallback state) (lspHandlers state)
                           lspOptions Nothing
   return ()
   where
     -- Callback that is called when the LSP server is started; makes the lsp
     -- state (LspFuncs) available to the message handlers through the vlsp TVar.
     initCallback
-      :: TVar (Maybe (LSP.Core.LspFuncs ()))
+      :: TVar (Maybe ServerState)
       -> LSP.Core.LspFuncs ()
       -> IO (Maybe J.ResponseError)
-    initCallback vlsp lsp = do
-      atomically $ writeTVar vlsp (Just lsp)
+    initCallback state lsp = do
+      atomically . writeTVar state $ Just (initialState lsp)
       return Nothing
 
     -- Interpret DidChangeConfigurationNotification; pointless at the moment
@@ -75,35 +73,19 @@ lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
                      -- around this peculiarity.
                      Just (J.ExecuteCommandOptions
                        (J.List ["dhall.server.lint",
-                                "dhall.server.toJSON",
                                 "dhall.server.annotateLet"]))
                  }
 
-lspHandlers :: TVar (Maybe (LSP.Core.LspFuncs ())) -> LSP.Core.Handlers
-lspHandlers lsp
-  = def { LSP.Core.initializedHandler                       = Just $ wrapHandler lsp Handlers.nullHandler
-        , LSP.Core.hoverHandler                             = Just $ wrapHandler lsp Handlers.hoverHandler
-        , LSP.Core.didOpenTextDocumentNotificationHandler   = Just $ wrapHandler lsp Handlers.didOpenTextDocumentNotificationHandler
-        , LSP.Core.didChangeTextDocumentNotificationHandler = Just $ wrapHandler lsp Handlers.nullHandler
-        , LSP.Core.didSaveTextDocumentNotificationHandler   = Just $ wrapHandler lsp Handlers.didSaveTextDocumentNotificationHandler
-        , LSP.Core.didCloseTextDocumentNotificationHandler  = Just $ wrapHandler lsp Handlers.nullHandler
-        , LSP.Core.cancelNotificationHandler                = Just $ wrapHandler lsp Handlers.nullHandler
-        , LSP.Core.responseHandler                          = Just $ wrapHandler lsp Handlers.nullHandler
-        , LSP.Core.executeCommandHandler                    = Just $ wrapHandler lsp Handlers.executeCommandHandler
-        , LSP.Core.documentFormattingHandler                = Just $ wrapHandler lsp Handlers.documentFormattingHandler
+lspHandlers :: TVar (Maybe ServerState) -> LSP.Core.Handlers
+lspHandlers state
+  = def { LSP.Core.initializedHandler                       = Just $ wrapHandler state nullHandler
+        , LSP.Core.hoverHandler                             = Just $ wrapHandler state hoverHandler
+        , LSP.Core.didOpenTextDocumentNotificationHandler   = Just $ wrapHandler state didOpenTextDocumentNotificationHandler
+        , LSP.Core.didChangeTextDocumentNotificationHandler = Just $ wrapHandler state nullHandler
+        , LSP.Core.didSaveTextDocumentNotificationHandler   = Just $ wrapHandler state didSaveTextDocumentNotificationHandler
+        , LSP.Core.didCloseTextDocumentNotificationHandler  = Just $ wrapHandler state nullHandler
+        , LSP.Core.cancelNotificationHandler                = Just $ wrapHandler state nullHandler
+        , LSP.Core.responseHandler                          = Just $ wrapHandler state nullHandler
+        , LSP.Core.executeCommandHandler                    = Just $ wrapHandler state executeCommandHandler
+        , LSP.Core.documentFormattingHandler                = Just $ wrapHandler state documentFormattingHandler
         }
-
--- Workaround to make our single-threaded LSP fit dhall-lsp's API, which
--- expects a multi-threaded implementation.
-wrapHandler
-  :: TVar (Maybe (LSP.Core.LspFuncs ()))
-  -> (LSP.Core.LspFuncs () -> a -> IO ())
-  -> a
-  -> IO ()
-wrapHandler vlsp handle message = do
-  mlsp <- readTVarIO vlsp
-  case mlsp of
-    Just lsp -> handle lsp message
-    Nothing ->
-      fail "A handler was called before the LSP was initialized properly.\
-          \ This should never happen."

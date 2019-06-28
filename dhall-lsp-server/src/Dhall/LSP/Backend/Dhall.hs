@@ -1,5 +1,6 @@
 module Dhall.LSP.Backend.Dhall (
   FileIdentifier,
+  fileIdentifierFromFilePath,
   fileIdentifierFromURI,
   WellTyped,
   fromWellTyped,
@@ -37,7 +38,7 @@ import qualified Text.Megaparsec as Megaparsec
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Crypto.Hash (Digest, SHA256)
 import Data.Text (Text)
-import System.FilePath (splitDirectories)
+import System.FilePath (splitDirectories, takeFileName, takeDirectory)
 import Lens.Family (view, set)
 import Control.Exception (SomeException, catch)
 import Control.Monad.Trans.State.Strict (runStateT)
@@ -51,15 +52,22 @@ newtype FileIdentifier = FileIdentifier Dhall.ImportType
 
 -- | Construct a FileIdentifier from a given URI. Supports "file:", "http:" and
 --   "https:" URI schemes.
+--   TODO: Split into FilePath -> FileIdentifier and URI -> Maybe FileIdentifier
+-- TODO: update comments
+fileIdentifierFromFilePath :: FilePath -> FileIdentifier
+fileIdentifierFromFilePath path =
+  let filename = Text.pack $ takeFileName path
+      directory = takeDirectory path
+      components = map Text.pack . reverse . splitDirectories $ directory
+  in FileIdentifier $ Dhall.Local Dhall.Absolute
+                        (Dhall.File (Dhall.Directory components) filename)
+
 fileIdentifierFromURI :: URI -> Maybe FileIdentifier
 fileIdentifierFromURI uri
   | URI.uriScheme uri == "file:" = do
-    filePath <- LSP.Types.uriToFilePath . LSP.Types.Uri . Text.pack
+    path <- LSP.Types.uriToFilePath . LSP.Types.Uri . Text.pack
                   $ URI.uriToString id uri ""
-    (file : components) <- return . map Text.pack . reverse . splitDirectories
-                             $ filePath
-    return . FileIdentifier $ Dhall.Local Dhall.Absolute
-               (Dhall.File (Dhall.Directory components) file)
+    return $ fileIdentifierFromFilePath path
 fileIdentifierFromURI uri
   | otherwise = do
     url <- Megaparsec.parseMaybe (Dhall.unParser Dhall.httpRaw) . Text.pack
