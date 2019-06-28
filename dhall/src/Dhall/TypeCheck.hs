@@ -769,6 +769,7 @@ typeWithA tpa = loop
             _          -> Left (TypeError ctx e (MustMapARecord kvsX tKvsX))
 
         let ktX = appEndo (foldMap (Endo . compareFieldTypes) ktsX) Nothing
+            mT₂ = fmap Dhall.Core.normalize mT₁
             mapType fieldType = App List (Record $ Dhall.Map.fromList [("mapKey", Text),
                                                                        ("mapValue", fieldType)])
             compareFieldTypes t Nothing = Just (Right t)
@@ -777,7 +778,7 @@ typeWithA tpa = loop
                | otherwise = Just (Left $ TypeError ctx e (HeterogenousRecordToMap tKvsX t t'))
             compareFieldTypes _ r@(Just Left{}) = r
 
-        case (ktX, mT₁) of
+        case (ktX, mT₂) of
             (Nothing, Nothing) -> Left (TypeError ctx e MissingToMapType)
             (Just err@Left{}, _) -> err
             (Just (Right t), Nothing) -> pure (mapType t)
@@ -3274,7 +3275,7 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
 
 prettyTypeMessage (MustMapARecord _expr0 _expr1) = ErrorMessages {..}
   where
-    short = "❰toMap❱ expects a record"
+    short = "❰toMap❱ expects a record value"
 
     long =
         "Explanation: You can apply ❰toMap❱ to any homogenous record, like this:         \n\

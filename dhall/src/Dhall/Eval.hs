@@ -529,10 +529,10 @@ eval !env t =
                             | otherwise -> error errorMsg
                           (x, y, ma) -> VMerge x y ma
     ToMap x ma       -> case (evalE x, evalE <$> ma) of
-                          (VRecordLit m, t) -> VListLit (fieldToListType <$> t) (Dhall.Map.foldMapWithKey entry m)
+                          (VRecordLit m, t) -> VListLit (unListType <$> t) (Dhall.Map.foldMapWithKey entry m)
                           (x, ma) -> VToMap x ma
       where
-        fieldToListType ft = VRecord (Dhall.Map.fromList [("mapKey", VText), ("mapValue", ft)])
+        unListType (VList item) = item
         entry key value = Data.Sequence.singleton (VRecordLit (Dhall.Map.fromList [("mapKey", VTextLit $ VChunks [] key),
                                                                                    ("mapValue", value)]))
     Field t k        -> case evalE t of

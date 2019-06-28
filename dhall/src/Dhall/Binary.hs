@@ -766,6 +766,13 @@ instance FromTerm a => FromTerm (Expr s a) where
         t₀  <- decode t₁
         _T₀ <- decode _T₁
         return (Annot t₀ _T₀)
+    decode (TList [ TInt 27, t₁ ]) = do
+        t₀ <- decode t₁
+        return (ToMap t₀ Nothing)
+    decode (TList [ TInt 27, t₁, _T₁ ]) = do
+        t₀ <- decode t₁
+        _T₀ <- decode _T₁
+        return (ToMap t₀ (Just _T₀))
     decode _ =
         empty
 
