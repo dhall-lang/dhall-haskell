@@ -82,7 +82,7 @@ for:
     - stack test dhall-text
     - stack test dhall-bash
     - stack test dhall-lsp-server
-    - stack bench --benchmark-arguments "--time-limit 1" dhall
+    - stack bench --benchmark-arguments "--time-limit=0 --min-duration=0"
 
 artifacts:
   - path: bin\dhall-%DEPLOY_SUFFIX%
