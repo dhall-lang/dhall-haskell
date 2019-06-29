@@ -49,7 +49,6 @@ Library
         containers                                     ,
         dhall                     >= 1.22.0   && < 1.25,
         exceptions                >= 0.8.3    && < 0.11,
-        lens                      >= 2.5      && < 4.18,
         optparse-applicative      >= 0.14.0.0 && < 0.15,
         scientific                >= 0.3.0.0  && < 0.4 ,
         text                      >= 0.11.1.0 && < 1.3 ,
