@@ -47,7 +47,7 @@ Library
         aeson-pretty                             < 0.9 ,
         bytestring                               < 0.11,
         containers                                     ,
-        dhall                     >= 1.22.0   && < 1.25,
+        dhall                     >= 1.24.0   && < 1.25,
         exceptions                >= 0.8.3    && < 0.11,
         optparse-applicative      >= 0.14.0.0 && < 0.15,
         scientific                >= 0.3.0.0  && < 0.4 ,
