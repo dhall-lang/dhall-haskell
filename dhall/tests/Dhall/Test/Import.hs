@@ -60,7 +60,7 @@ successTest path = do
         let load =
                 State.evalStateT (Import.loadWith actualExpr) (Import.emptyStatus directoryString)
 
-        if pathString == "./dhall-lang/tests/import/success/hashFromCacheA.dhall"
+        if Turtle.filename (Turtle.fromText path) == "hashFromCacheA.dhall"
             then do
                 setCache
                 _ <- load
