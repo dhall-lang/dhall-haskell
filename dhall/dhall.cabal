@@ -608,16 +608,6 @@ Benchmark deep-nested-large-record
         gauge                     >= 0.2.3    && < 0.3
     Default-Language: Haskell2010
 
-Benchmark dhall-command
-    Type: exitcode-stdio-1.0
-    Main-Is: Main.hs
-    Hs-Source-Dirs: benchmark/dhall-command
-    Build-Depends:
-        base                      >= 4        && < 5  ,
-        dhall
-    Default-Language: Haskell2010
-    ghc-options: -rtsopts -O2
-
 Benchmark map-operations
     Type: exitcode-stdio-1.0
     Main-Is: Main.hs
