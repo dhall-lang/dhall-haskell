@@ -62,7 +62,7 @@ for:
     - stack test dhall-text
     - stack test dhall-bash
     # - stack test dhall-lsp-server # Disabled while the tests are broken.
-    - stack bench --benchmark-arguments "--time-limit=0 --min-duration=0"
+    - stack bench --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
     
 -
   matrix:
