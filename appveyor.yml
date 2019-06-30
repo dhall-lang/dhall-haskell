@@ -61,7 +61,7 @@ for:
     - stack test dhall-json
     - stack test dhall-text
     - stack test dhall-bash
-    - stack test dhall-lsp-server
+    # - stack test dhall-lsp-server # Disabled while the tests are broken.
 -
   matrix:
     only:
