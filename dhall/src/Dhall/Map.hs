@@ -455,6 +455,9 @@ traverseWithKey f m =
 
 {-| Traverse all of the key-value pairs in a 'Map', not preserving their
     original order, where the result of the computation can be forgotten.
+
+    Note that this is a strict traversal, fully traversing the map even
+    when the Applicative is lazy in the remaining elements.
 -}
 unorderedTraverseWithKey_
     :: Ord k => Applicative f => (k -> a -> f ()) -> Map k a -> f ()
