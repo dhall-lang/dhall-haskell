@@ -25,6 +25,7 @@ import Dhall.LSP.State
 import Control.Applicative ((<|>))
 import Control.Concurrent.MVar
 import Control.Lens ((^.), use, uses, assign, modifying)
+import Control.Monad (guard)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.Except (throwE, catchE, runExceptT)
 import Control.Monad.Trans.State.Strict (execStateT)
@@ -153,7 +154,7 @@ hoverExplain request = do
 
       mHover = do err <- mError
                   explanation <- explain txt err
-                  True <- return $ isHovered explanation
+                  guard (isHovered explanation)
                   hoverFromDiagnosis explanation
   lspRespond LSP.RspHover request mHover
 
