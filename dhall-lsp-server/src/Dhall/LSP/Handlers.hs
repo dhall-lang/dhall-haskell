@@ -161,7 +161,7 @@ hoverExplain request = do
 hoverType :: J.HoverRequest -> HandlerM ()
 hoverType request = do
   let uri = request ^. J.params . J.textDocument . J.uri
-      (J.Position line col) = request ^. (J.params . J.position)
+      J.Position line col = request ^. J.params . J.position
   expr <- loadFile uri
   (welltyped, _) <- case typecheck expr of
     Left _ -> throwE (Info, "Can't infer type; code does not type-check.")
