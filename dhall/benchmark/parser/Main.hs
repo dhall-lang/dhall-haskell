@@ -38,7 +38,7 @@ listDirectory path = filter f <$> getDirectoryContents path
 type PreludeFiles = Map FilePath T.Text
 
 loadPreludeFiles :: IO PreludeFiles
-loadPreludeFiles = loadDirectory "Prelude"
+loadPreludeFiles = loadDirectory "./dhall-lang/Prelude"
     where
         loadDirectory :: FilePath -> IO PreludeFiles
         loadDirectory dir =
