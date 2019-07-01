@@ -27,6 +27,7 @@ import Dhall.Core
     , Var(..)
     )
 
+import Data.Text.Short (ShortText)
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
 import Numeric.Natural (Natural)
@@ -39,6 +40,7 @@ import Text.Megaparsec (SourcePos(..), Pos)
 import qualified Codec.Serialise
 import qualified Data.Coerce
 import qualified Data.List
+import qualified Data.Text.Short
 import qualified Dhall.Map
 import qualified Data.Sequence
 import qualified Dhall.Binary
@@ -48,6 +50,9 @@ import qualified Dhall.TypeCheck
 import qualified Test.QuickCheck
 import qualified Test.Tasty.QuickCheck
 import qualified Text.Megaparsec       as Megaparsec
+
+instance Arbitrary ShortText where
+  arbitrary = Data.Text.Short.fromText <$> arbitrary
 
 newtype DeserialiseFailureWithEq = D DeserialiseFailure
     deriving (Show)
