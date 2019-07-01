@@ -162,7 +162,7 @@ hoverExplain request = do
 hoverType :: J.HoverRequest -> HandlerM ()
 hoverType request = do
   let uri = request ^. J.params . J.textDocument . J.uri
-      (J.Position line col) = request ^. (J.params . J.position)
+      J.Position line col = request ^. J.params . J.position
   txt <- readUri uri
   expr <- loadFile uri
   (welltyped, _) <- case typecheck expr of
