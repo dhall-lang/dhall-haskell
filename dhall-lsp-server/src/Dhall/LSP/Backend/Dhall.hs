@@ -43,7 +43,7 @@ import Lens.Family (view, set)
 import Control.Exception (SomeException, catch)
 import Control.Monad.Trans.State.Strict (runStateT)
 import Network.URI (URI)
-import Data.Bifunctor (first, bimap)
+import Data.Bifunctor (first)
 
 -- | A @FileIdentifier@ represents either a local file or a remote url.
 newtype FileIdentifier = FileIdentifier Dhall.ImportType
@@ -155,9 +155,12 @@ load fileid expr (Cache cache) = do
     `catch` (\e -> return . Left $ ErrorImportSourced e)
     `catch` (\e -> return . Left $ ErrorInternal e)
 
--- | Typecheck a fully resolved expression.
-typecheck :: Expr Src X -> Either DhallError WellTyped
-typecheck = bimap ErrorTypecheck WellTyped . Dhall.typeOf
+-- | Typecheck a fully resolved expression. Returns a certification that the
+--   input was well-typed along with its (well-typed) type.
+typecheck :: Expr Src X -> Either DhallError (WellTyped, WellTyped)
+typecheck expr = case Dhall.typeOf expr of
+  Left err -> Left $ ErrorTypecheck err
+  Right typ -> Right (WellTyped expr, WellTyped typ)
 
 -- | Normalise a well-typed expression.
 normalize :: WellTyped -> Normal

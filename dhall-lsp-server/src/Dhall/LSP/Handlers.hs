@@ -165,7 +165,7 @@ hoverType request = do
       (J.Position line col) = request ^. (J.params . J.position)
   txt <- readUri uri
   expr <- loadFile uri
-  welltyped <- case typecheck expr of
+  (welltyped, _) <- case typecheck expr of
     Left _ -> throwE (Info, "Can't infer type; code does not type-check.")
     Right wt -> return wt
   case typeAt (line,col) welltyped of
@@ -203,7 +203,7 @@ diagnosticsHandler uri = do
         Right x -> return x
         Left err -> throwE err
       welltyped <- case typecheck expr' of
-        Right wt -> return wt
+        Right (wt, _typ) -> return wt
         Left err -> throwE err
       let normal = normalize welltyped
       -- cache the new expression
@@ -308,7 +308,7 @@ executeAnnotateLet request = do
       col = args ^. J.position . J.character
 
   expr <- loadFile uri
-  welltyped <- case typecheck expr of
+  (welltyped, _) <- case typecheck expr of
     Left _ -> throwE (Warning, "Failed to annotate let binding; not well-typed.")
     Right e -> return e
 
