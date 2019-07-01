@@ -14,7 +14,7 @@ import Dhall.TypeCheck (X)
 
 import Dhall.LSP.Backend.Dhall (FileIdentifier, parse, load, typecheck,
   normalize, fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate,
-  cacheExpr, parseWithHeader)
+  cacheExpr, parseWithHeader, fromWellTyped)
 import Dhall.LSP.Backend.Diagnostics (Range(..), Diagnosis(..), explain,
   sanitiseRange, rangeFromDhall, diagnose)
 import Dhall.LSP.Backend.Formatting (formatExprWithHeader)
@@ -165,11 +165,14 @@ hoverType request = do
       (J.Position line col) = request ^. (J.params . J.position)
   txt <- readUri uri
   expr <- loadFile uri
-  case typeAt (line,col) expr of
+  welltyped <- case typecheck expr of
+    Left _ -> throwE (Info, "Can't infer type; code does not type-check.")
+    Right wt -> return wt
+  case typeAt (line,col) welltyped of
     Left err -> throwE (Error, Text.pack err)
     Right typ ->
       let _range = fmap (rangeToJSON . sanitiseRange txt . rangeFromDhall)
-                        (srcAt (line,col) expr)
+                        (srcAt (line,col) (fromWellTyped welltyped))
           _contents = J.List [J.PlainString (pretty typ)]
           hover = J.Hover{..}
       in lspRespond LSP.RspHover request (Just hover)
@@ -305,12 +308,12 @@ executeAnnotateLet request = do
       col = args ^. J.position . J.character
 
   expr <- loadFile uri
-  _welltyped <- case typecheck expr of
+  welltyped <- case typecheck expr of
     Left _ -> throwE (Warning, "Failed to annotate let binding; not well-typed.")
     Right e -> return e
 
   (Src (SourcePos _ x1 y1) (SourcePos _ x2 y2) _, txt)
-    <- case annotateLet (line, col) expr of
+    <- case annotateLet (line, col) welltyped of
       Right x -> return x
       Left msg -> throwE (Warning, Text.pack msg)
 
