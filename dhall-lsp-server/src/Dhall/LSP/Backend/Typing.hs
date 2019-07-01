@@ -14,6 +14,7 @@ import Data.Bifunctor (first)
 
 import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot)
 import Dhall.LSP.Backend.Diagnostics (Position, positionFromMegaparsec, offsetToPosition)
+import Dhall.LSP.Backend.Dhall (WellTyped, fromWellTyped)
 
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty
@@ -21,9 +22,9 @@ import Dhall.Pretty (CharacterSet(..), prettyCharacterSet)
 
 -- | Find the type of the subexpression at the given position. Assumes that the
 --   input expression is well-typed.
-typeAt :: Position -> Expr Src X -> Either String (Expr Src X)
+typeAt :: Position -> WellTyped -> Either String (Expr Src X)
 typeAt pos expr = do
-  expr' <- case splitLets expr of
+  expr' <- case splitLets (fromWellTyped expr) of
              Just e -> return e
              Nothing -> Left "The impossible happened: failed to split let\
                               \ blocks when preprocessing for typeAt'."
@@ -85,9 +86,9 @@ srcAt pos expr = do Note src _ <- exprAt pos expr
 --   position (if there is one) and return a textual update to the source code
 --   that inserts the type annotation (or replaces the existing one). If
 --   something goes wrong returns a textual error message.
-annotateLet :: Position -> Expr Src X -> Either String (Src, Text)
+annotateLet :: Position -> WellTyped -> Either String (Src, Text)
 annotateLet pos expr = do
-  expr' <- case splitLets expr of
+  expr' <- case splitLets (fromWellTyped expr) of
              Just e -> return e
              Nothing -> Left "The impossible happened: failed to split let\
                               \ blocks when preprocessing for annotateLet'."
