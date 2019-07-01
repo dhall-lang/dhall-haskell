@@ -84,6 +84,21 @@ shallowDenote         e  = e
 completeExpression :: Parser a -> Parser (Expr Src a)
 completeExpression embedded = completeExpression_
   where
+    Parsers {..} = parsers embedded
+
+importExpression :: Parser a -> Parser (Expr Src a)
+importExpression embedded = importExpression_
+  where
+    Parsers {..} = parsers embedded
+
+data Parsers a = Parsers
+    { completeExpression_ :: Parser (Expr Src a)
+    , importExpression_   :: Parser (Expr Src a)
+    }
+
+parsers :: Parser a -> Parsers a
+parsers embedded = Parsers {..}
+  where
     completeExpression_ = do
         whitespace
         expression
@@ -226,8 +241,8 @@ completeExpression embedded = completeExpression_
     applicationExpression = do
             f <-    (do _Some; return Some)
                 <|> return id
-            a <- noted importExpression
-            b <- Text.Megaparsec.many (noted importExpression)
+            a <- noted importExpression_
+            b <- Text.Megaparsec.many (noted importExpression_)
             return (foldl app (f a) b)
           where
             app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
@@ -235,7 +250,7 @@ completeExpression embedded = completeExpression_
             app nL nR =
                 App nL nR
 
-    importExpression = noted (choice [ alternative0, alternative1 ])
+    importExpression_ = noted (choice [ alternative0, alternative1 ])
           where
             alternative0 = do
                 a <- embedded
@@ -313,8 +328,8 @@ completeExpression embedded = completeExpression_
 
             alternative07 = do
                 _merge
-                a <- importExpression
-                b <- importExpression <?> "second argument to ❰merge❱"
+                a <- importExpression_
+                b <- importExpression_ <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
 
             alternative09 = do
@@ -717,7 +732,7 @@ http = do
     whitespace
     headers <- optional (do
         _using
-        (completeExpression import_ <|> (_openParens *> completeExpression import_ <* _closeParens)) )
+        importExpression import_ )
     return (Remote (url { headers }))
 
 missing :: Parser ImportType
