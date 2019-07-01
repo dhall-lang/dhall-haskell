@@ -204,7 +204,6 @@ import Dhall.Map (Map)
 import Dhall.JSON.Util (pattern V)
 import Options.Applicative (Parser)
 
-import qualified Control.Lens
 import qualified Data.Aeson          as Aeson
 import qualified Data.Foldable       as Foldable
 import qualified Data.HashMap.Strict as HashMap
@@ -215,6 +214,7 @@ import qualified Data.Vector         as Vector
 import qualified Dhall.Core          as Core
 import qualified Dhall.Import
 import qualified Dhall.Map
+import qualified Dhall.Optics
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
@@ -884,7 +884,7 @@ data SpecialDoubleMode
 handleSpecialDoubles
     :: SpecialDoubleMode -> Expr s X -> Either CompileError (Expr s X)
 handleSpecialDoubles specialDoubleMode =
-    Control.Lens.rewriteMOf Core.subExpressions rewrite
+    Dhall.Optics.rewriteMOf Core.subExpressions rewrite
   where
     rewrite =
         case specialDoubleMode of
