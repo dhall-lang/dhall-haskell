@@ -45,8 +45,6 @@ import Control.Monad.Trans.State.Strict (runStateT)
 import Network.URI (URI)
 import Data.Bifunctor (first, bimap)
 
--- TODO: use record syntax for records!
-
 -- | A @FileIdentifier@ represents either a local file or a remote url.
 newtype FileIdentifier = FileIdentifier Dhall.ImportType
 
@@ -101,12 +99,15 @@ cacheExpr fileid (Normal expr) (Cache c) =
 -- Construct the unhashed import corresponding to the given file.
 importFromFileIdentifier :: FileIdentifier -> Dhall.Import
 importFromFileIdentifier (FileIdentifier importType) =
-  Dhall.Import (Dhall.ImportHashed Nothing importType) Dhall.Code
+  Dhall.Import { importHashed = Dhall.ImportHashed Nothing importType,
+                 importMode = Dhall.Code }
+
 
 -- Construct the hashed import corresponding to the given file.
 hashedImportFromFileIdentifier :: FileIdentifier -> Digest SHA256 -> Dhall.Import
 hashedImportFromFileIdentifier (FileIdentifier importType) hash =
-  Dhall.Import (Dhall.ImportHashed (Just hash) importType) Dhall.Code
+  Dhall.Import { importHashed = Dhall.ImportHashed (Just hash) importType,
+                 importMode = Dhall.Code }
 
 -- | Invalidate any _unhashed_ imports of the given file. Hashed imports are
 --   kept around as per
