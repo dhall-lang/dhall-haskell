@@ -1,7 +1,7 @@
 module Dhall.LSP.Backend.Linting
   ( Suggestion(..)
   , suggest
-  , lint
+  , Dhall.lint
   )
 where
 
@@ -49,8 +49,3 @@ diagUnusedBinding _ = []
 suggest :: Expr Src Import -> [Suggestion]
 suggest expr = concat [ diagLetInLet e ++ diagUnusedBinding e
                       | e <- universeOf subExpressions expr ]
-
--- | Lint the given Dhall expression. Removes unused let bindings and combines
---   nested lets.
-lint :: Expr Src Import -> Expr Src Import
-lint = Dhall.lint
