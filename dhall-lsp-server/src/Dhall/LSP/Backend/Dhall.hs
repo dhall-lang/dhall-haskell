@@ -108,12 +108,15 @@ hashedImportFromFileIdentifier :: FileIdentifier -> Digest SHA256 -> Dhall.Impor
 hashedImportFromFileIdentifier (FileIdentifier importType) hash =
   Dhall.Import (Dhall.ImportHashed (Just hash) importType) Dhall.Code
 
--- | Invalidate all imports of a file (unhashed, as well as any hashed
---   versions).
+-- | Invalidate any _unhashed_ imports of the given file. Hashed imports are
+--   kept around as per
+--   https://github.com/dhall-lang/dhall-lang/blob/master/standard/imports.md.
 invalidate :: FileIdentifier -> Cache -> Cache
 invalidate (FileIdentifier fileid) (Cache cache) =
-  Cache $ Map.filterWithKey
-    (\(Dhall.Import (Dhall.ImportHashed _ t) _) _ -> fileid /= t) cache
+  Cache $ Map.delete codeImport (Map.delete textImport cache)
+  where
+  codeImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.Code
+  textImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.RawText
 
 -- | A Dhall error. Covers parsing, resolving of imports, typechecking and
 --   normalisation.
