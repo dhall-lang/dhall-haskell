@@ -207,12 +207,15 @@ diffBool = diffPrimitive bool
 diffInteger :: Integer -> Integer -> Diff
 diffInteger = diffPrimitive (token . Internal.prettyNumber)
 
+diffInt :: Int -> Int -> Diff
+diffInt = diffPrimitive (token . Internal.prettyInt)
+
 diffVar :: Var -> Var -> Diff
 diffVar (V xL nL) (V xR nR) = format mempty label <> "@" <> natural
   where
     label = diffLabel xL xR
 
-    natural = diffInteger nL nR
+    natural = diffInt nL nR
 
 diffPretty :: (Eq a, Pretty a) => a -> a -> Diff
 diffPretty = diffPrimitive (token . Pretty.pretty)
