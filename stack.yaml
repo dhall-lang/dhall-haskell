@@ -1,10 +1,10 @@
 resolver: lts-13.19
 packages:
   - dhall
-  - dhall-bash
-  - dhall-json
-  - dhall-text
-  - dhall-lsp-server
+#  - dhall-bash
+#  - dhall-json
+#  - dhall-text
+#  - dhall-lsp-server
 extra-deps:
   - repline-0.2.1.0
 nix:
