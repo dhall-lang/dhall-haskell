@@ -1,8 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Dhall.LSP.Backend.Diagnostics
-  ( DhallException
-  , checkDhall
+  ( DhallError
   , diagnose
   , Diagnosis(..)
   , explain
@@ -16,31 +15,17 @@ module Dhall.LSP.Backend.Diagnostics
   )
 where
 
-import Dhall.Binary (DecodingFailure)
-import Dhall.Parser (ParseError, SourcedException(..), Src(..), unwrap)
-import Dhall.Import (MissingImports)
-import Dhall.TypeCheck (DetailedTypeError(..), TypeError(..), X)
+import Dhall.Parser (SourcedException(..), Src(..), unwrap)
+import Dhall.TypeCheck (DetailedTypeError(..), TypeError(..))
 import Dhall.Core (Expr(Note))
 
 import Dhall.LSP.Util
-import Dhall.LSP.Backend.Dhall (runDhall)
+import Dhall.LSP.Backend.Dhall
 
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Control.Exception (handle, SomeException)
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Text.Megaparsec as Megaparsec
-
--- | An exception that occurred while trying to parse, type-check and normalise
---   the input. TODO: make this list exhaustive! We currently report too many
---   exceptions as "internal errors".
-data DhallException
-  = ExceptionInternal SomeException
-  | ExceptionCBOR DecodingFailure  -- CBOR decoding failure (not relevant?)
-  | ExceptionImport (SourcedException MissingImports)  -- Failure to resolve an import statement
-  | ExceptionTypecheck (TypeError Src X)  -- Input does not type-check
-  | ExceptionParse ParseError  -- Input does not parse
-
 
 -- | A (line, col) pair representing a position in a source file; 0-based.
 type Position = (Int, Int)
@@ -55,23 +40,9 @@ data Diagnosis = Diagnosis {
     }
 
 
--- | Parse, type-check and normalise the given Dhall code, collecting any
---   occurring errors.
-checkDhall :: FilePath -> Text -> IO [DhallException]
-checkDhall path txt =
-  (handle' ExceptionInternal
-    . handle' ExceptionCBOR
-    . handle' ExceptionImport
-    . handle' ExceptionTypecheck
-    . handle' ExceptionParse
-    )
-    (const [] <$> runDhall path txt)
-  where
-    handle' constructor = handle (return . return . constructor)
-
 -- | Give a short diagnosis for a given error that can be shown to the end user.
-diagnose :: Text -> DhallException -> [Diagnosis]
-diagnose _ (ExceptionInternal e) = [Diagnosis { .. }]
+diagnose :: Text -> DhallError -> [Diagnosis]
+diagnose _ (ErrorInternal e) = [Diagnosis { .. }]
   where
     doctor = "Dhall"
     range = Nothing
@@ -79,25 +50,19 @@ diagnose _ (ExceptionInternal e) = [Diagnosis { .. }]
       "An internal error has occurred while trying to process the Dhall file: "
         <> tshow e
 
-diagnose _ (ExceptionCBOR t) = [Diagnosis { .. }]
-  where
-    doctor = "Dhall.Binary"
-    range = Nothing
-    diagnosis = "Failed to decode CBOR Dhall representation: " <> tshow t
-
-diagnose txt (ExceptionImport (SourcedException src e)) = [Diagnosis { .. }]
+diagnose txt (ErrorImportSourced (SourcedException src e)) = [Diagnosis { .. }]
   where
     doctor = "Dhall.Import"
     range = (Just . sanitiseRange txt . rangeFromDhall) src
     diagnosis = tshow e
 
-diagnose txt (ExceptionTypecheck e@(TypeError _ expr _)) = [Diagnosis { .. }]
+diagnose txt (ErrorTypecheck e@(TypeError _ expr _)) = [Diagnosis { .. }]
   where
     doctor = "Dhall.TypeCheck"
     range = fmap (sanitiseRange txt . rangeFromDhall) (note expr)
     diagnosis = tshow e
 
-diagnose txt (ExceptionParse e) =
+diagnose txt (ErrorParse e) =
   [ Diagnosis { .. } | (diagnosis, range) <- zip diagnoses (map Just ranges) ]
   where
     doctor = "Dhall.Parser"
@@ -126,8 +91,8 @@ diagnose txt (ExceptionParse e) =
 
 -- | Give a detailed explanation for the given error; if no detailed explanation
 --   is available return @Nothing@ instead.
-explain :: Text -> DhallException -> Maybe Diagnosis
-explain txt (ExceptionTypecheck e@(TypeError _ expr _)) = Just
+explain :: Text -> DhallError -> Maybe Diagnosis
+explain txt (ErrorTypecheck e@(TypeError _ expr _)) = Just
   (Diagnosis { .. })
   where
     doctor = "Dhall.TypeCheck"
