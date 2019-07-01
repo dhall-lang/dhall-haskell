@@ -209,6 +209,24 @@ And each of them with `stack build <package-name>`, for example:
 $ stack build dhall-json
 ```
 
+## Profiling
+
+Say you want to profile the `dhall-to-json` executable.
+
+Build the containing package with profiling options:
+
+```console
+$ stack build --profile --library-profiling dhall-json
+```
+
+Run the executable on your input. For example:
+
+```console
+$ stack exec --profile --rts-options -p -- dhall-to-json <<< 'True && False'
+```
+
+This generates a `dhall-to-json.prof` file in your current directory.
+
 ## Build the website
 
 Building the website from source is currently only supported for Nix on Linux.

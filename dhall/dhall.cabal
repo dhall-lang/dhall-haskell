@@ -587,9 +587,9 @@ Benchmark dhall-parser
         base                      >= 4        && < 5  ,
         bytestring                                    ,
         containers                >= 0.5.0.0  && < 0.7,
-        criterion                 >= 1.1      && < 1.6,
         dhall                                         ,
         directory                                     ,
+        gauge                     >= 0.2.3    && < 0.3,
         serialise                                     ,
         text                      >= 0.11.1.0 && < 1.3
     Default-Language: Haskell2010
@@ -604,27 +604,6 @@ Benchmark deep-nested-large-record
     Build-Depends:
         base                      >= 4        && < 5  ,
         containers                >= 0.5.0.0  && < 0.7,
-        criterion                 >= 1.1      && < 1.6,
-        dhall
+        dhall                                         ,
+        gauge                     >= 0.2.3    && < 0.3
     Default-Language: Haskell2010
-
-Benchmark dhall-command
-    Type: exitcode-stdio-1.0
-    Main-Is: Main.hs
-    Hs-Source-Dirs: benchmark/dhall-command
-    Build-Depends:
-        base                      >= 4        && < 5  ,
-        dhall
-    Default-Language: Haskell2010
-    ghc-options: -rtsopts -O2
-
-Benchmark map-operations
-    Type: exitcode-stdio-1.0
-    Main-Is: Main.hs
-    Hs-Source-Dirs: benchmark/map
-    Build-Depends:
-        base                      >= 4        && < 5  ,
-        criterion                 >= 1.1      && < 1.6,
-        dhall
-    Default-Language: Haskell2010
-    ghc-options: -rtsopts -O2

@@ -55,6 +55,6 @@ instance Pretty Src where
             inputString = Text.unpack line
 
             outputString =
-                Printf.printf ("%" <> show numberWidth <> "d: %s") n inputString
+                Printf.printf ("%" <> show numberWidth <> "d│ %s") n inputString
 
         numberedLines = Text.unlines (zipWith adapt [minimumNumber..] ls)
