@@ -22,9 +22,8 @@ import Dhall.LSP.Backend.Linting (Suggestion(..), suggest, lint)
 import Dhall.LSP.Backend.Typing (typeAt, srcAt, annotateLet)
 import Dhall.LSP.State
 
-import GHC.Conc (atomically)
 import Control.Applicative ((<|>))
-import Control.Concurrent.STM.TVar
+import Control.Concurrent.MVar
 import Control.Lens ((^.))
 import Control.Monad.Trans (lift, liftIO)
 import Control.Monad.Trans.Except (throwE, catchE, runExceptT)
@@ -42,21 +41,17 @@ import Text.Megaparsec (SourcePos(..), unPos)
 
 
 -- Workaround to make our single-threaded LSP fit dhall-lsp's API, which
--- expects a multi-threaded implementation.
+-- expects a multi-threaded implementation. Reports errors to the user via the
+-- LSP `ShowMessage` notification.
 wrapHandler
-  :: TVar (Maybe ServerState)
+  :: MVar ServerState
   -> (a -> HandlerM ())
   -> a
   -> IO ()
-wrapHandler vstate handle message = do
-  mstate <- readTVarIO vstate
-  case mstate of
-    Just state -> do
-      state' <- (execStateT . runExceptT) (catchE (handle message) lspUserMessage) state
-      atomically . writeTVar vstate $ Just state'
-    Nothing ->
-      fail "A handler was called before the language server was initialized\
-           \ properly. This should never happen."
+wrapHandler vstate handle message =
+  modifyMVar_ vstate $
+    execStateT . runExceptT $
+      catchE (handle message) lspUserMessage
 
 lspUserMessage :: (Severity, Text) -> HandlerM ()
 lspUserMessage (Log, text) =

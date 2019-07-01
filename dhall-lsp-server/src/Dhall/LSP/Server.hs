@@ -1,7 +1,7 @@
 {-| This is the entry point for the LSP server. -}
 module Dhall.LSP.Server(run) where
 
-import           Control.Concurrent.STM.TVar
+import           Control.Concurrent.MVar
 import           Data.Default
 import qualified Language.Haskell.LSP.Control as LSP.Control
 import qualified Language.Haskell.LSP.Core as LSP.Core
@@ -10,7 +10,6 @@ import qualified Language.Haskell.LSP.Types as J
 
 import Data.Text (Text)
 import qualified System.Log.Logger
-import GHC.Conc (atomically)
 
 import Dhall.LSP.State
 import Dhall.LSP.Handlers (nullHandler, wrapHandler, hoverHandler,
@@ -21,19 +20,19 @@ import Dhall.LSP.Handlers (nullHandler, wrapHandler, hoverHandler,
 run :: Maybe FilePath -> IO ()
 run mlog = do
   setupLogger mlog
-  state <- newTVarIO Nothing
+  state <- newEmptyMVar
   _    <- LSP.Control.run (makeConfig, initCallback state) (lspHandlers state)
                           lspOptions Nothing
   return ()
   where
     -- Callback that is called when the LSP server is started; makes the lsp
-    -- state (LspFuncs) available to the message handlers through the vlsp TVar.
+    -- state (LspFuncs) available to the message handlers through the vlsp MVar.
     initCallback
-      :: TVar (Maybe ServerState)
+      :: MVar ServerState
       -> LSP.Core.LspFuncs ()
       -> IO (Maybe J.ResponseError)
     initCallback state lsp = do
-      atomically . writeTVar state $ Just (initialState lsp)
+      putMVar state (initialState lsp)
       return Nothing
 
     -- Interpret DidChangeConfigurationNotification; pointless at the moment
@@ -76,7 +75,7 @@ lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
                                 "dhall.server.annotateLet"]))
                  }
 
-lspHandlers :: TVar (Maybe ServerState) -> LSP.Core.Handlers
+lspHandlers :: MVar ServerState -> LSP.Core.Handlers
 lspHandlers state
   = def { LSP.Core.initializedHandler                       = Just $ wrapHandler state nullHandler
         , LSP.Core.hoverHandler                             = Just $ wrapHandler state hoverHandler
