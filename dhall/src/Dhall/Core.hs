@@ -266,7 +266,8 @@ instance Pretty ImportType where
     pretty Missing = "missing"
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
-data ImportMode = Code | RawText deriving (Eq, Generic, Ord, Show)
+data ImportMode = Code | RawText | Location
+  deriving (Eq, Generic, Ord, Show)
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
@@ -299,8 +300,9 @@ instance Pretty Import where
       where
         suffix :: Text
         suffix = case importMode of
-            RawText -> " as Text"
-            Code    -> ""
+            RawText  -> " as Text"
+            Location -> " as Location"
+            Code     -> ""
 
 {-| Label for a bound variable
 
