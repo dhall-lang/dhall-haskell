@@ -1,9 +1,11 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Dhall.LSP.State where
 
 import qualified Language.Haskell.LSP.Core as LSP
 import qualified Language.Haskell.LSP.Messages as LSP
 import qualified Language.Haskell.LSP.Types as J
 
+import Control.Lens.TH (makeLenses)
 import Lens.Family (LensLike')
 import Data.Map.Strict (Map, empty)
 import Data.Dynamic (Dynamic)
@@ -35,6 +37,12 @@ data ServerState = ServerState
   -- ^ Access to the lsp functions supplied by haskell-lsp
   }
 
+makeLenses ''ServerState
+
+sendFunc :: Functor f =>
+  LensLike' f (LSP.LspFuncs ()) (LSP.FromServerMessage -> IO ())
+sendFunc k s = fmap (\x -> s {LSP.sendFunc = x}) (k (LSP.sendFunc s))
+
 initialState :: LSP.LspFuncs () -> ServerState
 initialState lsp = ServerState {..}
   where
@@ -42,19 +50,3 @@ initialState lsp = ServerState {..}
     _errors = empty
     _httpManager = Nothing
     _lspFuncs = lsp
-
-importCache :: Functor f => LensLike' f ServerState Cache
-importCache k s = fmap (\x -> s {_importCache = x}) (k (_importCache s))
-
-errors :: Functor f => LensLike' f ServerState (Map J.Uri DhallError)
-errors k s = fmap (\x -> s {_errors = x}) (k (_errors s))
-
-httpManager :: Functor f => LensLike' f ServerState (Maybe Dynamic)
-httpManager k s = fmap (\x -> s {_httpManager = x}) (k (_httpManager s))
-
-lspFuncs :: Functor f => LensLike' f ServerState (LSP.LspFuncs ())
-lspFuncs k s = fmap (\x -> s {_lspFuncs = x}) (k (_lspFuncs s))
-
-sendFunc :: Functor f =>
-  LensLike' f (LSP.LspFuncs ()) (LSP.FromServerMessage -> IO ())
-sendFunc k s = fmap (\x -> s {LSP.sendFunc = x}) (k (LSP.sendFunc s))
