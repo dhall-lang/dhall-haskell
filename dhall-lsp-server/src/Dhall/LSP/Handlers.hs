@@ -16,7 +16,7 @@ import Dhall.LSP.Backend.Dhall (FileIdentifier, parse, load, typecheck,
   normalize, fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate,
   cacheExpr, parseWithHeader, fromWellTyped)
 import Dhall.LSP.Backend.Diagnostics (Range(..), Diagnosis(..), explain,
-  sanitiseRange, rangeFromDhall, diagnose)
+  rangeFromDhall, diagnose)
 import Dhall.LSP.Backend.Formatting (formatExprWithHeader)
 import Dhall.LSP.Backend.Linting (Suggestion(..), suggest, lint)
 import Dhall.LSP.Backend.Typing (typeAt, srcAt, annotateLet)
@@ -137,7 +137,6 @@ hoverExplain :: J.HoverRequest -> HandlerM ()
 hoverExplain request = do
   let uri = request ^. J.params . J.textDocument . J.uri
       (J.Position line col) = request ^. (J.params . J.position)
-  txt <- readUri uri
   mError <- lift $ gets (Map.lookup uri . view errors)
   let isHovered (Diagnosis _ (Just (Range left right)) _) =
         left <= (line,col) && (line,col) <= right
@@ -154,7 +153,7 @@ hoverExplain request = do
       hoverFromDiagnosis _ = Nothing
 
       mHover = do err <- mError
-                  explanation <- explain txt err
+                  explanation <- explain err
                   True <- return $ isHovered explanation
                   hoverFromDiagnosis explanation
   lspRespond LSP.RspHover request mHover
@@ -163,7 +162,6 @@ hoverType :: J.HoverRequest -> HandlerM ()
 hoverType request = do
   let uri = request ^. J.params . J.textDocument . J.uri
       (J.Position line col) = request ^. (J.params . J.position)
-  txt <- readUri uri
   expr <- loadFile uri
   (welltyped, _) <- case typecheck expr of
     Left _ -> throwE (Info, "Can't infer type; code does not type-check.")
@@ -171,7 +169,7 @@ hoverType request = do
   case typeAt (line,col) welltyped of
     Left err -> throwE (Error, Text.pack err)
     Right typ ->
-      let _range = fmap (rangeToJSON . sanitiseRange txt . rangeFromDhall)
+      let _range = fmap (rangeToJSON . rangeFromDhall)
                         (srcAt (line,col) (fromWellTyped welltyped))
           _contents = J.List [J.PlainString (pretty typ)]
           hover = J.Hover{..}
@@ -236,7 +234,7 @@ diagnosticsHandler uri = do
             _relatedInformation = Nothing
         in J.Diagnostic {..}
 
-      diagnostics = concatMap (map diagnosisToDiagnostic . diagnose txt) (maybeToList errs)
+      diagnostics = concatMap (map diagnosisToDiagnostic . diagnose) (maybeToList errs)
                      ++ map suggestionToDiagnostic suggestions
 
   lift $ modify (over errors (Map.alter (const errs) uri))  -- cache errors
