@@ -43,7 +43,7 @@ import Lens.Family (view, set)
 import Control.Exception (SomeException, catch)
 import Control.Monad.Trans.State.Strict (runStateT)
 import Network.URI (URI)
-import Data.Bifunctor (first, second)
+import Data.Bifunctor (first, bimap)
 
 -- TODO: use record syntax for records!
 
@@ -149,7 +149,7 @@ load fileid expr (Cache cache) = do
 
 -- | Typecheck a fully resolved expression.
 typecheck :: Expr Src X -> Either DhallError WellTyped
-typecheck = first ErrorTypecheck . second WellTyped . Dhall.typeOf
+typecheck = bimap ErrorTypecheck WellTyped . Dhall.typeOf
 
 -- | Normalise a well-typed expression.
 normalize :: WellTyped -> Normal
