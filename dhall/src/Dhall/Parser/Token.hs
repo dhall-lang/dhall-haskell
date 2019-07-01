@@ -63,6 +63,7 @@ module Dhall.Parser.Token (
     _Type,
     _Kind,
     _Sort,
+    _Location,
     _equal,
     _or,
     _plus,
@@ -682,6 +683,9 @@ _Kind = reserved "Kind"
 
 _Sort :: Parser ()
 _Sort = reserved "Sort"
+
+_Location :: Parser ()
+_Location = reserved "Location"
 
 _equal :: Parser ()
 _equal = reservedChar '='

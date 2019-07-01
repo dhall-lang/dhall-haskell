@@ -476,7 +476,7 @@ instance ToTerm Import where
                 Just digest ->
                     TBytes ("\x12\x20" <> Data.ByteArray.convert digest)
 
-            m = TInt (case importMode of Code -> 0; RawText -> 1)
+            m = TInt (case importMode of Code -> 0; RawText -> 1; Location -> 2;)
 
         Import {..} = import_
 
@@ -785,6 +785,7 @@ instance FromTerm Import where
         importMode <- case mode of
             0 -> return Code
             1 -> return RawText
+            2 -> return Location
             _ -> empty
 
         let remote scheme = do

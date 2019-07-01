@@ -602,93 +602,93 @@ getCacheDirectory = alternative₀ <|> alternative₁
 exprFromUncachedImport :: Import -> StateT (Status IO) IO Resolved
 exprFromUncachedImport import_@(Import {..}) = do
     let ImportHashed {..} = importHashed
+    let resolveImport importType' = case importType' of
+          Local prefix file -> liftIO $ do
+              path   <- localToPath prefix file
+              exists <- Directory.doesFileExist path
 
-    (path, text, newImport) <- case importType of
-        Local prefix file -> liftIO $ do
-            path   <- localToPath prefix file
-            exists <- Directory.doesFileExist path
+              if exists
+                  then return ()
+                  else throwMissingImport (MissingFile path)
 
-            if exists
-                then return ()
-                else throwMissingImport (MissingFile path)
+              text <- Data.Text.IO.readFile path
 
-            text <- Data.Text.IO.readFile path
+              return (path, text, import_)
 
-            return (path, text, import_)
+          Remote url@URL { headers = maybeHeadersExpression } -> do
+              maybeHeadersAndExpression <- case maybeHeadersExpression of
+                  Nothing -> do
+                      return Nothing
+                  Just headersExpression -> do
+                      expr <- loadWith headersExpression
 
-        Remote url@URL { headers = maybeHeadersExpression } -> do
-            maybeHeadersAndExpression <- case maybeHeadersExpression of
-                Nothing -> do
-                    return Nothing
-                Just headersExpression -> do
-                    expr <- loadWith headersExpression
+                      let expected :: Expr Src X
+                          expected =
+                              App List
+                                  ( Record
+                                      ( Dhall.Map.fromList
+                                          [("header", Text), ("value", Text)]
+                                      )
+                                  )
+                      let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
+                      let annot = case expr of
+                              Note (Src begin end bytes) _ ->
+                                  Note (Src begin end bytes') (Annot expr expected)
+                                where
+                                  bytes' = bytes <> " : " <> suffix_
+                              _ ->
+                                  Annot expr expected
 
-                    let expected :: Expr Src X
-                        expected =
-                            App List
-                                ( Record
-                                    ( Dhall.Map.fromList
-                                        [("header", Text), ("value", Text)]
-                                    )
-                                )
-                    let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
-                    let annot = case expr of
-                            Note (Src begin end bytes) _ ->
-                                Note (Src begin end bytes') (Annot expr expected)
-                              where
-                                bytes' = bytes <> " : " <> suffix_
-                            _ ->
-                                Annot expr expected
+                      case Dhall.TypeCheck.typeOf annot of
+                          Left err -> liftIO (throwIO err)
+                          Right _  -> return ()
 
-                    case Dhall.TypeCheck.typeOf annot of
-                        Left err -> liftIO (throwIO err)
-                        Right _  -> return ()
+                      let expr' = Dhall.Core.normalize expr
 
-                    let expr' = Dhall.Core.normalize expr
-
-                    case toHeaders expr' of
-                        Just headers -> do
-                            return (Just (headers, expr'))
-                        Nothing      -> do
-                            liftIO (throwIO InternalError)
+                      case toHeaders expr' of
+                          Just headers -> do
+                              return (Just (headers, expr'))
+                          Nothing      -> do
+                              liftIO (throwIO InternalError)
 
 #ifdef MIN_VERSION_http_client
-            let maybeHeaders = fmap fst maybeHeadersAndExpression
+              let maybeHeaders = fmap fst maybeHeadersAndExpression
 
-            let newHeaders =
-                    fmap (fmap absurd . snd) maybeHeadersAndExpression
+              let newHeaders =
+                      fmap (fmap absurd . snd) maybeHeadersAndExpression
 
-            (path, text) <- fetchFromHttpUrl url maybeHeaders
+              (path, text) <- fetchFromHttpUrl url maybeHeaders
 
-            let newImport = Import
-                    { importHashed = ImportHashed
-                        { importType =
-                            Remote (url { headers = newHeaders })
-                        , ..
-                        }
-                    , ..
-                    }
+              let newImport = Import
+                      { importHashed = ImportHashed
+                          { importType =
+                              Remote (url { headers = newHeaders })
+                          , ..
+                          }
+                      , ..
+                      }
 
-            return (path, text, newImport)
+              return (path, text, newImport)
 #else
-            let urlString = Text.unpack (Dhall.Core.pretty url)
+              let urlString = Text.unpack (Dhall.Core.pretty url)
 
-            liftIO (throwIO (CannotImportHTTPURL urlString mheaders))
+              liftIO (throwIO (CannotImportHTTPURL urlString mheaders))
 #endif
 
-        Env env -> liftIO $ do
-            x <- System.Environment.lookupEnv (Text.unpack env)
-            case x of
-                Just string -> do
-                    return (Text.unpack env, Text.pack string, import_)
-                Nothing -> do
-                    throwMissingImport (MissingEnvironmentVariable env)
+          Env env -> liftIO $ do
+              x <- System.Environment.lookupEnv (Text.unpack env)
+              case x of
+                  Just string -> do
+                      return (Text.unpack env, Text.pack string, import_)
+                  Nothing -> do
+                      throwMissingImport (MissingEnvironmentVariable env)
 
-        Missing -> liftIO $ do
-            throwM (MissingImports [])
+          Missing -> liftIO $ do
+              throwM (MissingImports [])
 
     case importMode of
         Code -> do
+            (path, text, newImport) <- resolveImport importType
             let parser = unParser $ do
                     Text.Parser.Token.whiteSpace
                     r <- Dhall.Parser.expr
@@ -702,9 +702,29 @@ exprFromUncachedImport import_@(Import {..}) = do
                     return (Resolved {..})
 
         RawText -> do
+            (_path, text, newImport) <- resolveImport importType
             let resolvedExpression = TextLit (Chunks [] text)
 
             return (Resolved {..})
+
+        Location -> do
+            let locationType = Union $ Dhall.Map.fromList
+                    [ ("Environment", Just Text)
+                    , ("Remote", Just Text)
+                    , ("Local", Just Text)
+                    , ("Missing", Nothing)
+                    ]
+
+            let resolvedExpression =
+                    case importType of
+                        Missing -> Field locationType "Missing"
+                        local@(Local _ _) -> App (Field locationType "Local") (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty local)))
+                        remote@(Remote _) -> App (Field locationType "Remote") (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty remote)))
+                        Env env -> App (Field locationType "Environment") (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty env)))
+
+
+            return (Resolved resolvedExpression import_)
+
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status IO
