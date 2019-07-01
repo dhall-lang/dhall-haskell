@@ -48,10 +48,7 @@ import Data.Bifunctor (first)
 -- | A @FileIdentifier@ represents either a local file or a remote url.
 newtype FileIdentifier = FileIdentifier Dhall.ImportType
 
--- | Construct a FileIdentifier from a given URI. Supports "file:", "http:" and
---   "https:" URI schemes.
---   TODO: Split into FilePath -> FileIdentifier and URI -> Maybe FileIdentifier
--- TODO: update comments
+-- | Construct a FileIdentifier from a local file path.
 fileIdentifierFromFilePath :: FilePath -> FileIdentifier
 fileIdentifierFromFilePath path =
   let filename = Text.pack $ takeFileName path
@@ -60,6 +57,8 @@ fileIdentifierFromFilePath path =
   in FileIdentifier $ Dhall.Local Dhall.Absolute
                         (Dhall.File (Dhall.Directory components) filename)
 
+-- | Construct a FileIdentifier from a given URI. Supports "file:", "http:" and
+--   "https:" URI schemes.
 fileIdentifierFromURI :: URI -> Maybe FileIdentifier
 fileIdentifierFromURI uri
   | URI.uriScheme uri == "file:" = do
