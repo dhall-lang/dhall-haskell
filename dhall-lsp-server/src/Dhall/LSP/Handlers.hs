@@ -135,7 +135,7 @@ rangeToJSON (Range (x1,y1) (x2,y2)) = J.Range (J.Position x1 y1) (J.Position x2 
 hoverExplain :: J.HoverRequest -> HandlerM ()
 hoverExplain request = do
   let uri = request ^. J.params . J.textDocument . J.uri
-      (J.Position line col) = request ^. (J.params . J.position)
+      J.Position line col = request ^. J.params . J.position
   txt <- readUri uri
   mError <- uses errors $ Map.lookup uri
   let isHovered (Diagnosis _ (Just (Range left right)) _) =
