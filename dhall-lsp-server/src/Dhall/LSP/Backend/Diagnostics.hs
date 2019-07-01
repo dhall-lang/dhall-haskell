@@ -2,7 +2,6 @@
 
 module Dhall.LSP.Backend.Diagnostics
   ( DhallError
-  , checkDhall
   , diagnose
   , Diagnosis(..)
   , explain
@@ -40,20 +39,6 @@ data Diagnosis = Diagnosis {
     diagnosis :: Text
     }
 
-
--- | Parse, type-check and normalise the given Dhall code, collecting any
---   occurring errors.
-checkDhall :: FilePath -> Text -> IO [DhallError]
-checkDhall _path _txt = undefined
-{-  (handle' ExceptionInternal
-    . handle' ExceptionCBOR
-    . handle' ExceptionImport
-    . handle' ExceptionTypecheck
-    . handle' ExceptionParse
-    )
-    (const [] <$> runDhall path txt)
-  where
-    handle' constructor = handle (return . return . constructor) -}
 
 -- | Give a short diagnosis for a given error that can be shown to the end user.
 diagnose :: Text -> DhallError -> [Diagnosis]
