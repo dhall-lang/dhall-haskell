@@ -24,17 +24,15 @@ import Dhall.LSP.State
 
 import Control.Applicative ((<|>))
 import Control.Concurrent.MVar
-import Control.Lens ((^.))
-import Control.Monad.Trans (lift, liftIO)
+import Control.Lens ((^.), use, uses, assign, modifying)
+import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.Except (throwE, catchE, runExceptT)
 import Control.Monad.Trans.State.Strict (execStateT)
-import Control.Monad.Trans.State.Strict (gets, modify)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Map.Strict as Map
 import Data.Maybe (maybeToList)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Lens.Family (view, set, over)
 import qualified Network.URI as URI
 import qualified Network.URI.Encode as URI
 import Text.Megaparsec (SourcePos(..), unPos)
@@ -69,7 +67,7 @@ lspUserMessage (severity, text) =
 
 lspSend :: LSP.FromServerMessage -> HandlerM ()
 lspSend msg = do
-  send <- lift $ gets (view (lspFuncs . sendFunc))
+  send <- use (lspFuncs . sendFunc)
   liftIO $ send msg
 
 lspRespond :: (J.ResponseMessage response -> LSP.FromServerMessage)
@@ -87,16 +85,16 @@ lspRequest
   :: (J.RequestMessage J.ServerMethod params response -> LSP.FromServerMessage)
   -> J.ServerMethod -> params -> HandlerM ()
 lspRequest constructor method params = do
-  getNextReqId <- lift $ gets (LSP.getNextReqId . view lspFuncs)
+  getNextReqId <- uses lspFuncs LSP.getNextReqId
   reqId <- liftIO getNextReqId
   lspSend . constructor $ J.RequestMessage "2.0" reqId method params
 
 -- | A helper function to query haskell-lsp's VFS.
 readUri :: J.Uri -> HandlerM Text
 readUri uri = do
-  getVirtualFileFunc <- lift $ gets (LSP.getVirtualFileFunc . view lspFuncs)
-  asd <- liftIO $ getVirtualFileFunc uri
-  case asd of
+  getVirtualFileFunc <- uses lspFuncs LSP.getVirtualFileFunc
+  mVirtualFile <- liftIO $ getVirtualFileFunc uri
+  case mVirtualFile of
     Just (LSP.VirtualFile _ rope) -> return (Rope.toText rope)
     Nothing -> fail $ "Could not find " <> show uri <> " in VFS."
 
@@ -104,7 +102,7 @@ loadFile :: J.Uri -> HandlerM (Expr Src X)
 loadFile uri = do
   txt <- readUri uri
   fileIdentifier <- fileIdentifierFromUri uri
-  cache <- lift $ gets (view importCache)
+  cache <- use importCache
 
   expr <- case parse txt of
     Right e -> return e
@@ -116,7 +114,7 @@ loadFile uri = do
     _ -> throwE (Error, "Failed to resolve imports.")
   -- Update cache. Don't cache current expression because it might not have been
   -- written to disk yet (readUri reads from the VFS).
-  lift $ modify (set importCache cache')
+  assign importCache cache'
   return expr'
 
 -- helper
@@ -138,7 +136,7 @@ hoverExplain request = do
   let uri = request ^. J.params . J.textDocument . J.uri
       (J.Position line col) = request ^. (J.params . J.position)
   txt <- readUri uri
-  mError <- lift $ gets (Map.lookup uri . view errors)
+  mError <- uses errors $ Map.lookup uri
   let isHovered (Diagnosis _ (Just (Range left right)) _) =
         left <= (line,col) && (line,col) <= right
       isHovered _ = False
@@ -180,7 +178,7 @@ hoverType request = do
 hoverHandler :: J.HoverRequest -> HandlerM ()
 hoverHandler request = do
   let uri = request ^. J.params . J.textDocument . J.uri
-  errorMap <- lift $ gets (view errors)
+  errorMap <- use errors
   case Map.lookup uri errorMap of
     Nothing -> hoverType request
     _ -> hoverExplain request
@@ -191,8 +189,8 @@ diagnosticsHandler uri = do
   txt <- readUri uri
   fileIdentifier <- fileIdentifierFromUri uri
   -- make sure we don't keep a stale version around
-  lift $ modify (over importCache (invalidate fileIdentifier))
-  cache <- lift $ gets (view importCache)
+  modifying importCache (invalidate fileIdentifier)
+  cache <- use importCache
 
   errs <- flip catchE (return . Just) $ do
       expr <- case parse txt of
@@ -207,7 +205,7 @@ diagnosticsHandler uri = do
         Left err -> throwE err
       let normal = normalize welltyped
       -- cache the new expression
-      lift $ modify (set importCache (cacheExpr fileIdentifier normal cache'))
+      assign importCache (cacheExpr fileIdentifier normal cache')
       return Nothing
 
   let suggestions =
@@ -239,7 +237,7 @@ diagnosticsHandler uri = do
       diagnostics = concatMap (map diagnosisToDiagnostic . diagnose txt) (maybeToList errs)
                      ++ map suggestionToDiagnostic suggestions
 
-  lift $ modify (over errors (Map.alter (const errs) uri))  -- cache errors
+  modifying errors (Map.alter (const errs) uri)  -- cache errors
   lspSendNotification LSP.NotPublishDiagnostics J.TextDocumentPublishDiagnostics
                       (J.PublishDiagnosticsParams uri (J.List diagnostics))
 
