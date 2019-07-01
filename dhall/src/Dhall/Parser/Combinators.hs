@@ -13,6 +13,7 @@ import           Data.Sequence              (ViewL (..))
 import           Data.String                (IsString (..))
 import           Data.Text                  (Text)
 import           Data.Text.Prettyprint.Doc  (Pretty (..))
+import           Data.Text.Short            (ShortText)
 import           Data.Void                  (Void)
 import           Dhall.Map                  (Map)
 import           Dhall.Set                  (Set)
@@ -28,6 +29,7 @@ import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
+import qualified Data.Text.Short
 import qualified Dhall.Map
 import qualified Dhall.Pretty
 import qualified Dhall.Set
@@ -255,7 +257,7 @@ noDuplicates = go Dhall.Set.empty
         then fail "Duplicate key"
         else go (Dhall.Set.append x found) xs
 
-toMap :: [(Text, a)] -> Parser (Map Text a)
+toMap :: [(ShortText, a)] -> Parser (Map ShortText a)
 toMap kvs = do
     let adapt (k, v) = (k, pure v)
     let m = fromListWith (<|>) (fmap adapt kvs)
@@ -266,7 +268,7 @@ toMap kvs = do
                 then pure v
                 else
                     Text.Parser.Combinators.unexpected
-                        ("duplicate field: " ++ Data.Text.unpack k)
+                        ("duplicate field: " ++ Data.Text.Short.unpack k)
     Dhall.Map.traverseWithKey action m
   where
     fromListWith combine = foldr cons mempty

@@ -63,6 +63,7 @@ import Data.List.NonEmpty (NonEmpty(..), cons)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
 import Data.Text (Text)
+import Data.Text.Short (ShortText)
 
 import Dhall.Core (
     Expr(..)
@@ -94,8 +95,8 @@ import qualified Text.Printf
 
 data Env a =
     Empty
-  | Skip !(Env a) {-# unpack #-} !Text
-  | Extend !(Env a) {-# unpack #-} !Text (Val a)
+  | Skip !(Env a) {-# unpack #-} !ShortText
+  | Extend !(Env a) {-# unpack #-} !ShortText (Val a)
 
 data Void
 
@@ -119,7 +120,7 @@ errorMsg = unlines
     _ERROR = "\ESC[1;31mError\ESC[0m"
 
 
-data Closure a = Cl !Text !(Env a) !(Expr Void a)
+data Closure a = Cl !ShortText !(Env a) !(Expr Void a)
 data VChunks a = VChunks ![(Text, Val a)] !Text
 
 instance Semigroup (VChunks a) where
@@ -135,7 +136,7 @@ instance Monoid (VChunks a) where
 
 data HLamInfo a
   = Prim
-  | Typed !Text (Val a)
+  | Typed !ShortText (Val a)
   | NaturalFoldCl (Val a)
   | ListFoldCl (Val a)
   | OptionalFoldCl (Val a)
@@ -145,7 +146,7 @@ pattern VPrim f = VHLam Prim f
 
 data Val a
   = VConst !Const
-  | VVar !Text !Int
+  | VVar !ShortText !Int
   | VPrimVar
   | VApp !(Val a) !(Val a)
 
@@ -153,7 +154,7 @@ data Val a
   | VHLam !(HLamInfo a) !(Val a -> Val a)
 
   | VPi  (Val a) {-# unpack #-} !(Closure a)
-  | VHPi !Text (Val a) !(Val a -> Val a)
+  | VHPi !ShortText (Val a) !(Val a -> Val a)
 
   | VBool
   | VBoolLit !Bool
@@ -205,17 +206,17 @@ data Val a
   | VNone (Val a)
   | VOptionalFold (Val a) !(Val a) (Val a) !(Val a) !(Val a)
   | VOptionalBuild (Val a) !(Val a)
-  | VRecord !(Map Text (Val a))
-  | VRecordLit !(Map Text (Val a))
-  | VUnion !(Map Text (Maybe (Val a)))
-  | VUnionLit !Text !(Val a) !(Map Text (Maybe (Val a)))
+  | VRecord !(Map ShortText (Val a))
+  | VRecordLit !(Map ShortText (Val a))
+  | VUnion !(Map ShortText (Maybe (Val a)))
+  | VUnionLit !ShortText !(Val a) !(Map ShortText (Maybe (Val a)))
   | VCombine !(Val a) !(Val a)
   | VCombineTypes !(Val a) !(Val a)
   | VPrefer !(Val a) !(Val a)
   | VMerge !(Val a) !(Val a) !(Maybe (Val a))
-  | VField !(Val a) !Text
-  | VInject !(Map Text (Maybe (Val a))) !Text !(Maybe (Val a))
-  | VProject !(Val a) !(Either (Set Text) (Val a))
+  | VField !(Val a) !ShortText
+  | VInject !(Map ShortText (Maybe (Val a))) !ShortText !(Maybe (Val a))
+  | VProject !(Val a) !(Either (Set ShortText) (Val a))
   | VEmbed a
 
 vFun :: Val a -> Val a -> Val a
@@ -239,7 +240,7 @@ textShow text = "\"" <> Data.Text.concatMap f text <> "\""
     f c | c <= '\x1F' = Data.Text.pack (Text.Printf.printf "\\u%04x" (Data.Char.ord c))
         | otherwise   = Data.Text.singleton c
 
-countName :: Text -> Env a -> Int
+countName :: ShortText -> Env a -> Int
 countName x = go (0 :: Int) where
   go !acc Empty             = acc
   go  acc (Skip env x'    ) = go (if x == x' then acc + 1 else acc) env
@@ -581,11 +582,11 @@ eqMaybeBy f = go where
 conv :: forall a. Eq a => Env a -> Val a -> Val a -> Bool
 conv !env t t' =
   let
-    fresh :: Text -> (Text, Val a)
+    fresh :: ShortText -> (ShortText, Val a)
     fresh x = (x, VVar x (countName x env))
     {-# inline fresh #-}
 
-    freshCl :: Closure a -> (Text, Val a, Closure a)
+    freshCl :: Closure a -> (ShortText, Val a, Closure a)
     freshCl cl@(Cl x _ _) = (x, snd (fresh x), cl)
     {-# inline freshCl #-}
 
@@ -598,7 +599,7 @@ conv !env t t' =
     convE = conv env
     {-# inline convE #-}
 
-    convSkip :: Text -> Val a -> Val a -> Bool
+    convSkip :: ShortText -> Val a -> Val a -> Bool
     convSkip x = conv (Skip env x)
     {-# inline convSkip #-}
 
@@ -710,7 +711,7 @@ convEmpty (denote -> t) (denote -> u) = conv Empty (eval Empty t) (eval Empty u)
 
 data Names
   = NEmpty
-  | NBind !Names {-# unpack #-} !Text
+  | NBind !Names {-# unpack #-} !ShortText
   deriving Show
 
 envNames :: Env a -> Names
@@ -718,7 +719,7 @@ envNames Empty = NEmpty
 envNames (Skip   env x  ) = NBind (envNames env) x
 envNames (Extend env x _) = NBind (envNames env) x
 
-countName' :: Text -> Names -> Int
+countName' :: ShortText -> Names -> Int
 countName' x = go 0 where
   go !acc NEmpty         = acc
   go  acc (NBind env x') = go (if x == x' then acc + 1 else acc) env
@@ -727,15 +728,15 @@ countName' x = go 0 where
 quote :: forall a. Eq a => Names -> Val a -> Expr Void a
 quote !env !t =
   let
-    fresh :: Text -> (Text, Val a)
+    fresh :: ShortText -> (ShortText, Val a)
     fresh x = (x, VVar x (countName' x env))
     {-# inline fresh #-}
 
-    freshCl :: Closure a -> (Text, Val a, Closure a)
+    freshCl :: Closure a -> (ShortText, Val a, Closure a)
     freshCl cl@(Cl x _ _) = (x, snd (fresh x), cl)
     {-# inline freshCl #-}
 
-    qVar :: Text -> Int -> Expr Void a
+    qVar :: ShortText -> Int -> Expr Void a
     qVar !x !i = Var (V x (fromIntegral (countName' x env - i - 1)))
     {-# inline qVar #-}
 
@@ -743,7 +744,7 @@ quote !env !t =
     quoteE = quote env
     {-# inline quoteE #-}
 
-    quoteBind :: Text -> Val a -> Expr Void a
+    quoteBind :: ShortText -> Val a -> Expr Void a
     quoteBind x = quote (NBind env x)
     {-# inline quoteBind #-}
 
@@ -851,7 +852,7 @@ nfEmpty = nf Empty
 alphaNormalize :: Expr s a -> Expr s a
 alphaNormalize = goEnv NEmpty where
 
-  goVar :: Names -> Text -> Integer -> Expr s a
+  goVar :: Names -> ShortText -> Integer -> Expr s a
   goVar e topX topI = go 0 e topI where
     go !acc (NBind env x) !i
       | x == topX = if i == 0 then Var (V "_" acc) else go (acc + 1) env (i - 1)

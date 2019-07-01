@@ -33,6 +33,7 @@ import Data.Semigroup (Semigroup(..))
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
+import Data.Text.Short (ShortText)
 import Data.Traversable (forM)
 import Data.Typeable (Typeable)
 import Dhall.Binary (FromTerm(..), ToTerm(..))
@@ -46,6 +47,7 @@ import qualified Data.Set
 import qualified Data.Text                               as Text
 import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
+import qualified Data.Text.Short
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
@@ -763,7 +765,7 @@ typeWithA tpa = loop
     loop ctx e@(Field r x       ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
 
-        let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
+        let text = Data.Text.Short.fromText (Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x))
 
         case t of
             Record kts -> do
@@ -797,7 +799,7 @@ typeWithA tpa = loop
                 fmap adapt (traverse process (Dhall.Set.toList xs))
             _ -> do
                 let text =
-                        Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
+                        Data.Text.Short.fromText (Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs))
 
                 Left (TypeError ctx e (CantProject text r t))
     loop ctx e@(Project r (Right t)) = do
@@ -832,7 +834,7 @@ typeWithA tpa = loop
                         Left (TypeError ctx e (CantProjectByExpression t))
 
             _ -> do
-                let text = Dhall.Core.pretty t
+                let text = Data.Text.Short.fromText (Dhall.Core.pretty t)
 
                 Left (TypeError ctx e (CantProject text r t))
     loop ctx   (Note s e'       ) = case loop ctx e' of
@@ -875,7 +877,7 @@ instance ToTerm X where
 
 -- | The specific type error
 data TypeMessage s a
-    = UnboundVariable Text
+    = UnboundVariable ShortText
     | InvalidInputType (Expr s a)
     | InvalidOutputType (Expr s a)
     | NotAFunction (Expr s a) (Expr s a)
@@ -892,34 +894,34 @@ data TypeMessage s a
     | InvalidPredicate (Expr s a) (Expr s a)
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
-    | InvalidFieldType Text (Expr s a)
-    | FieldAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
-    | FieldMismatch Text (Expr s a) Const Text (Expr s a) Const
-    | InvalidAlternative Text (Expr s a)
-    | InvalidAlternativeType Text (Expr s a)
-    | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
+    | InvalidFieldType ShortText (Expr s a)
+    | FieldAnnotationMismatch ShortText (Expr s a) Const ShortText (Expr s a) Const
+    | FieldMismatch ShortText (Expr s a) Const ShortText (Expr s a) Const
+    | InvalidAlternative ShortText (Expr s a)
+    | InvalidAlternativeType ShortText (Expr s a)
+    | AlternativeAnnotationMismatch ShortText (Expr s a) Const ShortText (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
-    | DuplicateAlternative Text
+    | DuplicateAlternative ShortText
     | MustCombineARecord Char (Expr s a) (Expr s a)
     | RecordMismatch Char (Expr s a) (Expr s a) Const Const
     | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
     | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
-    | FieldCollision Text
+    | FieldCollision ShortText
     | MustMergeARecord (Expr s a) (Expr s a)
     | MustMergeUnion (Expr s a) (Expr s a)
-    | UnusedHandler (Set Text)
-    | MissingHandler (Set Text)
-    | HandlerInputTypeMismatch Text (Expr s a) (Expr s a)
-    | HandlerOutputTypeMismatch Text (Expr s a) Text (Expr s a)
-    | InvalidHandlerOutputType Text (Expr s a) (Expr s a)
+    | UnusedHandler (Set ShortText)
+    | MissingHandler (Set ShortText)
+    | HandlerInputTypeMismatch ShortText (Expr s a) (Expr s a)
+    | HandlerOutputTypeMismatch ShortText (Expr s a) ShortText (Expr s a)
+    | InvalidHandlerOutputType ShortText (Expr s a) (Expr s a)
     | MissingMergeType
-    | HandlerNotAFunction Text (Expr s a)
+    | HandlerNotAFunction ShortText (Expr s a)
     | ConstructorsRequiresAUnionType (Expr s a) (Expr s a)
-    | CantAccess Text (Expr s a) (Expr s a)
-    | CantProject Text (Expr s a) (Expr s a)
+    | CantAccess ShortText (Expr s a) (Expr s a)
+    | CantProject ShortText (Expr s a) (Expr s a)
     | CantProjectByExpression (Expr s a)
-    | MissingField Text (Expr s a)
-    | ProjectionTypeMismatch Text (Expr s a) (Expr s a) (Expr s a) (Expr s a)
+    | MissingField ShortText (Expr s a)
+    | ProjectionTypeMismatch ShortText (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
     | CantOr (Expr s a) (Expr s a)
     | CantEQ (Expr s a) (Expr s a)
@@ -965,7 +967,7 @@ prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
   -- https://github.com/dhall-lang/dhall-haskell/pull/116
   where
-    short = "Unbound variable: " <> Pretty.pretty x
+    short = "Unbound variable: " <> Pretty.pretty (Data.Text.Short.toText x)
 
     long =
         "Explanation: Expressions can only reference previously introduced (i.e. “bound”)\n\
@@ -2182,7 +2184,7 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \... which is neither a ❰Type❱, a ❰Kind❱, nor a ❰Sort❱                           \n"
       where
-        txt0 = insert k
+        txt0 = insert (Data.Text.Short.toText k)
         txt1 = insert expr0
 
 prettyTypeMessage (FieldAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
@@ -2234,9 +2236,9 @@ prettyTypeMessage (FieldAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessa
         \                                                                                \n\
         \... is a " <> level c0 <> ", which does not match                               \n"
       where
-        txt0 = insert k0
+        txt0 = insert (Data.Text.Short.toText k0)
         txt1 = insert expr0
-        txt2 = insert k1
+        txt2 = insert (Data.Text.Short.toText k1)
         txt3 = insert expr1
 
         level Type = "❰Type❱"
@@ -2292,9 +2294,9 @@ prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
         \                                                                                \n\
         \... is a " <> level c0 <> ", which does not match                               \n"
       where
-        txt0 = insert k0
+        txt0 = insert (Data.Text.Short.toText k0)
         txt1 = insert expr0
-        txt2 = insert k1
+        txt2 = insert (Data.Text.Short.toText k1)
         txt3 = insert expr1
 
         level Type = "term"
@@ -2353,7 +2355,7 @@ prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt1 <> "\n"
       where
-        txt0 = insert k
+        txt0 = insert (Data.Text.Short.toText k)
         txt1 = insert expr0
 
 prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
@@ -2395,7 +2397,7 @@ prettyTypeMessage (InvalidAlternative k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \... which is not a term, type, or kind.                                         \n"
       where
-        txt0 = insert k
+        txt0 = insert (Data.Text.Short.toText k)
         txt1 = insert expr0
 
 prettyTypeMessage (AlternativeAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
@@ -2453,9 +2455,9 @@ prettyTypeMessage (AlternativeAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = Erro
         \                                                                                \n\
         \... is a " <> level c1 <> ", which does not match                               \n"
       where
-        txt0 = insert k0
+        txt0 = insert (Data.Text.Short.toText k0)
         txt1 = insert expr0
-        txt2 = insert k1
+        txt2 = insert (Data.Text.Short.toText k1)
         txt3 = insert expr1
 
         level Type = "❰Type❱"
@@ -2529,7 +2531,7 @@ prettyTypeMessage (DuplicateAlternative k) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt0 <> "\n"
       where
-        txt0 = insert k
+        txt0 = insert (Data.Text.Short.toText k)
 
 prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
   where
@@ -2808,7 +2810,7 @@ prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
         \                                                                                \n\
         \... which is not allowed                                                        \n"
       where
-        txt0 = insert k
+        txt0 = insert (Data.Text.Short.toText k)
 
 prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
   where
@@ -2943,7 +2945,7 @@ prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
         \                                                                                \n\
         \... which had no matching alternatives in the union you tried to ❰merge❱        \n"
       where
-        txt0 = insert (Text.intercalate ", " (Data.Set.toList ks))
+        txt0 = insert (Text.intercalate ", " (fmap Data.Text.Short.toText (Data.Set.toList ks)))
 
 prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
   where
@@ -2983,7 +2985,7 @@ prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt0 <> "\n"
       where
-        txt0 = insert (Text.intercalate ", " (Data.Set.toList ks))
+        txt0 = insert (Text.intercalate ", " (fmap Data.Text.Short.toText (Data.Set.toList ks)))
 
 prettyTypeMessage MissingMergeType =
     ErrorMessages {..}
@@ -3073,7 +3075,7 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
         \                                                                                \n\
         \" <> txt2 <> "\n"
       where
-        txt0 = insert expr0
+        txt0 = insert (Data.Text.Short.toText expr0)
         txt1 = insert expr1
         txt2 = insert expr2
 
@@ -3137,7 +3139,7 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
         \                                                                                \n\
         \" <> txt2 <> "\n"
       where
-        txt0 = insert expr0
+        txt0 = insert (Data.Text.Short.toText expr0)
         txt1 = insert expr1
         txt2 = insert expr2
 
@@ -3193,9 +3195,9 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
         \                                                                                \n\
         \" <> txt3 <> "\n"
       where
-        txt0 = pretty key0
+        txt0 = pretty (Data.Text.Short.toText key0)
         txt1 = insert expr0
-        txt2 = pretty key1
+        txt2 = pretty (Data.Text.Short.toText key1)
         txt3 = insert expr1
 
 prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
@@ -3236,7 +3238,7 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \... which is not the type of a function                                         \n"
       where
-        txt0 = insert k
+        txt0 = insert (Data.Text.Short.toText k)
         txt1 = insert expr0
 
 prettyTypeMessage (ConstructorsRequiresAUnionType expr0 expr1) = ErrorMessages {..}
@@ -3345,7 +3347,7 @@ prettyTypeMessage (CantAccess lazyText0 expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt2 <> "\n"
       where
-        txt0 = insert lazyText0
+        txt0 = insert (Data.Text.Short.toText lazyText0)
         txt1 = insert expr0
         txt2 = insert expr1
 
@@ -3406,7 +3408,7 @@ prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt2 <> "\n"
       where
-        txt0 = insert lazyText0
+        txt0 = insert (Data.Text.Short.toText lazyText0)
         txt1 = insert expr0
         txt2 = insert expr1
 
@@ -3508,7 +3510,7 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt1 <> "\n"
       where
-        txt0 = insert k
+        txt0 = insert (Data.Text.Short.toText k)
         txt1 = insert expr0
 
 prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1 expr2 expr3) = ErrorMessages {..}
@@ -3554,7 +3556,7 @@ prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1 expr2 expr3) = ErrorMess
         \                                                                                \n\
         \" <> txt2 <> "\n"
       where
-        txt0 = insert k
+        txt0 = insert (Data.Text.Short.toText k)
         txt1 = insert expr0
         txt2 = insert expr1
 
@@ -3867,7 +3869,7 @@ instance (Eq a, Pretty s, Pretty a, ToTerm a) => Pretty (TypeError s a) where
             )
       where
         prettyKV (key, val) =
-            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
+            pretty (Data.Text.Short.toText key) <> " : " <> Dhall.Util.snipDoc (pretty val)
 
         prettyContext =
                 Pretty.vsep
@@ -3905,7 +3907,7 @@ instance (Eq a, Pretty s, Pretty a, ToTerm a) => Pretty (DetailedTypeError s a) 
             )
       where
         prettyKV (key, val) =
-            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
+            pretty (Data.Text.Short.toText key) <> " : " <> Dhall.Util.snipDoc (pretty val)
 
         prettyContext =
                 Pretty.vsep

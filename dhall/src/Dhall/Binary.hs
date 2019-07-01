@@ -55,6 +55,7 @@ import qualified Crypto.Hash
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.Sequence
+import qualified Data.Text.Short
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Options.Applicative
@@ -130,7 +131,7 @@ instance ToTerm a => ToTerm (Expr s a) where
     encode (Var (V "_" n)) =
         TInteger n
     encode (Var (V x n)) =
-        TList [ TString x, TInteger n ]
+        TList [ TString (Data.Text.Short.toText x), TInteger n ]
     encode NaturalBuild =
         TString "Natural/build"
     encode NaturalFold =
@@ -205,7 +206,7 @@ instance ToTerm a => ToTerm (Expr s a) where
         _A₁ = encode _A₀
         b₁  = encode b₀
     encode (Lam x _A₀ b₀) =
-        TList [ TInt 1, TString x, _A₁, b₁ ]
+        TList [ TInt 1, TString (Data.Text.Short.toText x), _A₁, b₁ ]
       where
         _A₁ = encode _A₀
         b₁  = encode b₀
@@ -215,7 +216,7 @@ instance ToTerm a => ToTerm (Expr s a) where
         _A₁ = encode _A₀
         _B₁ = encode _B₀
     encode (Pi x _A₀ _B₀) =
-        TList [ TInt 2, TString x, _A₁, _B₁ ]
+        TList [ TInt 2, TString (Data.Text.Short.toText x), _A₁, _B₁ ]
       where
         _A₁ = encode _A₀
         _B₁ = encode _B₀
@@ -308,7 +309,7 @@ instance ToTerm a => ToTerm (Expr s a) where
       where
         xTs₁ = do
             (x₀, _T₀) <- Dhall.Map.toList (Dhall.Map.sort xTs₀)
-            let x₁  = TString x₀
+            let x₁  = TString (Data.Text.Short.toText x₀)
             let _T₁ = encode _T₀
             return (x₁, _T₁)
     encode (RecordLit xts₀) =
@@ -316,18 +317,18 @@ instance ToTerm a => ToTerm (Expr s a) where
       where
         xts₁ = do
             (x₀, t₀) <- Dhall.Map.toList (Dhall.Map.sort xts₀)
-            let x₁ = TString x₀
+            let x₁ = TString (Data.Text.Short.toText x₀)
             let t₁ = encode t₀
             return (x₁, t₁)
     encode (Field t₀ x) =
-        TList [ TInt 9, t₁, TString x ]
+        TList [ TInt 9, t₁, TString (Data.Text.Short.toText x) ]
       where
         t₁ = encode t₀
     encode (Project t₀ (Left xs₀)) =
         TList ([ TInt 10, t₁ ] ++ xs₁)
       where
         t₁  = encode t₀
-        xs₁ = map TString (Dhall.Set.toList xs₀)
+        xs₁ = map (TString . Data.Text.Short.toText) (Dhall.Set.toList xs₀)
     encode (Project t₀ (Right _T₀)) =
         TList [ TInt 10, t₁, TList [ _T₁ ] ]
       where
@@ -339,7 +340,7 @@ instance ToTerm a => ToTerm (Expr s a) where
         xTs₁ = do
             (x₀, mT₀) <- Dhall.Map.toList (Dhall.Map.sort xTs₀)
 
-            let x₁  = TString x₀
+            let x₁  = TString (Data.Text.Short.toText x₀)
 
             let _T₁ = case mT₀ of
                     Nothing  -> TNull
@@ -347,13 +348,13 @@ instance ToTerm a => ToTerm (Expr s a) where
 
             return (x₁, _T₁)
     encode (UnionLit x t₀ yTs₀) =
-        TList [ TInt 12, TString x, t₁, TMap yTs₁ ]
+        TList [ TInt 12, TString (Data.Text.Short.toText x), t₁, TMap yTs₁ ]
       where
         t₁ = encode t₀
 
         yTs₁ = do
             (y₀, mT₀) <- Dhall.Map.toList (Dhall.Map.sort yTs₀)
-            let y₁  = TString y₀
+            let y₁  = TString (Data.Text.Short.toText y₀)
             let _T₁ = case mT₀ of
                     Just _T₀ -> encode _T₀
                     Nothing  -> TNull
@@ -406,7 +407,7 @@ instance ToTerm a => ToTerm (Expr s a) where
 
             let a₁ = encode a₀
 
-            [ TString x, mA₁, a₁ ]
+            [ TString (Data.Text.Short.toText x), mA₁, a₁ ]
 
         b₁ = encode b₀
     encode (Annot t₀ _T₀) =
@@ -556,9 +557,9 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TString "_") =
         empty
     decode (TList [ TString x, TInt n ]) =
-        return (Var (V x (fromIntegral n)))
+        return (Var (V (Data.Text.Short.fromText x) (fromIntegral n)))
     decode (TList [ TString x, TInteger n ]) =
-        return (Var (V x n))
+        return (Var (V (Data.Text.Short.fromText x) n))
     decode (TList (TInt 0 : f₁ : xs₁)) = do
         f₀  <- decode f₁
         xs₀ <- traverse decode xs₁
@@ -570,7 +571,7 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TList [ TInt 1, TString x, _A₁, b₁ ]) = do
         _A₀ <- decode _A₁
         b₀  <- decode b₁
-        return (Lam x _A₀ b₀)
+        return (Lam (Data.Text.Short.fromText x) _A₀ b₀)
     decode (TList [ TInt 2, _A₁, _B₁ ]) = do
         _A₀ <- decode _A₁
         _B₀ <- decode _B₁
@@ -578,7 +579,7 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TList [ TInt 2, TString x, _A₁, _B₁ ]) = do
         _A₀ <- decode _A₁
         _B₀ <- decode _B₁
-        return (Pi x _A₀ _B₀)
+        return (Pi (Data.Text.Short.fromText x) _A₀ _B₀)
     decode (TList [ TInt 3, TInt n, l₁, r₁ ]) = do
         l₀ <- decode l₁
         r₀ <- decode r₁
@@ -619,7 +620,7 @@ instance FromTerm a => FromTerm (Expr s a) where
         let process (TString x, _T₁) = do
                 _T₀ <- decode _T₁
 
-                return (x, _T₀)
+                return (Data.Text.Short.fromText x, _T₀)
             process _ =
                 empty
 
@@ -630,7 +631,7 @@ instance FromTerm a => FromTerm (Expr s a) where
         let process (TString x, t₁) = do
                t₀ <- decode t₁
 
-               return (x, t₀)
+               return (Data.Text.Short.fromText x, t₀)
             process _ =
                 empty
 
@@ -640,11 +641,11 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TList [ TInt 9, t₁, TString x ]) = do
         t₀ <- decode t₁
 
-        return (Field t₀ x)
+        return (Field t₀ (Data.Text.Short.fromText x))
     decode (TList (TInt 10 : t₁ : xs₁)) = do
         t₀ <- decode t₁
 
-        let expectString (TString x) = return x
+        let expectString (TString x) = return (Data.Text.Short.fromText x)
             expectString  _          = empty
 
         let decodeLeft = do
@@ -670,7 +671,7 @@ instance FromTerm a => FromTerm (Expr s a) where
                     TNull -> return Nothing
                     _     -> fmap Just (decode _T₁)
 
-                return (x, mT₀)
+                return (Data.Text.Short.fromText x, mT₀)
             process _ =
                 empty
 
@@ -685,13 +686,13 @@ instance FromTerm a => FromTerm (Expr s a) where
                     TNull -> return Nothing
                     _     -> fmap Just (decode _T₁)
 
-                return (y, _T₀)
+                return (Data.Text.Short.fromText y, _T₀)
             process _ =
                 empty
 
         yTs₀ <- traverse process yTs₁
 
-        return (UnionLit x t₀ (Dhall.Map.fromList yTs₀))
+        return (UnionLit (Data.Text.Short.fromText x) t₀ (Dhall.Map.fromList yTs₀))
     decode (TBool b) = do
         return (BoolLit b)
     decode (TList [ TInt 14, t₁, l₁, r₁ ]) = do
@@ -738,7 +739,7 @@ instance FromTerm a => FromTerm (Expr s a) where
 
                 a₀  <- decode a₁
 
-                let binding = Binding x mA₀ a₀
+                let binding = Binding (Data.Text.Short.fromText x) mA₀ a₀
 
                 case ls₁ of
                     [ b₁ ] -> do

@@ -64,6 +64,7 @@ import Data.Foldable
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
+import Data.Text.Short (ShortText)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import Numeric.Natural (Natural)
@@ -78,6 +79,7 @@ import qualified Data.Text                               as Text
 import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text   as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
+import qualified Data.Text.Short                         as ShortText
 import qualified Dhall.Map
 import qualified Dhall.Set
 
@@ -301,23 +303,23 @@ headCharacter c = alpha c || c == '_'
 tailCharacter :: Char -> Bool
 tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
 
-prettyLabelShared :: Bool -> Text -> Doc Ann
+prettyLabelShared :: Bool -> ShortText -> Doc Ann
 prettyLabelShared allowReserved a = label doc
     where
         doc =
-            case Text.uncons a of
+            case ShortText.uncons a of
                 Just (h, t)
-                    | headCharacter h && Text.all tailCharacter t && (allowReserved || not (Data.HashSet.member a reservedIdentifiers))
-                        -> Pretty.pretty a
-                _       -> backtick <> Pretty.pretty a <> backtick
+                    | headCharacter h && ShortText.all tailCharacter t && (allowReserved || not (Data.HashSet.member a reservedIdentifiers))
+                        -> Pretty.pretty (ShortText.toText a)
+                _       -> backtick <> Pretty.pretty (ShortText.toText a) <> backtick
 
-prettyLabel :: Text -> Doc Ann
+prettyLabel :: ShortText -> Doc Ann
 prettyLabel = prettyLabelShared False
 
-prettyAnyLabel :: Text -> Doc Ann
+prettyAnyLabel :: ShortText -> Doc Ann
 prettyAnyLabel = prettyLabelShared True
 
-prettyLabels :: Set Text -> Doc Ann
+prettyLabels :: Set ShortText -> Doc Ann
 prettyLabels a
     | Data.Set.null (Dhall.Set.toSet a) =
         lbrace <> rbrace
@@ -836,7 +838,7 @@ prettyCharacterSet characterSet = prettyExpression
 
         short = lparen <> prettyExpression a <> rparen
 
-    prettyKeyValue :: Pretty a => Doc Ann -> (Text, Expr s a) -> (Doc Ann, Doc Ann)
+    prettyKeyValue :: Pretty a => Doc Ann -> (ShortText, Expr s a) -> (Doc Ann, Doc Ann)
     prettyKeyValue separator (key, val) =
         (       prettyAnyLabel key
             <>  " "
@@ -851,11 +853,11 @@ prettyCharacterSet characterSet = prettyExpression
       where
         long = Pretty.hardline <> "    " <> prettyExpression val
 
-    prettyRecord :: Pretty a => Map Text (Expr s a) -> Doc Ann
+    prettyRecord :: Pretty a => Map ShortText (Expr s a) -> Doc Ann
     prettyRecord =
         braces . map (prettyKeyValue colon) . Dhall.Map.toList
 
-    prettyRecordLit :: Pretty a => Map Text (Expr s a) -> Doc Ann
+    prettyRecordLit :: Pretty a => Map ShortText (Expr s a) -> Doc Ann
     prettyRecordLit a
         | Data.Foldable.null a =
             lbrace <> equals <> rbrace
@@ -865,13 +867,13 @@ prettyCharacterSet characterSet = prettyExpression
     prettyAlternative (key, Just val) = prettyKeyValue colon (key, val)
     prettyAlternative (key, Nothing ) = duplicate (prettyAnyLabel key)
 
-    prettyUnion :: Pretty a => Map Text (Maybe (Expr s a)) -> Doc Ann
+    prettyUnion :: Pretty a => Map ShortText (Maybe (Expr s a)) -> Doc Ann
     prettyUnion =
         angles . map prettyAlternative . Dhall.Map.toList
 
     prettyUnionLit
         :: Pretty a
-        => Text -> Expr s a -> Map Text (Maybe (Expr s a)) -> Doc Ann
+        => ShortText -> Expr s a -> Map ShortText (Maybe (Expr s a)) -> Doc Ann
     prettyUnionLit a b c =
         angles (front : map prettyAlternative (Dhall.Map.toList c))
       where

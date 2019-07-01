@@ -12,11 +12,11 @@ module Dhall.Context (
     , toList
     ) where
 
-import Data.Text (Text)
+import Data.Text.Short (ShortText)
 import Prelude hiding (lookup)
 
-{-| A @(Context a)@ associates `Text` labels with values of type @a@.  Each
-    `Text` label can correspond to multiple values of type @a@
+{-| A @(Context a)@ associates `ShortText` labels with values of type @a@.  Each
+    `ShortText` label can correspond to multiple values of type @a@
 
     The `Context` is used for type-checking when @(a = Expr X)@
 
@@ -28,7 +28,7 @@ import Prelude hiding (lookup)
     lets you have multiple ordered occurrences of the same key and you can
     query for the @n@th occurrence of a given key.
 -}
-newtype Context a = Context { getContext :: [(Text, a)] }
+newtype Context a = Context { getContext :: [(ShortText, a)] }
     deriving (Functor)
 
 -- | An empty context with no key-value pairs
@@ -36,7 +36,7 @@ empty :: Context a
 empty = Context []
 
 -- | Add a key-value pair to the `Context`
-insert :: Text -> a -> Context a -> Context a
+insert :: ShortText -> a -> Context a -> Context a
 insert k v (Context kvs) = Context ((k, v) : kvs)
 {-# INLINABLE insert #-}
 
@@ -45,7 +45,7 @@ insert k v (Context kvs) = Context ((k, v) : kvs)
 > match (insert k v ctx) = Just (k, v, ctx)
 > match  empty           = Nothing
 -}
-match :: Context a -> Maybe (Text, a, Context a)
+match :: Context a -> Maybe (ShortText, a, Context a)
 match (Context ((k, v) : kvs)) = Just (k, v, Context kvs)
 match (Context           []  ) = Nothing
 {-# INLINABLE match #-}
@@ -57,7 +57,7 @@ match (Context           []  ) = Nothing
 > lookup k n (insert k v c) = lookup k (n - 1) c
 > lookup k n (insert j v c) = lookup k  n      c  -- k /= j
 -}
-lookup :: Text -> Integer -> Context a -> Maybe a
+lookup :: ShortText -> Integer -> Context a -> Maybe a
 lookup _ _ (Context         []  ) =
     Nothing
 lookup x n (Context ((k, v):kvs)) =
@@ -73,6 +73,6 @@ lookup x n (Context ((k, v):kvs)) =
 > toList           empty  = []
 > toList (insert k v ctx) = (k, v) : toList ctx
 -}
-toList :: Context a -> [(Text, a)]
+toList :: Context a -> [(ShortText, a)]
 toList = getContext
 {-# INLINABLE toList #-}

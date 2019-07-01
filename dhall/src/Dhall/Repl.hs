@@ -23,6 +23,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe ( mapMaybe )
 import Data.Semigroup ((<>))
 import Data.Text ( Text )
+import Data.Text.Short ( ShortText )
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Context (Context)
 import Dhall.Import (hashExpressionToCode, standardVersion)
@@ -40,6 +41,8 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
+import qualified Data.Text.Short
+import qualified Data.Text.Short as ShortText
 import qualified Dhall
 import qualified Dhall.Binary
 import qualified Dhall.Context
@@ -225,7 +228,7 @@ addBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => [String] -> m ()
 addBinding (k : "=" : srcs) = do
   let
     varName =
-      Text.pack k
+      ShortText.pack k
 
   loaded <-
     parseAndLoad ( unwords srcs )
@@ -364,7 +367,7 @@ saveBinding [file] = do
       handler handle =
           State.evalStateT
             (forM_ bindings $ \(name, expr) -> do
-              liftIO (System.IO.hPutStr handle $ ":let " <> Text.unpack name <> " = ")
+              liftIO (System.IO.hPutStr handle $ ":let " <> ShortText.unpack name <> " = ")
               outputWithoutSpacing expr)
             (env { outputHandle = Just handle })
 
@@ -466,7 +469,7 @@ completeFunc reversedPrev word
   = listCompletion . fmap fst <$> liftIO getEnvironment
 
   -- Complete record fields and union alternatives
-  | var : subFields <- Text.split (== '.') (Text.pack word)
+  | var : subFields <- Data.Text.Short.fromText <$> Text.split (== '.') (Text.pack word)
   , not $ null subFields
   = do
     Env { envBindings } <- get
@@ -477,7 +480,7 @@ completeFunc reversedPrev word
 
       Just binding -> do
         let candidates = algebraicComplete subFields (bindingExpr binding)
-        pure $ listCompletion (Text.unpack . (var <>) <$> candidates)
+        pure $ listCompletion (ShortText.unpack . (var <>) <$> candidates)
 
   -- Complete variables in scope and all reserved identifiers
   | otherwise
@@ -487,13 +490,13 @@ completeFunc reversedPrev word
     let vars     = map fst $ Dhall.Context.toList envBindings
         reserved = Data.HashSet.toList Dhall.Core.reservedIdentifiers
 
-    pure . listCompletion . map Text.unpack . nub $ vars ++ reserved
+    pure . listCompletion . map ShortText.unpack . nub $ vars ++ reserved
 
   where
     listCompletion = map simpleCompletion . filter (word `isPrefixOf`)
 
     algebraicComplete
-        :: [Text.Text] -> Dhall.Expr Dhall.Src Dhall.X -> [Text.Text]
+        :: [ShortText] -> Dhall.Expr Dhall.Src Dhall.X -> [ShortText]
     algebraicComplete subFields expr =
       let keys = fmap ("." <>) . Map.keys
 

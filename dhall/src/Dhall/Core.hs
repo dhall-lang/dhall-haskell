@@ -72,7 +72,7 @@ import Control.Exception (Exception)
 import Control.Monad.IO.Class (MonadIO(..))
 import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
-import Data.Data (Data)
+import Data.Data (Data(..), Constr, DataType)
 import Data.Foldable
 import Data.Functor.Identity (Identity(..))
 import Data.HashSet (HashSet)
@@ -82,6 +82,7 @@ import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
+import Data.Text.Short (ShortText)
 import Data.Traversable
 import Dhall.Map (Map)
 import Dhall.Set (Set)
@@ -95,11 +96,13 @@ import qualified Control.Exception
 import qualified Control.Monad
 import qualified Crypto.Hash
 import qualified Data.Char
+import qualified Data.Data
 import {-# SOURCE #-} qualified Dhall.Eval
 import qualified Data.HashSet
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
+import qualified Data.Text.Short
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Network.URI.Encode         as URI.Encode
@@ -336,7 +339,7 @@ instance Pretty Import where
     Zero indices are omitted when pretty-printing `Var`s and non-zero indices
     appear as a numeric suffix.
 -}
-data Var = V Text !Integer
+data Var = V ShortText !Integer
     deriving (Data, Generic, Eq, Ord, Show)
 
 instance IsString Var where
@@ -353,10 +356,10 @@ data Expr s a
     --   > Var (V x n)                              ~  x@n
     | Var Var
     -- | > Lam x     A b                            ~  λ(x : A) -> b
-    | Lam Text (Expr s a) (Expr s a)
+    | Lam ShortText (Expr s a) (Expr s a)
     -- | > Pi "_" A B                               ~        A  -> B
     --   > Pi x   A B                               ~  ∀(x : A) -> B
-    | Pi  Text (Expr s a) (Expr s a)
+    | Pi  ShortText (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
     -- | > Let [Binding x Nothing  r] e             ~  let x     = r in e
@@ -454,13 +457,13 @@ data Expr s a
     -- | > OptionalBuild                            ~  Optional/build
     | OptionalBuild
     -- | > Record       [(k1, t1), (k2, t2)]        ~  { k1 : t1, k2 : t1 }
-    | Record    (Map Text (Expr s a))
+    | Record    (Map ShortText (Expr s a))
     -- | > RecordLit    [(k1, v1), (k2, v2)]        ~  { k1 = v1, k2 = v2 }
-    | RecordLit (Map Text (Expr s a))
+    | RecordLit (Map ShortText (Expr s a))
     -- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
-    | Union     (Map Text (Maybe (Expr s a)))
+    | Union     (Map ShortText (Maybe (Expr s a)))
     -- | > UnionLit k v [(k1, Just t1), (k2, Nothing)] ~  < k = v | k1 : t1 | k2 >
-    | UnionLit Text (Expr s a) (Map Text (Maybe (Expr s a)))
+    | UnionLit ShortText (Expr s a) (Map ShortText (Maybe (Expr s a)))
     -- | > Combine x y                              ~  x ∧ y
     | Combine (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
@@ -471,10 +474,10 @@ data Expr s a
     --   > Merge x y  Nothing                       ~  merge x y
     | Merge (Expr s a) (Expr s a) (Maybe (Expr s a))
     -- | > Field e x                                ~  e.x
-    | Field (Expr s a) Text
+    | Field (Expr s a) ShortText
     -- | > Project e (Left xs)                      ~  e.{ xs }
     -- | > Project e (Right t)                      ~  e.(t)
-    | Project (Expr s a) (Either (Set Text) (Expr s a))
+    | Project (Expr s a) (Either (Set ShortText) (Expr s a))
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
     -- | > ImportAlt                                ~  e1 ? e2
@@ -482,6 +485,26 @@ data Expr s a
     -- | > Embed import                             ~  import
     | Embed a
     deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data)
+
+-- Temporarily copied from
+-- https://github.com/haskell-hvr/text-short/pull/9
+instance Data ShortText where
+
+  gfoldl f z txt = z Data.Text.Short.fromString `f` (Data.Text.Short.toString txt)
+
+  toConstr _ = Data.Data.mkConstr shortTextDataType "fromString" [] Data.Data.Prefix
+
+  gunfold k z c = case Data.Data.constrIndex c of
+    1 -> k (z fromString)
+    _ -> error "gunfold"
+
+  dataTypeOf _ = shortTextDataType
+
+packConstr :: Constr
+packConstr = Data.Data.mkConstr shortTextDataType "fromString" [] Data.Data.Prefix
+
+shortTextDataType :: DataType
+shortTextDataType = Data.Data.mkDataType "Data.Text.Short" [packConstr]
 
 -- This instance is hand-written due to the fact that deriving
 -- it does not give us an INLINABLE pragma. We annotate this fmap
@@ -701,7 +724,7 @@ instance IsString (Expr s a) where
     fromString str = Var (fromString str)
 
 data Binding s a = Binding
-    { variable   :: Text
+    { variable   :: ShortText
     , annotation :: Maybe (Expr s a)
     , value      :: Expr s a
     } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data)
@@ -1962,7 +1985,7 @@ internalError text = error (unlines
     ] )
 
 -- | The set of reserved identifiers for the Dhall language
-reservedIdentifiers :: HashSet Text
+reservedIdentifiers :: HashSet ShortText
 reservedIdentifiers =
     Data.HashSet.fromList
         [ "let"

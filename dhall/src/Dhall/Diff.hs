@@ -26,6 +26,7 @@ import Data.Sequence (Seq)
 import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
+import Data.Text.Short (ShortText)
 import Dhall.Core (Binding(..), Chunks (..), Const(..), Expr(..), Var(..))
 import Dhall.Binary (ToTerm)
 import Dhall.Map (Map)
@@ -171,10 +172,10 @@ diffPrimitive f l r
     | l == r    = ignore
     | otherwise = difference (f l) (f r)
 
-diffLabel :: Text -> Text -> Diff
+diffLabel :: ShortText -> ShortText -> Diff
 diffLabel = diffPrimitive (token . Internal.prettyLabel)
 
-diffLabels :: Set Text -> Set Text -> Diff
+diffLabels :: Set ShortText -> Set ShortText -> Diff
 diffLabels ksL ksR =
     braced (diffFieldNames <> (if anyEqual then [ ignore ] else []))
   where
@@ -253,16 +254,16 @@ enclosed' l m docs =
 diffKeyVals
     :: (Eq a, Pretty a)
     => Diff
-    -> Map Text (Expr s a)
-    -> Map Text (Expr s a)
+    -> Map ShortText (Expr s a)
+    -> Map ShortText (Expr s a)
     -> [Diff]
 diffKeyVals assign = diffKeysWith assign diffExpression
 
 diffKeysWith
     :: Diff
     -> (a -> a -> Diff)
-    -> Map Text a
-    -> Map Text a
+    -> Map ShortText a
+    -> Map ShortText a
     -> [Diff]
 diffKeysWith assign diffVals kvsL kvsR =
     diffFieldNames <> diffFieldValues <> (if anyEqual then [ ignore ] else [])
@@ -404,29 +405,29 @@ isBoth p
 
 diffRecord
     :: (Eq a, Pretty a)
-    => Map Text (Expr s a) -> Map Text (Expr s a) -> Diff
+    => Map ShortText (Expr s a) -> Map ShortText (Expr s a) -> Diff
 diffRecord kvsL kvsR = braced (diffKeyVals colon kvsL kvsR)
 
 diffRecordLit
     :: (Eq a, Pretty a)
-    => Map Text (Expr s a) -> Map Text (Expr s a) -> Diff
+    => Map ShortText (Expr s a) -> Map ShortText (Expr s a) -> Diff
 diffRecordLit kvsL kvsR = braced (diffKeyVals equals kvsL kvsR)
 
 diffUnion
     :: (Eq a, Pretty a)
-    => Map Text (Maybe (Expr s a)) -> Map Text (Maybe (Expr s a)) -> Diff
+    => Map ShortText (Maybe (Expr s a)) -> Map ShortText (Maybe (Expr s a)) -> Diff
 diffUnion kvsL kvsR = angled (diffKeysWith colon diffVals kvsL kvsR)
   where
     diffVals = diffMaybe (colon <> " ") diffExpression
 
 diffUnionLit
     :: (Eq a, Pretty a)
-    => Text
-    -> Text
+    => ShortText
+    -> ShortText
     -> Expr s a
     -> Expr s a
-    -> Map Text (Maybe (Expr s a))
-    -> Map Text (Maybe (Expr s a))
+    -> Map ShortText (Maybe (Expr s a))
+    -> Map ShortText (Maybe (Expr s a))
     -> Diff
 diffUnionLit kL kR vL vR kvsL kvsR =
         langle

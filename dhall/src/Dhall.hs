@@ -118,6 +118,7 @@ import Data.Semigroup (Semigroup)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
+import Data.Text.Short (ShortText)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Data.Word (Word8, Word16, Word32, Word64)
@@ -147,6 +148,7 @@ import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
+import qualified Data.Text.Short
 import qualified Data.Vector
 import qualified Dhall.Binary
 import qualified Dhall.Context
@@ -928,10 +930,10 @@ genericAuto = fmap to (evalState (genericAutoWith defaultInterpretOptions) 1)
     `Interpret`
 -}
 data InterpretOptions = InterpretOptions
-    { fieldModifier       :: Text -> Text
+    { fieldModifier       :: ShortText -> ShortText
     -- ^ Function used to transform Haskell field names into their corresponding
     --   Dhall field names
-    , constructorModifier :: Text -> Text
+    , constructorModifier :: ShortText -> ShortText
     -- ^ Function used to transform Haskell constructor names into their
     --   corresponding Dhall alternative names
     , inputNormalizer     :: Dhall.Core.ReifiedNormalizer X
@@ -971,38 +973,38 @@ instance GenericInterpret V1 where
         expected = Union mempty
 
 unsafeExpectUnion
-    :: Text -> Expr Src X -> Dhall.Map.Map Text (Maybe (Expr Src X))
+    :: Text -> Expr Src X -> Dhall.Map.Map ShortText (Maybe (Expr Src X))
 unsafeExpectUnion _ (Union kts) =
     kts
 unsafeExpectUnion name expression =
     Dhall.Core.internalError
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
-unsafeExpectRecord :: Text -> Expr Src X -> Dhall.Map.Map Text (Expr Src X)
+unsafeExpectRecord :: ShortText -> Expr Src X -> Dhall.Map.Map ShortText (Expr Src X)
 unsafeExpectRecord _ (Record kts) =
     kts
 unsafeExpectRecord name expression =
     Dhall.Core.internalError
-        (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
+        (Data.Text.Short.toText name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
 unsafeExpectUnionLit
-    :: Text
+    :: ShortText
     -> Expr Src X
-    -> (Text, Maybe (Expr Src X))
+    -> (ShortText, Maybe (Expr Src X))
 unsafeExpectUnionLit _ (Field (Union _) k) =
     (k, Nothing)
 unsafeExpectUnionLit _ (App (Field (Union _) k) v) =
     (k, Just v)
 unsafeExpectUnionLit name expression =
     Dhall.Core.internalError
-        (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
+        (Data.Text.Short.toText name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
-unsafeExpectRecordLit :: Text -> Expr Src X -> Dhall.Map.Map Text (Expr Src X)
+unsafeExpectRecordLit :: ShortText -> Expr Src X -> Dhall.Map.Map ShortText (Expr Src X)
 unsafeExpectRecordLit _ (RecordLit kvs) =
     kvs
 unsafeExpectRecordLit name expression =
     Dhall.Core.internalError
-        (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
+        (Data.Text.Short.toText name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
 notEmptyRecordLit :: Expr s a -> Maybe (Expr s a)
 notEmptyRecordLit e = case e of
@@ -1014,7 +1016,7 @@ notEmptyRecord e = case e of
     Record m | null m -> Nothing
     _                 -> Just e
 extractUnionConstructor
-    :: Expr s a -> Maybe (Text, Expr s a, Dhall.Map.Map Text (Maybe (Expr s a)))
+    :: Expr s a -> Maybe (ShortText, Expr s a, Dhall.Map.Map ShortText (Maybe (Expr s a)))
 extractUnionConstructor (UnionLit fld e rest) =
   return (fld, e, rest)
 extractUnionConstructor (App (Field (Union kts) fld) e) =
@@ -1033,8 +1035,8 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
         nR :: M1 i c2 f2 a
         nR = undefined
 
-        nameL = constructorModifier (Data.Text.pack (conName nL))
-        nameR = constructorModifier (Data.Text.pack (conName nR))
+        nameL = constructorModifier (Data.Text.Short.pack (conName nL))
+        nameR = constructorModifier (Data.Text.Short.pack (conName nR))
 
         extract e0 = do
           case extractUnionConstructor e0 of
@@ -1062,7 +1064,7 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
         n :: M1 i c h a
         n = undefined
 
-        name = constructorModifier (Data.Text.pack (conName n))
+        name = constructorModifier (Data.Text.Short.pack (conName n))
 
         extract u = case extractUnionConstructor u of
           Just (name', e, _) ->
@@ -1085,7 +1087,7 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
         n :: M1 i c f a
         n = undefined
 
-        name = constructorModifier (Data.Text.pack (conName n))
+        name = constructorModifier (Data.Text.Short.pack (conName n))
 
         extract u = case extractUnionConstructor u of
           Just (name', e, _) ->
@@ -1153,9 +1155,9 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
         let expected =
                 Record (Dhall.Map.fromList [(key, expected')])
               where
-                key = fieldModifier (Data.Text.pack name)
+                key = fieldModifier (Data.Text.Short.pack name)
         let extract expr@(RecordLit m) =
-                    let name' = fieldModifier (Data.Text.pack name)
+                    let name' = fieldModifier (Data.Text.Short.pack name)
                         extract'' e = fmap (M1 . K1) (extract' e)
                         lookupRes = Dhall.Map.lookup name' m
                         typeError' = typeError expected expr
@@ -1384,8 +1386,8 @@ instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) =>
         nR :: M1 i c2 f2 a
         nR = undefined
 
-        keyL = constructorModifier (Data.Text.pack (conName nL))
-        keyR = constructorModifier (Data.Text.pack (conName nR))
+        keyL = constructorModifier (Data.Text.Short.pack (conName nL))
+        keyR = constructorModifier (Data.Text.Short.pack (conName nR))
 
         InputType embedL declaredL = evalState (genericInjectWith options) 1
         InputType embedR declaredR = evalState (genericInjectWith options) 1
@@ -1408,7 +1410,7 @@ instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInj
         nR :: M1 i c h a
         nR = undefined
 
-        keyR = constructorModifier (Data.Text.pack (conName nR))
+        keyR = constructorModifier (Data.Text.Short.pack (conName nR))
 
         declared = Union (Dhall.Map.insert keyR (notEmptyRecord declaredR) ktsL)
 
@@ -1435,7 +1437,7 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
         nL :: M1 i c f a
         nL = undefined
 
-        keyL = constructorModifier (Data.Text.pack (conName nL))
+        keyL = constructorModifier (Data.Text.Short.pack (conName nL))
 
         declared = Union (Dhall.Map.insert keyL (notEmptyRecord declaredL) ktsR)
 
@@ -1500,7 +1502,7 @@ instance GenericInject U1 where
 
 instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
     genericInjectWith opts@(InterpretOptions {..}) = do
-        name <- fieldModifier . Data.Text.pack <$> getSelName n
+        name <- fieldModifier . Data.Text.Short.pack <$> getSelName n
         let embed (M1 (K1 x)) =
                 RecordLit (Dhall.Map.singleton name (embedIn x))
         let declared =
@@ -1556,7 +1558,7 @@ newtype RecordType a =
     ( Data.Functor.Product.Product
         ( Control.Applicative.Const
             ( Dhall.Map.Map
-                Text
+                ShortText
                 ( Expr Src X )
             )
         )
@@ -1581,7 +1583,7 @@ record ( RecordType ( Data.Functor.Product.Pair ( Control.Applicative.Const fiel
 
 
 -- | Parse a single field of a record.
-field :: Text -> Type a -> RecordType a
+field :: ShortText -> Type a -> RecordType a
 field key valueType@(Type extract expected) =
   let
     extractBody expr@(RecordLit fields) = case Dhall.Map.lookup key fields of
@@ -1635,14 +1637,14 @@ status = union
 -}
 newtype UnionType a =
     UnionType
-      ( Data.Functor.Compose.Compose (Dhall.Map.Map Text) Type a )
+      ( Data.Functor.Compose.Compose (Dhall.Map.Map ShortText) Type a )
   deriving (Functor)
 
 instance Data.Semigroup.Semigroup (UnionType a) where
-    (<>) = coerce ((<>) :: Dhall.Map.Map Text (Type a) -> Dhall.Map.Map Text (Type a) -> Dhall.Map.Map Text (Type a))
+    (<>) = coerce ((<>) :: Dhall.Map.Map ShortText (Type a) -> Dhall.Map.Map ShortText (Type a) -> Dhall.Map.Map ShortText (Type a))
 
 instance Monoid (UnionType a) where
-    mempty = coerce (mempty :: Dhall.Map.Map Text (Type a))
+    mempty = coerce (mempty :: Dhall.Map.Map ShortText (Type a))
     mappend = (Data.Semigroup.<>)
 
 -- | Run a 'UnionType' parser to build a 'Type' parser.
@@ -1666,7 +1668,7 @@ union (UnionType (Data.Functor.Compose.Compose mp)) = Type
       in Data.Maybe.maybe (typeError (Union expect) e0) (uncurry extract) result
 
 -- | Parse a single constructor of a union
-constructor :: Text -> Type a -> UnionType a
+constructor :: ShortText -> Type a -> UnionType a
 constructor key valueType = UnionType
     ( Data.Functor.Compose.Compose (Dhall.Map.singleton key valueType) )
 
@@ -1733,7 +1735,7 @@ injectProject =
 infixr 5 >*<
 
 newtype RecordInputType a
-  = RecordInputType (Dhall.Map.Map Text (InputType a))
+  = RecordInputType (Dhall.Map.Map ShortText (InputType a))
 
 instance Contravariant RecordInputType where
   contramap f (RecordInputType inputTypeRecord) = RecordInputType $ contramap f <$> inputTypeRecord
@@ -1746,10 +1748,10 @@ instance Divisible RecordInputType where
       ((contramap $ snd . f) <$> cInputTypeRecord)
   conquer = RecordInputType mempty
 
-inputFieldWith :: Text -> InputType a -> RecordInputType a
+inputFieldWith :: ShortText -> InputType a -> RecordInputType a
 inputFieldWith name inputType = RecordInputType $ Dhall.Map.singleton name inputType
 
-inputField :: Inject a => Text -> RecordInputType a
+inputField :: Inject a => ShortText -> RecordInputType a
 inputField name = inputFieldWith name inject
 
 inputRecord :: RecordInputType a -> InputType a
@@ -1815,11 +1817,11 @@ newtype UnionInputType a =
     ( Data.Functor.Product.Product
         ( Control.Applicative.Const
             ( Dhall.Map.Map
-                Text
+                ShortText
                 ( Expr Src X )
             )
         )
-        ( Op (Text, Expr Src X) )
+        ( Op (ShortText, Expr Src X) )
         a
     )
   deriving (Contravariant)
@@ -1856,7 +1858,7 @@ inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Co
     fields' = fmap notEmptyRecord fields
 
 inputConstructorWith
-    :: Text
+    :: ShortText
     -> InputType a
     -> UnionInputType a
 inputConstructorWith name inputType = UnionInputType $
@@ -1872,6 +1874,6 @@ inputConstructorWith name inputType = UnionInputType $
 
 inputConstructor
     :: Inject a
-    => Text
+    => ShortText
     -> UnionInputType a
 inputConstructor name = inputConstructorWith name inject

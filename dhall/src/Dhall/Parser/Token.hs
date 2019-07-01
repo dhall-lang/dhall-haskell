@@ -102,6 +102,7 @@ import Control.Applicative (Alternative(..), optional)
 import Data.Functor (void)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
+import Data.Text.Short (ShortText)
 import Dhall.Core
 import Dhall.Set (Set)
 import Prelude hiding (const, pi)
@@ -111,7 +112,7 @@ import qualified Control.Monad
 import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
-import qualified Data.Text
+import qualified Data.Text.Short
 import qualified Dhall.Set
 import qualified Network.URI.Encode         as URI.Encode
 import qualified Text.Megaparsec
@@ -272,11 +273,11 @@ blockCommentContinue = endOfComment <|> continue
         blockCommentChunk
         blockCommentContinue
 
-simpleLabel :: Bool -> Parser Text
+simpleLabel :: Bool -> Parser ShortText
 simpleLabel allowReserved = try (do
     c    <- Text.Parser.Char.satisfy headCharacter
     rest <- Dhall.Parser.Combinators.takeWhile tailCharacter
-    let text = Data.Text.cons c rest
+    let text = Data.Text.Short.cons c (Data.Text.Short.fromText rest)
     Control.Monad.guard (allowReserved || not (Data.HashSet.member text reservedIdentifiers))
     return text )
   where
@@ -284,18 +285,18 @@ simpleLabel allowReserved = try (do
 
     tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
 
-backtickLabel :: Parser Text
+backtickLabel :: Parser ShortText
 backtickLabel = do
     _ <- Text.Parser.Char.char '`'
     t <- takeWhile1 predicate
     _ <- Text.Parser.Char.char '`'
-    return t
+    return (Data.Text.Short.fromText t)
   where
     predicate c =
             '\x20' <= c && c <= '\x5F'
         ||  '\x61' <= c && c <= '\x7E'
 
-labels :: Parser (Set Text)
+labels :: Parser (Set ShortText)
 labels = do
     _openBrace
     xs <- nonEmptyLabels <|> emptyLabels
@@ -310,13 +311,13 @@ labels = do
         noDuplicates (x : xs)
 
 
-label :: Parser Text
+label :: Parser ShortText
 label = (do
     t <- backtickLabel <|> simpleLabel False
     whitespace
     return t ) <?> "label"
 
-anyLabel :: Parser Text
+anyLabel :: Parser ShortText
 anyLabel = (do
     t <- backtickLabel <|> simpleLabel True
     whitespace
