@@ -112,6 +112,10 @@ hashedImportFromFileIdentifier (FileIdentifier importType) hash =
 -- | Invalidate any _unhashed_ imports of the given file. Hashed imports are
 --   kept around as per
 --   https://github.com/dhall-lang/dhall-lang/blob/master/standard/imports.md.
+--   Note to future self: this doesn't correctly invalidate reverse
+--   dependencies, i.e. other cached expressions that imported the invalidated
+--   one. We need to change the representation of the import graph in
+--   Dhall.Import in order to be able to implement this correctly!
 invalidate :: FileIdentifier -> Cache -> Cache
 invalidate (FileIdentifier fileid) (Cache cache) =
   Cache $ Map.delete codeImport (Map.delete textImport cache)
