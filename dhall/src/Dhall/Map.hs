@@ -49,6 +49,7 @@ module Dhall.Map
     , toList
     , toMap
     , keys
+    , values
     ) where
 
 import Control.Applicative ((<|>))
@@ -491,3 +492,12 @@ toMap (Map m _) = m
 keys :: Map k v -> [k]
 keys (Map _ ks) = ks
 {-# INLINABLE keys #-}
+
+{-| Return the values from a `Map` in their original order
+
+>>> values (fromList [("B",1),("A",2)])
+[1,2]
+-}
+values :: Ord k => Map k v -> [v]
+values (Map m ks) = fmap (\k -> m Data.Map.! k) ks
+{-# INLINABLE values #-}
