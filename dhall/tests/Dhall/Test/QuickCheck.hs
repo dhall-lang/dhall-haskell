@@ -27,6 +27,7 @@ import Dhall.Core
     , Var(..)
     )
 
+import Data.Hashable (Hashable)
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
 import Numeric.Natural (Natural)
@@ -123,7 +124,7 @@ integer =
         , (1, fmap (\x -> x - (2 ^ (64 :: Int))) arbitrary)
         ]
 
-instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
+instance (Ord k, Hashable k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
     arbitrary = do
         n   <- Test.QuickCheck.choose (0, 2)
         kvs <- Test.QuickCheck.vectorOf n ((,) <$> arbitrary <*> arbitrary)

@@ -59,6 +59,7 @@ import Control.Applicative (Applicative(..), (<$>))
 #endif
 
 import Data.Foldable (foldr', foldl', toList)
+import Data.Hashable (Hashable)
 import Data.List.NonEmpty (NonEmpty(..), cons)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
@@ -565,7 +566,7 @@ eqListBy f = go where
   go _  _  = False
 {-# inline eqListBy #-}
 
-eqMapsBy :: Ord k => (v -> v -> Bool) -> Map k v -> Map k v -> Bool
+eqMapsBy :: (Eq k, Hashable k) => (v -> v -> Bool) -> Map k v -> Map k v -> Bool
 eqMapsBy f mL mR = eqListBy eq (Dhall.Map.toList mL) (Dhall.Map.toList mR)
   where
     eq (kL, vL) (kR, vR) = kL == kR && f vL vR
