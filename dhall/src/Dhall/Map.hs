@@ -69,7 +69,9 @@ import qualified Prelude
     This is done primarily to avoid a dependency on @insert-ordered-containers@
     and also to improve performance
 -}
-data Map k v = Map (Data.Map.Map k v) [k]
+data Map k v =
+  -- | Invariant: @sort (keys m) == Data.Map.keys (toMap m)@
+  Map (Data.Map.Map k v) [k]
     deriving (Data)
 
 instance (Eq k, Eq v) => Eq (Map k v) where
