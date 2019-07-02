@@ -49,6 +49,7 @@ module Dhall.Map
     , toList
     , toMap
     , keys
+    , elems
     ) where
 
 import Control.Applicative ((<|>))
@@ -82,15 +83,15 @@ instance Functor (Map k) where
   fmap f (Map m ks) = Map (fmap f m) ks
   {-# INLINABLE fmap #-}
 
-instance Foldable (Map k) where
-  foldr f z (Map m _) = foldr f z m
+instance Ord k => Foldable (Map k) where
+  foldr f z m = foldr f z (elems m)
   {-# INLINABLE foldr #-}
 
-  foldMap f (Map m _) = foldMap f m
+  foldMap f m = foldMap f (elems m)
   {-# INLINABLE foldMap #-}
 
-instance Traversable (Map k) where
-  traverse f (Map m ks) = (\m' -> Map m' ks) <$> traverse f m
+instance Ord k => Traversable (Map k) where
+  traverse f m = traverseWithKey (\_ v -> f v) m
   {-# INLINABLE traverse #-}
 
 instance Ord k => Data.Semigroup.Semigroup (Map k v) where
@@ -491,3 +492,12 @@ toMap (Map m _) = m
 keys :: Map k v -> [k]
 keys (Map _ ks) = ks
 {-# INLINABLE keys #-}
+
+{-| Return the values from a `Map` in their original order.
+
+>>> elems (fromList [("B",1),("A",2)])
+[1,2]
+-}
+elems :: Ord k => Map k v -> [v]
+elems (Map m ks) = fmap (\k -> m Data.Map.! k) ks
+{-# INLINABLE elems #-}
