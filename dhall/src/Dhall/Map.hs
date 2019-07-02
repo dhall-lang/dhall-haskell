@@ -86,10 +86,10 @@ instance Functor (Map k) where
 instance Ord k => Foldable (Map k) where
   foldr f z m = foldr f z (values m)
   {-# INLINABLE foldr #-}
- 
+
   foldMap f m = foldMap f (values m)
   {-# INLINABLE foldMap #-}
- 
+
 instance Ord k => Traversable (Map k) where
   traverse f m = traverseWithKey (\_ v -> f v) m
   {-# INLINABLE traverse #-}
