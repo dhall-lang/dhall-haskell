@@ -42,6 +42,7 @@ module Dhall.Map
       -- * Traversals
     , mapWithKey
     , traverseWithKey
+    , unorderedTraverseWithKey
     , unorderedTraverseWithKey_
     , foldMapWithKey
 
@@ -453,6 +454,15 @@ traverseWithKey f m =
   where
     f' (k, a) = fmap ((,) k) (f k a)
 {-# INLINABLE traverseWithKey #-}
+
+{-| Same as `traverseWithKey`, except that the order of effects is not
+    necessarily the same as the order of the keys
+-}
+unorderedTraverseWithKey
+    :: Ord k => Applicative f => (k -> a -> f b) -> Map k a -> f (Map k b)
+unorderedTraverseWithKey f (Map m ks) =
+    fmap (\m' -> Map m' ks) (Data.Map.traverseWithKey f m)
+{-# INLINABLE unorderedTraverseWithKey #-}
 
 {-| Traverse all of the key-value pairs in a 'Map', not preserving their
     original order, where the result of the computation can be forgotten.
