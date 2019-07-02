@@ -147,13 +147,13 @@ singleton k v = Map m ks
 
 >>> fromList [("B",1),("A",2)]  -- The map preserves order
 fromList [("B",1),("A",2)]
->>> fromList [("A",1),("A",2)]  -- For duplicates, later values take precedence
-fromList [("A",2)]
+>>> fromList [("A",1),("A",2)]  -- For duplicates, earlier values take precedence
+fromList [("A",1)]
 -}
 fromList :: Ord k => [(k, v)] -> Map k v
 fromList kvs = Map m ks
   where
-    m = Data.Map.fromList kvs
+    m = Data.Map.fromListWith (\_new old -> old) kvs
 
     ks = nubOrd (map fst kvs)
 {-# INLINABLE fromList #-}
