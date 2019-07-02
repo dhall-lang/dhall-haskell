@@ -77,8 +77,13 @@ instance (Eq k, Eq v) => Eq (Map k v) where
   Map m1 ks == Map m2 ks' = m1 == m2 && ks == ks'
   {-# INLINABLE (==) #-}
 
+{-|
+>>> fromList [("A",1),("B",2)] < fromList [("B",1),("A",0)]
+True
+-}
 instance (Ord k, Ord v) => Ord (Map k v) where
-  compare (Map mL ksL) (Map mR ksR) = compare mL mR <> compare ksL ksR
+  compare m1 m2 = compare (toList m1) (toList m2)
+  {-# INLINABLE compare #-}
 
 instance Functor (Map k) where
   fmap f (Map m ks) = Map (fmap f m) ks
