@@ -83,15 +83,15 @@ instance Functor (Map k) where
   fmap f (Map m ks) = Map (fmap f m) ks
   {-# INLINABLE fmap #-}
 
-instance Foldable (Map k) where
-  foldr f z (Map m _) = foldr f z m
+instance Ord k => Foldable (Map k) where
+  foldr f z m = foldr f z (values m)
   {-# INLINABLE foldr #-}
-
-  foldMap f (Map m _) = foldMap f m
+ 
+  foldMap f m = foldMap f (values m)
   {-# INLINABLE foldMap #-}
-
-instance Traversable (Map k) where
-  traverse f (Map m ks) = (\m' -> Map m' ks) <$> traverse f m
+ 
+instance Ord k => Traversable (Map k) where
+  traverse f m = traverseWithKey (\_ v -> f v) m
   {-# INLINABLE traverse #-}
 
 instance Ord k => Data.Semigroup.Semigroup (Map k v) where
