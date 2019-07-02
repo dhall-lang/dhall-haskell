@@ -347,7 +347,8 @@ prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
 prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyInt n))
 
 prettyCharacterSet :: Pretty a => CharacterSet -> Expr s a -> Doc Ann
-prettyCharacterSet characterSet = prettyExpression
+prettyCharacterSet characterSet expression =
+    Pretty.group (prettyExpression expression)
   where
     prettyExpression a0@(Lam _ _ _) =
         arrows characterSet (fmap duplicate (docs a0))

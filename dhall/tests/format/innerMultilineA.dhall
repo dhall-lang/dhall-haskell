@@ -1,0 +1,11 @@
+{ inner =
+  ''
+
+  one
+
+  two
+
+  three
+
+  ''
+}
