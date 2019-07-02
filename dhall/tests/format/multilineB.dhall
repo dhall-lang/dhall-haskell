@@ -1,3 +1,1 @@
-''
-ABC
-DEF''
+"ABC\nDEF"
