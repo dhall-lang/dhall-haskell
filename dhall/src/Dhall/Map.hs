@@ -49,7 +49,7 @@ module Dhall.Map
     , toList
     , toMap
     , keys
-    , values
+    , elems
     ) where
 
 import Control.Applicative ((<|>))
@@ -84,10 +84,10 @@ instance Functor (Map k) where
   {-# INLINABLE fmap #-}
 
 instance Ord k => Foldable (Map k) where
-  foldr f z m = foldr f z (values m)
+  foldr f z m = foldr f z (elems m)
   {-# INLINABLE foldr #-}
 
-  foldMap f m = foldMap f (values m)
+  foldMap f m = foldMap f (elems m)
   {-# INLINABLE foldMap #-}
 
 instance Ord k => Traversable (Map k) where
@@ -493,11 +493,11 @@ keys :: Map k v -> [k]
 keys (Map _ ks) = ks
 {-# INLINABLE keys #-}
 
-{-| Return the values from a `Map` in their original order
+{-| Return the values from a `Map` in their original order.
 
->>> values (fromList [("B",1),("A",2)])
+>>> elems (fromList [("B",1),("A",2)])
 [1,2]
 -}
-values :: Ord k => Map k v -> [v]
-values (Map m ks) = fmap (\k -> m Data.Map.! k) ks
-{-# INLINABLE values #-}
+elems :: Ord k => Map k v -> [v]
+elems (Map m ks) = fmap (\k -> m Data.Map.! k) ks
+{-# INLINABLE elems #-}
