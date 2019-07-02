@@ -56,6 +56,7 @@ import Data.Data (Data)
 import Data.Semigroup
 import Prelude hiding (filter, lookup)
 
+import qualified Data.List
 import qualified Data.Map
 import qualified Data.Set
 import qualified GHC.Exts
@@ -204,12 +205,7 @@ fromList [("C",1),("B",2),("A",3)]
 fromList [("C",1),("A",3)]
 -}
 insert :: Ord k => k -> v -> Map k v -> Map k v
-insert k v (Map m ks) = Map m' ks'
-  where
-    m' = Data.Map.insert k v m
-
-    ks' | elem k ks = ks
-        | otherwise = k : ks
+insert k v m = insertWith const k v m
 {-# INLINABLE insert #-}
 
 {-| Insert a key-value pair into a `Map`, using the supplied function to combine
@@ -223,10 +219,10 @@ fromList [("C",3),("A",3)]
 insertWith :: Ord k => (v -> v -> v) -> k -> v -> Map k v -> Map k v
 insertWith f k v (Map m ks) = Map m' ks'
   where
-    m' = Data.Map.insertWith f k v m
+    (mayOldV, m') = Data.Map.insertLookupWithKey (\_k new old -> f new old) k v m
 
-    ks' | elem k ks = ks
-        | otherwise = k : ks
+    ks' | Just _ <- mayOldV = ks
+        | otherwise         = k : ks
 {-# INLINABLE insertWith #-}
 
 {-| Delete a key from a `Map` if present, otherwise return the original `Map`
@@ -241,7 +237,7 @@ delete k (Map m ks) = Map m' ks'
   where
     m' = Data.Map.delete k m
 
-    ks' = Prelude.filter (k /=) ks
+    ks' = Data.List.delete k ks
 {-# INLINABLE delete #-}
 
 {-| Keep all values that satisfy the given predicate
@@ -256,9 +252,7 @@ filter predicate (Map m ks) = Map m' ks'
   where
     m' = Data.Map.filter predicate m
 
-    set = Data.Map.keysSet m'
-
-    ks' = Prelude.filter (\k -> Data.Set.member k set) ks
+    ks' = Prelude.filter (\k -> Data.Map.member k m') ks
 {-# INLINABLE filter #-}
 
 {-| Transform all values in a `Map` using the supplied function, deleting the
@@ -272,9 +266,7 @@ mapMaybe f (Map m ks) = Map m' ks'
   where
     m' = Data.Map.mapMaybe f m
 
-    set = Data.Map.keysSet m'
-
-    ks' = Prelude.filter (\k -> Data.Set.member k set) ks
+    ks' = Prelude.filter (\k -> Data.Map.member k m') ks
 {-# INLINABLE mapMaybe #-}
 
 {-| Retrieve a key from a `Map`
@@ -338,9 +330,7 @@ union (Map mL ksL) (Map mR ksR) = Map m ks
   where
     m = Data.Map.union mL mR
 
-    setL = Data.Map.keysSet mL
-
-    ks = ksL <|> Prelude.filter (\k -> Data.Set.notMember k setL) ksR
+    ks = ksL <|> Prelude.filter (\k -> Data.Map.notMember k mL) ksR
 {-# INLINABLE union #-}
 
 {-| Combine two `Map`s using a combining function for colliding keys
@@ -355,9 +345,7 @@ unionWith combine (Map mL ksL) (Map mR ksR) = Map m ks
   where
     m = Data.Map.unionWith combine mL mR
 
-    setL = Data.Map.keysSet mL
-
-    ks = ksL <|> Prelude.filter (\k -> Data.Set.notMember k setL) ksR
+    ks = ksL <|> Prelude.filter (\k -> Data.Map.notMember k mL) ksR
 {-# INLINABLE unionWith #-}
 
 {-| Combine two `Map` on their shared keys, keeping the value from the first
@@ -373,10 +361,7 @@ intersection (Map mL ksL) (Map mR _) = Map m ks
   where
     m = Data.Map.intersection mL mR
 
-    setL = Data.Map.keysSet mL
-    setR = Data.Map.keysSet mR
-    set  = Data.Set.intersection setL setR
-    ks   = Prelude.filter (\k -> Data.Set.member k set) ksL
+    ks = Prelude.filter (\k -> Data.Map.member k m) ksL
 {-# INLINABLE intersection #-}
 
 {-| Combine two `Map`s on their shared keys, using the supplied function to
@@ -390,10 +375,7 @@ intersectionWith combine (Map mL ksL) (Map mR _) = Map m ks
   where
     m = Data.Map.intersectionWith combine mL mR
 
-    setL = Data.Map.keysSet mL
-    setR = Data.Map.keysSet mR
-    set  = Data.Set.intersection setL setR
-    ks   = Prelude.filter (\k -> Data.Set.member k set) ksL
+    ks = Prelude.filter (\k -> Data.Map.member k m) ksL
 {-# INLINABLE intersectionWith #-}
 
 {-| Compute the difference of two `Map`s by subtracting all keys from the
@@ -407,9 +389,7 @@ difference (Map mL ksL) (Map mR _) = Map m ks
   where
     m = Data.Map.difference mL mR
 
-    setR = Data.Map.keysSet mR
-
-    ks = Prelude.filter (\k -> Data.Set.notMember k setR) ksL
+    ks = Prelude.filter (\k -> Data.Map.notMember k mR) ksL
 {-# INLINABLE difference #-}
 
 {-| Fold all of the key-value pairs in a `Map`, in their original order
