@@ -24,6 +24,7 @@ module Dhall.Pretty.Internal (
     , prettyLabels
     , prettyNatural
     , prettyNumber
+    , prettyInt
     , prettyDouble
     , prettyToStrictText
     , prettyToString
@@ -327,6 +328,9 @@ prettyLabels a
 prettyNumber :: Integer -> Doc Ann
 prettyNumber = literal . Pretty.pretty
 
+prettyInt :: Int -> Doc Ann
+prettyInt = literal . Pretty.pretty
+
 prettyNatural :: Natural -> Doc Ann
 prettyNatural = literal . Pretty.pretty
 
@@ -340,7 +344,7 @@ prettyConst Sort = builtin "Sort"
 
 prettyVar :: Var -> Doc Ann
 prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
-prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyNumber n))
+prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyInt n))
 
 prettyCharacterSet :: Pretty a => CharacterSet -> Expr s a -> Doc Ann
 prettyCharacterSet characterSet = prettyExpression
