@@ -141,9 +141,12 @@ singleton k v = Map m ks
 
 {-| Create a `Map` from a list of key-value pairs
 
-> fromList empty = mempty
->
-> fromList (x <|> y) = fromList x <> fromList y
+'fromList' is a monoid homomorphism:
+
+>>> fromList mempty == mempty
+True
+
+prop> \x y -> fromList (x <> y) == fromList x <> fromList y
 
 >>> fromList [("B",1),("A",2)]  -- The map preserves order
 fromList [("B",1),("A",2)]
