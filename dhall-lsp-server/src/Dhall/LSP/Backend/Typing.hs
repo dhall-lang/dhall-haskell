@@ -86,12 +86,16 @@ typeAt' pos ctx expr = do
 
 -- | Find the smallest Note-wrapped expression at the given position.
 exprAt :: Position -> Expr Src a -> Maybe (Expr Src a)
-exprAt pos e@(Note _ expr) = exprAt pos expr <|> Just e
-exprAt pos expr =
+exprAt pos e = do e' <- splitLets e
+                  exprAt' pos e'
+
+exprAt' :: Position -> Expr Src a -> Maybe (Expr Src a)
+exprAt' pos e@(Note _ expr) = exprAt pos expr <|> Just e
+exprAt' pos expr =
   let subExprs = toListOf subExpressions expr
   in case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
     [] -> Nothing
-    ((src,e) : _) -> exprAt pos e <|> Just (Note src e)
+    ((src,e) : _) -> exprAt' pos e <|> Just (Note src e)
 
 
 -- | Find the smallest Src annotation containing the given position.
