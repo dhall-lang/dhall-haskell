@@ -546,7 +546,7 @@ typeWithA tpa = loop
                             then return ()
                             else Left (TypeError ctx e (AlternativeAnnotationMismatch k t c k0 t0 c0))
 
-                Dhall.Map.unorderedTraverseWithKey_ process kts
+                Dhall.Map.unorderedTraverseWithKey_ process (Dhall.Map.delete k0 kts)
 
                 return (Const c0)
     loop ctx e@(UnionLit k v kts) = do
