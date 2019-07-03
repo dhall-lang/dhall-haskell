@@ -100,10 +100,17 @@ instance Ord k => Traversable (Map k) where
   traverse f m = traverseWithKey (\_ v -> f v) m
   {-# INLINABLE traverse #-}
 
+{-|
+prop> \x y z -> x <> (y <> z) == (x <> y) <> (z :: Map Int Int)
+-}
 instance Ord k => Data.Semigroup.Semigroup (Map k v) where
     (<>) = union
     {-# INLINABLE (<>) #-}
 
+{-|
+prop> \x -> x <> mempty == (x :: Map Int Int)
+prop> \x -> mempty <> x == (x :: Map Int Int)
+-}
 instance Ord k => Monoid (Map k v) where
     mempty = Map Data.Map.empty []
     {-# INLINABLE mempty #-}
@@ -519,3 +526,11 @@ keys (Map _ ks) = ks
 elems :: Ord k => Map k v -> [v]
 elems (Map m ks) = fmap (\k -> m Data.Map.! k) ks
 {-# INLINABLE elems #-}
+
+{- $setup
+>>> import Test.QuickCheck (Arbitrary(..))
+>>> :{
+  instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
+    arbitrary = fromList <$> arbitrary
+:}
+-}
