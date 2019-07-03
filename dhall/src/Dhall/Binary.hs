@@ -128,9 +128,9 @@ class ToTerm a where
 
 instance ToTerm a => ToTerm (Expr s a) where
     encode (Var (V "_" n)) =
-        TInteger n
+        TInt n
     encode (Var (V x n)) =
-        TList [ TString x, TInteger n ]
+        TList [ TString x, TInt n ]
     encode NaturalBuild =
         TString "Natural/build"
     encode NaturalFold =
@@ -488,9 +488,9 @@ class FromTerm a where
 
 instance FromTerm a => FromTerm (Expr s a) where
     decode (TInt n) =
-        return (Var (V "_" (fromIntegral n)))
-    decode (TInteger n) =
         return (Var (V "_" n))
+    decode (TInteger n) =
+        return (Var (V "_" (fromIntegral n)))
     decode (TString "Natural/build") =
         return NaturalBuild
     decode (TString "Natural/fold") =
@@ -556,9 +556,9 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TString "_") =
         empty
     decode (TList [ TString x, TInt n ]) =
-        return (Var (V x (fromIntegral n)))
-    decode (TList [ TString x, TInteger n ]) =
         return (Var (V x n))
+    decode (TList [ TString x, TInteger n ]) =
+        return (Var (V x (fromIntegral n)))
     decode (TList (TInt 0 : f₁ : xs₁)) = do
         f₀  <- decode f₁
         xs₀ <- traverse decode xs₁

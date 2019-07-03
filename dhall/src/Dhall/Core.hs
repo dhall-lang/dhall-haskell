@@ -336,7 +336,7 @@ instance Pretty Import where
     Zero indices are omitted when pretty-printing `Var`s and non-zero indices
     appear as a numeric suffix.
 -}
-data Var = V Text !Integer
+data Var = V Text !Int
     deriving (Data, Generic, Eq, Ord, Show)
 
 instance IsString Var where
@@ -807,7 +807,7 @@ instance Pretty a => Pretty (Expr s a) where
     descend into a lambda or let expression that binds a variable of the same
     name in order to avoid shifting the bound variables by mistake.
 -}
-shift :: Integer -> Var -> Expr s a -> Expr s a
+shift :: Int -> Var -> Expr s a -> Expr s a
 shift _ _ (Const a) = Const a
 shift d (V x n) (Var (V x' n')) = Var (V x' n'')
   where

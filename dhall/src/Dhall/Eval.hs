@@ -251,7 +251,7 @@ inst (Cl x env t) !u = eval (Extend env x u) t
 
 -- Out-of-env variables have negative de Bruijn levels.
 vVar :: Env a -> Var -> Val a
-vVar env (V x (fromInteger -> i :: Int)) = go env i where
+vVar env (V x i) = go env i where
   go (Extend env x' v) i
     | x == x'   = if i == 0 then v else go env (i - 1)
     | otherwise = go env i
@@ -851,7 +851,7 @@ nfEmpty = nf Empty
 alphaNormalize :: Expr s a -> Expr s a
 alphaNormalize = goEnv NEmpty where
 
-  goVar :: Names -> Text -> Integer -> Expr s a
+  goVar :: Names -> Text -> Int -> Expr s a
   goVar e topX topI = go 0 e topI where
     go !acc (NBind env x) !i
       | x == topX = if i == 0 then Var (V "_" acc) else go (acc + 1) env (i - 1)
