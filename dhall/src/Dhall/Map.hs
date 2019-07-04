@@ -30,6 +30,7 @@ module Dhall.Map
       -- * Deletion/Update
     , delete
     , filter
+    , restrictKeys
     , mapMaybe
 
       -- * Query
@@ -56,6 +57,7 @@ module Dhall.Map
     , toList
     , toMap
     , keys
+    , keysSet
     , elems
     ) where
 
@@ -339,6 +341,23 @@ filter predicate (Map m ks) = Map m' ks'
     ks' = filterKeys (\k -> Data.Map.member k m') ks
 {-# INLINABLE filter #-}
 
+{-| Restrict a 'Map' to only those keys found in a @"Data.Set".'Set'@.
+
+>>> restrictKeys (fromList [("A",1),("B",2)]) (Data.Set.fromList ["A"])
+fromList [("A",1)]
+-}
+restrictKeys :: Ord k => Map k a -> Data.Set.Set k -> Map k a
+restrictKeys (Map m ks) s = Map m' ks'
+  where
+#if MIN_VERSION_containers(0,5,8)
+    m' = Data.Map.restrictKeys m s
+#else
+    m' = Data.Map.filterWithKey (\k _ -> Data.Set.member k s) m
+#endif
+
+    ks' = filterKeys (\k -> Data.Set.member k s) ks
+{-# INLINABLE restrictKeys #-}
+
 {-| Transform all values in a `Map` using the supplied function, deleting the
     key if the function returns `Nothing`
 
@@ -599,6 +618,15 @@ elems :: Ord k => Map k v -> [v]
 elems (Map m Sorted)        = Data.Map.elems m
 elems (Map m (Original ks)) = fmap (\k -> m Data.Map.! k) ks
 {-# INLINABLE elems #-}
+
+{-| Return the @"Data.Set".'Set'@ of the keys
+
+>>> keysSet (fromList [("B",1),("A",2)])
+fromList ["A","B"]
+-}
+keysSet :: Map k v -> Data.Set.Set k
+keysSet (Map m _) = Data.Map.keysSet m
+{-# INLINABLE keysSet #-}
 
 filterKeys :: (a -> Bool) -> Keys a -> Keys a
 filterKeys _ Sorted        = Sorted
