@@ -28,7 +28,9 @@ import qualified Dhall.Parser.Token as Dhall
 import qualified Dhall.Parser as Dhall
 import qualified Dhall.TypeCheck as Dhall
 
+import qualified Data.Graph as Graph
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Network.URI as URI
 import qualified Language.Haskell.LSP.Types as LSP.Types
 import qualified Data.Text as Text
@@ -76,23 +78,27 @@ newtype WellTyped = WellTyped {fromWellTyped :: Expr Src X}
 -- | A fully normalised expression.
 newtype Normal = Normal {fromNormal :: Expr Src X}
 
+-- An import graph, represented by an adjacency list. An element `(a,b)` means
+-- that `b` imports `a`.
+type ImportGraph = [(Dhall.Import, Dhall.Import)]
+
 -- | A cache maps Dhall imports to fully normalised expressions. By reusing
 --   caches we can speeds up diagnostics etc. significantly!
-newtype Cache = Cache (Map.Map Dhall.Import (Expr Src X))
+data Cache = Cache ImportGraph (Map.Map Dhall.Import (Expr Src X))
 
 -- | The initial cache.
 emptyCache :: Cache
-emptyCache = Cache Map.empty
+emptyCache = Cache [] Map.empty
 
 -- | Cache a given normal expression.
 cacheExpr :: FileIdentifier -> Normal -> Cache -> Cache
-cacheExpr fileid (Normal expr) (Cache c) =
+cacheExpr fileid (Normal expr) (Cache graph c) =
   let unhashedImport = importFromFileIdentifier fileid
       alpha = Dhall.alphaNormalize expr  -- we need to alpha-normalise before
       hash = Dhall.hashExpression maxBound alpha  -- calculating the hash
       hashedImport = hashedImportFromFileIdentifier fileid hash
-  in Cache $ Map.insert unhashedImport expr
-           $ Map.insert hashedImport expr c
+  in Cache graph $ Map.insert unhashedImport expr
+                 $ Map.insert hashedImport expr c
 
 -- Construct the unhashed import corresponding to the given file.
 importFromFileIdentifier :: FileIdentifier -> Dhall.Import
@@ -110,16 +116,36 @@ hashedImportFromFileIdentifier (FileIdentifier importType) hash =
 -- | Invalidate any _unhashed_ imports of the given file. Hashed imports are
 --   kept around as per
 --   https://github.com/dhall-lang/dhall-lang/blob/master/standard/imports.md.
---   Note to future self: this doesn't correctly invalidate reverse
---   dependencies, i.e. other cached expressions that imported the invalidated
---   one. We need to change the representation of the import graph in
---   Dhall.Import in order to be able to implement this correctly!
+--   Transitively invalidates any imports depending on the changed file.
 invalidate :: FileIdentifier -> Cache -> Cache
-invalidate (FileIdentifier fileid) (Cache cache) =
-  Cache $ Map.delete codeImport (Map.delete textImport cache)
+invalidate (FileIdentifier fileid) (Cache edgeList cache) =
+  Cache edgeList' $ Map.withoutKeys cache invalidImports
   where
-  codeImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.Code
-  textImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.RawText
+    imports = map fst edgeList ++ map snd edgeList
+
+    adjacencyLists = foldr
+                       -- add reversed edges to adjacency lists
+                       (\(from, to) -> Map.adjust (from :) to)
+                       -- starting from the discrete graph
+                       (Map.fromList [ (i,[]) | i <- imports])
+                       edgeList
+
+    (graph, importFromVertex, vertexFromImport) = Graph.graphFromEdges
+      [(node, node, neighbours) | (node, neighbours) <- Map.assocs adjacencyLists]
+
+    -- compute the reverse dependencies, i.e. the imports reachable in the transposed graph
+    reachableImports import_ =
+      map (\(i,_,_) -> i) . map importFromVertex . concat $
+        do vertex <- vertexFromImport import_
+           return (Graph.reachable graph vertex)
+
+    codeImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.Code
+    textImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.RawText
+    invalidImports = Set.fromList $ codeImport : reachableImports codeImport
+                                    ++ textImport : reachableImports textImport
+
+    edgeList' = filter (\(from, to) -> Set.notMember from invalidImports
+                                       && Set.notMember to invalidImports) edgeList
 
 -- | A Dhall error. Covers parsing, resolving of imports, typechecking and
 --   normalisation.
@@ -140,16 +166,18 @@ parseWithHeader = first ErrorParse . Dhall.exprAndHeaderFromText ""
 -- | Resolve all imports in an expression.
 load :: FileIdentifier -> Expr Src Dhall.Import -> Cache ->
   IO (Either DhallError (Cache, Expr Src X))
-load fileid expr (Cache cache) = do
+load fileid expr (Cache graph cache) = do
   let emptyStatus = Dhall.emptyStatus ""
-      status = -- reuse cache
+      status = -- reuse cache and import graph
                set Dhall.cache cache .
+               set Dhall.graph graph .
                -- set "root import"
                set Dhall.stack (importFromFileIdentifier fileid :| [])
                  $ emptyStatus
   (do (expr', status') <- runStateT (Dhall.loadWith expr) status
-      let cache' = Cache $ view Dhall.cache status'
-      return . Right $ (cache', expr'))
+      let cache' = view Dhall.cache status'
+          graph' = view Dhall.graph status'
+      return . Right $ (Cache graph' cache', expr'))
     `catch` (\e -> return . Left $ ErrorImportSourced e)
     `catch` (\e -> return . Left $ ErrorInternal e)
 
