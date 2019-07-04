@@ -1,0 +1,16 @@
+pull_request_rules:
+- actions:
+    merge:
+      strict: true
+      method: squash
+  name: Automatically merge pull requests
+  conditions:
+  - status-success=continuous-integration/appveyor/pr
+  - status-success=hydra
+  - label=merge me
+  - ! '#approved-reviews-by>=1'
+  - ! '#changes-requested-reviews-by=0'
+- actions:
+    delete_head_branch: {}
+  name: Delete head branch after merge
+  conditions: []

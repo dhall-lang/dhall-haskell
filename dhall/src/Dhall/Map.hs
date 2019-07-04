@@ -13,6 +13,7 @@ module Dhall.Map
       -- * Construction
     , singleton
     , fromList
+    , fromListWithKey
 
       -- * Sorting
     , sort
@@ -157,6 +158,19 @@ fromList kvs = Map m ks
 
     ks = nubOrd (map fst kvs)
 {-# INLINABLE fromList #-}
+
+{-| Create a `Map` from a list of key-value pairs with a combining function.
+
+>>> fromListWithKey (\k v1 v2 -> k ++ v1 ++ v2) [("B","v1"),("A","v2"),("B","v3")]
+fromList [("B","Bv3v1"),("A","v2")]
+-}
+fromListWithKey :: Ord k => (k -> v -> v -> v) -> [(k, v)] -> Map k v
+fromListWithKey f kvs = Map m ks
+  where
+    m = Data.Map.fromListWithKey f kvs
+
+    ks = nubOrd (map fst kvs)
+{-# INLINABLE fromListWithKey #-}
 
 {-| Remove duplicates from a  list
 
