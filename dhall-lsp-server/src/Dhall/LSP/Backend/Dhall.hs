@@ -28,7 +28,6 @@ import qualified Dhall.Parser.Token as Dhall
 import qualified Dhall.Parser as Dhall
 import qualified Dhall.TypeCheck as Dhall
 
-import qualified Text.Dot as Dot
 import qualified Data.Map.Strict as Map
 import qualified Network.URI as URI
 import qualified Language.Haskell.LSP.Types as LSP.Types
@@ -79,7 +78,7 @@ newtype Normal = Normal {fromNormal :: Expr Src X}
 
 -- | A cache maps Dhall imports to fully normalised expressions. By reusing
 --   caches we can speeds up diagnostics etc. significantly!
-newtype Cache = Cache (Map.Map Dhall.Import (Dot.NodeId, Expr Src X))
+newtype Cache = Cache (Map.Map Dhall.Import (Expr Src X))
 
 -- | The initial cache.
 emptyCache :: Cache
@@ -92,8 +91,8 @@ cacheExpr fileid (Normal expr) (Cache c) =
       alpha = Dhall.alphaNormalize expr  -- we need to alpha-normalise before
       hash = Dhall.hashExpression maxBound alpha  -- calculating the hash
       hashedImport = hashedImportFromFileIdentifier fileid hash
-  in Cache $ Map.insert unhashedImport (Dot.userNodeId 0, expr)
-           $ Map.insert hashedImport (Dot.userNodeId 0, expr) c
+  in Cache $ Map.insert unhashedImport expr
+           $ Map.insert hashedImport expr c
 
 -- Construct the unhashed import corresponding to the given file.
 importFromFileIdentifier :: FileIdentifier -> Dhall.Import

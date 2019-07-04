@@ -111,6 +111,7 @@ module Dhall.Import (
     , emptyStatus
     , stack
     , cache
+    , graph
     , manager
     , standardVersion
     , normalizer
@@ -164,7 +165,6 @@ import Dhall.Core
 import Dhall.Import.HTTP
 #endif
 import Dhall.Import.Types
-import Text.Dot ((.->.), userNodeId)
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
 import Dhall.TypeCheck (X(..))
@@ -763,15 +763,10 @@ loadWith expr₀ = case expr₀ of
         then throwMissingImport (Imported _stack (Cycle import₀))
         else do
             case Map.lookup child _cache of
-                Just (childNode, expr) -> do
-                    zoom dot . State.modify $ \getDot -> do
-                        parentNode <- getDot
-
-                        -- Add edge between parent and child
-                        parentNode .->. childNode
-
-                        -- Return parent NodeId
-                        pure parentNode
+                Just expr -> do
+                    zoom graph . State.modify $
+                      -- Add the edge `parent -> child` to the import graph
+                      \edges -> (parent, child) : edges
 
                     pure expr
                 Nothing        -> do
@@ -810,29 +805,14 @@ loadWith expr₀ = case expr₀ of
 
                     let stackWithNewImport = NonEmpty.cons newImport _stack
 
-                    let childNodeId = userNodeId _nextNodeId
-
-                    -- Increment the next node id
-                    zoom nextNodeId $ State.modify succ
-
-                    -- Make current node the dot graph
-                    zoom dot . State.put $ importNode childNodeId child
-
                     zoom stack (State.put stackWithNewImport)
                     expr'' <- loadWith resolvedExpression
                     zoom stack (State.put _stack)
 
-                    zoom dot . State.modify $ \getSubDot -> do
-                        parentNode <- _dot
-
-                        -- Get current node back from sub-graph
-                        childNode <- getSubDot
-
-                        -- Add edge between parent and child
-                        parentNode .->. childNode
-
-                        -- Return parent NodeId
-                        pure parentNode
+                    zoom graph . State.modify $
+                      -- Add the edge `parent -> newImport` to the import graph,
+                      -- where `newImport` is `child` with normalized headers.
+                      \edges -> (parent, newImport) : edges
 
                     _cacher child expr''
 
@@ -849,7 +829,7 @@ loadWith expr₀ = case expr₀ of
                     expr''' <- case Dhall.TypeCheck.typeWith _startingContext expr'' of
                         Left  err -> throwM (Imported _stack' err)
                         Right _   -> return (Dhall.Core.normalizeWith _normalizer expr'')
-                    zoom cache (State.modify' (Map.insert child (childNodeId, expr''')))
+                    zoom cache (State.modify' (Map.insert child expr'''))
                     return expr'''
 
     case hash (importHashed import₀) of

@@ -21,12 +21,13 @@ module Dhall.Main
 
 import Control.Applicative (optional, (<|>))
 import Control.Exception (SomeException)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
 import Dhall.Binary (StandardVersion)
-import Dhall.Core (Expr(..), Import)
+import Dhall.Core (Expr(..), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src)
@@ -36,6 +37,7 @@ import Lens.Family (set)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
+import Text.Dot ((.->.))
 
 import qualified Codec.CBOR.JSON
 import qualified Codec.CBOR.Read
@@ -389,12 +391,31 @@ command (Options {..}) = do
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _dot}) <-
+            (Dhall.Import.Types.Status { _graph, _stack }) <-
                 State.execStateT (Dhall.Import.loadWith expression) (toStatus file)
 
-            putStr . ("strict " <>) . Text.Dot.showDot $
-                   Text.Dot.attribute ("rankdir", "LR") >>
-                   _dot
+            let (rootImport :| _) = _stack
+                imports = rootImport : map fst _graph ++ map snd _graph
+                importIds = Data.Map.fromList (zip imports [Text.Dot.userNodeId i | i <- [0..]])
+
+            let dotNode (i, nodeId) =
+                    Text.Dot.userNode
+                        nodeId
+                        [ ("label", Data.Text.unpack $ pretty i)
+                        , ("shape", "box")
+                        , ("style", "rounded")
+                        ]
+
+            let dotEdge (from, to) =
+                    case (Data.Map.lookup from importIds, Data.Map.lookup to importIds) of
+                        (Just from', Just to') -> from' .->. to'
+                        _                      -> pure ()
+
+            let dot = do Text.Dot.attribute ("rankdir", "LR")
+                         mapM_ dotNode (Data.Map.assocs importIds)
+                         mapM_ dotEdge _graph
+
+            putStr . ("strict " <>) . Text.Dot.showDot $ dot
 
         Resolve { resolveMode = Just ListImmediateDependencies, ..} -> do
             expression <- getExpression file
