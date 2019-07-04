@@ -566,7 +566,9 @@ eqListBy f = go where
 {-# inline eqListBy #-}
 
 eqMapsBy :: Ord k => (v -> v -> Bool) -> Map k v -> Map k v -> Bool
-eqMapsBy f mL mR = eqListBy eq (Dhall.Map.toList mL) (Dhall.Map.toList mR)
+eqMapsBy f mL mR =
+    Dhall.Map.size mL == Dhall.Map.size mR
+    && eqListBy eq (Dhall.Map.toList mL) (Dhall.Map.toList mR)
   where
     eq (kL, vL) (kR, vR) = kL == kR && f vL vR
 {-# inline eqMapsBy #-}
