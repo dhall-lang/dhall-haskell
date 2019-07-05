@@ -32,6 +32,7 @@ module Dhall.Map
     , lookup
     , member
     , uncons
+    , size
 
       -- * Combine
     , union
@@ -96,6 +97,9 @@ instance Ord k => Foldable (Map k) where
 
   foldMap f m = foldMap f (elems m)
   {-# INLINABLE foldMap #-}
+
+  length m = size m
+  {-# INLINABLE length #-}
 
 instance Ord k => Traversable (Map k) where
   traverse f m = traverseWithKey (\_ v -> f v) m
@@ -344,6 +348,14 @@ False
 member :: Ord k => k -> Map k v -> Bool
 member k (Map m _) = Data.Map.member k m
 {-# INLINABLE member #-}
+
+{-|
+>>> size (fromList [("A",1)])
+1
+-}
+size :: Map k v -> Int
+size (Map m _) = Data.Map.size m
+{-# INLINABLE size #-}
 
 {-| Combine two `Map`s, preferring keys from the first `Map`
 
