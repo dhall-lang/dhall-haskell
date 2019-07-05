@@ -107,15 +107,11 @@
 
 >     let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
 > 
-> in  let example = constructors Example
-> 
 > in  let Nesting = < Inline : {} | Nested : Text >
 > 
-> in  let nesting = constructors Nesting
-> 
 > in  { field    = "name"
->     , nesting  = nesting.Inline {=}
->     , contents = example.Left { foo = 2 }
+>     , nesting  = Nesting.Inline {=}
+>     , contents = Example.Left { foo = 2 }
 >     }
 
     ... produces this JSON:
@@ -130,15 +126,11 @@
 
 >     let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
 > 
-> in  let example = constructors Example
-> 
 > in  let Nesting = < Inline : {} | Nested : Text >
 > 
-> in  let nesting = constructors Nesting
-> 
 > in  { field    = "name"
->     , nesting  = nesting.Nested "value"
->     , contents = example.Left { foo = 2 }
+>     , nesting  = Nesting.Nested "value"
+>     , contents = Example.Left { foo = 2 }
 >     }
 
     ... produces this JSON:

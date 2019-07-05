@@ -1980,7 +1980,6 @@ reservedIdentifiers =
         , "else"
         , "as"
         , "using"
-        , "constructors"
         , "Natural"
         , "Natural/fold"
         , "Natural/build"
