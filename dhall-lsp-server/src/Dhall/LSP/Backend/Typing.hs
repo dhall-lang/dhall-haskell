@@ -9,7 +9,7 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Control.Lens (toListOf)
 import Data.Text (Text)
 import Control.Applicative ((<|>))
-import Data.Bifunctor (first, bimap)
+import Data.Bifunctor (first)
 
 import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot, getLetIdentifier,
   getLamIdentifier, getForallIdentifier)
@@ -78,15 +78,9 @@ typeAt' pos ctx (Note _ expr) = typeAt' pos ctx expr
 typeAt' pos ctx expr = do
   let subExprs = toListOf subExpressions expr
   case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
-<<<<<<< HEAD
     [] -> do typ <- typeWithA absurd ctx expr  -- return type of whole subexpression
              return (Nothing, typ)
     ((src, e):_) -> typeAt' pos ctx (Note src e)  -- continue with leaf-expression
-
-=======
-    [] -> typeWithA absurd ctx expr  -- return type of whole expression
-    ((src, e):_) -> typeAt' pos ctx (Note src e)  -- continue with subexpression
->>>>>>> master
 
 
 -- | Find the smallest Note-wrapped expression at the given position.
