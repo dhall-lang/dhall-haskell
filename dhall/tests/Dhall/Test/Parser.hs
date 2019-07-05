@@ -52,7 +52,7 @@ getTests = do
             let skip =
                     [ -- These two unexpected successes are due to not correctly
                       -- requiring non-empty whitespace after the `:` in a type
-                      -- annotatoin
+                      -- annotation
                       parseDirectory </> "failure/annotation.dhall"
                     , parseDirectory </> "failure/unit/ImportEnvWrongEscape.dhall"
 
