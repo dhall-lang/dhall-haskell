@@ -21,6 +21,7 @@ module Dhall.Main
 
 import Control.Applicative (optional, (<|>))
 import Control.Exception (SomeException)
+import Control.Monad.Trans (lift)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -29,11 +30,11 @@ import Data.Version (showVersion)
 import Dhall.Binary (StandardVersion)
 import Dhall.Core (Expr(..), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
-import Dhall.Import (Imported(..))
+import Dhall.Import (Imported(..), Status)
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
-import Lens.Family (set)
+import Lens.Family (view, set)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
@@ -41,9 +42,11 @@ import Text.Dot ((.->.))
 
 import qualified Codec.CBOR.JSON
 import qualified Codec.CBOR.Read
+import qualified Codec.CBOR.Term                           as CBOR
 import qualified Codec.CBOR.Write
 import qualified Codec.Serialise
 import qualified Control.Exception
+import qualified Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.State.Strict          as State
 import qualified Data.Aeson
 import qualified Data.Aeson.Encode.Pretty
@@ -72,6 +75,7 @@ import qualified Options.Applicative
 import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.IO
+import qualified System.Directory
 import qualified System.FilePath
 import qualified Text.Dot
 import qualified Data.Map
@@ -82,6 +86,7 @@ data Options = Options
     , explain         :: Bool
     , plain           :: Bool
     , ascii           :: Bool
+    , useDump         :: Bool
     , standardVersion :: StandardVersion
     }
 
@@ -115,6 +120,7 @@ parseOptions =
     <*> switch "explain" "Explain error messages in more detail"
     <*> switch "plain" "Disable syntax highlighting"
     <*> switch "ascii" "Format code using only ASCII syntax"
+    <*> switch "use-dump" "Use cache dump. At your own risk!"
     <*> Dhall.Binary.parseStandardVersion
   where
     switch name description =
@@ -287,6 +293,70 @@ parserInfoOptions =
         <>  Options.Applicative.fullDesc
         )
 
+
+cacheFromDump :: Status m -> IO (Status m)
+cacheFromDump status = System.IO.withFile "dhall-cache" System.IO.ReadWriteMode $ \handle -> do
+    contents <- Data.ByteString.Lazy.hGetContents handle
+
+    mStatus' <- Control.Monad.Trans.Maybe.runMaybeT $ do
+        Right term <- return (Codec.Serialise.deserialiseOrFail contents)
+        CBOR.TList [ CBOR.TMap c, CBOR.TList g ] <- return term
+
+        let pairs (x : y : zs) = (x, y) : pairs zs
+            pairs _ = []
+
+        let decodePair (x, y) = do x' <- Dhall.Binary.decode x
+                                   y' <- Dhall.Binary.decode y
+                                   return (x', y')
+
+        Just _cache <- return (fmap Data.Map.fromList (traverse decodePair c))
+        Just _graph <- return (traverse decodePair (pairs g))
+
+        let oldStatus =
+                set Dhall.Import.cache _cache
+                  (set Dhall.Import.graph _graph status)
+
+        let imports = map fst _graph ++ map snd _graph
+
+        dumpTime <- lift (System.Directory.getModificationTime "dhall-cache")
+
+        let collect import_@(Dhall.Core.Import (Dhall.Core.ImportHashed Nothing file@(Dhall.Core.Local _ _)) _) = do
+                let filePath = Data.Text.unpack (pretty file)
+                importExists <- System.Directory.doesFileExist filePath
+
+                isOutdated <-
+                    if importExists
+                        then do  -- check if import has been modified recently
+                            lastModified <- System.Directory.getModificationTime filePath
+                            return (dumpTime < lastModified)
+
+                            else return True  -- import no longer exists
+
+                if isOutdated  -- need to invalidate import and its reverse dependencies
+                    then return (import_ : Dhall.Import.reverseDependencies import_ oldStatus)
+
+                    else return []
+
+                -- we don't invalidate remote or frozen imports
+            collect _ = return []
+
+        outdated <- lift $ fmap concat (traverse collect imports)
+        return (Dhall.Import.invalidate outdated oldStatus)
+
+    case mStatus' of
+        Just status' -> return status'
+        Nothing -> return status
+
+dumpCache :: Status m -> IO ()
+dumpCache status =
+    Data.ByteString.Lazy.writeFile "dhall-cache" (Codec.Serialise.serialise dump)
+  where
+    encodePair (x, y) = (Dhall.Binary.encode x, Dhall.Binary.encode y)
+    dump =
+        CBOR.TList [ CBOR.TMap (map encodePair (Data.Map.toList (view Dhall.Import.cache status)))
+                   , CBOR.TList (concat [[Dhall.Binary.encode x, Dhall.Binary.encode y] | (x, y) <- view Dhall.Import.graph status]) ]
+
+
 -- | Run the command specified by the `Options` type
 command :: Options -> IO ()
 command (Options {..}) = do
@@ -296,14 +366,20 @@ command (Options {..}) = do
 
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
-    let toStatus maybeFile =
-            set Dhall.Import.standardVersion standardVersion
-                (Dhall.Import.emptyStatus file)
+    let initialStatus maybeFile
+            | not useDump = return emptyStatus
+            | otherwise = cacheFromDump emptyStatus
           where
             file = case maybeFile of
                 Just "-" -> "."
                 Just f   -> System.FilePath.takeDirectory f
                 Nothing  -> "."
+
+            emptyStatus =
+                set Dhall.Import.standardVersion standardVersion
+                    (Dhall.Import.emptyStatus file)
+
+
 
     let handle =
                 Control.Exception.handle handler2
@@ -370,7 +446,11 @@ command (Options {..}) = do
         Default {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) (toStatus file)
+            status <- initialStatus file
+
+            (resolvedExpression, status') <- State.runStateT (Dhall.Import.loadWith expression) status
+
+            dumpCache status'
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -391,8 +471,12 @@ command (Options {..}) = do
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _graph, _stack }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file)
+            status <- initialStatus file
+
+            status'@(Dhall.Import.Types.Status { _graph, _stack }) <-
+                State.execStateT (Dhall.Import.loadWith expression) status
+
+            dumpCache status'
 
             let (rootImport :| _) = _stack
                 imports = rootImport : map fst _graph ++ map snd _graph
@@ -427,8 +511,12 @@ command (Options {..}) = do
         Resolve { resolveMode = Just ListTransitiveDependencies, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _cache }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file)
+            status <- initialStatus file
+
+            status'@(Dhall.Import.Types.Status { _cache }) <-
+                State.execStateT (Dhall.Import.loadWith expression) status
+
+            dumpCache status'
 
             mapM_ print
                  .   fmap (   Pretty.pretty
@@ -440,8 +528,13 @@ command (Options {..}) = do
         Resolve { resolveMode = Nothing, ..} -> do
             expression <- getExpression file
 
-            (resolvedExpression, _) <-
-                State.runStateT (Dhall.Import.loadWith expression) (toStatus file)
+            status <- initialStatus file
+
+            (resolvedExpression, status') <-
+                State.runStateT (Dhall.Import.loadWith expression) status
+
+            dumpCache status'
+
             render System.IO.stdout resolvedExpression
 
         Normalize {..} -> do

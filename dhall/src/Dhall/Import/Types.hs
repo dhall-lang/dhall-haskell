@@ -30,7 +30,9 @@ import System.FilePath (isRelative, splitDirectories)
 
 import qualified Dhall.Binary
 import qualified Dhall.Context
+import qualified Data.Graph    as Graph
 import qualified Data.Map      as Map
+import qualified Data.Set      as Set
 import qualified Data.Text
 
 data Resolved = Resolved
@@ -186,3 +188,38 @@ instance Exception PrettyHttpException
 
 instance Show PrettyHttpException where
   show (PrettyHttpException msg _) = msg
+
+-- | Given a list of imports whose underlying files have changed, remove them
+--  from the import cache. Including any "reverse dependencies" is up to the
+--  caller!
+invalidate :: [Import] -> Status m -> Status m
+invalidate imports Status {..} =
+    Status {_cache = _cache', _graph = _graph', ..}
+  where
+    invalid = Set.fromList imports
+    _cache' = Map.withoutKeys _cache invalid
+    _graph' = filter (\(from, to) -> Set.notMember from invalid
+                                       && Set.notMember to invalid) _graph
+
+-- | Calculate the reverse dependencies of an import in the import cache. Does
+--   not include the import itself, assuming there aren't any cycles in the
+--   import graph!
+reverseDependencies :: Import -> Status m -> [Import]
+reverseDependencies import_ Status {..} =
+    map (\(i,_,_) -> i) . map importFromVertex . concat $
+        do vertex <- vertexFromImport import_
+           return (Graph.reachable importGraph vertex)
+  where
+    imports = map fst _graph ++ map snd _graph
+
+    -- adjacency lists representing the transposed dependency graph
+    adjacencyLists = foldr
+                       (\(from, to) -> Map.adjust (from :) to)
+                       (Map.fromList [ (i,[]) | i <- imports])
+                       _graph
+
+    -- representation using Data.Graph
+    (importGraph, importFromVertex, vertexFromImport) =
+        Graph.graphFromEdges
+            [(node, node, neighbours)
+            | (node, neighbours) <- Map.assocs adjacencyLists]

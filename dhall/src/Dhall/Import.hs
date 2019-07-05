@@ -112,6 +112,8 @@ module Dhall.Import (
     , stack
     , cache
     , graph
+    , invalidate
+    , reverseDependencies
     , manager
     , standardVersion
     , normalizer
