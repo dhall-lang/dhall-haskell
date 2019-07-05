@@ -197,7 +197,7 @@ invalidate imports Status {..} =
     Status {_cache = _cache', _graph = _graph', ..}
   where
     invalid = Set.fromList imports
-    _cache' = Map.withoutKeys _cache invalid
+    _cache' = Map.filterWithKey (\i _ -> Set.notMember i invalid) _cache
     _graph' = filter (\(from, to) -> Set.notMember from invalid
                                        && Set.notMember to invalid) _graph
 
