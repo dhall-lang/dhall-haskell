@@ -9,7 +9,7 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Control.Lens (toListOf)
 import Data.Text (Text)
 import Control.Applicative ((<|>))
-import Data.Bifunctor (first)
+import Data.Bifunctor (first, bimap)
 
 import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot, getLetIdentifier,
   getLamIdentifier, getForallIdentifier)
@@ -31,8 +31,8 @@ typeAt pos expr = do
                               \ blocks when preprocessing for typeAt'."
   (mSrc, typ) <- first show $ typeAt' pos empty expr'
   case mSrc of
-    Just src -> return (Just src, typ)
-    Nothing -> return (srcAt pos expr', typ)
+    Just src -> return (Just src, normalize typ)
+    Nothing -> return (srcAt pos expr', normalize typ)
 
 typeAt' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Maybe Src, Expr Src X)
 -- the user hovered over the bound name in a let expression
@@ -78,10 +78,15 @@ typeAt' pos ctx (Note _ expr) = typeAt' pos ctx expr
 typeAt' pos ctx expr = do
   let subExprs = toListOf subExpressions expr
   case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
+<<<<<<< HEAD
     [] -> do typ <- typeWithA absurd ctx expr  -- return type of whole subexpression
              return (Nothing, typ)
     ((src, e):_) -> typeAt' pos ctx (Note src e)  -- continue with leaf-expression
 
+=======
+    [] -> typeWithA absurd ctx expr  -- return type of whole expression
+    ((src, e):_) -> typeAt' pos ctx (Note src e)  -- continue with subexpression
+>>>>>>> master
 
 
 -- | Find the smallest Note-wrapped expression at the given position.
@@ -125,7 +130,7 @@ annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
                      Just x -> return x
                      Nothing -> Left "The impossible happened: failed\
                                      \ to re-parse a Let expression."
-       return (srcAnnot, ": " <> printExpr _A <> " ")
+       return (srcAnnot, ": " <> printExpr (normalize _A) <> " ")
 
 -- binders, see typeAt'
 annotateLet' pos ctx (Let (Binding x _ a :| []) e@(Note src _)) | pos `inside` src = do
