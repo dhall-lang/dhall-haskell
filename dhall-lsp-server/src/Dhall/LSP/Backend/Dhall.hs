@@ -28,9 +28,7 @@ import qualified Dhall.Parser.Token as Dhall
 import qualified Dhall.Parser as Dhall
 import qualified Dhall.TypeCheck as Dhall
 
-import qualified Data.Graph as Graph
 import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
 import qualified Network.URI as URI
 import qualified Language.Haskell.LSP.Types as LSP.Types
 import qualified Data.Text as Text
@@ -119,33 +117,14 @@ hashedImportFromFileIdentifier (FileIdentifier importType) hash =
 --   Transitively invalidates any imports depending on the changed file.
 invalidate :: FileIdentifier -> Cache -> Cache
 invalidate (FileIdentifier fileid) (Cache edgeList cache) =
-  Cache edgeList' $ Map.withoutKeys cache invalidImports
+  Cache (view Dhall.graph status') (view Dhall.cache status')
   where
-    imports = map fst edgeList ++ map snd edgeList
-
-    adjacencyLists = foldr
-                       -- add reversed edges to adjacency lists
-                       (\(from, to) -> Map.adjust (from :) to)
-                       -- starting from the discrete graph
-                       (Map.fromList [ (i,[]) | i <- imports])
-                       edgeList
-
-    (graph, importFromVertex, vertexFromImport) = Graph.graphFromEdges
-      [(node, node, neighbours) | (node, neighbours) <- Map.assocs adjacencyLists]
-
-    -- compute the reverse dependencies, i.e. the imports reachable in the transposed graph
-    reachableImports import_ =
-      map (\(i,_,_) -> i) . map importFromVertex . concat $
-        do vertex <- vertexFromImport import_
-           return (Graph.reachable graph vertex)
-
+    status' = Dhall.invalidate invalidImports status
+    status = set Dhall.cache cache . set Dhall.graph edgeList $ Dhall.emptyStatus ""
     codeImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.Code
     textImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.RawText
-    invalidImports = Set.fromList $ codeImport : reachableImports codeImport
-                                    ++ textImport : reachableImports textImport
-
-    edgeList' = filter (\(from, to) -> Set.notMember from invalidImports
-                                       && Set.notMember to invalidImports) edgeList
+    invalidImports = codeImport : Dhall.reverseDependencies codeImport status
+                     ++ textImport : Dhall.reverseDependencies textImport status
 
 -- | A Dhall error. Covers parsing, resolving of imports, typechecking and
 --   normalisation.
