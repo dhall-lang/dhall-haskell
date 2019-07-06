@@ -9,7 +9,7 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Control.Lens (toListOf)
 import Data.Text (Text)
 import Control.Applicative ((<|>))
-import Data.Bifunctor (first)
+import Data.Bifunctor (first, bimap)
 
 import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot)
 import Dhall.LSP.Backend.Diagnostics (Position, Range(..), rangeFromDhall)
@@ -27,7 +27,7 @@ typeAt pos expr = do
              Just e -> return e
              Nothing -> Left "The impossible happened: failed to split let\
                               \ blocks when preprocessing for typeAt'."
-  first show $ typeAt' pos empty expr'
+  bimap show normalize $ typeAt' pos empty expr'
 
 typeAt' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
 -- the input only contains singleton lets
@@ -60,9 +60,8 @@ typeAt' pos ctx (Note _ expr) = typeAt' pos ctx expr
 typeAt' pos ctx expr = do
   let subExprs = toListOf subExpressions expr
   case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
-    [] -> typeWithA absurd ctx expr  -- return type of whole subexpression
-    ((src, e):_) -> typeAt' pos ctx (Note src e)  -- continue with leaf-expression
-
+    [] -> typeWithA absurd ctx expr  -- return type of whole expression
+    ((src, e):_) -> typeAt' pos ctx (Note src e)  -- continue with subexpression
 
 
 -- | Find the smallest Note-wrapped expression at the given position.
@@ -102,7 +101,7 @@ annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
                      Just x -> return x
                      Nothing -> Left "The impossible happened: failed\
                                      \ to re-parse a Let expression."
-       return (srcAnnot, ": " <> printExpr _A <> " ")
+       return (srcAnnot, ": " <> printExpr (normalize _A) <> " ")
 
 -- binders, see typeAt'
 annotateLet' pos ctx (Let (Binding x _ a :| []) e@(Note src _)) | pos `inside` src = do
