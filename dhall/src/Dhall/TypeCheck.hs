@@ -916,7 +916,6 @@ data TypeMessage s a
     | InvalidHandlerOutputType Text (Expr s a) (Expr s a)
     | MissingMergeType
     | HandlerNotAFunction Text (Expr s a)
-    | ConstructorsRequiresAUnionType (Expr s a) (Expr s a)
     | CantAccess Text (Expr s a) (Expr s a)
     | CantProject Text (Expr s a) (Expr s a)
     | CantProjectByExpression (Expr s a)
@@ -3240,58 +3239,6 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
       where
         txt0 = insert k
         txt1 = insert expr0
-
-prettyTypeMessage (ConstructorsRequiresAUnionType expr0 expr1) = ErrorMessages {..}
-  where
-    short = "❰constructors❱ requires a union type"
-
-    long =
-        "Explanation: You can only use the ❰constructors❱ keyword on an argument that is \n\
-        \a union type literal, like this:                                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────────────────┐                           \n\
-        \    │ constructors < Left : Natural, Right : Bool > │                           \n\
-        \    └───────────────────────────────────────────────┘                           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you cannot use the ❰constructors❱ keyword on any other type of argument.\n\
-        \For example, you cannot use a variable argument:                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────┐                                            \n\
-        \    │ λ(t : Type) → constructors t │  Invalid: ❰t❱ might not be a union type    \n\
-        \    └──────────────────────────────┘                                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────────────────────┐                         \n\
-        \    │ let t : Type = < Left : Natural, Right : Bool > │  Invalid: Type-checking \n\
-        \    │ in  constructors t                              │  precedes normalization \n\
-        \    └─────────────────────────────────────────────────┘                         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, you can import the union type argument:                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────┐                                          \n\
-        \    │ constructors ./unionType.dhall │ Valid: Import resolution precedes        \n\
-        \    └────────────────────────────────┘ type-checking                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \────────────────────────────────────────────────────────────────────────────────\n\
-        \                                                                                \n\
-        \You tried to supply the following argument:                                     \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... which normalized to:                                                        \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is not a union type literal                                           \n"
-      where
-        txt0 = insert expr0
-        txt1 = insert expr1
 
 prettyTypeMessage (CantAccess lazyText0 expr0 expr1) = ErrorMessages {..}
   where
