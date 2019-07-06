@@ -82,6 +82,8 @@
               <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Safety-guarantees">Safety guarantees</a>
               <div class="dropdown-divider"></div>
               <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Dhall-in-production">Dhall in production</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Design-choices">Design choices</a>
             </div>
           </li>
           <li class="nav-item dropdown">
@@ -99,6 +101,10 @@
               How-to guides
             </a>
             <div class="dropdown-menu" aria-labelledby="howtoDropdown">
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/How-to-integrate-Dhall">How to integrate Dhall</a>
+              <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Frequently-Asked-Questions-%28FAQ%29">Frequently Asked Questions (FAQ)</a>
+              <div class="dropdown-divider"></div>
               <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Cheatsheet">Cheatsheet</a>
               <div class="dropdown-divider"></div>
               <a class="nav-link" href="https://github.com/dhall-lang/dhall-lang/wiki/Frequently-Asked-Questions-%28FAQ%29">Frequently Asked Questions (FAQ)</a>
@@ -141,7 +147,7 @@
               <div class="dropdown-divider"></div>
               <a class="nav-link" href="https://github.com/dhall-lang/dhall-haskell/blob/master/dhall/README.md"><img src = "./img/haskell-logo.png" height="32px" alt="Haskell logo"><span>Haskell</span></a>
               <div class="dropdown-divider"></div>
-              <a class="nav-link" href="https://github.com/dhall-lang/dhall-nix/blob/master/README.md"><img src = "./img/nix-logo.png" height="32px" alt="Nix logo"><span>Nix</span></a>
+              <a class="nav-link" href="https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-nix"><img src = "./img/nix-logo.png" height="32px" alt="Nix logo"><span>Nix</span></a>
               <div class="dropdown-divider"></div>
               <a class="nav-link" href="https://git.sr.ht/~singpolyma/dhall-ruby"><img src = "./img/ruby-logo.svg" height="32px" alt="Ruby logo"><span>Ruby</span></a>
             </div>
@@ -164,8 +170,14 @@
     </nav>
     <header>
     <h1 class="text-center">The Dhall configuration language</h1>
-    <p class="text-center">The non-repetitive alternative to YAML</p>
+    <p class="lead text-center">The non-repetitive alternative to YAML</p>
     </header>
+    <div class="container">
+    <p class="lead text-center">
+    Dhall is a <a href="https://github.com/dhall-lang/dhall-lang/wiki/Programmable-configuration-files">programmable configuration language</a>
+    that you can think of as: JSON + functions + types + imports
+    </p>
+    </div>
     <div id="editor">
       <div id="input-pane">
         <ul class="nav nav-tabs example-tab">
@@ -227,15 +239,13 @@
       <a href="https://github.com/dhall-lang/dhall-lang/wiki/Safety-guarantees"class="btn btn-lg btn-outline-dark bg-light">Safety Guarantees<i class="fas fa-shield-alt"></i></a>
     </div>
     <div class="container jumbotron" style="background-color: #cfebfb">
-      <h1 class="display-4">Tough on messes</h1>
-      <p class="lead">Dhall is built for large and weird configuration
-      schemas.</p>
+      <h1 class="display-4">Integration friendly</h1>
+      <p class="lead">Dhall provides a smooth migration path for mature enterprise deployments.</p>
       <hr class="my-4">
-      <p>Don't use YAML?  No problem!</p>
-      <p>Dhall can integrate with messy APIs and tools.  You can even convert
-      Dhall to ad-hoc and non-standard
-      configuration file formats.</p>
-      <a href="https://github.com/dhall-lang/dhall-nethack" class="btn btn-lg btn-outline-dark bg-light">See an Example <i class="fas fa-cogs"></i></a>
+      <p>You can convert both ways between Dhall and JSON/YAML or read Dhall
+      configuration files directly into a language that supports a native
+      language binding.</p>
+      <a href="https://github.com/dhall-lang/dhall-lang/wiki/How-to-integrate-Dhall" class="btn btn-lg btn-outline-dark bg-light">Integrations <i class="fas fa-cogs" ></i></a>
     </div>
     <div class="container jumbotron" style="background-color: #fbf3c8">
       <h1 class="display-4">Tired of YAML?</h1>
@@ -324,8 +334,8 @@
 -}
 
 { home       = "/home/bill"
-, privateKey = "/home/bill/id_ed25519"
-, publicKey  = "/home/blil/id_ed25519.pub"
+, privateKey = "/home/bill/.ssh/id_ed25519"
+, publicKey  = "/home/blil/.ssh/id_ed25519.pub"
 }`
 
     let example1 = `{- Don't repeat yourself!
@@ -335,8 +345,8 @@
 
 let user = "bill"
 in  { home       = "/home/\${user}"
-    , privateKey = "/home/\${user}/id_ed25519"
-    , publicKey  = "/home/\${user}/id_ed25519.pub"
+    , privateKey = "/home/\${user}/.ssh/id_ed25519"
+    , publicKey  = "/home/\${user}/.ssh/id_ed25519.pub"
     }
 
 {- Change the name "bill" to "jane" -}`;
@@ -345,7 +355,7 @@ in  { home       = "/home/\${user}"
 
 let makeUser = \\(user : Text) ->
       let home       = "/home/\${user}"
-      let privateKey = "\${home}/id_ed25519"
+      let privateKey = "\${home}/.ssh/id_ed25519"
       let publicKey  = "\${privateKey}.pub"
       in  { home = home
           , privateKey = privateKey
@@ -370,7 +380,7 @@ let Config : Type =
 
 let makeUser : Text -> Config = \\(user : Text) ->
       let home       : Text   = "/home/\${user}"
-      let privateKey : Text   = "\${home}/id_ed25519"
+      let privateKey : Text   = "\${home}/.ssh/id_ed25519"
       let publicKey  : Text   = "\${privateKey}.pub"
       let config     : Config =
             { home       = home
@@ -405,7 +415,7 @@ let generate = https://prelude.dhall-lang.org/List/generate
 
 let makeUser = \\(user : Text) ->
       let home       = "/home/\${user}"
-      let privateKey = "\${home}/id_ed25519"
+      let privateKey = "\${home}/.ssh/id_ed25519"
       let publicKey  = "\${privateKey}.pub"
       in  { home = home
           , privateKey = privateKey
