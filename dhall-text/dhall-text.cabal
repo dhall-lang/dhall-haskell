@@ -26,7 +26,7 @@ Executable dhall-to-text
     Build-Depends:
         base                 >= 4.8.0.0  && < 5   ,
         dhall                >= 1.15.0   && < 1.25,
-        optparse-applicative                < 0.15,
+        optparse-applicative                < 0.16,
         text                 >= 0.11.1.0 && < 1.3
     GHC-Options: -Wall
     Other-Modules:
