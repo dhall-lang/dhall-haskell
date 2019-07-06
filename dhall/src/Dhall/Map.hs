@@ -105,10 +105,17 @@ instance Ord k => Traversable (Map k) where
   traverse f m = traverseWithKey (\_ v -> f v) m
   {-# INLINABLE traverse #-}
 
+{-|
+prop> \x y z -> x <> (y <> z) == (x <> y) <> (z :: Map Int Int)
+-}
 instance Ord k => Data.Semigroup.Semigroup (Map k v) where
     (<>) = union
     {-# INLINABLE (<>) #-}
 
+{-|
+prop> \x -> x <> mempty == (x :: Map Int Int)
+prop> \x -> mempty <> x == (x :: Map Int Int)
+-}
 instance Ord k => Monoid (Map k v) where
     mempty = Map Data.Map.empty []
     {-# INLINABLE mempty #-}
@@ -146,14 +153,19 @@ singleton k v = Map m ks
 
 {-| Create a `Map` from a list of key-value pairs
 
-> fromList empty = mempty
->
-> fromList (x <|> y) = fromList x <> fromList y
-
 >>> fromList [("B",1),("A",2)]  -- The map preserves order
 fromList [("B",1),("A",2)]
 >>> fromList [("A",1),("A",2)]  -- For duplicates, later values take precedence
 fromList [("A",2)]
+
+Note that this handling of duplicates means that 'fromList' is /not/ a monoid
+homomorphism:
+
+>>> fromList [(1, True)] <> fromList [(1, False)]
+fromList [(1,True)]
+>>> fromList ([(1, True)] <> [(1, False)])
+fromList [(1,False)]
+
 -}
 fromList :: Ord k => [(k, v)] -> Map k v
 fromList kvs = Map m ks
@@ -542,3 +554,11 @@ keys (Map _ ks) = ks
 elems :: Ord k => Map k v -> [v]
 elems (Map m ks) = fmap (\k -> m Data.Map.! k) ks
 {-# INLINABLE elems #-}
+
+{- $setup
+>>> import Test.QuickCheck (Arbitrary(..))
+>>> :{
+  instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
+    arbitrary = fromList <$> arbitrary
+:}
+-}
