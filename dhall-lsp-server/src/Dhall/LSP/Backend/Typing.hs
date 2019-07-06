@@ -8,12 +8,11 @@ import Dhall.Parser (Src(..))
 import Data.List.NonEmpty (NonEmpty (..))
 import Control.Lens (toListOf)
 import Data.Text (Text)
-import qualified Data.Text as Text
 import Control.Applicative ((<|>))
-import Data.Bifunctor (first)
+import Data.Bifunctor (first, bimap)
 
 import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot)
-import Dhall.LSP.Backend.Diagnostics (Position, positionFromMegaparsec, offsetToPosition)
+import Dhall.LSP.Backend.Diagnostics (Position, Range(..), rangeFromDhall)
 import Dhall.LSP.Backend.Dhall (WellTyped, fromWellTyped)
 
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
@@ -28,7 +27,7 @@ typeAt pos expr = do
              Just e -> return e
              Nothing -> Left "The impossible happened: failed to split let\
                               \ blocks when preprocessing for typeAt'."
-  first show $ typeAt' pos empty expr'
+  bimap show normalize $ typeAt' pos empty expr'
 
 typeAt' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Expr Src X)
 -- the input only contains singleton lets
@@ -61,9 +60,8 @@ typeAt' pos ctx (Note _ expr) = typeAt' pos ctx expr
 typeAt' pos ctx expr = do
   let subExprs = toListOf subExpressions expr
   case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
-    [] -> typeWithA absurd ctx expr  -- return type of whole subexpression
-    ((src, e):_) -> typeAt' pos ctx (Note src e)  -- continue with leaf-expression
-
+    [] -> typeWithA absurd ctx expr  -- return type of whole expression
+    ((src, e):_) -> typeAt' pos ctx (Note src e)  -- continue with subexpression
 
 
 -- | Find the smallest Note-wrapped expression at the given position.
@@ -103,7 +101,7 @@ annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
                      Just x -> return x
                      Nothing -> Left "The impossible happened: failed\
                                      \ to re-parse a Let expression."
-       return (srcAnnot, ": " <> printExpr _A <> " ")
+       return (srcAnnot, ": " <> printExpr (normalize _A) <> " ")
 
 -- binders, see typeAt'
 annotateLet' pos ctx (Let (Binding x _ a :| []) e@(Note src _)) | pos `inside` src = do
@@ -155,10 +153,5 @@ splitLets expr = subExpressions splitLets expr
 -- This version takes trailing whitespace into account
 -- (c.f. `sanitiseRange` from Backend.Diangostics).
 inside :: Position -> Src -> Bool
-inside pos (Src left _right txt) =
-  let (x1,y1) = positionFromMegaparsec left
-      txt' = Text.stripEnd txt
-      (dx2,dy2) = (offsetToPosition txt . Text.length) txt'
-      (x2,y2) | dx2 == 0 = (x1, y1 + dy2)
-              | otherwise = (x1 + dx2, dy2)
-  in (x1,y1) <= pos && pos < (x2,y2)
+inside pos src = left <= pos && pos < right
+  where Range left right = rangeFromDhall src

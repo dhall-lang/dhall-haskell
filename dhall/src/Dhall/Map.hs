@@ -13,6 +13,7 @@ module Dhall.Map
       -- * Construction
     , singleton
     , fromList
+    , fromListWithKey
 
       -- * Sorting
     , sort
@@ -31,6 +32,7 @@ module Dhall.Map
     , lookup
     , member
     , uncons
+    , size
 
       -- * Combine
     , union
@@ -42,6 +44,7 @@ module Dhall.Map
       -- * Traversals
     , mapWithKey
     , traverseWithKey
+    , unorderedTraverseWithKey
     , unorderedTraverseWithKey_
     , foldMapWithKey
 
@@ -49,6 +52,7 @@ module Dhall.Map
     , toList
     , toMap
     , keys
+    , elems
     ) where
 
 import Control.Applicative ((<|>))
@@ -78,28 +82,43 @@ instance (Eq k, Eq v) => Eq (Map k v) where
   Map m1 ks == Map m2 ks' = m1 == m2 && ks == ks'
   {-# INLINABLE (==) #-}
 
+{-|
+>>> fromList [("A",1),("B",2)] < fromList [("B",1),("A",0)]
+True
+-}
 instance (Ord k, Ord v) => Ord (Map k v) where
-  compare (Map mL ksL) (Map mR ksR) = compare mL mR <> compare ksL ksR
+  compare m1 m2 = compare (toList m1) (toList m2)
+  {-# INLINABLE compare #-}
 
 instance Functor (Map k) where
   fmap f (Map m ks) = Map (fmap f m) ks
   {-# INLINABLE fmap #-}
 
-instance Foldable (Map k) where
-  foldr f z (Map m _) = foldr f z m
+instance Ord k => Foldable (Map k) where
+  foldr f z m = foldr f z (elems m)
   {-# INLINABLE foldr #-}
 
-  foldMap f (Map m _) = foldMap f m
+  foldMap f m = foldMap f (elems m)
   {-# INLINABLE foldMap #-}
 
-instance Traversable (Map k) where
-  traverse f (Map m ks) = (\m' -> Map m' ks) <$> traverse f m
+  length m = size m
+  {-# INLINABLE length #-}
+
+instance Ord k => Traversable (Map k) where
+  traverse f m = traverseWithKey (\_ v -> f v) m
   {-# INLINABLE traverse #-}
 
+{-|
+prop> \x y z -> x <> (y <> z) == (x <> y) <> (z :: Map Int Int)
+-}
 instance Ord k => Data.Semigroup.Semigroup (Map k v) where
     (<>) = union
     {-# INLINABLE (<>) #-}
 
+{-|
+prop> \x -> x <> mempty == (x :: Map Int Int)
+prop> \x -> mempty <> x == (x :: Map Int Int)
+-}
 instance Ord k => Monoid (Map k v) where
     mempty = Map Data.Map.empty []
     {-# INLINABLE mempty #-}
@@ -137,14 +156,19 @@ singleton k v = Map m ks
 
 {-| Create a `Map` from a list of key-value pairs
 
-> fromList empty = mempty
->
-> fromList (x <|> y) = fromList x <> fromList y
-
 >>> fromList [("B",1),("A",2)]  -- The map preserves order
 fromList [("B",1),("A",2)]
 >>> fromList [("A",1),("A",2)]  -- For duplicates, later values take precedence
 fromList [("A",2)]
+
+Note that this handling of duplicates means that 'fromList' is /not/ a monoid
+homomorphism:
+
+>>> fromList [(1, True)] <> fromList [(1, False)]
+fromList [(1,True)]
+>>> fromList ([(1, True)] <> [(1, False)])
+fromList [(1,False)]
+
 -}
 fromList :: Ord k => [(k, v)] -> Map k v
 fromList kvs = Map m ks
@@ -153,6 +177,19 @@ fromList kvs = Map m ks
 
     ks = nubOrd (map fst kvs)
 {-# INLINABLE fromList #-}
+
+{-| Create a `Map` from a list of key-value pairs with a combining function.
+
+>>> fromListWithKey (\k v1 v2 -> k ++ v1 ++ v2) [("B","v1"),("A","v2"),("B","v3")]
+fromList [("B","Bv3v1"),("A","v2")]
+-}
+fromListWithKey :: Ord k => (k -> v -> v -> v) -> [(k, v)] -> Map k v
+fromListWithKey f kvs = Map m ks
+  where
+    m = Data.Map.fromListWithKey f kvs
+
+    ks = nubOrd (map fst kvs)
+{-# INLINABLE fromListWithKey #-}
 
 {-| Remove duplicates from a  list
 
@@ -318,6 +355,14 @@ member :: Ord k => k -> Map k v -> Bool
 member k (Map m _) = Data.Map.member k m
 {-# INLINABLE member #-}
 
+{-|
+>>> size (fromList [("A",1)])
+1
+-}
+size :: Map k v -> Int
+size (Map m _) = Data.Map.size m
+{-# INLINABLE size #-}
+
 {-| Combine two `Map`s, preferring keys from the first `Map`
 
 > union = unionWith (\v _ -> v)
@@ -435,6 +480,15 @@ traverseWithKey f m =
     f' (k, a) = fmap ((,) k) (f k a)
 {-# INLINABLE traverseWithKey #-}
 
+{-| Same as `traverseWithKey`, except that the order of effects is not
+    necessarily the same as the order of the keys
+-}
+unorderedTraverseWithKey
+    :: Ord k => Applicative f => (k -> a -> f b) -> Map k a -> f (Map k b)
+unorderedTraverseWithKey f (Map m ks) =
+    fmap (\m' -> Map m' ks) (Data.Map.traverseWithKey f m)
+{-# INLINABLE unorderedTraverseWithKey #-}
+
 {-| Traverse all of the key-value pairs in a 'Map', not preserving their
     original order, where the result of the computation can be forgotten.
 
@@ -473,3 +527,20 @@ toMap (Map m _) = m
 keys :: Map k v -> [k]
 keys (Map _ ks) = ks
 {-# INLINABLE keys #-}
+
+{-| Return the values from a `Map` in their original order.
+
+>>> elems (fromList [("B",1),("A",2)])
+[1,2]
+-}
+elems :: Ord k => Map k v -> [v]
+elems (Map m ks) = fmap (\k -> m Data.Map.! k) ks
+{-# INLINABLE elems #-}
+
+{- $setup
+>>> import Test.QuickCheck (Arbitrary(..))
+>>> :{
+  instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
+    arbitrary = fromList <$> arbitrary
+:}
+-}

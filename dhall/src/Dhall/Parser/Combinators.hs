@@ -9,7 +9,6 @@ import           Control.Applicative        (Alternative (..), liftA2)
 import           Control.Exception          (Exception)
 import           Control.Monad              (MonadPlus (..))
 import           Data.Semigroup             (Semigroup (..))
-import           Data.Sequence              (ViewL (..))
 import           Data.String                (IsString (..))
 import           Data.Text                  (Text)
 import           Data.Text.Prettyprint.Doc  (Pretty (..))
@@ -23,7 +22,6 @@ import           Text.Parser.Token          (TokenParsing (..))
 
 import qualified Control.Monad.Fail
 import qualified Data.Char
-import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc               as Pretty
@@ -256,19 +254,9 @@ noDuplicates = go Dhall.Set.empty
         else go (Dhall.Set.append x found) xs
 
 toMap :: [(Text, a)] -> Parser (Map Text a)
-toMap kvs = do
-    let adapt (k, v) = (k, pure v)
-    let m = fromListWith (<|>) (fmap adapt kvs)
-    let action k vs = case Data.Sequence.viewl vs of
-            EmptyL  -> empty
-            v :< vs' ->
-                if null vs'
-                then pure v
-                else
-                    Text.Parser.Combinators.unexpected
-                        ("duplicate field: " ++ Data.Text.unpack k)
-    Dhall.Map.traverseWithKey action m
+toMap kvs = Dhall.Map.unorderedTraverseWithKey (\_k v -> v) m
   where
-    fromListWith combine = foldr cons mempty
-      where
-        cons (k, v) = Dhall.Map.insertWith combine k v
+    m = Dhall.Map.fromListWithKey err (map (\(k, v) -> (k, pure v)) kvs)
+
+    err k _v1 _v2 = Text.Parser.Combinators.unexpected
+                        ("duplicate field: " ++ Data.Text.unpack k)
