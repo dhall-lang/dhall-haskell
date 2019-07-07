@@ -371,13 +371,13 @@ typeWithA tpa = loop
         return (Pi "_" (Const Type) (Const Type))
     loop ctx e@(ListLit  Nothing  xs) = do
         case Data.Sequence.viewl xs of
-            x0 :< _ -> do
+            x0 :< xs' -> do
                 t <- loop ctx x0
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
                     _ -> Left (TypeError ctx e (InvalidListType t))
-                flip traverseWithIndex_ xs (\i x -> do
+                flip traverseWithIndex_ xs' (\i x -> do
                     t' <- loop ctx x
                     if Dhall.Core.judgmentallyEqual t t'
                         then return ()
