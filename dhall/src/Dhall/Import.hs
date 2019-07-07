@@ -171,6 +171,7 @@ import Dhall.TypeCheck (X(..))
 import Lens.Family.State.Strict (zoom)
 
 import qualified Codec.Serialise
+import qualified Control.Exception                as Exception
 import qualified Control.Monad.Trans.Maybe        as Maybe
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Crypto.Hash
@@ -389,24 +390,28 @@ instance Canonicalize Import where
         Import (canonicalize importHashed) importMode
 
 toHeaders
-  :: Expr s a
+  :: Text
+  -> Text
+  -> Expr s a
   -> Maybe [(CI Data.ByteString.ByteString, Data.ByteString.ByteString)]
-toHeaders (ListLit _ hs) = do
-    hs' <- mapM toHeader hs
+toHeaders key₀ key₁ (ListLit _ hs) = do
+    hs' <- mapM (toHeader key₀ key₁) hs
     return (Data.Foldable.toList hs')
-toHeaders  _             = do
+toHeaders _ _ _ = do
     empty
 
 toHeader
-  :: Expr s a
+  :: Text
+  -> Text
+  -> Expr s a
   -> Maybe (CI Data.ByteString.ByteString, Data.ByteString.ByteString)
-toHeader (RecordLit m) = do
-    TextLit (Chunks [] keyText  ) <- Dhall.Map.lookup "header" m
-    TextLit (Chunks [] valueText) <- Dhall.Map.lookup "value"  m
+toHeader key₀ key₁ (RecordLit m) = do
+    TextLit (Chunks [] keyText  ) <- Dhall.Map.lookup key₀ m
+    TextLit (Chunks [] valueText) <- Dhall.Map.lookup key₁ m
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
     let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
     return (Data.CaseInsensitive.mk keyBytes, valueBytes)
-toHeader _ = do
+toHeader _ _ _ = do
     empty
 
 
@@ -622,34 +627,50 @@ exprFromUncachedImport import_@(Import {..}) = do
                   Just headersExpression -> do
                       expr <- loadWith headersExpression
 
-                      let expected :: Expr Src X
-                          expected =
-                              App List
-                                  ( Record
-                                      ( Dhall.Map.fromList
-                                          [("header", Text), ("value", Text)]
-                                      )
-                                  )
-                      let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
-                      let annot = case expr of
-                              Note (Src begin end bytes) _ ->
-                                  Note (Src begin end bytes') (Annot expr expected)
-                                where
-                                  bytes' = bytes <> " : " <> suffix_
-                              _ ->
-                                  Annot expr expected
+                      let decodeHeaders key₀ key₁ = do
+                              let expected :: Expr Src X
+                                  expected =
+                                      App List
+                                          ( Record
+                                              ( Dhall.Map.fromList
+                                                  [ (key₀, Text), (key₁, Text) ]
+                                              )
+                                          )
 
-                      case Dhall.TypeCheck.typeOf annot of
-                          Left err -> liftIO (throwIO err)
-                          Right _  -> return ()
+                              let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
+                              let annot = case expr of
+                                      Note (Src begin end bytes) _ ->
+                                          Note (Src begin end bytes') (Annot expr expected)
+                                        where
+                                          bytes' = bytes <> " : " <> suffix_
+                                      _ ->
+                                          Annot expr expected
 
-                      let expr' = Dhall.Core.normalize expr
+                              case Dhall.TypeCheck.typeOf annot of
+                                  Left err -> liftIO (throwIO err)
+                                  Right _  -> return ()
 
-                      case toHeaders expr' of
-                          Just headers -> do
-                              return (Just (headers, expr'))
-                          Nothing      -> do
-                              liftIO (throwIO InternalError)
+                              let expr' = Dhall.Core.normalize expr
+
+                              case toHeaders key₀ key₁ expr' of
+                                  Just headers -> do
+                                      return (Just (headers, expr'))
+                                  Nothing      -> do
+                                      liftIO (throwIO InternalError)
+
+                      let handler₀ (e :: SomeException) = do
+                              {- Try to decode using the preferred @mapKey@ /
+                                 @mapValue@ fields and fall back to @header@ /
+                                 @value@ if that fails.  However, if @header@ /
+                                 @value@ still fails then re-throw the original
+                                 exception for @mapKey@ / @mapValue@
+                              -}
+                              let handler₁ (_ :: SomeException) =
+                                      Exception.throw e
+
+                              Exception.handle handler₁ (decodeHeaders "header" "value")
+
+                      liftIO (Exception.handle handler₀ (decodeHeaders "mapKey" "mapValue"))
 
 #ifdef MIN_VERSION_http_client
               let maybeHeaders = fmap fst maybeHeadersAndExpression
