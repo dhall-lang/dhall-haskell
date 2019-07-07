@@ -102,6 +102,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/concatSep
     dhall-lang/Prelude/Text/package.dhall
     dhall-lang/Prelude/Text/show
+    dhall-lang/tests/binary-decode/failure/unit/*.dhallb
     dhall-lang/tests/binary-decode/success/unit/*.dhall
     dhall-lang/tests/binary-decode/success/unit/*.dhallb
     dhall-lang/tests/import/cache/dhall/1220efc43103e49b56c5bf089db8e0365bbfc455b8a2f0dc6ee5727a3586f85969fd
@@ -246,6 +247,138 @@ Extra-Source-Files:
     dhall-lang/tests/parser/success/unit/import/*.dhallb
     dhall-lang/tests/parser/success/text/*.dhall
     dhall-lang/tests/parser/success/text/*.dhallb
+    dhall-lang/tests/semantic-hash/success/*.dhall
+    dhall-lang/tests/semantic-hash/success/*.hash
+    dhall-lang/tests/semantic-hash/success/haskell-tutorial/access/*.dhall
+    dhall-lang/tests/semantic-hash/success/haskell-tutorial/access/*.hash
+    dhall-lang/tests/semantic-hash/success/haskell-tutorial/combineTypes/*.dhall
+    dhall-lang/tests/semantic-hash/success/haskell-tutorial/combineTypes/*.hash
+    dhall-lang/tests/semantic-hash/success/haskell-tutorial/prefer/*.dhall
+    dhall-lang/tests/semantic-hash/success/haskell-tutorial/prefer/*.hash
+    dhall-lang/tests/semantic-hash/success/haskell-tutorial/projection/*.dhall
+    dhall-lang/tests/semantic-hash/success/haskell-tutorial/projection/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/and/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/and/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/build/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/build/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/even/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/even/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/fold/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/fold/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/not/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/not/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/odd/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/odd/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/or/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/or/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/show/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Bool/show/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Double/show/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Double/show/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Integer/show/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Integer/show/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Integer/toDouble/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Integer/toDouble/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/all/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/all/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/any/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/any/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/build/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/build/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/concat/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/concat/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/concatMap/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/concatMap/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/filter/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/filter/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/fold/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/fold/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/generate/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/generate/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/head/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/head/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/indexed/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/indexed/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/iterate/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/iterate/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/last/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/last/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/length/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/length/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/map/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/map/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/null/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/null/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/replicate/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/replicate/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/reverse/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/reverse/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/shifted/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/shifted/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/List/unzip/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/List/unzip/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/build/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/build/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/enumerate/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/enumerate/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/even/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/even/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/fold/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/fold/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/isZero/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/isZero/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/odd/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/odd/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/product/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/product/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/show/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/show/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/sum/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/sum/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/toDouble/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/toDouble/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/toInteger/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Natural/toInteger/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/all/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/all/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/any/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/any/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/build/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/build/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/concat/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/concat/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/filter/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/filter/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/fold/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/fold/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/head/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/head/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/last/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/last/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/length/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/length/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/map/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/map/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/null/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/null/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/toList/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/toList/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/unzip/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Optional/unzip/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Text/concat/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Text/concat/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Text/concatMap/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Text/concatMap/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Text/concatMapSep/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Text/concatMapSep/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Text/concatSep/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Text/concatSep/*.hash
+    dhall-lang/tests/semantic-hash/success/prelude/Text/show/*.dhall
+    dhall-lang/tests/semantic-hash/success/prelude/Text/show/*.hash
+    dhall-lang/tests/semantic-hash/success/simple/*.dhall
+    dhall-lang/tests/semantic-hash/success/simple/*.hash
+    dhall-lang/tests/semantic-hash/success/simplifications/*.dhall
+    dhall-lang/tests/semantic-hash/success/simplifications/*.hash
     dhall-lang/tests/typecheck/data/*.dhall
     dhall-lang/tests/typecheck/failure/*.dhall
     dhall-lang/tests/typecheck/success/*.dhall
@@ -533,6 +666,7 @@ Test-Suite tasty
         Dhall.Test.Parser
         Dhall.Test.QuickCheck
         Dhall.Test.Regression
+        Dhall.Test.SemanticHash
         Dhall.Test.Tutorial
         Dhall.Test.TypeCheck
         Dhall.Test.TypeInference
