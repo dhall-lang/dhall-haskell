@@ -689,8 +689,8 @@ typeWithA tpa = loop
             Union kts -> return kts
             _         -> Left (TypeError ctx e (MustMergeUnion kvsY tKvsY))
 
-        let ksX = Data.Set.fromList (Dhall.Map.keys ktsX)
-        let ksY = Data.Set.fromList (Dhall.Map.keys ktsY)
+        let ksX = Dhall.Map.keysSet ktsX
+        let ksY = Dhall.Map.keysSet ktsY
 
         let diffX = Data.Set.difference ksX ksY
         let diffY = Data.Set.difference ksY ksX

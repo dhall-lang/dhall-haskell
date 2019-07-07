@@ -540,15 +540,14 @@ eval !env t =
                         if null ks then
                           VRecordLit mempty
                         else case evalE t of
-                          VRecordLit kvs
-                            | Just s <- traverse (\k -> (k,) <$> Dhall.Map.lookup k kvs) (toList ks)
-                              -> VRecordLit (Dhall.Map.sort (Dhall.Map.fromList s))
-                            | otherwise -> error errorMsg
+                          VRecordLit kvs -> let
+                            kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
+                            in VRecordLit (Dhall.Map.sort kvs')
                           t -> VProject t (Left ks)
     Project t (Right e) ->
                         case evalE e of
                           VRecord kts ->
-                            evalE (Project t (Left (Dhall.Set.fromList (Dhall.Map.keys kts))))
+                            evalE (Project t (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
                           e' -> VProject (evalE t) (Right e')
     Note _ e         -> evalE e
     ImportAlt t _    -> evalE t
