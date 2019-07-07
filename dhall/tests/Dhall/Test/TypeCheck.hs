@@ -31,9 +31,7 @@ getTests = do
     let failureTestFiles = do
             path <- Turtle.lstree (typecheckDirectory </> "failure")
 
-            let skip =
-                    [ typecheckDirectory </> "failure/duplicateFields.dhall"
-                    ]
+            let skip = []
 
             Monad.guard (path `notElem` skip)
 

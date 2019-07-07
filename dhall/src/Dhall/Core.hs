@@ -1660,17 +1660,7 @@ normalizeWithM ctx e0 = loop (denote e0)
         r' <- loop r
         case r' of
             RecordLit kvs ->
-                case traverse adapt (Dhall.Set.toList xs) of
-                    Just s  ->
-                        loop (RecordLit kvs')
-                      where
-                        kvs' = Dhall.Map.fromList s
-                    Nothing ->
-                        Project <$> (RecordLit <$> traverse loop kvs) <*> pure (Left xs)
-              where
-                adapt x = do
-                    v <- Dhall.Map.lookup x kvs
-                    return (x, v)
+                pure (RecordLit (Dhall.Map.restrictKeys kvs (Dhall.Set.toSet xs)))
             _   | null xs -> pure (RecordLit mempty)
                 | otherwise -> pure (Project r' (Left xs))
     Project r (Right e1) -> do
@@ -1678,7 +1668,7 @@ normalizeWithM ctx e0 = loop (denote e0)
 
         case e2 of
             Record kts -> do
-                loop (Project r (Left (Dhall.Set.fromList (Dhall.Map.keys kts))))
+                loop (Project r (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
             _ -> do
                 r' <- loop r
                 pure (Project r' (Right e2))
@@ -1911,7 +1901,7 @@ isNormalized e0 = loop (denote e0)
                       Right e' ->
                           case e' of
                               Record kts ->
-                                  loop (Project r (Left (Dhall.Set.fromList (Dhall.Map.keys kts))))
+                                  loop (Project r (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
                               _ ->
                                   False
               _ -> not (null xs)

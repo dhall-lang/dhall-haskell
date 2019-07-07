@@ -270,8 +270,8 @@ diffKeysWith
 diffKeysWith assign diffVals kvsL kvsR =
     diffFieldNames <> diffFieldValues <> (if anyEqual then [ ignore ] else [])
   where
-    ksL = Data.Set.fromList (Dhall.Map.keys kvsL)
-    ksR = Data.Set.fromList (Dhall.Map.keys kvsR)
+    ksL = Dhall.Map.keysSet kvsL
+    ksR = Dhall.Map.keysSet kvsR
 
     extraL = Data.Set.difference ksL ksR
     extraR = Data.Set.difference ksR ksL
