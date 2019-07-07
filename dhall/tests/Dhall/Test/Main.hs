@@ -6,6 +6,7 @@ import Test.Tasty      (TestTree)
 import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.Diff
 import qualified Dhall.Test.Format
+import qualified Dhall.Test.SemanticHash
 import qualified Dhall.Test.Import
 import qualified Dhall.Test.Lint
 import qualified Dhall.Test.Normalization
@@ -39,6 +40,8 @@ getAllTests = do
 
     diffTests <- Dhall.Test.Diff.getTests
 
+    semanticHashTests <- Dhall.Test.SemanticHash.getTests
+
     let testTree =
             Test.Tasty.testGroup "Dhall Tests"
                 [ normalizationTests
@@ -49,6 +52,7 @@ getAllTests = do
                 , formattingTests
                 , lintTests
                 , diffTests
+                , semanticHashTests
                 , Dhall.Test.Regression.tests
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests

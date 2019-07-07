@@ -31,6 +31,7 @@ testTree =
         , yamlQuotedStrings
         , yaml
         , emptyAlternative
+        , nesting
         ]
 
 issue48 :: TestTree
@@ -125,3 +126,47 @@ emptyAlternative = Test.Tasty.HUnit.testCase "Empty alternative" $ do
     let message = "Empty alternatives were not decoded from JSON correctly"
 
     Test.Tasty.HUnit.assertEqual message expectedResult actualResult
+
+nesting :: TestTree
+nesting = Test.Tasty.testGroup "Nesting" [ nested, inline ]
+  where
+    nested =
+        testCase "./tasty/data/nesting0.dhall"
+             (Data.Aeson.Object
+                 [ ("foo", Data.Aeson.Number 2)
+                 , ("name", Data.Aeson.String "Left")
+                 ]
+             )
+
+    inline =
+        testCase "./tasty/data/nesting1.dhall"
+            (Data.Aeson.Object
+                [ ("name", Data.Aeson.String "Left")
+                , ("value", Data.Aeson.Object [ ("foo", Data.Aeson.Number 2 )] )
+                ]
+            )
+
+    testCase file expectedValue =
+        Test.Tasty.HUnit.testCase "Nesting alternative name" $ do
+            code <- Data.Text.IO.readFile file
+
+            parsedExpression <- case Dhall.Parser.exprFromText file code of
+                Left  exception        -> Control.Exception.throwIO exception
+                Right parsedExpression -> return parsedExpression
+
+            resolvedExpression <- Dhall.Import.load parsedExpression
+
+            let mapKey     = "mapKey"
+            let mapValue   = "mapValue"
+            let conversion = Conversion {..}
+
+            let convertedExpression =
+                    Dhall.JSON.convertToHomogeneousMaps conversion resolvedExpression
+
+            actualValue <- case Dhall.JSON.dhallToJSON convertedExpression of
+                Left  exception   -> Control.Exception.throwIO exception
+                Right actualValue -> return actualValue
+
+            let message = "The alternative name was not nested correctly"
+
+            Test.Tasty.HUnit.assertEqual message expectedValue actualValue
