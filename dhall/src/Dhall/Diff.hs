@@ -207,12 +207,15 @@ diffBool = diffPrimitive bool
 diffInteger :: Integer -> Integer -> Diff
 diffInteger = diffPrimitive (token . Internal.prettyNumber)
 
+diffInt :: Int -> Int -> Diff
+diffInt = diffPrimitive (token . Internal.prettyInt)
+
 diffVar :: Var -> Var -> Diff
 diffVar (V xL nL) (V xR nR) = format mempty label <> "@" <> natural
   where
     label = diffLabel xL xR
 
-    natural = diffInteger nL nR
+    natural = diffInt nL nR
 
 diffPretty :: (Eq a, Pretty a) => a -> a -> Diff
 diffPretty = diffPrimitive (token . Pretty.pretty)
@@ -579,18 +582,6 @@ skeleton (ListAppend {}) =
     <>  operator "#"
     <>  " "
     <>  ignore
-skeleton (OptionalLit {}) =
-        lbracket
-    <>  " "
-    <>  ignore
-    <>  " "
-    <>  rbracket
-    <>  " "
-    <>  colon
-    <>  " "
-    <>  builtin "Optional"
-    <>  " "
-    <>  ignore
 skeleton (Record {}) =
         lbrace
     <>  " "
@@ -778,21 +769,6 @@ diffAnnotatedExpression (ListLit aL bL) (ListLit aR@(Just _) bR) = align doc
   where
     doc =   format " " (diffList bL bR)
         <>  format " " (diffMaybe (colon <> " ") (diffApplicationExpression `on` App List) aL aR)
-diffAnnotatedExpression (OptionalLit aL bL) (OptionalLit aR bR) =
-    align doc
-  where
-    doc =   lbracket
-        <>  " "
-        <>  format " " (diffMaybe mempty diffExpression bL bR)
-        <>  rbracket
-        <>  " "
-        <>  colon
-        <>  " "
-        <>  diffApplicationExpression (App Optional aL) (App Optional aR)
-diffAnnotatedExpression l@(OptionalLit {}) r =
-    mismatch l r
-diffAnnotatedExpression l r@(OptionalLit {}) =
-    mismatch l r
 diffAnnotatedExpression l@(Annot {}) r@(Annot {}) =
     enclosed' "  " (colon <> " ") (docs l r)
   where
@@ -1020,8 +996,10 @@ diffSelectorExpression l@(Field {}) r@(Field {}) =
   where
     docs (Field aL bL) (Field aR bR) =
         Data.List.NonEmpty.cons (diffLabel bL bR) (docs aL aR)
-    docs (Project aL bL) (Project aR bR) =
+    docs (Project aL (Left bL)) (Project aR (Left bR)) =
         Data.List.NonEmpty.cons (diffLabels bL bR) (docs aL aR)
+    docs (Project aL (Right bL)) (Project aR (Right bR)) =
+        Data.List.NonEmpty.cons (diffExpression bL bR) (docs aL aR)
     docs aL aR =
         pure (diffPrimitiveExpression aL aR)
 diffSelectorExpression l@(Field {}) r =
@@ -1033,8 +1011,10 @@ diffSelectorExpression l@(Project {}) r@(Project {}) =
   where
     docs (Field aL bL) (Field aR bR) =
         Data.List.NonEmpty.cons (diffLabel bL bR) (docs aL aR)
-    docs (Project aL bL) (Project aR bR) =
+    docs (Project aL (Left bL)) (Project aR (Left bR)) =
         Data.List.NonEmpty.cons (diffLabels bL bR) (docs aL aR)
+    docs (Project aL (Right bL)) (Project aR (Right bR)) =
+        Data.List.NonEmpty.cons (diffExpression bL bR) (docs aL aR)
     docs aL aR =
         pure (diffPrimitiveExpression aL aR)
 diffSelectorExpression l@(Project {}) r =
@@ -1162,10 +1142,6 @@ diffPrimitiveExpression l r@List =
 diffPrimitiveExpression (ListLit Nothing bL) (ListLit Nothing bR) = align doc
   where
     doc = format " " (diffList bL bR)
-diffPrimitiveExpression l@(ListLit {}) r =
-    mismatch l r
-diffPrimitiveExpression l r@(ListLit {}) =
-    mismatch l r
 diffPrimitiveExpression ListBuild ListBuild =
     "…"
 diffPrimitiveExpression l@ListBuild r =

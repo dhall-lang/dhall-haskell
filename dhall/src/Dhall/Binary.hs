@@ -43,7 +43,6 @@ import Dhall.Core
     , Var(..)
     )
 
-import Data.ByteArray.Encoding (Base(..))
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
@@ -53,11 +52,9 @@ import Prelude hiding (exponent)
 import GHC.Float (double2Float, float2Double)
 
 import qualified Crypto.Hash
-import qualified Data.ByteArray.Encoding
+import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.Sequence
-import qualified Data.Text
-import qualified Data.Text.Encoding
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Options.Applicative
@@ -131,9 +128,9 @@ class ToTerm a where
 
 instance ToTerm a => ToTerm (Expr s a) where
     encode (Var (V "_" n)) =
-        TInteger n
+        TInt n
     encode (Var (V x n)) =
-        TList [ TString x, TInteger n ]
+        TList [ TString x, TInt n ]
     encode NaturalBuild =
         TString "Natural/build"
     encode NaturalFold =
@@ -291,15 +288,6 @@ instance ToTerm a => ToTerm (Expr s a) where
             Just t  -> encode t
 
         xs₁ = map encode (Data.Foldable.toList xs₀)
-    encode (OptionalLit _T₀ Nothing) =
-        TList [ TInt 5, _T₁ ]
-      where
-        _T₁ = encode _T₀
-    encode (OptionalLit _T₀ (Just t₀)) =
-        TList [ TInt 5, _T₁, t₁ ]
-      where
-        _T₁ = encode _T₀
-        t₁  = encode t₀
     encode (Some t₀) =
         TList [ TInt 5, TNull, t₁ ]
       where
@@ -335,11 +323,16 @@ instance ToTerm a => ToTerm (Expr s a) where
         TList [ TInt 9, t₁, TString x ]
       where
         t₁ = encode t₀
-    encode (Project t₀ xs₀) =
+    encode (Project t₀ (Left xs₀)) =
         TList ([ TInt 10, t₁ ] ++ xs₁)
       where
         t₁  = encode t₀
         xs₁ = map TString (Dhall.Set.toList xs₀)
+    encode (Project t₀ (Right _T₀)) =
+        TList [ TInt 10, t₁, TList [ _T₁ ] ]
+      where
+        _T₁ = encode _T₀
+        t₁  = encode t₀
     encode (Union xTs₀) =
         TList [ TInt 11, TMap xTs₁ ]
       where
@@ -440,8 +433,7 @@ instance ToTerm Import where
                     Nothing ->
                         TNull
                     Just h ->
-                        encode
-                            (Import { importHashed = h, importMode = Code })
+                        encode h
 
                 scheme₁ = case scheme₀ of
                     HTTP  -> 0
@@ -482,10 +474,9 @@ instance ToTerm Import where
                 Nothing ->
                     TNull
                 Just digest ->
-                    TList
-                        [ TString "sha256", TString (Data.Text.pack (show digest)) ]
+                    TBytes ("\x12\x20" <> Data.ByteArray.convert digest)
 
-            m = TInt (case importMode of Code -> 0; RawText -> 1)
+            m = TInt (case importMode of Code -> 0; RawText -> 1; Location -> 2;)
 
         Import {..} = import_
 
@@ -497,9 +488,9 @@ class FromTerm a where
 
 instance FromTerm a => FromTerm (Expr s a) where
     decode (TInt n) =
-        return (Var (V "_" (fromIntegral n)))
-    decode (TInteger n) =
         return (Var (V "_" n))
+    decode (TInteger n) =
+        return (Var (V "_" (fromIntegral n)))
     decode (TString "Natural/build") =
         return NaturalBuild
     decode (TString "Natural/fold") =
@@ -565,9 +556,9 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TString "_") =
         empty
     decode (TList [ TString x, TInt n ]) =
-        return (Var (V x (fromIntegral n)))
-    decode (TList [ TString x, TInteger n ]) =
         return (Var (V x n))
+    decode (TList [ TString x, TInteger n ]) =
+        return (Var (V x (fromIntegral n)))
     decode (TList (TInt 0 : f₁ : xs₁)) = do
         f₀  <- decode f₁
         xs₀ <- traverse decode xs₁
@@ -612,16 +603,9 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TList (TInt 4 : TNull : xs₁ )) = do
         xs₀ <- traverse decode xs₁
         return (ListLit Nothing (Data.Sequence.fromList xs₀))
-    decode (TList [ TInt 5, _T₁ ]) = do
-        _T₀ <- decode _T₁
-        return (OptionalLit _T₀ Nothing)
     decode (TList [ TInt 5, TNull, t₁ ]) = do
         t₀ <- decode t₁
         return (Some t₀)
-    decode (TList [ TInt 5, _T₁, t₁ ]) = do
-        _T₀ <- decode _T₁
-        t₀  <- decode t₁
-        return (OptionalLit _T₀ (Just t₀))
     decode (TList [ TInt 6, t₁, u₁ ]) = do
         t₀ <- decode t₁
         u₀ <- decode u₁
@@ -660,12 +644,26 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TList (TInt 10 : t₁ : xs₁)) = do
         t₀ <- decode t₁
 
-        let process (TString x) = return x
-            process  _          = empty
+        let expectString (TString x) = return x
+            expectString  _          = empty
 
-        xs₀ <- traverse process xs₁
+        let decodeLeft = do
+                strings <- traverse expectString xs₁
 
-        return (Project t₀ (Dhall.Set.fromList xs₀))
+                return (Left (Dhall.Set.fromList strings))
+
+        let decodeRight =
+                case xs₁ of
+                    [ TList [ _T₁ ] ] -> do
+                        _T₀ <- decode _T₁
+
+                        return (Right _T₀)
+                    _ -> do
+                        empty
+
+        xs₀ <- decodeLeft <|> decodeRight
+
+        return (Project t₀ xs₀)
     decode (TList [ TInt 11, TMap xTs₁ ]) = do
         let process (TString x, _T₁) = do
                 mT₀ <- case _T₁ of
@@ -768,13 +766,17 @@ instance FromTerm Import where
             TNull -> do
                 return Nothing
 
-            TList [ TString "sha256", TString base16Text ] -> do
-                let base16Bytes = Data.Text.Encoding.encodeUtf8 base16Text
-                digestBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 base16Bytes of
-                    Left  _           -> empty
-                    Right digestBytes -> return (digestBytes :: Data.ByteString.ByteString)
+            TBytes bytes -> do
+                let (prefix, suffix) = Data.ByteString.splitAt 2 bytes
 
-                digest <- Crypto.Hash.digestFromByteString digestBytes
+                case prefix of
+                    "\x12\x20" -> return ()
+                    _          -> empty
+
+                digest <- case Crypto.Hash.digestFromByteString suffix of
+                    Nothing     -> empty
+                    Just digest -> return digest
+
                 return (Just digest)
 
             _ -> do
@@ -783,6 +785,7 @@ instance FromTerm Import where
         importMode <- case mode of
             0 -> return Code
             1 -> return RawText
+            2 -> return Location
             _ -> empty
 
         let remote scheme = do
@@ -801,9 +804,11 @@ instance FromTerm Import where
                 (headers, authority, paths, file, query) <- case xs of
                     headers₀ : TString authority : ys -> do
                         headers₁ <- case headers₀ of
-                            TNull -> return Nothing
+                            TNull -> do
+                                return Nothing
                             _     -> do
-                                Embed (Import { importHashed = headers }) <- decode headers₀
+                                headers <- decode headers₀
+
                                 return (Just headers)
                         (paths, file, query) <- process ys
                         return (headers₁, authority, paths, file, query)

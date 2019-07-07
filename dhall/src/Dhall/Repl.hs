@@ -251,6 +251,13 @@ addBinding (k : "=" : srcs) = do
 
 addBinding _ = Fail.fail ":let should be of the form `:let x = y`"
 
+clearBindings :: (MonadFail m, MonadState Env m) => [String] -> m ()
+clearBindings [] = modify adapt
+  where
+    adapt (Env {..}) = Env { envBindings = Dhall.Context.empty, ..}
+
+clearBindings _ = Fail.fail ":clear takes no arguments"
+
 hashBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => [String] -> m ()
 hashBinding [] = Fail.fail ":hash should be of the form `:hash expr"
 hashBinding tokens = do
@@ -415,6 +422,7 @@ options =
   [ ( "type", dontCrash . typeOf )
   , ( "hash", dontCrash . hashBinding )
   , ( "let", dontCrash . addBinding . separateEqual )
+  , ( "clear", dontCrash . clearBindings)
   , ( "load", dontCrash . loadBinding )
   , ( "save", dontCrash . saveBinding . separateEqual )
   , ( "set", dontCrash . setOption)

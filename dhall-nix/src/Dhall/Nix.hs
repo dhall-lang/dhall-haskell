@@ -90,7 +90,6 @@ module Dhall.Nix (
     , CompileError(..)
     ) where
 
-import Control.Applicative (empty)
 import Control.Exception (Exception)
 import Data.Foldable (toList)
 import Data.Fix (Fix(..))
@@ -124,6 +123,8 @@ import qualified Nix
 data CompileError
     = CannotReferenceShadowedVariable Var
     -- ^ Nix does not provide a way to reference a shadowed variable
+    | CannotProjectByType
+    -- ^ We currently do not support threading around type information
     deriving (Typeable)
 
 instance Show CompileError where
@@ -178,6 +179,15 @@ Nix
 |]
       where
         txt = Dhall.Core.pretty v
+
+    show CannotProjectByType =
+        Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: Cannot project by type
+
+The ❰dhall-to-nix❱ compiler does not support projecting out a subset of a record
+by the expected type (i.e. ❰someRecord.(someType)❱ 
+    |]
+
 
 _ERROR :: Data.Text.Text
 _ERROR = "\ESC[1;31mError\ESC[0m"
@@ -411,10 +421,6 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e6 = Fix (NAbs "xs" (Fix (NLet [NamedVar ["n"] e5 Nix.nullPos] e4)))
         return (Fix (NAbs "t" e6))
     loop Optional = return (Fix (NAbs "t" (Fix (NSet []))))
-    loop (OptionalLit _ b) =
-        case b of
-            Nothing -> return (Fix (NConstant NNull))
-            Just c  -> loop c
     loop (Some a) = loop a
     loop None = return (Fix (NConstant NNull))
     loop OptionalFold = do
@@ -426,8 +432,8 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e0 = Pi "nothing" "optional" "optional"
         let e1 = Pi "just" (Pi "_" "a" "optional") e0
         let e2 = Pi "optional" (Const Type) e1
-        let e3 = OptionalLit "a" empty
-        let e4 = Lam "x" "a" (OptionalLit "a" (pure "x"))
+        let e3 = App None "a"
+        let e4 = Lam "x" "a" (Some "x")
         let e5 = App (App (App "f" (App Optional "a")) e4) e3
         loop (Lam "a" (Const Type) (Lam "f" e2 e5))
     loop (Record _) = return (Fix (NSet []))
@@ -518,10 +524,12 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop (Field a b) = do
         a' <- loop a
         return (Fix (NSelect a' [StaticKey b] Nothing))
-    loop (Project a b) = do
+    loop (Project a (Left b)) = do
         a' <- loop a
         let b' = fmap StaticKey (toList b)
         return (Fix (NSet [Inherit (Just a') b' Nix.nullPos]))
+    loop (Project _ (Right _)) = do
+        Left CannotProjectByType
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
     loop (Embed (X x)) = x

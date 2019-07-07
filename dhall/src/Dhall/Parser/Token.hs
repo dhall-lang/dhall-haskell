@@ -28,7 +28,6 @@ module Dhall.Parser.Token (
     _as,
     _using,
     _merge,
-    _constructors,
     _Some,
     _None,
     _NaturalFold,
@@ -63,6 +62,7 @@ module Dhall.Parser.Token (
     _Type,
     _Kind,
     _Sort,
+    _Location,
     _equal,
     _or,
     _plus,
@@ -575,9 +575,6 @@ _using = keyword "using"
 _merge :: Parser ()
 _merge = keyword "merge"
 
-_constructors :: Parser ()
-_constructors = keyword "constructors"
-
 _Some :: Parser ()
 _Some = keyword "Some"
 
@@ -682,6 +679,9 @@ _Kind = reserved "Kind"
 
 _Sort :: Parser ()
 _Sort = reserved "Sort"
+
+_Location :: Parser ()
+_Location = reserved "Location"
 
 _equal :: Parser ()
 _equal = reservedChar '='

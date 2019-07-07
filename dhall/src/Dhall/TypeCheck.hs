@@ -25,6 +25,7 @@ import Control.Applicative (empty)
 import Control.Exception (Exception)
 import Data.Data (Data(..))
 import Data.Foldable (forM_, toList)
+import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (First(..))
 import Data.Sequence (Seq, ViewL(..))
@@ -97,7 +98,7 @@ type Typer a = forall s. a -> Expr s a
     constructor with custom logic
 -}
 typeWithA
-    :: Eq a
+    :: (Eq a, Pretty a)
     => Typer a
     -> Context (Expr s a)
     -> Expr s a
@@ -195,7 +196,9 @@ typeWithA tpa = loop
             loop ctx b2
 
     loop ctx e@(Annot x t       ) = do
-        _ <- loop ctx t
+        case Dhall.Core.denote t of
+            Const _ -> return ()
+            _       -> void (loop ctx t)
 
         t' <- loop ctx x
         if Dhall.Core.judgmentallyEqual t t'
@@ -446,20 +449,6 @@ typeWithA tpa = loop
         return (Pi "_" (Const Type) (Const Type))
     loop _      None              = do
         return (Pi "A" (Const Type) (App Optional "A"))
-    loop ctx e@(OptionalLit t xs) = do
-        s <- fmap Dhall.Core.normalize (loop ctx t)
-        case s of
-            Const Type -> return ()
-            _ -> Left (TypeError ctx e (InvalidOptionalType t))
-        forM_ xs (\x -> do
-            t' <- loop ctx x
-            if Dhall.Core.judgmentallyEqual t t'
-                then return ()
-                else do
-                    let nf_t  = Dhall.Core.normalize t
-                    let nf_t' = Dhall.Core.normalize t'
-                    Left (TypeError ctx e (InvalidOptionalElement nf_t x nf_t')) )
-        return (App Optional t)
     loop ctx e@(Some a) = do
         _A <- loop ctx a
         s <- fmap Dhall.Core.normalize (loop ctx _A)
@@ -500,27 +489,29 @@ typeWithA tpa = loop
                 Dhall.Map.unorderedTraverseWithKey_ process rest
                 return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
-        case Dhall.Map.toList kvs of
-            []         -> return (Record mempty)
-            (k0, v0):_ -> do
+        case Dhall.Map.uncons kvs of
+            Nothing             -> return (Record mempty)
+            Just (k0, v0, kvs') -> do
                 t0 <- loop ctx v0
                 s0 <- fmap Dhall.Core.normalize (loop ctx t0)
                 c <- case s0 of
                     Const c -> pure c
-                    _       -> Left (TypeError ctx e (InvalidField k0 v0))
+                    _       -> Left (TypeError ctx e (InvalidFieldType k0 v0))
+
                 let process k v = do
                         t <- loop ctx v
                         s <- fmap Dhall.Core.normalize (loop ctx t)
                         case s of
-                            Const c' ->
-                                if c == c'
-                                then return ()
-                                else Left (TypeError ctx e (FieldMismatch k v c k0 v0 c'))
-                            _ -> Left (TypeError ctx e (InvalidField k t))
+                            Const c'
+                                | c == c'   -> return ()
+                                | otherwise -> Left (TypeError ctx e (FieldMismatch k v c k0 v0 c'))
+                            _ -> Left (TypeError ctx e (InvalidFieldType k t))
 
                         return t
-                kts <- Dhall.Map.traverseWithKey process kvs
-                return (Record kts)
+
+                kts <- Dhall.Map.unorderedTraverseWithKey process kvs'
+
+                return (Record (Dhall.Map.insert k0 t0 kts))
     loop ctx e@(Union     kts   ) = do
         let nonEmpty k mt = First (fmap (\t -> (k, t)) mt)
 
@@ -555,7 +546,7 @@ typeWithA tpa = loop
                             then return ()
                             else Left (TypeError ctx e (AlternativeAnnotationMismatch k t c k0 t0 c0))
 
-                Dhall.Map.unorderedTraverseWithKey_ process kts
+                Dhall.Map.unorderedTraverseWithKey_ process (Dhall.Map.delete k0 kts)
 
                 return (Const c0)
     loop ctx e@(UnionLit k v kts) = do
@@ -783,7 +774,7 @@ typeWithA tpa = loop
                 case Dhall.Map.lookup x kts of
                     Just t' -> return t'
                     Nothing -> Left (TypeError ctx e (MissingField x t))
-            Const Type -> do
+            _ -> do
                 case Dhall.Core.normalize r of
                   Union kts ->
                     case Dhall.Map.lookup x kts of
@@ -791,10 +782,9 @@ typeWithA tpa = loop
                         Just Nothing   -> return (Union kts)
                         Nothing -> Left (TypeError ctx e (MissingField x t))
                   r' -> Left (TypeError ctx e (CantAccess text r' t))
-            _ -> do
-                Left (TypeError ctx e (CantAccess text r t))
-    loop ctx e@(Project r xs    ) = do
+    loop ctx e@(Project r (Left xs)) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
+
         case t of
             Record kts -> do
                 _ <- loop ctx t
@@ -803,10 +793,49 @@ typeWithA tpa = loop
                         case Dhall.Map.lookup k kts of
                             Just t' -> return (k, t')
                             Nothing -> Left (TypeError ctx e (MissingField k t))
+
                 let adapt = Record . Dhall.Map.fromList
+
                 fmap adapt (traverse process (Dhall.Set.toList xs))
             _ -> do
-                let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
+                let text =
+                        Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
+
+                Left (TypeError ctx e (CantProject text r t))
+    loop ctx e@(Project r (Right t)) = do
+        _R <- fmap Dhall.Core.normalize (loop ctx r)
+
+        case _R of
+            Record ktsR -> do
+                _ <- loop ctx t
+
+                case Dhall.Core.normalize t of
+                    Record ktsT -> do
+                        let actualSubset =
+                                Record (Dhall.Map.intersection ktsR ktsT)
+
+                        let expectedSubset = t
+
+                        let process k tT = do
+                                case Dhall.Map.lookup k ktsR of
+                                    Nothing -> do
+                                        Left (TypeError ctx e (MissingField k _R))
+                                    Just tR -> do
+                                        if Dhall.Core.judgmentallyEqual tT tR
+                                            then do
+                                                return ()
+                                            else do
+                                                Left (TypeError ctx e (ProjectionTypeMismatch k tT tR expectedSubset actualSubset))
+
+                        Dhall.Map.unorderedTraverseWithKey_ process ktsT
+
+                        return (Record ktsT)
+                    _ -> do
+                        Left (TypeError ctx e (CantProjectByExpression t))
+
+            _ -> do
+                let text = Dhall.Core.pretty t
+
                 Left (TypeError ctx e (CantProject text r t))
     loop ctx   (Note s e'       ) = case loop ctx e' of
         Left (TypeError ctx' (Note s' e'') m) -> Left (TypeError ctx' (Note s' e'') m)
@@ -865,7 +894,6 @@ data TypeMessage s a
     | InvalidPredicate (Expr s a) (Expr s a)
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
-    | InvalidField Text (Expr s a)
     | InvalidFieldType Text (Expr s a)
     | FieldAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | FieldMismatch Text (Expr s a) Const Text (Expr s a) Const
@@ -888,10 +916,11 @@ data TypeMessage s a
     | InvalidHandlerOutputType Text (Expr s a) (Expr s a)
     | MissingMergeType
     | HandlerNotAFunction Text (Expr s a)
-    | ConstructorsRequiresAUnionType (Expr s a) (Expr s a)
     | CantAccess Text (Expr s a) (Expr s a)
     | CantProject Text (Expr s a) (Expr s a)
+    | CantProjectByExpression (Expr s a)
     | MissingField Text (Expr s a)
+    | ProjectionTypeMismatch Text (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
     | CantOr (Expr s a) (Expr s a)
     | CantEQ (Expr s a) (Expr s a)
@@ -930,9 +959,6 @@ _NOT = "\ESC[1mnot\ESC[0m"
 
 insert :: Pretty a => a -> Doc Ann
 insert = Dhall.Util.insert
-
-prettyDiff :: (Eq a, Pretty a, ToTerm a) => Expr s a -> Expr s a -> Doc Ann
-prettyDiff exprL exprR = Dhall.Diff.diffNormalized exprL exprR
 
 prettyTypeMessage
     :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> ErrorMessages
@@ -1341,7 +1367,7 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
     short = "Wrong type of function argument\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr3
+        <>  Dhall.Diff.diffNormalized expr1 expr3
 
     long =
         "Explanation: Every function declares what type or kind of argument to accept    \n\
@@ -1475,7 +1501,7 @@ prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
     short = "Expression doesn't match annotation\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr2
+        <>  Dhall.Diff.diffNormalized expr1 expr2
     long =
         "Explanation: You can annotate an expression with its type or kind using the     \n\
         \❰:❱ symbol, like this:                                                          \n\
@@ -1758,7 +1784,7 @@ prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
   where
     short = "❰if❱ branches must have matching types\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr3
+        <>  Dhall.Diff.diffNormalized expr1 expr3
 
     long =
         "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
@@ -1910,7 +1936,7 @@ prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
   where
     short = "List elements should all have the same type\n"
         <>  "\n"
-        <>  prettyDiff expr0 expr2
+        <>  Dhall.Diff.diffNormalized expr0 expr2
 
     long =
         "Explanation: Every element in a list must have the same type                    \n\
@@ -1948,7 +1974,7 @@ prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
   where
     short = "List element has the wrong type\n"
         <>  "\n"
-        <>  prettyDiff expr0 expr2
+        <>  Dhall.Diff.diffNormalized expr0 expr2
 
     long =
         "Explanation: Every element in the list must have a type matching the type       \n\
@@ -2038,7 +2064,7 @@ prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..
   where
     short = "❰Optional❱ element has the wrong type\n"
         <>  "\n"
-        <>  prettyDiff expr0 expr2
+        <>  Dhall.Diff.diffNormalized expr0 expr2
 
     long =
         "Explanation: An ❰Optional❱ element must have a type matching the type annotation\n\
@@ -2276,43 +2302,6 @@ prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
         level Kind = "type"
         level Sort = "kind"
 
-prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
-  where
-    short = "Invalid field"
-
-    long =
-        "Explanation: Every record literal is a set of fields assigned to values, like   \n\
-        \this:                                                                           \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────────────┐                                  \n\
-        \    │ { foo = 100, bar = True, baz = \"ABC\" } │                                \n\
-        \    └────────────────────────────────────────┘                                  \n\
-        \                                                                                \n\
-        \However, fields can only be terms and or ❰Type❱s and not ❰Kind❱s                \n\
-        \                                                                                \n\
-        \For example, the following record literal is " <> _NOT <> " valid:              \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────┐                                                          \n\
-        \    │ { foo = Type } │                                                          \n\
-        \    └────────────────┘                                                          \n\
-        \              ⇧                                                                 \n\
-        \              ❰Type❱ is a ❰Kind❱, which is not allowed                          \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a record literal with a field named:                               \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... whose value is:                                                             \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is not a term or ❰Type❱                                               \n"
-      where
-        txt0 = insert k
-        txt1 = insert expr0
-
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
     short = "Invalid alternative type"
@@ -2478,7 +2467,7 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
   where
     short = "You can only append ❰List❱s with matching element types\n"
         <>  "\n"
-        <>  prettyDiff expr0 expr1
+        <>  Dhall.Diff.diffNormalized expr0 expr1
 
     long =
         "Explanation: You can append two ❰List❱s using the ❰#❱ operator, like this:      \n\
@@ -3032,7 +3021,7 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
   where
     short = "Wrong handler input type\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr2
+        <>  Dhall.Diff.diffNormalized expr1 expr2
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -3094,7 +3083,7 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
   where
     short = "Wrong handler output type\n"
         <>  "\n"
-        <>  prettyDiff expr1 expr2
+        <>  Dhall.Diff.diffNormalized expr1 expr2
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -3158,7 +3147,7 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
   where
     short = "Handlers should have the same output type\n"
         <>  "\n"
-        <>  prettyDiff expr0 expr1
+        <>  Dhall.Diff.diffNormalized expr0 expr1
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -3250,58 +3239,6 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
       where
         txt0 = insert k
         txt1 = insert expr0
-
-prettyTypeMessage (ConstructorsRequiresAUnionType expr0 expr1) = ErrorMessages {..}
-  where
-    short = "❰constructors❱ requires a union type"
-
-    long =
-        "Explanation: You can only use the ❰constructors❱ keyword on an argument that is \n\
-        \a union type literal, like this:                                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────────────────┐                           \n\
-        \    │ constructors < Left : Natural, Right : Bool > │                           \n\
-        \    └───────────────────────────────────────────────┘                           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you cannot use the ❰constructors❱ keyword on any other type of argument.\n\
-        \For example, you cannot use a variable argument:                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────┐                                            \n\
-        \    │ λ(t : Type) → constructors t │  Invalid: ❰t❱ might not be a union type    \n\
-        \    └──────────────────────────────┘                                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────────────────────┐                         \n\
-        \    │ let t : Type = < Left : Natural, Right : Bool > │  Invalid: Type-checking \n\
-        \    │ in  constructors t                              │  precedes normalization \n\
-        \    └─────────────────────────────────────────────────┘                         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, you can import the union type argument:                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────┐                                          \n\
-        \    │ constructors ./unionType.dhall │ Valid: Import resolution precedes        \n\
-        \    └────────────────────────────────┘ type-checking                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \────────────────────────────────────────────────────────────────────────────────\n\
-        \                                                                                \n\
-        \You tried to supply the following argument:                                     \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... which normalized to:                                                        \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is not a union type literal                                           \n"
-      where
-        txt0 = insert expr0
-        txt1 = insert expr1
 
 prettyTypeMessage (CantAccess lazyText0 expr0 expr1) = ErrorMessages {..}
   where
@@ -3406,7 +3343,7 @@ prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
-        \You tried to access the fields:                                               \n\
+        \You tried to access the fields:                                                 \n\
         \                                                                                \n\
         \" <> txt0 <> "\n\
         \                                                                                \n\
@@ -3421,6 +3358,65 @@ prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
         txt0 = insert lazyText0
         txt1 = insert expr0
         txt2 = insert expr1
+
+prettyTypeMessage (CantProjectByExpression expr) = ErrorMessages {..}
+  where
+    short = "Selector is not a record type"
+
+    long =
+        "Explanation: You can project by an expression if that expression is a record    \n\
+        \type:                                                                           \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ { foo = True }.({ foo : Bool }) │  This is valid ...                      \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────┐                                \n\
+        \    │ λ(r : { foo : Bool }) → r.{ foo : Bool } │  ... and so is this            \n\
+        \    └──────────────────────────────────────────┘                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot project by any other type of expression:                     \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ { foo = True }.(True) │                                                   \n\
+        \    └───────────────────────┘                                                   \n\
+        \                      ⇧                                                         \n\
+        \                      Invalid: Not a record type                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You accidentally try to project by a record value instead of a record type,   \n\
+        \  like this:                                                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ let T = { foo : Bool }          │                                         \n\
+        \    │                                 │                                         \n\
+        \    │ let x = { foo = True , bar = 1} │                                         \n\
+        \    │                                 │                                         \n\
+        \    │ let y = { foo = False, bar = 2} │                                         \n\
+        \    │                                 │                                         \n\
+        \    │ in  x.(y)                       │                                         \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \             ⇧                                                                  \n\
+        \             The user might have meant ❰T❱ here                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to project out the following type:                                    \n\
+        \                                                                                \n\
+        \" <> txt <> "\n\
+        \                                                                                \n\
+        \... which is not a record type                                                  \n"
+      where
+        txt = insert expr
 
 prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
   where
@@ -3444,11 +3440,13 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \For example, the following expression is " <> _NOT <> " valid:                  \n\
         \                                                                                \n\
+        \                                                                                \n\
         \    ┌─────────────────────────────────┐                                         \n\
         \    │ { foo = True, bar = \"ABC\" }.qux │                                       \n\
         \    └─────────────────────────────────┘                                         \n\
         \                                  ⇧                                             \n\
         \                                  Invalid: the record has no ❰qux❱ field        \n\
+        \                                                                                \n\
         \                                                                                \n\
         \You tried to access a field named:                                              \n\
         \                                                                                \n\
@@ -3461,6 +3459,53 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
       where
         txt0 = insert k
         txt1 = insert expr0
+
+prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1 expr2 expr3) = ErrorMessages {..}
+  where
+    short = "Projection type mismatch\n"
+        <>  "\n"
+        <>  Dhall.Diff.diffNormalized expr2 expr3
+
+    long =
+        "Explanation: You can project a subset of fields from a record by specifying the \n\
+        \desired type of the final record, like this:                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────┐                             \n\
+        \    │ { foo = 1, bar = True }.({ foo : Natural }) │  This is valid              \n\
+        \    └─────────────────────────────────────────────┘                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the expected type for each desired field must match the actual type of  \n\
+        \the corresponding field in the original record.                                 \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \              Invalid: The ❰foo❱ field contains ❰1❱, which has type ❰Natural❱...\n\
+        \              ⇩                                                                 \n\
+        \    ┌──────────────────────────────────────────┐                                \n\
+        \    │ { foo = 1, bar = True }.({ foo : Text }) │                                \n\
+        \    └──────────────────────────────────────────┘                                \n\
+        \                                       ⇧                                        \n\
+        \                                       ... but we requested that the ❰foo❱ field\n\
+        \                                       must contain a value of type ❰Text❱      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You tried to project out a field named:                                         \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... that should have type:                                                      \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... but that field instead had a value of type:                                 \n\
+        \                                                                                \n\
+        \" <> txt2 <> "\n"
+      where
+        txt0 = insert k
+        txt1 = insert expr0
+        txt2 = insert expr1
 
 prettyTypeMessage (CantAnd expr0 expr1) =
         buildBooleanOperator "&&" expr0 expr1

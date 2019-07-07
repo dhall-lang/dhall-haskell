@@ -61,6 +61,7 @@ in
 
           # This is the only `dhall` build that runs the test suite
           coverage.dhall
+          coverage.dhall-json
 
           (shared.trivial src.rev)
         ];

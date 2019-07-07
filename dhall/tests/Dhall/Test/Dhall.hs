@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -45,7 +46,7 @@ wrongDhallType = Dhall.Type { .. }
               , ( "foo", Dhall.Core.Text )
               ]
             )
-        extract _ = Nothing
+        extract expr = Dhall.typeError expected expr
 
 shouldShowDetailedTypeError :: TestTree
 shouldShowDetailedTypeError = testCase "detailed TypeError" $ do

@@ -39,12 +39,19 @@ module Dhall
     , detailed
 
     -- * Types
-    , Type(..)
+    , Type (..)
     , RecordType(..)
     , UnionType(..)
     , InputType(..)
     , Interpret(..)
     , InvalidType(..)
+    , ExtractErrors(..)
+    , Extractor
+    , MonadicExtractor
+    , typeError
+    , extractError
+    , toMonadic
+    , fromMonadic
     , auto
     , genericAuto
     , InterpretOptions(..)
@@ -96,15 +103,18 @@ module Dhall
     , Generic
     ) where
 
-import Control.Applicative (empty, liftA2, (<|>), Alternative)
+import Control.Applicative (empty, liftA2, Alternative)
 import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
 import Control.Monad (guard)
 import Data.Coerce (coerce)
+import Data.Either.Validation (Validation(..), ealt, eitherToValidation, validationToEither)
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
+import Data.Semigroup (Semigroup)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
@@ -128,6 +138,8 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
+import qualified Data.Maybe
+import qualified Data.List.NonEmpty
 import qualified Data.Semigroup
 import qualified Data.Scientific
 import qualified Data.Sequence
@@ -150,15 +162,70 @@ import qualified Dhall.Util
 -- >>> :set -XOverloadedStrings
 -- >>> :set -XRecordWildCards
 
-{-| Every `Type` must obey the contract that if an expression's type matches the
-    the `expected` type then the `extract` function must succeed.  If not, then
-    this exception is thrown
+type Extractor s a = Validation (ExtractErrors s a)
+type MonadicExtractor s a = Either (ExtractErrors s a)
 
-    This exception indicates that an invalid `Type` was provided to the `input`
+
+typeError :: Expr s a -> Expr s a -> Extractor s a b
+typeError expected actual = Failure . ExtractErrors . pure . TypeMismatch $ InvalidType expected actual
+
+extractError :: Text -> Extractor s a b
+extractError = Failure . ExtractErrors . pure . ExtractError
+
+-- | Switches from an @Applicative@ extraction result, able to accumulate errors,
+-- to a @Monad@ extraction result, able to chain sequential operations
+toMonadic :: Extractor s a b -> MonadicExtractor s a b
+toMonadic = validationToEither
+
+-- | Switches from a @Monad@ extraction result, able to chain sequential errors,
+-- to an @Applicative@ extraction result, able to accumulate errors
+fromMonadic :: MonadicExtractor s a b -> Extractor s a b
+fromMonadic = eitherToValidation
+
+newtype ExtractErrors s a = ExtractErrors
+   { getErrors :: NonEmpty (ExtractError s a)
+   } deriving Semigroup
+
+instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractErrors s a) where
+    show (ExtractErrors (e :| [])) = show e
+    show (ExtractErrors es) = prefix <> (unlines . Data.List.NonEmpty.toList . fmap show $ es)
+      where
+        prefix =
+            "Multiple errors were encountered during extraction: \n\
+            \                                                    \n"
+
+instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractErrors s a)
+
+{-| Extraction of a value can fail for two reasons, either a type mismatch (which should not happen,
+    as expressions are type-checked against the expected type before being passed to @extract@), or
+    a term-level error, described with a freeform text value.
+-}
+data ExtractError s a =
+    TypeMismatch (InvalidType s a)
+  | ExtractError Text
+
+instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractError s a) where
+  show (TypeMismatch e)  = show e
+  show (ExtractError es) =
+      _ERROR <> ": Failed extraction                                                   \n\
+      \                                                                                \n\
+      \The expression type-checked successfully but the transformation to the target   \n\
+      \type failed with the following error:                                           \n\
+      \                                                                                \n\
+      \" <> Data.Text.unpack es <> "\n\
+      \                                                                                \n"
+
+instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractError s a)
+
+{-| Every `Type` must obey the contract that if an expression's type matches the
+    the `expected` type then the `extract` function must not fail with a type error.
+    If not, then this value is returned.
+
+    This value indicates that an invalid `Type` was provided to the `input`
     function
 -}
 data InvalidType s a = InvalidType
-  { invalidTypeExpected :: Expr s a
+  { invalidTypeExpected   :: Expr s a
   , invalidTypeExpression :: Expr s a
   }
   deriving (Typeable)
@@ -184,9 +251,6 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (InvalidType s a) 
         where
           txt0 = Dhall.Util.insert invalidTypeExpected
           txt1 = Dhall.Util.insert invalidTypeExpression
-
-
-instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (InvalidType s a)
 
 -- | @since 1.16
 data InputSettings = InputSettings
@@ -362,9 +426,8 @@ inputWithSettings settings (Type {..}) txt = do
     let normExpr = Dhall.Core.normalizeWith (view normalizer settings) expr'
 
     case extract normExpr  of
-        Just x  -> return x
-        Nothing -> Control.Exception.throwIO
-                     (InvalidType expected expr')
+        Success x  -> return x
+        Failure e -> Control.Exception.throwIO e
 
 {-| Type-check and evaluate a Dhall program that is read from the
     file-system.
@@ -465,8 +528,8 @@ rawInput
     -- ^ The decoded value in Haskell
 rawInput (Type {..}) expr = do
     case extract (Dhall.Core.normalize expr) of
-        Just x  -> pure x
-        Nothing -> empty
+        Success x  -> pure x
+        Failure _e -> empty
 
 {-| Use this to provide more detailed error messages
 
@@ -601,7 +664,7 @@ detailed =
 > input :: Type a -> Text -> IO a
 -}
 data Type a = Type
-    { extract  :: Expr Src X -> Maybe a
+    { extract  :: Expr Src X -> Extractor Src X a
     -- ^ Extracts Haskell value from the Dhall expression
     , expected :: Expr Src X
     -- ^ Dhall type of the Haskell value
@@ -617,7 +680,7 @@ bool :: Type Bool
 bool = Type {..}
   where
     extract (BoolLit b) = pure b
-    extract  _          = Nothing
+    extract expr        = typeError expected expr
 
     expected = Bool
 
@@ -630,7 +693,7 @@ natural :: Type Natural
 natural = Type {..}
   where
     extract (NaturalLit n) = pure n
-    extract  _             = empty
+    extract  expr             = typeError Natural expr
 
     expected = Natural
 
@@ -643,7 +706,7 @@ integer :: Type Integer
 integer = Type {..}
   where
     extract (IntegerLit n) = pure n
-    extract  _             = empty
+    extract  expr          = typeError Integer expr
 
     expected = Integer
 
@@ -664,7 +727,7 @@ double :: Type Double
 double = Type {..}
   where
     extract (DoubleLit n) = pure n
-    extract  _            = empty
+    extract  expr            = typeError Double expr
 
     expected = Double
 
@@ -677,7 +740,7 @@ lazyText :: Type Data.Text.Lazy.Text
 lazyText = Type {..}
   where
     extract (TextLit (Chunks [] t)) = pure (Data.Text.Lazy.fromStrict t)
-    extract  _                      = empty
+    extract  expr = typeError Text expr
 
     expected = Text
 
@@ -698,8 +761,8 @@ maybe :: Type a -> Type (Maybe a)
 maybe (Type extractIn expectedIn) = Type extractOut expectedOut
   where
     extractOut (Some e    ) = fmap Just (extractIn e)
-    extractOut (App None _) = return Nothing
-    extractOut _            = empty
+    extractOut (App None _) = pure Nothing
+    extractOut expr         = typeError expectedOut expr
 
     expectedOut = App Optional expectedIn
 
@@ -712,7 +775,7 @@ sequence :: Type a -> Type (Seq a)
 sequence (Type extractIn expectedIn) = Type extractOut expectedOut
   where
     extractOut (ListLit _ es) = traverse extractIn es
-    extractOut  _             = Nothing
+    extractOut expr           = typeError expectedOut expr
 
     expectedOut = App List expectedIn
 
@@ -741,8 +804,8 @@ unit :: Type ()
 unit = Type extractOut expectedOut
   where
     extractOut (RecordLit fields)
-        | Data.Foldable.null fields = return ()
-    extractOut _ = Nothing
+        | Data.Foldable.null fields = pure ()
+    extractOut expr = typeError (Record mempty) expr
 
     expectedOut = Record mempty
 
@@ -763,10 +826,10 @@ string = Data.Text.Lazy.unpack <$> lazyText
 pair :: Type a -> Type b -> Type (a, b)
 pair l r = Type extractOut expectedOut
   where
-    extractOut (RecordLit fields) =
-      (,) <$> ( Dhall.Map.lookup "_1" fields >>= extract l )
-          <*> ( Dhall.Map.lookup "_2" fields >>= extract r )
-    extractOut _ = Nothing
+    extractOut expr@(RecordLit fields) =
+      (,) <$> ( Data.Maybe.maybe (typeError expectedOut expr) (extract l) $ Dhall.Map.lookup "_1" fields)
+          <*> ( Data.Maybe.maybe (typeError expectedOut expr) (extract r) $ Dhall.Map.lookup "_2" fields)
+    extractOut expr = typeError expectedOut expr
 
     expectedOut =
         Record
@@ -833,9 +896,10 @@ instance (Inject a, Interpret b) => Interpret (a -> b) where
       where
         normalizer_ = Just (inputNormalizer opts)
 
-        extractOut e = Just (\i -> case extractIn (Dhall.Core.normalizeWith normalizer_ (App e (embed i))) of
-            Just o  -> o
-            Nothing -> error "Interpret: You cannot decode a function if it does not have the correct type" )
+        -- ToDo
+        extractOut e = pure (\i -> case extractIn (Dhall.Core.normalizeWith normalizer_ (App e (embed i))) of
+            Success o  -> o
+            Failure _e -> error "Interpret: You cannot decode a function if it does not have the correct type" )
 
         expectedOut = Pi "_" declared expectedIn
 
@@ -902,7 +966,7 @@ instance GenericInterpret f => GenericInterpret (M1 D d f) where
 instance GenericInterpret V1 where
     genericAutoWith _ = pure Type {..}
       where
-        extract _ = Nothing
+        extract expr = typeError expected expr
 
         expected = Union mempty
 
@@ -973,11 +1037,13 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
         nameR = constructorModifier (Data.Text.pack (conName nR))
 
         extract e0 = do
-          (name, e1, _) <- extractUnionConstructor e0
-          if
-            | name == nameL -> fmap (L1 . M1) (extractL e1)
-            | name == nameR -> fmap (R1 . M1) (extractR e1)
-            | otherwise     -> Nothing
+          case extractUnionConstructor e0 of
+            Just (name, e1, _) ->
+              if
+                | name == nameL -> fmap (L1 . M1) (extractL e1)
+                | name == nameR -> fmap (R1 . M1) (extractR e1)
+                | otherwise     -> typeError expected e0
+            _ -> typeError expected e0
 
         expected =
             Union
@@ -998,11 +1064,12 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
 
         name = constructorModifier (Data.Text.pack (conName n))
 
-        extract u = do
-          (name', e, _) <- extractUnionConstructor u
-          if
-            | name == name' -> fmap (R1 . M1) (extractR e)
-            | otherwise     -> fmap  L1       (extractL u)
+        extract u = case extractUnionConstructor u of
+          Just (name', e, _) ->
+            if
+              | name == name' -> fmap (R1 . M1) (extractR e)
+              | otherwise     -> fmap  L1       (extractL u)
+          Nothing -> typeError expected u
 
         expected =
             Union (Dhall.Map.insert name (notEmptyRecord expectedR) ktsL)
@@ -1020,11 +1087,12 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
 
         name = constructorModifier (Data.Text.pack (conName n))
 
-        extract u = do
-          (name', e, _) <- extractUnionConstructor u
-          if
-            | name == name' -> fmap (L1 . M1) (extractL e)
-            | otherwise     -> fmap  R1       (extractR u)
+        extract u = case extractUnionConstructor u of
+          Just (name', e, _) ->
+            if
+              | name == name' -> fmap (L1 . M1) (extractL e)
+              | otherwise     -> fmap  R1       (extractR u)
+          _ -> typeError expected u
 
         expected =
             Union (Dhall.Map.insert name (notEmptyRecord expectedL) ktsR)
@@ -1037,7 +1105,7 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
 instance (GenericInterpret (f :+: g), GenericInterpret (h :+: i)) => GenericInterpret ((f :+: g) :+: (h :+: i)) where
     genericAutoWith options = pure (Type {..})
       where
-        extract e = fmap L1 (extractL e) <|> fmap R1 (extractR e)
+        extract e = fmap L1 (extractL e) `ealt` fmap R1 (extractR e)
 
         expected = Union (Dhall.Map.union ktsL ktsR)
 
@@ -1055,7 +1123,7 @@ instance GenericInterpret f => GenericInterpret (M1 C c f) where
 instance GenericInterpret U1 where
     genericAutoWith _ = pure (Type {..})
       where
-        extract _ = Just U1
+        extract _ = pure U1
 
         expected = Record (Dhall.Map.fromList [])
 
@@ -1082,15 +1150,17 @@ getSelName n = case selName n of
 instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
     genericAutoWith opts@(InterpretOptions {..}) = do
         name <- getSelName n
-        let extract (RecordLit m) = do
-                    let name' = fieldModifier (Data.Text.pack name)
-                    e <- Dhall.Map.lookup name' m
-                    fmap (M1 . K1) (extract' e)
-            extract _            = Nothing
         let expected =
                 Record (Dhall.Map.fromList [(key, expected')])
               where
                 key = fieldModifier (Data.Text.pack name)
+        let extract expr@(RecordLit m) =
+                    let name' = fieldModifier (Data.Text.pack name)
+                        extract'' e = fmap (M1 . K1) (extract' e)
+                        lookupRes = Dhall.Map.lookup name' m
+                        typeError' = typeError expected expr
+                    in Data.Maybe.maybe typeError' extract'' lookupRes
+            extract expr            = typeError expected expr
         pure (Type {..})
       where
         n :: M1 i s f a
@@ -1240,10 +1310,8 @@ instance Inject () where
 instance Inject a => Inject (Maybe a) where
     injectWith options = InputType embedOut declaredOut
       where
-        embedOut (Just x) =
-            OptionalLit declaredIn (pure (embedIn x))
-        embedOut Nothing =
-            OptionalLit declaredIn  empty
+        embedOut (Just x ) = Some (embedIn x)
+        embedOut  Nothing  = App None declaredIn
 
         InputType embedIn declaredIn = injectWith options
 
@@ -1494,7 +1562,7 @@ newtype RecordType a =
         )
         ( Data.Functor.Compose.Compose
             ( (->) ( Expr Src X ) )
-            Maybe
+            (Extractor Src X)
         )
         a
     )
@@ -1514,15 +1582,12 @@ record ( RecordType ( Data.Functor.Product.Pair ( Control.Applicative.Const fiel
 
 -- | Parse a single field of a record.
 field :: Text -> Type a -> RecordType a
-field key valueType =
+field key valueType@(Type extract expected) =
   let
-    extractBody expr = do
-      RecordLit fields <-
-        return expr
-
-      Dhall.Map.lookup key fields
-        >>= extract valueType
-
+    extractBody expr@(RecordLit fields) = case Dhall.Map.lookup key fields of
+      Just v -> extract v
+      _ -> typeError expected expr
+    extractBody expr = typeError expected expr
   in
     RecordType
       ( Data.Functor.Product.Pair
@@ -1589,15 +1654,16 @@ union (UnionType (Data.Functor.Compose.Compose mp)) = Type
   where
     expect = (notEmptyRecord . Dhall.expected) <$> mp
 
-    extractF e0 = do
-      (fld, e1, rest) <- extractUnionConstructor e0
+    extractF e0 =
+      let result = do
+            (fld, e1, rest) <- extractUnionConstructor e0
 
-      t <- Dhall.Map.lookup fld mp
+            t <- Dhall.Map.lookup fld mp
 
-      guard $ Dhall.Core.Union rest `Dhall.Core.judgmentallyEqual`
-                Dhall.Core.Union (Dhall.Map.delete fld expect)
-
-      extract t e1
+            guard $ Dhall.Core.Union rest `Dhall.Core.judgmentallyEqual`
+                      Dhall.Core.Union (Dhall.Map.delete fld expect)
+            pure (t, e1)
+      in Data.Maybe.maybe (typeError (Union expect) e0) (uncurry extract) result
 
 -- | Parse a single constructor of a union
 constructor :: Text -> Type a -> UnionType a

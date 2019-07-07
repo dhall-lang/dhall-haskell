@@ -4,6 +4,7 @@ import System.FilePath ((</>))
 import Test.Tasty      (TestTree)
 
 import qualified Dhall.Test.Dhall
+import qualified Dhall.Test.Diff
 import qualified Dhall.Test.Format
 import qualified Dhall.Test.Import
 import qualified Dhall.Test.Lint
@@ -13,6 +14,7 @@ import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
 import qualified Dhall.Test.Tutorial
 import qualified Dhall.Test.TypeCheck
+import qualified Dhall.Test.TypeInference
 import qualified GHC.IO.Encoding
 import qualified System.Directory
 import qualified System.Environment
@@ -29,9 +31,13 @@ getAllTests = do
 
     typecheckingTests <- Dhall.Test.TypeCheck.getTests
 
+    typeinferenceTests <- Dhall.Test.TypeInference.getTests
+
     importingTests <- Dhall.Test.Import.getTests
 
     lintTests <- Dhall.Test.Lint.getTests
+
+    diffTests <- Dhall.Test.Diff.getTests
 
     let testTree =
             Test.Tasty.testGroup "Dhall Tests"
@@ -39,8 +45,10 @@ getAllTests = do
                 , parsingTests
                 , importingTests
                 , typecheckingTests
+                , typeinferenceTests
                 , formattingTests
                 , lintTests
+                , diffTests
                 , Dhall.Test.Regression.tests
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests

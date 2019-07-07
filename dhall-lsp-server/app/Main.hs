@@ -1,82 +1,64 @@
+{-| This module contains the top-level entrypoint and options parsing for the
+    @dhall-lsp-server@ executable
+-}
 
-module Main (main) where
+module Main
+  ( main
+  )
+where
 
-
-
-
-import           Data.Default
-import qualified Data.HashMap.Strict                   as H
-import qualified Data.Text                             as T
-import qualified System.Exit
-import qualified System.Log.Logger                     as L
-
-
-
-import qualified Data.Text.IO
-import qualified System.IO
-import qualified Data.Map as Map
 import Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative
+import Control.Applicative ((<|>))
 
-import qualified System.IO.Unsafe
+import qualified Dhall.LSP.Server
 
-import LSP.Server(run)
-
+-- | Top-level program options
 data Options = Options {
-    command :: Command
-  , logFile :: Maybe String -- file where the server process debug log should be written
+    command :: Mode
+  , logFile :: Maybe FilePath
 }
 
-data Command = CmdVersion | Default
+-- | The mode in which to run @dhall-lsp-server@
+data Mode = Version | LSPServer
 
 parseOptions :: Parser Options
-parseOptions = Options <$> parseMode
-                       <*> Options.Applicative.optional parseLogFile
-    where
-      parseLogFile = Options.Applicative.strOption
-                       (
-                          Options.Applicative.long "log"
-                       <> Options.Applicative.help "If present writes debug output to the specified file")
+parseOptions =
+  Options <$> parseMode <*> Options.Applicative.optional parseLogFile
+  where
+    parseLogFile = Options.Applicative.strOption
+      (Options.Applicative.long "log" <> Options.Applicative.help
+        "If present writes debug output to the specified file"
+      )
 
 
 subcommand :: String -> String -> Parser a -> Parser a
-subcommand name description parser =
-    Options.Applicative.hsubparser
-        (   Options.Applicative.command name parserInfo
-        <>  Options.Applicative.metavar name
-        )
+subcommand name description parser = Options.Applicative.hsubparser
+  (Options.Applicative.command name parserInfo
+  <> Options.Applicative.metavar name
+  )
   where
-    parserInfo =
-        Options.Applicative.info parser
-            (   Options.Applicative.fullDesc
-            <>  Options.Applicative.progDesc description
-            )
+    parserInfo = Options.Applicative.info
+      parser
+      (Options.Applicative.fullDesc <> Options.Applicative.progDesc description)
 
-parseMode :: Parser Command
+parseMode :: Parser Mode
 parseMode =
-        subcommand
-            "version"
-            "Display version"
-            (pure CmdVersion)
-    <|> pure Default
+  subcommand "version" "Display version" (pure Version) <|> pure LSPServer
 
 parserInfoOptions :: ParserInfo Options
-parserInfoOptions =
-    Options.Applicative.info
-        (Options.Applicative.helper <*> parseOptions)
-        (   Options.Applicative.progDesc "Interpreter for the Dhall language"
-        <>  Options.Applicative.fullDesc
-        )
+parserInfoOptions = Options.Applicative.info
+  (Options.Applicative.helper <*> parseOptions)
+  (Options.Applicative.progDesc "LSP server for the Dhall language"
+  <> Options.Applicative.fullDesc
+  )
 
 runCommand :: Options -> IO ()
-runCommand Options{..} = case command of
-  CmdVersion -> putStrLn ("0.0.1.1" :: String)-- TODO: read from build
-  Default    ->
-   run logFile (pure ()) >>= \case
-    0 -> exitSuccess
-    c -> exitWith . System.Exit.ExitFailure $ c
+runCommand Options {..} = case command of
+  Version -> putStrLn ("0.0.1.1" :: String)
+  LSPServer -> Dhall.LSP.Server.run logFile
 
+-- | Entry point for the @dhall-lsp-server@ executable
 main :: IO ()
-main = Options.Applicative.execParser parserInfoOptions >>= runCommand
-
-
+main = do options <- Options.Applicative.execParser parserInfoOptions
+          runCommand options

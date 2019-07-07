@@ -24,6 +24,7 @@ module Dhall.Pretty.Internal (
     , prettyLabels
     , prettyNatural
     , prettyNumber
+    , prettyInt
     , prettyDouble
     , prettyToStrictText
     , prettyToString
@@ -327,6 +328,9 @@ prettyLabels a
 prettyNumber :: Integer -> Doc Ann
 prettyNumber = literal . Pretty.pretty
 
+prettyInt :: Int -> Doc Ann
+prettyInt = literal . Pretty.pretty
+
 prettyNatural :: Natural -> Doc Ann
 prettyNatural = literal . Pretty.pretty
 
@@ -340,10 +344,11 @@ prettyConst Sort = builtin "Sort"
 
 prettyVar :: Var -> Doc Ann
 prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
-prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyNumber n))
+prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyInt n))
 
 prettyCharacterSet :: Pretty a => CharacterSet -> Expr s a -> Doc Ann
-prettyCharacterSet characterSet = prettyExpression
+prettyCharacterSet characterSet expression =
+    Pretty.group (prettyExpression expression)
   where
     prettyExpression a0@(Lam _ _ _) =
         arrows characterSet (fmap duplicate (docs a0))
@@ -538,10 +543,6 @@ prettyCharacterSet characterSet = prettyExpression
             list (map prettyExpression (Data.Foldable.toList b))
         <>  " : "
         <>  prettyApplicationExpression (App List a)
-    prettyAnnotatedExpression (OptionalLit a b) =
-            list (map prettyExpression (Data.Foldable.toList b))
-        <>  " : "
-        <>  prettyApplicationExpression (App Optional a)
     prettyAnnotatedExpression (Note _ a) =
         prettyAnnotatedExpression a
     prettyAnnotatedExpression a0 =
@@ -732,8 +733,14 @@ prettyCharacterSet characterSet = prettyExpression
     prettySelectorExpression :: Pretty a => Expr s a -> Doc Ann
     prettySelectorExpression (Field a b) =
         prettySelectorExpression a <> dot <> prettyAnyLabel b
-    prettySelectorExpression (Project a b) =
+    prettySelectorExpression (Project a (Left b)) =
         prettySelectorExpression a <> dot <> prettyLabels b
+    prettySelectorExpression (Project a (Right b)) =
+            prettySelectorExpression a
+        <>  dot
+        <>  lparen
+        <>  prettyExpression b
+        <>  rparen
     prettySelectorExpression (Note _ b) =
         prettySelectorExpression b
     prettySelectorExpression a0 =

@@ -9,10 +9,12 @@ import Test.Tasty (TestTree)
 import qualified Control.Exception
 import qualified Data.Aeson
 import qualified Data.ByteString.Lazy
+import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Dhall.Import
 import qualified Dhall.JSON
 import qualified Dhall.Parser
+import qualified Dhall.Yaml
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
@@ -71,23 +73,18 @@ yamlQuotedStrings = Test.Tasty.HUnit.testCase "Yaml: quoted string style" assert
 
         code <- Data.Text.IO.readFile file
 
-        parsedExpression <- case Dhall.Parser.exprFromText file code of
-            Left  exception        -> Control.Exception.throwIO exception
-            Right parsedExpression -> return parsedExpression
+        let options =
+              Dhall.Yaml.defaultOptions { Dhall.Yaml.quoted = True }
 
-        resolvedExpression <- Dhall.Import.load parsedExpression
-
-        jsonValue <- case Dhall.JSON.dhallToJSON resolvedExpression of
-            Left  exception   -> Control.Exception.throwIO exception
-            Right jsonValue -> return jsonValue
-
-        let actualValue = Dhall.JSON.jsonToYaml jsonValue False True
+        actualValue <-
+          Dhall.Yaml.dhallToYaml options (Data.Text.pack file) code
 
         bytes <- Data.ByteString.Lazy.readFile "./tasty/data/quoted.yaml"
+
         let expectedValue = Data.ByteString.Lazy.toStrict bytes
 
         let message =
-                "Conversion to quoted yaml did not generate the expected output"
+              "Conversion to quoted yaml did not generate the expected output"
 
         Test.Tasty.HUnit.assertEqual message expectedValue actualValue
 
@@ -99,19 +96,11 @@ yaml = Test.Tasty.HUnit.testCase "Yaml: normal string style" assertion
 
         code <- Data.Text.IO.readFile file
 
-        parsedExpression <- case Dhall.Parser.exprFromText file code of
-            Left  exception        -> Control.Exception.throwIO exception
-            Right parsedExpression -> return parsedExpression
-
-        resolvedExpression <- Dhall.Import.load parsedExpression
-
-        jsonValue <- case Dhall.JSON.dhallToJSON resolvedExpression of
-            Left  exception   -> Control.Exception.throwIO exception
-            Right jsonValue -> return jsonValue
-
-        let actualValue = Dhall.JSON.jsonToYaml jsonValue False False
+        actualValue <-
+          Dhall.Yaml.dhallToYaml Dhall.Yaml.defaultOptions (Data.Text.pack file) code
 
         bytes <- Data.ByteString.Lazy.readFile "./tasty/data/normal.yaml"
+
         let expectedValue = Data.ByteString.Lazy.toStrict bytes
 
         let message =

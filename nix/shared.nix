@@ -1,6 +1,15 @@
 { compiler ? "ghc843", coverage ? false, system ? builtins.currentSystem }:
 
 let
+  allDhallPackages = [
+    "dhall"
+    "dhall-bash"
+    "dhall-json"
+    "dhall-lsp-server"
+    "dhall-nix"
+    "dhall-text"
+  ];
+
   fetchNixpkgs = import ./fetchNixpkgs.nix;
 
   mass = function: names: haskellPackagesNew: haskellPackagesOld:
@@ -90,23 +99,7 @@ let
         };
     };
 
-    dhall-sdist =
-      let
-        predicate = path: type:
-          let
-            base = baseNameOf path;
-
-          in
-             !( pkgsNew.lib.hasSuffix ".nix" base
-             || base == "dist"
-             || base == "result"
-             || base == ".git"
-             );
-
-        src = builtins.filterSource predicate ../dhall;
-
-      in
-        pkgsNew.callPackage (import ./dhall-sdist.nix src) { };
+    sdist = pkgsNew.callPackage ./sdist.nix { };
 
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
@@ -152,6 +145,9 @@ let
                     ++  pkgsNew.lib.optional (!(compiler == "ghcjs" || compiler == "ghc7103")) "dhall"
                     );
 
+                doBenchmarkExtension =
+                  mass pkgsNew.haskell.lib.doBenchmark allDhallPackages;
+
                 failOnAllWarningsExtension =
                   mass failOnAllWarnings [
                     "dhall"
@@ -172,48 +168,45 @@ let
                       applyCoverage
                         (haskellPackagesNew.callCabal2nix
                           "dhall"
-                          pkgsNew.dhall-sdist
+                          (pkgsNew.sdist ../dhall)
                           { }
                         );
 
                     dhall-bash =
                       haskellPackagesNew.callCabal2nix
                         "dhall-bash"
-                        ../dhall-bash
+                        (pkgsNew.sdist ../dhall-bash)
                         { };
 
                     dhall-json =
                       haskellPackagesNew.callCabal2nix
                         "dhall-json"
-                        ../dhall-json
+                        (pkgsNew.sdist ../dhall-json)
                         { };
 
                     dhall-lsp-server =
                       haskellPackagesNew.callCabal2nix
                         "dhall-lsp-server"
-                        ../dhall-lsp-server
+                        (pkgsNew.sdist ../dhall-lsp-server)
                         { };
 
                     dhall-nix =
                       haskellPackagesNew.callCabal2nix
                         "dhall-nix"
-                        ../dhall-nix
+                        (pkgsNew.sdist ../dhall-nix)
                         { };
 
                     dhall-text =
                       haskellPackagesNew.callCabal2nix
                         "dhall-text"
-                        ../dhall-text
+                        (pkgsNew.sdist ../dhall-text)
                         { };
 
                     dhall-try =
                       pkgsNew.haskell.lib.overrideCabal
                         (haskellPackagesNew.callCabal2nix
                           "dhall-try"
-                          (builtins.filterSource
-                            (path: _: baseNameOf path != "index.html")
-                            ../dhall-try
-                          )
+                          (pkgsNew.sdist ../dhall-try)
                           { }
                         )
                         (old: {
@@ -231,6 +224,7 @@ let
                   [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./.; })
                     extension
                     doCheckExtension
+                    doBenchmarkExtension
                     failOnAllWarningsExtension
                   ];
           }
@@ -592,9 +586,7 @@ let
       '';
     };
 
-  toShell = drv:
-    # Benchmark dependencies aren't added by default
-    (pkgs.haskell.lib.doBenchmark drv).env;
+  toShell = drv: drv.env;
 
   possibly-static = {
     dhall            = makeStaticIfPossible "dhall"           ;
@@ -638,13 +630,13 @@ in
 
     inherit (pkgs.releaseTools) aggregate;
 
-    shell-dhall            = toShell pkgs.haskell.packages."${compiler}".dhall           ;
-    shell-dhall-bash       = toShell pkgs.haskell.packages."${compiler}".dhall-bash      ;
-    shell-dhall-json       = toShell pkgs.haskell.packages."${compiler}".dhall-json      ;
-    shell-dhall-lsp-server = toShell pkgs.haskell.packages."${compiler}".dhall-lsp-server;
-    shell-dhall-nix        = toShell pkgs.haskell.packages."${compiler}".dhall-nix       ;
-    shell-dhall-text       = toShell pkgs.haskell.packages."${compiler}".dhall-text      ;
-    shell-dhall-try        = toShell pkgs.haskell.packages."${compiler}".dhall-try       ;
+    shell-dhall            = pkgs.haskell.packages."${compiler}".dhall.env           ;
+    shell-dhall-bash       = pkgs.haskell.packages."${compiler}".dhall-bash.env      ;
+    shell-dhall-json       = pkgs.haskell.packages."${compiler}".dhall-json.env      ;
+    shell-dhall-lsp-server = pkgs.haskell.packages."${compiler}".dhall-lsp-server.env;
+    shell-dhall-nix        = pkgs.haskell.packages."${compiler}".dhall-nix.env       ;
+    shell-dhall-text       = pkgs.haskell.packages."${compiler}".dhall-text.env      ;
+    shell-dhall-try        = pkgs.haskell.packages."${compiler}".dhall-try.env       ;
 
     image-dhall            = toDockerImage "dhall"           ;
     image-dhall-bash       = toDockerImage "dhall-bash"      ;

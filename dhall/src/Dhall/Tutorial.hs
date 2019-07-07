@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
 {-| Dhall is a programming language specialized for configuration files.  This
-    module contains a tutorial explaning how to author configuration files using
+    module contains a tutorial explaining how to author configuration files using
     this language
 -}
 module Dhall.Tutorial (
@@ -317,7 +317,7 @@ import Dhall
 -- - Bool
 -- + Natural
 -- ...
--- 1: 1 : Bool
+-- 1│ 1 : Bool
 -- ...
 -- (input):1:1
 -- ...
@@ -517,7 +517,7 @@ import Dhall
 -- *** Exception:
 -- ...Error...: An empty list requires a type annotation
 -- ...
--- 1: []
+-- 1│ []
 -- ...
 -- (input):1:1
 --
@@ -531,7 +531,7 @@ import Dhall
 -- - Natural
 -- + Bool
 -- ...
--- 1:     True
+-- 1│     True
 -- ...
 -- (input):1:5
 -- ...
@@ -1532,20 +1532,16 @@ import Dhall
 -- or you changed some of the imports and want to update the hashes you can use the
 -- freeze command to either add or update hashes:
 --
--- > cat foo.dhall
--- ''
--- let replicate =
---       https://raw.githubusercontent.com/dhall-lang/Prelude/c79c2bc3c46f129cc5b6d594ce298a381bcae92c/List/replicate
---
--- in  replicate 5
--- ''
--- > dhall freeze --inplace ./foo.dhall
--- > cat ./foo.dhall
--- ''
--- let replicate =
---       https://raw.githubusercontent.com/dhall-lang/Prelude/c79c2bc3c46f129cc5b6d594ce298a381bcae92c/List/replicate sha256:b0e3ec1797b32c80c0bcb7e8254b08c7e9e35e75e6b410c7ac21477ab90167ad 
--- in  replicate 5
--- ''
+-- > $ cat foo.dhall
+-- > let replicate =
+-- >       https://raw.githubusercontent.com/dhall-lang/Prelude/c79c2bc3c46f129cc5b6d594ce298a381bcae92c/List/replicate
+-- > in  replicate 5
+-- > $
+-- > $ dhall freeze --inplace ./foo.dhall
+-- > $ cat ./foo.dhall
+-- > let replicate =
+-- >       https://raw.githubusercontent.com/dhall-lang/Prelude/c79c2bc3c46f129cc5b6d594ce298a381bcae92c/List/replicate sha256:b0e3ec1797b32c80c0bcb7e8254b08c7e9e35e75e6b410c7ac21477ab90167ad
+-- > in  replicate 5
 --
 -- $rawText
 --

@@ -7,12 +7,11 @@ import Language.Haskell.LSP.Types(
       Diagnostic(..)
     , Range(..)
     , DiagnosticSeverity(..)
-    , DiagnosticSource(..)
-    , DiagnosticRelatedInformation(..)
     , Position(..)
     )
 
-import Backend.Dhall.Diagnostics
+import Data.Foldable (traverse_)
+import Dhall.LSP.Handlers.Diagnostics (compilerDiagnostics)
 
 import qualified Data.Text
 import qualified Data.Text.IO
@@ -97,7 +96,8 @@ getDiagnostics :: FilePath -> IO [Diagnostic]
 getDiagnostics path = do
   text <- Data.Text.IO.readFile path
   compilerDiagnostics path text
-  
+
+successImports :: [String]
 successImports = [ "../dhall/dhall-lang/tests/import/success/alternativeEnvNaturalA.dhall"
                  , "../dhall/dhall-lang/tests/import/success/alternativeEnvSimpleA.dhall"
                  , "../dhall/dhall-lang/tests/import/success/alternativeNaturalA.dhall"
@@ -109,6 +109,10 @@ successImports = [ "../dhall/dhall-lang/tests/import/success/alternativeEnvNatur
                  , "../dhall/dhall-lang/tests/import/success/asTextB.dhall"
                  , "../dhall/dhall-lang/tests/import/success/fieldOrderB.dhall"]  
 
+mkDiagnostics :: Data.Text.Text
+              -> (Int, Int)
+              -> (Int, Int)
+              -> [Diagnostic]
 mkDiagnostics msg (sl, sc) (el, ec) = [
   Diagnostic {
   _range = Range {
