@@ -42,6 +42,7 @@ module Dhall.Map
       -- * Combine
     , union
     , unionWith
+    , outerJoin
     , intersection
     , intersectionWith
     , difference
@@ -468,6 +469,36 @@ unionWith combine (Map mL ksL) (Map mR ksR) = Map m ks
             l <|> Prelude.filter (\k -> Data.Map.notMember k mL) r
         _                        -> Sorted
 {-# INLINABLE unionWith #-}
+
+{-| A generalised 'unionWith'.
+
+>>> outerJoin Left Left (\k a b -> Right (k, a, b)) (fromList [("A",1),("B",2)]) (singleton "A" 3)
+fromList [("A",Right ("A",1,3)),("B",Left 2)]
+
+This function is much inspired by the "Data.Semialign.Semialign" class.
+-}
+outerJoin
+    :: Ord k
+    => (a -> c)
+    -> (b -> c)
+    -> (k -> a -> b -> c)
+    -> Map k a
+    -> Map k b
+    -> Map k c
+outerJoin fa fb fab (Map ma ksA) (Map mb ksB) = Map m ks
+  where
+    m = Data.Map.mergeWithKey
+            (\k a b -> Just (fab k a b))
+            (fmap fa)
+            (fmap fb)
+            ma
+            mb
+
+    ks = case (ksA, ksB) of
+        (Original l, Original r) -> Original $
+            l <|> Prelude.filter (\k -> Data.Map.notMember k ma) r
+        _                        -> Sorted
+{-# INLINABLE outerJoin #-}
 
 {-| Combine two `Map` on their shared keys, keeping the value from the first
     `Map`
