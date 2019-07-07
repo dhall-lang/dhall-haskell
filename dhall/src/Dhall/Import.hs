@@ -661,7 +661,7 @@ exprFromUncachedImport import_@(Import {..}) = do
                       let handler₀ (e :: SomeException) = do
                               {- Try to decode using the preferred @mapKey@ /
                                  @mapValue@ fields and fall back to @header@ /
-                                 @value@ if that fields.  However, if @header@ /
+                                 @value@ if that fails.  However, if @header@ /
                                  @value@ still fails then re-throw the original
                                  exception for @mapKey@ / @mapValue@
                               -}
