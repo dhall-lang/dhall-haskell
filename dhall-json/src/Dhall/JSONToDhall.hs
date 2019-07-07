@@ -391,7 +391,8 @@ dhallFromJSON (Conversion {..}) expressionType =
         (UNone  , _         ) -> Left (ContainsUnion t)
         (UStrict, xs@(_:_:_)) -> Left (UndecidableUnion t v xs)
         (_      , [ ]       ) -> Left (Mismatch t v)
-        (_      , x:_       ) -> Right x
+        (UFirst , x:_       ) -> Right x
+        (UStrict, [x]       ) -> Right x
 
     -- object ~> Record
     loop (D.Record r) v@(A.Object o)
