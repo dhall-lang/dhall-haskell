@@ -78,9 +78,8 @@ newtype WellTyped = WellTyped {fromWellTyped :: Expr Src X}
 -- | A fully normalised expression.
 newtype Normal = Normal {fromNormal :: Expr Src X}
 
--- An import graph, represented by an adjacency list. An element `(a,b)` means
--- that `b` imports `a`.
-type ImportGraph = [(Dhall.Import, Dhall.Import)]
+-- An import graph, represented by list of import dependencies.
+type ImportGraph = [Dhall.Depends]
 
 -- | A cache maps Dhall imports to fully normalised expressions. By reusing
 --   caches we can speeds up diagnostics etc. significantly!
@@ -118,17 +117,17 @@ hashedImportFromFileIdentifier (FileIdentifier importType) hash =
 --   https://github.com/dhall-lang/dhall-lang/blob/master/standard/imports.md.
 --   Transitively invalidates any imports depending on the changed file.
 invalidate :: FileIdentifier -> Cache -> Cache
-invalidate (FileIdentifier fileid) (Cache edgeList cache) =
-  Cache edgeList' $ Map.withoutKeys cache invalidImports
+invalidate (FileIdentifier fileid) (Cache dependencies cache) =
+  Cache dependencies' $ Map.withoutKeys cache invalidImports
   where
-    imports = map fst edgeList ++ map snd edgeList
+    imports = map Dhall.parent dependencies ++ map Dhall.child dependencies
 
     adjacencyLists = foldr
                        -- add reversed edges to adjacency lists
-                       (\(from, to) -> Map.adjust (from :) to)
+                       (\(Dhall.Depends parent child) -> Map.adjust (parent :) child)
                        -- starting from the discrete graph
                        (Map.fromList [ (i,[]) | i <- imports])
-                       edgeList
+                       dependencies
 
     (graph, importFromVertex, vertexFromImport) = Graph.graphFromEdges
       [(node, node, neighbours) | (node, neighbours) <- Map.assocs adjacencyLists]
@@ -144,8 +143,8 @@ invalidate (FileIdentifier fileid) (Cache edgeList cache) =
     invalidImports = Set.fromList $ codeImport : reachableImports codeImport
                                     ++ textImport : reachableImports textImport
 
-    edgeList' = filter (\(from, to) -> Set.notMember from invalidImports
-                                       && Set.notMember to invalidImports) edgeList
+    dependencies' = filter (\(Dhall.Depends parent child) -> Set.notMember parent invalidImports
+                                && Set.notMember child invalidImports) dependencies
 
 -- | A Dhall error. Covers parsing, resolving of imports, typechecking and
 --   normalisation.

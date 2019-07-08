@@ -111,6 +111,7 @@ module Dhall.Import (
     , emptyStatus
     , stack
     , cache
+    , Depends(..)
     , graph
     , manager
     , standardVersion
@@ -766,7 +767,7 @@ loadWith expr₀ = case expr₀ of
                 Just expr -> do
                     zoom graph . State.modify $
                       -- Add the edge `parent -> child` to the import graph
-                      \edges -> (parent, child) : edges
+                      \edges -> Depends parent child : edges
 
                     pure expr
                 Nothing        -> do
@@ -812,7 +813,7 @@ loadWith expr₀ = case expr₀ of
                     zoom graph . State.modify $
                       -- Add the edge `parent -> newImport` to the import graph,
                       -- where `newImport` is `child` with normalized headers.
-                      \edges -> (parent, newImport) : edges
+                      \edges -> Depends parent newImport : edges
 
                     _cacher child expr''
 

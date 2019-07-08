@@ -29,7 +29,7 @@ import Data.Version (showVersion)
 import Dhall.Binary (StandardVersion)
 import Dhall.Core (Expr(..), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
-import Dhall.Import (Imported(..))
+import Dhall.Import (Imported(..), Depends(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
@@ -395,7 +395,7 @@ command (Options {..}) = do
                 State.execStateT (Dhall.Import.loadWith expression) (toStatus file)
 
             let (rootImport :| _) = _stack
-                imports = rootImport : map fst _graph ++ map snd _graph
+                imports = rootImport : map parent _graph ++ map child _graph
                 importIds = Data.Map.fromList (zip imports [Text.Dot.userNodeId i | i <- [0..]])
 
             let dotNode (i, nodeId) =
@@ -406,10 +406,10 @@ command (Options {..}) = do
                         , ("style", "rounded")
                         ]
 
-            let dotEdge (from, to) =
-                    case (Data.Map.lookup from importIds, Data.Map.lookup to importIds) of
-                        (Just from', Just to') -> from' .->. to'
-                        _                      -> pure ()
+            let dotEdge (Depends parent child) =
+                    case (Data.Map.lookup parent importIds, Data.Map.lookup child importIds) of
+                        (Just from, Just to) -> from .->. to
+                        _                    -> pure ()
 
             let dot = do Text.Dot.attribute ("rankdir", "LR")
                          mapM_ dotNode (Data.Map.assocs importIds)
