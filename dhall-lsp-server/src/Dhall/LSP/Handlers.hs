@@ -202,9 +202,7 @@ diagnosticsHandler uri = do
       welltyped <- case typecheck expr' of
         Right (wt, _typ) -> return wt
         Left err -> throwE err
-      let normal = normalize welltyped
-      -- cache the new expression
-      assign importCache (cacheExpr fileIdentifier normal cache')
+      assign importCache cache'
       return Nothing
 
   let suggestions =

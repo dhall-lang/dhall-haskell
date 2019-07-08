@@ -89,16 +89,6 @@ data Cache = Cache ImportGraph (Map.Map Dhall.Import (Expr Src X))
 emptyCache :: Cache
 emptyCache = Cache [] Map.empty
 
--- | Cache a given normal expression.
-cacheExpr :: FileIdentifier -> Normal -> Cache -> Cache
-cacheExpr fileid (Normal expr) (Cache graph c) =
-  let unhashedImport = importFromFileIdentifier fileid
-      alpha = Dhall.alphaNormalize expr  -- we need to alpha-normalise before
-      hash = Dhall.hashExpression maxBound alpha  -- calculating the hash
-      hashedImport = hashedImportFromFileIdentifier fileid hash
-  in Cache graph $ Map.insert unhashedImport expr
-                 $ Map.insert hashedImport expr c
-
 -- Construct the unhashed import corresponding to the given file.
 importFromFileIdentifier :: FileIdentifier -> Dhall.Import
 importFromFileIdentifier (FileIdentifier importType) =
