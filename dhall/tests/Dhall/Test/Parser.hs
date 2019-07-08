@@ -86,13 +86,7 @@ getTests = do
     let binaryDecodeFailureFiles = do
             path <- Turtle.lstree (binaryDecodeDirectory </> "failure")
 
-            let skip =
-                    [ binaryDecodeDirectory </> "failure/unit/ApplyNoArgs.dhallb"
-                    , binaryDecodeDirectory </> "failure/unit/LambdaExplicitlyNamedUnderscore.dhallb"
-                    , binaryDecodeDirectory </> "failure/unit/NaturalNegativeOne.dhallb"
-                    , binaryDecodeDirectory </> "failure/unit/PiExplicitlyNamedUnderscore.dhallb"
-                    , binaryDecodeDirectory </> "failure/unit/VariableExplicitlyNamedUnderscore.dhallb"
-                    ]
+            let skip = []
 
             Monad.guard (path `notElem` skip)
 
