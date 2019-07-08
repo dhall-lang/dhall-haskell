@@ -1,4 +1,10 @@
-module Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot) where
+module Dhall.LSP.Backend.Parsing
+  ( getLetInner
+  , getLetAnnot
+  , getLetIdentifier
+  , getLamIdentifier
+  , getForallIdentifier)
+where
 
 import Dhall.Src (Src(..))
 import Dhall.Parser
@@ -46,6 +52,56 @@ getLetAnnot (Src left _ text) = Megaparsec.parseMaybe (unParser parseLetAnnot) t
           end <- getSourcePos
           _ <- Megaparsec.takeRest
           return (Src begin end tokens)
+
+-- | Given an Src of a let expression return the Src containing the bound
+--   identifier, i.e. given `let x = ... in ...` return the Src descriptor
+--   containing `x`. Returns the original Src if something goes wrong.
+getLetIdentifier :: Src -> Src
+getLetIdentifier src@(Src left _ text) =
+  case Megaparsec.parseMaybe (unParser parseLetIdentifier) text of
+    Just src' -> src'
+    Nothing -> src
+  where parseLetIdentifier = do
+          setSourcePos left
+          _let
+          begin <- getSourcePos
+          (tokens, _) <- Megaparsec.match label
+          end <- getSourcePos
+          _ <- Megaparsec.takeRest
+          return (Src begin end tokens)
+
+-- | Cf. `getLetIdentifier`.
+getLamIdentifier :: Src -> Src
+getLamIdentifier src@(Src left _ text) =
+  case Megaparsec.parseMaybe (unParser parseLetIdentifier) text of
+    Just src' -> src'
+    Nothing -> src
+  where parseLetIdentifier = do
+          setSourcePos left
+          _lambda
+          _openParens
+          begin <- getSourcePos
+          (tokens, _) <- Megaparsec.match label
+          end <- getSourcePos
+          _ <- Megaparsec.takeRest
+          return (Src begin end tokens)
+
+-- | Cf. `getLetIdentifier`.
+getForallIdentifier :: Src -> Src
+getForallIdentifier src@(Src left _ text) =
+  case Megaparsec.parseMaybe (unParser parseLetIdentifier) text of
+    Just src' -> src'
+    Nothing -> src
+  where parseLetIdentifier = do
+          setSourcePos left
+          _forall
+          _openParens
+          begin <- getSourcePos
+          (tokens, _) <- Megaparsec.match label
+          end <- getSourcePos
+          _ <- Megaparsec.takeRest
+          return (Src begin end tokens)
+
 
 setSourcePos :: SourcePos -> Parser ()
 setSourcePos src = Megaparsec.updateParserState

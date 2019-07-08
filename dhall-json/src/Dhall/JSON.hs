@@ -107,15 +107,11 @@
 
 >     let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
 > 
-> in  let example = constructors Example
-> 
 > in  let Nesting = < Inline : {} | Nested : Text >
 > 
-> in  let nesting = constructors Nesting
-> 
 > in  { field    = "name"
->     , nesting  = nesting.Inline {=}
->     , contents = example.Left { foo = 2 }
+>     , nesting  = Nesting.Inline {=}
+>     , contents = Example.Left { foo = 2 }
 >     }
 
     ... produces this JSON:
@@ -130,15 +126,11 @@
 
 >     let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
 > 
-> in  let example = constructors Example
-> 
 > in  let Nesting = < Inline : {} | Nested : Text >
 > 
-> in  let nesting = constructors Nesting
-> 
 > in  { field    = "name"
->     , nesting  = nesting.Nested "value"
->     , contents = example.Left { foo = 2 }
+>     , nesting  = Nesting.Nested "value"
+>     , contents = Example.Left { foo = 2 }
 >     }
 
     ... produces this JSON:
@@ -330,19 +322,30 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
         Core.RecordLit a ->
             case toOrderedList a of
                 [   (   "contents"
-                    ,   Core.UnionLit alternativeName contents _
+                    ,   Core.App
+                            (Core.Field
+                                _
+                                alternativeName
+                            )
+                            contents
                     )
                  ,  (   "field"
                     ,   Core.TextLit
                             (Core.Chunks [] field)
                     )
                  ,  (   "nesting"
-                    ,   Core.UnionLit
-                            "Nested"
+                    ,   Core.App
+                            (Core.Field
+                                (Core.Union
+                                    [ ("Inline", Just (Core.Record []))
+                                    , ("Nested", Just Core.Text)
+                                    ]
+                                )
+                                "Nested"
+                            )
                             (Core.TextLit
                                 (Core.Chunks [] nestedField)
                             )
-                            [ ("Inline", Just (Core.Record [])) ]
                     )
                  ] -> do
                     contents' <- loop contents
@@ -360,20 +363,28 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                     return (Aeson.toJSON ( Dhall.Map.toMap taggedValue ))
 
                 [   (   "contents"
-                    ,   Core.UnionLit
-                            alternativeName
+                    ,   Core.App
+                            (Core.Field
+                                _
+                                alternativeName
+                            )
                             (Core.RecordLit contents)
-                            _
                     )
                  ,  (   "field"
                     ,   Core.TextLit
                             (Core.Chunks [] field)
                     )
                  ,  (   "nesting"
-                    ,   Core.UnionLit
-                            "Inline"
+                    ,   Core.App
+                            (Core.Field
+                                (Core.Union
+                                    [ ("Inline", Just (Core.Record []))
+                                    , ("Nested", Just Core.Text)
+                                    ]
+                                )
+                                "Inline"
+                            )
                             (Core.RecordLit [])
-                            [ ("Nested", Just Core.Text) ]
                     )
                  ] -> do
                     let contents' =

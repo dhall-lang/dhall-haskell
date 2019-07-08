@@ -28,7 +28,6 @@ module Dhall.Parser.Token (
     _as,
     _using,
     _merge,
-    _constructors,
     _Some,
     _None,
     _NaturalFold,
@@ -371,12 +370,14 @@ pathComponent :: ComponentType -> Parser Text
 pathComponent componentType = do
     _ <- "/" :: Parser Text
 
-    let pathData = do
-            text <- Text.Megaparsec.takeWhile1P Nothing Dhall.Core.pathCharacter
-
+    let pathData =
             case componentType of
-                FileComponent -> return text
-                URLComponent  -> return (URI.Encode.decodeText text)
+                FileComponent -> do
+                    Text.Megaparsec.takeWhile1P Nothing Dhall.Core.pathCharacter
+                URLComponent -> do
+                    text <- star pchar
+
+                    return (URI.Encode.decodeText text)
 
     let quotedPathData = do
             _    <- Text.Parser.Char.char '"'
@@ -385,11 +386,16 @@ pathComponent componentType = do
 
             return text
 
-    pathData <|> quotedPathData
+    quotedPathData <|> pathData
 
 file_ :: ComponentType -> Parser File
 file_ componentType = do
-    path <- Data.List.NonEmpty.some1 (pathComponent componentType)
+    let emptyPath =
+            case componentType of
+                URLComponent  -> pure (pure "")
+                FileComponent -> empty
+
+    path <- Data.List.NonEmpty.some1 (pathComponent componentType) <|> emptyPath
 
     let directory = Directory (reverse (Data.List.NonEmpty.init path))
     let file      = Data.List.NonEmpty.last path
@@ -575,9 +581,6 @@ _using = keyword "using"
 
 _merge :: Parser ()
 _merge = keyword "merge"
-
-_constructors :: Parser ()
-_constructors = keyword "constructors"
 
 _Some :: Parser ()
 _Some = keyword "Some"
