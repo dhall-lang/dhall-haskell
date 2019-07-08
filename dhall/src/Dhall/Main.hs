@@ -27,7 +27,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
 import Dhall.Binary (StandardVersion)
-import Dhall.Core (Expr(..), Import, pretty)
+import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..), Depends(..))
 import Dhall.Parser (Src)
@@ -100,6 +100,7 @@ data Mode
     | Lint { inplace :: Maybe FilePath }
     | Encode { file :: Maybe FilePath, json :: Bool }
     | Decode { file :: Maybe FilePath, json :: Bool }
+    | Text { file :: Maybe FilePath }
 
 data ResolveMode
     = Dot
@@ -186,6 +187,10 @@ parseMode =
             "decode"
             "Decode a Dhall expression from binary"
             (Decode <$> optional parseFile <*> parseJSONFlag)
+    <|> subcommand
+            "text"
+            "Render a Dhall expression that evaluates to a Text literal"
+            (Text <$> optional parseFile)
     <|> (Default <$> optional parseFile <*> parseAnnotate <*> parseAlpha)
   where
     argument =
@@ -566,6 +571,27 @@ command (Options {..}) = do
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 
             renderDoc System.IO.stdout doc
+
+        Text {..} -> do
+            expression <- getExpression file
+
+            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) (toStatus file)
+
+            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
+
+            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+
+            case normalizedExpression of
+                Dhall.Core.TextLit (Dhall.Core.Chunks [] text) -> do
+                    Data.Text.IO.putStr text
+                _ -> do
+                    let invalidTypeExpected :: Expr X X
+                        invalidTypeExpected = Dhall.Core.Text
+
+                    let invalidTypeExpression :: Expr X X
+                        invalidTypeExpression = normalizedExpression
+
+                    Control.Exception.throwIO (Dhall.InvalidType {..})
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()

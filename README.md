@@ -11,7 +11,6 @@ the following packages:
 * [`dhall-bash`](./dhall-bash) - [![Hackage](https://img.shields.io/hackage/v/dhall-bash.svg)](https://hackage.haskell.org/package/dhall-bash)
 * [`dhall-json`](./dhall-json) - [![Hackage](https://img.shields.io/hackage/v/dhall-json.svg)](https://hackage.haskell.org/package/dhall-json)
 * [`dhall-nix`](./dhall-nix) - [![Hackage](https://img.shields.io/hackage/v/dhall-nix.svg)](https://hackage.haskell.org/package/dhall-nix)
-* [`dhall-text`](./dhall-text) - [![Hackage](https://img.shields.io/hackage/v/dhall-text.svg)](https://hackage.haskell.org/package/dhall-text)
 
 Navigate to each package's directory for their respective `README`s
 
@@ -41,7 +40,6 @@ visit one of the following links:
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-json/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-json/latest)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-nix/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-nix/latest)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-lsp-server/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-lsp-server/latest)
-* [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-text/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-text/latest)
 
 You can then click the "Help" button in the bottom right corner, which will
 show you a `nix-env` command that you can run to install the prebuilt
@@ -71,7 +69,6 @@ download image archives for each package using the following URLs:
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-json/latest/download/1/docker-image-dhall-json.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-json/latest/download/1/docker-image-dhall-json.tar.gz)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-lsp-server/latest/download/1/docker-image-dhall-lsp-server.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-lsp-server/latest/download/1/docker-image-dhall-lsp-server.tar.gz)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-nix/latest/download/1/docker-image-dhall-nix.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-nix/latest/download/1/docker-image-dhall-nix.tar.gz)
-* [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-text/latest/download/1/docker-image-dhall-text.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-text/latest/download/1/docker-image-dhall-text.tar.gz)
 
 You can then load and run one of these archives like so:
 
