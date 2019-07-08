@@ -1,7 +1,5 @@
     let OperatingSystem = < Linux : {} | OSX : {} >
 
-in  let operatingSystem = constructors OperatingSystem
-
 in  let Addon = { apt : { packages : List Text, sources : List Text } }
 
 in  let makeInclude =
@@ -71,7 +69,7 @@ in  { language =
               , deploy =
                   False
               , os =
-                  operatingSystem.Linux {=}
+                  OperatingSystem.Linux {=}
               }
             , makeInclude
               { ghc =
@@ -81,7 +79,7 @@ in  { language =
               , deploy =
                   True
               , os =
-                  operatingSystem.Linux {=}
+                  OperatingSystem.Linux {=}
               }
             , makeInclude
               { ghc =
@@ -91,7 +89,7 @@ in  { language =
               , deploy =
                   True
               , os =
-                  operatingSystem.OSX {=}
+                  OperatingSystem.OSX {=}
               }
             ]
         }

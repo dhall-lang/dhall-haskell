@@ -12,6 +12,7 @@ module Dhall.Set (
     , toSet
     , toSeq
     , fromList
+    , fromSet
     , append
     , empty
     , difference
@@ -47,6 +48,9 @@ toList = Data.Foldable.toList
 -- n.b. toList . fromList = id, only if the list elements are unique
 fromList :: Ord a => [a] -> Set a
 fromList = foldl' (flip append) empty
+
+fromSet :: Data.Set.Set a -> Set a
+fromSet s = Set s (Data.Sequence.fromList (Data.Set.elems s))
 
 -- O(log n) time complexity.
 append :: Ord a => a -> Set a -> Set a
