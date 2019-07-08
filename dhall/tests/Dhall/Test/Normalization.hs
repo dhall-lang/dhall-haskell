@@ -46,11 +46,7 @@ getTests = do
     let unitTestFiles = do
             path <- Turtle.lstree "./dhall-lang/tests/normalization/success/unit"
 
-            let skip =
-                    [ normalizationDirectory </> "unit/EmptyAlternativeA.dhall"
-                    -- https://github.com/dhall-lang/dhall-lang/issues/505
-                    , normalizationDirectory </> "unit/OperatorTextConcatenateLhsEmptyA.dhall"
-                    ]
+            let skip = []
 
             Monad.guard (path `notElem` skip)
 

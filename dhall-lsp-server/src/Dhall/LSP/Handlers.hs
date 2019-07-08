@@ -14,12 +14,12 @@ import Dhall.TypeCheck (X)
 
 import Dhall.LSP.Backend.Dhall (FileIdentifier, parse, load, typecheck,
   normalize, fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate,
-  cacheExpr, parseWithHeader, fromWellTyped)
+  cacheExpr, parseWithHeader)
 import Dhall.LSP.Backend.Diagnostics (Range(..), Diagnosis(..), explain,
   rangeFromDhall, diagnose)
 import Dhall.LSP.Backend.Formatting (formatExprWithHeader)
 import Dhall.LSP.Backend.Linting (Suggestion(..), suggest, lint)
-import Dhall.LSP.Backend.Typing (typeAt, srcAt, annotateLet)
+import Dhall.LSP.Backend.Typing (typeAt, annotateLet)
 import Dhall.LSP.State
 
 import Control.Applicative ((<|>))
@@ -167,9 +167,8 @@ hoverType request = do
     Right wt -> return wt
   case typeAt (line,col) welltyped of
     Left err -> throwE (Error, Text.pack err)
-    Right typ ->
-      let _range = fmap (rangeToJSON . rangeFromDhall)
-                        (srcAt (line,col) (fromWellTyped welltyped))
+    Right (mSrc, typ) ->
+      let _range = fmap (rangeToJSON . rangeFromDhall) mSrc
           _contents = J.List [J.PlainString (pretty typ)]
           hover = J.Hover{..}
       in lspRespond LSP.RspHover request (Just hover)
