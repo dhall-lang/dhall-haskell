@@ -8,7 +8,6 @@ module Dhall.LSP.Backend.Dhall (
   fromNormal,
   Cache,
   emptyCache,
-  cacheExpr,
   invalidate,
   DhallError(..),
   parse,
@@ -37,7 +36,6 @@ import qualified Data.Text as Text
 import qualified Text.Megaparsec as Megaparsec
 
 import Data.List.NonEmpty (NonEmpty((:|)))
-import Crypto.Hash (Digest, SHA256)
 import Data.Text (Text)
 import System.FilePath (splitDirectories, takeFileName, takeDirectory)
 import Lens.Family (view, set)
@@ -95,12 +93,6 @@ importFromFileIdentifier (FileIdentifier importType) =
   Dhall.Import { importHashed = Dhall.ImportHashed Nothing importType,
                  importMode = Dhall.Code }
 
-
--- Construct the hashed import corresponding to the given file.
-hashedImportFromFileIdentifier :: FileIdentifier -> Digest SHA256 -> Dhall.Import
-hashedImportFromFileIdentifier (FileIdentifier importType) hash =
-  Dhall.Import { importHashed = Dhall.ImportHashed (Just hash) importType,
-                 importMode = Dhall.Code }
 
 -- | Invalidate any _unhashed_ imports of the given file. Hashed imports are
 --   kept around as per
