@@ -13,8 +13,7 @@ import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (X)
 
 import Dhall.LSP.Backend.Dhall (FileIdentifier, parse, load, typecheck,
-  normalize, fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate,
-  cacheExpr, parseWithHeader)
+  fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate, parseWithHeader)
 import Dhall.LSP.Backend.Diagnostics (Range(..), Diagnosis(..), explain,
   rangeFromDhall, diagnose)
 import Dhall.LSP.Backend.Formatting (formatExprWithHeader)
@@ -198,12 +197,10 @@ diagnosticsHandler uri = do
       (cache', expr') <- case loaded of
         Right x -> return x
         Left err -> throwE err
-      welltyped <- case typecheck expr' of
+      _ <- case typecheck expr' of
         Right (wt, _typ) -> return wt
         Left err -> throwE err
-      let normal = normalize welltyped
-      -- cache the new expression
-      assign importCache (cacheExpr fileIdentifier normal cache')
+      assign importCache cache'
       return Nothing
 
   let suggestions =

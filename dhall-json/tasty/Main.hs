@@ -12,8 +12,10 @@ import qualified Data.Aeson
 import qualified Data.ByteString.Lazy
 import qualified Data.Text
 import qualified Data.Text.IO
+import qualified Dhall.Core           as Core
 import qualified Dhall.Import
 import qualified Dhall.JSON
+import qualified Dhall.JSONToDhall    as JSONToDhall
 import qualified Dhall.Parser
 import qualified Dhall.Yaml
 import qualified Test.Tasty
@@ -28,6 +30,7 @@ testTree =
         [ issue48
         , yamlQuotedStrings
         , yaml
+        , emptyAlternative
         , nesting
         ]
 
@@ -109,6 +112,20 @@ yaml = Test.Tasty.HUnit.testCase "Yaml: normal string style" assertion
                 "Conversion to normal yaml did not generate the expected output"
 
         Test.Tasty.HUnit.assertEqual message expectedValue actualValue
+
+emptyAlternative :: TestTree
+emptyAlternative = Test.Tasty.HUnit.testCase "Empty alternative" $ do
+    let schema = Core.Union [ ("Bar", Nothing), ("Foo", Nothing) ]
+
+    let json = Data.Aeson.String "Foo"
+
+    let expectedResult = Core.Field schema "Foo"
+
+    actualResult <- Core.throws (JSONToDhall.dhallFromJSON JSONToDhall.defaultConversion schema json)
+
+    let message = "Empty alternatives were not decoded from JSON correctly"
+
+    Test.Tasty.HUnit.assertEqual message expectedResult actualResult
 
 nesting :: TestTree
 nesting = Test.Tasty.testGroup "Nesting" [ nested, inline ]
