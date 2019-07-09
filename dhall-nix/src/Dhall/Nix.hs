@@ -45,10 +45,10 @@
     `Optional` values translate to @null@ if missing or the unwrapped value if
     present:
 
-> $ dhall-to-nix <<< "[] : Optional Integer"
+> $ dhall-to-nix <<< "None Integer"
 > null
 
-> $ dhall-to-nix <<< "[1] : Optional Integer"
+> $ dhall-to-nix <<< "Some +1"
 > 1
 
     Unions are Church-encoded:

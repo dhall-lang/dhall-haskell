@@ -54,15 +54,15 @@
 
     Dhall @List@s translate to JSON lists:
 
-> $ dhall-to-json <<< '[1, 2, 3] : List Integer'
+> $ dhall-to-json <<< '[+1, +2, +3] : List Integer'
 > [1,2,3]
 
     Dhall @Optional@ values translate to @null@ if absent and the unwrapped
     value otherwise:
 
-> $ dhall-to-json <<< '[] : Optional Integer'
+> $ dhall-to-json <<< 'None Integer'
 > null
-> $ dhall-to-json <<< '[1] : Optional Integer'
+> $ dhall-to-json <<< 'Some +1'
 > 1
 
     Dhall records translate to JSON records:
@@ -75,7 +75,7 @@
 > $ dhall-to-json <<< "< Left = +2 | Right : Natural>"
 > 2
 > $ cat config
-> [ < Person = { age = +47, name = "John" }
+> [ < Person = { age = 47, name = "John" }
 >   | Place  : { location : Text }
 >   >
 > , < Place  = { location = "North Pole" }
@@ -84,7 +84,7 @@
 > , < Place  = { location = "Sahara Desert" }
 >   | Person : { age : Natural, name : Text }
 >   >
-> , < Person = { age = +35, name = "Alice" }
+> , < Person = { age = 35, name = "Alice" }
 >   | Place  : { location : Text }
 >   >
 > ]

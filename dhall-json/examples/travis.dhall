@@ -25,7 +25,7 @@ in  let makeInclude =
                     merge
                     { Linux =
                           λ(_ : {})
-                        → [ { apt =
+                        → Some { apt =
                                 { packages =
                                     [ "cabal-install-${args.cabal}"
                                     , "ghc-${args.ghc}"
@@ -34,17 +34,16 @@ in  let makeInclude =
                                     [ "hvr-ghc" ]
                                 }
                             }
-                          ] : Optional Addon
                     , OSX =
-                        λ(_ : {}) → [] : Optional Addon
+                        λ(_ : {}) → None Addon
                     }
                     args.os
                 , os =
                     merge
                     { Linux =
-                        λ(_ : {}) → [] : Optional Text
+                        λ(_ : {}) → None Text
                     , OSX =
-                        λ(_ : {}) → [ "osx" ] : Optional Text
+                        λ(_ : {}) → Some "osx"
                     }
                     args.os
                 }

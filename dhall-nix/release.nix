@@ -175,13 +175,13 @@ in
         testOptionalLit = dhallToNix ''
             λ(b : Bool)
           → if b
-            then ([0] : Optional Natural)
-            else ([]  : Optional Natural)
+            then (Some 0)
+            else (None Natural)
         '';
         testOptionalFold = dhallToNix ''
           Optional/fold
           Natural
-          ([1] : Optional Natural)
+          (Some 1)
           Natural
         '';
         testOptionalBuild = dhallToNix ''
