@@ -33,28 +33,25 @@ import qualified Dhall.Context
 import qualified Data.Map      as Map
 import qualified Data.Text
 
-data Resolved = Resolved
-    { resolvedExpression :: Expr Src Import
-    -- ^ Expression with its immediate imports resolved
-    , newImport          :: Import
-    -- ^ New import to use in place of the original import for chaining
-    --   downstream imports
+-- normalized headers
+newtype ResolvedImport = ResolvedImport Import
+
+data LoadedImport = LoadedImport
+    { normalisedImport :: Expr Src X  -- typechecked and normalised
+    , semanticHash :: Crypto.Hash.Digest SHA256  -- TODO: newtype SemanticHash
+    , graph :: Tree ResolvedImport  -- `Real` resolved import is root node
     }
 
--- | `parent` imports (i.e. depends on) `child`
-data Depends = Depends { parent :: Import, child :: Import }
+data LoadedExpr = LoadedExpr
+    { loadedExpr :: Expr Src X  -- not typechecked or normalised!
+    , imports :: [Tree ResolvedImport]  -- TODO...
+    }
+
+data ImportStack = NonEmpty ResolvedImport
 
 -- | State threaded throughout the import process
 data Status m = Status
-    { _stack :: NonEmpty Import
-    -- ^ Stack of `Import`s that we've imported along the way to get to the
-    -- current point
-
-    , _graph :: [Depends]
-    -- ^ Graph of all the imports visited so far, represented by a list of
-    --   import dependencies.
-
-    , _cache :: Map Import (Expr Src X)
+    { _cache :: Map Import LoadedImport
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
 
@@ -66,24 +63,13 @@ data Status m = Status
     , _normalizer :: Maybe (ReifiedNormalizer X)
 
     , _startingContext :: Context (Expr Src X)
-
-    , _resolver :: Import -> StateT (Status m) m Resolved
-
-    , _cacher :: Import -> Expr Src X -> StateT (Status m) m ()
+    -- ^ typechecking context; allows us to load _open_ expressions
     }
 
 -- | Default starting `Status` that is polymorphic in the base `Monad`
-emptyStatusWith
-    :: (Import -> StateT (Status m) m Resolved)
-    -> (Import -> Expr Src X -> StateT (Status m) m ())
-    -> FilePath
-    -> Status m
-emptyStatusWith _resolver _cacher rootDirectory = Status {..}
+emptyStatus :: Status m
+emptyStatus = Status {..}
   where
-    _stack = pure rootImport
-
-    _graph = []
-
     _cache = Map.empty
 
     _manager = Nothing
@@ -94,6 +80,11 @@ emptyStatusWith _resolver _cacher rootDirectory = Status {..}
 
     _startingContext = Dhall.Context.empty
 
+
+-- TODO: allow file names as well (not just directory)
+rootImport :: FilePath -> Import
+rootImport rootDirectory = rootImport
+  where
     prefix = if isRelative rootDirectory
       then Here
       else Absolute
@@ -111,13 +102,7 @@ emptyStatusWith _resolver _cacher rootDirectory = Status {..}
       , importMode = Code
       }
 
-stack :: Functor f => LensLike' f (Status m) (NonEmpty Import)
-stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
-
-graph :: Functor f => LensLike' f (Status m) [Depends]
-graph k s = fmap (\x -> s { _graph = x }) (k (_graph s))
-
-cache :: Functor f => LensLike' f (Status m) (Map Import (Expr Src X))
+cache :: Functor f => LensLike' f (Status m) (Map Import LoadedImport)
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
 manager :: Functor f => LensLike' f (Status m) (Maybe Dynamic)
@@ -133,16 +118,6 @@ normalizer k s = fmap (\x -> s {_normalizer = x}) (k (_normalizer s))
 startingContext :: Functor f => LensLike' f (Status m) (Context (Expr Src X))
 startingContext k s =
     fmap (\x -> s { _startingContext = x }) (k (_startingContext s))
-
-resolver
-    :: Functor f
-    => LensLike' f (Status m) (Import -> StateT (Status m) m Resolved)
-resolver k s = fmap (\x -> s { _resolver = x }) (k (_resolver s))
-
-cacher
-    :: Functor f
-    => LensLike' f (Status m) (Import -> Expr Src X -> StateT (Status m) m ())
-cacher k s = fmap (\x -> s { _cacher = x }) (k (_cacher s))
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic
