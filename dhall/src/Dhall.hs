@@ -230,6 +230,8 @@ data InvalidType s a = InvalidType
   }
   deriving (Typeable)
 
+instance (Pretty s, Typeable s, Pretty a, Typeable a) => Exception (InvalidType s a)
+
 _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
 

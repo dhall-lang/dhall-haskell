@@ -1,4 +1,7 @@
-# `dhall-text`
+# `dhall text`
+
+The `dhall-text` executable is now subsumed by the `dhall text` subcommand,
+which does the same thing.  This `README` remains behind as a tutorial.
 
 For installation or development instructions, see:
 
@@ -6,8 +9,8 @@ For installation or development instructions, see:
 
 ## Introduction
 
-This `dhall-text` package provides a `dhall-to-text` executable which you can
-use to template text using the Dhall configuration language.
+You can use the `dhall text` subcommand to template text using the Dhall
+configuration language.
 
 ## Example
 
@@ -80,7 +83,7 @@ in  \(people : List ./Person) ->
 Templating HTML is just ordinary function application:
 
 ```bash
-$ dhall-to-text <<< './make-items ./people'
+$ dhall text <<< './make-items ./people'
 <li class="list-group-item">
   <span class="badge">14</span>
   Maria
