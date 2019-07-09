@@ -358,7 +358,7 @@ diffChunks cL cR
 
     diffTextSkeleton = difference textSkeleton textSkeleton
 
-    chunks = zipWith chunkDiff (toEitherList cL) (toEitherList cR)
+    chunks = zipWith chunkDiff (toEitherList cL) (toEitherList cR) 
 
     chunkDiff a b =
       case (a, b) of

@@ -106,13 +106,13 @@
     the same record.  For example, this code:
 
 >     let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
->
+> 
 > in  let example = constructors Example
->
+> 
 > in  let Nesting = < Inline : {} | Nested : Text >
->
+> 
 > in  let nesting = constructors Nesting
->
+> 
 > in  { field    = "name"
 >     , nesting  = nesting.Inline {=}
 >     , contents = example.Left { foo = 2 }
@@ -129,13 +129,13 @@
     underneath a field named @nestedField@.  For example, this code:
 
 >     let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
->
+> 
 > in  let example = constructors Example
->
+> 
 > in  let Nesting = < Inline : {} | Nested : Text >
->
+> 
 > in  let nesting = constructors Nesting
->
+> 
 > in  { field    = "name"
 >     , nesting  = nesting.Nested "value"
 >     , contents = example.Left { foo = 2 }
@@ -155,7 +155,7 @@
 
 > $ cat ./example.dhall
 > let JSON = https://prelude.dhall-lang.org/JSON/package.dhall
->
+> 
 > in  JSON.object
 >     [ { mapKey = "foo", mapValue = JSON.null }
 >     , { mapKey =
@@ -307,7 +307,7 @@ dhallToJSON
     -> Either CompileError Value
 dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
   where
-    loop e = case e of
+    loop e = case e of 
         Core.BoolLit a -> return (toJSON a)
         Core.NaturalLit a -> return (toJSON a)
         Core.IntegerLit a -> return (toJSON a)
@@ -455,7 +455,7 @@ omitNull (Bool bool) =
 omitNull Null =
     Null
 
-{-| Omit record fields that are @null@, arrays and records whose transitive
+{-| Omit record fields that are @null@, arrays and records whose transitive 
     fields are all null
 -}
 omitEmpty :: Value -> Value
@@ -951,3 +951,4 @@ codeToValue conversion specialDoubleMode name code = do
     case dhallToJSON specialDoubleExpression of
       Left  err  -> Control.Exception.throwIO err
       Right json -> return json
+

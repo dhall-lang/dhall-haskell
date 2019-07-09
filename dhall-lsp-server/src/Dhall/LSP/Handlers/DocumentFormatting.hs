@@ -23,7 +23,7 @@ formatDocument fileUri _tabSize _insertSpaces = do
     let
       filePath = maybe (error "can't convert uri to file path") id $ J.uriToFilePath fileUri -- !FIXME: handle non-file uris
     txt <- lift $ Data.Text.IO.readFile filePath
-    case Formatting.formatDocument txt of
+    case Formatting.formatDocument txt of 
       (Right formatted) -> let
                              numLines = Data.Text.length txt
                              range = J.Range  (J.Position 0 0) (J.Position numLines 0)
@@ -31,3 +31,4 @@ formatDocument fileUri _tabSize _insertSpaces = do
       (Left err) -> do
                   lift $ LSP.Utility.logs $ "Error while formatting the document " <> show err
                   pure (J.List [])
+    
