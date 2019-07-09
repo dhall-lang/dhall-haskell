@@ -105,9 +105,9 @@
     contains a record then the name of the alternative is stored inline within
     the same record.  For example, this code:
 
->     let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
+> let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
 > 
-> in  let Nesting = < Inline : {} | Nested : Text >
+> let Nesting = < Inline : {} | Nested : Text >
 > 
 > in  { field    = "name"
 >     , nesting  = Nesting.Inline {=}
@@ -124,9 +124,9 @@
     If @nesting@ is set to @Nested nestedField@ then the union is store
     underneath a field named @nestedField@.  For example, this code:
 
->     let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
+> let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
 > 
-> in  let Nesting = < Inline : {} | Nested : Text >
+> let Nesting = < Inline : {} | Nested : Text >
 > 
 > in  { field    = "name"
 >     , nesting  = Nesting.Nested "value"
