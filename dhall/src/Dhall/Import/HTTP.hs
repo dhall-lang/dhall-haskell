@@ -232,6 +232,7 @@ renderURL url =
 
     queryText = foldMap renderQuery query
 
+-- TODO: Remove String return
 fetchFromHttpUrl
     :: URL
     -> Maybe [(CI ByteString, ByteString)]

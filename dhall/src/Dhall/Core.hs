@@ -189,7 +189,6 @@ data URL = URL
     , authority :: Text
     , path      :: File
     , query     :: Maybe Text
-    , headers   :: Maybe (Expr Src Import)
     } deriving (Eq, Generic, Ord, Show)
 
 instance Pretty URL where
@@ -223,7 +222,7 @@ instance Pretty URL where
 data ImportType
     = Local FilePrefix File
     -- ^ Local path
-    | Remote URL
+    | Remote URL (Maybe (Expr Src Import))
     -- ^ URL of remote resource and optional headers stored in an import
     | Env  Text
     -- ^ Environment variable

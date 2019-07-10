@@ -33,12 +33,25 @@ import qualified Dhall.Context
 import qualified Data.Map      as Map
 import qualified Data.Text
 
--- normalized headers
-newtype ResolvedImport = ResolvedImport Import
+-- binary headers
+type Headers = [(CI ByteString, ByteString)]
+
+-- non-cyclic, binary headers, canonical
+data ResolvedImportType =
+    ResolvedLocal FilePrefix File
+    -- ^ Like a normal file import, but not resolved relative to the import stack
+    ResolvedRemote URL (Maybe Headers)
+    -- ^ URL (sans headers) plus normalised headers
+    ResolvedEnv Text  -- ^ same as plain Env
+    ResolvedMissing  -- ^ same as plain Missing
+
+newtype SemanticHash = SemanticHash Crypto.Hash.Digest SHA256
+
+data ResolvedImport = ResolvedImport (Maybe SemanticHash) ResolvedImportType ImportMode
 
 data LoadedImport = LoadedImport
     { normalisedImport :: Expr Src X  -- typechecked and normalised
-    , semanticHash :: Crypto.Hash.Digest SHA256  -- TODO: newtype SemanticHash
+    , semanticHash :: SemanticHash
     , graph :: Tree ResolvedImport  -- `Real` resolved import is root node
     }
 
