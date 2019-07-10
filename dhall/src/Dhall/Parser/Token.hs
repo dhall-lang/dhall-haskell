@@ -29,7 +29,6 @@ module Dhall.Parser.Token (
     _using,
     _merge,
     _toMap,
-    _constructors,
     _Some,
     _None,
     _NaturalFold,
@@ -64,6 +63,7 @@ module Dhall.Parser.Token (
     _Type,
     _Kind,
     _Sort,
+    _Location,
     _equal,
     _or,
     _plus,
@@ -371,12 +371,14 @@ pathComponent :: ComponentType -> Parser Text
 pathComponent componentType = do
     _ <- "/" :: Parser Text
 
-    let pathData = do
-            text <- Text.Megaparsec.takeWhile1P Nothing Dhall.Core.pathCharacter
-
+    let pathData =
             case componentType of
-                FileComponent -> return text
-                URLComponent  -> return (URI.Encode.decodeText text)
+                FileComponent -> do
+                    Text.Megaparsec.takeWhile1P Nothing Dhall.Core.pathCharacter
+                URLComponent -> do
+                    text <- star pchar
+
+                    return (URI.Encode.decodeText text)
 
     let quotedPathData = do
             _    <- Text.Parser.Char.char '"'
@@ -385,11 +387,16 @@ pathComponent componentType = do
 
             return text
 
-    pathData <|> quotedPathData
+    quotedPathData <|> pathData
 
 file_ :: ComponentType -> Parser File
 file_ componentType = do
-    path <- Data.List.NonEmpty.some1 (pathComponent componentType)
+    let emptyPath =
+            case componentType of
+                URLComponent  -> pure (pure "")
+                FileComponent -> empty
+
+    path <- Data.List.NonEmpty.some1 (pathComponent componentType) <|> emptyPath
 
     let directory = Directory (reverse (Data.List.NonEmpty.init path))
     let file      = Data.List.NonEmpty.last path
@@ -579,9 +586,6 @@ _merge = keyword "merge"
 _toMap :: Parser ()
 _toMap = keyword "toMap"
 
-_constructors :: Parser ()
-_constructors = keyword "constructors"
-
 _Some :: Parser ()
 _Some = keyword "Some"
 
@@ -686,6 +690,9 @@ _Kind = reserved "Kind"
 
 _Sort :: Parser ()
 _Sort = reserved "Sort"
+
+_Location :: Parser ()
+_Location = reserved "Location"
 
 _equal :: Parser ()
 _equal = reservedChar '='

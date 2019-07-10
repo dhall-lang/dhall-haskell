@@ -52,6 +52,7 @@ import Prelude hiding (exponent)
 import GHC.Float (double2Float, float2Double)
 
 import qualified Crypto.Hash
+import qualified Control.Monad       as Monad
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.Sequence
@@ -128,9 +129,9 @@ class ToTerm a where
 
 instance ToTerm a => ToTerm (Expr s a) where
     encode (Var (V "_" n)) =
-        TInteger n
+        TInt n
     encode (Var (V x n)) =
-        TList [ TString x, TInteger n ]
+        TList [ TString x, TInt n ]
     encode NaturalBuild =
         TString "Natural/build"
     encode NaturalFold =
@@ -485,7 +486,7 @@ instance ToTerm Import where
                 Just digest ->
                     TBytes ("\x12\x20" <> Data.ByteArray.convert digest)
 
-            m = TInt (case importMode of Code -> 0; RawText -> 1)
+            m = TInt (case importMode of Code -> 0; RawText -> 1; Location -> 2;)
 
         Import {..} = import_
 
@@ -497,9 +498,9 @@ class FromTerm a where
 
 instance FromTerm a => FromTerm (Expr s a) where
     decode (TInt n) =
-        return (Var (V "_" (fromIntegral n)))
-    decode (TInteger n) =
         return (Var (V "_" n))
+    decode (TInteger n) =
+        return (Var (V "_" (fromIntegral n)))
     decode (TString "Natural/build") =
         return NaturalBuild
     decode (TString "Natural/fold") =
@@ -564,19 +565,23 @@ instance FromTerm a => FromTerm (Expr s a) where
         return (Const Sort)
     decode (TString "_") =
         empty
-    decode (TList [ TString x, TInt n ]) =
-        return (Var (V x (fromIntegral n)))
-    decode (TList [ TString x, TInteger n ]) =
+    decode (TList [ TString x, TInt n ]) = do
+        Monad.guard (x /= "_")
         return (Var (V x n))
+    decode (TList [ TString x, TInteger n ]) = do
+        Monad.guard (x /= "_")
+        return (Var (V x (fromIntegral n)))
     decode (TList (TInt 0 : f₁ : xs₁)) = do
         f₀  <- decode f₁
         xs₀ <- traverse decode xs₁
+        Monad.guard (not (null xs₀))
         return (foldl App f₀ xs₀)
     decode (TList [ TInt 1, _A₁, b₁ ]) = do
         _A₀ <- decode _A₁
         b₀  <- decode b₁
         return (Lam "_" _A₀ b₀)
     decode (TList [ TInt 1, TString x, _A₁, b₁ ]) = do
+        Monad.guard (x /= "_")
         _A₀ <- decode _A₁
         b₀  <- decode b₁
         return (Lam x _A₀ b₀)
@@ -585,6 +590,7 @@ instance FromTerm a => FromTerm (Expr s a) where
         _B₀ <- decode _B₁
         return (Pi "_" _A₀ _B₀)
     decode (TList [ TInt 2, TString x, _A₁, _B₁ ]) = do
+        Monad.guard (x /= "_")
         _A₀ <- decode _A₁
         _B₀ <- decode _B₁
         return (Pi x _A₀ _B₀)
@@ -710,6 +716,7 @@ instance FromTerm a => FromTerm (Expr s a) where
 
         return (BoolIf t₀ l₀ r₀)
     decode (TList [ TInt 15, TInt n ]) = do
+        Monad.guard (0 <= n)
         return (NaturalLit (fromIntegral n))
     decode (TList [ TInt 15, TInteger n ]) = do
         return (NaturalLit (fromInteger n))
@@ -801,6 +808,7 @@ instance FromTerm Import where
         importMode <- case mode of
             0 -> return Code
             1 -> return RawText
+            2 -> return Location
             _ -> empty
 
         let remote scheme = do
@@ -938,7 +946,13 @@ decodeExpression term =
     -- For backwards compatibility with older expressions that have a version
     -- tag to ease the migration
     decodeWithVersion = do
-        TList [ TString _, taggedTerm ] <- return strippedTerm
+        TList [ TString version, taggedTerm ] <- return strippedTerm
+
+        -- "_" has never been a valid version string, and this ensures that we
+        -- don't interpret `[ "_", 0 ]` as the expression `_` (encoded as `0`)
+        -- tagged with a version string of `"_"`
+        Monad.guard (version /= "_")
+
         decode taggedTerm
 
 data DecodingFailure = CBORIsNotDhall Term

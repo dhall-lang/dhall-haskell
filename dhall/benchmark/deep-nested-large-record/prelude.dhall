@@ -1,5 +1,5 @@
 { types =
-  { Big = constructors ./BigEnum.dhall
-  , Little = constructors ./LittleEnum.dhall
+  { Big = ./BigEnum.dhall
+  , Little = ./LittleEnum.dhall
   }
 }

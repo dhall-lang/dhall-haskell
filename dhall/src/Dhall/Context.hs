@@ -57,7 +57,7 @@ match (Context           []  ) = Nothing
 > lookup k n (insert k v c) = lookup k (n - 1) c
 > lookup k n (insert j v c) = lookup k  n      c  -- k /= j
 -}
-lookup :: Text -> Integer -> Context a -> Maybe a
+lookup :: Text -> Int -> Context a -> Maybe a
 lookup _ _ (Context         []  ) =
     Nothing
 lookup x n (Context ((k, v):kvs)) =

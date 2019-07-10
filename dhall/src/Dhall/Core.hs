@@ -266,7 +266,8 @@ instance Pretty ImportType where
     pretty Missing = "missing"
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
-data ImportMode = Code | RawText deriving (Eq, Generic, Ord, Show)
+data ImportMode = Code | RawText | Location
+  deriving (Eq, Generic, Ord, Show)
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
@@ -299,8 +300,9 @@ instance Pretty Import where
       where
         suffix :: Text
         suffix = case importMode of
-            RawText -> " as Text"
-            Code    -> ""
+            RawText  -> " as Text"
+            Location -> " as Location"
+            Code     -> ""
 
 {-| Label for a bound variable
 
@@ -334,7 +336,7 @@ instance Pretty Import where
     Zero indices are omitted when pretty-printing `Var`s and non-zero indices
     appear as a numeric suffix.
 -}
-data Var = V Text !Integer
+data Var = V Text !Int
     deriving (Data, Generic, Eq, Ord, Show)
 
 instance IsString Var where
@@ -811,7 +813,7 @@ instance Pretty a => Pretty (Expr s a) where
     descend into a lambda or let expression that binds a variable of the same
     name in order to avoid shifting the bound variables by mistake.
 -}
-shift :: Integer -> Var -> Expr s a -> Expr s a
+shift :: Int -> Var -> Expr s a -> Expr s a
 shift _ _ (Const a) = Const a
 shift d (V x n) (Var (V x' n')) = Var (V x' n'')
   where
@@ -1684,17 +1686,7 @@ normalizeWithM ctx e0 = loop (denote e0)
         r' <- loop r
         case r' of
             RecordLit kvs ->
-                case traverse adapt (Dhall.Set.toList xs) of
-                    Just s  ->
-                        loop (RecordLit kvs')
-                      where
-                        kvs' = Dhall.Map.fromList s
-                    Nothing ->
-                        Project <$> (RecordLit <$> traverse loop kvs) <*> pure (Left xs)
-              where
-                adapt x = do
-                    v <- Dhall.Map.lookup x kvs
-                    return (x, v)
+                pure (RecordLit (Dhall.Map.restrictKeys kvs (Dhall.Set.toSet xs)))
             _   | null xs -> pure (RecordLit mempty)
                 | otherwise -> pure (Project r' (Left xs))
     Project r (Right e1) -> do
@@ -1702,7 +1694,7 @@ normalizeWithM ctx e0 = loop (denote e0)
 
         case e2 of
             Record kts -> do
-                loop (Project r (Left (Dhall.Set.fromList (Dhall.Map.keys kts))))
+                loop (Project r (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
             _ -> do
                 r' <- loop r
                 pure (Project r' (Right e2))
@@ -1936,7 +1928,7 @@ isNormalized e0 = loop (denote e0)
                       Right e' ->
                           case e' of
                               Record kts ->
-                                  loop (Project r (Left (Dhall.Set.fromList (Dhall.Map.keys kts))))
+                                  loop (Project r (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
                               _ ->
                                   False
               _ -> not (null xs)
@@ -2006,7 +1998,6 @@ reservedIdentifiers =
         , "else"
         , "as"
         , "using"
-        , "constructors"
         , "Natural"
         , "Natural/fold"
         , "Natural/build"

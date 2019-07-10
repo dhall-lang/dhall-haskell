@@ -372,22 +372,27 @@ dhallFromJSON (Conversion {..}) expressionType =
     loop (D.alphaNormalize (D.normalize expressionType))
   where
     -- any ~> Union
-    loop t@(D.Union tmMay) v = case unions of
-      UNone -> Left $ ContainsUnion t
-      _     -> case Map.traverseWithKey (const id) tmMay of
-          Nothing -> undefined
-          Just tm ->
-            -- OLD-STYLE UNION:
-            -- let f k a = D.UnionLit k <$> loop a v
-            --                          <*> pure (Map.delete k tmMay)
-            let f k a = D.App (D.Field t k) <$> loop a v
-             in case rights . toList $ Map.mapWithKey f tm of
-                  [ ]   -> Left $ Mismatch t v
-                  [x]   -> Right x
-                  xs@(x:_:_) -> case unions of
-                      UStrict -> Left $ UndecidableUnion t v xs
-                      UFirst  -> Right x
-                      UNone   -> undefined -- can't happen
+    loop t@(D.Union tm) v = do
+      let f key maybeType =
+            case maybeType of
+              Just _type -> do
+                expression <- loop _type v
+
+                return (D.App (D.Field t key) expression)
+
+              Nothing -> do
+                case v of
+                    A.String text | key == text -> do
+                        return (D.Field t key)
+                    _ -> do
+                        Left (Mismatch t v)
+
+      case (unions, rights (toList (Map.mapWithKey f tm))) of
+        (UNone  , _         ) -> Left (ContainsUnion t)
+        (UStrict, xs@(_:_:_)) -> Left (UndecidableUnion t v xs)
+        (_      , [ ]       ) -> Left (Mismatch t v)
+        (UFirst , x:_       ) -> Right x
+        (UStrict, [x]       ) -> Right x
 
     -- object ~> Record
     loop (D.Record r) v@(A.Object o)

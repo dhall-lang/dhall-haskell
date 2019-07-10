@@ -207,12 +207,15 @@ diffBool = diffPrimitive bool
 diffInteger :: Integer -> Integer -> Diff
 diffInteger = diffPrimitive (token . Internal.prettyNumber)
 
+diffInt :: Int -> Int -> Diff
+diffInt = diffPrimitive (token . Internal.prettyInt)
+
 diffVar :: Var -> Var -> Diff
 diffVar (V xL nL) (V xR nR) = format mempty label <> "@" <> natural
   where
     label = diffLabel xL xR
 
-    natural = diffInteger nL nR
+    natural = diffInt nL nR
 
 diffPretty :: (Eq a, Pretty a) => a -> a -> Diff
 diffPretty = diffPrimitive (token . Pretty.pretty)
@@ -267,8 +270,8 @@ diffKeysWith
 diffKeysWith assign diffVals kvsL kvsR =
     diffFieldNames <> diffFieldValues <> (if anyEqual then [ ignore ] else [])
   where
-    ksL = Data.Set.fromList (Dhall.Map.keys kvsL)
-    ksR = Data.Set.fromList (Dhall.Map.keys kvsR)
+    ksL = Dhall.Map.keysSet kvsL
+    ksR = Dhall.Map.keysSet kvsR
 
     extraL = Data.Set.difference ksL ksR
     extraR = Data.Set.difference ksR ksL

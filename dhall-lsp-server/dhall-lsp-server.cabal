@@ -28,11 +28,8 @@ library
       Dhall.LSP.Backend.ToJSON
       Dhall.LSP.Backend.Typing
       Dhall.LSP.Handlers
-      Dhall.LSP.Handlers.Command
-      Dhall.LSP.Handlers.Diagnostics
-      Dhall.LSP.Handlers.DocumentFormatting
-      Dhall.LSP.Handlers.Hover
       Dhall.LSP.Server
+      Dhall.LSP.State
   other-modules:
       Paths_dhall_lsp_server
       Dhall.LSP.Util
@@ -45,9 +42,11 @@ library
     , base >=4.7 && <5
     , bytestring
     , containers
+    , cryptonite
     , data-default
     , dhall
     , dhall-json
+    , dotgen
     , filepath
     , haskell-lsp < 0.9
     , hslogger
@@ -55,6 +54,7 @@ library
     , lens-family-core
     , megaparsec
     , mtl
+    , network-uri
     , optparse-applicative
     , prettyprinter
     , sorted-list

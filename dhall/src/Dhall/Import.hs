@@ -111,6 +111,8 @@ module Dhall.Import (
     , emptyStatus
     , stack
     , cache
+    , Depends(..)
+    , graph
     , manager
     , standardVersion
     , normalizer
@@ -164,13 +166,13 @@ import Dhall.Core
 import Dhall.Import.HTTP
 #endif
 import Dhall.Import.Types
-import Text.Dot ((.->.), userNodeId)
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
 import Dhall.TypeCheck (X(..))
 import Lens.Family.State.Strict (zoom)
 
 import qualified Codec.Serialise
+import qualified Control.Exception                as Exception
 import qualified Control.Monad.Trans.Maybe        as Maybe
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Crypto.Hash
@@ -389,24 +391,28 @@ instance Canonicalize Import where
         Import (canonicalize importHashed) importMode
 
 toHeaders
-  :: Expr s a
+  :: Text
+  -> Text
+  -> Expr s a
   -> Maybe [(CI Data.ByteString.ByteString, Data.ByteString.ByteString)]
-toHeaders (ListLit _ hs) = do
-    hs' <- mapM toHeader hs
+toHeaders key₀ key₁ (ListLit _ hs) = do
+    hs' <- mapM (toHeader key₀ key₁) hs
     return (Data.Foldable.toList hs')
-toHeaders  _             = do
+toHeaders _ _ _ = do
     empty
 
 toHeader
-  :: Expr s a
+  :: Text
+  -> Text
+  -> Expr s a
   -> Maybe (CI Data.ByteString.ByteString, Data.ByteString.ByteString)
-toHeader (RecordLit m) = do
-    TextLit (Chunks [] keyText  ) <- Dhall.Map.lookup "header" m
-    TextLit (Chunks [] valueText) <- Dhall.Map.lookup "value"  m
+toHeader key₀ key₁ (RecordLit m) = do
+    TextLit (Chunks [] keyText  ) <- Dhall.Map.lookup key₀ m
+    TextLit (Chunks [] valueText) <- Dhall.Map.lookup key₁ m
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
     let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
     return (Data.CaseInsensitive.mk keyBytes, valueBytes)
-toHeader _ = do
+toHeader _ _ _ = do
     empty
 
 
@@ -602,93 +608,109 @@ getCacheDirectory = alternative₀ <|> alternative₁
 exprFromUncachedImport :: Import -> StateT (Status IO) IO Resolved
 exprFromUncachedImport import_@(Import {..}) = do
     let ImportHashed {..} = importHashed
+    let resolveImport importType' = case importType' of
+          Local prefix file -> liftIO $ do
+              path   <- localToPath prefix file
+              exists <- Directory.doesFileExist path
 
-    (path, text, newImport) <- case importType of
-        Local prefix file -> liftIO $ do
-            path   <- localToPath prefix file
-            exists <- Directory.doesFileExist path
+              if exists
+                  then return ()
+                  else throwMissingImport (MissingFile path)
 
-            if exists
-                then return ()
-                else throwMissingImport (MissingFile path)
+              text <- Data.Text.IO.readFile path
 
-            text <- Data.Text.IO.readFile path
+              return (path, text, import_)
 
-            return (path, text, import_)
+          Remote url@URL { headers = maybeHeadersExpression } -> do
+              maybeHeadersAndExpression <- case maybeHeadersExpression of
+                  Nothing -> do
+                      return Nothing
+                  Just headersExpression -> do
+                      expr <- loadWith headersExpression
 
-        Remote url@URL { headers = maybeHeadersExpression } -> do
-            maybeHeadersAndExpression <- case maybeHeadersExpression of
-                Nothing -> do
-                    return Nothing
-                Just headersExpression -> do
-                    expr <- loadWith headersExpression
+                      let decodeHeaders key₀ key₁ = do
+                              let expected :: Expr Src X
+                                  expected =
+                                      App List
+                                          ( Record
+                                              ( Dhall.Map.fromList
+                                                  [ (key₀, Text), (key₁, Text) ]
+                                              )
+                                          )
 
-                    let expected :: Expr Src X
-                        expected =
-                            App List
-                                ( Record
-                                    ( Dhall.Map.fromList
-                                        [("header", Text), ("value", Text)]
-                                    )
-                                )
-                    let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
-                    let annot = case expr of
-                            Note (Src begin end bytes) _ ->
-                                Note (Src begin end bytes') (Annot expr expected)
-                              where
-                                bytes' = bytes <> " : " <> suffix_
-                            _ ->
-                                Annot expr expected
+                              let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
+                              let annot = case expr of
+                                      Note (Src begin end bytes) _ ->
+                                          Note (Src begin end bytes') (Annot expr expected)
+                                        where
+                                          bytes' = bytes <> " : " <> suffix_
+                                      _ ->
+                                          Annot expr expected
 
-                    case Dhall.TypeCheck.typeOf annot of
-                        Left err -> liftIO (throwIO err)
-                        Right _  -> return ()
+                              case Dhall.TypeCheck.typeOf annot of
+                                  Left err -> liftIO (throwIO err)
+                                  Right _  -> return ()
 
-                    let expr' = Dhall.Core.normalize expr
+                              let expr' = Dhall.Core.normalize expr
 
-                    case toHeaders expr' of
-                        Just headers -> do
-                            return (Just (headers, expr'))
-                        Nothing      -> do
-                            liftIO (throwIO InternalError)
+                              case toHeaders key₀ key₁ expr' of
+                                  Just headers -> do
+                                      return (Just (headers, expr'))
+                                  Nothing      -> do
+                                      liftIO (throwIO InternalError)
+
+                      let handler₀ (e :: SomeException) = do
+                              {- Try to decode using the preferred @mapKey@ /
+                                 @mapValue@ fields and fall back to @header@ /
+                                 @value@ if that fails.  However, if @header@ /
+                                 @value@ still fails then re-throw the original
+                                 exception for @mapKey@ / @mapValue@
+                              -}
+                              let handler₁ (_ :: SomeException) =
+                                      Exception.throw e
+
+                              Exception.handle handler₁ (decodeHeaders "header" "value")
+
+                      liftIO (Exception.handle handler₀ (decodeHeaders "mapKey" "mapValue"))
 
 #ifdef MIN_VERSION_http_client
-            let maybeHeaders = fmap fst maybeHeadersAndExpression
+              let maybeHeaders = fmap fst maybeHeadersAndExpression
 
-            let newHeaders =
-                    fmap (fmap absurd . snd) maybeHeadersAndExpression
+              let newHeaders =
+                      fmap (fmap absurd . snd) maybeHeadersAndExpression
 
-            (path, text) <- fetchFromHttpUrl url maybeHeaders
+              (path, text) <- fetchFromHttpUrl url maybeHeaders
 
-            let newImport = Import
-                    { importHashed = ImportHashed
-                        { importType =
-                            Remote (url { headers = newHeaders })
-                        , ..
-                        }
-                    , ..
-                    }
+              let newImport = Import
+                      { importHashed = ImportHashed
+                          { importType =
+                              Remote (url { headers = newHeaders })
+                          , ..
+                          }
+                      , ..
+                      }
 
-            return (path, text, newImport)
+              return (path, text, newImport)
 #else
-            let urlString = Text.unpack (Dhall.Core.pretty url)
+              let urlString = Text.unpack (Dhall.Core.pretty url)
 
-            liftIO (throwIO (CannotImportHTTPURL urlString mheaders))
+              liftIO (throwIO (CannotImportHTTPURL urlString mheaders))
 #endif
 
-        Env env -> liftIO $ do
-            x <- System.Environment.lookupEnv (Text.unpack env)
-            case x of
-                Just string -> do
-                    return (Text.unpack env, Text.pack string, import_)
-                Nothing -> do
-                    throwMissingImport (MissingEnvironmentVariable env)
+          Env env -> liftIO $ do
+              x <- System.Environment.lookupEnv (Text.unpack env)
+              case x of
+                  Just string -> do
+                      return (Text.unpack env, Text.pack string, import_)
+                  Nothing -> do
+                      throwMissingImport (MissingEnvironmentVariable env)
 
-        Missing -> liftIO $ do
-            throwM (MissingImports [])
+          Missing -> liftIO $ do
+              throwM (MissingImports [])
 
     case importMode of
         Code -> do
+            (path, text, newImport) <- resolveImport importType
             let parser = unParser $ do
                     Text.Parser.Token.whiteSpace
                     r <- Dhall.Parser.expr
@@ -702,9 +724,29 @@ exprFromUncachedImport import_@(Import {..}) = do
                     return (Resolved {..})
 
         RawText -> do
+            (_path, text, newImport) <- resolveImport importType
             let resolvedExpression = TextLit (Chunks [] text)
 
             return (Resolved {..})
+
+        Location -> do
+            let locationType = Union $ Dhall.Map.fromList
+                    [ ("Environment", Just Text)
+                    , ("Remote", Just Text)
+                    , ("Local", Just Text)
+                    , ("Missing", Nothing)
+                    ]
+
+            let resolvedExpression =
+                    case importType of
+                        Missing -> Field locationType "Missing"
+                        local@(Local _ _) -> App (Field locationType "Local") (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty local)))
+                        remote@(Remote _) -> App (Field locationType "Remote") (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty remote)))
+                        Env env -> App (Field locationType "Environment") (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty env)))
+
+
+            return (Resolved resolvedExpression import_)
+
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status IO
@@ -743,15 +785,10 @@ loadWith expr₀ = case expr₀ of
         then throwMissingImport (Imported _stack (Cycle import₀))
         else do
             case Map.lookup child _cache of
-                Just (childNode, expr) -> do
-                    zoom dot . State.modify $ \getDot -> do
-                        parentNode <- getDot
-
-                        -- Add edge between parent and child
-                        parentNode .->. childNode
-
-                        -- Return parent NodeId
-                        pure parentNode
+                Just expr -> do
+                    zoom graph . State.modify $
+                      -- Add the edge `parent -> child` to the import graph
+                      \edges -> Depends parent child : edges
 
                     pure expr
                 Nothing        -> do
@@ -790,29 +827,14 @@ loadWith expr₀ = case expr₀ of
 
                     let stackWithNewImport = NonEmpty.cons newImport _stack
 
-                    let childNodeId = userNodeId _nextNodeId
-
-                    -- Increment the next node id
-                    zoom nextNodeId $ State.modify succ
-
-                    -- Make current node the dot graph
-                    zoom dot . State.put $ importNode childNodeId child
-
                     zoom stack (State.put stackWithNewImport)
                     expr'' <- loadWith resolvedExpression
                     zoom stack (State.put _stack)
 
-                    zoom dot . State.modify $ \getSubDot -> do
-                        parentNode <- _dot
-
-                        -- Get current node back from sub-graph
-                        childNode <- getSubDot
-
-                        -- Add edge between parent and child
-                        parentNode .->. childNode
-
-                        -- Return parent NodeId
-                        pure parentNode
+                    zoom graph . State.modify $
+                      -- Add the edge `parent -> newImport` to the import graph,
+                      -- where `newImport` is `child` with normalized headers.
+                      \edges -> Depends parent newImport : edges
 
                     _cacher child expr''
 
@@ -829,7 +851,7 @@ loadWith expr₀ = case expr₀ of
                     expr''' <- case Dhall.TypeCheck.typeWith _startingContext expr'' of
                         Left  err -> throwM (Imported _stack' err)
                         Right _   -> return (Dhall.Core.normalizeWith _normalizer expr'')
-                    zoom cache (State.modify' (Map.insert child (childNodeId, expr''')))
+                    zoom cache (State.modify' (Map.insert child expr'''))
                     return expr'''
 
     case hash (importHashed import₀) of

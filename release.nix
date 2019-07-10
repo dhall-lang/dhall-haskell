@@ -33,7 +33,6 @@ in
           # shared_7_10_3.dhall-lsp-server
           # `hnix` depends on `lens-family-th`, which doesn't support GHC 7.10.3
           # shared_7_10_3.dhall-nix
-          shared_7_10_3.dhall-text
 
           # Verify that the packages build against the latest supported version
           # of the compiler
@@ -44,7 +43,6 @@ in
           # shared_8_6_1.dhall-lsp-server
           # `hnix` depends on `unix-2.7.*` and doesn't work with GHC 8.6
           # shared_8_6_1.dhall-nix
-          shared_8_6_1.dhall-text
 
           # However, we still use GHC 8.4.3 to build the distributed tarballs
           # due to a bug in GHC 8.6.1.  See:
@@ -55,7 +53,6 @@ in
           shared.tarball-dhall-json
           shared.tarball-dhall-lsp-server
           shared.tarball-dhall-nix
-          shared.tarball-dhall-text
 
           shared_ghcjs.tarball-website
 
@@ -77,7 +74,6 @@ in
       tarball-dhall-json
       tarball-dhall-lsp-server
       tarball-dhall-nix
-      tarball-dhall-text
     ;
 
     linux-dhall            = shared_linux.possibly-static.dhall;
@@ -85,7 +81,6 @@ in
     linux-dhall-json       = shared_linux.possibly-static.dhall-json;
     linux-dhall-lsp-server = shared_linux.possibly-static.dhall-lsp-server;
     linux-dhall-nix        = shared_linux.possibly-static.dhall-nix;
-    linux-dhall-text       = shared_linux.possibly-static.dhall-text;
 
     inherit (shared_linux)
       image-dhall
@@ -93,6 +88,5 @@ in
       image-dhall-json
       image-dhall-lsp-server
       image-dhall-nix
-      image-dhall-text
     ;
   }

@@ -85,7 +85,7 @@ issue96 = Test.Tasty.HUnit.testCase "Issue #96" (do
 issue126 :: TestTree
 issue126 = Test.Tasty.HUnit.testCase "Issue #126" (do
     e <- Util.code "''\nfoo\nbar\n''"
-    Util.normalize' e @?= "''\nfoo\nbar\n''" )
+    Util.normalize' e @?= "\"foo\\nbar\\n\"" )
 
 issue151 :: TestTree
 issue151 = Test.Tasty.HUnit.testCase "Issue #151" (do

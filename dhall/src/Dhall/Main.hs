@@ -21,14 +21,15 @@ module Dhall.Main
 
 import Control.Applicative (optional, (<|>))
 import Control.Exception (SomeException)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
 import Dhall.Binary (StandardVersion)
-import Dhall.Core (Expr(..), Import)
+import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
-import Dhall.Import (Imported(..))
+import Dhall.Import (Imported(..), Depends(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
@@ -36,6 +37,7 @@ import Lens.Family (set)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
+import Text.Dot ((.->.))
 
 import qualified Codec.CBOR.JSON
 import qualified Codec.CBOR.Read
@@ -98,6 +100,7 @@ data Mode
     | Lint { inplace :: Maybe FilePath }
     | Encode { file :: Maybe FilePath, json :: Bool }
     | Decode { file :: Maybe FilePath, json :: Bool }
+    | Text { file :: Maybe FilePath }
 
 data ResolveMode
     = Dot
@@ -184,6 +187,10 @@ parseMode =
             "decode"
             "Decode a Dhall expression from binary"
             (Decode <$> optional parseFile <*> parseJSONFlag)
+    <|> subcommand
+            "text"
+            "Render a Dhall expression that evaluates to a Text literal"
+            (Text <$> optional parseFile)
     <|> (Default <$> optional parseFile <*> parseAnnotate <*> parseAlpha)
   where
     argument =
@@ -389,12 +396,31 @@ command (Options {..}) = do
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _dot}) <-
+            (Dhall.Import.Types.Status { _graph, _stack }) <-
                 State.execStateT (Dhall.Import.loadWith expression) (toStatus file)
 
-            putStr . ("strict " <>) . Text.Dot.showDot $
-                   Text.Dot.attribute ("rankdir", "LR") >>
-                   _dot
+            let (rootImport :| _) = _stack
+                imports = rootImport : map parent _graph ++ map child _graph
+                importIds = Data.Map.fromList (zip imports [Text.Dot.userNodeId i | i <- [0..]])
+
+            let dotNode (i, nodeId) =
+                    Text.Dot.userNode
+                        nodeId
+                        [ ("label", Data.Text.unpack $ pretty i)
+                        , ("shape", "box")
+                        , ("style", "rounded")
+                        ]
+
+            let dotEdge (Depends parent child) =
+                    case (Data.Map.lookup parent importIds, Data.Map.lookup child importIds) of
+                        (Just from, Just to) -> from .->. to
+                        _                    -> pure ()
+
+            let dot = do Text.Dot.attribute ("rankdir", "LR")
+                         mapM_ dotNode (Data.Map.assocs importIds)
+                         mapM_ dotEdge _graph
+
+            putStr . ("strict " <>) . Text.Dot.showDot $ dot
 
         Resolve { resolveMode = Just ListImmediateDependencies, ..} -> do
             expression <- getExpression file
@@ -545,6 +571,27 @@ command (Options {..}) = do
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 
             renderDoc System.IO.stdout doc
+
+        Text {..} -> do
+            expression <- getExpression file
+
+            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) (toStatus file)
+
+            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
+
+            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+
+            case normalizedExpression of
+                Dhall.Core.TextLit (Dhall.Core.Chunks [] text) -> do
+                    Data.Text.IO.putStr text
+                _ -> do
+                    let invalidTypeExpected :: Expr X X
+                        invalidTypeExpected = Dhall.Core.Text
+
+                    let invalidTypeExpression :: Expr X X
+                        invalidTypeExpression = normalizedExpression
+
+                    Control.Exception.throwIO (Dhall.InvalidType {..})
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()

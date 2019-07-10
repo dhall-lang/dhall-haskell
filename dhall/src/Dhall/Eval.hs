@@ -252,7 +252,7 @@ inst (Cl x env t) !u = eval (Extend env x u) t
 
 -- Out-of-env variables have negative de Bruijn levels.
 vVar :: Env a -> Var -> Val a
-vVar env (V x (fromInteger -> i :: Int)) = go env i where
+vVar env (V x i) = go env i where
   go (Extend env x' v) i
     | x == x'   = if i == 0 then v else go env (i - 1)
     | otherwise = go env i
@@ -548,15 +548,14 @@ eval !env t =
                         if null ks then
                           VRecordLit mempty
                         else case evalE t of
-                          VRecordLit kvs
-                            | Just s <- traverse (\k -> (k,) <$> Dhall.Map.lookup k kvs) (toList ks)
-                              -> VRecordLit (Dhall.Map.sort (Dhall.Map.fromList s))
-                            | otherwise -> error errorMsg
+                          VRecordLit kvs -> let
+                            kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
+                            in VRecordLit (Dhall.Map.sort kvs')
                           t -> VProject t (Left ks)
     Project t (Right e) ->
                         case evalE e of
                           VRecord kts ->
-                            evalE (Project t (Left (Dhall.Set.fromList (Dhall.Map.keys kts))))
+                            evalE (Project t (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
                           e' -> VProject (evalE t) (Right e')
     Note _ e         -> evalE e
     ImportAlt t _    -> evalE t
@@ -574,7 +573,9 @@ eqListBy f = go where
 {-# inline eqListBy #-}
 
 eqMapsBy :: Ord k => (v -> v -> Bool) -> Map k v -> Map k v -> Bool
-eqMapsBy f mL mR = eqListBy eq (Dhall.Map.toList mL) (Dhall.Map.toList mR)
+eqMapsBy f mL mR =
+    Dhall.Map.size mL == Dhall.Map.size mR
+    && eqListBy eq (Dhall.Map.toList mL) (Dhall.Map.toList mR)
   where
     eq (kL, vL) (kR, vR) = kL == kR && f vL vR
 {-# inline eqMapsBy #-}
@@ -861,7 +862,7 @@ nfEmpty = nf Empty
 alphaNormalize :: Expr s a -> Expr s a
 alphaNormalize = goEnv NEmpty where
 
-  goVar :: Names -> Text -> Integer -> Expr s a
+  goVar :: Names -> Text -> Int -> Expr s a
   goVar e topX topI = go 0 e topI where
     go !acc (NBind env x) !i
       | x == topX = if i == 0 then Var (V "_" acc) else go (acc + 1) env (i - 1)
