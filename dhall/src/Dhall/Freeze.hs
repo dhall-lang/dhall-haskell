@@ -17,10 +17,11 @@ module Dhall.Freeze
 import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Data.Maybe (fromMaybe)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
-import Dhall.Import (standardVersion)
+import Dhall.Import (standardVersion, SemanticImport(..))
 import Dhall.Parser (exprAndHeaderFromText, Src)
 import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
 import Dhall.TypeCheck (X)
@@ -29,6 +30,7 @@ import System.Console.ANSI (hSupportsANSI)
 
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict          as State
+import qualified Crypto.Hash
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Data.Text.IO
@@ -55,37 +57,24 @@ freezeImport directory _standardVersion import_ = do
                         }
                 }
 
-    let status =
-            set standardVersion
-                _standardVersion
-                (Dhall.Import.emptyStatus directory)
+    let status = set standardVersion _standardVersion Dhall.Import.emptyStatus
+    let stack = Dhall.Import.rootImport directory :| []
 
-    let download =
-            State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
+    let download import' = State.evalStateT (do
+            resolvedImport <- Dhall.Import.resolveImport stack import'
+            SemanticImport {..} <- Dhall.Import.processImport stack resolvedImport
+            return semanticHash) status
 
     -- Try again without the semantic integrity check if decoding fails
-    let handler :: SomeException -> IO (Expr Src X)
+    let handler :: SomeException -> IO (Crypto.Hash.Digest Crypto.Hash.SHA256)
         handler _ = do
-            State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
+            download unprotectedImport
 
-    expression <- Control.Exception.handle handler download
+    semanticHash <- Control.Exception.handle handler (download import_)
 
-    case Dhall.TypeCheck.typeOf expression of
-        Left  exception -> Control.Exception.throwIO exception
-        Right _         -> return ()
-
-    let normalizedExpression =
-            Dhall.Core.alphaNormalize (Dhall.Core.normalize expression)
-
-    let expressionHash =
-            Just (Dhall.Import.hashExpression _standardVersion normalizedExpression)
-
-    let newImportHashed = (importHashed import_) { hash = expressionHash }
+    let newImportHashed = (importHashed import_) { hash = Just semanticHash }
 
     let newImport = import_ { importHashed = newImportHashed }
-
-    State.evalStateT (Dhall.Import.exprToImport newImport normalizedExpression) status
-
     return newImport
 
 -- | Freeze an import only if the import is a `Remote` import

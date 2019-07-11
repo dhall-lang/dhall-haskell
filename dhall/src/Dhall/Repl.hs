@@ -25,7 +25,7 @@ import Data.Semigroup ((<>))
 import Data.Text ( Text )
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Context (Context)
-import Dhall.Import (hashExpressionToCode, standardVersion)
+import Dhall.Import (hashExpressionToCode, standardVersion, LoadedExpr(..))
 import Dhall.Pretty (CharacterSet(..))
 import Lens.Family (set)
 import System.Console.Haskeline (Interrupt(..))
@@ -131,9 +131,12 @@ parseAndLoad src = do
         return a
 
   let status =
-        set standardVersion (_standardVersion env) (Dhall.emptyStatus ".")
+        set standardVersion (_standardVersion env) Dhall.emptyStatus
+  let stack = Dhall.rootImport "." :| []
 
-  liftIO ( State.evalStateT (Dhall.loadWith parsed) status )
+  LoadedExpr {..} <-
+      liftIO ( State.evalStateT (Dhall.loadExpr stack parsed) status )
+  return loadedExpr
 
 
 eval :: ( MonadIO m, MonadState Env m ) => String -> m ()

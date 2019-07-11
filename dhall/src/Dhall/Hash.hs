@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# language RecordWildCards   #-}
 
 -- | This module contains the implementation of the @dhall hash@ subcommand
 
@@ -7,9 +8,10 @@ module Dhall.Hash
       hash
     ) where
 
+import Data.List.NonEmpty (NonEmpty (..))
 import Dhall.Binary (StandardVersion)
 import Dhall.Parser (exprFromText)
-import Dhall.Import (hashExpressionToCode, standardVersion)
+import Dhall.Import (hashExpressionToCode, standardVersion, LoadedExpr(..))
 import Lens.Family (set)
 
 import qualified Control.Monad.Trans.State.Strict as State
@@ -29,16 +31,19 @@ hash _standardVersion = do
         Right parsedExpression -> return parsedExpression
 
     let status =
-            set standardVersion _standardVersion (Dhall.Import.emptyStatus ".")
+            set standardVersion _standardVersion Dhall.Import.emptyStatus
 
-    resolvedExpression <- State.evalStateT (Dhall.Import.loadWith parsedExpression) status
+    let stack = Dhall.Import.rootImport "." :| []
 
-    case Dhall.TypeCheck.typeOf resolvedExpression of
+    LoadedExpr {..} <-
+        State.evalStateT (Dhall.Import.loadExpr stack parsedExpression) status
+
+    case Dhall.TypeCheck.typeOf loadedExpr of
         Left  exception -> Control.Exception.throwIO exception
         Right _         -> return ()
 
     let normalizedExpression =
-            Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)
+            Dhall.Core.alphaNormalize (Dhall.Core.normalize loadedExpr)
 
     Data.Text.IO.putStrLn
         (hashExpressionToCode _standardVersion normalizedExpression)

@@ -123,7 +123,7 @@ import Data.Vector (Vector)
 import Data.Word (Word8, Word16, Word32, Word64)
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Core (Expr(..), Chunks(..))
-import Dhall.Import (Imported(..))
+import Dhall.Import (Imported(..), LoadedExpr(..))
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import GHC.Generics
@@ -412,20 +412,22 @@ inputWithSettings settings (Type {..}) txt = do
             .  set Dhall.Import.normalizer      _normalizer
             .  set Dhall.Import.startingContext _startingContext
 
-    let status = transform (Dhall.Import.emptyStatus _rootDirectory)
+    let status = transform Dhall.Import.emptyStatus
 
-    expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
+    let importStack = Dhall.Import.rootImport _rootDirectory :| []
+
+    LoadedExpr {..} <- State.evalStateT (Dhall.Import.loadExpr importStack expr) status
 
     let suffix = Dhall.Pretty.Internal.prettyToStrictText expected
-    let annot = case expr' of
+    let annot = case loadedExpr of
             Note (Src begin end bytes) _ ->
-                Note (Src begin end bytes') (Annot expr' expected)
+                Note (Src begin end bytes') (Annot loadedExpr expected)
               where
                 bytes' = bytes <> " : " <> suffix
             _ ->
-                Annot expr' expected
+                Annot loadedExpr expected
     _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
-    let normExpr = Dhall.Core.normalizeWith (view normalizer settings) expr'
+    let normExpr = Dhall.Core.normalizeWith (view normalizer settings) loadedExpr
 
     case extract normExpr  of
         Success x  -> return x
@@ -507,12 +509,12 @@ inputExprWithSettings settings txt = do
             .  set Dhall.Import.normalizer      _normalizer
             .  set Dhall.Import.startingContext _startingContext
 
-    let status = transform (Dhall.Import.emptyStatus _rootDirectory)
+    let status = transform Dhall.Import.emptyStatus
+    let importStack = Dhall.Import.rootImport _rootDirectory :| []
+    LoadedExpr {..} <- State.evalStateT (Dhall.Import.loadExpr importStack expr) status
 
-    expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
-
-    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) expr')
-    pure (Dhall.Core.normalizeWith (view normalizer settings) expr')
+    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) loadedExpr)
+    pure (Dhall.Core.normalizeWith (view normalizer settings) loadedExpr)
 
 -- | Use this function to extract Haskell values directly from Dhall AST.
 --   The intended use case is to allow easy extraction of Dhall values for

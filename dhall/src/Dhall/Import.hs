@@ -102,7 +102,10 @@ module Dhall.Import (
     -- * Import
       load
     , loadExpr
+    , LoadedExpr(..)
     , processImport
+    , SemanticImport(..)
+    , resolveImport
     , hashExpression
     , hashExpressionToCode
     , assertNoImports
@@ -111,6 +114,7 @@ module Dhall.Import (
     , cache
     , graph
     , manager
+    , rootImport
     , standardVersion
     , normalizer
     , startingContext
@@ -467,7 +471,7 @@ parent = File { directory = Directory { components = [ ".." ] }, file = "" }
 --   and, in the case remote imports, evaluate the headers.
 resolveImport :: ImportStack -> Import -> StateT Status IO ResolvedImport
 -- Remote import without headers
-resolveImport parent
+resolveImport stack
   (Import (ImportHashed mHash (Remote (URL {..}) Nothing)) mode) =
     return (ResolvedImport mHash resolvedImportType mode)
   where
