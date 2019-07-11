@@ -45,7 +45,7 @@
     `Optional` values translate to @null@ if missing or the unwrapped value if
     present:
 
-> $ dhall-to-nix <<< "None Integer"
+> $ dhall-to-nix <<< "None Natural"
 > null
 
 > $ dhall-to-nix <<< "Some +1"
