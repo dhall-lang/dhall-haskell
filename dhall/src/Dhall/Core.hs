@@ -198,10 +198,7 @@ instance Pretty URL where
         <>  Pretty.pretty authority
         <>  pathDoc
         <>  queryDoc
-        <>  foldMap prettyHeaders headers
       where
-        prettyHeaders h = " using " <> Pretty.pretty h
-
         File {..} = path
 
         Directory {..} = directory
@@ -241,11 +238,11 @@ instance Semigroup ImportType where
     Local prefix file₀ <> Local Parent file₁ =
         Local prefix (file₀ <> parent <> file₁)
 
-    Remote (URL { path = path₀, .. }) <> Local Parent path₁ =
-        Remote (URL { path = path₀ <> parent <> path₁, .. })
+    Remote (URL { path = path₀, .. } headers) <> Local Parent path₁ =
+        Remote (URL { path = path₀ <> parent <> path₁, .. } headers)
 
-    import₀ <> Remote (URL { headers = headers₀, .. }) =
-        Remote (URL { headers = headers₁, .. })
+    import₀ <> Remote (URL { headers = headers₀, .. } headers) =
+        Remote (URL { headers = headers₁, .. } headers)
       where
         importHashed₀ = Import (ImportHashed Nothing import₀) Code
 
@@ -258,7 +255,9 @@ instance Pretty ImportType where
     pretty (Local prefix file) =
         Pretty.pretty prefix <> Pretty.pretty file
 
-    pretty (Remote url) = Pretty.pretty url
+    pretty (Remote url ) = Pretty.pretty url <> foldMap prettyHeaders headers
+      where
+        prettyHeaders h = " using " <> Pretty.pretty h
 
     pretty (Env env) = "env:" <> Pretty.pretty env
 

@@ -33,8 +33,8 @@ import qualified Dhall.Context
 import qualified Data.Map      as Map
 import qualified Data.Text
 
--- binary headers
-type Headers = [(CI ByteString, ByteString)]
+-- HTTP headers
+type Headers = [(Text, Text)]
 
 -- non-cyclic, binary headers, canonical
 data ResolvedImportType =
@@ -45,26 +45,58 @@ data ResolvedImportType =
     ResolvedEnv Text  -- ^ same as plain Env
     ResolvedMissing  -- ^ same as plain Missing
 
-newtype SemanticHash = SemanticHash Crypto.Hash.Digest SHA256
+instance Pretty ResolvedImportType where
+    pretty (ResolvedLocal prefix file) =
+        Pretty.pretty prefix <> Pretty.pretty file
+
+    pretty (ResolvedRemote url Nothing) = Pretty.pretty url
+
+    pretty (ResolvedRemote url (Just headers)) =
+        Pretty.pretty url <> " using " <> Pretty.pretty headersExpr
+      where
+        headersExpr = ListLit Nothing (foldMap headerExpr headers)
+        headerExpr (key, value) =
+            let keyExpr = TextLit (Chunks [] key)
+                valueExpr = TextLit (Chunks [] value)
+            in RecordLit (Map.fromList [("mapKey", keyExpr), ("mapValue", valueExpr)]
+
+    pretty (ResolvedEnv env) = "env:" <> Pretty.pretty env
+
+    pretty Missing = "missing"
+
+
+newtype SemanticHash = SemanticHash { fromSemanticHash :: Crypto.Hash.Digest SHA256 }
+newtype SemisemanticHash = SemisemanticHash { fromSemisemanticHash :: Crypto.Hash.Digest SHA256 }
 
 data ResolvedImport = ResolvedImport (Maybe SemanticHash) ResolvedImportType ImportMode
 
-data LoadedImport = LoadedImport
-    { normalisedImport :: Expr Src X  -- typechecked and normalised
+instance Pretty ResolvedImport where
+    pretty (Import {..}) = Pretty.pretty importHashed <> Pretty.pretty suffix
+      where
+        suffix :: Text
+        suffix = case importMode of
+            RawText  -> " as Text"
+            Location -> " as Location"
+            Code     -> ""
+
+
+data SemanticImport = SemanticImport
+    { normalisedImport :: Expr Src X
+    -- ^ typechecked and normalised (not necessarily alpha-normal)
     , semanticHash :: SemanticHash
     , graph :: Tree ResolvedImport  -- `Real` resolved import is root node
     }
 
 data LoadedExpr = LoadedExpr
     { loadedExpr :: Expr Src X  -- not typechecked or normalised!
-    , imports :: [Tree ResolvedImport]  -- TODO...
+    , imports :: [SemanticImport]
     }
 
 data ImportStack = NonEmpty ResolvedImport
 
 -- | State threaded throughout the import process
 data Status m = Status
-    { _cache :: Map Import LoadedImport
+    { _cache :: Map Import SemanticImport
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
 
@@ -74,6 +106,7 @@ data Status m = Status
     , _standardVersion :: StandardVersion
 
     , _normalizer :: Maybe (ReifiedNormalizer X)
+    -- ^ TODO!
 
     , _startingContext :: Context (Expr Src X)
     -- ^ typechecking context; allows us to load _open_ expressions
@@ -95,8 +128,8 @@ emptyStatus = Status {..}
 
 
 -- TODO: allow file names as well (not just directory)
-rootImport :: FilePath -> Import
-rootImport rootDirectory = rootImport
+rootImport :: FilePath -> ResolvedImport
+rootImport filePath = ResolvedImport Nothing importType Code
   where
     prefix = if isRelative rootDirectory
       then Here
@@ -115,7 +148,7 @@ rootImport rootDirectory = rootImport
       , importMode = Code
       }
 
-cache :: Functor f => LensLike' f (Status m) (Map Import LoadedImport)
+cache :: Functor f => LensLike' f (Status m) (Map ResolvedImport SemanticImport)
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
 manager :: Functor f => LensLike' f (Status m) (Maybe Dynamic)
