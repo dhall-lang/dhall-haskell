@@ -48,7 +48,7 @@
 > $ dhall-to-nix <<< "None Natural"
 > null
 
-> $ dhall-to-nix <<< "Some +1"
+> $ dhall-to-nix <<< "Some 1"
 > 1
 
     Unions are Church-encoded:
