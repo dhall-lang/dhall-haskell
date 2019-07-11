@@ -100,25 +100,20 @@
 
 module Dhall.Import (
     -- * Import
-      exprFromImport
-    , exprToImport
-    , load
-    , loadWith
+      load
+    , loadExpr
+    , processImport
     , hashExpression
     , hashExpressionToCode
     , assertNoImports
     , Status
     , emptyStatus
-    , stack
     , cache
-    , Depends(..)
     , graph
     , manager
     , standardVersion
     , normalizer
     , startingContext
-    , resolver
-    , cacher
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -134,6 +129,7 @@ import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term(..))
 import Control.Exception (Exception, SomeException, throwIO, toException)
 import Control.Monad (guard)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
@@ -169,12 +165,13 @@ import Dhall.Import.Types
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
 import Dhall.TypeCheck (X(..))
-import Lens.Family.State.Strict (zoom)
+import Lens.Family.State.Strict (zoom, use, (%=))
 
 import qualified Codec.Serialise
 import qualified Control.Exception                as Exception
 import qualified Control.Monad.Trans.Maybe        as Maybe
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Control.Monad.Trans.Writer       as Writer
 import qualified Crypto.Hash
 import qualified Data.ByteArray
 import qualified Data.ByteString
@@ -186,6 +183,7 @@ import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Encoding
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO
+import qualified Data.Tree                        as Tree
 import qualified Dhall.Binary
 import qualified Dhall.Core
 import qualified Dhall.Map
@@ -249,7 +247,7 @@ instance Show ReferentiallyOpaque where
 
 -- | Extend another exception with the current import stack
 data Imported e = Imported
-    { importStack :: NonEmpty Import -- ^ Imports resolved so far, in reverse order
+    { importStack :: ImportStack -- ^ Imports resolved so far, in reverse order
     , nested      :: e               -- ^ The nested exception
     } deriving (Typeable)
 
@@ -395,7 +393,7 @@ toHeaders
   :: Text
   -> Text
   -> Expr s a
-  -> Maybe [(CI Data.ByteString.ByteString, Data.ByteString.ByteString)]
+  -> Maybe [(Text, Text)]
 toHeaders key₀ key₁ (ListLit _ hs) = do
     hs' <- mapM (toHeader key₀ key₁) hs
     return (Data.Foldable.toList hs')
@@ -406,13 +404,11 @@ toHeader
   :: Text
   -> Text
   -> Expr s a
-  -> Maybe (CI Data.ByteString.ByteString, Data.ByteString.ByteString)
+  -> Maybe (Text, Text)
 toHeader key₀ key₁ (RecordLit m) = do
     TextLit (Chunks [] keyText  ) <- Dhall.Map.lookup key₀ m
     TextLit (Chunks [] valueText) <- Dhall.Map.lookup key₁ m
-    let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
-    let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
-    return (Data.CaseInsensitive.mk keyBytes, valueBytes)
+    return (keyText, valueText)
 toHeader _ _ _ = do
     empty
 
@@ -464,25 +460,15 @@ localToPath prefix file_ = liftIO $ do
 
     return (foldr cons prefixPath cs)
 
--- | "Resolve" an import: "chain" the import together with the parent import
---   (on top of the import stack) and check for cyclic imports and
---   "referential sanity"; in the case of remote imports, evaluate headers.
-resolveImport :: ImportStack -> Import -> StateT (Status IO) IO ResolvedImport
-resolveImport (parent :| stack) import_
-    | child `elem` stack =  -- ensure there aren't any import cycles
-        throwMissingImport (Imported stack (Cycle import_))
-    | not (local parent) && local child =  -- ensure all imports are "referentially sane"
-        throwMissingImport (Imported stack (ReferentiallyOpaque import_))
-  where
-    child = chainImport parent import_
-    local (ResolvedImport _ (ResolvedLocal   {}) _) = True
-    local (ResolvedImport _ (ResolvedRemote  {}) _) = False
-    local (ResolvedImport _ (ResolvedEnv     {}) _) = True
-    local (ResolvedImport _ (ResolvedMissing {}) _) = True
+parent :: File
+parent = File { directory = Directory { components = [ ".." ] }, file = "" }
 
+-- | "Resolve" an import: "chain" the import together with the parent import
+--   and, in the case remote imports, evaluate the headers.
+resolveImport :: ImportStack -> Import -> StateT Status IO ResolvedImport
 -- Remote import without headers
 resolveImport parent
-            (Import (ImportHashed mHash (Remote (URL {..}) Nothing) mode) =
+  (Import (ImportHashed mHash (Remote (URL {..}) Nothing)) mode) =
     return (ResolvedImport mHash resolvedImportType mode)
   where
     resolvedUrl = URL { path = canonicalize path, ..}
@@ -493,22 +479,22 @@ resolveImport stack
   (Import (ImportHashed mHash (Remote (URL {..}) (Just headers))) mode) = do
     let resolvedUrl = URL { path = canonicalize path, .. }
 
-    expr <- loadExpr stack headers
+    LoadedExpr {..} <- loadExpr stack headers
 
     let decodeHeaders key₀ key₁ = do
             let expected :: Expr Src X
                 expected = App List (Record (Dhall.Map.fromList [ (key₀, Text), (key₁, Text) ]))
-            let annot = case expr of
+            let annot = case loadedExpr of
                     Note (Src begin end bytes) _ ->
                         let bytes' = bytes <> " : "
                               <> Dhall.Pretty.Internal.prettyToStrictText expected
-                        in Note (Src begin end bytes') (Annot expr expected)
-                    _ -> Annot expr expected
+                        in Note (Src begin end bytes') (Annot loadedExpr expected)
+                    _ -> Annot loadedExpr expected
             case Dhall.TypeCheck.typeOf annot of
                 Left err -> liftIO (throwIO err)
                 Right _  -> return ()
-            let expr' = Dhall.Core.normalize expr
-            case toHeaders key₀ key₁ expr' of
+            let normalisedExpr = Dhall.Core.normalize loadedExpr
+            case toHeaders key₀ key₁ normalisedExpr of
                 Just httpHeaders -> return httpHeaders
                 Nothing -> liftIO (throwIO InternalError)
 
@@ -551,7 +537,7 @@ resolveImport (ResolvedImport _ (ResolvedLocal prefix file) _ :| _)
 
 {- Remote (URL { path = path₀, .. }) <> Local Parent path₁ =
        Remote (URL { path = path₀ <> parent <> path₁, .. }) -}
-chainImport (ResolvedImport _ (ResolvedRemote (URL {..}) mHeaders) _)
+resolveImport (ResolvedImport _ (ResolvedRemote (URL {..}) mHeaders) _ :| _)
   (Import (ImportHashed mHash (Local Parent file)) mode) =
     return (ResolvedImport mHash resolvedImportType mode)
   where
@@ -577,64 +563,71 @@ resolveImport _ (Import (ImportHashed mHash (Local prefix file)) mode) =
 -- | Queries the "hot" cache (in `Status`); defers to
 --   `processImportWithSemanticCache` in general.
 processImport
-  :: ImportStack -> ResolvedImport -> StateT (Status IO) IO SemanticImport
+  :: ImportStack -> ResolvedImport -> StateT Status IO SemanticImport
 processImport stack import_ = do
     cache_ <- use cache
     case Map.lookup import_ cache_ of
         Just semanticImport -> return semanticImport
         Nothing -> do
-            semanticImport <- processImportWithSemanticCache stack resolvedImport
-            modifying cache (Map.insert import_ semanticImport)
+            semanticImport <- processImportWithSemanticCache stack import_
+            -- Lens.Family.State.Strict only exports `%=`, not `modifying`...
+            cache %= (Map.insert import_ semanticImport)
             return semanticImport
 
 -- Checks the "semantic" disk cache; defers to
 -- `processImportWithSemisemanticCache` in general.
 processImportWithSemanticCache
-  :: ImportStack -> ResolvedImport -> StateT (Status IO) IO SemanticImport
+  :: ImportStack -> ResolvedImport -> StateT Status IO SemanticImport
 -- Pass on non-frozen imports.
-processImportWithSemanticCache stack import_@(Import (ImportHashed Nothing _) _) =
+processImportWithSemanticCache stack import_@(ResolvedImport Nothing _ _) =
     processImportWithSemisemanticCache stack import_
 
 processImportWithSemanticCache stack
-  import_@(Import (ImportHashed (Just semanticHash) _) _) = do
-    mCached <- fetchFromSemanticCache semanticHash
+  import_@(ResolvedImport (Just semanticHash) _ _) = do
+    mCached <- lift $ fetchFromSemanticCache semanticHash
     case mCached of
-        Just bytes -> do
+        Just bytesStrict -> do
             let actualHash = Crypto.Hash.hash bytesStrict
             if semanticHash == actualHash
                 then return ()
-                else throwMissingImport (Imported _stack (HashMismatch {..}))
+                else throwMissingImport (Imported stack (HashMismatch {..}))
 
+            let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
             term <- Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytesLazy)
             normalisedImport <- Dhall.Core.throws (Dhall.Binary.decodeExpression term)
             -- a frozen import does not have any dependencies if loaded from the semantic cache.
-            let graph = Node import_ []
-            return (SemanticImport {..})
+            let graph = Tree.Node import_ []
+            -- TODO: cached imports should have type Expr Src X!
+            return (SemanticImport {normalisedImport = fmap undefined normalisedImport, ..})
 
         Nothing -> do  -- continue with semi-semantic cache
-            SemanticImport { normalisedImport = normalisedImport, graph = Node _ imports }
+            SemanticImport { normalisedImport = normalisedImport, graph = Tree.Node _ imports }
                 <- processImportWithSemisemanticCache stack import_
 
             -- The semi-semantic cache always returns a semantic hash computed
             -- with the default `StandardVersion`. In general we will need to
             -- check all possible versions to find the one that matches the
             -- requested semantic hash, if it exists.
-            let alphaNormal = Dhall.Core.alphaNormalize (normalisedImport result)
+            let alphaNormal = Dhall.Core.alphaNormalize normalisedImport
             let variants = map (\version -> encodeExpression version alphaNormal)
                                [ minBound .. maxBound ]
-            case find ((== semanticHash). Crypto.Hash.hash) of
-                Just bytes -> writeToSemanticCache semanticHash bytes
-                Nothing -> throwMissingImport (Imported stack (HashMismatch {..}))
+            case Data.Foldable.find ((== semanticHash). Crypto.Hash.hash) variants of
+                Just bytes -> lift $ writeToSemanticCache semanticHash bytes
+                Nothing -> do
+                    let expectedHash = semanticHash
+                    version <- use standardVersion
+                    let actualHash = hashExpression version alphaNormal
+                    throwMissingImport (Imported stack (HashMismatch {..}))
 
-            return (SemanticImport { graph = Node import_ imports, .. })
+            return (SemanticImport { graph = Tree.Node import_ imports, .. })
 
 -- Try to load from "semi-semantic" disk cache, otherwise typecheck and
 -- normalise from scratch.
 processImportWithSemisemanticCache
-  :: ImportStack -> ResolvedImport -> StateT (Status IO) IO SemanticImport
+  :: ImportStack -> ResolvedImport -> StateT Status IO SemanticImport
 -- `as Location` imports aren't cached "semi-semantically"
 processImportWithSemisemanticCache stack
-  import_@(ResolvedImport (Import (ImportHashed _ importType) Location)) = do
+  import_@(ResolvedImport _ resolvedImportType Location) = do
     let locationType = Union $ Dhall.Map.fromList
             [ ("Environment", Just Text)
             , ("Remote", Just Text)
@@ -642,47 +635,49 @@ processImportWithSemisemanticCache stack
             , ("Missing", Nothing)
             ]
     let normalisedImport =
-            case importType of
+            case resolvedImportType of
                 ResolvedMissing -> Field locationType "Missing"
                 local@(ResolvedLocal _ _) ->
                     App (Field locationType "Local")
                       (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty local)))
-                remote@(ResolvedRemote _) ->
+                remote@(ResolvedRemote _ _) ->
                     App (Field locationType "Remote")
                       (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty remote)))
                 ResolvedEnv env ->
                     App (Field locationType "Environment")
                       (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty env)))
-    -- note that normalisedImport is already alpha-normal since it doesn't contain any variables
-    let semanticHash = hashExpression (normalisedImport)
+
+    version <- use standardVersion
+    let semanticHash = hashExpression version normalisedImport
     -- `as Location` doesn't actually touch anything
-    let graph = Node import_ []
+    let graph = Tree.Node import_ []
     return (SemanticImport {..})
 
 -- `as Text` imports aren't cached "semi-semantically" either
 processImportWithSemisemanticCache stack
-  import_@(ResolvedImport (Import (ImportHashed _ importType) RawText)) = do
-    text <- fetchFresh importType
+  import_@(ResolvedImport _ resolvedImportType RawText) = do
+    text <- fetchFresh stack resolvedImportType
     let normalisedImport = TextLit (Chunks [] text)
-    let semanticHash = hashExpression (normalisedImport)
-    let graph = Node import_ []
+    version <- use standardVersion
+    let semanticHash = hashExpression version (normalisedImport)
+    let graph = Tree.Node import_ []
     return (SemanticImport {..})
 
 processImportWithSemisemanticCache stack
-  import_@(ResolvedImport (Import (ImportHashed _ importType) Code)) = do
-    text <- fetchFresh importType
+  import_@(ResolvedImport _ resolvedImportType Code) = do
+    text <- fetchFresh stack resolvedImportType
 
-    path <- case importType of
-        Local prefix file = localToPath prefix file
-        Remote url -> Text.unpack (renderURL url)
-        Env env -> Text.unpack env
-        Missing -> liftIO $ throwM (MissingImports [])
+    path <- case resolvedImportType of
+        ResolvedLocal prefix file -> lift $ localToPath prefix file
+        ResolvedRemote url _ -> return $ Text.unpack (renderURL url)
+        ResolvedEnv env -> return $ Text.unpack env
+        ResolvedMissing -> liftIO $ throwM (MissingImports [])
     let parser = unParser $ do
             Text.Parser.Token.whiteSpace
             r <- Dhall.Parser.expr
             Text.Parser.Combinators.eof
             return r
-    parsedImport <- case Text.Megaparsec.parse parser path text of
+    parsedImport <- case Text.Megaparsec.parse parser (path :: FilePath) text of
         Left errInfo -> do
             liftIO (throwIO (ParseError errInfo text))
         Right expr -> do
@@ -692,43 +687,50 @@ processImportWithSemisemanticCache stack
     loaded@LoadedExpr {..} <- loadExpr stack' parsedImport
 
     -- Check semi-semantic cache
-    let semisemanticHash = hashSemisemantic loaded
-    result <- fetchFromSemisemanticCache semisemanticHash
+    version <- use standardVersion
+    let semisemanticHash = hashSemisemantic version loaded
+    result <- lift $ fetchFromSemisemanticCache semisemanticHash
     (bytes, normalisedImport) <- case result of
-        Just bytes -> do
+        Just bytesStrict -> do
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
             term <- Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytesLazy)
             normalisedImport <- Dhall.Core.throws (Dhall.Binary.decodeExpression term)
-            return (bytes, normalisedImport)
+            -- TODO!
+            return (bytesStrict, fmap undefined normalisedImport)
         Nothing -> do  -- otherwise typecheck and normalise
-            normalisedImport <- case Dhall.TypeCheck.typeWith _startingContext loadedExpr of
+            startingContext_ <- use startingContext
+            normalizer_ <- use normalizer
+            normalisedImport <- case Dhall.TypeCheck.typeWith startingContext_ loadedExpr of
                 Left err -> throwM (Imported stack' err)
-                Right _ -> return (Dhall.Core.normalizeWith _normalizer loadedExpr)
-
-            let alphaNormal = Dhall.Core.alphaNormalize (normalisedImport result)
-            let bytes = encodeExpression defaultVersion alphaNormal
-            writeToSemisemanticCache semisemanticHash bytes
-            return (bytes, normalisedImport)
+                Right _ -> return (Dhall.Core.normalizeWith normalizer_ loadedExpr)
+            let alphaNormal = Dhall.Core.alphaNormalize normalisedImport
+            let bytes = encodeExpression version alphaNormal
+            lift $ writeToSemisemanticCache semisemanticHash bytes
+            return (bytes, alphaNormal)
 
     let semanticHash = Crypto.Hash.hash bytes
-    let graph = Node import_ imports
+    let dependencies = map (\SemanticImport {..} -> graph) imports
+    let graph = Tree.Node import_ dependencies
     return (SemanticImport {..})
 
 
 -- Fetch source code directly from disk/network
-fetchFresh :: ResolvedImportType -> StateT (Status m) IO Text
-fetchFresh (ResolvedLocal prefix file) = liftIO $ do
-    let path = localToPath prefix file
+fetchFresh :: ImportStack -> ResolvedImportType -> StateT Status IO Text
+fetchFresh _ (ResolvedLocal prefix file) = liftIO $ do
+    path <- localToPath prefix file
     exists <- Directory.doesFileExist path
     if exists
         then Data.Text.IO.readFile path
-        then throwMissingImport (MissingFile path)
+        else throwMissingImport (MissingFile path)
 
-fetchFresh (ResolvedRemote url mHeaders) = do
-    (_, text) <- fetchFromHttpUrl url mHeaders
+fetchFresh stack (ResolvedRemote url mHeaders) = do
+    let encodeHeader (key, value) =
+            (Data.CaseInsensitive.mk (Data.Text.Encoding.encodeUtf8 key)
+            , Data.Text.Encoding.encodeUtf8 value)
+    text <- fetchFromHttpUrl stack url (fmap (map encodeHeader) mHeaders)
     return text
 
-fetchFresh (ResolvedEnv env) = liftIO $ do
+fetchFresh _ (ResolvedEnv env) = liftIO $ do
     x <- System.Environment.lookupEnv (Text.unpack env)
     case x of
         Just string -> do
@@ -736,24 +738,24 @@ fetchFresh (ResolvedEnv env) = liftIO $ do
         Nothing -> do
                 throwMissingImport (MissingEnvironmentVariable env)
 
-fetchFresh Missing = liftIO $ throwM (MissingImports [])
+fetchFresh _ ResolvedMissing = liftIO $ throwM (MissingImports [])
 
 -- Fetch encoded normal form from "semantic cache"
-fetchFromSemanticCache :: SemanticHash -> IO (Maybe ByteString)
+fetchFromSemanticCache :: SemanticHash -> IO (Maybe Data.ByteString.ByteString)
 fetchFromSemanticCache expectedHash = Maybe.runMaybeT $ do
     cacheFile <- getCacheFile expectedHash
     True <- liftIO (Directory.doesFileExist cacheFile)
     liftIO (Data.ByteString.readFile cacheFile)
 
 -- Fetch encoded normal form from "semi-semantic cache"
-fetchFromSemisemanticCache :: SemisemanticHash -> IO (Maybe ByteString)
+fetchFromSemisemanticCache :: SemisemanticHash -> IO (Maybe Data.ByteString.ByteString)
 fetchFromSemisemanticCache semisemanticHash = Maybe.runMaybeT $ do
         cacheFile <- getCacheFile semisemanticHash  -- TODO: use different cache directory
         True <- liftIO (Directory.doesFileExist cacheFile)
         liftIO (Data.ByteString.readFile cacheFile)
 
 -- write to "semantic cache"
-writeToSemanticCache :: SemanticHash -> ByteString -> IO ()
+writeToSemanticCache :: SemanticHash -> Data.ByteString.ByteString -> IO ()
 writeToSemanticCache semanticHash bytes = do
     Maybe.runMaybeT $ do
         cacheFile <- getCacheFile semanticHash
@@ -761,7 +763,7 @@ writeToSemanticCache semanticHash bytes = do
     return ()
 
 -- write to "semi-semantic cache"
-writeToSemisemanticCache :: SemisemanticHash -> ByteString -> IO ()
+writeToSemisemanticCache :: SemisemanticHash -> Data.ByteString.ByteString -> IO ()
 writeToSemisemanticCache semisemanticHash bytes = do
     Maybe.runMaybeT $ do
         cacheFile <- getCacheFile semisemanticHash  -- TODO: different cache location
@@ -770,31 +772,46 @@ writeToSemisemanticCache semisemanticHash bytes = do
 
 -- | Load an expression, i.e. replace all imports with their semantics (normal
 --   forms). The resulting expression is neither typechecked nor normalised!
-loadExpr :: ImportStack -> Expr Src Import -> StateT (Status IO) IO) LoadedExpr
+loadExpr :: ImportStack -> Expr Src Import -> StateT Status IO LoadedExpr
 loadExpr stack expr = do
-    (loadedExpr, imports) <- runWriter (loadExpr' stack expr)
+    (loadedExpr, imports) <- Writer.runWriterT (loadExpr' stack expr)
     return (LoadedExpr {..})
 
 -- Use the writer monad to keep track of any imports
 loadExpr' :: ImportStack -> Expr Src Import ->
-                WriterT [ResolvedImport] (StateT (Status IO) IO) (Expr Src X)
-loadExpr' stack (Embed import_) = do
+                Writer.WriterT [SemanticImport] (StateT Status IO) (Expr Src X)
+loadExpr' stack@(parent :|_) (Embed import_) = do
     let handler₀ (MissingImports es) =
-            throwM (MissingImports (map (\e -> toException (Imported _stack' e)) es))
-        handler₁ e = throwMissingImport (Imported _stack' e :: Imported SomeException)
+            throwM (MissingImports (map (\e -> toException (Imported stack e)) es))
+        handler₁ e = throwMissingImport (Imported stack e :: Imported SomeException)
 
     resolvedImport <- lift $ resolveImport stack import_
         `catches` [ Handler handler₀, Handler handler₁ ]
+
+    -- make sure the import is "referentially transparent"
+    let local (ResolvedImport _ (ResolvedLocal   {}) _) = True
+        local (ResolvedImport _ (ResolvedRemote  {}) _) = False
+        local (ResolvedImport _ (ResolvedEnv     {}) _) = True
+        local (ResolvedImport _ (ResolvedMissing {}) _) = True
+    if not (local resolvedImport) || local parent
+        then return ()
+        else throwMissingImport (Imported stack (ReferentiallyOpaque import_))
+
+    -- check for import cycles
+    if resolvedImport `elem` stack
+        then throwMissingImport (Imported stack (Cycle import_))
+        else return ()
+
     semanticImport@SemanticImport {..} <- lift $ processImport stack resolvedImport
         `catches` [ Handler handler₀, Handler handler₁ ]
 
-    tell semanticImport
+    Writer.tell [semanticImport]
     return normalisedImport
 
 loadExpr' stack (ImportAlt a b) = loadExpr' stack a `catch` handler₀
   where
     handler₀ (SourcedException (Src begin _ text₀) (MissingImports es₀)) =
-        loadExpr' loadWith b `catch` handler₁
+        loadExpr' stack b `catch` handler₁
       where
         handler₁ (SourcedException (Src _ end text₁) (MissingImports es₁)) =
             throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
@@ -807,8 +824,9 @@ loadExpr' stack (Note a b) = do
 
 -- map over subexpressions
 loadExpr' stack expr = do
-    let go = fmap exprXToImport . loadExpr' stack
-        :: Expr Src Import -> WriterT [ResolvedImport] (StateT (Status IO) IO) (Expr Src Import)
+    let go = fmap (fmap absurd) . loadExpr' stack
+               :: Expr Src Import
+               -> Writer.WriterT [SemanticImport] (StateT Status IO) (Expr Src Import)
     expr' <- Dhall.Core.subExpressions go expr
     let loadedExpr = fmap undefined expr'  -- this is safe since expr' doesn't contain imports!
     return loadedExpr
@@ -875,7 +893,10 @@ getCacheDirectory = alternative₀ <|> alternative₁
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
-load expression = State.evalStateT (loadExpr (rootImport ".") expression) emptyStatus
+load expression = do
+    LoadedExpr {..} <-
+        State.evalStateT (loadExpr (rootImport "." :| []) expression) emptyStatus
+    return loadedExpr
 
 encodeExpression
     :: forall s
@@ -906,13 +927,13 @@ encodeExpression _standardVersion expression = bytesStrict
 -- "semi-semantic" hash, calculated by concatenating the code for the
 -- _unnormalised_ (and non-typechecked) syntax tree with the semantic hashes of all imports
 hashSemisemantic :: StandardVersion -> LoadedExpr -> SemisemanticHash
-hashSemisemantic standardVersion_ (LoadedExpr {..}) =
-    SemisemanticHash (hash semisemanticContent)
+hashSemisemantic standardVersion_ (LoadedExpr {..}) = Crypto.Hash.hash semisemanticContent
   where
     syntacticHash = Crypto.Hash.hash (encodeExpression standardVersion_ loadedExpr)
-    semanticHashes = map (fromSemanticHash . semanticHash . rootLabel) imports
+      :: Crypto.Hash.Digest SHA256
+    semanticHashes = map semanticHash imports
     semisemanticContent = Data.ByteArray.concat (syntacticHash : semanticHashes)
-        :: ByteString
+        :: Data.ByteString.ByteString
 
 -- | Hash a fully resolved expression. To compute the semantic hash the
 --   expression has to be alpha-beta-normal.

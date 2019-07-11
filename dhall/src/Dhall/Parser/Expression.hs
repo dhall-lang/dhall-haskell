@@ -733,7 +733,7 @@ http = do
     headers <- optional (do
         _using
         importExpression import_ )
-    return (Remote (url { headers }))
+    return (Remote url headers)
 
 missing :: Parser ImportType
 missing = do

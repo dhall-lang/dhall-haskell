@@ -415,8 +415,6 @@ httpRaw = do
     path      <- file_ URLComponent
     query     <- optional (("?" :: Parser Text) *> query_)
 
-    let headers = Nothing
-
     return (URL {..})
 
 authority_ :: Parser Text

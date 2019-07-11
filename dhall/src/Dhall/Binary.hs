@@ -421,7 +421,7 @@ instance ToTerm a => ToTerm (Expr s a) where
 instance ToTerm Import where
     encode import_ =
         case importType of
-            Remote (URL { scheme = scheme₀, ..}) ->
+            Remote (URL { scheme = scheme₀, ..}) headers ->
                 TList
                     (   prefix
                     ++  [ TInt scheme₁, using, TString authority ]
@@ -826,7 +826,7 @@ instance FromTerm Import where
                 let directory  = Directory {..}
                 let path       = File {..}
 
-                return (Remote (URL {..}))
+                return (Remote (URL {..}) headers)
 
         let local prefix = do
                 let process [ TString file ] = do

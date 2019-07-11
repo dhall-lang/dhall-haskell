@@ -5,76 +5,83 @@
 module Dhall.Import.Types where
 
 import Control.Exception (Exception)
-import Control.Monad.Trans.State.Strict (StateT)
 import Data.Dynamic
 import Data.List.NonEmpty (NonEmpty)
-import Data.Map (Map)
 import Data.Semigroup ((<>))
+import Data.Text (Text)
+import Data.Text.Prettyprint.Doc (Pretty(..))
+import Data.Tree (Tree)
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Context (Context)
 import Dhall.Core
-  ( Directory (..)
-  , Expr
+  ( Chunks(..)
+  , Directory (..)
+  , Expr(..)
   , File (..)
   , FilePrefix (..)
-  , Import (..)
-  , ImportHashed (..)
   , ImportMode (..)
-  , ImportType (..)
   , ReifiedNormalizer(..)
+  , URL(..)
   )
 import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
 import Lens.Family (LensLike')
-import System.FilePath (isRelative, splitDirectories)
+import System.FilePath (isRelative, splitDirectories, takeFileName, takeDirectory)
 
+import qualified Crypto.Hash
 import qualified Dhall.Binary
 import qualified Dhall.Context
-import qualified Data.Map      as Map
+import qualified Dhall.Map
+import qualified Data.Map
 import qualified Data.Text
 
 -- HTTP headers
 type Headers = [(Text, Text)]
 
 -- non-cyclic, binary headers, canonical
-data ResolvedImportType =
-    ResolvedLocal FilePrefix File
-    -- ^ Like a normal file import, but not resolved relative to the import stack
-    ResolvedRemote URL (Maybe Headers)
-    -- ^ URL (sans headers) plus normalised headers
-    ResolvedEnv Text  -- ^ same as plain Env
-    ResolvedMissing  -- ^ same as plain Missing
+data ResolvedImportType
+    = ResolvedLocal FilePrefix File
+      -- ^ Like a normal file import, but not resolved relative to the import stack
+    | ResolvedRemote URL (Maybe Headers)
+      -- ^ URL (sans headers) plus normalised headers
+    | ResolvedEnv Text  -- ^ same as plain Env
+    | ResolvedMissing  -- ^ same as plain Missing
+    deriving (Eq, Ord)
 
 instance Pretty ResolvedImportType where
     pretty (ResolvedLocal prefix file) =
-        Pretty.pretty prefix <> Pretty.pretty file
+        pretty prefix <> pretty file
 
-    pretty (ResolvedRemote url Nothing) = Pretty.pretty url
+    pretty (ResolvedRemote url Nothing) = pretty url
 
     pretty (ResolvedRemote url (Just headers)) =
-        Pretty.pretty url <> " using " <> Pretty.pretty headersExpr
+        pretty url <> " using " <> pretty headersExpr
       where
-        headersExpr = ListLit Nothing (foldMap headerExpr headers)
+        headersExpr = ListLit Nothing (foldMap (pure . headerExpr) headers)
+        headerExpr :: (Text, Text) -> Expr Src X
         headerExpr (key, value) =
             let keyExpr = TextLit (Chunks [] key)
                 valueExpr = TextLit (Chunks [] value)
-            in RecordLit (Map.fromList [("mapKey", keyExpr), ("mapValue", valueExpr)]
+            in RecordLit (Dhall.Map.fromList [("mapKey", keyExpr), ("mapValue", valueExpr)])
 
-    pretty (ResolvedEnv env) = "env:" <> Pretty.pretty env
+    pretty (ResolvedEnv env) = "env:" <> pretty env
 
-    pretty Missing = "missing"
+    pretty ResolvedMissing = "missing"
 
 
-newtype SemanticHash = SemanticHash { fromSemanticHash :: Crypto.Hash.Digest SHA256 }
-newtype SemisemanticHash = SemisemanticHash { fromSemisemanticHash :: Crypto.Hash.Digest SHA256 }
+type SemanticHash = Crypto.Hash.Digest Crypto.Hash.SHA256
+type SemisemanticHash = Crypto.Hash.Digest Crypto.Hash.SHA256
 
 data ResolvedImport = ResolvedImport (Maybe SemanticHash) ResolvedImportType ImportMode
-
+    deriving (Eq, Ord)
 instance Pretty ResolvedImport where
-    pretty (Import {..}) = Pretty.pretty importHashed <> Pretty.pretty suffix
+    pretty (ResolvedImport maybeHash resolvedImportType mode) =
+        pretty resolvedImportType <> prettyHash <> prettyMode
       where
-        suffix :: Text
-        suffix = case importMode of
+        prettyHash = case maybeHash of
+            Just hash -> " sha256:" <> pretty (show hash)
+            Nothing -> ""
+        prettyMode = case mode of
             RawText  -> " as Text"
             Location -> " as Location"
             Code     -> ""
@@ -82,7 +89,7 @@ instance Pretty ResolvedImport where
 
 data SemanticImport = SemanticImport
     { normalisedImport :: Expr Src X
-    -- ^ typechecked and normalised (not necessarily alpha-normal)
+    -- ^ typechecked and alpha-beta-normal
     , semanticHash :: SemanticHash
     , graph :: Tree ResolvedImport  -- `Real` resolved import is root node
     }
@@ -92,11 +99,11 @@ data LoadedExpr = LoadedExpr
     , imports :: [SemanticImport]
     }
 
-data ImportStack = NonEmpty ResolvedImport
+type ImportStack = NonEmpty ResolvedImport
 
 -- | State threaded throughout the import process
-data Status m = Status
-    { _cache :: Map Import SemanticImport
+data Status = Status
+    { _cache :: Data.Map.Map ResolvedImport SemanticImport
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
 
@@ -113,10 +120,10 @@ data Status m = Status
     }
 
 -- | Default starting `Status` that is polymorphic in the base `Monad`
-emptyStatus :: Status m
+emptyStatus :: Status
 emptyStatus = Status {..}
   where
-    _cache = Map.empty
+    _cache = Data.Map.empty
 
     _manager = Nothing
 
@@ -127,41 +134,36 @@ emptyStatus = Status {..}
     _startingContext = Dhall.Context.empty
 
 
--- TODO: allow file names as well (not just directory)
+-- | Given a path to dhall file (can be a dummy path like "~/.") construct the
+-- corresponding ResolvedImport to be used as the root import on the import stack.
 rootImport :: FilePath -> ResolvedImport
-rootImport filePath = ResolvedImport Nothing importType Code
+rootImport filePath = ResolvedImport Nothing resolvedImportType Code
   where
-    prefix = if isRelative rootDirectory
-      then Here
-      else Absolute
-    pathComponents =
-        fmap Data.Text.pack (reverse (splitDirectories rootDirectory))
+    file = Data.Text.pack (takeFileName filePath)
+    directory = takeDirectory filePath
+    prefix = if isRelative filePath
+        then Here
+        else Absolute
 
-    dirAsFile = File (Directory pathComponents) "."
+    directoryComponents =
+        fmap Data.Text.pack (reverse (splitDirectories directory))
 
-    -- Fake import to set the directory we're relative to.
-    rootImport = Import
-      { importHashed = ImportHashed
-        { hash = Nothing
-        , importType = Local prefix dirAsFile
-        }
-      , importMode = Code
-      }
+    resolvedImportType = ResolvedLocal prefix (File (Directory directoryComponents) file)
 
-cache :: Functor f => LensLike' f (Status m) (Map ResolvedImport SemanticImport)
+cache :: Functor f => LensLike' f Status (Data.Map.Map ResolvedImport SemanticImport)
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
-manager :: Functor f => LensLike' f (Status m) (Maybe Dynamic)
+manager :: Functor f => LensLike' f Status (Maybe Dynamic)
 manager k s = fmap (\x -> s { _manager = x }) (k (_manager s))
 
-standardVersion :: Functor f => LensLike' f (Status m) StandardVersion
+standardVersion :: Functor f => LensLike' f Status StandardVersion
 standardVersion k s =
     fmap (\x -> s { _standardVersion = x }) (k (_standardVersion s))
 
-normalizer :: Functor f => LensLike' f (Status m) (Maybe (ReifiedNormalizer X))
+normalizer :: Functor f => LensLike' f Status (Maybe (ReifiedNormalizer X))
 normalizer k s = fmap (\x -> s {_normalizer = x}) (k (_normalizer s))
 
-startingContext :: Functor f => LensLike' f (Status m) (Context (Expr Src X))
+startingContext :: Functor f => LensLike' f Status (Context (Expr Src X))
 startingContext k s =
     fmap (\x -> s { _startingContext = x }) (k (_startingContext s))
 
