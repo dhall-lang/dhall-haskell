@@ -54,7 +54,7 @@
 
     Dhall @List@s translate to JSON lists:
 
-> $ dhall-to-json <<< '[+1, +2, +3] : List Integer'
+> $ dhall-to-json <<< '[1, 2, 3] : List Natural'
 > [1,2,3]
 
     Dhall @Optional@ values translate to @null@ if absent and the unwrapped
