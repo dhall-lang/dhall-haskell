@@ -62,7 +62,7 @@
 
 > $ dhall-to-json <<< 'None Natural'
 > null
-> $ dhall-to-json <<< 'Some +1'
+> $ dhall-to-json <<< 'Some 1'
 > 1
 
     Dhall records translate to JSON records:
