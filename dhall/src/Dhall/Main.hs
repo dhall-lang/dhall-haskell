@@ -25,11 +25,12 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
+import Data.Tree (Tree(..))
 import Data.Version (showVersion)
 import Dhall.Binary (StandardVersion)
-import Dhall.Core (Expr(Annot), Import, pretty)
+import Dhall.Core (Expr(Annot), Import)
 import Dhall.Freeze (Intent(..), Scope(..))
-import Dhall.Import (Imported(..))
+import Dhall.Import (Imported(..), LoadedExpr(..), ResolvedImport(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
@@ -37,7 +38,6 @@ import Lens.Family (set)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
-import Text.Dot ((.->.))
 
 import qualified Codec.CBOR.JSON
 import qualified Codec.CBOR.Read
@@ -61,7 +61,6 @@ import qualified Dhall.Format
 import qualified Dhall.Freeze
 import qualified Dhall.Hash
 import qualified Dhall.Import
-import qualified Dhall.Import.Types
 import qualified Dhall.Lint
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
@@ -72,9 +71,6 @@ import qualified Options.Applicative
 import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.IO
-import qualified System.FilePath
-import qualified Text.Dot
-import qualified Data.Map
 
 -- | Top-level program options
 data Options = Options
@@ -301,14 +297,13 @@ command (Options {..}) = do
 
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
-    let toStatus maybeFile =
-            set Dhall.Import.standardVersion standardVersion
-                (Dhall.Import.emptyStatus file)
-          where
-            file = case maybeFile of
-                Just "-" -> "."
-                Just f   -> System.FilePath.takeDirectory f
-                Nothing  -> "."
+    let importStack :: Maybe FilePath -> Dhall.Import.ImportStack
+        importStack (Just "-") = Dhall.Import.rootImport "." :| []
+        importStack (Just f)   = Dhall.Import.rootImport f :| []
+        importStack Nothing    = Dhall.Import.rootImport "." :| []
+
+
+    let status = set Dhall.Import.standardVersion standardVersion Dhall.Import.emptyStatus
 
     let handle =
                 Control.Exception.handle handler2
@@ -375,11 +370,13 @@ command (Options {..}) = do
         Default {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) (toStatus file)
+            let stack = importStack file
 
-            inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            LoadedExpr {..} <- State.evalStateT (Dhall.Import.loadExpr stack expression) status
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf loadedExpr)
+
+            let normalizedExpression = Dhall.Core.normalize loadedExpr
 
             let alphaNormalizedExpression =
                     if alpha
@@ -396,10 +393,15 @@ command (Options {..}) = do
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _graph, _stack }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file)
+            let stack = importStack file
 
-            let (rootImport :| _) = _stack
+            let (rootImport :| _) = stack
+
+            LoadedExpr {..} <- State.evalStateT (Dhall.Import.loadExpr stack expression) status
+
+            let _importTree = Node rootImport (map Dhall.Import.graph imports)
+
+            {- let
                 imports = rootImport : map parent _graph ++ map child _graph
                 importIds = Data.Map.fromList (zip imports [Text.Dot.userNodeId i | i <- [0..]])
 
@@ -420,7 +422,9 @@ command (Options {..}) = do
                          mapM_ dotNode (Data.Map.assocs importIds)
                          mapM_ dotEdge _graph
 
-            putStr . ("strict " <>) . Text.Dot.showDot $ dot
+            putStr . ("strict " <>) . Text.Dot.showDot $ dot -}
+
+            return ()  -- TODO!
 
         Resolve { resolveMode = Just ListImmediateDependencies, ..} -> do
             expression <- getExpression file
@@ -432,22 +436,25 @@ command (Options {..}) = do
         Resolve { resolveMode = Just ListTransitiveDependencies, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _cache }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file)
+            let stack = importStack file
+
+            LoadedExpr {..} <-
+                State.evalStateT (Dhall.Import.loadExpr stack expression) status
 
             mapM_ print
-                 .   fmap (   Pretty.pretty
-                          .   Dhall.Core.importType
-                          .   Dhall.Core.importHashed )
-                 .   Data.Map.keys
-                 $   _cache
+                 .   fmap Pretty.pretty
+                 .   map (\(ResolvedImport _ importType _) -> importType)
+                 .   map (rootLabel . Dhall.Import.graph)
+                 $   imports
 
         Resolve { resolveMode = Nothing, ..} -> do
             expression <- getExpression file
 
-            (resolvedExpression, _) <-
-                State.runStateT (Dhall.Import.loadWith expression) (toStatus file)
-            render System.IO.stdout resolvedExpression
+            let stack = importStack file
+
+            LoadedExpr {..} <-
+                State.evalStateT (Dhall.Import.loadExpr stack expression) status
+            render System.IO.stdout loadedExpr
 
         Normalize {..} -> do
             expression <- getExpression file
@@ -575,11 +582,13 @@ command (Options {..}) = do
         Text {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) (toStatus file)
+            let stack = importStack file
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
+            LoadedExpr {..} <- State.evalStateT (Dhall.Import.loadExpr stack expression) status
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot loadedExpr Dhall.Core.Text))
+
+            let normalizedExpression = Dhall.Core.normalize loadedExpr
 
             case normalizedExpression of
                 Dhall.Core.TextLit (Dhall.Core.Chunks [] text) -> do

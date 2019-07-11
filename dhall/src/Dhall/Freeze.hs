@@ -22,9 +22,8 @@ import Data.Text
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Import (standardVersion, SemanticImport(..))
-import Dhall.Parser (exprAndHeaderFromText, Src)
+import Dhall.Parser (exprAndHeaderFromText)
 import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
-import Dhall.TypeCheck (X)
 import Lens.Family (set)
 import System.Console.ANSI (hSupportsANSI)
 
@@ -37,7 +36,6 @@ import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
-import qualified Dhall.TypeCheck
 import qualified System.FilePath
 import qualified System.IO
 

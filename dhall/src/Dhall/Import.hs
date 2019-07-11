@@ -103,16 +103,18 @@ module Dhall.Import (
       load
     , loadExpr
     , LoadedExpr(..)
+    , ImportStack
     , processImport
     , SemanticImport(..)
     , resolveImport
+    , ResolvedImport(..)
+    , ResolvedImportType(..)
     , hashExpression
     , hashExpressionToCode
     , assertNoImports
     , Status
     , emptyStatus
     , cache
-    , graph
     , manager
     , rootImport
     , standardVersion
@@ -151,7 +153,6 @@ import System.FilePath ((</>))
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Core
     ( Expr(..)
-    , Binding(..)
     , Chunks(..)
     , Directory(..)
     , File(..)
@@ -169,7 +170,7 @@ import Dhall.Import.Types
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
 import Dhall.TypeCheck (X(..))
-import Lens.Family.State.Strict (zoom, use, (%=))
+import Lens.Family.State.Strict (use, (%=))
 
 import qualified Codec.Serialise
 import qualified Control.Exception                as Exception
@@ -464,14 +465,14 @@ localToPath prefix file_ = liftIO $ do
 
     return (foldr cons prefixPath cs)
 
-parent :: File
-parent = File { directory = Directory { components = [ ".." ] }, file = "" }
+parentFile :: File
+parentFile = File { directory = Directory { components = [ ".." ] }, file = "" }
 
 -- | "Resolve" an import: "chain" the import together with the parent import
 --   and, in the case remote imports, evaluate the headers.
 resolveImport :: ImportStack -> Import -> StateT Status IO ResolvedImport
 -- Remote import without headers
-resolveImport stack
+resolveImport _
   (Import (ImportHashed mHash (Remote (URL {..}) Nothing)) mode) =
     return (ResolvedImport mHash resolvedImportType mode)
   where
@@ -536,7 +537,7 @@ resolveImport (ResolvedImport _ (ResolvedLocal prefix file) _ :| _)
   (Import (ImportHashed mHash (Local Parent file')) mode) =
     return (ResolvedImport mHash resolvedImportType mode)
   where
-    resolvedFile = canonicalize (file <> parent <> file')
+    resolvedFile = canonicalize (file <> parentFile <> file')
     resolvedImportType = ResolvedLocal prefix resolvedFile
 
 {- Remote (URL { path = path₀, .. }) <> Local Parent path₁ =
@@ -545,7 +546,7 @@ resolveImport (ResolvedImport _ (ResolvedRemote (URL {..}) mHeaders) _ :| _)
   (Import (ImportHashed mHash (Local Parent file)) mode) =
     return (ResolvedImport mHash resolvedImportType mode)
   where
-    resolvedUrl = URL { path = canonicalize (path <> parent <> file), ..}
+    resolvedUrl = URL { path = canonicalize (path <> parentFile <> file), ..}
     resolvedImportType = ResolvedRemote resolvedUrl mHeaders
 
 {- _ <> import₁ =
@@ -594,7 +595,7 @@ processImportWithSemanticCache stack
             let actualHash = Crypto.Hash.hash bytesStrict
             if semanticHash == actualHash
                 then return ()
-                else throwMissingImport (Imported stack (HashMismatch {..}))
+                else throwMissingImport (Imported stack (HashMismatch {expectedHash = semanticHash, ..}))
 
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
             term <- Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytesLazy)
@@ -630,7 +631,7 @@ processImportWithSemanticCache stack
 processImportWithSemisemanticCache
   :: ImportStack -> ResolvedImport -> StateT Status IO SemanticImport
 -- `as Location` imports aren't cached "semi-semantically"
-processImportWithSemisemanticCache stack
+processImportWithSemisemanticCache _
   import_@(ResolvedImport _ resolvedImportType Location) = do
     let locationType = Union $ Dhall.Map.fromList
             [ ("Environment", Just Text)
@@ -713,7 +714,7 @@ processImportWithSemisemanticCache stack
             return (bytes, alphaNormal)
 
     let semanticHash = Crypto.Hash.hash bytes
-    let dependencies = map (\SemanticImport {..} -> graph) imports
+    let dependencies = map graph imports
     let graph = Tree.Node import_ dependencies
     return (SemanticImport {..})
 
@@ -761,7 +762,7 @@ fetchFromSemisemanticCache semisemanticHash = Maybe.runMaybeT $ do
 -- write to "semantic cache"
 writeToSemanticCache :: SemanticHash -> Data.ByteString.ByteString -> IO ()
 writeToSemanticCache semanticHash bytes = do
-    Maybe.runMaybeT $ do
+    _ <- Maybe.runMaybeT $ do
         cacheFile <- getCacheFile semanticHash
         liftIO (Data.ByteString.writeFile cacheFile bytes)
     return ()
@@ -769,7 +770,7 @@ writeToSemanticCache semanticHash bytes = do
 -- write to "semi-semantic cache"
 writeToSemisemanticCache :: SemisemanticHash -> Data.ByteString.ByteString -> IO ()
 writeToSemisemanticCache semisemanticHash bytes = do
-    Maybe.runMaybeT $ do
+    _ <- Maybe.runMaybeT $ do
         cacheFile <- getCacheFile semisemanticHash  -- TODO: different cache location
         liftIO (Data.ByteString.writeFile cacheFile bytes)
     return ()
