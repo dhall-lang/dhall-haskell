@@ -60,7 +60,7 @@
     Dhall @Optional@ values translate to @null@ if absent and the unwrapped
     value otherwise:
 
-> $ dhall-to-json <<< 'None Integer'
+> $ dhall-to-json <<< 'None Natural'
 > null
 > $ dhall-to-json <<< 'Some +1'
 > 1
