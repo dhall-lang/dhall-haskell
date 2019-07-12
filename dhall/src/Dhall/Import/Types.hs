@@ -52,15 +52,9 @@ data Status m = Status
     -- ^ Stack of `Import`s that we've imported along the way to get to the
     -- current point
 
-<<<<<<< HEAD
     , _graph :: [(Import,Import)]
     -- ^ Graph of all the imports visited so far, represented by a list of
     --   edges. An edge `(a, b)` means that `b` imported `a`.
-=======
-    , _graph :: [Depends]
-    -- ^ Graph of all the imports visited so far, represented by a list of
-    --   import dependencies.
->>>>>>> master
 
     , _cache :: Map Import (Expr Src X)
     -- ^ Cache of imported expressions with their node id in order to avoid
@@ -122,11 +116,7 @@ emptyStatusWith _resolver _cacher rootDirectory = Status {..}
 stack :: Functor f => LensLike' f (Status m) (NonEmpty Import)
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
 
-<<<<<<< HEAD
 graph :: Functor f => LensLike' f (Status m) [(Import, Import)]
-=======
-graph :: Functor f => LensLike' f (Status m) [Depends]
->>>>>>> master
 graph k s = fmap (\x -> s { _graph = x }) (k (_graph s))
 
 cache :: Functor f => LensLike' f (Status m) (Map Import (Expr Src X))

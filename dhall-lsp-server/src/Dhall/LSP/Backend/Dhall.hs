@@ -1,4 +1,4 @@
-module Dhall.LSP.Backend.Dhall (
+smodule Dhall.LSP.Backend.Dhall (
   FileIdentifier,
   fileIdentifierFromFilePath,
   fileIdentifierFromURI,
@@ -27,10 +27,6 @@ import qualified Dhall.Parser.Token as Dhall
 import qualified Dhall.Parser as Dhall
 import qualified Dhall.TypeCheck as Dhall
 
-<<<<<<< HEAD
-=======
-import qualified Data.Graph as Graph
->>>>>>> master
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Network.URI as URI
@@ -79,14 +75,9 @@ newtype WellTyped = WellTyped {fromWellTyped :: Expr Src X}
 -- | A fully normalised expression.
 newtype Normal = Normal {fromNormal :: Expr Src X}
 
-<<<<<<< HEAD
 -- An import graph, represented by an adjacency list. An element `(a,b)` means
 -- that `b` imports `a`.
 type ImportGraph = [(Dhall.Import, Dhall.Import)]
-=======
--- An import graph, represented by list of import dependencies.
-type ImportGraph = [Dhall.Depends]
->>>>>>> master
 
 -- | A cache maps Dhall imports to fully normalised expressions. By reusing
 --   caches we can speeds up diagnostics etc. significantly!
@@ -95,7 +86,6 @@ data Cache = Cache ImportGraph (Map.Map Dhall.Import (Expr Src X))
 -- | The initial cache.
 emptyCache :: Cache
 emptyCache = Cache [] Map.empty
-<<<<<<< HEAD
 
 -- | Cache a given normal expression.
 cacheExpr :: FileIdentifier -> Normal -> Cache -> Cache
@@ -106,8 +96,6 @@ cacheExpr fileid (Normal expr) (Cache graph c) =
       hashedImport = hashedImportFromFileIdentifier fileid hash
   in Cache graph $ Map.insert unhashedImport expr
                  $ Map.insert hashedImport expr c
-=======
->>>>>>> master
 
 -- Construct the unhashed import corresponding to the given file.
 importFromFileIdentifier :: FileIdentifier -> Dhall.Import
@@ -121,7 +109,6 @@ importFromFileIdentifier (FileIdentifier importType) =
 --   https://github.com/dhall-lang/dhall-lang/blob/master/standard/imports.md.
 --   Transitively invalidates any imports depending on the changed file.
 invalidate :: FileIdentifier -> Cache -> Cache
-<<<<<<< HEAD
 invalidate (FileIdentifier fileid) (Cache edgeList cache) =
   Cache (view Dhall.graph status') (view Dhall.cache status')
   where
@@ -131,36 +118,6 @@ invalidate (FileIdentifier fileid) (Cache edgeList cache) =
     textImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.RawText
     invalidImports = codeImport : Dhall.reverseDependencies codeImport status
                      ++ textImport : Dhall.reverseDependencies textImport status
-=======
-invalidate (FileIdentifier fileid) (Cache dependencies cache) =
-  Cache dependencies' $ Map.withoutKeys cache invalidImports
-  where
-    imports = map Dhall.parent dependencies ++ map Dhall.child dependencies
-
-    adjacencyLists = foldr
-                       -- add reversed edges to adjacency lists
-                       (\(Dhall.Depends parent child) -> Map.adjust (parent :) child)
-                       -- starting from the discrete graph
-                       (Map.fromList [ (i,[]) | i <- imports])
-                       dependencies
-
-    (graph, importFromVertex, vertexFromImport) = Graph.graphFromEdges
-      [(node, node, neighbours) | (node, neighbours) <- Map.assocs adjacencyLists]
-
-    -- compute the reverse dependencies, i.e. the imports reachable in the transposed graph
-    reachableImports import_ =
-      map (\(i,_,_) -> i) . map importFromVertex . concat $
-        do vertex <- vertexFromImport import_
-           return (Graph.reachable graph vertex)
-
-    codeImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.Code
-    textImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.RawText
-    invalidImports = Set.fromList $ codeImport : reachableImports codeImport
-                                    ++ textImport : reachableImports textImport
-
-    dependencies' = filter (\(Dhall.Depends parent child) -> Set.notMember parent invalidImports
-                                && Set.notMember child invalidImports) dependencies
->>>>>>> master
 
 -- | A Dhall error. Covers parsing, resolving of imports, typechecking and
 --   normalisation.
