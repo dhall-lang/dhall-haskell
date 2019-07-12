@@ -1,52 +1,40 @@
-    let OperatingSystem = < Linux : {} | OSX : {} >
+let OperatingSystem = < Linux : {} | OSX : {} >
 
-in  let Addon = { apt : { packages : List Text, sources : List Text } }
+let Addon = { apt : { packages : List Text, sources : List Text } }
 
-in  let makeInclude =
-            λ ( args
-              : { ghc :
-                    Text
-                , cabal :
-                    Text
-                , deploy :
-                    Bool
-                , os :
-                    OperatingSystem
+let makeInclude =
+        λ ( args
+          : { ghc : Text, cabal : Text, deploy : Bool, os : OperatingSystem }
+          )
+      → let release = if args.deploy then " DEPLOY_GITHUB_RELEASE=TRUE" else ""
+
+        in  { env =
+                "CABALVER=${args.cabal} GHCVER=${args.ghc}${release}"
+            , compiler =
+                ": #GHC ${args.ghc}"
+            , addons =
+                merge
+                { Linux =
+                      λ(_ : {})
+                    → Some
+                      { apt =
+                          { packages =
+                              [ "cabal-install-${args.cabal}"
+                              , "ghc-${args.ghc}"
+                              ]
+                          , sources =
+                              [ "hvr-ghc" ]
+                          }
+                      }
+                , OSX =
+                    λ(_ : {}) → None Addon
                 }
-              )
-          →     let release =
-                      if args.deploy then " DEPLOY_GITHUB_RELEASE=TRUE" else ""
-            
-            in  { env =
-                    "CABALVER=${args.cabal} GHCVER=${args.ghc}${release}"
-                , compiler =
-                    ": #GHC ${args.ghc}"
-                , addons =
-                    merge
-                    { Linux =
-                          λ(_ : {})
-                        → Some { apt =
-                                { packages =
-                                    [ "cabal-install-${args.cabal}"
-                                    , "ghc-${args.ghc}"
-                                    ]
-                                , sources =
-                                    [ "hvr-ghc" ]
-                                }
-                            }
-                    , OSX =
-                        λ(_ : {}) → None Addon
-                    }
-                    args.os
-                , os =
-                    merge
-                    { Linux =
-                        λ(_ : {}) → None Text
-                    , OSX =
-                        λ(_ : {}) → Some "osx"
-                    }
-                    args.os
-                }
+                args.os
+            , os =
+                merge
+                { Linux = λ(_ : {}) → None Text, OSX = λ(_ : {}) → Some "osx" }
+                args.os
+            }
 
 in  { language =
         "c"
