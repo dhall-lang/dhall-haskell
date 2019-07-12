@@ -910,7 +910,7 @@ alphaNormalize = goEnv NEmpty where
     go !acc (NBind env x) !i
       | x == topX = if i == 0 then Var (V "_" acc) else go (acc + 1) env (i - 1)
       | otherwise = go (acc + 1) env i
-    go acc NEmpty i = Var (V topX topI)
+    go acc NEmpty i = Var (V topX i)
 
   goEnv :: Names -> Expr s a -> Expr s a
   goEnv !e t = let
