@@ -590,7 +590,11 @@ command (Options {..}) = do
             Dhall.Freeze.freeze inplace scope intent characterSet standardVersion
 
         Hash -> do
-            Dhall.Hash.hash standardVersion
+            status <- initialStatus Nothing
+
+            status' <- Dhall.Hash.hash standardVersion status
+
+            dumpCache status'
 
         Lint {..} -> do
             case inplace of

@@ -20,18 +20,15 @@ import qualified Dhall.TypeCheck
 import qualified Data.Text.IO
 
 -- | Implementation of the @dhall hash@ subcommand
-hash :: StandardVersion -> IO ()
-hash _standardVersion = do
+hash :: StandardVersion -> Dhall.Import.Status IO -> IO (Dhall.Import.Status IO)
+hash _standardVersion status = do
     inText <- Data.Text.IO.getContents
 
     parsedExpression <- case exprFromText "(stdin)" inText of
         Left  exception        -> Control.Exception.throwIO exception
         Right parsedExpression -> return parsedExpression
 
-    let status =
-            set standardVersion _standardVersion (Dhall.Import.emptyStatus ".")
-
-    resolvedExpression <- State.evalStateT (Dhall.Import.loadWith parsedExpression) status
+    (resolvedExpression, status') <- State.runStateT (Dhall.Import.loadWith parsedExpression) status
 
     case Dhall.TypeCheck.typeOf resolvedExpression of
         Left  exception -> Control.Exception.throwIO exception
@@ -42,3 +39,5 @@ hash _standardVersion = do
 
     Data.Text.IO.putStrLn
         (hashExpressionToCode _standardVersion normalizedExpression)
+
+    return status'
