@@ -613,15 +613,14 @@ processImportWithSemanticCache stack
             -- with the default `StandardVersion`. In general we will need to
             -- check all possible versions to find the one that matches the
             -- requested semantic hash, if it exists.
-            let alphaNormal = Dhall.Core.alphaNormalize normalisedImport
-            let variants = map (\version -> encodeExpression version alphaNormal)
+            let variants = map (\version -> encodeExpression version normalisedImport)
                                [ minBound .. maxBound ]
             case Data.Foldable.find ((== semanticHash). Crypto.Hash.hash) variants of
                 Just bytes -> lift $ writeToSemanticCache semanticHash bytes
                 Nothing -> do
                     let expectedHash = semanticHash
                     version <- use standardVersion
-                    let actualHash = hashExpression version alphaNormal
+                    let actualHash = hashExpression version normalisedImport
                     throwMissingImport (Imported stack (HashMismatch {..}))
 
             return (SemanticImport { graph = Tree.Node import_ imports, .. })
