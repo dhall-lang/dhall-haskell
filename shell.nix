@@ -7,7 +7,6 @@ shared.pkgs.runCommand "dhall-shell-${shell}" {
   buildInputs = [
     static.dhall
     static.dhall-json
-    static.dhall-text
     static.dhall-bash
     static.dhall-nix
   ];
@@ -22,7 +21,6 @@ shared.pkgs.runCommand "dhall-shell-${shell}" {
     echo "        $ nix-shell --argstr shell zsh"
 
     source <(dhall         --${shell}-completion-script dhall)
-    source <(dhall-to-text --${shell}-completion-script dhall-to-text)
     source <(dhall-to-bash --${shell}-completion-script dhall-to-bash)
     source <(dhall-to-nix  --${shell}-completion-script dhall-to-nix)
     source <(dhall-to-json --${shell}-completion-script dhall-to-json)

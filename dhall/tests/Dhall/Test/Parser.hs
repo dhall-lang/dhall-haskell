@@ -52,7 +52,7 @@ getTests = do
             let skip =
                     [ -- These two unexpected successes are due to not correctly
                       -- requiring non-empty whitespace after the `:` in a type
-                      -- annotatoin
+                      -- annotation
                       parseDirectory </> "failure/annotation.dhall"
                     , parseDirectory </> "failure/unit/ImportEnvWrongEscape.dhall"
 
@@ -77,17 +77,30 @@ getTests = do
     failureTests <- do
         Test.Util.discover (Turtle.chars <> ".dhall") shouldNotParse failureFiles
 
-    let binaryDecodeFiles =
+    let binaryDecodeSuccessFiles =
             Turtle.lstree (binaryDecodeDirectory </> "success")
 
-    binaryDecodeTests <- do
-        Test.Util.discover (Turtle.chars <* "A.dhallb") shouldDecode binaryDecodeFiles
+    binaryDecodeSuccessTests <- do
+        Test.Util.discover (Turtle.chars <* "A.dhallb") shouldDecode binaryDecodeSuccessFiles
+
+    let binaryDecodeFailureFiles = do
+            path <- Turtle.lstree (binaryDecodeDirectory </> "failure")
+
+            let skip = []
+
+            Monad.guard (path `notElem` skip)
+
+            return path
+
+    binaryDecodeFailureTests <- do
+        Test.Util.discover (Turtle.chars <* ".dhallb") shouldNotDecode binaryDecodeFailureFiles
 
     let testTree =
             Tasty.testGroup "parser tests"
                 [ successTests
                 , failureTests
-                , binaryDecodeTests
+                , binaryDecodeSuccessTests
+                , binaryDecodeFailureTests
                 ]
 
     return testTree
@@ -143,3 +156,16 @@ shouldDecode pathText = do
                 "The decoded expression didn't match the parsed expression"
 
         Tasty.HUnit.assertEqual message decodedExpression strippedExpression )
+
+shouldNotDecode :: Text -> TestTree
+shouldNotDecode pathText = do
+    let pathString = Text.unpack pathText
+
+    Tasty.HUnit.testCase pathString (do
+        bytes <- ByteString.Lazy.readFile (pathString <> ".dhallb")
+
+        term <- Core.throws (Serialise.deserialiseOrFail bytes)
+
+        case Binary.decodeExpression term of
+            Left _ -> return ()
+            Right _ -> fail "Unexpected successful decode" )

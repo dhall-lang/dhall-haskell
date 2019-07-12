@@ -13,13 +13,12 @@ import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (X)
 
 import Dhall.LSP.Backend.Dhall (FileIdentifier, parse, load, typecheck,
-  normalize, fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate,
-  cacheExpr, parseWithHeader, fromWellTyped)
+  fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate, parseWithHeader)
 import Dhall.LSP.Backend.Diagnostics (Range(..), Diagnosis(..), explain,
   rangeFromDhall, diagnose)
 import Dhall.LSP.Backend.Formatting (formatExprWithHeader)
 import Dhall.LSP.Backend.Linting (Suggestion(..), suggest, lint)
-import Dhall.LSP.Backend.Typing (typeAt, srcAt, annotateLet)
+import Dhall.LSP.Backend.Typing (typeAt, annotateLet)
 import Dhall.LSP.State
 
 import Control.Applicative ((<|>))
@@ -167,9 +166,8 @@ hoverType request = do
     Right wt -> return wt
   case typeAt (line,col) welltyped of
     Left err -> throwE (Error, Text.pack err)
-    Right typ ->
-      let _range = fmap (rangeToJSON . rangeFromDhall)
-                        (srcAt (line,col) (fromWellTyped welltyped))
+    Right (mSrc, typ) ->
+      let _range = fmap (rangeToJSON . rangeFromDhall) mSrc
           _contents = J.List [J.PlainString (pretty typ)]
           hover = J.Hover{..}
       in lspRespond LSP.RspHover request (Just hover)
@@ -199,12 +197,10 @@ diagnosticsHandler uri = do
       (cache', expr') <- case loaded of
         Right x -> return x
         Left err -> throwE err
-      welltyped <- case typecheck expr' of
+      _ <- case typecheck expr' of
         Right (wt, _typ) -> return wt
         Left err -> throwE err
-      let normal = normalize welltyped
-      -- cache the new expression
-      assign importCache (cacheExpr fileIdentifier normal cache')
+      assign importCache cache'
       return Nothing
 
   let suggestions =

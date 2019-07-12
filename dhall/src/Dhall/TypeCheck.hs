@@ -24,7 +24,6 @@ module Dhall.TypeCheck (
 import Control.Applicative (empty)
 import Control.Exception (Exception)
 import Data.Data (Data(..))
-import Data.Foldable (forM_, toList)
 import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (First(..))
@@ -33,7 +32,6 @@ import Data.Semigroup (Semigroup(..))
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
-import Data.Traversable (forM)
 import Data.Typeable (Typeable)
 import Dhall.Binary (FromTerm(..), ToTerm(..))
 import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
@@ -41,6 +39,7 @@ import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Foldable
+import qualified Data.Map
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text                               as Text
@@ -371,13 +370,13 @@ typeWithA tpa = loop
         return (Pi "_" (Const Type) (Const Type))
     loop ctx e@(ListLit  Nothing  xs) = do
         case Data.Sequence.viewl xs of
-            x0 :< _ -> do
+            x0 :< xs' -> do
                 t <- loop ctx x0
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
                     _ -> Left (TypeError ctx e (InvalidListType t))
-                flip traverseWithIndex_ xs (\i x -> do
+                flip traverseWithIndex_ xs' (\i x -> do
                     t' <- loop ctx x
                     if Dhall.Core.judgmentallyEqual t t'
                         then return ()
@@ -583,23 +582,13 @@ typeWithA tpa = loop
             else Left (TypeError ctx e (RecordMismatch '∧' kvsX kvsY constX constY))
 
         let combineTypes ktsL ktsR = do
-                let ksL =
-                        Data.Set.fromList (Dhall.Map.keys ktsL)
-                let ksR =
-                        Data.Set.fromList (Dhall.Map.keys ktsR)
-                let ks = Data.Set.union ksL ksR
-                kts <- forM (toList ks) (\k -> do
-                    case (Dhall.Map.lookup k ktsL, Dhall.Map.lookup k ktsR) of
-                        (Just (Record ktsL'), Just (Record ktsR')) -> do
-                            t <- combineTypes ktsL' ktsR'
-                            return (k, t)
-                        (Nothing, Just t) -> do
-                            return (k, t)
-                        (Just t, Nothing) -> do
-                            return (k, t)
-                        _ -> do
-                            Left (TypeError ctx e (FieldCollision k)) )
-                return (Record (Dhall.Map.fromList kts))
+                let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
+                    combine k _ _ = Left (TypeError ctx e (FieldCollision k))
+
+                let eKts = Dhall.Map.outerJoin Right Right combine
+                                               ktsL ktsR
+
+                fmap Record (Dhall.Map.unorderedTraverseWithKey (\_k v -> v) eKts)
 
         combineTypes ktsX ktsY
     loop ctx e@(CombineTypes l r) = do
@@ -631,21 +620,13 @@ typeWithA tpa = loop
             _          -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
 
         let combineTypes ktsL ktsR = do
-                let ksL =
-                        Data.Set.fromList (Dhall.Map.keys ktsL)
-                let ksR =
-                        Data.Set.fromList (Dhall.Map.keys ktsR)
-                let ks = Data.Set.union ksL ksR
-                forM_ (toList ks) (\k -> do
-                    case (Dhall.Map.lookup k ktsL, Dhall.Map.lookup k ktsR) of
-                        (Just (Record ktsL'), Just (Record ktsR')) -> do
-                            combineTypes ktsL' ktsR'
-                        (Nothing, Just _) -> do
-                            return ()
-                        (Just _, Nothing) -> do
-                            return ()
-                        _ -> do
-                            Left (TypeError ctx e (FieldCollision k)) )
+                let mL = Dhall.Map.toMap ktsL
+                let mR = Dhall.Map.toMap ktsR
+
+                let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
+                    combine k _ _ = Left (TypeError ctx e (FieldCollision k))
+
+                Data.Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
 
         combineTypes ktsL0 ktsR0
 
@@ -689,8 +670,8 @@ typeWithA tpa = loop
             Union kts -> return kts
             _         -> Left (TypeError ctx e (MustMergeUnion kvsY tKvsY))
 
-        let ksX = Data.Set.fromList (Dhall.Map.keys ktsX)
-        let ksY = Data.Set.fromList (Dhall.Map.keys ktsY)
+        let ksX = Dhall.Map.keysSet ktsX
+        let ksY = Dhall.Map.keysSet ktsY
 
         let diffX = Data.Set.difference ksX ksY
         let diffY = Data.Set.difference ksY ksX
