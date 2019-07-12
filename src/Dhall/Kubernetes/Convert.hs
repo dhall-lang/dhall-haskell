@@ -139,16 +139,6 @@ toTypes definitions = memo
     convertToType maybeModelName Definition{..} = case (ref, typ, properties) of
       -- If we point to a ref we just reference it via Import
       (Just r, _, _) -> Dhall.Embed $ mkImport [] $ (pathFromRef r <> ".dhall")
-      -- Otherwise - if we have a 'type' - it's a basic type
-      (_, Just basic, _) -> case basic of
-        "object"  -> kvList
-        "array"   | Just item <- items -> Dhall.App Dhall.List (convertToType Nothing item)
-        "string"  | format == Just "int-or-string" -> intOrString
-        "string"  -> Dhall.Text
-        "boolean" -> Dhall.Bool
-        "integer" -> Dhall.Natural
-        "number"  -> Dhall.Double
-        other     -> error $ "Found missing Swagger type: " <> Text.unpack other
       -- Otherwise - if we have 'properties' - it's an object
       (_, _, Just props) ->
         let (required', optional')
@@ -162,6 +152,16 @@ toTypes definitions = memo
               <> fmap (second $ Dhall.App Dhall.Optional) (Data.Map.toList optional')
 
         in Dhall.Record $ Dhall.Map.fromList $ fmap (first $ unModelName) allFields
+      -- Otherwise - if we have a 'type' - it's a basic type
+      (_, Just basic, _) -> case basic of
+        "object"  -> kvList
+        "array"   | Just item <- items -> Dhall.App Dhall.List (convertToType Nothing item)
+        "string"  | format == Just "int-or-string" -> intOrString
+        "string"  -> Dhall.Text
+        "boolean" -> Dhall.Bool
+        "integer" -> Dhall.Natural
+        "number"  -> Dhall.Double
+        other     -> error $ "Found missing Swagger type: " <> Text.unpack other
       -- There are empty schemas that only have a description, so we return empty record
       _ -> Dhall.Record mempty
 
@@ -183,6 +183,8 @@ toDefault definitions types modelName = go
       (Dhall.Union _) -> Nothing
       -- Simple types should not have a default
       (Dhall.Text) -> Nothing
+      -- Set lists to empty
+      (Dhall.App Dhall.List typ) -> Just $ Dhall.ListLit (Just $ adjustImport typ) mempty
       -- But most of the times we are dealing with a record.
       -- Here we transform the record type in a value, transforming the keys in this way:
       -- * take the BaseData from definition and populate it
@@ -196,13 +198,6 @@ toDefault definitions types modelName = go
             getBaseData _ = mempty
 
             baseData = getBaseData $ Data.Map.lookup modelName definitions
-
-            -- | The imports that we get from the types are referring to the local folder,
-            --   but if we want to refer them from the defaults we need to adjust the path
-            adjustImport :: Expr -> Expr
-            adjustImport (Dhall.Embed imp) | Just file <- namespacedObjectFromImport imp
-              = Dhall.Embed $ mkImport ["types", ".."] (file <> ".dhall")
-            adjustImport other = other
 
             -- | Given a Dhall type from a record field, figure out if and what default
             --   value it should have
@@ -225,6 +220,13 @@ toDefault definitions types modelName = go
       -- We error out here because wildcards are bad, and we should know if
       -- we get something unexpected
       _ -> error $ show modelName
+
+    -- | The imports that we get from the types are referring to the local folder,
+    --   but if we want to refer them from the defaults we need to adjust the path
+    adjustImport :: Expr -> Expr
+    adjustImport (Dhall.Embed imp) | Just file <- namespacedObjectFromImport imp
+      = Dhall.Embed $ mkImport ["types", ".."] (file <> ".dhall")
+    adjustImport other = other
 
 
 -- | Get a Dhall.Map filled with imports, for creating giant Records or Unions of types or defaults
