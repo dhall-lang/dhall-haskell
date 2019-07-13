@@ -58,7 +58,7 @@ script:
   - tar -jcvf $(mk_release_name dhall-lsp-server) bin/dhall-lsp-server
 
 before_deploy:
-  - stack build --copy-bins --local-bin-path ./bin;
+  - stack build --copy-bins --local-bin-path ./bin
   # TODO: move the tar operations here
   - mkdir -p uploads
   - mv *.tar.bz2 uploads/
