@@ -8,6 +8,7 @@
 
 module Main where
 
+import           Control.Applicative (optional)
 import qualified Control.Exception
 import           Control.Exception (SomeException)
 import           Control.Monad (when)
@@ -17,7 +18,7 @@ import           Data.Text (Text)
 import qualified Data.Text.IO as Text
 import           Data.Version (showVersion)
 import qualified GHC.IO.Encoding
-import qualified Options.Applicative as O
+import qualified Options.Applicative as Options
 import           Options.Applicative (Parser, ParserInfo)
 import qualified System.Exit
 import qualified System.IO
@@ -35,14 +36,15 @@ data CommandOptions = CommandOptions
     { version    :: Bool
     , schema     :: Text
     , conversion :: Conversion
+    , file       :: Maybe FilePath
     } deriving Show
 
 -- | Command info and description
 parserInfo :: ParserInfo CommandOptions
-parserInfo = O.info
-          (  O.helper <*> parseOptions)
-          (  O.fullDesc
-          <> O.progDesc "Populate Dhall value given its Dhall type (schema) from a YAML expression"
+parserInfo = Options.info
+          (  Options.helper <*> parseOptions)
+          (  Options.fullDesc
+          <> Options.progDesc "Populate Dhall value given its Dhall type (schema) from a YAML expression"
           )
 
 
@@ -52,16 +54,27 @@ parseOptions :: Parser CommandOptions
 parseOptions = CommandOptions <$> parseVersion
                               <*> parseSchema
                               <*> parseConversion
+                              <*> optional parseFile
   where
-    parseSchema  =  O.strArgument
-                 (  O.metavar "SCHEMA"
-                 <> O.help "Dhall type expression (schema)"
-                 )
-    parseVersion =  O.switch
-                 (  O.long "version"
-                 <> O.short 'V'
-                 <> O.help "Display version"
-                 )
+    parseSchema =
+        Options.strArgument
+            (  Options.metavar "SCHEMA"
+            <> Options.help "Dhall type expression (schema)"
+            )
+
+    parseVersion =
+        Options.switch
+            (  Options.long "version"
+            <> Options.short 'V'
+            <> Options.help "Display version"
+            )
+
+    parseFile =
+        Options.strOption
+            (   Options.long "file"
+            <>  Options.help "Read expression from a file instead of standard input"
+            <>  Options.metavar "FILE"
+            )
 
 -- ----------
 -- Main
@@ -71,16 +84,18 @@ main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
-    CommandOptions{..} <- O.execParser parserInfo
+    CommandOptions{..} <- Options.execParser parserInfo
 
     when version $ do
       putStrLn (showVersion Meta.version)
       System.Exit.exitSuccess
 
     handle $ do
-        stdin <- BSL8.getContents
+        bytes <- case file of
+            Nothing   -> BSL8.getContents
+            Just path -> BSL8.readFile path
 
-        Text.putStr =<< dhallFromYaml (Options schema conversion) stdin
+        Text.putStr =<< dhallFromYaml (Options schema conversion) bytes
 
 
 handle :: IO a -> IO a
