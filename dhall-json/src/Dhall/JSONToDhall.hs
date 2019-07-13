@@ -102,6 +102,11 @@
 > $ json-to-dhall 'List { mapKey : Text, mapValue : Text }' <<< '{"foo": "bar"}'
 > [ { mapKey = "foo", mapValue = "bar" } ]
 
+    The map keys can even be union types instead of `Text`:
+
+> $ json-to-dhall 'List { mapKey : < A | B >, mapValue : Natural }' <<< '{"A": 1, "B": 2}'
+> [ { mapKey = < A | B >.A, mapValue = 1 }, { mapKey = < A | B >.B, mapValue = 2 } ]
+
     Flag @--no-keyval-maps@ switches off this mechanism (if one would ever need it):
 
 > $ json-to-dhall --no-keyval-maps 'List { mapKey : Text, mapValue : Text }' <<< '{"foo": "bar"}'
