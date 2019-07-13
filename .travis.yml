@@ -7,6 +7,7 @@ cache:
   - $HOME/.ghc
   - $HOME/.cabal
   - $HOME/.stack
+  - $HOME/.local/bin
   - $TRAVIS_BUILD_DIR/.stack-work
 
 matrix:
@@ -26,17 +27,15 @@ branches:
 before_install:
   # Using compiler above sets CC to an invalid value, so unset it
   - unset CC
-  # We want to always allow newer versions of packages when building on GHC HEAD
   - CABALARGS=""
-  - if [ "x$GHCVER" = "xhead" ]; then CABALARGS=--allow-newer; fi
-  # Download and unpack the stack executable
   - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$HOME/.local/bin:/opt/alex/$ALEXVER/bin:/opt/happy/$HAPPYVER/bin:$HOME/.cabal/bin:$PATH
-  - mkdir -p ~/.local/bin
-  - travis_retry curl --insecure -L https://get.haskellstack.org/stable/osx-x86_64.tar.gz | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
-  # Use the more reliable S3 mirror of Hackage
-  - mkdir -p $HOME/.cabal
-  - echo 'remote-repo: hackage.haskell.org:http://hackage.fpcomplete.com/' > $HOME/.cabal/config
-  - echo 'remote-repo-cache: $HOME/.cabal/packages' >> $HOME/.cabal/config
+  - | # Install stack
+    mkdir -p ~/.local/bin
+    travis_retry curl --insecure -L https://get.haskellstack.org/stable/osx-x86_64.tar.gz | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
+    # Use the more reliable S3 mirror of Hackage
+    mkdir -p $HOME/.cabal
+    echo 'remote-repo: hackage.haskell.org:http://hackage.fpcomplete.com/' > $HOME/.cabal/config
+    echo 'remote-repo-cache: $HOME/.cabal/packages' >> $HOME/.cabal/config
 
 
 install:
