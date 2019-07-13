@@ -65,7 +65,7 @@ before_deploy:
 
 deploy:
   - provider: releases
-    api_key: $API_KEY
+    api_key: $GITHUB_OAUTH_TOKEN
     file_glob: true
     file: uploads/*
     skip_cleanup: true
