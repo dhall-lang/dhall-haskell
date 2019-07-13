@@ -49,7 +49,7 @@ install:
 
 script:
   - export PATH="${PATH}:$(pwd)/artifacts"
-  - stack build --copy-bins --local-bin-path ./bin;
+  - stack build --copy-bins --local-bin-path ./bin
   - get_cabal_version() { cat $1/$1.cabal | grep '^Version: ' | gsed -e 's/^Version: //g'; }
   - mk_release_name() { echo "$1-$(get_cabal_version $1)-x86_64-macos.tar.bz2"; }
   - tar -jcvf $(mk_release_name dhall) bin/dhall
