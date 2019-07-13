@@ -23,7 +23,7 @@ import qualified Control.Monad
 import qualified Crypto.Hash
 import qualified Data.ByteArray.Encoding
 import qualified Data.ByteString
-import qualified Data.Char
+import qualified Data.Char               as Char
 import qualified Data.Foldable
 import qualified Data.List
 import qualified Data.List.NonEmpty
@@ -32,7 +32,7 @@ import qualified Data.Text
 import qualified Data.Text.Encoding
 import qualified Text.Megaparsec
 #if !MIN_VERSION_megaparsec(7, 0, 0)
-import qualified Text.Megaparsec.Char as Text.Megaparsec
+import qualified Text.Megaparsec.Char    as Text.Megaparsec
 #endif
 import qualified Text.Parser.Char
 
@@ -439,9 +439,9 @@ parsers embedded = Parsers {..}
                 return (Chunks [] t)
               where
                 predicate c =
-                    (   ('\x20' <= c && c <= '\x21'    )
-                    ||  ('\x23' <= c && c <= '\x5B'    )
-                    ||  ('\x5D' <= c && c <= '\x10FFFF')
+                    (   ('\x20' <= c && c <= '\x21')
+                    ||  ('\x23' <= c && c <= '\x5B')
+                    ||  ('\x5D' <= c && c <= '\x10FFFF' && validCodepoint c)
                     ) && c /= '$'
 
             unescapedCharacterSlow = do
@@ -496,7 +496,7 @@ parsers embedded = Parsers {..}
 
                             let number = toNumber ns
 
-                            Control.Monad.guard (number <= 0x10FFFF)
+                            Control.Monad.guard (number <= 0x10FFFF && validCodepoint (Char.chr number))
                                 <|> fail "Invalid Unicode code point"
 
                             _  <- Text.Parser.Char.char '}'
@@ -505,7 +505,7 @@ parsers embedded = Parsers {..}
 
                     n <- bracedEscapeSequence <|> fourCharacterEscapeSequence
 
-                    return (Data.Char.chr n)
+                    return (Char.chr n)
 
     doubleQuotedLiteral = do
             _      <- Text.Parser.Char.char '"'
@@ -552,7 +552,10 @@ parsers embedded = Parsers {..}
                     return (Chunks [] a <> b)
                   where
                     predicate c =
-                        ('\x20' <= c && c <= '\x10FFFF') && c /= '$' && c /= '\''
+                            '\x20' <= c && c <= '\x10FFFF'
+                        &&  validCodepoint c
+                        &&  c /= '$'
+                        &&  c /= '\''
 
                 unescapedCharacterSlow = do
                     a <- satisfy predicate
