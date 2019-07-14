@@ -1703,7 +1703,7 @@ normalizeWithM ctx e0 = loop (denote e0)
             RecordLit kvs ->
                 pure (RecordLit (Dhall.Map.restrictKeys kvs (Dhall.Set.toSet xs)))
             _   | null xs -> pure (RecordLit mempty)
-                | otherwise -> pure (Project r' (Left xs))
+                | otherwise -> pure (Project r' (Left (Dhall.Set.sort xs)))
     Project r (Right e1) -> do
         e2 <- loop e1
 
@@ -1939,7 +1939,7 @@ isNormalized e0 = loop (denote e0)
           case r of
               RecordLit kvs ->
                   case xs of
-                      Left  s -> not (all (flip Dhall.Map.member kvs) s)
+                      Left  s -> not (all (flip Dhall.Map.member kvs) s) && Dhall.Set.isSorted s
                       Right e' ->
                           case e' of
                               Record kts ->
