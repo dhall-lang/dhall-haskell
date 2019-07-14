@@ -26,8 +26,8 @@ import Data.Sequence (Seq)
 import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Dhall.Core (Binding(..), Chunks (..), Const(..), Expr(..), Var(..))
-import Dhall.Binary (ToTerm)
+import Dhall.Core (Binding(..), Chunks (..), Const(..), Expr(..), Var(..), Core)
+import Dhall.Eval (alphaNf, nfEmpty)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import Dhall.Pretty.Internal (Ann)
@@ -38,7 +38,6 @@ import qualified Data.List.NonEmpty
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
-import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Pretty.Internal      as Internal
@@ -154,11 +153,11 @@ rparen :: Diff
 rparen = token Internal.rparen
 
 -- | Render the difference between the normal form of two expressions
-diffNormalized :: (Eq a, Pretty a, ToTerm a) => Expr s a -> Expr s a -> Doc Ann
+diffNormalized :: Core -> Core -> Doc Ann
 diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
   where
-    l1 = Dhall.Core.alphaNormalize (Dhall.Core.normalize l0)
-    r1 = Dhall.Core.alphaNormalize (Dhall.Core.normalize r0)
+    l1 = alphaNf (nfEmpty l0)
+    r1 = alphaNf (nfEmpty r0)
 
 -- | Render the difference between two expressions
 diff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
@@ -361,7 +360,7 @@ diffChunks cL cR
 
     diffTextSkeleton = difference textSkeleton textSkeleton
 
-    chunks = zipWith chunkDiff (toEitherList cL) (toEitherList cR) 
+    chunks = zipWith chunkDiff (toEitherList cL) (toEitherList cR)
 
     chunkDiff a b =
       case (a, b) of

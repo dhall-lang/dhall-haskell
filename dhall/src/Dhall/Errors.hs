@@ -1,902 +1,281 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings #-}
 {-# OPTIONS_GHC -Wall #-}
 
--- | This module contains the logic for type checking Dhall code
+module Dhall.Errors where
 
-module Dhall.TypeCheck (
-    -- * Type-checking
-      typeWith
-    , typeOf
-    , typeWithA
-    , checkContext
-
-    -- * Types
-    , Typer
-    , X(..)
-    , TypeError(..)
-    , DetailedTypeError(..)
-    , TypeMessage(..)
-    ) where
-
-import Control.Applicative (empty)
-import Control.Exception (Exception)
-import Data.Data (Data(..))
-import Data.Functor (void)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid (First(..))
-import Data.Sequence (Seq, ViewL(..))
+import Control.Exception (Exception(..))
+import Control.Monad.Catch (throwM)
+import Control.Monad.Reader (asks)
+import Crypto.Hash (SHA256)
+import Data.Foldable (toList)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Semigroup (Semigroup(..))
 import Data.Set (Set)
+import Data.String (fromString)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Typeable (Typeable)
-import Dhall.Binary (FromTerm(..), ToTerm(..))
-import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
-import Dhall.Context (Context)
+import Dhall.Context (Cxt(..), ElabM, ImportState(..), typesToList)
+import Dhall.Core (Const(..), Import(..))
+import Dhall.Eval (Core)
+import Dhall.Parser.Combinators (Src)
 import Dhall.Pretty (Ann, layoutOpts)
 
-import qualified Data.Foldable
-import qualified Data.Map
-import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text                               as Text
 import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
-import qualified Dhall.Context
-import qualified Dhall.Core
 import qualified Dhall.Diff
-import qualified Dhall.Map
-import qualified Dhall.Set
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Util
+import qualified Crypto.Hash
 
-traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
-traverseWithIndex_ k xs =
-    Data.Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
+-- Elaboration errors
+--------------------------------------------------------------------------------
 
-axiom :: Const -> Either (TypeError s a) Const
-axiom Type = return Kind
-axiom Kind = return Sort
-axiom Sort = Left (TypeError Dhall.Context.empty (Const Sort) Untyped)
+-- | An elaboration error that includes import stack, source position and local context
+data ContextualError =
+  ContextualError !(NonEmpty Import) !Cxt !(Maybe Src) !ElabError
 
-rule :: Const -> Const -> Either () Const
-rule Type Type = return Type
-rule Kind Type = return Type
-rule Sort Type = return Type
-rule Kind Kind = return Kind
-rule Sort Kind = return Sort
-rule Sort Sort = return Sort
--- This forbids dependent types. If this ever changes, then the fast
--- path in the Let case of typeWithA will become unsound.
-rule _    _    = Left ()
+-- We distinguish disabled import resolution from the other import errors, because we don't want
+-- to recover from the former when elaborating import alternatives.
+data ElabError = TypeError !TypeError | ImportError !ImportError | ImportResolutionDisabled
 
-{-| Type-check an expression and return the expression's type if type-checking
-    succeeds or an error if type-checking fails
+elabError :: Cxt -> ElabError -> ElabM a
+elabError cxt err = do
+  stack <- asks _stack
+  throwM (ContextualError stack cxt Nothing err)
 
-    `typeWith` does not necessarily normalize the type since full normalization
-    is not necessary for just type-checking.  If you actually care about the
-    returned type then you may want to `Dhall.Core.normalize` it afterwards.
+typeError :: Cxt -> TypeError -> ElabM a
+typeError cxt = elabError cxt . TypeError
 
-    The supplied `Context` records the types of the names in scope. If
-    these are ill-typed, the return value may be ill-typed.
--}
-typeWith :: Context (Expr s X) -> Expr s X -> Either (TypeError s X) (Expr s X)
-typeWith ctx expr = do
-    checkContext ctx
-    typeWithA absurd ctx expr
+importError :: Cxt -> ImportError -> ElabM a
+importError cxt = elabError cxt . ImportError
 
-{-| Function that converts the value inside an `Embed` constructor into a new
-    expression
--}
-type Typer a = forall s. a -> Expr s a
+instance Show ContextualError where
+    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
 
-{-| Generalization of `typeWith` that allows type-checking the `Embed`
-    constructor with custom logic
--}
-typeWithA
-    :: (Eq a, Pretty a)
-    => Typer a
-    -> Context (Expr s a)
-    -> Expr s a
-    -> Either (TypeError s a) (Expr s a)
-typeWithA tpa = loop
+instance Exception ContextualError
+
+prettyContextualError :: (ElabError -> Doc ann) -> ContextualError -> Doc xxx
+prettyContextualError prettyElab (ContextualError imports ctx pos msg) =
+  fromString (concat (zipWith indent [0..] toDisplay) ++ "\n") <>
+  Pretty.unAnnotate
+      (   "\n"
+      <>  (if null (typesToList $ _types ctx)
+          then ""
+          else prettyContext ctx <> "\n\n")
+      <>  prettyElab msg
+      <>  source)
   where
-    loop _     (Const c         ) = do
-        fmap Const (axiom c)
-    loop ctx e@(Var (V x n)     ) = do
-        case Dhall.Context.lookup x n ctx of
-            Nothing -> Left (TypeError ctx e (UnboundVariable x))
-            Just a  -> do
-                -- Note: no need to typecheck the value we're
-                -- returning; that is done at insertion time.
-                return a
-    loop ctx   (Lam x _A  b     ) = do
-        _ <- loop ctx _A
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
-        _B <- loop ctx' b
-        let p = Pi x _A _B
-        _t <- loop ctx p
-        return p
-    loop ctx e@(Pi  x _A _B     ) = do
-        tA <- fmap Dhall.Core.normalize (loop ctx _A)
-        kA <- case tA of
-            Const k -> return k
-            _       -> Left (TypeError ctx e (InvalidInputType _A))
-
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
-        tB <- fmap Dhall.Core.normalize (loop ctx' _B)
-        kB <- case tB of
-            Const k -> return k
-            _       -> Left (TypeError ctx' e (InvalidOutputType _B))
-
-        case rule kA kB of
-            Left () -> Left (TypeError ctx e (NoDependentTypes _A _B))
-            Right k -> Right (Const k)
-    loop ctx e@(App f a         ) = do
-        tf <- fmap Dhall.Core.normalize (loop ctx f)
-        (x, _A, _B) <- case tf of
-            Pi x _A _B -> return (x, _A, _B)
-            _          -> Left (TypeError ctx e (NotAFunction f tf))
-        _A' <- loop ctx a
-        if Dhall.Core.judgmentallyEqual _A _A'
-            then do
-                let a'   = Dhall.Core.shift   1  (V x 0) a
-                let _B'  = Dhall.Core.subst (V x 0) a' _B
-                let _B'' = Dhall.Core.shift (-1) (V x 0) _B'
-                return _B''
-            else do
-                let nf_A  = Dhall.Core.normalize _A
-                let nf_A' = Dhall.Core.normalize _A'
-                Left (TypeError ctx e (TypeMismatch f nf_A a nf_A'))
-    loop ctx e@(Let (Binding x mA a0 :| ls) b0) = do
-        _A1 <- loop ctx a0
-        case mA of
-            Just _A0 -> do
-                _ <- loop ctx _A0
-                let nf_A0 = Dhall.Core.normalize _A0
-                let nf_A1 = Dhall.Core.normalize _A1
-                if Dhall.Core.judgmentallyEqual _A0 _A1
-                    then return ()
-                    else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
-            Nothing -> return ()
-
-        t <- loop ctx _A1
-
-        let a1 = Dhall.Core.normalize a0
-        let a2 = Dhall.Core.shift 1 (V x 0) a1
-
-        let rest = case ls of
-                []       -> b0
-                l' : ls' -> Let (l' :| ls') b0
-
-        -- The catch-all branch directly implements the Dhall
-        -- specification as written; it is necessary to substitute in
-        -- types in order to get 'dependent let' behaviour and to
-        -- allow type synonyms (see #69). However, doing a full
-        -- substitution is slow if the value is large and used many
-        -- times. If the value being substitued in is a term (i.e.,
-        -- its type is a Type), then we can get a very significant
-        -- speed-up by doing the type-checking once at binding-time,
-        -- as opposed to doing it at every use site (see #412).
-        case Dhall.Core.normalize t of
-          Const Type -> do
-            let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A1) ctx)
-            _B0 <- loop ctx' rest
-            let _B1 = Dhall.Core.subst (V x 0) a2 _B0
-            let _B2 = Dhall.Core.shift (-1) (V x 0) _B1
-            return _B2
-
-          _ -> do
-            let b1 = Dhall.Core.subst (V x 0) a2 rest
-            let b2 = Dhall.Core.shift (-1) (V x 0) b1
-            loop ctx b2
-
-    loop ctx e@(Annot x t       ) = do
-        case Dhall.Core.denote t of
-            Const _ -> return ()
-            _       -> void (loop ctx t)
-
-        t' <- loop ctx x
-        if Dhall.Core.judgmentallyEqual t t'
-            then do
-                return t
-            else do
-                let nf_t  = Dhall.Core.normalize t
-                let nf_t' = Dhall.Core.normalize t'
-                Left (TypeError ctx e (AnnotMismatch x nf_t nf_t'))
-    loop _      Bool              = do
-        return (Const Type)
-    loop _     (BoolLit _       ) = do
-        return Bool
-    loop ctx e@(BoolAnd l r     ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantAnd l tl))
-
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantAnd r tr))
-
-        return Bool
-    loop ctx e@(BoolOr  l r     ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantOr l tl))
-
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantOr r tr))
-
-        return Bool
-    loop ctx e@(BoolEQ  l r     ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantEQ l tl))
-
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantEQ r tr))
-
-        return Bool
-    loop ctx e@(BoolNE  l r     ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantNE l tl))
-
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantNE r tr))
-
-        return Bool
-    loop ctx e@(BoolIf x y z    ) = do
-        tx <- fmap Dhall.Core.normalize (loop ctx x)
-        case tx of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (InvalidPredicate x tx))
-        ty  <- fmap Dhall.Core.normalize (loop ctx y )
-        tty <- fmap Dhall.Core.normalize (loop ctx ty)
-        case tty of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (IfBranchMustBeTerm True y ty tty))
-
-        tz <- fmap Dhall.Core.normalize (loop ctx z)
-        ttz <- fmap Dhall.Core.normalize (loop ctx tz)
-        case ttz of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (IfBranchMustBeTerm False z tz ttz))
-
-        if Dhall.Core.judgmentallyEqual ty tz
-            then return ()
-            else Left (TypeError ctx e (IfBranchMismatch y z ty tz))
-        return ty
-    loop _      Natural           = do
-        return (Const Type)
-    loop _     (NaturalLit _    ) = do
-        return Natural
-    loop _      NaturalFold       = do
-        return
-            (Pi "_" Natural
-                (Pi "natural" (Const Type)
-                    (Pi "succ" (Pi "_" "natural" "natural")
-                        (Pi "zero" "natural" "natural") ) ) )
-    loop _      NaturalBuild      = do
-        return
-            (Pi "_"
-                (Pi "natural" (Const Type)
-                    (Pi "succ" (Pi "_" "natural" "natural")
-                        (Pi "zero" "natural" "natural") ) )
-                Natural )
-    loop _      NaturalIsZero     = do
-        return (Pi "_" Natural Bool)
-    loop _      NaturalEven       = do
-        return (Pi "_" Natural Bool)
-    loop _      NaturalOdd        = do
-        return (Pi "_" Natural Bool)
-    loop _      NaturalToInteger  = do
-        return (Pi "_" Natural Integer)
-    loop _      NaturalShow  = do
-        return (Pi "_" Natural Text)
-    loop ctx e@(NaturalPlus  l r) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Natural -> return ()
-            _       -> Left (TypeError ctx e (CantAdd l tl))
-
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Natural -> return ()
-            _       -> Left (TypeError ctx e (CantAdd r tr))
-        return Natural
-    loop ctx e@(NaturalTimes l r) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Natural -> return ()
-            _       -> Left (TypeError ctx e (CantMultiply l tl))
-
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Natural -> return ()
-            _       -> Left (TypeError ctx e (CantMultiply r tr))
-        return Natural
-    loop _      Integer           = do
-        return (Const Type)
-    loop _     (IntegerLit _    ) = do
-        return Integer
-    loop _      IntegerShow  = do
-        return (Pi "_" Integer Text)
-    loop _      IntegerToDouble = do
-        return (Pi "_" Integer Double)
-    loop _      Double            = do
-        return (Const Type)
-    loop _     (DoubleLit _     ) = do
-        return Double
-    loop _     DoubleShow         = do
-        return (Pi "_" Double Text)
-    loop _      Text              = do
-        return (Const Type)
-    loop ctx e@(TextLit (Chunks xys _)) = do
-        let process (_, y) = do
-                ty <- fmap Dhall.Core.normalize (loop ctx y)
-                case ty of
-                    Text -> return ()
-                    _    -> Left (TypeError ctx e (CantInterpolate y ty))
-        mapM_ process xys
-        return Text
-    loop ctx e@(TextAppend l r  ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Text -> return ()
-            _    -> Left (TypeError ctx e (CantTextAppend l tl))
-
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Text -> return ()
-            _    -> Left (TypeError ctx e (CantTextAppend r tr))
-        return Text
-    loop _      TextShow          = do
-        return (Pi "_" Text Text)
-    loop _      List              = do
-        return (Pi "_" (Const Type) (Const Type))
-    loop ctx e@(ListLit  Nothing  xs) = do
-        case Data.Sequence.viewl xs of
-            x0 :< xs' -> do
-                t <- loop ctx x0
-                s <- fmap Dhall.Core.normalize (loop ctx t)
-                case s of
-                    Const Type -> return ()
-                    _ -> Left (TypeError ctx e (InvalidListType t))
-                flip traverseWithIndex_ xs' (\i x -> do
-                    t' <- loop ctx x
-                    if Dhall.Core.judgmentallyEqual t t'
-                        then return ()
-                        else do
-                            let nf_t  = Dhall.Core.normalize t
-                            let nf_t' = Dhall.Core.normalize t'
-                            let err   = MismatchedListElements i nf_t x nf_t'
-                            Left (TypeError ctx x err) )
-                return (App List t)
-            _ -> Left (TypeError ctx e MissingListType)
-    loop ctx e@(ListLit (Just t ) xs) = do
-        s <- fmap Dhall.Core.normalize (loop ctx t)
-        case s of
-            Const Type -> return ()
-            _ -> Left (TypeError ctx e (InvalidListType t))
-        flip traverseWithIndex_ xs (\i x -> do
-            t' <- loop ctx x
-            if Dhall.Core.judgmentallyEqual t t'
-                then return ()
-                else do
-                    let nf_t  = Dhall.Core.normalize t
-                    let nf_t' = Dhall.Core.normalize t'
-                    Left (TypeError ctx x (InvalidListElement i nf_t x nf_t')) )
-        return (App List t)
-    loop ctx e@(ListAppend l r  ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        el <- case tl of
-            App List el -> return el
-            _           -> Left (TypeError ctx e (CantListAppend l tl))
-
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        er <- case tr of
-            App List er -> return er
-            _           -> Left (TypeError ctx e (CantListAppend r tr))
-
-        if Dhall.Core.judgmentallyEqual el er
-            then return (App List el)
-            else Left (TypeError ctx e (ListAppendMismatch el er))
-    loop _      ListBuild         = do
-        return
-            (Pi "a" (Const Type)
-                (Pi "_"
-                    (Pi "list" (Const Type)
-                        (Pi "cons" (Pi "_" "a" (Pi "_" "list" "list"))
-                            (Pi "nil" "list" "list") ) )
-                    (App List "a") ) )
-    loop _      ListFold          = do
-        return
-            (Pi "a" (Const Type)
-                (Pi "_" (App List "a")
-                    (Pi "list" (Const Type)
-                        (Pi "cons" (Pi "_" "a" (Pi "_" "list" "list"))
-                            (Pi "nil" "list" "list")) ) ) )
-    loop _      ListLength        = do
-        return (Pi "a" (Const Type) (Pi "_" (App List "a") Natural))
-    loop _      ListHead          = do
-        return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Optional "a")))
-    loop _      ListLast          = do
-        return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Optional "a")))
-    loop _      ListIndexed       = do
-        let kts = [("index", Natural), ("value", "a")]
-        return
-            (Pi "a" (Const Type)
-                (Pi "_" (App List "a")
-                    (App List (Record (Dhall.Map.fromList kts))) ) )
-    loop _      ListReverse       = do
-        return (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a")))
-    loop _      Optional          = do
-        return (Pi "_" (Const Type) (Const Type))
-    loop _      None              = do
-        return (Pi "A" (Const Type) (App Optional "A"))
-    loop ctx e@(Some a) = do
-        _A <- loop ctx a
-        s <- fmap Dhall.Core.normalize (loop ctx _A)
-        case s of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (InvalidSome a _A s))
-        return (App Optional _A)
-    loop _      OptionalFold      = do
-        return
-            (Pi "a" (Const Type)
-                (Pi "_" (App Optional "a")
-                    (Pi "optional" (Const Type)
-                        (Pi "just" (Pi "_" "a" "optional")
-                            (Pi "nothing" "optional" "optional") ) ) ) )
-    loop _      OptionalBuild     = do
-        return
-            (Pi "a" (Const Type)
-                (Pi "_" f (App Optional "a") ) )
-        where f = Pi "optional" (Const Type)
-                      (Pi "just" (Pi "_" "a" "optional")
-                          (Pi "nothing" "optional" "optional") )
-    loop ctx e@(Record    kts   ) = do
-        case Dhall.Map.uncons kts of
-            Nothing             -> return (Const Type)
-            Just (k0, t0, rest) -> do
-                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
-                c <- case s0 of
-                    Const c -> pure c
-                    _ -> Left (TypeError ctx e (InvalidFieldType k0 t0))
-                let process k t = do
-                        s <- fmap Dhall.Core.normalize (loop ctx t)
-                        case s of
-                            Const c' ->
-                                if c == c'
-                                then return ()
-                                else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 c'))
-                            _ -> Left (TypeError ctx e (InvalidFieldType k t))
-                Dhall.Map.unorderedTraverseWithKey_ process rest
-                return (Const c)
-    loop ctx e@(RecordLit kvs   ) = do
-        case Dhall.Map.uncons kvs of
-            Nothing             -> return (Record mempty)
-            Just (k0, v0, kvs') -> do
-                t0 <- loop ctx v0
-                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
-                c <- case s0 of
-                    Const c -> pure c
-                    _       -> Left (TypeError ctx e (InvalidFieldType k0 v0))
-
-                let process k v = do
-                        t <- loop ctx v
-                        s <- fmap Dhall.Core.normalize (loop ctx t)
-                        case s of
-                            Const c'
-                                | c == c'   -> return ()
-                                | otherwise -> Left (TypeError ctx e (FieldMismatch k v c k0 v0 c'))
-                            _ -> Left (TypeError ctx e (InvalidFieldType k t))
-
-                        return t
-
-                kts <- Dhall.Map.unorderedTraverseWithKey process kvs'
-
-                return (Record (Dhall.Map.insert k0 t0 kts))
-    loop ctx e@(Union     kts   ) = do
-        let nonEmpty k mt = First (fmap (\t -> (k, t)) mt)
-
-        case getFirst (Dhall.Map.foldMapWithKey nonEmpty kts) of
-            Nothing -> do
-                return (Const Type)
-
-            Just (k0, t0) -> do
-                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
-
-                c0 <- case s0 of
-                    Const c0 -> do
-                        return c0
-
-                    _ -> do
-                        Left (TypeError ctx e (InvalidAlternativeType k0 t0))
-
-                let process _ Nothing = do
-                        return ()
-
-                    process k (Just t) = do
-                        s <- fmap Dhall.Core.normalize (loop ctx t)
-
-                        c <- case s of
-                            Const c -> do
-                                return c
-
-                            _ -> do
-                                Left (TypeError ctx e (InvalidAlternativeType k t))
-
-                        if c0 == c
-                            then return ()
-                            else Left (TypeError ctx e (AlternativeAnnotationMismatch k t c k0 t0 c0))
-
-                Dhall.Map.unorderedTraverseWithKey_ process (Dhall.Map.delete k0 kts)
-
-                return (Const c0)
-    loop ctx e@(UnionLit k v kts) = do
-        case Dhall.Map.lookup k kts of
-            Just _  -> Left (TypeError ctx e (DuplicateAlternative k))
-            Nothing -> return ()
-        t <- loop ctx v
-        let union = Union (Dhall.Map.insert k (Just (Dhall.Core.normalize t)) kts)
-        _ <- loop ctx union
-        return union
-    loop ctx e@(Combine kvsX kvsY) = do
-        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
-        ktsX  <- case tKvsX of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
-
-        tKvsY <- fmap Dhall.Core.normalize (loop ctx kvsY)
-        ktsY  <- case tKvsY of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
-
-        ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
-        constX <- case ttKvsX of
-            Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
-
-        ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
-        constY <- case ttKvsY of
-            Const constY -> return constY
-            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
-
-        if constX == constY
-            then return ()
-            else Left (TypeError ctx e (RecordMismatch '∧' kvsX kvsY constX constY))
-
-        let combineTypes ktsL ktsR = do
-                let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
-                    combine k _ _ = Left (TypeError ctx e (FieldCollision k))
-
-                let eKts = Dhall.Map.outerJoin Right Right combine
-                                               ktsL ktsR
-
-                fmap Record (Dhall.Map.unorderedTraverseWithKey (\_k v -> v) eKts)
-
-        combineTypes ktsX ktsY
-    loop ctx e@(CombineTypes l r) = do
-        tL <- loop ctx l
-        let l' = Dhall.Core.normalize l
-        cL <- case tL of
-            Const cL -> return cL
-            _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType l l'))
-        tR <- loop ctx r
-        let r' = Dhall.Core.normalize r
-        cR <- case tR of
-            Const cR -> return cR
-            _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
-        let decide Type Type =
-                return Type
-            decide Kind Kind =
-                return Kind
-            decide Sort Sort =
-                return Sort
-            decide x y =
-                Left (TypeError ctx e (RecordTypeMismatch x y l r))
-        c <- decide cL cR
-
-        ktsL0 <- case l' of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (CombineTypesRequiresRecordType l l'))
-        ktsR0 <- case r' of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
-
-        let combineTypes ktsL ktsR = do
-                let mL = Dhall.Map.toMap ktsL
-                let mR = Dhall.Map.toMap ktsR
-
-                let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
-                    combine k _ _ = Left (TypeError ctx e (FieldCollision k))
-
-                Data.Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
-
-        combineTypes ktsL0 ktsR0
-
-        return (Const c)
-    loop ctx e@(Prefer kvsX kvsY) = do
-        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
-        ktsX  <- case tKvsX of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
-
-        tKvsY <- fmap Dhall.Core.normalize (loop ctx kvsY)
-        ktsY  <- case tKvsY of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
-
-        ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
-        constX <- case ttKvsX of
-            Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
-
-        ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
-        constY <- case ttKvsY of
-            Const constY -> return constY
-            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
-
-        if constX == constY
-            then return ()
-            else Left (TypeError ctx e (RecordMismatch '⫽' kvsX kvsY constX constY))
-
-        return (Record (Dhall.Map.union ktsY ktsX))
-    loop ctx e@(Merge kvsX kvsY mT₁) = do
-        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
-
-        ktsX <- case tKvsX of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustMergeARecord kvsX tKvsX))
-
-        tKvsY <- fmap Dhall.Core.normalize (loop ctx kvsY)
-
-        ktsY <- case tKvsY of
-            Union kts -> return kts
-            _         -> Left (TypeError ctx e (MustMergeUnion kvsY tKvsY))
-
-        let ksX = Dhall.Map.keysSet ktsX
-        let ksY = Dhall.Map.keysSet ktsY
-
-        let diffX = Data.Set.difference ksX ksY
-        let diffY = Data.Set.difference ksY ksX
-
-        if Data.Set.null diffX
-            then return ()
-            else Left (TypeError ctx e (UnusedHandler diffX))
-
-        (mKX, _T₁) <- do
-            case mT₁ of
-                Just _T₁ -> do
-                    return (Nothing, _T₁)
-
-                Nothing -> do
-                    case Dhall.Map.uncons ktsX of
-                        Nothing -> do
-                            Left (TypeError ctx e MissingMergeType)
-
-                        Just (kX, tX, _) -> do
-                            _T₁ <- do
-                                case Dhall.Map.lookup kX ktsY of
-                                    Nothing -> do
-                                        Left (TypeError ctx e (UnusedHandler diffX))
-
-                                    Just Nothing -> do
-                                        return tX
-
-                                    Just (Just _)  ->
-                                        case tX of
-                                            Pi x _A₀ _T₀ -> do
-                                                return (Dhall.Core.shift (-1) (V x 0) _T₀)
-                                            _ -> do
-                                                Left (TypeError ctx e (HandlerNotAFunction kX tX))
-
-                            return (Just kX, _T₁)
-
-        _ <- loop ctx _T₁
-
-        let process kY mTY = do
-                case Dhall.Map.lookup kY ktsX of
-                    Nothing -> do
-                        Left (TypeError ctx e (MissingHandler diffY))
-
-                    Just tX -> do
-                        _T₃ <- do
-                            case mTY of
-                                Nothing -> do
-                                    return tX
-                                Just _A₁ -> do
-                                    case tX of
-                                        Pi x _A₀ _T₂ -> do
-                                            if Dhall.Core.judgmentallyEqual _A₀ _A₁
-                                                then return ()
-                                                else Left (TypeError ctx e (HandlerInputTypeMismatch kY _A₁ _A₀))
-
-                                            return (Dhall.Core.shift (-1) (V x 0) _T₂)
-                                        _ -> do
-                                            Left (TypeError ctx e (HandlerNotAFunction kY tX))
-
-                        if Dhall.Core.judgmentallyEqual _T₁ _T₃
-                            then return ()
-                            else
-                                case mKX of
-                                    Nothing -> do
-                                        Left (TypeError ctx e (InvalidHandlerOutputType kY _T₁ _T₃))
-                                    Just kX -> do
-                                        Left (TypeError ctx e (HandlerOutputTypeMismatch kX _T₁ kY _T₃))
-
-        Dhall.Map.unorderedTraverseWithKey_ process ktsY
-
-        return _T₁
-    loop ctx e@(Field r x       ) = do
-        t <- fmap Dhall.Core.normalize (loop ctx r)
-
-        let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
-
-        case t of
-            Record kts -> do
-                _ <- loop ctx t
-
-                case Dhall.Map.lookup x kts of
-                    Just t' -> return t'
-                    Nothing -> Left (TypeError ctx e (MissingField x t))
-            _ -> do
-                case Dhall.Core.normalize r of
-                  Union kts ->
-                    case Dhall.Map.lookup x kts of
-                        Just (Just t') -> return (Pi x t' (Union kts))
-                        Just Nothing   -> return (Union kts)
-                        Nothing -> Left (TypeError ctx e (MissingField x t))
-                  r' -> Left (TypeError ctx e (CantAccess text r' t))
-    loop ctx e@(Project r (Left xs)) = do
-        t <- fmap Dhall.Core.normalize (loop ctx r)
-
-        case t of
-            Record kts -> do
-                _ <- loop ctx t
-
-                let process k =
-                        case Dhall.Map.lookup k kts of
-                            Just t' -> return (k, t')
-                            Nothing -> Left (TypeError ctx e (MissingField k t))
-
-                let adapt = Record . Dhall.Map.fromList
-
-                fmap adapt (traverse process (Dhall.Set.toList xs))
-            _ -> do
-                let text =
-                        Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
-
-                Left (TypeError ctx e (CantProject text r t))
-    loop ctx e@(Project r (Right t)) = do
-        _R <- fmap Dhall.Core.normalize (loop ctx r)
-
-        case _R of
-            Record ktsR -> do
-                _ <- loop ctx t
-
-                case Dhall.Core.normalize t of
-                    Record ktsT -> do
-                        let actualSubset =
-                                Record (Dhall.Map.intersection ktsR ktsT)
-
-                        let expectedSubset = t
-
-                        let process k tT = do
-                                case Dhall.Map.lookup k ktsR of
-                                    Nothing -> do
-                                        Left (TypeError ctx e (MissingField k _R))
-                                    Just tR -> do
-                                        if Dhall.Core.judgmentallyEqual tT tR
-                                            then do
-                                                return ()
-                                            else do
-                                                Left (TypeError ctx e (ProjectionTypeMismatch k tT tR expectedSubset actualSubset))
-
-                        Dhall.Map.unorderedTraverseWithKey_ process ktsT
-
-                        return (Record ktsT)
-                    _ -> do
-                        Left (TypeError ctx e (CantProjectByExpression t))
-
-            _ -> do
-                let text = Dhall.Core.pretty t
-
-                Left (TypeError ctx e (CantProject text r t))
-    loop ctx   (Note s e'       ) = case loop ctx e' of
-        Left (TypeError ctx' (Note s' e'') m) -> Left (TypeError ctx' (Note s' e'') m)
-        Left (TypeError ctx'          e''  m) -> Left (TypeError ctx' (Note s  e'') m)
-        Right r                               -> Right r
-    loop ctx   (ImportAlt l _r  ) =
-       fmap Dhall.Core.normalize (loop ctx l)
-    loop _     (Embed p         ) = Right $ tpa p
-
-{-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
-    expression must be closed (i.e. no free variables), otherwise type-checking
-    will fail.
+    indent n import_ =
+      "\n" ++ replicate (2 * n) ' ' ++ "↳ " ++ Dhall.Pretty.Internal.prettyToString import_
+
+    -- Tthe final (outermost) import is fake to establish the base
+    -- directory. Also, we need outermost-first.
+    toDisplay = drop 1 (reverse (toList imports))
+    prettyKV (key, val) = pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
+
+    prettyContext =
+            Pretty.vsep
+        .   map prettyKV
+        .   reverse
+        .   typesToList
+        .   _types
+
+    source = maybe mempty pretty pos
+
+instance Pretty ContextualError where
+    pretty = prettyContextualError $ \case
+      TypeError err            -> shortTypeMessage err <> "\n"
+      ImportError err          -> fromString (show err) <> "\n"
+      ImportResolutionDisabled -> "Import resolution is disabled\n"
+
+{-| Newtype used to wrap error messages so that they render with a more
+    detailed explanation of what went wrong
 -}
-typeOf :: Expr s X -> Either (TypeError s X) (Expr s X)
-typeOf = typeWith Dhall.Context.empty
+newtype DetailedContextualError = DetailedContextualError ContextualError
+    deriving (Typeable)
+
+instance Show DetailedContextualError where
+    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
+
+instance Exception DetailedContextualError
+
+instance Pretty DetailedContextualError where
+    pretty (DetailedContextualError cxtErr) = prettyContextualError (
+      \m -> (case m of
+              TypeError err            -> longTypeMessage err <> "\n"
+              ImportError err          -> fromString (show err) <> "\n"
+              ImportResolutionDisabled -> "Import resolution is disabled\n")
+          <>  "────────────────────────────────────────────────────────────────────────────────\n"
+          <>  "\n")
+      cxtErr
+
+-- Import errors
+--------------------------------------------------------------------------------
 
 
--- | The specific type error
-data TypeMessage s a
-    = UnboundVariable Text
-    | InvalidInputType (Expr s a)
-    | InvalidOutputType (Expr s a)
-    | NotAFunction (Expr s a) (Expr s a)
-    | TypeMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
-    | AnnotMismatch (Expr s a) (Expr s a) (Expr s a)
+data ImportError
+  -- | An import failed because of a cycle in the import graph
+  = Cycle !Import
+
+  {-| Dhall tries to ensure that all expressions hosted on network endpoints are
+      weakly referentially transparent, meaning roughly that any two clients will
+      compile the exact same result given the same URL.
+
+      To be precise, a strong interpretaton of referential transparency means that
+      if you compiled a URL you could replace the expression hosted at that URL
+      with the compiled result.  Let's call this \"static linking\".  Dhall (very
+      intentionally) does not satisfy this stronger interpretation of referential
+      transparency since \"statically linking\" an expression (i.e. permanently
+      resolving all imports) means that the expression will no longer update if
+      its dependencies change.
+
+      In general, either interpretation of referential transparency is not
+      enforceable in a networked context since one can easily violate referential
+      transparency with a custom DNS, but Dhall can still try to guard against
+      common unintentional violations.  To do this, Dhall enforces that a
+      non-local import may not reference a local import.
+
+      Local imports are defined as:
+
+      * A file
+
+      * A URL with a host of @localhost@ or @127.0.0.1@
+
+      All other imports are defined to be non-local
+  -}
+  | ReferentiallyOpaque !Import
+
+  -- | Exception thrown when an imported file is missing
+  | MissingFile !FilePath
+
+  -- | Exception thrown when an environment variable is missing
+  | MissingEnvironmentVariable !Text
+
+  -- | Exception thrown when a HTTP url is imported but dhall was built without
+  -- the @with-http@ Cabal flag.
+  | CannotImportHTTPURL !String
+
+  -- | Exception thrown when encountering a "missing" import.
+  | MissingImport
+
+  -- | Exception thrown when an integrity check fails
+  | HashMismatch { expectedHash :: Crypto.Hash.Digest SHA256
+                 , actualHash   :: Crypto.Hash.Digest SHA256}
+
+instance Exception ImportError
+
+instance Show ImportError where
+  show (Cycle import_) =
+    "\nCyclic import: " ++ Dhall.Pretty.Internal.prettyToString import_
+  show (ReferentiallyOpaque import_) =
+    "\nReferentially opaque import: " ++ Dhall.Pretty.Internal.prettyToString import_
+  show (MissingFile path) =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Missing file "
+        <>  path
+  show (MissingEnvironmentVariable name) =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Missing environment variable\n"
+        <>  "\n"
+        <>  "↳ " <> Text.unpack name
+  show (CannotImportHTTPURL url) =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Cannot import HTTP URL.\n"
+        <>  "\n"
+        <>  "Dhall was compiled without the 'with-http' flag.\n"
+        <>  "\n"
+        <>  "The requested URL was: "
+        <>  url
+        <>  "\n"
+  show MissingImport = "Cannot import \"missing\""
+  show (HashMismatch {..}) =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Import integrity check failed\n"
+        <>  "\n"
+        <>  "Expected hash:\n"
+        <>  "\n"
+        <>  "↳ " <> show expectedHash <> "\n"
+        <>  "\n"
+        <>  "Actual hash:\n"
+        <>  "\n"
+        <>  "↳ " <> show actualHash <> "\n"
+
+
+-- Type errors
+--------------------------------------------------------------------------------
+
+data TypeError
+    = UnboundVariable !Text
+    | InvalidInputType !Core
+    | InvalidOutputType !Core
+    | NotAFunction !Core !Core
+    | TypeMismatch !Core !Core !Core !Core
+    | AnnotMismatch !Core !Core !Core
     | Untyped
     | MissingListType
-    | MismatchedListElements Int (Expr s a) (Expr s a) (Expr s a)
-    | InvalidListElement Int (Expr s a) (Expr s a) (Expr s a)
-    | InvalidListType (Expr s a)
-    | InvalidSome (Expr s a) (Expr s a) (Expr s a)
-    | InvalidPredicate (Expr s a) (Expr s a)
-    | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
-    | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
-    | InvalidFieldType Text (Expr s a)
-    | FieldAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
-    | FieldMismatch Text (Expr s a) Const Text (Expr s a) Const
-    | InvalidAlternative Text (Expr s a)
-    | InvalidAlternativeType Text (Expr s a)
-    | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
-    | ListAppendMismatch (Expr s a) (Expr s a)
-    | DuplicateAlternative Text
-    | MustCombineARecord Char (Expr s a) (Expr s a)
-    | RecordMismatch Char (Expr s a) (Expr s a) Const Const
-    | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
-    | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
-    | FieldCollision Text
-    | MustMergeARecord (Expr s a) (Expr s a)
-    | MustMergeUnion (Expr s a) (Expr s a)
-    | UnusedHandler (Set Text)
-    | MissingHandler (Set Text)
-    | HandlerInputTypeMismatch Text (Expr s a) (Expr s a)
-    | HandlerOutputTypeMismatch Text (Expr s a) Text (Expr s a)
-    | InvalidHandlerOutputType Text (Expr s a) (Expr s a)
+    | MismatchedListElements !Int !Core !Core !Core
+    | InvalidListElement !Int !Core !Core !Core
+    | InvalidListType !Core
+    | InvalidOptionalElement !Core  !Core !Core
+    | InvalidOptionalType !Core
+    | InvalidSome !Core !Core !Core
+    | InvalidPredicate !Core !Core
+    | IfBranchMismatch !Core !Core !Core !Core
+    | IfBranchMustBeTerm Bool !Core !Core !Core
+    | InvalidFieldType !Text !Core
+    | FieldAnnotationMismatch !Text !Core !Const !Text !Core !Const
+    | FieldMismatch !Text !Core !Const !Text !Core !Const
+    | InvalidAlternative !Text !Core
+    | InvalidAlternativeType !Text !Core
+    | AlternativeAnnotationMismatch !Text !Core !Const !Text !Core !Const
+    | ListAppendMismatch !Core !Core
+    | DuplicateAlternative !Text
+    | MustCombineARecord Char !Core !Core
+    | RecordMismatch Char !Core !Core !Const !Const
+    | CombineTypesRequiresRecordType !Core !Core
+    | RecordTypeMismatch !Const !Const !Core !Core
+    | FieldCollision !Text
+    | MustMergeARecord !Core !Core
+    | MustMergeUnion !Core !Core
+    | UnusedHandler !(Set Text)
+    | MissingHandler !(Set Text)
+    | HandlerInputTypeMismatch !Text !Core !Core
+    | HandlerOutputTypeMismatch !Text !Core  !Text !Core
+    | InvalidHandlerOutputType !Text !Core !Core
     | MissingMergeType
-    | HandlerNotAFunction Text (Expr s a)
-    | CantAccess Text (Expr s a) (Expr s a)
-    | CantProject Text (Expr s a) (Expr s a)
-    | CantProjectByExpression (Expr s a)
-    | MissingField Text (Expr s a)
-    | ProjectionTypeMismatch Text (Expr s a) (Expr s a) (Expr s a) (Expr s a)
-    | CantAnd (Expr s a) (Expr s a)
-    | CantOr (Expr s a) (Expr s a)
-    | CantEQ (Expr s a) (Expr s a)
-    | CantNE (Expr s a) (Expr s a)
-    | CantInterpolate (Expr s a) (Expr s a)
-    | CantTextAppend (Expr s a) (Expr s a)
-    | CantListAppend (Expr s a) (Expr s a)
-    | CantAdd (Expr s a) (Expr s a)
-    | CantMultiply (Expr s a) (Expr s a)
-    | NoDependentTypes (Expr s a) (Expr s a)
+    | HandlerNotAFunction !Text !Core
+    | CantAccess !Text !Core !Core
+    | CantProject !Text !Core !Core
+    | MissingField !Text !Core
+    | MissingAlternative !Text !Core
+    | CantAnd !Core !Core
+    | CantOr !Core !Core
+    | CantEQ !Core !Core
+    | CantNE !Core !Core
+    | CantInterpolate !Core !Core
+    | CantTextAppend !Core !Core
+    | CantListAppend !Core !Core
+    | CantAdd !Core !Core
+    | CantMultiply !Core !Core
+    | NoDependentTypes !Core !Core
+
+    | ExpectedAType !Core
+    | UnexpectedRecordField !Text !Core
+    | ConvError !Core !Core
+    | MergeDependentHandler !Text !Core
     deriving (Show)
 
-shortTypeMessage :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> Doc Ann
+shortTypeMessage :: TypeError -> Doc Ann
 shortTypeMessage msg =
     "\ESC[1;31mError\ESC[0m: " <> short <> "\n"
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
-longTypeMessage :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> Doc Ann
+longTypeMessage :: TypeError -> Doc Ann
 longTypeMessage msg =
         "\ESC[1;31mError\ESC[0m: " <> short <> "\n"
     <>  "\n"
@@ -914,11 +293,7 @@ data ErrorMessages = ErrorMessages
 _NOT :: Doc ann
 _NOT = "\ESC[1mnot\ESC[0m"
 
-insert :: Pretty a => a -> Doc Ann
-insert = Dhall.Util.insert
-
-prettyTypeMessage
-    :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> ErrorMessages
+prettyTypeMessage :: TypeError -> ErrorMessages
 prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
   -- https://github.com/dhall-lang/dhall-haskell/pull/116
@@ -1036,7 +411,7 @@ prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
 
 prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
   where
-    short = "Invalid function input"
+    short = "Expected a type for function input"
 
     long =
         "Explanation: A function can accept an input “term” that has a given “type”, like\n\
@@ -1652,7 +1027,7 @@ prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
 prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
     ErrorMessages {..}
   where
-    short = "❰if❱ branch is not a term"
+    short = "❰if❱ branch cannot be a type"
 
     long =
         "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
@@ -1741,7 +1116,7 @@ prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
   where
     short = "❰if❱ branches must have matching types\n"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr1 expr3
+        <>  Dhall.Diff.diffNormalized expr2 expr3
 
     long =
         "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
@@ -1866,10 +1241,10 @@ prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
 prettyTypeMessage MissingListType = do
     ErrorMessages {..}
   where
-    short = "An empty list requires a type annotation"
+    short = "Empty list requires a type annotation"
 
     long =
-        "Explanation: Lists do not require a type annotation if they have at least one   \n\
+        "Explanation: Lists never require a type annotation if they have at least one   \n\
         \element:                                                                        \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -1878,15 +1253,15 @@ prettyTypeMessage MissingListType = do
         \    └───────────┘                                                               \n\
         \                                                                                \n\
         \                                                                                \n\
-        \However, empty lists still require a type annotation:                           \n\
+        \However, empty lists may require a type annotation, if the element type is not  \n\
+        \inferable from program context:                                                 \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────┐                                                       \n\
         \    │ [] : List Natural │  This type annotation is mandatory                    \n\
         \    └───────────────────┘                                                       \n\
         \                                                                                \n\
-        \                                                                                \n\
-        \You cannot supply an empty list without a type annotation                       \n"
+        \                                                                                \n"
 
 prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
     ErrorMessages {..}
@@ -1965,6 +1340,99 @@ prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
         txt1 = pretty i
         txt3 = insert expr2
 
+prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
+  where
+    short = "Invalid type for ❰Optional❱ element"
+
+    long =
+        "Explanation: The legacy ❰List❱-like syntax for ❰Optional❱ literals ends with a  \n\
+        \type annotation for the element that might be present, like this:               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ [1] : Optional Natural │  An optional element that's present              \n\
+        \    └────────────────────────┘                                                  \n\
+        \                     ⇧                                                          \n\
+        \                     The type of the ❰Optional❱ element, which is an ❰Natural❱  \n\
+        \                     number                                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ [] : Optional Natural  │  An optional element that's absent               \n\
+        \    └────────────────────────┘                                                  \n\
+        \                    ⇧                                                           \n\
+        \                    You still specify the type even when the element is absent  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \The element type must be a type and not something else.  For example, the       \n\
+        \following element types are " <> _NOT <> " valid:                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────┐                                                        \n\
+        \    │ ... : Optional 1 │                                                        \n\
+        \    └──────────────────┘                                                        \n\
+        \                     ⇧                                                          \n\
+        \                     This is a ❰Natural❱ number and not a ❰Type❱                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────┐                                                     \n\
+        \    │ ... : Optional Type │                                                     \n\
+        \    └─────────────────────┘                                                     \n\
+        \                     ⇧                                                          \n\
+        \                     This is a ❰Kind❱ and not a ❰Type❱                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Even if the element is absent you still must specify a valid type               \n\
+        \                                                                                \n\
+        \You declared that the ❰Optional❱ element should have type:                      \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... which is not a ❰Type❱                                                       \n"
+      where
+        txt0 = insert expr0
+
+prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..}
+  where
+    short = "❰Optional❱ element has the wrong type\n"
+        <>  "\n"
+        <>  Dhall.Diff.diffNormalized expr0 expr2
+
+    long =
+        "Explanation: An ❰Optional❱ element must have a type matching the type annotation\n\
+        \                                                                                \n\
+        \For example, this is a valid ❰Optional❱ value:                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ [1] : Optional Natural │  ❰1❱ is a ❰Natural❱ number, which matches the    \n\
+        \    └────────────────────────┘  number                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but this is " <> _NOT <> " a valid ❰Optional❱ value:                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ [\"ABC\"] : Optional Natural │  ❰\"ABC\"❱ is not a ❰Natural❱ number       \n\
+        \    └────────────────────────────┘                                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Your ❰Optional❱ element should have this type:                                  \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... but the element you provided:                                               \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... has this type instead:                                                      \n\
+        \                                                                                \n\
+        \" <> txt2 <> "\n"
+      where
+        txt0 = insert expr0
+        txt1 = insert expr1
+        txt2 = insert expr2
+
 prettyTypeMessage (InvalidSome expr0 expr1 expr2) = ErrorMessages {..}
   where
     short = "❰Some❱ argument has the wrong type"
@@ -2006,49 +1474,6 @@ prettyTypeMessage (InvalidSome expr0 expr1 expr2) = ErrorMessages {..}
         txt0 = insert expr0
         txt1 = insert expr1
         txt2 = insert expr2
-
-prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
-  where
-    short = "Invalid field type"
-
-    long =
-        "Explanation: Every record type annotates each field with a ❰Type❱, a ❰Kind❱, or \n\
-        \a ❰Sort❱ like this:                                                             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────────────────────┐                            \n\
-        \    │ { foo : Natural, bar : Integer, baz : Text } │  Every field is annotated  \n\
-        \    └──────────────────────────────────────────────┘  with a ❰Type❱             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────┐                                              \n\
-        \    │ { foo : Type, bar : Type } │  Every field is annotated                    \n\
-        \    └────────────────────────────┘  with a ❰Kind❱                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, the types of fields may " <> _NOT <> " be term-level values:           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────┐                                              \n\
-        \    │ { foo : Natural, bar : 1 } │  Invalid record type                         \n\
-        \    └────────────────────────────┘                                              \n\
-        \                             ⇧                                                  \n\
-        \                             ❰1❱ is a ❰Natural❱ number and not a ❰Type❱,        \n\
-        \                             ❰Kind❱, or ❰Sort❱                                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a record type with a field named:                                  \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... annotated with the following expression:                                    \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is neither a ❰Type❱, a ❰Kind❱, nor a ❰Sort❱                           \n"
-      where
-        txt0 = insert k
-        txt1 = insert expr0
 
 prettyTypeMessage (FieldAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
   where
@@ -2110,7 +1535,7 @@ prettyTypeMessage (FieldAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessa
 
 prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
   where
-    short = "Field mismatch"
+    short = "Field kind mismatch"
 
     long =
         "Explanation: Every record has fields that can be either terms or types, like    \n\
@@ -2165,6 +1590,43 @@ prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
         level Type = "term"
         level Kind = "type"
         level Sort = "kind"
+
+prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
+  where
+    short = "Invalid field"
+
+    long =
+        "Explanation: Every record literal is a set of fields assigned to values, like   \n\
+        \this:                                                                           \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────────┐                                  \n\
+        \    │ { foo = 100, bar = True, baz = \"ABC\" } │                                \n\
+        \    └────────────────────────────────────────┘                                  \n\
+        \                                                                                \n\
+        \However, fields can only be terms and or ❰Type❱s and not ❰Kind❱s                \n\
+        \                                                                                \n\
+        \For example, the following record literal is " <> _NOT <> " valid:              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ { foo = Type } │                                                          \n\
+        \    └────────────────┘                                                          \n\
+        \              ⇧                                                                 \n\
+        \              ❰Type❱ is a ❰Kind❱, which is not allowed                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You provided a record literal with a field named:                               \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... whose value is:                                                             \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... which is not a term or ❰Type❱                                               \n"
+      where
+        txt0 = insert k
+        txt1 = insert expr0
 
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
@@ -2853,7 +2315,7 @@ prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
 prettyTypeMessage MissingMergeType =
     ErrorMessages {..}
   where
-    short = "An empty ❰merge❱ requires a type annotation"
+    short = "Empty ❰merge❱ requires a type annotation"
 
     long =
         "Explanation: A ❰merge❱ does not require a type annotation if the union has at   \n\
@@ -2867,7 +2329,8 @@ prettyTypeMessage MissingMergeType =
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
         \                                                                                \n\
-        \However, you must provide a type annotation when merging an empty union:        \n\
+        \However, you may need to provide a type annotation when merging an empty union  \n\
+        \if the return type is not inferable from context:                               \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────────┐                                          \n\
@@ -2878,7 +2341,7 @@ prettyTypeMessage MissingMergeType =
         \                                                                                \n\
         \                                                                                \n\
         \You can provide any type at all as the annotation, since merging an empty       \n\
-        \union can produce any type of output                                            \n"
+        \union can produce output of any type                                            \n"
 
 prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
     ErrorMessages {..}
@@ -3164,7 +2627,7 @@ prettyTypeMessage (CantAccess lazyText0 expr0 expr1) = ErrorMessages {..}
 
 prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
   where
-    short = "Not a record"
+    short = "Expected a record for projection"
 
     long =
         "Explanation: You can only project fields on records, like this:                 \n\
@@ -3207,7 +2670,7 @@ prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
-        \You tried to access the fields:                                                 \n\
+        \You tried to access the fields:                                               \n\
         \                                                                                \n\
         \" <> txt0 <> "\n\
         \                                                                                \n\
@@ -3223,153 +2686,49 @@ prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
         txt1 = insert expr0
         txt2 = insert expr1
 
-prettyTypeMessage (CantProjectByExpression expr) = ErrorMessages {..}
+prettyTypeMessage (MissingAlternative k _) = ErrorMessages short short
   where
-    short = "Selector is not a record type"
-
-    long =
-        "Explanation: You can project by an expression if that expression is a record    \n\
-        \type:                                                                           \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────┐                                         \n\
-        \    │ { foo = True }.({ foo : Bool }) │  This is valid ...                      \n\
-        \    └─────────────────────────────────┘                                         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────────────────┐                                \n\
-        \    │ λ(r : { foo : Bool }) → r.{ foo : Bool } │  ... and so is this            \n\
-        \    └──────────────────────────────────────────┘                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you cannot project by any other type of expression:                     \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────┐                                                   \n\
-        \    │ { foo = True }.(True) │                                                   \n\
-        \    └───────────────────────┘                                                   \n\
-        \                      ⇧                                                         \n\
-        \                      Invalid: Not a record type                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Some common reasons why you might get this error:                               \n\
-        \                                                                                \n\
-        \● You accidentally try to project by a record value instead of a record type,   \n\
-        \  like this:                                                                    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────┐                                         \n\
-        \    │ let T = { foo : Bool }          │                                         \n\
-        \    │                                 │                                         \n\
-        \    │ let x = { foo = True , bar = 1} │                                         \n\
-        \    │                                 │                                         \n\
-        \    │ let y = { foo = False, bar = 2} │                                         \n\
-        \    │                                 │                                         \n\
-        \    │ in  x.(y)                       │                                         \n\
-        \    └─────────────────────────────────┘                                         \n\
-        \             ⇧                                                                  \n\
-        \             The user might have meant ❰T❱ here                                 \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \────────────────────────────────────────────────────────────────────────────────\n\
-        \                                                                                \n\
-        \You tried to project out the following type:                                    \n\
-        \                                                                                \n\
-        \" <> txt <> "\n\
-        \                                                                                \n\
-        \... which is not a record type                                                  \n"
-      where
-        txt = insert expr
+    short = "Missing union constructor: " <> pretty k
 
 prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
-  where
-    short = "Missing record field"
+        where
+          short = "Missing record field: " <> pretty k
 
-    long =
-        "Explanation: You can only access fields on records, like this:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────┐                                         \n\
-        \    │ { foo = True, bar = \"ABC\" }.foo │  This is valid ...                    \n\
-        \    └─────────────────────────────────┘                                         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────────────┐                               \n\
-        \    │ λ(r : { foo : Bool, bar : Text }) → r.foo │  ... and so is this           \n\
-        \    └───────────────────────────────────────────┘                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you can only access fields if they are present                          \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────┐                                         \n\
-        \    │ { foo = True, bar = \"ABC\" }.qux │                                       \n\
-        \    └─────────────────────────────────┘                                         \n\
-        \                                  ⇧                                             \n\
-        \                                  Invalid: the record has no ❰qux❱ field        \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You tried to access a field named:                                              \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... but the field is missing because the record only defines the following      \n\
-        \fields:                                                                         \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n"
-      where
-        txt0 = insert k
-        txt1 = insert expr0
-
-prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1 expr2 expr3) = ErrorMessages {..}
-  where
-    short = "Projection type mismatch\n"
-        <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr2 expr3
-
-    long =
-        "Explanation: You can project a subset of fields from a record by specifying the \n\
-        \desired type of the final record, like this:                                    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────────────────┐                             \n\
-        \    │ { foo = 1, bar = True }.({ foo : Natural }) │  This is valid              \n\
-        \    └─────────────────────────────────────────────┘                             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but the expected type for each desired field must match the actual type of  \n\
-        \the corresponding field in the original record.                                 \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \              Invalid: The ❰foo❱ field contains ❰1❱, which has type ❰Natural❱...\n\
-        \              ⇩                                                                 \n\
-        \    ┌──────────────────────────────────────────┐                                \n\
-        \    │ { foo = 1, bar = True }.({ foo : Text }) │                                \n\
-        \    └──────────────────────────────────────────┘                                \n\
-        \                                       ⇧                                        \n\
-        \                                       ... but we requested that the ❰foo❱ field\n\
-        \                                       must contain a value of type ❰Text❱      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You tried to project out a field named:                                         \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... that should have type:                                                      \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... but that field instead had a value of type:                                 \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n"
-      where
-        txt0 = insert k
-        txt1 = insert expr0
-        txt2 = insert expr1
+          long =
+              "Explanation: You can only access fields on records, like this:                  \n\
+              \                                                                                \n\
+              \                                                                                \n\
+              \    ┌─────────────────────────────────┐                                         \n\
+              \    │ { foo = True, bar = \"ABC\" }.foo │  This is valid ...                    \n\
+              \    └─────────────────────────────────┘                                         \n\
+              \                                                                                \n\
+              \                                                                                \n\
+              \    ┌───────────────────────────────────────────┐                               \n\
+              \    │ λ(r : { foo : Bool, bar : Text }) → r.foo │  ... and so is this           \n\
+              \    └───────────────────────────────────────────┘                               \n\
+              \                                                                                \n\
+              \                                                                                \n\
+              \... but you can only access fields if they are present                          \n\
+              \                                                                                \n\
+              \For example, the following expression is " <> _NOT <> " valid:                  \n\
+              \                                                                                \n\
+              \    ┌─────────────────────────────────┐                                         \n\
+              \    │ { foo = True, bar = \"ABC\" }.qux │                                       \n\
+              \    └─────────────────────────────────┘                                         \n\
+              \                                  ⇧                                             \n\
+              \                                  Invalid: the record has no ❰qux❱ field        \n\
+              \                                                                                \n\
+              \You tried to access a field named:                                              \n\
+              \                                                                                \n\
+              \" <> txt0 <> "\n\
+              \                                                                                \n\
+              \... but the field is missing because the record only defines the following      \n\
+              \fields:                                                                         \n\
+              \                                                                                \n\
+              \" <> txt1 <> "\n"
+            where
+              txt0 = insert k
+              txt1 = insert expr0
 
 prettyTypeMessage (CantAnd expr0 expr1) =
         buildBooleanOperator "&&" expr0 expr1
@@ -3565,7 +2924,32 @@ prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
         txt0 = insert expr0
         txt1 = insert expr1
 
-buildBooleanOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
+prettyTypeMessage (ExpectedAType got) = ErrorMessages short "" where
+  short = "Expected a type or a kind\n"
+      <>  "\n"
+      <>  "inferred type:\n\n"
+      <>  "    " <> pretty got
+
+prettyTypeMessage (UnexpectedRecordField k a) = ErrorMessages short "" where
+  short = "Unexpected record field: " <> pretty k
+      <>  "\n\n"
+      <>  "Expected an expression with type:\n\n"
+      <>  "    " <> pretty a
+
+prettyTypeMessage (ConvError has want) = ErrorMessages short "" where
+  short =  "Type mismatch\n"
+        <> "expected type:\n\n"
+        <> "    " <> pretty want
+        <> "\n\ninferred type:\n\n"
+        <> "    " <> pretty has
+
+prettyTypeMessage (MergeDependentHandler k a) = ErrorMessages short "" where
+  short =  "Merge handler cannot have dependent function type.\n"
+        <> "Inferred type for handler of alternative " <> pretty k <> ":\n\n"
+        <> "    " <> pretty a
+
+
+buildBooleanOperator :: Text -> Core -> Core -> ErrorMessages
 buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
   where
     short = "❰" <> txt2 <> "❱ only works on ❰Bool❱s"
@@ -3594,7 +2978,7 @@ buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
 
     txt2 = pretty operator
 
-buildNaturalOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
+buildNaturalOperator :: Text -> Core -> Core -> ErrorMessages
 buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
   where
     short = "❰" <> txt2 <> "❱ only works on ❰Natural❱s"
@@ -3655,94 +3039,6 @@ buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
 
     txt2 = pretty operator
 
--- | A structured type error that includes context
-data TypeError s a = TypeError
-    { context     :: Context (Expr s a)
-    , current     :: Expr s a
-    , typeMessage :: TypeMessage s a
-    }
+insert :: Pretty a => a -> Doc Ann
+insert = Dhall.Util.insert
 
-instance (Eq a, Pretty s, Pretty a, ToTerm a) => Show (TypeError s a) where
-    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
-
-instance (Eq a, Pretty s, Pretty a, ToTerm a, Typeable s, Typeable a) => Exception (TypeError s a)
-
-instance (Eq a, Pretty s, Pretty a, ToTerm a) => Pretty (TypeError s a) where
-    pretty (TypeError ctx expr msg)
-        = Pretty.unAnnotate
-            (   "\n"
-            <>  (   if null (Dhall.Context.toList ctx)
-                    then ""
-                    else prettyContext ctx <> "\n\n"
-                )
-            <>  shortTypeMessage msg <> "\n"
-            <>  source
-            )
-      where
-        prettyKV (key, val) =
-            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
-
-        prettyContext =
-                Pretty.vsep
-            .   map prettyKV
-            .   reverse
-            .   Dhall.Context.toList
-
-        source = case expr of
-            Note s _ -> pretty s
-            _        -> mempty
-
-{-| Newtype used to wrap error messages so that they render with a more
-    detailed explanation of what went wrong
--}
-newtype DetailedTypeError s a = DetailedTypeError (TypeError s a)
-    deriving (Typeable)
-
-instance (Eq a, Pretty s, Pretty a, ToTerm a) => Show (DetailedTypeError s a) where
-    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
-
-instance (Eq a, Pretty s, Pretty a, ToTerm a, Typeable s, Typeable a) => Exception (DetailedTypeError s a)
-
-instance (Eq a, Pretty s, Pretty a, ToTerm a) => Pretty (DetailedTypeError s a) where
-    pretty (DetailedTypeError (TypeError ctx expr msg))
-        = Pretty.unAnnotate
-            (   "\n"
-            <>  (   if null (Dhall.Context.toList ctx)
-                    then ""
-                    else prettyContext ctx <> "\n\n"
-                )
-            <>  longTypeMessage msg <> "\n"
-            <>  "────────────────────────────────────────────────────────────────────────────────\n"
-            <>  "\n"
-            <>  source
-            )
-      where
-        prettyKV (key, val) =
-            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
-
-        prettyContext =
-                Pretty.vsep
-            .   map prettyKV
-            .   reverse
-            .   Dhall.Context.toList
-
-        source = case expr of
-            Note s _ -> pretty s
-            _        -> mempty
-
-{-| This function verifies that a custom context is well-formed so that
-    type-checking will not loop
-
-    Note that `typeWith` already calls `checkContext` for you on the `Context`
-    that you supply
--}
-checkContext :: Context (Expr s X) -> Either (TypeError s X) ()
-checkContext context =
-    case Dhall.Context.match context of
-        Nothing -> do
-            return ()
-        Just (x, v, context') -> do
-            let shiftedV       =       Dhall.Core.shift (-1) (V x 0)  v
-            let shiftedContext = fmap (Dhall.Core.shift (-1) (V x 0)) context'
-            _ <- typeWith shiftedContext shiftedV
-            return ()

@@ -673,7 +673,7 @@ parsers embedded = Parsers {..}
             _closeBracket
             return (ListLit Nothing (Data.Sequence.fromList a)) ) <?> "list literal"
 
-env :: Parser ImportType
+env :: Parser RawImportType
 env = do
     _ <- Text.Parser.Char.text "env:"
     a <- (alternative0 <|> alternative1)
@@ -688,7 +688,7 @@ env = do
         _ <- Text.Parser.Char.char '"'
         return a
 
-localRaw :: Parser ImportType
+localRaw :: Parser RawImportType
 localRaw =
     choice
         [ parentPath
@@ -720,27 +720,27 @@ localRaw =
 
         return (Local Absolute file)
 
-local :: Parser ImportType
+local :: Parser RawImportType
 local = do
     a <- localRaw
     whitespace
     return a
 
-http :: Parser ImportType
+http :: Parser RawImportType
 http = do
     url <- httpRaw
     whitespace
     headers <- optional (do
         _using
         importExpression import_ )
-    return (Remote (url { headers }))
+    return (Remote (url headers))
 
-missing :: Parser ImportType
+missing :: Parser RawImportType
 missing = do
   _missing
   return Missing
 
-importType_ :: Parser ImportType
+importType_ :: Parser RawImportType
 importType_ = do
     let predicate c =
             c == '~' || c == '.' || c == '/' || c == 'h' || c == 'e' || c == 'm'
@@ -749,7 +749,7 @@ importType_ = do
 
     choice [ local, http, env, missing ]
 
-importHashed_ :: Parser ImportHashed
+importHashed_ :: Parser RawImportHashed
 importHashed_ = do
     importType <- importType_
     hash       <- optional importHash_
@@ -767,7 +767,7 @@ importHashed_ = do
           Nothing -> fail "Invalid sha256 hash"
           Just h  -> pure h
 
-import_ :: Parser Import
+import_ :: Parser RawImport
 import_ = (do
     importHashed <- importHashed_
     importMode   <- alternative <|> pure Code
