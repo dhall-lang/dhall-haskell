@@ -3,6 +3,8 @@
 -- | Parse Dhall tokens. Even though we don't have a tokenizer per-se this
 ---  module is useful for keeping some small parsing utilities.
 module Dhall.Parser.Token (
+    reservedIdentifiers,
+    pathCharacter,
     whitespace,
     bashEnvironmentVariable,
     posixEnvironmentVariable,
@@ -99,6 +101,7 @@ import           Dhall.Parser.Combinators
 
 import Control.Applicative (Alternative(..), optional)
 import Data.Functor (void)
+import Data.HashSet (HashSet)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Dhall.Core
@@ -122,6 +125,75 @@ import Numeric.Natural (Natural)
 import Prelude hiding (const, pi)
 
 import qualified Text.Parser.Token
+
+-- | The set of reserved identifiers for the Dhall language
+reservedIdentifiers :: HashSet Text
+reservedIdentifiers =
+    Data.HashSet.fromList
+        [ "let"
+        , "in"
+        , "Type"
+        , "Kind"
+        , "Sort"
+        , "forall"
+        , "Bool"
+        , "True"
+        , "False"
+        , "merge"
+        , "if"
+        , "then"
+        , "else"
+        , "as"
+        , "using"
+        , "Natural"
+        , "Natural/fold"
+        , "Natural/build"
+        , "Natural/isZero"
+        , "Natural/even"
+        , "Natural/odd"
+        , "Natural/toInteger"
+        , "Natural/show"
+        , "Integer"
+        , "Integer/show"
+        , "Integer/toDouble"
+        , "Double"
+        , "Double/show"
+        , "Text"
+        , "Text/show"
+        , "List"
+        , "List/build"
+        , "List/fold"
+        , "List/length"
+        , "List/head"
+        , "List/last"
+        , "List/indexed"
+        , "List/reverse"
+        , "Optional"
+        , "Some"
+        , "None"
+        , "Optional/build"
+        , "Optional/fold"
+        , "NaN"
+        , "Infinity"
+        ]
+
+{-| Returns `True` if the given `Char` is valid within an unquoted path
+    component
+
+    This is exported for reuse within the @"Dhall.Parser.Token"@ module
+-}
+pathCharacter :: Char -> Bool
+pathCharacter c =
+         '\x21' == c
+    ||  ('\x24' <= c && c <= '\x27')
+    ||  ('\x2A' <= c && c <= '\x2B')
+    ||  ('\x2D' <= c && c <= '\x2E')
+    ||  ('\x30' <= c && c <= '\x3B')
+    ||  c == '\x3D'
+    ||  ('\x40' <= c && c <= '\x5A')
+    ||  ('\x5E' <= c && c <= '\x7A')
+    ||  c == '\x7C'
+    ||  c == '\x7E'
 
 
 whitespace :: Parser ()
@@ -373,7 +445,7 @@ pathComponent componentType = do
     let pathData =
             case componentType of
                 FileComponent -> do
-                    Text.Megaparsec.takeWhile1P Nothing Dhall.Core.pathCharacter
+                    Text.Megaparsec.takeWhile1P Nothing pathCharacter
                 URLComponent -> do
                     text <- star pchar
 
@@ -408,16 +480,12 @@ scheme_ =
     *>  ((("s" :: Parser Text) *> pure HTTPS) <|> pure HTTP)
     <*  ("://" :: Parser Text)
 
-httpRaw :: Parser URL
+httpRaw :: Parser (Maybe Raw -> RawURL)
 httpRaw = do
-    scheme    <- scheme_
-    authority <- authority_
-    path      <- file_ URLComponent
-    query     <- optional (("?" :: Parser Text) *> query_)
-
-    let headers = Nothing
-
-    return (URL {..})
+  RawURL <$> scheme_
+         <*> authority_
+         <*> file_ URLComponent
+         <*> optional (("?" :: Parser Text) *> query_)
 
 authority_ :: Parser Text
 authority_ = option (try (userinfo <> "@")) <> host <> option (":" <> port)

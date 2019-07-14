@@ -1,3 +1,5 @@
+{-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE OverloadedStrings  #-}
 
@@ -30,16 +32,8 @@ import Dhall.Core
     ( Binding(..)
     , Chunks(..)
     , Const(..)
-    , Directory(..)
     , Expr(..)
-    , File(..)
-    , FilePrefix(..)
-    , Import(..)
-    , ImportHashed(..)
-    , ImportMode(..)
-    , ImportType(..)
-    , Scheme(..)
-    , URL(..)
+    , Nf
     , Var(..)
     )
 
@@ -51,10 +45,7 @@ import Options.Applicative (Parser)
 import Prelude hiding (exponent)
 import GHC.Float (double2Float, float2Double)
 
-import qualified Crypto.Hash
-import qualified Control.Monad       as Monad
-import qualified Data.ByteArray
-import qualified Data.ByteString
+import qualified Control.Monad as Monad
 import qualified Data.Sequence
 import qualified Dhall.Map
 import qualified Dhall.Set
@@ -127,7 +118,7 @@ unApply e₀ = (baseFunction₀, diffArguments₀ [])
 class ToTerm a where
     encode :: a -> Term
 
-instance ToTerm a => ToTerm (Expr s a) where
+instance ToTerm Nf where
     encode (Var (V "_" n)) =
         TInt n
     encode (Var (V x n)) =
@@ -393,8 +384,7 @@ instance ToTerm a => ToTerm (Expr s a) where
             [ x₁, y₁ ]
 
         z₁ = TString z₀
-    encode (Embed x) =
-        encode x
+    encode (Embed x) = case x of
     encode (Let as₀ b₀) =
         TList ([ TInt 25 ] ++ as₁ ++ [ b₁ ])
       where
@@ -418,76 +408,11 @@ instance ToTerm a => ToTerm (Expr s a) where
     encode (Note _ e) =
         encode e
 
-instance ToTerm Import where
-    encode import_ =
-        case importType of
-            Remote (URL { scheme = scheme₀, ..}) ->
-                TList
-                    (   prefix
-                    ++  [ TInt scheme₁, using, TString authority ]
-                    ++  map TString (reverse components)
-                    ++  [ TString file ]
-                    ++  (case query    of Nothing -> [ TNull ]; Just q -> [ TString q ])
-                    )
-              where
-                using = case headers of
-                    Nothing ->
-                        TNull
-                    Just h ->
-                        encode h
-
-                scheme₁ = case scheme₀ of
-                    HTTP  -> 0
-                    HTTPS -> 1
-                File {..} = path
-
-                Directory {..} = directory
-
-            Local prefix₀ path ->
-                    TList
-                        (   prefix
-                        ++  [ TInt prefix₁ ]
-                        ++  map TString components₁
-                        ++  [ TString file ]
-                        )
-              where
-                File {..} = path
-
-                Directory {..} = directory
-
-                prefix₁ = case prefix₀ of
-                  Absolute -> 2
-                  Here     -> 3
-                  Parent   -> 4
-                  Home     -> 5
-
-                components₁ = reverse components
-
-            Env x ->
-                TList (prefix ++ [ TInt 6, TString x ])
-
-            Missing ->
-                TList (prefix ++ [ TInt 7 ])
-      where
-        prefix = [ TInt 24, h, m ]
-          where
-            h = case hash of
-                Nothing ->
-                    TNull
-                Just digest ->
-                    TBytes ("\x12\x20" <> Data.ByteArray.convert digest)
-
-            m = TInt (case importMode of Code -> 0; RawText -> 1; Location -> 2;)
-
-        Import {..} = import_
-
-        ImportHashed {..} = importHashed
-
 -- | Types that can be decoded from a CBOR `Term`
 class FromTerm a where
     decode :: Term -> Maybe a
 
-instance FromTerm a => FromTerm (Expr s a) where
+instance FromTerm Nf where
     decode (TInt n) =
         return (Var (V "_" n))
     decode (TInteger n) =
@@ -736,7 +661,6 @@ instance FromTerm a => FromTerm (Expr s a) where
         (xys, z) <- process xs
 
         return (TextLit (Chunks xys z))
-    decode e@(TList (TInt 24 : _)) = fmap Embed (decode e)
     decode (TList (TInt 25 : xs)) = do
         let process (TString x : _A₁ : a₁ : ls₁) = do
                 mA₀ <- case _A₁ of
@@ -767,106 +691,6 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode _ =
         empty
 
-instance FromTerm Import where
-    decode (TList (TInt 24 : h : TInt mode : TInt n : xs)) = do
-        hash <- case h of
-            TNull -> do
-                return Nothing
-
-            TBytes bytes -> do
-                let (prefix, suffix) = Data.ByteString.splitAt 2 bytes
-
-                case prefix of
-                    "\x12\x20" -> return ()
-                    _          -> empty
-
-                digest <- case Crypto.Hash.digestFromByteString suffix of
-                    Nothing     -> empty
-                    Just digest -> return digest
-
-                return (Just digest)
-
-            _ -> do
-                empty
-
-        importMode <- case mode of
-            0 -> return Code
-            1 -> return RawText
-            2 -> return Location
-            _ -> empty
-
-        let remote scheme = do
-                let process [ TString file, q ] = do
-                        query <- case q of
-                            TNull     -> return Nothing
-                            TString x -> return (Just x)
-                            _         -> empty
-                        return ([], file, query)
-                    process (TString path : ys) = do
-                        (paths, file, query) <- process ys
-                        return (path : paths, file, query)
-                    process _ = do
-                        empty
-
-                (headers, authority, paths, file, query) <- case xs of
-                    headers₀ : TString authority : ys -> do
-                        headers₁ <- case headers₀ of
-                            TNull -> do
-                                return Nothing
-                            _     -> do
-                                headers <- decode headers₀
-
-                                return (Just headers)
-                        (paths, file, query) <- process ys
-                        return (headers₁, authority, paths, file, query)
-                    _ -> do
-                        empty
-
-                let components = reverse paths
-                let directory  = Directory {..}
-                let path       = File {..}
-
-                return (Remote (URL {..}))
-
-        let local prefix = do
-                let process [ TString file ] = do
-                        return ([], file)
-                    process (TString path : ys) = do
-                        (paths, file) <- process ys
-                        return (path : paths, file)
-                    process _ =
-                        empty
-
-                (paths, file) <- process xs
-
-                let components = reverse paths
-                let directory  = Directory {..}
-
-                return (Local prefix (File {..}))
-
-        let env = do
-                case xs of
-                    [ TString x ] -> return (Env x)
-                    _             -> empty
-
-        let missing = return Missing
-
-        importType <- case n of
-            0 -> remote HTTP
-            1 -> remote HTTPS
-            2 -> local Absolute
-            3 -> local Here
-            4 -> local Parent
-            5 -> local Home
-            6 -> env
-            7 -> missing
-            _ -> empty
-
-        let importHashed = ImportHashed {..}
-
-        return (Import {..})
-
-    decode _ = empty
 
 strip55799Tag :: Term -> Term
 strip55799Tag term =
@@ -913,11 +737,11 @@ strip55799Tag term =
             TDouble a
 
 -- | Encode a Dhall expression as a CBOR `Term`
-encodeExpression :: Expr s Import -> Term
+encodeExpression :: Nf -> Term
 encodeExpression = encode
 
 -- | Decode a Dhall expression from a CBOR `Term`
-decodeExpression :: Term -> Either DecodingFailure (Expr s Import)
+decodeExpression :: Term -> Either DecodingFailure Nf
 decodeExpression term =
     case decodeWithoutVersion <|> decodeWithVersion of
         Just expression -> Right expression

@@ -56,6 +56,7 @@ module Dhall.Pretty.Internal (
     ) where
 
 import Dhall.Core
+import {-# SOURCE #-} Dhall.Parser.Token (reservedIdentifiers)
 
 #if MIN_VERSION_base(4,8,0)
 #else

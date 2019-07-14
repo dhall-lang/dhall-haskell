@@ -4,16 +4,14 @@
   LambdaCase,
   OverloadedStrings,
   PatternSynonyms,
-  RankNTypes,
   ScopedTypeVariables,
-  TupleSections,
-  ViewPatterns
+  ViewPatterns,
+  MagicHash
   #-}
 
 {-# OPTIONS_GHC
   -O
   -fno-warn-name-shadowing
-  -fno-warn-unused-matches
   #-}
 
 {-|
@@ -29,29 +27,26 @@ Potential optimizations without changing Expr:
     is fairly cheap to determine at evaluation time.
 
 Potential optimizations with changing Expr:
-  - Use Int in Var instead of Integer. Overflow is practically impossible.
-  - Use actual full de Bruijn indices in Var instead of Text counting indices. Then, we'd
-    switch to full de Bruijn levels in Val as well, and use proper constant time non-shadowing
-    name generation.
+  - Use actual full de Bruijn indices in Var instead of Text counting
+    indices. Then, we'd switch to full de Bruijn levels in Val as well, and use
+    constant time non-shadowing name generation.
 
 -}
 
 module Dhall.Eval (
-    Env(..)
-  , Names(..)
-  , Closure(..)
-  , VChunks(..)
-  , Val(..)
-  , Void
-  , inst
+    inst
   , eval
+  , freeIn
   , conv
   , convEmpty
   , quote
   , nf
   , nfEmpty
-  , Dhall.Eval.alphaNormalize
+  , alphaNf
+  , vCombineTypes
+  , Names(..)
   ) where
+
 
 #if MIN_VERSION_base(4,8,0)
 #else
@@ -61,25 +56,31 @@ import Control.Applicative (Applicative(..), (<$>))
 import Data.Foldable (foldr', foldl', toList)
 import Data.List.NonEmpty (NonEmpty(..), cons)
 import Data.Semigroup (Semigroup(..))
-import Data.Sequence (Seq)
 import Data.Text (Text)
 
 import Dhall.Core (
     Expr(..)
   , Binding(..)
   , Chunks(..)
+  , Names(..)
+  , Closure(..)
   , Const(..)
-  , Import
+  , Core
+  , Env(..)
+  , HLamInfo(..)
+  , Nf
+  , Resolved(..)
+  , VChunks(..)
+  , Val(..)
   , Var(..)
-  , denote
+  , X
+  , internalError
+  , pattern VPrim
+  , vFun
   )
 
--- import Control.Exception (throw)
--- import Dhall.Import.Types (InternalError)
 import Dhall.Map (Map)
-import Dhall.Set (Set)
-import GHC.Natural (Natural)
-import Unsafe.Coerce (unsafeCoerce)
+import GHC.Prim (reallyUnsafePtrEquality#)
 
 import qualified Data.Char
 import qualified Data.List.NonEmpty
@@ -90,140 +91,17 @@ import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Text.Printf
 
-----------------------------------------------------------------------------------------------------
-
-data Env a =
-    Empty
-  | Skip !(Env a) {-# unpack #-} !Text
-  | Extend !(Env a) {-# unpack #-} !Text (Val a)
-
-data Void
-
-coeExprVoid :: Expr Void a -> Expr s a
-coeExprVoid = unsafeCoerce
-{-# inline coeExprVoid #-}
-
-errorMsg :: String
-errorMsg = unlines
-  [ _ERROR <> ": Compiler bug                                                        "
-  , "                                                                                "
-  , "An ill-typed expression was encountered during normalization.                   "
-  , "Explanation: This error message means that there is a bug in the Dhall compiler."
-  , "You didn't do anything wrong, but if you would like to see this problem fixed   "
-  , "then you should report the bug at:                                              "
-  , "                                                                                "
-  , "https://github.com/dhall-lang/dhall-haskell/issues                              "
-  ]
-  where
-    _ERROR :: String
-    _ERROR = "\ESC[1;31mError\ESC[0m"
-
-
-data Closure a = Cl !Text !(Env a) !(Expr Void a)
-data VChunks a = VChunks ![(Text, Val a)] !Text
-
-instance Semigroup (VChunks a) where
-  VChunks xys z <> VChunks [] z' = VChunks xys (z <> z')
-  VChunks xys z <> VChunks ((x', y'):xys') z' = VChunks (xys ++ (z <> x', y'):xys') z'
-
-instance Monoid (VChunks a) where
-  mempty = VChunks [] mempty
-
-#if !(MIN_VERSION_base(4,11,0))
-  mappend = (<>)
-#endif
-
-data HLamInfo a
-  = Prim
-  | Typed !Text (Val a)
-  | NaturalFoldCl (Val a)
-  | ListFoldCl (Val a)
-  | OptionalFoldCl (Val a)
-
-pattern VPrim :: (Val a -> Val a) -> Val a
-pattern VPrim f = VHLam Prim f
-
-data Val a
-  = VConst !Const
-  | VVar !Text !Int
-  | VPrimVar
-  | VApp !(Val a) !(Val a)
-
-  | VLam (Val a) {-# unpack #-} !(Closure a)
-  | VHLam !(HLamInfo a) !(Val a -> Val a)
-
-  | VPi  (Val a) {-# unpack #-} !(Closure a)
-  | VHPi !Text (Val a) !(Val a -> Val a)
-
-  | VBool
-  | VBoolLit !Bool
-  | VBoolAnd !(Val a) !(Val a)
-  | VBoolOr !(Val a) !(Val a)
-  | VBoolEQ !(Val a) !(Val a)
-  | VBoolNE !(Val a) !(Val a)
-  | VBoolIf !(Val a) !(Val a) !(Val a)
-
-  | VNatural
-  | VNaturalLit !Natural
-  | VNaturalFold !(Val a) !(Val a) !(Val a) !(Val a)
-  | VNaturalBuild !(Val a)
-  | VNaturalIsZero !(Val a)
-  | VNaturalEven !(Val a)
-  | VNaturalOdd !(Val a)
-  | VNaturalToInteger !(Val a)
-  | VNaturalShow !(Val a)
-  | VNaturalPlus !(Val a) !(Val a)
-  | VNaturalTimes !(Val a) !(Val a)
-
-  | VInteger
-  | VIntegerLit !Integer
-  | VIntegerShow !(Val a)
-  | VIntegerToDouble !(Val a)
-
-  | VDouble
-  | VDoubleLit !Double
-  | VDoubleShow !(Val a)
-
-  | VText
-  | VTextLit !(VChunks a)
-  | VTextAppend !(Val a) !(Val a)
-  | VTextShow !(Val a)
-
-  | VList !(Val a)
-  | VListLit !(Maybe (Val a)) !(Seq (Val a))
-  | VListAppend !(Val a) !(Val a)
-  | VListBuild   (Val a) !(Val a)
-  | VListFold    (Val a) !(Val a) !(Val a) !(Val a) !(Val a)
-  | VListLength  (Val a) !(Val a)
-  | VListHead    (Val a) !(Val a)
-  | VListLast    (Val a) !(Val a)
-  | VListIndexed (Val a) !(Val a)
-  | VListReverse (Val a) !(Val a)
-
-  | VOptional (Val a)
-  | VSome (Val a)
-  | VNone (Val a)
-  | VOptionalFold (Val a) !(Val a) (Val a) !(Val a) !(Val a)
-  | VOptionalBuild (Val a) !(Val a)
-  | VRecord !(Map Text (Val a))
-  | VRecordLit !(Map Text (Val a))
-  | VUnion !(Map Text (Maybe (Val a)))
-  | VUnionLit !Text !(Val a) !(Map Text (Maybe (Val a)))
-  | VCombine !(Val a) !(Val a)
-  | VCombineTypes !(Val a) !(Val a)
-  | VPrefer !(Val a) !(Val a)
-  | VMerge !(Val a) !(Val a) !(Maybe (Val a))
-  | VField !(Val a) !Text
-  | VInject !(Map Text (Maybe (Val a))) !Text !(Maybe (Val a))
-  | VProject !(Val a) !(Either (Set Text) (Val a))
-  | VEmbed a
-
-vFun :: Val a -> Val a -> Val a
-vFun a b = VHPi "_" a (\_ -> b)
-{-# inline vFun #-}
-
 -- Evaluation
 ----------------------------------------------------------------------------------------------------
+
+evalError :: String
+evalError = internalError "An ill-typed expression was encountered during normalization."
+
+ptrEq :: a -> a -> Bool
+ptrEq !a !a' = case reallyUnsafePtrEquality# a a' of
+  1# -> True
+  _  -> False
+{-# inline ptrEq #-}
 
 textShow :: Text -> Text
 textShow text = "\"" <> Data.Text.concatMap f text <> "\""
@@ -239,18 +117,18 @@ textShow text = "\"" <> Data.Text.concatMap f text <> "\""
     f c | c <= '\x1F' = Data.Text.pack (Text.Printf.printf "\\u%04x" (Data.Char.ord c))
         | otherwise   = Data.Text.singleton c
 
-countName :: Text -> Env a -> Int
+countName :: Text -> Env -> Int
 countName x = go (0 :: Int) where
   go !acc Empty             = acc
   go  acc (Skip env x'    ) = go (if x == x' then acc + 1 else acc) env
   go  acc (Extend env x' _) = go (if x == x' then acc + 1 else acc) env
 
-inst :: Eq a => Closure a -> Val a -> Val a
+inst :: Closure -> Val -> Val
 inst (Cl x env t) !u = eval (Extend env x u) t
 {-# inline inst #-}
 
 -- Out-of-env variables have negative de Bruijn levels.
-vVar :: Env a -> Var -> Val a
+vVar :: Env -> Var -> Val
 vVar env (V x i) = go env i where
   go (Extend env x' v) i
     | x == x'   = if i == 0 then v else go env (i - 1)
@@ -260,28 +138,28 @@ vVar env (V x i) = go env i where
     | otherwise = go env i
   go Empty i = VVar x (0 - i - 1)
 
-vApp :: Eq a => Val a -> Val a -> Val a
+vApp :: Val -> Val -> Val
 vApp !t !u = case t of
   VLam _ t    -> inst t u
   VHLam _ t   -> t u
   t           -> VApp t u
 {-# inline vApp #-}
 
-vCombine :: Val a -> Val a -> Val a
+vCombine :: Val -> Val -> Val
 vCombine t u = case (t, u) of
   (VRecordLit m, u) | null m    -> u
   (t, VRecordLit m) | null m    -> t
   (VRecordLit m, VRecordLit m') -> VRecordLit (Dhall.Map.sort (Dhall.Map.unionWith vCombine m m'))
   (t, u)                        -> VCombine t u
 
-vCombineTypes :: Val a -> Val a -> Val a
+vCombineTypes :: Val -> Val -> Val
 vCombineTypes t u = case (t, u) of
   (VRecord m, u) | null m -> u
   (t, VRecord m) | null m -> t
   (VRecord m, VRecord m') -> VRecord (Dhall.Map.sort (Dhall.Map.unionWith vCombineTypes m m'))
   (t, u)                  -> VCombineTypes t u
 
-vListAppend :: Val a -> Val a -> Val a
+vListAppend :: Val -> Val -> Val
 vListAppend t u = case (t, u) of
   (VListLit _ xs, u) | null xs   -> u
   (t, VListLit _ ys) | null ys   -> t
@@ -289,7 +167,7 @@ vListAppend t u = case (t, u) of
   (t, u)                         -> VListAppend t u
 {-# inline vListAppend #-}
 
-vNaturalPlus :: Val a -> Val a -> Val a
+vNaturalPlus :: Val -> Val -> Val
 vNaturalPlus t u = case (t, u) of
   (VNaturalLit 0, u            ) -> u
   (t,             VNaturalLit 0) -> t
@@ -297,14 +175,14 @@ vNaturalPlus t u = case (t, u) of
   (t,             u            ) -> VNaturalPlus t u
 {-# inline vNaturalPlus #-}
 
-eval :: forall a. Eq a => Env a -> Expr Void a -> Val a
+eval :: Env -> Core -> Val
 eval !env t =
   let
-    evalE :: Expr Void a -> Val a
+    evalE :: Core -> Val
     evalE = eval env
     {-# inline evalE #-}
 
-    evalChunks :: Chunks Void a -> VChunks a
+    evalChunks :: Chunks X Resolved -> VChunks
     evalChunks (Chunks xys z) =
       foldr' (\(x, t) vcs ->
                 case evalE t of
@@ -330,16 +208,16 @@ eval !env t =
     BoolLit b        -> VBoolLit b
     BoolAnd t u      -> case (evalE t, evalE u) of
                           (VBoolLit True, u)    -> u
-                          (VBoolLit False, u)   -> VBoolLit False
+                          (VBoolLit False, _)   -> VBoolLit False
                           (t, VBoolLit True)    -> t
-                          (t, VBoolLit False)   -> VBoolLit False
+                          (_, VBoolLit False)   -> VBoolLit False
                           (t, u) | conv env t u -> t
                           (t, u)                -> VBoolAnd t u
     BoolOr t u       -> case (evalE t, evalE u) of
                           (VBoolLit False, u)   -> u
-                          (VBoolLit True, u)    -> VBoolLit True
+                          (VBoolLit True, _)    -> VBoolLit True
                           (t, VBoolLit False)   -> t
-                          (t, VBoolLit True)    -> VBoolLit True
+                          (_, VBoolLit True)    -> VBoolLit True
                           (t, u) | conv env t u -> t
                           (t, u)                -> VBoolOr t u
     BoolEQ t u       -> case (evalE t, evalE u) of
@@ -353,10 +231,10 @@ eval !env t =
                           (t, u) | conv env t u -> VBoolLit False
                           (t, u)                -> VBoolNE t u
     BoolIf b t f     -> case (evalE b, evalE t, evalE f) of
-                          (VBoolLit True,  t, f)   -> t
-                          (VBoolLit False, t, f)   -> f
+                          (VBoolLit True,  t, _)   -> t
+                          (VBoolLit False, _, f)   -> f
                           (b, VBoolLit True, VBoolLit False) -> b
-                          (b, t, f) | conv env t f -> t
+                          (_, t, f) | conv env t f -> t
                           (b, t, f)                -> VBoolIf b t f
 
     Natural          -> VNatural
@@ -394,8 +272,8 @@ eval !env t =
     NaturalTimes t u -> case (evalE t, evalE u) of
                           (VNaturalLit 1, u            ) -> u
                           (t,             VNaturalLit 1) -> t
-                          (VNaturalLit 0, u            ) -> VNaturalLit 0
-                          (t,             VNaturalLit 0) -> VNaturalLit 0
+                          (VNaturalLit 0, _            ) -> VNaturalLit 0
+                          (_,             VNaturalLit 0) -> VNaturalLit 0
                           (VNaturalLit m, VNaturalLit n) -> VNaturalLit (m * n)
                           (t,             u            ) -> VNaturalTimes t u
 
@@ -477,7 +355,7 @@ eval !env t =
                           t -> VListIndexed a t
     ListReverse      -> VPrim $ \ ~a -> VPrim $ \case
                           VListLit t as | null as -> VListLit t (Data.Sequence.reverse as)
-                          VListLit t as -> VListLit Nothing (Data.Sequence.reverse as)
+                          VListLit _ as -> VListLit Nothing (Data.Sequence.reverse as)
                           t             -> VListReverse a t
 
     Optional         -> VPrim VOptional
@@ -487,13 +365,13 @@ eval !env t =
     OptionalFold     -> VPrim $ \ ~a -> VPrim $ \case
                           VNone _ ->
                             VHLam (Typed "optional" (VConst Type)) $ \optional ->
-                            VHLam (Typed "some" (vFun a optional)) $ \some ->
+                            VHLam (Typed "some" (vFun a optional)) $ \_ ->
                             VHLam (Typed "none" optional) $ \none ->
                             none
                           VSome t ->
                             VHLam (Typed "optional" (VConst Type)) $ \optional ->
                             VHLam (Typed "some" (vFun a optional)) $ \some ->
-                            VHLam (Typed "none" optional) $ \none ->
+                            VHLam (Typed "none" optional) $ \_ ->
                             some `vApp` t
                           opt ->
                             VHLam (OptionalFoldCl opt) $ \o ->
@@ -522,19 +400,19 @@ eval !env t =
     Merge x y ma     -> case (evalE x, evalE y, evalE <$> ma) of
                           (VRecordLit m, VUnionLit k v _, _)
                             | Just f <- Dhall.Map.lookup k m -> f `vApp` v
-                            | otherwise -> error errorMsg
+                            | otherwise -> error evalError
                           (VRecordLit m, VInject _ k mt, _)
                             | Just f  <- Dhall.Map.lookup k m -> maybe f (vApp f) mt
-                            | otherwise -> error errorMsg
+                            | otherwise -> error evalError
                           (x, y, ma) -> VMerge x y ma
     Field t k        -> case evalE t of
                           VRecordLit m
                             | Just v <- Dhall.Map.lookup k m -> v
-                            | otherwise -> error errorMsg
+                            | otherwise -> error evalError
                           VUnion m -> case Dhall.Map.lookup k m of
                             Just (Just _) -> VPrim $ \ ~u -> VInject m k (Just u)
                             Just Nothing  -> VInject m k Nothing
-                            _             -> error errorMsg
+                            _             -> error evalError
                           t -> VField t k
     Project t (Left ks) ->
                         if null ks then
@@ -550,8 +428,8 @@ eval !env t =
                             evalE (Project t (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
                           e' -> VProject (evalE t) (Right e')
     Note _ e         -> evalE e
+    Embed _          -> undefined
     ImportAlt t _    -> evalE t
-    Embed a          -> VEmbed a
 
 
 -- Conversion checking
@@ -579,31 +457,32 @@ eqMaybeBy f = go where
   go _        _        = False
 {-# inline eqMaybeBy #-}
 
-conv :: forall a. Eq a => Env a -> Val a -> Val a -> Bool
+conv :: Env -> Val -> Val -> Bool
 conv !env t t' =
   let
-    fresh :: Text -> (Text, Val a)
+    fresh :: Text -> (Text, Val)
     fresh x = (x, VVar x (countName x env))
     {-# inline fresh #-}
 
-    freshCl :: Closure a -> (Text, Val a, Closure a)
+    freshCl :: Closure -> (Text, Val, Closure)
     freshCl cl@(Cl x _ _) = (x, snd (fresh x), cl)
     {-# inline freshCl #-}
 
-    convChunks :: VChunks a -> VChunks a -> Bool
+    convChunks :: VChunks -> VChunks -> Bool
     convChunks (VChunks xys z) (VChunks xys' z') =
       eqListBy (\(x, y) (x', y') -> x == x' && conv env y y') xys xys' && z == z'
     {-# inline convChunks #-}
 
-    convE :: Val a -> Val a -> Bool
+    convE :: Val -> Val -> Bool
     convE = conv env
     {-# inline convE #-}
 
-    convSkip :: Text -> Val a -> Val a -> Bool
+    convSkip :: Text -> Val -> Val -> Bool
     convSkip x = conv (Skip env x)
     {-# inline convSkip #-}
 
   in case (t, t') of
+    _ | ptrEq t t' -> True
     (VConst k, VConst k') -> k == k'
     (VVar x i, VVar x' i') -> x == x' && i == i'
 
@@ -656,8 +535,8 @@ conv !env t t' =
     (VIntegerToDouble t , VIntegerToDouble t') -> convE t t'
 
     (VDouble       , VDouble)        -> True
-    (VDoubleLit n  , VDoubleLit n')  -> Dhall.Binary.encode (DoubleLit n  :: Expr Void Import) ==
-                                        Dhall.Binary.encode (DoubleLit n' :: Expr Void Import)
+    (VDoubleLit n  , VDoubleLit n')  -> Dhall.Binary.encode (DoubleLit n  :: Nf) ==
+                                        Dhall.Binary.encode (DoubleLit n' :: Nf)
     (VDoubleShow t , VDoubleShow t') -> convE t t'
 
     (VText, VText) -> True
@@ -670,7 +549,7 @@ conv !env t t' =
     (VListLit _ xs  , VListLit _ xs') -> eqListBy convE (toList xs) (toList xs')
 
     (VListAppend t u     , VListAppend t' u'       ) -> convE t t' && convE u u'
-    (VListBuild a t      , VListBuild a' t'        ) -> convE t t'
+    (VListBuild _ t      , VListBuild _ t'         ) -> convE t t'
     (VListLength a t     , VListLength a' t'       ) -> convE a a' && convE t t'
     (VListHead _ t       , VListHead _ t'          ) -> convE t t'
     (VListLast _ t       , VListLast _ t'          ) -> convE t t'
@@ -697,24 +576,18 @@ conv !env t t' =
     (VProject t (Right e)    , VProject t' (Right e')      ) -> convE t t' && convE e e'
     (VInject m k mt          , VInject m' k' mt'           ) -> eqMapsBy (eqMaybeBy convE) m m'
                                                                   && k == k' && eqMaybeBy convE mt mt'
-    (VEmbed a                , VEmbed a'                   ) -> a == a'
     (VOptionalFold a t _ u v , VOptionalFold a' t' _ u' v' ) ->
       convE a a' && convE t t' && convE u u' && convE v v'
 
     (_, _) -> False
 
-convEmpty :: Eq a => Expr s a -> Expr t a -> Bool
-convEmpty (denote -> t) (denote -> u) = conv Empty (eval Empty t) (eval Empty u)
+convEmpty :: Core -> Core -> Bool
+convEmpty t u = conv Empty (eval Empty t) (eval Empty u)
 
 -- Quoting
 ----------------------------------------------------------------------------------------------------
 
-data Names
-  = NEmpty
-  | NBind !Names {-# unpack #-} !Text
-  deriving Show
-
-envNames :: Env a -> Names
+envNames :: Env -> Names
 envNames Empty = NEmpty
 envNames (Skip   env x  ) = NBind (envNames env) x
 envNames (Extend env x _) = NBind (envNames env) x
@@ -725,30 +598,30 @@ countName' x = go 0 where
   go  acc (NBind env x') = go (if x == x' then acc + 1 else acc) env
 
 -- | Quote a value into beta-normal form.
-quote :: forall a. Eq a => Names -> Val a -> Expr Void a
+quote :: Names -> Val -> Nf
 quote !env !t =
   let
-    fresh :: Text -> (Text, Val a)
+    fresh :: Text -> (Text, Val)
     fresh x = (x, VVar x (countName' x env))
     {-# inline fresh #-}
 
-    freshCl :: Closure a -> (Text, Val a, Closure a)
+    freshCl :: Closure -> (Text, Val, Closure)
     freshCl cl@(Cl x _ _) = (x, snd (fresh x), cl)
     {-# inline freshCl #-}
 
-    qVar :: Text -> Int -> Expr Void a
+    qVar :: Text -> Int -> Nf
     qVar !x !i = Var (V x (fromIntegral (countName' x env - i - 1)))
     {-# inline qVar #-}
 
-    quoteE :: Val a -> Expr Void a
+    quoteE :: Val -> Nf
     quoteE = quote env
     {-# inline quoteE #-}
 
-    quoteBind :: Text -> Val a -> Expr Void a
+    quoteBind :: Text -> Val -> Nf
     quoteBind x = quote (NBind env x)
     {-# inline quoteBind #-}
 
-    qApp :: Expr Void a -> Val a -> Expr Void a
+    qApp :: Nf -> Val -> Nf
     qApp t VPrimVar = t
     qApp t u        = App t (quoteE u)
     {-# inline qApp #-}
@@ -830,34 +703,44 @@ quote !env !t =
     VProject t p                  -> Project (quoteE t) (fmap quoteE p)
     VInject m k Nothing           -> Field (Union ((quoteE <$>) <$> m)) k
     VInject m k (Just t)          -> Field (Union ((quoteE <$>) <$> m)) k `qApp` t
-    VEmbed a                      -> Embed a
-    VPrimVar                      -> error errorMsg
+    VPrimVar                      -> error evalError
 
 -- Normalization
 ----------------------------------------------------------------------------------------------------
 
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
-nf :: Eq a => Env a -> Expr s a -> Expr t a
-nf !env = coeExprVoid . quote (envNames env) . eval env . denote
+nf :: Env -> Core -> Nf
+nf !env = quote (envNames env) . eval env
 
 -- | Normalize an expression in an empty environment.
-nfEmpty :: Eq a => Expr s a -> Expr t a
+nfEmpty :: Core -> Nf
 nfEmpty = nf Empty
 
 -- Alpha-renaming
 --------------------------------------------------------------------------------
 
--- | Rename all binders to "_".
-alphaNormalize :: Expr s a -> Expr s a
-alphaNormalize = goEnv NEmpty where
+{-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
+    using De Bruijn indices to distinguish them
+
+>>> alphaNf (Lam "a" (Const Type) (Lam "b" (Const Type) (Lam "x" "a" (Lam "y" "b" "x"))))
+Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
+
+    α-normalization does not affect free variables:
+
+>>> alphaNf "x"
+Var (V "x" 0)
+
+-}
+alphaNf :: Expr s a -> Expr s a
+alphaNf = goEnv NEmpty where
 
   goVar :: Names -> Text -> Int -> Expr s a
   goVar e topX topI = go 0 e topI where
     go !acc (NBind env x) !i
       | x == topX = if i == 0 then Var (V "_" acc) else go (acc + 1) env (i - 1)
       | otherwise = go (acc + 1) env i
-    go acc NEmpty i = Var (V topX i)
+    go _ NEmpty i = Var (V topX i)
 
   goEnv :: Names -> Expr s a -> Expr s a
   goEnv !e t = let
@@ -943,3 +826,87 @@ alphaNormalize = goEnv NEmpty where
       Note s e         -> Note s (go e)
       ImportAlt t u    -> ImportAlt (go t) (go u)
       Embed a          -> Embed a
+
+{-| Detect if the given variable is free within the given expression
+
+>>> "x" `freeIn` "x"
+True
+>>> "x" `freeIn` "y"
+False
+>>> "x" `freeIn` Lam "x" (Const Type) "x"
+False
+-}
+freeIn :: Var -> Expr s a -> Bool
+freeIn (V x i) = go NEmpty where
+  go :: Names -> Expr s a -> Bool
+  go !ns t = let
+    go_ = go ns
+    in case t of
+      Const _          -> False
+      Var (V x' i')    -> x == x' && (i' - countName' x' ns == i)
+      Lam x a u        -> go_ a || go (NBind ns x) u
+      Pi x a b         -> go_ a || go (NBind ns x) b
+      App t u          -> go_ t || go_ u
+      Let (b :| bs) u  -> gobs ns (b:bs) where
+                            gobs ns []                   = go ns u
+                            gobs ns (Binding x a t : bs) =
+                              maybe False (go ns) a || go ns t || gobs (NBind ns x) bs
+
+      Annot t u        -> go_ t || go_ u
+      Bool             -> False
+      BoolLit _        -> False
+      BoolAnd t u      -> go_ t || go_ u
+      BoolOr t u       -> go_ t || go_ u
+      BoolEQ t u       -> go_ t || go_ u
+      BoolNE t u       -> go_ t || go_ u
+      BoolIf b t f     -> go_ b || go_ t || go_ f
+      Natural          -> False
+      NaturalLit _     -> False
+      NaturalFold      -> False
+      NaturalBuild     -> False
+      NaturalIsZero    -> False
+      NaturalEven      -> False
+      NaturalOdd       -> False
+      NaturalToInteger -> False
+      NaturalShow      -> False
+      NaturalPlus t u  -> go_ t || go_ u
+      NaturalTimes t u -> go_ t || go_ u
+      Integer          -> False
+      IntegerLit _     -> False
+      IntegerShow      -> False
+      IntegerToDouble  -> False
+      Double           -> False
+      DoubleLit _      -> False
+      DoubleShow       -> False
+      Text             -> False
+      TextLit cs       -> case cs of Chunks xys _ -> any (any go_) xys
+      TextAppend t u   -> go_ t || go_ u
+      TextShow         -> False
+      List             -> False
+      ListLit ma ts    -> maybe False go_ ma || any go_ ts
+      ListAppend t u   -> go_ t || go_ u
+      ListBuild        -> False
+      ListFold         -> False
+      ListLength       -> False
+      ListHead         -> False
+      ListLast         -> False
+      ListIndexed      -> False
+      ListReverse      -> False
+      Optional         -> False
+      Some t           -> go_ t
+      None             -> False
+      OptionalFold     -> False
+      OptionalBuild    -> False
+      Record kts       -> any go_ kts
+      RecordLit kts    -> any go_ kts
+      Union kts        -> any (maybe False go_) kts
+      UnionLit _ v kts -> go_ v || any (maybe False go_) kts
+      Combine t u      -> go_ t || go_ u
+      CombineTypes t u -> go_ t || go_ u
+      Prefer t u       -> go_ t || go_ u
+      Merge t u ma     -> go_ t || go_ u || maybe False go_ ma
+      Field t _        -> go_ t
+      Project t _      -> go_ t
+      Note _ e         -> go_ e
+      ImportAlt t u    -> go_ t || go_ u
+      Embed _          -> False

@@ -1,11 +1,12 @@
 module Dhall.Core where
 
 data Const
-
 data Var
-
 data Expr s a
+-- data Import a
+-- data X
 
-data Import
+-- data Resolved
 
-denote :: Expr s a -> Expr t a
+-- type Nf   = Expr Src
+-- type Core = Expr X Resolved

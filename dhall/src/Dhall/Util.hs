@@ -7,8 +7,11 @@ module Dhall.Util
     , snipDoc
     , insert
     , _ERROR
+    , throws
     ) where
 
+import Control.Exception (Exception)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Monoid ((<>))
 import Data.String (IsString)
 import Data.Text (Text)
@@ -19,6 +22,15 @@ import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Dhall.Pretty
+import qualified Control.Exception
+
+
+{-| Convenience utility for converting `Either`-based exceptions to `IO`-based
+    exceptions
+-}
+throws :: (Exception e, MonadIO io) => Either e a -> io a
+throws (Left  e) = liftIO (Control.Exception.throwIO e)
+throws (Right a) = return a
 
 -- | Utility function to cut out the interior of a large text block
 snip :: Text -> Text
