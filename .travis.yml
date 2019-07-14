@@ -41,7 +41,7 @@ before_install:
 install:
   - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
   - set -ex
-  - stack --no-terminal --install-ghc "" build --only-dependencies
+  - stack --no-terminal --install-ghc build --only-dependencies
   - set +ex
 
 
