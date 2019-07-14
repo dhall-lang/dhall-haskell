@@ -31,7 +31,7 @@ before_install:
   - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$HOME/.local/bin:/opt/alex/$ALEXVER/bin:/opt/happy/$HAPPYVER/bin:$HOME/.cabal/bin:$PATH
   - | # Install stack
     mkdir -p ~/.local/bin
-    travis_retry curl --insecure -L https://get.haskellstack.org/stable/osx-x86_64.tar.gz | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
+    travis_retry curl -L https://get.haskellstack.org/stable/osx-x86_64.tar.gz | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
     # Use the more reliable S3 mirror of Hackage
     mkdir -p $HOME/.cabal
     echo 'remote-repo: hackage.haskell.org:http://hackage.fpcomplete.com/' > $HOME/.cabal/config
@@ -40,9 +40,8 @@ before_install:
 
 install:
   - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
-  - if [ -f configure.ac ]; then autoreconf -i; fi
   - set -ex
-  - stack --no-terminal --install-ghc $ARGS test --bench --only-dependencies
+  - stack --no-terminal --install-ghc "" build --only-dependencies
   - set +ex
 
 
