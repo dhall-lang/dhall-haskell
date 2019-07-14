@@ -38,6 +38,9 @@ getTests = do
                     -- This is a bug created by a parsing performance
                     -- improvement
                     [ parseDirectory </> "success/unit/MergeParenAnnotationA.dhall"
+
+                    -- https://github.com/dhall-lang/dhall-haskell/issues/1110
+                    , parseDirectory </> "success/unit/import/urls/potPourriA.dhall"
                     ]
 
             Monad.guard (path `notElem` skip)
