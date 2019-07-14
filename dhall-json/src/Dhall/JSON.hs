@@ -703,6 +703,9 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
                     Core.TextLit (Core.Chunks [] keyText) ->
                         return keyText
 
+                    Core.Field (Core.Union _) keyText ->
+                        return keyText
+
                     _ ->
                         empty
 
