@@ -38,7 +38,7 @@ parserInfo :: ParserInfo Options
 parserInfo = Options.info
           (  Options.helper <*> parseOptions)
           (  Options.fullDesc
-          <> Options.progDesc "Populate Dhall value given its Dhall type (schema) from a JSON expression"
+          <> Options.progDesc "Convert a JSON expression to a Dhall expression, given the expected Dhall type"
           )
 
 -- | All the command arguments and options

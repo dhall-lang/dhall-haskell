@@ -44,7 +44,7 @@ parserInfo :: ParserInfo CommandOptions
 parserInfo = Options.info
           (  Options.helper <*> parseOptions)
           (  Options.fullDesc
-          <> Options.progDesc "Populate Dhall value given its Dhall type (schema) from a YAML expression"
+          <> Options.progDesc "Convert a YAML expression to a Dhall expression, given the expected Dhall type"
           )
 
 
