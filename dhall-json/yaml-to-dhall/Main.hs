@@ -72,7 +72,7 @@ parseOptions = CommandOptions <$> parseVersion
     parseFile =
         Options.strOption
             (   Options.long "file"
-            <>  Options.help "Read expression from a file instead of standard input"
+            <>  Options.help "Read YAML expression from a file instead of standard input"
             <>  Options.metavar "FILE"
             )
 
