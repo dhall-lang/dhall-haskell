@@ -10,6 +10,7 @@ where
 import Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative
 import Control.Applicative ((<|>))
+import Data.Monoid ((<>))
 
 import qualified Dhall.LSP.Server
 
