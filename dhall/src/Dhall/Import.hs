@@ -136,7 +136,7 @@ import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term(..))
 import Control.Exception (Exception, SomeException, throwIO, toException)
 import Control.Monad (guard)
-import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..))
+import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..), handle)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
@@ -173,7 +173,6 @@ import Dhall.TypeCheck (X(..))
 import Lens.Family.State.Strict (zoom)
 
 import qualified Codec.Serialise
-import qualified Control.Exception                as Exception
 import qualified Control.Monad.Trans.Maybe        as Maybe
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Crypto.Hash
@@ -391,29 +390,23 @@ instance Canonicalize Import where
     canonicalize (Import importHashed importMode) =
         Import (canonicalize importHashed) importMode
 
-toHeaders
-  :: Text
-  -> Text
-  -> Expr s a
-  -> Maybe [HTTPHeader]
-toHeaders key₀ key₁ (ListLit _ hs) = do
-    hs' <- mapM (toHeader key₀ key₁) hs
+toHeaders :: Expr s a -> Maybe [HTTPHeader]
+toHeaders (ListLit _ hs) = do
+    hs' <- mapM toHeader hs
     return (Data.Foldable.toList hs')
-toHeaders _ _ _ = do
+toHeaders _ = do
     empty
 
-toHeader
-  :: Text
-  -> Text
-  -> Expr s a
-  -> Maybe HTTPHeader
-toHeader key₀ key₁ (RecordLit m) = do
-    TextLit (Chunks [] keyText  ) <- Dhall.Map.lookup key₀ m
-    TextLit (Chunks [] valueText) <- Dhall.Map.lookup key₁ m
+toHeader :: Expr s a -> Maybe HTTPHeader
+toHeader (RecordLit m) = do
+    TextLit (Chunks [] keyText  ) <-
+        Dhall.Map.lookup "header" m <|> Dhall.Map.lookup "mapKey" m
+    TextLit (Chunks [] valueText) <-
+        Dhall.Map.lookup "value" m <|> Dhall.Map.lookup "mapValue" m
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
     let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
     return (Data.CaseInsensitive.mk keyBytes, valueBytes)
-toHeader _ _ _ = do
+toHeader _ = do
     empty
 
 
@@ -464,8 +457,15 @@ localToPath prefix file_ = liftIO $ do
 
     return (foldr cons prefixPath cs)
 
-chainImport :: Chained -> Import -> Chained
-chainImport (Chained import_) import' = Chained (canonicalize (import_ <> import'))
+-- Chain imports, also typecheck and normalizer headers if applicable.
+chainImport :: MonadCatch m => Chained -> Import -> StateT (Status m) m Chained
+chainImport (Chained parent) child@(Import importHashed@(ImportHashed _ (Remote url)) _) = do
+    url' <- normalizeHeaders url
+    let child' = child { importHashed = importHashed { importType = Remote url' } }
+    return (Chained (canonicalize (parent <> child')))
+
+chainImport (Chained parent) child =
+    return (Chained (canonicalize (parent <> child)))
 
 -- | Parse an expression from a `Import` containing a Dhall program
 exprFromImport :: Chained -> StateT (Status IO) IO Resolved
@@ -497,8 +497,6 @@ exprFromImport here@(Chained (Import {..})) = do
 
     case result of
         Just resolvedExpression -> do
-            let newImport = here
-
             return (Resolved {..})
         Nothing -> do
             exprFromUncachedImport here
@@ -611,8 +609,58 @@ getCacheDirectory = alternative₀ <|> alternative₁
             Just homeDirectory -> return (homeDirectory </> ".cache")
             Nothing            -> empty
 
+-- If the URL contains headers typecheck them and replace them with their normal
+-- forms.
+normalizeHeaders :: MonadCatch m => URL -> StateT (Status m) m URL
+normalizeHeaders url@URL { headers = Just headersExpression } = do
+    expr <- loadWith headersExpression
+
+    let go key₀ key₁ = do
+            let expected :: Expr Src X
+                expected =
+                    App List
+                        ( Record
+                            ( Dhall.Map.fromList
+                                [ (key₀, Text), (key₁, Text) ]
+                            )
+                        )
+
+            let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
+            let annot = case expr of
+                    Note (Src begin end bytes) _ ->
+                        Note (Src begin end bytes') (Annot expr expected)
+                      where
+                        bytes' = bytes <> " : " <> suffix_
+                    _ ->
+                        Annot expr expected
+
+            _ <- case (Dhall.TypeCheck.typeOf annot) of
+                Left err -> throwM err
+                Right _ -> return ()
+
+            return (Dhall.Core.normalize expr)
+
+    let handler₀ (e :: SomeException) = do
+            {- Try to normalize using the preferred @mapKey@ /
+                @mapValue@ fields and fall back to @header@ /
+                @value@ if that fails.  However, if @header@ /
+                @value@ still fails then re-throw the original
+                exception for @mapKey@ / @mapValue@
+            -}
+            let handler₁ (_ :: SomeException) =
+                    throwM e
+
+            handle handler₁ (go "header" "value")
+
+    headersExpression' <-
+        handle handler₀ (go "mapKey" "mapValue")
+
+    return url { headers = Just (fmap absurd headersExpression') }
+
+normalizeHeaders url = return url
+
 exprFromUncachedImport :: Chained -> StateT (Status IO) IO Resolved
-exprFromUncachedImport import_@(Chained (Import {..})) = do
+exprFromUncachedImport (Chained (Import {..})) = do
     let ImportHashed {..} = importHashed
     let resolveImport importType' = case importType' of
           Local prefix file -> liftIO $ do
@@ -625,78 +673,15 @@ exprFromUncachedImport import_@(Chained (Import {..})) = do
 
               text <- Data.Text.IO.readFile path
 
-              return (path, text, import_)
+              return (path, text)
 
           Remote url@URL { headers = maybeHeadersExpression } -> do
-              maybeHeadersAndExpression <- case maybeHeadersExpression of
-                  Nothing -> do
-                      return Nothing
-                  Just headersExpression -> do
-                      expr <- loadWith headersExpression
-
-                      let decodeHeaders key₀ key₁ = do
-                              let expected :: Expr Src X
-                                  expected =
-                                      App List
-                                          ( Record
-                                              ( Dhall.Map.fromList
-                                                  [ (key₀, Text), (key₁, Text) ]
-                                              )
-                                          )
-
-                              let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
-                              let annot = case expr of
-                                      Note (Src begin end bytes) _ ->
-                                          Note (Src begin end bytes') (Annot expr expected)
-                                        where
-                                          bytes' = bytes <> " : " <> suffix_
-                                      _ ->
-                                          Annot expr expected
-
-                              case Dhall.TypeCheck.typeOf annot of
-                                  Left err -> liftIO (throwIO err)
-                                  Right _  -> return ()
-
-                              let expr' = Dhall.Core.normalize expr
-
-                              case toHeaders key₀ key₁ expr' of
-                                  Just headers -> do
-                                      return (Just (headers, expr'))
-                                  Nothing      -> do
-                                      liftIO (throwIO InternalError)
-
-                      let handler₀ (e :: SomeException) = do
-                              {- Try to decode using the preferred @mapKey@ /
-                                 @mapValue@ fields and fall back to @header@ /
-                                 @value@ if that fails.  However, if @header@ /
-                                 @value@ still fails then re-throw the original
-                                 exception for @mapKey@ / @mapValue@
-                              -}
-                              let handler₁ (_ :: SomeException) =
-                                      Exception.throw e
-
-                              Exception.handle handler₁ (decodeHeaders "header" "value")
-
-                      liftIO (Exception.handle handler₀ (decodeHeaders "mapKey" "mapValue"))
-
 #ifdef MIN_VERSION_http_client
-              let maybeHeaders = fmap fst maybeHeadersAndExpression
-
-              let newHeaders =
-                      fmap (fmap absurd . snd) maybeHeadersAndExpression
+              let maybeHeaders = foldMap toHeaders maybeHeadersExpression
 
               (path, text) <- fetchFromHttpUrl url maybeHeaders
 
-              let newImport = Import
-                      { importHashed = ImportHashed
-                          { importType =
-                              Remote (url { headers = newHeaders })
-                          , ..
-                          }
-                      , ..
-                      }
-
-              return (path, text, chainImport import_ newImport)
+              return (path, text)
 #else
               let urlString = Text.unpack (Dhall.Core.pretty url)
 
@@ -707,7 +692,7 @@ exprFromUncachedImport import_@(Chained (Import {..})) = do
               x <- System.Environment.lookupEnv (Text.unpack env)
               case x of
                   Just string -> do
-                      return (Text.unpack env, Text.pack string, import_)
+                      return (Text.unpack env, Text.pack string)
                   Nothing -> do
                       throwMissingImport (MissingEnvironmentVariable env)
 
@@ -716,7 +701,7 @@ exprFromUncachedImport import_@(Chained (Import {..})) = do
 
     case importMode of
         Code -> do
-            (path, text, newImport) <- resolveImport importType
+            (path, text) <- resolveImport importType
             let parser = unParser $ do
                     Text.Parser.Token.whiteSpace
                     r <- Dhall.Parser.expr
@@ -730,7 +715,7 @@ exprFromUncachedImport import_@(Chained (Import {..})) = do
                     return (Resolved {..})
 
         RawText -> do
-            (_path, text, newImport) <- resolveImport importType
+            (_path, text) <- resolveImport importType
             let resolvedExpression = TextLit (Chunks [] text)
 
             return (Resolved {..})
@@ -751,7 +736,7 @@ exprFromUncachedImport import_@(Chained (Import {..})) = do
                         Env env -> App (Field locationType "Environment") (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty env)))
 
 
-            return (Resolved resolvedExpression import_)
+            return (Resolved resolvedExpression)
 
 
 -- | Default starting `Status`, importing relative to the given directory.
@@ -770,7 +755,7 @@ loadWith expr₀ = case expr₀ of
 
     let parent = NonEmpty.head _stack
 
-    let child = chainImport parent import₀
+    child <- chainImport parent import₀
 
     let local (Chained (Import (ImportHashed _ (Remote  {})) _)) = False
         local (Chained (Import (ImportHashed _ (Local   {})) _)) = True
@@ -829,16 +814,15 @@ loadWith expr₀ = case expr₀ of
 
                     Resolved {..} <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
 
-                    let stackWithNewImport = NonEmpty.cons newImport _stack
+                    let stackWithChild = NonEmpty.cons child _stack
 
-                    zoom stack (State.put stackWithNewImport)
+                    zoom stack (State.put stackWithChild)
                     expr'' <- loadWith resolvedExpression
                     zoom stack (State.put _stack)
 
                     zoom graph . State.modify $
-                      -- Add the edge `parent -> newImport` to the import graph,
-                      -- where `newImport` is `child` with normalized headers.
-                      \edges -> Depends parent newImport : edges
+                      -- Add the edge `parent -> child` to the import graph.
+                      \edges -> Depends parent child : edges
 
                     _cacher child expr''
 

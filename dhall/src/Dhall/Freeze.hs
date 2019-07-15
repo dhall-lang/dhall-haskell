@@ -86,9 +86,11 @@ freezeImport directory _standardVersion import_ = do
     let newImport = import_ { importHashed = newImportHashed }
 
     let rootImport :| _ = view stack status
-    let newChained = chainImport rootImport newImport
 
-    State.evalStateT (Dhall.Import.exprToImport newChained normalizedExpression) status
+    State.evalStateT
+        (do newChained <- chainImport rootImport newImport
+            Dhall.Import.exprToImport newChained normalizedExpression)
+        status
 
     return newImport
 

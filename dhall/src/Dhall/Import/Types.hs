@@ -35,7 +35,9 @@ import qualified Data.Map      as Map
 import qualified Data.Text
 
 -- | A fully 'chained' import, i.e. if it contains a relative path that path is
---   relative to the current directory.
+--   relative to the current directory. If it is a remote import with headers
+--   those are well-typed and in normal form. Note that the type itself isn't
+--   precise enough to capture either of these invariants.
 newtype Chained = Chained { chainedImport :: Import }
   deriving (Eq, Ord)
 
@@ -45,9 +47,6 @@ instance Pretty Chained where
 data Resolved = Resolved
     { resolvedExpression :: Expr Src Import
     -- ^ The imported expression, potentially still referencing other imports.
-    , newImport          :: Chained
-    -- ^ New import to use in place of the original import for chaining
-    --   downstream imports
     }
 
 -- | `parent` imports (i.e. depends on) `child`
