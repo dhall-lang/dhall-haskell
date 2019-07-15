@@ -28,7 +28,7 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Tree (Tree(..))
 import Data.Version (showVersion)
 import Dhall.Binary (StandardVersion)
-import Dhall.Core (Expr(Annot), Import)
+import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..), LoadedExpr(..), ResolvedImport(..))
 import Dhall.Parser (Src)
@@ -38,6 +38,7 @@ import Lens.Family (set)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
+import Text.Dot ((.->.))
 
 import qualified Codec.CBOR.JSON
 import qualified Codec.CBOR.Read
@@ -49,6 +50,7 @@ import qualified Data.Aeson
 import qualified Data.Aeson.Encode.Pretty
 import qualified Data.ByteString.Lazy
 import qualified Data.ByteString.Lazy.Char8
+import qualified Data.Map
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
@@ -71,6 +73,7 @@ import qualified Options.Applicative
 import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.IO
+import qualified Text.Dot
 
 -- | Top-level program options
 data Options = Options
@@ -399,11 +402,15 @@ command (Options {..}) = do
 
             LoadedExpr {..} <- State.evalStateT (Dhall.Import.loadExpr stack expression) status
 
-            let _importTree = Node rootImport (map Dhall.Import.graph imports)
+            -- construct the full import tree
+            let importTree = Node rootImport (map Dhall.Import.graph imports)
 
-            {- let
-                imports = rootImport : map parent _graph ++ map child _graph
-                importIds = Data.Map.fromList (zip imports [Text.Dot.userNodeId i | i <- [0..]])
+            let edges :: Tree a -> [(a, a)]
+                edges (Node a bs) =
+                    [(a, rootLabel b) | b <- bs] ++ concatMap edges bs
+
+            let allImports = foldMap (\i -> [i]) importTree
+                importIds = Data.Map.fromList (zip allImports [Text.Dot.userNodeId i | i <- [0..]])
 
             let dotNode (i, nodeId) =
                     Text.Dot.userNode
@@ -413,18 +420,16 @@ command (Options {..}) = do
                         , ("style", "rounded")
                         ]
 
-            let dotEdge (Depends parent child) =
+            let dotEdge (parent, child) =
                     case (Data.Map.lookup parent importIds, Data.Map.lookup child importIds) of
                         (Just from, Just to) -> from .->. to
                         _                    -> pure ()
 
             let dot = do Text.Dot.attribute ("rankdir", "LR")
                          mapM_ dotNode (Data.Map.assocs importIds)
-                         mapM_ dotEdge _graph
+                         mapM_ dotEdge (edges importTree)
 
-            putStr . ("strict " <>) . Text.Dot.showDot $ dot -}
-
-            return ()  -- TODO!
+            putStr . ("strict " <>) . Text.Dot.showDot $ dot
 
         Resolve { resolveMode = Just ListImmediateDependencies, ..} -> do
             expression <- getExpression file
