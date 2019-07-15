@@ -438,7 +438,8 @@ command (Options {..}) = do
             mapM_ print
                  .   fmap (   Pretty.pretty
                           .   Dhall.Core.importType
-                          .   Dhall.Core.importHashed )
+                          .   Dhall.Core.importHashed
+                          .   Dhall.Import.chainedImport )
                  .   Data.Map.keys
                  $   _cache
 

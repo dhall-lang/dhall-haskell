@@ -15,16 +15,17 @@ module Dhall.Freeze
     ) where
 
 import Control.Exception (SomeException)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Maybe (fromMaybe)
 import Data.Text
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
-import Dhall.Import (standardVersion)
+import Dhall.Import (standardVersion, stack, chainImport)
 import Dhall.Parser (exprAndHeaderFromText, Src)
 import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
 import Dhall.TypeCheck (X)
-import Lens.Family (set)
+import Lens.Family (set, view)
 import System.Console.ANSI (hSupportsANSI)
 
 import qualified Control.Exception
@@ -84,7 +85,10 @@ freezeImport directory _standardVersion import_ = do
 
     let newImport = import_ { importHashed = newImportHashed }
 
-    State.evalStateT (Dhall.Import.exprToImport newImport normalizedExpression) status
+    let rootImport :| _ = view stack status
+    let newChained = chainImport rootImport newImport
+
+    State.evalStateT (Dhall.Import.exprToImport newChained normalizedExpression) status
 
     return newImport
 

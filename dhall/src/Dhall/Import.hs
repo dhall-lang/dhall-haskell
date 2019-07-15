@@ -119,6 +119,8 @@ module Dhall.Import (
     , startingContext
     , resolver
     , cacher
+    , chainImport
+    , chainedImport
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -248,8 +250,8 @@ instance Show ReferentiallyOpaque where
 
 -- | Extend another exception with the current import stack
 data Imported e = Imported
-    { importStack :: NonEmpty Import -- ^ Imports resolved so far, in reverse order
-    , nested      :: e               -- ^ The nested exception
+    { importStack :: NonEmpty Chained  -- ^ Imports resolved so far, in reverse order
+    , nested      :: e                 -- ^ The nested exception
     } deriving (Typeable)
 
 instance Exception e => Exception (Imported e)
@@ -463,9 +465,12 @@ localToPath prefix file_ = liftIO $ do
 
     return (foldr cons prefixPath cs)
 
+chainImport :: Chained -> Import -> Chained
+chainImport (Chained import_) import' = Chained (canonicalize (import_ <> import'))
+
 -- | Parse an expression from a `Import` containing a Dhall program
-exprFromImport :: Import -> StateT (Status IO) IO Resolved
-exprFromImport here@(Import {..}) = do
+exprFromImport :: Chained -> StateT (Status IO) IO Resolved
+exprFromImport here@(Chained (Import {..})) = do
     let ImportHashed {..} = importHashed
 
     Status {..} <- State.get
@@ -487,7 +492,9 @@ exprFromImport here@(Import {..}) = do
 
         term <- Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytesLazy)
 
-        Dhall.Core.throws (Dhall.Binary.decodeExpression term)
+        -- TODO: generalise decodeExpression!
+        resolvedExpr <- Dhall.Core.throws (Dhall.Binary.decodeExpression term)
+        return (fmap undefined resolvedExpr)
 
     case result of
         Just resolvedExpression -> do
@@ -507,11 +514,11 @@ exprFromImport here@(Import {..}) = do
     like doing \"the right thing\" for uncached imports (i.e. exporting
     environment variables or creating files)
 -}
-exprToImport :: Import -> Expr Src X -> StateT (Status IO) IO ()
+exprToImport :: Chained -> Expr Src X -> StateT (Status IO) IO ()
 exprToImport here expression = do
     Status {..} <- State.get
 
-    let Import {..} = here
+    let Chained (Import {..}) = here
 
     let ImportHashed {..} = importHashed
 
@@ -605,8 +612,8 @@ getCacheDirectory = alternative₀ <|> alternative₁
             Just homeDirectory -> return (homeDirectory </> ".cache")
             Nothing            -> empty
 
-exprFromUncachedImport :: Import -> StateT (Status IO) IO Resolved
-exprFromUncachedImport import_@(Import {..}) = do
+exprFromUncachedImport :: Chained -> StateT (Status IO) IO Resolved
+exprFromUncachedImport import_@(Chained (Import {..})) = do
     let ImportHashed {..} = importHashed
     let resolveImport importType' = case importType' of
           Local prefix file -> liftIO $ do
@@ -690,7 +697,7 @@ exprFromUncachedImport import_@(Import {..}) = do
                       , ..
                       }
 
-              return (path, text, newImport)
+              return (path, text, chainImport import_ newImport)
 #else
               let urlString = Text.unpack (Dhall.Core.pretty url)
 
@@ -764,14 +771,12 @@ loadWith expr₀ = case expr₀ of
 
     let parent = NonEmpty.head _stack
 
-    let import₁ = parent <> import₀
+    let child = chainImport parent import₀
 
-    let child = canonicalize import₁
-
-    let local (Import (ImportHashed _ (Remote  {})) _) = False
-        local (Import (ImportHashed _ (Local   {})) _) = True
-        local (Import (ImportHashed _ (Env     {})) _) = True
-        local (Import (ImportHashed _ (Missing {})) _) = True
+    let local (Chained (Import (ImportHashed _ (Remote  {})) _)) = False
+        local (Chained (Import (ImportHashed _ (Local   {})) _)) = True
+        local (Chained (Import (ImportHashed _ (Env     {})) _)) = True
+        local (Chained (Import (ImportHashed _ (Missing {})) _)) = True
 
     let referentiallySane = not (local child) || local parent
 

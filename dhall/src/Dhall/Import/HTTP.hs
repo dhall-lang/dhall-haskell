@@ -276,7 +276,7 @@ fetchFromHttpUrl childURL mheaders = do
 
     Status {..} <- State.get
 
-    let parentImport = NonEmpty.head _stack
+    let Chained parentImport = NonEmpty.head _stack
 
     let parentImportType = importType (importHashed parentImport)
 
