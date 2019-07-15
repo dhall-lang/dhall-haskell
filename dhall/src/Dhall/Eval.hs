@@ -553,7 +553,7 @@ eval !env t =
                           VRecordLit kvs -> let
                             kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
                             in VRecordLit (Dhall.Map.sort kvs')
-                          t -> VProject t (Left ks)
+                          t -> VProject t (Left (Dhall.Set.sort ks))
     Project t (Right e) ->
                         case evalE e of
                           VRecord kts ->

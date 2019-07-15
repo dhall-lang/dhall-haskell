@@ -16,6 +16,8 @@ module Dhall.Set (
     , append
     , empty
     , difference
+    , sort
+    , isSorted
     ) where
 
 import Prelude
@@ -66,3 +68,20 @@ empty = Set Data.Set.empty Data.Sequence.empty
 difference :: Ord a => Set a -> Set a -> [a]
 difference os (Set s _) =
     filter (\ x -> not (Data.Set.member x s)) (toList os)
+
+{-| Sort the set elements, forgetting their original ordering.
+
+>>> sort (fromList [2, 1]) == fromList [1, 2]
+True
+-}
+sort :: Ord a => Set a -> Set a
+sort (Set s xs) = Set s (Data.Sequence.sort xs)
+
+{-|
+>>> isSorted (fromList [2, 1])
+False
+>>> isSorted (fromList [1, 2])
+True
+-}
+isSorted :: Ord a => Set a -> Bool
+isSorted s = toList s == Data.Set.toList (toSet s)
