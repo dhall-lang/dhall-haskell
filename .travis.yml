@@ -40,25 +40,23 @@ before_install:
 
 install:
   - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
+  - SAVED_OPTIONS=$(set +o)
   - set -ex
   - stack --no-terminal --install-ghc build --only-dependencies
-  - set +ex
+  - eval "$SAVED_OPTIONS"
 
 
 script:
-  - export PATH="${PATH}:$(pwd)/artifacts"
+  - export PATH="${PATH}:$(pwd)/bin"
   - stack build --copy-bins --local-bin-path ./bin
   - source .travis-functions.sh
   - tar -jcvf $(mk_release_name dhall) bin/dhall
   - tar -jcvf $(mk_release_name dhall-json) bin/dhall-to-json bin/dhall-to-yaml bin/json-to-dhall bin/yaml-to-dhall
   - tar -jcvf $(mk_release_name dhall-bash) bin/dhall-to-bash
   - tar -jcvf $(mk_release_name dhall-lsp-server) bin/dhall-lsp-server
-
-before_deploy:
-  - stack build --copy-bins --local-bin-path ./bin
-  # TODO: move the tar operations here
   - mkdir -p uploads
   - mv *.tar.bz2 uploads/
+
 
 deploy:
   - provider: releases
