@@ -81,17 +81,18 @@ type ImportGraph = [Dhall.Depends]
 
 -- | A cache maps Dhall imports to fully normalised expressions. By reusing
 --   caches we can speeds up diagnostics etc. significantly!
-data Cache = Cache ImportGraph (Map.Map Dhall.Import (Expr Src X))
+data Cache = Cache ImportGraph (Map.Map Dhall.Chained (Expr Src X))
 
 -- | The initial cache.
 emptyCache :: Cache
 emptyCache = Cache [] Map.empty
 
 -- Construct the unhashed import corresponding to the given file.
-importFromFileIdentifier :: FileIdentifier -> Dhall.Import
+importFromFileIdentifier :: FileIdentifier -> Dhall.Chained
 importFromFileIdentifier (FileIdentifier importType) =
-  Dhall.Import { importHashed = Dhall.ImportHashed Nothing importType,
-                 importMode = Dhall.Code }
+  Dhall.Chained
+    $ Dhall.Import { importHashed = Dhall.ImportHashed Nothing importType,
+                     importMode = Dhall.Code }
 
 
 -- | Invalidate any _unhashed_ imports of the given file. Hashed imports are
@@ -120,8 +121,8 @@ invalidate (FileIdentifier fileid) (Cache dependencies cache) =
         do vertex <- vertexFromImport import_
            return (Graph.reachable graph vertex)
 
-    codeImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.Code
-    textImport = Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.RawText
+    codeImport = Dhall.Chained $ Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.Code
+    textImport = Dhall.Chained $ Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.RawText
     invalidImports = Set.fromList $ codeImport : reachableImports codeImport
                                     ++ textImport : reachableImports textImport
 
