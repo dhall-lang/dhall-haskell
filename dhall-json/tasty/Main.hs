@@ -7,7 +7,6 @@ module Main where
 import Dhall.JSON (Conversion(..))
 import Test.Tasty (TestTree)
 
-import qualified Control.Exception    as Exception
 import qualified Data.Aeson           as Aeson
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
