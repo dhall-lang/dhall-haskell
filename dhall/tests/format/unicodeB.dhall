@@ -1,15 +1,15 @@
   λ(isActive : Bool)
 →   { barLeftEnd =
-        [ "┨" ] : Optional Text
+        Some "┨"
     , barRightEnd =
-        [ "┠" ] : Optional Text
+        Some "┠"
     , separator =
-        [ "┃" ] : Optional Text
+        Some "┃"
     , alignment =
           < ToTheLeft = {=} | ToTheRight : {} | Centered : {} >
         : ./Alignment.dhall
     , barWidth =
-        [] : Optional Natural
+        None Natural
     , barSegments =
         [ "index", "command", "path", "title" ]
     }
