@@ -30,11 +30,11 @@ import Data.Version (showVersion)
 import Dhall.Binary (StandardVersion)
 import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
-import Dhall.Import (Imported(..), LoadedExpr(..), ResolvedImport(..))
+import Dhall.Import (Imported(..), LoadedExpr(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
-import Lens.Family (set)
+import Lens.Family (set, view)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
@@ -443,13 +443,13 @@ command (Options {..}) = do
 
             let stack = importStack file
 
-            LoadedExpr {..} <-
-                State.evalStateT (Dhall.Import.loadExpr stack expression) status
+            status' <-
+                State.execStateT (Dhall.Import.loadExpr stack expression) status
+
+            let imports = Data.Map.keys (view Dhall.Import.cache status')
 
             mapM_ print
                  .   fmap Pretty.pretty
-                 .   map (\(ResolvedImport _ importType _) -> importType)
-                 .   map (rootLabel . Dhall.Import.graph)
                  $   imports
 
         Resolve { resolveMode = Nothing, ..} -> do
