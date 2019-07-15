@@ -34,7 +34,7 @@ import Dhall.Parser.Token
 import Dhall.Parser.Expression
 
 -- | Parser for a top-level Dhall expression
-expr :: Parser (Expr Src Import)
+expr :: Parser Raw
 expr = exprA (Text.Megaparsec.try import_)
 
 -- | Parser for a top-level Dhall expression. The expression is parameterized
@@ -67,7 +67,7 @@ exprFromText
   :: String -- ^ User-friendly name describing the input expression,
             --   used in parsing error messages
   -> Text   -- ^ Input expression to parse
-  -> Either ParseError (Expr Src Import)
+  -> Either ParseError Raw
 exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
 
 {-| Like `exprFromText` but also returns the leading comments and whitespace
@@ -86,7 +86,7 @@ exprAndHeaderFromText
     :: String -- ^ User-friendly name describing the input expression,
               --   used in parsing error messages
     -> Text   -- ^ Input expression to parse
-    -> Either ParseError (Text, Expr Src Import)
+    -> Either ParseError (Text, Raw)
 exprAndHeaderFromText delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
     Right (txt, r) -> Right (Data.Text.dropWhileEnd (/= '\n') txt, r)

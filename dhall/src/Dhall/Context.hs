@@ -45,15 +45,19 @@ emptyCxt = Cxt Empty TEmpty
 
 quoteCxt :: Cxt -> Val -> Nf
 quoteCxt Cxt{..} = quote (envNames _values)
-{-# inline quoteCxt #-}
+{-# INLINE quoteCxt #-}
+
+quoteCxtCore :: Cxt -> Val -> Core
+quoteCxtCore cxt = nfToCore . quoteCxt cxt
+{-# INLINE quoteCxtCore #-}
 
 define :: Text -> Val -> Val -> Cxt -> Cxt
 define x t a (Cxt ts as) = Cxt (Extend ts x t) (TBind as x a)
-{-# inline define #-}
+{-# INLINE define #-}
 
 bind :: Text -> Val -> Cxt -> Cxt
 bind x a (Cxt ts as) = Cxt (Skip ts x) (TBind as x a)
-{-# inline bind #-}
+{-# INLINE bind #-}
 
 data ImportOptions
     -- ^ Imports are disabled.

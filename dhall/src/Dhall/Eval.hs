@@ -35,16 +35,18 @@ Potential optimizations with changing Expr:
 
 module Dhall.Eval (
     inst
-  , eval
-  , freeIn
+  , Names(..)
+  , alphaNf
   , conv
   , convEmpty
-  , quote
+  , countName
+  , eval
+  , freeIn
   , nf
   , nfEmpty
-  , alphaNf
+  , pattern VAnyPi
+  , quote
   , vCombineTypes
-  , Names(..)
   ) where
 
 
@@ -62,12 +64,12 @@ import Dhall.Core (
     Expr(..)
   , Binding(..)
   , Chunks(..)
-  , Names(..)
   , Closure(..)
   , Const(..)
   , Core
   , Env(..)
   , HLamInfo(..)
+  , Names(..)
   , Nf
   , Resolved(..)
   , VChunks(..)
@@ -137,6 +139,13 @@ vVar env (V x i) = go env i where
     | x == x'   = if i == 0 then VVar x (countName x env) else go env (i - 1)
     | otherwise = go env i
   go Empty i = VVar x (0 - i - 1)
+
+-- | Pattern synonym for matching any Pi value.
+pattern VAnyPi :: Text -> Val -> (Val -> Val) -> Val
+pattern VAnyPi x a b <- ((\case VPi a b@(Cl x _ _) -> Just (x, a, inst b)
+                                VHPi x a b         -> Just (x, a, b)
+                                _                  -> Nothing)
+                         -> Just (x, a, b))
 
 vApp :: Val -> Val -> Val
 vApp !t !u = case t of
@@ -704,6 +713,7 @@ quote !env !t =
     VInject m k Nothing           -> Field (Union ((quoteE <$>) <$> m)) k
     VInject m k (Just t)          -> Field (Union ((quoteE <$>) <$> m)) k `qApp` t
     VPrimVar                      -> error evalError
+
 
 -- Normalization
 ----------------------------------------------------------------------------------------------------

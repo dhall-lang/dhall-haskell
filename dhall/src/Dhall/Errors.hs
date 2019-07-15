@@ -17,9 +17,8 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Typeable (Typeable)
 import Dhall.Context (Cxt(..), ElabM, ImportState(..), typesToList)
-import Dhall.Core (Const(..), Import(..))
-import Dhall.Eval (Core)
-import Dhall.Parser.Combinators (Src)
+import Dhall.Core (Const(..), Core, CoreImport)
+import Dhall.Src (Src)
 import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Set
@@ -36,7 +35,7 @@ import qualified Crypto.Hash
 
 -- | An elaboration error that includes import stack, source position and local context
 data ContextualError =
-  ContextualError !(NonEmpty Import) !Cxt !(Maybe Src) !ElabError
+  ContextualError !(NonEmpty CoreImport) !Cxt !(Maybe Src) !ElabError
 
 -- We distinguish disabled import resolution from the other import errors, because we don't want
 -- to recover from the former when elaborating import alternatives.
@@ -119,7 +118,7 @@ instance Pretty DetailedContextualError where
 
 data ImportError
   -- | An import failed because of a cycle in the import graph
-  = Cycle !Import
+  = Cycle !CoreImport
 
   {-| Dhall tries to ensure that all expressions hosted on network endpoints are
       weakly referentially transparent, meaning roughly that any two clients will
@@ -147,7 +146,7 @@ data ImportError
 
       All other imports are defined to be non-local
   -}
-  | ReferentiallyOpaque !Import
+  | ReferentiallyOpaque !CoreImport
 
   -- | Exception thrown when an imported file is missing
   | MissingFile !FilePath
@@ -250,6 +249,8 @@ data TypeError
     | HandlerNotAFunction !Text !Core
     | CantAccess !Text !Core !Core
     | CantProject !Text !Core !Core
+    | CantProjectByExpression !Core
+    | ProjectionTypeMismatch !Text !Core !Core !Core !Core
     | MissingField !Text !Core
     | MissingAlternative !Text !Core
     | CantAnd !Core !Core
@@ -1111,6 +1112,49 @@ prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
         txt2 = insert expr1
         txt3 = insert expr2
 
+prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
+  where
+    short = "Invalid field type"
+
+    long =
+        "Explanation: Every record type annotates each field with a ❰Type❱, a ❰Kind❱, or \n\
+        \a ❰Sort❱ like this:                                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────────┐                            \n\
+        \    │ { foo : Natural, bar : Integer, baz : Text } │  Every field is annotated  \n\
+        \    └──────────────────────────────────────────────┘  with a ❰Type❱             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ { foo : Type, bar : Type } │  Every field is annotated                    \n\
+        \    └────────────────────────────┘  with a ❰Kind❱                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, the types of fields may " <> _NOT <> " be term-level values:           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ { foo : Natural, bar : 1 } │  Invalid record type                         \n\
+        \    └────────────────────────────┘                                              \n\
+        \                             ⇧                                                  \n\
+        \                             ❰1❱ is a ❰Natural❱ number and not a ❰Type❱,        \n\
+        \                             ❰Kind❱, or ❰Sort❱                                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You provided a record type with a field named:                                  \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... annotated with the following expression:                                    \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... which is neither a ❰Type❱, a ❰Kind❱, nor a ❰Sort❱                           \n"
+      where
+        txt0 = insert k
+        txt1 = insert expr0
+
 prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     ErrorMessages {..}
   where
@@ -1590,43 +1634,6 @@ prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
         level Type = "term"
         level Kind = "type"
         level Sort = "kind"
-
-prettyTypeMessage (InvalidField k expr0) = ErrorMessages {..}
-  where
-    short = "Invalid field"
-
-    long =
-        "Explanation: Every record literal is a set of fields assigned to values, like   \n\
-        \this:                                                                           \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────────────┐                                  \n\
-        \    │ { foo = 100, bar = True, baz = \"ABC\" } │                                \n\
-        \    └────────────────────────────────────────┘                                  \n\
-        \                                                                                \n\
-        \However, fields can only be terms and or ❰Type❱s and not ❰Kind❱s                \n\
-        \                                                                                \n\
-        \For example, the following record literal is " <> _NOT <> " valid:              \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────┐                                                          \n\
-        \    │ { foo = Type } │                                                          \n\
-        \    └────────────────┘                                                          \n\
-        \              ⇧                                                                 \n\
-        \              ❰Type❱ is a ❰Kind❱, which is not allowed                          \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a record literal with a field named:                               \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... whose value is:                                                             \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is not a term or ❰Type❱                                               \n"
-      where
-        txt0 = insert k
-        txt1 = insert expr0
 
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
@@ -2526,6 +2533,7 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
         txt2 = pretty key1
         txt3 = insert expr1
 
+
 prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
   where
     short = "Handler is not a function"
@@ -2683,6 +2691,112 @@ prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
         \" <> txt2 <> "\n"
       where
         txt0 = insert lazyText0
+        txt1 = insert expr0
+        txt2 = insert expr1
+
+prettyTypeMessage (CantProjectByExpression expr) = ErrorMessages {..}
+  where
+    short = "Selector is not a record type"
+
+    long =
+        "Explanation: You can project by an expression if that expression is a record    \n\
+        \type:                                                                           \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ { foo = True }.({ foo : Bool }) │  This is valid ...                      \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────┐                                \n\
+        \    │ λ(r : { foo : Bool }) → r.{ foo : Bool } │  ... and so is this            \n\
+        \    └──────────────────────────────────────────┘                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot project by any other type of expression:                     \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────┐                                                   \n\
+        \    │ { foo = True }.(True) │                                                   \n\
+        \    └───────────────────────┘                                                   \n\
+        \                      ⇧                                                         \n\
+        \                      Invalid: Not a record type                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You accidentally try to project by a record value instead of a record type,   \n\
+        \  like this:                                                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────┐                                         \n\
+        \    │ let T = { foo : Bool }          │                                         \n\
+        \    │                                 │                                         \n\
+        \    │ let x = { foo = True , bar = 1} │                                         \n\
+        \    │                                 │                                         \n\
+        \    │ let y = { foo = False, bar = 2} │                                         \n\
+        \    │                                 │                                         \n\
+        \    │ in  x.(y)                       │                                         \n\
+        \    └─────────────────────────────────┘                                         \n\
+        \             ⇧                                                                  \n\
+        \             The user might have meant ❰T❱ here                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to project out the following type:                                    \n\
+        \                                                                                \n\
+        \" <> txt <> "\n\
+        \                                                                                \n\
+        \... which is not a record type                                                  \n"
+      where
+        txt = insert expr
+
+prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1 expr2 expr3) = ErrorMessages {..}
+  where
+    short = "Projection type mismatch\n"
+        <>  "\n"
+        <>  Dhall.Diff.diffNormalized expr2 expr3
+
+    long =
+        "Explanation: You can project a subset of fields from a record by specifying the \n\
+        \desired type of the final record, like this:                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────┐                             \n\
+        \    │ { foo = 1, bar = True }.({ foo : Natural }) │  This is valid              \n\
+        \    └─────────────────────────────────────────────┘                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the expected type for each desired field must match the actual type of  \n\
+        \the corresponding field in the original record.                                 \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \              Invalid: The ❰foo❱ field contains ❰1❱, which has type ❰Natural❱...\n\
+        \              ⇩                                                                 \n\
+        \    ┌──────────────────────────────────────────┐                                \n\
+        \    │ { foo = 1, bar = True }.({ foo : Text }) │                                \n\
+        \    └──────────────────────────────────────────┘                                \n\
+        \                                       ⇧                                        \n\
+        \                                       ... but we requested that the ❰foo❱ field\n\
+        \                                       must contain a value of type ❰Text❱      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You tried to project out a field named:                                         \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... that should have type:                                                      \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... but that field instead had a value of type:                                 \n\
+        \                                                                                \n\
+        \" <> txt2 <> "\n"
+      where
+        txt0 = insert k
         txt1 = insert expr0
         txt2 = insert expr1
 
@@ -3041,4 +3155,3 @@ buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
 
 insert :: Pretty a => a -> Doc Ann
 insert = Dhall.Util.insert
-

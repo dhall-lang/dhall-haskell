@@ -54,6 +54,7 @@ module Dhall.Core (
     , VChunks(..)
     , VType
     , Val(..)
+    , coreToRaw
     , nfToCore
     , nfToRaw
     , pattern VPrim
@@ -603,11 +604,15 @@ internalError text = unlines
 
 nfToCore :: Nf -> Core
 nfToCore = unsafeCoerce
-{-# inline nfToCore #-}
+{-# INLINE nfToCore #-}
 
 nfToRaw :: Nf -> Raw
 nfToRaw = unsafeCoerce
-{-# inline nfToRaw #-}
+{-# INLINE nfToRaw #-}
+
+coreToRaw :: Core -> Raw
+coreToRaw = undefined
+{-# INLINE coreToRaw #-}
 
 data Resolved = Resolved !(Import URL) !Core Val
 
