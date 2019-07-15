@@ -140,7 +140,6 @@ import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
-import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
@@ -320,7 +319,7 @@ throwMissingImport e = throwM (MissingImports [toException e])
 data CannotImportHTTPURL =
     CannotImportHTTPURL
         String
-        (Maybe [(CI Data.ByteString.ByteString, Data.ByteString.ByteString)])
+        (Maybe [HTTPHeader])
     deriving (Typeable)
 
 instance Exception CannotImportHTTPURL
@@ -396,7 +395,7 @@ toHeaders
   :: Text
   -> Text
   -> Expr s a
-  -> Maybe [(CI Data.ByteString.ByteString, Data.ByteString.ByteString)]
+  -> Maybe [HTTPHeader]
 toHeaders key₀ key₁ (ListLit _ hs) = do
     hs' <- mapM (toHeader key₀ key₁) hs
     return (Data.Foldable.toList hs')
@@ -407,7 +406,7 @@ toHeader
   :: Text
   -> Text
   -> Expr s a
-  -> Maybe (CI Data.ByteString.ByteString, Data.ByteString.ByteString)
+  -> Maybe HTTPHeader
 toHeader key₀ key₁ (RecordLit m) = do
     TextLit (Chunks [] keyText  ) <- Dhall.Map.lookup key₀ m
     TextLit (Chunks [] valueText) <- Dhall.Map.lookup key₁ m

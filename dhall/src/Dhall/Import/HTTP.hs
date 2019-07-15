@@ -51,7 +51,7 @@ import Network.HTTP.Client (HttpException(..), Manager)
 
 import qualified Network.HTTP.Client                     as HTTP
 import qualified Network.HTTP.Client.TLS                 as HTTP
-import qualified Network.HTTP.Types.Status
+import qualified Network.HTTP.Types
 
 mkPrettyHttpException :: HttpException -> PrettyHttpException
 mkPrettyHttpException ex =
@@ -88,7 +88,7 @@ renderPrettyHttpException (HttpExceptionRequest _ e) =
             <>  "↳ " <> show statusCode
       where
         statusCode =
-            Network.HTTP.Types.Status.statusCode
+            Network.HTTP.Types.statusCode
                 (HTTP.responseStatus response)
     e' -> "\n" <> show e'
 #else
@@ -232,9 +232,11 @@ renderURL url =
 
     queryText = foldMap renderQuery query
 
+type HTTPHeader = Network.HTTP.Types.Header
+
 fetchFromHttpUrl
     :: URL
-    -> Maybe [(CI ByteString, ByteString)]
+    -> Maybe [HTTPHeader]
     -> StateT (Status m) IO (String, Text.Text)
 #ifdef __GHCJS__
 fetchFromHttpUrl childURL Nothing = do
