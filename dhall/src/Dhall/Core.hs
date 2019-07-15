@@ -1668,17 +1668,15 @@ normalizeWithM ctx e0 = loop (denote e0)
         t' <- traverse loop t
         case x' of
             RecordLit kvsX -> do
-                let entry key value =
-                        Data.Sequence.singleton
-                            (RecordLit
-                                (Dhall.Map.fromList
-                                    [ ("mapKey"  , TextLit (Chunks [] key))
-                                    , ("mapValue", value                  )
-                                    ]
-                                )
+                let entry (key, value) =
+                        RecordLit
+                            (Dhall.Map.fromList
+                                [ ("mapKey"  , TextLit (Chunks [] key))
+                                , ("mapValue", value                  )
+                                ]
                             )
 
-                let keyValues = Dhall.Map.foldMapWithKey entry kvsX
+                let keyValues = Data.Sequence.fromList (map entry (Dhall.Map.toList kvsX))
 
                 let listType = case t' of
                         Just (App List itemType) | null keyValues ->
