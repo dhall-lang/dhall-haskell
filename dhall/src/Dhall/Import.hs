@@ -944,6 +944,7 @@ loadWith expr₀ = case expr₀ of
   CombineTypes a b     -> CombineTypes <$> loadWith a <*> loadWith b
   Prefer a b           -> Prefer <$> loadWith a <*> loadWith b
   Merge a b c          -> Merge <$> loadWith a <*> loadWith b <*> mapM loadWith c
+  ToMap a b            -> ToMap <$> loadWith a <*> mapM loadWith b
   Field a b            -> Field <$> loadWith a <*> pure b
   Project a b          -> Project <$> loadWith a <*> mapM loadWith b
   Note a b             -> do

@@ -528,6 +528,35 @@ prettyCharacterSet characterSet expression =
             <>  prettyImportExpression a
             <>  " "
             <>  prettyImportExpression b
+    prettyAnnotatedExpression (ToMap a (Just b)) =
+        Pretty.group (Pretty.flatAlt long short)
+      where
+        long =
+            Pretty.align
+                (   keyword "toMap"
+                <>  Pretty.hardline
+                <>  prettyImportExpression a
+                <>  Pretty.hardline
+                <>  colon <> space
+                <>  prettyApplicationExpression b
+                )
+
+        short = keyword "toMap" <> space
+            <>  prettyImportExpression a
+            <>  space <> colon <> space
+            <>  prettyApplicationExpression b
+    prettyAnnotatedExpression (ToMap a Nothing) =
+        Pretty.group (Pretty.flatAlt long short)
+      where
+        long =
+            Pretty.align
+                (   keyword "toMap"
+                <>  Pretty.hardline
+                <>  prettyImportExpression a
+                )
+
+        short = keyword "toMap" <> space
+            <>  prettyImportExpression a
     prettyAnnotatedExpression a0@(Annot _ _) =
         enclose'
             ""

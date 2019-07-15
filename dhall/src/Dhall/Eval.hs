@@ -213,6 +213,7 @@ data Val a
   | VCombineTypes !(Val a) !(Val a)
   | VPrefer !(Val a) !(Val a)
   | VMerge !(Val a) !(Val a) !(Maybe (Val a))
+  | VToMap !(Val a) !(Maybe (Val a))
   | VField !(Val a) !Text
   | VInject !(Map Text (Maybe (Val a))) !Text !(Maybe (Val a))
   | VProject !(Val a) !(Either (Set Text) (Val a))
@@ -527,6 +528,15 @@ eval !env t =
                             | Just f  <- Dhall.Map.lookup k m -> maybe f (vApp f) mt
                             | otherwise -> error errorMsg
                           (x, y, ma) -> VMerge x y ma
+    ToMap x ma       -> case (evalE x, evalE <$> ma) of
+                          (VRecordLit m, Just (VList t)) | null m ->
+                              VListLit (Just t) (Dhall.Map.foldMapWithKey entry m)
+                          (VRecordLit m, _) ->
+                              VListLit Nothing (Dhall.Map.foldMapWithKey entry m)
+                          (x, ma) -> VToMap x ma
+      where
+        entry key value = Data.Sequence.singleton (VRecordLit (Dhall.Map.fromList [("mapKey", VTextLit $ VChunks [] key),
+                                                                                   ("mapValue", value)]))
     Field t k        -> case evalE t of
                           VRecordLit m
                             | Just v <- Dhall.Map.lookup k m -> v
@@ -692,6 +702,7 @@ conv !env t t' =
     (VCombineTypes t u       , VCombineTypes t' u'         ) -> convE t t' && convE u u'
     (VPrefer  t u            , VPrefer t' u'               ) -> convE t t' && convE u u'
     (VMerge t u _            , VMerge t' u' _              ) -> convE t t' && convE u u'
+    (VToMap t _              , VToMap t' _                 ) -> convE t t'
     (VField t k              , VField t' k'                ) -> convE t t' && k == k'
     (VProject t (Left ks)    , VProject t' (Left ks')      ) -> convE t t' && ks == ks'
     (VProject t (Right e)    , VProject t' (Right e')      ) -> convE t t' && convE e e'
@@ -826,6 +837,7 @@ quote !env !t =
     VCombineTypes t u             -> CombineTypes (quoteE t) (quoteE u)
     VPrefer t u                   -> Prefer (quoteE t) (quoteE u)
     VMerge t u ma                 -> Merge (quoteE t) (quoteE u) (quoteE <$> ma)
+    VToMap t ma                   -> ToMap (quoteE t) (quoteE <$> ma)
     VField t k                    -> Field (quoteE t) k
     VProject t p                  -> Project (quoteE t) (fmap quoteE p)
     VInject m k Nothing           -> Field (Union ((quoteE <$>) <$> m)) k
@@ -938,6 +950,7 @@ alphaNormalize = goEnv NEmpty where
       CombineTypes t u -> CombineTypes  (go t) (go u)
       Prefer t u       -> Prefer (go t) (go u)
       Merge x y ma     -> Merge (go x) (go y) (go <$> ma)
+      ToMap x ma       -> ToMap (go x) (go <$> ma)
       Field t k        -> Field (go t) k
       Project t ks     -> Project (go t) (go <$> ks)
       Note s e         -> Note s (go e)
