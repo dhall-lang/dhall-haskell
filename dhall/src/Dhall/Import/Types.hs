@@ -35,7 +35,7 @@ import qualified Data.Text
 
 data Resolved = Resolved
     { resolvedExpression :: Expr Src Import
-    -- ^ Expression with its immediate imports resolved
+    -- ^ The imported expression, potentially still referencing other imports.
     , newImport          :: Import
     -- ^ New import to use in place of the original import for chaining
     --   downstream imports
