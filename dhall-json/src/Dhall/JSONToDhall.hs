@@ -102,6 +102,11 @@
 > $ json-to-dhall 'List { mapKey : Text, mapValue : Text }' <<< '{"foo": "bar"}'
 > [ { mapKey = "foo", mapValue = "bar" } ]
 
+    The map keys can even be union types instead of `Text`:
+
+> $ json-to-dhall 'List { mapKey : < A | B >, mapValue : Natural }' <<< '{"A": 1, "B": 2}'
+> [ { mapKey = < A | B >.A, mapValue = 1 }, { mapKey = < A | B >.B, mapValue = 2 } ]
+
     Flag @--no-keyval-maps@ switches off this mechanism (if one would ever need it):
 
 > $ json-to-dhall --no-keyval-maps 'List { mapKey : Text, mapValue : Text }' <<< '{"foo": "bar"}'
@@ -424,19 +429,28 @@ dhallFromJSON (Conversion {..}) expressionType =
     loop t@(App D.List (D.Record r)) v@(A.Object o)
         | not noKeyValMap
         , ["mapKey", "mapValue"] == Map.keys r
-        , Just D.Text == Map.lookup "mapKey" r
+        , Just mapKey   <- Map.lookup "mapKey" r
         , Just mapValue <- Map.lookup "mapValue" r
-        , keyExprMap    :: Either CompileError (HM.HashMap Text ExprX)
-                        <- traverse (loop mapValue) o
-        = let f :: (Text, ExprX) -> ExprX
+        = do
+          keyExprMap <- traverse (loop mapValue) o
+
+          toKey <- do
+              case mapKey of
+                  D.Text    -> return (\key -> D.TextLit (Chunks [] key))
+                  D.Union _ -> return (\key -> D.Field mapKey key)
+                  _         -> Left (Mismatch t v)
+
+          let f :: (Text, ExprX) -> ExprX
               f (key, val) = D.RecordLit ( Map.fromList
-                  [ ("mapKey"  , D.TextLit (Chunks [] key))
+                  [ ("mapKey"  , toKey key)
                   , ("mapValue", val)
                   ] )
-              recs :: Either CompileError (Dhall.Seq ExprX)
-              recs = fmap f . Seq.fromList . HM.toList <$> keyExprMap
-              typeAnn = if HM.null o then Just mapValue else Nothing
-           in D.ListLit typeAnn <$> recs
+
+          let records = (fmap f . Seq.fromList . HM.toList) keyExprMap
+
+          let typeAnn = if HM.null o then Just mapValue else Nothing
+
+          return (D.ListLit typeAnn records)
         | noKeyValMap
         = Left (NoKeyValMap t v)
         | otherwise

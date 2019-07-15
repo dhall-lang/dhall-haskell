@@ -54,15 +54,15 @@
 
     Dhall @List@s translate to JSON lists:
 
-> $ dhall-to-json <<< '[1, 2, 3] : List Integer'
+> $ dhall-to-json <<< '[1, 2, 3] : List Natural'
 > [1,2,3]
 
     Dhall @Optional@ values translate to @null@ if absent and the unwrapped
     value otherwise:
 
-> $ dhall-to-json <<< '[] : Optional Integer'
+> $ dhall-to-json <<< 'None Natural'
 > null
-> $ dhall-to-json <<< '[1] : Optional Integer'
+> $ dhall-to-json <<< 'Some 1'
 > 1
 
     Dhall records translate to JSON records:
@@ -75,7 +75,7 @@
 > $ dhall-to-json <<< "< Left = +2 | Right : Natural>"
 > 2
 > $ cat config
-> [ < Person = { age = +47, name = "John" }
+> [ < Person = { age = 47, name = "John" }
 >   | Place  : { location : Text }
 >   >
 > , < Place  = { location = "North Pole" }
@@ -84,7 +84,7 @@
 > , < Place  = { location = "Sahara Desert" }
 >   | Person : { age : Natural, name : Text }
 >   >
-> , < Person = { age = +35, name = "Alice" }
+> , < Person = { age = 35, name = "Alice" }
 >   | Place  : { location : Text }
 >   >
 > ]
@@ -105,9 +105,9 @@
     contains a record then the name of the alternative is stored inline within
     the same record.  For example, this code:
 
->     let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
+> let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
 > 
-> in  let Nesting = < Inline : {} | Nested : Text >
+> let Nesting = < Inline : {} | Nested : Text >
 > 
 > in  { field    = "name"
 >     , nesting  = Nesting.Inline {=}
@@ -124,9 +124,9 @@
     If @nesting@ is set to @Nested nestedField@ then the union is store
     underneath a field named @nestedField@.  For example, this code:
 
->     let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
+> let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
 > 
-> in  let Nesting = < Inline : {} | Nested : Text >
+> let Nesting = < Inline : {} | Nested : Text >
 > 
 > in  { field    = "name"
 >     , nesting  = Nesting.Nested "value"
@@ -701,6 +701,9 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
 
                 keyText <- case key of
                     Core.TextLit (Core.Chunks [] keyText) ->
+                        return keyText
+
+                    Core.Field (Core.Union _) keyText ->
                         return keyText
 
                     _ ->

@@ -898,8 +898,6 @@ data TypeMessage s a
     | MismatchedListElements Int (Expr s a) (Expr s a) (Expr s a)
     | InvalidListElement Int (Expr s a) (Expr s a) (Expr s a)
     | InvalidListType (Expr s a)
-    | InvalidOptionalElement (Expr s a) (Expr s a) (Expr s a)
-    | InvalidOptionalType (Expr s a)
     | InvalidSome (Expr s a) (Expr s a) (Expr s a)
     | InvalidPredicate (Expr s a) (Expr s a)
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
@@ -2022,99 +2020,6 @@ prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
         txt0 = insert expr0
         txt1 = pretty i
         txt3 = insert expr2
-
-prettyTypeMessage (InvalidOptionalType expr0) = ErrorMessages {..}
-  where
-    short = "Invalid type for ❰Optional❱ element"
-
-    long =
-        "Explanation: The legacy ❰List❱-like syntax for ❰Optional❱ literals ends with a  \n\
-        \type annotation for the element that might be present, like this:               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────┐                                                  \n\
-        \    │ [1] : Optional Natural │  An optional element that's present              \n\
-        \    └────────────────────────┘                                                  \n\
-        \                     ⇧                                                          \n\
-        \                     The type of the ❰Optional❱ element, which is an ❰Natural❱  \n\
-        \                     number                                                     \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────┐                                                  \n\
-        \    │ [] : Optional Natural  │  An optional element that's absent               \n\
-        \    └────────────────────────┘                                                  \n\
-        \                    ⇧                                                           \n\
-        \                    You still specify the type even when the element is absent  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \The element type must be a type and not something else.  For example, the       \n\
-        \following element types are " <> _NOT <> " valid:                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────┐                                                        \n\
-        \    │ ... : Optional 1 │                                                        \n\
-        \    └──────────────────┘                                                        \n\
-        \                     ⇧                                                          \n\
-        \                     This is a ❰Natural❱ number and not a ❰Type❱                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────┐                                                     \n\
-        \    │ ... : Optional Type │                                                     \n\
-        \    └─────────────────────┘                                                     \n\
-        \                     ⇧                                                          \n\
-        \                     This is a ❰Kind❱ and not a ❰Type❱                          \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Even if the element is absent you still must specify a valid type               \n\
-        \                                                                                \n\
-        \You declared that the ❰Optional❱ element should have type:                      \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... which is not a ❰Type❱                                                       \n"
-      where
-        txt0 = insert expr0
-
-prettyTypeMessage (InvalidOptionalElement expr0 expr1 expr2) = ErrorMessages {..}
-  where
-    short = "❰Optional❱ element has the wrong type\n"
-        <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr0 expr2
-
-    long =
-        "Explanation: An ❰Optional❱ element must have a type matching the type annotation\n\
-        \                                                                                \n\
-        \For example, this is a valid ❰Optional❱ value:                                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────┐                                                  \n\
-        \    │ [1] : Optional Natural │  ❰1❱ is a ❰Natural❱ number, which matches the    \n\
-        \    └────────────────────────┘  number                                          \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but this is " <> _NOT <> " a valid ❰Optional❱ value:                        \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────┐                                              \n\
-        \    │ [\"ABC\"] : Optional Natural │  ❰\"ABC\"❱ is not a ❰Natural❱ number       \n\
-        \    └────────────────────────────┘                                              \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Your ❰Optional❱ element should have this type:                                  \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... but the element you provided:                                               \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... has this type instead:                                                      \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n"
-      where
-        txt0 = insert expr0
-        txt1 = insert expr1
-        txt2 = insert expr2
 
 prettyTypeMessage (InvalidSome expr0 expr1 expr2) = ErrorMessages {..}
   where

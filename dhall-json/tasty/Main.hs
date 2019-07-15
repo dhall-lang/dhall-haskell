@@ -7,8 +7,8 @@ module Main where
 import Dhall.JSON (Conversion(..))
 import Test.Tasty (TestTree)
 
-import qualified Control.Exception
-import qualified Data.Aeson
+import qualified Control.Exception    as Exception
+import qualified Data.Aeson           as Aeson
 import qualified Data.ByteString.Lazy
 import qualified Data.Text
 import qualified Data.Text.IO
@@ -32,6 +32,7 @@ testTree =
         , yaml
         , emptyAlternative
         , nesting
+        , unionKeys
         ]
 
 issue48 :: TestTree
@@ -43,7 +44,7 @@ issue48 = Test.Tasty.HUnit.testCase "Issue #48" assertion
         code <- Data.Text.IO.readFile file
 
         parsedExpression <- case Dhall.Parser.exprFromText file code of
-            Left  exception        -> Control.Exception.throwIO exception
+            Left  exception        -> Exception.throwIO exception
             Right parsedExpression -> return parsedExpression
 
         resolvedExpression <- Dhall.Import.load parsedExpression
@@ -56,12 +57,12 @@ issue48 = Test.Tasty.HUnit.testCase "Issue #48" assertion
                 Dhall.JSON.convertToHomogeneousMaps conversion resolvedExpression
 
         actualValue <- case Dhall.JSON.dhallToJSON convertedExpression of
-            Left  exception   -> Control.Exception.throwIO exception
+            Left  exception   -> Exception.throwIO exception
             Right actualValue -> return actualValue
 
         bytes <- Data.ByteString.Lazy.readFile "./tasty/data/issue48.json"
 
-        expectedValue <- case Data.Aeson.eitherDecode bytes of
+        expectedValue <- case Aeson.eitherDecode bytes of
             Left  string        -> fail string
             Right expectedValue -> return expectedValue
 
@@ -117,7 +118,7 @@ emptyAlternative :: TestTree
 emptyAlternative = Test.Tasty.HUnit.testCase "Empty alternative" $ do
     let schema = Core.Union [ ("Bar", Nothing), ("Foo", Nothing) ]
 
-    let json = Data.Aeson.String "Foo"
+    let json = Aeson.String "Foo"
 
     let expectedResult = Core.Field schema "Foo"
 
@@ -132,17 +133,17 @@ nesting = Test.Tasty.testGroup "Nesting" [ nested, inline ]
   where
     nested =
         testCase "./tasty/data/nesting0.dhall"
-             (Data.Aeson.Object
-                 [ ("foo", Data.Aeson.Number 2)
-                 , ("name", Data.Aeson.String "Left")
+             (Aeson.Object
+                 [ ("foo", Aeson.Number 2)
+                 , ("name", Aeson.String "Left")
                  ]
              )
 
     inline =
         testCase "./tasty/data/nesting1.dhall"
-            (Data.Aeson.Object
-                [ ("name", Data.Aeson.String "Left")
-                , ("value", Data.Aeson.Object [ ("foo", Data.Aeson.Number 2 )] )
+            (Aeson.Object
+                [ ("name", Aeson.String "Left")
+                , ("value", Aeson.Object [ ("foo", Aeson.Number 2 )] )
                 ]
             )
 
@@ -151,7 +152,7 @@ nesting = Test.Tasty.testGroup "Nesting" [ nested, inline ]
             code <- Data.Text.IO.readFile file
 
             parsedExpression <- case Dhall.Parser.exprFromText file code of
-                Left  exception        -> Control.Exception.throwIO exception
+                Left  exception        -> Exception.throwIO exception
                 Right parsedExpression -> return parsedExpression
 
             resolvedExpression <- Dhall.Import.load parsedExpression
@@ -164,9 +165,59 @@ nesting = Test.Tasty.testGroup "Nesting" [ nested, inline ]
                     Dhall.JSON.convertToHomogeneousMaps conversion resolvedExpression
 
             actualValue <- case Dhall.JSON.dhallToJSON convertedExpression of
-                Left  exception   -> Control.Exception.throwIO exception
+                Left  exception   -> Exception.throwIO exception
                 Right actualValue -> return actualValue
 
             let message = "The alternative name was not nested correctly"
 
             Test.Tasty.HUnit.assertEqual message expectedValue actualValue
+
+unionKeys :: TestTree
+unionKeys = Test.Tasty.HUnit.testCase "Empty alternative" $ do
+    let union = Core.Union [ ("A", Nothing), ("B", Nothing) ]
+    let schema =
+            Core.App
+                Core.List
+                (Core.Record
+                    [ ("mapKey"  , union       )
+                    , ("mapValue", Core.Natural)
+                    ]
+                )
+
+    let expectedValue =
+            Aeson.Object [ ("A", Aeson.Number 1), ("B", Aeson.Number 2) ]
+
+    let expectedDhall =
+            Core.ListLit
+                Nothing
+                [   Core.RecordLit
+                    [ ("mapKey"  , Core.Field union "A")
+                    , ("mapValue", Core.NaturalLit 1   )
+                    ]
+                ,   Core.RecordLit
+                    [ ("mapKey"  , Core.Field union "B")
+                    , ("mapValue", Core.NaturalLit 2   )
+                    ]
+                ]
+
+    actualDhall <- Core.throws (JSONToDhall.dhallFromJSON JSONToDhall.defaultConversion schema expectedValue)
+
+    let message₀ = "Union keys were not decoded from JSON correctly"
+
+    Test.Tasty.HUnit.assertEqual message₀ expectedDhall actualDhall
+
+    let mapKey = "mapKey"
+
+    let mapValue = "mapValue"
+
+    let conversion = Dhall.JSON.Conversion {..}
+
+    let convertedExpression =
+            Dhall.JSON.convertToHomogeneousMaps conversion expectedDhall
+
+    let message₁ = "Union keys were not encoded as JSON correctly"
+
+    case Dhall.JSON.dhallToJSON convertedExpression of
+        Left exception -> Exception.throwIO exception
+        Right actualValue ->
+            Test.Tasty.HUnit.assertEqual message₁ expectedValue actualValue
