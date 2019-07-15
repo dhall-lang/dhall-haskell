@@ -4,6 +4,7 @@
 
 module Main where
 
+import Data.Monoid ((<>))
 import Dhall.JSON (Conversion(..))
 import Test.Tasty (TestTree)
 
