@@ -21,6 +21,7 @@ import Dhall.Core (Expr(Note))
 import Dhall.LSP.Util
 import Dhall.LSP.Backend.Dhall
 
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.List.NonEmpty as NonEmpty

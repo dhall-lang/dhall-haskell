@@ -191,6 +191,8 @@ parsers embedded = Parsers {..}
                                     return (Annot a b)
                         (Merge c d _, e) ->
                             return (Merge c d (Just e))
+                        (ToMap c _, d) ->
+                            return (ToMap c (Just d))
                         _ -> return (Annot a b)
 
             alternative4A <|> alternative4B <|> pure a
@@ -286,6 +288,7 @@ parsers embedded = Parsers {..}
                     , alternative05
                     , alternative06
                     , alternative07
+                    , alternative08
                     , alternative37
                     , alternative09
 
@@ -331,6 +334,11 @@ parsers embedded = Parsers {..}
                 a <- importExpression_
                 b <- importExpression_ <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
+
+            alternative08 = do
+                _toMap
+                a <- importExpression_
+                return (ToMap a Nothing)
 
             alternative09 = do
                 a <- try doubleInfinity
