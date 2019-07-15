@@ -10,6 +10,8 @@ import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
 
+import qualified Codec.CBOR.Read      as CBOR
+import qualified Codec.CBOR.Term      as CBOR
 import qualified Codec.Serialise      as Serialise
 import qualified Control.Monad        as Monad
 import qualified Data.ByteString      as ByteString
@@ -74,6 +76,9 @@ getTests = do
                       -- The same performance improvements also broke the
                       -- precedence of parsing empty list literals
                     , parseDirectory </> "failure/unit/ListLitEmptyPrecedence.dhall"
+
+                      -- https://github.com/dhall-lang/dhall-haskell/pull/1104
+                    , parseDirectory </> "failure/nonCharacter.dhall"
                     ]
 
             Monad.guard (path `notElem` skip)
@@ -126,8 +131,15 @@ shouldParse path = do
 
         let bytes = Serialise.serialise term
 
-        let message = "The expected CBOR representation doesn't match the actual one"
-        Tasty.HUnit.assertEqual message encoded bytes
+        Monad.unless (encoded == bytes) $ do
+            ("", expected) <- Core.throws (CBOR.deserialiseFromBytes CBOR.decodeTerm encoded)
+
+            let message = "The expected CBOR representation doesn't match the actual one\n"
+                          ++ "expected: " ++ show expected ++ "\n but got: " ++ show term
+                          ++ "\n expr: " ++ show expression
+
+            Tasty.HUnit.assertFailure message
+
 
 shouldNotParse :: Text -> TestTree
 shouldNotParse path = do
