@@ -613,6 +613,7 @@ exprFromUncachedImport import_@(Import {..}) = do
     let resolveImport importType' = case importType' of
           Local prefix file -> liftIO $ do
               path   <- localToPath prefix file
+              absolutePath <- Directory.makeAbsolute path
               exists <- Directory.doesFileExist path
 
               if exists
@@ -621,7 +622,7 @@ exprFromUncachedImport import_@(Import {..}) = do
 
               text <- Data.Text.IO.readFile path
 
-              return (path, text, import_)
+              return (absolutePath, text, import_)
 
           Remote url@URL { headers = maybeHeadersExpression } -> do
               maybeHeadersAndExpression <- case maybeHeadersExpression of
