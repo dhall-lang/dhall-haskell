@@ -108,7 +108,8 @@ module Dhall.Import (
     , hashExpressionToCode
     , assertNoImports
     , Status
-    , Chained(..)
+    , Chained
+    , chainedImport
     , emptyStatus
     , stack
     , cache

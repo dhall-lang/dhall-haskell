@@ -36,8 +36,9 @@ import qualified Data.Text
 
 -- | A fully 'chained' import, i.e. if it contains a relative path that path is
 --   relative to the current directory. If it is a remote import with headers
---   those are well-typed and in normal form. Note that the type itself isn't
---   precise enough to capture either of these invariants.
+--   those are well-typed (either of type `List { header : Text, value Text}` or
+--   `List { mapKey : Text, mapValue Text})` and in normal form. These
+--   invariants are preserved by the API exposed by @Dhall.Import@.
 newtype Chained = Chained { chainedImport :: Import }
   deriving (Eq, Ord)
 
