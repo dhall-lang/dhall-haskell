@@ -3,6 +3,7 @@ module Dhall.LSP.Backend.Formatting (formatExpr, formatExprWithHeader) where
 import Dhall.Core (Expr)
 import Dhall.Pretty (CharacterSet(..), layoutOpts, prettyCharacterSet)
 
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty

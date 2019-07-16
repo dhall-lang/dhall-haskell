@@ -419,6 +419,16 @@ eval !env t =
                             | Just f  <- Dhall.Map.lookup k m -> maybe f (vApp f) mt
                             | otherwise -> error evalError
                           (x, y, ma) -> VMerge x y ma
+    ToMap x ma       -> case (evalE x, evalE <$> ma) of
+                          (VRecordLit m, Just (VList t)) | null m ->
+                            VListLit (Just t) (Data.Sequence.empty)
+                          (VRecordLit m, _) -> let
+                            entry (k, v) =
+                              VRecordLit (Dhall.Map.fromList [("mapKey", VTextLit $ VChunks [] k),
+                                                              ("mapValue", v)])
+                            s = (Data.Sequence.fromList . map entry . Dhall.Map.toList) m
+                            in VListLit Nothing s
+                          (x, ma) -> VToMap x ma
     Field t k        -> case evalE t of
                           VRecordLit m
                             | Just v <- Dhall.Map.lookup k m -> v
@@ -435,7 +445,7 @@ eval !env t =
                           VRecordLit kvs -> let
                             kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
                             in VRecordLit (Dhall.Map.sort kvs')
-                          t -> VProject t (Left ks)
+                          t -> VProject t (Left (Dhall.Set.sort ks))
     Project t (Right e) ->
                         case evalE e of
                           VRecord kts ->
@@ -585,6 +595,7 @@ conv !env t t' =
     (VCombineTypes t u       , VCombineTypes t' u'         ) -> convE t t' && convE u u'
     (VPrefer  t u            , VPrefer t' u'               ) -> convE t t' && convE u u'
     (VMerge t u _            , VMerge t' u' _              ) -> convE t t' && convE u u'
+    (VToMap t _              , VToMap t' _                 ) -> convE t t'
     (VField t k              , VField t' k'                ) -> convE t t' && k == k'
     (VProject t (Left ks)    , VProject t' (Left ks')      ) -> convE t t' && ks == ks'
     (VProject t (Right e)    , VProject t' (Right e')      ) -> convE t t' && convE e e'
@@ -713,6 +724,7 @@ quote !env !t =
     VCombineTypes t u             -> CombineTypes (quoteE t) (quoteE u)
     VPrefer t u                   -> Prefer (quoteE t) (quoteE u)
     VMerge t u ma                 -> Merge (quoteE t) (quoteE u) (quoteE <$> ma)
+    VToMap t ma                   -> ToMap (quoteE t) (quoteE <$> ma)
     VField t k                    -> Field (quoteE t) k
     VProject t p                  -> Project (quoteE t) (fmap quoteE p)
     VInject m k Nothing           -> Field (Union ((quoteE <$>) <$> m)) k
@@ -836,6 +848,7 @@ alphaNf = goEnv NEmpty where
       CombineTypes t u -> CombineTypes  (go t) (go u)
       Prefer t u       -> Prefer (go t) (go u)
       Merge x y ma     -> Merge (go x) (go y) (go <$> ma)
+      ToMap x ma       -> ToMap (go x) (go <$> ma)
       Field t k        -> Field (go t) k
       Project t ks     -> Project (go t) (go <$> ks)
       Note s e         -> Note s (go e)
@@ -894,7 +907,7 @@ freeIn (V x i) = go NEmpty where
       DoubleLit _      -> False
       DoubleShow       -> False
       Text             -> False
-      TextLit cs       -> case cs of Chunks xys _ -> any (any go_) xys
+      TextLit cs       -> case cs of Chunks xys _ -> any (go_ . snd) xys
       TextAppend t u   -> go_ t || go_ u
       TextShow         -> False
       List             -> False
@@ -920,6 +933,7 @@ freeIn (V x i) = go NEmpty where
       CombineTypes t u -> go_ t || go_ u
       Prefer t u       -> go_ t || go_ u
       Merge t u ma     -> go_ t || go_ u || maybe False go_ ma
+      ToMap t u        -> go_ t || maybe False go_ u
       Field t _        -> go_ t
       Project t _      -> go_ t
       Note _ e         -> go_ e

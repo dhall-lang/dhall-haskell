@@ -518,6 +518,9 @@ data Expr s a
     -- | > Merge x y (Just t )                      ~  merge x y : t
     --   > Merge x y  Nothing                       ~  merge x y
     | Merge !(Expr s a) !(Expr s a) !(Maybe (Expr s a))
+    -- | > ToMap x (Just t)                         ~  toMap x : t
+    --   > ToMap x  Nothing                         ~  toMap x
+    | ToMap !(Expr s a) !(Maybe (Expr s a))
     -- | > Field e x                                ~  e.x
     | Field !(Expr s a) !Text
     -- | > Project e (Left xs)                      ~  e.{ xs }
@@ -741,6 +744,7 @@ data Val
   | VCombineTypes Val Val
   | VPrefer Val Val
   | VMerge Val Val !(Maybe Val)
+  | VToMap !Val !(Maybe Val)
   | VField Val !Text
   | VInject !(Map Text (Maybe Val)) !Text !(Maybe Val)
   | VProject Val !(Either (Set Text) Val)

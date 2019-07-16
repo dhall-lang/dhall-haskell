@@ -19,7 +19,8 @@
 {-|
 TODO:
 - explicitly thread universe levels around instead of recomputing,
-  remove heterogeneously kinded unify_-s
+  remove heterogeneously kinded unify_-s. This requires adding
+  more universe annotations to Core.
 -}
 
 module Dhall.Elaboration where
@@ -75,13 +76,12 @@ fresh :: Cxt -> Text -> (Text, Val)
 fresh Cxt{..} x = (x, VVar x (countName x _values))
 {-# inline fresh #-}
 
-unify :: Cxt -> Val -> Val -> Maybe (Val -> Val -> ElabM X) -> ElabM ()
+unify :: Cxt -> Val -> Val -> Maybe (ElabM X) -> ElabM ()
 unify cxt@Cxt{..} t u err =
   unless (conv _values t u) $
     case err of
-      Just f -> absurd <$> f t u
-      _ ->  typeError cxt $
-                ConvError (quoteCxtCore cxt t) (quoteCxtCore cxt u)
+      Just err -> absurd <$> err
+      _        -> typeError cxt $ ConvError (quoteCxtCore cxt t) (quoteCxtCore cxt u)
 {-# inline unify #-}
 
 addSrc :: Src -> ElabM a -> ElabM a
@@ -607,13 +607,50 @@ infer cxt@Cxt{..} t =
                 let bv = b (VVar x i)
                 when (freeIn (V x i) (quoteBind_ x bv)) $
                   typeError_ (MergeDependentHandler k (quoteCore_ a))
-                unify_ field field' $ Just $ \a b ->
-                  typeError_ (HandlerInputTypeMismatch k (quoteCore_ a) (quoteCore_ b))
+                unify_ field field' $ Just $
+                  typeError_ (HandlerInputTypeMismatch k (quoteCore_ field) (quoteCore_ field'))
                 pure bv
               _ -> typeError_ (HandlerNotAFunction k (quoteCore_ a))
       let tt' = VRecord (maybe a (\field -> vFun field a) <$> union)
       unify_ tt tt' Nothing
       pure (Merge t u Nothing, a)
+
+    ToMap t ma -> do
+      let recTy fieldTy =
+            VRecord $ Dhall.Map.fromList [("mapKey", VText), ("mapValue", fieldTy)]
+
+      (t, tt) <- infer_ t
+
+      -- the second projection of mFieldTy here is the field type
+      (mFieldTy :: Maybe (Core, VType)) <- forM ma $ \a -> do
+        (a, _) <- inferTy_ a Nothing
+        case eval_ a of
+          VList (VRecord kts)
+            | Just fieldTy <- Dhall.Map.lookup "mapValue" kts,
+              Just VText   <- Dhall.Map.lookup "mapKey" kts,
+              Dhall.Map.keys kts == ["mapKey", "mapValue"] ->
+            pure (a, fieldTy)
+          va -> typeError_ (InvalidToMapType (quoteCore_ va))
+
+      kts <- case tt of
+        VRecord kts -> pure kts
+        _           -> typeError_ (MustMapARecord t (quoteCore_ tt))
+
+      case (Dhall.Map.uncons kts, mFieldTy) of
+        (Nothing, Nothing)             -> typeError_ MissingToMapType
+        (Nothing, Just (ann, fieldTy)) -> pure (ToMap t (Just ann), VList (recTy fieldTy))
+        (Just (_, a, kts), mFieldTy) -> do
+          flip Dhall.Map.unorderedTraverseWithKey_ kts $ \_ a' -> do
+            unify_ a a' $ Just $
+              typeError_ (HeterogeneousRecordToMap (quoteCore_ tt) (quoteCore_ a) (quoteCore_ a'))
+          case mFieldTy of
+            Just (ann, fieldTy) -> do
+              unify_ a fieldTy $ Just $
+                typeError_ (MapTypeMismatch (quoteCore_ (VList (recTy a)))
+                                            (quoteCore_ (VList (recTy fieldTy))))
+              pure (ToMap t (Just ann), VList (recTy a))
+            Nothing ->
+              pure (ToMap t Nothing, VList (recTy a))
 
     Field t k -> do
       (t, tt) <- infer_ t
@@ -650,8 +687,8 @@ infer cxt@Cxt{..} t =
             VRecord bs -> do
               flip Dhall.Map.unorderedTraverseWithKey_ bs $ \k rTy -> do
                 case Dhall.Map.lookup k as of
-                  Just lTy -> unify_ lTy rTy $ Just $ \l r ->
-                                typeError_ (ProjectionTypeMismatch k (quoteCore_ l) (quoteCore_ r)
+                  Just lTy -> unify_ lTy rTy $ Just $
+                                typeError_ (ProjectionTypeMismatch k (quoteCore_ lTy) (quoteCore_ rTy)
                                             t u)
                   Nothing  -> typeError_ (MissingField k (quoteCore_ tt))
               pure (Project t (Right u), VRecord bs)
