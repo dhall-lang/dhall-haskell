@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveLift         #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
@@ -65,6 +66,8 @@ module Dhall.Map
 import Control.Applicative ((<|>))
 import Data.Data (Data)
 import Data.Semigroup
+import Instances.TH.Lift ()
+import Language.Haskell.TH.Syntax (Lift)
 import Prelude hiding (filter, lookup)
 
 import qualified Data.List
@@ -81,12 +84,12 @@ import qualified Prelude
     and also to improve performance
 -}
 data Map k v = Map (Data.Map.Map k v) (Keys k)
-    deriving (Data)
+    deriving (Data, Lift)
 
 data Keys a
     = Sorted
     | Original [a]
-    deriving (Data)
+    deriving (Data, Lift)
 
 instance (Ord k, Eq v) => Eq (Map k v) where
   m1 == m2 =

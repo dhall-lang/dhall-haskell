@@ -2,6 +2,7 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DeriveLift         #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
@@ -88,6 +89,8 @@ import Dhall.Set (Set)
 import Dhall.Src (Src)
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import GHC.Generics (Generic)
+import Instances.TH.Lift ()
+import Language.Haskell.TH.Syntax (Lift)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 
@@ -126,7 +129,7 @@ import qualified Text.Printf
     Dhall is not a dependently typed language
 -}
 data Const = Type | Kind | Sort
-    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic)
+    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic, Lift)
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -337,7 +340,7 @@ instance Pretty Import where
     appear as a numeric suffix.
 -}
 data Var = V Text !Int
-    deriving (Data, Generic, Eq, Ord, Show)
+    deriving (Data, Generic, Eq, Ord, Show, Lift)
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -484,7 +487,8 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data)
+    deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data, Lift)
+
 
 -- This instance is hand-written due to the fact that deriving
 -- it does not give us an INLINABLE pragma. We annotate this fmap
@@ -710,7 +714,7 @@ data Binding s a = Binding
     { variable   :: Text
     , annotation :: Maybe (Expr s a)
     , value      :: Expr s a
-    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data)
+    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, Lift)
 
 instance Bifunctor Binding where
     first k (Binding a b c) = Binding a (fmap (first k) b) (first k c)
@@ -719,7 +723,7 @@ instance Bifunctor Binding where
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, Lift)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =
