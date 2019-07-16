@@ -505,9 +505,7 @@ exprFromImport here@(Chained (Import {..})) = do
 
         term <- Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytesLazy)
 
-        -- TODO: generalise decodeExpression!
-        resolvedExpr <- Dhall.Core.throws (Dhall.Binary.decodeExpression term)
-        return (fmap undefined resolvedExpr)
+        Dhall.Core.throws (Dhall.Binary.decodeExpression term)
 
     case result of
         Just resolvedExpression -> do

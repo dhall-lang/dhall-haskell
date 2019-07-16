@@ -917,7 +917,7 @@ encodeExpression :: Expr s Import -> Term
 encodeExpression = encode
 
 -- | Decode a Dhall expression from a CBOR `Term`
-decodeExpression :: Term -> Either DecodingFailure (Expr s Import)
+decodeExpression :: FromTerm a => Term -> Either DecodingFailure (Expr s a)
 decodeExpression term =
     case decodeWithoutVersion <|> decodeWithVersion of
         Just expression -> Right expression

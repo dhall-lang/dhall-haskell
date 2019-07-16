@@ -568,6 +568,7 @@ command (Options {..}) = do
                         Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytes)
 
             expression <- Dhall.Core.throws (Dhall.Binary.decodeExpression term)
+                :: IO (Expr Src Import)
 
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 
