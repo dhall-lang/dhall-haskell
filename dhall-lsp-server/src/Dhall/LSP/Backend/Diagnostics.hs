@@ -5,6 +5,7 @@ module Dhall.LSP.Backend.Diagnostics
   , diagnose
   , Diagnosis(..)
   , explain
+  , embedsWithRanges
   , offsetToPosition
   , Position
   , positionFromMegaparsec
@@ -16,11 +17,13 @@ where
 
 import Dhall.Parser (SourcedException(..), Src(..), unwrap)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError(..))
-import Dhall.Core (Expr(Note))
+import Dhall.Core (Expr(Note, Embed), subExpressions)
 
 import Dhall.LSP.Util
 import Dhall.LSP.Backend.Dhall
 
+import Control.Lens (toListOf)
+import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -137,3 +140,13 @@ positionToOffset txt (line, col) = if line < length ls
 offsetToPosition :: Text -> Int -> Position
 offsetToPosition txt off = (length ls - 1, Text.length (NonEmpty.last ls))
   where ls = lines' (Text.take off txt)
+
+-- | Collect all `Embed` constructors (i.e. imports if the expression has type
+--   `Expr Src Import`) wrapped in a Note constructor and return them together
+--   with their associated range in the source code.
+embedsWithRanges :: Expr Src a -> [(Range, a)]
+embedsWithRanges =
+  map (\(src, a) -> (rangeFromDhall src, a)) . execWriter . go
+  where go :: Expr Src a -> Writer [(Src, a)] ()
+        go (Note src (Embed a)) = tell [(src, a)]
+        go expr = mapM_ go (toListOf subExpressions expr)
