@@ -23,7 +23,6 @@ import Dhall.Core (Expr)
 
 import qualified Dhall.Core as Dhall
 import qualified Dhall.Import as Dhall
-import qualified Dhall.Parser.Token as Dhall
 import qualified Dhall.Parser as Dhall
 import qualified Dhall.TypeCheck as Dhall
 
@@ -33,7 +32,6 @@ import qualified Data.Set as Set
 import qualified Network.URI as URI
 import qualified Language.Haskell.LSP.Types as LSP.Types
 import qualified Data.Text as Text
-import qualified Text.Megaparsec as Megaparsec
 
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text)
@@ -45,7 +43,7 @@ import Network.URI (URI)
 import Data.Bifunctor (first)
 
 -- | A @FileIdentifier@ represents either a local file or a remote url.
-newtype FileIdentifier = FileIdentifier Dhall.ImportType
+newtype FileIdentifier = FileIdentifier Dhall.Chained
 
 -- | Construct a FileIdentifier from a local file path.
 fileIdentifierFromFilePath :: FilePath -> FileIdentifier
@@ -53,22 +51,17 @@ fileIdentifierFromFilePath path =
   let filename = Text.pack $ takeFileName path
       directory = takeDirectory path
       components = map Text.pack . reverse . splitDirectories $ directory
-  in FileIdentifier $ Dhall.Local Dhall.Absolute
-                        (Dhall.File (Dhall.Directory components) filename)
+      file = Dhall.File (Dhall.Directory components) filename
+  in FileIdentifier $ Dhall.chainedFromLocalHere Dhall.Absolute file Dhall.Code
 
--- | Construct a FileIdentifier from a given URI. Supports "file:", "http:" and
---   "https:" URI schemes.
+-- | Construct a FileIdentifier from a given URI. Supports only "file:" URIs.
 fileIdentifierFromURI :: URI -> Maybe FileIdentifier
 fileIdentifierFromURI uri
   | URI.uriScheme uri == "file:" = do
     path <- LSP.Types.uriToFilePath . LSP.Types.Uri . Text.pack
                   $ URI.uriToString id uri ""
     return $ fileIdentifierFromFilePath path
-fileIdentifierFromURI uri
-  | otherwise = do
-    url <- Megaparsec.parseMaybe (Dhall.unParser Dhall.httpRaw) . Text.pack
-             $ URI.uriToString id uri ""
-    return $ FileIdentifier (Dhall.Remote url)
+fileIdentifierFromURI _ = Nothing
 
 -- | A well-typed expression.
 newtype WellTyped = WellTyped {fromWellTyped :: Expr Src X}
@@ -87,20 +80,12 @@ data Cache = Cache ImportGraph (Map.Map Dhall.Chained (Expr Src X))
 emptyCache :: Cache
 emptyCache = Cache [] Map.empty
 
--- Construct the unhashed import corresponding to the given file.
-importFromFileIdentifier :: FileIdentifier -> Dhall.Chained
-importFromFileIdentifier (FileIdentifier importType) =
-  Dhall.Chained
-    $ Dhall.Import { importHashed = Dhall.ImportHashed Nothing importType,
-                     importMode = Dhall.Code }
-
-
 -- | Invalidate any _unhashed_ imports of the given file. Hashed imports are
 --   kept around as per
 --   https://github.com/dhall-lang/dhall-lang/blob/master/standard/imports.md.
 --   Transitively invalidates any imports depending on the changed file.
 invalidate :: FileIdentifier -> Cache -> Cache
-invalidate (FileIdentifier fileid) (Cache dependencies cache) =
+invalidate (FileIdentifier chained) (Cache dependencies cache) =
   Cache dependencies' $ Map.withoutKeys cache invalidImports
   where
     imports = map Dhall.parent dependencies ++ map Dhall.child dependencies
@@ -121,8 +106,8 @@ invalidate (FileIdentifier fileid) (Cache dependencies cache) =
         do vertex <- vertexFromImport import_
            return (Graph.reachable graph vertex)
 
-    codeImport = Dhall.Chained $ Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.Code
-    textImport = Dhall.Chained $ Dhall.Import (Dhall.ImportHashed Nothing fileid) Dhall.RawText
+    codeImport = Dhall.chainedChangeMode Dhall.Code chained
+    textImport = Dhall.chainedChangeMode Dhall.RawText chained
     invalidImports = Set.fromList $ codeImport : reachableImports codeImport
                                     ++ textImport : reachableImports textImport
 
@@ -148,13 +133,13 @@ parseWithHeader = first ErrorParse . Dhall.exprAndHeaderFromText ""
 -- | Resolve all imports in an expression.
 load :: FileIdentifier -> Expr Src Dhall.Import -> Cache ->
   IO (Either DhallError (Cache, Expr Src X))
-load fileid expr (Cache graph cache) = do
+load (FileIdentifier chained) expr (Cache graph cache) = do
   let emptyStatus = Dhall.emptyStatus ""
       status = -- reuse cache and import graph
                set Dhall.cache cache .
                set Dhall.graph graph .
                -- set "root import"
-               set Dhall.stack (importFromFileIdentifier fileid :| [])
+               set Dhall.stack (chained :| [])
                  $ emptyStatus
   (do (expr', status') <- runStateT (Dhall.loadWith expr) status
       let cache' = view Dhall.cache status'

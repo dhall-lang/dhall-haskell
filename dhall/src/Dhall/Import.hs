@@ -110,6 +110,8 @@ module Dhall.Import (
     , Status
     , Chained
     , chainedImport
+    , chainedFromLocalHere
+    , chainedChangeMode
     , emptyStatus
     , stack
     , cache
@@ -458,7 +460,18 @@ localToPath prefix file_ = liftIO $ do
 
     return (foldr cons prefixPath cs)
 
--- Chain imports, also typecheck and normalizer headers if applicable.
+-- | Given a `Local` import construct the corresponding unhashed `Chained`
+--   import (interpreting relative path as relative to the current directory).
+chainedFromLocalHere :: FilePrefix -> File -> ImportMode -> Chained
+chainedFromLocalHere prefix file mode = Chained $
+     Import (ImportHashed Nothing (Local prefix (canonicalize file))) mode
+
+-- | Adjust the import mode of a chained import
+chainedChangeMode :: ImportMode -> Chained -> Chained
+chainedChangeMode mode (Chained (Import importHashed _)) =
+    Chained (Import importHashed mode)
+
+-- Chain imports, also typecheck and normalize headers if applicable.
 chainImport :: MonadCatch m => Chained -> Import -> StateT (Status m) m Chained
 chainImport (Chained parent) child@(Import importHashed@(ImportHashed _ (Remote url)) _) = do
     url' <- normalizeHeaders url
