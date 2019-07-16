@@ -3,8 +3,7 @@
 module Dhall.Test.Parser where
 
 import Data.Text (Text)
-import Dhall.Core (Expr, Import)
-import Dhall.TypeCheck (X)
+import Dhall.Core (Raw)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
@@ -149,7 +148,7 @@ shouldDecode pathText = do
 
         parsedExpression <- Core.throws (Parser.exprFromText mempty text)
 
-        let strippedExpression :: Expr X Import
+        let strippedExpression :: Raw
             strippedExpression = Core.denote parsedExpression
 
         let message =

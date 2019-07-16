@@ -6,14 +6,9 @@ module Dhall.Util
     ( snip
     , snipDoc
     , insert
-    , _ERROR
-    , throws
     ) where
 
-import Control.Exception (Exception)
-import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Monoid ((<>))
-import Data.String (IsString)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Dhall.Pretty (Ann)
@@ -22,15 +17,7 @@ import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Dhall.Pretty
-import qualified Control.Exception
 
-
-{-| Convenience utility for converting `Either`-based exceptions to `IO`-based
-    exceptions
--}
-throws :: (Exception e, MonadIO io) => Either e a -> io a
-throws (Left  e) = liftIO (Control.Exception.throwIO e)
-throws (Right a) = return a
 
 -- | Utility function to cut out the interior of a large text block
 snip :: Text -> Text
@@ -89,7 +76,3 @@ takeEnd n l = go (drop n l) l
 insert :: Pretty a => a -> Doc Ann
 insert expression =
     "↳ " <> Pretty.align (snipDoc (Pretty.pretty expression))
-
--- | Prefix used for error messages
-_ERROR :: IsString string => string
-_ERROR = "\ESC[1;31mError\ESC[0m"

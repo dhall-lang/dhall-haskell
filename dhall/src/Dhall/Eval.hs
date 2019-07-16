@@ -41,6 +41,7 @@ module Dhall.Eval (
   , convEmpty
   , countName
   , eval
+  , evalEmpty
   , freeIn
   , nf
   , nfEmpty
@@ -183,6 +184,10 @@ vNaturalPlus t u = case (t, u) of
   (VNaturalLit m, VNaturalLit n) -> VNaturalLit (m + n)
   (t,             u            ) -> VNaturalPlus t u
 {-# inline vNaturalPlus #-}
+
+evalEmpty :: Core -> Val
+evalEmpty = eval Empty
+{-# inline evalEmpty #-}
 
 eval :: Env -> Core -> Val
 eval !env t =

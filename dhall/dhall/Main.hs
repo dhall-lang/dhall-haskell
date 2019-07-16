@@ -1,6 +1,9 @@
 module Main where
 
-import qualified Dhall.Main
-
 main :: IO ()
-main = Dhall.Main.main
+main = undefined
+
+-- import qualified Dhall.Main
+
+-- main :: IO ()
+-- main = Dhall.Main.main

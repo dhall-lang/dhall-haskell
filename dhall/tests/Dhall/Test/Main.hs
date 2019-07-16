@@ -3,17 +3,17 @@ module Main where
 import System.FilePath ((</>))
 import Test.Tasty      (TestTree)
 
-import qualified Dhall.Test.Dhall
+-- import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.Diff
-import qualified Dhall.Test.Format
-import qualified Dhall.Test.SemanticHash
-import qualified Dhall.Test.Import
-import qualified Dhall.Test.Lint
+-- import qualified Dhall.Test.Format
+-- import qualified Dhall.Test.SemanticHash
+-- import qualified Dhall.Test.Import
+-- import qualified Dhall.Test.Lint
 import qualified Dhall.Test.Normalization
 import qualified Dhall.Test.Parser
-import qualified Dhall.Test.QuickCheck
-import qualified Dhall.Test.Regression
-import qualified Dhall.Test.Tutorial
+-- import qualified Dhall.Test.QuickCheck
+-- import qualified Dhall.Test.Regression
+-- import qualified Dhall.Test.Tutorial
 import qualified Dhall.Test.TypeCheck
 import qualified Dhall.Test.TypeInference
 import qualified GHC.IO.Encoding
@@ -28,7 +28,7 @@ getAllTests = do
 
     parsingTests <- Dhall.Test.Parser.getTests
 
-    formattingTests <- Dhall.Test.Format.getTests
+    -- formattingTests <- Dhall.Test.Format.getTests
 
     typecheckingTests <- Dhall.Test.TypeCheck.getTests
 
@@ -36,27 +36,28 @@ getAllTests = do
 
     importingTests <- Dhall.Test.Import.getTests
 
-    lintTests <- Dhall.Test.Lint.getTests
+    -- lintTests <- Dhall.Test.Lint.getTests
 
     diffTests <- Dhall.Test.Diff.getTests
 
-    semanticHashTests <- Dhall.Test.SemanticHash.getTests
+    -- semanticHashTests <- Dhall.Test.SemanticHash.getTests
 
     let testTree =
             Test.Tasty.testGroup "Dhall Tests"
-                [ normalizationTests
+                [
+                  normalizationTests
                 , parsingTests
-                , importingTests
+                -- , importingTests
                 , typecheckingTests
                 , typeinferenceTests
-                , formattingTests
-                , lintTests
+                -- , formattingTests
+                -- , lintTests
                 , diffTests
-                , semanticHashTests
-                , Dhall.Test.Regression.tests
-                , Dhall.Test.Tutorial.tests
-                , Dhall.Test.QuickCheck.tests
-                , Dhall.Test.Dhall.tests
+                -- , semanticHashTests
+                -- , Dhall.Test.Regression.tests
+                -- , Dhall.Test.Tutorial.tests
+                -- , Dhall.Test.QuickCheck.tests
+                -- , Dhall.Test.Dhall.tests
                 ]
 
     return testTree

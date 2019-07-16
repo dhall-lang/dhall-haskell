@@ -1,7 +1,9 @@
-{-# LANGUAGE EmptyCase #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE EmptyCase         #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 
 {-| This module contains logic for converting Dhall expressions to and from
     CBOR expressions which can in turn be converted to and from a binary

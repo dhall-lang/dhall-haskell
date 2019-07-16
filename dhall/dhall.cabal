@@ -606,37 +606,37 @@ Library
             TemplateHaskell
 
     Exposed-Modules:
-        Dhall,
-        Dhall.Binary,
+        -- Dhall,
+        Dhall.Binary
         Dhall.Context,
         Dhall.Core,
         Dhall.Eval,
+        Dhall.Elaboration,
         Dhall.Errors,
         Dhall.Diff,
-        Dhall.Format,
-        Dhall.Freeze,
-        Dhall.Hash,
+        -- Dhall.Format,
+        -- Dhall.Freeze,
+        -- Dhall.Hash,
         Dhall.Import,
-        Dhall.Lint,
-        Dhall.Main,
+        -- Dhall.Lint,
+        -- Dhall.Main,
         Dhall.Map,
-        Dhall.Optics,
+        -- Dhall.Optics,
         Dhall.Set,
         Dhall.Src,
         Dhall.Parser,
         Dhall.Parser.Expression,
         Dhall.Parser.Token,
-        Dhall.Pretty,
-        Dhall.Repl,
-        Dhall.Tutorial
+        Dhall.Pretty
+        -- Dhall.Repl,
+        -- Dhall.Tutorial,
     if !flag(cross)
         Exposed-Modules:
-            Dhall.TH
+            -- Dhall.TH
     Other-Modules:
         Dhall.Pretty.Internal,
         Dhall.Parser.Combinators,
-        Dhall.Import.Types,
-        Dhall.Eval,
+        -- Dhall.Import.Types,
         Dhall.Util,
         Paths_dhall
     if flag(with-http)
@@ -659,17 +659,17 @@ Test-Suite tasty
     Main-Is: Dhall/Test/Main.hs
     GHC-Options: -Wall
     Other-Modules:
-        Dhall.Test.Dhall
+        -- Dhall.Test.Dhall
         Dhall.Test.Diff
-        Dhall.Test.Format
-        Dhall.Test.Import
-        Dhall.Test.Lint
+        -- Dhall.Test.Format
+        -- Dhall.Test.Import
+        -- Dhall.Test.Lint
         Dhall.Test.Normalization
         Dhall.Test.Parser
-        Dhall.Test.QuickCheck
-        Dhall.Test.Regression
-        Dhall.Test.SemanticHash
-        Dhall.Test.Tutorial
+        -- Dhall.Test.QuickCheck
+        -- Dhall.Test.Regression
+        -- Dhall.Test.SemanticHash
+        -- Dhall.Test.Tutorial
         Dhall.Test.TypeCheck
         Dhall.Test.TypeInference
         Dhall.Test.Util

@@ -1,9 +1,12 @@
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE EmptyCase          #-}
-{-# LANGUAGE PatternSynonyms    #-}
+{-# LANGUAGE CPP                  #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE EmptyCase            #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE PatternSynonyms      #-}
+{-# LANGUAGE RecordWildCards      #-}
+{-# LANGUAGE ViewPatterns         #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| This module contains the core calculus for the Dhall language.
@@ -68,6 +71,7 @@ module Dhall.Core (
     , X
     , absurd
     , internalError
+    , throws
     ) where
 
 #if MIN_VERSION_base(4,8,0)
@@ -75,6 +79,8 @@ module Dhall.Core (
 import Control.Applicative (Applicative(..), (<$>))
 #endif
 
+import Control.Exception (Exception(..), throwIO)
+import Control.Monad.IO.Class (MonadIO(..))
 import Crypto.Hash (SHA256)
 import Data.Data (Data(..))
 import Data.List.NonEmpty (NonEmpty(..))
@@ -311,7 +317,7 @@ instance Pretty CoreImportType where
 data ImportMode = Code | RawText | Location
   deriving (Eq, Generic, Ord, Show)
 
--- | A `ImportType` extended with an optional hash for semantic integrity checks
+-- | An `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed url = ImportHashed
     { hash       :: !(Maybe (Crypto.Hash.Digest SHA256))
     , importType :: !(ImportType url)
@@ -597,6 +603,13 @@ internalError text = unlines
     , text
     , "```                                                                             "
     ]
+
+{-| Convenience utility for converting `Either`-based exceptions to `IO`-based
+    exceptions
+-}
+throws :: (Exception e, MonadIO io) => Either e a -> io a
+throws (Left  e) = liftIO (Control.Exception.throwIO e)
+throws (Right a) = return a
 
 
 -- values
