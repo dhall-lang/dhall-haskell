@@ -394,6 +394,9 @@ instance Canonicalize Import where
     canonicalize (Import importHashed importMode) =
         Import (canonicalize importHashed) importMode
 
+-- Given a well-typed (of type `List { header : Text, value Text }` or
+-- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form
+-- construct the corresponding binary http headers.
 toHeaders :: Expr s a -> Maybe [HTTPHeader]
 toHeaders (ListLit _ hs) = do
     hs' <- mapM toHeader hs
