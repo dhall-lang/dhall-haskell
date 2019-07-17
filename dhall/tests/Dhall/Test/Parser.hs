@@ -41,7 +41,7 @@ getTests = do
                     -- improvement
                     [ parseDirectory </> "success/unit/MergeParenAnnotationA.dhall"
 
-                    -- https://github.com/dhall-lang/dhall-haskell/issues/1110
+                    -- https://github.com/dhall-lang/dhall-lang/pull/655
                     , parseDirectory </> "success/unit/import/urls/potPourriA.dhall"
                     ]
 
