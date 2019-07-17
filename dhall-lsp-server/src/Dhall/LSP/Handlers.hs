@@ -8,14 +8,15 @@ import qualified Language.Haskell.LSP.VFS as LSP
 import qualified Data.Aeson as J
 import qualified Yi.Rope as Rope
 
-import Dhall.Core (Expr, pretty)
+import Dhall.Core (Expr, pretty, Import(..), ImportHashed(..), ImportType(..), headers)
+import Dhall.Import (localToPath)
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (X)
 
 import Dhall.LSP.Backend.Dhall (FileIdentifier, parse, load, typecheck,
   fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate, parseWithHeader)
 import Dhall.LSP.Backend.Diagnostics (Range(..), Diagnosis(..), explain,
-  rangeFromDhall, diagnose)
+  rangeFromDhall, diagnose, embedsWithRanges)
 import Dhall.LSP.Backend.Formatting (formatExprWithHeader)
 import Dhall.LSP.Backend.Linting (Suggestion(..), suggest, lint)
 import Dhall.LSP.Backend.Typing (typeAt, annotateLet)
@@ -36,6 +37,7 @@ import qualified Data.Text as Text
 import qualified Network.URI as URI
 import qualified Network.URI.Encode as URI
 import Text.Megaparsec (SourcePos(..), unPos)
+import System.FilePath
 
 
 -- Workaround to make our single-threaded LSP fit dhall-lsp's API, which
@@ -179,6 +181,43 @@ hoverHandler request = do
   case Map.lookup uri errorMap of
     Nothing -> hoverType request
     _ -> hoverExplain request
+
+
+documentLinkHandler :: J.DocumentLinkRequest -> HandlerM ()
+documentLinkHandler req = do
+  let uri = req ^. J.params . J.textDocument . J.uri
+  path <- case J.uriToFilePath uri of
+    Nothing -> throwE (Log, "Could not process document links; failed to convert\
+                            \ URI to file path.")
+    Just p -> return p
+  txt <- readUri uri
+  expr <- case parse txt of
+    Right e -> return e
+    Left _ -> throwE (Log, "Could not process document links; did not parse.")
+
+  let imports = embedsWithRanges expr :: [(Range, Import)]
+
+  let basePath = takeDirectory path
+
+  let go :: (Range, Import) -> IO [J.DocumentLink]
+      go (range, Import (ImportHashed _ (Local prefix file)) _) = do
+        filePath <- localToPath prefix file
+        let filePath' = basePath </> filePath  -- absolute file path
+        let url' = J.filePathToUri filePath'
+        let _range = rangeToJSON range
+        let _target = Just (J.getUri url')
+        return [J.DocumentLink {..}]
+
+      go (range, Import (ImportHashed _ (Remote url)) _) = do
+        let _range = rangeToJSON range
+        let url' = url { headers = Nothing }
+        let _target = Just (pretty url')
+        return [J.DocumentLink {..}]
+
+      go _ = return []
+
+  links <- liftIO $ mapM go imports
+  lspRespond LSP.RspDocumentLink req (J.List (concat links))
 
 
 diagnosticsHandler :: J.Uri -> HandlerM ()

@@ -104,6 +104,7 @@ module Dhall.Import (
     , exprToImport
     , load
     , loadWith
+    , localToPath
     , hashExpression
     , hashExpressionToCode
     , assertNoImports
@@ -437,6 +438,8 @@ instance Show HashMismatch where
         <>  "\n"
         <>  "↳ " <> show actualHash <> "\n"
 
+-- | Construct the file path corresponding to a local import. If the import is
+--   _relative_ then the resulting path is also relative.
 localToPath :: MonadIO io => FilePrefix -> File -> io FilePath
 localToPath prefix file_ = liftIO $ do
     let File {..} = file_
@@ -451,11 +454,10 @@ localToPath prefix file_ = liftIO $ do
             return "/"
 
         Parent -> do
-            pwd <- Directory.getCurrentDirectory
-            return (FilePath.takeDirectory pwd)
+            return ".."
 
         Here -> do
-            Directory.getCurrentDirectory
+            return "."
 
     let cs = map Text.unpack (file : components)
 
@@ -611,6 +613,7 @@ exprFromUncachedImport import_@(Import {..}) = do
     let resolveImport importType' = case importType' of
           Local prefix file -> liftIO $ do
               path   <- localToPath prefix file
+              absolutePath <- Directory.makeAbsolute path
               exists <- Directory.doesFileExist path
 
               if exists
@@ -619,7 +622,7 @@ exprFromUncachedImport import_@(Import {..}) = do
 
               text <- Data.Text.IO.readFile path
 
-              return (path, text, import_)
+              return (absolutePath, text, import_)
 
           Remote url@URL { headers = maybeHeadersExpression } -> do
               maybeHeadersAndExpression <- case maybeHeadersExpression of
