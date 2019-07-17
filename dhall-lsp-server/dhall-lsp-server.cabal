@@ -22,6 +22,7 @@ library
   exposed-modules:
       Dhall.LSP.Backend.Dhall
       Dhall.LSP.Backend.Diagnostics
+      Dhall.LSP.Backend.Freezing
       Dhall.LSP.Backend.Formatting
       Dhall.LSP.Backend.Linting
       Dhall.LSP.Backend.Parsing

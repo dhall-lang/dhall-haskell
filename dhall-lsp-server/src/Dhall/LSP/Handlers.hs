@@ -8,7 +8,7 @@ import qualified Language.Haskell.LSP.VFS as LSP
 import qualified Data.Aeson as J
 import qualified Yi.Rope as Rope
 
-import Dhall.Core (Expr, pretty, Import(..), ImportHashed(..), ImportType(..), headers)
+import Dhall.Core (Expr(Note, Embed), pretty, Import(..), ImportHashed(..), ImportType(..), headers)
 import Dhall.Import (localToPath)
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (X)
@@ -18,8 +18,10 @@ import Dhall.LSP.Backend.Dhall (FileIdentifier, parse, load, typecheck,
 import Dhall.LSP.Backend.Diagnostics (Range(..), Diagnosis(..), explain,
   rangeFromDhall, diagnose, embedsWithRanges)
 import Dhall.LSP.Backend.Formatting (formatExprWithHeader)
+import Dhall.LSP.Backend.Freezing (computeSemanticHash, getImportHashPosition,
+  stripHash, getAllImportsWithHashPositions)
 import Dhall.LSP.Backend.Linting (Suggestion(..), suggest, lint)
-import Dhall.LSP.Backend.Typing (typeAt, annotateLet)
+import Dhall.LSP.Backend.Typing (typeAt, annotateLet, exprAt)
 import Dhall.LSP.State
 
 import Control.Applicative ((<|>))
@@ -297,6 +299,8 @@ executeCommandHandler :: J.ExecuteCommandRequest -> HandlerM ()
 executeCommandHandler request
   | command == "dhall.server.lint" = executeLintAndFormat request
   | command == "dhall.server.annotateLet" = executeAnnotateLet request
+  | command == "dhall.server.freezeImport" = executeFreezeImport request
+  | command == "dhall.server.freezeAllImports" = executeFreezeAllImports request
   | otherwise = throwE (Warning, "Command '" <> command
                                    <> "' not known; ignored.")
   where command = request ^. J.params . J.command
@@ -358,6 +362,74 @@ executeAnnotateLet request = do
     (J.ApplyWorkspaceEditParams edit)
 
 
+executeFreezeAllImports :: J.ExecuteCommandRequest -> HandlerM ()
+executeFreezeAllImports request = do
+  uri <- getCommandArguments request
+
+  fileIdentifier <- fileIdentifierFromUri uri
+  txt <- readUri uri
+  expr <- case parse txt of
+    Right e -> return e
+    Left _ -> throwE (Warning, "Could not freeze imports; did not parse.")
+
+  let importRanges = getAllImportsWithHashPositions expr
+  edits <- mapM (\(import_, Range (x1, y1) (x2, y2)) -> do
+    cache <- use importCache
+    let importExpr = Embed (stripHash import_)
+
+    hashResult <- liftIO $ computeSemanticHash fileIdentifier importExpr cache
+    (cache', hash) <- case hashResult of
+      Right (c, t) -> return (c, t)
+      Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
+    assign importCache cache'
+
+    let range = J.Range (J.Position x1 y1) (J.Position x2 y2)
+    return (J.TextEdit range (" " <> hash))
+   ) importRanges
+
+  let workspaceEdit = J.WorkspaceEdit
+        (Just (HashMap.singleton uri (J.List edits))) Nothing
+  lspRequest LSP.ReqApplyWorkspaceEdit J.WorkspaceApplyEdit
+    (J.ApplyWorkspaceEditParams workspaceEdit)
+
+
+executeFreezeImport :: J.ExecuteCommandRequest -> HandlerM ()
+executeFreezeImport request = do
+  args :: J.TextDocumentPositionParams <- getCommandArguments request
+  let uri = args ^. J.textDocument . J.uri
+      line = args ^. J.position . J.line
+      col = args ^. J.position . J.character
+
+  txt <- readUri uri
+  expr <- case parse txt of
+    Right e -> return e
+    Left _ -> throwE (Warning, "Could not freeze import; did not parse.")
+
+  (src, import_)
+    <- case exprAt (line, col) expr of
+      Just (Note src (Embed i)) -> return (src, i)
+      _ -> throwE (Warning, "You weren't pointing at an import!")
+
+  Range (x1, y1) (x2, y2) <- case getImportHashPosition src of
+      Just range -> return range
+      Nothing -> throwE (Error, "Failed to re-parse import!")
+
+  fileIdentifier <- fileIdentifierFromUri uri
+  cache <- use importCache
+  let importExpr = Embed (stripHash import_)
+
+  hashResult <- liftIO $ computeSemanticHash fileIdentifier importExpr cache
+  (cache', hash) <- case hashResult of
+    Right (c, t) -> return (c, t)
+    Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
+  assign importCache cache'
+
+  let range = J.Range (J.Position x1 y1) (J.Position x2 y2)
+      edit = J.WorkspaceEdit
+        (Just (HashMap.singleton uri (J.List [J.TextEdit range (" " <> hash)]))) Nothing
+
+  lspRequest LSP.ReqApplyWorkspaceEdit J.WorkspaceApplyEdit
+    (J.ApplyWorkspaceEditParams edit)
 
 
 -- handler that doesn't do anything. Useful for example to make haskell-lsp shut

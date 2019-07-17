@@ -2,6 +2,7 @@ module Dhall.LSP.Backend.Dhall (
   FileIdentifier,
   fileIdentifierFromFilePath,
   fileIdentifierFromURI,
+  hashNormalToCode,
   WellTyped,
   fromWellTyped,
   Normal,
@@ -21,6 +22,7 @@ import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
 import Dhall.Core (Expr)
 
+import qualified Dhall.Binary as Dhall
 import qualified Dhall.Core as Dhall
 import qualified Dhall.Import as Dhall
 import qualified Dhall.Parser.Token as Dhall
@@ -172,3 +174,11 @@ typecheck expr = case Dhall.typeOf expr of
 -- | Normalise a well-typed expression.
 normalize :: WellTyped -> Normal
 normalize (WellTyped expr) = Normal $ Dhall.normalize expr
+
+-- | Given a normal expression compute the hash (using the default standard
+--   version) of its alpha-normal form. Returns the hash in the format used in
+--   Dhall's hash annotations (prefixed by "sha256:" and base-64 encoded).
+hashNormalToCode :: Normal -> Text
+hashNormalToCode (Normal expr) =
+  Dhall.hashExpressionToCode Dhall.defaultStandardVersion alphaNormal
+  where alphaNormal = Dhall.alphaNormalize expr
