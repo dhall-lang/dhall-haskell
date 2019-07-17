@@ -341,7 +341,7 @@ instance Show CannotImportHTTPURL where
 {-|
 > canonicalize . canonicalize = canonicalize
 
-> canonicalize (a <> b) = canonicalize a <> canonicalize b
+> canonicalize (a <> b) = canonicalize (canonicalize a <> canonicalize b)
 -}
 class Semigroup path => Canonicalize path where
     canonicalize :: path -> path
