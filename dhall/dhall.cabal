@@ -1,7 +1,7 @@
 Name: dhall
 Version: 1.27.0
 Cabal-Version: >=1.10
-Build-Type: Simple
+Build-Type: Custom
 Tested-With: GHC == 7.10.3, GHC == 8.4.3, GHC == 8.6.1
 License: BSD3
 License-File: LICENSE
@@ -630,6 +630,7 @@ Test-Suite doctest
     Build-Depends:
         base                          ,
         directory                     ,
+        dhall                         ,
         filepath                < 1.5 ,
         mockery                 < 0.4 ,
         special-values                ,
@@ -670,3 +671,9 @@ Benchmark deep-nested-large-record
         dhall                                         ,
         gauge                     >= 0.2.3    && < 0.3
     Default-Language: Haskell2010
+
+Custom-Setup
+  Setup-Depends:
+      Cabal
+    , base
+    , cabal-doctest
