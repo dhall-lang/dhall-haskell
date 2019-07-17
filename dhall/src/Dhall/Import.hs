@@ -653,12 +653,10 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
             return (Dhall.Core.normalize expr)
 
     let handler₀ (e :: SomeException) = do
-            {- Try to normalize using the preferred @mapKey@ /
-                @mapValue@ fields and fall back to @header@ /
-                @value@ if that fails.  However, if @header@ /
-                @value@ still fails then re-throw the original
-                exception for @mapKey@ / @mapValue@
-            -}
+            {- Try to typecheck using the preferred @mapKey@/@mapValue@ fields
+               and fall back to @header@/@value@ if that fails. However, if
+               @header@/@value@ still fails then re-throw the original exception
+               for @mapKey@ / @mapValue@. -}
             let handler₁ (_ :: SomeException) =
                     throwM e
 
