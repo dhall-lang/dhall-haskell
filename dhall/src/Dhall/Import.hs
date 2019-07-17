@@ -104,6 +104,7 @@ module Dhall.Import (
     , exprToImport
     , load
     , loadWith
+    , localToPath
     , hashExpression
     , hashExpressionToCode
     , assertNoImports
@@ -434,6 +435,8 @@ instance Show HashMismatch where
         <>  "\n"
         <>  "↳ " <> show actualHash <> "\n"
 
+-- | Construct the file path corresponding to a local import. If the import is
+--   _relative_ then the resulting path is also relative.
 localToPath :: MonadIO io => FilePrefix -> File -> io FilePath
 localToPath prefix file_ = liftIO $ do
     let File {..} = file_
@@ -448,11 +451,10 @@ localToPath prefix file_ = liftIO $ do
             return "/"
 
         Parent -> do
-            pwd <- Directory.getCurrentDirectory
-            return (FilePath.takeDirectory pwd)
+            return ".."
 
         Here -> do
-            Directory.getCurrentDirectory
+            return "."
 
     let cs = map Text.unpack (file : components)
 
@@ -675,6 +677,7 @@ exprFromUncachedImport (Chained (Import {..})) = do
     let resolveImport importType' = case importType' of
           Local prefix file -> liftIO $ do
               path   <- localToPath prefix file
+              absolutePath <- Directory.makeAbsolute path
               exists <- Directory.doesFileExist path
 
               if exists
@@ -683,7 +686,7 @@ exprFromUncachedImport (Chained (Import {..})) = do
 
               text <- Data.Text.IO.readFile path
 
-              return (path, text)
+              return (absolutePath, text)
 
           Remote url@URL { headers = maybeHeadersExpression } -> do
 #ifdef MIN_VERSION_http_client
@@ -942,6 +945,7 @@ loadWith expr₀ = case expr₀ of
   CombineTypes a b     -> CombineTypes <$> loadWith a <*> loadWith b
   Prefer a b           -> Prefer <$> loadWith a <*> loadWith b
   Merge a b c          -> Merge <$> loadWith a <*> loadWith b <*> mapM loadWith c
+  ToMap a b            -> ToMap <$> loadWith a <*> mapM loadWith b
   Field a b            -> Field <$> loadWith a <*> pure b
   Project a b          -> Project <$> loadWith a <*> mapM loadWith b
   Note a b             -> do

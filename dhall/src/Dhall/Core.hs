@@ -470,6 +470,9 @@ data Expr s a
     -- | > Merge x y (Just t )                      ~  merge x y : t
     --   > Merge x y  Nothing                       ~  merge x y
     | Merge (Expr s a) (Expr s a) (Maybe (Expr s a))
+    -- | > ToMap x (Just t)                         ~  toMap x : t
+    --   > ToMap x  Nothing                         ~  toMap x
+    | ToMap (Expr s a) (Maybe (Expr s a))
     -- | > Field e x                                ~  e.x
     | Field (Expr s a) Text
     -- | > Project e (Left xs)                      ~  e.{ xs }
@@ -547,6 +550,7 @@ instance Functor (Expr s) where
   fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
   fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
   fmap f (Merge e1 e2 maybeE) = Merge (fmap f e1) (fmap f e2) (fmap (fmap f) maybeE)
+  fmap f (ToMap e maybeE) = ToMap (fmap f e) (fmap (fmap f) maybeE)
   fmap f (Field e1 v) = Field (fmap f e1) v
   fmap f (Project e1 vs) = Project (fmap f e1) (fmap (fmap f) vs)
   fmap f (Note s e1) = Note s (fmap f e1)
@@ -623,6 +627,7 @@ instance Monad (Expr s) where
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
     Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
     Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
+    ToMap a b            >>= k = ToMap (a >>= k) (fmap (>>= k) b)
     Field a b            >>= k = Field (a >>= k) b
     Project a b          >>= k = Project (a >>= k) (fmap (>>= k) b)
     Note a b             >>= k = Note a (b >>= k)
@@ -689,6 +694,7 @@ instance Bifunctor Expr where
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
     first k (Prefer a b          ) = Prefer (first k a) (first k b)
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
+    first k (ToMap a b           ) = ToMap (first k a) (fmap (first k) b)
     first k (Field a b           ) = Field (first k a) b
     first k (Project a b         ) = Project (first k a) (fmap (first k) b)
     first k (Note a b            ) = Note (k a) (first k b)
@@ -960,6 +966,10 @@ shift d v (Merge a b c) = Merge a' b' c'
     a' =       shift d v  a
     b' =       shift d v  b
     c' = fmap (shift d v) c
+shift d v (ToMap a b) = ToMap a' b'
+  where
+    a' =       shift d v  a
+    b' = fmap (shift d v) b
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
@@ -1135,6 +1145,10 @@ subst x e (Merge a b c) = Merge a' b' c'
     a' =       subst x e  a
     b' =       subst x e  b
     c' = fmap (subst x e) c
+subst x e (ToMap a b) = ToMap a' b'
+  where
+    a' =       subst x e  a
+    b' = fmap (subst x e) b
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
@@ -1268,6 +1282,7 @@ denote (Combine a b         ) = Combine (denote a) (denote b)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
 denote (Prefer a b          ) = Prefer (denote a) (denote b)
 denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
+denote (ToMap a b           ) = ToMap (denote a) (fmap denote b)
 denote (Field a b           ) = Field (denote a) b
 denote (Project a b         ) = Project (denote a) (fmap denote b)
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
@@ -1648,6 +1663,30 @@ normalizeWithM ctx e0 = loop (denote e0)
             _ -> Merge x' y' <$> t'
       where
         t' = traverse loop t
+    ToMap x t        -> do
+        x' <- loop x
+        t' <- traverse loop t
+        case x' of
+            RecordLit kvsX -> do
+                let entry (key, value) =
+                        RecordLit
+                            (Dhall.Map.fromList
+                                [ ("mapKey"  , TextLit (Chunks [] key))
+                                , ("mapValue", value                  )
+                                ]
+                            )
+
+                let keyValues = Data.Sequence.fromList (map entry (Dhall.Map.toList kvsX))
+
+                let listType = case t' of
+                        Just (App List itemType) | null keyValues ->
+                            Just itemType
+                        _ ->
+                            Nothing
+
+                return (ListLit listType keyValues)
+            _ -> do
+                return (ToMap x' t')
     Field r x        -> do
         r' <- loop r
         case r' of
@@ -1662,7 +1701,7 @@ normalizeWithM ctx e0 = loop (denote e0)
             RecordLit kvs ->
                 pure (RecordLit (Dhall.Map.restrictKeys kvs (Dhall.Set.toSet xs)))
             _   | null xs -> pure (RecordLit mempty)
-                | otherwise -> pure (Project r' (Left xs))
+                | otherwise -> pure (Project r' (Left (Dhall.Set.sort xs)))
     Project r (Right e1) -> do
         e2 <- loop e1
 
@@ -1882,6 +1921,7 @@ isNormalized e0 = loop (denote e0)
                               Nothing -> True
                       _ -> True
               _ -> True
+      ToMap x t -> loop x && all loop t
       Field r x -> loop r &&
           case r of
               RecordLit kvs ->
@@ -1897,7 +1937,7 @@ isNormalized e0 = loop (denote e0)
           case r of
               RecordLit kvs ->
                   case xs of
-                      Left  s -> not (all (flip Dhall.Map.member kvs) s)
+                      Left  s -> not (all (flip Dhall.Map.member kvs) s) && Dhall.Set.isSorted s
                       Right e' ->
                           case e' of
                               Record kts ->
@@ -1965,6 +2005,7 @@ reservedIdentifiers =
         , "True"
         , "False"
         , "merge"
+        , "toMap"
         , "if"
         , "then"
         , "else"
@@ -2068,6 +2109,7 @@ subExpressions f (Combine a b) = Combine <$> f a <*> f b
 subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
 subExpressions f (Prefer a b) = Prefer <$> f a <*> f b
 subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
+subExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
 subExpressions f (Field a b) = Field <$> f a <*> pure b
 subExpressions f (Project a b) = Project <$> f a <*> traverse f b
 subExpressions f (Note a b) = Note a <$> f b

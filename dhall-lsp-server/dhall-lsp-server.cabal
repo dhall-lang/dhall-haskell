@@ -48,7 +48,7 @@ library
     , dhall-json
     , dotgen
     , filepath
-    , haskell-lsp
+    , haskell-lsp < 0.9
     , hslogger
     , lens
     , lens-family-core
