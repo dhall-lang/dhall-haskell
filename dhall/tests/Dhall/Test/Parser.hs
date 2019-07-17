@@ -170,6 +170,6 @@ shouldNotDecode pathText = do
 
         term <- Core.throws (Serialise.deserialiseOrFail bytes)
 
-        case Binary.decodeExpression term of
+        case Binary.decodeExpression term :: Either Binary.DecodingFailure (Expr X Import) of
             Left _ -> return ()
             Right _ -> fail "Unexpected successful decode" )
