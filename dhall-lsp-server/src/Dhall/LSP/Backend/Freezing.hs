@@ -38,11 +38,11 @@ stripHash (Import (ImportHashed _ importType) mode) =
 getImportHashPosition :: Src -> Maybe Range
 getImportHashPosition src@(Src left _ text)  = do
   Src left' right' _ <- getImportHash src
-  let (x0, y0) = positionFromMegaparsec left
+  let p0 = positionFromMegaparsec left
 
   -- sanitise the starting point
-  let (x1, y1) = positionFromMegaparsec left'
-      off1 = positionToOffset text (subtractPosition (x0, y0) (x1, y1))
+  let p1 = positionFromMegaparsec left'
+      off1 = positionToOffset text (subtractPosition p0 p1)
       Range _ left'' = rangeFromDhall (Src left left' (Text.take off1 text))
 
   -- sanitise the end point
