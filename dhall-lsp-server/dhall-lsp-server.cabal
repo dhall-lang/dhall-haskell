@@ -105,3 +105,21 @@ executable dhall-lsp-server
   GHC-Options: -Wall -fwarn-incomplete-uni-patterns
   if impl(eta)
      buildable: False
+
+Test-Suite doctest
+    Type: exitcode-stdio-1.0
+    Hs-Source-Dirs: doctest
+    Main-Is: Main.hs
+    GHC-Options: -Wall
+    Build-Depends:
+        base                          ,
+        directory                     ,
+        filepath                < 1.5 ,
+        doctest   >= 0.7.0   && < 0.17
+    Other-Extensions: OverloadedStrings RecordWildCards
+    Default-Language: Haskell2010
+    -- `doctest` doesn't work with `MIN_VERSION` macros before GHC 8
+    --
+    --  See: https://ghc.haskell.org/trac/ghc/ticket/10970
+    if impl(ghc < 8.0)
+      Buildable: False
