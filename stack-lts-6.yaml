@@ -90,6 +90,7 @@ extra-deps:
 - x509-system-1.6.6
 - x509-validation-1.6.11
 - yaml-0.10.4.0
+- cabal-doctest-1.0.6
 flags:
   transformers-compat:
     four: true
