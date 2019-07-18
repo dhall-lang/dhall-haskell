@@ -109,7 +109,7 @@ renderPrettyHttpException e = case e of
         <> show e'
 #endif
 
-needManager :: StateT (Status m) IO Manager
+needManager :: StateT Status IO Manager
 needManager = do
     x <- zoom manager State.get
     case join (fmap fromDynamic x) of
@@ -237,7 +237,7 @@ type HTTPHeader = Network.HTTP.Types.Header
 fetchFromHttpUrl
     :: URL
     -> Maybe [HTTPHeader]
-    -> StateT (Status m) IO (String, Text.Text)
+    -> StateT Status IO Text.Text
 #ifdef __GHCJS__
 fetchFromHttpUrl childURL Nothing = do
     let childURLText = renderURL childURL
@@ -288,5 +288,5 @@ fetchFromHttpUrl childURL mheaders = do
 
     case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
         Left  err  -> liftIO (Control.Exception.throwIO err)
-        Right text -> return (childURLString, Data.Text.Lazy.toStrict text)
+        Right text -> return (Data.Text.Lazy.toStrict text)
 #endif
