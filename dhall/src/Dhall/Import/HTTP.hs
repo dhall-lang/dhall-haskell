@@ -252,7 +252,7 @@ fetchFromHttpUrl childURL Nothing = do
         200 -> return ()
         _   -> fail (childURLString <> " returned a non-200 status code: " <> show statusCode)
 
-    return (childURLString, body)
+    return body
 fetchFromHttpUrl _ _ = do
     fail "Dhall does not yet support custom headers when built using GHCJS"
 #else
