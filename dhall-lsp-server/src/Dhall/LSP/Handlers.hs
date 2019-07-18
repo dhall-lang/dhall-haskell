@@ -27,7 +27,7 @@ import Dhall.LSP.State
 import Control.Applicative ((<|>))
 import Control.Concurrent.MVar
 import Control.Lens ((^.), use, uses, assign, modifying)
-import Control.Monad (guard)
+import Control.Monad (guard, forM)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.Except (throwE, catchE, runExceptT)
 import Control.Monad.Trans.State.Strict (execStateT)
@@ -373,7 +373,7 @@ executeFreezeAllImports request = do
     Left _ -> throwE (Warning, "Could not freeze imports; did not parse.")
 
   let importRanges = getAllImportsWithHashPositions expr
-  edits <- mapM (\(import_, Range (x1, y1) (x2, y2)) -> do
+  edits <- forM importRanges $ \(import_, Range (x1, y1) (x2, y2)) -> do
     cache <- use importCache
     let importExpr = Embed (stripHash import_)
 
@@ -385,7 +385,6 @@ executeFreezeAllImports request = do
 
     let range = J.Range (J.Position x1 y1) (J.Position x2 y2)
     return (J.TextEdit range (" " <> hash))
-   ) importRanges
 
   let workspaceEdit = J.WorkspaceEdit
         (Just (HashMap.singleton uri (J.List edits))) Nothing
