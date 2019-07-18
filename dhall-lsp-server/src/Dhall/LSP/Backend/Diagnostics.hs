@@ -12,7 +12,7 @@ module Dhall.LSP.Backend.Diagnostics
   , positionToOffset
   , Range(..)
   , rangeFromDhall
-  , relativePosition
+  , subtractPosition
   )
 where
 
@@ -124,9 +124,9 @@ addRelativePosition :: Position -> Position -> Position
 addRelativePosition (x1, y1) (0, dy2) = (x1, y1 + dy2)
 addRelativePosition (x1, _) (dx2, y2) = (x1 + dx2, y2)
 
--- addRelativePosition pos (relativePosition pos pos') = pos'
-relativePosition :: Position -> Position -> Position
-relativePosition (x1, y1) (x2, y2) | x1 == x2 = (0, y2 - y1)
+-- | prop> addRelativePosition pos (subtractPosition pos pos') == pos'
+subtractPosition :: Position -> Position -> Position
+subtractPosition (x1, y1) (x2, y2) | x1 == x2 = (0, y2 - y1)
                                    | otherwise = (x2 - x1, y2)
 
 -- | Convert a source range from Dhalls @Src@ format. The returned range is

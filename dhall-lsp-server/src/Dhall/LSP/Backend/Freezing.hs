@@ -14,7 +14,8 @@ import qualified Data.Text as Text
 
 import Dhall.LSP.Backend.Dhall (FileIdentifier, Cache, DhallError, typecheck,
   normalize, hashNormalToCode, load)
-import Dhall.LSP.Backend.Diagnostics (Range(..), rangeFromDhall, positionFromMegaparsec, positionToOffset, relativePosition)
+import Dhall.LSP.Backend.Diagnostics (Range(..), rangeFromDhall,
+  positionFromMegaparsec, positionToOffset, subtractPosition)
 import Dhall.LSP.Backend.Parsing (getImportHash)
 
 -- | Given an expression (potentially still containing imports) compute its
@@ -41,7 +42,7 @@ getImportHashPosition src@(Src left _ text)  = do
 
   -- sanitise the starting point
   let (x1, y1) = positionFromMegaparsec left'
-      off1 = positionToOffset text (relativePosition (x0, y0) (x1, y1))
+      off1 = positionToOffset text (subtractPosition (x0, y0) (x1, y1))
       Range _ left'' = rangeFromDhall (Src left left' (Text.take off1 text))
 
   -- sanitise the end point
