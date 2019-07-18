@@ -489,7 +489,6 @@ data Expr s a
     | Embed a
     deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data, Lift)
 
-
 -- This instance is hand-written due to the fact that deriving
 -- it does not give us an INLINABLE pragma. We annotate this fmap
 -- implementation with this pragma below to allow GHC to, possibly,
