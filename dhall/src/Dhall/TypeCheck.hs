@@ -37,6 +37,7 @@ import Dhall.Binary (FromTerm(..), ToTerm(..))
 import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
+import Language.Haskell.TH.Syntax (Lift(lift))
 
 import qualified Data.Foldable
 import qualified Data.Map
@@ -864,6 +865,10 @@ typeOf = typeWith Dhall.Context.empty
 
 -- | Like `Data.Void.Void`, except with a shorter inferred type
 newtype X = X { absurd :: forall a . a }
+
+
+instance Lift X where
+    lift ( X impossible ) = impossible
 
 instance Show X where
     show = absurd
