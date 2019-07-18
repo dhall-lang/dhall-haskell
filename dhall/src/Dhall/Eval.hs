@@ -396,7 +396,7 @@ eval !env t =
                                 VPrim $ \y ->
                                   case (x,y) of
                                     (VNaturalLit x, VNaturalLit y)
-                                      | x >= y    -> VNaturalLit (x - y)
+                                      | y >= x    -> VNaturalLit (subtract x y)
                                       | otherwise -> VNaturalLit 0
                                     (x, y) -> VNaturalTruncatedSubtract x y
     NaturalPlus t u  -> vNaturalPlus (evalE t) (evalE u)
