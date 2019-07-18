@@ -172,6 +172,7 @@ data Val a
   | VNaturalOdd !(Val a)
   | VNaturalToInteger !(Val a)
   | VNaturalShow !(Val a)
+  | VNaturalTruncatedSubtract !(Val a) !(Val a)
   | VNaturalPlus !(Val a) !(Val a)
   | VNaturalTimes !(Val a) !(Val a)
 
@@ -391,6 +392,13 @@ eval !env t =
                                       n             -> VNaturalToInteger n
     NaturalShow      -> VPrim $ \case VNaturalLit n -> VTextLit (VChunks [] (Data.Text.pack (show n)))
                                       n             -> VNaturalShow n
+    NaturalTruncatedSubtract -> VPrim $ \x ->
+                                VPrim $ \y ->
+                                  case (x,y) of
+                                    (VNaturalLit x, VNaturalLit y)
+                                      | x >= y    -> VNaturalLit (x - y)
+                                      | otherwise -> VNaturalLit 0
+                                    (x, y) -> VNaturalTruncatedSubtract x y
     NaturalPlus t u  -> vNaturalPlus (evalE t) (evalE u)
     NaturalTimes t u -> case (evalE t, evalE u) of
                           (VNaturalLit 1, u            ) -> u
@@ -658,6 +666,7 @@ conv !env t t' =
     (VNaturalOdd t       , VNaturalOdd t')       -> convE t t'
     (VNaturalToInteger t , VNaturalToInteger t') -> convE t t'
     (VNaturalShow t      , VNaturalShow t')      -> convE t t'
+    (VNaturalTruncatedSubtract x y , VNaturalTruncatedSubtract x' y')      -> convE x x' && convE y y'
     (VNaturalPlus t u    , VNaturalPlus t' u')   -> convE t t' && convE u u'
     (VNaturalTimes t u   , VNaturalTimes t' u')  -> convE t t' && convE u u'
 
@@ -799,6 +808,7 @@ quote !env !t =
     VNaturalShow t                -> NaturalShow `qApp` t
     VNaturalPlus t u              -> NaturalPlus (quoteE t) (quoteE u)
     VNaturalTimes t u             -> NaturalTimes (quoteE t) (quoteE u)
+    VNaturalTruncatedSubtract x y -> NaturalTruncatedSubtract --`qApp` x `qApp` y
 
     VInteger                      -> Integer
     VIntegerLit n                 -> IntegerLit n
@@ -915,6 +925,7 @@ alphaNormalize = goEnv NEmpty where
       NaturalOdd       -> NaturalOdd
       NaturalToInteger -> NaturalToInteger
       NaturalShow      -> NaturalShow
+      NaturalTruncatedSubtract      -> NaturalTruncatedSubtract
       NaturalPlus t u  -> NaturalPlus  (go t) (go u)
       NaturalTimes t u -> NaturalTimes (go t) (go u)
       Integer          -> Integer

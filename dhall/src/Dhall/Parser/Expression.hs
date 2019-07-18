@@ -355,17 +355,17 @@ parsers embedded = Parsers {..}
                 case c of
                     'N' ->
                         choice
-                            [ NaturalFold      <$ _NaturalFold
-                            , NaturalBuild     <$ _NaturalBuild
-                            , NaturalIsZero    <$ _NaturalIsZero
-                            , NaturalEven      <$ _NaturalEven
-                            , NaturalOdd       <$ _NaturalOdd
-                            , NaturalToInteger <$ _NaturalToInteger
-                            , NaturalToInteger <$ _NaturalToInteger
-                            , NaturalShow      <$ _NaturalShow
-                            , Natural          <$ _Natural
-                            , None             <$ _None
-                            , DoubleLit nan    <$ _NaN
+                            [ NaturalFold              <$ _NaturalFold
+                            , NaturalBuild             <$ _NaturalBuild
+                            , NaturalIsZero            <$ _NaturalIsZero
+                            , NaturalEven              <$ _NaturalEven
+                            , NaturalOdd               <$ _NaturalOdd
+                            , NaturalTruncatedSubtract <$ _NaturalTruncatedSubtract
+                            , NaturalToInteger         <$ Text.Megaparsec.try _NaturalToInteger
+                            , NaturalShow              <$ _NaturalShow
+                            , Natural                  <$ _Natural
+                            , None                     <$ _None
+                            , DoubleLit nan            <$ _NaN
                             ]
                     'I' ->
                         choice

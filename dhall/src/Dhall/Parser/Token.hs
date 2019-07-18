@@ -39,6 +39,7 @@ module Dhall.Parser.Token (
     _NaturalOdd,
     _NaturalToInteger,
     _NaturalShow,
+    _NaturalTruncatedSubtract,
     _IntegerShow,
     _IntegerToDouble,
     _DoubleShow,
@@ -624,6 +625,9 @@ _NaturalToInteger = reserved "Natural/toInteger"
 
 _NaturalShow :: Parser ()
 _NaturalShow = reserved "Natural/show"
+
+_NaturalTruncatedSubtract :: Parser ()
+_NaturalTruncatedSubtract = reserved "Natural/truncatedSubtract"
 
 _IntegerShow :: Parser ()
 _IntegerShow = reserved "Integer/show"
