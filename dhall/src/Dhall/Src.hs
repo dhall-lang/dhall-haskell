@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -10,6 +11,7 @@ module Dhall.Src
       Src(..)
     ) where
 
+import Control.DeepSeq (NFData)
 import Data.Data (Data)
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -28,7 +30,7 @@ import qualified Text.Printf     as Printf
 -- | Source code extract
 data Src = Src !SourcePos !SourcePos Text
   -- Text field is intentionally lazy
-  deriving (Data, Eq, Generic, Ord, Show)
+  deriving (Data, Eq, Generic, Ord, Show, NFData)
 
 
 instance Lift Src where

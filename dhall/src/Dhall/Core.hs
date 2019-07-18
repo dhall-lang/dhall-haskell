@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns       #-}
 {-# LANGUAGE CPP                #-}
+{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveLift         #-}
@@ -69,6 +70,7 @@ module Dhall.Core (
 import Control.Applicative (Applicative(..), (<$>))
 #endif
 import Control.Applicative (empty)
+import Control.DeepSeq (NFData)
 import Control.Exception (Exception)
 import Control.Monad.IO.Class (MonadIO(..))
 import Crypto.Hash (SHA256)
@@ -129,7 +131,7 @@ import qualified Text.Printf
     Dhall is not a dependently typed language
 -}
 data Const = Type | Kind | Sort
-    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic, Lift)
+    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic, NFData, Lift)
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -141,7 +143,7 @@ instance Pretty Const where
     @Directory { components = [ "baz", "bar", "foo" ] }@
 -}
 newtype Directory = Directory { components :: [Text] }
-    deriving (Eq, Generic, Ord, Show)
+    deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Semigroup Directory where
     Directory components₀ <> Directory components₁ =
@@ -156,7 +158,7 @@ instance Pretty Directory where
 data File = File
     { directory :: Directory
     , file      :: Text
-    } deriving (Eq, Generic, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Pretty File where
     pretty (File {..}) =
@@ -177,7 +179,7 @@ data FilePrefix
     -- ^ Path relative to @..@
     | Home
     -- ^ Path relative to @~@
-    deriving (Eq, Generic, Ord, Show)
+    deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Pretty FilePrefix where
     pretty Absolute = ""
@@ -185,7 +187,7 @@ instance Pretty FilePrefix where
     pretty Parent   = ".."
     pretty Home     = "~"
 
-data Scheme = HTTP | HTTPS deriving (Eq, Generic, Ord, Show)
+data Scheme = HTTP | HTTPS deriving (Eq, Generic, Ord, Show, NFData)
 
 data URL = URL
     { scheme    :: Scheme
@@ -193,7 +195,7 @@ data URL = URL
     , path      :: File
     , query     :: Maybe Text
     , headers   :: Maybe (Expr Src Import)
-    } deriving (Eq, Generic, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Pretty URL where
     pretty (URL {..}) =
@@ -231,7 +233,7 @@ data ImportType
     | Env  Text
     -- ^ Environment variable
     | Missing
-    deriving (Eq, Generic, Ord, Show)
+    deriving (Eq, Generic, Ord, Show, NFData)
 
 parent :: File
 parent = File { directory = Directory { components = [ ".." ] }, file = "" }
@@ -270,13 +272,13 @@ instance Pretty ImportType where
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
 data ImportMode = Code | RawText | Location
-  deriving (Eq, Generic, Ord, Show)
+  deriving (Eq, Generic, Ord, Show, NFData)
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
     { hash       :: Maybe (Crypto.Hash.Digest SHA256)
     , importType :: ImportType
-    } deriving (Eq, Generic, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Semigroup ImportHashed where
     ImportHashed _ importType₀ <> ImportHashed hash importType₁ =
@@ -292,7 +294,7 @@ instance Pretty ImportHashed where
 data Import = Import
     { importHashed :: ImportHashed
     , importMode   :: ImportMode
-    } deriving (Eq, Generic, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Semigroup Import where
     Import importHashed₀ _ <> Import importHashed₁ code =
@@ -340,7 +342,7 @@ instance Pretty Import where
     appear as a numeric suffix.
 -}
 data Var = V Text !Int
-    deriving (Data, Generic, Eq, Ord, Show, Lift)
+    deriving (Data, Generic, Eq, Ord, Show, NFData, Lift)
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -487,7 +489,9 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data, Lift)
+    deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data, NFData, Lift)
+-- NB: If you add a constructor to Expr, please also update the Arbitrary
+-- instance in Dhall.Test.QuickCheck.
 
 -- This instance is hand-written due to the fact that deriving
 -- it does not give us an INLINABLE pragma. We annotate this fmap
@@ -713,7 +717,7 @@ data Binding s a = Binding
     { variable   :: Text
     , annotation :: Maybe (Expr s a)
     , value      :: Expr s a
-    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, Lift)
+    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData, Lift)
 
 instance Bifunctor Binding where
     first k (Binding a b c) = Binding a (fmap (first k) b) (first k c)
@@ -722,7 +726,7 @@ instance Bifunctor Binding where
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, Lift)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData, Lift)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =
@@ -1757,6 +1761,11 @@ isNormalizedWith :: (Eq s, Eq a) => Normalizer a -> Expr s a -> Bool
 isNormalizedWith ctx e = e == normalizeWith (Just (ReifiedNormalizer ctx)) e
 
 -- | Quickly check if an expression is in normal form
+--
+-- Given a well-typed expression @e@, @'isNormalized' e@ is equivalent to
+-- @e == 'normalize' e@.
+--
+-- Given an ill-typed expression, 'isNormalized' may return 'True' or 'False'.
 isNormalized :: Eq a => Expr s a -> Bool
 isNormalized e0 = loop (denote e0)
   where
@@ -1778,6 +1787,7 @@ isNormalized e0 = loop (denote e0)
           App (App OptionalBuild _) (App (App OptionalFold _) _) -> False
 
           App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
+          App NaturalFold (NaturalLit _) -> False
           App NaturalBuild _ -> False
           App NaturalIsZero (NaturalLit _) -> False
           App NaturalEven (NaturalLit _) -> False
@@ -1924,30 +1934,20 @@ isNormalized e0 = loop (denote e0)
                               Nothing -> True
                       _ -> True
               _ -> True
-      ToMap x t -> loop x && all loop t
-      Field r x -> loop r &&
-          case r of
-              RecordLit kvs ->
-                  case Dhall.Map.lookup x kvs of
-                      Just _  -> False
-                      Nothing -> True
-              Union kvs ->
-                  case Dhall.Map.lookup x kvs of
-                      Just _  -> False
-                      Nothing -> True
-              _ -> True
-      Project r xs -> loop r &&
-          case r of
-              RecordLit kvs ->
-                  case xs of
-                      Left  s -> not (all (flip Dhall.Map.member kvs) s) && Dhall.Set.isSorted s
-                      Right e' ->
-                          case e' of
-                              Record kts ->
-                                  loop (Project r (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
-                              _ ->
-                                  False
-              _ -> not (null xs)
+      ToMap x t -> case x of
+          RecordLit _ -> False
+          _ -> loop x && all loop t
+      Field r _ -> case r of
+          RecordLit _ -> False
+          _ -> loop r
+      Project r p -> loop r &&
+          case p of
+              Left s -> case r of
+                  RecordLit _ -> False
+                  _ -> not (Dhall.Set.null s) && Dhall.Set.isSorted s
+              Right e' -> case e' of
+                  Record _ -> False
+                  _ -> loop e'
       Note _ e' -> loop e'
       ImportAlt l _r -> loop l
       Embed _ -> True
