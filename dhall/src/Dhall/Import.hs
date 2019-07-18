@@ -134,7 +134,7 @@ module Dhall.Import (
 
 import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term(..))
-import Control.Exception (Exception, SomeException, throwIO, toException)
+import Control.Exception (Exception, SomeException, toException)
 import Control.Monad (guard)
 import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..), handle)
 import Control.Monad.IO.Class (MonadIO(..))
@@ -564,7 +564,7 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) Code)) = do
             return absolutePath
         Remote url -> return $ Text.unpack (renderURL url)
         Env env -> return $ Text.unpack env
-        Missing -> liftIO $ throwM (MissingImports [])
+        Missing -> throwM (MissingImports [])
 
     let parser = unParser $ do
             Text.Parser.Token.whiteSpace
@@ -573,7 +573,7 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) Code)) = do
             return r
 
     parsedImport <- case Text.Megaparsec.parse parser path text of
-        Left  errInfo -> liftIO (throwIO (ParseError errInfo text))
+        Left  errInfo -> throwM (ParseError errInfo text)
         Right expr    -> return expr
 
     loadedExpr <- loadWith parsedImport  -- we load imports recursively here
