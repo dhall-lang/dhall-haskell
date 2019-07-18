@@ -112,7 +112,7 @@ lift6 f =
         <*> arbitrary
         <*> arbitrary
 
-natural :: (Arbitrary a, Num a) => Gen a
+natural :: Gen Natural
 natural =
     Test.QuickCheck.frequency
         [ (7, arbitrary)
