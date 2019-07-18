@@ -808,7 +808,7 @@ quote !env !t =
     VNaturalShow t                -> NaturalShow `qApp` t
     VNaturalPlus t u              -> NaturalPlus (quoteE t) (quoteE u)
     VNaturalTimes t u             -> NaturalTimes (quoteE t) (quoteE u)
-    VNaturalTruncatedSubtract x y -> NaturalTruncatedSubtract --`qApp` x `qApp` y
+    VNaturalTruncatedSubtract x y -> NaturalTruncatedSubtract `qApp` x `qApp` y
 
     VInteger                      -> Integer
     VIntegerLit n                 -> IntegerLit n
