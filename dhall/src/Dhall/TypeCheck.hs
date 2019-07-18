@@ -751,6 +751,8 @@ typeWithA tpa = loop
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustMapARecord kvsX tKvsX))
 
+        Data.Foldable.traverse_ (loop ctx) mT₁
+
         let ktX = appEndo (foldMap (Endo . compareFieldTypes) ktsX) Nothing
             mT₂ = fmap Dhall.Core.normalize mT₁
             mapType fieldType = App List (Record $ Dhall.Map.fromList [("mapKey", Text),
