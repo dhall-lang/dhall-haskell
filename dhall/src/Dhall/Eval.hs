@@ -530,13 +530,14 @@ eval !env t =
                           (x, y, ma) -> VMerge x y ma
     ToMap x ma       -> case (evalE x, evalE <$> ma) of
                           (VRecordLit m, Just (VList t)) | null m ->
-                              VListLit (Just t) (Dhall.Map.foldMapWithKey entry m)
-                          (VRecordLit m, _) ->
-                              VListLit Nothing (Dhall.Map.foldMapWithKey entry m)
+                            VListLit (Just t) (Data.Sequence.empty)
+                          (VRecordLit m, _) -> let
+                            entry (k, v) =
+                              VRecordLit (Dhall.Map.fromList [("mapKey", VTextLit $ VChunks [] k),
+                                                              ("mapValue", v)])
+                            s = (Data.Sequence.fromList . map entry . Dhall.Map.toList) m
+                            in VListLit Nothing s
                           (x, ma) -> VToMap x ma
-      where
-        entry key value = Data.Sequence.singleton (VRecordLit (Dhall.Map.fromList [("mapKey", VTextLit $ VChunks [] key),
-                                                                                   ("mapValue", value)]))
     Field t k        -> case evalE t of
                           VRecordLit m
                             | Just v <- Dhall.Map.lookup k m -> v
@@ -553,7 +554,7 @@ eval !env t =
                           VRecordLit kvs -> let
                             kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
                             in VRecordLit (Dhall.Map.sort kvs')
-                          t -> VProject t (Left ks)
+                          t -> VProject t (Left (Dhall.Set.sort ks))
     Project t (Right e) ->
                         case evalE e of
                           VRecord kts ->

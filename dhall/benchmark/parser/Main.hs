@@ -16,6 +16,7 @@ import qualified Data.ByteString.Lazy
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Dhall.Binary
+import qualified Dhall.Core as Dhall
 import qualified Dhall.Parser as Dhall
 
 #if MIN_VERSION_directory(1,2,3)
@@ -72,7 +73,8 @@ benchExprFromBytes name bytes = bench name (whnf f bytes)
         term <- case Codec.Serialise.deserialiseOrFail bytes of
             Left  _    -> Nothing
             Right term -> return term
-        case Dhall.Binary.decodeExpression term of
+        case Dhall.Binary.decodeExpression term
+          :: Either Dhall.Binary.DecodingFailure (Dhall.Expr () Dhall.Import) of
             Left  _          -> Nothing
             Right expression -> return expression
 

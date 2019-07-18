@@ -7,7 +7,6 @@ cache:
   - $HOME/.ghc
   - $HOME/.cabal
   - $HOME/.stack
-  - $HOME/.local/bin
   - $TRAVIS_BUILD_DIR/.stack-work
 
 matrix:
