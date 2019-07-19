@@ -27,21 +27,24 @@ import Dhall.Core
     , Var(..)
     )
 
+import Data.Functor.Identity (Identity(..))
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
 import Numeric.Natural (Natural)
 import Test.QuickCheck
-    (Arbitrary(..), Gen, Positive(..), Property, genericShrink, (===), (==>))
+    (Arbitrary(..), Gen, Positive(..), Property, NonNegative(..), genericShrink, (===), (==>))
 import Test.QuickCheck.Instances ()
 import Test.Tasty (TestTree)
 import Text.Megaparsec (SourcePos(..), Pos)
 
+import qualified Control.Spoon
 import qualified Codec.Serialise
 import qualified Data.Coerce
 import qualified Data.List
 import qualified Dhall.Map
 import qualified Data.Sequence
 import qualified Dhall.Binary
+import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
@@ -58,6 +61,7 @@ instance Eq DeserialiseFailureWithEq where
 
 instance (Arbitrary a, Ord a) => Arbitrary (Set a) where
   arbitrary = Dhall.Set.fromList <$> arbitrary
+  shrink = map Dhall.Set.fromList . shrink . Dhall.Set.toList
 
 lift0 :: a -> Gen a
 lift0 = pure
@@ -108,7 +112,7 @@ lift6 f =
         <*> arbitrary
         <*> arbitrary
 
-natural :: (Arbitrary a, Num a) => Gen a
+natural :: Gen Natural
 natural =
     Test.QuickCheck.frequency
         [ (7, arbitrary)
@@ -184,7 +188,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                           bindings <- Test.QuickCheck.vectorOf n arbitrary
                           body     <- arbitrary
                           return (Let (binding :| bindings) body)
-                  in  ( 1, Test.QuickCheck.oneof [ letExpression ])
+                  in  ( 7, letExpression)
                 , ( 1, lift2 Annot)
                 , ( 7, lift0 Bool)
                 , ( 7, lift1 BoolLit)
@@ -233,15 +237,16 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                 , ( 7, lift0 OptionalFold)
                 , ( 7, lift0 OptionalBuild)
                 , ( 1, lift1 Record)
-                , ( 1, lift1 RecordLit)
+                , ( 7, lift1 RecordLit)
                 , ( 1, lift1 Union)
                 , ( 1, lift3 UnionLit)
                 , ( 1, lift2 Combine)
                 , ( 1, lift2 CombineTypes)
                 , ( 1, lift2 Prefer)
                 , ( 1, lift3 Merge)
-                , ( 1, lift2 Field)
-                , ( 1, lift2 Project)
+                , ( 1, lift2 ToMap)
+                , ( 7, lift2 Field)
+                , ( 7, lift2 Project)
                 , ( 7, lift1 Embed)
                 ]
             )
@@ -301,7 +306,7 @@ instance Arbitrary ImportHashed where
 -- The standard does not yet specify how to encode `as Text`, so don't test it
 -- yet
 instance Arbitrary ImportMode where
-    arbitrary = lift0 Code
+    arbitrary = Test.QuickCheck.elements [ Code, RawText, Location ]
 
     shrink = genericShrink
 
@@ -323,9 +328,9 @@ instance Arbitrary URL where
 instance Arbitrary Var where
     arbitrary =
         Test.QuickCheck.oneof
-            [ fmap (V "_") (fromIntegral <$> (natural :: Gen Int))
+            [ fmap (V "_") (getNonNegative <$> arbitrary)
             , lift1 (\t -> V t 0)
-            , lift1 V <*> (fromIntegral <$> (natural :: Gen Int))
+            , lift1 V <*> (getNonNegative <$> arbitrary)
             ]
 
     shrink = genericShrink
@@ -348,10 +353,19 @@ binaryRoundtrip expression =
         -> Either DeserialiseFailureWithEq a
     wrap = Data.Coerce.coerce
 
--- isNormalizedIsConsistentWithNormalize :: Expr () Import -> Property
--- isNormalizedIsConsistentWithNormalize expression =
---         Dhall.Core.isNormalized expression
---     === (Dhall.Core.normalize expression == expression)
+isNormalizedIsConsistentWithNormalize :: Expr () Import -> Property
+isNormalizedIsConsistentWithNormalize expression =
+    case Control.Spoon.spoon (Dhall.Core.normalize expression) of
+        Just nf -> Dhall.Core.isNormalized expression === (nf == expression)
+        Nothing -> Test.QuickCheck.discard
+
+normalizeWithMIsConsistentWithNormalize :: Expr () Import -> Property
+normalizeWithMIsConsistentWithNormalize expression =
+    case Control.Spoon.spoon (Dhall.Core.normalize expression :: Expr () Import) of
+        Just nf ->
+            let nfM = runIdentity (Dhall.Core.normalizeWithM (\_ -> Identity Nothing) expression)
+            in nfM === nf
+        Nothing -> Test.QuickCheck.discard
 
 isSameAsSelf :: Expr () Import -> Property
 isSameAsSelf expression =
@@ -368,10 +382,14 @@ tests =
         [ ( "Binary serialization should round-trip"
           , Test.QuickCheck.property binaryRoundtrip
           )
-        -- , ( "isNormalized should be consistent with normalize"
-        --   , Test.QuickCheck.property
-        --       (Test.QuickCheck.withMaxSuccess 10000 isNormalizedIsConsistentWithNormalize)
-        --   )
+        , ( "isNormalized should be consistent with normalize"
+          , Test.QuickCheck.property
+              (Test.QuickCheck.withMaxSuccess 10000 isNormalizedIsConsistentWithNormalize)
+          )
+        , ( "normalizeWithM should be consistent with normalize"
+          , Test.QuickCheck.property
+              (Test.QuickCheck.withMaxSuccess 10000 normalizeWithMIsConsistentWithNormalize)
+          )
         , ( "An expression should have no difference with itself"
           , Test.QuickCheck.property
               (Test.QuickCheck.withMaxSuccess 10000 isSameAsSelf)
