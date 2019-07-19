@@ -361,7 +361,7 @@ parsers embedded = Parsers {..}
                             , NaturalEven      <$ _NaturalEven
                             , NaturalOdd       <$ _NaturalOdd
                             , NaturalSubtract  <$ _NaturalSubtract
-                            , NaturalToInteger <$ Text.Megaparsec.try _NaturalToInteger
+                            , NaturalToInteger <$ _NaturalToInteger
                             , NaturalShow      <$ _NaturalShow
                             , Natural          <$ _Natural
                             , None             <$ _None
