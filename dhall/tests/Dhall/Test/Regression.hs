@@ -37,6 +37,8 @@ tests =
         , issue201
         , issue216
         , issue253
+        , issue1131a
+        , issue1131b
         , parsing0
         , typeChecking0
         , typeChecking1
@@ -153,6 +155,14 @@ issue253 = Test.Tasty.HUnit.testCase "Issue #253" (do
     -- infinitely loop
     Just _ <- System.Timeout.timeout 1000000 (Control.Exception.evaluate $! result)
     return () )
+
+issue1131a :: TestTree
+issue1131a = Test.Tasty.HUnit.testCase "Issue #1131 a"
+    (Util.assertDoesntTypeCheck "toMap {=} : <>.x")
+
+issue1131b :: TestTree
+issue1131b = Test.Tasty.HUnit.testCase "Issue #1131 b"
+    (Util.assertDoesntTypeCheck "toMap {=} : List {mapKey : Text, mapValue : 0}")
 
 parsing0 :: TestTree
 parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (do

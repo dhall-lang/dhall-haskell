@@ -30,6 +30,7 @@ import Dhall.Core
 import Data.Functor.Identity (Identity(..))
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
+import Dhall.TypeCheck (Typer)
 import Numeric.Natural (Natural)
 import Test.QuickCheck
     (Arbitrary(..), Gen, Positive(..), Property, NonNegative(..), genericShrink, (===), (==>))
@@ -41,11 +42,12 @@ import qualified Control.Spoon
 import qualified Codec.Serialise
 import qualified Data.Coerce
 import qualified Data.List
-import qualified Dhall.Map
 import qualified Data.Sequence
 import qualified Dhall.Binary
+import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
+import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Test.QuickCheck
@@ -111,13 +113,6 @@ lift6 f =
         <*> arbitrary
         <*> arbitrary
         <*> arbitrary
-
-natural :: Gen Natural
-natural =
-    Test.QuickCheck.frequency
-        [ (7, arbitrary)
-        , (1, fmap (\x -> x + (2 ^ (64 :: Int))) arbitrary)
-        ]
 
 integer :: (Arbitrary a, Num a) => Gen a
 integer =
@@ -190,34 +185,34 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                           return (Let (binding :| bindings) body)
                   in  ( 7, letExpression)
                 , ( 1, lift2 Annot)
-                , ( 7, lift0 Bool)
+                , ( 1, lift0 Bool)
                 , ( 7, lift1 BoolLit)
                 , ( 1, lift2 BoolAnd)
                 , ( 1, lift2 BoolOr)
                 , ( 1, lift2 BoolEQ)
                 , ( 1, lift2 BoolNE)
                 , ( 1, lift3 BoolIf)
-                , ( 7, lift0 Natural)
-                , ( 7, fmap NaturalLit natural)
-                , ( 7, lift0 NaturalFold)
-                , ( 7, lift0 NaturalBuild)
-                , ( 7, lift0 NaturalIsZero)
-                , ( 7, lift0 NaturalEven)
-                , ( 7, lift0 NaturalOdd)
-                , ( 7, lift0 NaturalToInteger)
-                , ( 7, lift0 NaturalShow)
+                , ( 1, lift0 Natural)
+                , ( 7, fmap NaturalLit arbitrary)
+                , ( 1, lift0 NaturalFold)
+                , ( 1, lift0 NaturalBuild)
+                , ( 1, lift0 NaturalIsZero)
+                , ( 1, lift0 NaturalEven)
+                , ( 1, lift0 NaturalOdd)
+                , ( 1, lift0 NaturalToInteger)
+                , ( 1, lift0 NaturalShow)
                 , ( 1, lift2 NaturalPlus)
                 , ( 1, lift2 NaturalTimes)
-                , ( 7, lift0 Integer)
+                , ( 1, lift0 Integer)
                 , ( 7, fmap IntegerLit integer)
-                , ( 7, lift0 IntegerShow)
-                , ( 7, lift0 Double)
+                , ( 1, lift0 IntegerShow)
+                , ( 1, lift0 Double)
                 , ( 7, lift1 DoubleLit)
-                , ( 7, lift0 DoubleShow)
-                , ( 7, lift0 Text)
+                , ( 1, lift0 DoubleShow)
+                , ( 1, lift0 Text)
                 , ( 1, lift1 TextLit)
                 , ( 1, lift2 TextAppend)
-                , ( 7, lift0 List)
+                , ( 1, lift0 List)
                 , let listLit = do
                           n  <- Test.QuickCheck.choose (0, 3)
                           xs <- Test.QuickCheck.vectorOf n arbitrary
@@ -226,16 +221,16 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
 
                   in  ( 1, listLit)
                 , ( 1, lift2 ListAppend)
-                , ( 7, lift0 ListBuild)
-                , ( 7, lift0 ListFold)
-                , ( 7, lift0 ListLength)
-                , ( 7, lift0 ListHead)
-                , ( 7, lift0 ListLast)
-                , ( 7, lift0 ListIndexed)
-                , ( 7, lift0 ListReverse)
-                , ( 7, lift0 Optional)
-                , ( 7, lift0 OptionalFold)
-                , ( 7, lift0 OptionalBuild)
+                , ( 1, lift0 ListBuild)
+                , ( 1, lift0 ListFold)
+                , ( 1, lift0 ListLength)
+                , ( 1, lift0 ListHead)
+                , ( 1, lift0 ListLast)
+                , ( 1, lift0 ListIndexed)
+                , ( 1, lift0 ListReverse)
+                , ( 1, lift0 Optional)
+                , ( 1, lift0 OptionalFold)
+                , ( 1, lift0 OptionalBuild)
                 , ( 1, lift1 Record)
                 , ( 7, lift1 RecordLit)
                 , ( 1, lift1 Union)
@@ -353,6 +348,14 @@ binaryRoundtrip expression =
         -> Either DeserialiseFailureWithEq a
     wrap = Data.Coerce.coerce
 
+everythingWellTypedNormalizes :: Expr () () -> Property
+everythingWellTypedNormalizes expression =
+        isRight (Dhall.TypeCheck.typeWithA filterOutEmbeds Dhall.Context.empty expression)
+    ==> Test.QuickCheck.total (Dhall.Core.normalize expression :: Expr () ())
+  where
+    filterOutEmbeds :: Typer a
+    filterOutEmbeds _ = Const Sort -- This could be any ill-typed expression.
+
 isNormalizedIsConsistentWithNormalize :: Expr () Import -> Property
 isNormalizedIsConsistentWithNormalize expression =
     case Control.Spoon.spoon (Dhall.Core.normalize expression) of
@@ -381,6 +384,10 @@ tests =
         "QuickCheck"
         [ ( "Binary serialization should round-trip"
           , Test.QuickCheck.property binaryRoundtrip
+          )
+        , ( "everything well-typed should normalize"
+          , Test.QuickCheck.property
+              (Test.QuickCheck.withMaxSuccess 10000 everythingWellTypedNormalizes)
           )
         , ( "isNormalized should be consistent with normalize"
           , Test.QuickCheck.property
