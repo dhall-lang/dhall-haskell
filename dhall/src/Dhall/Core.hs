@@ -399,8 +399,8 @@ data Expr s a
     | NaturalToInteger
     -- | > NaturalShow                              ~  Natural/show
     | NaturalShow
-    -- | > NaturalTruncatedSubtract                              ~  Natural/truncatedSubtract
-    | NaturalTruncatedSubtract
+    -- | > NaturalSubtract                          ~  Natural/subtract
+    | NaturalSubtract
     -- | > NaturalPlus x y                          ~  x + y
     | NaturalPlus (Expr s a) (Expr s a)
     -- | > NaturalTimes x y                         ~  x * y
@@ -521,7 +521,7 @@ instance Functor (Expr s) where
   fmap _ NaturalOdd = NaturalOdd
   fmap _ NaturalToInteger = NaturalToInteger
   fmap _ NaturalShow = NaturalShow
-  fmap _ NaturalTruncatedSubtract = NaturalTruncatedSubtract
+  fmap _ NaturalSubtract = NaturalSubtract
   fmap f (NaturalPlus e1 e2) = NaturalPlus (fmap f e1) (fmap f e2)
   fmap f (NaturalTimes e1 e2) = NaturalTimes (fmap f e1) (fmap f e2)
   fmap _ Integer = Integer
@@ -599,7 +599,7 @@ instance Monad (Expr s) where
     NaturalOdd           >>= _ = NaturalOdd
     NaturalToInteger     >>= _ = NaturalToInteger
     NaturalShow          >>= _ = NaturalShow
-    NaturalTruncatedSubtract          >>= _ = NaturalTruncatedSubtract
+    NaturalSubtract      >>= _ = NaturalSubtract
     NaturalPlus  a b     >>= k = NaturalPlus  (a >>= k) (b >>= k)
     NaturalTimes a b     >>= k = NaturalTimes (a >>= k) (b >>= k)
     Integer              >>= _ = Integer
@@ -644,72 +644,72 @@ instance Monad (Expr s) where
     Embed a              >>= k = k a
 
 instance Bifunctor Expr where
-    first _ (Const a             ) = Const a
-    first _ (Var a               ) = Var a
-    first k (Lam a b c           ) = Lam a (first k b) (first k c)
-    first k (Pi a b c            ) = Pi a (first k b) (first k c)
-    first k (App a b             ) = App (first k a) (first k b)
-    first k (Let as b            ) = Let (fmap (first k) as) (first k b)
-    first k (Annot a b           ) = Annot (first k a) (first k b)
-    first _  Bool                  = Bool
-    first _ (BoolLit a           ) = BoolLit a
-    first k (BoolAnd a b         ) = BoolAnd (first k a) (first k b)
-    first k (BoolOr a b          ) = BoolOr (first k a) (first k b)
-    first k (BoolEQ a b          ) = BoolEQ (first k a) (first k b)
-    first k (BoolNE a b          ) = BoolNE (first k a) (first k b)
-    first k (BoolIf a b c        ) = BoolIf (first k a) (first k b) (first k c)
-    first _  Natural               = Natural
-    first _ (NaturalLit a        ) = NaturalLit a
-    first _  NaturalFold           = NaturalFold
-    first _  NaturalBuild          = NaturalBuild
-    first _  NaturalIsZero         = NaturalIsZero
-    first _  NaturalEven           = NaturalEven
-    first _  NaturalOdd            = NaturalOdd
-    first _  NaturalToInteger      = NaturalToInteger
-    first _  NaturalShow           = NaturalShow
-    first _  NaturalTruncatedSubtract           = NaturalTruncatedSubtract
-    first k (NaturalPlus a b     ) = NaturalPlus (first k a) (first k b)
-    first k (NaturalTimes a b    ) = NaturalTimes (first k a) (first k b)
-    first _  Integer               = Integer
-    first _ (IntegerLit a        ) = IntegerLit a
-    first _  IntegerShow           = IntegerShow
-    first _  IntegerToDouble       = IntegerToDouble
-    first _  Double                = Double
-    first _ (DoubleLit a         ) = DoubleLit a
-    first _  DoubleShow            = DoubleShow
-    first _  Text                  = Text
-    first k (TextLit (Chunks a b)) = TextLit (Chunks (fmap (fmap (first k)) a) b)
-    first k (TextAppend a b      ) = TextAppend (first k a) (first k b)
-    first _  TextShow              = TextShow
-    first _  List                  = List
-    first k (ListLit a b         ) = ListLit (fmap (first k) a) (fmap (first k) b)
-    first k (ListAppend a b      ) = ListAppend (first k a) (first k b)
-    first _  ListBuild             = ListBuild
-    first _  ListFold              = ListFold
-    first _  ListLength            = ListLength
-    first _  ListHead              = ListHead
-    first _  ListLast              = ListLast
-    first _  ListIndexed           = ListIndexed
-    first _  ListReverse           = ListReverse
-    first _  Optional              = Optional
-    first k (Some a              ) = Some (first k a)
-    first _  None                  = None
-    first _  OptionalFold          = OptionalFold
-    first _  OptionalBuild         = OptionalBuild
-    first k (Record a            ) = Record (fmap (first k) a)
-    first k (RecordLit a         ) = RecordLit (fmap (first k) a)
-    first k (Union a             ) = Union (fmap (fmap (first k)) a)
-    first k (UnionLit a b c      ) = UnionLit a (first k b) (fmap (fmap (first k)) c)
-    first k (Combine a b         ) = Combine (first k a) (first k b)
-    first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
-    first k (Prefer a b          ) = Prefer (first k a) (first k b)
-    first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
-    first k (ToMap a b           ) = ToMap (first k a) (fmap (first k) b)
-    first k (Field a b           ) = Field (first k a) b
-    first k (Project a b         ) = Project (first k a) (fmap (first k) b)
-    first k (Note a b            ) = Note (k a) (first k b)
-    first k (ImportAlt a b       ) = ImportAlt (first k a) (first k b)
-    first _ (Embed a             ) = Embed a
+    first _ (Const a              ) = Const a
+    first _ (Var a                ) = Var a
+    first k (Lam a b c            ) = Lam a (first k b) (first k c)
+    first k (Pi a b c             ) = Pi a (first k b) (first k c)
+    first k (App a b              ) = App (first k a) (first k b)
+    first k (Let as b             ) = Let (fmap (first k) as) (first k b)
+    first k (Annot a b            ) = Annot (first k a) (first k b)
+    first _  Bool                   = Bool
+    first _ (BoolLit a            ) = BoolLit a
+    first k (BoolAnd a b          ) = BoolAnd (first k a) (first k b)
+    first k (BoolOr a b           ) = BoolOr (first k a) (first k b)
+    first k (BoolEQ a b           ) = BoolEQ (first k a) (first k b)
+    first k (BoolNE a b           ) = BoolNE (first k a) (first k b)
+    first k (BoolIf a b c         ) = BoolIf (first k a) (first k b) (first k c)
+    first _  Natural                = Natural
+    first _ (NaturalLit a         ) = NaturalLit a
+    first _  NaturalFold            = NaturalFold
+    first _  NaturalBuild           = NaturalBuild
+    first _  NaturalIsZero          = NaturalIsZero
+    first _  NaturalEven            = NaturalEven
+    first _  NaturalOdd             = NaturalOdd
+    first _  NaturalToInteger       = NaturalToInteger
+    first _  NaturalShow            = NaturalShow
+    first _  NaturalSubtract        = NaturalSubtract
+    first k (NaturalPlus a b      ) = NaturalPlus (first k a) (first k b)
+    first k (NaturalTimes a b     ) = NaturalTimes (first k a) (first k b)
+    first _  Integer                = Integer
+    first _ (IntegerLit a         ) = IntegerLit a
+    first _  IntegerShow            = IntegerShow
+    first _  IntegerToDouble        = IntegerToDouble
+    first _  Double                 = Double
+    first _ (DoubleLit a          ) = DoubleLit a
+    first _  DoubleShow             = DoubleShow
+    first _  Text                   = Text
+    first k (TextLit (Chunks a b) ) = TextLit (Chunks (fmap (fmap (first k)) a) b)
+    first k (TextAppend a b       ) = TextAppend (first k a) (first k b)
+    first _  TextShow               = TextShow
+    first _  List                   = List
+    first k (ListLit a b          ) = ListLit (fmap (first k) a) (fmap (first k) b)
+    first k (ListAppend a b       ) = ListAppend (first k a) (first k b)
+    first _  ListBuild              = ListBuild
+    first _  ListFold               = ListFold
+    first _  ListLength             = ListLength
+    first _  ListHead               = ListHead
+    first _  ListLast               = ListLast
+    first _  ListIndexed            = ListIndexed
+    first _  ListReverse            = ListReverse
+    first _  Optional               = Optional
+    first k (Some a               ) = Some (first k a)
+    first _  None                   = None
+    first _  OptionalFold           = OptionalFold
+    first _  OptionalBuild          = OptionalBuild
+    first k (Record a             ) = Record (fmap (first k) a)
+    first k (RecordLit a          ) = RecordLit (fmap (first k) a)
+    first k (Union a              ) = Union (fmap (fmap (first k)) a)
+    first k (UnionLit a b c       ) = UnionLit a (first k b) (fmap (fmap (first k)) c)
+    first k (Combine a b          ) = Combine (first k a) (first k b)
+    first k (CombineTypes a b     ) = CombineTypes (first k a) (first k b)
+    first k (Prefer a b           ) = Prefer (first k a) (first k b)
+    first k (Merge a b c          ) = Merge (first k a) (first k b) (fmap (first k) c)
+    first k (ToMap a b            ) = ToMap (first k a) (fmap (first k) b)
+    first k (Field a b            ) = Field (first k a) b
+    first k (Project a b          ) = Project (first k a) (fmap (first k) b)
+    first k (Note a b             ) = Note (k a) (first k b)
+    first k (ImportAlt a b        ) = ImportAlt (first k a) (first k b)
+    first _ (Embed a              ) = Embed a
 
     second = fmap
 
@@ -899,7 +899,7 @@ shift _ _ NaturalEven = NaturalEven
 shift _ _ NaturalOdd = NaturalOdd
 shift _ _ NaturalToInteger = NaturalToInteger
 shift _ _ NaturalShow = NaturalShow
-shift _ _ NaturalTruncatedSubtract = NaturalTruncatedSubtract
+shift _ _ NaturalSubtract = NaturalSubtract
 shift d v (NaturalPlus a b) = NaturalPlus a' b'
   where
     a' = shift d v a
@@ -1079,7 +1079,7 @@ subst _ _ NaturalEven = NaturalEven
 subst _ _ NaturalOdd = NaturalOdd
 subst _ _ NaturalToInteger = NaturalToInteger
 subst _ _ NaturalShow = NaturalShow
-subst _ _ NaturalTruncatedSubtract = NaturalTruncatedSubtract
+subst _ _ NaturalSubtract = NaturalSubtract
 subst x e (NaturalPlus a b) = NaturalPlus a' b'
   where
     a' = subst x e a
@@ -1232,74 +1232,74 @@ boundedType _                = False
 
 -- | Remove all `Note` constructors from an `Expr` (i.e. de-`Note`)
 denote :: Expr s a -> Expr t a
-denote (Note _ b            ) = denote b
-denote (Const a             ) = Const a
-denote (Var a               ) = Var a
-denote (Lam a b c           ) = Lam a (denote b) (denote c)
-denote (Pi a b c            ) = Pi a (denote b) (denote c)
-denote (App a b             ) = App (denote a) (denote b)
-denote (Let as b            ) = Let (fmap f as) (denote b)
+denote (Note _ b             ) = denote b
+denote (Const a              ) = Const a
+denote (Var a                ) = Var a
+denote (Lam a b c            ) = Lam a (denote b) (denote c)
+denote (Pi a b c             ) = Pi a (denote b) (denote c)
+denote (App a b              ) = App (denote a) (denote b)
+denote (Let as b             ) = Let (fmap f as) (denote b)
   where
     f (Binding c d e) = Binding c (fmap denote d) (denote e)
-denote (Annot a b           ) = Annot (denote a) (denote b)
-denote  Bool                  = Bool
-denote (BoolLit a           ) = BoolLit a
-denote (BoolAnd a b         ) = BoolAnd (denote a) (denote b)
-denote (BoolOr a b          ) = BoolOr (denote a) (denote b)
-denote (BoolEQ a b          ) = BoolEQ (denote a) (denote b)
-denote (BoolNE a b          ) = BoolNE (denote a) (denote b)
-denote (BoolIf a b c        ) = BoolIf (denote a) (denote b) (denote c)
-denote  Natural               = Natural
-denote (NaturalLit a        ) = NaturalLit a
-denote  NaturalFold           = NaturalFold
-denote  NaturalBuild          = NaturalBuild
-denote  NaturalIsZero         = NaturalIsZero
-denote  NaturalEven           = NaturalEven
-denote  NaturalOdd            = NaturalOdd
-denote  NaturalToInteger      = NaturalToInteger
-denote  NaturalShow           = NaturalShow
-denote  NaturalTruncatedSubtract           = NaturalTruncatedSubtract
-denote (NaturalPlus a b     ) = NaturalPlus (denote a) (denote b)
-denote (NaturalTimes a b    ) = NaturalTimes (denote a) (denote b)
-denote  Integer               = Integer
-denote (IntegerLit a        ) = IntegerLit a
-denote  IntegerShow           = IntegerShow
-denote  IntegerToDouble       = IntegerToDouble
-denote  Double                = Double
-denote (DoubleLit a         ) = DoubleLit a
-denote  DoubleShow            = DoubleShow
-denote  Text                  = Text
-denote (TextLit (Chunks a b)) = TextLit (Chunks (fmap (fmap denote) a) b)
-denote (TextAppend a b      ) = TextAppend (denote a) (denote b)
-denote  TextShow              = TextShow
-denote  List                  = List
-denote (ListLit a b         ) = ListLit (fmap denote a) (fmap denote b)
-denote (ListAppend a b      ) = ListAppend (denote a) (denote b)
-denote  ListBuild             = ListBuild
-denote  ListFold              = ListFold
-denote  ListLength            = ListLength
-denote  ListHead              = ListHead
-denote  ListLast              = ListLast
-denote  ListIndexed           = ListIndexed
-denote  ListReverse           = ListReverse
-denote  Optional              = Optional
-denote (Some a              ) = Some (denote a)
-denote  None                  = None
-denote  OptionalFold          = OptionalFold
-denote  OptionalBuild         = OptionalBuild
-denote (Record a            ) = Record (fmap denote a)
-denote (RecordLit a         ) = RecordLit (fmap denote a)
-denote (Union a             ) = Union (fmap (fmap denote) a)
-denote (UnionLit a b c      ) = UnionLit a (denote b) (fmap (fmap denote) c)
-denote (Combine a b         ) = Combine (denote a) (denote b)
-denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
-denote (Prefer a b          ) = Prefer (denote a) (denote b)
-denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
-denote (ToMap a b           ) = ToMap (denote a) (fmap denote b)
-denote (Field a b           ) = Field (denote a) b
-denote (Project a b         ) = Project (denote a) (fmap denote b)
-denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
-denote (Embed a             ) = Embed a
+denote (Annot a b            ) = Annot (denote a) (denote b)
+denote  Bool                   = Bool
+denote (BoolLit a            ) = BoolLit a
+denote (BoolAnd a b          ) = BoolAnd (denote a) (denote b)
+denote (BoolOr a b           ) = BoolOr (denote a) (denote b)
+denote (BoolEQ a b           ) = BoolEQ (denote a) (denote b)
+denote (BoolNE a b           ) = BoolNE (denote a) (denote b)
+denote (BoolIf a b c         ) = BoolIf (denote a) (denote b) (denote c)
+denote  Natural                = Natural
+denote (NaturalLit a         ) = NaturalLit a
+denote  NaturalFold            = NaturalFold
+denote  NaturalBuild           = NaturalBuild
+denote  NaturalIsZero          = NaturalIsZero
+denote  NaturalEven            = NaturalEven
+denote  NaturalOdd             = NaturalOdd
+denote  NaturalToInteger       = NaturalToInteger
+denote  NaturalShow            = NaturalShow
+denote  NaturalSubtract        = NaturalSubtract
+denote (NaturalPlus a b      ) = NaturalPlus (denote a) (denote b)
+denote (NaturalTimes a b     ) = NaturalTimes (denote a) (denote b)
+denote  Integer                = Integer
+denote (IntegerLit a         ) = IntegerLit a
+denote  IntegerShow            = IntegerShow
+denote  IntegerToDouble        = IntegerToDouble
+denote  Double                 = Double
+denote (DoubleLit a          ) = DoubleLit a
+denote  DoubleShow             = DoubleShow
+denote  Text                   = Text
+denote (TextLit (Chunks a b) ) = TextLit (Chunks (fmap (fmap denote) a) b)
+denote (TextAppend a b       ) = TextAppend (denote a) (denote b)
+denote  TextShow               = TextShow
+denote  List                   = List
+denote (ListLit a b          ) = ListLit (fmap denote a) (fmap denote b)
+denote (ListAppend a b       ) = ListAppend (denote a) (denote b)
+denote  ListBuild              = ListBuild
+denote  ListFold               = ListFold
+denote  ListLength             = ListLength
+denote  ListHead               = ListHead
+denote  ListLast               = ListLast
+denote  ListIndexed            = ListIndexed
+denote  ListReverse            = ListReverse
+denote  Optional               = Optional
+denote (Some a               ) = Some (denote a)
+denote  None                   = None
+denote  OptionalFold           = OptionalFold
+denote  OptionalBuild          = OptionalBuild
+denote (Record a             ) = Record (fmap denote a)
+denote (RecordLit a          ) = RecordLit (fmap denote a)
+denote (Union a              ) = Union (fmap (fmap denote) a)
+denote (UnionLit a b c       ) = UnionLit a (denote b) (fmap (fmap denote) c)
+denote (Combine a b          ) = Combine (denote a) (denote b)
+denote (CombineTypes a b     ) = CombineTypes (denote a) (denote b)
+denote (Prefer a b           ) = Prefer (denote a) (denote b)
+denote (Merge a b c          ) = Merge (denote a) (denote b) (fmap denote c)
+denote (ToMap a b            ) = ToMap (denote a) (fmap denote b)
+denote (Field a b            ) = Field (denote a) b
+denote (Project a b          ) = Project (denote a) (fmap denote b)
+denote (ImportAlt a b        ) = ImportAlt (denote a) (denote b)
+denote (Embed a              ) = Embed a
 
 shallowDenote :: Expr s a -> Expr s a
 shallowDenote (Note _ e) = shallowDenote e
@@ -1410,7 +1410,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                     App NaturalToInteger (NaturalLit n) -> pure (IntegerLit (toInteger n))
                     App NaturalShow (NaturalLit n) ->
                         pure (TextLit (Chunks [] (Data.Text.pack (show n))))
-                    App NaturalTruncatedSubtract (NaturalLit x) (NaturalLit y) ->
+                    App NaturalSubtract (NaturalLit x) (NaturalLit y) ->
                         | y >= x    -> pure (NaturalLit (subtract x y))
                         | otherwise -> pure (NaturalLit 0)
                     App IntegerShow (IntegerLit n)
@@ -1567,7 +1567,7 @@ normalizeWithM ctx e0 = loop (denote e0)
     NaturalOdd -> pure NaturalOdd
     NaturalToInteger -> pure NaturalToInteger
     NaturalShow -> pure NaturalShow
-    NaturalTruncatedSubtract -> pure NaturalTruncatedSubtract
+    NaturalSubtract -> pure NaturalSubtract
     NaturalPlus x y -> decide <$> loop x <*> loop y
       where
         decide (NaturalLit 0)  r             = r
@@ -1835,7 +1835,7 @@ isNormalized e0 = loop (denote e0)
           App NaturalEven (NaturalLit _) -> False
           App NaturalOdd (NaturalLit _) -> False
           App NaturalShow (NaturalLit _) -> False
-          App NaturalTruncatedSubtract (NaturalLit _) -> False
+          App NaturalSubtract (NaturalLit _) -> False
           App NaturalToInteger (NaturalLit _) -> False
           App IntegerShow (IntegerLit _) -> False
           App IntegerToDouble (IntegerLit _) -> False
@@ -1894,7 +1894,7 @@ isNormalized e0 = loop (denote e0)
       NaturalEven -> True
       NaturalOdd -> True
       NaturalShow -> True
-      NaturalTruncatedSubtract -> True
+      NaturalSubtract -> True
       NaturalToInteger -> True
       NaturalPlus x y -> loop x && loop y && decide x y
         where
@@ -2066,7 +2066,7 @@ reservedIdentifiers =
         , "Natural/odd"
         , "Natural/toInteger"
         , "Natural/show"
-        , "Natural/truncatedSubtract"
+        , "Natural/subtract"
         , "Integer"
         , "Integer/show"
         , "Integer/toDouble"
@@ -2119,7 +2119,7 @@ subExpressions _ NaturalEven = pure NaturalEven
 subExpressions _ NaturalOdd = pure NaturalOdd
 subExpressions _ NaturalToInteger = pure NaturalToInteger
 subExpressions _ NaturalShow = pure NaturalShow
-subExpressions _ NaturalTruncatedSubtract = pure NaturalTruncatedSubtract
+subExpressions _ NaturalSubtract = pure NaturalSubtract
 subExpressions f (NaturalPlus a b) = NaturalPlus <$> f a <*> f b
 subExpressions f (NaturalTimes a b) = NaturalTimes <$> f a <*> f b
 subExpressions _ Integer = pure Integer

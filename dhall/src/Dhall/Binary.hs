@@ -147,8 +147,8 @@ instance ToTerm a => ToTerm (Expr s a) where
         TString "Natural/toInteger"
     encode NaturalShow =
         TString "Natural/show"
-    encode NaturalTruncatedSubtract =
-        TString "Natural/truncatedSubtract"
+    encode NaturalSubtract =
+        TString "Natural/subtract"
     encode IntegerToDouble =
         TString "Integer/toDouble"
     encode IntegerShow =
@@ -519,8 +519,8 @@ instance FromTerm a => FromTerm (Expr s a) where
         return NaturalToInteger
     decode (TString "Natural/show") =
         return NaturalShow
-    decode (TString "Natural/truncatedSubtract") =
-        return NaturalTruncatedSubtract
+    decode (TString "Natural/subtract") =
+        return NaturalSubtract
     decode (TString "Integer/toDouble") =
         return IntegerToDouble
     decode (TString "Integer/show") =
