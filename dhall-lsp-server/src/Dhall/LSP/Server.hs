@@ -72,7 +72,9 @@ lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
                      -- around this peculiarity.
                      Just (J.ExecuteCommandOptions
                        (J.List ["dhall.server.lint",
-                                "dhall.server.annotateLet"]))
+                                "dhall.server.annotateLet",
+                                "dhall.server.freezeImport",
+                                "dhall.server.freezeAllImports"]))
                  , LSP.Core.documentLinkProvider =
                     Just (J.DocumentLinkOptions { _resolveProvider = Just False })
                  }

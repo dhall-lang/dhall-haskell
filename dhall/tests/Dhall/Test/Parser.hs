@@ -12,9 +12,11 @@ import Turtle (FilePath, (</>))
 
 import qualified Codec.Serialise      as Serialise
 import qualified Control.Monad        as Monad
+import qualified Data.ByteString      as ByteString
 import qualified Data.ByteString.Lazy as ByteString.Lazy
 import qualified Data.Text            as Text
 import qualified Data.Text.IO         as Text.IO
+import qualified Data.Text.Encoding   as Text.Encoding
 import qualified Dhall.Binary         as Binary
 import qualified Dhall.Core           as Core
 import qualified Dhall.Parser         as Parser
@@ -132,11 +134,14 @@ shouldNotParse path = do
     let pathString = Text.unpack path
 
     Tasty.HUnit.testCase pathString (do
-        text <- Text.IO.readFile pathString
+        bytes <- ByteString.readFile pathString
 
-        case Parser.exprFromText mempty text of
-            Left  _ -> return ()
-            Right _ -> fail "Unexpected successful parser" )
+        case Text.Encoding.decodeUtf8' bytes of
+            Left _ -> return ()
+            Right text -> do
+                case Parser.exprFromText mempty text of
+                    Left  _ -> return ()
+                    Right _ -> fail "Unexpected successful parser" )
 
 shouldDecode :: Text -> TestTree
 shouldDecode pathText = do
