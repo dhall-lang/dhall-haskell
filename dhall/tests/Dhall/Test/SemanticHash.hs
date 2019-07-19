@@ -2,6 +2,7 @@
 
 module Dhall.Test.SemanticHash where
 
+import Data.Monoid((<>))
 import Data.Text (Text)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)

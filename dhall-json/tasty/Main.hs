@@ -40,6 +40,8 @@ testTree =
         , Test.Tasty.testGroup "Nesting"
             [ testDhallToJSON "./tasty/data/nesting0"
             , testDhallToJSON "./tasty/data/nesting1"
+            , testDhallToJSON "./tasty/data/nestingLegacy0"
+            , testDhallToJSON "./tasty/data/nestingLegacy1"
             ]
         , Test.Tasty.testGroup "Union keys"
             [ testJSONToDhall "./tasty/data/unionKeys"
