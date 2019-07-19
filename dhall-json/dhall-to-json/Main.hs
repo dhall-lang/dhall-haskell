@@ -3,7 +3,7 @@
 
 module Main where
 
-import Control.Applicative ((<|>))
+import Control.Applicative ((<|>), optional)
 import Control.Exception (SomeException)
 import Control.Monad (when)
 import Data.Aeson (Value)
@@ -17,12 +17,13 @@ import qualified Data.Aeson
 import qualified Data.Aeson.Encode.Pretty
 import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Lazy
-import qualified Data.Text.IO
+import qualified Data.Text                as Text
+import qualified Data.Text.IO             as Text.IO
 import qualified Dhall
 import qualified Dhall.JSON
 import qualified GHC.IO.Encoding
-import qualified Options.Applicative
-import qualified Paths_dhall_json as Meta
+import qualified Options.Applicative      as Options
+import qualified Paths_dhall_json         as Meta
 import qualified System.Exit
 import qualified System.IO
 
@@ -33,6 +34,7 @@ data Options = Options
     , version                   :: Bool
     , conversion                :: Conversion
     , approximateSpecialDoubles :: Bool
+    , file                      :: Maybe FilePath
     }
 
 parseOptions :: Parser Options
@@ -44,58 +46,66 @@ parseOptions =
     <*> parseVersion
     <*> Dhall.JSON.parseConversion
     <*> parseApproximateSpecialDoubles
+    <*> optional parseFile
   where
     parseExplain =
-        Options.Applicative.switch
-            (   Options.Applicative.long "explain"
-            <>  Options.Applicative.help "Explain error messages in detail"
+        Options.switch
+            (   Options.long "explain"
+            <>  Options.help "Explain error messages in detail"
             )
 
     parsePretty =
         prettyFlag <|> compactFlag <|> defaultBehavior
       where
         prettyFlag =
-            Options.Applicative.flag'
+            Options.flag'
                 True
-                (   Options.Applicative.long "pretty"
-                <>  Options.Applicative.help "Pretty print generated JSON"
+                (   Options.long "pretty"
+                <>  Options.help "Pretty print generated JSON"
                 )
 
         compactFlag =
-            Options.Applicative.flag'
+            Options.flag'
                 False
-                (   Options.Applicative.long "compact"
-                <>  Options.Applicative.help "Render JSON on one line"
+                (   Options.long "compact"
+                <>  Options.help "Render JSON on one line"
                 )
 
         defaultBehavior =
             pure False
 
     parseVersion =
-        Options.Applicative.switch
-            (   Options.Applicative.long "version"
-            <>  Options.Applicative.help "Display version"
+        Options.switch
+            (   Options.long "version"
+            <>  Options.help "Display version"
             )
 
     parseApproximateSpecialDoubles =
-        Options.Applicative.switch
-            (   Options.Applicative.long "approximate-special-doubles"
-            <>  Options.Applicative.help "Use approximate representation for NaN/±Infinity"
+        Options.switch
+            (   Options.long "approximate-special-doubles"
+            <>  Options.help "Use approximate representation for NaN/±Infinity"
+            )
+
+    parseFile =
+        Options.strOption
+            (   Options.long "file"
+            <>  Options.help "Read expression from a file instead of standard input"
+            <>  Options.metavar "FILE"
             )
 
 parserInfo :: ParserInfo Options
 parserInfo =
-    Options.Applicative.info
-        (Options.Applicative.helper <*> parseOptions)
-        (   Options.Applicative.fullDesc
-        <>  Options.Applicative.progDesc "Compile Dhall to JSON"
+    Options.info
+        (Options.helper <*> parseOptions)
+        (   Options.fullDesc
+        <>  Options.progDesc "Compile Dhall to JSON"
         )
 
 main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
-    Options {..} <- Options.Applicative.execParser parserInfo
+    Options {..} <- Options.execParser parserInfo
 
     when version $ do
       putStrLn (showVersion Meta.version)
@@ -119,9 +129,15 @@ main = do
                 then ApproximateWithinJSON
                 else ForbidWithinJSON
 
-        stdin <- Data.Text.IO.getContents
+        text <- case file of
+            Nothing   -> Text.IO.getContents
+            Just path -> Text.IO.readFile path
 
-        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode "(stdin)" stdin)
+        let path = case file of
+                Nothing -> "(stdin)"
+                Just p  -> Text.pack p
+
+        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode path text)
 
         Data.ByteString.Char8.putStrLn $ Data.ByteString.Lazy.toStrict $ encode json
 
