@@ -790,7 +790,7 @@ typeWithA tpa = loop
                     case Dhall.Map.lookup x kts of
                         Just (Just t') -> return (Pi x t' (Union kts))
                         Just Nothing   -> return (Union kts)
-                        Nothing -> Left (TypeError ctx e (MissingField x t))
+                        Nothing -> Left (TypeError ctx e (MissingConstructor x r))
                   r' -> Left (TypeError ctx e (CantAccess text r' t))
     loop ctx e@(Project r (Left xs)) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
@@ -933,6 +933,7 @@ data TypeMessage s a
     | CantProject Text (Expr s a) (Expr s a)
     | CantProjectByExpression (Expr s a)
     | MissingField Text (Expr s a)
+    | MissingConstructor Text (Expr s a)
     | ProjectionTypeMismatch Text (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
     | CantOr (Expr s a) (Expr s a)
@@ -3468,6 +3469,44 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \... but the field is missing because the record only defines the following      \n\
         \fields:                                                                         \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n"
+      where
+        txt0 = insert k
+        txt1 = insert expr0
+
+prettyTypeMessage (MissingConstructor k expr0) = ErrorMessages {..}
+  where
+    short = "Missing constructor"
+
+    long =
+        "Explanation: You can access constructors from unions, like this:                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────┐                                                       \n\
+        \    │ < Foo | Bar >.Foo │  This is valid ...                                    \n\
+        \    └───────────────────┘                                                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you can only access constructors if they match an union alternative of  \n\
+        \the same name.                                                                  \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────┐                                                       \n\
+        \    │ < Foo | Bar >.Baz │                                                       \n\
+        \    └───────────────────┘                                                       \n\
+        \                    ⇧                                                           \n\
+        \                    Invalid: the union has no ❰Baz❱ alternative                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You tried to access a constructor named:                                        \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... but the constructor is missing because the union only defines the following \n\
+        \alternatives:                                                                   \n\
         \                                                                                \n\
         \" <> txt1 <> "\n"
       where
