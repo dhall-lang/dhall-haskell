@@ -686,6 +686,7 @@ Test-Suite tasty
         prettyprinter                                  ,
         QuickCheck                >= 2.10     && < 2.14,
         quickcheck-instances      >= 0.3.12   && < 0.4 ,
+        semigroups                                     ,
         serialise                                      ,
         spoon                                    < 0.4 ,
         tasty                     >= 0.11.2   && < 1.3 ,
