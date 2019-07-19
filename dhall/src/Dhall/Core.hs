@@ -1410,7 +1410,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                     App NaturalToInteger (NaturalLit n) -> pure (IntegerLit (toInteger n))
                     App NaturalShow (NaturalLit n) ->
                         pure (TextLit (Chunks [] (Data.Text.pack (show n))))
-                    App NaturalSubtract (NaturalLit x) (NaturalLit y) ->
+                    App (App NaturalSubtract (NaturalLit x)) (NaturalLit y)
                         | y >= x    -> pure (NaturalLit (subtract x y))
                         | otherwise -> pure (NaturalLit 0)
                     App IntegerShow (IntegerLit n)
