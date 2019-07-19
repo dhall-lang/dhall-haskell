@@ -27,11 +27,12 @@ import Dhall.Core
     , Var(..)
     )
 
+import Data.Functor.Identity (Identity(..))
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
 import Numeric.Natural (Natural)
 import Test.QuickCheck
-    (Arbitrary(..), Gen, Positive(..), Property, genericShrink, (===), (==>))
+    (Arbitrary(..), Gen, Positive(..), Property, NonNegative(..), genericShrink, (===), (==>))
 import Test.QuickCheck.Instances ()
 import Test.Tasty (TestTree)
 import Text.Megaparsec (SourcePos(..), Pos)
@@ -111,7 +112,7 @@ lift6 f =
         <*> arbitrary
         <*> arbitrary
 
-natural :: (Arbitrary a, Num a) => Gen a
+natural :: Gen Natural
 natural =
     Test.QuickCheck.frequency
         [ (7, arbitrary)
@@ -187,7 +188,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                           bindings <- Test.QuickCheck.vectorOf n arbitrary
                           body     <- arbitrary
                           return (Let (binding :| bindings) body)
-                  in  ( 1, Test.QuickCheck.oneof [ letExpression ])
+                  in  ( 7, letExpression)
                 , ( 1, lift2 Annot)
                 , ( 7, lift0 Bool)
                 , ( 7, lift1 BoolLit)
@@ -327,9 +328,9 @@ instance Arbitrary URL where
 instance Arbitrary Var where
     arbitrary =
         Test.QuickCheck.oneof
-            [ fmap (V "_") (fromIntegral <$> (natural :: Gen Int))
+            [ fmap (V "_") (getNonNegative <$> arbitrary)
             , lift1 (\t -> V t 0)
-            , lift1 V <*> (fromIntegral <$> (natural :: Gen Int))
+            , lift1 V <*> (getNonNegative <$> arbitrary)
             ]
 
     shrink = genericShrink
@@ -358,6 +359,14 @@ isNormalizedIsConsistentWithNormalize expression =
         Just nf -> Dhall.Core.isNormalized expression === (nf == expression)
         Nothing -> Test.QuickCheck.discard
 
+normalizeWithMIsConsistentWithNormalize :: Expr () Import -> Property
+normalizeWithMIsConsistentWithNormalize expression =
+    case Control.Spoon.spoon (Dhall.Core.normalize expression :: Expr () Import) of
+        Just nf ->
+            let nfM = runIdentity (Dhall.Core.normalizeWithM (\_ -> Identity Nothing) expression)
+            in nfM === nf
+        Nothing -> Test.QuickCheck.discard
+
 isSameAsSelf :: Expr () Import -> Property
 isSameAsSelf expression =
   hasNoImportAndTypechecks ==> Dhall.Diff.same (Dhall.Diff.diffExpression expression expression)
@@ -376,6 +385,10 @@ tests =
         , ( "isNormalized should be consistent with normalize"
           , Test.QuickCheck.property
               (Test.QuickCheck.withMaxSuccess 10000 isNormalizedIsConsistentWithNormalize)
+          )
+        , ( "normalizeWithM should be consistent with normalize"
+          , Test.QuickCheck.property
+              (Test.QuickCheck.withMaxSuccess 10000 normalizeWithMIsConsistentWithNormalize)
           )
         , ( "An expression should have no difference with itself"
           , Test.QuickCheck.property
