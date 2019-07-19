@@ -877,7 +877,7 @@ loadWith expr₀ = case expr₀ of
                     throwMissingImport (Imported _stack' (HashMismatch {..}))
 
     return expr
-  ImportAlt a b        -> loadWith a `catch` handler₀
+  ImportAlt a b -> loadWith a `catch` handler₀
     where
       handler₀ (SourcedException (Src begin _ text₀) (MissingImports es₀)) =
           loadWith b `catch` handler₁
