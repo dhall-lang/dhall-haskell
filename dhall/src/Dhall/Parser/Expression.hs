@@ -77,10 +77,6 @@ noted parser = do
         Note src₁ _ | laxSrcEq src₀ src₁ -> return e
         _                                -> return (Note src₀ e)
 
-shallowDenote :: Expr s a -> Expr s a
-shallowDenote (Note _ e) = shallowDenote e
-shallowDenote         e  = e
-
 completeExpression :: Parser a -> Parser (Expr Src a)
 completeExpression embedded = completeExpression_
   where
@@ -181,18 +177,13 @@ parsers embedded = Parsers {..}
 
                     b <- expression
 
-                    case (shallowDenote a, shallowDenote b) of
-                        (ListLit _ xs, App f c) ->
-                            case shallowDenote f of
-                                List -> case xs of
-                                    [] -> return (ListLit (Just c) xs)
-                                    _  -> return (Annot a b)
-                                _ ->
-                                    return (Annot a b)
-                        (Merge c d _, e) ->
-                            return (Merge c d (Just e))
-                        (ToMap c _, d) ->
-                            return (ToMap c (Just d))
+                    case shallowDenote a of
+                        ListLit _ [] ->
+                            return (ListLit (Just b) [])
+                        Merge c d _ ->
+                            return (Merge c d (Just b))
+                        ToMap c _ ->
+                            return (ToMap c (Just b))
                         _ -> return (Annot a b)
 
             alternative4A <|> alternative4B <|> pure a
