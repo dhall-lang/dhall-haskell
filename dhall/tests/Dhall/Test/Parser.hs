@@ -76,9 +76,6 @@ getTests = do
                       -- The same performance improvements also broke the
                       -- precedence of parsing empty list literals
                     , parseDirectory </> "failure/unit/ListLitEmptyPrecedence.dhall"
-
-                      -- https://github.com/dhall-lang/dhall-haskell/pull/1104
-                    , parseDirectory </> "failure/nonCharacter.dhall"
                     ]
 
             Monad.guard (path `notElem` skip)

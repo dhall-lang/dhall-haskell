@@ -3,6 +3,7 @@
 -- | Parse Dhall tokens. Even though we don't have a tokenizer per-se this
 ---  module is useful for keeping some small parsing utilities.
 module Dhall.Parser.Token (
+    validCodepoint,
     whitespace,
     bashEnvironmentVariable,
     posixEnvironmentVariable,
@@ -108,7 +109,7 @@ import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
-import qualified Data.Char
+import qualified Data.Char                  as Char
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Text
@@ -124,6 +125,11 @@ import Prelude hiding (const, pi)
 
 import qualified Text.Parser.Token
 
+validCodepoint :: Char -> Bool
+validCodepoint c =
+    not (category == Char.Surrogate || category == Char.NotAssigned)
+  where
+    category = Char.generalCategory c
 
 whitespace :: Parser ()
 whitespace = Text.Parser.Combinators.skipMany whitespaceChunk
@@ -207,19 +213,19 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
   where
     hexDigit = do
         c <- Text.Parser.Char.satisfy predicate
-        return (Data.Char.ord c - Data.Char.ord '0')
+        return (Char.ord c - Char.ord '0')
       where
         predicate c = '0' <= c && c <= '9'
 
     hexUpper = do
         c <- Text.Parser.Char.satisfy predicate
-        return (10 + Data.Char.ord c - Data.Char.ord 'A')
+        return (10 + Char.ord c - Char.ord 'A')
       where
         predicate c = 'A' <= c && c <= 'F'
 
     hexLower = do
         c <- Text.Parser.Char.satisfy predicate
-        return (10 + Data.Char.ord c - Data.Char.ord 'a')
+        return (10 + Char.ord c - Char.ord 'a')
       where
         predicate c = 'a' <= c && c <= 'f'
 
@@ -258,7 +264,7 @@ blockCommentChunk =
         predicate c =
                 '\x20' <= c && c <= '\x10FFFF' && c /= '-' && c /= '{'
             ||  c == '\n'
-            || c == '\t'
+            ||  c == '\t'
 
     character = void (Text.Parser.Char.satisfy predicate)
       where
