@@ -364,11 +364,11 @@ isNormalizedIsConsistentWithNormalize expression =
 
 normalizeWithMIsConsistentWithNormalize :: Expr () Import -> Property
 normalizeWithMIsConsistentWithNormalize expression =
-    case Control.Spoon.spoon (Dhall.Core.normalize expression :: Expr () Import) of
-        Just nf ->
-            let nfM = runIdentity (Dhall.Core.normalizeWithM (\_ -> Identity Nothing) expression)
-            in nfM === nf
+    case Control.Spoon.spoon (nfM, nf) of
+        Just (a, b) -> a === b
         Nothing -> Test.QuickCheck.discard
+  where nfM = runIdentity (Dhall.Core.normalizeWithM (\_ -> Identity Nothing) expression)
+        nf = Dhall.Core.normalize expression :: Expr () Import
 
 isSameAsSelf :: Expr () Import -> Property
 isSameAsSelf expression =
