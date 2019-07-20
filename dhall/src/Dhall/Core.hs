@@ -47,6 +47,7 @@ module Dhall.Core (
     , isNormalized
     , isNormalizedWith
     , denote
+    , shallowDenote
     , freeIn
 
     -- * Pretty-printing
@@ -426,7 +427,7 @@ data Expr s a
     | TextShow
     -- | > List                                     ~  List
     | List
-    -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : List t
+    -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : t
     --   > ListLit  Nothing  [x, y, z]              ~  [x, y, z]
     | ListLit (Maybe (Expr s a)) (Seq (Expr s a))
     -- | > ListAppend x y                           ~  x # y
@@ -1292,6 +1293,10 @@ denote (Project a b         ) = Project (denote a) (fmap denote b)
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
+shallowDenote :: Expr s a -> Expr s a
+shallowDenote (Note _ e) = shallowDenote e
+shallowDenote         e  = e
+
 {-| Reduce an expression to its normal form, performing beta reduction and applying
     any custom definitions.
 
@@ -1417,7 +1422,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                                     (ListAppend (ListLit Nothing (pure "a")) "as")
                                 )
 
-                        nil = ListLit (Just _A₀) empty
+                        nil = ListLit (Just (App List _A₀)) empty
                     App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil -> do
                       t' <- loop t
                       if boundedType t' then strict else lazy
@@ -1443,7 +1448,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                         o = case Data.Sequence.viewr ys of
                                 _ :> y -> Some y
                                 _      -> App None t
-                    App (App ListIndexed _A₀) (ListLit _A₁ as₀) -> loop (ListLit t as₁)
+                    App (App ListIndexed _A₀) (ListLit _ as₀) -> loop (ListLit t as₁)
                       where
                         as₁ = Data.Sequence.mapWithIndex adapt as₀
 
@@ -1453,7 +1458,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                                   , ("value", _A₀)
                                   ]
 
-                        t | null as₀  = Just _A₂
+                        t | null as₀  = Just (App List _A₂)
                           | otherwise = Nothing
 
                         adapt n a_ =
@@ -1465,7 +1470,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                     App (App ListReverse t) (ListLit _ xs) ->
                         loop (ListLit m (Data.Sequence.reverse xs))
                       where
-                        m = if Data.Sequence.null xs then Just t else Nothing
+                        m = if Data.Sequence.null xs then Just (App List t) else Nothing
                     App (App (App (App (App OptionalFold _) (App None _)) _) _) nothing ->
                         loop nothing
                     App (App (App (App (App OptionalFold _) (Some x)) _) just) _ ->
@@ -1697,8 +1702,8 @@ normalizeWithM ctx e0 = loop (denote e0)
                 let keyValues = Data.Sequence.fromList (map entry (Dhall.Map.toList kvsX))
 
                 let listType = case t' of
-                        Just (App List itemType) | null keyValues ->
-                            Just itemType
+                        Just _ | null keyValues ->
+                            t'
                         _ ->
                             Nothing
 
