@@ -447,9 +447,9 @@ parsers embedded = Parsers {..}
                 return (Chunks [] t)
               where
                 predicate c =
-                    (   ('\x20' <= c && c <= '\x21')
-                    ||  ('\x23' <= c && c <= '\x5B')
-                    ||  ('\x5D' <= c && c <= '\x10FFFF' && validCodepoint c)
+                    (   ('\x20' <= c && c <= '\x21'    )
+                    ||  ('\x23' <= c && c <= '\x5B'    )
+                    ||  ('\x5D' <= c && c <= '\x10FFFF')
                     ) && c /= '$'
 
             unescapedCharacterSlow = do
@@ -560,10 +560,7 @@ parsers embedded = Parsers {..}
                     return (Chunks [] a <> b)
                   where
                     predicate c =
-                            '\x20' <= c && c <= '\x10FFFF'
-                        &&  validCodepoint c
-                        &&  c /= '$'
-                        &&  c /= '\''
+                        ('\x20' <= c && c <= '\x10FFFF') && c /= '$' && c /= '\''
 
                 unescapedCharacterSlow = do
                     a <- satisfy predicate

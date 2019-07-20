@@ -233,8 +233,7 @@ lineComment :: Parser ()
 lineComment = do
     _ <- Text.Parser.Char.text "--"
 
-    let predicate c =
-            ('\x20' <= c && c <= '\x10FFFF' && validCodepoint c) || c == '\t'
+    let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
 
     _ <- Dhall.Parser.Combinators.takeWhile predicate
 
@@ -263,20 +262,13 @@ blockCommentChunk =
     characters = void (Dhall.Parser.Combinators.takeWhile1 predicate)
       where
         predicate c =
-                (   '\x20' <= c && c <= '\x10FFFF'
-                &&  c /= '-'
-                &&  c /= '{'
-                &&  validCodepoint c
-                )
+                '\x20' <= c && c <= '\x10FFFF' && c /= '-' && c /= '{'
             ||  c == '\n'
             ||  c == '\t'
 
     character = void (Text.Parser.Char.satisfy predicate)
       where
-        predicate c =
-                ('\x20' <= c && c <= '\x10FFFF' && validCodepoint c)
-            ||  c == '\n'
-            ||  c == '\t'
+        predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
 
     endOfLine = void (Text.Parser.Char.text "\r\n")
 
@@ -380,7 +372,7 @@ quotedPathCharacter :: Char -> Bool
 quotedPathCharacter c =
         ('\x20' <= c && c <= '\x21')
     ||  ('\x23' <= c && c <= '\x2E')
-    ||  ('\x30' <= c && c <= '\x10FFFF' && validCodepoint c)
+    ||  ('\x30' <= c && c <= '\x10FFFF')
 
 data ComponentType = URLComponent | FileComponent
 
