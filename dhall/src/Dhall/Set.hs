@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 
 -- | This module only exports ways of constructing a Set,
@@ -16,9 +17,13 @@ module Dhall.Set (
     , append
     , empty
     , difference
+    , sort
+    , isSorted
+    , null
     ) where
 
-import Prelude
+import Prelude hiding (null)
+import Control.DeepSeq (NFData)
 import Data.List (foldl')
 import Data.Sequence (Seq, (|>))
 import Data.Data (Data)
@@ -29,7 +34,7 @@ import qualified Data.Sequence
 import qualified Data.Foldable
 
 data Set a = Set (Data.Set.Set a) (Seq a)
-    deriving (Eq, Generic, Ord, Show, Data)
+    deriving (Eq, Generic, Ord, Show, Data, NFData)
 
 instance Foldable Set where
     foldMap f = foldMap f . toSeq
@@ -66,3 +71,29 @@ empty = Set Data.Set.empty Data.Sequence.empty
 difference :: Ord a => Set a -> Set a -> [a]
 difference os (Set s _) =
     filter (\ x -> not (Data.Set.member x s)) (toList os)
+
+{-| Sort the set elements, forgetting their original ordering.
+
+>>> sort (fromList [2, 1]) == fromList [1, 2]
+True
+-}
+sort :: Ord a => Set a -> Set a
+sort (Set s xs) = Set s (Data.Sequence.sort xs)
+
+{-|
+>>> isSorted (fromList [2, 1])
+False
+>>> isSorted (fromList [1, 2])
+True
+-}
+isSorted :: Ord a => Set a -> Bool
+isSorted s = toList s == Data.Set.toList (toSet s)
+
+{-|
+>>> null (fromList [1])
+False
+>>> null (fromList [])
+True
+-}
+null :: Set a -> Bool
+null (Set s _) = Data.Set.null s

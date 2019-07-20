@@ -6,6 +6,7 @@ import Dhall.TypeCheck (typeWithA, X(..), TypeError(..))
 import Dhall.Parser (Src(..))
 
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Monoid ((<>))
 import Control.Lens (toListOf)
 import Data.Text (Text)
 import Control.Applicative ((<|>))

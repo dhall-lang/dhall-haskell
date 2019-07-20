@@ -337,7 +337,7 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                     ,   Core.App
                             (Core.Field
                                 (Core.Union
-                                    [ ("Inline", Just (Core.Record []))
+                                    [ ("Inline", mInlineType)
                                     , ("Nested", Just Core.Text)
                                     ]
                                 )
@@ -347,7 +347,7 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                                 (Core.Chunks [] nestedField)
                             )
                     )
-                 ] -> do
+                 ] | all (== Core.Record []) mInlineType -> do
                     contents' <- loop contents
 
                     let taggedValue =
@@ -375,18 +375,9 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                             (Core.Chunks [] field)
                     )
                  ,  (   "nesting"
-                    ,   Core.App
-                            (Core.Field
-                                (Core.Union
-                                    [ ("Inline", Just (Core.Record []))
-                                    , ("Nested", Just Core.Text)
-                                    ]
-                                )
-                                "Inline"
-                            )
-                            (Core.RecordLit [])
+                    ,   nesting
                     )
-                 ] -> do
+                 ] | isInlineNesting nesting -> do
                     let contents' =
                             Dhall.Map.insert
                                 field
@@ -444,6 +435,28 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
 
                 outer value
         _ -> Left (Unsupported e)
+
+isInlineNesting :: Expr s X -> Bool
+isInlineNesting (Core.App
+                    (Core.Field
+                        (Core.Union
+                            [ ("Inline", Just (Core.Record []))
+                            , ("Nested", Just Core.Text)
+                            ]
+                        )
+                        "Inline"
+                    )
+                    (Core.RecordLit [])
+                )  = True
+isInlineNesting (Core.Field
+                    (Core.Union
+                        [ ("Inline", Nothing)
+                        , ("Nested", Just Core.Text)
+                        ]
+                    )
+                    "Inline"
+                ) = True
+isInlineNesting _ = False
 
 toOrderedList :: Ord k => Map k v -> [(k, v)]
 toOrderedList =
@@ -825,6 +838,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             a' =      loop a
             b' =      loop b
             c' = fmap loop c
+
+        Core.ToMap a b ->
+            Core.ToMap a' b'
+          where
+            a' =      loop a
+            b' = fmap loop b
 
         Core.Field a b ->
             Core.Field a' b

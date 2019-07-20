@@ -191,6 +191,8 @@ parsers embedded = Parsers {..}
                                     return (Annot a b)
                         (Merge c d _, e) ->
                             return (Merge c d (Just e))
+                        (ToMap c _, d) ->
+                            return (ToMap c (Just d))
                         _ -> return (Annot a b)
 
             alternative4A <|> alternative4B <|> pure a
@@ -286,6 +288,7 @@ parsers embedded = Parsers {..}
                     , alternative05
                     , alternative06
                     , alternative07
+                    , alternative08
                     , alternative37
                     , alternative09
 
@@ -331,6 +334,11 @@ parsers embedded = Parsers {..}
                 a <- importExpression_
                 b <- importExpression_ <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
+
+            alternative08 = do
+                _toMap
+                a <- importExpression_
+                return (ToMap a Nothing)
 
             alternative09 = do
                 a <- try doubleInfinity
@@ -752,23 +760,24 @@ importType_ = do
 
     choice [ local, http, env, missing ]
 
+importHash_ :: Parser (Crypto.Hash.Digest Crypto.Hash.SHA256)
+importHash_ = do
+    _ <- Text.Parser.Char.text "sha256:"
+    text <- count 64 (satisfy hexdig <?> "hex digit")
+    whitespace
+    let strictBytes16 = Data.Text.Encoding.encodeUtf8 text
+    strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
+        Left  string      -> fail string
+        Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
+    case Crypto.Hash.digestFromByteString strictBytes of
+      Nothing -> fail "Invalid sha256 hash"
+      Just h  -> pure h
+
 importHashed_ :: Parser ImportHashed
 importHashed_ = do
     importType <- importType_
     hash       <- optional importHash_
     return (ImportHashed {..})
-  where
-    importHash_ = do
-        _ <- Text.Parser.Char.text "sha256:"
-        text <- count 64 (satisfy hexdig <?> "hex digit")
-        whitespace
-        let strictBytes16 = Data.Text.Encoding.encodeUtf8 text
-        strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
-            Left  string      -> fail string
-            Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
-        case Crypto.Hash.digestFromByteString strictBytes of
-          Nothing -> fail "Invalid sha256 hash"
-          Just h  -> pure h
 
 import_ :: Parser Import
 import_ = (do

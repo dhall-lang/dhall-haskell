@@ -2,6 +2,7 @@
 
 module Dhall.Test.Parser where
 
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Dhall.Core (Expr, Import)
 import Dhall.TypeCheck (X)
@@ -11,9 +12,11 @@ import Turtle (FilePath, (</>))
 
 import qualified Codec.Serialise      as Serialise
 import qualified Control.Monad        as Monad
+import qualified Data.ByteString      as ByteString
 import qualified Data.ByteString.Lazy as ByteString.Lazy
 import qualified Data.Text            as Text
 import qualified Data.Text.IO         as Text.IO
+import qualified Data.Text.Encoding   as Text.Encoding
 import qualified Dhall.Binary         as Binary
 import qualified Dhall.Core           as Core
 import qualified Dhall.Parser         as Parser
@@ -37,6 +40,9 @@ getTests = do
                     -- This is a bug created by a parsing performance
                     -- improvement
                     [ parseDirectory </> "success/unit/MergeParenAnnotationA.dhall"
+
+                    -- https://github.com/dhall-lang/dhall-lang/pull/655
+                    , parseDirectory </> "success/unit/import/urls/potPourriA.dhall"
                     ]
 
             Monad.guard (path `notElem` skip)
@@ -128,11 +134,14 @@ shouldNotParse path = do
     let pathString = Text.unpack path
 
     Tasty.HUnit.testCase pathString (do
-        text <- Text.IO.readFile pathString
+        bytes <- ByteString.readFile pathString
 
-        case Parser.exprFromText mempty text of
-            Left  _ -> return ()
-            Right _ -> fail "Unexpected successful parser" )
+        case Text.Encoding.decodeUtf8' bytes of
+            Left _ -> return ()
+            Right text -> do
+                case Parser.exprFromText mempty text of
+                    Left  _ -> return ()
+                    Right _ -> fail "Unexpected successful parser" )
 
 shouldDecode :: Text -> TestTree
 shouldDecode pathText = do
@@ -166,6 +175,6 @@ shouldNotDecode pathText = do
 
         term <- Core.throws (Serialise.deserialiseOrFail bytes)
 
-        case Binary.decodeExpression term of
+        case Binary.decodeExpression term :: Either Binary.DecodingFailure (Expr X Import) of
             Left _ -> return ()
             Right _ -> fail "Unexpected successful decode" )

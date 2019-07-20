@@ -5,22 +5,27 @@ module Dhall.LSP.Backend.Diagnostics
   , diagnose
   , Diagnosis(..)
   , explain
+  , embedsWithRanges
   , offsetToPosition
   , Position
   , positionFromMegaparsec
   , positionToOffset
   , Range(..)
   , rangeFromDhall
+  , subtractPosition
   )
 where
 
 import Dhall.Parser (SourcedException(..), Src(..), unwrap)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError(..))
-import Dhall.Core (Expr(Note))
+import Dhall.Core (Expr(Note, Embed), subExpressions)
 
 import Dhall.LSP.Util
 import Dhall.LSP.Backend.Dhall
 
+import Control.Lens (toListOf)
+import Control.Monad.Trans.Writer (Writer, execWriter, tell)
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.List.NonEmpty as NonEmpty
@@ -115,6 +120,15 @@ positionToMegaparsec (line, col) = Megaparsec.SourcePos ""
                                      (Megaparsec.mkPos $ max 0 line + 1)
                                      (Megaparsec.mkPos $ max 0 col + 1)
 
+addRelativePosition :: Position -> Position -> Position
+addRelativePosition (x1, y1) (0, dy2) = (x1, y1 + dy2)
+addRelativePosition (x1, _) (dx2, y2) = (x1 + dx2, y2)
+
+-- | prop> addRelativePosition pos (subtractPosition pos pos') == pos'
+subtractPosition :: Position -> Position -> Position
+subtractPosition (x1, y1) (x2, y2) | x1 == x2 = (0, y2 - y1)
+                                   | otherwise = (x2 - x1, y2)
+
 -- | Convert a source range from Dhalls @Src@ format. The returned range is
 --   "tight", that is, does not contain any trailing whitespace.
 rangeFromDhall :: Src -> Range
@@ -122,8 +136,7 @@ rangeFromDhall (Src left _right text) = Range (x1,y1) (x2,y2)
   where
     (x1,y1) = positionFromMegaparsec left
     (dx2,dy2) = offsetToPosition text . Text.length $ Text.stripEnd text
-    (x2,y2) | dx2 == 0 = (x1, y1 + dy2)
-            | otherwise = (x1 + dx2, dy2)
+    (x2,y2) = addRelativePosition (x1,y1) (dx2,dy2)
 
 -- Convert a (line,column) position into the corresponding character offset
 -- and back, such that the two are inverses of eachother.
@@ -136,3 +149,13 @@ positionToOffset txt (line, col) = if line < length ls
 offsetToPosition :: Text -> Int -> Position
 offsetToPosition txt off = (length ls - 1, Text.length (NonEmpty.last ls))
   where ls = lines' (Text.take off txt)
+
+-- | Collect all `Embed` constructors (i.e. imports if the expression has type
+--   `Expr Src Import`) wrapped in a Note constructor and return them together
+--   with their associated range in the source code.
+embedsWithRanges :: Expr Src a -> [(Range, a)]
+embedsWithRanges =
+  map (\(src, a) -> (rangeFromDhall src, a)) . execWriter . go
+  where go :: Expr Src a -> Writer [(Src, a)] ()
+        go (Note src (Embed a)) = tell [(src, a)]
+        go expr = mapM_ go (toListOf subExpressions expr)

@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns       #-}
 {-# LANGUAGE CPP                #-}
+{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveTraversable  #-}
@@ -68,6 +69,7 @@ module Dhall.Core (
 import Control.Applicative (Applicative(..), (<$>))
 #endif
 import Control.Applicative (empty)
+import Control.DeepSeq (NFData)
 import Control.Exception (Exception)
 import Control.Monad.IO.Class (MonadIO(..))
 import Crypto.Hash (SHA256)
@@ -126,7 +128,7 @@ import qualified Text.Printf
     Dhall is not a dependently typed language
 -}
 data Const = Type | Kind | Sort
-    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic)
+    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic, NFData)
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -138,7 +140,7 @@ instance Pretty Const where
     @Directory { components = [ "baz", "bar", "foo" ] }@
 -}
 newtype Directory = Directory { components :: [Text] }
-    deriving (Eq, Generic, Ord, Show)
+    deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Semigroup Directory where
     Directory components₀ <> Directory components₁ =
@@ -153,7 +155,7 @@ instance Pretty Directory where
 data File = File
     { directory :: Directory
     , file      :: Text
-    } deriving (Eq, Generic, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Pretty File where
     pretty (File {..}) =
@@ -174,7 +176,7 @@ data FilePrefix
     -- ^ Path relative to @..@
     | Home
     -- ^ Path relative to @~@
-    deriving (Eq, Generic, Ord, Show)
+    deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Pretty FilePrefix where
     pretty Absolute = ""
@@ -182,7 +184,7 @@ instance Pretty FilePrefix where
     pretty Parent   = ".."
     pretty Home     = "~"
 
-data Scheme = HTTP | HTTPS deriving (Eq, Generic, Ord, Show)
+data Scheme = HTTP | HTTPS deriving (Eq, Generic, Ord, Show, NFData)
 
 data URL = URL
     { scheme    :: Scheme
@@ -190,7 +192,7 @@ data URL = URL
     , path      :: File
     , query     :: Maybe Text
     , headers   :: Maybe (Expr Src Import)
-    } deriving (Eq, Generic, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Pretty URL where
     pretty (URL {..}) =
@@ -228,7 +230,7 @@ data ImportType
     | Env  Text
     -- ^ Environment variable
     | Missing
-    deriving (Eq, Generic, Ord, Show)
+    deriving (Eq, Generic, Ord, Show, NFData)
 
 parent :: File
 parent = File { directory = Directory { components = [ ".." ] }, file = "" }
@@ -267,13 +269,13 @@ instance Pretty ImportType where
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
 data ImportMode = Code | RawText | Location
-  deriving (Eq, Generic, Ord, Show)
+  deriving (Eq, Generic, Ord, Show, NFData)
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
     { hash       :: Maybe (Crypto.Hash.Digest SHA256)
     , importType :: ImportType
-    } deriving (Eq, Generic, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Semigroup ImportHashed where
     ImportHashed _ importType₀ <> ImportHashed hash importType₁ =
@@ -289,7 +291,7 @@ instance Pretty ImportHashed where
 data Import = Import
     { importHashed :: ImportHashed
     , importMode   :: ImportMode
-    } deriving (Eq, Generic, Ord, Show)
+    } deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Semigroup Import where
     Import importHashed₀ _ <> Import importHashed₁ code =
@@ -337,7 +339,7 @@ instance Pretty Import where
     appear as a numeric suffix.
 -}
 data Var = V Text !Int
-    deriving (Data, Generic, Eq, Ord, Show)
+    deriving (Data, Generic, Eq, Ord, Show, NFData)
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -470,6 +472,9 @@ data Expr s a
     -- | > Merge x y (Just t )                      ~  merge x y : t
     --   > Merge x y  Nothing                       ~  merge x y
     | Merge (Expr s a) (Expr s a) (Maybe (Expr s a))
+    -- | > ToMap x (Just t)                         ~  toMap x : t
+    --   > ToMap x  Nothing                         ~  toMap x
+    | ToMap (Expr s a) (Maybe (Expr s a))
     -- | > Field e x                                ~  e.x
     | Field (Expr s a) Text
     -- | > Project e (Left xs)                      ~  e.{ xs }
@@ -481,7 +486,9 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data)
+    deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data, NFData)
+-- NB: If you add a constructor to Expr, please also update the Arbitrary
+-- instance in Dhall.Test.QuickCheck.
 
 -- This instance is hand-written due to the fact that deriving
 -- it does not give us an INLINABLE pragma. We annotate this fmap
@@ -547,6 +554,7 @@ instance Functor (Expr s) where
   fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
   fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
   fmap f (Merge e1 e2 maybeE) = Merge (fmap f e1) (fmap f e2) (fmap (fmap f) maybeE)
+  fmap f (ToMap e maybeE) = ToMap (fmap f e) (fmap (fmap f) maybeE)
   fmap f (Field e1 v) = Field (fmap f e1) v
   fmap f (Project e1 vs) = Project (fmap f e1) (fmap (fmap f) vs)
   fmap f (Note s e1) = Note s (fmap f e1)
@@ -623,6 +631,7 @@ instance Monad (Expr s) where
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
     Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
     Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
+    ToMap a b            >>= k = ToMap (a >>= k) (fmap (>>= k) b)
     Field a b            >>= k = Field (a >>= k) b
     Project a b          >>= k = Project (a >>= k) (fmap (>>= k) b)
     Note a b             >>= k = Note a (b >>= k)
@@ -689,6 +698,7 @@ instance Bifunctor Expr where
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
     first k (Prefer a b          ) = Prefer (first k a) (first k b)
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
+    first k (ToMap a b           ) = ToMap (first k a) (fmap (first k) b)
     first k (Field a b           ) = Field (first k a) b
     first k (Project a b         ) = Project (first k a) (fmap (first k) b)
     first k (Note a b            ) = Note (k a) (first k b)
@@ -704,7 +714,7 @@ data Binding s a = Binding
     { variable   :: Text
     , annotation :: Maybe (Expr s a)
     , value      :: Expr s a
-    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data)
+    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData)
 
 instance Bifunctor Binding where
     first k (Binding a b c) = Binding a (fmap (first k) b) (first k c)
@@ -713,7 +723,7 @@ instance Bifunctor Binding where
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =
@@ -960,6 +970,10 @@ shift d v (Merge a b c) = Merge a' b' c'
     a' =       shift d v  a
     b' =       shift d v  b
     c' = fmap (shift d v) c
+shift d v (ToMap a b) = ToMap a' b'
+  where
+    a' =       shift d v  a
+    b' = fmap (shift d v) b
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
@@ -1135,6 +1149,10 @@ subst x e (Merge a b c) = Merge a' b' c'
     a' =       subst x e  a
     b' =       subst x e  b
     c' = fmap (subst x e) c
+subst x e (ToMap a b) = ToMap a' b'
+  where
+    a' =       subst x e  a
+    b' = fmap (subst x e) b
 subst x e (Field a b) = Field a' b
   where
     a' = subst x e a
@@ -1268,6 +1286,7 @@ denote (Combine a b         ) = Combine (denote a) (denote b)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
 denote (Prefer a b          ) = Prefer (denote a) (denote b)
 denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
+denote (ToMap a b           ) = ToMap (denote a) (fmap denote b)
 denote (Field a b           ) = Field (denote a) b
 denote (Project a b         ) = Project (denote a) (fmap denote b)
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
@@ -1327,6 +1346,20 @@ normalizeWithM ctx e0 = loop (denote e0)
                     -- build/fold fusion for `List`
                     App (App ListBuild _) (App (App ListFold _) e') -> loop e'
 
+                    App NaturalFold (NaturalLit n) -> do
+                        let natural = Var (V "natural" 0)
+                        let go 0  x = x
+                            go n' x = go (n'-1) (App (Var (V "succ" 0)) x)
+                        let n' = go n (Var (V "zero" 0))
+                        pure
+                            (Lam "natural"
+                                (Const Type)
+                                (Lam "succ"
+                                    (Pi "_" natural natural)
+                                    (Lam "zero"
+                                        natural
+                                        n')))
+
                     -- build/fold fusion for `Natural`
                     App NaturalBuild (App NaturalFold e') -> loop e'
 
@@ -1347,7 +1380,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                         lazyLoop !n = App succ' (lazyLoop (n - 1))
                     App NaturalBuild g -> loop (App (App (App g Natural) succ) zero)
                       where
-                        succ = Lam "x" Natural (NaturalPlus "x" (NaturalLit 1))
+                        succ = Lam "n" Natural (NaturalPlus "n" (NaturalLit 1))
 
                         zero = NaturalLit 0
                     App NaturalIsZero (NaturalLit n) -> pure (BoolLit (n == 0))
@@ -1648,6 +1681,30 @@ normalizeWithM ctx e0 = loop (denote e0)
             _ -> Merge x' y' <$> t'
       where
         t' = traverse loop t
+    ToMap x t        -> do
+        x' <- loop x
+        t' <- traverse loop t
+        case x' of
+            RecordLit kvsX -> do
+                let entry (key, value) =
+                        RecordLit
+                            (Dhall.Map.fromList
+                                [ ("mapKey"  , TextLit (Chunks [] key))
+                                , ("mapValue", value                  )
+                                ]
+                            )
+
+                let keyValues = Data.Sequence.fromList (map entry (Dhall.Map.toList kvsX))
+
+                let listType = case t' of
+                        Just (App List itemType) | null keyValues ->
+                            Just itemType
+                        _ ->
+                            Nothing
+
+                return (ListLit listType keyValues)
+            _ -> do
+                return (ToMap x' t')
     Field r x        -> do
         r' <- loop r
         case r' of
@@ -1662,7 +1719,7 @@ normalizeWithM ctx e0 = loop (denote e0)
             RecordLit kvs ->
                 pure (RecordLit (Dhall.Map.restrictKeys kvs (Dhall.Set.toSet xs)))
             _   | null xs -> pure (RecordLit mempty)
-                | otherwise -> pure (Project r' (Left xs))
+                | otherwise -> pure (Project r' (Left (Dhall.Set.sort xs)))
     Project r (Right e1) -> do
         e2 <- loop e1
 
@@ -1715,6 +1772,11 @@ isNormalizedWith :: (Eq s, Eq a) => Normalizer a -> Expr s a -> Bool
 isNormalizedWith ctx e = e == normalizeWith (Just (ReifiedNormalizer ctx)) e
 
 -- | Quickly check if an expression is in normal form
+--
+-- Given a well-typed expression @e@, @'isNormalized' e@ is equivalent to
+-- @e == 'normalize' e@.
+--
+-- Given an ill-typed expression, 'isNormalized' may return 'True' or 'False'.
 isNormalized :: Eq a => Expr s a -> Bool
 isNormalized e0 = loop (denote e0)
   where
@@ -1736,6 +1798,7 @@ isNormalized e0 = loop (denote e0)
           App (App OptionalBuild _) (App (App OptionalFold _) _) -> False
 
           App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
+          App NaturalFold (NaturalLit _) -> False
           App NaturalBuild _ -> False
           App NaturalIsZero (NaturalLit _) -> False
           App NaturalEven (NaturalLit _) -> False
@@ -1882,29 +1945,20 @@ isNormalized e0 = loop (denote e0)
                               Nothing -> True
                       _ -> True
               _ -> True
-      Field r x -> loop r &&
-          case r of
-              RecordLit kvs ->
-                  case Dhall.Map.lookup x kvs of
-                      Just _  -> False
-                      Nothing -> True
-              Union kvs ->
-                  case Dhall.Map.lookup x kvs of
-                      Just _  -> False
-                      Nothing -> True
-              _ -> True
-      Project r xs -> loop r &&
-          case r of
-              RecordLit kvs ->
-                  case xs of
-                      Left  s -> not (all (flip Dhall.Map.member kvs) s)
-                      Right e' ->
-                          case e' of
-                              Record kts ->
-                                  loop (Project r (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
-                              _ ->
-                                  False
-              _ -> not (null xs)
+      ToMap x t -> case x of
+          RecordLit _ -> False
+          _ -> loop x && all loop t
+      Field r _ -> case r of
+          RecordLit _ -> False
+          _ -> loop r
+      Project r p -> loop r &&
+          case p of
+              Left s -> case r of
+                  RecordLit _ -> False
+                  _ -> not (Dhall.Set.null s) && Dhall.Set.isSorted s
+              Right e' -> case e' of
+                  Record _ -> False
+                  _ -> loop e'
       Note _ e' -> loop e'
       ImportAlt l _r -> loop l
       Embed _ -> True
@@ -1965,6 +2019,7 @@ reservedIdentifiers =
         , "True"
         , "False"
         , "merge"
+        , "toMap"
         , "if"
         , "then"
         , "else"
@@ -2068,6 +2123,7 @@ subExpressions f (Combine a b) = Combine <$> f a <*> f b
 subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
 subExpressions f (Prefer a b) = Prefer <$> f a <*> f b
 subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
+subExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
 subExpressions f (Field a b) = Field <$> f a <*> pure b
 subExpressions f (Project a b) = Project <$> f a <*> traverse f b
 subExpressions f (Note a b) = Note a <$> f b

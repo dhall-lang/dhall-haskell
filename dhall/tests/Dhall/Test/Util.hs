@@ -11,6 +11,7 @@ module Dhall.Test.Util
     , assertNormalizesToWith
     , assertNormalized
     , assertTypeChecks
+    , assertDoesntTypeCheck
     , discover
     , toDhallPath
     ) where
@@ -86,6 +87,16 @@ assertNormalized e = do
 
 assertTypeChecks :: Text -> IO ()
 assertTypeChecks text = Data.Functor.void (code text)
+
+assertDoesntTypeCheck :: Text -> IO ()
+assertDoesntTypeCheck text = do
+    expr0 <- case Dhall.Parser.exprFromText mempty text of
+        Left parseError -> Control.Exception.throwIO parseError
+        Right e         -> return e
+    expr1 <- Dhall.Import.load expr0
+    case Dhall.TypeCheck.typeOf expr1 of
+        Left _      -> return ()
+        Right type_ -> fail ("Bad type for " <> Text.unpack text <> "\n  " <> show type_)
 
 {-| Automatically run a test on all files in a directory tree that end in
     @A.dhall@

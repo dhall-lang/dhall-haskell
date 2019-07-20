@@ -14,7 +14,7 @@ import qualified System.Log.Logger
 import Dhall.LSP.State
 import Dhall.LSP.Handlers (nullHandler, wrapHandler, hoverHandler,
   didOpenTextDocumentNotificationHandler, didSaveTextDocumentNotificationHandler,
-  executeCommandHandler, documentFormattingHandler)
+  executeCommandHandler, documentFormattingHandler, documentLinkHandler)
 
 -- | The main entry point for the LSP server.
 run :: Maybe FilePath -> IO ()
@@ -72,7 +72,11 @@ lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
                      -- around this peculiarity.
                      Just (J.ExecuteCommandOptions
                        (J.List ["dhall.server.lint",
-                                "dhall.server.annotateLet"]))
+                                "dhall.server.annotateLet",
+                                "dhall.server.freezeImport",
+                                "dhall.server.freezeAllImports"]))
+                 , LSP.Core.documentLinkProvider =
+                    Just (J.DocumentLinkOptions { _resolveProvider = Just False })
                  }
 
 lspHandlers :: MVar ServerState -> LSP.Core.Handlers
@@ -87,4 +91,5 @@ lspHandlers state
         , LSP.Core.responseHandler                          = Just $ wrapHandler state nullHandler
         , LSP.Core.executeCommandHandler                    = Just $ wrapHandler state executeCommandHandler
         , LSP.Core.documentFormattingHandler                = Just $ wrapHandler state documentFormattingHandler
+        , LSP.Core.documentLinkHandler                      = Just $ wrapHandler state documentLinkHandler
         }

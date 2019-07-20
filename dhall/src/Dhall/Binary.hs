@@ -415,6 +415,15 @@ instance ToTerm a => ToTerm (Expr s a) where
       where
         t₁  = encode t₀
         _T₁ = encode _T₀
+    encode (ToMap t₀ Nothing) =
+        TList [ TInt 27, t₁ ]
+      where
+        t₁ = encode t₀
+    encode (ToMap t₀ (Just _T₀)) =
+        TList [ TInt 27, t₁, _T₁ ]
+      where
+        t₁  = encode t₀
+        _T₁ = encode _T₀
     encode (Note _ e) =
         encode e
 
@@ -764,6 +773,13 @@ instance FromTerm a => FromTerm (Expr s a) where
         t₀  <- decode t₁
         _T₀ <- decode _T₁
         return (Annot t₀ _T₀)
+    decode (TList [ TInt 27, t₁ ]) = do
+        t₀ <- decode t₁
+        return (ToMap t₀ Nothing)
+    decode (TList [ TInt 27, t₁, _T₁ ]) = do
+        t₀ <- decode t₁
+        _T₀ <- decode _T₁
+        return (ToMap t₀ (Just _T₀))
     decode _ =
         empty
 
@@ -917,7 +933,7 @@ encodeExpression :: Expr s Import -> Term
 encodeExpression = encode
 
 -- | Decode a Dhall expression from a CBOR `Term`
-decodeExpression :: Term -> Either DecodingFailure (Expr s Import)
+decodeExpression :: FromTerm a => Term -> Either DecodingFailure (Expr s a)
 decodeExpression term =
     case decodeWithoutVersion <|> decodeWithVersion of
         Just expression -> Right expression

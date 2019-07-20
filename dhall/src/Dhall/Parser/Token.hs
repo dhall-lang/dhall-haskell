@@ -29,6 +29,7 @@ module Dhall.Parser.Token (
     _as,
     _using,
     _merge,
+    _toMap,
     _Some,
     _None,
     _NaturalFold,
@@ -141,6 +142,9 @@ alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
 
 digit :: Char -> Bool
 digit c = '\x30' <= c && c <= '\x39'
+
+alphaNum :: Char -> Bool
+alphaNum c = alpha c || digit c
 
 hexdig :: Char -> Bool
 hexdig c =
@@ -295,7 +299,7 @@ simpleLabel allowReserved = try (do
   where
     headCharacter c = alpha c || c == '_'
 
-    tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
+    tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
 
 backtickLabel :: Parser Text
 backtickLabel = do
@@ -340,7 +344,7 @@ bashEnvironmentVariable = satisfy predicate0 <> star (satisfy predicate1)
   where
     predicate0 c = alpha c || c == '_'
 
-    predicate1 c = alpha c || digit c || c == '_'
+    predicate1 c = alphaNum c || c == '_'
 
 posixEnvironmentVariable :: Parser Text
 posixEnvironmentVariable = plus posixEnvironmentVariableCharacter
@@ -442,7 +446,7 @@ userinfo = star (satisfy predicate <|> pctEncoded)
     predicate c = unreserved c || subDelims c || c == ':'
 
 host :: Parser Text
-host = choice [ ipLiteral, ipV4Address, regName ]
+host = choice [ ipLiteral, try ipV4Address, domain ]
 
 port :: Parser Text
 port = star (satisfy digit)
@@ -538,10 +542,13 @@ decOctet =
       where
         predicate c = '\x30' <= c && c <= '\x35'
 
-regName :: Parser Text
-regName = star (satisfy predicate <|> pctEncoded)
+domain :: Parser Text
+domain = domainLabel <> star ("." <> domainLabel ) <> option "."
+
+domainLabel :: Parser Text
+domainLabel = plus alphaNum_ <> star (plus "-" <> plus alphaNum_)
   where
-    predicate c = unreserved c || subDelims c
+    alphaNum_ = satisfy alphaNum
 
 pchar :: Parser Text
 pchar = satisfy predicate <|> pctEncoded
@@ -561,7 +568,7 @@ subDelims c = c `elem` ("!$&'()*+,;=" :: String)
 
 unreserved :: Char -> Bool
 unreserved c =
-    alpha c || digit c || c == '-' || c == '.' || c == '_' || c == '~'
+    alphaNum c || c == '-' || c == '.' || c == '_' || c == '~'
 
 reserved :: Data.Text.Text -> Parser ()
 reserved x = do _ <- Text.Parser.Char.text x; whitespace
@@ -595,6 +602,9 @@ _using = keyword "using"
 
 _merge :: Parser ()
 _merge = keyword "merge"
+
+_toMap :: Parser ()
+_toMap = keyword "toMap"
 
 _Some :: Parser ()
 _Some = keyword "Some"

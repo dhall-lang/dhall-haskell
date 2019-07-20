@@ -646,6 +646,10 @@ skeleton (Merge {}) =
     <>  ignore
     <>  " "
     <>  ignore
+skeleton (ToMap {}) =
+        keyword "toMap"
+    <>  " "
+    <>  ignore
 skeleton (Field {}) =
         ignore
     <>  dot
@@ -760,6 +764,16 @@ diffAnnotatedExpression (Merge aL bL cL) (Merge aR bR cR) = align doc
 diffAnnotatedExpression l@(Merge {}) r =
     mismatch l r
 diffAnnotatedExpression l r@(Merge {}) =
+    mismatch l r
+diffAnnotatedExpression (ToMap aL bL) (ToMap aR bR) = align doc
+  where
+    doc =   keyword "toMap"
+        <>  " "
+        <>  format " " (diffImportExpression aL aR)
+        <>  diffMaybe (colon <> " ") diffApplicationExpression bL bR
+diffAnnotatedExpression l@(ToMap {}) r =
+    mismatch l r
+diffAnnotatedExpression l r@(ToMap {}) =
     mismatch l r
 diffAnnotatedExpression (ListLit aL@(Just _) bL) (ListLit aR bR) = align doc
   where

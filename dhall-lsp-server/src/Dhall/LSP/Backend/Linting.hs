@@ -11,6 +11,7 @@ import qualified Dhall.Lint as Dhall
 
 import Dhall.LSP.Backend.Diagnostics
 
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.List.NonEmpty (NonEmpty(..), tails, toList)
 import Control.Lens (universeOf)
