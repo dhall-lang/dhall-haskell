@@ -121,7 +121,7 @@ shouldParse path = do
 
         expression <- Core.throws (Parser.exprFromText mempty text)
 
-        let term = Binary.encode expression
+        let term = Binary.encodeExpression expression
 
         let bytes = Serialise.serialise term
 

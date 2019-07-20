@@ -530,7 +530,7 @@ command (Options {..}) = do
         Encode {..} -> do
             expression <- getExpression file
 
-            let term = Dhall.Binary.encode expression
+            let term = Dhall.Binary.encodeExpression expression
 
             let bytes = Codec.Serialise.serialise term
 
