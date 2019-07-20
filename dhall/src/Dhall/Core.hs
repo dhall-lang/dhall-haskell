@@ -1306,11 +1306,19 @@ denote (Embed a             ) = Embed a
     That is, if the functions in custom context are not total then the Dhall language, evaluated
     with those functions is not total either.
 
+    `normalizeWith` can fail with an `error` if you normalize an ill-typed
+    expression
 -}
 normalizeWith :: Eq a => Maybe (ReifiedNormalizer a) -> Expr s a -> Expr t a
 normalizeWith (Just ctx) t = runIdentity (normalizeWithM (getReifiedNormalizer ctx) t)
 normalizeWith _          t = Dhall.Eval.nfEmpty t
 
+{-| This function generalizes `normalizeWith` by allowing the custom normalizer
+    to use an arbitrary `Monad`
+
+    `normalizeWithM` can fail with an `error` if you normalize an ill-typed
+    expression
+-}
 normalizeWithM
     :: (Monad m, Eq a) => NormalizerM m a -> Expr s a -> m (Expr t a)
 normalizeWithM ctx e0 = loop (denote e0)
@@ -1749,6 +1757,9 @@ textShow text = "\"" <> Data.Text.concatMap f text <> "\""
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise
+
+    `judgmentallyEqual` can fail with an `error` if you compare ill-typed
+    expressions
 -}
 judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
 judgmentallyEqual = Dhall.Eval.convEmpty
@@ -1768,6 +1779,9 @@ newtype ReifiedNormalizer a = ReifiedNormalizer
 --   Unlike `isNormalized`, this will fully normalize and traverse through the expression.
 --
 --   It is much more efficient to use `isNormalized`.
+--
+--  `isNormalizedWith` can fail with an `error` if you check an ill-typed
+--  expression
 isNormalizedWith :: (Eq s, Eq a) => Normalizer a -> Expr s a -> Bool
 isNormalizedWith ctx e = e == normalizeWith (Just (ReifiedNormalizer ctx)) e
 
