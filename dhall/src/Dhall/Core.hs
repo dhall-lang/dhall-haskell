@@ -1192,8 +1192,8 @@ alphaNormalize = Dhall.Eval.alphaNormalize
     expressions before normalizing them since normalization can convert an
     ill-typed expression into a well-typed expression.
 
-    However, `normalize` will not fail if the expression is ill-typed and will
-    leave ill-typed sub-expressions unevaluated.
+    `normalize` can also fail with `error` if you normalize an ill-typed
+    expression
 -}
 
 normalize :: Eq a => Expr s a -> Expr t a
