@@ -245,6 +245,8 @@ Extra-Source-Files:
     dhall-lang/tests/parser/success/unit/*.dhallb
     dhall-lang/tests/parser/success/unit/import/*.dhall
     dhall-lang/tests/parser/success/unit/import/*.dhallb
+    dhall-lang/tests/parser/success/unit/import/urls/*.dhall
+    dhall-lang/tests/parser/success/unit/import/urls/*.dhallb
     dhall-lang/tests/parser/success/text/*.dhall
     dhall-lang/tests/parser/success/text/*.dhallb
     dhall-lang/tests/semantic-hash/success/*.dhall
