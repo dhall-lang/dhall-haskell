@@ -36,7 +36,6 @@ import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
 import Dhall.X (X(..))
-import Language.Haskell.TH.Syntax (Lift(lift))
 
 import qualified Data.Foldable
 import qualified Data.Map
