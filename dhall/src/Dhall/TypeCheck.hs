@@ -21,9 +21,7 @@ module Dhall.TypeCheck (
     , TypeMessage(..)
     ) where
 
-import Control.Applicative (empty)
 import Control.Exception (Exception)
-import Data.Data (Data(..))
 import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (Endo(..), First(..))
@@ -33,10 +31,11 @@ import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Typeable (Typeable)
-import Dhall.Binary (FromTerm(..), ToTerm(..))
+import Dhall.Binary (ToTerm(..))
 import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
+import Dhall.X (X(..))
 import Language.Haskell.TH.Syntax (Lift(lift))
 
 import qualified Data.Foldable
@@ -869,33 +868,6 @@ typeWithA tpa = loop
 -}
 typeOf :: Expr s X -> Either (TypeError s X) (Expr s X)
 typeOf = typeWith Dhall.Context.empty
-
--- | Like `Data.Void.Void`, except with a shorter inferred type
-newtype X = X { absurd :: forall a . a }
-
-
-instance Lift X where
-    lift ( X impossible ) = impossible
-
-instance Show X where
-    show = absurd
-
-instance Eq X where
-  _ == _ = True
-
-instance Data X where
-    dataTypeOf = absurd
-    gunfold _ _ _ = undefined
-    toConstr = absurd
-
-instance Pretty X where
-    pretty = absurd
-
-instance FromTerm X where
-    decode _ = empty
-
-instance ToTerm X where
-    encode = absurd
 
 -- | The specific type error
 data TypeMessage s a
