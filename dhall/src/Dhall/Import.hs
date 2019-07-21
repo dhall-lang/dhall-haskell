@@ -973,7 +973,7 @@ encodeExpression _standardVersion expression = bytesStrict
     intermediateExpression = fmap absurd expression
 
     term :: Term
-    term = Dhall.Binary.encode intermediateExpression
+    term = Dhall.Binary.encodeExpression intermediateExpression
 
     taggedTerm :: Term
     taggedTerm =

@@ -91,6 +91,8 @@ import Dhall.Set (Set)
 import Dhall.Src (Src)
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import GHC.Generics (Generic)
+import Instances.TH.Lift ()
+import Language.Haskell.TH.Syntax (Lift)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 
@@ -130,6 +132,8 @@ import qualified Text.Printf
 -}
 data Const = Type | Kind | Sort
     deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic, NFData)
+
+instance Lift Const
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -342,6 +346,8 @@ instance Pretty Import where
 data Var = V Text !Int
     deriving (Data, Generic, Eq, Ord, Show, NFData)
 
+instance Lift Var
+
 instance IsString Var where
     fromString str = V (fromString str) 0
 
@@ -492,6 +498,8 @@ data Expr s a
     deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data, NFData)
 -- NB: If you add a constructor to Expr, please also update the Arbitrary
 -- instance in Dhall.Test.QuickCheck.
+
+instance (Lift s, Lift a, Data s, Data a) => Lift (Expr s a)
 
 -- This instance is hand-written due to the fact that deriving
 -- it does not give us an INLINABLE pragma. We annotate this fmap
@@ -722,6 +730,8 @@ data Binding s a = Binding
     , value      :: Expr s a
     } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData)
 
+instance (Lift s, Lift a, Data s, Data a) => Lift (Binding s a)
+
 instance Bifunctor Binding where
     first k (Binding a b c) = Binding a (fmap (first k) b) (first k c)
 
@@ -730,6 +740,8 @@ instance Bifunctor Binding where
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
     deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData)
+
+instance (Lift s, Lift a, Data s, Data a) => Lift (Chunks s a)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =

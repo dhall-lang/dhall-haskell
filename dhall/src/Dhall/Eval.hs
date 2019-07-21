@@ -78,6 +78,7 @@ import Dhall.Core (
 -- import Dhall.Import.Types (InternalError)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
+import Dhall.X   (X)
 import GHC.Natural (Natural)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -675,8 +676,8 @@ conv !env t t' =
     (VIntegerToDouble t , VIntegerToDouble t') -> convE t t'
 
     (VDouble       , VDouble)        -> True
-    (VDoubleLit n  , VDoubleLit n')  -> Dhall.Binary.encode (DoubleLit n  :: Expr Void Import) ==
-                                        Dhall.Binary.encode (DoubleLit n' :: Expr Void Import)
+    (VDoubleLit n  , VDoubleLit n')  -> Dhall.Binary.encode (DoubleLit n  :: Expr X Import) ==
+                                        Dhall.Binary.encode (DoubleLit n' :: Expr X Import)
     (VDoubleShow t , VDoubleShow t') -> convE t t'
 
     (VText, VText) -> True
