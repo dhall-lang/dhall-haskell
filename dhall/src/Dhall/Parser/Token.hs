@@ -3,6 +3,7 @@
 -- | Parse Dhall tokens. Even though we don't have a tokenizer per-se this
 ---  module is useful for keeping some small parsing utilities.
 module Dhall.Parser.Token (
+    validCodepoint,
     whitespace,
     bashEnvironmentVariable,
     posixEnvironmentVariable,
@@ -108,7 +109,7 @@ import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
-import qualified Data.Char
+import qualified Data.Char                  as Char
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Text
@@ -124,6 +125,11 @@ import Prelude hiding (const, pi)
 
 import qualified Text.Parser.Token
 
+validCodepoint :: Char -> Bool
+validCodepoint c =
+    not (category == Char.Surrogate || category == Char.NotAssigned)
+  where
+    category = Char.generalCategory c
 
 whitespace :: Parser ()
 whitespace = Text.Parser.Combinators.skipMany whitespaceChunk
@@ -136,6 +142,9 @@ alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
 
 digit :: Char -> Bool
 digit c = '\x30' <= c && c <= '\x39'
+
+alphaNum :: Char -> Bool
+alphaNum c = alpha c || digit c
 
 hexdig :: Char -> Bool
 hexdig c =
@@ -204,19 +213,19 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
   where
     hexDigit = do
         c <- Text.Parser.Char.satisfy predicate
-        return (Data.Char.ord c - Data.Char.ord '0')
+        return (Char.ord c - Char.ord '0')
       where
         predicate c = '0' <= c && c <= '9'
 
     hexUpper = do
         c <- Text.Parser.Char.satisfy predicate
-        return (10 + Data.Char.ord c - Data.Char.ord 'A')
+        return (10 + Char.ord c - Char.ord 'A')
       where
         predicate c = 'A' <= c && c <= 'F'
 
     hexLower = do
         c <- Text.Parser.Char.satisfy predicate
-        return (10 + Data.Char.ord c - Data.Char.ord 'a')
+        return (10 + Char.ord c - Char.ord 'a')
       where
         predicate c = 'a' <= c && c <= 'f'
 
@@ -255,7 +264,7 @@ blockCommentChunk =
         predicate c =
                 '\x20' <= c && c <= '\x10FFFF' && c /= '-' && c /= '{'
             ||  c == '\n'
-            || c == '\t'
+            ||  c == '\t'
 
     character = void (Text.Parser.Char.satisfy predicate)
       where
@@ -282,7 +291,7 @@ simpleLabel allowReserved = try (do
   where
     headCharacter c = alpha c || c == '_'
 
-    tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
+    tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
 
 backtickLabel :: Parser Text
 backtickLabel = do
@@ -327,7 +336,7 @@ bashEnvironmentVariable = satisfy predicate0 <> star (satisfy predicate1)
   where
     predicate0 c = alpha c || c == '_'
 
-    predicate1 c = alpha c || digit c || c == '_'
+    predicate1 c = alphaNum c || c == '_'
 
 posixEnvironmentVariable :: Parser Text
 posixEnvironmentVariable = plus posixEnvironmentVariableCharacter
@@ -429,7 +438,7 @@ userinfo = star (satisfy predicate <|> pctEncoded)
     predicate c = unreserved c || subDelims c || c == ':'
 
 host :: Parser Text
-host = choice [ ipLiteral, ipV4Address, regName ]
+host = choice [ ipLiteral, try ipV4Address, domain ]
 
 port :: Parser Text
 port = star (satisfy digit)
@@ -525,10 +534,13 @@ decOctet =
       where
         predicate c = '\x30' <= c && c <= '\x35'
 
-regName :: Parser Text
-regName = star (satisfy predicate <|> pctEncoded)
+domain :: Parser Text
+domain = domainLabel <> star ("." <> domainLabel ) <> option "."
+
+domainLabel :: Parser Text
+domainLabel = plus alphaNum_ <> star (plus "-" <> plus alphaNum_)
   where
-    predicate c = unreserved c || subDelims c
+    alphaNum_ = satisfy alphaNum
 
 pchar :: Parser Text
 pchar = satisfy predicate <|> pctEncoded
@@ -548,7 +560,7 @@ subDelims c = c `elem` ("!$&'()*+,;=" :: String)
 
 unreserved :: Char -> Bool
 unreserved c =
-    alpha c || digit c || c == '-' || c == '.' || c == '_' || c == '~'
+    alphaNum c || c == '-' || c == '.' || c == '_' || c == '~'
 
 reserved :: Data.Text.Text -> Parser ()
 reserved x = do _ <- Text.Parser.Char.text x; whitespace

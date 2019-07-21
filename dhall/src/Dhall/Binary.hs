@@ -56,6 +56,7 @@ import qualified Control.Monad       as Monad
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.Sequence
+import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Options.Applicative
@@ -281,12 +282,13 @@ instance ToTerm a => ToTerm (Expr s a) where
         l₁ = encode l₀
         r₁ = encode r₀
     encode (ListLit _T₀ xs₀)
-        | null xs₀  = TList [ TInt 4, _T₁ ]
+        | null xs₀  = TList [ TInt label, _T₁ ]
         | otherwise = TList ([ TInt 4, TNull ] ++ xs₁)
       where
-        _T₁ = case _T₀ of
-            Nothing -> TNull
-            Just t  -> encode t
+        (label, _T₁) = case fmap Dhall.Core.shallowDenote _T₀ of
+            Nothing                                                -> (4 , TNull)
+            Just (App t0 t1) | List <- Dhall.Core.shallowDenote t0 -> (4 , encode t1)
+            Just t                                                 -> (28, encode t)
 
         xs₁ = map encode (Data.Foldable.toList xs₀)
     encode (Some t₀) =
@@ -614,7 +616,7 @@ instance FromTerm a => FromTerm (Expr s a) where
         return (op l₀ r₀)
     decode (TList [ TInt 4, _T₁ ]) = do
         _T₀ <- decode _T₁
-        return (ListLit (Just _T₀) empty)
+        return (ListLit (Just (App List _T₀)) empty)
     decode (TList (TInt 4 : TNull : xs₁ )) = do
         xs₀ <- traverse decode xs₁
         return (ListLit Nothing (Data.Sequence.fromList xs₀))
@@ -780,6 +782,9 @@ instance FromTerm a => FromTerm (Expr s a) where
         t₀ <- decode t₁
         _T₀ <- decode _T₁
         return (ToMap t₀ (Just _T₀))
+    decode (TList [ TInt 28, _T₁ ]) = do
+        _T₀ <- decode _T₁
+        return (ListLit (Just _T₀) empty)
     decode _ =
         empty
 
