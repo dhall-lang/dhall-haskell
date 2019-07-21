@@ -3,7 +3,6 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DeriveLift         #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
@@ -131,7 +130,9 @@ import qualified Text.Printf
     Dhall is not a dependently typed language
 -}
 data Const = Type | Kind | Sort
-    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic, NFData, Lift)
+    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic, NFData)
+
+instance Lift Const
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -342,7 +343,9 @@ instance Pretty Import where
     appear as a numeric suffix.
 -}
 data Var = V Text !Int
-    deriving (Data, Generic, Eq, Ord, Show, NFData, Lift)
+    deriving (Data, Generic, Eq, Ord, Show, NFData)
+
+instance Lift Var
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -489,9 +492,11 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data, NFData, Lift)
+    deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data, NFData)
 -- NB: If you add a constructor to Expr, please also update the Arbitrary
 -- instance in Dhall.Test.QuickCheck.
+
+instance (Lift s, Lift a, Data s, Data a) => Lift (Expr s a)
 
 -- This instance is hand-written due to the fact that deriving
 -- it does not give us an INLINABLE pragma. We annotate this fmap
@@ -717,7 +722,9 @@ data Binding s a = Binding
     { variable   :: Text
     , annotation :: Maybe (Expr s a)
     , value      :: Expr s a
-    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData, Lift)
+    } deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData)
+
+instance (Lift s, Lift a, Data s, Data a) => Lift (Binding s a)
 
 instance Bifunctor Binding where
     first k (Binding a b c) = Binding a (fmap (first k) b) (first k c)
@@ -726,7 +733,9 @@ instance Bifunctor Binding where
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData, Lift)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData)
+
+instance (Lift s, Lift a, Data s, Data a) => Lift (Chunks s a)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =

@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveLift #-}
 
 -- | This module only exports ways of constructing a Set,
 -- retrieving List, Set, and Seq representations of the same data,
@@ -37,7 +36,9 @@ import qualified Data.Sequence
 import qualified Data.Foldable
 
 data Set a = Set (Data.Set.Set a) (Seq a)
-    deriving (Eq, Generic, Ord, Show, Data, NFData, Lift)
+    deriving (Eq, Generic, Ord, Show, Data, NFData)
+
+instance (Data a, Lift a, Ord a) => Lift (Set a)
 
 instance Foldable Set where
     foldMap f = foldMap f . toSeq
