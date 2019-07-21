@@ -7,6 +7,7 @@ packages:
 extra-deps:
   - repline-0.2.1.0
   - th-lift-instances-0.1.13@sha256:2852e468511805cb25d9e3923c9e91647d008ab4a764ec0921e5e40ff8a8e874,2625
+  - th-lift-0.8.0.1@sha256:cceb81b12c0580e02a7a3898b6d60cca5e1be080741f69ddde4f12210d8ba7ca,1960
 nix:
   packages:
     - ncurses
