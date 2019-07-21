@@ -203,7 +203,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                 , ( 1, lift0 NaturalShow)
                 , ( 1, lift2 NaturalPlus)
                 , ( 1, lift2 NaturalTimes)
-                , ( 1, lift2 NaturalSubtract)
+                , ( 1, lift0 NaturalSubtract)
                 , ( 1, lift0 Integer)
                 , ( 7, fmap IntegerLit integer)
                 , ( 1, lift0 IntegerShow)
