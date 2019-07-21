@@ -398,6 +398,8 @@ eval !env t =
                             (VNaturalLit x, VNaturalLit y)
                               | y >= x    -> VNaturalLit (subtract x y)
                               | otherwise -> VNaturalLit 0
+                            (VNaturalLit 0, y) -> y
+                            (x, VNaturalLit 0) -> VNaturalLit 0
                             (x, y) -> VNaturalSubtract x y
     NaturalPlus t u  -> vNaturalPlus (evalE t) (evalE u)
     NaturalTimes t u -> case (evalE t, evalE u) of
