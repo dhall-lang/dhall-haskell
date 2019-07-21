@@ -28,6 +28,8 @@ import Data.List (foldl')
 import Data.Sequence (Seq, (|>))
 import Data.Data (Data)
 import GHC.Generics (Generic)
+import Instances.TH.Lift ()
+import Language.Haskell.TH.Syntax (Lift)
 
 import qualified Data.Set
 import qualified Data.Sequence
@@ -35,6 +37,8 @@ import qualified Data.Foldable
 
 data Set a = Set (Data.Set.Set a) (Seq a)
     deriving (Eq, Generic, Ord, Show, Data, NFData)
+
+instance (Data a, Lift a, Ord a) => Lift (Set a)
 
 instance Foldable Set where
     foldMap f = foldMap f . toSeq
