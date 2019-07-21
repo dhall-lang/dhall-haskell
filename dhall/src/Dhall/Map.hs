@@ -69,6 +69,8 @@ import Control.DeepSeq (NFData)
 import Data.Data (Data)
 import Data.Semigroup
 import GHC.Generics (Generic)
+import Instances.TH.Lift ()
+import Language.Haskell.TH.Syntax (Lift)
 import Prelude hiding (filter, lookup)
 
 import qualified Data.List
@@ -87,10 +89,14 @@ import qualified Prelude
 data Map k v = Map (Data.Map.Map k v) (Keys k)
     deriving (Data, Generic, NFData)
 
+instance (Data k, Data v, Lift k, Lift v, Ord k) => Lift (Map k v)
+
 data Keys a
     = Sorted
     | Original [a]
     deriving (Data, Generic, NFData)
+
+instance (Data a, Lift a) => Lift (Keys a)
 
 instance (Ord k, Eq v) => Eq (Map k v) where
   m1 == m2 =
