@@ -1358,6 +1358,20 @@ normalizeWithM ctx e0 = loop (denote e0)
                     -- build/fold fusion for `List`
                     App (App ListBuild _) (App (App ListFold _) e') -> loop e'
 
+                    App NaturalFold (NaturalLit n) -> do
+                        let natural = Var (V "natural" 0)
+                        let go 0  x = x
+                            go n' x = go (n'-1) (App (Var (V "succ" 0)) x)
+                        let n' = go n (Var (V "zero" 0))
+                        pure
+                            (Lam "natural"
+                                (Const Type)
+                                (Lam "succ"
+                                    (Pi "_" natural natural)
+                                    (Lam "zero"
+                                        natural
+                                        n')))
+
                     -- build/fold fusion for `Natural`
                     App NaturalBuild (App NaturalFold e') -> loop e'
 
@@ -1378,7 +1392,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                         lazyLoop !n = App succ' (lazyLoop (n - 1))
                     App NaturalBuild g -> loop (App (App (App g Natural) succ) zero)
                       where
-                        succ = Lam "x" Natural (NaturalPlus "x" (NaturalLit 1))
+                        succ = Lam "n" Natural (NaturalPlus "n" (NaturalLit 1))
 
                         zero = NaturalLit 0
                     App NaturalIsZero (NaturalLit n) -> pure (BoolLit (n == 0))
