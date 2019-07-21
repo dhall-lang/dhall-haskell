@@ -437,7 +437,7 @@ eval !env t =
                               `vApp` VHLam (Typed "a" a) (\x ->
                                               VHLam (Typed "as" (VList a)) (\as ->
                                                 vListAppend (VListLit Nothing (pure x)) as))
-                              `vApp` VListLit (Just a) mempty
+                              `vApp` VListLit (Just (VList a)) mempty
 
     ListFold         -> VPrim $ \a -> VPrim $ \case
                           VListLit _ as ->
@@ -465,8 +465,8 @@ eval !env t =
     ListIndexed      -> VPrim $ \ a -> VPrim $ \case
                           VListLit _ as -> let
                             a' = if null as then
-                                   Just (VRecord (Dhall.Map.fromList
-                                                  [("index", VNatural), ("value", a)]))
+                                   Just (VList (VRecord (Dhall.Map.fromList
+                                                         [("index", VNatural), ("value", a)])))
                                  else
                                    Nothing
                             as' = Data.Sequence.mapWithIndex
@@ -529,8 +529,8 @@ eval !env t =
                             | otherwise -> error errorMsg
                           (x, y, ma) -> VMerge x y ma
     ToMap x ma       -> case (evalE x, evalE <$> ma) of
-                          (VRecordLit m, Just (VList t)) | null m ->
-                            VListLit (Just t) (Data.Sequence.empty)
+                          (VRecordLit m, ma'@(Just _)) | null m ->
+                            VListLit ma' (Data.Sequence.empty)
                           (VRecordLit m, _) -> let
                             entry (k, v) =
                               VRecordLit (Dhall.Map.fromList [("mapKey", VTextLit $ VChunks [] k),

@@ -18,7 +18,6 @@ module Dhall.Diff (
     ) where
 
 import Data.Foldable (fold, toList)
-import Data.Function (on)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (Any(..))
 import Data.Semigroup
@@ -573,8 +572,6 @@ skeleton (ListLit {}) =
     <>  " "
     <>  colon
     <>  " "
-    <>  builtin "List"
-    <>  " "
     <>  ignore
 skeleton (ListAppend {}) =
         ignore
@@ -778,11 +775,11 @@ diffAnnotatedExpression l r@(ToMap {}) =
 diffAnnotatedExpression (ListLit aL@(Just _) bL) (ListLit aR bR) = align doc
   where
     doc =   format " " (diffList bL bR)
-        <>  format " " (diffMaybe (colon <> " ") (diffApplicationExpression `on` App List) aL aR)
+        <>  format " " (diffMaybe (colon <> " ") diffApplicationExpression aL aR)
 diffAnnotatedExpression (ListLit aL bL) (ListLit aR@(Just _) bR) = align doc
   where
     doc =   format " " (diffList bL bR)
-        <>  format " " (diffMaybe (colon <> " ") (diffApplicationExpression `on` App List) aL aR)
+        <>  format " " (diffMaybe (colon <> " ") diffApplicationExpression aL aR)
 diffAnnotatedExpression l@(Annot {}) r@(Annot {}) =
     enclosed' "  " (colon <> " ") (docs l r)
   where
