@@ -4,6 +4,8 @@ module Dhall.X where
 
 import Data.Data (Data(..))
 import Data.Text.Prettyprint.Doc (Pretty(..))
+import Instances.TH.Lift ()
+import Language.Haskell.TH.Syntax (Lift, lift)
 
 -- | Like `Data.Void.Void`, except with a shorter inferred type
 newtype X = X { absurd :: forall a . a }
@@ -21,3 +23,6 @@ instance Data X where
 
 instance Pretty X where
     pretty = absurd
+
+instance Lift X where
+  lift (X impossible) = impossible
