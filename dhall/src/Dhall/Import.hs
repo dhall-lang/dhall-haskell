@@ -121,6 +121,7 @@ module Dhall.Import (
     , normalizer
     , startingContext
     , chainImport
+    , ImportSemantics
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -589,7 +590,7 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) Code)) = do
     Status {..} <- State.get
 
     importSemantics <- case Dhall.TypeCheck.typeWith _startingContext loadedExpr of
-        Left  err -> throwM (Imported _stack err)
+        Left  err -> throwMissingImport (Imported _stack err)
         Right _   -> return (Dhall.Core.normalizeWith _normalizer loadedExpr)
 
     return (ImportSemantics {..})

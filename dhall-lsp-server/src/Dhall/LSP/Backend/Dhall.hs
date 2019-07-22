@@ -74,7 +74,7 @@ type ImportGraph = [Dhall.Depends]
 
 -- | A cache maps Dhall imports to fully normalised expressions. By reusing
 --   caches we can speeds up diagnostics etc. significantly!
-data Cache = Cache ImportGraph (Map.Map Dhall.Chained (Expr Src X))
+data Cache = Cache ImportGraph (Map.Map Dhall.Chained Dhall.ImportSemantics)
 
 -- | The initial cache.
 emptyCache :: Cache
