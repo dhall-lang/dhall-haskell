@@ -1,5 +1,6 @@
 module Dhall.LSP.Backend.Parsing
-  ( getLetInner
+  ( getImportHash
+  , getLetInner
   , getLetAnnot
   , getLetIdentifier
   , getLamIdentifier
@@ -102,6 +103,20 @@ getForallIdentifier src@(Src left _ text) =
           _ <- Megaparsec.takeRest
           return (Src begin end tokens)
 
+-- | Given an Src of a import expression return the Src containing the hash
+--   annotation. If the import does not have a hash annotation return a 0-length
+--   Src where we can insert one.
+getImportHash :: Src -> Maybe Src
+getImportHash (Src left _ text) =
+  Megaparsec.parseMaybe (unParser parseImportHashPosition) text
+  where parseImportHashPosition = do
+          setSourcePos left
+          _ <- importType_
+          begin <- getSourcePos
+          (tokens, _) <- Megaparsec.match $ optional importHash_
+          end <- getSourcePos
+          _ <- Megaparsec.takeRest
+          return (Src begin end tokens)
 
 setSourcePos :: SourcePos -> Parser ()
 setSourcePos src = Megaparsec.updateParserState

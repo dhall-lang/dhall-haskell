@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE OverloadedStrings  #-}
 
@@ -43,6 +44,7 @@ import Dhall.Core
     , Var(..)
     )
 
+import Dhall.X (X(..))
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
@@ -56,6 +58,7 @@ import qualified Control.Monad       as Monad
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.Sequence
+import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Options.Applicative
@@ -127,7 +130,7 @@ unApply e₀ = (baseFunction₀, diffArguments₀ [])
 class ToTerm a where
     encode :: a -> Term
 
-instance ToTerm a => ToTerm (Expr s a) where
+instance ToTerm a => ToTerm (Expr X a) where
     encode (Var (V "_" n)) =
         TInt n
     encode (Var (V x n)) =
@@ -281,12 +284,13 @@ instance ToTerm a => ToTerm (Expr s a) where
         l₁ = encode l₀
         r₁ = encode r₀
     encode (ListLit _T₀ xs₀)
-        | null xs₀  = TList [ TInt 4, _T₁ ]
+        | null xs₀  = TList [ TInt label, _T₁ ]
         | otherwise = TList ([ TInt 4, TNull ] ++ xs₁)
       where
-        _T₁ = case _T₀ of
-            Nothing -> TNull
-            Just t  -> encode t
+        (label, _T₁) = case _T₀ of
+            Nothing           -> (4 , TNull)
+            Just (App List t) -> (4 , encode t)
+            Just t            -> (28, encode t)
 
         xs₁ = map encode (Data.Foldable.toList xs₀)
     encode (Some t₀) =
@@ -424,8 +428,7 @@ instance ToTerm a => ToTerm (Expr s a) where
       where
         t₁  = encode t₀
         _T₁ = encode _T₀
-    encode (Note _ e) =
-        encode e
+    encode (Note (X absurd) _) = absurd
 
 instance ToTerm Import where
     encode import_ =
@@ -443,7 +446,7 @@ instance ToTerm Import where
                     Nothing ->
                         TNull
                     Just h ->
-                        encode h
+                        encodeExpression h
 
                 scheme₁ = case scheme₀ of
                     HTTP  -> 0
@@ -491,6 +494,9 @@ instance ToTerm Import where
         Import {..} = import_
 
         ImportHashed {..} = importHashed
+
+instance ToTerm X where
+    encode = absurd
 
 -- | Types that can be decoded from a CBOR `Term`
 class FromTerm a where
@@ -614,7 +620,7 @@ instance FromTerm a => FromTerm (Expr s a) where
         return (op l₀ r₀)
     decode (TList [ TInt 4, _T₁ ]) = do
         _T₀ <- decode _T₁
-        return (ListLit (Just _T₀) empty)
+        return (ListLit (Just (App List _T₀)) empty)
     decode (TList (TInt 4 : TNull : xs₁ )) = do
         xs₀ <- traverse decode xs₁
         return (ListLit Nothing (Data.Sequence.fromList xs₀))
@@ -780,6 +786,9 @@ instance FromTerm a => FromTerm (Expr s a) where
         t₀ <- decode t₁
         _T₀ <- decode _T₁
         return (ToMap t₀ (Just _T₀))
+    decode (TList [ TInt 28, _T₁ ]) = do
+        _T₀ <- decode _T₁
+        return (ListLit (Just _T₀) empty)
     decode _ =
         empty
 
@@ -884,6 +893,9 @@ instance FromTerm Import where
 
     decode _ = empty
 
+instance FromTerm X where
+    decode _ = empty
+
 strip55799Tag :: Term -> Term
 strip55799Tag term =
     case term of
@@ -929,8 +941,11 @@ strip55799Tag term =
             TDouble a
 
 -- | Encode a Dhall expression as a CBOR `Term`
+--
+-- This 'Dhall.Core.denote's the expression before encoding it. To encode an
+-- already denoted expression, it is more efficient to directly use 'encode'.
 encodeExpression :: Expr s Import -> Term
-encodeExpression = encode
+encodeExpression e = encode (Dhall.Core.denote e :: Expr X Import)
 
 -- | Decode a Dhall expression from a CBOR `Term`
 decodeExpression :: FromTerm a => Term -> Either DecodingFailure (Expr s a)
