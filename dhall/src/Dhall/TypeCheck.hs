@@ -21,9 +21,7 @@ module Dhall.TypeCheck (
     , TypeMessage(..)
     ) where
 
-import Control.Applicative (empty)
 import Control.Exception (Exception)
-import Data.Data (Data(..))
 import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (Endo(..), First(..))
@@ -33,10 +31,11 @@ import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Typeable (Typeable)
-import Dhall.Binary (FromTerm(..), ToTerm(..))
+import Dhall.Binary (ToTerm(..))
 import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
+import Dhall.X (X(..))
 
 import qualified Data.Foldable
 import qualified Data.Map
@@ -375,7 +374,7 @@ typeWithA tpa = loop
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const Type -> return ()
-                    _ -> Left (TypeError ctx e (InvalidListType t))
+                    _ -> Left (TypeError ctx e (InvalidListType (App List t)))
                 flip traverseWithIndex_ xs' (\i x -> do
                     t' <- loop ctx x
                     if Dhall.Core.judgmentallyEqual t t'
@@ -387,20 +386,25 @@ typeWithA tpa = loop
                             Left (TypeError ctx x err) )
                 return (App List t)
             _ -> Left (TypeError ctx e MissingListType)
-    loop ctx e@(ListLit (Just t ) xs) = do
-        s <- fmap Dhall.Core.normalize (loop ctx t)
-        case s of
-            Const Type -> return ()
-            _ -> Left (TypeError ctx e (InvalidListType t))
+    loop ctx e@(ListLit (Just t0) xs) = do
+        _ <- loop ctx t0
+        let nf_t0 = Dhall.Core.normalize t0
+        t1 <- case nf_t0 of
+            App List t1 -> do
+                s <- fmap Dhall.Core.normalize (loop ctx t1)
+                case s of
+                    Const Type -> return t1
+                    _ -> Left (TypeError ctx e (InvalidListType nf_t0))
+            _ -> Left (TypeError ctx e (InvalidListType nf_t0))
         flip traverseWithIndex_ xs (\i x -> do
             t' <- loop ctx x
-            if Dhall.Core.judgmentallyEqual t t'
+            if Dhall.Core.judgmentallyEqual t1 t'
                 then return ()
                 else do
-                    let nf_t  = Dhall.Core.normalize t
+                    let nf_t  = Dhall.Core.normalize t1
                     let nf_t' = Dhall.Core.normalize t'
                     Left (TypeError ctx x (InvalidListElement i nf_t x nf_t')) )
-        return (App List t)
+        return (App List t1)
     loop ctx e@(ListAppend l r  ) = do
         tl <- fmap Dhall.Core.normalize (loop ctx l)
         el <- case tl of
@@ -751,6 +755,8 @@ typeWithA tpa = loop
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustMapARecord kvsX tKvsX))
 
+        Data.Foldable.traverse_ (loop ctx) mT₁
+
         let ktX = appEndo (foldMap (Endo . compareFieldTypes) ktsX) Nothing
             mT₂ = fmap Dhall.Core.normalize mT₁
             mapType fieldType = App List (Record $ Dhall.Map.fromList [("mapKey", Text),
@@ -790,7 +796,7 @@ typeWithA tpa = loop
                     case Dhall.Map.lookup x kts of
                         Just (Just t') -> return (Pi x t' (Union kts))
                         Just Nothing   -> return (Union kts)
-                        Nothing -> Left (TypeError ctx e (MissingField x t))
+                        Nothing -> Left (TypeError ctx e (MissingConstructor x r))
                   r' -> Left (TypeError ctx e (CantAccess text r' t))
     loop ctx e@(Project r (Left xs)) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
@@ -862,29 +868,6 @@ typeWithA tpa = loop
 typeOf :: Expr s X -> Either (TypeError s X) (Expr s X)
 typeOf = typeWith Dhall.Context.empty
 
--- | Like `Data.Void.Void`, except with a shorter inferred type
-newtype X = X { absurd :: forall a . a }
-
-instance Show X where
-    show = absurd
-
-instance Eq X where
-  _ == _ = True
-
-instance Data X where
-    dataTypeOf = absurd
-    gunfold _ _ _ = undefined
-    toConstr = absurd
-
-instance Pretty X where
-    pretty = absurd
-
-instance FromTerm X where
-    decode _ = empty
-
-instance ToTerm X where
-    encode = absurd
-
 -- | The specific type error
 data TypeMessage s a
     = UnboundVariable Text
@@ -933,6 +916,7 @@ data TypeMessage s a
     | CantProject Text (Expr s a) (Expr s a)
     | CantProjectByExpression (Expr s a)
     | MissingField Text (Expr s a)
+    | MissingConstructor Text (Expr s a)
     | ProjectionTypeMismatch Text (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
     | CantOr (Expr s a) (Expr s a)
@@ -1871,11 +1855,11 @@ prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
 
 prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
   where
-    short = "Invalid type for ❰List❱ elements"
+    short = "Invalid type for ❰List❱"
 
     long =
-        "Explanation: ❰List❱s can optionally document the type of their elements with a  \n\
-        \type annotation, like this:                                                     \n\
+        "Explanation: ❰List❱s can optionally document their type with a type annotation, \n\
+        \like this:                                                                      \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────┐                                                \n\
@@ -1889,8 +1873,19 @@ prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
         \    ┌───────────────────┐                                                       \n\
         \    │ [] : List Natural │  An empty ❰List❱                                      \n\
         \    └───────────────────┘                                                       \n\
-        \                ⇧                                                               \n\
-        \                You must specify the type when the ❰List❱ is empty              \n\
+        \           ⇧                                                                    \n\
+        \           You must specify the type when the ❰List❱ is empty                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \The type must be of the form ❰List ...❱ and not something else.  For example,   \n\
+        \the following type annotation is " <> _NOT <> " valid:                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────┐                                                              \n\
+        \    │ ... : Bool │                                                              \n\
+        \    └────────────┘                                                              \n\
+        \            ⇧                                                                   \n\
+        \            This type does not have the form ❰List ...❱                         \n\
         \                                                                                \n\
         \                                                                                \n\
         \The element type must be a type and not something else.  For example, the       \n\
@@ -1911,11 +1906,11 @@ prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
         \                 This is a ❰Kind❱ and not a ❰Type❱                              \n\
         \                                                                                \n\
         \                                                                                \n\
-        \You declared that the ❰List❱'s elements should have type:                       \n\
+        \You declared that the ❰List❱ should have type:                                  \n\
         \                                                                                \n\
         \" <> txt0 <> "\n\
         \                                                                                \n\
-        \... which is not a ❰Type❱                                                       \n"
+        \... which is not a valid list type                                              \n"
       where
         txt0 = insert expr0
 
@@ -3468,6 +3463,44 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
         \                                                                                \n\
         \... but the field is missing because the record only defines the following      \n\
         \fields:                                                                         \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n"
+      where
+        txt0 = insert k
+        txt1 = insert expr0
+
+prettyTypeMessage (MissingConstructor k expr0) = ErrorMessages {..}
+  where
+    short = "Missing constructor"
+
+    long =
+        "Explanation: You can access constructors from unions, like this:                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────┐                                                       \n\
+        \    │ < Foo | Bar >.Foo │  This is valid ...                                    \n\
+        \    └───────────────────┘                                                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you can only access constructors if they match an union alternative of  \n\
+        \the same name.                                                                  \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────┐                                                       \n\
+        \    │ < Foo | Bar >.Baz │                                                       \n\
+        \    └───────────────────┘                                                       \n\
+        \                    ⇧                                                           \n\
+        \                    Invalid: the union has no ❰Baz❱ alternative                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You tried to access a constructor named:                                        \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... but the constructor is missing because the union only defines the following \n\
+        \alternatives:                                                                   \n\
         \                                                                                \n\
         \" <> txt1 <> "\n"
       where
