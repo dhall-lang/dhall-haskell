@@ -136,7 +136,7 @@ import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term(..))
 import Control.Exception (Exception, SomeException, toException)
 import Control.Monad (guard)
-import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..), handle)
+import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
@@ -506,37 +506,43 @@ loadImportWithSemanticCache
 
 loadImportWithSemanticCache
   import_@(Chained (Import (ImportHashed (Just hash) _) _)) = do
-  mCached <- liftIO $ fetchFromSemanticCache hash
+    Status { .. } <- State.get
+    mCached <- liftIO $ fetchFromSemanticCache hash
 
-  case mCached of
-      Just bytesStrict -> do
-          let actualHash = Crypto.Hash.hash bytesStrict
-          if hash == actualHash
-              then return ()
-              else do
-                  Status { _stack } <- State.get
-                  throwMissingImport (Imported _stack (HashMismatch {expectedHash = hash, ..}))
+    case mCached of
+        Just bytesStrict -> do
+            let actualHash = Crypto.Hash.hash bytesStrict
+            if hash == actualHash
+                then return ()
+                else do
+                    Status { _stack } <- State.get
+                    throwMissingImport (Imported _stack (HashMismatch {expectedHash = hash, ..}))
 
-          let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
-          term <- Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytesLazy)
-          importSemantics <- Dhall.Core.throws (Dhall.Binary.decodeExpression term)
-          return (ImportSemantics {..})
+            let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
+            -- ??
+            term <- case Codec.Serialise.deserialiseOrFail bytesLazy of
+                Left err -> throwMissingImport (Imported _stack err)
+                Right t -> return t
+            importSemantics <- case Dhall.Binary.decodeExpression term of
+                Left err -> throwMissingImport (Imported _stack err)
+                Right sem -> return sem
+            return (ImportSemantics {..})
 
-      Nothing -> do
-          ImportSemantics {..} <- loadImportFresh import_
+        Nothing -> do
+            ImportSemantics {..} <- loadImportFresh import_
 
-          let alphaNormal = Dhall.Core.alphaNormalize importSemantics
-          let variants = map (\version -> encodeExpression version alphaNormal)
-                              [ minBound .. maxBound ]
-          case Data.Foldable.find ((== hash). Crypto.Hash.hash) variants of
-              Just bytes -> liftIO $ writeToSemanticCache hash bytes
-              Nothing -> do
-                  let expectedHash = hash
-                  Status { _standardVersion, _stack } <- State.get
-                  let actualHash = hashExpression _standardVersion alphaNormal
-                  throwMissingImport (Imported _stack (HashMismatch {..}))
+            let alphaNormal = Dhall.Core.alphaNormalize importSemantics
+            let variants = map (\version -> encodeExpression version alphaNormal)
+                                [ minBound .. maxBound ]
+            case Data.Foldable.find ((== hash). Crypto.Hash.hash) variants of
+                Just bytes -> liftIO $ writeToSemanticCache hash bytes
+                Nothing -> do
+                    let expectedHash = hash
+                    Status { _standardVersion, _stack } <- State.get
+                    let actualHash = hashExpression _standardVersion alphaNormal
+                    throwMissingImport (Imported _stack (HashMismatch {..}))
 
-          return (ImportSemantics {..})
+            return (ImportSemantics {..})
 
 -- Fetch encoded normal form from "semantic cache"
 fetchFromSemanticCache :: Crypto.Hash.Digest SHA256 -> IO (Maybe Data.ByteString.ByteString)
@@ -573,7 +579,9 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) Code)) = do
             return r
 
     parsedImport <- case Text.Megaparsec.parse parser path text of
-        Left  errInfo -> throwM (ParseError errInfo text)
+        Left  errInfo -> do
+            Status { _stack } <- State.get
+            throwMissingImport (Imported _stack (ParseError errInfo text))
         Right expr    -> return expr
 
     loadedExpr <- loadWith parsedImport  -- we load imports recursively here
@@ -615,12 +623,13 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) RawText)) = do
 
 -- Fetch source code directly from disk/network
 fetchFresh :: ImportType -> StateT Status IO Text
-fetchFresh (Local prefix file) = liftIO $ do
-    path <- localToPath prefix file
-    exists <- Directory.doesFileExist path
+fetchFresh (Local prefix file) = do
+    Status { _stack } <- State.get
+    path <- liftIO $ localToPath prefix file
+    exists <- liftIO $ Directory.doesFileExist path
     if exists
-        then Data.Text.IO.readFile path
-        else throwMissingImport (MissingFile path)
+        then liftIO $ Data.Text.IO.readFile path
+        else throwMissingImport (Imported _stack (MissingFile path))
 
 fetchFresh (Remote (url@URL { headers = maybeHeadersExpression })) = do
 #ifdef MIN_VERSION_http_client
@@ -628,18 +637,20 @@ fetchFresh (Remote (url@URL { headers = maybeHeadersExpression })) = do
     fetchFromHttpUrl url maybeHeaders
 #else
     let urlString = Text.unpack (Dhall.Core.pretty url)
-    liftIO (throwIO (CannotImportHTTPURL urlString mheaders))
+    Status { _stack } <- State.get
+    throwMissingImport (Imported _stack (CannotImportHTTPURL urlString mheaders))
 #endif
 
-fetchFresh (Env env) = liftIO $ do
-    x <- System.Environment.lookupEnv (Text.unpack env)
+fetchFresh (Env env) = do
+    Status { _stack } <- State.get
+    x <- liftIO $ System.Environment.lookupEnv (Text.unpack env)
     case x of
         Just string -> do
             return (Text.pack string)
         Nothing -> do
-                throwMissingImport (MissingEnvironmentVariable env)
+                throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
 
-fetchFresh Missing = liftIO $ throwM (MissingImports [])
+fetchFresh Missing = throwM (MissingImports [])
 
 getCacheFile
     :: (Alternative m, MonadIO m) => Crypto.Hash.Digest SHA256 -> m FilePath
@@ -704,6 +715,7 @@ getCacheDirectory = alternative₀ <|> alternative₁
 -- forms.
 normalizeHeaders :: URL -> StateT Status IO URL
 normalizeHeaders url@URL { headers = Just headersExpression } = do
+    Status { _stack } <- State.get
     loadedExpr <- loadWith headersExpression
 
     let go key₀ key₁ = do
@@ -726,7 +738,7 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
                         Annot loadedExpr expected
 
             _ <- case (Dhall.TypeCheck.typeOf annot) of
-                Left err -> throwM err
+                Left err -> throwMissingImport (Imported _stack err)
                 Right _ -> return ()
 
             return (Dhall.Core.normalize loadedExpr)
@@ -737,7 +749,7 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
                @header@/@value@ still fails then re-throw the original exception
                for @mapKey@ / @mapValue@. -}
             let handler₁ (_ :: SomeException) =
-                    throwM e
+                    throwMissingImport (Imported _stack e)
 
             handle handler₁ (go "header" "value")
 
@@ -783,30 +795,10 @@ loadWith expr₀ = case expr₀ of
         -- Add the edge `parent -> child` to the import graph
         \edges -> Depends parent child : edges
 
-    -- Here we have to match and unwrap the @MissingImports@
-    -- in a separate handler, otherwise we'd have it wrapped
-    -- in another @Imported@ when parsing a @missing@, because
-    -- we are representing it with an empty exception list
-    -- (which would not be empty if this would happen).
-    -- TODO: restructure the Exception hierarchy to prevent
-    -- this nesting from happening in the first place.
-    let handler₀ (MissingImports es) =
-          throwM
-            (MissingImports
-                (map
-                  (\e -> toException (Imported _stack' e))
-                  es
-                )
-              )
-
-        handler₁ e = throwMissingImport
-            (Imported _stack e :: Imported SomeException)
-
     let stackWithChild = NonEmpty.cons child _stack
 
     zoom stack (State.put stackWithChild)
-    ImportSemantics {..}
-        <- loadImport child `catches` [ Handler handler₀, Handler handler₁ ]
+    ImportSemantics {..} <- loadImport child
     zoom stack (State.put _stack)
 
     return importSemantics
