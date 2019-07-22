@@ -549,13 +549,14 @@ eval !env t =
                             _             -> error errorMsg
                           t -> VField t k
     Project t (Left ks) ->
-                        if null ks then
-                          VRecordLit mempty
-                        else case evalE t of
-                          VRecordLit kvs -> let
-                            kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
-                            in VRecordLit (Dhall.Map.sort kvs')
-                          t -> VProject t (Left (Dhall.Set.sort ks))
+                        case Dhall.Set.toList ks of
+                          [] -> VRecordLit mempty
+                          [k] -> VRecordLit (Dhall.Map.singleton k (evalE (Field t k)))
+                          _ -> case evalE t of
+                            VRecordLit kvs -> let
+                              kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
+                              in VRecordLit (Dhall.Map.sort kvs')
+                            t -> VProject t (Left (Dhall.Set.sort ks))
     Project t (Right e) ->
                         case evalE e of
                           VRecord kts ->

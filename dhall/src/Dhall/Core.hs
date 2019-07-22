@@ -103,6 +103,7 @@ import qualified Data.Char
 import {-# SOURCE #-} qualified Dhall.Eval
 import qualified Data.HashSet
 import qualified Data.Sequence
+import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Map
@@ -1739,12 +1740,15 @@ normalizeWithM ctx e0 = loop (denote e0)
                     Nothing -> Field <$> (RecordLit <$> traverse loop kvs) <*> pure x
             _ -> pure (Field r' x)
     Project r (Left xs)-> do
-        r' <- loop r
-        case r' of
-            RecordLit kvs ->
-                pure (RecordLit (Dhall.Map.restrictKeys kvs (Dhall.Set.toSet xs)))
-            _   | null xs -> pure (RecordLit mempty)
-                | otherwise -> pure (Project r' (Left (Dhall.Set.sort xs)))
+        case Dhall.Set.toList xs of
+            [] -> pure (RecordLit mempty)
+            [x] -> fmap (RecordLit . Dhall.Map.singleton x) (loop (Field r x))
+            _ -> do
+                r' <- loop r
+                case r' of
+                    RecordLit kvs ->
+                        pure (RecordLit (Dhall.Map.restrictKeys kvs (Dhall.Set.toSet xs)))
+                    _ -> pure (Project r' (Left (Dhall.Set.sort xs)))
     Project r (Right e1) -> do
         e2 <- loop e1
 
@@ -1984,9 +1988,9 @@ isNormalized e0 = loop (denote e0)
           _ -> loop r
       Project r p -> loop r &&
           case p of
-              Left s -> case r of
+              Left s -> Data.Set.size (Dhall.Set.toSet s) > 1 && case r of
                   RecordLit _ -> False
-                  _ -> not (Dhall.Set.null s) && Dhall.Set.isSorted s
+                  _ -> Dhall.Set.isSorted s
               Right e' -> case e' of
                   Record _ -> False
                   _ -> loop e'
