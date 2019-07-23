@@ -1735,8 +1735,17 @@ normalizeWithM ctx e0 = loop (denote e0)
         case r' of
             RecordLit kvs ->
                 case Dhall.Map.lookup x kvs of
-                    Just v  -> loop v
+                    Just v  -> pure v
                     Nothing -> Field <$> (RecordLit <$> traverse loop kvs) <*> pure x
+            Project r_ _ -> loop (Field r_ x)
+            Prefer l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+                Just v -> pure v
+                Nothing -> loop (Field l x)
+            Prefer (RecordLit kvs) r_ | not (Dhall.Map.member x kvs) -> loop (Field r_ x)
+            Combine l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+                Just v -> pure (Field (Combine l (RecordLit (Dhall.Map.singleton x v))) x)
+                Nothing -> loop (Field l x)
+            Combine (RecordLit kvs) r_ | not (Dhall.Map.member x kvs) -> loop (Field r_ x)
             _ -> pure (Field r' x)
     Project r (Left xs)-> do
         r' <- loop r
@@ -1980,8 +1989,13 @@ isNormalized e0 = loop (denote e0)
       ToMap x t -> case x of
           RecordLit _ -> False
           _ -> loop x && all loop t
-      Field r _ -> case r of
+      Field r k -> case r of
           RecordLit _ -> False
+          Project _ _ -> False
+          Combine x@(RecordLit m) y -> loop x && loop y && Dhall.Map.member k m
+          Combine x (RecordLit m) -> loop x && Dhall.Map.toList (fmap loop m) == [(k, True)]
+          Prefer x@(RecordLit m) y -> loop x && loop y && Dhall.Map.member k m
+          Prefer _ (RecordLit _) -> False
           _ -> loop r
       Project r p -> loop r &&
           case p of
