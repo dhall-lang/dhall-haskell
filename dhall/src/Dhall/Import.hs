@@ -532,15 +532,14 @@ loadImportWithSemanticCache
         Nothing -> do
             ImportSemantics {..} <- loadImportFresh import_
 
-            let alphaNormal = Dhall.Core.alphaNormalize importSemantics
-            let variants = map (\version -> encodeExpression version alphaNormal)
+            let variants = map (\version -> encodeExpression version importSemantics)
                                 [ minBound .. maxBound ]
             case Data.Foldable.find ((== hash). Crypto.Hash.hash) variants of
                 Just bytes -> liftIO $ writeToSemanticCache hash bytes
                 Nothing -> do
                     let expectedHash = hash
                     Status { _standardVersion, _stack } <- State.get
-                    let actualHash = hashExpression _standardVersion alphaNormal
+                    let actualHash = hashExpression _standardVersion importSemantics
                     throwMissingImport (Imported _stack (HashMismatch {..}))
 
             return (ImportSemantics {..})
@@ -591,7 +590,10 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) Code)) = do
 
     importSemantics <- case Dhall.TypeCheck.typeWith _startingContext loadedExpr of
         Left  err -> throwM (Imported _stack err)
-        Right _   -> return (Dhall.Core.normalizeWith _normalizer loadedExpr)
+        Right _   -> do
+            let betaNormal = Dhall.Core.normalizeWith _normalizer loadedExpr
+                alphaBetaNormal = Dhall.Core.alphaNormalize betaNormal
+            return alphaBetaNormal
 
     return (ImportSemantics {..})
 
@@ -603,6 +605,7 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) Location)) = do
             , ("Missing", Nothing)
             ]
 
+    -- importSemantics is alpha-beta-normal by construction!
     let importSemantics = case importType of
             Missing -> Field locationType "Missing"
             local@(Local _ _) ->
@@ -619,6 +622,8 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) Location)) = do
 
 loadImportFresh (Chained (Import (ImportHashed _ importType) RawText)) = do
     text <- fetchFresh importType
+
+    -- importSemantics is alpha-beta-normal by construction!
     let importSemantics = TextLit (Chunks [] text)
     return (ImportSemantics {..})
 
