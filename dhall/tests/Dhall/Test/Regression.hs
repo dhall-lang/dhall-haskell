@@ -6,6 +6,7 @@
 module Dhall.Test.Regression where
 
 import qualified Control.Exception
+import qualified Data.Text.IO
 import qualified Data.Text.Lazy.IO
 import qualified Data.Text.Prettyprint.Doc
 import qualified Data.Text.Prettyprint.Doc.Render.Text
@@ -136,7 +137,8 @@ issue201 = Test.Tasty.HUnit.testCase "Issue #201" (do
 issue216 :: TestTree
 issue216 = Test.Tasty.HUnit.testCase "Issue #216" (do
     -- Verify that pretty-printing preserves string interpolation
-    e <- Util.code "./tests/regression/issue216a.dhall"
+    source <- Data.Text.IO.readFile "./tests/regression/issue216b.dhall"
+    e <- Util.code source
     let doc       = Data.Text.Prettyprint.Doc.pretty e
     let docStream = Data.Text.Prettyprint.Doc.layoutSmart Dhall.Pretty.layoutOpts doc
     let text0 = Data.Text.Prettyprint.Doc.Render.Text.renderLazy docStream
