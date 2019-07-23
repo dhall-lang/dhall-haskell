@@ -105,6 +105,7 @@ module Dhall.Import (
     , localToPath
     , hashExpression
     , hashExpressionToCode
+    , writeExpressionToSemanticCache
     , assertNoImports
     , Status
     , Chained
@@ -549,6 +550,14 @@ fetchFromSemanticCache expectedHash = Maybe.runMaybeT $ do
     cacheFile <- getCacheFile expectedHash
     True <- liftIO (Directory.doesFileExist cacheFile)
     liftIO (Data.ByteString.readFile cacheFile)
+
+-- | Ensure that the given expression is present in the semantic cache. The
+--   given expression should be alpha-beta-normal.
+writeExpressionToSemanticCache :: Expr Src X -> IO ()
+writeExpressionToSemanticCache expression = writeToSemanticCache hash bytes
+  where
+    bytes = encodeExpression Dhall.Binary.defaultStandardVersion expression
+    hash = Crypto.Hash.hash bytes
 
 writeToSemanticCache :: Crypto.Hash.Digest SHA256 -> Data.ByteString.ByteString -> IO ()
 writeToSemanticCache hash bytes = do
