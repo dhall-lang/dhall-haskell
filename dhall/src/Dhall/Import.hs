@@ -520,7 +520,6 @@ loadImportWithSemanticCache
                     throwMissingImport (Imported _stack (HashMismatch {expectedHash = hash, ..}))
 
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
-            -- ??
             term <- case Codec.Serialise.deserialiseOrFail bytesLazy of
                 Left err -> throwMissingImport (Imported _stack err)
                 Right t -> return t
