@@ -507,18 +507,18 @@ loadImportWithSemanticCache
     loadImportFresh import_
 
 loadImportWithSemanticCache
-  import_@(Chained (Import (ImportHashed (Just hash) _) _)) = do
+  import_@(Chained (Import (ImportHashed (Just semanticHash) _) _)) = do
     Status { .. } <- State.get
-    mCached <- liftIO $ fetchFromSemanticCache hash
+    mCached <- liftIO $ fetchFromSemanticCache semanticHash
 
     case mCached of
         Just bytesStrict -> do
             let actualHash = Crypto.Hash.hash bytesStrict
-            if hash == actualHash
+            if semanticHash == actualHash
                 then return ()
                 else do
                     Status { _stack } <- State.get
-                    throwMissingImport (Imported _stack (HashMismatch {expectedHash = hash, ..}))
+                    throwMissingImport (Imported _stack (HashMismatch {expectedHash = semanticHash, ..}))
 
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
             term <- case Codec.Serialise.deserialiseOrFail bytesLazy of
@@ -527,17 +527,18 @@ loadImportWithSemanticCache
             importSemantics <- case Dhall.Binary.decodeExpression term of
                 Left err -> throwMissingImport (Imported _stack err)
                 Right sem -> return sem
+
             return (ImportSemantics {..})
 
         Nothing -> do
-            ImportSemantics {..} <- loadImportFresh import_
+            ImportSemantics { importSemantics } <- loadImportFresh import_
 
             let variants = map (\version -> encodeExpression version importSemantics)
                                 [ minBound .. maxBound ]
-            case Data.Foldable.find ((== hash). Crypto.Hash.hash) variants of
-                Just bytes -> liftIO $ writeToSemanticCache hash bytes
+            case Data.Foldable.find ((== semanticHash). Crypto.Hash.hash) variants of
+                Just bytes -> liftIO $ writeToSemanticCache semanticHash bytes
                 Nothing -> do
-                    let expectedHash = hash
+                    let expectedHash = semanticHash
                     Status { _standardVersion, _stack } <- State.get
                     let actualHash = hashExpression _standardVersion importSemantics
                     throwMissingImport (Imported _stack (HashMismatch {..}))
@@ -603,6 +604,7 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) Code)) = do
                 alphaBetaNormal = Dhall.Core.alphaNormalize betaNormal
             return alphaBetaNormal
 
+    let semanticHash = hashExpression Dhall.Binary.defaultStandardVersion importSemantics
     return (ImportSemantics {..})
 
 loadImportFresh (Chained (Import (ImportHashed _ importType) Location)) = do
@@ -626,6 +628,7 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) Location)) = do
                 App (Field locationType "Environment")
                   (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty env)))
 
+    let semanticHash = hashExpression Dhall.Binary.defaultStandardVersion importSemantics
     return (ImportSemantics {..})
 
 loadImportFresh (Chained (Import (ImportHashed _ importType) RawText)) = do
@@ -633,6 +636,7 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) RawText)) = do
 
     -- importSemantics is alpha-beta-normal by construction!
     let importSemantics = TextLit (Chunks [] text)
+    let semanticHash = hashExpression Dhall.Binary.defaultStandardVersion importSemantics
     return (ImportSemantics {..})
 
 -- Fetch source code directly from disk/network
