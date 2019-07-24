@@ -3,14 +3,18 @@
 module Dhall.Lint
     ( -- * Lint
       lint
+    , denote
     ) where
 
+import Unsafe.Coerce (unsafeCoerce)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup ((<>))
-import Dhall.Core (Binding(..), Expr(..), Import, Var(..), subExpressions)
+import Dhall.Core (Binding(..), Expr(..), CoreImport, Var(..), X)
 
+import Dhall.Optics (subExpressions)
 import qualified Dhall.Core
 import qualified Dhall.Optics
+import qualified Dhall.Eval
 
 {-| Automatically improve a Dhall expression
 
@@ -19,11 +23,11 @@ import qualified Dhall.Optics
     * removes unused @let@ bindings with 'removeLetInLet'.
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeUnusedBindings'.
 -}
-lint :: Expr s Import -> Expr t Import
+lint :: Expr s CoreImport -> Expr t CoreImport
 lint = postproc . linting . preproc
   where
     -- pre-processing: remove Note constructors and unfold Let blocks
-    preproc = Dhall.Optics.rewriteOf subExpressions unfoldNestedLets . Dhall.Core.denote
+    preproc = Dhall.Optics.rewriteOf subExpressions unfoldNestedLets . denote
     -- main linting step: remove unused let bindings and update optional syntax
     linting = Dhall.Optics.rewriteOf subExpressions removeUnusedBindings
     -- post-processing: fold nested Lets into Let blocks
@@ -40,8 +44,8 @@ removeLetInLet _ = Nothing
 -- opportunities!
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
 removeUnusedBindings (Let (Binding a _ _ :| []) d)
-    | not (V a 0 `Dhall.Core.freeIn` d) =
-        Just (Dhall.Core.shift (-1) (V a 0) d)
+    | not (V a 0 `Dhall.Eval.freeIn` d) =
+        Just (shift (-1) (V a 0) d)
 removeUnusedBindings _ = Nothing
 
 -- Unfold Let blocks into nested Let bindings binding a single variable each.
@@ -49,3 +53,16 @@ removeUnusedBindings _ = Nothing
 unfoldNestedLets :: Expr s a -> Maybe (Expr s a)
 unfoldNestedLets (Let (b :| (l : ls)) d) = Just (Let (b :| []) (Let (l :| ls) d))
 unfoldNestedLets _ = Nothing
+
+denote :: Expr s a -> Expr t a
+denote = unsafeCoerce . Dhall.Optics.rewriteOf subExpressions $
+  \case Note s e -> Just e
+        e        -> Nothing
+
+shift :: Var -> Expr s a -> Expr s a
+shift = undefined
+
+assertNoImports :: Expr s CoreImport -> Expr s X
+assertNoImports = unsafeCoerce . Dhall.Optics.rewriteOf subExpressions $
+  \case Embed{} -> error "assertNoImports: imports"
+        _       -> Nothing

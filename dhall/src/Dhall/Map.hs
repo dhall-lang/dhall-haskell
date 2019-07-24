@@ -80,7 +80,7 @@ import qualified Prelude
     This is done primarily to avoid a dependency on @insert-ordered-containers@
     and also to improve performance
 -}
-data Map k v = Map (Data.Map.Map k v) (Keys k)
+data Map k v = Map !(Data.Map.Map k v) !(Keys k)
     deriving (Data)
 
 data Keys a

@@ -10,13 +10,13 @@ module Dhall.Optics
     , rewriteMOf
     , transformMOf
     , mapMOf
-    , subexpressions
+    -- , subExpressions
     ) where
 
 import Control.Applicative (WrappedMonad(..))
 import Data.Profunctor.Unsafe ((#.))
 import Lens.Family (ASetter, LensLike, over)
-import Dhall.Core (Expr(..), Binding(..))
+import Dhall.Core (Expr(..), Binding(..), Chunks(..))
 
 -- | Identical to @"Control.Lens".`Control.Lens.rewriteOf`@
 rewriteOf :: ASetter a b a b -> (b -> Maybe a) -> a -> b
@@ -111,14 +111,18 @@ mapMOf l cmd = unwrapMonad #. l (WrapMonad #. cmd)
 -- subExpressions f (Record a) = Record <$> traverse f a
 -- subExpressions f ( RecordLit a ) = RecordLit <$> traverse f a
 -- subExpressions f (Union a) = Union <$> traverse (traverse f) a
--- subExpressions f (UnionLit a b c) = UnionLit a <$> f b <*> traverse (traverse f) c
 -- subExpressions f (Combine a b) = Combine <$> f a <*> f b
 -- subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
 -- subExpressions f (Prefer a b) = Prefer <$> f a <*> f b
 -- subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 -- subExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
--- subExpressions f (Field a b) = Field <$> f a <*> pure b
 -- subExpressions f (Project a b) = Project <$> f a <*> traverse f b
--- subExpressions f (Note a b) = Note a <$> f b
--- subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
--- subExpressions _ (Embed a) = pure (Embed a)
+-- subExpressions f (ImportAlt l r b) = ImportAlt <$> f l <*> f r <*> pure b
+-- subExpressions _ (EmbedImport a) = pure (Embed a)
+
+-- chunkExprs
+--   :: Applicative f
+--   => (Expr s a -> f (Expr t b))
+--   -> Chunks s a -> f (Chunks t b)
+-- chunkExprs f (Chunks chunks final) =
+--   flip Chunks final <$> traverse (traverse f) chunks

@@ -13,8 +13,6 @@ import           Data.String                (IsString (..))
 import           Data.Text                  (Text)
 import           Data.Text.Prettyprint.Doc  (Pretty (..))
 import           Data.Void                  (Void)
-import           Dhall.Map                  (Map)
-import           Dhall.Set                  (Set)
 import           Dhall.Src                  (Src(..))
 import           Prelude                    hiding (const, pi)
 import           Text.Parser.Combinators    (try, (<?>))
@@ -22,13 +20,10 @@ import           Text.Parser.Token          (TokenParsing (..))
 
 import qualified Control.Monad.Fail
 import qualified Data.Char
-import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
-import qualified Dhall.Map
 import qualified Dhall.Pretty
-import qualified Dhall.Set
 import qualified Text.Megaparsec
 #if !MIN_VERSION_megaparsec(7, 0, 0)
 import qualified Text.Megaparsec.Char as Text.Megaparsec (satisfy)
@@ -244,19 +239,19 @@ takeWhile predicate = Parser (Text.Megaparsec.takeWhileP Nothing predicate)
 takeWhile1 :: (Char -> Bool) -> Parser Text
 takeWhile1 predicate = Parser (Text.Megaparsec.takeWhile1P Nothing predicate)
 
-noDuplicates :: Ord a => [a] -> Parser (Set a)
-noDuplicates = go Dhall.Set.empty
-  where
-    go found    []  = return found
-    go found (x:xs) =
-        if Data.Set.member x (Dhall.Set.toSet found)
-        then fail "Duplicate key"
-        else go (Dhall.Set.append x found) xs
+-- noDuplicates :: Ord a => [a] -> Parser (Set a)
+-- noDuplicates = go Dhall.Set.empty
+--   where
+--     go found    []  = return found
+--     go found (x:xs) =
+--         if Data.Set.member x (Dhall.Set.toSet found)
+--         then fail "Duplicate key"
+--         else go (Dhall.Set.append x found) xs
 
-toMap :: [(Text, a)] -> Parser (Map Text a)
-toMap kvs = Dhall.Map.unorderedTraverseWithKey (\_k v -> v) m
-  where
-    m = Dhall.Map.fromListWithKey err (map (\(k, v) -> (k, pure v)) kvs)
+-- toMap :: [(Text, a)] -> Parser (Map Text a)
+-- toMap kvs = Dhall.Map.unorderedTraverseWithKey (\_k v -> v) m
+--   where
+--     m = Dhall.Map.fromListWithKey err (map (\(k, v) -> (k, pure v)) kvs)
 
-    err k _v1 _v2 = Text.Parser.Combinators.unexpected
-                        ("duplicate field: " ++ Data.Text.unpack k)
+--     err k _v1 _v2 = Text.Parser.Combinators.unexpected
+--                         ("duplicate field: " ++ Data.Text.unpack k)

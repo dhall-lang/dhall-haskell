@@ -105,8 +105,7 @@ import Data.Functor (void)
 import Data.HashSet (HashSet)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
-import Dhall.Core
-import Dhall.Set (Set)
+
 import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
@@ -115,7 +114,6 @@ import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Text
-import qualified Dhall.Set
 import qualified Network.URI.Encode         as URI.Encode
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char.Lexer
@@ -126,6 +124,8 @@ import Numeric.Natural (Natural)
 import Prelude hiding (const, pi)
 
 import qualified Text.Parser.Token
+import qualified Dhall.Core as Core
+import Dhall.Presyntax
 
 -- | The set of reserved identifiers for the Dhall language
 reservedIdentifiers :: HashSet Text
@@ -247,7 +247,7 @@ naturalLiteral = (do
     whitespace
     return a ) <?> "natural literal"
 
-identifier :: Parser Var
+identifier :: Parser V
 identifier = do
     x <- label
 
@@ -367,20 +367,12 @@ backtickLabel = do
             '\x20' <= c && c <= '\x5F'
         ||  '\x61' <= c && c <= '\x7E'
 
-labels :: Parser (Set Text)
+labels :: Parser [Text]
 labels = do
     _openBrace
-    xs <- nonEmptyLabels <|> emptyLabels
+    xs <- Text.Megaparsec.sepBy anyLabel _comma
     _closeBrace
     return xs
-  where
-    emptyLabels = pure Dhall.Set.empty
-
-    nonEmptyLabels = do
-        x  <- anyLabel
-        xs <- many (do _ <- _comma; anyLabel)
-        noDuplicates (x : xs)
-
 
 label :: Parser Text
 label = (do
@@ -461,7 +453,7 @@ pathComponent componentType = do
 
     quotedPathData <|> pathData
 
-file_ :: ComponentType -> Parser File
+file_ :: ComponentType -> Parser Core.File
 file_ componentType = do
     let emptyPath =
             case componentType of
@@ -470,23 +462,23 @@ file_ componentType = do
 
     path <- Data.List.NonEmpty.some1 (pathComponent componentType) <|> emptyPath
 
-    let directory = Directory (reverse (Data.List.NonEmpty.init path))
+    let directory = Core.Directory (reverse (Data.List.NonEmpty.init path))
     let file      = Data.List.NonEmpty.last path
 
-    return (File {..})
+    return (Core.File {..})
 
-scheme_ :: Parser Scheme
+scheme_ :: Parser Core.Scheme
 scheme_ =
         ("http" :: Parser Text)
-    *>  ((("s" :: Parser Text) *> pure HTTPS) <|> pure HTTP)
+    *>  ((("s" :: Parser Text) *> pure Core.HTTPS) <|> pure Core.HTTP)
     <*  ("://" :: Parser Text)
 
-httpRaw :: Parser (Maybe Raw -> RawURL)
+httpRaw :: Parser (Maybe Expr -> URL)
 httpRaw = do
-  RawURL <$> scheme_
-         <*> authority_
-         <*> file_ URLComponent
-         <*> optional (("?" :: Parser Text) *> query_)
+  URL <$> scheme_
+      <*> authority_
+      <*> file_ URLComponent
+      <*> optional (("?" :: Parser Text) *> query_)
 
 authority_ :: Parser Text
 authority_ = option (try (userinfo <> "@")) <> host <> option (":" <> port)

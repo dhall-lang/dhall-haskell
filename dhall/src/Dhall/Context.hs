@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings, BangPatterns #-}
 
 module Dhall.Context where
 
@@ -18,45 +18,43 @@ import System.FilePath
 import qualified Data.Map.Strict as Map
 import qualified Data.Text
 
-
--- | An import which has been previously resolved during elaboration. The
---   contained 'Val' is the lazy value of the imported expression.
-data ResolvedImport = ResolvedImport !CoreImport Val
-
 -- | Types of local bindings.
-data Types = TEmpty | TBind !Types {-# unpack #-} !Text Val
+data Types = TEmpty | TBind !Types Val
 
-typesNames :: Types -> Names
-typesNames TEmpty         = NEmpty
-typesNames (TBind ts x _) = NBind (typesNames ts) x
-
--- | Normal types of local bindings.
-typesToList :: Types -> [(Text, Nf)]
-typesToList TEmpty         = []
-typesToList (TBind ts x v) = (x, quote (typesNames ts) v): typesToList ts
+-- | Normal types of in-scope bindings.
+typesToList :: Types -> [Expr X]
+typesToList = fst . go where
+  go :: Types -> ([Expr X], Int)
+  go TEmpty       = ([], 0)
+  go (TBind ts v) = case go ts of
+    (ts', l) -> let !l' = l + 1 in (quote NoAlpha l v : ts', l')
 
 data Cxt = Cxt {
-    _values :: !Env
-  , _types  :: !Types
+    _values :: !Env   -- ^ Values of bindings.
+  , _types  :: !Types -- ^ Types of bindings.
+  , _names  :: !Names -- ^ Names of binders.
+  , _lvl    :: !Int   -- ^ Size of the context.
   }
 
 emptyCxt :: Cxt
-emptyCxt = Cxt Empty TEmpty
+emptyCxt = Cxt Empty TEmpty NEmpty 0
 
-quoteCxt :: Cxt -> Val -> Nf
-quoteCxt Cxt{..} = quote (envNames _values)
+quoteCxt :: Cxt -> Val -> Expr X
+quoteCxt Cxt{..} = quote NoAlpha _lvl
 {-# INLINE quoteCxt #-}
 
-quoteCxtCore :: Cxt -> Val -> Core
-quoteCxtCore cxt = nfToCore . quoteCxt cxt
-{-# INLINE quoteCxtCore #-}
+-- quoteCxtCore :: Cxt -> Val -> Core
+-- quoteCxtCore cxt = nfToCore . quoteCxt cxt
+-- {-# INLINE quoteCxtCore #-}
 
+-- | Extend context with a definition.
 define :: Text -> Val -> Val -> Cxt -> Cxt
-define x t a (Cxt ts as) = Cxt (Extend ts x t) (TBind as x a)
+define x t a (Cxt vs as ns l) = Cxt (Extend vs t) (TBind as a) (NBind ns x) (l + 1)
 {-# INLINE define #-}
 
+-- | Extend context with a bound name.
 bind :: Text -> Val -> Cxt -> Cxt
-bind x a (Cxt ts as) = Cxt (Skip ts x) (TBind as x a)
+bind x a (Cxt ts as ns l) = Cxt (Skip ts) (TBind as a) (NBind ns x) (l + 1)
 {-# INLINE bind #-}
 
 data ImportOptions
@@ -72,20 +70,21 @@ data ImportOptions
   | OldResolve
   deriving Show
 
+-- | Entry for imports cache.
 data CacheEntry = CacheEntry {
-    _core    :: !Core
+    _core    :: !(Expr I)
   , _value   :: Val
-  , _type    :: VType
-  , _nf      :: Nf
+  , _type    :: Val
+  , _nf      :: Expr X
   , _hash    :: Digest SHA256
   }
 
 data ImportState = ImportState {
-    _stack :: !(NonEmpty CoreImport)
+    _stack :: !(NonEmpty (Import I))
     -- ^ Stack of `Import`s that we've imported along the way to get to the
     -- current point
 
-  , _cache :: !(IORef (Map CoreImport CacheEntry))
+  , _cache :: !(IORef (Map (Import I) CacheEntry))
     -- ^ Cache of imported expressions in order to avoid importing the same
     --   expression twice with different values
 
@@ -98,12 +97,12 @@ data ImportState = ImportState {
   , _importOptions :: !ImportOptions
 
     -- ^ Import graph.
-  , _graph :: !(IORef (Map CoreImport (Int, Set CoreImport)))
+  , _graph :: !(IORef (Map (Import I) (Int, Set (Import I))))
   }
 
 type ElabM = ReaderT ImportState IO
 
-rootImport :: FilePath -> CoreImport
+rootImport :: FilePath -> Import I
 rootImport rootDir =
   let prefix = if isRelative rootDir then Here else Absolute
       pathComponents =

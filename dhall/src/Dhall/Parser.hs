@@ -22,7 +22,7 @@ import Control.Exception (Exception)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Data.Void (Void)
-import Dhall.Core
+import Dhall.Presyntax
 import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
 
@@ -34,12 +34,11 @@ import Dhall.Parser.Token
 import Dhall.Parser.Expression
 
 -- | Parser for a top-level Dhall expression
-expr :: Parser Raw
+expr :: Parser Expr
 expr = exprA (Text.Megaparsec.try import_)
 
--- | Parser for a top-level Dhall expression. The expression is parameterized
--- over any parseable type, allowing the language to be extended as needed.
-exprA :: Parser a -> Parser (Expr Src a)
+-- | Parser for a top-level Dhall expression.
+exprA :: Parser Import -> Parser Expr
 exprA = completeExpression
 
 -- | A parsing error
@@ -67,7 +66,7 @@ exprFromText
   :: String -- ^ User-friendly name describing the input expression,
             --   used in parsing error messages
   -> Text   -- ^ Input expression to parse
-  -> Either ParseError Raw
+  -> Either ParseError Expr
 exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
 
 {-| Like `exprFromText` but also returns the leading comments and whitespace
@@ -86,7 +85,7 @@ exprAndHeaderFromText
     :: String -- ^ User-friendly name describing the input expression,
               --   used in parsing error messages
     -> Text   -- ^ Input expression to parse
-    -> Either ParseError (Text, Raw)
+    -> Either ParseError (Text, Expr)
 exprAndHeaderFromText delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
     Right (txt, r) -> Right (Data.Text.dropWhileEnd (/= '\n') txt, r)

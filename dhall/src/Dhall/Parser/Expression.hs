@@ -14,7 +14,7 @@ import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
-import Dhall.Core
+import Dhall.Presyntax
 import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
@@ -27,7 +27,6 @@ import qualified Data.Char
 import qualified Data.Foldable
 import qualified Data.List
 import qualified Data.List.NonEmpty
-import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Encoding
 import qualified Text.Megaparsec
@@ -35,6 +34,7 @@ import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char as Text.Megaparsec
 #endif
 import qualified Text.Parser.Char
+import qualified Dhall.Core as Core
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
@@ -67,36 +67,36 @@ setOffset o = Text.Megaparsec.updateParserState $ \(Text.Megaparsec.State s p _ 
 #endif
 {-# INLINE setOffset #-}
 
-noted :: Parser (Expr Src a) -> Parser (Expr Src a)
+noted :: Parser Expr -> Parser Expr
 noted parser = do
     before      <- getSourcePos
     (tokens, e) <- Text.Megaparsec.match parser
     after       <- getSourcePos
     let src₀ = Src before after tokens
     case e of
-        Note src₁ _ | laxSrcEq src₀ src₁ -> return e
-        _                                -> return (Note src₀ e)
+        SrcAnnot src₁ _ | laxSrcEq src₀ src₁ -> return e
+        _                                    -> return (SrcAnnot src₀ e)
 
-shallowDenote :: Expr s a -> Expr s a
-shallowDenote (Note _ e) = shallowDenote e
-shallowDenote         e  = e
+shallowDenote :: Expr -> Expr
+shallowDenote (SrcAnnot _ e) = shallowDenote e
+shallowDenote             e  = e
 
-completeExpression :: Parser a -> Parser (Expr Src a)
+completeExpression :: Parser Import -> Parser Expr
 completeExpression embedded = completeExpression_
   where
     Parsers {..} = parsers embedded
 
-importExpression :: Parser a -> Parser (Expr Src a)
+importExpression :: Parser Import -> Parser Expr
 importExpression embedded = importExpression_
   where
     Parsers {..} = parsers embedded
 
-data Parsers a = Parsers
-    { completeExpression_ :: Parser (Expr Src a)
-    , importExpression_   :: Parser (Expr Src a)
+data Parsers = Parsers
+    { completeExpression_ :: Parser Expr
+    , importExpression_   :: Parser Expr
     }
 
-parsers :: Parser a -> Parsers a
+parsers :: Parser Import -> Parsers
 parsers embedded = Parsers {..}
   where
     completeExpression_ = do
@@ -123,7 +123,7 @@ parsers embedded = Parsers {..}
             _closeParens
             _arrow
             c <- expression
-            return (Lam a b c)
+            return (Lam a (Just b) c)
 
         alternative1 = do
             _if
@@ -178,22 +178,8 @@ parsers embedded = Parsers {..}
 
             let alternative4B = do
                     _colon
-
                     b <- expression
-
-                    case (shallowDenote a, shallowDenote b) of
-                        (ListLit _ xs, App f c) ->
-                            case shallowDenote f of
-                                List -> case xs of
-                                    [] -> return (ListLit (Just c) xs)
-                                    _  -> return (Annot a b)
-                                _ ->
-                                    return (Annot a b)
-                        (Merge c d _, e) ->
-                            return (Merge c d (Just e))
-                        (ToMap c _, d) ->
-                            return (ToMap c (Just d))
-                        _ -> return (Annot a b)
+                    return (Annot a b)
 
             alternative4A <|> alternative4B <|> pure a
 
@@ -247,8 +233,8 @@ parsers embedded = Parsers {..}
             b <- Text.Megaparsec.many (noted importExpression_)
             return (foldl app (f a) b)
           where
-            app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
-                Note (Src before after (bytesL <> bytesR)) (App nL nR)
+            app nL@(SrcAnnot (Src before _ bytesL) _) nR@(SrcAnnot (Src _ after bytesR) _) =
+                SrcAnnot (Src before after (bytesL <> bytesR)) (App nL nR)
             app nL nR =
                 App nL nR
 
@@ -256,8 +242,7 @@ parsers embedded = Parsers {..}
           where
             alternative0 = do
                 a <- embedded
-                return (Embed a)
-
+                return (EmbedImport a)
             alternative1 = selectorExpression
 
     selectorExpression = noted (do
@@ -291,7 +276,6 @@ parsers embedded = Parsers {..}
                     , alternative08
                     , alternative37
                     , alternative09
-
                     , builtin <?> "built-in expression"
                     ]
                 )
@@ -333,12 +317,12 @@ parsers embedded = Parsers {..}
                 _merge
                 a <- importExpression_
                 b <- importExpression_ <?> "second argument to ❰merge❱"
-                return (Merge a b Nothing)
+                return (Merge a b)
 
             alternative08 = do
                 _toMap
                 a <- importExpression_
-                return (ToMap a Nothing)
+                return (ToMap a)
 
             alternative09 = do
                 a <- try doubleInfinity
@@ -406,16 +390,16 @@ parsers embedded = Parsers {..}
                             , Optional         <$ _Optional
                             ]
                     'B' ->    Bool             <$ _Bool
-                    'S' ->    Const Sort       <$ _Sort
+                    'S' ->    Const Core.Sort       <$ _Sort
                     'T' ->
                         choice
                             [ TextShow         <$ _TextShow
                             , Text             <$ _Text
                             , BoolLit True     <$ _True
-                            , Const Type       <$ _Type
+                            , Const Core.Type       <$ _Type
                             ]
                     'F' ->    BoolLit False    <$ _False
-                    'K' ->    Const Kind       <$ _Kind
+                    'K' ->    Const Core.Kind       <$ _Kind
                     _   ->    empty
 
             alternative37 = do
@@ -440,11 +424,11 @@ parsers embedded = Parsers {..}
                 _ <- Text.Parser.Char.text "${"
                 e <- completeExpression_
                 _ <- Text.Parser.Char.char '}'
-                return (Chunks [(mempty, e)] mempty)
+                return (Core.Chunks [(mempty, e)] mempty)
 
             unescapedCharacterFast = do
                 t <- Text.Megaparsec.takeWhile1P Nothing predicate
-                return (Chunks [] t)
+                return (Core.Chunks [] t)
               where
                 predicate c =
                     (   ('\x20' <= c && c <= '\x21'    )
@@ -454,7 +438,7 @@ parsers embedded = Parsers {..}
 
             unescapedCharacterSlow = do
                 _ <- Text.Parser.Char.char '$'
-                return (Chunks [] "$")
+                return (Core.Chunks [] "$")
 
             escapedCharacter = do
                 _ <- Text.Parser.Char.char '\\'
@@ -470,7 +454,7 @@ parsers embedded = Parsers {..}
                     , tab
                     , unicode
                     ]
-                return (Chunks [] (Data.Text.singleton c))
+                return (Core.Chunks [] (Data.Text.singleton c))
               where
                 quotationMark = Text.Parser.Char.char '"'
 
@@ -543,7 +527,7 @@ parsers embedded = Parsers {..}
                     a <- completeExpression_
                     _ <- Text.Parser.Char.char '}'
                     b <- singleQuoteContinue
-                    return (Chunks [(mempty, a)] mempty <> b)
+                    return (Core.Chunks [(mempty, a)] mempty <> b)
 
                 escapeInterpolation = do
                     _ <- Text.Parser.Char.text "''${"
@@ -557,7 +541,7 @@ parsers embedded = Parsers {..}
                 unescapedCharacterFast = do
                     a <- Text.Megaparsec.takeWhile1P Nothing predicate
                     b <- singleQuoteContinue
-                    return (Chunks [] a <> b)
+                    return (Core.Chunks [] a <> b)
                   where
                     predicate c =
                         ('\x20' <= c && c <= '\x10FFFF') && c /= '$' && c /= '\''
@@ -565,14 +549,14 @@ parsers embedded = Parsers {..}
                 unescapedCharacterSlow = do
                     a <- satisfy predicate
                     b <- singleQuoteContinue
-                    return (Chunks [] a <> b)
+                    return (Core.Chunks [] a <> b)
                   where
                     predicate c = c == '$' || c == '\''
 
                 endOfLine = do
                     a <- "\n" <|> "\r\n"
                     b <- singleQuoteContinue
-                    return (Chunks [] a <> b)
+                    return (Core.Chunks [] a <> b)
 
                 tab = do
                     _ <- Text.Parser.Char.char '\t'
@@ -616,26 +600,24 @@ parsers embedded = Parsers {..}
             let nonEmptyRecordType = do
                     _colon
                     b <- expression
-                    e <- Text.Megaparsec.many (do
+                    e <- Text.Megaparsec.many $ do
                         _comma
                         c <- anyLabel
                         _colon
                         d <- expression
-                        return (c, d) )
-                    m <- toMap ((a, b) : e)
-                    return (Record m)
+                        return (c, d)
+                    return (Record ((a, b):e))
 
             let nonEmptyRecordLiteral = do
                     _equal
                     b <- expression
-                    e <- Text.Megaparsec.many (do
+                    e <- Text.Megaparsec.many $ do
                         _comma
                         c <- anyLabel
                         _equal
                         d <- expression
-                        return (c, d) )
-                    m <- toMap ((a, b) : e)
-                    return (RecordLit m)
+                        return (c, d)
+                    return (RecordLit ((a, b):e))
 
             nonEmptyRecordType <|> nonEmptyRecordLiteral
 
@@ -645,8 +627,7 @@ parsers embedded = Parsers {..}
 
     nonEmptyUnionTypeOrLiteral = do
             (f, kvs) <- loop
-            m <- toMap kvs
-            return (f m)
+            return (f kvs)
           where
             loop = do
                 a <- anyLabel
@@ -679,9 +660,9 @@ parsers embedded = Parsers {..}
             _openBracket
             a <- Text.Megaparsec.sepBy expression _comma
             _closeBracket
-            return (ListLit Nothing (Data.Sequence.fromList a)) ) <?> "list literal"
+            return (ListLit a)) <?> "list literal"
 
-env :: Parser RawImportType
+env :: Parser ImportType
 env = do
     _ <- Text.Parser.Char.text "env:"
     a <- (alternative0 <|> alternative1)
@@ -696,7 +677,7 @@ env = do
         _ <- Text.Parser.Char.char '"'
         return a
 
-localRaw :: Parser RawImportType
+localRaw :: Parser ImportType
 localRaw =
     choice
         [ parentPath
@@ -709,32 +690,32 @@ localRaw =
         _    <- ".." :: Parser Text
         file <- file_ FileComponent
 
-        return (Local Parent file)
+        return (Local Core.Parent file)
 
     herePath = do
         _    <- "." :: Parser Text
         file <- file_ FileComponent
 
-        return (Local Here file)
+        return (Local Core.Here file)
 
     homePath = do
         _    <- "~" :: Parser Text
         file <- file_ FileComponent
 
-        return (Local Home file)
+        return (Local Core.Home file)
 
     absolutePath = do
         file <- file_ FileComponent
 
-        return (Local Absolute file)
+        return (Local Core.Absolute file)
 
-local :: Parser RawImportType
+local :: Parser ImportType
 local = do
     a <- localRaw
     whitespace
     return a
 
-http :: Parser RawImportType
+http :: Parser ImportType
 http = do
     url <- httpRaw
     whitespace
@@ -743,12 +724,12 @@ http = do
         importExpression import_ )
     return (Remote (url headers))
 
-missing :: Parser RawImportType
+missing :: Parser ImportType
 missing = do
   _missing
   return Missing
 
-importType_ :: Parser RawImportType
+importType_ :: Parser ImportType
 importType_ = do
     let predicate c =
             c == '~' || c == '.' || c == '/' || c == 'h' || c == 'e' || c == 'm'
@@ -757,7 +738,7 @@ importType_ = do
 
     choice [ local, http, env, missing ]
 
-importHashed_ :: Parser RawImportHashed
+importHashed_ :: Parser ImportHashed
 importHashed_ = do
     importType <- importType_
     hash       <- optional importHash_
@@ -775,15 +756,15 @@ importHashed_ = do
           Nothing -> fail "Invalid sha256 hash"
           Just h  -> pure h
 
-import_ :: Parser RawImport
+import_ :: Parser Import
 import_ = (do
     importHashed <- importHashed_
-    importMode   <- alternative <|> pure Code
+    importMode   <- alternative <|> pure Core.Code
     return (Import {..}) ) <?> "import"
   where
     alternative = do
       _as
-      (_Text >> pure RawText) <|> (_Location >> pure Location)
+      (_Text >> pure Core.RawText) <|> (_Location >> pure Core.Location)
 
 -- | Similar to `Dhall.Core.renderChunks` except that this doesn't bother to
 -- render interpolated expressions to avoid a `Buildable a` constraint.  The
@@ -792,10 +773,10 @@ import_ = (do
 --
 -- This also doesn't include the surrounding quotes since they would interfere
 -- with the whitespace detection
-renderChunks :: Chunks s a -> Text
-renderChunks (Chunks a b) = foldMap renderChunk a <> b
+renderChunks :: Core.Chunks Expr -> Text
+renderChunks (Core.Chunks a b) = foldMap renderChunk a <> b
   where
-    renderChunk :: (Text, Expr s a) -> Text
+    renderChunk :: (Text, Expr) -> Text
     renderChunk (c, _) = c <> "${x}"
 
 splitOn :: Text -> Text -> NonEmpty Text
@@ -804,48 +785,48 @@ splitOn needle haystack =
         []     -> "" :| []
         t : ts -> t  :| ts
 
-linesLiteral :: Chunks s a -> NonEmpty (Chunks s a)
-linesLiteral (Chunks [] suffix) =
-    fmap (Chunks []) (splitOn "\n" suffix)
-linesLiteral (Chunks ((prefix, interpolation) : pairs₀) suffix₀) =
+linesLiteral :: Core.Chunks a -> NonEmpty (Core.Chunks a)
+linesLiteral (Core.Chunks [] suffix) =
+    fmap (Core.Chunks []) (splitOn "\n" suffix)
+linesLiteral (Core.Chunks ((prefix, interpolation) : pairs₀) suffix₀) =
     foldr
         Data.List.NonEmpty.cons
-        (Chunks ((lastLine, interpolation) : pairs₁) suffix₁ :| chunks)
-        (fmap (Chunks []) initLines)
+        (Core.Chunks ((lastLine, interpolation) : pairs₁) suffix₁ :| chunks)
+        (fmap (Core.Chunks []) initLines)
   where
     splitLines = splitOn "\n" prefix
 
     initLines = Data.List.NonEmpty.init splitLines
     lastLine  = Data.List.NonEmpty.last splitLines
 
-    Chunks pairs₁ suffix₁ :| chunks = linesLiteral (Chunks pairs₀ suffix₀)
+    Core.Chunks pairs₁ suffix₁ :| chunks = linesLiteral (Core.Chunks pairs₀ suffix₀)
 
-unlinesLiteral :: NonEmpty (Chunks s a) -> Chunks s a
+unlinesLiteral :: NonEmpty (Core.Chunks a) -> Core.Chunks a
 unlinesLiteral chunks =
     Data.Foldable.fold (Data.List.NonEmpty.intersperse "\n" chunks)
 
-emptyLine :: Chunks s a -> Bool
-emptyLine (Chunks [] ""  ) = True
-emptyLine (Chunks [] "\r") = True  -- So that `\r\n` is treated as a blank line
+emptyLine :: Core.Chunks a -> Bool
+emptyLine (Core.Chunks [] ""  ) = True
+emptyLine (Core.Chunks [] "\r") = True  -- So that `\r\n` is treated as a blank line
 emptyLine  _               = False
 
-leadingSpaces :: Chunks s a -> Text
+leadingSpaces :: Core.Chunks a -> Text
 leadingSpaces chunks = Data.Text.takeWhile isSpace firstText
   where
     isSpace c = c == '\x20' || c == '\x09'
 
     firstText =
         case chunks of
-            Chunks                []  suffix -> suffix
-            Chunks ((prefix, _) : _ ) _      -> prefix
+            Core.Chunks                []  suffix -> suffix
+            Core.Chunks ((prefix, _) : _ ) _      -> prefix
 
-dropLiteral :: Int -> Chunks s a -> Chunks s a
-dropLiteral n (Chunks [] suffix) =
-    Chunks [] (Data.Text.drop n suffix)
-dropLiteral n (Chunks ((prefix, interpolation) : rest) suffix) =
-    Chunks ((Data.Text.drop n prefix, interpolation) : rest) suffix
+dropLiteral :: Int -> Core.Chunks a -> Core.Chunks a
+dropLiteral n (Core.Chunks [] suffix) =
+    Core.Chunks [] (Data.Text.drop n suffix)
+dropLiteral n (Core.Chunks ((prefix, interpolation) : rest) suffix) =
+    Core.Chunks ((Data.Text.drop n prefix, interpolation) : rest) suffix
 
-toDoubleQuoted :: Chunks Src a -> Chunks Src a
+toDoubleQuoted :: Core.Chunks a -> Core.Chunks a
 toDoubleQuoted literal =
     unlinesLiteral (fmap (dropLiteral indent) literals)
   where

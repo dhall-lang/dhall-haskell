@@ -622,6 +622,7 @@ Library
         -- Dhall.Main,
         Dhall.Map,
         -- Dhall.Optics,
+        Dhall.Presyntax,
         Dhall.Set,
         Dhall.Src,
         Dhall.Parser,

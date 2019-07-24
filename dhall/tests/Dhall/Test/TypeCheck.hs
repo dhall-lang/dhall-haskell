@@ -55,7 +55,7 @@ successTest prefix =
         let expectedCode = Test.Util.toDhallPath (prefix <> "B.dhall")
         actualExpr   <- Test.Util.getRaw actualCode
         expectedType <- Eval.evalEmpty <$> Test.Util.getCore expectedCode
-        _ <- Elab.checkRoot "." actualExpr expectedType
+        _ <- Elab.checkExpr actualExpr expectedType
         pure ()
 
 failureTest :: Text -> TestTree
@@ -63,7 +63,7 @@ failureTest path = do
     Tasty.HUnit.testCase (Text.unpack path) $ do
         expression <- Test.Util.getRaw $ Test.Util.toDhallPath path
 
-        typeChecked <- (True <$ Elab.inferRoot "." expression)
+        typeChecked <- (True <$ Elab.inferExpr expression)
                        `catch`
                        \(ContextualError _ _ _ TypeError{}) -> pure False
 

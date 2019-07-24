@@ -1,12 +1,10 @@
-{-# LANGUAGE CPP                  #-}
-{-# LANGUAGE DeriveDataTypeable   #-}
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE EmptyCase            #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE PatternSynonyms      #-}
-{-# LANGUAGE RecordWildCards      #-}
-{-# LANGUAGE ViewPatterns         #-}
+{-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE DeriveFoldable             #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DeriveTraversable          #-}
+{-# LANGUAGE EmptyCase                  #-}
+{-# LANGUAGE PatternSynonyms            #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| This module contains the core calculus for the Dhall language.
@@ -15,64 +13,7 @@
     functionality, better error messages, and Haskell integration
 -}
 
-module Dhall.Core (
-    -- * Syntax
-      Const(..)
-    , Binding(..)
-    , Chunks(..)
-    , Core
-    , CoreBinding
-    , CoreImport
-    , CoreImportHashed
-    , CoreImportType
-    , Directory(..)
-    , Expr(..)
-    , File(..)
-    , FilePrefix(..)
-    , Import(..)
-    , ImportHashed(..)
-    , ImportMode(..)
-    , ImportType(..)
-    , Names(..)
-    , Nf
-    , NfBinding
-    , Raw
-    , RawBinding
-    , RawImport
-    , RawImportHashed
-    , RawImportType
-    , RawURL(..)
-    , Resolved(..)
-    , Scheme(..)
-    , URL(..)
-    , Var(..)
-    , coerceEmbed
-    , coerceNote
-    , envNames
-
-    -- * Values
-    , Closure(..)
-    , Env(..)
-    , HLamInfo(..)
-    , VChunks(..)
-    , VType
-    , Val(..)
-    , coreToRaw
-    , nfToCore
-    , nfToRaw
-    , pattern VPrim
-    , vFun
-    , vType
-
-    -- * Pretty-printing
-    , Dhall.Pretty.Internal.pretty
-
-    -- * Miscellaneous
-    , X
-    , absurd
-    , internalError
-    , throws
-    ) where
+module Dhall.Core where
 
 #if MIN_VERSION_base(4,8,0)
 #else
@@ -82,68 +23,46 @@ import Control.Applicative (Applicative(..), (<$>))
 import Control.Exception (Exception(..), throwIO)
 import Control.Monad.IO.Class (MonadIO(..))
 import Crypto.Hash (SHA256)
-import Data.Data (Data(..))
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
 import Data.String (IsString(..))
 import Data.Text (Text)
-import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
-
 import Dhall.Map (Map)
 import Dhall.Set (Set)
-import Dhall.Src (Src)
-
-import {-# SOURCE #-} Dhall.Parser.Token (pathCharacter)
-import {-# SOURCE #-} Dhall.Pretty.Internal
-
-import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
-import Unsafe.Coerce (unsafeCoerce)
-
 import qualified Crypto.Hash
-import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc  as Pretty
-import qualified Network.URI.Encode         as URI.Encode
-
--- synonyms
---------------------------------------------------------------------------------
-
-type Raw              = Expr Src (Import RawURL)
-type Core             = Expr X Resolved
-type Nf               = Expr X X
-type VType            = Val
-
-type RawBinding       = Binding Src RawImport
-type CoreBinding      = Binding X Resolved
-type NfBinding        = Binding X X
-type RawImport        = Import RawURL
-type CoreImport       = Import URL
-type RawImportType    = ImportType RawURL
-type CoreImportType   = ImportType URL
-type RawImportHashed  = ImportHashed RawURL
-type CoreImportHashed = ImportHashed URL
 
 --------------------------------------------------------------------------------
 
--- | Empty type.
+-- | The body of an interpolated @Text@ literal
+data Chunks a = Chunks ![(Text, a)] !Text
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+
+instance Data.Semigroup.Semigroup (Chunks a) where
+    Chunks xysL zL <> Chunks         []    zR =
+        Chunks xysL (zL <> zR)
+    Chunks xysL zL <> Chunks ((x, y):xysR) zR =
+        Chunks (xysL ++ (zL <> x, y):xysR) zR
+
+instance Monoid (Chunks a) where
+    mempty = Chunks [] mempty
+
+#if !(MIN_VERSION_base(4,11,0))
+    mappend = (<>)
+#endif
+
+instance IsString (Chunks a) where
+    fromString str = Chunks [] (fromString str)
+
+-- | Like `Data.Void.Void`, except with a shorter inferred type
 data X
 
 absurd :: X -> a
 absurd x = case x of
 
-instance Show X   where show    = undefined
-instance Eq X     where (==)    = undefined
-instance Ord X    where compare = undefined
-instance Pretty X where pretty  = undefined
-
-instance Data X where
-  dataTypeOf _ = undefined
-  gunfold _ _  = undefined
-  toConstr _   = undefined
-
---------------------------------------------------------------------------------
-
+instance Show X where
+    show _ = undefined
 
 {-| Constants for a pure type system
 
@@ -165,10 +84,11 @@ instance Data X where
     Dhall is not a dependently typed language
 -}
 data Const = Type | Kind | Sort
-    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic)
+  deriving (Show, Eq, Ord)
 
-instance Pretty Const where
-    pretty = Pretty.unAnnotate . prettyConst
+
+-- Imports
+--------------------------------------------------------------------------------
 
 {-| Internal representation of a directory that stores the path components in
     reverse order
@@ -177,31 +97,15 @@ instance Pretty Const where
     @Directory { components = [ "baz", "bar", "foo" ] }@
 -}
 newtype Directory = Directory { components :: [Text] }
-    deriving (Eq, Generic, Ord, Show)
+    deriving (Eq, Ord, Show)
 
 instance Semigroup Directory where
     Directory components₀ <> Directory components₁ =
         Directory (components₁ <> components₀)
 
-instance Pretty Directory where
-    pretty (Directory {..}) = foldMap prettyPathComponent (reverse components)
-
-{-| A `File` is a `directory` followed by one additional path component
-    representing the `file` name
--}
-data File = File
-    { directory :: !Directory
-    , file      :: !Text
-    } deriving (Eq, Generic, Ord, Show)
-
-instance Pretty File where
-    pretty (File {..}) =
-            Pretty.pretty directory
-        <>  prettyPathComponent file
-
-instance Semigroup File where
-    File directory₀ _ <> File directory₁ file =
-        File (directory₀ <> directory₁) file
+-- | How to interpret the import's contents (i.e. as Dhall code or raw text)
+data ImportMode = Code | RawText | Location
+  deriving (Eq, Ord, Show)
 
 -- | The beginning of a file path which anchors subsequent path components
 data FilePrefix
@@ -213,83 +117,35 @@ data FilePrefix
     -- ^ Path relative to @..@
     | Home
     -- ^ Path relative to @~@
-    deriving (Eq, Generic, Ord, Show)
+    deriving (Eq, Ord, Show)
 
-instance Pretty FilePrefix where
-    pretty Absolute = ""
-    pretty Here     = "."
-    pretty Parent   = ".."
-    pretty Home     = "~"
+data Scheme = HTTP | HTTPS
+  deriving (Show, Eq, Ord)
 
-data Scheme = HTTP | HTTPS deriving (Eq, Generic, Ord, Show)
+instance Semigroup File where
+    File directory₀ _ <> File directory₁ file =
+        File (directory₀ <> directory₁) file
 
-data RawURL = RawURL !Scheme !Text !File !(Maybe Text) !(Maybe Raw)
-  deriving Show
-
-data URL = URL
-    { scheme    :: !Scheme
-    , authority :: !Text
-    , path      :: !File
-    , query     :: !(Maybe Text)
-    , headers   :: !(Maybe Core)
-    } deriving (Show, Eq, Ord)
-
-prettyPathComponent :: Text -> Doc ann
-prettyPathComponent text
-    | Data.Text.all pathCharacter text =
-        "/" <> Pretty.pretty text
-    | otherwise =
-        "/\"" <> Pretty.pretty text <> "\""
-
-prettyURIComponent :: Text -> Doc ann
-prettyURIComponent text
-    | Data.Text.all (\c -> pathCharacter c && URI.Encode.isAllowed c) text =
-        "/" <> Pretty.pretty text
-    | otherwise =
-        "/\"" <> Pretty.pretty text <> "\""
-
-instance Pretty URL where
-    pretty (URL {..}) =
-            schemeDoc
-        <>  "://"
-        <>  Pretty.pretty authority
-        <>  pathDoc
-        <>  queryDoc
-        <>  foldMap prettyHeaders headers
-      where
-        prettyHeaders h = " using " <> Pretty.pretty h
-
-        File {..} = path
-
-        Directory {..} = directory
-
-        pathDoc =
-                foldMap prettyURIComponent (reverse components)
-            <>  prettyURIComponent file
-
-        schemeDoc = case scheme of
-            HTTP  -> "http"
-            HTTPS -> "https"
-
-        queryDoc = case query of
-            Nothing -> ""
-            Just q  -> "?" <> Pretty.pretty q
+{-| A `File` is a `directory` followed by one additional path component
+    representing the `file` name
+-}
+data File = File
+    { directory :: !Directory
+    , file      :: !Text
+    } deriving (Eq, Ord, Show)
 
 -- | The type of import (i.e. local vs. remote vs. environment)
-data ImportType url
+data ImportType a
     = Local !FilePrefix !File
     -- ^ Local path
-    | Remote !url
+    | Remote !(URL a)
     -- ^ URL of remote resource and optional headers stored in an import
     | Env !Text
     -- ^ Environment variable
     | Missing
-    deriving (Eq, Ord, Show)
+    deriving (Show, Eq, Ord)
 
-parent :: File
-parent = File { directory = Directory { components = [ ".." ] }, file = "" }
-
-instance Semigroup CoreImportType where
+instance Semigroup (ImportType a) where
     Local prefix file₀ <> Local Here file₁ = Local prefix (file₀ <> file₁)
 
     Remote (URL { path = path₀, ..}) <> Local Here path₁ =
@@ -303,129 +159,108 @@ instance Semigroup CoreImportType where
 
     _ <> import₁ = import₁
 
-instance Pretty CoreImportType where
-    pretty (Local prefix file) =
-        Pretty.pretty prefix <> Pretty.pretty file
-
-    pretty (Remote url) = Pretty.pretty url
-
-    pretty (Env env) = "env:" <> Pretty.pretty env
-
-    pretty Missing = "missing"
-
--- | How to interpret the import's contents (i.e. as Dhall code or raw text)
-data ImportMode = Code | RawText | Location
-  deriving (Eq, Generic, Ord, Show)
-
 -- | An `ImportType` extended with an optional hash for semantic integrity checks
-data ImportHashed url = ImportHashed
+data ImportHashed a = ImportHashed
     { hash       :: !(Maybe (Crypto.Hash.Digest SHA256))
-    , importType :: !(ImportType url)
-    } deriving (Eq, Ord, Show)
+    , importType :: !(ImportType a)
+    } deriving (Show, Eq, Ord)
 
-instance Semigroup CoreImportHashed where
+instance Semigroup (ImportHashed a) where
     ImportHashed _ importType₀ <> ImportHashed hash importType₁ =
         ImportHashed hash (importType₀ <> importType₁)
 
-instance Pretty CoreImportHashed where
-    pretty (ImportHashed  Nothing p) =
-      Pretty.pretty p
-    pretty (ImportHashed (Just h) p) =
-      Pretty.pretty p <> " sha256:" <> Pretty.pretty (show h)
-
 -- | Reference to an external resource
-data Import url = Import
-    { importHashed :: !(ImportHashed url)
+data Import a = Import
+    { importHashed :: !(ImportHashed a)
     , importMode   :: !ImportMode
-    } deriving (Eq, Ord, Show)
+    } deriving (Show, Eq, Ord)
 
-instance Semigroup CoreImport where
+instance Semigroup (Import a) where
     Import importHashed₀ _ <> Import importHashed₁ code =
         Import (importHashed₀ <> importHashed₁) code
 
-instance Pretty CoreImport where
-    pretty (Import {..}) = Pretty.pretty importHashed <> Pretty.pretty suffix
-      where
-        suffix :: Text
-        suffix = case importMode of
-            RawText  -> " as Text"
-            Location -> " as Location"
-            Code     -> ""
+data URL a = URL
+    { scheme    :: !Scheme
+    , authority :: !Text
+    , path      :: !File
+    , query     :: !(Maybe Text)
+    , headers   :: !(Maybe (Expr a))
+                                 -- ^ We know by elaboration that this expression
+                                 --   is definitionally an association list of headers. We don't
+                                 --   store the headers, only the expression, and recompute
+                                 --   headers when needed.
+    } deriving (Show, Eq, Ord)
 
-{-| Label for a bound variable
+-- | This specifies whether an annotation comes from the source syntax, or is
+--   inferred during elaboration. We keep track of this information so that
+--   we can pretty print elaborated core back with the same annotations as in
+--   the source.
+data AnnotSource
+  -- | > Annotation comes from elaboration.
+  = ElabAnnot
+  -- | > Annotation comes from source.
+  | SourceAnnot
+  deriving (Show, Eq, Ord)
 
-    The `Text` field is the variable's name (i.e. \"@x@\").
+data Binding i = Binding
+    { variable   :: !Text
+    , annotation :: !(Maybe (Expr i))
+    , value      :: !(Expr i)
+    } deriving (Show, Eq, Ord)
 
-    The `Int` field disambiguates variables with the same name if there are
-    multiple bound variables of the same name in scope.  Zero refers to the
-    nearest bound variable and the index increases by one for each bound
-    variable of the same name going outward.  The following diagram may help:
+parent :: File
+parent = File { directory = Directory { components = [ ".." ] }, file = "" }
 
->                               ┌──refers to──┐
->                               │             │
->                               v             │
-> λ(x : Type) → λ(y : Type) → λ(x : Type) → x@0
->
-> ┌─────────────────refers to─────────────────┐
-> │                                           │
-> v                                           │
-> λ(x : Type) → λ(y : Type) → λ(x : Type) → x@1
+-- Core expressions
+--------------------------------------------------------------------------------
 
-    This `Int` behaves like a De Bruijn index in the special case where all
-    variables have the same name.
+data Projection i
+  -- | > Projecting a single field.
+  = ProjSingle !Text
+  -- | > Projecting a set of fields. We may have a projection by an expression, in
+  --     which case we remember the original expression.
+  | ProjSet !(Set Text) !(Maybe (Expr i))
+  deriving (Show, Eq, Ord)
 
-    You can optionally omit the index if it is @0@:
+data Injection
+  -- | > Inject an enum constructor.
+  = InjEnum
+  -- | > Inject a field constructor.
+  | InjField
+  deriving (Show, Eq, Ord)
 
->                               ┌─refers to─┐
->                               │           │
->                               v           │
-> λ(x : Type) → λ(y : Type) → λ(x : Type) → x
-
-    Zero indices are omitted when pretty-printing `Var`s and non-zero indices
-    appear as a numeric suffix.
--}
-data Var = V !Text !Int
-    deriving (Data, Generic, Eq, Ord, Show)
-
-instance IsString Var where
-    fromString str = V (fromString str) 0
-
-instance Pretty Var where
-    pretty = Pretty.unAnnotate . prettyVar
-
--- | Syntax tree for expressions
-data Expr s a
+-- | Syntax tree for expressions. The type parameter stands for imports.
+data Expr i
     -- | > Const c                                  ~  c
     = Const !Const
-    -- | > Var (V x 0)                              ~  x
-    --   > Var (V x n)                              ~  x@n
-    | Var {-# unpack #-} !Var
-    -- | > Lam x     A b                            ~  λ(x : A) -> b
-    | Lam !Text !(Expr s a) !(Expr s a)
-    -- | > Pi "_" A B                               ~        A  -> B
-    --   > Pi x   A B                               ~  ∀(x : A) -> B
-    | Pi  Text !(Expr s a) !(Expr s a)
+    -- | De Bruijn indices.
+    | Var !Int
+    -- | > Lam (x, _) A b                           ~  λ(x : A) -> b
+    | Lam !(Text, AnnotSource) !(Expr i) !(Expr i)
+    -- | > Pi "_" i j A B                           ~  (A : i) -> (B : j)
+    --   > Pi x   i j   A B                         ~  ∀(x : A : i) -> B : j
+    | Pi !Text !Const !Const !(Expr i) !(Expr i)
     -- | > App f a                                  ~  f a
-    | App !(Expr s a) !(Expr s a)
+    | App !(Expr i) !(Expr i)
     -- | > Let [Binding x Nothing  r] e             ~  let x     = r in e
     --   > Let [Binding x (Just t) r] e             ~  let x : t = r in e
-    | Let (NonEmpty (Binding s a)) !(Expr s a)
+    | Let !(NonEmpty (Binding i)) !(Expr i)
     -- | > Annot x t                                ~  x : t
-    | Annot !(Expr s a) !(Expr s a)
+    | Annot !(Expr i) !(Expr i)
     -- | > Bool                                     ~  Bool
     | Bool
     -- | > BoolLit b                                ~  b
     | BoolLit !Bool
     -- | > BoolAnd x y                              ~  x && y
-    | BoolAnd !(Expr s a) !(Expr s a)
+    | BoolAnd !(Expr i) !(Expr i)
     -- | > BoolOr  x y                              ~  x || y
-    | BoolOr  !(Expr s a) !(Expr s a)
+    | BoolOr  !(Expr i) !(Expr i)
     -- | > BoolEQ  x y                              ~  x == y
-    | BoolEQ  !(Expr s a) !(Expr s a)
+    | BoolEQ  !(Expr i) !(Expr i)
     -- | > BoolNE  x y                              ~  x != y
-    | BoolNE  !(Expr s a) !(Expr s a)
+    | BoolNE  !(Expr i) !(Expr i)
     -- | > BoolIf x y z                             ~  if x then y else z
-    | BoolIf !(Expr s a) !(Expr s a) !(Expr s a)
+    | BoolIf !(Expr i) !(Expr i) !(Expr i)
     -- | > Natural                                  ~  Natural
     | Natural
     -- | > NaturalLit n                             ~  n
@@ -445,9 +280,9 @@ data Expr s a
     -- | > NaturalShow                              ~  Natural/show
     | NaturalShow
     -- | > NaturalPlus x y                          ~  x + y
-    | NaturalPlus !(Expr s a) !(Expr s a)
+    | NaturalPlus !(Expr i) !(Expr i)
     -- | > NaturalTimes x y                         ~  x * y
-    | NaturalTimes !(Expr s a) !(Expr s a)
+    | NaturalTimes !(Expr i) !(Expr i)
     -- | > Integer                                  ~  Integer
     | Integer
     -- | > IntegerLit n                             ~  ±n
@@ -465,18 +300,17 @@ data Expr s a
     -- | > Text                                     ~  Text
     | Text
     -- | > TextLit (Chunks [(t1, e1), (t2, e2)] t3) ~  "t1${e1}t2${e2}t3"
-    | TextLit !(Chunks s a)
+    | TextLit {-# unpack #-} !(Chunks (Expr i))
     -- | > TextAppend x y                           ~  x ++ y
-    | TextAppend !(Expr s a) !(Expr s a)
+    | TextAppend !(Expr i) !(Expr i)
     -- | > TextShow                                 ~  Text/show
     | TextShow
     -- | > List                                     ~  List
     | List
-    -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : List t
-    --   > ListLit  Nothing  [x, y, z]              ~  [x, y, z]
-    | ListLit !(Maybe (Expr s a)) !(Seq (Expr s a))
+    -- | > ListLit [x, y, z]                        ~  [x, y, z] : List t
+    | ListLit !(Maybe (Expr i, AnnotSource)) !(Seq (Expr i))
     -- | > ListAppend x y                           ~  x # y
-    | ListAppend !(Expr s a) !(Expr s a)
+    | ListAppend !(Expr i) !(Expr i)
     -- | > ListBuild                                ~  List/build
     | ListBuild
     -- | > ListFold                                 ~  List/fold
@@ -494,7 +328,7 @@ data Expr s a
     -- | > Optional                                 ~  Optional
     | Optional
     -- | > Some e                                   ~  Some e
-    | Some !(Expr s a)
+    | Some !(Expr i)
     -- | > None                                     ~  None
     | None
     -- | > OptionalFold                             ~  Optional/fold
@@ -502,89 +336,46 @@ data Expr s a
     -- | > OptionalBuild                            ~  Optional/build
     | OptionalBuild
     -- | > Record       [(k1, t1), (k2, t2)]        ~  { k1 : t1, k2 : t1 }
-    | Record    !(Map Text (Expr s a))
+    | Record    !(Map Text (Expr i))
     -- | > RecordLit    [(k1, v1), (k2, v2)]        ~  { k1 = v1, k2 = v2 }
-    | RecordLit !(Map Text (Expr s a))
-    -- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
-    | Union     !(Map Text (Maybe (Expr s a)))
-    -- | > UnionLit k v [(k1, Just t1), (k2, Nothing)] ~  < k = v | k1 : t1 | k2 >
-    | UnionLit !Text !(Expr s a) !(Map Text (Maybe (Expr s a)))
+    | RecordLit !(Map Text (Expr i))
+    -- | > Union [(k1, Just t1), (k2, Nothing)]     ~  < k1 : t1 | k2 >
+    | Union     !(Map Text (Maybe (Expr i)))
     -- | > Combine x y                              ~  x ∧ y
-    | Combine !(Expr s a) !(Expr s a)
+    | Combine !(Expr i) !(Expr i)
     -- | > CombineTypes x y                         ~  x ⩓ y
-    | CombineTypes !(Expr s a) !(Expr s a)
+    | CombineTypes !(Expr i) !(Expr i)
     -- | > Prefer x y                               ~  x ⫽ y
-    | Prefer !(Expr s a) !(Expr s a)
-    -- | > Merge x y (Just t )                      ~  merge x y : t
-    --   > Merge x y  Nothing                       ~  merge x y
-    | Merge !(Expr s a) !(Expr s a) !(Maybe (Expr s a))
-    -- | > ToMap x (Just t)                         ~  toMap x : t
-    --   > ToMap x  Nothing                         ~  toMap x
-    | ToMap !(Expr s a) !(Maybe (Expr s a))
-    -- | > Field e x                                ~  e.x
-    | Field !(Expr s a) !Text
-    -- | > Project e (Left xs)                      ~  e.{ xs }
-    -- | > Project e (Right t)                      ~  e.(t)
-    | Project !(Expr s a) !(Either (Set Text) (Expr s a))
-    -- | > Note s x                                 ~  e
-    | Note s !(Expr s a)
+    | Prefer !(Expr i) !(Expr i)
+    -- | > Merge t x y                              ~  merge x y : t
+    | Merge !(Expr i) !(Expr i) !(Maybe (Expr i, AnnotSource))
+    -- | > ToMap t x                                ~  toMap x : List {mapKey : Text, mapValue : t}
+    | ToMap !(Expr i) !(Maybe (Expr i, AnnotSource))
+    -- | > Inject e k1 i                            ~ e.k1
+    --   We know from elaboration that 'e' is definitionally equal to
+    --   a union type, but it is more efficient to only store
+    --   the original expression, but not the union itself.
+    | Inject !(Expr i) !Text !Injection
+    -- | > Project t (ProjSingle k)                 ~ t.k
+    --   > Project t (ProjSet [k1, k2])             ~ t.{k1, k2}
+    --   > Project t (Proj!(Expr i) ks e            ~ t.(e)
+    | Project !(Expr i) !(Projection i)
     -- | > ImportAlt                                ~  e1 ? e2
-    | ImportAlt !(Expr s a) !(Expr s a)
-    -- | > Embed import                             ~  import
-    | Embed a
-    deriving (Eq, Ord, Show, Data)
+    --     The 'Bool' annotation picks out the successfully
+    --     resolved branch.
+    | ImportAlt !(Expr i) !(Expr i) !Bool
+    | EmbedImport !i
+    deriving (Show, Eq, Ord)
 
-coerceNote :: Expr X a -> Expr s a
-coerceNote = unsafeCoerce
-{-# inline coerceNote #-}
+--------------------------------------------------------------------------------
 
-coerceEmbed :: Expr s X -> Expr s a
-coerceEmbed = unsafeCoerce
-{-# inline coerceEmbed #-}
-
-instance IsString (Expr s a) where
-    fromString str = Var (fromString str)
-
-data Binding s a = Binding
-    { variable   :: !Text
-    , annotation :: !(Maybe (Expr s a))
-    , value      :: !(Expr s a)
-    } deriving (Eq, Ord, Show, Data)
-
--- | The body of an interpolated @Text@ literal
-data Chunks s a = Chunks ![(Text, Expr s a)] !Text
-    deriving (Eq, Ord, Show, Data)
-
-instance Data.Semigroup.Semigroup (Chunks s a) where
-    Chunks xysL zL <> Chunks         []    zR =
-        Chunks xysL (zL <> zR)
-    Chunks xysL zL <> Chunks ((x, y):xysR) zR =
-        Chunks (xysL ++ (zL <> x, y):xysR) zR
-
-instance Monoid (Chunks s a) where
-    mempty = Chunks [] mempty
-
-#if !(MIN_VERSION_base(4,11,0))
-    mappend = (<>)
-#endif
-
-instance IsString (Chunks s a) where
-    fromString str = Chunks [] (fromString str)
-
-{-  There is a one-to-one correspondence between the builders in this section
-    and the sub-parsers in "Dhall.Parser".  Each builder is named after the
-    corresponding parser and the relationship between builders exactly matches
-    the relationship between parsers.  This leads to the nice emergent property
-    of automatically getting all the parentheses and precedences right.
-
-    This approach has one major disadvantage: you can get an infinite loop if
-    you add a new constructor to the syntax tree without adding a matching
-    case the corresponding builder.
+{-| Convenience utility for converting `Either`-based exceptions to `IO`-based
+    exceptions
 -}
+throws :: (Exception e, MonadIO io) => Either e a -> io a
+throws (Left  e) = liftIO (Control.Exception.throwIO e)
+throws (Right a) = return a
 
--- | Generates a syntactically valid Dhall program
-instance Pretty a => Pretty (Expr s a) where
-    pretty = Pretty.unAnnotate . prettyExpr
 
 _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
@@ -607,50 +398,46 @@ internalError text = unlines
     , "```                                                                             "
     ]
 
-{-| Convenience utility for converting `Either`-based exceptions to `IO`-based
-    exceptions
--}
-throws :: (Exception e, MonadIO io) => Either e a -> io a
-throws (Left  e) = liftIO (Control.Exception.throwIO e)
-throws (Right a) = return a
-
-
--- values
+-- Names
 --------------------------------------------------------------------------------
 
-nfToCore :: Nf -> Core
-nfToCore = unsafeCoerce
-{-# INLINE nfToCore #-}
+data Names = NEmpty | NBind !Names {-# unpack #-} !Text
+  deriving Show
 
-nfToRaw :: Nf -> Raw
-nfToRaw = unsafeCoerce
-{-# INLINE nfToRaw #-}
+indexNames :: Names -> Int -> Text
+indexNames NEmpty       _ = error $ internalError "indexNames: out-of bounds index"
+indexNames (NBind _  x) 0 = x
+indexNames (NBind ns _) i = indexNames ns (i - 1)
 
-coreToRaw :: Core -> Raw
-coreToRaw = undefined
-{-# INLINE coreToRaw #-}
+-- | Data type used mostly for printing 'Expr'. Since 'Expr' does not store
+--   names in variables, we need a name environment for printing.
+data Named a = Named !Names a
+  deriving (Show)
 
-data Resolved = Resolved !(Import URL) !Core Val
-
-instance Eq Resolved where
-  Resolved _ t _ == Resolved _ t' _ = t == t'
-
-instance Ord Resolved where
-  compare (Resolved _ t _) (Resolved _ t' _) = compare t t'
+countName :: Text -> Names -> Int
+countName x = go 0 where
+  go !acc NEmpty         = acc
+  go  acc (NBind env x') = go (if x == x' then acc + 1 else acc) env
 
 
-instance Show Resolved where
-  show (Resolved i _ _) = show i
+-- Values
+--------------------------------------------------------------------------------
 
-instance Pretty Resolved where
-  pretty (Resolved i _ _) = Pretty.pretty i
+-- | Resolved import, containing an elaborated import, the elaborated
+--   expression behind the import and the lazy value of this expression.
+data I = I !(Import I) !(Expr I) Val
 
-data Env =
-    Empty
-  | Skip !Env {-# unpack #-} !Text
-  | Extend !Env {-# unpack #-} !Text Val
+instance Show I where
+  show (I i _ _) = show i
 
-data Closure = Cl !Text !Env !Core
+instance Eq I where
+  (I i _ _) == (I i' _ _) = i == i'
+
+instance Ord I where
+  compare (I i _ _) (I i' _ _) = compare i i'
+
+data Env = Empty | Skip !Env | Extend !Env Val
+data Closure = Cl !Text !Env !(Expr I)
 data VChunks = VChunks ![(Text, Val)] !Text
 
 instance Semigroup VChunks where
@@ -659,7 +446,6 @@ instance Semigroup VChunks where
 
 instance Monoid VChunks where
   mempty = VChunks [] mempty
-
 #if !(MIN_VERSION_base(4,11,0))
   mappend = (<>)
 #endif
@@ -674,95 +460,87 @@ data HLamInfo
 pattern VPrim :: (Val -> Val) -> Val
 pattern VPrim f = VHLam Prim f
 
+data VProjection
+  = VProjSingle !Text
+  | VProjSet !(Set Text) !(Maybe Val)
+
 data Val
   = VConst !Const
-  | VVar !Text !Int
+  | VVar !Int
   | VPrimVar
-  | VApp Val Val
+  | VApp !Val Val
 
   | VLam Val {-# unpack #-} !Closure
   | VHLam !HLamInfo !(Val -> Val)
 
-  | VPi  Val {-# unpack #-} !Closure
-  | VHPi !Text Val !(Val -> Val)
+  | VPi !Const !Const Val {-# unpack #-} !Closure
+  | VHPi !Text !Const !Const Val !(Val -> Val)
 
   | VBool
   | VBoolLit !Bool
-  | VBoolAnd Val Val
-  | VBoolOr Val Val
-  | VBoolEQ Val Val
-  | VBoolNE Val Val
-  | VBoolIf Val Val Val
+  | VBoolAnd !Val Val
+  | VBoolOr !Val Val
+  | VBoolEQ !Val Val
+  | VBoolNE !Val Val
+  | VBoolIf !Val Val Val
 
   | VNatural
   | VNaturalLit !Natural
-  | VNaturalFold Val Val Val Val
-  | VNaturalBuild Val
-  | VNaturalIsZero Val
-  | VNaturalEven Val
-  | VNaturalOdd Val
-  | VNaturalToInteger Val
-  | VNaturalShow Val
-  | VNaturalPlus Val Val
-  | VNaturalTimes Val Val
+  | VNaturalFold Val !Val !Val !Val
+  | VNaturalBuild !Val
+  | VNaturalIsZero !Val
+  | VNaturalEven !Val
+  | VNaturalOdd !Val
+  | VNaturalToInteger !Val
+  | VNaturalShow !Val
+  | VNaturalPlus !Val !Val
+  | VNaturalTimes !Val !Val
 
   | VInteger
   | VIntegerLit !Integer
-  | VIntegerShow Val
-  | VIntegerToDouble Val
+  | VIntegerShow !Val
+  | VIntegerToDouble !Val
 
   | VDouble
   | VDoubleLit !Double
-  | VDoubleShow Val
+  | VDoubleShow !Val
 
   | VText
   | VTextLit {-# unpack #-} !VChunks
-  | VTextAppend Val Val
-  | VTextShow Val
+  | VTextAppend !Val !Val
+  | VTextShow !Val
 
-  | VList Val
+  | VList !Val
   | VListLit !(Maybe Val) !(Seq Val)
-  | VListAppend Val Val
-  | VListBuild   Val Val
-  | VListFold    Val Val Val Val Val
-  | VListLength  Val Val
-  | VListHead    Val Val
-  | VListLast    Val Val
-  | VListIndexed Val Val
-  | VListReverse Val Val
+  | VListAppend !Val !Val
+  | VListBuild   Val !Val
+  | VListFold    Val !Val !Val !Val !Val
+  | VListLength  Val !Val
+  | VListHead    Val !Val
+  | VListLast    Val !Val
+  | VListIndexed Val !Val
+  | VListReverse Val !Val
 
   | VOptional Val
-  | VSome Val
+  | VSome !Val
   | VNone Val
-  | VOptionalFold Val Val Val Val Val
-  | VOptionalBuild Val Val
+  | VOptionalFold Val !Val Val !Val !Val
+  | VOptionalBuild Val !Val
   | VRecord !(Map Text Val)
   | VRecordLit !(Map Text Val)
   | VUnion !(Map Text (Maybe Val))
-  | VUnionLit !Text Val !(Map Text (Maybe Val))
-  | VCombine Val Val
-  | VCombineTypes Val Val
-  | VPrefer Val Val
-  | VMerge Val Val !(Maybe Val)
+  | VCombine !Val !Val
+  | VCombineTypes !Val !Val
+  | VPrefer !Val !Val
+  | VMerge !Val !Val !(Maybe Val)
   | VToMap !Val !(Maybe Val)
-  | VField Val !Text
-  | VInject !(Map Text (Maybe Val)) !Text !(Maybe Val)
-  | VProject Val !(Either (Set Text) Val)
+  | VInject Val !Text !(Maybe Val)   -- Nothing if enum constructor, Just v if field
+  | VProject !Val !VProjection
 
-vFun :: Val -> Val -> Val
-vFun a b = VHPi "_" a (\_ -> b)
+vFun :: Const -> Const -> Val -> Val -> Val
+vFun i j a b = VHPi "_" i j a (\_ -> b)
 {-# inline vFun #-}
 
 vType :: Val
 vType = VConst Type
 {-# inline vType #-}
-
-data Names
-  = NEmpty
-  | NBind !Names {-# unpack #-} !Text
-  deriving Show
-
-envNames :: Env -> Names
-envNames Empty            = NEmpty
-envNames (Skip   env x  ) = NBind (envNames env) x
-envNames (Extend env x _) = NBind (envNames env) x
