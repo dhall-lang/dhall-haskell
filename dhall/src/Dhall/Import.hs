@@ -180,6 +180,7 @@ import qualified Control.Monad.Trans.Maybe        as Maybe
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Control.Monad.Trans.Writer       as Writer
 import qualified Crypto.Hash
+import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
@@ -500,13 +501,13 @@ loadImport import_ = do
             zoom cache (State.modify (Map.insert import_ importSemantics))
             return importSemantics
 
--- | Load an import from the 'semantic cache'. Defers to `loadImportFresh` for
---   imports that aren't frozen (and therefore not cached semantically), as well
---   as those that aren't cached yet.
+-- | Load an import from the 'semantic cache'. Defers to
+--   `loadImportWithSemisemanticCache` for imports that aren't frozen (and
+--   therefore not cached semantically), as well as those that aren't cached yet.
 loadImportWithSemanticCache :: Chained -> StateT Status IO ImportSemantics
 loadImportWithSemanticCache
   import_@(Chained (Import (ImportHashed Nothing _) _)) = do
-    loadImportFresh import_
+    loadImportWithSemisemanticCache import_
 
 loadImportWithSemanticCache
   import_@(Chained (Import (ImportHashed (Just semanticHash) _) _)) = do
@@ -533,7 +534,7 @@ loadImportWithSemanticCache
             return (ImportSemantics {..})
 
         Nothing -> do
-            ImportSemantics { importSemantics } <- loadImportFresh import_
+            ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache import_
 
             let variants = map (\version -> encodeExpression version importSemantics)
                                 [ minBound .. maxBound ]
@@ -550,7 +551,7 @@ loadImportWithSemanticCache
 -- Fetch encoded normal form from "semantic cache"
 fetchFromSemanticCache :: Crypto.Hash.Digest SHA256 -> IO (Maybe Data.ByteString.ByteString)
 fetchFromSemanticCache expectedHash = Maybe.runMaybeT $ do
-    cacheFile <- getCacheFile expectedHash
+    cacheFile <- getCacheFile "dhall" expectedHash
     True <- liftIO (Directory.doesFileExist cacheFile)
     liftIO (Data.ByteString.readFile cacheFile)
 
@@ -565,14 +566,17 @@ writeExpressionToSemanticCache expression = writeToSemanticCache hash bytes
 writeToSemanticCache :: Crypto.Hash.Digest SHA256 -> Data.ByteString.ByteString -> IO ()
 writeToSemanticCache hash bytes = do
     _ <- Maybe.runMaybeT $ do
-        cacheFile <- getCacheFile hash
+        cacheFile <- getCacheFile "dhall" hash
         liftIO (Data.ByteString.writeFile cacheFile bytes)
     return ()
 
--- | Load, typecheck and normalise an import from scratch.
-loadImportFresh :: Chained -> StateT Status IO ImportSemantics
-loadImportFresh (Chained (Import (ImportHashed _ importType) Code)) = do
+-- Check the "semi-semantic" disk cache, otherwise typecheck and normalise from
+-- scratch.
+loadImportWithSemisemanticCache
+  :: Chained -> StateT Status IO ImportSemantics
+loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Code)) = do
     text <- fetchFresh importType
+    Status {..} <- State.get
 
     path <- case importType of
         Local prefix file -> liftIO $ do
@@ -591,25 +595,53 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) Code)) = do
 
     parsedImport <- case Text.Megaparsec.parse parser path text of
         Left  errInfo -> do
-            Status { _stack } <- State.get
             throwMissingImport (Imported _stack (ParseError errInfo text))
         Right expr    -> return expr
 
-    loadedExpr <- loadWith parsedImport  -- we load imports recursively here
+    resolved@ResolvedExpr{..} <- resolve parsedImport  -- we load imports recursively here
 
-    Status {..} <- State.get
+    -- Check the semi-semantic cache. See
+    -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for the reasoning
+    -- behind semi-semantic caching.
+    let semisemanticHash = computeSemisemanticHash resolved
+    mCached <- lift $ fetchFromSemisemanticCache semisemanticHash
 
-    importSemantics <- case Dhall.TypeCheck.typeWith _startingContext loadedExpr of
-        Left  err -> throwM (Imported _stack err)
-        Right _   -> do
-            let betaNormal = Dhall.Core.normalizeWith _normalizer loadedExpr
-                alphaBetaNormal = Dhall.Core.alphaNormalize betaNormal
-            return alphaBetaNormal
+    (bytes, importSemantics) <- case mCached of
+        Just bytesStrict -> do
+            let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
+            term <- Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytesLazy)
+            importSemantics <- Dhall.Core.throws (Dhall.Binary.decodeExpression term)
 
+            return (bytesStrict, importSemantics)
+
+        Nothing -> do
+            betaNormal <- case Dhall.TypeCheck.typeWith _startingContext resolvedExpr of
+                Left err -> throwM (Imported _stack err)
+                Right _ -> return (Dhall.Core.normalizeWith _normalizer resolvedExpr)
+
+            let alphaBetaNormal = Dhall.Core.alphaNormalize betaNormal
+
+            let bytes = encodeExpression _standardVersion alphaBetaNormal
+
+            lift $ writeToSemisemanticCache semisemanticHash bytes
+            return (bytes, alphaBetaNormal)
+
+    let semanticHash = Crypto.Hash.hash bytes
+    return (ImportSemantics {..})
+
+-- `as Text` imports aren't cached since they are well-typed and normal by
+-- construction
+loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) RawText)) = do
+    text <- fetchFresh importType
+
+    -- importSemantics is alpha-beta-normal by construction!
+    let importSemantics = TextLit (Chunks [] text)
     let semanticHash = hashExpression Dhall.Binary.defaultStandardVersion importSemantics
     return (ImportSemantics {..})
 
-loadImportFresh (Chained (Import (ImportHashed _ importType) Location)) = do
+-- `as Location` imports aren't cached since they are well-typed and normal by
+-- construction
+loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Location)) = do
     let locationType = Union $ Dhall.Map.fromList
             [ ("Environment", Just Text)
             , ("Remote", Just Text)
@@ -633,13 +665,33 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) Location)) = do
     let semanticHash = hashExpression Dhall.Binary.defaultStandardVersion importSemantics
     return (ImportSemantics {..})
 
-loadImportFresh (Chained (Import (ImportHashed _ importType) RawText)) = do
-    text <- fetchFresh importType
+-- The semi-semantic hash of an expression is computed by combining its
+-- cryptographic hash (of its plain AST, without normalising or resolving
+-- imports) with the semantic hashes of all of its imports and hashing the
+-- result. See https://github.com/dhall-lang/dhall-haskell/issues/1098 for
+-- further discussion.
+computeSemisemanticHash :: ResolvedExpr -> Crypto.Hash.Digest Crypto.Hash.SHA256
+computeSemisemanticHash (ResolvedExpr {..}) = Crypto.Hash.hash combined
+  where
+    importHashes = map semanticHash imports :: [Crypto.Hash.Digest SHA256]
+    syntacticHash = Crypto.Hash.hash
+        (encodeExpression Dhall.Binary.defaultStandardVersion resolvedExpr)
+    combined = Data.ByteArray.concat (syntacticHash : importHashes)
+        :: Data.ByteString.ByteString
 
-    -- importSemantics is alpha-beta-normal by construction!
-    let importSemantics = TextLit (Chunks [] text)
-    let semanticHash = hashExpression Dhall.Binary.defaultStandardVersion importSemantics
-    return (ImportSemantics {..})
+-- Fetch encoded normal form from "semi-semantic cache"
+fetchFromSemisemanticCache :: Crypto.Hash.Digest SHA256 -> IO (Maybe Data.ByteString.ByteString)
+fetchFromSemisemanticCache semisemanticHash = Maybe.runMaybeT $ do
+    cacheFile <- getCacheFile "dhall-haskell" semisemanticHash
+    True <- liftIO (Directory.doesFileExist cacheFile)
+    liftIO (Data.ByteString.readFile cacheFile)
+
+writeToSemisemanticCache :: Crypto.Hash.Digest SHA256 -> Data.ByteString.ByteString -> IO ()
+writeToSemisemanticCache semisemanticHash bytes = do
+    _ <- Maybe.runMaybeT $ do
+        cacheFile <- getCacheFile "dhall-haskell" semisemanticHash
+        liftIO (Data.ByteString.writeFile cacheFile bytes)
+    return ()
 
 -- Fetch source code directly from disk/network
 fetchFresh :: ImportType -> StateT Status IO Text
@@ -673,8 +725,8 @@ fetchFresh (Env env) = do
 fetchFresh Missing = throwM (MissingImports [])
 
 getCacheFile
-    :: (Alternative m, MonadIO m) => Crypto.Hash.Digest SHA256 -> m FilePath
-getCacheFile hash = do
+    :: (Alternative m, MonadIO m) => FilePath -> Crypto.Hash.Digest SHA256 -> m FilePath
+getCacheFile cacheName hash = do
     let assertDirectory directory = do
             let private = transform Directory.emptyPermissions
                   where
@@ -705,11 +757,9 @@ getCacheFile hash = do
 
     cacheDirectory <- getCacheDirectory
 
-    let dhallDirectory = cacheDirectory </> "dhall"
+    assertDirectory (cacheDirectory </> cacheName)
 
-    assertDirectory dhallDirectory
-
-    let cacheFile = dhallDirectory </> ("1220" <> show hash)
+    let cacheFile = (cacheDirectory </> cacheName) </> ("1220" <> show hash)
 
     return cacheFile
 
