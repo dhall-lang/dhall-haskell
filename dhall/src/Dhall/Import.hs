@@ -597,7 +597,7 @@ loadImportFresh (Chained (Import (ImportHashed _ importType) Code)) = do
     Status {..} <- State.get
 
     importSemantics <- case Dhall.TypeCheck.typeWith _startingContext loadedExpr of
-        Left  err -> throwM (Imported _stack err)
+        Left  err -> throwMissingImport (Imported _stack err)
         Right _   -> do
             let betaNormal = Dhall.Core.normalizeWith _normalizer loadedExpr
                 alphaBetaNormal = Dhall.Core.alphaNormalize betaNormal
