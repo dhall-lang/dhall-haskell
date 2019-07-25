@@ -140,6 +140,7 @@ import Control.Exception (Exception, SomeException, toException)
 import Control.Monad (guard)
 import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
 import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -177,6 +178,7 @@ import Lens.Family.State.Strict (zoom)
 import qualified Codec.Serialise
 import qualified Control.Monad.Trans.Maybe        as Maybe
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Control.Monad.Trans.Writer       as Writer
 import qualified Crypto.Hash
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
@@ -784,13 +786,27 @@ normalizeHeaders url = return url
     supply
 -}
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src X)
-loadWith expr₀ = case expr₀ of
+loadWith expression = do
+    ResolvedExpr {..} <- resolve expression
+    return resolvedExpr
+
+-- | Resolve all imports within an expression
+load :: Expr Src Import -> IO (Expr Src X)
+load expression = State.evalStateT (loadWith expression) (emptyStatus ".")
+
+resolve :: Expr Src Import -> StateT Status IO ResolvedExpr
+resolve expression = do
+    (resolvedExpr, imports) <- Writer.runWriterT (resolve' expression)
+    return (ResolvedExpr {..})
+
+resolve' :: Expr Src Import -> Writer.WriterT [ImportSemantics] (StateT Status IO) (Expr Src X)
+resolve' expr₀ = case expr₀ of
   Embed import₀ -> do
-    Status {..} <- State.get
+    Status {..} <- lift $ State.get
 
     let parent = NonEmpty.head _stack
 
-    child <- chainImport parent import₀
+    child <- lift $ chainImport parent import₀
 
     let local (Chained (Import (ImportHashed _ (Remote  {})) _)) = False
         local (Chained (Import (ImportHashed _ (Local   {})) _)) = True
@@ -809,22 +825,23 @@ loadWith expr₀ = case expr₀ of
         then throwMissingImport (Imported _stack (Cycle import₀))
         else return ()
 
-    zoom graph . State.modify $
+    lift . zoom graph . State.modify $
         -- Add the edge `parent -> child` to the import graph
         \edges -> Depends parent child : edges
 
     let stackWithChild = NonEmpty.cons child _stack
 
-    zoom stack (State.put stackWithChild)
-    ImportSemantics {..} <- loadImport child
-    zoom stack (State.put _stack)
+    lift $ zoom stack (State.put stackWithChild)
+    resolvedImport@ImportSemantics {..} <- lift $ loadImport child
+    Writer.tell [resolvedImport]
+    lift $ zoom stack (State.put _stack)
 
     return importSemantics
 
-  ImportAlt a b -> loadWith a `catch` handler₀
+  ImportAlt a b -> resolve' a `catch` handler₀
     where
       handler₀ (SourcedException (Src begin _ text₀) (MissingImports es₀)) =
-          loadWith b `catch` handler₁
+          resolve' b `catch` handler₁
         where
           handler₁ (SourcedException (Src _ end text₁) (MissingImports es₁)) =
               throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
@@ -833,20 +850,20 @@ loadWith expr₀ = case expr₀ of
 
   Const a              -> pure (Const a)
   Var a                -> pure (Var a)
-  Lam a b c            -> Lam <$> pure a <*> loadWith b <*> loadWith c
-  Pi a b c             -> Pi <$> pure a <*> loadWith b <*> loadWith c
-  App a b              -> App <$> loadWith a <*> loadWith b
-  Let as b             -> Let <$> traverse f as <*> loadWith b
+  Lam a b c            -> Lam <$> pure a <*> resolve' b <*> resolve' c
+  Pi a b c             -> Pi <$> pure a <*> resolve' b <*> resolve' c
+  App a b              -> App <$> resolve' a <*> resolve' b
+  Let as b             -> Let <$> traverse f as <*> resolve' b
     where
-      f (Binding c d e) = Binding c <$> traverse loadWith d <*> loadWith e
-  Annot a b            -> Annot <$> loadWith a <*> loadWith b
+      f (Binding c d e) = Binding c <$> traverse resolve' d <*> resolve' e
+  Annot a b            -> Annot <$> resolve' a <*> resolve' b
   Bool                 -> pure Bool
   BoolLit a            -> pure (BoolLit a)
-  BoolAnd a b          -> BoolAnd <$> loadWith a <*> loadWith b
-  BoolOr a b           -> BoolOr <$> loadWith a <*> loadWith b
-  BoolEQ a b           -> BoolEQ <$> loadWith a <*> loadWith b
-  BoolNE a b           -> BoolNE <$> loadWith a <*> loadWith b
-  BoolIf a b c         -> BoolIf <$> loadWith a <*> loadWith b <*> loadWith c
+  BoolAnd a b          -> BoolAnd <$> resolve' a <*> resolve' b
+  BoolOr a b           -> BoolOr <$> resolve' a <*> resolve' b
+  BoolEQ a b           -> BoolEQ <$> resolve' a <*> resolve' b
+  BoolNE a b           -> BoolNE <$> resolve' a <*> resolve' b
+  BoolIf a b c         -> BoolIf <$> resolve' a <*> resolve' b <*> resolve' c
   Natural              -> pure Natural
   NaturalLit a         -> pure (NaturalLit a)
   NaturalFold          -> pure NaturalFold
@@ -856,8 +873,8 @@ loadWith expr₀ = case expr₀ of
   NaturalOdd           -> pure NaturalOdd
   NaturalToInteger     -> pure NaturalToInteger
   NaturalShow          -> pure NaturalShow
-  NaturalPlus a b      -> NaturalPlus <$> loadWith a <*> loadWith b
-  NaturalTimes a b     -> NaturalTimes <$> loadWith a <*> loadWith b
+  NaturalPlus a b      -> NaturalPlus <$> resolve' a <*> resolve' b
+  NaturalTimes a b     -> NaturalTimes <$> resolve' a <*> resolve' b
   Integer              -> pure Integer
   IntegerLit a         -> pure (IntegerLit a)
   IntegerShow          -> pure IntegerShow
@@ -866,12 +883,12 @@ loadWith expr₀ = case expr₀ of
   DoubleLit a          -> pure (DoubleLit a)
   DoubleShow           -> pure DoubleShow
   Text                 -> pure Text
-  TextLit (Chunks a b) -> fmap TextLit (Chunks <$> mapM (mapM loadWith) a <*> pure b)
-  TextAppend a b       -> TextAppend <$> loadWith a <*> loadWith b
+  TextLit (Chunks a b) -> fmap TextLit (Chunks <$> mapM (mapM resolve') a <*> pure b)
+  TextAppend a b       -> TextAppend <$> resolve' a <*> resolve' b
   TextShow             -> pure TextShow
   List                 -> pure List
-  ListLit a b          -> ListLit <$> mapM loadWith a <*> mapM loadWith b
-  ListAppend a b       -> ListAppend <$> loadWith a <*> loadWith b
+  ListLit a b          -> ListLit <$> mapM resolve' a <*> mapM resolve' b
+  ListAppend a b       -> ListAppend <$> resolve' a <*> resolve' b
   ListBuild            -> pure ListBuild
   ListFold             -> pure ListFold
   ListLength           -> pure ListLength
@@ -881,28 +898,24 @@ loadWith expr₀ = case expr₀ of
   ListReverse          -> pure ListReverse
   Optional             -> pure Optional
   None                 -> pure None
-  Some a               -> Some <$> loadWith a
+  Some a               -> Some <$> resolve' a
   OptionalFold         -> pure OptionalFold
   OptionalBuild        -> pure OptionalBuild
-  Record a             -> Record <$> mapM loadWith a
-  RecordLit a          -> RecordLit <$> mapM loadWith a
-  Union a              -> Union <$> mapM (mapM loadWith) a
-  UnionLit a b c       -> UnionLit <$> pure a <*> loadWith b <*> mapM (mapM loadWith) c
-  Combine a b          -> Combine <$> loadWith a <*> loadWith b
-  CombineTypes a b     -> CombineTypes <$> loadWith a <*> loadWith b
-  Prefer a b           -> Prefer <$> loadWith a <*> loadWith b
-  Merge a b c          -> Merge <$> loadWith a <*> loadWith b <*> mapM loadWith c
-  ToMap a b            -> ToMap <$> loadWith a <*> mapM loadWith b
-  Field a b            -> Field <$> loadWith a <*> pure b
-  Project a b          -> Project <$> loadWith a <*> mapM loadWith b
+  Record a             -> Record <$> mapM resolve' a
+  RecordLit a          -> RecordLit <$> mapM resolve' a
+  Union a              -> Union <$> mapM (mapM resolve') a
+  UnionLit a b c       -> UnionLit <$> pure a <*> resolve' b <*> mapM (mapM resolve') c
+  Combine a b          -> Combine <$> resolve' a <*> resolve' b
+  CombineTypes a b     -> CombineTypes <$> resolve' a <*> resolve' b
+  Prefer a b           -> Prefer <$> resolve' a <*> resolve' b
+  Merge a b c          -> Merge <$> resolve' a <*> resolve' b <*> mapM resolve' c
+  ToMap a b            -> ToMap <$> resolve' a <*> mapM resolve' b
+  Field a b            -> Field <$> resolve' a <*> pure b
+  Project a b          -> Project <$> resolve' a <*> mapM resolve' b
   Note a b             -> do
       let handler e = throwM (SourcedException a (e :: MissingImports))
 
-      (Note <$> pure a <*> loadWith b) `catch` handler
-
--- | Resolve all imports within an expression
-load :: Expr Src Import -> IO (Expr Src X)
-load expression = State.evalStateT (loadWith expression) (emptyStatus ".")
+      (Note <$> pure a <*> resolve' b) `catch` handler
 
 encodeExpression
     :: forall s

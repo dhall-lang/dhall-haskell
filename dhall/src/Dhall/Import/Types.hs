@@ -52,6 +52,16 @@ data ImportSemantics = ImportSemantics
     -- ^ Its semantic hash, i.e. the hash of its encoded normal form.
     }
 
+data ResolvedExpr = ResolvedExpr
+    { resolvedExpr :: Expr Src X
+    -- ^ The fully resolved expression, i.e. any imports where replaced by their
+    --   semantics. Note that the resolved expression has not yet been
+    --   typechecked nor normalised!
+    , imports :: [ImportSemantics]
+    -- ^ The semantics of any imports that were loaded when resolving the
+    --   expression. Used to compute the semi-semantic hash.
+    }
+
 -- | `parent` imports (i.e. depends on) `child`
 data Depends = Depends { parent :: Chained, child :: Chained }
 
