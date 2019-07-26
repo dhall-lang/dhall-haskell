@@ -143,6 +143,8 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
+import Data.ByteString (ByteString)
+import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
@@ -315,6 +317,8 @@ instance Show MissingImports where
 
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
 throwMissingImport e = throwM (MissingImports [toException e])
+
+type HTTPHeader = (CI ByteString, ByteString)
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
@@ -581,7 +585,9 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             path <- localToPath prefix file
             absolutePath <- Directory.makeAbsolute path
             return absolutePath
-        Remote url -> return $ Text.unpack (renderURL url)
+        Remote url -> do
+            let urlText = Dhall.Pretty.Internal.pretty (url { headers = Nothing })
+            return (Text.unpack urlText)
         Env env -> return $ Text.unpack env
         Missing -> throwM (MissingImports [])
 
@@ -703,9 +709,10 @@ fetchFresh (Remote (url@URL { headers = maybeHeadersExpression })) = do
     let maybeHeaders = foldMap toHeaders maybeHeadersExpression
     fetchFromHttpUrl url maybeHeaders
 #else
+    let maybeHeaders = foldMap toHeaders maybeHeadersExpression
     let urlString = Text.unpack (Dhall.Core.pretty url)
     Status { _stack } <- State.get
-    throwMissingImport (Imported _stack (CannotImportHTTPURL urlString mheaders))
+    throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
 #endif
 
 fetchFresh (Env env) = do
