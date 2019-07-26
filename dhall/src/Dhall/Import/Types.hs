@@ -28,7 +28,6 @@ import Dhall.TypeCheck (X)
 import Lens.Family (LensLike')
 import System.FilePath (isRelative, splitDirectories)
 
-import qualified Crypto.Hash
 import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Data.Map      as Map
@@ -48,18 +47,6 @@ instance Pretty Chained where
 data ImportSemantics = ImportSemantics
     { importSemantics :: Expr Src X
     -- ^ The fully resolved import, typechecked and alpha-beta-normal.
-    , semanticHash :: Crypto.Hash.Digest Crypto.Hash.SHA256
-    -- ^ Its semantic hash, i.e. the hash of its encoded normal form.
-    }
-
-data ResolvedExpr = ResolvedExpr
-    { resolvedExpr :: Expr Src X
-    -- ^ The fully resolved expression, i.e. any imports where replaced by their
-    --   semantics. Note that the resolved expression has not yet been
-    --   typechecked nor normalised!
-    , imports :: [ImportSemantics]
-    -- ^ The semantics of any imports that were loaded when resolving the
-    --   expression. Used to compute the semi-semantic hash.
     }
 
 -- | `parent` imports (i.e. depends on) `child`

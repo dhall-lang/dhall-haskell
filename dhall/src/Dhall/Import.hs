@@ -100,8 +100,7 @@
 
 module Dhall.Import (
     -- * Import
-      load
-    , loadWith
+      loadWith
     , localToPath
     , hashExpression
     , hashExpressionToCode
@@ -178,7 +177,6 @@ import Lens.Family.State.Strict (zoom)
 import qualified Codec.Serialise
 import qualified Control.Monad.Trans.Maybe        as Maybe
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Control.Monad.Trans.Writer       as Writer
 import qualified Crypto.Hash
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
@@ -597,21 +595,21 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             throwMissingImport (Imported _stack (ParseError errInfo text))
         Right expr    -> return expr
 
-    resolved@ResolvedExpr{..} <- resolve parsedImport  -- we load imports recursively here
+    resolvedExpr <- loadWith parsedImport  -- we load imports recursively here
 
     -- Check the semi-semantic cache. See
     -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for the reasoning
     -- behind semi-semantic caching.
-    let semisemanticHash = computeSemisemanticHash resolved
+    let semisemanticHash = computeSemisemanticHash resolvedExpr
     mCached <- lift $ fetchFromSemisemanticCache semisemanticHash
 
-    (bytes, importSemantics) <- case mCached of
+    importSemantics <- case mCached of
         Just bytesStrict -> do
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
             term <- Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytesLazy)
             importSemantics <- Dhall.Core.throws (Dhall.Binary.decodeExpression term)
 
-            return (bytesStrict, importSemantics)
+            return importSemantics
 
         Nothing -> do
             betaNormal <- case Dhall.TypeCheck.typeWith _startingContext resolvedExpr of
@@ -621,11 +619,10 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             let alphaBetaNormal = Dhall.Core.alphaNormalize betaNormal
 
             let bytes = encodeExpression _standardVersion alphaBetaNormal
-
             lift $ writeToSemisemanticCache semisemanticHash bytes
-            return (bytes, alphaBetaNormal)
 
-    let semanticHash = Crypto.Hash.hash bytes
+            return alphaBetaNormal
+
     return (ImportSemantics {..})
 
 -- `as Text` imports aren't cached since they are well-typed and normal by
@@ -635,7 +632,6 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Raw
 
     -- importSemantics is alpha-beta-normal by construction!
     let importSemantics = TextLit (Chunks [] text)
-    let semanticHash = hashExpression Dhall.Binary.defaultStandardVersion importSemantics
     return (ImportSemantics {..})
 
 -- `as Location` imports aren't cached since they are well-typed and normal by
@@ -661,15 +657,15 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
                 App (Field locationType "Environment")
                   (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty env)))
 
-    let semanticHash = hashExpression Dhall.Binary.defaultStandardVersion importSemantics
     return (ImportSemantics {..})
 
 -- The semi-semantic hash of an expression is computed from the fully resolved
 -- AST (without normalising or type-checking it first). See
 -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for further
 -- discussion.
-computeSemisemanticHash :: ResolvedExpr -> Crypto.Hash.Digest Crypto.Hash.SHA256
-computeSemisemanticHash (ResolvedExpr {..}) = hashExpression defaultStandardVersion resolvedExpr
+computeSemisemanticHash :: Expr Src X -> Crypto.Hash.Digest Crypto.Hash.SHA256
+computeSemisemanticHash resolvedExpr =
+    hashExpression Dhall.Binary.defaultStandardVersion resolvedExpr
 
 -- Fetch encoded normal form from "semi-semantic cache"
 fetchFromSemisemanticCache :: Crypto.Hash.Digest SHA256 -> IO (Maybe Data.ByteString.ByteString)
@@ -828,27 +824,13 @@ normalizeHeaders url = return url
     supply
 -}
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src X)
-loadWith expression = do
-    ResolvedExpr {..} <- resolve expression
-    return resolvedExpr
-
--- | Resolve all imports within an expression
-load :: Expr Src Import -> IO (Expr Src X)
-load expression = State.evalStateT (loadWith expression) (emptyStatus ".")
-
-resolve :: Expr Src Import -> StateT Status IO ResolvedExpr
-resolve expression = do
-    (resolvedExpr, imports) <- Writer.runWriterT (resolve' expression)
-    return (ResolvedExpr {..})
-
-resolve' :: Expr Src Import -> Writer.WriterT [ImportSemantics] (StateT Status IO) (Expr Src X)
-resolve' expr₀ = case expr₀ of
+loadWith expr₀ = case expr₀ of
   Embed import₀ -> do
-    Status {..} <- lift $ State.get
+    Status {..} <- State.get
 
     let parent = NonEmpty.head _stack
 
-    child <- lift $ chainImport parent import₀
+    child <- chainImport parent import₀
 
     let local (Chained (Import (ImportHashed _ (Remote  {})) _)) = False
         local (Chained (Import (ImportHashed _ (Local   {})) _)) = True
@@ -867,23 +849,22 @@ resolve' expr₀ = case expr₀ of
         then throwMissingImport (Imported _stack (Cycle import₀))
         else return ()
 
-    lift . zoom graph . State.modify $
+    zoom graph . State.modify $
         -- Add the edge `parent -> child` to the import graph
         \edges -> Depends parent child : edges
 
     let stackWithChild = NonEmpty.cons child _stack
 
-    lift $ zoom stack (State.put stackWithChild)
-    resolvedImport@ImportSemantics {..} <- lift $ loadImport child
-    Writer.tell [resolvedImport]
-    lift $ zoom stack (State.put _stack)
+    zoom stack (State.put stackWithChild)
+    ImportSemantics {..} <- loadImport child
+    zoom stack (State.put _stack)
 
     return importSemantics
 
-  ImportAlt a b -> resolve' a `catch` handler₀
+  ImportAlt a b -> loadWith a `catch` handler₀
     where
       handler₀ (SourcedException (Src begin _ text₀) (MissingImports es₀)) =
-          resolve' b `catch` handler₁
+          loadWith b `catch` handler₁
         where
           handler₁ (SourcedException (Src _ end text₁) (MissingImports es₁)) =
               throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
@@ -892,20 +873,20 @@ resolve' expr₀ = case expr₀ of
 
   Const a              -> pure (Const a)
   Var a                -> pure (Var a)
-  Lam a b c            -> Lam <$> pure a <*> resolve' b <*> resolve' c
-  Pi a b c             -> Pi <$> pure a <*> resolve' b <*> resolve' c
-  App a b              -> App <$> resolve' a <*> resolve' b
-  Let as b             -> Let <$> traverse f as <*> resolve' b
+  Lam a b c            -> Lam <$> pure a <*> loadWith b <*> loadWith c
+  Pi a b c             -> Pi <$> pure a <*> loadWith b <*> loadWith c
+  App a b              -> App <$> loadWith a <*> loadWith b
+  Let as b             -> Let <$> traverse f as <*> loadWith b
     where
-      f (Binding c d e) = Binding c <$> traverse resolve' d <*> resolve' e
-  Annot a b            -> Annot <$> resolve' a <*> resolve' b
+      f (Binding c d e) = Binding c <$> traverse loadWith d <*> loadWith e
+  Annot a b            -> Annot <$> loadWith a <*> loadWith b
   Bool                 -> pure Bool
   BoolLit a            -> pure (BoolLit a)
-  BoolAnd a b          -> BoolAnd <$> resolve' a <*> resolve' b
-  BoolOr a b           -> BoolOr <$> resolve' a <*> resolve' b
-  BoolEQ a b           -> BoolEQ <$> resolve' a <*> resolve' b
-  BoolNE a b           -> BoolNE <$> resolve' a <*> resolve' b
-  BoolIf a b c         -> BoolIf <$> resolve' a <*> resolve' b <*> resolve' c
+  BoolAnd a b          -> BoolAnd <$> loadWith a <*> loadWith b
+  BoolOr a b           -> BoolOr <$> loadWith a <*> loadWith b
+  BoolEQ a b           -> BoolEQ <$> loadWith a <*> loadWith b
+  BoolNE a b           -> BoolNE <$> loadWith a <*> loadWith b
+  BoolIf a b c         -> BoolIf <$> loadWith a <*> loadWith b <*> loadWith c
   Natural              -> pure Natural
   NaturalLit a         -> pure (NaturalLit a)
   NaturalFold          -> pure NaturalFold
@@ -915,8 +896,8 @@ resolve' expr₀ = case expr₀ of
   NaturalOdd           -> pure NaturalOdd
   NaturalToInteger     -> pure NaturalToInteger
   NaturalShow          -> pure NaturalShow
-  NaturalPlus a b      -> NaturalPlus <$> resolve' a <*> resolve' b
-  NaturalTimes a b     -> NaturalTimes <$> resolve' a <*> resolve' b
+  NaturalPlus a b      -> NaturalPlus <$> loadWith a <*> loadWith b
+  NaturalTimes a b     -> NaturalTimes <$> loadWith a <*> loadWith b
   Integer              -> pure Integer
   IntegerLit a         -> pure (IntegerLit a)
   IntegerShow          -> pure IntegerShow
@@ -925,12 +906,12 @@ resolve' expr₀ = case expr₀ of
   DoubleLit a          -> pure (DoubleLit a)
   DoubleShow           -> pure DoubleShow
   Text                 -> pure Text
-  TextLit (Chunks a b) -> fmap TextLit (Chunks <$> mapM (mapM resolve') a <*> pure b)
-  TextAppend a b       -> TextAppend <$> resolve' a <*> resolve' b
+  TextLit (Chunks a b) -> fmap TextLit (Chunks <$> mapM (mapM loadWith) a <*> pure b)
+  TextAppend a b       -> TextAppend <$> loadWith a <*> loadWith b
   TextShow             -> pure TextShow
   List                 -> pure List
-  ListLit a b          -> ListLit <$> mapM resolve' a <*> mapM resolve' b
-  ListAppend a b       -> ListAppend <$> resolve' a <*> resolve' b
+  ListLit a b          -> ListLit <$> mapM loadWith a <*> mapM loadWith b
+  ListAppend a b       -> ListAppend <$> loadWith a <*> loadWith b
   ListBuild            -> pure ListBuild
   ListFold             -> pure ListFold
   ListLength           -> pure ListLength
@@ -940,24 +921,24 @@ resolve' expr₀ = case expr₀ of
   ListReverse          -> pure ListReverse
   Optional             -> pure Optional
   None                 -> pure None
-  Some a               -> Some <$> resolve' a
+  Some a               -> Some <$> loadWith a
   OptionalFold         -> pure OptionalFold
   OptionalBuild        -> pure OptionalBuild
-  Record a             -> Record <$> mapM resolve' a
-  RecordLit a          -> RecordLit <$> mapM resolve' a
-  Union a              -> Union <$> mapM (mapM resolve') a
-  UnionLit a b c       -> UnionLit <$> pure a <*> resolve' b <*> mapM (mapM resolve') c
-  Combine a b          -> Combine <$> resolve' a <*> resolve' b
-  CombineTypes a b     -> CombineTypes <$> resolve' a <*> resolve' b
-  Prefer a b           -> Prefer <$> resolve' a <*> resolve' b
-  Merge a b c          -> Merge <$> resolve' a <*> resolve' b <*> mapM resolve' c
-  ToMap a b            -> ToMap <$> resolve' a <*> mapM resolve' b
-  Field a b            -> Field <$> resolve' a <*> pure b
-  Project a b          -> Project <$> resolve' a <*> mapM resolve' b
+  Record a             -> Record <$> mapM loadWith a
+  RecordLit a          -> RecordLit <$> mapM loadWith a
+  Union a              -> Union <$> mapM (mapM loadWith) a
+  UnionLit a b c       -> UnionLit <$> pure a <*> loadWith b <*> mapM (mapM loadWith) c
+  Combine a b          -> Combine <$> loadWith a <*> loadWith b
+  CombineTypes a b     -> CombineTypes <$> loadWith a <*> loadWith b
+  Prefer a b           -> Prefer <$> loadWith a <*> loadWith b
+  Merge a b c          -> Merge <$> loadWith a <*> loadWith b <*> mapM loadWith c
+  ToMap a b            -> ToMap <$> loadWith a <*> mapM loadWith b
+  Field a b            -> Field <$> loadWith a <*> pure b
+  Project a b          -> Project <$> loadWith a <*> mapM loadWith b
   Note a b             -> do
       let handler e = throwM (SourcedException a (e :: MissingImports))
 
-      (Note <$> pure a <*> resolve' b) `catch` handler
+      (Note <$> pure a <*> loadWith b) `catch` handler
 
 encodeExpression
     :: forall s
