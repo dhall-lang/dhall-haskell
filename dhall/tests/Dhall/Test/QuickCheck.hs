@@ -358,9 +358,14 @@ everythingWellTypedNormalizes expression =
 
 isNormalizedIsConsistentWithNormalize :: Expr () Import -> Property
 isNormalizedIsConsistentWithNormalize expression =
-    case Control.Spoon.spoon (Dhall.Core.normalize expression) of
-        Just nf -> Dhall.Core.isNormalized expression === (nf == expression)
+    case maybeProp of
         Nothing -> Test.QuickCheck.discard
+        Just prop -> prop
+  where
+      maybeProp = do
+          nf <- Control.Spoon.spoon (Dhall.Core.normalize expression)
+          isNormalized <- Control.Spoon.spoon (Dhall.Core.isNormalized expression)
+          return $ isNormalized === (nf == expression)
 
 normalizeWithMIsConsistentWithNormalize :: Expr () Import -> Property
 normalizeWithMIsConsistentWithNormalize expression =

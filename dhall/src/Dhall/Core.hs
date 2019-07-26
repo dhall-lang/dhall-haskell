@@ -1807,7 +1807,8 @@ isNormalizedWith ctx e = e == normalizeWith (Just (ReifiedNormalizer ctx)) e
 -- Given a well-typed expression @e@, @'isNormalized' e@ is equivalent to
 -- @e == 'normalize' e@.
 --
--- Given an ill-typed expression, 'isNormalized' may return 'True' or 'False'.
+-- Given an ill-typed expression, 'isNormalized' may fail with an error, or
+-- evaluate to either False or True!
 isNormalized :: Eq a => Expr s a -> Bool
 isNormalized e0 = loop (denote e0)
   where
