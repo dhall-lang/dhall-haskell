@@ -118,6 +118,7 @@ module Dhall.Import (
     , Depends(..)
     , graph
     , remote
+    , toHeaders
     , standardVersion
     , normalizer
     , startingContext
@@ -638,10 +639,12 @@ fetchFresh (Env env) = do
 
 fetchFresh Missing = throwM (MissingImports [])
 
+
 fetchRemote :: URL -> StateT Status IO Data.Text.Text
 #ifndef MIN_VERSION_http_client
-fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
+fetchRemote (url@URL { headers = maybeHeaders }) = do
     let urlString = Text.unpack (Dhall.Core.pretty url)
+    let maybeHeaders = fmap toHeaders maybeHeadersExpression
     Status { _stack } <- State.get
     throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
 #else
@@ -652,31 +655,31 @@ fetchRemote url = do
   where
     fetchFromHTTP :: Manager -> URL -> StateT Status IO Data.Text.Text
     fetchFromHTTP manager (url'@URL { headers = maybeHeadersExpression }) = do
-        let maybeHeaders = foldMap toHeaders maybeHeadersExpression
+        let maybeHeaders = fmap toHeaders maybeHeadersExpression
         fetchFromHttpUrl manager url' maybeHeaders
-
-    -- Given a well-typed (of type `List { header : Text, value Text }` or
-    -- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form
-    -- construct the corresponding binary http headers.
-    toHeaders :: Expr s a -> Maybe [HTTPHeader]
-    toHeaders (ListLit _ hs) = do
-        hs' <- mapM toHeader hs
-        return (Data.Foldable.toList hs')
-    toHeaders _ = do
-        empty
-
-    toHeader :: Expr s a -> Maybe HTTPHeader
-    toHeader (RecordLit m) = do
-        TextLit (Chunks [] keyText  ) <-
-            Dhall.Map.lookup "header" m <|> Dhall.Map.lookup "mapKey" m
-        TextLit (Chunks [] valueText) <-
-            Dhall.Map.lookup "value" m <|> Dhall.Map.lookup "mapValue" m
-        let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
-        let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
-        return (Data.CaseInsensitive.mk keyBytes, valueBytes)
-    toHeader _ = do
-        empty
 #endif
+
+-- | Given a well-typed (of type `List { header : Text, value Text }` or
+-- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form
+-- construct the corresponding binary http headers; otherwise return the empty
+-- list.
+toHeaders :: Expr s a -> [HTTPHeader]
+toHeaders (ListLit _ hs) = Data.Foldable.toList (Data.Foldable.fold maybeHeaders)
+  where
+      maybeHeaders = mapM toHeader hs
+toHeaders _ = []
+
+toHeader :: Expr s a -> Maybe HTTPHeader
+toHeader (RecordLit m) = do
+    TextLit (Chunks [] keyText  ) <-
+        Dhall.Map.lookup "header" m <|> Dhall.Map.lookup "mapKey" m
+    TextLit (Chunks [] valueText) <-
+        Dhall.Map.lookup "value" m <|> Dhall.Map.lookup "mapValue" m
+    let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
+    let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
+    return (Data.CaseInsensitive.mk keyBytes, valueBytes)
+toHeader _ = do
+    empty
 
 getCacheFile
     :: (Alternative m, MonadIO m) => Crypto.Hash.Digest SHA256 -> m FilePath
