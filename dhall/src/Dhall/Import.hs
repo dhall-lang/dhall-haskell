@@ -180,7 +180,6 @@ import qualified Control.Monad.Trans.Maybe        as Maybe
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Control.Monad.Trans.Writer       as Writer
 import qualified Crypto.Hash
-import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
@@ -665,19 +664,12 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
     let semanticHash = hashExpression Dhall.Binary.defaultStandardVersion importSemantics
     return (ImportSemantics {..})
 
--- The semi-semantic hash of an expression is computed by combining its
--- cryptographic hash (of its plain AST, without normalising or resolving
--- imports) with the semantic hashes of all of its imports and hashing the
--- result. See https://github.com/dhall-lang/dhall-haskell/issues/1098 for
--- further discussion.
+-- The semi-semantic hash of an expression is computed from the fully resolved
+-- AST (without normalising or type-checking it first). See
+-- https://github.com/dhall-lang/dhall-haskell/issues/1098 for further
+-- discussion.
 computeSemisemanticHash :: ResolvedExpr -> Crypto.Hash.Digest Crypto.Hash.SHA256
-computeSemisemanticHash (ResolvedExpr {..}) = Crypto.Hash.hash combined
-  where
-    importHashes = map semanticHash imports :: [Crypto.Hash.Digest SHA256]
-    syntacticHash = Crypto.Hash.hash
-        (encodeExpression Dhall.Binary.defaultStandardVersion resolvedExpr)
-    combined = Data.ByteArray.concat (syntacticHash : importHashes)
-        :: Data.ByteString.ByteString
+computeSemisemanticHash (ResolvedExpr {..}) = hashExpression defaultStandardVersion resolvedExpr
 
 -- Fetch encoded normal form from "semi-semantic cache"
 fetchFromSemisemanticCache :: Crypto.Hash.Digest SHA256 -> IO (Maybe Data.ByteString.ByteString)
