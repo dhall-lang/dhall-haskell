@@ -606,14 +606,20 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
     importSemantics <- case mCached of
         Just bytesStrict -> do
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
-            term <- Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytesLazy)
-            importSemantics <- Dhall.Core.throws (Dhall.Binary.decodeExpression term)
+
+            term <- case Codec.Serialise.deserialiseOrFail bytesLazy of
+                Left err -> throwMissingImport (Imported _stack err)
+                Right t -> return t
+
+            importSemantics <- case Dhall.Binary.decodeExpression term of
+                Left err -> throwMissingImport (Imported _stack err)
+                Right sem -> return sem
 
             return importSemantics
 
         Nothing -> do
             betaNormal <- case Dhall.TypeCheck.typeWith _startingContext resolvedExpr of
-                Left err -> throwM (Imported _stack err)
+                Left  err -> throwMissingImport (Imported _stack err)
                 Right _ -> return (Dhall.Core.normalizeWith _normalizer resolvedExpr)
 
             let alphaBetaNormal = Dhall.Core.alphaNormalize betaNormal
