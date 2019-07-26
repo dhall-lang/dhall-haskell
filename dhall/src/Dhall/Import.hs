@@ -170,7 +170,7 @@ import Dhall.Core
     )
 #ifdef MIN_VERSION_http_client
 import Network.HTTP.Client (Manager)
-import Dhall.Import.HTTP
+import Dhall.Import.HTTP hiding (HTTPHeader)
 #endif
 import Dhall.Import.Types
 
