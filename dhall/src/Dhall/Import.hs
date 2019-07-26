@@ -100,7 +100,8 @@
 
 module Dhall.Import (
     -- * Import
-      loadWith
+      load
+    , loadWith
     , localToPath
     , hashExpression
     , hashExpressionToCode
@@ -945,6 +946,10 @@ loadWith expr₀ = case expr₀ of
       let handler e = throwM (SourcedException a (e :: MissingImports))
 
       (Note <$> pure a <*> loadWith b) `catch` handler
+
+-- | Resolve all imports within an expression
+load :: Expr Src Import -> IO (Expr Src X)
+load expression = State.evalStateT (loadWith expression) (emptyStatus ".")
 
 encodeExpression
     :: forall s
