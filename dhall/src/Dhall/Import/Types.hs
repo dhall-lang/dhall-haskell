@@ -5,6 +5,7 @@
 module Dhall.Import.Types where
 
 import Control.Exception (Exception)
+import Control.Monad.Trans.State.Strict (StateT)
 import Data.Dynamic
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
@@ -22,6 +23,7 @@ import Dhall.Core
   , ImportMode (..)
   , ImportType (..)
   , ReifiedNormalizer(..)
+  , URL
   )
 import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
@@ -66,8 +68,8 @@ data Status = Status
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
 
-    , _manager :: Maybe Dynamic
-    -- ^ Cache for the HTTP `Manager` so that we only acquire it once
+    , _remote :: URL -> StateT Status IO Data.Text.Text
+    -- ^ The remote resolver, fetches the content at the given URL.
 
     , _standardVersion :: StandardVersion
 
@@ -76,9 +78,10 @@ data Status = Status
     , _startingContext :: Context (Expr Src X)
     }
 
--- | Default starting `Status`, importing relative to the given directory.
-emptyStatus :: FilePath -> Status
-emptyStatus rootDirectory = Status {..}
+-- | Initial `Status`, parameterised over the remote resolver, importing
+--   relative to the given directory.
+emptyStatusWith :: (URL -> StateT Status IO Data.Text.Text) -> FilePath -> Status
+emptyStatusWith _remote rootDirectory = Status {..}
   where
     _stack = pure (Chained rootImport)
 
@@ -120,8 +123,8 @@ graph k s = fmap (\x -> s { _graph = x }) (k (_graph s))
 cache :: Functor f => LensLike' f Status (Map Chained ImportSemantics)
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
-manager :: Functor f => LensLike' f Status (Maybe Dynamic)
-manager k s = fmap (\x -> s { _manager = x }) (k (_manager s))
+remote :: Functor f => LensLike' f Status (URL -> StateT Status IO Data.Text.Text)
+remote k s = fmap (\x -> s { _remote = x }) (k (_remote s))
 
 standardVersion :: Functor f => LensLike' f Status StandardVersion
 standardVersion k s =

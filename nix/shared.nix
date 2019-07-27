@@ -169,6 +169,11 @@ let
                           { }
                         );
 
+                    dhall-no-http =
+                      pkgsNew.haskell.lib.appendConfigureFlag
+                        haskellPackagesNew.dhall
+                        [ "-f-with-http" ];
+
                     dhall-bash =
                       haskellPackagesNew.callCabal2nix
                         "dhall-bash"
@@ -612,7 +617,15 @@ in
 
     inherit (pkgs) tarball-website website;
 
-    inherit (pkgs.haskell.packages."${compiler}") dhall dhall-bash dhall-json dhall-lsp-server dhall-nix dhall-try;
+    inherit (pkgs.haskell.packages."${compiler}")
+      dhall
+      dhall-no-http
+      dhall-bash
+      dhall-json
+      dhall-lsp-server
+      dhall-nix
+      dhall-try
+    ;
 
     inherit (pkgs.releaseTools) aggregate;
 

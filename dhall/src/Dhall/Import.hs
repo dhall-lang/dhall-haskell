@@ -117,7 +117,8 @@ module Dhall.Import (
     , cache
     , Depends(..)
     , graph
-    , manager
+    , remote
+    , toHeaders
     , standardVersion
     , normalizer
     , startingContext
@@ -169,6 +170,7 @@ import Dhall.Core
     , URL(..)
     )
 #ifdef MIN_VERSION_http_client
+import Network.HTTP.Client (Manager)
 import Dhall.Import.HTTP hiding (HTTPHeader)
 #endif
 import Dhall.Import.Types
@@ -396,29 +398,6 @@ instance Canonicalize ImportHashed where
 instance Canonicalize Import where
     canonicalize (Import importHashed importMode) =
         Import (canonicalize importHashed) importMode
-
--- Given a well-typed (of type `List { header : Text, value Text }` or
--- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form
--- construct the corresponding binary http headers.
-toHeaders :: Expr s a -> Maybe [HTTPHeader]
-toHeaders (ListLit _ hs) = do
-    hs' <- mapM toHeader hs
-    return (Data.Foldable.toList hs')
-toHeaders _ = do
-    empty
-
-toHeader :: Expr s a -> Maybe HTTPHeader
-toHeader (RecordLit m) = do
-    TextLit (Chunks [] keyText  ) <-
-        Dhall.Map.lookup "header" m <|> Dhall.Map.lookup "mapKey" m
-    TextLit (Chunks [] valueText) <-
-        Dhall.Map.lookup "value" m <|> Dhall.Map.lookup "mapValue" m
-    let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
-    let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
-    return (Data.CaseInsensitive.mk keyBytes, valueBytes)
-toHeader _ = do
-    empty
-
 
 -- | Exception thrown when an integrity check fails
 data HashMismatch = HashMismatch
@@ -663,9 +642,9 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
             local@(Local _ _) ->
                 App (Field locationType "Local")
                   (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty local)))
-            remote@(Remote _) ->
+            remote_@(Remote _) ->
                 App (Field locationType "Remote")
-                  (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty remote)))
+                  (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty remote_)))
             Env env ->
                 App (Field locationType "Environment")
                   (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty env)))
@@ -704,16 +683,9 @@ fetchFresh (Local prefix file) = do
         then liftIO $ Data.Text.IO.readFile path
         else throwMissingImport (Imported _stack (MissingFile path))
 
-fetchFresh (Remote (url@URL { headers = maybeHeadersExpression })) = do
-#ifdef MIN_VERSION_http_client
-    let maybeHeaders = foldMap toHeaders maybeHeadersExpression
-    fetchFromHttpUrl url maybeHeaders
-#else
-    let maybeHeaders = foldMap toHeaders maybeHeadersExpression
-    let urlString = Text.unpack (Dhall.Core.pretty url)
-    Status { _stack } <- State.get
-    throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
-#endif
+fetchFresh (Remote url) = do
+    Status { _remote } <- State.get
+    _remote url
 
 fetchFresh (Env env) = do
     Status { _stack } <- State.get
@@ -725,6 +697,48 @@ fetchFresh (Env env) = do
                 throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
 
 fetchFresh Missing = throwM (MissingImports [])
+
+
+fetchRemote :: URL -> StateT Status IO Data.Text.Text
+#ifndef MIN_VERSION_http_client
+fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
+    let maybeHeaders = fmap toHeaders maybeHeadersExpression
+    let urlString = Text.unpack (Dhall.Core.pretty url)
+    Status { _stack } <- State.get
+    throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
+#else
+fetchRemote url = do
+    manager <- liftIO $ newManager
+    zoom remote (State.put (fetchFromHTTP manager))
+    fetchFromHTTP manager url
+  where
+    fetchFromHTTP :: Manager -> URL -> StateT Status IO Data.Text.Text
+    fetchFromHTTP manager (url'@URL { headers = maybeHeadersExpression }) = do
+        let maybeHeaders = fmap toHeaders maybeHeadersExpression
+        fetchFromHttpUrl manager url' maybeHeaders
+#endif
+
+-- | Given a well-typed (of type `List { header : Text, value Text }` or
+-- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form
+-- construct the corresponding binary http headers; otherwise return the empty
+-- list.
+toHeaders :: Expr s a -> [HTTPHeader]
+toHeaders (ListLit _ hs) = Data.Foldable.toList (Data.Foldable.fold maybeHeaders)
+  where
+      maybeHeaders = mapM toHeader hs
+toHeaders _ = []
+
+toHeader :: Expr s a -> Maybe HTTPHeader
+toHeader (RecordLit m) = do
+    TextLit (Chunks [] keyText  ) <-
+        Dhall.Map.lookup "header" m <|> Dhall.Map.lookup "mapKey" m
+    TextLit (Chunks [] valueText) <-
+        Dhall.Map.lookup "value" m <|> Dhall.Map.lookup "mapValue" m
+    let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
+    let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
+    return (Data.CaseInsensitive.mk keyBytes, valueBytes)
+toHeader _ = do
+    empty
 
 getCacheFile
     :: (Alternative m, MonadIO m) => FilePath -> Crypto.Hash.Digest SHA256 -> m FilePath
@@ -831,6 +845,10 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
     return url { headers = Just (fmap absurd headersExpression') }
 
 normalizeHeaders url = return url
+
+-- | Default starting `Status`, importing relative to the given directory.
+emptyStatus :: FilePath -> Status
+emptyStatus = emptyStatusWith fetchRemote
 
 {-| Generalized version of `load`
 
