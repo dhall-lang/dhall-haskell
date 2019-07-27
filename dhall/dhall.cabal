@@ -686,6 +686,7 @@ Test-Suite tasty
         directory                                      ,
         filepath                                       ,
         foldl                                    < 1.5 ,
+        lens-family-core          >= 1.0.0    && < 2.1 ,
         megaparsec                                     ,
         prettyprinter                                  ,
         QuickCheck                >= 2.10     && < 2.14,
@@ -700,6 +701,9 @@ Test-Suite tasty
         transformers                                   ,
         turtle                                   < 1.6 ,
         vector                    >= 0.11.0.0 && < 0.13
+    if flag(with-http)
+      CPP-Options:
+        -DWITH_HTTP
     Default-Language: Haskell2010
 
 Test-Suite doctest

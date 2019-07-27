@@ -5,15 +5,13 @@
 module Dhall.Import.HTTP where
 
 import Control.Exception (Exception)
-import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString (ByteString)
 import Data.CaseInsensitive (CI)
-import Data.Dynamic (fromDynamic, toDyn)
+import Data.Dynamic (toDyn)
 import Data.Semigroup ((<>))
 import Data.Text (Text)
-import Lens.Family.State.Strict (zoom)
 
 import Dhall.Core
     ( Directory(..)
@@ -109,24 +107,17 @@ renderPrettyHttpException e = case e of
         <> show e'
 #endif
 
-needManager :: StateT Status IO Manager
-needManager = do
-    x <- zoom manager State.get
-    case join (fmap fromDynamic x) of
-        Just m  -> return m
-        Nothing -> do
-            let settings = HTTP.tlsManagerSettings
-
+newManager :: IO Manager
+newManager = do
+    let settings = HTTP.tlsManagerSettings
 #ifdef MIN_VERSION_http_client
 #if MIN_VERSION_http_client(0,5,0)
-                    { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (30 * 1000 * 1000) }  -- 30 seconds
+          { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (30 * 1000 * 1000) }  -- 30 seconds
 #else
-                    { HTTP.managerResponseTimeout = Just (30 * 1000 * 1000) }  -- 30 seconds
+          { HTTP.managerResponseTimeout = Just (30 * 1000 * 1000) }  -- 30 seconds
 #endif
 #endif
-            m <- liftIO (HTTP.newManager settings)
-            zoom manager (State.put (Just (toDyn m)))
-            return m
+    HTTP.newManager settings
 
 data NotCORSCompliant = NotCORSCompliant
     { expectedOrigins :: [ByteString]
@@ -235,11 +226,12 @@ renderURL url =
 type HTTPHeader = Network.HTTP.Types.Header
 
 fetchFromHttpUrl
-    :: URL
+    :: Manager
+    -> URL
     -> Maybe [HTTPHeader]
     -> StateT Status IO Text.Text
 #ifdef __GHCJS__
-fetchFromHttpUrl childURL Nothing = do
+fetchFromHttpUrl _ childURL Nothing = do
     let childURLText = renderURL childURL
 
     let childURLString = Text.unpack childURLText
@@ -253,13 +245,11 @@ fetchFromHttpUrl childURL Nothing = do
         _   -> fail (childURLString <> " returned a non-200 status code: " <> show statusCode)
 
     return body
-fetchFromHttpUrl _ _ = do
+fetchFromHttpUrl _ _ _ = do
     fail "Dhall does not yet support custom headers when built using GHCJS"
 #else
-fetchFromHttpUrl childURL mheaders = do
+fetchFromHttpUrl manager childURL mheaders = do
     let childURLString = Text.unpack (renderURL childURL)
-
-    m <- needManager
 
     request <- liftIO (HTTP.parseUrlThrow childURLString)
 
@@ -268,7 +258,7 @@ fetchFromHttpUrl childURL mheaders = do
               Nothing      -> request
               Just headers -> request { HTTP.requestHeaders = headers }
 
-    let io = HTTP.httpLbs requestWithHeaders m
+    let io = HTTP.httpLbs requestWithHeaders manager
 
     let handler e = do
             let _ = e :: HttpException

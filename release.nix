@@ -60,6 +60,9 @@ in
           coverage.dhall
           coverage.dhall-json
 
+          # Check that the package builds with HTTP support compiled out
+          shared.dhall-no-http
+
           (shared.trivial src.rev)
         ];
       };
