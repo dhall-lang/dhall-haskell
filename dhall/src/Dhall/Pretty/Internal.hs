@@ -222,6 +222,10 @@ prefer :: CharacterSet -> Text
 prefer ASCII   = "//"
 prefer Unicode = "⫽"
 
+equivalent :: CharacterSet -> Text
+equivalent ASCII   = "==="
+equivalent Unicode = "≡"
+
 {-| Format an expression that holds a variable number of elements, such as a
     list, record, or union
 -}
@@ -485,6 +489,16 @@ prettyCharacterSet characterSet expression =
                 <>  rparen
         docs (Note _   c) = docs c
         docs           c  = [ prettyExpression c ]
+    prettyExpression (Assert a) =
+        Pretty.group (Pretty.flatAlt long short)
+      where
+        short = keyword "assert" <> " " <> colon <> " " <> prettyExpression a
+
+        long =
+            Pretty.align
+            (  "  " <> keyword "assert"
+            <> Pretty.hardline <> colon <> " " <> prettyExpression a
+            )
     prettyExpression (Note _ a) =
         prettyExpression a
     prettyExpression a0 =
@@ -729,12 +743,24 @@ prettyCharacterSet characterSet expression =
     prettyNotEqualExpression a0@(BoolNE _ _) =
         prettyOperator "!=" (docs a0)
       where
-        docs (BoolNE a b) = prettyApplicationExpression b : docs a
+        docs (BoolNE a b) = prettyEquivalentExpression b : docs a
         docs (Note   _ b) = docs b
-        docs           b  = [ prettyApplicationExpression b ]
+        docs           b  = [ prettyEquivalentExpression b ]
     prettyNotEqualExpression (Note _ a) =
         prettyNotEqualExpression a
     prettyNotEqualExpression a0 =
+        prettyEquivalentExpression a0
+
+    prettyEquivalentExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyEquivalentExpression a0@(Equivalent _ _) =
+        prettyOperator (equivalent characterSet) (docs a0)
+      where
+        docs (Equivalent a b) = prettyApplicationExpression b : docs a
+        docs (Note       _ b) = docs b
+        docs               b  = [ prettyApplicationExpression b ]
+    prettyEquivalentExpression (Note _ a) =
+        prettyEquivalentExpression a
+    prettyEquivalentExpression a0 =
         prettyApplicationExpression a0
 
     prettyApplicationExpression :: Pretty a => Expr s a -> Doc Ann

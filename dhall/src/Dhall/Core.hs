@@ -487,6 +487,10 @@ data Expr s a
     -- | > Project e (Left xs)                      ~  e.{ xs }
     -- | > Project e (Right t)                      ~  e.(t)
     | Project (Expr s a) (Either (Set Text) (Expr s a))
+    -- | > Assert e                                 ~  assert : e
+    | Assert (Expr s a)
+    -- | > Equivalent x y                           ~  x ≡ y
+    | Equivalent (Expr s a) (Expr s a)
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
     -- | > ImportAlt                                ~  e1 ? e2
@@ -566,6 +570,8 @@ instance Functor (Expr s) where
   fmap f (ToMap e maybeE) = ToMap (fmap f e) (fmap (fmap f) maybeE)
   fmap f (Field e1 v) = Field (fmap f e1) v
   fmap f (Project e1 vs) = Project (fmap f e1) (fmap (fmap f) vs)
+  fmap f (Assert t) = Assert (fmap f t)
+  fmap f (Equivalent e1 e2) = Equivalent (fmap f e1) (fmap f e2)
   fmap f (Note s e1) = Note s (fmap f e1)
   fmap f (ImportAlt e1 e2) = ImportAlt (fmap f e1) (fmap f e2)
   fmap f (Embed a) = Embed (f a)
@@ -643,6 +649,8 @@ instance Monad (Expr s) where
     ToMap a b            >>= k = ToMap (a >>= k) (fmap (>>= k) b)
     Field a b            >>= k = Field (a >>= k) b
     Project a b          >>= k = Project (a >>= k) (fmap (>>= k) b)
+    Assert a             >>= k = Assert (a >>= k)
+    Equivalent a b       >>= k = Equivalent (a >>= k) (b >>= k)
     Note a b             >>= k = Note a (b >>= k)
     ImportAlt a b        >>= k = ImportAlt (a >>= k) (b >>= k)
     Embed a              >>= k = k a
@@ -709,6 +717,8 @@ instance Bifunctor Expr where
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
     first k (ToMap a b           ) = ToMap (first k a) (fmap (first k) b)
     first k (Field a b           ) = Field (first k a) b
+    first k (Assert a            ) = Assert (first k a)
+    first k (Equivalent a b      ) = Equivalent (first k a) (first k b)
     first k (Project a b         ) = Project (first k a) (fmap (first k) b)
     first k (Note a b            ) = Note (k a) (first k b)
     first k (ImportAlt a b       ) = ImportAlt (first k a) (first k b)
@@ -990,6 +1000,13 @@ shift d v (ToMap a b) = ToMap a' b'
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
+shift d v (Assert a) = Assert a'
+  where
+    a' = shift d v a
+shift d v (Equivalent a b) = Equivalent a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
 shift d v (Project a b) = Project a' b'
   where
     a' =       shift d v  a
@@ -1173,6 +1190,13 @@ subst x e (Project a b) = Project a' b'
   where
     a' =       subst x e  a
     b' = fmap (subst x e) b
+subst x e (Assert a) = Assert a'
+  where
+    a' = subst x e a
+subst x e (Equivalent a b) = Equivalent a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
 subst x e (Note a b) = Note a b'
   where
     b' = subst x e b
@@ -1302,6 +1326,8 @@ denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (ToMap a b           ) = ToMap (denote a) (fmap denote b)
 denote (Field a b           ) = Field (denote a) b
 denote (Project a b         ) = Project (denote a) (fmap denote b)
+denote (Assert a            ) = Assert (denote a)
+denote (Equivalent a b      ) = Equivalent (denote a) (denote b)
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
@@ -1754,6 +1780,15 @@ normalizeWithM ctx e0 = loop (denote e0)
             _ -> do
                 r' <- loop r
                 pure (Project r' (Right e2))
+    Assert t -> do
+        t' <- loop t
+
+        pure (Assert t')
+    Equivalent l r -> do
+        l' <- loop l
+        r' <- loop r
+
+        pure (Equivalent l' r')
     Note _ e' -> loop e'
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
@@ -1991,6 +2026,8 @@ isNormalized e0 = loop (denote e0)
               Right e' -> case e' of
                   Record _ -> False
                   _ -> loop e'
+      Assert t -> loop t
+      Equivalent l r -> loop l && loop r
       Note _ e' -> loop e'
       ImportAlt l _r -> loop l
       Embed _ -> True
@@ -2158,6 +2195,8 @@ subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 subExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
 subExpressions f (Field a b) = Field <$> f a <*> pure b
 subExpressions f (Project a b) = Project <$> f a <*> traverse f b
+subExpressions f (Assert a) = Assert <$> f a
+subExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 subExpressions _ (Embed a) = pure (Embed a)
