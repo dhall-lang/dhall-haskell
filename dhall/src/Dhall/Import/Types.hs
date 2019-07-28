@@ -48,7 +48,7 @@ instance Pretty Chained where
 
 data ImportSemantics = ImportSemantics
     { importSemantics :: Expr Src X
-    -- ^ The fully resolved import, typechecked and alpha-beta-normal.
+    -- ^ The fully resolved import, typechecked and beta-normal.
     }
 
 -- | `parent` imports (i.e. depends on) `child`

@@ -517,14 +517,14 @@ loadImportWithSemanticCache
         Nothing -> do
             ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache import_
 
-            let variants = map (\version -> encodeExpression version importSemantics)
+            let variants = map (\version -> encodeExpression version (Dhall.Core.alphaNormalize importSemantics))
                                 [ minBound .. maxBound ]
             case Data.Foldable.find ((== semanticHash). Crypto.Hash.hash) variants of
                 Just bytes -> liftIO $ writeToSemanticCache semanticHash bytes
                 Nothing -> do
                     let expectedHash = semanticHash
                     Status { _standardVersion, _stack } <- State.get
-                    let actualHash = hashExpression _standardVersion importSemantics
+                    let actualHash = hashExpression _standardVersion (Dhall.Core.alphaNormalize importSemantics)
                     throwMissingImport (Imported _stack (HashMismatch {..}))
 
             return (ImportSemantics {..})
@@ -608,12 +608,10 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
                 Left  err -> throwMissingImport (Imported _stack err)
                 Right _ -> return (Dhall.Core.normalizeWith _normalizer resolvedExpr)
 
-            let alphaBetaNormal = Dhall.Core.alphaNormalize betaNormal
-
-            let bytes = encodeExpression _standardVersion alphaBetaNormal
+            let bytes = encodeExpression _standardVersion betaNormal
             lift $ writeToSemisemanticCache semisemanticHash bytes
 
-            return alphaBetaNormal
+            return betaNormal
 
     return (ImportSemantics {..})
 
