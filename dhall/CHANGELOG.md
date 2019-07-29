@@ -85,6 +85,15 @@
     * See: https://github.com/dhall-lang/dhall-haskell/pull/1126
 * BUG FIX: Fix import alternatives to recover from type errors
     * See: https://github.com/dhall-lang/dhall-haskell/pull/1152
+* Feature: Semi-semantic caching
+    * The Haskell implementation now implicitly caches *all* local imports, not
+      just imports frozen by integrity checks, so that you don't have to freeze
+      them when doing local development
+    * These cached imports are still correctly invalidated if they or any of
+      their dependencies change
+    * This new implicit cache is stored underneath `~/.cache/dhall-haskell` by
+      default
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1154
 * Feature: New `dhall text` subcommand
     * This new subcommand supersedes the old `dhall-to-text` executable
 * Feature: Add `instance Lift (Expr s a)`
@@ -92,6 +101,9 @@
 * Fixes and improvements to error messages:
     * See: https://github.com/dhall-lang/dhall-haskell/pull/1030
     * See: https://github.com/dhall-lang/dhall-haskell/pull/1137
+* Fixes and improvements to tests:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1155
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1159
 * Performance improvements
     * See: https://github.com/dhall-lang/dhall-haskell/pull/1036
     * See: https://github.com/dhall-lang/dhall-haskell/pull/1051
