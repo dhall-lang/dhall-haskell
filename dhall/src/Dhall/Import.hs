@@ -100,13 +100,12 @@
 
 module Dhall.Import (
     -- * Import
-      exprFromImport
-    , exprToImport
-    , load
+      load
     , loadWith
     , localToPath
     , hashExpression
     , hashExpressionToCode
+    , writeExpressionToSemanticCache
     , assertNoImports
     , Status
     , Chained
@@ -118,13 +117,13 @@ module Dhall.Import (
     , cache
     , Depends(..)
     , graph
-    , manager
+    , remote
+    , toHeaders
     , standardVersion
     , normalizer
     , startingContext
-    , resolver
-    , cacher
     , chainImport
+    , ImportSemantics
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -138,12 +137,15 @@ module Dhall.Import (
 
 import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term(..))
-import Control.Exception (Exception, SomeException, throwIO, toException)
+import Control.Exception (Exception, SomeException, toException)
 import Control.Monad (guard)
-import Control.Monad.Catch (throwM, MonadCatch(catch), catches, Handler(..), handle)
+import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
 import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT)
 import Crypto.Hash (SHA256)
+import Data.ByteString (ByteString)
+import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
@@ -168,7 +170,8 @@ import Dhall.Core
     , URL(..)
     )
 #ifdef MIN_VERSION_http_client
-import Dhall.Import.HTTP
+import Network.HTTP.Client (Manager)
+import Dhall.Import.HTTP hiding (HTTPHeader)
 #endif
 import Dhall.Import.Types
 
@@ -317,6 +320,8 @@ instance Show MissingImports where
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
 throwMissingImport e = throwM (MissingImports [toException e])
 
+type HTTPHeader = (CI ByteString, ByteString)
+
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
 data CannotImportHTTPURL =
@@ -394,29 +399,6 @@ instance Canonicalize Import where
     canonicalize (Import importHashed importMode) =
         Import (canonicalize importHashed) importMode
 
--- Given a well-typed (of type `List { header : Text, value Text }` or
--- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form
--- construct the corresponding binary http headers.
-toHeaders :: Expr s a -> Maybe [HTTPHeader]
-toHeaders (ListLit _ hs) = do
-    hs' <- mapM toHeader hs
-    return (Data.Foldable.toList hs')
-toHeaders _ = do
-    empty
-
-toHeader :: Expr s a -> Maybe HTTPHeader
-toHeader (RecordLit m) = do
-    TextLit (Chunks [] keyText  ) <-
-        Dhall.Map.lookup "header" m <|> Dhall.Map.lookup "mapKey" m
-    TextLit (Chunks [] valueText) <-
-        Dhall.Map.lookup "value" m <|> Dhall.Map.lookup "mapValue" m
-    let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
-    let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
-    return (Data.CaseInsensitive.mk keyBytes, valueBytes)
-toHeader _ = do
-    empty
-
-
 -- | Exception thrown when an integrity check fails
 data HashMismatch = HashMismatch
     { expectedHash :: Crypto.Hash.Digest SHA256
@@ -477,7 +459,7 @@ chainedChangeMode mode (Chained (Import importHashed _)) =
     Chained (Import importHashed mode)
 
 -- Chain imports, also typecheck and normalize headers if applicable.
-chainImport :: MonadCatch m => Chained -> Import -> StateT (Status m) m Chained
+chainImport :: Chained -> Import -> StateT Status IO Chained
 chainImport (Chained parent) child@(Import importHashed@(ImportHashed _ (Remote url)) _) = do
     url' <- normalizeHeaders url
     let child' = child { importHashed = importHashed { importType = Remote url' } }
@@ -486,90 +468,279 @@ chainImport (Chained parent) child@(Import importHashed@(ImportHashed _ (Remote 
 chainImport (Chained parent) child =
     return (Chained (canonicalize (parent <> child)))
 
--- | Parse an expression from a `Import` containing a Dhall program
-exprFromImport :: Chained -> StateT (Status IO) IO Resolved
-exprFromImport here@(Chained (Import {..})) = do
-    let ImportHashed {..} = importHashed
-
+-- | Load an import, resulting in a fully resolved, type-checked and normalised
+--   expression. @loadImport@ handles the 'hot' cache in @Status@ and defers to
+--   `loadImportWithSemanticCache` for imports that aren't in the @Status@ cache
+--   already.
+loadImport :: Chained -> StateT Status IO ImportSemantics
+loadImport import_ = do
     Status {..} <- State.get
-
-    result <- Maybe.runMaybeT $ do
-        Just expectedHash <- return hash
-        cacheFile         <- getCacheFile expectedHash
-        True              <- liftIO (Directory.doesFileExist cacheFile)
-
-        bytesStrict <- liftIO (Data.ByteString.readFile cacheFile)
-
-        let actualHash = Crypto.Hash.hash bytesStrict
-
-        if expectedHash == actualHash
-            then return ()
-            else throwMissingImport (Imported _stack (HashMismatch {..}))
-
-        let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
-
-        term <- Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytesLazy)
-
-        Dhall.Core.throws (Dhall.Binary.decodeExpression term)
-
-    case result of
-        Just resolvedExpression -> do
-            return (Resolved {..})
+    case Map.lookup import_ _cache of
+        Just importSemantics -> return importSemantics
         Nothing -> do
-            exprFromUncachedImport here
+            importSemantics <- loadImportWithSemanticCache import_
+            zoom cache (State.modify (Map.insert import_ importSemantics))
+            return importSemantics
 
-{-| Save an expression to the specified `Import`
+-- | Load an import from the 'semantic cache'. Defers to
+--   `loadImportWithSemisemanticCache` for imports that aren't frozen (and
+--   therefore not cached semantically), as well as those that aren't cached yet.
+loadImportWithSemanticCache :: Chained -> StateT Status IO ImportSemantics
+loadImportWithSemanticCache
+  import_@(Chained (Import (ImportHashed Nothing _) _)) = do
+    loadImportWithSemisemanticCache import_
 
-    Currently this only works for cached imports and ignores other types of
-    imports, but could conceivably work for uncached imports in the future
+loadImportWithSemanticCache
+  import_@(Chained (Import (ImportHashed (Just semanticHash) _) _)) = do
+    Status { .. } <- State.get
+    mCached <- liftIO $ fetchFromSemanticCache semanticHash
 
-    The main reason for this more general type is for symmetry with
-    `exprFromImport` and to support doing more clever things in the future,
-    like doing \"the right thing\" for uncached imports (i.e. exporting
-    environment variables or creating files)
--}
-exprToImport :: Chained -> Expr Src X -> StateT (Status IO) IO ()
-exprToImport here expression = do
-    Status {..} <- State.get
+    case mCached of
+        Just bytesStrict -> do
+            let actualHash = Crypto.Hash.hash bytesStrict
+            if semanticHash == actualHash
+                then return ()
+                else do
+                    Status { _stack } <- State.get
+                    throwMissingImport (Imported _stack (HashMismatch {expectedHash = semanticHash, ..}))
 
-    let Chained (Import {..}) = here
+            let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
+            term <- case Codec.Serialise.deserialiseOrFail bytesLazy of
+                Left err -> throwMissingImport (Imported _stack err)
+                Right t -> return t
+            importSemantics <- case Dhall.Binary.decodeExpression term of
+                Left err -> throwMissingImport (Imported _stack err)
+                Right sem -> return sem
 
-    let ImportHashed {..} = importHashed
+            return (ImportSemantics {..})
 
+        Nothing -> do
+            ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache import_
+
+            let variants = map (\version -> encodeExpression version (Dhall.Core.alphaNormalize importSemantics))
+                                [ minBound .. maxBound ]
+            case Data.Foldable.find ((== semanticHash). Crypto.Hash.hash) variants of
+                Just bytes -> liftIO $ writeToSemanticCache semanticHash bytes
+                Nothing -> do
+                    let expectedHash = semanticHash
+                    Status { _standardVersion, _stack } <- State.get
+                    let actualHash = hashExpression _standardVersion (Dhall.Core.alphaNormalize importSemantics)
+                    throwMissingImport (Imported _stack (HashMismatch {..}))
+
+            return (ImportSemantics {..})
+
+-- Fetch encoded normal form from "semantic cache"
+fetchFromSemanticCache :: Crypto.Hash.Digest SHA256 -> IO (Maybe Data.ByteString.ByteString)
+fetchFromSemanticCache expectedHash = Maybe.runMaybeT $ do
+    cacheFile <- getCacheFile "dhall" expectedHash
+    True <- liftIO (Directory.doesFileExist cacheFile)
+    liftIO (Data.ByteString.readFile cacheFile)
+
+-- | Ensure that the given expression is present in the semantic cache. The
+--   given expression should be alpha-beta-normal.
+writeExpressionToSemanticCache :: Expr Src X -> IO ()
+writeExpressionToSemanticCache expression = writeToSemanticCache hash bytes
+  where
+    bytes = encodeExpression Dhall.Binary.defaultStandardVersion expression
+    hash = Crypto.Hash.hash bytes
+
+writeToSemanticCache :: Crypto.Hash.Digest SHA256 -> Data.ByteString.ByteString -> IO ()
+writeToSemanticCache hash bytes = do
     _ <- Maybe.runMaybeT $ do
-        Just expectedHash  <- return hash
-        cacheFile          <- getCacheFile expectedHash
-
-        _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith _startingContext expression)
-
-        let normalizedExpression =
-                Dhall.Core.alphaNormalize
-                    (Dhall.Core.normalizeWith
-                        _normalizer
-                        expression
-                    )
-
-        let check version = do
-                let bytes = encodeExpression version normalizedExpression
-
-                let actualHash = Crypto.Hash.hash bytes
-
-                guard (expectedHash == actualHash)
-
-                liftIO (Data.ByteString.writeFile cacheFile bytes)
-
-        let fallback = do
-                let actualHash = hashExpression NoVersion normalizedExpression
-
-                throwMissingImport (Imported _stack (HashMismatch {..}))
-
-        Data.Foldable.asum (map check [ minBound .. maxBound ]) <|> fallback
-
+        cacheFile <- getCacheFile "dhall" hash
+        liftIO (Data.ByteString.writeFile cacheFile bytes)
     return ()
 
+-- Check the "semi-semantic" disk cache, otherwise typecheck and normalise from
+-- scratch.
+loadImportWithSemisemanticCache
+  :: Chained -> StateT Status IO ImportSemantics
+loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Code)) = do
+    text <- fetchFresh importType
+    Status {..} <- State.get
+
+    path <- case importType of
+        Local prefix file -> liftIO $ do
+            path <- localToPath prefix file
+            absolutePath <- Directory.makeAbsolute path
+            return absolutePath
+        Remote url -> do
+            let urlText = Dhall.Pretty.Internal.pretty (url { headers = Nothing })
+            return (Text.unpack urlText)
+        Env env -> return $ Text.unpack env
+        Missing -> throwM (MissingImports [])
+
+    let parser = unParser $ do
+            Text.Parser.Token.whiteSpace
+            r <- Dhall.Parser.expr
+            Text.Parser.Combinators.eof
+            return r
+
+    parsedImport <- case Text.Megaparsec.parse parser path text of
+        Left  errInfo -> do
+            throwMissingImport (Imported _stack (ParseError errInfo text))
+        Right expr    -> return expr
+
+    resolvedExpr <- loadWith parsedImport  -- we load imports recursively here
+
+    -- Check the semi-semantic cache. See
+    -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for the reasoning
+    -- behind semi-semantic caching.
+    let semisemanticHash = computeSemisemanticHash resolvedExpr
+    mCached <- lift $ fetchFromSemisemanticCache semisemanticHash
+
+    importSemantics <- case mCached of
+        Just bytesStrict -> do
+            let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
+
+            term <- case Codec.Serialise.deserialiseOrFail bytesLazy of
+                Left err -> throwMissingImport (Imported _stack err)
+                Right t -> return t
+
+            importSemantics <- case Dhall.Binary.decodeExpression term of
+                Left err -> throwMissingImport (Imported _stack err)
+                Right sem -> return sem
+
+            return importSemantics
+
+        Nothing -> do
+            betaNormal <- case Dhall.TypeCheck.typeWith _startingContext resolvedExpr of
+                Left  err -> throwMissingImport (Imported _stack err)
+                Right _ -> return (Dhall.Core.normalizeWith _normalizer resolvedExpr)
+
+            let bytes = encodeExpression _standardVersion betaNormal
+            lift $ writeToSemisemanticCache semisemanticHash bytes
+
+            return betaNormal
+
+    return (ImportSemantics {..})
+
+-- `as Text` imports aren't cached since they are well-typed and normal by
+-- construction
+loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) RawText)) = do
+    text <- fetchFresh importType
+
+    -- importSemantics is alpha-beta-normal by construction!
+    let importSemantics = TextLit (Chunks [] text)
+    return (ImportSemantics {..})
+
+-- `as Location` imports aren't cached since they are well-typed and normal by
+-- construction
+loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Location)) = do
+    let locationType = Union $ Dhall.Map.fromList
+            [ ("Environment", Just Text)
+            , ("Remote", Just Text)
+            , ("Local", Just Text)
+            , ("Missing", Nothing)
+            ]
+
+    -- importSemantics is alpha-beta-normal by construction!
+    let importSemantics = case importType of
+            Missing -> Field locationType "Missing"
+            local@(Local _ _) ->
+                App (Field locationType "Local")
+                  (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty local)))
+            remote_@(Remote _) ->
+                App (Field locationType "Remote")
+                  (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty remote_)))
+            Env env ->
+                App (Field locationType "Environment")
+                  (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty env)))
+
+    return (ImportSemantics {..})
+
+-- The semi-semantic hash of an expression is computed from the fully resolved
+-- AST (without normalising or type-checking it first). See
+-- https://github.com/dhall-lang/dhall-haskell/issues/1098 for further
+-- discussion.
+computeSemisemanticHash :: Expr Src X -> Crypto.Hash.Digest Crypto.Hash.SHA256
+computeSemisemanticHash resolvedExpr =
+    hashExpression Dhall.Binary.defaultStandardVersion resolvedExpr
+
+-- Fetch encoded normal form from "semi-semantic cache"
+fetchFromSemisemanticCache :: Crypto.Hash.Digest SHA256 -> IO (Maybe Data.ByteString.ByteString)
+fetchFromSemisemanticCache semisemanticHash = Maybe.runMaybeT $ do
+    cacheFile <- getCacheFile "dhall-haskell" semisemanticHash
+    True <- liftIO (Directory.doesFileExist cacheFile)
+    liftIO (Data.ByteString.readFile cacheFile)
+
+writeToSemisemanticCache :: Crypto.Hash.Digest SHA256 -> Data.ByteString.ByteString -> IO ()
+writeToSemisemanticCache semisemanticHash bytes = do
+    _ <- Maybe.runMaybeT $ do
+        cacheFile <- getCacheFile "dhall-haskell" semisemanticHash
+        liftIO (Data.ByteString.writeFile cacheFile bytes)
+    return ()
+
+-- Fetch source code directly from disk/network
+fetchFresh :: ImportType -> StateT Status IO Text
+fetchFresh (Local prefix file) = do
+    Status { _stack } <- State.get
+    path <- liftIO $ localToPath prefix file
+    exists <- liftIO $ Directory.doesFileExist path
+    if exists
+        then liftIO $ Data.Text.IO.readFile path
+        else throwMissingImport (Imported _stack (MissingFile path))
+
+fetchFresh (Remote url) = do
+    Status { _remote } <- State.get
+    _remote url
+
+fetchFresh (Env env) = do
+    Status { _stack } <- State.get
+    x <- liftIO $ System.Environment.lookupEnv (Text.unpack env)
+    case x of
+        Just string -> do
+            return (Text.pack string)
+        Nothing -> do
+                throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
+
+fetchFresh Missing = throwM (MissingImports [])
+
+
+fetchRemote :: URL -> StateT Status IO Data.Text.Text
+#ifndef MIN_VERSION_http_client
+fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
+    let maybeHeaders = fmap toHeaders maybeHeadersExpression
+    let urlString = Text.unpack (Dhall.Core.pretty url)
+    Status { _stack } <- State.get
+    throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
+#else
+fetchRemote url = do
+    manager <- liftIO $ newManager
+    zoom remote (State.put (fetchFromHTTP manager))
+    fetchFromHTTP manager url
+  where
+    fetchFromHTTP :: Manager -> URL -> StateT Status IO Data.Text.Text
+    fetchFromHTTP manager (url'@URL { headers = maybeHeadersExpression }) = do
+        let maybeHeaders = fmap toHeaders maybeHeadersExpression
+        fetchFromHttpUrl manager url' maybeHeaders
+#endif
+
+-- | Given a well-typed (of type `List { header : Text, value Text }` or
+-- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form
+-- construct the corresponding binary http headers; otherwise return the empty
+-- list.
+toHeaders :: Expr s a -> [HTTPHeader]
+toHeaders (ListLit _ hs) = Data.Foldable.toList (Data.Foldable.fold maybeHeaders)
+  where
+      maybeHeaders = mapM toHeader hs
+toHeaders _ = []
+
+toHeader :: Expr s a -> Maybe HTTPHeader
+toHeader (RecordLit m) = do
+    TextLit (Chunks [] keyText  ) <-
+        Dhall.Map.lookup "header" m <|> Dhall.Map.lookup "mapKey" m
+    TextLit (Chunks [] valueText) <-
+        Dhall.Map.lookup "value" m <|> Dhall.Map.lookup "mapValue" m
+    let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
+    let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
+    return (Data.CaseInsensitive.mk keyBytes, valueBytes)
+toHeader _ = do
+    empty
+
 getCacheFile
-    :: (Alternative m, MonadIO m) => Crypto.Hash.Digest SHA256 -> m FilePath
-getCacheFile hash = do
+    :: (Alternative m, MonadIO m) => FilePath -> Crypto.Hash.Digest SHA256 -> m FilePath
+getCacheFile cacheName hash = do
     let assertDirectory directory = do
             let private = transform Directory.emptyPermissions
                   where
@@ -600,11 +771,9 @@ getCacheFile hash = do
 
     cacheDirectory <- getCacheDirectory
 
-    let dhallDirectory = cacheDirectory </> "dhall"
+    assertDirectory (cacheDirectory </> cacheName)
 
-    assertDirectory dhallDirectory
-
-    let cacheFile = dhallDirectory </> ("1220" <> show hash)
+    let cacheFile = (cacheDirectory </> cacheName) </> ("1220" <> show hash)
 
     return cacheFile
 
@@ -628,9 +797,10 @@ getCacheDirectory = alternative₀ <|> alternative₁
 
 -- If the URL contains headers typecheck them and replace them with their normal
 -- forms.
-normalizeHeaders :: MonadCatch m => URL -> StateT (Status m) m URL
+normalizeHeaders :: URL -> StateT Status IO URL
 normalizeHeaders url@URL { headers = Just headersExpression } = do
-    expr <- loadWith headersExpression
+    Status { _stack } <- State.get
+    loadedExpr <- loadWith headersExpression
 
     let go key₀ key₁ = do
             let expected :: Expr Src X
@@ -643,19 +813,19 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
                         )
 
             let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
-            let annot = case expr of
+            let annot = case loadedExpr of
                     Note (Src begin end bytes) _ ->
-                        Note (Src begin end bytes') (Annot expr expected)
+                        Note (Src begin end bytes') (Annot loadedExpr expected)
                       where
                         bytes' = bytes <> " : " <> suffix_
                     _ ->
-                        Annot expr expected
+                        Annot loadedExpr expected
 
             _ <- case (Dhall.TypeCheck.typeOf annot) of
-                Left err -> throwM err
+                Left err -> throwMissingImport (Imported _stack err)
                 Right _ -> return ()
 
-            return (Dhall.Core.normalize expr)
+            return (Dhall.Core.normalize loadedExpr)
 
     let handler₀ (e :: SomeException) = do
             {- Try to typecheck using the preferred @mapKey@/@mapValue@ fields
@@ -663,7 +833,7 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
                @header@/@value@ still fails then re-throw the original exception
                for @mapKey@ / @mapValue@. -}
             let handler₁ (_ :: SomeException) =
-                    throwM e
+                    throwMissingImport (Imported _stack e)
 
             handle handler₁ (go "header" "value")
 
@@ -674,97 +844,16 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
 
 normalizeHeaders url = return url
 
-exprFromUncachedImport :: Chained -> StateT (Status IO) IO Resolved
-exprFromUncachedImport (Chained (Import {..})) = do
-    let ImportHashed {..} = importHashed
-    let resolveImport importType' = case importType' of
-          Local prefix file -> liftIO $ do
-              path   <- localToPath prefix file
-              absolutePath <- Directory.makeAbsolute path
-              exists <- Directory.doesFileExist path
-
-              if exists
-                  then return ()
-                  else throwMissingImport (MissingFile path)
-
-              text <- Data.Text.IO.readFile path
-
-              return (absolutePath, text)
-
-          Remote url@URL { headers = maybeHeadersExpression } -> do
-#ifdef MIN_VERSION_http_client
-              let maybeHeaders = foldMap toHeaders maybeHeadersExpression
-
-              (path, text) <- fetchFromHttpUrl url maybeHeaders
-
-              return (path, text)
-#else
-              let urlString = Text.unpack (Dhall.Core.pretty url)
-
-              liftIO (throwIO (CannotImportHTTPURL urlString mheaders))
-#endif
-
-          Env env -> liftIO $ do
-              x <- System.Environment.lookupEnv (Text.unpack env)
-              case x of
-                  Just string -> do
-                      return (Text.unpack env, Text.pack string)
-                  Nothing -> do
-                      throwMissingImport (MissingEnvironmentVariable env)
-
-          Missing -> liftIO $ do
-              throwM (MissingImports [])
-
-    case importMode of
-        Code -> do
-            (path, text) <- resolveImport importType
-            let parser = unParser $ do
-                    Text.Parser.Token.whiteSpace
-                    r <- Dhall.Parser.expr
-                    Text.Parser.Combinators.eof
-                    return r
-
-            case Text.Megaparsec.parse parser path text of
-                Left errInfo -> do
-                    liftIO (throwIO (ParseError errInfo text))
-                Right resolvedExpression -> do
-                    return (Resolved {..})
-
-        RawText -> do
-            (_path, text) <- resolveImport importType
-            let resolvedExpression = TextLit (Chunks [] text)
-
-            return (Resolved {..})
-
-        Location -> do
-            let locationType = Union $ Dhall.Map.fromList
-                    [ ("Environment", Just Text)
-                    , ("Remote", Just Text)
-                    , ("Local", Just Text)
-                    , ("Missing", Nothing)
-                    ]
-
-            let resolvedExpression =
-                    case importType of
-                        Missing -> Field locationType "Missing"
-                        local@(Local _ _) -> App (Field locationType "Local") (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty local)))
-                        remote@(Remote _) -> App (Field locationType "Remote") (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty remote)))
-                        Env env -> App (Field locationType "Environment") (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty env)))
-
-
-            return (Resolved resolvedExpression)
-
-
 -- | Default starting `Status`, importing relative to the given directory.
-emptyStatus :: FilePath -> Status IO
-emptyStatus = emptyStatusWith exprFromImport exprToImport
+emptyStatus :: FilePath -> Status
+emptyStatus = emptyStatusWith fetchRemote
 
 {-| Generalized version of `load`
 
     You can configure the desired behavior through the initial `Status` that you
     supply
 -}
-loadWith :: MonadCatch m => Expr Src Import -> StateT (Status m) m (Expr Src X)
+loadWith :: Expr Src Import -> StateT Status IO (Expr Src X)
 loadWith expr₀ = case expr₀ of
   Embed import₀ -> do
     Status {..} <- State.get
@@ -786,97 +875,22 @@ loadWith expr₀ = case expr₀ of
 
     let _stack' = NonEmpty.cons child _stack
 
-    expr <- if child `elem` _stack
+    if child `elem` _stack
         then throwMissingImport (Imported _stack (Cycle import₀))
-        else do
-            case Map.lookup child _cache of
-                Just expr -> do
-                    zoom graph . State.modify $
-                      -- Add the edge `parent -> child` to the import graph
-                      \edges -> Depends parent child : edges
+        else return ()
 
-                    pure expr
-                Nothing        -> do
-                    -- Here we have to match and unwrap the @MissingImports@
-                    -- in a separate handler, otherwise we'd have it wrapped
-                    -- in another @Imported@ when parsing a @missing@, because
-                    -- we are representing it with an empty exception list
-                    -- (which would not be empty if this would happen).
-                    -- TODO: restructure the Exception hierarchy to prevent
-                    -- this nesting from happening in the first place.
-                    let handler₀
-                            :: (MonadCatch m)
-                            => MissingImports
-                            -> StateT (Status m) m Resolved
-                        handler₀ (MissingImports es) =
-                          throwM
-                            (MissingImports
-                               (map
-                                 (\e -> toException (Imported _stack' e))
-                                 es
-                               )
-                             )
+    zoom graph . State.modify $
+        -- Add the edge `parent -> child` to the import graph
+        \edges -> Depends parent child : edges
 
-                        handler₁
-                            :: (MonadCatch m)
-                            => SomeException
-                            -> StateT (Status m) m Resolved
-                        handler₁ e =
-                          throwMissingImport (Imported _stack' e)
+    let stackWithChild = NonEmpty.cons child _stack
 
-                    -- This loads a \"dynamic\" expression (i.e. an expression
-                    -- that might still contain imports)
-                    let loadDynamic = _resolver child
+    zoom stack (State.put stackWithChild)
+    ImportSemantics {..} <- loadImport child
+    zoom stack (State.put _stack)
 
-                    Resolved {..} <- loadDynamic `catches` [ Handler handler₀, Handler handler₁ ]
+    return importSemantics
 
-                    let stackWithChild = NonEmpty.cons child _stack
-
-                    zoom stack (State.put stackWithChild)
-                    expr'' <- loadWith resolvedExpression
-                    zoom stack (State.put _stack)
-
-                    zoom graph . State.modify $
-                      -- Add the edge `parent -> child` to the import graph.
-                      \edges -> Depends parent child : edges
-
-                    _cacher child expr''
-
-                    -- Type-check expressions here for three separate reasons:
-                    --
-                    --  * to verify that they are closed
-                    --  * to catch type errors as early in the import process
-                    --    as possible
-                    --  * to avoid normalizing ill-typed expressions that need
-                    --    to be hashed
-                    --
-                    -- There is no need to check expressions that have been
-                    -- cached, since they have already been checked
-                    expr''' <- case Dhall.TypeCheck.typeWith _startingContext expr'' of
-                        Left  err -> throwM (Imported _stack' err)
-                        Right _   -> return (Dhall.Core.normalizeWith _normalizer expr'')
-                    zoom cache (State.modify' (Map.insert child expr'''))
-                    return expr'''
-
-    case hash (importHashed import₀) of
-        Nothing -> do
-            return ()
-        Just expectedHash -> do
-            let matches version =
-                    let actualHash =
-                            hashExpression version (Dhall.Core.alphaNormalize expr)
-
-                    in  expectedHash == actualHash
-
-            if any matches [ minBound .. maxBound ]
-                then return ()
-                else do
-                    let actualHash =
-                            hashExpression NoVersion (Dhall.Core.alphaNormalize expr)
-
-                    throwMissingImport (Imported _stack' (HashMismatch {..}))
-
-    return expr
   ImportAlt a b -> loadWith a `catch` handler₀
     where
       handler₀ (SourcedException (Src begin _ text₀) (MissingImports es₀)) =

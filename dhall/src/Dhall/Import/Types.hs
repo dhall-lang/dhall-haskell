@@ -23,6 +23,7 @@ import Dhall.Core
   , ImportMode (..)
   , ImportType (..)
   , ReifiedNormalizer(..)
+  , URL
   )
 import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
@@ -45,16 +46,16 @@ newtype Chained = Chained { chainedImport :: Import }
 instance Pretty Chained where
     pretty (Chained import_) = pretty import_
 
-data Resolved = Resolved
-    { resolvedExpression :: Expr Src Import
-    -- ^ The imported expression, potentially still referencing other imports.
+data ImportSemantics = ImportSemantics
+    { importSemantics :: Expr Src X
+    -- ^ The fully resolved import, typechecked and beta-normal.
     }
 
 -- | `parent` imports (i.e. depends on) `child`
 data Depends = Depends { parent :: Chained, child :: Chained }
 
 -- | State threaded throughout the import process
-data Status m = Status
+data Status = Status
     { _stack :: NonEmpty Chained
     -- ^ Stack of `Import`s that we've imported along the way to get to the
     -- current point
@@ -63,31 +64,24 @@ data Status m = Status
     -- ^ Graph of all the imports visited so far, represented by a list of
     --   import dependencies.
 
-    , _cache :: Map Chained (Expr Src X)
+    , _cache :: Map Chained ImportSemantics
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
 
-    , _manager :: Maybe Dynamic
-    -- ^ Cache for the HTTP `Manager` so that we only acquire it once
+    , _remote :: URL -> StateT Status IO Data.Text.Text
+    -- ^ The remote resolver, fetches the content at the given URL.
 
     , _standardVersion :: StandardVersion
 
     , _normalizer :: Maybe (ReifiedNormalizer X)
 
     , _startingContext :: Context (Expr Src X)
-
-    , _resolver :: Chained -> StateT (Status m) m Resolved
-
-    , _cacher :: Chained -> Expr Src X -> StateT (Status m) m ()
     }
 
--- | Default starting `Status` that is polymorphic in the base `Monad`
-emptyStatusWith
-    :: (Chained -> StateT (Status m) m Resolved)
-    -> (Chained -> Expr Src X -> StateT (Status m) m ())
-    -> FilePath
-    -> Status m
-emptyStatusWith _resolver _cacher rootDirectory = Status {..}
+-- | Initial `Status`, parameterised over the remote resolver, importing
+--   relative to the given directory.
+emptyStatusWith :: (URL -> StateT Status IO Data.Text.Text) -> FilePath -> Status
+emptyStatusWith _remote rootDirectory = Status {..}
   where
     _stack = pure (Chained rootImport)
 
@@ -120,38 +114,28 @@ emptyStatusWith _resolver _cacher rootDirectory = Status {..}
       , importMode = Code
       }
 
-stack :: Functor f => LensLike' f (Status m) (NonEmpty Chained)
+stack :: Functor f => LensLike' f Status (NonEmpty Chained)
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
 
-graph :: Functor f => LensLike' f (Status m) [Depends]
+graph :: Functor f => LensLike' f Status [Depends]
 graph k s = fmap (\x -> s { _graph = x }) (k (_graph s))
 
-cache :: Functor f => LensLike' f (Status m) (Map Chained (Expr Src X))
+cache :: Functor f => LensLike' f Status (Map Chained ImportSemantics)
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
-manager :: Functor f => LensLike' f (Status m) (Maybe Dynamic)
-manager k s = fmap (\x -> s { _manager = x }) (k (_manager s))
+remote :: Functor f => LensLike' f Status (URL -> StateT Status IO Data.Text.Text)
+remote k s = fmap (\x -> s { _remote = x }) (k (_remote s))
 
-standardVersion :: Functor f => LensLike' f (Status m) StandardVersion
+standardVersion :: Functor f => LensLike' f Status StandardVersion
 standardVersion k s =
     fmap (\x -> s { _standardVersion = x }) (k (_standardVersion s))
 
-normalizer :: Functor f => LensLike' f (Status m) (Maybe (ReifiedNormalizer X))
+normalizer :: Functor f => LensLike' f Status (Maybe (ReifiedNormalizer X))
 normalizer k s = fmap (\x -> s {_normalizer = x}) (k (_normalizer s))
 
-startingContext :: Functor f => LensLike' f (Status m) (Context (Expr Src X))
+startingContext :: Functor f => LensLike' f Status (Context (Expr Src X))
 startingContext k s =
     fmap (\x -> s { _startingContext = x }) (k (_startingContext s))
-
-resolver
-    :: Functor f
-    => LensLike' f (Status m) (Chained -> StateT (Status m) m Resolved)
-resolver k s = fmap (\x -> s { _resolver = x }) (k (_resolver s))
-
-cacher
-    :: Functor f
-    => LensLike' f (Status m) (Chained -> Expr Src X -> StateT (Status m) m ())
-cacher k s = fmap (\x -> s { _cacher = x }) (k (_cacher s))
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic

@@ -13,7 +13,6 @@ import qualified Control.Exception as Exception
 import qualified Control.Monad     as Monad
 import qualified Data.Text         as Text
 import qualified Dhall.Core        as Core
-import qualified Dhall.Import      as Import
 import qualified Dhall.Parser      as Parser
 import qualified Dhall.Test.Util   as Test.Util
 import qualified Dhall.TypeCheck   as TypeCheck
@@ -58,7 +57,7 @@ successTest prefix =
 
         let annotatedExpr = Core.Annot actualExpr expectedExpr
 
-        resolvedExpr <- Import.load annotatedExpr
+        resolvedExpr <- Test.Util.load annotatedExpr
 
         _ <- Core.throws (TypeCheck.typeOf resolvedExpr)
 
@@ -73,7 +72,7 @@ failureTest path = do
 
         let io :: IO Bool
             io = do
-                _ <- Import.load expression
+                _ <- Test.Util.load expression
                 return True
 
         let handler :: SomeException -> IO Bool

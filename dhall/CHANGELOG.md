@@ -1,3 +1,118 @@
+1.25.0
+
+* Supports version 8.0.0 of the standard
+    * See: https://github.com/dhall-lang/dhall-lang/releases/tag/v8.0.0
+* BREAKING CHANGE: Remove support for old-style `List`-like `Optional` literals
+    * List-like `Optional` Literals (i.e. `[ 1 ] : Optional Natural`) are no
+      longer valid
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1002
+* BREAKING CHANGE: Add support for semi-semantic caching
+    * This change significantly improves the performance of imports
+    * This change also automatically caches imports without an integrity check
+    * This changes several types in `Dhall.Import` to support this new
+      feature
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1113
+* BREAKING CHANGE: Implement new Unicode braced escape sequence
+    * Escape sequences encoding surrogate pairs are no longer valid
+    * Instead, characters previously encoded as surrogate pairs can instead be
+      encoded as a braced sequence
+    * For example: "\uD834\uDD1E" must now be written as "\u{1D11E}"
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/987
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1104
+* BREAKING CHANGE: Make the type of extract richer:
+    * `Dhall.extract` can now return a detailed error instead of just a `Maybe`
+    * This is a breaking chnage because the type of `extract` changed
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1011
+* BREAKING CHANGE: Add support for importing expressions `as Location`
+    * This is a breaking change because a new `Location` constructor was added
+      to `ImportMode`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1019
+* BREAKING CHANGE: Switch `Var` to use an `Int`
+    * This is a performance improvement, but also a breaking change since the
+      `Integer` in the `Var` constructor was changed to an `Int`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1044
+* BREAKING CHANGE: Add new `toMap` keyword
+    * This is a breaking change to the API because a new `ToMap` constructor
+      was added to the `Expr` type
+    * This is also a technically breaking change to the language because `toMap`
+      is now a reserved keyword, although most code should be unaffected in
+      practice
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1041
+* BREAKING CHANGE: Sort the fields of a record projection during normalization
+    * This is a technically breaking change to the language because any
+      expressions with an uninterpreted record projection will have a different
+      semantic integrity check.  However, most could should be unaffected in
+      practice
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1111
+* BUG FIX: Fix substitution into record projection by type
+    * An expression like this one was being incorrectly rejected:
+      `let e = { a = 10, b = "Text" } let s = { a : Natural } in e.(s)`, which
+      this change fixes
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1012
+* BUG FIX: Reject record projection when there is a field type mismatch
+    * Record projection by type was previously not checking the expected
+      field types, which this change fixes
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1027
+* BUG FIX: Fix linting of unused let bindings
+    * Certain let bindings were not correctly detected as unused, which this
+      change fixes
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1001
+* BUG FIX: Fix `--file` option
+    * The `--file` option from the previous release did not work, due to not
+      computing relative paths correctly, which this change fixes
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1004
+* BUG FIX: Minor fix to `dhall diff`
+    * `dhall diff` was incorrectly displaying spurious differences for
+      identical lists that were function arguments, which this change fixes
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1006
+* BUG FIX: Allow `Sort` as type annotation
+    * This should have been implemented in the previous release as part of
+      supporting version 8.0.0 of the standard, but was missed
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1024
+* BUG FIX: `Dhall.Map`: Reflect original key ordering in `Ord` instance
+    * `Dhall.Map` now considers key order when comparing `Map`s, which it should
+      have done before, but didn't
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1050
+* BUG FIX: Consistently format multi-line strings
+    * The formatter now formats naked multi-line strings the same as nested
+      multi-line strings
+    * Specifically, naked multi-line strings can now be formatted on a single
+      (just like nested multi-line strings)
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1056
+* BUG FIX: Make `isNormalized` consistent with `normalize`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1115
+* BUG FIX: Make `normalizeWithM` consistent with `normalize`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1126
+* BUG FIX: Fix import alternatives to recover from type errors
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1152
+* Feature: Semi-semantic caching
+    * The Haskell implementation now implicitly caches *all* local imports, not
+      just imports frozen by integrity checks, so that you don't have to freeze
+      them when doing local development
+    * These cached imports are still correctly invalidated if they or any of
+      their dependencies change
+    * This new implicit cache is stored underneath `~/.cache/dhall-haskell` by
+      default
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1154
+* Feature: New `dhall text` subcommand
+    * This new subcommand supersedes the old `dhall-to-text` executable
+* Feature: Add `instance Lift (Expr s a)`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1119
+* Fixes and improvements to error messages:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1030
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1137
+* Fixes and improvements to tests:
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1155
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1159
+* Performance improvements
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1036
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1051
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1048
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1057
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1065
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1066
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1085
+
 1.24.0
 
 * Supports version 8.0.0 of the standard

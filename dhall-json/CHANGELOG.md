@@ -1,3 +1,28 @@
+1.4.0
+
+* BREAKING CHANGE: Split `Dhall.YAML` into `Dhall.YAML` + `Dhall.YAMLToDhall`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/993
+* BUG FIX: Fix `dhall-to-{json,yaml}`'s support for preserving alternative
+  names
+    * The `Nested`/`Inline` unions are now correctly given special treatment
+      again
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1080
+* Feature: Support weakly-typed JSON value added to Prelude
+    * You can now encode/decode values of type `./Prelude/JSON/Type` which
+      can store arbitrary JSON
+    * This is useful when dealing with "pass-through" or schema-free JSON
+      values
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1007
+* Feature: Eta support for `dhall-json`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1013
+* Feature: Add `--file` option to `dhall-json` executables
+* Feature: Support unions for keys
+    * You can now decode record fields as enums instead of `Text` so that you
+      can pattern match on them
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1094
+* Pretty-print output of `{json,yaml}-to-dhall`
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/1150
+
 1.3.0
 
 * BREAKING CHANGE: Change YAML/JSON encoding for `NaN`/`Infinity`/`-Infinity`
@@ -7,7 +32,7 @@
 * BREAKING CHANGE: Isolate YAML code to one modulee
     * This is a breaking change because it moves `Dhall.JSON.jsonToYaml` to
       `Dhall.YAML.jsonToYaml`
-    * See: https://github.com/dhall-lang/dhall-haskell/pull/989/files
+    * See: https://github.com/dhall-lang/dhall-haskell/pull/989
 * New `yaml-to-dhall` command-line utility
     * See: https://github.com/dhall-lang/dhall-haskell/pull/977
 * Add `--quoted` flag to force quoting of YAML string literals

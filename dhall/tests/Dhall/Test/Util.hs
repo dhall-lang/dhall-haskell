@@ -1,10 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 
 module Dhall.Test.Util
     ( code
     , codeWith
     , equivalent
+    , load
+    , loadWith
     , normalize'
     , normalizeWith'
     , assertNormalizesTo
@@ -16,10 +19,12 @@ module Dhall.Test.Util
     , toDhallPath
     ) where
 
+import Control.Monad.Trans.State.Strict (StateT)
 import Data.Bifunctor (first)
 import Data.Text (Text)
 import Dhall.Context (Context)
-import Dhall.Core (Expr, Normalizer, ReifiedNormalizer(..))
+import Dhall.Core (Expr, Normalizer, ReifiedNormalizer(..), Import)
+import Dhall.Import (Status)
 import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
 import Prelude hiding (FilePath)
@@ -36,8 +41,19 @@ import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Test.Tasty        as Tasty
 import qualified Turtle
+
+#ifndef WITH_HTTP
+import Control.Monad.IO.Class (MonadIO(..))
+import Dhall.Core (URL(..))
+import Lens.Family.State.Strict (zoom)
+
+import qualified Data.Foldable
+import qualified Data.Text.Encoding
+import qualified Data.Text.IO
+#endif
 
 normalize' :: Expr Src X -> Text
 normalize' = Dhall.Core.pretty . Dhall.Core.normalize
@@ -54,11 +70,78 @@ codeWith ctx expr = do
     expr0 <- case Dhall.Parser.exprFromText mempty expr of
         Left parseError -> Control.Exception.throwIO parseError
         Right expr0     -> return expr0
-    expr1 <- Dhall.Import.load expr0
+    expr1 <- load expr0
     case Dhall.TypeCheck.typeWith ctx expr1 of
         Left typeError -> Control.Exception.throwIO typeError
         Right _        -> return ()
     return expr1
+
+load :: Expr Src Import -> IO (Expr Src X)
+load expression =
+    State.evalStateT (loadWith expression) (Dhall.Import.emptyStatus ".")
+
+#ifdef WITH_HTTP
+loadWith :: Expr Src Import -> StateT Status IO (Expr Src X)
+loadWith = Dhall.Import.loadWith
+
+#else
+loadWith :: Expr Src Import -> StateT Status IO (Expr Src X)
+loadWith expr = do
+    let mockRemote' url = do
+            liftIO . putStrLn $ "\nTesting without real HTTP support --"
+                ++ " using mock HTTP client to resolve remote import."
+            mockRemote url
+    zoom Dhall.Import.remote (State.put mockRemote')
+    Dhall.Import.loadWith expr
+
+mockRemote :: Dhall.Core.URL -> StateT Status IO Data.Text.Text
+-- Matches anything pointing to
+-- `https://raw.githubusercontent.com/dhall-lang/dhall-lang/master/`
+mockRemote (URL { authority = "raw.githubusercontent.com"
+                , path = Dhall.Core.File (Dhall.Core.Directory components) file })
+  | take 3 (reverse components) == ["dhall-lang", "dhall-lang", "master"] = do
+    let dropEnd n ls = take (length ls - n) ls
+    let localDir = dropEnd 3 components ++ ["dhall-lang"]
+
+    localPath <- Dhall.Import.localToPath Dhall.Core.Here (Dhall.Core.File (Dhall.Core.Directory localDir) file)
+    liftIO $ Data.Text.IO.readFile localPath
+
+-- Matches anything pointing to
+-- `https://test.dhall-lang.org/Bool/package.dhall`; checks that a `test` header
+-- is present and redirects to the local copy of the prelude.
+mockRemote (URL { authority = "test.dhall-lang.org"
+                , path = Dhall.Core.File (Dhall.Core.Directory components) file
+                , headers = Just headersExpr }) =
+    case Data.Foldable.find ((== "test") . fst) hs of
+        Nothing -> fail $ "(mock http) Tried to load an import from "
+                          ++"\"test.dhall-lang.org\""
+                          ++ "without setting the \"test\" header field."
+        Just (_, _) -> do
+            let localDir = components ++ ["Prelude", "dhall-lang"]
+            localPath <- Dhall.Import.localToPath Dhall.Core.Here (Dhall.Core.File (Dhall.Core.Directory localDir) file)
+            liftIO $ Data.Text.IO.readFile localPath
+  where
+    hs = Dhall.Import.toHeaders headersExpr
+
+-- Emulates `https://httpbin.org/user-agent`
+mockRemote (URL { authority = "httpbin.org"
+                , path = Dhall.Core.File (Dhall.Core.Directory []) "user-agent"
+                , headers = Just headersExpr }) =
+    case Data.Foldable.find ((== "user-agent") . fst) hs of
+        Nothing -> fail $ "(mock http) Tried to read the user agent via "
+                          ++ "\"httpbin.com/user-agent\" without supplying one "
+                          ++ "in the header!"
+        Just (_, userAgent) -> do
+            let agentText = Data.Text.Encoding.decodeUtf8 userAgent
+            return ("{\n  \"user-agent\": \"" <> agentText <> "\"\n}\n")
+  where
+    hs = Dhall.Import.toHeaders headersExpr
+
+mockRemote url = do
+    let urlString = Text.unpack (Dhall.Core.pretty url)
+    fail ("(mock http) Url does not match any of the hard-coded rules: "
+        <> urlString)
+#endif
 
 equivalent :: Text -> Text -> IO ()
 equivalent text0 text1 = do
@@ -93,7 +176,7 @@ assertDoesntTypeCheck text = do
     expr0 <- case Dhall.Parser.exprFromText mempty text of
         Left parseError -> Control.Exception.throwIO parseError
         Right e         -> return e
-    expr1 <- Dhall.Import.load expr0
+    expr1 <- load expr0
     case Dhall.TypeCheck.typeOf expr1 of
         Left _      -> return ()
         Right type_ -> fail ("Bad type for " <> Text.unpack text <> "\n  " <> show type_)
@@ -104,9 +187,9 @@ assertDoesntTypeCheck text = do
 discover :: Pattern Text -> (Text -> TestTree) -> Shell FilePath -> IO TestTree
 discover pattern buildTest paths = do
     let shell = do
-            path <- paths
+            path_ <- paths
 
-            let pathText = Turtle.format fp path
+            let pathText = Turtle.format fp path_
 
             prefix : _ <- return (Turtle.match pattern pathText)
 
