@@ -58,7 +58,7 @@ successTest path = do
         let unsetCache = Turtle.unset "XDG_CACHE_HOME"
 
         let load =
-                State.evalStateT (Import.loadWith actualExpr) (Import.emptyStatus directoryString)
+                State.evalStateT (Test.Util.loadWith actualExpr) (Import.emptyStatus directoryString)
 
         if Turtle.filename (Turtle.fromText path) == "hashFromCacheA.dhall"
             then do
@@ -81,7 +81,7 @@ failureTest path = do
         actualExpr <- Core.throws (Parser.exprFromText mempty text)
 
         Exception.catch
-          (do _ <- Import.load actualExpr
+          (do _ <- Test.Util.load actualExpr
 
               fail "Import should have failed, but it succeeds")
           (\(SourcedException _ (MissingImports _)) -> pure ()) )
