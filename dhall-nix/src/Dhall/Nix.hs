@@ -53,7 +53,7 @@
 
     Unions are Church-encoded:
 
-> $ dhall-to-nix <<< "< Left = True | Right : Natural >"
+> $ dhall-to-nix <<< "< Left : Bool | Right : Natural >.Left True"
 > { Left, Right }: Left true
 
     Also, all Dhall expressions are normalized before translation to Nix:

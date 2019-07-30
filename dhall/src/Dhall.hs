@@ -1614,10 +1614,10 @@ data Status = Queued Natural
     And assume that we have the following Dhall union that we would like to
     parse as a @Status@:
 
-> < Result = "Finish succesfully"
+> < Result : Text
 > | Queued : Natural
 > | Errored : Text
-> >
+> >.Result "Finish successfully"
 
     Our parser has type 'Type' @Status@, but we can't build that out of any
     smaller parsers, as 'Type's cannot be combined (they are only 'Functor's).
@@ -1772,10 +1772,10 @@ data Status = Queued Natural
     And assume that we have the following Dhall union that we would like to
     parse as a @Status@:
 
-> < Result = "Finish succesfully"
+> < Result : Text
 > | Queued : Natural
 > | Errored : Text
-> >
+> >.Result "Finish successfully"
 
     Our injector has type 'InputType' @Status@, but we can't build that out of any
     smaller injectors, as 'InputType's cannot be combined.
