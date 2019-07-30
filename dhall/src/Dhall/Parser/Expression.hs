@@ -312,11 +312,7 @@ parsers embedded = Parsers {..}
                 _closeBrace
                 return a ) <?> "record type or literal"
 
-            alternative05 = (do
-                _openAngle
-                a <- unionTypeOrLiteral
-                _closeAngle
-                return a ) <?> "union type or literal"
+            alternative05 = unionType
 
             alternative06 = listLiteral
 
@@ -630,30 +626,21 @@ parsers embedded = Parsers {..}
 
             nonEmptyRecordType <|> nonEmptyRecordLiteral
 
-    unionTypeOrLiteral =
-                nonEmptyUnionTypeOrLiteral
-            <|> return (Union mempty)
+    unionType = (do
+            _openAngle
 
-    nonEmptyUnionTypeOrLiteral = do
-            (f, kvs) <- loop
+            let unionTypeEntry = do
+                    a <- anyLabel
+                    b <- optional (do _colon; expression)
+                    return (a, b)
+
+            kvs <- Text.Megaparsec.sepBy unionTypeEntry _bar
+
             m <- toMap kvs
-            return (f m)
-          where
-            loop = do
-                a <- anyLabel
-                let alternative1 = do
-                        b <- optional (do _colon; expression)
 
-                        let alternative2 = do
-                                _bar
-                                (f, kvs) <- loop
-                                return (f, (a, b):kvs)
+            _closeAngle
 
-                        let alternative3 = return (Union, [(a, b)])
-
-                        alternative2 <|> alternative3
-
-                alternative1
+            return (Union m) ) <?> "union type"
 
     listLiteral = (do
             _openBracket
