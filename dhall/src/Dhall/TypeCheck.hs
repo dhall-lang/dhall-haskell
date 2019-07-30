@@ -15,10 +15,10 @@ module Dhall.TypeCheck (
 
     -- * Types
     , Typer
+    , X
     , TypeError(..)
     , DetailedTypeError(..)
     , TypeMessage(..)
-    , X
     ) where
 
 import Data.Void (Void, absurd)
