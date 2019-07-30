@@ -209,7 +209,6 @@ data Val a
   | VRecord !(Map Text (Val a))
   | VRecordLit !(Map Text (Val a))
   | VUnion !(Map Text (Maybe (Val a)))
-  | VUnionLit !Text !(Val a) !(Map Text (Maybe (Val a)))
   | VCombine !(Val a) !(Val a)
   | VCombineTypes !(Val a) !(Val a)
   | VPrefer !(Val a) !(Val a)
@@ -512,7 +511,6 @@ eval !env t =
     Record kts       -> VRecord (Dhall.Map.sort (evalE <$> kts))
     RecordLit kts    -> VRecordLit (Dhall.Map.sort (evalE <$> kts))
     Union kts        -> VUnion (Dhall.Map.sort ((evalE <$>) <$> kts))
-    UnionLit k v kts -> VUnionLit k (evalE v) (Dhall.Map.sort ((evalE <$>) <$> kts))
     Combine t u      -> vCombine (evalE t) (evalE u)
     CombineTypes t u -> vCombineTypes (evalE t) (evalE u)
     Prefer t u       -> case (evalE t, evalE u) of
@@ -522,9 +520,6 @@ eval !env t =
                              VRecordLit (Dhall.Map.sort (Dhall.Map.union m' m))
                           (t, u) -> VPrefer t u
     Merge x y ma     -> case (evalE x, evalE y, evalE <$> ma) of
-                          (VRecordLit m, VUnionLit k v _, _)
-                            | Just f <- Dhall.Map.lookup k m -> f `vApp` v
-                            | otherwise -> error errorMsg
                           (VRecordLit m, VInject _ k mt, _)
                             | Just f  <- Dhall.Map.lookup k m -> maybe f (vApp f) mt
                             | otherwise -> error errorMsg
@@ -698,8 +693,6 @@ conv !env t t' =
     (VRecord m               , VRecord m'                  ) -> eqMapsBy convE m m'
     (VRecordLit m            , VRecordLit m'               ) -> eqMapsBy convE m m'
     (VUnion m                , VUnion m'                   ) -> eqMapsBy (eqMaybeBy convE) m m'
-    (VUnionLit k v m         , VUnionLit k' v' m'          ) -> k == k' && convE v v' &&
-                                                                  eqMapsBy (eqMaybeBy convE)  m m'
     (VCombine t u            , VCombine t' u'              ) -> convE t t' && convE u u'
     (VCombineTypes t u       , VCombineTypes t' u'         ) -> convE t t' && convE u u'
     (VPrefer  t u            , VPrefer t' u'               ) -> convE t t' && convE u u'
@@ -834,7 +827,6 @@ quote !env !t =
     VRecord m                     -> Record (quoteE <$> m)
     VRecordLit m                  -> RecordLit (quoteE <$> m)
     VUnion m                      -> Union ((quoteE <$>) <$> m)
-    VUnionLit k v m               -> UnionLit k (quoteE v) ((quoteE <$>) <$> m)
     VCombine t u                  -> Combine (quoteE t) (quoteE u)
     VCombineTypes t u             -> CombineTypes (quoteE t) (quoteE u)
     VPrefer t u                   -> Prefer (quoteE t) (quoteE u)
@@ -947,7 +939,6 @@ alphaNormalize = goEnv NEmpty where
       Record kts       -> Record (go <$> kts)
       RecordLit kts    -> RecordLit (go <$> kts)
       Union kts        -> Union ((go <$>) <$> kts)
-      UnionLit k v kts -> UnionLit k (go v) ((go <$>) <$> kts)
       Combine t u      -> Combine (go t) (go u)
       CombineTypes t u -> CombineTypes  (go t) (go u)
       Prefer t u       -> Prefer (go t) (go u)

@@ -552,14 +552,6 @@ typeWithA tpa = loop
                 Dhall.Map.unorderedTraverseWithKey_ process (Dhall.Map.delete k0 kts)
 
                 return (Const c0)
-    loop ctx e@(UnionLit k v kts) = do
-        case Dhall.Map.lookup k kts of
-            Just _  -> Left (TypeError ctx e (DuplicateAlternative k))
-            Nothing -> return ()
-        t <- loop ctx v
-        let union = Union (Dhall.Map.insert k (Just (Dhall.Core.normalize t)) kts)
-        _ <- loop ctx union
-        return union
     loop ctx e@(Combine kvsX kvsY) = do
         tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
         ktsX  <- case tKvsX of
@@ -892,7 +884,6 @@ data TypeMessage s a
     | InvalidAlternativeType Text (Expr s a)
     | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
-    | DuplicateAlternative Text
     | MustCombineARecord Char (Expr s a) (Expr s a)
     | RecordMismatch Char (Expr s a) (Expr s a) Const Const
     | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
@@ -2420,32 +2411,6 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
       where
         txt0 = insert expr0
         txt1 = insert expr1
-
-prettyTypeMessage (DuplicateAlternative k) = ErrorMessages {..}
-  where
-    short = "Duplicate union alternative"
-
-    long =
-        "Explanation: Unions may not have two alternatives that share the same name      \n\
-        \                                                                                \n\
-        \For example, the following expressions are " <> _NOT <> " valid:                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────┐                                             \n\
-        \    │ < foo = True | foo : Text > │  Invalid: ❰foo❱ appears twice               \n\
-        \    └─────────────────────────────┘                                             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────────┐                                   \n\
-        \    │ < foo = 1 | bar : Bool | bar : Text > │  Invalid: ❰bar❱ appears twice     \n\
-        \    └───────────────────────────────────────┘                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You have more than one alternative named:                                       \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n"
-      where
-        txt0 = insert k
 
 prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
   where

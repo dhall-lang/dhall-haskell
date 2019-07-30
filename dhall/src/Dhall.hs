@@ -1017,8 +1017,6 @@ notEmptyRecord e = case e of
     _                 -> Just e
 extractUnionConstructor
     :: Expr s a -> Maybe (Text, Expr s a, Dhall.Map.Map Text (Maybe (Expr s a)))
-extractUnionConstructor (UnionLit fld e rest) =
-  return (fld, e, rest)
 extractUnionConstructor (App (Field (Union kts) fld) e) =
   return (fld, e, Dhall.Map.delete fld kts)
 extractUnionConstructor (Field (Union kts) fld) =

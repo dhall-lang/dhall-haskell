@@ -351,18 +351,6 @@ instance ToTerm a => ToTerm (Expr X a) where
                     Just _T₀ -> encode _T₀
 
             return (x₁, _T₁)
-    encode (UnionLit x t₀ yTs₀) =
-        TList [ TInt 12, TString x, t₁, TMap yTs₁ ]
-      where
-        t₁ = encode t₀
-
-        yTs₁ = do
-            (y₀, mT₀) <- Dhall.Map.toList (Dhall.Map.sort yTs₀)
-            let y₁  = TString y₀
-            let _T₁ = case mT₀ of
-                    Just _T₀ -> encode _T₀
-                    Nothing  -> TNull
-            return (y₁, _T₁)
     encode (BoolLit b) =
         TBool b
     encode (BoolIf t₀ l₀ r₀) =
@@ -698,21 +686,6 @@ instance FromTerm a => FromTerm (Expr s a) where
         xTs₀ <- traverse process xTs₁
 
         return (Union (Dhall.Map.fromList xTs₀))
-    decode (TList [ TInt 12, TString x, t₁, TMap yTs₁ ]) = do
-        t₀ <- decode t₁
-
-        let process (TString y, _T₁) = do
-                _T₀ <- case _T₁ of
-                    TNull -> return Nothing
-                    _     -> fmap Just (decode _T₁)
-
-                return (y, _T₀)
-            process _ =
-                empty
-
-        yTs₀ <- traverse process yTs₁
-
-        return (UnionLit x t₀ (Dhall.Map.fromList yTs₀))
     decode (TBool b) = do
         return (BoolLit b)
     decode (TList [ TInt 14, t₁, l₁, r₁ ]) = do

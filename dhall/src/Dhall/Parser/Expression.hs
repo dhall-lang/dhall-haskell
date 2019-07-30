@@ -641,17 +641,6 @@ parsers embedded = Parsers {..}
           where
             loop = do
                 a <- anyLabel
-
-                let alternative0 = do
-                        _equal
-                        b <- expression
-                        kvs <- Text.Megaparsec.many (do
-                            _bar
-                            c <- anyLabel
-                            d <- optional (do _colon; expression)
-                            return (c, d) )
-                        return (UnionLit a b, kvs)
-
                 let alternative1 = do
                         b <- optional (do _colon; expression)
 
@@ -664,7 +653,7 @@ parsers embedded = Parsers {..}
 
                         alternative2 <|> alternative3
 
-                alternative0 <|> alternative1
+                alternative1
 
     listLiteral = (do
             _openBracket

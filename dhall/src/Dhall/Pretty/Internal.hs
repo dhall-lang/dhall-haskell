@@ -855,8 +855,6 @@ prettyCharacterSet characterSet expression =
         prettyRecordLit a
     prettyPrimitiveExpression (Union a) =
         prettyUnion a
-    prettyPrimitiveExpression (UnionLit a b c) =
-        prettyUnionLit a b c
     prettyPrimitiveExpression (ListLit Nothing b) =
         list (map prettyExpression (Data.Foldable.toList b))
     prettyPrimitiveExpression (Note _ b) =
@@ -902,14 +900,6 @@ prettyCharacterSet characterSet expression =
     prettyUnion :: Pretty a => Map Text (Maybe (Expr s a)) -> Doc Ann
     prettyUnion =
         angles . map prettyAlternative . Dhall.Map.toList
-
-    prettyUnionLit
-        :: Pretty a
-        => Text -> Expr s a -> Map Text (Maybe (Expr s a)) -> Doc Ann
-    prettyUnionLit a b c =
-        angles (front : map prettyAlternative (Dhall.Map.toList c))
-      where
-        front = prettyKeyValue equals (a, b)
 
     prettyChunks :: Pretty a => Chunks s a -> Doc Ann
     prettyChunks (Chunks a b) =

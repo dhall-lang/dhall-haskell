@@ -75,7 +75,7 @@
 > $ dhall-to-json <<< "< Left = +2 | Right : Natural>"
 > 2
 > $ cat config
-> [ < Person = { age = 47, name = "John" }
+> [ < Person = { age = 47, name = "John" } -- TODO
 >   | Place  : { location : Text }
 >   >
 > , < Place  = { location = "North Pole" }
@@ -393,7 +393,6 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                 _ -> do
                     a' <- traverse loop a
                     return (Aeson.toJSON (Dhall.Map.toMap a'))
-        Core.UnionLit _ b _ -> loop b
         Core.App (Core.Field (Core.Union _) _) b -> loop b
         Core.Field (Core.Union _) k -> return (Aeson.toJSON k)
         Core.Lam _ (Core.Const Core.Type)
@@ -807,12 +806,6 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             Core.Union a'
           where
             a' = fmap (fmap loop) a
-
-        Core.UnionLit a b c ->
-            Core.UnionLit a b' c'
-          where
-            b' =            loop  b
-            c' = fmap (fmap loop) c
 
         Core.Combine a b ->
             Core.Combine a' b'
