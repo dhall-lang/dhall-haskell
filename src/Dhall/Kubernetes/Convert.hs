@@ -181,6 +181,8 @@ toDefault definitions types modelName = go
       -- If it's a sum type, we have to exclude it as we cannot mix types and values
       -- in records (we need this to have the big "defaults" record)
       (Dhall.Union _) -> Nothing
+      -- Dynamic records (i.e. List { mapKey : Text, mapValue : Text }) also don't have default
+      (Dhall.App Dhall.List _) -> Nothing
       -- Simple types should not have a default
       (Dhall.Text) -> Nothing
       -- Set lists to empty
@@ -219,7 +221,7 @@ toDefault definitions types modelName = go
 
       -- We error out here because wildcards are bad, and we should know if
       -- we get something unexpected
-      _ -> error $ show modelName
+      e -> error $ show modelName <> "\n\n" <> show e
 
     -- | The imports that we get from the types are referring to the local folder,
     --   but if we want to refer them from the defaults we need to adjust the path

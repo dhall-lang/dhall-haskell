@@ -55,7 +55,7 @@ main = do
   -- Convert to Dhall types in a Map
   let types = Convert.toTypes
         -- TODO: find a better way to deal with this cyclic import
-        $ Data.Map.adjust patchCyclicImports
+         $ Data.Map.adjust patchCyclicImports
             (ModelName "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1beta1.JSONSchemaProps")
             definitions
 

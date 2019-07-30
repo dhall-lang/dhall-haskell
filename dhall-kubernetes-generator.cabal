@@ -23,7 +23,7 @@ executable dhall-kubernetes-generator
     base          >= 4.8.2.0   && < 5    ,
     aeson         >= 1.0.0.0   && < 1.5  ,
     containers    >= 0.5.0.0   && < 0.7  ,
-    dhall         >= 1.22.0    && < 1.23 ,
+    dhall         >= 1.22.0    && < 1.25 ,
     prettyprinter >= 1.2.0.1   && < 1.3  ,
     text          >= 0.11.1.0  && < 1.3  ,
     turtle        >= 1.5.0     && < 1.6  ,

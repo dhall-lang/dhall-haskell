@@ -1,6 +1,6 @@
-resolver: lts-13.04
+resolver: lts-13.27
 packages:
 - .
 extra-deps:
-- dhall-1.22.0
-- dhall-json-1.2.8
+- dhall-1.24.0
+- dhall-json-1.3.0
