@@ -10,8 +10,6 @@
 module Dhall.Binary
     ( -- * Standard versions
       StandardVersion(..)
-    , defaultStandardVersion
-    , parseStandardVersion
     , renderStandardVersion
 
     -- * Encoding and decoding
@@ -49,7 +47,6 @@ import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Options.Applicative (Parser)
 import Prelude hiding (exponent)
 import GHC.Float (double2Float, float2Double)
 
@@ -61,7 +58,6 @@ import qualified Data.Sequence
 import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Set
-import qualified Options.Applicative
 
 -- | Supported version strings
 data StandardVersion
@@ -78,29 +74,6 @@ data StandardVersion
     | V_1_0_0
     -- ^ Version "1.0.0"
     deriving (Enum, Bounded)
-
-defaultStandardVersion :: StandardVersion
-defaultStandardVersion = NoVersion
-
-parseStandardVersion :: Parser StandardVersion
-parseStandardVersion =
-    Options.Applicative.option readVersion
-        (   Options.Applicative.long "standard-version"
-        <>  Options.Applicative.metavar "X.Y.Z"
-        <>  Options.Applicative.help "The standard version to use"
-        <>  Options.Applicative.value defaultStandardVersion
-        )
-  where
-    readVersion = do
-        string <- Options.Applicative.str
-        case string :: Text of
-            "none"  -> return NoVersion
-            "1.0.0" -> return V_1_0_0
-            "2.0.0" -> return V_2_0_0
-            "3.0.0" -> return V_3_0_0
-            "4.0.0" -> return V_4_0_0
-            "5.0.0" -> return V_5_0_0
-            _       -> fail "Unsupported version"
 
 renderStandardVersion :: StandardVersion -> Text
 renderStandardVersion NoVersion = "none"
