@@ -86,7 +86,7 @@ parseStandardVersion :: Parser StandardVersion
 parseStandardVersion =
     Options.Applicative.option readVersion
         (   Options.Applicative.long "standard-version"
-        <>  Options.Applicative.metavar "Void.Y.Z"
+        <>  Options.Applicative.metavar "X.Y.Z"
         <>  Options.Applicative.help "The standard version to use"
         <>  Options.Applicative.value defaultStandardVersion
         )
