@@ -81,6 +81,7 @@ import Dhall.Core (
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import GHC.Natural (Natural)
+import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Data.Char
 import qualified Data.List.NonEmpty
@@ -99,7 +100,7 @@ data Env a =
   | Extend !(Env a) {-# unpack #-} !Text (Val a)
 
 coeExprVoid :: Expr Void a -> Expr s a
-coeExprVoid = first absurd
+coeExprVoid = unsafeCoerce
 {-# inline coeExprVoid #-}
 
 errorMsg :: String
