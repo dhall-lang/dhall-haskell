@@ -558,10 +558,6 @@ typeWithA tpa = loop
             Const constY -> return constY
             _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
 
-        if constX == constY
-            then return ()
-            else Left (TypeError ctx e (RecordMismatch '∧' kvsX kvsY constX constY))
-
         let combineTypes ktsL ktsR = do
                 let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
                     combine k _ _ = Left (TypeError ctx e (FieldCollision k))
