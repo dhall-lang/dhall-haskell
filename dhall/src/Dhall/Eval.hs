@@ -58,13 +58,12 @@ module Dhall.Eval (
 import Control.Applicative (Applicative(..), (<$>))
 #endif
 
-import Data.Bifunctor (first)
 import Data.Foldable (foldr', foldl', toList)
 import Data.List.NonEmpty (NonEmpty(..), cons)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
 import Data.Text (Text)
-import Data.Void (Void, absurd)
+import Data.Void (Void)
 
 import Dhall.Core (
     Expr(..)
