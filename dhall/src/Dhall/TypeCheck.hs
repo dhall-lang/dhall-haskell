@@ -579,15 +579,7 @@ typeWithA tpa = loop
         cR <- case tR of
             Const cR -> return cR
             _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
-        let decide Type Type =
-                return Type
-            decide Kind Kind =
-                return Kind
-            decide Sort Sort =
-                return Sort
-            decide x y =
-                Left (TypeError ctx e (RecordTypeMismatch x y l r))
-        c <- decide cL cR
+        let c = max cL cR
 
         ktsL0 <- case l' of
             Record kts -> return kts
