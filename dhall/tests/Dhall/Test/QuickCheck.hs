@@ -234,7 +234,6 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                 , ( 1, lift1 Record)
                 , ( 7, lift1 RecordLit)
                 , ( 1, lift1 Union)
-                , ( 1, lift3 UnionLit)
                 , ( 7, lift2 Combine)
                 , ( 1, lift2 CombineTypes)
                 , ( 7, lift2 Prefer)
