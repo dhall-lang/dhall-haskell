@@ -553,12 +553,12 @@ typeWithA tpa = loop
             _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
 
         ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
-        constX <- case ttKvsX of
+        _      <- case ttKvsX of
             Const constX -> return constX
             _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
 
         ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
-        constY <- case ttKvsY of
+        _      <- case ttKvsY of
             Const constY -> return constY
             _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
 
@@ -616,12 +616,12 @@ typeWithA tpa = loop
             _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
 
         ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
-        constX <- case ttKvsX of
+        _      <- case ttKvsX of
             Const constX -> return constX
             _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
 
         ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
-        constY <- case ttKvsY of
+        _      <- case ttKvsY of
             Const constY -> return constY
             _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
 
