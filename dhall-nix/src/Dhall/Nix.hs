@@ -53,7 +53,7 @@
 
     Unions are Church-encoded:
 
-> $ dhall-to-nix <<< "< Left = True | Right : Natural >"
+> $ dhall-to-nix <<< "< Left : Bool | Right : Natural >.Left True"
 > { Left, Right }: Left true
 
     Also, all Dhall expressions are normalized before translation to Nix:
@@ -444,13 +444,6 @@ dhallToNix e = loop (Dhall.Core.normalize e)
                 return (NamedVar [StaticKey k] v Nix.nullPos)
         return (Fix (NSet a''))
     loop (Union _) = return (Fix (NSet []))
-    loop (UnionLit k v kts) = do
-        v' <- loop v
-        let e0 = do
-                k' <- k : Dhall.Map.keys kts
-                return (k', Nothing)
-        let e2 = Fix (NBinary NApp (Fix (NSym k)) v')
-        return (Fix (NAbs (ParamSet e0 False Nothing) e2))
     loop (Combine a b) = do
         a' <- loop a
         b' <- loop b

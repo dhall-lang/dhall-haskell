@@ -6,8 +6,7 @@
     , separator =
         Some "┃"
     , alignment =
-          < ToTheLeft = {=} | ToTheRight : {} | Centered : {} >
-        : ./Alignment.dhall
+        < ToTheLeft | ToTheRight | Centered >.ToTheLeft : ./Alignment.dhall
     , barWidth =
         None Natural
     , barSegments =

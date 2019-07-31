@@ -11,7 +11,6 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import Data.Semigroup ((<>))
 import Data.Text.Prettyprint.Doc (Pretty(..))
-import Dhall.Binary (StandardVersion(..))
 import Dhall.Context (Context)
 import Dhall.Core
   ( Directory (..)
@@ -30,7 +29,6 @@ import Dhall.TypeCheck (X)
 import Lens.Family (LensLike')
 import System.FilePath (isRelative, splitDirectories)
 
-import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Data.Map      as Map
 import qualified Data.Text
@@ -71,8 +69,6 @@ data Status = Status
     , _remote :: URL -> StateT Status IO Data.Text.Text
     -- ^ The remote resolver, fetches the content at the given URL.
 
-    , _standardVersion :: StandardVersion
-
     , _normalizer :: Maybe (ReifiedNormalizer X)
 
     , _startingContext :: Context (Expr Src X)
@@ -90,8 +86,6 @@ emptyStatusWith _remote rootDirectory = Status {..}
     _cache = Map.empty
 
     _manager = Nothing
-
-    _standardVersion = Dhall.Binary.defaultStandardVersion
 
     _normalizer = Nothing
 
@@ -125,10 +119,6 @@ cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
 remote :: Functor f => LensLike' f Status (URL -> StateT Status IO Data.Text.Text)
 remote k s = fmap (\x -> s { _remote = x }) (k (_remote s))
-
-standardVersion :: Functor f => LensLike' f Status StandardVersion
-standardVersion k s =
-    fmap (\x -> s { _standardVersion = x }) (k (_standardVersion s))
 
 normalizer :: Functor f => LensLike' f Status (Maybe (ReifiedNormalizer X))
 normalizer k s = fmap (\x -> s {_normalizer = x}) (k (_normalizer s))

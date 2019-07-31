@@ -470,8 +470,6 @@ data Expr s a
     | RecordLit (Map Text (Expr s a))
     -- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
     | Union     (Map Text (Maybe (Expr s a)))
-    -- | > UnionLit k v [(k1, Just t1), (k2, Nothing)] ~  < k = v | k1 : t1 | k2 >
-    | UnionLit Text (Expr s a) (Map Text (Maybe (Expr s a)))
     -- | > Combine x y                              ~  x ∧ y
     | Combine (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
@@ -561,7 +559,6 @@ instance Functor (Expr s) where
   fmap f (Record r) = Record (fmap (fmap f) r)
   fmap f (RecordLit r) = RecordLit (fmap (fmap f) r)
   fmap f (Union u) = Union (fmap (fmap (fmap f)) u)
-  fmap f (UnionLit v e u) = UnionLit v (fmap f e) (fmap (fmap (fmap f)) u)
   fmap f (Combine e1 e2) = Combine (fmap f e1) (fmap f e2)
   fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
   fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
@@ -639,7 +636,6 @@ instance Monad (Expr s) where
     Record    a          >>= k = Record (fmap (>>= k) a)
     RecordLit a          >>= k = RecordLit (fmap (>>= k) a)
     Union     a          >>= k = Union (fmap (fmap (>>= k)) a)
-    UnionLit a b c       >>= k = UnionLit a (b >>= k) (fmap (fmap (>>= k)) c)
     Combine a b          >>= k = Combine (a >>= k) (b >>= k)
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
     Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
@@ -707,7 +703,6 @@ instance Bifunctor Expr where
     first k (Record a            ) = Record (fmap (first k) a)
     first k (RecordLit a         ) = RecordLit (fmap (first k) a)
     first k (Union a             ) = Union (fmap (fmap (first k)) a)
-    first k (UnionLit a b c      ) = UnionLit a (first k b) (fmap (fmap (first k)) c)
     first k (Combine a b         ) = Combine (first k a) (first k b)
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
     first k (Prefer a b          ) = Prefer (first k a) (first k b)
@@ -968,10 +963,6 @@ shift d v (RecordLit a) = RecordLit a'
 shift d v (Union a) = Union a'
   where
     a' = fmap (fmap (shift d v)) a
-shift d v (UnionLit a b c) = UnionLit a b' c'
-  where
-    b' =             shift d v   b
-    c' = fmap (fmap (shift d v)) c
 shift d v (Combine a b) = Combine a' b'
   where
     a' = shift d v a
@@ -1148,10 +1139,6 @@ subst x e (RecordLit kvs) = RecordLit kvs'
 subst x e (Union kts) = Union kts'
   where
     kts' = fmap (fmap (subst x e)) kts
-subst x e (UnionLit a b kts) = UnionLit a b' kts'
-  where
-    b'   =             subst x e   b
-    kts' = fmap (fmap (subst x e)) kts
 subst x e (Combine a b) = Combine a' b'
   where
     a' = subst x e a
@@ -1302,7 +1289,6 @@ denote  OptionalBuild         = OptionalBuild
 denote (Record a            ) = Record (fmap denote a)
 denote (RecordLit a         ) = RecordLit (fmap denote a)
 denote (Union a             ) = Union (fmap (fmap denote) a)
-denote (UnionLit a b c      ) = UnionLit a (denote b) (fmap (fmap denote) c)
 denote (Combine a b         ) = Combine (denote a) (denote b)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
 denote (Prefer a b          ) = Prefer (denote a) (denote b)
@@ -1656,10 +1642,6 @@ normalizeWithM ctx e0 = loop (denote e0)
     Union kts -> Union . Dhall.Map.sort <$> kts'
       where
         kts' = traverse (traverse loop) kts
-    UnionLit k v kvs -> UnionLit k <$> v' <*> (Dhall.Map.sort <$> kvs')
-      where
-        v'   =                    loop  v
-        kvs' = traverse (traverse loop) kvs
     Combine x y -> decide <$> loop x <*> loop y
       where
         decide (RecordLit m) r | Data.Foldable.null m =
@@ -1696,10 +1678,6 @@ normalizeWithM ctx e0 = loop (denote e0)
         case x' of
             RecordLit kvsX ->
                 case y' of
-                    UnionLit kY vY _ ->
-                        case Dhall.Map.lookup kY kvsX of
-                            Just vX -> loop (App vX vY)
-                            Nothing -> Merge x' y' <$> t'
                     Field (Union ktsY) kY ->
                         case Dhall.Map.lookup kY ktsY of
                             Just Nothing ->
@@ -1749,8 +1727,17 @@ normalizeWithM ctx e0 = loop (denote e0)
         case r' of
             RecordLit kvs ->
                 case Dhall.Map.lookup x kvs of
-                    Just v  -> loop v
+                    Just v  -> pure v
                     Nothing -> Field <$> (RecordLit <$> traverse loop kvs) <*> pure x
+            Project r_ _ -> loop (Field r_ x)
+            Prefer l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+                Just v -> pure v
+                Nothing -> loop (Field l x)
+            Prefer (RecordLit kvs) r_ | not (Dhall.Map.member x kvs) -> loop (Field r_ x)
+            Combine l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+                Just v -> pure (Field (Combine l (RecordLit (Dhall.Map.singleton x v))) x)
+                Nothing -> loop (Field l x)
+            Combine (RecordLit kvs) r_ | not (Dhall.Map.member x kvs) -> loop (Field r_ x)
             _ -> pure (Field r' x)
     Project r (Left xs)-> do
         r' <- loop r
@@ -1964,7 +1951,6 @@ isNormalized e0 = loop (denote e0)
       Record kts -> Dhall.Map.isSorted kts && all loop kts
       RecordLit kvs -> Dhall.Map.isSorted kvs && all loop kvs
       Union kts -> Dhall.Map.isSorted kts && all (all loop) kts
-      UnionLit _ v kvs -> loop v && Dhall.Map.isSorted kvs && all (all loop) kvs
       Combine x y -> loop x && loop y && decide x y
         where
           decide (RecordLit m) _ | Data.Foldable.null m = False
@@ -1983,21 +1969,17 @@ isNormalized e0 = loop (denote e0)
           decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
           decide  _ _ = True
-      Merge x y t -> loop x && loop y && all loop t &&
-          case x of
-              RecordLit kvsX ->
-                  case y of
-                      UnionLit kY _  _ ->
-                          case Dhall.Map.lookup kY kvsX of
-                              Just _  -> False
-                              Nothing -> True
-                      _ -> True
-              _ -> True
+      Merge x y t -> loop x && loop y && all loop t
       ToMap x t -> case x of
           RecordLit _ -> False
           _ -> loop x && all loop t
-      Field r _ -> case r of
+      Field r k -> case r of
           RecordLit _ -> False
+          Project _ _ -> False
+          Combine x@(RecordLit m) y -> loop x && loop y && Dhall.Map.member k m
+          Combine x (RecordLit m) -> loop x && Dhall.Map.toList (fmap loop m) == [(k, True)]
+          Prefer x@(RecordLit m) y -> loop x && loop y && Dhall.Map.member k m
+          Prefer _ (RecordLit _) -> False
           _ -> loop r
       Project r p -> loop r &&
           case p of
@@ -2167,8 +2149,6 @@ subExpressions _ OptionalBuild = pure OptionalBuild
 subExpressions f (Record a) = Record <$> traverse f a
 subExpressions f ( RecordLit a ) = RecordLit <$> traverse f a
 subExpressions f (Union a) = Union <$> traverse (traverse f) a
-subExpressions f (UnionLit a b c) =
-    UnionLit a <$> f b <*> traverse (traverse f) c
 subExpressions f (Combine a b) = Combine <$> f a <*> f b
 subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
 subExpressions f (Prefer a b) = Prefer <$> f a <*> f b

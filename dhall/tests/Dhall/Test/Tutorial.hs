@@ -33,7 +33,6 @@ tests =
         , Test.Tasty.testGroup "Unions"
             [ example 0 "./tests/tutorial/unions0A.dhall" "./tests/tutorial/unions0B.dhall"
             , example 1 "./tests/tutorial/unions1A.dhall" "./tests/tutorial/unions1B.dhall"
-            , example 2 "./tests/tutorial/unions2A.dhall" "./tests/tutorial/unions2B.dhall"
             , example 3 "./tests/tutorial/unions3A.dhall" "./tests/tutorial/unions3B.dhall"
             , example 4 "./tests/tutorial/unions4A.dhall" "./tests/tutorial/unions4B.dhall"
             ]

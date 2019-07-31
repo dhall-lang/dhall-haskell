@@ -72,22 +72,17 @@
 
     Dhall unions translate to the wrapped value:
 
-> $ dhall-to-json <<< "< Left = +2 | Right : Natural>"
+> $ dhall-to-json <<< "< Left : Natural | Right : Natural>.Left 2"
 > 2
 > $ cat config
-> [ < Person = { age = 47, name = "John" }
->   | Place  : { location : Text }
->   >
-> , < Place  = { location = "North Pole" }
->   | Person : { age : Natural, name : Text }
->   >
-> , < Place  = { location = "Sahara Desert" }
->   | Person : { age : Natural, name : Text }
->   >
-> , < Person = { age = 35, name = "Alice" }
->   | Place  : { location : Text }
->   >
-> ]
+> let MyType =
+>       < Person : { age : Natural, name : Text } | Place : { location : Text } >
+>
+> in  [ MyType.Person { age = 47, name = "John" }
+>     , MyType.Place { location = "North Pole" }
+>     , MyType.Place { location = "Sahara Desert" }
+>     , MyType.Person { age = 35, name = "Alice" }
+>     ]
 > $ dhall-to-json <<< "./config"
 > [{"age":47,"name":"John"},{"location":"North Pole"},{"location":"Sahara Desert"},{"age":35,"name":"Alice"}]
 
@@ -107,10 +102,10 @@
 
 > let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
 > 
-> let Nesting = < Inline : {} | Nested : Text >
+> let Nesting = < Inline | Nested : Text >
 > 
 > in  { field    = "name"
->     , nesting  = Nesting.Inline {=}
+>     , nesting  = Nesting.Inline
 >     , contents = Example.Left { foo = 2 }
 >     }
 
@@ -393,7 +388,6 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                 _ -> do
                     a' <- traverse loop a
                     return (Aeson.toJSON (Dhall.Map.toMap a'))
-        Core.UnionLit _ b _ -> loop b
         Core.App (Core.Field (Core.Union _) _) b -> loop b
         Core.Field (Core.Union _) k -> return (Aeson.toJSON k)
         Core.Lam _ (Core.Const Core.Type)
@@ -810,12 +804,6 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             Core.Union a'
           where
             a' = fmap (fmap loop) a
-
-        Core.UnionLit a b c ->
-            Core.UnionLit a b' c'
-          where
-            b' =            loop  b
-            c' = fmap (fmap loop) c
 
         Core.Combine a b ->
             Core.Combine a' b'
