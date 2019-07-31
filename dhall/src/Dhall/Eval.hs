@@ -298,6 +298,28 @@ vNaturalPlus t u = case (t, u) of
   (t,             u            ) -> VNaturalPlus t u
 {-# inline vNaturalPlus #-}
 
+vField :: Val a -> Text -> Val a
+vField t0 k = go t0 where
+  go = \case
+    VUnion m -> case Dhall.Map.lookup k m of
+      Just (Just _) -> VPrim $ \ ~u -> VInject m k (Just u)
+      Just Nothing  -> VInject m k Nothing
+      _             -> error errorMsg
+    VRecordLit m
+      | Just v <- Dhall.Map.lookup k m -> v
+      | otherwise -> error errorMsg
+    VProject t _ -> go t
+    VPrefer l (VRecordLit m) -> case Dhall.Map.lookup k m of
+      Just v -> v
+      Nothing -> go l
+    VPrefer (VRecordLit m) r | not (Dhall.Map.member k m) -> go r
+    VCombine l (VRecordLit m) -> case Dhall.Map.lookup k m of
+      Just v -> VField (VCombine l (VRecordLit (Dhall.Map.singleton k v))) k
+      Nothing -> go l
+    VCombine (VRecordLit m) r | not (Dhall.Map.member k m) -> go r
+    t -> VField t k
+{-# inline vField #-}
+
 eval :: forall a. Eq a => Env a -> Expr Void a -> Val a
 eval !env t =
   let
@@ -534,15 +556,7 @@ eval !env t =
                             s = (Data.Sequence.fromList . map entry . Dhall.Map.toList) m
                             in VListLit Nothing s
                           (x, ma) -> VToMap x ma
-    Field t k        -> case evalE t of
-                          VRecordLit m
-                            | Just v <- Dhall.Map.lookup k m -> v
-                            | otherwise -> error errorMsg
-                          VUnion m -> case Dhall.Map.lookup k m of
-                            Just (Just _) -> VPrim $ \ ~u -> VInject m k (Just u)
-                            Just Nothing  -> VInject m k Nothing
-                            _             -> error errorMsg
-                          t -> VField t k
+    Field t k        -> vField (evalE t) k
     Project t (Left ks) ->
                         if null ks then
                           VRecordLit mempty
