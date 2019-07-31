@@ -497,6 +497,17 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- loop a
         b' <- loop b
         return (Fix (NBinary NApp b' a'))
+    loop (ToMap a _) = do
+        a' <- loop a
+        let ks = Fix (NBinary NApp "builtins.attrNames" "kvs")
+        let v = Fix (NBinary NApp (Fix (NBinary NApp "builtins.getAttr" "k")) "kvs")
+        let setBindings =
+                [ NamedVar [StaticKey "mapKey"] "k" Nix.nullPos
+                , NamedVar [StaticKey "mapValue"] v Nix.nullPos
+                ]
+        let map_ = Fix (NBinary NApp "map" (Fix (NAbs "k" (Fix (NSet setBindings)))))
+        let toMap = Fix (NAbs "kvs" (Fix (NBinary NApp map_ ks)))
+        return (Fix (NBinary NApp toMap a'))
     loop (Prefer a b) = do
         a' <- loop a
         b' <- loop b
