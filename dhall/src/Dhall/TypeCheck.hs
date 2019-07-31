@@ -720,6 +720,11 @@ typeWithA tpa = loop
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustMapARecord kvsX tKvsX))
 
+        ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
+        _ <- case ttKvsX of
+            Const Type -> return ()
+            _          -> Left (TypeError ctx e (MustMapARecord kvsX tKvsX))
+
         Data.Foldable.traverse_ (loop ctx) mT₁
 
         let ktX = appEndo (foldMap (Endo . compareFieldTypes) ktsX) Nothing
