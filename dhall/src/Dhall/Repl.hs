@@ -23,11 +23,9 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe ( mapMaybe )
 import Data.Semigroup ((<>))
 import Data.Text ( Text )
-import Dhall.Binary (StandardVersion(..))
 import Dhall.Context (Context)
-import Dhall.Import (hashExpressionToCode, standardVersion)
+import Dhall.Import (hashExpressionToCode)
 import Dhall.Pretty (CharacterSet(..))
-import Lens.Family (set)
 import System.Console.Haskeline (Interrupt(..))
 import System.Console.Haskeline.Completion ( Completion, simpleCompletion )
 import System.Directory ( getDirectoryContents )
@@ -41,7 +39,6 @@ import qualified Data.Text.IO as Text.IO
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
 import qualified Dhall
-import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize )
@@ -60,8 +57,8 @@ import qualified System.IO
 type Repl = Repline.HaskelineT (State.StateT Env IO)
 
 -- | Implementation of the @dhall repl@ subcommand
-repl :: CharacterSet -> Bool -> StandardVersion -> IO ()
-repl characterSet explain _standardVersion =
+repl :: CharacterSet -> Bool -> IO ()
+repl characterSet explain =
     if explain then Dhall.detailed io else io
   where
     io =
@@ -74,7 +71,7 @@ repl characterSet explain _standardVersion =
             completer
             greeter
         )
-        (emptyEnv { characterSet, explain, _standardVersion })
+        (emptyEnv { characterSet, explain })
 
 
 data Env = Env
@@ -82,7 +79,6 @@ data Env = Env
   , envIt            :: Maybe Binding
   , explain          :: Bool
   , characterSet     :: CharacterSet
-  , _standardVersion :: StandardVersion
   , outputHandle     :: Maybe System.IO.Handle
   }
 
@@ -93,7 +89,6 @@ emptyEnv =
     { envBindings = Dhall.Context.empty
     , envIt = Nothing
     , explain = False
-    , _standardVersion = Dhall.Binary.defaultStandardVersion
     , characterSet = Unicode
     , outputHandle = Just System.IO.stdout
     }
@@ -116,12 +111,8 @@ envToContext Env{ envBindings, envIt } =
 
 
 parseAndLoad
-  :: ( MonadIO m, MonadState Env m )
-  => String -> m ( Dhall.Expr Dhall.Src Dhall.X )
+  :: MonadIO m => String -> m ( Dhall.Expr Dhall.Src Dhall.X )
 parseAndLoad src = do
-  env <-
-    get
-
   parsed <-
     case Dhall.exprFromText "(stdin)" ( Text.pack src ) of
       Left e ->
@@ -130,8 +121,7 @@ parseAndLoad src = do
       Right a ->
         return a
 
-  let status =
-        set standardVersion (_standardVersion env) (Dhall.emptyStatus ".")
+  let status = Dhall.emptyStatus "."
 
   liftIO ( State.evalStateT (Dhall.loadWith parsed) status )
 
@@ -267,9 +257,7 @@ hashBinding tokens = do
 
   normalizedExpression <- normalize loadedExpression
 
-  Env{_standardVersion} <- get
-
-  writeOutputHandle $ hashExpressionToCode _standardVersion normalizedExpression
+  writeOutputHandle $ hashExpressionToCode normalizedExpression
 
 saveFilePrefix :: FilePath
 saveFilePrefix = ".dhall-repl"
