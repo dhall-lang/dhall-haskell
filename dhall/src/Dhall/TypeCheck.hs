@@ -621,10 +621,6 @@ typeWithA tpa = loop
             Const constY -> return constY
             _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
 
-        if constX == constY
-            then return ()
-            else Left (TypeError ctx e (RecordMismatch '⫽' kvsX kvsY constX constY))
-
         return (Record (Dhall.Map.union ktsY ktsX))
     loop ctx e@(Merge kvsX kvsY mT₁) = do
         tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
