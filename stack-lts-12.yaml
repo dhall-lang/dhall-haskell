@@ -4,7 +4,6 @@ packages:
   - dhall-bash
   - dhall-json
   - dhall-lsp-server
-  - dhall-nix
 extra-deps:
   - megaparsec-7.0.4
   - repline-0.2.1.0
@@ -20,16 +19,6 @@ extra-deps:
   - yaml-0.10.4.0
   - th-lift-instances-0.1.13@sha256:2852e468511805cb25d9e3923c9e91647d008ab4a764ec0921e5e40ff8a8e874,2625
   - th-lift-0.8.0.1@sha256:cceb81b12c0580e02a7a3898b6d60cca5e1be080741f69ddde4f12210d8ba7ca,1960
-  - hnix-0.6.1@sha256:13da97c09489ccf0b908fbe7817401137559eebc377c00cd7b8a66b77e8c251b,24519
-  - contravariant-1.5.2@sha256:853259271870000c007a281f0bf0bf6e1aaa97c5fd5cd5734d7b0d79b9de2af5,2761
-  - free-5.1.1@sha256:a1590b7a418b1d7716487d4cc942f5305447806c8e21efd0730499ce4aebdf6d,4116
-  - hnix-store-core-0.1.0.0@sha256:719a261870367b3ce2e2e8d11502e7170faa664109a14486b95b555bc3672807,2541
-  - parser-combinators-1.0.3@sha256:275aa39a14263f96bc8e0069041cf0f4782d7c7fe177ea733a2d353ec9c503bc,1856
-  - pretty-show-1.9.5@sha256:92aa3f43d8459a9b543e102fbb0b7a6aae0074e18ca6a9970d9922a867114f53,1963
-  - ref-tf-0.4.0.1@sha256:369e5c6237e4b6fe330fde021b94a9f98971690cbec5b910faa9af3cbcb15610,1133
-  - aeson-1.4.4.0@sha256:c70d78f78efb1d766f1c5b594c9eadcc1bc9587d83e5a50714b9a91105fb2ca4,6963
-  - time-compat-1.9.2.2@sha256:9998dc1b77b5067572ab708e94750f1061152f342e92ad1aba38aae63581174d,4209
-  - base-orphans-0.8.1@sha256:defd0057b5db93257528d89b5b01a0fee9738e878c121c686948ac4aa5dded63,2927
 flags:
   transformers-compat:
     five-three: true
