@@ -311,15 +311,21 @@ vField t0 k = go t0 where
       | Just v <- Dhall.Map.lookup k m -> v
       | otherwise -> error errorMsg
     VProject t _ -> go t
+    VPrefer (VRecordLit m) r -> case Dhall.Map.lookup k m of
+      Just v -> VField (VPrefer (singletonVRecordLit v) r) k
+      Nothing -> go r
     VPrefer l (VRecordLit m) -> case Dhall.Map.lookup k m of
       Just v -> v
       Nothing -> go l
-    VPrefer (VRecordLit m) r | not (Dhall.Map.member k m) -> go r
+    VCombine (VRecordLit m) r -> case Dhall.Map.lookup k m of
+      Just v -> VField (VCombine (singletonVRecordLit v) r) k
+      Nothing -> go r
     VCombine l (VRecordLit m) -> case Dhall.Map.lookup k m of
-      Just v -> VField (VCombine l (VRecordLit (Dhall.Map.singleton k v))) k
+      Just v -> VField (VCombine l (singletonVRecordLit v)) k
       Nothing -> go l
-    VCombine (VRecordLit m) r | not (Dhall.Map.member k m) -> go r
     t -> VField t k
+
+  singletonVRecordLit v = VRecordLit (Dhall.Map.singleton k v)
 {-# inline vField #-}
 
 eval :: forall a. Eq a => Env a -> Expr Void a -> Val a
