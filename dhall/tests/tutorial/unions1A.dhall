@@ -1,1 +1,1 @@
-./process.dhall < Right = True | Left : Natural >
+./process.dhall ((./Union.dhall).Right True)
