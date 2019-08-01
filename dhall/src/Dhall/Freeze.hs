@@ -18,13 +18,10 @@ import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Data.Maybe (fromMaybe)
 import Data.Text
-import Dhall.Binary (StandardVersion(..))
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
-import Dhall.Import (standardVersion)
 import Dhall.Parser (exprAndHeaderFromText, Src)
 import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
 import Dhall.TypeCheck (X)
-import Lens.Family (set)
 import System.Console.ANSI (hSupportsANSI)
 
 import qualified Control.Exception
@@ -43,10 +40,9 @@ import qualified System.IO
 freezeImport
     :: FilePath
     -- ^ Current working directory
-    -> StandardVersion
     -> Import
     -> IO Import
-freezeImport directory _standardVersion import_ = do
+freezeImport directory import_ = do
     let unprotectedImport =
             import_
                 { importHashed =
@@ -55,10 +51,7 @@ freezeImport directory _standardVersion import_ = do
                         }
                 }
 
-    let status =
-            set standardVersion
-                _standardVersion
-                (Dhall.Import.emptyStatus directory)
+    let status = Dhall.Import.emptyStatus directory
 
     let download =
             State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
@@ -80,7 +73,7 @@ freezeImport directory _standardVersion import_ = do
     -- make sure the frozen import is present in the semantic cache
     Dhall.Import.writeExpressionToSemanticCache expression
 
-    let expressionHash = Dhall.Import.hashExpression _standardVersion normalizedExpression
+    let expressionHash = Dhall.Import.hashExpression normalizedExpression
 
     let newImportHashed = (importHashed import_) { hash = Just expressionHash }
 
@@ -92,12 +85,11 @@ freezeImport directory _standardVersion import_ = do
 freezeRemoteImport
     :: FilePath
     -- ^ Current working directory
-    -> StandardVersion
     -> Import
     -> IO Import
-freezeRemoteImport directory _standardVersion import_ = do
+freezeRemoteImport directory import_ = do
     case importType (importHashed import_) of
-        Remote {} -> freezeImport directory _standardVersion import_
+        Remote {} -> freezeImport directory import_
         _         -> return import_
 
 writeExpr :: Maybe FilePath -> (Text, Expr s Import) -> CharacterSet -> IO ()
@@ -147,9 +139,8 @@ freeze
     -> Scope
     -> Intent
     -> CharacterSet
-    -> StandardVersion
     -> IO ()
-freeze inplace scope intent characterSet _standardVersion = do
+freeze inplace scope intent characterSet = do
     (text, directory) <- case inplace of
         Nothing -> do
             text <- Data.Text.IO.getContents
@@ -168,7 +159,7 @@ freeze inplace scope intent characterSet _standardVersion = do
                 AllImports        -> freezeImport
                 OnlyRemoteImports -> freezeRemoteImport
 
-    let freezeFunction = freezeScope directory _standardVersion
+    let freezeFunction = freezeScope directory
 
     let cache
             (ImportAlt

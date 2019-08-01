@@ -29,7 +29,7 @@ tests :: TestTree
 tests =
     testGroup "Input"
      [ shouldShowDetailedTypeError
-     , shouldHandleBothUnionLiterals
+     , shouldHandleUnionLiteral
      , shouldHaveWorkingGenericAuto
      , shouldHandleUnionsCorrectly
      , shouldTreatAConstructorStoringUnitAsEmptyAlternative
@@ -75,13 +75,12 @@ shouldShowDetailedTypeError = testCase "detailed TypeError" $ do
     Right _ -> fail "The extraction using a wrong type succeded"
 
 -- https://github.com/dhall-lang/dhall-haskell/issues/915
-shouldHandleBothUnionLiterals :: TestTree
-shouldHandleBothUnionLiterals = testCase "Marshal union literals" $ do
+shouldHandleUnionLiteral :: TestTree
+shouldHandleUnionLiteral = testCase "Marshal union literals" $ do
     let example :: Dhall.Type Bool
         example = Dhall.union (Dhall.constructor "Test" Dhall.bool)
 
     _ <- Dhall.input example "< Test : Bool >.Test True"
-    _ <- Dhall.input example "< Test = True >"
 
     return ()
 
@@ -145,13 +144,6 @@ shouldHandleUnionsCorrectly =
     , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N2 { _1 = \"ABC\" }"
         `shouldMarshalInto` N2 "ABC"
 
-    , "< N0 = { _1 = True } | N1 : { _1 : Natural } | N2 : { _1 : Text } >"
-        `shouldMarshalInto` N0 True
-    , "< N0 : { _1 : Bool } | N1 = { _1 = 5 } | N2 : { _1 : Text } >"
-        `shouldMarshalInto` N1 5
-    , "< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 = { _1 = \"ABC\" } >"
-        `shouldMarshalInto` N2 "ABC"
-
     , "(< E0 | E1 | E2>).E0" `shouldMarshalInto` E0
     , "(< E0 | E1 | E2>).E1" `shouldMarshalInto` E1
     , "(< E0 | E1 | E2>).E2" `shouldMarshalInto` E2
@@ -162,9 +154,6 @@ shouldHandleUnionsCorrectly =
         `shouldMarshalInto` M1
     , "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M2 { _1 = {=} }"
         `shouldMarshalInto` M2 ()
-
-    , "< M0 = { _1 = True } | M1 | M2 : { _1 : {} } >"
-        `shouldMarshalInto` M0 True
 
     , N0 True
         `shouldInjectInto`

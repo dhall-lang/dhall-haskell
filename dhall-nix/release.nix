@@ -199,7 +199,7 @@ in
         testRecord = dhallToNix "{}";
         testRecordLit = dhallToNix "{ foo = 1, bar = True}";
         testUnion = dhallToNix "< Left : Natural | Right : Bool >";
-        testUnionLit = dhallToNix "< Left = 2 | Right : Bool >";
+        testUnionLit = dhallToNix "< Left : Natural | Right : Bool >.Left 2";
         testCombine = dhallToNix ''
             λ(x : { foo : { bar : Text } })
           → λ(y : { foo : { baz : Bool } })
