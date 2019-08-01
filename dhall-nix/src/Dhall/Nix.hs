@@ -95,6 +95,7 @@ import Data.Foldable (toList)
 import Data.Fix (Fix(..))
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
+import Data.Void (absurd)
 import Dhall.Core (Chunks(..), Const(..), Expr(..), Var(..))
 import Dhall.TypeCheck (X(..))
 import Nix.Atoms (NAtom(..))
@@ -532,4 +533,4 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         Left CannotProjectByType
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
-    loop (Embed (X x)) = x
+    loop (Embed x) = absurd x
