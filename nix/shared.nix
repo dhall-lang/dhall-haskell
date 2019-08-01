@@ -151,6 +151,7 @@ let
                     "dhall"
                     "dhall-bash"
                     "dhall-json"
+                    "dhall-nix"
                   ];
 
                 extension =

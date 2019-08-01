@@ -30,7 +30,6 @@ module Dhall
     , sourceName
     , startingContext
     , normalizer
-    , standardVersion
     , defaultInputSettings
     , InputSettings
     , defaultEvaluateSettings
@@ -121,7 +120,6 @@ import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Data.Word (Word8, Word16, Word32, Word64)
-import Dhall.Binary (StandardVersion(..))
 import Dhall.Core (Expr(..), Chunks(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
@@ -148,7 +146,6 @@ import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
 import qualified Data.Vector
-import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
@@ -297,7 +294,6 @@ sourceName k s =
 data EvaluateSettings = EvaluateSettings
   { _startingContext :: Dhall.Context.Context (Expr Src X)
   , _normalizer      :: Maybe (Dhall.Core.ReifiedNormalizer X)
-  , _standardVersion :: StandardVersion
   }
 
 -- | Default evaluation settings: no extra entries in the initial
@@ -308,7 +304,6 @@ defaultEvaluateSettings :: EvaluateSettings
 defaultEvaluateSettings = EvaluateSettings
   { _startingContext = Dhall.Context.empty
   , _normalizer      = Nothing
-  , _standardVersion = Dhall.Binary.defaultStandardVersion
   }
 
 -- | Access the starting context used for evaluation and type-checking.
@@ -334,17 +329,6 @@ normalizer = evaluateSettings . l
     l :: (Functor f)
       => LensLike' f EvaluateSettings (Maybe (Dhall.Core.ReifiedNormalizer X))
     l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
-
--- | Access the standard version (used primarily when encoding or decoding
--- Dhall expressions to and from a binary representation)
---
--- @since 1.17
-standardVersion
-    :: (Functor f, HasEvaluateSettings s)
-    => LensLike' f s StandardVersion
-standardVersion = evaluateSettings . l
-  where
-  l k s = fmap (\x -> s { _standardVersion = x}) (k (_standardVersion s))
 
 -- | @since 1.16
 class HasEvaluateSettings s where
@@ -408,8 +392,7 @@ inputWithSettings settings (Type {..}) txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               set Dhall.Import.standardVersion _standardVersion
-            .  set Dhall.Import.normalizer      _normalizer
+               set Dhall.Import.normalizer      _normalizer
             .  set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatus _rootDirectory)
@@ -503,8 +486,7 @@ inputExprWithSettings settings txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               set Dhall.Import.standardVersion _standardVersion
-            .  set Dhall.Import.normalizer      _normalizer
+               set Dhall.Import.normalizer      _normalizer
             .  set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatus _rootDirectory)
@@ -1017,8 +999,6 @@ notEmptyRecord e = case e of
     _                 -> Just e
 extractUnionConstructor
     :: Expr s a -> Maybe (Text, Expr s a, Dhall.Map.Map Text (Maybe (Expr s a)))
-extractUnionConstructor (UnionLit fld e rest) =
-  return (fld, e, rest)
 extractUnionConstructor (App (Field (Union kts) fld) e) =
   return (fld, e, Dhall.Map.delete fld kts)
 extractUnionConstructor (Field (Union kts) fld) =
@@ -1616,10 +1596,10 @@ data Status = Queued Natural
     And assume that we have the following Dhall union that we would like to
     parse as a @Status@:
 
-> < Result = "Finish succesfully"
+> < Result : Text
 > | Queued : Natural
 > | Errored : Text
-> >
+> >.Result "Finish successfully"
 
     Our parser has type 'Type' @Status@, but we can't build that out of any
     smaller parsers, as 'Type's cannot be combined (they are only 'Functor's).
@@ -1774,10 +1754,10 @@ data Status = Queued Natural
     And assume that we have the following Dhall union that we would like to
     parse as a @Status@:
 
-> < Result = "Finish succesfully"
+> < Result : Text
 > | Queued : Natural
 > | Errored : Text
-> >
+> >.Result "Finish successfully"
 
     Our injector has type 'InputType' @Status@, but we can't build that out of any
     smaller injectors, as 'InputType's cannot be combined.
