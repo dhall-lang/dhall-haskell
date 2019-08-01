@@ -1837,7 +1837,7 @@ isNormalized e0 = loop (denote e0)
           App NaturalEven (NaturalLit _) -> False
           App NaturalOdd (NaturalLit _) -> False
           App NaturalShow (NaturalLit _) -> False
-          App NaturalSubtract (NaturalLit _) -> False
+          App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
           App NaturalToInteger (NaturalLit _) -> False
           App IntegerShow (IntegerLit _) -> False
           App IntegerToDouble (IntegerLit _) -> False
