@@ -10,7 +10,6 @@ import Turtle (FilePath)
 
 import qualified Data.Text                             as Text
 import qualified Data.Text.IO                          as Text.IO
-import qualified Dhall.Binary                          as Binary
 import qualified Dhall.Core                            as Core
 import qualified Dhall.Import                          as Import
 import qualified Dhall.Parser                          as Parser
@@ -40,7 +39,7 @@ hashTest prefix =
 
         let normalized = Core.alphaNormalize (Core.normalize resolved)
 
-        let actualHash = Import.hashExpressionToCode Binary.defaultStandardVersion normalized
+        let actualHash = Import.hashExpressionToCode normalized
 
         expectedHash <- Text.stripEnd <$> Text.IO.readFile (Text.unpack hashFile)
 

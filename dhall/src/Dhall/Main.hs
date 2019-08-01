@@ -26,14 +26,12 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
-import Dhall.Binary (StandardVersion)
 import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..), Depends(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
-import Lens.Family (set)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (exitFailure)
 import System.IO (Handle)
@@ -82,7 +80,6 @@ data Options = Options
     , explain         :: Bool
     , plain           :: Bool
     , ascii           :: Bool
-    , standardVersion :: StandardVersion
     }
 
 -- | The subcommands for the @dhall@ executable
@@ -116,7 +113,6 @@ parseOptions =
     <*> switch "explain" "Explain error messages in more detail"
     <*> switch "plain" "Disable syntax highlighting"
     <*> switch "ascii" "Format code using only ASCII syntax"
-    <*> Dhall.Binary.parseStandardVersion
   where
     switch name description =
         Options.Applicative.switch
@@ -301,9 +297,7 @@ command (Options {..}) = do
 
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
-    let toStatus maybeFile =
-            set Dhall.Import.standardVersion standardVersion
-                (Dhall.Import.emptyStatus file)
+    let toStatus maybeFile = Dhall.Import.emptyStatus file
           where
             file = case maybeFile of
                 Just "-" -> "."
@@ -469,7 +463,7 @@ command (Options {..}) = do
             render System.IO.stdout (Dhall.Core.normalize inferredType)
 
         Repl -> do
-            Dhall.Repl.repl characterSet explain standardVersion
+            Dhall.Repl.repl characterSet explain
 
         Diff {..} -> do
             expression1 <- Dhall.inputExpr expr1
@@ -488,10 +482,10 @@ command (Options {..}) = do
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze inplace scope intent characterSet standardVersion
+            Dhall.Freeze.freeze inplace scope intent characterSet
 
         Hash -> do
-            Dhall.Hash.hash standardVersion
+            Dhall.Hash.hash
 
         Lint {..} -> do
             case inplace of
