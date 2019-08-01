@@ -119,7 +119,6 @@ module Dhall.Import (
     , graph
     , remote
     , toHeaders
-    , standardVersion
     , normalizer
     , startingContext
     , chainImport
@@ -524,8 +523,8 @@ loadImportWithSemanticCache
                 Just bytes -> liftIO $ writeToSemanticCache semanticHash bytes
                 Nothing -> do
                     let expectedHash = semanticHash
-                    Status { _standardVersion, _stack } <- State.get
-                    let actualHash = hashExpression _standardVersion (Dhall.Core.alphaNormalize importSemantics)
+                    Status { _stack } <- State.get
+                    let actualHash = hashExpression (Dhall.Core.alphaNormalize importSemantics)
                     throwMissingImport (Imported _stack (HashMismatch {..}))
 
             return (ImportSemantics {..})
@@ -542,7 +541,7 @@ fetchFromSemanticCache expectedHash = Maybe.runMaybeT $ do
 writeExpressionToSemanticCache :: Expr Src X -> IO ()
 writeExpressionToSemanticCache expression = writeToSemanticCache hash bytes
   where
-    bytes = encodeExpression Dhall.Binary.defaultStandardVersion expression
+    bytes = encodeExpression NoVersion expression
     hash = Crypto.Hash.hash bytes
 
 writeToSemanticCache :: Crypto.Hash.Digest SHA256 -> Data.ByteString.ByteString -> IO ()
@@ -609,7 +608,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
                 Left  err -> throwMissingImport (Imported _stack err)
                 Right _ -> return (Dhall.Core.normalizeWith _normalizer resolvedExpr)
 
-            let bytes = encodeExpression _standardVersion betaNormal
+            let bytes = encodeExpression NoVersion betaNormal
             lift $ writeToSemisemanticCache semisemanticHash bytes
 
             return betaNormal
@@ -655,8 +654,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
 -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for further
 -- discussion.
 computeSemisemanticHash :: Expr Src X -> Crypto.Hash.Digest Crypto.Hash.SHA256
-computeSemisemanticHash resolvedExpr =
-    hashExpression Dhall.Binary.defaultStandardVersion resolvedExpr
+computeSemisemanticHash resolvedExpr = hashExpression resolvedExpr
 
 -- Fetch encoded normal form from "semi-semantic cache"
 fetchFromSemisemanticCache :: Crypto.Hash.Digest SHA256 -> IO (Maybe Data.ByteString.ByteString)
@@ -958,7 +956,6 @@ loadWith expr₀ = case expr₀ of
   Record a             -> Record <$> mapM loadWith a
   RecordLit a          -> RecordLit <$> mapM loadWith a
   Union a              -> Union <$> mapM (mapM loadWith) a
-  UnionLit a b c       -> UnionLit <$> pure a <*> loadWith b <*> mapM (mapM loadWith) c
   Combine a b          -> Combine <$> loadWith a <*> loadWith b
   CombineTypes a b     -> CombineTypes <$> loadWith a <*> loadWith b
   Prefer a b           -> Prefer <$> loadWith a <*> loadWith b
@@ -978,7 +975,7 @@ load expression = State.evalStateT (loadWith expression) (emptyStatus ".")
 encodeExpression
     :: forall s
     .  StandardVersion
-    -- ^ `Nothing` means to encode without the version tag
+    -- ^ `NoVersion` means to encode without the version tag
     -> Expr s X
     -> Data.ByteString.ByteString
 encodeExpression _standardVersion expression = bytesStrict
@@ -1002,10 +999,9 @@ encodeExpression _standardVersion expression = bytesStrict
     bytesStrict = Data.ByteString.Lazy.toStrict bytesLazy
 
 -- | Hash a fully resolved expression
-hashExpression
-    :: StandardVersion -> Expr s X -> (Crypto.Hash.Digest SHA256)
-hashExpression _standardVersion expression =
-    Crypto.Hash.hash (encodeExpression _standardVersion expression)
+hashExpression :: Expr s X -> (Crypto.Hash.Digest SHA256)
+hashExpression expression =
+    Crypto.Hash.hash (encodeExpression NoVersion expression)
 
 {-| Convenience utility to hash a fully resolved expression and return the
     base-16 encoded hash with the @sha256:@ prefix
@@ -1013,9 +1009,9 @@ hashExpression _standardVersion expression =
     In other words, the output of this function can be pasted into Dhall
     source code to add an integrity check to an import
 -}
-hashExpressionToCode :: StandardVersion -> Expr s X -> Text
-hashExpressionToCode _standardVersion expr =
-    "sha256:" <> Text.pack (show (hashExpression _standardVersion expr))
+hashExpressionToCode :: Expr s X -> Text
+hashExpressionToCode expr =
+    "sha256:" <> Text.pack (show (hashExpression expr))
 
 -- | A call to `assertNoImports` failed because there was at least one import
 data ImportResolutionDisabled = ImportResolutionDisabled deriving (Exception)

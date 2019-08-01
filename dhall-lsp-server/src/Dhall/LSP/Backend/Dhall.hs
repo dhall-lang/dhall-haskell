@@ -22,7 +22,6 @@ import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
 import Dhall.Core (Expr)
 
-import qualified Dhall.Binary as Dhall
 import qualified Dhall.Core as Dhall
 import qualified Dhall.Import as Dhall
 import qualified Dhall.Parser as Dhall
@@ -166,5 +165,5 @@ normalize (WellTyped expr) = Normal $ Dhall.normalize expr
 --   Dhall's hash annotations (prefixed by "sha256:" and base-64 encoded).
 hashNormalToCode :: Normal -> Text
 hashNormalToCode (Normal expr) =
-  Dhall.hashExpressionToCode Dhall.defaultStandardVersion alphaNormal
+  Dhall.hashExpressionToCode alphaNormal
   where alphaNormal = Dhall.alphaNormalize expr

@@ -421,28 +421,6 @@ diffUnion kvsL kvsR = angled (diffKeysWith colon diffVals kvsL kvsR)
   where
     diffVals = diffMaybe (colon <> " ") diffExpression
 
-diffUnionLit
-    :: (Eq a, Pretty a)
-    => Text
-    -> Text
-    -> Expr s a
-    -> Expr s a
-    -> Map Text (Maybe (Expr s a))
-    -> Map Text (Maybe (Expr s a))
-    -> Diff
-diffUnionLit kL kR vL vR kvsL kvsR =
-        langle
-    <>  " "
-    <>  format " " (diffLabel kL kR)
-    <>  equals
-    <>  " "
-    <>  format " " (diffExpression vL vR)
-    <>  halfAngled (diffKeysWith colon diffVals kvsL kvsR)
-  where
-    diffVals = diffMaybe (colon <> " ") diffExpression
-
-    halfAngled = enclosed (pipe <> " ") (pipe <> " ") rangle
-
 listSkeleton :: Diff
 listSkeleton =
         lbracket
@@ -605,16 +583,6 @@ skeleton (Union {}) =
     <>  ignore
     <>  " "
     <>  colon
-    <>  " "
-    <>  ignore
-    <>  " "
-    <>  rangle
-skeleton (UnionLit {}) =
-        langle
-    <>  " "
-    <>  ignore
-    <>  " "
-    <>  equals
     <>  " "
     <>  ignore
     <>  " "
@@ -1266,12 +1234,6 @@ diffPrimitiveExpression (Union aL) (Union aR) =
 diffPrimitiveExpression l@(Union {}) r =
     mismatch l r
 diffPrimitiveExpression l r@(Union {}) =
-    mismatch l r
-diffPrimitiveExpression (UnionLit aL bL cL) (UnionLit aR bR cR) =
-    diffUnionLit aL aR bL bR cL cR
-diffPrimitiveExpression l@(UnionLit {}) r =
-    mismatch l r
-diffPrimitiveExpression l r@(UnionLit {}) =
     mismatch l r
 diffPrimitiveExpression aL aR =
     if same doc
