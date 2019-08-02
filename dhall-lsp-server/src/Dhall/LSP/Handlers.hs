@@ -13,6 +13,8 @@ import Dhall.Import (localToPath)
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (X)
 
+import Dhall.LSP.Backend.Completion (Completion(..), completionQueryAt,
+  completeEnvironmentImport, completeLocalImport, buildCompletionContext, completeProjections, completeFromContext)
 import Dhall.LSP.Backend.Dhall (FileIdentifier, parse, load, typecheck,
   fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate, parseWithHeader)
 import Dhall.LSP.Backend.Diagnostics (Range(..), Diagnosis(..), explain,
@@ -21,6 +23,7 @@ import Dhall.LSP.Backend.Formatting (formatExprWithHeader)
 import Dhall.LSP.Backend.Freezing (computeSemanticHash, getImportHashPosition,
   stripHash, getAllImportsWithHashPositions)
 import Dhall.LSP.Backend.Linting (Suggestion(..), suggest, lint)
+import Dhall.LSP.Backend.Parsing (binderExprFromText)
 import Dhall.LSP.Backend.Typing (typeAt, annotateLet, exprAt)
 import Dhall.LSP.State
 
@@ -34,13 +37,14 @@ import Control.Monad.Trans.State.Strict (execStateT)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Map.Strict as Map
 import Data.Maybe (maybeToList)
-import Data.Text (Text)
+import Data.Text (Text, isPrefixOf)
 import qualified Data.Text as Text
 import qualified Network.URI as URI
 import qualified Network.URI.Encode as URI
 import Text.Megaparsec (SourcePos(..), unPos)
 import System.FilePath
 
+import Debug.Trace
 
 -- Workaround to make our single-threaded LSP fit dhall-lsp's API, which
 -- expects a multi-threaded implementation. Reports errors to the user via the
@@ -429,6 +433,93 @@ executeFreezeImport request = do
 
   lspRequest LSP.ReqApplyWorkspaceEdit J.WorkspaceApplyEdit
     (J.ApplyWorkspaceEditParams edit)
+
+completionHandler :: J.CompletionRequest -> HandlerM ()
+completionHandler request = do
+  let uri = request ^. J.params . J.textDocument . J.uri
+      line = request ^. J.params . J.position . J.line
+      col = request ^. J.params . J.position . J.character
+
+  txt <- readUri uri
+  let (completionLeadup, completionPrefix) = completionQueryAt txt (line, col)
+
+  let computeCompletions
+        -- environment variable
+        | "env:" `isPrefixOf` completionPrefix =
+          liftIO $ completeEnvironmentImport
+
+        -- local import
+        | any (`isPrefixOf` completionPrefix) [ "/", "./", "../", "~/" ] = do
+          let relativeTo | Just path <- J.uriToFilePath uri = path
+                         | otherwise = "."
+          liftIO $ completeLocalImport relativeTo (Text.unpack completionPrefix)
+
+        -- record projection / union constructor
+        | (target, _) <- Text.breakOnEnd "." completionPrefix
+        , not (Text.null target) = do
+          let bindersExpr = binderExprFromText completionLeadup
+
+          fileIdentifier <- fileIdentifierFromUri uri
+          cache <- use importCache
+          loadedBinders <- liftIO $ load fileIdentifier bindersExpr cache
+
+          (cache', bindersExpr') <-
+            case loadedBinders of
+              Right (cache', binders) -> do
+                return (cache', binders)
+              Left _ -> throwE (Log, "Could not complete projection; failed to load binders expression.")
+
+          let completionContext = buildCompletionContext bindersExpr'
+
+          targetExpr <- case parse (Text.dropEnd 1 target) of
+            Right e -> return e
+            Left _ -> throwE (Log, "Could not complete projection; prefix did not parse.")
+
+          loaded' <- liftIO $ load fileIdentifier targetExpr cache'
+          case loaded' of
+            Right (cache'', targetExpr') -> do
+              assign importCache cache''
+              return (completeProjections completionContext targetExpr')
+            Left _ -> return []
+
+        -- complete identifiers in scope
+        | otherwise = do
+          let bindersExpr = binderExprFromText completionLeadup
+
+          fileIdentifier <- fileIdentifierFromUri uri
+          cache <- use importCache  -- todo save cache afterwards
+          loadedBinders <- liftIO $ load fileIdentifier bindersExpr cache
+
+          bindersExpr' <-
+            case loadedBinders of
+              Right (cache', binders) -> do
+                assign importCache cache'
+                return binders
+              Left _ -> throwE (Log, "Could not complete projection; failed to load binders expression.")
+
+          let context = buildCompletionContext bindersExpr'
+          return (completeFromContext context)
+
+  completions <- computeCompletions
+
+  let item (Completion {..}) = J.CompletionItem {..}
+       where
+        _label = traceShowId completeText
+        _kind = Nothing
+        _detail = fmap pretty completeType
+        _documentation = Nothing
+        _deprecated = Nothing
+        _preselect = Nothing
+        _sortText = Nothing
+        _filterText = Nothing
+        _insertText = Nothing
+        _insertTextFormat = Nothing
+        _textEdit = Nothing
+        _additionalTextEdits = Nothing
+        _commitCharacters = Nothing
+        _command = Nothing
+        _xdata = Nothing
+  lspRespond LSP.RspCompletion request $ J.Completions (J.List (map item completions))
 
 
 -- handler that doesn't do anything. Useful for example to make haskell-lsp shut

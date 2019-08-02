@@ -20,6 +20,7 @@ source-repository head
 
 library
   exposed-modules:
+      Dhall.LSP.Backend.Completion
       Dhall.LSP.Backend.Dhall
       Dhall.LSP.Backend.Diagnostics
       Dhall.LSP.Backend.Freezing
@@ -45,6 +46,7 @@ library
     , containers           >= 0.5.11.0 && < 0.7
     , cryptonite           >= 0.25     && < 0.27
     , data-default         >= 0.7.1.1  && < 0.8
+    , directory            >= 1.2.2.0  && < 1.4
     , dhall                >= 1.25.0   && < 1.26
     , dhall-json           >= 1.4      && < 1.5
     , dotgen               >= 0.4.2    && < 0.5
