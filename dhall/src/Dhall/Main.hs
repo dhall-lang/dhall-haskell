@@ -3,6 +3,7 @@
 -}
 
 {-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -273,7 +274,6 @@ getExpression :: Maybe FilePath -> IO (Expr Src Import)
 getExpression maybeFile = do
     inText <- do
         case maybeFile of
-            Just "-"  -> Data.Text.IO.getContents
             Just file -> Data.Text.IO.readFile file
             Nothing   -> Data.Text.IO.getContents
 
@@ -297,12 +297,11 @@ command (Options {..}) = do
 
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
-    let toStatus maybeFile = Dhall.Import.emptyStatus file
-          where
-            file = case maybeFile of
-                Just "-" -> "."
-                Just f   -> System.FilePath.takeDirectory f
-                Nothing  -> "."
+    let rootDirectory = \case
+            Just f   -> System.FilePath.takeDirectory f
+            Nothing  -> "."
+
+    let toStatus = Dhall.Import.emptyStatus . rootDirectory
 
     let handle =
                 Control.Exception.handle handler2
@@ -362,7 +361,7 @@ command (Options {..}) = do
         Default {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) (toStatus file)
+            resolvedExpression <- Dhall.Import.loadRelativeTo (rootDirectory file) expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -433,8 +432,7 @@ command (Options {..}) = do
         Resolve { resolveMode = Nothing, ..} -> do
             expression <- getExpression file
 
-            (resolvedExpression, _) <-
-                State.runStateT (Dhall.Import.loadWith expression) (toStatus file)
+            resolvedExpression <- Dhall.Import.loadRelativeTo (rootDirectory file) expression
             render System.IO.stdout resolvedExpression
 
         Normalize {..} -> do
@@ -564,7 +562,7 @@ command (Options {..}) = do
         Text {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- State.evalStateT (Dhall.Import.loadWith expression) (toStatus file)
+            resolvedExpression <- Dhall.Import.loadRelativeTo (rootDirectory file) expression
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
 
