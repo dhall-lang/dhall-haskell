@@ -53,7 +53,7 @@
 
     Unions are Church-encoded:
 
-> $ dhall-to-nix <<< "< Left = True | Right : Natural >"
+> $ dhall-to-nix <<< "< Left : Bool | Right : Natural >.Left True"
 > { Left, Right }: Left true
 
     Also, all Dhall expressions are normalized before translation to Nix:
@@ -300,6 +300,14 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return (Fix (NLet [e5] e8))
     loop NaturalShow = do
         return "toString"
+    loop NaturalSubtract = do
+        let e0 = NamedVar ["z"] (Fix (NBinary NMinus "y" "x")) Nix.nullPos
+        let e1 = Fix (NBinary NLt "z" (Fix (NConstant (NInt 0))))
+        let e2 = Fix (NConstant (NInt 0))
+        let e3 = "z"
+        let e4 = Fix (NIf e1 e2 e3)
+        let e5 = Fix (NLet [e0] e4)
+        return (Fix (NAbs "x" (Fix (NAbs "y" e5))))
     loop NaturalToInteger = do
         return (Fix (NAbs "n" "n"))
     loop (NaturalPlus a b) = do
@@ -444,13 +452,6 @@ dhallToNix e = loop (Dhall.Core.normalize e)
                 return (NamedVar [StaticKey k] v Nix.nullPos)
         return (Fix (NSet a''))
     loop (Union _) = return (Fix (NSet []))
-    loop (UnionLit k v kts) = do
-        v' <- loop v
-        let e0 = do
-                k' <- k : Dhall.Map.keys kts
-                return (k', Nothing)
-        let e2 = Fix (NBinary NApp (Fix (NSym k)) v')
-        return (Fix (NAbs (ParamSet e0 False Nothing) e2))
     loop (Combine a b) = do
         a' <- loop a
         b' <- loop b
@@ -497,6 +498,17 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- loop a
         b' <- loop b
         return (Fix (NBinary NApp b' a'))
+    loop (ToMap a _) = do
+        a' <- loop a
+        let ks = Fix (NBinary NApp "builtins.attrNames" "kvs")
+        let v = Fix (NBinary NApp (Fix (NBinary NApp "builtins.getAttr" "k")) "kvs")
+        let setBindings =
+                [ NamedVar [StaticKey "mapKey"] "k" Nix.nullPos
+                , NamedVar [StaticKey "mapValue"] v Nix.nullPos
+                ]
+        let map_ = Fix (NBinary NApp "map" (Fix (NAbs "k" (Fix (NSet setBindings)))))
+        let toMap = Fix (NAbs "kvs" (Fix (NBinary NApp map_ ks)))
+        return (Fix (NBinary NApp toMap a'))
     loop (Prefer a b) = do
         a' <- loop a
         b' <- loop b

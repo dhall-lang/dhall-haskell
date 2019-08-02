@@ -7,10 +7,8 @@ module Dhall.Hash
       hash
     ) where
 
-import Dhall.Binary (StandardVersion)
 import Dhall.Parser (exprFromText)
-import Dhall.Import (hashExpressionToCode, standardVersion)
-import Lens.Family (set)
+import Dhall.Import (hashExpressionToCode)
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Control.Exception
@@ -20,16 +18,15 @@ import qualified Dhall.TypeCheck
 import qualified Data.Text.IO
 
 -- | Implementation of the @dhall hash@ subcommand
-hash :: StandardVersion -> IO ()
-hash _standardVersion = do
+hash :: IO ()
+hash = do
     inText <- Data.Text.IO.getContents
 
     parsedExpression <- case exprFromText "(stdin)" inText of
         Left  exception        -> Control.Exception.throwIO exception
         Right parsedExpression -> return parsedExpression
 
-    let status =
-            set standardVersion _standardVersion (Dhall.Import.emptyStatus ".")
+    let status = Dhall.Import.emptyStatus "."
 
     resolvedExpression <- State.evalStateT (Dhall.Import.loadWith parsedExpression) status
 
@@ -40,5 +37,4 @@ hash _standardVersion = do
     let normalizedExpression =
             Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)
 
-    Data.Text.IO.putStrLn
-        (hashExpressionToCode _standardVersion normalizedExpression)
+    Data.Text.IO.putStrLn (hashExpressionToCode normalizedExpression)

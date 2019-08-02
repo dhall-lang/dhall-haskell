@@ -405,6 +405,8 @@ data Expr s a
     | NaturalToInteger
     -- | > NaturalShow                              ~  Natural/show
     | NaturalShow
+    -- | > NaturalSubtract                          ~  Natural/subtract
+    | NaturalSubtract
     -- | > NaturalPlus x y                          ~  x + y
     | NaturalPlus (Expr s a) (Expr s a)
     -- | > NaturalTimes x y                         ~  x * y
@@ -468,8 +470,6 @@ data Expr s a
     | RecordLit (Map Text (Expr s a))
     -- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
     | Union     (Map Text (Maybe (Expr s a)))
-    -- | > UnionLit k v [(k1, Just t1), (k2, Nothing)] ~  < k = v | k1 : t1 | k2 >
-    | UnionLit Text (Expr s a) (Map Text (Maybe (Expr s a)))
     -- | > Combine x y                              ~  x ∧ y
     | Combine (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
@@ -527,6 +527,7 @@ instance Functor (Expr s) where
   fmap _ NaturalOdd = NaturalOdd
   fmap _ NaturalToInteger = NaturalToInteger
   fmap _ NaturalShow = NaturalShow
+  fmap _ NaturalSubtract = NaturalSubtract
   fmap f (NaturalPlus e1 e2) = NaturalPlus (fmap f e1) (fmap f e2)
   fmap f (NaturalTimes e1 e2) = NaturalTimes (fmap f e1) (fmap f e2)
   fmap _ Integer = Integer
@@ -558,7 +559,6 @@ instance Functor (Expr s) where
   fmap f (Record r) = Record (fmap (fmap f) r)
   fmap f (RecordLit r) = RecordLit (fmap (fmap f) r)
   fmap f (Union u) = Union (fmap (fmap (fmap f)) u)
-  fmap f (UnionLit v e u) = UnionLit v (fmap f e) (fmap (fmap (fmap f)) u)
   fmap f (Combine e1 e2) = Combine (fmap f e1) (fmap f e2)
   fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
   fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
@@ -604,6 +604,7 @@ instance Monad (Expr s) where
     NaturalOdd           >>= _ = NaturalOdd
     NaturalToInteger     >>= _ = NaturalToInteger
     NaturalShow          >>= _ = NaturalShow
+    NaturalSubtract      >>= _ = NaturalSubtract
     NaturalPlus  a b     >>= k = NaturalPlus  (a >>= k) (b >>= k)
     NaturalTimes a b     >>= k = NaturalTimes (a >>= k) (b >>= k)
     Integer              >>= _ = Integer
@@ -635,7 +636,6 @@ instance Monad (Expr s) where
     Record    a          >>= k = Record (fmap (>>= k) a)
     RecordLit a          >>= k = RecordLit (fmap (>>= k) a)
     Union     a          >>= k = Union (fmap (fmap (>>= k)) a)
-    UnionLit a b c       >>= k = UnionLit a (b >>= k) (fmap (fmap (>>= k)) c)
     Combine a b          >>= k = Combine (a >>= k) (b >>= k)
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
     Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
@@ -671,6 +671,7 @@ instance Bifunctor Expr where
     first _  NaturalOdd            = NaturalOdd
     first _  NaturalToInteger      = NaturalToInteger
     first _  NaturalShow           = NaturalShow
+    first _  NaturalSubtract       = NaturalSubtract
     first k (NaturalPlus a b     ) = NaturalPlus (first k a) (first k b)
     first k (NaturalTimes a b    ) = NaturalTimes (first k a) (first k b)
     first _  Integer               = Integer
@@ -702,7 +703,6 @@ instance Bifunctor Expr where
     first k (Record a            ) = Record (fmap (first k) a)
     first k (RecordLit a         ) = RecordLit (fmap (first k) a)
     first k (Union a             ) = Union (fmap (fmap (first k)) a)
-    first k (UnionLit a b c      ) = UnionLit a (first k b) (fmap (fmap (first k)) c)
     first k (Combine a b         ) = Combine (first k a) (first k b)
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
     first k (Prefer a b          ) = Prefer (first k a) (first k b)
@@ -906,6 +906,7 @@ shift _ _ NaturalEven = NaturalEven
 shift _ _ NaturalOdd = NaturalOdd
 shift _ _ NaturalToInteger = NaturalToInteger
 shift _ _ NaturalShow = NaturalShow
+shift _ _ NaturalSubtract = NaturalSubtract
 shift d v (NaturalPlus a b) = NaturalPlus a' b'
   where
     a' = shift d v a
@@ -962,10 +963,6 @@ shift d v (RecordLit a) = RecordLit a'
 shift d v (Union a) = Union a'
   where
     a' = fmap (fmap (shift d v)) a
-shift d v (UnionLit a b c) = UnionLit a b' c'
-  where
-    b' =             shift d v   b
-    c' = fmap (fmap (shift d v)) c
 shift d v (Combine a b) = Combine a' b'
   where
     a' = shift d v a
@@ -1085,6 +1082,7 @@ subst _ _ NaturalEven = NaturalEven
 subst _ _ NaturalOdd = NaturalOdd
 subst _ _ NaturalToInteger = NaturalToInteger
 subst _ _ NaturalShow = NaturalShow
+subst _ _ NaturalSubtract = NaturalSubtract
 subst x e (NaturalPlus a b) = NaturalPlus a' b'
   where
     a' = subst x e a
@@ -1140,10 +1138,6 @@ subst x e (RecordLit kvs) = RecordLit kvs'
     kvs' = fmap (subst x e) kvs
 subst x e (Union kts) = Union kts'
   where
-    kts' = fmap (fmap (subst x e)) kts
-subst x e (UnionLit a b kts) = UnionLit a b' kts'
-  where
-    b'   =             subst x e   b
     kts' = fmap (fmap (subst x e)) kts
 subst x e (Combine a b) = Combine a' b'
   where
@@ -1263,6 +1257,7 @@ denote  NaturalEven           = NaturalEven
 denote  NaturalOdd            = NaturalOdd
 denote  NaturalToInteger      = NaturalToInteger
 denote  NaturalShow           = NaturalShow
+denote  NaturalSubtract       = NaturalSubtract
 denote (NaturalPlus a b     ) = NaturalPlus (denote a) (denote b)
 denote (NaturalTimes a b    ) = NaturalTimes (denote a) (denote b)
 denote  Integer               = Integer
@@ -1294,7 +1289,6 @@ denote  OptionalBuild         = OptionalBuild
 denote (Record a            ) = Record (fmap denote a)
 denote (RecordLit a         ) = RecordLit (fmap denote a)
 denote (Union a             ) = Union (fmap (fmap denote) a)
-denote (UnionLit a b c      ) = UnionLit a (denote b) (fmap (fmap denote) c)
 denote (Combine a b         ) = Combine (denote a) (denote b)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
 denote (Prefer a b          ) = Prefer (denote a) (denote b)
@@ -1414,6 +1408,11 @@ normalizeWithM ctx e0 = loop (denote e0)
                     App NaturalToInteger (NaturalLit n) -> pure (IntegerLit (toInteger n))
                     App NaturalShow (NaturalLit n) ->
                         pure (TextLit (Chunks [] (Data.Text.pack (show n))))
+                    App (App NaturalSubtract (NaturalLit x)) (NaturalLit y)
+                        | y >= x    -> pure (NaturalLit (subtract x y))
+                        | otherwise -> pure (NaturalLit 0)
+                    App (App NaturalSubtract (NaturalLit 0)) y -> pure y
+                    App (App NaturalSubtract _) (NaturalLit 0) -> pure (NaturalLit 0)
                     App IntegerShow (IntegerLit n)
                         | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
                         | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
@@ -1568,6 +1567,7 @@ normalizeWithM ctx e0 = loop (denote e0)
     NaturalOdd -> pure NaturalOdd
     NaturalToInteger -> pure NaturalToInteger
     NaturalShow -> pure NaturalShow
+    NaturalSubtract -> pure NaturalSubtract
     NaturalPlus x y -> decide <$> loop x <*> loop y
       where
         decide (NaturalLit 0)  r             = r
@@ -1642,10 +1642,6 @@ normalizeWithM ctx e0 = loop (denote e0)
     Union kts -> Union . Dhall.Map.sort <$> kts'
       where
         kts' = traverse (traverse loop) kts
-    UnionLit k v kvs -> UnionLit k <$> v' <*> (Dhall.Map.sort <$> kvs')
-      where
-        v'   =                    loop  v
-        kvs' = traverse (traverse loop) kvs
     Combine x y -> decide <$> loop x <*> loop y
       where
         decide (RecordLit m) r | Data.Foldable.null m =
@@ -1682,10 +1678,6 @@ normalizeWithM ctx e0 = loop (denote e0)
         case x' of
             RecordLit kvsX ->
                 case y' of
-                    UnionLit kY vY _ ->
-                        case Dhall.Map.lookup kY kvsX of
-                            Just vX -> loop (App vX vY)
-                            Nothing -> Merge x' y' <$> t'
                     Field (Union ktsY) kY ->
                         case Dhall.Map.lookup kY ktsY of
                             Just Nothing ->
@@ -1735,8 +1727,17 @@ normalizeWithM ctx e0 = loop (denote e0)
         case r' of
             RecordLit kvs ->
                 case Dhall.Map.lookup x kvs of
-                    Just v  -> loop v
+                    Just v  -> pure v
                     Nothing -> Field <$> (RecordLit <$> traverse loop kvs) <*> pure x
+            Project r_ _ -> loop (Field r_ x)
+            Prefer l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+                Just v -> pure v
+                Nothing -> loop (Field l x)
+            Prefer (RecordLit kvs) r_ | not (Dhall.Map.member x kvs) -> loop (Field r_ x)
+            Combine l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+                Just v -> pure (Field (Combine l (RecordLit (Dhall.Map.singleton x v))) x)
+                Nothing -> loop (Field l x)
+            Combine (RecordLit kvs) r_ | not (Dhall.Map.member x kvs) -> loop (Field r_ x)
             _ -> pure (Field r' x)
     Project r (Left xs)-> do
         r' <- loop r
@@ -1836,6 +1837,9 @@ isNormalized e0 = loop (denote e0)
           App NaturalEven (NaturalLit _) -> False
           App NaturalOdd (NaturalLit _) -> False
           App NaturalShow (NaturalLit _) -> False
+          App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
+          App (App NaturalSubtract (NaturalLit 0)) _ -> False
+          App (App NaturalSubtract _) (NaturalLit 0) -> False
           App NaturalToInteger (NaturalLit _) -> False
           App IntegerShow (IntegerLit _) -> False
           App IntegerToDouble (IntegerLit _) -> False
@@ -1894,6 +1898,7 @@ isNormalized e0 = loop (denote e0)
       NaturalEven -> True
       NaturalOdd -> True
       NaturalShow -> True
+      NaturalSubtract -> True
       NaturalToInteger -> True
       NaturalPlus x y -> loop x && loop y && decide x y
         where
@@ -1948,7 +1953,6 @@ isNormalized e0 = loop (denote e0)
       Record kts -> Dhall.Map.isSorted kts && all loop kts
       RecordLit kvs -> Dhall.Map.isSorted kvs && all loop kvs
       Union kts -> Dhall.Map.isSorted kts && all (all loop) kts
-      UnionLit _ v kvs -> loop v && Dhall.Map.isSorted kvs && all (all loop) kvs
       Combine x y -> loop x && loop y && decide x y
         where
           decide (RecordLit m) _ | Data.Foldable.null m = False
@@ -1967,21 +1971,17 @@ isNormalized e0 = loop (denote e0)
           decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
           decide  _ _ = True
-      Merge x y t -> loop x && loop y && all loop t &&
-          case x of
-              RecordLit kvsX ->
-                  case y of
-                      UnionLit kY _  _ ->
-                          case Dhall.Map.lookup kY kvsX of
-                              Just _  -> False
-                              Nothing -> True
-                      _ -> True
-              _ -> True
+      Merge x y t -> loop x && loop y && all loop t
       ToMap x t -> case x of
           RecordLit _ -> False
           _ -> loop x && all loop t
-      Field r _ -> case r of
+      Field r k -> case r of
           RecordLit _ -> False
+          Project _ _ -> False
+          Combine x@(RecordLit m) y -> loop x && loop y && Dhall.Map.member k m
+          Combine x (RecordLit m) -> loop x && Dhall.Map.toList (fmap loop m) == [(k, True)]
+          Prefer x@(RecordLit m) y -> loop x && loop y && Dhall.Map.member k m
+          Prefer _ (RecordLit _) -> False
           _ -> loop r
       Project r p -> loop r &&
           case p of
@@ -2065,6 +2065,7 @@ reservedIdentifiers =
         , "Natural/odd"
         , "Natural/toInteger"
         , "Natural/show"
+        , "Natural/subtract"
         , "Integer"
         , "Integer/show"
         , "Integer/toDouble"
@@ -2117,6 +2118,7 @@ subExpressions _ NaturalEven = pure NaturalEven
 subExpressions _ NaturalOdd = pure NaturalOdd
 subExpressions _ NaturalToInteger = pure NaturalToInteger
 subExpressions _ NaturalShow = pure NaturalShow
+subExpressions _ NaturalSubtract = pure NaturalSubtract
 subExpressions f (NaturalPlus a b) = NaturalPlus <$> f a <*> f b
 subExpressions f (NaturalTimes a b) = NaturalTimes <$> f a <*> f b
 subExpressions _ Integer = pure Integer
@@ -2149,8 +2151,6 @@ subExpressions _ OptionalBuild = pure OptionalBuild
 subExpressions f (Record a) = Record <$> traverse f a
 subExpressions f ( RecordLit a ) = RecordLit <$> traverse f a
 subExpressions f (Union a) = Union <$> traverse (traverse f) a
-subExpressions f (UnionLit a b c) =
-    UnionLit a <$> f b <*> traverse (traverse f) c
 subExpressions f (Combine a b) = Combine <$> f a <*> f b
 subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
 subExpressions f (Prefer a b) = Prefer <$> f a <*> f b
