@@ -97,7 +97,7 @@ import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (absurd)
 import Dhall.Core (Chunks(..), Const(..), Expr(..), Var(..))
-import Dhall.TypeCheck (X(..))
+import Dhall.TypeCheck (X)
 import Nix.Atoms (NAtom(..))
 import Nix.Expr
     ( Antiquoted(..)
