@@ -639,6 +639,9 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.NaturalShow ->
             Core.NaturalShow
 
+        Core.NaturalSubtract ->
+            Core.NaturalSubtract
+
         Core.NaturalPlus a b ->
             Core.NaturalPlus a' b'
           where

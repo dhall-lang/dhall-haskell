@@ -12,7 +12,9 @@ import qualified Options.Applicative
 import Control.Applicative ((<|>))
 import Data.Monoid ((<>))
 
+import qualified Data.Version
 import qualified Dhall.LSP.Server
+import qualified Paths_dhall_lsp_server
 
 -- | Top-level program options
 data Options = Options {
@@ -56,7 +58,7 @@ parserInfoOptions = Options.Applicative.info
 
 runCommand :: Options -> IO ()
 runCommand Options {..} = case command of
-  Version -> putStrLn ("0.0.1.1" :: String)
+  Version -> putStrLn (Data.Version.showVersion Paths_dhall_lsp_server.version)
   LSPServer -> Dhall.LSP.Server.run logFile
 
 -- | Entry point for the @dhall-lsp-server@ executable
