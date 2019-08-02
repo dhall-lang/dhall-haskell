@@ -527,7 +527,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 
                       elementType
                           | null elements =
-                              Just (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON") ])
+                              Just (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON") ]))
                           | otherwise =
                               Nothing
 
