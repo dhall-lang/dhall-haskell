@@ -301,6 +301,14 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return (Fix (NLet [e5] e8))
     loop NaturalShow = do
         return "toString"
+    loop NaturalSubtract = do
+        let e0 = NamedVar ["z"] (Fix (NBinary NMinus "y" "x")) Nix.nullPos
+        let e1 = Fix (NBinary NLt "z" (Fix (NConstant (NInt 0))))
+        let e2 = Fix (NConstant (NInt 0))
+        let e3 = "z"
+        let e4 = Fix (NIf e1 e2 e3)
+        let e5 = Fix (NLet [e0] e4)
+        return (Fix (NAbs "x" (Fix (NAbs "y" e5))))
     loop NaturalToInteger = do
         return (Fix (NAbs "n" "n"))
     loop (NaturalPlus a b) = do

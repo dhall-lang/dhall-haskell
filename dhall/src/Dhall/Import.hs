@@ -925,6 +925,7 @@ loadWith expr₀ = case expr₀ of
   NaturalOdd           -> pure NaturalOdd
   NaturalToInteger     -> pure NaturalToInteger
   NaturalShow          -> pure NaturalShow
+  NaturalSubtract      -> pure NaturalSubtract
   NaturalPlus a b      -> NaturalPlus <$> loadWith a <*> loadWith b
   NaturalTimes a b     -> NaturalTimes <$> loadWith a <*> loadWith b
   Integer              -> pure Integer
