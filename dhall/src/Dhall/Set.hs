@@ -35,13 +35,23 @@ import qualified Data.Set
 import qualified Data.Sequence
 import qualified Data.Foldable
 
+-- Invariant: In @Set set seq@, @toAscList set == sort (toList seq)@.
 data Set a = Set (Data.Set.Set a) (Seq a)
-    deriving (Eq, Generic, Ord, Show, Data, NFData)
+    deriving (Generic, Show, Data, NFData)
+
+instance Eq a => Eq (Set a) where
+    (Set _ x) == (Set _ y) = x == y
+    {-# INLINABLE (==) #-}
+
+instance Ord a => Ord (Set a) where
+    compare (Set _ x) (Set _ y) = compare x y
+    {-# INLINABLE compare #-}
 
 instance (Data a, Lift a, Ord a) => Lift (Set a)
 
 instance Foldable Set where
-    foldMap f = foldMap f . toSeq
+    foldMap f (Set _ x) = foldMap f x
+    {-# INLINABLE foldMap #-}
 
 toSet :: Set a -> Data.Set.Set a
 toSet (Set s _) = s
