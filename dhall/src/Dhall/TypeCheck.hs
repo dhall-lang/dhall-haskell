@@ -306,6 +306,8 @@ typeWithA tpa = loop
         return (Pi "_" Natural Integer)
     loop _      NaturalShow  = do
         return (Pi "_" Natural Text)
+    loop _      NaturalSubtract  = do
+        return (Pi "_" Natural (Pi "_" Natural Natural))
     loop ctx e@(NaturalPlus  l r) = do
         tl <- fmap Dhall.Core.normalize (loop ctx l)
         case tl of
