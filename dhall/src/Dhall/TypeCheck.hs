@@ -160,8 +160,6 @@ typeWithA tpa = loop
                     else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
             Nothing -> return ()
 
-        _ <- loop ctx _A1
-
         let a1 = Dhall.Core.normalize a0
         let a2 = Dhall.Core.shift 1 (V x 0) a1
 
