@@ -257,10 +257,17 @@ parseConversion = Conversion <$> parseStrict
                              <*> parseKVMap
                              <*> parseUnion
   where
-    parseStrict =  O.switch
-                (  O.long "records-strict"
-                <> O.help "Parse all fields in records"
-                )
+    parseStrict =
+            O.flag' True
+            (  O.long "records-strict"
+            <> O.help "Fail if any YAML fields are missing from the expected Dhall type"
+            )
+        <|> O.flag' False
+            (  O.long "records-loose"
+            <> O.help "Tolerate YAML fields not present within the expected Dhall type"
+            )
+        <|> pure True
+
     parseKVArr  =  O.switch
                 (  O.long "no-keyval-arrays"
                 <> O.help "Disable conversion of key-value arrays to records"
@@ -631,7 +638,7 @@ showCompileError format showValue = let prefix = red "\nError: "
 
     UndecidableUnion e v xs -> prefix
       <> "More than one union component type matches " <> format <> " value"
-      <> "\n\nDhall:\n" <> showExpr e
+      <> "\n\nExpected Dhall type:\n" <> showExpr e
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n\nPossible matches:\n\n" -- Showing all the allowed matches
       <> Text.unpack (Text.intercalate sep $ D.pretty <$> xs)
@@ -639,7 +646,7 @@ showCompileError format showValue = let prefix = red "\nError: "
 
     Mismatch e v -> prefix
       <> "Dhall type expression and json value do not match:"
-      <> "\n\nDhall:\n" <> showExpr e
+      <> "\n\nExpected Dhall type:\n" <> showExpr e
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
 
@@ -651,22 +658,22 @@ showCompileError format showValue = let prefix = red "\nError: "
 
     UnhandledKeys ks e v -> prefix
       <> "Key(s) " <> purple (Text.unpack (Text.intercalate ", " ks))
-      <> " present in the " <> format <> " object but not in the corresponding Dhall record. This is not allowed in presence of "
-      <> green "--records-strict" <> " flag:"
-      <> "\n\nDhall:\n" <> showExpr e
+      <> " present in the " <> format <> " object but not in the expected Dhall record type. This is not allowed unless you enable the "
+      <> green "--records-loose" <> " flag:"
+      <> "\n\nExpected Dhall type:\n" <> showExpr e
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
 
     NoKeyValArray e v -> prefix
       <> "" <> format <> " (key-value) arrays cannot be converted to Dhall records under "
       <> green "--no-keyval-arrays" <> " flag"
-      <> "\n\nDhall:\n" <> showExpr e
+      <> "\n\nExpected Dhall type:\n" <> showExpr e
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
 
     NoKeyValMap e v -> prefix
       <> "Homogeneous " <> format <> " map objects cannot be converted to Dhall association lists under "
       <> green "--no-keyval-arrays" <> " flag"
-      <> "\n\nDhall:\n" <> showExpr e
+      <> "\n\nExpected Dhall type:\n" <> showExpr e
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
