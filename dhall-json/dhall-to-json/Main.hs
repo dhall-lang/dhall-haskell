@@ -17,7 +17,6 @@ import qualified Data.Aeson
 import qualified Data.Aeson.Encode.Pretty
 import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Lazy
-import qualified Data.Text                as Text
 import qualified Data.Text.IO             as Text.IO
 import qualified Dhall
 import qualified Dhall.JSON
@@ -133,11 +132,7 @@ main = do
             Nothing   -> Text.IO.getContents
             Just path -> Text.IO.readFile path
 
-        let path = case file of
-                Nothing -> "(stdin)"
-                Just p  -> Text.pack p
-
-        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode path text)
+        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode file text)
 
         Data.ByteString.Char8.putStrLn $ Data.ByteString.Lazy.toStrict $ encode json
 

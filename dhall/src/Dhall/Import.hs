@@ -101,6 +101,7 @@
 module Dhall.Import (
     -- * Import
       load
+    , loadRelativeTo
     , loadWith
     , localToPath
     , hashExpression
@@ -924,6 +925,7 @@ loadWith expr₀ = case expr₀ of
   NaturalOdd           -> pure NaturalOdd
   NaturalToInteger     -> pure NaturalToInteger
   NaturalShow          -> pure NaturalShow
+  NaturalSubtract      -> pure NaturalSubtract
   NaturalPlus a b      -> NaturalPlus <$> loadWith a <*> loadWith b
   NaturalTimes a b     -> NaturalTimes <$> loadWith a <*> loadWith b
   Integer              -> pure Integer
@@ -971,7 +973,13 @@ loadWith expr₀ = case expr₀ of
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
-load expression = State.evalStateT (loadWith expression) (emptyStatus ".")
+load = loadRelativeTo "."
+
+-- | Resolve all imports within an expression, importing relative to the given
+-- directory.
+loadRelativeTo :: FilePath -> Expr Src Import -> IO (Expr Src X)
+loadRelativeTo rootDirectory expression =
+    State.evalStateT (loadWith expression) (emptyStatus rootDirectory)
 
 encodeExpression
     :: forall s

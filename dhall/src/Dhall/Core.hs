@@ -405,6 +405,8 @@ data Expr s a
     | NaturalToInteger
     -- | > NaturalShow                              ~  Natural/show
     | NaturalShow
+    -- | > NaturalSubtract                          ~  Natural/subtract
+    | NaturalSubtract
     -- | > NaturalPlus x y                          ~  x + y
     | NaturalPlus (Expr s a) (Expr s a)
     -- | > NaturalTimes x y                         ~  x * y
@@ -529,6 +531,7 @@ instance Functor (Expr s) where
   fmap _ NaturalOdd = NaturalOdd
   fmap _ NaturalToInteger = NaturalToInteger
   fmap _ NaturalShow = NaturalShow
+  fmap _ NaturalSubtract = NaturalSubtract
   fmap f (NaturalPlus e1 e2) = NaturalPlus (fmap f e1) (fmap f e2)
   fmap f (NaturalTimes e1 e2) = NaturalTimes (fmap f e1) (fmap f e2)
   fmap _ Integer = Integer
@@ -607,6 +610,7 @@ instance Monad (Expr s) where
     NaturalOdd           >>= _ = NaturalOdd
     NaturalToInteger     >>= _ = NaturalToInteger
     NaturalShow          >>= _ = NaturalShow
+    NaturalSubtract      >>= _ = NaturalSubtract
     NaturalPlus  a b     >>= k = NaturalPlus  (a >>= k) (b >>= k)
     NaturalTimes a b     >>= k = NaturalTimes (a >>= k) (b >>= k)
     Integer              >>= _ = Integer
@@ -675,6 +679,7 @@ instance Bifunctor Expr where
     first _  NaturalOdd            = NaturalOdd
     first _  NaturalToInteger      = NaturalToInteger
     first _  NaturalShow           = NaturalShow
+    first _  NaturalSubtract       = NaturalSubtract
     first k (NaturalPlus a b     ) = NaturalPlus (first k a) (first k b)
     first k (NaturalTimes a b    ) = NaturalTimes (first k a) (first k b)
     first _  Integer               = Integer
@@ -911,6 +916,7 @@ shift _ _ NaturalEven = NaturalEven
 shift _ _ NaturalOdd = NaturalOdd
 shift _ _ NaturalToInteger = NaturalToInteger
 shift _ _ NaturalShow = NaturalShow
+shift _ _ NaturalSubtract = NaturalSubtract
 shift d v (NaturalPlus a b) = NaturalPlus a' b'
   where
     a' = shift d v a
@@ -1093,6 +1099,7 @@ subst _ _ NaturalEven = NaturalEven
 subst _ _ NaturalOdd = NaturalOdd
 subst _ _ NaturalToInteger = NaturalToInteger
 subst _ _ NaturalShow = NaturalShow
+subst _ _ NaturalSubtract = NaturalSubtract
 subst x e (NaturalPlus a b) = NaturalPlus a' b'
   where
     a' = subst x e a
@@ -1274,6 +1281,7 @@ denote  NaturalEven           = NaturalEven
 denote  NaturalOdd            = NaturalOdd
 denote  NaturalToInteger      = NaturalToInteger
 denote  NaturalShow           = NaturalShow
+denote  NaturalSubtract       = NaturalSubtract
 denote (NaturalPlus a b     ) = NaturalPlus (denote a) (denote b)
 denote (NaturalTimes a b    ) = NaturalTimes (denote a) (denote b)
 denote  Integer               = Integer
@@ -1426,6 +1434,11 @@ normalizeWithM ctx e0 = loop (denote e0)
                     App NaturalToInteger (NaturalLit n) -> pure (IntegerLit (toInteger n))
                     App NaturalShow (NaturalLit n) ->
                         pure (TextLit (Chunks [] (Data.Text.pack (show n))))
+                    App (App NaturalSubtract (NaturalLit x)) (NaturalLit y)
+                        | y >= x    -> pure (NaturalLit (subtract x y))
+                        | otherwise -> pure (NaturalLit 0)
+                    App (App NaturalSubtract (NaturalLit 0)) y -> pure y
+                    App (App NaturalSubtract _) (NaturalLit 0) -> pure (NaturalLit 0)
                     App IntegerShow (IntegerLit n)
                         | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
                         | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
@@ -1580,6 +1593,7 @@ normalizeWithM ctx e0 = loop (denote e0)
     NaturalOdd -> pure NaturalOdd
     NaturalToInteger -> pure NaturalToInteger
     NaturalShow -> pure NaturalShow
+    NaturalSubtract -> pure NaturalSubtract
     NaturalPlus x y -> decide <$> loop x <*> loop y
       where
         decide (NaturalLit 0)  r             = r
@@ -1858,6 +1872,9 @@ isNormalized e0 = loop (denote e0)
           App NaturalEven (NaturalLit _) -> False
           App NaturalOdd (NaturalLit _) -> False
           App NaturalShow (NaturalLit _) -> False
+          App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
+          App (App NaturalSubtract (NaturalLit 0)) _ -> False
+          App (App NaturalSubtract _) (NaturalLit 0) -> False
           App NaturalToInteger (NaturalLit _) -> False
           App IntegerShow (IntegerLit _) -> False
           App IntegerToDouble (IntegerLit _) -> False
@@ -1916,6 +1933,7 @@ isNormalized e0 = loop (denote e0)
       NaturalEven -> True
       NaturalOdd -> True
       NaturalShow -> True
+      NaturalSubtract -> True
       NaturalToInteger -> True
       NaturalPlus x y -> loop x && loop y && decide x y
         where
@@ -2084,6 +2102,7 @@ reservedIdentifiers =
         , "Natural/odd"
         , "Natural/toInteger"
         , "Natural/show"
+        , "Natural/subtract"
         , "Integer"
         , "Integer/show"
         , "Integer/toDouble"
@@ -2136,6 +2155,7 @@ subExpressions _ NaturalEven = pure NaturalEven
 subExpressions _ NaturalOdd = pure NaturalOdd
 subExpressions _ NaturalToInteger = pure NaturalToInteger
 subExpressions _ NaturalShow = pure NaturalShow
+subExpressions _ NaturalSubtract = pure NaturalSubtract
 subExpressions f (NaturalPlus a b) = NaturalPlus <$> f a <*> f b
 subExpressions f (NaturalTimes a b) = NaturalTimes <$> f a <*> f b
 subExpressions _ Integer = pure Integer

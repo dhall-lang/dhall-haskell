@@ -365,7 +365,7 @@ parsers embedded = Parsers {..}
                             , NaturalIsZero    <$ _NaturalIsZero
                             , NaturalEven      <$ _NaturalEven
                             , NaturalOdd       <$ _NaturalOdd
-                            , NaturalToInteger <$ _NaturalToInteger
+                            , NaturalSubtract  <$ _NaturalSubtract
                             , NaturalToInteger <$ _NaturalToInteger
                             , NaturalShow      <$ _NaturalShow
                             , Natural          <$ _Natural

@@ -824,6 +824,8 @@ prettyCharacterSet characterSet expression =
         builtin "Natural/toInteger"
     prettyPrimitiveExpression NaturalShow =
         builtin "Natural/show"
+    prettyPrimitiveExpression NaturalSubtract =
+        builtin "Natural/subtract"
     prettyPrimitiveExpression Integer =
         builtin "Integer"
     prettyPrimitiveExpression IntegerShow =
