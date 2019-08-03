@@ -256,7 +256,6 @@ parseConversion = Conversion <$> parseStrict
                              <*> parseKVArr
                              <*> parseKVMap
                              <*> parseUnion
-                             <*> parseAllowImports
   where
     parseStrict =
             O.flag' True
@@ -273,17 +272,10 @@ parseConversion = Conversion <$> parseStrict
                 (  O.long "no-keyval-arrays"
                 <> O.help "Disable conversion of key-value arrays to records"
                 )
-
     parseKVMap  =  O.switch
                 (  O.long "no-keyval-maps"
                 <> O.help "Disable conversion of homogeneous map objects to association lists"
                 )
-
-    parseAllowImports =
-        O.switch
-            (   O.long "--allow-imports"
-            <>  O.help "Permit imports in the generated code"
-            )
 
 -- | Parser for command options related to treating union types
 parseUnion :: Parser UnionConv
@@ -312,11 +304,10 @@ parseUnion =
 
 -- | JSON-to-dhall translation options
 data Conversion = Conversion
-    { strictRecs   :: Bool
-    , noKeyValArr  :: Bool
-    , noKeyValMap  :: Bool
-    , unions       :: UnionConv
-    , allowImports :: Bool
+    { strictRecs  :: Bool
+    , noKeyValArr :: Bool
+    , noKeyValMap :: Bool
+    , unions      :: UnionConv
     } deriving Show
 
 data UnionConv = UFirst | UNone | UStrict deriving (Show, Read, Eq)
