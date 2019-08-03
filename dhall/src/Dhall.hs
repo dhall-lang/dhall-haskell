@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds            #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
@@ -6,12 +7,16 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiWayIf                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PolyKinds                  #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE TupleSections              #-}
+
 
 {-| Please read the "Dhall.Tutorial" module, which contains a tutorial explaining
     how to use the language, the compiler, and this library
@@ -52,6 +57,8 @@ module Dhall
     , toMonadic
     , fromMonadic
     , auto
+    , InterpretFix
+    , autoWithFix
     , genericAuto
     , InterpretOptions(..)
     , defaultInterpretOptions
@@ -104,12 +111,14 @@ module Dhall
 
 import Control.Applicative (empty, liftA2, Alternative)
 import Control.Exception (Exception)
+import Control.Monad.Trans.Free (FreeF (..))
 import Control.Monad.Trans.State.Strict
 import Control.Monad (guard)
 import Data.Coerce (coerce)
 import Data.Either.Validation (Validation(..), ealt, eitherToValidation, validationToEither)
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
+import Data.Functor.Foldable (Base, Corecursive, elgot)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
@@ -135,6 +144,7 @@ import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
+import qualified Data.Functor.Foldable
 import qualified Data.Functor.Product
 import qualified Data.Maybe
 import qualified Data.List.NonEmpty
@@ -899,6 +909,103 @@ instance (Interpret a, Interpret b) => Interpret (a, b)
 -}
 auto :: Interpret a => Type a
 auto = autoWith defaultInterpretOptions
+
+newtype DhallFix f t = DhallFix { unDhallFix :: t }
+newtype FixVar = FixVar { unFixVar :: (Expr Src X) }
+
+-- This is a helper instance used from implementation of Interpret for DhallFix
+instance Interpret FixVar where
+    autoWith _ = Type {..}
+        where
+        extract (App _ e0) = pure (FixVar e0)
+        extract e          = typeError expected e
+
+        expected = "t"
+
+type InterpretFix f t =
+   ( Traversable f
+   , Corecursive t
+   , Interpret (f FixVar)
+   , Base t ~ f
+   )
+
+instance InterpretFix f t => Interpret (DhallFix f t) where
+    autoWith opts = Type { extract = extr, expected = expe }
+        where
+        extr (Lam _ _ (Lam _ _ e)) = DhallFix <$> buildF e
+        extr e                     = typeError expe e
+
+        -- buildF = elgot f g <=< extract (auto @FixVar)
+        viaMonadic a b x = fromMonadic $ toMonadic . a =<< toMonadic (b x)
+        buildF = elgot f g `viaMonadic` extract (auto @FixVar)
+
+        g = repack . extract xF_t . unFixVar
+        repack (Failure e) = Left (Failure e)
+        repack (Success s) = Right (Free s)
+        f (Free s) = Data.Functor.Foldable.embed <$> sequenceA s
+        f (Pure x) = typeError expe x
+
+        expe = Pi "t" (Dhall.Core.Const Dhall.Core.Type) -- = ∀(t : Type)
+             $ Pi "_" (Pi "_" (expected xF_t) "t")       -- → ∀(F t → t)
+             $ "t"                                       -- → t
+
+        xF_t = autoWith @(f FixVar) opts
+
+{-| `autoWithFix` allows you to implement `Interpret` instance for a recursive
+    data type. For example, given a Haskell expression:
+
+  > data Expr
+  >    = Lit Natural
+  >    | Add Expr Expr
+  >    | Mul Expr Expr
+  >    deriving (Generic, Show)
+  >
+  > makeBaseFunctor ''Expr
+  > deriving instance Generic (ExprF a)
+  > instance Interpret a => Interpret (ExprF a)
+  > instance Interpret Expr where autoWith = autoWithFix
+
+    And a dhall file:
+
+  > -- expr.dhall
+  >
+  > -- F-Algebra declaration.
+  > let ExprF
+  >   = λ(t : Type) →
+  >   < LitF : { _1 : Natural }
+  >   | AddF : { _1 : t, _2 : t }
+  >   | MulF : { _1 : t, _2 : t }
+  >   >
+  >
+  > -- Helper function.
+  > let Expr
+  >   = λ(t : Type)
+  >   → λ(fix : ExprF t → t)
+  >   → let E = ExprF t in
+  >     { Lit = λ(x : Natural)      → fix (E.LitF { _1 = x })
+  >     , Add = λ(a : t) → λ(b : t) → fix (E.AddF { _1 = a, _2 = b })
+  >     , Mul = λ(a : t) → λ(b : t) → fix (E.MulF { _1 = a, _2 = b })
+  >     }
+  >
+  > -- Example usage.
+  > let result
+  >   = λ(t : Type)
+  >   → λ(fix : ExprF t → t)
+  >   → let E = Expr t fix in
+  >     E.Add
+  >       (E.Mul (E.Lit 3) (E.Lit 7))
+  >       (E.Add (E.Lit 1) (E.Lit 2))
+  >
+  > in result
+
+    We're now able to interpret it:
+
+  > > input @Expr auto "./expr.dhall"
+  > Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))
+
+-}
+autoWithFix :: forall f t. InterpretFix f t => InterpretOptions -> Type t
+autoWithFix opts = unDhallFix <$> autoWith @(DhallFix f t) opts
 
 {-| `genericAuto` is the default implementation for `auto` if you derive
     `Interpret`.  The difference is that you can use `genericAuto` without
