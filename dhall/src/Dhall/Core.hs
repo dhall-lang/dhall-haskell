@@ -111,6 +111,7 @@ import {-# SOURCE #-} qualified Dhall.Eval
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Sequence
+import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Map
@@ -1808,13 +1809,19 @@ normalizeWithM ctx e0 = loop (denote e0)
                 Just v -> pure (Field (Combine l (singletonRecordLit v)) x)
                 Nothing -> loop (Field l x)
             _ -> pure (Field r' x)
-    Project r (Left xs)-> do
-        r' <- loop r
-        case r' of
+    Project x (Left fields)-> do
+        x' <- loop x
+        let fieldsSet = Dhall.Set.toSet fields
+        case x' of
             RecordLit kvs ->
-                pure (RecordLit (Dhall.Map.restrictKeys kvs (Dhall.Set.toSet xs)))
-            _   | null xs -> pure (RecordLit mempty)
-                | otherwise -> pure (Project r' (Left (Dhall.Set.sort xs)))
+                pure (RecordLit (Dhall.Map.restrictKeys kvs fieldsSet))
+            Prefer l (RecordLit rKvs) -> do
+                let rKs = Dhall.Map.keysSet rKvs
+                let l' = Project l (Left (Dhall.Set.fromSet (Data.Set.difference fieldsSet rKs)))
+                let r' = RecordLit (Dhall.Map.restrictKeys rKvs fieldsSet)
+                loop (Prefer l' r')
+            _ | null fields -> pure (RecordLit mempty)
+              | otherwise   -> pure (Project x' (Left (Dhall.Set.sort fields)))
     Project r (Right e1) -> do
         e2 <- loop e1
 
@@ -2063,6 +2070,7 @@ isNormalized e0 = loop (denote e0)
           case p of
               Left s -> case r of
                   RecordLit _ -> False
+                  Prefer _ (RecordLit _) -> False
                   _ -> not (Dhall.Set.null s) && Dhall.Set.isSorted s
               Right e' -> case e' of
                   Record _ -> False
