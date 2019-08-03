@@ -416,7 +416,7 @@ eval !env t =
                                       n             -> VNaturalToInteger n
     NaturalShow      -> VPrim $ \case VNaturalLit n -> VTextLit (VChunks [] (Data.Text.pack (show n)))
                                       n             -> VNaturalShow n
-    NaturalSubtract  -> VPrim $ \x -> VPrim $ \y ->
+    NaturalSubtract  -> VPrim $ \x -> VHLam (Typed "n" VNatural) $ \y ->
                           case (x,y) of
                             (VNaturalLit x, VNaturalLit y)
                               | y >= x    -> VNaturalLit (subtract x y)
