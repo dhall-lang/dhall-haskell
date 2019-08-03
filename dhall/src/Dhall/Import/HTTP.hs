@@ -51,60 +51,80 @@ import qualified Network.HTTP.Client                     as HTTP
 import qualified Network.HTTP.Client.TLS                 as HTTP
 import qualified Network.HTTP.Types
 
-mkPrettyHttpException :: HttpException -> PrettyHttpException
-mkPrettyHttpException ex =
-    PrettyHttpException (renderPrettyHttpException ex) (toDyn ex)
+mkPrettyHttpException :: String -> HttpException -> PrettyHttpException
+mkPrettyHttpException url ex =
+    PrettyHttpException (renderPrettyHttpException url ex) (toDyn ex)
 
-renderPrettyHttpException :: HttpException -> String
+renderPrettyHttpException :: String -> HttpException -> String
 #if MIN_VERSION_http_client(0,5,0)
-renderPrettyHttpException (InvalidUrlException _ r) =
-  "\n"
+renderPrettyHttpException _ (InvalidUrlException _ r) =
+      "\n"
   <>  "\ESC[1;31mError\ESC[0m: Invalid URL\n"
   <>  "\n"
-  <>  "↳ " <> show r
-renderPrettyHttpException (HttpExceptionRequest _ e) =
+  <>  "↳ " <> show r <> "\n"
+renderPrettyHttpException url (HttpExceptionRequest _ e) =
   case e of
     ConnectionFailure _ ->
-      "\n"
+          "\n"
       <>  "\ESC[1;31mError\ESC[0m: Remote host not found\n"
-    InvalidDestinationHost host ->
-      "\n"
-      <>  "\ESC[1;31mError\ESC[0m: Invalid remote host name\n"
       <>  "\n"
-      <>  "↳ " <> show host
+      <>  "URL:\n"
+      <>  "\n"
+      <>  "↳ " <> url <> "\n"
+    InvalidDestinationHost host ->
+          "\n"
+      <>  "\ESC[1;31mError\ESC[0m: Invalid remote host name:\n"
+      <>  "\n"
+      <>  "↳ " <> show host <> "\n"
     ResponseTimeout ->
-      "\n"
-      <>  "\ESC[1;31mError\ESC[0m: The remote host took too long to respond"
+          "\n"
+      <>  "\ESC[1;31mError\ESC[0m: The remote host took too long to respond\n"
+      <>  "\n"
+      <>  "URL:\n"
+      <>  "\n"
+      <>  "↳ " <> url <> "\n"
     StatusCodeException response _
         | statusCode == 404 ->
-            "\n"
-            <>  "\ESC[1;31mError\ESC[0m: Remote file not found"
+                "\n"
+            <>  "\ESC[1;31mError\ESC[0m: Remote file not found\n"
+            <>  "\n"
+            <>  "URL:\n"
+            <>  "\n"
+            <>  "↳ " <> url <> "\n"
         | otherwise ->
-            "\n"
+                "\n"
             <>  "\ESC[1;31mError\ESC[0m: Unexpected HTTP status code:\n"
             <>  "\n"
-            <>  "↳ " <> show statusCode
+            <>  "↳ " <> show statusCode <> "\n"
+            <>  "\n"
+            <>  "URL:\n"
+            <>  "\n"
+            <>  "↳ " <> url <> "\n"
       where
         statusCode =
             Network.HTTP.Types.statusCode
                 (HTTP.responseStatus response)
-    e' -> "\n" <> show e'
+    e' -> "\n" <> show e' <> "\n"
 #else
-renderPrettyHttpException e = case e of
+renderPrettyHttpException url e = case e of
     FailedConnectionException2 _ _ _ e' ->
             "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Wrong host\n"
+        <>  "\ESC[1;31mError\ESC[0m: Wrong host:\n"
         <>  "\n"
-        <>  "↳ " <> show e'
+        <>  "↳ " <> show e' <> "\n"
     InvalidDestinationHost host ->
             "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Invalid host name\n"
+        <>  "\ESC[1;31mError\ESC[0m: Invalid host name:\n"
         <>  "\n"
-        <>  "↳ " <> show host
+        <>  "↳ " <> show host <> "\n"
     ResponseTimeout ->
             "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
+        <>  "\n"
+        <>  "URL:\n"
+        <>  "\n"
+        <>  "↳ " <> url <> "\n"
     e' ->   "\n"
-        <> show e'
+        <>  show e' <> "\n"
 #endif
 
 newManager :: IO Manager
@@ -262,7 +282,7 @@ fetchFromHttpUrl manager childURL mheaders = do
 
     let handler e = do
             let _ = e :: HttpException
-            Control.Exception.throwIO (mkPrettyHttpException e)
+            Control.Exception.throwIO (mkPrettyHttpException childURLString e)
 
     response <- liftIO (Control.Exception.handle handler io)
 
