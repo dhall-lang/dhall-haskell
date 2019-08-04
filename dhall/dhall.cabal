@@ -116,6 +116,14 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/concatSep
     dhall-lang/Prelude/Text/package.dhall
     dhall-lang/Prelude/Text/show
+    dhall-lang/Prelude/XML/attribute
+    dhall-lang/Prelude/XML/element
+    dhall-lang/Prelude/XML/emptyAttributes
+    dhall-lang/Prelude/XML/leaf
+    dhall-lang/Prelude/XML/package.dhall
+    dhall-lang/Prelude/XML/render
+    dhall-lang/Prelude/XML/text
+    dhall-lang/Prelude/XML/Type
     dhall-lang/tests/binary-decode/failure/unit/*.dhallb
     dhall-lang/tests/binary-decode/success/unit/*.dhall
     dhall-lang/tests/binary-decode/success/unit/*.dhallb
