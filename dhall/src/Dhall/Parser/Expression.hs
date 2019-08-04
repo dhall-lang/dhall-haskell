@@ -107,6 +107,7 @@ parsers embedded = Parsers {..}
                 , alternative2
                 , alternative3
                 , alternative4
+                , alternative5
                 ]
             ) <?> "expression"
       where
@@ -165,6 +166,12 @@ parsers embedded = Parsers {..}
             return (Pi a b c)
 
         alternative4 = do
+            _assert
+            _colon
+            a <- expression
+            return (Assert a)
+
+        alternative5 = do
             a <- operatorExpression
 
             let alternative4A = do
@@ -217,7 +224,9 @@ parsers embedded = Parsers {..}
             <|> NaturalTimes <$ _times
             <|> BoolEQ       <$ _doubleEqual
 
-    precedence3Operator = BoolNE <$ _notEqual
+    precedence3Operator
+            =   BoolNE     <$ _notEqual
+            <|> Equivalent <$ _equivalent
 
     precedence0Expression =
             makeOperatorExpression precedence1Expression precedence0Operator
@@ -356,7 +365,7 @@ parsers embedded = Parsers {..}
                             , NaturalIsZero    <$ _NaturalIsZero
                             , NaturalEven      <$ _NaturalEven
                             , NaturalOdd       <$ _NaturalOdd
-                            , NaturalToInteger <$ _NaturalToInteger
+                            , NaturalSubtract  <$ _NaturalSubtract
                             , NaturalToInteger <$ _NaturalToInteger
                             , NaturalShow      <$ _NaturalShow
                             , Natural          <$ _Natural

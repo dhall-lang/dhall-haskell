@@ -61,16 +61,16 @@ axiom Type = return Kind
 axiom Kind = return Sort
 axiom Sort = Left (TypeError Dhall.Context.empty (Const Sort) Untyped)
 
-rule :: Const -> Const -> Either () Const
-rule Type Type = return Type
-rule Kind Type = return Type
-rule Sort Type = return Type
-rule Kind Kind = return Kind
-rule Sort Kind = return Sort
-rule Sort Sort = return Sort
--- This forbids dependent types. If this ever changes, then the fast
--- path in the Let case of typeWithA will become unsound.
-rule _    _    = Left ()
+rule :: Const -> Const -> Const
+rule Type Type = Type
+rule Kind Type = Type
+rule Sort Type = Type
+rule Type Kind = Kind
+rule Kind Kind = Kind
+rule Sort Kind = Sort
+rule Type Sort = Sort
+rule Kind Sort = Sort
+rule Sort Sort = Sort
 
 {-| Type-check an expression and return the expression's type if type-checking
     succeeds or an error if type-checking fails
@@ -131,9 +131,7 @@ typeWithA tpa = loop
             Const k -> return k
             _       -> Left (TypeError ctx' e (InvalidOutputType _B))
 
-        case rule kA kB of
-            Left () -> Left (TypeError ctx e (NoDependentTypes _A _B))
-            Right k -> Right (Const k)
+        return (Const (rule kA kB))
     loop ctx e@(App f a         ) = do
         tf <- fmap Dhall.Core.normalize (loop ctx f)
         (x, _A, _B) <- case tf of
@@ -162,8 +160,6 @@ typeWithA tpa = loop
                     else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
             Nothing -> return ()
 
-        t <- loop ctx _A1
-
         let a1 = Dhall.Core.normalize a0
         let a2 = Dhall.Core.shift 1 (V x 0) a1
 
@@ -171,27 +167,9 @@ typeWithA tpa = loop
                 []       -> b0
                 l' : ls' -> Let (l' :| ls') b0
 
-        -- The catch-all branch directly implements the Dhall
-        -- specification as written; it is necessary to substitute in
-        -- types in order to get 'dependent let' behaviour and to
-        -- allow type synonyms (see #69). However, doing a full
-        -- substitution is slow if the value is large and used many
-        -- times. If the value being substitued in is a term (i.e.,
-        -- its type is a Type), then we can get a very significant
-        -- speed-up by doing the type-checking once at binding-time,
-        -- as opposed to doing it at every use site (see #412).
-        case Dhall.Core.normalize t of
-          Const Type -> do
-            let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A1) ctx)
-            _B0 <- loop ctx' rest
-            let _B1 = Dhall.Core.subst (V x 0) a2 _B0
-            let _B2 = Dhall.Core.shift (-1) (V x 0) _B1
-            return _B2
-
-          _ -> do
-            let b1 = Dhall.Core.subst (V x 0) a2 rest
-            let b2 = Dhall.Core.shift (-1) (V x 0) b1
-            loop ctx b2
+        let b1 = Dhall.Core.subst (V x 0) a2 rest
+        let b2 = Dhall.Core.shift (-1) (V x 0) b1
+        loop ctx b2
 
     loop ctx e@(Annot x t       ) = do
         case Dhall.Core.denote t of
@@ -306,6 +284,8 @@ typeWithA tpa = loop
         return (Pi "_" Natural Integer)
     loop _      NaturalShow  = do
         return (Pi "_" Natural Text)
+    loop _      NaturalSubtract  = do
+        return (Pi "_" Natural (Pi "_" Natural Natural))
     loop ctx e@(NaturalPlus  l r) = do
         tl <- fmap Dhall.Core.normalize (loop ctx l)
         case tl of
@@ -845,6 +825,34 @@ typeWithA tpa = loop
                 let text = Dhall.Core.pretty t
 
                 Left (TypeError ctx e (CantProject text r t))
+    loop ctx e@(Assert t) = do
+        _ <- loop ctx t
+
+        let t' = Dhall.Core.normalize t
+
+        case t' of
+            Equivalent x y -> do
+                if Dhall.Core.judgmentallyEqual x y
+                    then return t'
+                    else Left (TypeError ctx e (AssertionFailed x y))
+
+            _ -> Left (TypeError ctx e (NotAnEquivalence t))
+    loop ctx e@(Equivalent x y) = do
+        _A₀ <- loop ctx x
+
+        c₀ <- loop ctx _A₀
+        case c₀ of
+            Const Type -> return ()
+            _          -> Left (TypeError ctx e (IncomparableExpression x))
+
+        _A₁ <- loop ctx y
+
+        c₁ <- loop ctx _A₁
+        case c₁ of
+            Const Type -> return ()
+            _          -> Left (TypeError ctx e (IncomparableExpression y))
+
+        return (Const Type)
     loop ctx   (Note s e'       ) = case loop ctx e' of
         Left (TypeError ctx' (Note s' e'') m) -> Left (TypeError ctx' (Note s' e'') m)
         Left (TypeError ctx'          e''  m) -> Left (TypeError ctx' (Note s  e'') m)
@@ -908,6 +916,9 @@ data TypeMessage s a
     | MissingField Text (Expr s a)
     | MissingConstructor Text (Expr s a)
     | ProjectionTypeMismatch Text (Expr s a) (Expr s a) (Expr s a) (Expr s a)
+    | AssertionFailed (Expr s a) (Expr s a)
+    | NotAnEquivalence (Expr s a)
+    | IncomparableExpression (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
     | CantOr (Expr s a) (Expr s a)
     | CantEQ (Expr s a) (Expr s a)
@@ -917,7 +928,6 @@ data TypeMessage s a
     | CantListAppend (Expr s a) (Expr s a)
     | CantAdd (Expr s a) (Expr s a)
     | CantMultiply (Expr s a) (Expr s a)
-    | NoDependentTypes (Expr s a) (Expr s a)
     deriving (Show)
 
 shortTypeMessage :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> Doc Ann
@@ -3476,6 +3486,155 @@ prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1 expr2 expr3) = ErrorMess
         txt1 = insert expr0
         txt2 = insert expr1
 
+prettyTypeMessage (AssertionFailed expr0 expr1) = ErrorMessages {..}
+  where
+    short = "Assertion failed\n"
+        <>  "\n"
+        <>  Dhall.Diff.diffNormalized expr0 expr1
+
+    long =
+        "Explanation: You can assert at type-checking time that two terms are equal if   \n\
+        \they have the same normal form, like this:                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ assert : 2 + 2 ≡ 4 │  This is valid                                       \n\
+        \    └────────────────────┘                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... and an assertion still succeeds if the normal forms only differ by renaming \n\
+        \bound variables, like this:                                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────────────────┐                    \n\
+        \    │ assert : λ(n : Natural) → n + 0 ≡ λ(m : Natural) → m │  This is also valid\n\
+        \    └──────────────────────────────────────────────────────┘                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \However, an assertion fails if the normal forms differ in any other way.  For   \n\
+        \example, the following assertion is " <> _NOT <> " valid:                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────┐                                                          \n\
+        \    │ assert : 0 ≡ 1 │  Invalid: ❰0❱ does not equal ❰1❱                         \n\
+        \    └────────────────┘                                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You might have tried to ❰assert❱ a precondition on a function's input, like   \n\
+        \  this:                                                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────────────────────────────┐        \n\
+        \    │ λ(n : Natural) → let _ = assert : Natural/isZero n ≡ False in n  │        \n\
+        \    └──────────────────────────────────────────────────────────────────┘        \n\
+        \                                        ⇧                                       \n\
+        \                                        Invalid: This assertion will always fail\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \  This will not work.  Such an assertion is checking all possible inputs to the \n\
+        \  function, before you've even used the function at all.                        \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to assert that this expression:                                       \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... is the same as this other expression:                                       \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... but they differ\n"
+      where
+        txt0 = insert expr0
+        txt1 = insert expr1
+
+prettyTypeMessage (NotAnEquivalence expr) = ErrorMessages {..}
+  where
+    short = "Not an equivalence\n"
+
+    long =
+        "Explanation: The type annotation for an ❰assert❱ must evaluate to an equivalence\n\
+        \of the form ❰x ≡ y❱, like this:                                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ assert : 2 + 2 ≡ 4 │  This is valid                                       \n\
+        \    └────────────────────┘                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but any other type is not a valid annotation.  For example, the following   \n\
+        \assertion is " <> _NOT <> " valid:                                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────┐                                                           \n\
+        \    │ assert : True │  Invalid: ❰True❱ is not an equivalence                    \n\
+        \    └───────────────┘                                                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You tried to supply an expression of type ❰Bool❱ to the assertion, rather than\n\
+        \  two separate expressions to compare, like this:                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────┐                                               \n\
+        \    │ assert : Natural/isZero 0 │  Invalid: A boolean expression is not the     \n\
+        \    └───────────────────────────┘  same thing as a type-level equivalence       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \  You have to explicitly compare two expressions, even if that just means       \n\
+        \  comparing the expression to ❰True❱, like this:                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────┐                                        \n\
+        \    │ assert : Natural/isZero 0 ≡ True │  Valid: You can assert that two boolean\n\
+        \    └──────────────────────────────────┘  expressions are equivalent            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You provided the following type annotation for an ❰assert❱:                     \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... which is not an equivalence\n"
+      where
+        txt0 = insert expr
+
+prettyTypeMessage (IncomparableExpression expr) = ErrorMessages {..}
+  where
+    short = "Incomparable expression\n"
+
+    long =
+        "Explanation: You can use an ❰assert❱ to compare two terms for equivalence, like \n\
+        \this:                                                                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────┐                                                      \n\
+        \    │ assert : 2 + 2 ≡ 4 │  This is valid because ❰2 + 2❱ and ❰4❱ are both terms\n\
+        \    └────────────────────┘                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot compare expressions, that are not terms, such as types.  For \n\
+        \example, the following assertion is " <> _NOT <> " valid:                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────┐                                              \n\
+        \    │ assert : Natural ≡ Natural │  Invalid: ❰Natural❱ is a type, not a term    \n\
+        \    └────────────────────────────┘                                              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You tried to compare the following expression:                                  \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... which is not a term\n"
+      where
+        txt0 = insert expr
+
 prettyTypeMessage (CantAnd expr0 expr1) =
         buildBooleanOperator "&&" expr0 expr1
 
@@ -3629,46 +3788,6 @@ prettyTypeMessage (CantAdd expr0 expr1) =
 
 prettyTypeMessage (CantMultiply expr0 expr1) =
         buildNaturalOperator "*" expr0 expr1
-
-prettyTypeMessage (NoDependentTypes expr0 expr1) = ErrorMessages {..}
-  where
-    short = "No dependent types"
-
-    long =
-        "Explanation: The Dhall programming language does not allow functions from terms \n\
-        \to types.  These function types are also known as “dependent function types”    \n\
-        \because you have a type whose value “depends” on the value of a term.           \n\
-        \                                                                                \n\
-        \For example, this is " <> _NOT <> " a legal function type:                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────┐                                                             \n\
-        \    │ Bool → Type │                                                             \n\
-        \    └─────────────┘                                                             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Similarly, this is " <> _NOT <> " legal code:                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────────────────────┐                       \n\
-        \    │ λ(Vector : Natural → Type → Type) → Vector 0 Text │                       \n\
-        \    └───────────────────────────────────────────────────┘                       \n\
-        \                 ⇧                                                              \n\
-        \                 Invalid dependent type                                         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Your function type is invalid because the input has type:                       \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... and the output has kind:                                                    \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which makes this a forbidden dependent function type                        \n"
-      where
-        txt0 = insert expr0
-        txt1 = insert expr1
 
 buildBooleanOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
 buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}

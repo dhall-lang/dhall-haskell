@@ -183,6 +183,7 @@ import Control.Applicative (empty, (<|>))
 import Control.Monad (guard)
 import Control.Exception (Exception, throwIO)
 import Data.Aeson (Value(..), ToJSON(..))
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Text (Text)
 import Dhall.Core (Expr)
@@ -205,6 +206,7 @@ import qualified Dhall.Optics
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
+import qualified System.FilePath
 
 {-| This is the exception type for errors that might arise when translating
     Dhall to JSON
@@ -639,6 +641,9 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.NaturalShow ->
             Core.NaturalShow
 
+        Core.NaturalSubtract ->
+            Core.NaturalSubtract
+
         Core.NaturalPlus a b ->
             Core.NaturalPlus a' b'
           where
@@ -843,6 +848,17 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
           where
             a' = loop a
 
+        Core.Assert a ->
+            Core.Assert a'
+          where
+            a' = loop a
+
+        Core.Equivalent a b ->
+            Core.Equivalent a' b'
+          where
+            a' = loop a
+            b' = loop b
+
         Core.ImportAlt a b ->
             Core.ImportAlt a' b'
           where
@@ -948,13 +964,18 @@ handleSpecialDoubles specialDoubleMode =
 codeToValue
   :: Conversion
   -> SpecialDoubleMode
-  -> Text  -- ^ Describe the input for the sake of error location.
+  -> Maybe FilePath  -- ^ The source file path. If no path is given, imports
+                     -- are resolved relative to the current directory.
   -> Text  -- ^ Input text.
   -> IO Value
-codeToValue conversion specialDoubleMode name code = do
-    parsedExpression <- Core.throws (Dhall.Parser.exprFromText (Data.Text.unpack name) code)
+codeToValue conversion specialDoubleMode mFilePath code = do
+    parsedExpression <- Core.throws (Dhall.Parser.exprFromText (fromMaybe "(stdin)" mFilePath) code)
 
-    resolvedExpression <- Dhall.Import.load parsedExpression
+    let rootDirectory = case mFilePath of
+            Nothing -> "."
+            Just fp -> System.FilePath.takeDirectory fp
+
+    resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory parsedExpression
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 

@@ -68,14 +68,15 @@ parseQuoted =
 -}
 dhallToYaml
   :: Options
-  -> Text  -- ^ Describe the input for the sake of error location.
+  -> Maybe FilePath  -- ^ The source file path. If no path is given, imports
+                     -- are resolved relative to the current directory.
   -> Text  -- ^ Input text.
   -> IO ByteString
-dhallToYaml Options{..} name code = do
+dhallToYaml Options{..} mFilePath code = do
   
   let explaining = if explain then Dhall.detailed else id
 
-  json <- omission <$> explaining (codeToValue conversion UseYAMLEncoding name code)
+  json <- omission <$> explaining (codeToValue conversion UseYAMLEncoding mFilePath code)
 
   return $ jsonToYaml json documents quoted
 

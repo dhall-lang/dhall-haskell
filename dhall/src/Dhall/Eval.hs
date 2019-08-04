@@ -173,6 +173,7 @@ data Val a
   | VNaturalOdd !(Val a)
   | VNaturalToInteger !(Val a)
   | VNaturalShow !(Val a)
+  | VNaturalSubtract !(Val a) !(Val a)
   | VNaturalPlus !(Val a) !(Val a)
   | VNaturalTimes !(Val a) !(Val a)
 
@@ -217,6 +218,8 @@ data Val a
   | VField !(Val a) !Text
   | VInject !(Map Text (Maybe (Val a))) !Text !(Maybe (Val a))
   | VProject !(Val a) !(Either (Set Text) (Val a))
+  | VAssert !(Val a)
+  | VEquivalent !(Val a) !(Val a)
   | VEmbed a
 
 vFun :: Val a -> Val a -> Val a
@@ -413,6 +416,14 @@ eval !env t =
                                       n             -> VNaturalToInteger n
     NaturalShow      -> VPrim $ \case VNaturalLit n -> VTextLit (VChunks [] (Data.Text.pack (show n)))
                                       n             -> VNaturalShow n
+    NaturalSubtract  -> VPrim $ \x -> VPrim $ \y ->
+                          case (x,y) of
+                            (VNaturalLit x, VNaturalLit y)
+                              | y >= x    -> VNaturalLit (subtract x y)
+                              | otherwise -> VNaturalLit 0
+                            (VNaturalLit 0, y) -> y
+                            (x, VNaturalLit 0) -> VNaturalLit 0
+                            (x, y) -> VNaturalSubtract x y
     NaturalPlus t u  -> vNaturalPlus (evalE t) (evalE u)
     NaturalTimes t u -> case (evalE t, evalE u) of
                           (VNaturalLit 1, u            ) -> u
@@ -570,6 +581,8 @@ eval !env t =
                           VRecord kts ->
                             evalE (Project t (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
                           e' -> VProject (evalE t) (Right e')
+    Assert t         -> VAssert (evalE t)
+    Equivalent t u   -> VEquivalent (evalE t) (evalE u)
     Note _ e         -> evalE e
     ImportAlt t _    -> evalE t
     Embed a          -> VEmbed a
@@ -662,14 +675,15 @@ conv !env t t' =
     (VNaturalFold t _ u v, VNaturalFold t' _ u' v') ->
       convE t t' && convE u u' && convE v v'
 
-    (VNaturalBuild t     , VNaturalBuild t')     -> convE t t'
-    (VNaturalIsZero t    , VNaturalIsZero t')    -> convE t t'
-    (VNaturalEven t      , VNaturalEven t')      -> convE t t'
-    (VNaturalOdd t       , VNaturalOdd t')       -> convE t t'
-    (VNaturalToInteger t , VNaturalToInteger t') -> convE t t'
-    (VNaturalShow t      , VNaturalShow t')      -> convE t t'
-    (VNaturalPlus t u    , VNaturalPlus t' u')   -> convE t t' && convE u u'
-    (VNaturalTimes t u   , VNaturalTimes t' u')  -> convE t t' && convE u u'
+    (VNaturalBuild t      , VNaturalBuild t')       -> convE t t'
+    (VNaturalIsZero t     , VNaturalIsZero t')      -> convE t t'
+    (VNaturalEven t       , VNaturalEven t')        -> convE t t'
+    (VNaturalOdd t        , VNaturalOdd t')         -> convE t t'
+    (VNaturalToInteger t  , VNaturalToInteger t')   -> convE t t'
+    (VNaturalShow t       , VNaturalShow t')        -> convE t t'
+    (VNaturalSubtract x y , VNaturalSubtract x' y') -> convE x x' && convE y y'
+    (VNaturalPlus t u     , VNaturalPlus t' u')     -> convE t t' && convE u u'
+    (VNaturalTimes t u    , VNaturalTimes t' u')    -> convE t t' && convE u u'
 
     (VInteger           , VInteger)            -> True
     (VIntegerLit t      , VIntegerLit t')      -> t == t'
@@ -715,6 +729,8 @@ conv !env t t' =
     (VField t k              , VField t' k'                ) -> convE t t' && k == k'
     (VProject t (Left ks)    , VProject t' (Left ks')      ) -> convE t t' && ks == ks'
     (VProject t (Right e)    , VProject t' (Right e')      ) -> convE t t' && convE e e'
+    (VAssert t               , VAssert t'                  ) -> convE t t'
+    (VEquivalent t u         , VEquivalent t' u'           ) -> convE t t' && convE u u'
     (VInject m k mt          , VInject m' k' mt'           ) -> eqMapsBy (eqMaybeBy convE) m m'
                                                                   && k == k' && eqMaybeBy convE mt mt'
     (VEmbed a                , VEmbed a'                   ) -> a == a'
@@ -807,6 +823,7 @@ quote !env !t =
     VNaturalShow t                -> NaturalShow `qApp` t
     VNaturalPlus t u              -> NaturalPlus (quoteE t) (quoteE u)
     VNaturalTimes t u             -> NaturalTimes (quoteE t) (quoteE u)
+    VNaturalSubtract x y          -> NaturalSubtract `qApp` x `qApp` y
 
     VInteger                      -> Integer
     VIntegerLit n                 -> IntegerLit n
@@ -848,6 +865,8 @@ quote !env !t =
     VToMap t ma                   -> ToMap (quoteE t) (quoteE <$> ma)
     VField t k                    -> Field (quoteE t) k
     VProject t p                  -> Project (quoteE t) (fmap quoteE p)
+    VAssert t                     -> Assert (quoteE t)
+    VEquivalent t u               -> Equivalent (quoteE t) (quoteE u)
     VInject m k Nothing           -> Field (Union ((quoteE <$>) <$> m)) k
     VInject m k (Just t)          -> Field (Union ((quoteE <$>) <$> m)) k `qApp` t
     VEmbed a                      -> Embed a
@@ -922,6 +941,7 @@ alphaNormalize = goEnv NEmpty where
       NaturalOdd       -> NaturalOdd
       NaturalToInteger -> NaturalToInteger
       NaturalShow      -> NaturalShow
+      NaturalSubtract  -> NaturalSubtract
       NaturalPlus t u  -> NaturalPlus  (go t) (go u)
       NaturalTimes t u -> NaturalTimes (go t) (go u)
       Integer          -> Integer
@@ -960,6 +980,8 @@ alphaNormalize = goEnv NEmpty where
       ToMap x ma       -> ToMap (go x) (go <$> ma)
       Field t k        -> Field (go t) k
       Project t ks     -> Project (go t) (go <$> ks)
+      Assert t         -> Assert (go t)
+      Equivalent t u   -> Equivalent (go t) (go u)
       Note s e         -> Note s (go e)
       ImportAlt t u    -> ImportAlt (go t) (go u)
       Embed a          -> Embed a
