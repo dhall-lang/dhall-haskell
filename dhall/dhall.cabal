@@ -43,11 +43,19 @@ Extra-Source-Files:
     dhall-lang/Prelude/Integer/package.dhall
     dhall-lang/Prelude/Integer/show
     dhall-lang/Prelude/Integer/toDouble
+    dhall-lang/Prelude/JSON/array
+    dhall-lang/Prelude/JSON/bool
     dhall-lang/Prelude/JSON/keyText
     dhall-lang/Prelude/JSON/keyValue
     dhall-lang/Prelude/JSON/Nesting
+    dhall-lang/Prelude/JSON/null
+    dhall-lang/Prelude/JSON/number
+    dhall-lang/Prelude/JSON/object
     dhall-lang/Prelude/JSON/package.dhall
+    dhall-lang/Prelude/JSON/render
+    dhall-lang/Prelude/JSON/string
     dhall-lang/Prelude/JSON/Tagged
+    dhall-lang/Prelude/JSON/Type
     dhall-lang/Prelude/List/all
     dhall-lang/Prelude/List/any
     dhall-lang/Prelude/List/build
