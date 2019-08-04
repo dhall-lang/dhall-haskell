@@ -330,6 +330,8 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
     go e@(ToMap         {}) = Left (UnsupportedStatement e)
     go e@(Field         {}) = Left (UnsupportedStatement e)
     go e@(Project       {}) = Left (UnsupportedStatement e)
+    go e@(Assert        {}) = Left (UnsupportedStatement e)
+    go e@(Equivalent    {}) = Left (UnsupportedStatement e)
     go e@(ImportAlt     {}) = Left (UnsupportedStatement e)
 
 {-| Compile a Dhall expression to a Bash expression
