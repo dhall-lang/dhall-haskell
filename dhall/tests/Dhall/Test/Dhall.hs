@@ -9,7 +9,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving  #-}
 {-# LANGUAGE TemplateHaskell     #-}
-{-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -138,11 +137,11 @@ shouldHaveWorkingAutoWithFix = testGroup "autoWithFix"
         -- but I don't think that would provide much value, and would only slow
         -- things down. Thoughts?
         let expectedExpr = Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))
-        expr <- Dhall.input @AExpr Dhall.auto (makeExprDhall expectedExpr)
+        expr <- Dhall.input Dhall.auto (makeExprDhall expectedExpr)
         assertEqual "autoWithFix didn't give us what we wanted" expectedExpr expr
     , testCase "passes a shadowing sanity check" $ do
         let expectedExpr = Lit 2
-        expr <- Dhall.input @AExpr Dhall.auto "./tests/recursive/expr0.dhall"
+        expr <- Dhall.input Dhall.auto "./tests/recursive/expr0.dhall"
         assertEqual "autoWithFix didn't give us what we wanted" expectedExpr expr
     ]
 

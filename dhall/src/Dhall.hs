@@ -12,7 +12,6 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE TupleSections              #-}
@@ -937,7 +936,7 @@ instance InterpretFix f t => Interpret (DhallFix f t) where
 
         -- buildF = elgot f g <=< extract (auto @FixVar)
         viaMonadic a b x = fromMonadic $ toMonadic . a =<< toMonadic (b x)
-        buildF = elgot f g `viaMonadic` extract (auto @FixVar)
+        buildF = elgot f g `viaMonadic` extract (auto :: Type FixVar)
 
         g = repack . extract xF_t . unFixVar
         repack (Failure e) = Left (Failure e)
@@ -949,7 +948,7 @@ instance InterpretFix f t => Interpret (DhallFix f t) where
              $ Pi "_" (Pi "_" (expected xF_t) "t")       -- → ∀(F t → t)
              $ "t"                                       -- → t
 
-        xF_t = autoWith @(f FixVar) opts
+        xF_t = autoWith opts :: Type (f FixVar)
 
 {-| `autoWithFix` allows you to implement `Interpret` instance for a recursive
     data type. For example, given a Haskell expression:
@@ -1005,7 +1004,7 @@ instance InterpretFix f t => Interpret (DhallFix f t) where
 
 -}
 autoWithFix :: forall f t. InterpretFix f t => InterpretOptions -> Type t
-autoWithFix opts = unDhallFix <$> autoWith @(DhallFix f t) opts
+autoWithFix opts = unDhallFix <$> (autoWith opts :: Type (DhallFix f t))
 
 {-| `genericAuto` is the default implementation for `auto` if you derive
     `Interpret`.  The difference is that you can use `genericAuto` without

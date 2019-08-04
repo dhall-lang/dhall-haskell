@@ -509,6 +509,7 @@ Extra-Source-Files:
     tests/lint/success/*.dhall
     tests/diff/*.dhall
     tests/diff/*.txt
+    tests/recursive/*.dhall
     tests/regression/*.dhall
     tests/tutorial/*.dhall
 
