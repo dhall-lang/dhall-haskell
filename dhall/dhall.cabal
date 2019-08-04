@@ -68,6 +68,12 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/reverse
     dhall-lang/Prelude/List/shifted
     dhall-lang/Prelude/List/unzip
+    dhall-lang/Prelude/Map/Entry
+    dhall-lang/Prelude/Map/keys
+    dhall-lang/Prelude/Map/map
+    dhall-lang/Prelude/Map/package.dhall
+    dhall-lang/Prelude/Map/Type
+    dhall-lang/Prelude/Map/values
     dhall-lang/Prelude/Monoid
     dhall-lang/Prelude/Natural/build
     dhall-lang/Prelude/Natural/enumerate
