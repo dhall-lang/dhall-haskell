@@ -39,6 +39,8 @@ removeLetInLet _ = Nothing
 -- variable -- unfold Let blocks first to make sure we don't miss any rewrite
 -- opportunities!
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
+-- Don't remove assertions!
+removeUnusedBindings (Let (Binding _ _ (Assert _) :| []) _) = Nothing
 removeUnusedBindings (Let (Binding a _ _ :| []) d)
     | not (V a 0 `Dhall.Core.freeIn` d) =
         Just (Dhall.Core.shift (-1) (V a 0) d)
