@@ -1,6 +1,6 @@
 cabal-version: 1.12
 name:           dhall-lsp-server
-version:        1.0.0
+Version: 1.0.0
 description:    Please see the README on GitHub at <https://github.com/githubuser/dhall-lsp-server#readme>
 homepage:       https://github.com/dhall-lang/dhall-haskell/dhall-lsp-server#readme
 bug-reports:    https://github.com/dhall-lang/dhall-haskell/issues

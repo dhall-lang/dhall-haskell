@@ -173,6 +173,7 @@ data Val a
   | VNaturalOdd !(Val a)
   | VNaturalToInteger !(Val a)
   | VNaturalShow !(Val a)
+  | VNaturalSubtract !(Val a) !(Val a)
   | VNaturalPlus !(Val a) !(Val a)
   | VNaturalTimes !(Val a) !(Val a)
 
@@ -209,7 +210,6 @@ data Val a
   | VRecord !(Map Text (Val a))
   | VRecordLit !(Map Text (Val a))
   | VUnion !(Map Text (Maybe (Val a)))
-  | VUnionLit !Text !(Val a) !(Map Text (Maybe (Val a)))
   | VCombine !(Val a) !(Val a)
   | VCombineTypes !(Val a) !(Val a)
   | VPrefer !(Val a) !(Val a)
@@ -298,6 +298,28 @@ vNaturalPlus t u = case (t, u) of
   (VNaturalLit m, VNaturalLit n) -> VNaturalLit (m + n)
   (t,             u            ) -> VNaturalPlus t u
 {-# inline vNaturalPlus #-}
+
+vField :: Val a -> Text -> Val a
+vField t0 k = go t0 where
+  go = \case
+    VUnion m -> case Dhall.Map.lookup k m of
+      Just (Just _) -> VPrim $ \ ~u -> VInject m k (Just u)
+      Just Nothing  -> VInject m k Nothing
+      _             -> error errorMsg
+    VRecordLit m
+      | Just v <- Dhall.Map.lookup k m -> v
+      | otherwise -> error errorMsg
+    VProject t _ -> go t
+    VPrefer l (VRecordLit m) -> case Dhall.Map.lookup k m of
+      Just v -> v
+      Nothing -> go l
+    VPrefer (VRecordLit m) r | not (Dhall.Map.member k m) -> go r
+    VCombine l (VRecordLit m) -> case Dhall.Map.lookup k m of
+      Just v -> VField (VCombine l (VRecordLit (Dhall.Map.singleton k v))) k
+      Nothing -> go l
+    VCombine (VRecordLit m) r | not (Dhall.Map.member k m) -> go r
+    t -> VField t k
+{-# inline vField #-}
 
 eval :: forall a. Eq a => Env a -> Expr Void a -> Val a
 eval !env t =
@@ -392,6 +414,14 @@ eval !env t =
                                       n             -> VNaturalToInteger n
     NaturalShow      -> VPrim $ \case VNaturalLit n -> VTextLit (VChunks [] (Data.Text.pack (show n)))
                                       n             -> VNaturalShow n
+    NaturalSubtract  -> VPrim $ \x -> VPrim $ \y ->
+                          case (x,y) of
+                            (VNaturalLit x, VNaturalLit y)
+                              | y >= x    -> VNaturalLit (subtract x y)
+                              | otherwise -> VNaturalLit 0
+                            (VNaturalLit 0, y) -> y
+                            (x, VNaturalLit 0) -> VNaturalLit 0
+                            (x, y) -> VNaturalSubtract x y
     NaturalPlus t u  -> vNaturalPlus (evalE t) (evalE u)
     NaturalTimes t u -> case (evalE t, evalE u) of
                           (VNaturalLit 1, u            ) -> u
@@ -512,7 +542,6 @@ eval !env t =
     Record kts       -> VRecord (Dhall.Map.sort (evalE <$> kts))
     RecordLit kts    -> VRecordLit (Dhall.Map.sort (evalE <$> kts))
     Union kts        -> VUnion (Dhall.Map.sort ((evalE <$>) <$> kts))
-    UnionLit k v kts -> VUnionLit k (evalE v) (Dhall.Map.sort ((evalE <$>) <$> kts))
     Combine t u      -> vCombine (evalE t) (evalE u)
     CombineTypes t u -> vCombineTypes (evalE t) (evalE u)
     Prefer t u       -> case (evalE t, evalE u) of
@@ -522,9 +551,6 @@ eval !env t =
                              VRecordLit (Dhall.Map.sort (Dhall.Map.union m' m))
                           (t, u) -> VPrefer t u
     Merge x y ma     -> case (evalE x, evalE y, evalE <$> ma) of
-                          (VRecordLit m, VUnionLit k v _, _)
-                            | Just f <- Dhall.Map.lookup k m -> f `vApp` v
-                            | otherwise -> error errorMsg
                           (VRecordLit m, VInject _ k mt, _)
                             | Just f  <- Dhall.Map.lookup k m -> maybe f (vApp f) mt
                             | otherwise -> error errorMsg
@@ -539,15 +565,7 @@ eval !env t =
                             s = (Data.Sequence.fromList . map entry . Dhall.Map.toList) m
                             in VListLit Nothing s
                           (x, ma) -> VToMap x ma
-    Field t k        -> case evalE t of
-                          VRecordLit m
-                            | Just v <- Dhall.Map.lookup k m -> v
-                            | otherwise -> error errorMsg
-                          VUnion m -> case Dhall.Map.lookup k m of
-                            Just (Just _) -> VPrim $ \ ~u -> VInject m k (Just u)
-                            Just Nothing  -> VInject m k Nothing
-                            _             -> error errorMsg
-                          t -> VField t k
+    Field t k        -> vField (evalE t) k
     Project t (Left ks) ->
                         if null ks then
                           VRecordLit mempty
@@ -653,14 +671,15 @@ conv !env t t' =
     (VNaturalFold t _ u v, VNaturalFold t' _ u' v') ->
       convE t t' && convE u u' && convE v v'
 
-    (VNaturalBuild t     , VNaturalBuild t')     -> convE t t'
-    (VNaturalIsZero t    , VNaturalIsZero t')    -> convE t t'
-    (VNaturalEven t      , VNaturalEven t')      -> convE t t'
-    (VNaturalOdd t       , VNaturalOdd t')       -> convE t t'
-    (VNaturalToInteger t , VNaturalToInteger t') -> convE t t'
-    (VNaturalShow t      , VNaturalShow t')      -> convE t t'
-    (VNaturalPlus t u    , VNaturalPlus t' u')   -> convE t t' && convE u u'
-    (VNaturalTimes t u   , VNaturalTimes t' u')  -> convE t t' && convE u u'
+    (VNaturalBuild t      , VNaturalBuild t')       -> convE t t'
+    (VNaturalIsZero t     , VNaturalIsZero t')      -> convE t t'
+    (VNaturalEven t       , VNaturalEven t')        -> convE t t'
+    (VNaturalOdd t        , VNaturalOdd t')         -> convE t t'
+    (VNaturalToInteger t  , VNaturalToInteger t')   -> convE t t'
+    (VNaturalShow t       , VNaturalShow t')        -> convE t t'
+    (VNaturalSubtract x y , VNaturalSubtract x' y') -> convE x x' && convE y y'
+    (VNaturalPlus t u     , VNaturalPlus t' u')     -> convE t t' && convE u u'
+    (VNaturalTimes t u    , VNaturalTimes t' u')    -> convE t t' && convE u u'
 
     (VInteger           , VInteger)            -> True
     (VIntegerLit t      , VIntegerLit t')      -> t == t'
@@ -698,8 +717,6 @@ conv !env t t' =
     (VRecord m               , VRecord m'                  ) -> eqMapsBy convE m m'
     (VRecordLit m            , VRecordLit m'               ) -> eqMapsBy convE m m'
     (VUnion m                , VUnion m'                   ) -> eqMapsBy (eqMaybeBy convE) m m'
-    (VUnionLit k v m         , VUnionLit k' v' m'          ) -> k == k' && convE v v' &&
-                                                                  eqMapsBy (eqMaybeBy convE)  m m'
     (VCombine t u            , VCombine t' u'              ) -> convE t t' && convE u u'
     (VCombineTypes t u       , VCombineTypes t' u'         ) -> convE t t' && convE u u'
     (VPrefer  t u            , VPrefer t' u'               ) -> convE t t' && convE u u'
@@ -800,6 +817,7 @@ quote !env !t =
     VNaturalShow t                -> NaturalShow `qApp` t
     VNaturalPlus t u              -> NaturalPlus (quoteE t) (quoteE u)
     VNaturalTimes t u             -> NaturalTimes (quoteE t) (quoteE u)
+    VNaturalSubtract x y          -> NaturalSubtract `qApp` x `qApp` y
 
     VInteger                      -> Integer
     VIntegerLit n                 -> IntegerLit n
@@ -834,7 +852,6 @@ quote !env !t =
     VRecord m                     -> Record (quoteE <$> m)
     VRecordLit m                  -> RecordLit (quoteE <$> m)
     VUnion m                      -> Union ((quoteE <$>) <$> m)
-    VUnionLit k v m               -> UnionLit k (quoteE v) ((quoteE <$>) <$> m)
     VCombine t u                  -> Combine (quoteE t) (quoteE u)
     VCombineTypes t u             -> CombineTypes (quoteE t) (quoteE u)
     VPrefer t u                   -> Prefer (quoteE t) (quoteE u)
@@ -916,6 +933,7 @@ alphaNormalize = goEnv NEmpty where
       NaturalOdd       -> NaturalOdd
       NaturalToInteger -> NaturalToInteger
       NaturalShow      -> NaturalShow
+      NaturalSubtract  -> NaturalSubtract
       NaturalPlus t u  -> NaturalPlus  (go t) (go u)
       NaturalTimes t u -> NaturalTimes (go t) (go u)
       Integer          -> Integer
@@ -947,7 +965,6 @@ alphaNormalize = goEnv NEmpty where
       Record kts       -> Record (go <$> kts)
       RecordLit kts    -> RecordLit (go <$> kts)
       Union kts        -> Union ((go <$>) <$> kts)
-      UnionLit k v kts -> UnionLit k (go v) ((go <$>) <$> kts)
       Combine t u      -> Combine (go t) (go u)
       CombineTypes t u -> CombineTypes  (go t) (go u)
       Prefer t u       -> Prefer (go t) (go u)
