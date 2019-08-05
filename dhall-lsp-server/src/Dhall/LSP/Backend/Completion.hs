@@ -78,29 +78,22 @@ buildCompletionContext' :: Context (Expr Src X) -> Context (Expr Src X)
 buildCompletionContext' context values (Let (Binding x mA a :| []) e)
   -- We prefer the actual value over the annotated type in order to get
   -- 'dependent let' behaviour whenever possible.
-  | Right _A <- typeWithA absurd context a
-  , Right kind <- typeWithA absurd context _A =
+  | Right _A <- typeWithA absurd context a =
     let _A' = normalize _A
-        kind' = normalize kind
-
-        context' = fmap (shift 1 (V x 0)) $ insert x _A' context
 
         a' = normalize a
+        e' = subst (V x 0) a' e
 
-        e' | Const k <- kind', k `elem` [Kind, Sort] =
-             subst (V x 0) a' e  -- 'dependent let'
-           | otherwise = e
-
-        values' | Const k <- kind', k `elem` [Kind, Sort] =
-                  fmap (shift 1 (V x 0)) $ insert x a' values
-                | otherwise = fmap (shift 1 (V x 0)) $ insert x holeExpr values
+        context' = fmap (shift 1 (V x 0)) $ insert x _A' context
+        values' = fmap (shift 1 (V x 0)) $ insert x a' values
 
     in buildCompletionContext' context' values' e'
 
-  -- fall back to annotated type if body doesn't type check; can't do 'dependent let'
+  -- fall back to annotated type if body doesn't type check; bind to `holeExpr`
   | Just _A <- mA
   , Right _ <- typeWithA absurd context _A =
     let _A' = normalize _A
+
         context' = fmap (shift 1 (V x 0)) $ insert x _A' context
         values' = fmap (shift 1 (V x 0)) $ insert x holeExpr values
 
