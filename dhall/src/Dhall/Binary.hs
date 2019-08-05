@@ -258,6 +258,11 @@ instance ToTerm a => ToTerm (Expr X a) where
       where
         l₁ = encode l₀
         r₁ = encode r₀
+    encode (Equivalent l₀ r₀) =
+        TList [ TInt 3, TInt 12, l₁, r₁ ]
+      where
+        l₁ = encode l₀
+        r₁ = encode r₀
     encode (ListLit _T₀ xs₀)
         | null xs₀  = TList [ TInt label, _T₁ ]
         | otherwise = TList ([ TInt 4, TNull ] ++ xs₁)
@@ -360,6 +365,10 @@ instance ToTerm a => ToTerm (Expr X a) where
             [ x₁, y₁ ]
 
         z₁ = TString z₀
+    encode (Assert t₀) =
+        TList [ TInt 19, t₁ ]
+      where
+        t₁ = encode t₀
     encode (Embed x) =
         encode x
     encode (Let as₀ b₀) =
@@ -581,6 +590,7 @@ instance FromTerm a => FromTerm (Expr s a) where
                 9  -> return Prefer
                 10 -> return CombineTypes
                 11 -> return ImportAlt
+                12 -> return Equivalent
                 _  -> empty
         return (op l₀ r₀)
     decode (TList [ TInt 4, _T₁ ]) = do
@@ -701,6 +711,10 @@ instance FromTerm a => FromTerm (Expr s a) where
         (xys, z) <- process xs
 
         return (TextLit (Chunks xys z))
+    decode (TList [ TInt 19, t₁ ]) = do
+        t₀ <- decode t₁
+
+        return (Assert t₀)
     decode e@(TList (TInt 24 : _)) = fmap Embed (decode e)
     decode (TList (TInt 25 : xs)) = do
         let process (TString x : _A₁ : a₁ : ls₁) = do

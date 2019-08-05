@@ -848,6 +848,17 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
           where
             a' = loop a
 
+        Core.Assert a ->
+            Core.Assert a'
+          where
+            a' = loop a
+
+        Core.Equivalent a b ->
+            Core.Equivalent a' b'
+          where
+            a' = loop a
+            b' = loop b
+
         Core.ImportAlt a b ->
             Core.ImportAlt a' b'
           where

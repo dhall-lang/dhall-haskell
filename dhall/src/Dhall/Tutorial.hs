@@ -47,6 +47,9 @@ module Dhall.Tutorial (
     -- * Total
     -- $total
 
+    -- * Assertions
+    -- $assertions
+
     -- * Headers
     -- $headers
 
@@ -1385,6 +1388,90 @@ import Dhall
 -- __Exercise__: If you have a lot of spare time, try to \"break the compiler\" by
 -- finding an input expression that crashes or loops forever (and file a bug
 -- report if you succeed)
+
+-- $assertions
+--
+-- You can add compile-time assertions which you can use to add tests to your
+-- code.  For example, we can add some tests to our @not@ function like this:
+--
+-- > let not : Bool -> Bool = \(b : Bool) -> b == False
+-- >
+-- > let example0 = assert : not False === True
+-- >
+-- > let example1 = assert : not True === False
+-- >
+-- > in  not
+--
+-- The expression @assert : not False == True@ is a type-checking assertion
+-- that two expressions have the same normal form.  If the two expressions differ
+-- then type-checking rejects the code.
+--
+-- For example, suppose that we change the example to add an incorrect assertion:
+--
+-- > -- ./test.dhall
+-- >
+-- > let not : Bool -> Bool = \(b : Bool) -> b == False
+-- >
+-- > let example0 = assert : not False === True
+-- >
+-- > let example1 = assert : not True === True  -- Oops!
+-- >
+-- > in  not
+--
+-- The type-checker then rejects the assertion with the following error message:
+--
+-- > $ dhall <<< './test.dhall' 
+-- > 
+-- > ↳ ./test.dhall
+-- > 
+-- > Error: Assertion failed
+-- > 
+-- > - False
+-- > + True
+-- > 
+-- > 7│                assert : not True === True -- Oops!
+-- > 8│ 
+-- > 
+-- > ./test.dhall:7:16
+-- > 
+-- > 1│ ./test.dhall
+-- > 
+-- > (stdin):1:1
+--
+-- You can compare expressions that contain variables, too, which is equivalent
+-- to symbolic reasoning:
+--
+-- > $ dhall <<< '\(n : Natural) -> assert : n === (n + 0)'
+-- > λ(n : Natural) → assert : n ≡ n
+--
+-- Dhall accepts this because the language has built-in support for normalizing
+-- @n + 0@ to @n@, so both sides of the comparison normalize to the same value:
+-- @n@.
+--
+-- Note that this sort of symbolic reasoning is limited and can only detect
+-- equality of normal forms.  Some equivalent expressions will be rejected
+-- if they don't share the same normal form, such as these:
+--
+-- > $ dhall <<< '\(n : Natural) -> assert : Natural/even (n + n) === True'
+-- > 
+-- > Use "dhall --explain" for detailed errors
+-- > 
+-- > n : Natural
+-- > 
+-- > Error: Assertion failed
+-- > 
+-- > - … …
+-- > + True
+-- > 
+-- > 1│                   assert : Natural/even (n + n) === True
+-- > 
+-- > (stdin):1:19
+--
+-- Here the normalizer is not smart enough to simplify @Natural/even (n + n)@ to
+-- @True@ so the assertion fails.
+--
+-- If you prefer to use Unicode, then the Unicode equivalent of @===@ is @≡@
+-- (U+2261).
 
 -- $headers
 --
