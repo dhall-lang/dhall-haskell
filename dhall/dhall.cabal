@@ -43,11 +43,19 @@ Extra-Source-Files:
     dhall-lang/Prelude/Integer/package.dhall
     dhall-lang/Prelude/Integer/show
     dhall-lang/Prelude/Integer/toDouble
+    dhall-lang/Prelude/JSON/array
+    dhall-lang/Prelude/JSON/bool
     dhall-lang/Prelude/JSON/keyText
     dhall-lang/Prelude/JSON/keyValue
     dhall-lang/Prelude/JSON/Nesting
+    dhall-lang/Prelude/JSON/null
+    dhall-lang/Prelude/JSON/number
+    dhall-lang/Prelude/JSON/object
     dhall-lang/Prelude/JSON/package.dhall
+    dhall-lang/Prelude/JSON/render
+    dhall-lang/Prelude/JSON/string
     dhall-lang/Prelude/JSON/Tagged
+    dhall-lang/Prelude/JSON/Type
     dhall-lang/Prelude/List/all
     dhall-lang/Prelude/List/any
     dhall-lang/Prelude/List/build
@@ -68,6 +76,12 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/reverse
     dhall-lang/Prelude/List/shifted
     dhall-lang/Prelude/List/unzip
+    dhall-lang/Prelude/Map/Entry
+    dhall-lang/Prelude/Map/keys
+    dhall-lang/Prelude/Map/map
+    dhall-lang/Prelude/Map/package.dhall
+    dhall-lang/Prelude/Map/Type
+    dhall-lang/Prelude/Map/values
     dhall-lang/Prelude/Monoid
     dhall-lang/Prelude/Natural/build
     dhall-lang/Prelude/Natural/enumerate
@@ -102,6 +116,14 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/concatSep
     dhall-lang/Prelude/Text/package.dhall
     dhall-lang/Prelude/Text/show
+    dhall-lang/Prelude/XML/attribute
+    dhall-lang/Prelude/XML/element
+    dhall-lang/Prelude/XML/emptyAttributes
+    dhall-lang/Prelude/XML/leaf
+    dhall-lang/Prelude/XML/package.dhall
+    dhall-lang/Prelude/XML/render
+    dhall-lang/Prelude/XML/text
+    dhall-lang/Prelude/XML/Type
     dhall-lang/tests/binary-decode/failure/unit/*.dhallb
     dhall-lang/tests/binary-decode/success/unit/*.dhall
     dhall-lang/tests/binary-decode/success/unit/*.dhallb
@@ -116,7 +138,6 @@ Extra-Source-Files:
     dhall-lang/tests/normalization/success/haskell-tutorial/combineTypes/*.dhall
     dhall-lang/tests/normalization/success/haskell-tutorial/prefer/*.dhall
     dhall-lang/tests/normalization/success/haskell-tutorial/projection/*.dhall
-    dhall-lang/tests/normalization/success/prelude/package.dhall
     dhall-lang/tests/normalization/success/simple/*.dhall
     dhall-lang/tests/normalization/success/simplifications/*.dhall
     dhall-lang/tests/normalization/success/unit/*.dhall
