@@ -43,11 +43,11 @@ exprA :: Parser a -> Parser (Expr Src a)
 exprA = completeExpression
 
 -- | A parsing error
-data ParseError = ParseError
+data ParseError = ParseError {
 #if MIN_VERSION_megaparsec(7, 0, 0)
-    { unwrap :: Text.Megaparsec.ParseErrorBundle Text Void
+      unwrap :: Text.Megaparsec.ParseErrorBundle Text Void
 #else
-    { unwrap :: Text.Megaparsec.ParseError Char Void
+      unwrap :: Text.Megaparsec.ParseError Char Void
 #endif
     , input  :: Text
     }
