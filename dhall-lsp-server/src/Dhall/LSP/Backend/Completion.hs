@@ -10,7 +10,7 @@ import Dhall.Context (empty, toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Text as Text
 import Dhall.Context (Context, insert)
-import Dhall.Core (Expr(..), Binding(..), Var(..), normalize, shift, Const(..), subst, pretty, reservedIdentifiers)
+import Dhall.Core (Expr(..), Binding(..), Var(..), normalize, shift, subst, pretty, reservedIdentifiers)
 import Dhall.TypeCheck (X(..), typeWithA, typeOf)
 import Dhall.Parser (Src, exprFromText)
 import qualified Dhall.Map
