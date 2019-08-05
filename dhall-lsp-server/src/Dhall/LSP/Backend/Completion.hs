@@ -142,7 +142,7 @@ completeFromContext (CompletionContext context _) =
   let context' = toList context
       completeReserved keyword
         | Right expr <- exprFromText "" keyword
-        , Right typ <- typeOf (fmap undefined expr) =
+        , Right typ <- typeOf (do _ <- expr; holeExpr) =
           Completion keyword (Just typ)
         | otherwise = Completion keyword Nothing
       reserved = map completeReserved $ HashSet.toList reservedIdentifiers
