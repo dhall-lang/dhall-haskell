@@ -147,7 +147,7 @@ completeFromContext (CompletionContext context _) =
         | otherwise = Completion keyword Nothing
       reserved = map completeReserved $ HashSet.toList reservedIdentifiers
   in [ Completion (pretty var) (if typ == holeExpr then Nothing else Just typ)
-     | (var, (_, typ)) <- zip (contextToVariables context') (toList context) ]
+     | (var, (_, typ)) <- zip (contextToVariables context') context' ]
      ++ reserved
 
 -- | Complete union constructors and record projections.
