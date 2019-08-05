@@ -10,8 +10,6 @@
 module Dhall.Binary
     ( -- * Standard versions
       StandardVersion(..)
-    , defaultStandardVersion
-    , parseStandardVersion
     , renderStandardVersion
 
     -- * Encoding and decoding
@@ -27,6 +25,7 @@ module Dhall.Binary
 import Codec.CBOR.Term (Term(..))
 import Control.Applicative (empty, (<|>))
 import Control.Exception (Exception)
+import Data.Void (Void, absurd)
 import Dhall.Core
     ( Binding(..)
     , Chunks(..)
@@ -44,12 +43,10 @@ import Dhall.Core
     , Var(..)
     )
 
-import Dhall.X (X(..))
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Options.Applicative (Parser)
 import Prelude hiding (exponent)
 import GHC.Float (double2Float, float2Double)
 
@@ -61,7 +58,6 @@ import qualified Data.Sequence
 import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Set
-import qualified Options.Applicative
 
 -- | Supported version strings
 data StandardVersion
@@ -78,29 +74,6 @@ data StandardVersion
     | V_1_0_0
     -- ^ Version "1.0.0"
     deriving (Enum, Bounded)
-
-defaultStandardVersion :: StandardVersion
-defaultStandardVersion = NoVersion
-
-parseStandardVersion :: Parser StandardVersion
-parseStandardVersion =
-    Options.Applicative.option readVersion
-        (   Options.Applicative.long "standard-version"
-        <>  Options.Applicative.metavar "X.Y.Z"
-        <>  Options.Applicative.help "The standard version to use"
-        <>  Options.Applicative.value defaultStandardVersion
-        )
-  where
-    readVersion = do
-        string <- Options.Applicative.str
-        case string :: Text of
-            "none"  -> return NoVersion
-            "1.0.0" -> return V_1_0_0
-            "2.0.0" -> return V_2_0_0
-            "3.0.0" -> return V_3_0_0
-            "4.0.0" -> return V_4_0_0
-            "5.0.0" -> return V_5_0_0
-            _       -> fail "Unsupported version"
 
 renderStandardVersion :: StandardVersion -> Text
 renderStandardVersion NoVersion = "none"
@@ -130,7 +103,7 @@ unApply e₀ = (baseFunction₀, diffArguments₀ [])
 class ToTerm a where
     encode :: a -> Term
 
-instance ToTerm a => ToTerm (Expr X a) where
+instance ToTerm a => ToTerm (Expr Void a) where
     encode (Var (V "_" n)) =
         TInt n
     encode (Var (V x n)) =
@@ -149,6 +122,8 @@ instance ToTerm a => ToTerm (Expr X a) where
         TString "Natural/toInteger"
     encode NaturalShow =
         TString "Natural/show"
+    encode NaturalSubtract =
+        TString "Natural/subtract"
     encode IntegerToDouble =
         TString "Integer/toDouble"
     encode IntegerShow =
@@ -283,6 +258,11 @@ instance ToTerm a => ToTerm (Expr X a) where
       where
         l₁ = encode l₀
         r₁ = encode r₀
+    encode (Equivalent l₀ r₀) =
+        TList [ TInt 3, TInt 12, l₁, r₁ ]
+      where
+        l₁ = encode l₀
+        r₁ = encode r₀
     encode (ListLit _T₀ xs₀)
         | null xs₀  = TList [ TInt label, _T₁ ]
         | otherwise = TList ([ TInt 4, TNull ] ++ xs₁)
@@ -351,18 +331,6 @@ instance ToTerm a => ToTerm (Expr X a) where
                     Just _T₀ -> encode _T₀
 
             return (x₁, _T₁)
-    encode (UnionLit x t₀ yTs₀) =
-        TList [ TInt 12, TString x, t₁, TMap yTs₁ ]
-      where
-        t₁ = encode t₀
-
-        yTs₁ = do
-            (y₀, mT₀) <- Dhall.Map.toList (Dhall.Map.sort yTs₀)
-            let y₁  = TString y₀
-            let _T₁ = case mT₀ of
-                    Just _T₀ -> encode _T₀
-                    Nothing  -> TNull
-            return (y₁, _T₁)
     encode (BoolLit b) =
         TBool b
     encode (BoolIf t₀ l₀ r₀) =
@@ -397,6 +365,10 @@ instance ToTerm a => ToTerm (Expr X a) where
             [ x₁, y₁ ]
 
         z₁ = TString z₀
+    encode (Assert t₀) =
+        TList [ TInt 19, t₁ ]
+      where
+        t₁ = encode t₀
     encode (Embed x) =
         encode x
     encode (Let as₀ b₀) =
@@ -428,7 +400,7 @@ instance ToTerm a => ToTerm (Expr X a) where
       where
         t₁  = encode t₀
         _T₁ = encode _T₀
-    encode (Note (X absurd) _) = absurd
+    encode (Note a _) = absurd a
 
 instance ToTerm Import where
     encode import_ =
@@ -495,7 +467,7 @@ instance ToTerm Import where
 
         ImportHashed {..} = importHashed
 
-instance ToTerm X where
+instance ToTerm Void where
     encode = absurd
 
 -- | Types that can be decoded from a CBOR `Term`
@@ -521,6 +493,8 @@ instance FromTerm a => FromTerm (Expr s a) where
         return NaturalToInteger
     decode (TString "Natural/show") =
         return NaturalShow
+    decode (TString "Natural/subtract") =
+        return NaturalSubtract
     decode (TString "Integer/toDouble") =
         return IntegerToDouble
     decode (TString "Integer/show") =
@@ -616,6 +590,7 @@ instance FromTerm a => FromTerm (Expr s a) where
                 9  -> return Prefer
                 10 -> return CombineTypes
                 11 -> return ImportAlt
+                12 -> return Equivalent
                 _  -> empty
         return (op l₀ r₀)
     decode (TList [ TInt 4, _T₁ ]) = do
@@ -698,21 +673,6 @@ instance FromTerm a => FromTerm (Expr s a) where
         xTs₀ <- traverse process xTs₁
 
         return (Union (Dhall.Map.fromList xTs₀))
-    decode (TList [ TInt 12, TString x, t₁, TMap yTs₁ ]) = do
-        t₀ <- decode t₁
-
-        let process (TString y, _T₁) = do
-                _T₀ <- case _T₁ of
-                    TNull -> return Nothing
-                    _     -> fmap Just (decode _T₁)
-
-                return (y, _T₀)
-            process _ =
-                empty
-
-        yTs₀ <- traverse process yTs₁
-
-        return (UnionLit x t₀ (Dhall.Map.fromList yTs₀))
     decode (TBool b) = do
         return (BoolLit b)
     decode (TList [ TInt 14, t₁, l₁, r₁ ]) = do
@@ -751,6 +711,10 @@ instance FromTerm a => FromTerm (Expr s a) where
         (xys, z) <- process xs
 
         return (TextLit (Chunks xys z))
+    decode (TList [ TInt 19, t₁ ]) = do
+        t₀ <- decode t₁
+
+        return (Assert t₀)
     decode e@(TList (TInt 24 : _)) = fmap Embed (decode e)
     decode (TList (TInt 25 : xs)) = do
         let process (TString x : _A₁ : a₁ : ls₁) = do
@@ -893,7 +857,7 @@ instance FromTerm Import where
 
     decode _ = empty
 
-instance FromTerm X where
+instance FromTerm Void where
     decode _ = empty
 
 strip55799Tag :: Term -> Term
@@ -945,7 +909,7 @@ strip55799Tag term =
 -- This 'Dhall.Core.denote's the expression before encoding it. To encode an
 -- already denoted expression, it is more efficient to directly use 'encode'.
 encodeExpression :: Expr s Import -> Term
-encodeExpression e = encode (Dhall.Core.denote e :: Expr X Import)
+encodeExpression e = encode (Dhall.Core.denote e :: Expr Void Import)
 
 -- | Decode a Dhall expression from a CBOR `Term`
 decodeExpression :: FromTerm a => Term -> Either DecodingFailure (Expr s a)

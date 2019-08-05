@@ -105,6 +105,7 @@ import Data.Bifunctor (first)
 import Data.ByteString
 import Data.Monoid ((<>))
 import Data.Typeable (Typeable)
+import Data.Void (absurd)
 import Dhall.Core (Expr(..), Chunks(..))
 import Dhall.TypeCheck
 
@@ -269,7 +270,7 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
         let bytes = "declare -r " <> var <> "=" <> e
         return bytes
     go (Embed   x) = do
-        Dhall.TypeCheck.absurd x
+        absurd x
     go (Note  _ e) = do
         go e
 
@@ -296,6 +297,7 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
     go e@(NaturalOdd      ) = Left (UnsupportedStatement e)
     go e@(NaturalToInteger) = Left (UnsupportedStatement e)
     go e@(NaturalShow     ) = Left (UnsupportedStatement e)
+    go e@(NaturalSubtract ) = Left (UnsupportedStatement e)
     go e@(NaturalPlus   {}) = Left (UnsupportedStatement e)
     go e@(NaturalTimes  {}) = Left (UnsupportedStatement e)
     go e@(Integer         ) = Left (UnsupportedStatement e)
@@ -322,7 +324,6 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
     go e@(OptionalBuild   ) = Left (UnsupportedStatement e)
     go e@(Record        {}) = Left (UnsupportedStatement e)
     go e@(Union         {}) = Left (UnsupportedStatement e)
-    go e@(UnionLit      {}) = Left (UnsupportedStatement e)
     go e@(Combine       {}) = Left (UnsupportedStatement e)
     go e@(CombineTypes  {}) = Left (UnsupportedStatement e)
     go e@(Prefer        {}) = Left (UnsupportedStatement e)
@@ -330,6 +331,8 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
     go e@(ToMap         {}) = Left (UnsupportedStatement e)
     go e@(Field         {}) = Left (UnsupportedStatement e)
     go e@(Project       {}) = Left (UnsupportedStatement e)
+    go e@(Assert        {}) = Left (UnsupportedStatement e)
+    go e@(Equivalent    {}) = Left (UnsupportedStatement e)
     go e@(ImportAlt     {}) = Left (UnsupportedStatement e)
 
 {-| Compile a Dhall expression to a Bash expression

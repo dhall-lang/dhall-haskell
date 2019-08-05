@@ -72,22 +72,17 @@
 
     Dhall unions translate to the wrapped value:
 
-> $ dhall-to-json <<< "< Left = +2 | Right : Natural>"
+> $ dhall-to-json <<< "< Left : Natural | Right : Natural>.Left 2"
 > 2
 > $ cat config
-> [ < Person = { age = 47, name = "John" }
->   | Place  : { location : Text }
->   >
-> , < Place  = { location = "North Pole" }
->   | Person : { age : Natural, name : Text }
->   >
-> , < Place  = { location = "Sahara Desert" }
->   | Person : { age : Natural, name : Text }
->   >
-> , < Person = { age = 35, name = "Alice" }
->   | Place  : { location : Text }
->   >
-> ]
+> let MyType =
+>       < Person : { age : Natural, name : Text } | Place : { location : Text } >
+>
+> in  [ MyType.Person { age = 47, name = "John" }
+>     , MyType.Place { location = "North Pole" }
+>     , MyType.Place { location = "Sahara Desert" }
+>     , MyType.Person { age = 35, name = "Alice" }
+>     ]
 > $ dhall-to-json <<< "./config"
 > [{"age":47,"name":"John"},{"location":"North Pole"},{"location":"Sahara Desert"},{"age":35,"name":"Alice"}]
 
@@ -107,10 +102,10 @@
 
 > let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
 > 
-> let Nesting = < Inline : {} | Nested : Text >
+> let Nesting = < Inline | Nested : Text >
 > 
 > in  { field    = "name"
->     , nesting  = Nesting.Inline {=}
+>     , nesting  = Nesting.Inline
 >     , contents = Example.Left { foo = 2 }
 >     }
 
@@ -188,6 +183,7 @@ import Control.Applicative (empty, (<|>))
 import Control.Monad (guard)
 import Control.Exception (Exception, throwIO)
 import Data.Aeson (Value(..), ToJSON(..))
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Text (Text)
 import Dhall.Core (Expr)
@@ -210,6 +206,7 @@ import qualified Dhall.Optics
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Options.Applicative
+import qualified System.FilePath
 
 {-| This is the exception type for errors that might arise when translating
     Dhall to JSON
@@ -393,7 +390,6 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                 _ -> do
                     a' <- traverse loop a
                     return (Aeson.toJSON (Dhall.Map.toMap a'))
-        Core.UnionLit _ b _ -> loop b
         Core.App (Core.Field (Core.Union _) _) b -> loop b
         Core.Field (Core.Union _) k -> return (Aeson.toJSON k)
         Core.Lam _ (Core.Const Core.Type)
@@ -645,6 +641,9 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.NaturalShow ->
             Core.NaturalShow
 
+        Core.NaturalSubtract ->
+            Core.NaturalSubtract
+
         Core.NaturalPlus a b ->
             Core.NaturalPlus a' b'
           where
@@ -808,12 +807,6 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
           where
             a' = fmap (fmap loop) a
 
-        Core.UnionLit a b c ->
-            Core.UnionLit a b' c'
-          where
-            b' =            loop  b
-            c' = fmap (fmap loop) c
-
         Core.Combine a b ->
             Core.Combine a' b'
           where
@@ -854,6 +847,17 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             Core.Project a' b
           where
             a' = loop a
+
+        Core.Assert a ->
+            Core.Assert a'
+          where
+            a' = loop a
+
+        Core.Equivalent a b ->
+            Core.Equivalent a' b'
+          where
+            a' = loop a
+            b' = loop b
 
         Core.ImportAlt a b ->
             Core.ImportAlt a' b'
@@ -960,13 +964,18 @@ handleSpecialDoubles specialDoubleMode =
 codeToValue
   :: Conversion
   -> SpecialDoubleMode
-  -> Text  -- ^ Describe the input for the sake of error location.
+  -> Maybe FilePath  -- ^ The source file path. If no path is given, imports
+                     -- are resolved relative to the current directory.
   -> Text  -- ^ Input text.
   -> IO Value
-codeToValue conversion specialDoubleMode name code = do
-    parsedExpression <- Core.throws (Dhall.Parser.exprFromText (Data.Text.unpack name) code)
+codeToValue conversion specialDoubleMode mFilePath code = do
+    parsedExpression <- Core.throws (Dhall.Parser.exprFromText (fromMaybe "(stdin)" mFilePath) code)
 
-    resolvedExpression <- Dhall.Import.load parsedExpression
+    let rootDirectory = case mFilePath of
+            Nothing -> "."
+            Just fp -> System.FilePath.takeDirectory fp
+
+    resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory parsedExpression
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 

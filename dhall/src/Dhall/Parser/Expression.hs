@@ -107,6 +107,7 @@ parsers embedded = Parsers {..}
                 , alternative2
                 , alternative3
                 , alternative4
+                , alternative5
                 ]
             ) <?> "expression"
       where
@@ -165,6 +166,12 @@ parsers embedded = Parsers {..}
             return (Pi a b c)
 
         alternative4 = do
+            _assert
+            _colon
+            a <- expression
+            return (Assert a)
+
+        alternative5 = do
             a <- operatorExpression
 
             let alternative4A = do
@@ -217,7 +224,9 @@ parsers embedded = Parsers {..}
             <|> NaturalTimes <$ _times
             <|> BoolEQ       <$ _doubleEqual
 
-    precedence3Operator = BoolNE <$ _notEqual
+    precedence3Operator
+            =   BoolNE     <$ _notEqual
+            <|> Equivalent <$ _equivalent
 
     precedence0Expression =
             makeOperatorExpression precedence1Expression precedence0Operator
@@ -312,11 +321,7 @@ parsers embedded = Parsers {..}
                 _closeBrace
                 return a ) <?> "record type or literal"
 
-            alternative05 = (do
-                _openAngle
-                a <- unionTypeOrLiteral
-                _closeAngle
-                return a ) <?> "union type or literal"
+            alternative05 = unionType
 
             alternative06 = listLiteral
 
@@ -360,7 +365,7 @@ parsers embedded = Parsers {..}
                             , NaturalIsZero    <$ _NaturalIsZero
                             , NaturalEven      <$ _NaturalEven
                             , NaturalOdd       <$ _NaturalOdd
-                            , NaturalToInteger <$ _NaturalToInteger
+                            , NaturalSubtract  <$ _NaturalSubtract
                             , NaturalToInteger <$ _NaturalToInteger
                             , NaturalShow      <$ _NaturalShow
                             , Natural          <$ _Natural
@@ -630,41 +635,21 @@ parsers embedded = Parsers {..}
 
             nonEmptyRecordType <|> nonEmptyRecordLiteral
 
-    unionTypeOrLiteral =
-                nonEmptyUnionTypeOrLiteral
-            <|> return (Union mempty)
+    unionType = (do
+            _openAngle
 
-    nonEmptyUnionTypeOrLiteral = do
-            (f, kvs) <- loop
+            let unionTypeEntry = do
+                    a <- anyLabel
+                    b <- optional (do _colon; expression)
+                    return (a, b)
+
+            kvs <- Text.Megaparsec.sepBy unionTypeEntry _bar
+
             m <- toMap kvs
-            return (f m)
-          where
-            loop = do
-                a <- anyLabel
 
-                let alternative0 = do
-                        _equal
-                        b <- expression
-                        kvs <- Text.Megaparsec.many (do
-                            _bar
-                            c <- anyLabel
-                            d <- optional (do _colon; expression)
-                            return (c, d) )
-                        return (UnionLit a b, kvs)
+            _closeAngle
 
-                let alternative1 = do
-                        b <- optional (do _colon; expression)
-
-                        let alternative2 = do
-                                _bar
-                                (f, kvs) <- loop
-                                return (f, (a, b):kvs)
-
-                        let alternative3 = return (Union, [(a, b)])
-
-                        alternative2 <|> alternative3
-
-                alternative0 <|> alternative1
+            return (Union m) ) <?> "union type"
 
     listLiteral = (do
             _openBracket

@@ -222,6 +222,10 @@ prefer :: CharacterSet -> Text
 prefer ASCII   = "//"
 prefer Unicode = "⫽"
 
+equivalent :: CharacterSet -> Text
+equivalent ASCII   = "==="
+equivalent Unicode = "≡"
+
 {-| Format an expression that holds a variable number of elements, such as a
     list, record, or union
 -}
@@ -485,6 +489,16 @@ prettyCharacterSet characterSet expression =
                 <>  rparen
         docs (Note _   c) = docs c
         docs           c  = [ prettyExpression c ]
+    prettyExpression (Assert a) =
+        Pretty.group (Pretty.flatAlt long short)
+      where
+        short = keyword "assert" <> " " <> colon <> " " <> prettyExpression a
+
+        long =
+            Pretty.align
+            (  "  " <> keyword "assert"
+            <> Pretty.hardline <> colon <> " " <> prettyExpression a
+            )
     prettyExpression (Note _ a) =
         prettyExpression a
     prettyExpression a0 =
@@ -498,9 +512,9 @@ prettyCharacterSet characterSet expression =
             Pretty.align
                 (   keyword "merge"
                 <>  Pretty.hardline
-                <>  prettyImportExpression a
+                <>  Pretty.indent 2 (prettyImportExpression a)
                 <>  Pretty.hardline
-                <>  prettyImportExpression b
+                <>  Pretty.indent 2 (prettyImportExpression b)
                 <>  Pretty.hardline
                 <>  colon <> space
                 <>  prettyApplicationExpression c
@@ -519,9 +533,9 @@ prettyCharacterSet characterSet expression =
             Pretty.align
                 (   keyword "merge"
                 <>  Pretty.hardline
-                <>  prettyImportExpression a
+                <>  Pretty.indent 2 (prettyImportExpression a)
                 <>  Pretty.hardline
-                <>  prettyImportExpression b
+                <>  Pretty.indent 2 (prettyImportExpression b)
                 )
 
         short = keyword "merge" <> space
@@ -535,7 +549,7 @@ prettyCharacterSet characterSet expression =
             Pretty.align
                 (   keyword "toMap"
                 <>  Pretty.hardline
-                <>  prettyImportExpression a
+                <>  Pretty.indent 2 (prettyImportExpression a)
                 <>  Pretty.hardline
                 <>  colon <> space
                 <>  prettyApplicationExpression b
@@ -552,7 +566,7 @@ prettyCharacterSet characterSet expression =
             Pretty.align
                 (   keyword "toMap"
                 <>  Pretty.hardline
-                <>  prettyImportExpression a
+                <>  Pretty.indent 2 (prettyImportExpression a)
                 )
 
         short = keyword "toMap" <> space
@@ -729,12 +743,24 @@ prettyCharacterSet characterSet expression =
     prettyNotEqualExpression a0@(BoolNE _ _) =
         prettyOperator "!=" (docs a0)
       where
-        docs (BoolNE a b) = prettyApplicationExpression b : docs a
+        docs (BoolNE a b) = prettyEquivalentExpression b : docs a
         docs (Note   _ b) = docs b
-        docs           b  = [ prettyApplicationExpression b ]
+        docs           b  = [ prettyEquivalentExpression b ]
     prettyNotEqualExpression (Note _ a) =
         prettyNotEqualExpression a
     prettyNotEqualExpression a0 =
+        prettyEquivalentExpression a0
+
+    prettyEquivalentExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyEquivalentExpression a0@(Equivalent _ _) =
+        prettyOperator (equivalent characterSet) (docs a0)
+      where
+        docs (Equivalent a b) = prettyApplicationExpression b : docs a
+        docs (Note       _ b) = docs b
+        docs               b  = [ prettyApplicationExpression b ]
+    prettyEquivalentExpression (Note _ a) =
+        prettyEquivalentExpression a
+    prettyEquivalentExpression a0 =
         prettyApplicationExpression a0
 
     prettyApplicationExpression :: Pretty a => Expr s a -> Doc Ann
@@ -744,12 +770,12 @@ prettyCharacterSet characterSet expression =
         Note _ b -> prettyApplicationExpression b
         _        -> prettyImportExpression a0
       where
-        result = enclose' "" "" " " "" (fmap duplicate (reverse (docs a0)))
+        result = enclose' "" "" " " "" (reverse (docs a0))
 
-        docs (App  a b) = prettyImportExpression b : docs a
-        docs (Some   a) = [ prettyImportExpression a , builtin "Some"         ]
+        docs (App  a b) = ( prettyImportExpression b, Pretty.indent 2 (prettyImportExpression b) ) : docs a
+        docs (Some   a) = map duplicate [ prettyImportExpression a , builtin "Some" ]
         docs (Note _ b) = docs b
-        docs         b  = [ prettyImportExpression b ]
+        docs         b  = map duplicate [ prettyImportExpression b ]
 
     prettyImportExpression :: Pretty a => Expr s a -> Doc Ann
     prettyImportExpression (Embed a) =
@@ -798,6 +824,8 @@ prettyCharacterSet characterSet expression =
         builtin "Natural/toInteger"
     prettyPrimitiveExpression NaturalShow =
         builtin "Natural/show"
+    prettyPrimitiveExpression NaturalSubtract =
+        builtin "Natural/subtract"
     prettyPrimitiveExpression Integer =
         builtin "Integer"
     prettyPrimitiveExpression IntegerShow =
@@ -855,8 +883,6 @@ prettyCharacterSet characterSet expression =
         prettyRecordLit a
     prettyPrimitiveExpression (Union a) =
         prettyUnion a
-    prettyPrimitiveExpression (UnionLit a b c) =
-        prettyUnionLit a b c
     prettyPrimitiveExpression (ListLit Nothing b) =
         list (map prettyExpression (Data.Foldable.toList b))
     prettyPrimitiveExpression (Note _ b) =
@@ -902,14 +928,6 @@ prettyCharacterSet characterSet expression =
     prettyUnion :: Pretty a => Map Text (Maybe (Expr s a)) -> Doc Ann
     prettyUnion =
         angles . map prettyAlternative . Dhall.Map.toList
-
-    prettyUnionLit
-        :: Pretty a
-        => Text -> Expr s a -> Map Text (Maybe (Expr s a)) -> Doc Ann
-    prettyUnionLit a b c =
-        angles (front : map prettyAlternative (Dhall.Map.toList c))
-      where
-        front = prettyKeyValue equals (a, b)
 
     prettyChunks :: Pretty a => Chunks s a -> Doc Ann
     prettyChunks (Chunks a b) =

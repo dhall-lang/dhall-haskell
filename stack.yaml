@@ -1,16 +1,21 @@
-resolver: lts-13.19
+resolver: lts-13.30
 packages:
   - dhall
   - dhall-bash
   - dhall-json
+  - dhall-nix
   - dhall-lsp-server
 extra-deps:
-  - repline-0.2.1.0
   - th-lift-instances-0.1.13@sha256:2852e468511805cb25d9e3923c9e91647d008ab4a764ec0921e5e40ff8a8e874,2625
   - th-lift-0.8.0.1@sha256:cceb81b12c0580e02a7a3898b6d60cca5e1be080741f69ddde4f12210d8ba7ca,1960
   - haskell-lsp-0.15.0.0
   - haskell-lsp-types-0.15.0.0
   - rope-utf16-splay-0.3.1.0@sha256:15a53c57f8413d193054bb5f045929edae3b2669def4c6af63197b30dc1d5003
+  - hnix-0.6.1@sha256:13da97c09489ccf0b908fbe7817401137559eebc377c00cd7b8a66b77e8c251b,24519
+  - hashing-0.1.0.1@sha256:98861f16791946cdf28e3c7a6ee9ac8b72d546d6e33c569c7087ef18253294e7,2816
+  - hnix-store-core-0.1.0.0@sha256:719a261870367b3ce2e2e8d11502e7170faa664109a14486b95b555bc3672807,2541
+  - monadlist-0.0.2@sha256:978305e3f03dd5f65c673b551124dac0c39a247c2c14d84739ca9a3405fbb63a,904
+  - ref-tf-0.4.0.1@sha256:369e5c6237e4b6fe330fde021b94a9f98971690cbec5b910faa9af3cbcb15610,1133
 nix:
   packages:
     - ncurses

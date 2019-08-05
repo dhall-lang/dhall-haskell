@@ -37,7 +37,9 @@ Library
     Exposed-Modules:
         Dhall.Nix
     GHC-Options: -Wall
-
+    if os(windows)
+        Buildable: False
+        
 Executable dhall-to-nix
     Hs-Source-Dirs: exec
     Main-Is: Main.hs
@@ -49,3 +51,5 @@ Executable dhall-to-nix
         optparse-generic >= 1.1.1   && < 1.4,
         text
     GHC-Options: -Wall
+    if os(windows)
+        Buildable: False
