@@ -47,7 +47,8 @@ library
     , dhall                >= 1.25.0   && < 1.26
     , dhall-json           >= 1.4      && < 1.5
     , filepath             >= 1.4.2    && < 1.5
-    , haskell-lsp          >= 0.8.1.0  && < 0.9
+    , haskell-lsp          >= 0.15.0.0 && < 0.16
+    , rope-utf16-splay     >= 0.3.1.0  && < 0.4
     , hslogger             >= 1.2.10   && < 1.4
     , lens                 >= 4.16.1   && < 4.18
     , lens-family-core     >= 1.2.3    && < 2.1
@@ -59,7 +60,6 @@ library
     , transformers         >= 0.5.5.0  && < 0.6
     , unordered-containers >= 0.2.9.0  && < 0.3
     , uri-encode           >= 1.5.0.5  && < 1.6
-    , yi-rope              >= 0.11     && < 0.12
   default-language: Haskell2010
   GHC-Options: -Wall -fwarn-incomplete-uni-patterns
   if impl(eta)
