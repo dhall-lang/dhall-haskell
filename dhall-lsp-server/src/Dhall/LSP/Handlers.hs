@@ -172,7 +172,7 @@ hoverType request = do
     Left err -> throwE (Error, Text.pack err)
     Right (mSrc, typ) ->
       let _range = fmap (rangeToJSON . rangeFromDhall) mSrc
-          _contents = J.HoverContents $ J.MarkupContent J.MkMarkdown (pretty typ)
+          _contents = J.HoverContents $ J.MarkupContent J.MkPlainText (pretty typ)
           hover = J.Hover{..}
       in lspRespond LSP.RspHover request (Just hover)
 
