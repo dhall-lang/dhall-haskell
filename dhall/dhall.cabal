@@ -544,7 +544,6 @@ Library
         Dhall.Import.Types,
         Dhall.Eval,
         Dhall.Util,
-        Dhall.X
         Paths_dhall
     if flag(with-http)
       Other-Modules:

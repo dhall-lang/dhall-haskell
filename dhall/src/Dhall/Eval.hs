@@ -63,6 +63,7 @@ import Data.List.NonEmpty (NonEmpty(..), cons)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
 import Data.Text (Text)
+import Data.Void (Void)
 
 import Dhall.Core (
     Expr(..)
@@ -78,7 +79,6 @@ import Dhall.Core (
 -- import Dhall.Import.Types (InternalError)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
-import Dhall.X   (X)
 import GHC.Natural (Natural)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -97,8 +97,6 @@ data Env a =
     Empty
   | Skip !(Env a) {-# unpack #-} !Text
   | Extend !(Env a) {-# unpack #-} !Text (Val a)
-
-data Void
 
 coeExprVoid :: Expr Void a -> Expr s a
 coeExprVoid = unsafeCoerce
@@ -691,8 +689,8 @@ conv !env t t' =
     (VIntegerToDouble t , VIntegerToDouble t') -> convE t t'
 
     (VDouble       , VDouble)        -> True
-    (VDoubleLit n  , VDoubleLit n')  -> Dhall.Binary.encode (DoubleLit n  :: Expr X Import) ==
-                                        Dhall.Binary.encode (DoubleLit n' :: Expr X Import)
+    (VDoubleLit n  , VDoubleLit n')  -> Dhall.Binary.encode (DoubleLit n  :: Expr Void Import) ==
+                                        Dhall.Binary.encode (DoubleLit n' :: Expr Void Import)
     (VDoubleShow t , VDoubleShow t') -> convE t t'
 
     (VText, VText) -> True

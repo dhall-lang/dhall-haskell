@@ -11,6 +11,7 @@ import Control.Lens (toListOf)
 import Data.Text (Text)
 import Control.Applicative ((<|>))
 import Data.Bifunctor (first)
+import Data.Void (absurd)
 
 import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot, getLetIdentifier,
   getLamIdentifier, getForallIdentifier)
