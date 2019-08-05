@@ -44,8 +44,6 @@ import qualified Network.URI.Encode as URI
 import Text.Megaparsec (SourcePos(..), unPos)
 import System.FilePath
 
-import Debug.Trace
-
 -- Workaround to make our single-threaded LSP fit dhall-lsp's API, which
 -- expects a multi-threaded implementation. Reports errors to the user via the
 -- LSP `ShowMessage` notification.
@@ -504,7 +502,7 @@ completionHandler request = do
 
   let item (Completion {..}) = J.CompletionItem {..}
        where
-        _label = traceShowId completeText
+        _label = completeText
         _kind = Nothing
         _detail = fmap pretty completeType
         _documentation = Nothing

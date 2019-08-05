@@ -18,8 +18,6 @@ import qualified Data.HashSet as HashSet
 
 import Dhall.LSP.Backend.Parsing (holeExpr)
 
-import Debug.Trace
-
 -- | Given the cursor position construct the corresponding 'completion query'
 -- consisting of the leadup, i.e. text leading up to the word prefix that is to
 -- be completed, as well as the prefix that is to be completed.
@@ -158,7 +156,7 @@ completeProjections (CompletionContext context values) expr =
       subs = filter ((/= holeExpr) . snd) $ zip (contextToVariables values') (map snd values')
       expr' = foldl (\e (x,val) -> subst x val e) expr subs
 
-  in case typeWithA absurd (traceShow (map fst $ toList context) $ context) expr' of
+  in case typeWithA absurd context expr' of
       Left _ -> []
       Right _A ->
         let expr'' = normalize expr'
