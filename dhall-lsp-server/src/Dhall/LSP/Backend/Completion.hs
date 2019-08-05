@@ -5,6 +5,7 @@ import Dhall.LSP.Backend.Diagnostics (Position, positionToOffset)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (takeDirectory, (</>))
 import System.Environment (getEnvironment)
+import System.Timeout (timeout)
 
 import Dhall.Context (empty, toList)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -46,8 +47,11 @@ completeLocalImport relativeTo prefix = do
   if not exists
   then return []
   else do
-    files <- listDirectory dir
-    return (map (\file -> Completion (Text.pack file) Nothing) files)
+    let second = 10 ^ (6 :: Int)
+    mFiles <- timeout second (listDirectory dir)  -- 1s timeout
+    case mFiles of
+      Just files -> return (map (\file -> Completion (Text.pack file) Nothing) files)
+      Nothing -> return []
 
 -- | Complete environment variables.
 completeEnvironmentImport :: IO [Completion]
