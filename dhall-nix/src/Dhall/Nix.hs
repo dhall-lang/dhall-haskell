@@ -543,6 +543,10 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return (Fix (NSet [Inherit (Just a') b' Nix.nullPos]))
     loop (Project _ (Right _)) = do
         Left CannotProjectByType
+    loop (Assert _) = do
+        return (Fix (NSet []))
+    loop (Equivalent _ _) = do
+        return (Fix (NSet []))
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
     loop (Embed x) = absurd x
