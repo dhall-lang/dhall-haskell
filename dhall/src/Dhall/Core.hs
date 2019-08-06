@@ -2013,9 +2013,9 @@ isNormalized e0 = loop (denote e0)
       Field r k -> case r of
           RecordLit _ -> False
           Project _ _ -> False
-          Combine x@(RecordLit m) y -> loop x && loop y && Dhall.Map.member k m
-          Combine x (RecordLit m) -> loop x && Dhall.Map.toList (fmap loop m) == [(k, True)]
-          Prefer x@(RecordLit m) y -> loop x && loop y && Dhall.Map.member k m
+          Combine (RecordLit m) _ -> Dhall.Map.member k m && loop r
+          Combine _ (RecordLit m) -> Dhall.Map.keys m == [k] && loop r
+          Prefer (RecordLit m) _ -> Dhall.Map.member k m && loop r
           Prefer _ (RecordLit _) -> False
           _ -> loop r
       Project r p -> loop r &&
