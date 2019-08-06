@@ -149,6 +149,7 @@ import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
+import Data.Void (absurd)
 #if MIN_VERSION_base(4,8,0)
 #else
 import Data.Traversable (traverse)
@@ -176,7 +177,7 @@ import Dhall.Import.HTTP hiding (HTTPHeader)
 import Dhall.Import.Types
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
-import Dhall.TypeCheck (X(..))
+import Dhall.TypeCheck (X)
 import Lens.Family.State.Strict (zoom)
 
 import qualified Codec.Serialise

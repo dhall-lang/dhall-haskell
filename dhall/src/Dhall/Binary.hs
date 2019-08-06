@@ -25,6 +25,7 @@ module Dhall.Binary
 import Codec.CBOR.Term (Term(..))
 import Control.Applicative (empty, (<|>))
 import Control.Exception (Exception)
+import Data.Void (Void, absurd)
 import Dhall.Core
     ( Binding(..)
     , Chunks(..)
@@ -42,7 +43,6 @@ import Dhall.Core
     , Var(..)
     )
 
-import Dhall.X (X(..))
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
@@ -103,7 +103,7 @@ unApply e₀ = (baseFunction₀, diffArguments₀ [])
 class ToTerm a where
     encode :: a -> Term
 
-instance ToTerm a => ToTerm (Expr X a) where
+instance ToTerm a => ToTerm (Expr Void a) where
     encode (Var (V "_" n)) =
         TInt n
     encode (Var (V x n)) =
@@ -400,7 +400,7 @@ instance ToTerm a => ToTerm (Expr X a) where
       where
         t₁  = encode t₀
         _T₁ = encode _T₀
-    encode (Note (X absurd) _) = absurd
+    encode (Note a _) = absurd a
 
 instance ToTerm Import where
     encode import_ =
@@ -467,7 +467,7 @@ instance ToTerm Import where
 
         ImportHashed {..} = importHashed
 
-instance ToTerm X where
+instance ToTerm Void where
     encode = absurd
 
 -- | Types that can be decoded from a CBOR `Term`
@@ -857,7 +857,7 @@ instance FromTerm Import where
 
     decode _ = empty
 
-instance FromTerm X where
+instance FromTerm Void where
     decode _ = empty
 
 strip55799Tag :: Term -> Term
@@ -909,7 +909,7 @@ strip55799Tag term =
 -- This 'Dhall.Core.denote's the expression before encoding it. To encode an
 -- already denoted expression, it is more efficient to directly use 'encode'.
 encodeExpression :: Expr s Import -> Term
-encodeExpression e = encode (Dhall.Core.denote e :: Expr X Import)
+encodeExpression e = encode (Dhall.Core.denote e :: Expr Void Import)
 
 -- | Decode a Dhall expression from a CBOR `Term`
 decodeExpression :: FromTerm a => Term -> Either DecodingFailure (Expr s a)
