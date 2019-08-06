@@ -8,9 +8,8 @@
 
 module Main where
 
-import Control.Applicative (optional)
+import Control.Applicative (optional, (<|>))
 import Control.Exception (SomeException)
-import Control.Monad (when)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Version (showVersion)
@@ -36,14 +35,16 @@ import qualified Paths_dhall_json                          as Meta
 -- Command options
 -- ---------------
 
-data CommandOptions = CommandOptions
-    { version    :: Bool
-    , schema     :: Text
-    , conversion :: Conversion
-    , file       :: Maybe FilePath
-    , ascii      :: Bool
-    , plain      :: Bool
-    } deriving Show
+data CommandOptions
+    = CommandOptions
+        { schema     :: Text
+        , conversion :: Conversion
+        , file       :: Maybe FilePath
+        , ascii      :: Bool
+        , plain      :: Bool
+        }
+    | Version
+    deriving (Show)
 
 -- | Command info and description
 parserInfo :: ParserInfo CommandOptions
@@ -53,16 +54,17 @@ parserInfo = Options.info
           <> Options.progDesc "Convert a YAML expression to a Dhall expression, given the expected Dhall type"
           )
 
-
-
 -- | Parser for all the command arguments and options
 parseOptions :: Parser CommandOptions
-parseOptions = CommandOptions <$> parseVersion
-                              <*> parseSchema
-                              <*> parseConversion
-                              <*> optional parseFile
-                              <*> parseASCII
-                              <*> parsePlain
+parseOptions =
+        (   CommandOptions
+        <$> parseSchema
+        <*> parseConversion
+        <*> optional parseFile
+        <*> parseASCII
+        <*> parsePlain
+        )
+    <|> parseVersion
   where
     parseSchema =
         Options.strArgument
@@ -71,7 +73,8 @@ parseOptions = CommandOptions <$> parseVersion
             )
 
     parseVersion =
-        Options.switch
+        Options.flag'
+            Version
             (  Options.long "version"
             <> Options.short 'V'
             <> Options.help "Display version"
@@ -104,37 +107,38 @@ main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
-    CommandOptions{..} <- Options.execParser parserInfo
+    options <- Options.execParser parserInfo
 
-    let characterSet = case ascii of
-            True  -> ASCII
-            False -> Unicode
+    case options of
+        Version -> do
+            putStrLn (showVersion Meta.version)
 
-    when version $ do
-      putStrLn (showVersion Meta.version)
-      System.Exit.exitSuccess
+        CommandOptions {..} -> do
+            let characterSet = case ascii of
+                    True  -> ASCII
+                    False -> Unicode
 
-    handle $ do
-        bytes <- case file of
-            Nothing   -> BSL8.getContents
-            Just path -> BSL8.readFile path
+            handle $ do
+                bytes <- case file of
+                    Nothing   -> BSL8.getContents
+                    Just path -> BSL8.readFile path
 
-        result <- dhallFromYaml (Options schema conversion) bytes
+                result <- dhallFromYaml (Options schema conversion) bytes
 
-        let document = Dhall.Pretty.prettyCharacterSet characterSet result
+                let document = Dhall.Pretty.prettyCharacterSet characterSet result
 
-        let stream = Pretty.layoutSmart Dhall.Pretty.layoutOpts document
+                let stream = Pretty.layoutSmart Dhall.Pretty.layoutOpts document
 
-        supportsANSI <- ANSI.hSupportsANSI IO.stdout
+                supportsANSI <- ANSI.hSupportsANSI IO.stdout
 
-        let ansiStream =
-                if supportsANSI && not plain
-                then fmap Dhall.Pretty.annToAnsiStyle stream
-                else Pretty.unAnnotateS stream
+                let ansiStream =
+                        if supportsANSI && not plain
+                        then fmap Dhall.Pretty.annToAnsiStyle stream
+                        else Pretty.unAnnotateS stream
 
-        Pretty.Terminal.renderIO IO.stdout ansiStream
+                Pretty.Terminal.renderIO IO.stdout ansiStream
 
-        Text.IO.putStrLn ""
+                Text.IO.putStrLn ""
 
 
 handle :: IO a -> IO a
