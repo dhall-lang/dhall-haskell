@@ -22,6 +22,7 @@ import Dhall.Core (Expr(Note, Embed), subExpressions)
 
 import Dhall.LSP.Util
 import Dhall.LSP.Backend.Dhall
+import Dhall.LSP.Backend.Parsing (getImportLink)
 
 import Control.Lens (toListOf)
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
@@ -155,7 +156,7 @@ offsetToPosition txt off = (length ls - 1, Text.length (NonEmpty.last ls))
 --   with their associated range in the source code.
 embedsWithRanges :: Expr Src a -> [(Range, a)]
 embedsWithRanges =
-  map (\(src, a) -> (rangeFromDhall src, a)) . execWriter . go
+  map (\(src, a) -> (rangeFromDhall . getImportLink $ src, a)) . execWriter . go
   where go :: Expr Src a -> Writer [(Src, a)] ()
         go (Note src (Embed a)) = tell [(src, a)]
         go expr = mapM_ go (toListOf subExpressions expr)
