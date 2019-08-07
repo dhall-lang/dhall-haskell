@@ -427,6 +427,7 @@ eval !env t =
                          x ->
                            VPrim $ \case
                              VNaturalLit 0 -> VNaturalLit 0
+                             y | conv env x y -> VNaturalLit 0
                              y -> VNaturalSubtract x y
     NaturalPlus t u  -> vNaturalPlus (evalE t) (evalE u)
     NaturalTimes t u -> case (evalE t, evalE u) of
