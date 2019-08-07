@@ -25,6 +25,9 @@ install:
 
 cache:
   - '%STACK_ROOT% -> %STACK_YAML%, appveyor.yml'
+  - '.stack-work -> %STACK_YAML%, appveyor.yml'
+  - 'dhall/.stack-work -> %STACK_YAML%, appveyor.yml'
+  - 'dhall-bash/.stack-work -> %STACK_YAML%, appveyor.yml'
 
 for:
 -
