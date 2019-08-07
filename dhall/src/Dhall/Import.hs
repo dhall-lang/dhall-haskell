@@ -138,7 +138,7 @@ module Dhall.Import (
 import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term(..))
 import Control.Exception (Exception, SomeException, toException)
-import Control.Monad (guard)
+import Control.Monad (guard, unless)
 import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Class (lift)
@@ -483,6 +483,18 @@ loadImport import_ = do
             zoom cache (State.modify (Map.insert import_ importSemantics))
             return importSemantics
 
+-- | Evaluates to true if the given expression can be encoded with the expected
+--   hash, otherwise evaluates to false.
+verifyHash :: Expr Src X -> Crypto.Hash.Digest SHA256 -> Bool
+verifyHash expr expectedHash = maximum (map tryVersion [ minBound .. maxBound ])
+  where
+    expr' = Dhall.Core.alphaNormalize expr
+    tryVersion version =
+        (== expectedHash)
+        . Crypto.Hash.hash
+        . encodeExpression version
+        $ expr'
+
 -- | Load an import from the 'semantic cache'. Defers to
 --   `loadImportWithSemisemanticCache` for imports that aren't frozen (and
 --   therefore not cached semantically), as well as those that aren't cached yet.
@@ -498,13 +510,6 @@ loadImportWithSemanticCache
 
     case mCached of
         Just bytesStrict -> do
-            let actualHash = Crypto.Hash.hash bytesStrict
-            if semanticHash == actualHash
-                then return ()
-                else do
-                    Status { _stack } <- State.get
-                    throwMissingImport (Imported _stack (HashMismatch {expectedHash = semanticHash, ..}))
-
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
             term <- case Codec.Serialise.deserialiseOrFail bytesLazy of
                 Left err -> throwMissingImport (Imported _stack err)
@@ -513,20 +518,24 @@ loadImportWithSemanticCache
                 Left err -> throwMissingImport (Imported _stack err)
                 Right sem -> return sem
 
+            unless (verifyHash importSemantics semanticHash) $ do
+                let actualHash = Crypto.Hash.hash bytesStrict
+                Status { _stack } <- State.get
+                throwMissingImport (Imported _stack (HashMismatch {expectedHash = semanticHash, ..}))
+
             return (ImportSemantics {..})
 
         Nothing -> do
             ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache import_
 
-            let variants = map (\version -> encodeExpression version (Dhall.Core.alphaNormalize importSemantics))
-                                [ minBound .. maxBound ]
-            case Data.Foldable.find ((== semanticHash). Crypto.Hash.hash) variants of
-                Just bytes -> liftIO $ writeToSemanticCache semanticHash bytes
-                Nothing -> do
-                    let expectedHash = semanticHash
-                    Status { _stack } <- State.get
-                    let actualHash = hashExpression (Dhall.Core.alphaNormalize importSemantics)
-                    throwMissingImport (Imported _stack (HashMismatch {..}))
+            unless (verifyHash importSemantics semanticHash) $ do
+                let expectedHash = semanticHash
+                Status { _stack } <- State.get
+                let actualHash = hashExpression (Dhall.Core.alphaNormalize importSemantics)
+                throwMissingImport (Imported _stack (HashMismatch {..}))
+
+            let bytes = encodeExpression NoVersion importSemantics
+            liftIO $ writeToSemanticCache semanticHash bytes
 
             return (ImportSemantics {..})
 
