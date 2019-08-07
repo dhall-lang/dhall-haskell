@@ -1,6 +1,7 @@
 module Dhall.LSP.Backend.Completion where
 
 import Data.Text (Text)
+import Data.Void (absurd)
 import Dhall.LSP.Backend.Diagnostics (Position, positionToOffset)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (takeDirectory, (</>))
@@ -12,7 +13,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Text as Text
 import Dhall.Context (Context, insert)
 import Dhall.Core (Expr(..), Binding(..), Var(..), normalize, shift, subst, pretty, reservedIdentifiers)
-import Dhall.TypeCheck (X(..), typeWithA, typeOf)
+import Dhall.TypeCheck (X, typeWithA, typeOf)
 import Dhall.Parser (Src, exprFromText)
 import qualified Dhall.Map
 import qualified Data.HashSet as HashSet
