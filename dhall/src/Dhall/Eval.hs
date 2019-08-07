@@ -138,6 +138,7 @@ data HLamInfo a
   | NaturalFoldCl (Val a)
   | ListFoldCl (Val a)
   | OptionalFoldCl (Val a)
+  | NaturalSubtractZero
 
 pattern VPrim :: (Val a -> Val a) -> Val a
 pattern VPrim f = VHLam Prim f
@@ -414,14 +415,19 @@ eval !env t =
                                       n             -> VNaturalToInteger n
     NaturalShow      -> VPrim $ \case VNaturalLit n -> VTextLit (VChunks [] (Data.Text.pack (show n)))
                                       n             -> VNaturalShow n
-    NaturalSubtract  -> VPrim $ \x -> VPrim $ \y ->
-                          case (x,y) of
-                            (VNaturalLit x, VNaturalLit y)
-                              | y >= x    -> VNaturalLit (subtract x y)
-                              | otherwise -> VNaturalLit 0
-                            (VNaturalLit 0, y) -> y
-                            (x, VNaturalLit 0) -> VNaturalLit 0
-                            (x, y) -> VNaturalSubtract x y
+    NaturalSubtract -> VPrim $ \case
+                         VNaturalLit 0 ->
+                           VHLam NaturalSubtractZero id
+                         x@(VNaturalLit m) ->
+                           VPrim $ \case
+                               VNaturalLit n
+                                 | n >= m    -> VNaturalLit (subtract m n)
+                                 | otherwise -> VNaturalLit 0
+                               y -> VNaturalSubtract x y
+                         x ->
+                           VPrim $ \case
+                             VNaturalLit 0 -> VNaturalLit 0
+                             y -> VNaturalSubtract x y
     NaturalPlus t u  -> vNaturalPlus (evalE t) (evalE u)
     NaturalTimes t u -> case (evalE t, evalE u) of
                           (VNaturalLit 1, u            ) -> u
@@ -798,6 +804,7 @@ quote !env !t =
                                        NaturalFoldCl{}           -> quote env (t VPrimVar)
                                        ListFoldCl{}              -> quote env (t VPrimVar)
                                        OptionalFoldCl{}          -> quote env (t VPrimVar)
+                                       NaturalSubtractZero       -> App NaturalSubtract (NaturalLit 0)
 
     VPi a (freshCl -> (x, v, b))  -> Pi x (quoteE a) (quoteBind x (inst b v))
     VHPi (fresh -> (x, v)) a b    -> Pi x (quoteE a) (quoteBind x (b v))

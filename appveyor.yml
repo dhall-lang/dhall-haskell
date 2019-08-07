@@ -24,12 +24,7 @@ install:
   - git submodule update --init --recursive
 
 cache:
-  - C:\sr -> '%STACK_YAML%'
-  - .stack-work -> '%STACK_YAML%'
-  - dhall\.stack-work -> '%STACK_YAML%'
-  - dhall-json\.stack-work -> '%STACK_YAML%'
-  - dhall-bash\.stack-work -> '%STACK_YAML%'
-  - dhall-lsp-server\.stack-work -> '%STACK_YAML%'
+  - '%STACK_ROOT% -> %STACK_YAML%, appveyor.yml'
 
 for:
 -
