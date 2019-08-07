@@ -22,24 +22,25 @@ run :: Maybe FilePath -> IO ()
 run mlog = do
   setupLogger mlog
   state <- newEmptyMVar
-  _    <- LSP.Control.run (makeConfig, initCallback state) (lspHandlers state)
-                          lspOptions Nothing
-  return ()
-  where
-    -- Callback that is called when the LSP server is started; makes the lsp
-    -- state (LspFuncs) available to the message handlers through the vlsp MVar.
-    initCallback
-      :: MVar ServerState
-      -> LSP.Core.LspFuncs ()
-      -> IO (Maybe J.ResponseError)
-    initCallback state lsp = do
-      putMVar state (initialState lsp)
-      return Nothing
 
-    -- Interpret DidChangeConfigurationNotification; pointless at the moment
-    -- since we don't use a configuration.
-    makeConfig :: J.DidChangeConfigurationNotification -> Either Text ()
-    makeConfig _ = Right ()
+  -- these two are stubs since we do not use a config
+  let onInitialConfiguration :: J.InitializeRequest -> Either Text ()
+      onInitialConfiguration _ = Right ()
+  let onConfigurationChange :: J.DidChangeConfigurationNotification -> Either Text ()
+      onConfigurationChange _ = Right ()
+
+  -- Callback that is called when the LSP server is started; makes the lsp
+  -- state (LspFuncs) available to the message handlers through the `state` MVar.
+  let onStartup :: LSP.Core.LspFuncs () -> IO (Maybe J.ResponseError)
+      onStartup lsp = do
+        putMVar state (initialState lsp)
+        return Nothing
+
+  _ <- LSP.Control.run (LSP.Core.InitializeCallbacks {..})
+                       (lspHandlers state)
+                       lspOptions
+                       Nothing
+  return ()
 
 -- | sets the output logger.
 -- | if no filename is provided then logger is disabled, if input is string `[OUTPUT]` then log goes to stderr,

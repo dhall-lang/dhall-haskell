@@ -6,7 +6,7 @@ import qualified Language.Haskell.LSP.Types as J
 import qualified Language.Haskell.LSP.Types.Lens as J
 import qualified Language.Haskell.LSP.VFS as LSP
 import qualified Data.Aeson as J
-import qualified Yi.Rope as Rope
+import qualified Data.Rope.UTF16 as Rope
 
 import Dhall.Core (Expr(Note, Embed), pretty, Import(..), ImportHashed(..), ImportType(..), headers)
 import Dhall.Import (localToPath)
@@ -99,9 +99,9 @@ lspRequest constructor method params = do
 readUri :: J.Uri -> HandlerM Text
 readUri uri = do
   getVirtualFileFunc <- uses lspFuncs LSP.getVirtualFileFunc
-  mVirtualFile <- liftIO $ getVirtualFileFunc uri
+  mVirtualFile <- liftIO $ getVirtualFileFunc (J.toNormalizedUri uri)
   case mVirtualFile of
-    Just (LSP.VirtualFile _ rope) -> return (Rope.toText rope)
+    Just (LSP.VirtualFile _ rope _) -> return (Rope.toText rope)
     Nothing -> fail $ "Could not find " <> show uri <> " in VFS."
 
 loadFile :: J.Uri -> HandlerM (Expr Src X)
@@ -152,7 +152,7 @@ hoverExplain request = do
             encodedDiag = URI.encode (Text.unpack diagnosis)
             command = "[Explain error](dhall-explain:?"
                         <> Text.pack encodedDiag <> " )"
-            _contents = J.List [J.PlainString command]
+            _contents = J.HoverContents $ J.MarkupContent J.MkMarkdown command
         in Just J.Hover { .. }
       hoverFromDiagnosis _ = Nothing
 
@@ -174,7 +174,7 @@ hoverType request = do
     Left err -> throwE (Error, Text.pack err)
     Right (mSrc, typ) ->
       let _range = fmap (rangeToJSON . rangeFromDhall) mSrc
-          _contents = J.List [J.PlainString (pretty typ)]
+          _contents = J.HoverContents $ J.MarkupContent J.MkPlainText (pretty typ)
           hover = J.Hover{..}
       in lspRespond LSP.RspHover request (Just hover)
 
