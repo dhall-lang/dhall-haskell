@@ -9,13 +9,14 @@
     not match the expected type
 -}
 
-module Dhall.Diff (
+module Dhall.Diff  where {- (
     -- * Diff
       Diff (..)
     , diffExpression
     , diffNormalized
     , Dhall.Diff.diff
     ) where
+-}
 
 import Data.Foldable (fold, toList)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -371,12 +372,8 @@ diffChunks cL cR
 diffList
     :: (Eq a, Pretty a)
     => Seq (Expr s a) -> Seq (Expr s a) -> Diff
-diffList l r
-  | allDifferent parts = difference listSkeleton listSkeleton
-  | otherwise          = bracketed (foldMap diffPart parts)
+diffList l r = bracketed (foldMap diffPart parts)
   where
-    allDifferent = any (not . isBoth)
-
     -- Sections of the list that are only in left, only in right, or in both
     parts =
         Algo.Diff.getGroupedDiffBy ((same .) . diffExpression) (toList l) (toList r)
