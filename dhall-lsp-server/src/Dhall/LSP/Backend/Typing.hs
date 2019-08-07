@@ -2,7 +2,7 @@ module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
 
 import Dhall.Context (Context, insert, empty)
 import Dhall.Core (Expr(..), Binding(..), Const(..), subExpressions, normalize, shift, subst, Var(..))
-import Dhall.TypeCheck (typeWithA, X(..), TypeError(..))
+import Dhall.TypeCheck (typeWithA, X, TypeError(..))
 import Dhall.Parser (Src(..))
 
 import Data.List.NonEmpty (NonEmpty (..))
@@ -11,6 +11,7 @@ import Control.Lens (toListOf)
 import Data.Text (Text)
 import Control.Applicative ((<|>))
 import Data.Bifunctor (first)
+import Data.Void (absurd)
 
 import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot, getLetIdentifier,
   getLamIdentifier, getForallIdentifier)

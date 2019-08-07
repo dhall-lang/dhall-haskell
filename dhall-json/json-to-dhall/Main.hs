@@ -8,9 +8,8 @@
 
 module Main where
 
-import Control.Applicative (optional)
+import Control.Applicative (optional, (<|>))
 import Control.Exception (SomeException, throwIO)
-import Control.Monad (when)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Version (showVersion)
@@ -45,23 +44,28 @@ parserInfo = Options.info
           )
 
 -- | All the command arguments and options
-data Options = Options
-    { version    :: Bool
-    , schema     :: Text
-    , conversion :: Conversion
-    , file       :: Maybe FilePath
-    , ascii      :: Bool
-    , plain      :: Bool
-    } deriving Show
+data Options
+    = Options
+        { schema     :: Text
+        , conversion :: Conversion
+        , file       :: Maybe FilePath
+        , ascii      :: Bool
+        , plain      :: Bool
+        }
+    | Version
+    deriving Show
 
 -- | Parser for all the command arguments and options
 parseOptions :: Parser Options
-parseOptions = Options <$> parseVersion
-                       <*> parseSchema
-                       <*> parseConversion
-                       <*> optional parseFile
-                       <*> parseASCII
-                       <*> parsePlain
+parseOptions =
+        (   Options
+        <$> parseSchema
+        <*> parseConversion
+        <*> optional parseFile
+        <*> parseASCII
+        <*> parsePlain
+        )
+    <|> parseVersion
   where
     parseSchema =
         Options.strArgument
@@ -70,7 +74,8 @@ parseOptions = Options <$> parseVersion
             )
 
     parseVersion =
-        Options.switch
+        Options.flag'
+            Version
             (  Options.long "version"
             <> Options.short 'V'
             <> Options.help "Display version"
@@ -103,45 +108,46 @@ main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
-    Options {..} <- Options.execParser parserInfo
+    options <- Options.execParser parserInfo
 
-    let characterSet = case ascii of
-            True  -> ASCII
-            False -> Unicode
+    case options of
+        Version -> do
+            putStrLn (showVersion Meta.version)
 
-    when version $ do
-      putStrLn (showVersion Meta.version)
-      System.Exit.exitSuccess
+        Options {..} -> do
+            let characterSet = case ascii of
+                    True  -> ASCII
+                    False -> Unicode
 
-    handle $ do
-        bytes <- case file of
-            Nothing   -> ByteString.getContents
-            Just path -> ByteString.readFile path
+            handle $ do
+                bytes <- case file of
+                    Nothing   -> ByteString.getContents
+                    Just path -> ByteString.readFile path
 
-        value :: Aeson.Value <- case Aeson.eitherDecode bytes of
-          Left err -> throwIO (userError err)
-          Right v -> pure v
+                value :: Aeson.Value <- case Aeson.eitherDecode bytes of
+                  Left err -> throwIO (userError err)
+                  Right v -> pure v
 
-        expr <- typeCheckSchemaExpr id =<< resolveSchemaExpr schema
+                expr <- typeCheckSchemaExpr id =<< resolveSchemaExpr schema
 
-        result <- case dhallFromJSON conversion expr value of
-          Left err     -> throwIO err
-          Right result -> return result
+                result <- case dhallFromJSON conversion expr value of
+                  Left err     -> throwIO err
+                  Right result -> return result
 
-        let document = Dhall.Pretty.prettyCharacterSet characterSet result
+                let document = Dhall.Pretty.prettyCharacterSet characterSet result
 
-        let stream = Pretty.layoutSmart Dhall.Pretty.layoutOpts document
+                let stream = Pretty.layoutSmart Dhall.Pretty.layoutOpts document
 
-        supportsANSI <- ANSI.hSupportsANSI IO.stdout
+                supportsANSI <- ANSI.hSupportsANSI IO.stdout
 
-        let ansiStream =
-                if supportsANSI && not plain
-                then fmap Dhall.Pretty.annToAnsiStyle stream
-                else Pretty.unAnnotateS stream
+                let ansiStream =
+                        if supportsANSI && not plain
+                        then fmap Dhall.Pretty.annToAnsiStyle stream
+                        else Pretty.unAnnotateS stream
 
-        Pretty.Terminal.renderIO IO.stdout ansiStream
+                Pretty.Terminal.renderIO IO.stdout ansiStream
 
-        Text.IO.putStrLn ""
+                Text.IO.putStrLn ""
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler

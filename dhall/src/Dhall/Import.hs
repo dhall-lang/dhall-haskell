@@ -149,6 +149,7 @@ import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
+import Data.Void (absurd)
 #if MIN_VERSION_base(4,8,0)
 #else
 import Data.Traversable (traverse)
@@ -176,7 +177,7 @@ import Dhall.Import.HTTP hiding (HTTPHeader)
 import Dhall.Import.Types
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
-import Dhall.TypeCheck (X(..))
+import Dhall.TypeCheck (X)
 import Lens.Family.State.Strict (zoom)
 
 import qualified Codec.Serialise
@@ -964,6 +965,8 @@ loadWith expr₀ = case expr₀ of
   ToMap a b            -> ToMap <$> loadWith a <*> mapM loadWith b
   Field a b            -> Field <$> loadWith a <*> pure b
   Project a b          -> Project <$> loadWith a <*> mapM loadWith b
+  Assert a             -> Assert <$> loadWith a
+  Equivalent a b       -> Equivalent <$> loadWith a <*> loadWith b
   Note a b             -> do
       let handler e = throwM (SourcedException a (e :: MissingImports))
 

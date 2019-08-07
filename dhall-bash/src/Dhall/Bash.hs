@@ -105,6 +105,7 @@ import Data.Bifunctor (first)
 import Data.ByteString
 import Data.Monoid ((<>))
 import Data.Typeable (Typeable)
+import Data.Void (absurd)
 import Dhall.Core (Expr(..), Chunks(..))
 import Dhall.TypeCheck
 
@@ -269,7 +270,7 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
         let bytes = "declare -r " <> var <> "=" <> e
         return bytes
     go (Embed   x) = do
-        Dhall.TypeCheck.absurd x
+        absurd x
     go (Note  _ e) = do
         go e
 
@@ -330,6 +331,8 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
     go e@(ToMap         {}) = Left (UnsupportedStatement e)
     go e@(Field         {}) = Left (UnsupportedStatement e)
     go e@(Project       {}) = Left (UnsupportedStatement e)
+    go e@(Assert        {}) = Left (UnsupportedStatement e)
+    go e@(Equivalent    {}) = Left (UnsupportedStatement e)
     go e@(ImportAlt     {}) = Left (UnsupportedStatement e)
 
 {-| Compile a Dhall expression to a Bash expression

@@ -30,6 +30,7 @@ module Dhall.Parser.Token (
     _using,
     _merge,
     _toMap,
+    _assert,
     _Some,
     _None,
     _NaturalFold,
@@ -88,6 +89,7 @@ module Dhall.Parser.Token (
     _closeParens,
     _colon,
     _at,
+    _equivalent,
     _missing,
     _importAlt,
     _combine,
@@ -599,6 +601,9 @@ _merge = keyword "merge"
 _toMap :: Parser ()
 _toMap = keyword "toMap"
 
+_assert :: Parser ()
+_assert = keyword "assert"
+
 _Some :: Parser ()
 _Some = keyword "Some"
 
@@ -775,6 +780,11 @@ _colon = reservedChar ':'
 
 _at :: Parser ()
 _at = reservedChar '@'
+
+_equivalent :: Parser ()
+_equivalent = do
+    void (Text.Parser.Char.char '≡' <?> "\"≡\"") <|> void (Text.Parser.Char.text "===")
+    whitespace
 
 _missing :: Parser ()
 _missing = reserved "missing"

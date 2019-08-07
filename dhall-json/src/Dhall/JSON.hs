@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards     #-}
 {-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -116,7 +117,7 @@
 >   "name": "Left"
 > }
 
-    If @nesting@ is set to @Nested nestedField@ then the union is store
+    If @nesting@ is set to @Nested nestedField@ then the union is stored
     underneath a field named @nestedField@.  For example, this code:
 
 > let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
@@ -191,11 +192,13 @@ import Dhall.TypeCheck (X)
 import Dhall.Map (Map)
 import Dhall.JSON.Util (pattern V)
 import Options.Applicative (Parser)
+import Prelude hiding (getContents)
 
 import qualified Data.Aeson          as Aeson
 import qualified Data.Foldable       as Foldable
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.List
+import qualified Data.Map
 import qualified Data.Ord
 import qualified Data.Text
 import qualified Data.Vector         as Vector
@@ -319,12 +322,7 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
         Core.RecordLit a ->
             case toOrderedList a of
                 [   (   "contents"
-                    ,   Core.App
-                            (Core.Field
-                                _
-                                alternativeName
-                            )
-                            contents
+                    ,   contents
                     )
                  ,  (   "field"
                     ,   Core.TextLit
@@ -344,28 +342,26 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                                 (Core.Chunks [] nestedField)
                             )
                     )
-                 ] | all (== Core.Record []) mInlineType -> do
-                    contents' <- loop contents
+                 ] | all (== Core.Record []) mInlineType
+                   , Just (alternativeName, mExpr) <- getContents contents -> do
+                       contents' <- case mExpr of
+                           Just expr -> loop expr
+                           Nothing -> return Aeson.Null
 
-                    let taggedValue =
-                            Dhall.Map.fromList
-                                [   (   field
-                                    ,   toJSON alternativeName
-                                    )
-                                ,   (   nestedField
-                                    ,   contents'
-                                    )
-                                ]
+                       let taggedValue =
+                               Data.Map.fromList
+                                   [   (   field
+                                       ,   toJSON alternativeName
+                                       )
+                                   ,   (   nestedField
+                                       ,   contents'
+                                       )
+                                   ]
 
-                    return (Aeson.toJSON ( Dhall.Map.toMap taggedValue ))
+                       return (Aeson.toJSON taggedValue)
 
                 [   (   "contents"
-                    ,   Core.App
-                            (Core.Field
-                                _
-                                alternativeName
-                            )
-                            (Core.RecordLit contents)
+                    ,   contents
                     )
                  ,  (   "field"
                     ,   Core.TextLit
@@ -374,19 +370,35 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                  ,  (   "nesting"
                     ,   nesting
                     )
-                 ] | isInlineNesting nesting -> do
-                    let contents' =
-                            Dhall.Map.insert
-                                field
-                                (Core.TextLit
-                                    (Core.Chunks
-                                        []
-                                        alternativeName
-                                    )
-                                )
-                                contents
+                 ] | isInlineNesting nesting
+                   , Just (alternativeName, Just (Core.RecordLit kvs)) <- getContents contents -> do
+                       let kvs' =
+                               Dhall.Map.insert
+                                   field
+                                   (Core.TextLit
+                                       (Core.Chunks
+                                           []
+                                           alternativeName
+                                       )
+                                   )
+                                   kvs
 
-                    loop (Core.RecordLit contents')
+                       loop (Core.RecordLit kvs')
+
+                   | isInlineNesting nesting
+                   , Just (alternativeName, Nothing) <- getContents contents -> do
+                       let kvs =
+                               Dhall.Map.singleton
+                                   field
+                                   (Core.TextLit
+                                       (Core.Chunks
+                                           []
+                                           alternativeName
+                                       )
+                                   )
+
+                       loop (Core.RecordLit kvs)
+
                 _ -> do
                     a' <- traverse loop a
                     return (Aeson.toJSON (Dhall.Map.toMap a'))
@@ -431,6 +443,17 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
 
                 outer value
         _ -> Left (Unsupported e)
+
+getContents :: Expr s X -> Maybe (Text, Maybe (Expr s X))
+getContents (Core.App
+                (Core.Field
+                    _
+                    alternativeName
+                )
+                expression
+            ) = Just (alternativeName, Just expression)
+getContents (Core.Field _ alternativeName) = Just (alternativeName, Nothing)
+getContents _ = Nothing
 
 isInlineNesting :: Expr s X -> Bool
 isInlineNesting (Core.App
@@ -847,6 +870,17 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             Core.Project a' b
           where
             a' = loop a
+
+        Core.Assert a ->
+            Core.Assert a'
+          where
+            a' = loop a
+
+        Core.Equivalent a b ->
+            Core.Equivalent a' b'
+          where
+            a' = loop a
+            b' = loop b
 
         Core.ImportAlt a b ->
             Core.ImportAlt a' b'

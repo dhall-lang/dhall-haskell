@@ -95,8 +95,9 @@ import Data.Foldable (toList)
 import Data.Fix (Fix(..))
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
+import Data.Void (absurd)
 import Dhall.Core (Chunks(..), Const(..), Expr(..), Var(..))
-import Dhall.TypeCheck (X(..))
+import Dhall.TypeCheck (X)
 import Nix.Atoms (NAtom(..))
 import Nix.Expr
     ( Antiquoted(..)
@@ -542,6 +543,10 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return (Fix (NSet [Inherit (Just a') b' Nix.nullPos]))
     loop (Project _ (Right _)) = do
         Left CannotProjectByType
+    loop (Assert _) = do
+        return (Fix (NSet []))
+    loop (Equivalent _ _) = do
+        return (Fix (NSet []))
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
-    loop (Embed (X x)) = x
+    loop (Embed x) = absurd x
