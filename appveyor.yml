@@ -25,6 +25,9 @@ install:
 
 cache:
   - '%STACK_ROOT% -> %STACK_YAML%, appveyor.yml'
+  - '.stack-work -> %STACK_YAML%, appveyor.yml'
+  - 'dhall/.stack-work -> %STACK_YAML%, appveyor.yml'
+  - 'dhall-bash/.stack-work -> %STACK_YAML%, appveyor.yml'
 
 for:
 -
@@ -51,7 +54,7 @@ for:
     - stack test dhall-json
     - stack test dhall-bash
     # - stack test dhall-lsp-server # Disabled while the tests are broken.
-    - stack bench --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
+    - stack bench dhall --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
     
 -
   matrix:

@@ -14,7 +14,8 @@ import qualified System.Log.Logger
 import Dhall.LSP.State
 import Dhall.LSP.Handlers (nullHandler, wrapHandler, hoverHandler,
   didOpenTextDocumentNotificationHandler, didSaveTextDocumentNotificationHandler,
-  executeCommandHandler, documentFormattingHandler, documentLinkHandler)
+  executeCommandHandler, documentFormattingHandler, documentLinkHandler,
+  completionHandler)
 
 -- | The main entry point for the LSP server.
 run :: Maybe FilePath -> IO ()
@@ -65,6 +66,10 @@ syncOptions = J.TextDocumentSyncOptions
 -- Server capabilities. Tells the LSP client that we can execute commands etc.
 lspOptions :: LSP.Core.Options
 lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
+                 , LSP.Core.completionProvider =
+                     Just (J.CompletionOptions {
+                         _resolveProvider = Nothing
+                       , _triggerCharacters = Just [":", ".", "/"] })
                  , LSP.Core.executeCommandProvider =
                      -- Note that this registers the dhall.server.lint command
                      -- with VSCode, which means that our plugin can't expose a
@@ -93,4 +98,5 @@ lspHandlers state
         , LSP.Core.executeCommandHandler                    = Just $ wrapHandler state executeCommandHandler
         , LSP.Core.documentFormattingHandler                = Just $ wrapHandler state documentFormattingHandler
         , LSP.Core.documentLinkHandler                      = Just $ wrapHandler state documentLinkHandler
+        , LSP.Core.completionHandler                        = Just $ wrapHandler state completionHandler
         }
