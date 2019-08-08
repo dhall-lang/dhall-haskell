@@ -112,7 +112,7 @@ import Control.Applicative (empty, liftA2, Alternative)
 import Control.Exception (Exception)
 import Control.Monad.Trans.Free (FreeF (..))
 import Control.Monad.Trans.State.Strict
-import Control.Monad (guard)
+import Control.Monad (guard, (<=<))
 import Data.Coerce (coerce)
 import Data.Either.Validation (Validation(..), ealt, eitherToValidation, validationToEither)
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
@@ -128,7 +128,7 @@ import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Data.Word (Word8, Word16, Word32, Word64)
-import Dhall.Core (Expr(..), Chunks(..))
+import Dhall.Core (Expr(..), Chunks(..), Var(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
@@ -910,14 +910,14 @@ auto :: Interpret a => Type a
 auto = autoWith defaultInterpretOptions
 
 newtype DhallFix f t = DhallFix { unDhallFix :: t }
-newtype FixVar = FixVar { unFixVar :: (Expr Src X) }
+newtype FixVar = FixVar { unFixVar :: Expr Src X }
 
--- This is a helper instance used from implementation of Interpret for DhallFix
+-- This is a helper instance used for implementation of Interpret for DhallFix
 instance Interpret FixVar where
     autoWith _ = Type {..}
         where
-        extract (App _ e0) = pure (FixVar e0)
-        extract e          = typeError expected e
+        extract (App (Var (V "_" 0)) e0) = pure (FixVar e0)
+        extract e                        = typeError expected e
 
         expected = "t"
 
@@ -929,13 +929,14 @@ type InterpretFix f t =
    )
 
 instance InterpretFix f t => Interpret (DhallFix f t) where
-    autoWith opts = Type { extract = extr, expected = expe }
+    autoWith opts = Type
+        { extract = extr . Dhall.Core.alphaNormalize, expected = expe }
         where
         extr (Lam _ _ (Lam _ _ e)) = DhallFix <$> buildF e
         extr e                     = typeError expe e
 
         -- buildF = elgot f g <=< extract (auto @FixVar)
-        viaMonadic a b x = fromMonadic $ toMonadic . a =<< toMonadic (b x)
+        viaMonadic a b = fromMonadic . (toMonadic . a <=< toMonadic . b)
         buildF = elgot f g `viaMonadic` extract (auto :: Type FixVar)
 
         g = repack . extract xF_t . unFixVar
@@ -967,40 +968,50 @@ instance InterpretFix f t => Interpret (DhallFix f t) where
     And a dhall file:
 
   > -- expr.dhall
-  >
-  > -- F-Algebra declaration.
-  > let ExprF
-  >   = λ(t : Type) →
+  > λ(t : Type) →
+  > let ExprF =
   >   < LitF : { _1 : Natural }
   >   | AddF : { _1 : t, _2 : t }
   >   | MulF : { _1 : t, _2 : t }
   >   >
   >
-  > -- Helper function.
-  > let Expr
-  >   = λ(t : Type)
-  >   → λ(fix : ExprF t → t)
-  >   → let E = ExprF t in
-  >     { Lit = λ(x : Natural)      → fix (E.LitF { _1 = x })
-  >     , Add = λ(a : t) → λ(b : t) → fix (E.AddF { _1 = a, _2 = b })
-  >     , Mul = λ(a : t) → λ(b : t) → fix (E.MulF { _1 = a, _2 = b })
-  >     }
-  >
-  > -- Example usage.
-  > let result
-  >   = λ(t : Type)
-  >   → λ(fix : ExprF t → t)
-  >   → let E = Expr t fix in
-  >     E.Add
-  >       (E.Mul (E.Lit 3) (E.Lit 7))
-  >       (E.Add (E.Lit 1) (E.Lit 2))
-  >
-  > in result
+  > in  λ(Fix : ExprF → t) →
+  >     let Lit = λ(x : Natural)      → Fix (ExprF.LitF { _1 = x })
+  >     let Add = λ(a : t) → λ(b : t) → Fix (ExprF.AddF { _1 = a, _2 = b })
+  >     let Mul = λ(a : t) → λ(b : t) → Fix (ExprF.MulF { _1 = a, _2 = b })
+  >     in  Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))
 
     We're now able to interpret it:
 
   > > input @Expr auto "./expr.dhall"
   > Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))
+
+    Alternatively, we could factor out a helper expression:
+
+  > let Expr
+  >   = λ(t : Type)
+  >   → λ(Fix : ExprF t → t)
+  >   → let E = ExprF t in
+  >     { Lit = λ(x : Natural)      → Fix (E.LitF { _1 = x })
+  >     , Add = λ(a : t) → λ(b : t) → Fix (E.AddF { _1 = a, _2 = b })
+  >     , Mul = λ(a : t) → λ(b : t) → Fix (E.MulF { _1 = a, _2 = b })
+  >     }
+
+    And then the use location becomes:
+
+  >   λ(t : Type)
+  > → λ(Fix : ExprF t → t)
+  > → let E = Expr t Fix in
+  >   E.Add
+  >     (E.Mul (E.Lit 3) (E.Lit 7))
+  >     (E.Add (E.Lit 1) (E.Lit 2))
+  >
+
+    In general your dhall expression needs to be of type:
+
+  > ∀(t : Type) → ∀(F t → t) → t
+
+    Where F is an F-Algebra generating your data type.
 
 -}
 autoWithFix :: forall f t. InterpretFix f t => InterpretOptions -> Type t
