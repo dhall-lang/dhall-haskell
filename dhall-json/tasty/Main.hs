@@ -20,11 +20,15 @@ import qualified Dhall.JSONToDhall    as JSONToDhall
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Dhall.Yaml
+import qualified GHC.IO.Encoding
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
 main :: IO ()
-main = Test.Tasty.defaultMain testTree
+main = do
+    GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
+
+    Test.Tasty.defaultMain testTree
 
 testTree :: TestTree
 testTree =
