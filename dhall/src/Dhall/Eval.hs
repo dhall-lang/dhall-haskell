@@ -433,6 +433,7 @@ eval !env t =
                          x ->
                            VPrim $ \case
                              VNaturalLit 0 -> VNaturalLit 0
+                             y | conv env x y -> VNaturalLit 0
                              y -> VNaturalSubtract x y
     NaturalPlus t u  -> vNaturalPlus (evalE t) (evalE u)
     NaturalTimes t u -> case (evalE t, evalE u) of
@@ -561,6 +562,7 @@ eval !env t =
                           (t, VRecordLit m) | null m -> t
                           (VRecordLit m, VRecordLit m') ->
                              VRecordLit (Dhall.Map.sort (Dhall.Map.union m' m))
+                          (t, u) | conv env t u -> t
                           (t, u) -> VPrefer t u
     Merge x y ma     -> case (evalE x, evalE y, evalE <$> ma) of
                           (VRecordLit m, VInject _ k mt, _)

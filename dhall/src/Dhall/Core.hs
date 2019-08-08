@@ -1439,6 +1439,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                         | otherwise -> pure (NaturalLit 0)
                     App (App NaturalSubtract (NaturalLit 0)) y -> pure y
                     App (App NaturalSubtract _) (NaturalLit 0) -> pure (NaturalLit 0)
+                    App (App NaturalSubtract x) y | judgmentallyEqual x y -> pure (NaturalLit 0)
                     App IntegerShow (IntegerLit n)
                         | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
                         | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
@@ -1696,6 +1697,8 @@ normalizeWithM ctx e0 = loop (denote e0)
             l
         decide (RecordLit m) (RecordLit n) =
             RecordLit (Dhall.Map.sort (Dhall.Map.union n m))
+        decide l r | judgmentallyEqual l r =
+            l
         decide l r =
             Prefer l r
     Merge x y t      -> do
@@ -1881,6 +1884,7 @@ isNormalized e0 = loop (denote e0)
           App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
           App (App NaturalSubtract (NaturalLit 0)) _ -> False
           App (App NaturalSubtract _) (NaturalLit 0) -> False
+          App (App NaturalSubtract x) y -> not (judgmentallyEqual x y)
           App NaturalToInteger (NaturalLit _) -> False
           App IntegerShow (IntegerLit _) -> False
           App IntegerToDouble (IntegerLit _) -> False
@@ -2011,7 +2015,7 @@ isNormalized e0 = loop (denote e0)
           decide (RecordLit m) _ | Data.Foldable.null m = False
           decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
-          decide  _ _ = True
+          decide l r = not (judgmentallyEqual l r)
       Merge x y t -> loop x && loop y && all loop t
       ToMap x t -> case x of
           RecordLit _ -> False
