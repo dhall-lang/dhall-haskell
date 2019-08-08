@@ -1,5 +1,6 @@
 module Dhall.LSP.Backend.Parsing
-  ( getImportHash
+  ( getImportLink
+  , getImportHash
   , getLetInner
   , getLetAnnot
   , getLetIdentifier
@@ -20,7 +21,7 @@ import Dhall.Parser.Expression
 import Text.Megaparsec ((<|>), try, skipManyTill, lookAhead, anySingle,
   notFollowedBy, eof, takeRest)
 
-import Control.Applicative (optional)
+import Control.Applicative (optional, (<|>))
 import qualified Text.Megaparsec as Megaparsec
 import Text.Megaparsec (SourcePos(..))
 
@@ -131,6 +132,20 @@ setSourcePos src = Megaparsec.updateParserState
                      (\(Megaparsec.State s o (Megaparsec.PosState i o' _ t l)) ->
                        Megaparsec.State s o (Megaparsec.PosState i o' src t l))
 
+getImportLink :: Src -> Src
+getImportLink src@(Src left _ text) =
+  case Megaparsec.parseMaybe (unParser parseImportLink) text of
+    Just src' -> src'
+    Nothing -> src
+ where
+  parseImportLink = do
+    setSourcePos left
+    begin <- getSourcePos
+    (tokens, _) <-
+      Megaparsec.match $ (localRaw *> return ()) <|> (httpRaw *> return ())
+    end <- getSourcePos
+    _ <- Megaparsec.takeRest
+    return (Src begin end tokens)
 
 -- | An expression that is guaranteed not to typecheck. Can be used a
 -- placeholder type to emulate 'lazy' contexts, when typechecking something in a
