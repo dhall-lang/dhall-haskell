@@ -1,7 +1,7 @@
 module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
 
 import Dhall.Context (Context, insert, empty)
-import Dhall.Core (Expr(..), Binding(..), Const(..), subExpressions, normalize, shift, subst, Var(..))
+import Dhall.Core (Expr(..), Binding(..), Const(..), subExpressions, normalize, shift, subst, Var(..), pretty)
 import Dhall.TypeCheck (typeWithA, X, TypeError(..))
 import Dhall.Parser (Src(..))
 
@@ -17,10 +17,6 @@ import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot, getLetIdentifier,
   getLamIdentifier, getForallIdentifier)
 import Dhall.LSP.Backend.Diagnostics (Position, Range(..), rangeFromDhall)
 import Dhall.LSP.Backend.Dhall (WellTyped, fromWellTyped)
-
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty
-import Dhall.Pretty (CharacterSet(..), prettyCharacterSet)
 
 -- | Find the type of the subexpression at the given position. Assumes that the
 --   input expression is well-typed. Also returns the Src descriptor containing
@@ -126,7 +122,7 @@ annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
                      Just x -> return x
                      Nothing -> Left "The impossible happened: failed\
                                      \ to re-parse a Let expression."
-       return (srcAnnot, ": " <> printExpr (normalize _A) <> " ")
+       return (srcAnnot, ": " <> pretty (normalize _A) <> " ")
 
 -- binders, see typeAt'
 annotateLet' pos ctx (Let (Binding x _ a :| []) e@(Note src _)) | pos `inside` src = do
@@ -160,10 +156,6 @@ annotateLet' pos ctx expr = do
   case [ Note src e | (Note src e) <- subExprs, pos `inside` src ] of
     (e:[]) -> annotateLet' pos ctx e
     _ -> Left "You weren't pointing at a let binder!"
-
-
-printExpr :: Pretty.Pretty b => Expr a b -> Text
-printExpr expr = Pretty.renderStrict $ Pretty.layoutCompact (Pretty.unAnnotate (prettyCharacterSet Unicode expr))
 
 
 -- Split all multilets into single lets in an expression
