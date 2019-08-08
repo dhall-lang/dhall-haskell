@@ -986,8 +986,15 @@ instance InterpretFix f t => Interpret (DhallFix f t) where
   > > input @Expr auto "./expr.dhall"
   > Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))
 
-    Alternatively, we could factor out a helper expression:
+    Alternatively, we could factor out some helper expressions:
 
+  > let ExprF =
+  >   λ(t : Type) →
+  >   < LitF : { _1 : Natural }
+  >   | AddF : { _1 : t, _2 : t }
+  >   | MulF : { _1 : t, _2 : t }
+  >   >
+  >
   > let Expr
   >   = λ(t : Type)
   >   → λ(Fix : ExprF t → t)
