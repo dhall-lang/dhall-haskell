@@ -854,6 +854,13 @@ typeWithA tpa = loop
             Const Type -> return ()
             _          -> Left (TypeError ctx e (IncomparableExpression y))
 
+        if Dhall.Core.judgmentallyEqual _A₀ _A₁
+            then return ()
+            else do
+                let nf_A₀ = Dhall.Core.normalize _A₀
+                let nf_A₁ = Dhall.Core.normalize _A₁
+                Left (TypeError ctx e (EquivalenceTypeMismatch x nf_A₀ y nf_A₁))
+
         return (Const Type)
     loop ctx   (Note s e'       ) = case loop ctx e' of
         Left (TypeError ctx' (Note s' e'') m) -> Left (TypeError ctx' (Note s' e'') m)
@@ -921,6 +928,7 @@ data TypeMessage s a
     | AssertionFailed (Expr s a) (Expr s a)
     | NotAnEquivalence (Expr s a)
     | IncomparableExpression (Expr s a)
+    | EquivalenceTypeMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
     | CantOr (Expr s a) (Expr s a)
     | CantEQ (Expr s a) (Expr s a)
@@ -3636,6 +3644,45 @@ prettyTypeMessage (IncomparableExpression expr) = ErrorMessages {..}
         \... which is not a term\n"
       where
         txt0 = insert expr
+
+prettyTypeMessage (EquivalenceTypeMismatch l _L r _R) = ErrorMessages {..}
+  where
+    short = "The two sides of the equivalence have different types"
+
+    long =
+        "Explanation: You can use ❰≡❱ to compare two terms of the same type for          \n\
+        \equivalence, like this:                                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────┐                                                               \n\
+        \    │ 2 + 2 ≡ 4 │  This is valid because ❰2 + 2❱ and ❰4❱ have the same type     \n\
+        \    └───────────┘                                                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot compare expressions, that have different types.  For example,\n\
+        \the following assertion is " <> _NOT <> " valid:                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────┐                                                                \n\
+        \    │ 1 ≡ True │  Invalid: ❰1❱ has type ❰Natural❱, ❰True❱ has type ❰Bool❱       \n\
+        \    └──────────┘                                                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You tried to compare the following expressions:                                 \n\
+        \                                                                                \n\
+        \" <> insert l <> "\n\
+        \                                                                                \n\
+        \... which has type\n\
+        \                                                                                \n\
+        \" <> insert _L <> "\n\
+        \                                                                                \n\
+        \... and\n\
+        \                                                                                \n\
+        \" <> insert r <> "\n\
+        \                                                                                \n\
+        \... which has type\n\
+        \                                                                                \n\
+        \" <> insert _R <> "\n"
 
 prettyTypeMessage (CantAnd expr0 expr1) =
         buildBooleanOperator "&&" expr0 expr1
