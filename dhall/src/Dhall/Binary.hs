@@ -25,6 +25,7 @@ module Dhall.Binary
 import Codec.CBOR.Term (Term(..))
 import Control.Applicative (empty, (<|>))
 import Control.Exception (Exception)
+import Data.Void (Void, absurd)
 import Dhall.Core
     ( Binding(..)
     , Chunks(..)
@@ -42,7 +43,6 @@ import Dhall.Core
     , Var(..)
     )
 
-import Dhall.X (X(..))
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
@@ -103,7 +103,7 @@ unApply e₀ = (baseFunction₀, diffArguments₀ [])
 class ToTerm a where
     encode :: a -> Term
 
-instance ToTerm a => ToTerm (Expr X a) where
+instance ToTerm a => ToTerm (Expr Void a) where
     encode (Var (V "_" n)) =
         TInt n
     encode (Var (V x n)) =
@@ -122,6 +122,8 @@ instance ToTerm a => ToTerm (Expr X a) where
         TString "Natural/toInteger"
     encode NaturalShow =
         TString "Natural/show"
+    encode NaturalSubtract =
+        TString "Natural/subtract"
     encode IntegerToDouble =
         TString "Integer/toDouble"
     encode IntegerShow =
@@ -256,6 +258,11 @@ instance ToTerm a => ToTerm (Expr X a) where
       where
         l₁ = encode l₀
         r₁ = encode r₀
+    encode (Equivalent l₀ r₀) =
+        TList [ TInt 3, TInt 12, l₁, r₁ ]
+      where
+        l₁ = encode l₀
+        r₁ = encode r₀
     encode (ListLit _T₀ xs₀)
         | null xs₀  = TList [ TInt label, _T₁ ]
         | otherwise = TList ([ TInt 4, TNull ] ++ xs₁)
@@ -358,6 +365,10 @@ instance ToTerm a => ToTerm (Expr X a) where
             [ x₁, y₁ ]
 
         z₁ = TString z₀
+    encode (Assert t₀) =
+        TList [ TInt 19, t₁ ]
+      where
+        t₁ = encode t₀
     encode (Embed x) =
         encode x
     encode (Let as₀ b₀) =
@@ -389,7 +400,7 @@ instance ToTerm a => ToTerm (Expr X a) where
       where
         t₁  = encode t₀
         _T₁ = encode _T₀
-    encode (Note (X absurd) _) = absurd
+    encode (Note a _) = absurd a
 
 instance ToTerm Import where
     encode import_ =
@@ -456,7 +467,7 @@ instance ToTerm Import where
 
         ImportHashed {..} = importHashed
 
-instance ToTerm X where
+instance ToTerm Void where
     encode = absurd
 
 -- | Types that can be decoded from a CBOR `Term`
@@ -482,6 +493,8 @@ instance FromTerm a => FromTerm (Expr s a) where
         return NaturalToInteger
     decode (TString "Natural/show") =
         return NaturalShow
+    decode (TString "Natural/subtract") =
+        return NaturalSubtract
     decode (TString "Integer/toDouble") =
         return IntegerToDouble
     decode (TString "Integer/show") =
@@ -577,6 +590,7 @@ instance FromTerm a => FromTerm (Expr s a) where
                 9  -> return Prefer
                 10 -> return CombineTypes
                 11 -> return ImportAlt
+                12 -> return Equivalent
                 _  -> empty
         return (op l₀ r₀)
     decode (TList [ TInt 4, _T₁ ]) = do
@@ -697,6 +711,10 @@ instance FromTerm a => FromTerm (Expr s a) where
         (xys, z) <- process xs
 
         return (TextLit (Chunks xys z))
+    decode (TList [ TInt 19, t₁ ]) = do
+        t₀ <- decode t₁
+
+        return (Assert t₀)
     decode e@(TList (TInt 24 : _)) = fmap Embed (decode e)
     decode (TList (TInt 25 : xs)) = do
         let process (TString x : _A₁ : a₁ : ls₁) = do
@@ -839,7 +857,7 @@ instance FromTerm Import where
 
     decode _ = empty
 
-instance FromTerm X where
+instance FromTerm Void where
     decode _ = empty
 
 strip55799Tag :: Term -> Term
@@ -891,7 +909,7 @@ strip55799Tag term =
 -- This 'Dhall.Core.denote's the expression before encoding it. To encode an
 -- already denoted expression, it is more efficient to directly use 'encode'.
 encodeExpression :: Expr s Import -> Term
-encodeExpression e = encode (Dhall.Core.denote e :: Expr X Import)
+encodeExpression e = encode (Dhall.Core.denote e :: Expr Void Import)
 
 -- | Decode a Dhall expression from a CBOR `Term`
 decodeExpression :: FromTerm a => Term -> Either DecodingFailure (Expr s a)

@@ -36,6 +36,7 @@ import Test.QuickCheck
     (Arbitrary(..), Gen, Positive(..), Property, NonNegative(..), genericShrink, (===), (==>))
 import Test.QuickCheck.Instances ()
 import Test.Tasty (TestTree)
+import Test.Tasty.QuickCheck (QuickCheckTests(..))
 import Text.Megaparsec (SourcePos(..), Pos)
 
 import qualified Control.Spoon
@@ -51,6 +52,7 @@ import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Test.QuickCheck
+import qualified Test.Tasty
 import qualified Test.Tasty.QuickCheck
 import qualified Text.Megaparsec       as Megaparsec
 
@@ -203,6 +205,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                 , ( 1, lift0 NaturalShow)
                 , ( 1, lift2 NaturalPlus)
                 , ( 1, lift2 NaturalTimes)
+                , ( 1, lift0 NaturalSubtract)
                 , ( 1, lift0 Integer)
                 , ( 7, fmap IntegerLit integer)
                 , ( 1, lift0 IntegerShow)
@@ -384,25 +387,33 @@ isSameAsSelf expression =
 
 tests :: TestTree
 tests =
-    Test.Tasty.QuickCheck.testProperties
+    testProperties'
         "QuickCheck"
         [ ( "Binary serialization should round-trip"
           , Test.QuickCheck.property binaryRoundtrip
+          , QuickCheckTests 100
           )
         , ( "everything well-typed should normalize"
-          , Test.QuickCheck.property
-              (Test.QuickCheck.withMaxSuccess 10000 everythingWellTypedNormalizes)
+          , Test.QuickCheck.property everythingWellTypedNormalizes
+          , QuickCheckTests 100000
           )
         , ( "isNormalized should be consistent with normalize"
-          , Test.QuickCheck.property
-              (Test.QuickCheck.withMaxSuccess 10000 isNormalizedIsConsistentWithNormalize)
+          , Test.QuickCheck.property isNormalizedIsConsistentWithNormalize
+          , QuickCheckTests 10000
           )
         , ( "normalizeWithM should be consistent with normalize"
-          , Test.QuickCheck.property
-              (Test.QuickCheck.withMaxSuccess 10000 normalizeWithMIsConsistentWithNormalize)
+          , Test.QuickCheck.property normalizeWithMIsConsistentWithNormalize
+          , QuickCheckTests 10000
           )
         , ( "An expression should have no difference with itself"
-          , Test.QuickCheck.property
-              (Test.QuickCheck.withMaxSuccess 10000 isSameAsSelf)
+          , Test.QuickCheck.property isSameAsSelf
+          , QuickCheckTests 10000
           )
         ]
+
+testProperties' :: String -> [(String, Property, QuickCheckTests)] -> TestTree
+testProperties' name = Test.Tasty.testGroup name . map f
+  where
+    -- Using adjustOption instead of withMaxSuccess allows us to override the number of tests
+    -- with the --quickcheck-tests CLI option.
+    f (n, p, nTests) = Test.Tasty.adjustOption (max nTests) (Test.Tasty.QuickCheck.testProperty n p)

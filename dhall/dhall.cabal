@@ -43,11 +43,19 @@ Extra-Source-Files:
     dhall-lang/Prelude/Integer/package.dhall
     dhall-lang/Prelude/Integer/show
     dhall-lang/Prelude/Integer/toDouble
+    dhall-lang/Prelude/JSON/array
+    dhall-lang/Prelude/JSON/bool
     dhall-lang/Prelude/JSON/keyText
     dhall-lang/Prelude/JSON/keyValue
     dhall-lang/Prelude/JSON/Nesting
+    dhall-lang/Prelude/JSON/null
+    dhall-lang/Prelude/JSON/number
+    dhall-lang/Prelude/JSON/object
     dhall-lang/Prelude/JSON/package.dhall
+    dhall-lang/Prelude/JSON/render
+    dhall-lang/Prelude/JSON/string
     dhall-lang/Prelude/JSON/Tagged
+    dhall-lang/Prelude/JSON/Type
     dhall-lang/Prelude/List/all
     dhall-lang/Prelude/List/any
     dhall-lang/Prelude/List/build
@@ -68,6 +76,12 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/reverse
     dhall-lang/Prelude/List/shifted
     dhall-lang/Prelude/List/unzip
+    dhall-lang/Prelude/Map/Entry
+    dhall-lang/Prelude/Map/keys
+    dhall-lang/Prelude/Map/map
+    dhall-lang/Prelude/Map/package.dhall
+    dhall-lang/Prelude/Map/Type
+    dhall-lang/Prelude/Map/values
     dhall-lang/Prelude/Monoid
     dhall-lang/Prelude/Natural/build
     dhall-lang/Prelude/Natural/enumerate
@@ -102,6 +116,14 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/concatSep
     dhall-lang/Prelude/Text/package.dhall
     dhall-lang/Prelude/Text/show
+    dhall-lang/Prelude/XML/attribute
+    dhall-lang/Prelude/XML/element
+    dhall-lang/Prelude/XML/emptyAttributes
+    dhall-lang/Prelude/XML/leaf
+    dhall-lang/Prelude/XML/package.dhall
+    dhall-lang/Prelude/XML/render
+    dhall-lang/Prelude/XML/text
+    dhall-lang/Prelude/XML/Type
     dhall-lang/tests/binary-decode/failure/unit/*.dhallb
     dhall-lang/tests/binary-decode/success/unit/*.dhall
     dhall-lang/tests/binary-decode/success/unit/*.dhallb
@@ -116,124 +138,6 @@ Extra-Source-Files:
     dhall-lang/tests/normalization/success/haskell-tutorial/combineTypes/*.dhall
     dhall-lang/tests/normalization/success/haskell-tutorial/prefer/*.dhall
     dhall-lang/tests/normalization/success/haskell-tutorial/projection/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/and/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/and/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/build/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/build/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/even/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/even/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/fold/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/fold/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/not/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/not/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/odd/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/odd/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/or/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/or/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/show/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Bool/show/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Double/show/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Double/show/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Integer/show/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Integer/show/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Integer/toDouble/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Integer/toDouble/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/all/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/all/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/any/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/any/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/build/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/build/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/concat/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/concat/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/concatMap/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/concatMap/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/filter/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/filter/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/fold/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/fold/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/generate/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/generate/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/head/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/head/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/indexed/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/indexed/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/iterate/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/iterate/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/last/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/last/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/length/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/length/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/map/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/map/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/null/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/null/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/replicate/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/replicate/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/reverse/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/reverse/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/shifted/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/shifted/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/unzip/*.dhall
-    dhall-lang/tests/normalization/success/prelude/List/unzip/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/build/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/build/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/enumerate/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/enumerate/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/even/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/even/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/fold/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/fold/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/isZero/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/isZero/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/odd/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/odd/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/product/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/product/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/show/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/show/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/sum/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/sum/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/toDouble/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/toDouble/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/toInteger/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Natural/toInteger/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/all/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/all/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/any/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/any/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/build/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/build/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/concat/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/concat/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/filter/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/filter/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/fold/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/fold/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/head/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/head/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/last/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/last/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/length/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/length/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/map/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/map/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/null/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/null/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/toList/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/toList/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/unzip/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Optional/unzip/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Text/concat/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Text/concat/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Text/concatMap/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Text/concatMap/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Text/concatMapSep/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Text/concatMapSep/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Text/concatSep/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Text/concatSep/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Text/show/*.dhall
-    dhall-lang/tests/normalization/success/prelude/Text/show/*.dhall
     dhall-lang/tests/normalization/success/simple/*.dhall
     dhall-lang/tests/normalization/success/simplifications/*.dhall
     dhall-lang/tests/normalization/success/unit/*.dhall
@@ -544,7 +448,7 @@ Library
         Diff                        >= 0.2      && < 0.4 ,
         directory                   >= 1.2.2.0  && < 1.4 ,
         dotgen                      >= 0.4.2    && < 0.5 ,
-        either,
+        either                      >= 5        && < 5.1,
         exceptions                  >= 0.8.3    && < 0.11,
         filepath                    >= 1.4      && < 1.5 ,
         haskeline                   >= 0.7.2.1  && < 0.8 ,
@@ -640,7 +544,6 @@ Library
         Dhall.Import.Types,
         Dhall.Eval,
         Dhall.Util,
-        Dhall.X
         Paths_dhall
     if flag(with-http)
       Other-Modules:

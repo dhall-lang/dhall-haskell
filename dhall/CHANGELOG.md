@@ -1,7 +1,7 @@
 1.25.0
 
-* Supports version 8.0.0 of the standard
-    * See: https://github.com/dhall-lang/dhall-lang/releases/tag/v8.0.0
+* Supports version 9.0.0 of the standard
+    * See: https://github.com/dhall-lang/dhall-lang/releases/tag/v9.0.0
 * BREAKING CHANGE: Remove support for old-style `List`-like `Optional` literals
     * List-like `Optional` Literals (i.e. `[ 1 ] : Optional Natural`) are no
       longer valid

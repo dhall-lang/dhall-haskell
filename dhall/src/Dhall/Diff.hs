@@ -371,12 +371,8 @@ diffChunks cL cR
 diffList
     :: (Eq a, Pretty a)
     => Seq (Expr s a) -> Seq (Expr s a) -> Diff
-diffList l r
-  | allDifferent parts = difference listSkeleton listSkeleton
-  | otherwise          = bracketed (foldMap diffPart parts)
+diffList l r = bracketed (foldMap diffPart parts)
   where
-    allDifferent = any (not . isBoth)
-
     -- Sections of the list that are only in left, only in right, or in both
     parts =
         Algo.Diff.getGroupedDiffBy ((same .) . diffExpression) (toList l) (toList r)
@@ -1069,6 +1065,12 @@ diffPrimitiveExpression NaturalShow NaturalShow =
 diffPrimitiveExpression l@NaturalShow r =
     mismatch l r
 diffPrimitiveExpression l r@NaturalShow =
+    mismatch l r
+diffPrimitiveExpression NaturalSubtract NaturalSubtract =
+    "…"
+diffPrimitiveExpression l@NaturalSubtract r =
+    mismatch l r
+diffPrimitiveExpression l r@NaturalSubtract =
     mismatch l r
 diffPrimitiveExpression Integer Integer =
     "…"

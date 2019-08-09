@@ -11,7 +11,6 @@ import Test.Tasty (TestTree)
 import qualified Data.Aeson           as Aeson
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
-import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Dhall.Core           as Core
 import qualified Dhall.Import
@@ -40,6 +39,8 @@ testTree =
         , Test.Tasty.testGroup "Nesting"
             [ testDhallToJSON "./tasty/data/nesting0"
             , testDhallToJSON "./tasty/data/nesting1"
+            , testDhallToJSON "./tasty/data/nesting2"
+            , testDhallToJSON "./tasty/data/nesting3"
             , testDhallToJSON "./tasty/data/nestingLegacy0"
             , testDhallToJSON "./tasty/data/nestingLegacy1"
             ]
@@ -131,7 +132,7 @@ testDhallToYaml options prefix = Test.Tasty.HUnit.testCase prefix $ do
     text <- Data.Text.IO.readFile inputFile
 
     actualValue <- do
-        Dhall.Yaml.dhallToYaml options (Data.Text.pack inputFile) text
+        Dhall.Yaml.dhallToYaml options (Just inputFile) text
 
     expectedValue <- Data.ByteString.readFile outputFile
 
