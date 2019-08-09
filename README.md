@@ -16,13 +16,13 @@ Navigate to each package's directory for their respective `README`s
 
 ## Pre-built binaries
 
-You can download pre-built binaries for Windows and Linux on the release page:
+You can download pre-built binaries for Windows, OS X and Linux on the release page:
 
 * [`dhall-haskell` - Releases](https://github.com/dhall-lang/dhall-haskell/releases)
 
-For OS X, use `brew` to install the desired package.  For example:
+You can also install binaries for OS X using `brew`, like this:
 
-```
+```bash
 $ brew install dhall-json
 ```
 

@@ -82,6 +82,7 @@ import Dhall.Set (Set)
 import GHC.Natural (Natural)
 import Unsafe.Coerce (unsafeCoerce)
 
+import qualified Codec.Serialise     as Serialise
 import qualified Data.Char
 import qualified Data.List.NonEmpty
 import qualified Data.Sequence
@@ -703,8 +704,9 @@ conv !env t t' =
     (VIntegerToDouble t , VIntegerToDouble t') -> convE t t'
 
     (VDouble       , VDouble)        -> True
-    (VDoubleLit n  , VDoubleLit n')  -> Dhall.Binary.encode (DoubleLit n  :: Expr Void Import) ==
-                                        Dhall.Binary.encode (DoubleLit n' :: Expr Void Import)
+    (VDoubleLit n  , VDoubleLit n')  ->
+            Serialise.serialise (Dhall.Binary.encode (DoubleLit n  :: Expr Void Import))
+        ==  Serialise.serialise (Dhall.Binary.encode (DoubleLit n' :: Expr Void Import))
     (VDoubleShow t , VDoubleShow t') -> convE t t'
 
     (VText, VText) -> True
