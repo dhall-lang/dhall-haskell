@@ -5,7 +5,6 @@ module Main where
 
 import Control.Applicative ((<|>), optional)
 import Control.Exception (SomeException)
-import Control.Monad (when)
 import Data.Aeson (Value)
 import Data.Monoid ((<>))
 import Data.Version (showVersion)
@@ -17,7 +16,6 @@ import qualified Data.Aeson
 import qualified Data.Aeson.Encode.Pretty
 import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Lazy
-import qualified Data.Text                as Text
 import qualified Data.Text.IO             as Text.IO
 import qualified Dhall
 import qualified Dhall.JSON
@@ -27,26 +25,28 @@ import qualified Paths_dhall_json         as Meta
 import qualified System.Exit
 import qualified System.IO
 
-data Options = Options
-    { explain                   :: Bool
-    , pretty                    :: Bool
-    , omission                  :: Value -> Value
-    , version                   :: Bool
-    , conversion                :: Conversion
-    , approximateSpecialDoubles :: Bool
-    , file                      :: Maybe FilePath
-    }
+data Options
+    = Options
+        { explain                   :: Bool
+        , pretty                    :: Bool
+        , omission                  :: Value -> Value
+        , conversion                :: Conversion
+        , approximateSpecialDoubles :: Bool
+        , file                      :: Maybe FilePath
+        }
+    | Version
 
 parseOptions :: Parser Options
 parseOptions =
-        Options
-    <$> parseExplain
-    <*> parsePretty
-    <*> Dhall.JSON.parseOmission
-    <*> parseVersion
-    <*> Dhall.JSON.parseConversion
-    <*> parseApproximateSpecialDoubles
-    <*> optional parseFile
+        (   Options
+        <$> parseExplain
+        <*> parsePretty
+        <*> Dhall.JSON.parseOmission
+        <*> Dhall.JSON.parseConversion
+        <*> parseApproximateSpecialDoubles
+        <*> optional parseFile
+        )
+    <|> parseVersion
   where
     parseExplain =
         Options.switch
@@ -75,7 +75,8 @@ parseOptions =
             pure False
 
     parseVersion =
-        Options.switch
+        Options.flag'
+            Version
             (   Options.long "version"
             <>  Options.help "Display version"
             )
@@ -105,41 +106,38 @@ main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
-    Options {..} <- Options.execParser parserInfo
+    options <- Options.execParser parserInfo
 
-    when version $ do
-      putStrLn (showVersion Meta.version)
-      System.Exit.exitSuccess
+    case options of
+        Version -> do
+            putStrLn (showVersion Meta.version)
 
-    handle $ do
-        let config = Data.Aeson.Encode.Pretty.Config
-                       { Data.Aeson.Encode.Pretty.confIndent = Data.Aeson.Encode.Pretty.Spaces 2
-                       , Data.Aeson.Encode.Pretty.confCompare = compare
-                       , Data.Aeson.Encode.Pretty.confNumFormat = Data.Aeson.Encode.Pretty.Generic
-                       , Data.Aeson.Encode.Pretty.confTrailingNewline = False }
-        let encode =
-                if pretty
-                then Data.Aeson.Encode.Pretty.encodePretty' config
-                else Data.Aeson.encode
+        Options {..} -> do
+            handle $ do
+                let config = Data.Aeson.Encode.Pretty.Config
+                               { Data.Aeson.Encode.Pretty.confIndent = Data.Aeson.Encode.Pretty.Spaces 2
+                               , Data.Aeson.Encode.Pretty.confCompare = compare
+                               , Data.Aeson.Encode.Pretty.confNumFormat = Data.Aeson.Encode.Pretty.Generic
+                               , Data.Aeson.Encode.Pretty.confTrailingNewline = False }
+                let encode =
+                        if pretty
+                        then Data.Aeson.Encode.Pretty.encodePretty' config
+                        else Data.Aeson.encode
 
-        let explaining = if explain then Dhall.detailed else id
+                let explaining = if explain then Dhall.detailed else id
 
-        let specialDoubleMode =
-                if approximateSpecialDoubles
-                then ApproximateWithinJSON
-                else ForbidWithinJSON
+                let specialDoubleMode =
+                        if approximateSpecialDoubles
+                        then ApproximateWithinJSON
+                        else ForbidWithinJSON
 
-        text <- case file of
-            Nothing   -> Text.IO.getContents
-            Just path -> Text.IO.readFile path
+                text <- case file of
+                    Nothing   -> Text.IO.getContents
+                    Just path -> Text.IO.readFile path
 
-        let path = case file of
-                Nothing -> "(stdin)"
-                Just p  -> Text.pack p
+                json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode file text)
 
-        json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode path text)
-
-        Data.ByteString.Char8.putStrLn $ Data.ByteString.Lazy.toStrict $ encode json
+                Data.ByteString.Char8.putStrLn $ Data.ByteString.Lazy.toStrict $ encode json
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler

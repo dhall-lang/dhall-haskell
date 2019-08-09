@@ -487,6 +487,10 @@ data Expr s a
     -- | > Project e (Left xs)                      ~  e.{ xs }
     -- | > Project e (Right t)                      ~  e.(t)
     | Project (Expr s a) (Either (Set Text) (Expr s a))
+    -- | > Assert e                                 ~  assert : e
+    | Assert (Expr s a)
+    -- | > Equivalent x y                           ~  x ≡ y
+    | Equivalent (Expr s a) (Expr s a)
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
     -- | > ImportAlt                                ~  e1 ? e2
@@ -566,6 +570,8 @@ instance Functor (Expr s) where
   fmap f (ToMap e maybeE) = ToMap (fmap f e) (fmap (fmap f) maybeE)
   fmap f (Field e1 v) = Field (fmap f e1) v
   fmap f (Project e1 vs) = Project (fmap f e1) (fmap (fmap f) vs)
+  fmap f (Assert t) = Assert (fmap f t)
+  fmap f (Equivalent e1 e2) = Equivalent (fmap f e1) (fmap f e2)
   fmap f (Note s e1) = Note s (fmap f e1)
   fmap f (ImportAlt e1 e2) = ImportAlt (fmap f e1) (fmap f e2)
   fmap f (Embed a) = Embed (f a)
@@ -643,6 +649,8 @@ instance Monad (Expr s) where
     ToMap a b            >>= k = ToMap (a >>= k) (fmap (>>= k) b)
     Field a b            >>= k = Field (a >>= k) b
     Project a b          >>= k = Project (a >>= k) (fmap (>>= k) b)
+    Assert a             >>= k = Assert (a >>= k)
+    Equivalent a b       >>= k = Equivalent (a >>= k) (b >>= k)
     Note a b             >>= k = Note a (b >>= k)
     ImportAlt a b        >>= k = ImportAlt (a >>= k) (b >>= k)
     Embed a              >>= k = k a
@@ -709,6 +717,8 @@ instance Bifunctor Expr where
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
     first k (ToMap a b           ) = ToMap (first k a) (fmap (first k) b)
     first k (Field a b           ) = Field (first k a) b
+    first k (Assert a            ) = Assert (first k a)
+    first k (Equivalent a b      ) = Equivalent (first k a) (first k b)
     first k (Project a b         ) = Project (first k a) (fmap (first k) b)
     first k (Note a b            ) = Note (k a) (first k b)
     first k (ImportAlt a b       ) = ImportAlt (first k a) (first k b)
@@ -987,6 +997,13 @@ shift d v (ToMap a b) = ToMap a' b'
 shift d v (Field a b) = Field a' b
   where
     a' = shift d v a
+shift d v (Assert a) = Assert a'
+  where
+    a' = shift d v a
+shift d v (Equivalent a b) = Equivalent a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
 shift d v (Project a b) = Project a' b'
   where
     a' =       shift d v  a
@@ -1167,6 +1184,13 @@ subst x e (Project a b) = Project a' b'
   where
     a' =       subst x e  a
     b' = fmap (subst x e) b
+subst x e (Assert a) = Assert a'
+  where
+    a' = subst x e a
+subst x e (Equivalent a b) = Equivalent a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
 subst x e (Note a b) = Note a b'
   where
     b' = subst x e b
@@ -1296,6 +1320,8 @@ denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (ToMap a b           ) = ToMap (denote a) (fmap denote b)
 denote (Field a b           ) = Field (denote a) b
 denote (Project a b         ) = Project (denote a) (fmap denote b)
+denote (Assert a            ) = Assert (denote a)
+denote (Equivalent a b      ) = Equivalent (denote a) (denote b)
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
@@ -1413,6 +1439,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                         | otherwise -> pure (NaturalLit 0)
                     App (App NaturalSubtract (NaturalLit 0)) y -> pure y
                     App (App NaturalSubtract _) (NaturalLit 0) -> pure (NaturalLit 0)
+                    App (App NaturalSubtract x) y | judgmentallyEqual x y -> pure (NaturalLit 0)
                     App IntegerShow (IntegerLit n)
                         | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
                         | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
@@ -1649,7 +1676,7 @@ normalizeWithM ctx e0 = loop (denote e0)
         decide l (RecordLit n) | Data.Foldable.null n =
             l
         decide (RecordLit m) (RecordLit n) =
-            RecordLit (Dhall.Map.sort (Dhall.Map.unionWith decide m n))
+            RecordLit (Dhall.Map.unionWith decide m n)
         decide l r =
             Combine l r
     CombineTypes x y -> decide <$> loop x <*> loop y
@@ -1659,7 +1686,7 @@ normalizeWithM ctx e0 = loop (denote e0)
         decide l (Record n) | Data.Foldable.null n =
             l
         decide (Record m) (Record n) =
-            Record (Dhall.Map.sort (Dhall.Map.unionWith decide m n))
+            Record (Dhall.Map.unionWith decide m n)
         decide l r =
             CombineTypes l r
     Prefer x y -> decide <$> loop x <*> loop y
@@ -1669,7 +1696,9 @@ normalizeWithM ctx e0 = loop (denote e0)
         decide l (RecordLit n) | Data.Foldable.null n =
             l
         decide (RecordLit m) (RecordLit n) =
-            RecordLit (Dhall.Map.sort (Dhall.Map.union n m))
+            RecordLit (Dhall.Map.union n m)
+        decide l r | judgmentallyEqual l r =
+            l
         decide l r =
             Prefer l r
     Merge x y t      -> do
@@ -1723,6 +1752,8 @@ normalizeWithM ctx e0 = loop (denote e0)
             _ -> do
                 return (ToMap x' t')
     Field r x        -> do
+        let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)
+
         r' <- loop r
         case r' of
             RecordLit kvs ->
@@ -1730,14 +1761,18 @@ normalizeWithM ctx e0 = loop (denote e0)
                     Just v  -> pure v
                     Nothing -> Field <$> (RecordLit <$> traverse loop kvs) <*> pure x
             Project r_ _ -> loop (Field r_ x)
+            Prefer (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
+                Just v -> pure (Field (Prefer (singletonRecordLit v) r_) x)
+                Nothing -> loop (Field r_ x)
             Prefer l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
                 Just v -> pure v
                 Nothing -> loop (Field l x)
-            Prefer (RecordLit kvs) r_ | not (Dhall.Map.member x kvs) -> loop (Field r_ x)
+            Combine (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
+                Just v -> pure (Field (Combine (singletonRecordLit v) r_) x)
+                Nothing -> loop (Field r_ x)
             Combine l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Combine l (RecordLit (Dhall.Map.singleton x v))) x)
+                Just v -> pure (Field (Combine l (singletonRecordLit v)) x)
                 Nothing -> loop (Field l x)
-            Combine (RecordLit kvs) r_ | not (Dhall.Map.member x kvs) -> loop (Field r_ x)
             _ -> pure (Field r' x)
     Project r (Left xs)-> do
         r' <- loop r
@@ -1755,6 +1790,15 @@ normalizeWithM ctx e0 = loop (denote e0)
             _ -> do
                 r' <- loop r
                 pure (Project r' (Right e2))
+    Assert t -> do
+        t' <- loop t
+
+        pure (Assert t')
+    Equivalent l r -> do
+        l' <- loop l
+        r' <- loop r
+
+        pure (Equivalent l' r')
     Note _ e' -> loop e'
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
@@ -1840,6 +1884,7 @@ isNormalized e0 = loop (denote e0)
           App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
           App (App NaturalSubtract (NaturalLit 0)) _ -> False
           App (App NaturalSubtract _) (NaturalLit 0) -> False
+          App (App NaturalSubtract x) y -> not (judgmentallyEqual x y)
           App NaturalToInteger (NaturalLit _) -> False
           App IntegerShow (IntegerLit _) -> False
           App IntegerToDouble (IntegerLit _) -> False
@@ -1970,7 +2015,7 @@ isNormalized e0 = loop (denote e0)
           decide (RecordLit m) _ | Data.Foldable.null m = False
           decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
-          decide  _ _ = True
+          decide l r = not (judgmentallyEqual l r)
       Merge x y t -> loop x && loop y && all loop t
       ToMap x t -> case x of
           RecordLit _ -> False
@@ -1978,10 +2023,10 @@ isNormalized e0 = loop (denote e0)
       Field r k -> case r of
           RecordLit _ -> False
           Project _ _ -> False
-          Combine x@(RecordLit m) y -> loop x && loop y && Dhall.Map.member k m
-          Combine x (RecordLit m) -> loop x && Dhall.Map.toList (fmap loop m) == [(k, True)]
-          Prefer x@(RecordLit m) y -> loop x && loop y && Dhall.Map.member k m
+          Prefer (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
           Prefer _ (RecordLit _) -> False
+          Combine (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
+          Combine _ (RecordLit m) -> Dhall.Map.keys m == [k] && loop r
           _ -> loop r
       Project r p -> loop r &&
           case p of
@@ -1991,6 +2036,8 @@ isNormalized e0 = loop (denote e0)
               Right e' -> case e' of
                   Record _ -> False
                   _ -> loop e'
+      Assert t -> loop t
+      Equivalent l r -> loop l && loop r
       Note _ e' -> loop e'
       ImportAlt l _r -> loop l
       Embed _ -> True
@@ -2158,6 +2205,8 @@ subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 subExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
 subExpressions f (Field a b) = Field <$> f a <*> pure b
 subExpressions f (Project a b) = Project <$> f a <*> traverse f b
+subExpressions f (Assert a) = Assert <$> f a
+subExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 subExpressions _ (Embed a) = pure (Embed a)

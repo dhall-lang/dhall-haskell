@@ -14,31 +14,33 @@ import qualified System.Log.Logger
 import Dhall.LSP.State
 import Dhall.LSP.Handlers (nullHandler, wrapHandler, hoverHandler,
   didOpenTextDocumentNotificationHandler, didSaveTextDocumentNotificationHandler,
-  executeCommandHandler, documentFormattingHandler, documentLinkHandler)
+  executeCommandHandler, documentFormattingHandler, documentLinkHandler,
+  completionHandler)
 
 -- | The main entry point for the LSP server.
 run :: Maybe FilePath -> IO ()
 run mlog = do
   setupLogger mlog
   state <- newEmptyMVar
-  _    <- LSP.Control.run (makeConfig, initCallback state) (lspHandlers state)
-                          lspOptions Nothing
-  return ()
-  where
-    -- Callback that is called when the LSP server is started; makes the lsp
-    -- state (LspFuncs) available to the message handlers through the vlsp MVar.
-    initCallback
-      :: MVar ServerState
-      -> LSP.Core.LspFuncs ()
-      -> IO (Maybe J.ResponseError)
-    initCallback state lsp = do
-      putMVar state (initialState lsp)
-      return Nothing
 
-    -- Interpret DidChangeConfigurationNotification; pointless at the moment
-    -- since we don't use a configuration.
-    makeConfig :: J.DidChangeConfigurationNotification -> Either Text ()
-    makeConfig _ = Right ()
+  -- these two are stubs since we do not use a config
+  let onInitialConfiguration :: J.InitializeRequest -> Either Text ()
+      onInitialConfiguration _ = Right ()
+  let onConfigurationChange :: J.DidChangeConfigurationNotification -> Either Text ()
+      onConfigurationChange _ = Right ()
+
+  -- Callback that is called when the LSP server is started; makes the lsp
+  -- state (LspFuncs) available to the message handlers through the `state` MVar.
+  let onStartup :: LSP.Core.LspFuncs () -> IO (Maybe J.ResponseError)
+      onStartup lsp = do
+        putMVar state (initialState lsp)
+        return Nothing
+
+  _ <- LSP.Control.run (LSP.Core.InitializeCallbacks {..})
+                       (lspHandlers state)
+                       lspOptions
+                       Nothing
+  return ()
 
 -- | sets the output logger.
 -- | if no filename is provided then logger is disabled, if input is string `[OUTPUT]` then log goes to stderr,
@@ -64,6 +66,10 @@ syncOptions = J.TextDocumentSyncOptions
 -- Server capabilities. Tells the LSP client that we can execute commands etc.
 lspOptions :: LSP.Core.Options
 lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
+                 , LSP.Core.completionProvider =
+                     Just (J.CompletionOptions {
+                         _resolveProvider = Nothing
+                       , _triggerCharacters = Just [":", ".", "/"] })
                  , LSP.Core.executeCommandProvider =
                      -- Note that this registers the dhall.server.lint command
                      -- with VSCode, which means that our plugin can't expose a
@@ -92,4 +98,5 @@ lspHandlers state
         , LSP.Core.executeCommandHandler                    = Just $ wrapHandler state executeCommandHandler
         , LSP.Core.documentFormattingHandler                = Just $ wrapHandler state documentFormattingHandler
         , LSP.Core.documentLinkHandler                      = Just $ wrapHandler state documentLinkHandler
+        , LSP.Core.completionHandler                        = Just $ wrapHandler state completionHandler
         }
