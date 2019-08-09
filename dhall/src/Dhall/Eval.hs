@@ -274,14 +274,14 @@ vCombine :: Val a -> Val a -> Val a
 vCombine t u = case (t, u) of
   (VRecordLit m, u) | null m    -> u
   (t, VRecordLit m) | null m    -> t
-  (VRecordLit m, VRecordLit m') -> VRecordLit (Dhall.Map.sort (Dhall.Map.unionWith vCombine m m'))
+  (VRecordLit m, VRecordLit m') -> VRecordLit (Dhall.Map.unionWith vCombine m m')
   (t, u)                        -> VCombine t u
 
 vCombineTypes :: Val a -> Val a -> Val a
 vCombineTypes t u = case (t, u) of
   (VRecord m, u) | null m -> u
   (t, VRecord m) | null m -> t
-  (VRecord m, VRecord m') -> VRecord (Dhall.Map.sort (Dhall.Map.unionWith vCombineTypes m m'))
+  (VRecord m, VRecord m') -> VRecord (Dhall.Map.unionWith vCombineTypes m m')
   (t, u)                  -> VCombineTypes t u
 
 vListAppend :: Val a -> Val a -> Val a
@@ -561,7 +561,7 @@ eval !env t =
                           (VRecordLit m, u) | null m -> u
                           (t, VRecordLit m) | null m -> t
                           (VRecordLit m, VRecordLit m') ->
-                             VRecordLit (Dhall.Map.sort (Dhall.Map.union m' m))
+                             VRecordLit (Dhall.Map.union m' m)
                           (t, u) | conv env t u -> t
                           (t, u) -> VPrefer t u
     Merge x y ma     -> case (evalE x, evalE y, evalE <$> ma) of
@@ -586,7 +586,7 @@ eval !env t =
                         else case evalE t of
                           VRecordLit kvs -> let
                             kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
-                            in VRecordLit (Dhall.Map.sort kvs')
+                            in VRecordLit kvs'
                           t -> VProject t (Left (Dhall.Set.sort ks))
     Project t (Right e) ->
                         case evalE e of

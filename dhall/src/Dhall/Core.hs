@@ -1676,7 +1676,7 @@ normalizeWithM ctx e0 = loop (denote e0)
         decide l (RecordLit n) | Data.Foldable.null n =
             l
         decide (RecordLit m) (RecordLit n) =
-            RecordLit (Dhall.Map.sort (Dhall.Map.unionWith decide m n))
+            RecordLit (Dhall.Map.unionWith decide m n)
         decide l r =
             Combine l r
     CombineTypes x y -> decide <$> loop x <*> loop y
@@ -1686,7 +1686,7 @@ normalizeWithM ctx e0 = loop (denote e0)
         decide l (Record n) | Data.Foldable.null n =
             l
         decide (Record m) (Record n) =
-            Record (Dhall.Map.sort (Dhall.Map.unionWith decide m n))
+            Record (Dhall.Map.unionWith decide m n)
         decide l r =
             CombineTypes l r
     Prefer x y -> decide <$> loop x <*> loop y
@@ -1696,7 +1696,7 @@ normalizeWithM ctx e0 = loop (denote e0)
         decide l (RecordLit n) | Data.Foldable.null n =
             l
         decide (RecordLit m) (RecordLit n) =
-            RecordLit (Dhall.Map.sort (Dhall.Map.union n m))
+            RecordLit (Dhall.Map.union n m)
         decide l r | judgmentallyEqual l r =
             l
         decide l r =
