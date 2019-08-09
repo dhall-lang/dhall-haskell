@@ -20,6 +20,12 @@ You can download pre-built binaries for Windows, OS X and Linux on the release p
 
 * [`dhall-haskell` - Releases](https://github.com/dhall-lang/dhall-haskell/releases)
 
+You can also install binaries for OS X using `brew`, like this:
+
+```bash
+$ brew install dhall-json
+```
+
 You can also install pre-built Linux binaries for `master` using Nix using
 Nix's channel mechanism by following the instructions at this link:
 
