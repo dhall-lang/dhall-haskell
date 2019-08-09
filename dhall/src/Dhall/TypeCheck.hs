@@ -15,12 +15,13 @@ module Dhall.TypeCheck (
 
     -- * Types
     , Typer
-    , X(..)
+    , X
     , TypeError(..)
     , DetailedTypeError(..)
     , TypeMessage(..)
     ) where
 
+import Data.Void (Void, absurd)
 import Control.Exception (Exception)
 import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -35,7 +36,6 @@ import Dhall.Binary (ToTerm(..))
 import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
-import Dhall.X (X(..))
 
 import qualified Data.Foldable
 import qualified Data.Map
@@ -51,6 +51,8 @@ import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Util
+
+type X = Void
 
 traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
 traverseWithIndex_ k xs =

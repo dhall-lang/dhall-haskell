@@ -63,6 +63,7 @@ import Data.List.NonEmpty (NonEmpty(..), cons)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
 import Data.Text (Text)
+import Data.Void (Void)
 
 import Dhall.Core (
     Expr(..)
@@ -78,7 +79,6 @@ import Dhall.Core (
 -- import Dhall.Import.Types (InternalError)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
-import Dhall.X   (X)
 import GHC.Natural (Natural)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -97,8 +97,6 @@ data Env a =
     Empty
   | Skip !(Env a) {-# unpack #-} !Text
   | Extend !(Env a) {-# unpack #-} !Text (Val a)
-
-data Void
 
 coeExprVoid :: Expr Void a -> Expr s a
 coeExprVoid = unsafeCoerce
@@ -140,6 +138,7 @@ data HLamInfo a
   | NaturalFoldCl (Val a)
   | ListFoldCl (Val a)
   | OptionalFoldCl (Val a)
+  | NaturalSubtractZero
 
 pattern VPrim :: (Val a -> Val a) -> Val a
 pattern VPrim f = VHLam Prim f
@@ -275,14 +274,14 @@ vCombine :: Val a -> Val a -> Val a
 vCombine t u = case (t, u) of
   (VRecordLit m, u) | null m    -> u
   (t, VRecordLit m) | null m    -> t
-  (VRecordLit m, VRecordLit m') -> VRecordLit (Dhall.Map.sort (Dhall.Map.unionWith vCombine m m'))
+  (VRecordLit m, VRecordLit m') -> VRecordLit (Dhall.Map.unionWith vCombine m m')
   (t, u)                        -> VCombine t u
 
 vCombineTypes :: Val a -> Val a -> Val a
 vCombineTypes t u = case (t, u) of
   (VRecord m, u) | null m -> u
   (t, VRecord m) | null m -> t
-  (VRecord m, VRecord m') -> VRecord (Dhall.Map.sort (Dhall.Map.unionWith vCombineTypes m m'))
+  (VRecord m, VRecord m') -> VRecord (Dhall.Map.unionWith vCombineTypes m m')
   (t, u)                  -> VCombineTypes t u
 
 vListAppend :: Val a -> Val a -> Val a
@@ -312,15 +311,21 @@ vField t0 k = go t0 where
       | Just v <- Dhall.Map.lookup k m -> v
       | otherwise -> error errorMsg
     VProject t _ -> go t
+    VPrefer (VRecordLit m) r -> case Dhall.Map.lookup k m of
+      Just v -> VField (VPrefer (singletonVRecordLit v) r) k
+      Nothing -> go r
     VPrefer l (VRecordLit m) -> case Dhall.Map.lookup k m of
       Just v -> v
       Nothing -> go l
-    VPrefer (VRecordLit m) r | not (Dhall.Map.member k m) -> go r
+    VCombine (VRecordLit m) r -> case Dhall.Map.lookup k m of
+      Just v -> VField (VCombine (singletonVRecordLit v) r) k
+      Nothing -> go r
     VCombine l (VRecordLit m) -> case Dhall.Map.lookup k m of
-      Just v -> VField (VCombine l (VRecordLit (Dhall.Map.singleton k v))) k
+      Just v -> VField (VCombine l (singletonVRecordLit v)) k
       Nothing -> go l
-    VCombine (VRecordLit m) r | not (Dhall.Map.member k m) -> go r
     t -> VField t k
+
+  singletonVRecordLit v = VRecordLit (Dhall.Map.singleton k v)
 {-# inline vField #-}
 
 eval :: forall a. Eq a => Env a -> Expr Void a -> Val a
@@ -416,14 +421,20 @@ eval !env t =
                                       n             -> VNaturalToInteger n
     NaturalShow      -> VPrim $ \case VNaturalLit n -> VTextLit (VChunks [] (Data.Text.pack (show n)))
                                       n             -> VNaturalShow n
-    NaturalSubtract  -> VPrim $ \x -> VPrim $ \y ->
-                          case (x,y) of
-                            (VNaturalLit x, VNaturalLit y)
-                              | y >= x    -> VNaturalLit (subtract x y)
-                              | otherwise -> VNaturalLit 0
-                            (VNaturalLit 0, y) -> y
-                            (x, VNaturalLit 0) -> VNaturalLit 0
-                            (x, y) -> VNaturalSubtract x y
+    NaturalSubtract -> VPrim $ \case
+                         VNaturalLit 0 ->
+                           VHLam NaturalSubtractZero id
+                         x@(VNaturalLit m) ->
+                           VPrim $ \case
+                               VNaturalLit n
+                                 | n >= m    -> VNaturalLit (subtract m n)
+                                 | otherwise -> VNaturalLit 0
+                               y -> VNaturalSubtract x y
+                         x ->
+                           VPrim $ \case
+                             VNaturalLit 0 -> VNaturalLit 0
+                             y | conv env x y -> VNaturalLit 0
+                             y -> VNaturalSubtract x y
     NaturalPlus t u  -> vNaturalPlus (evalE t) (evalE u)
     NaturalTimes t u -> case (evalE t, evalE u) of
                           (VNaturalLit 1, u            ) -> u
@@ -550,7 +561,8 @@ eval !env t =
                           (VRecordLit m, u) | null m -> u
                           (t, VRecordLit m) | null m -> t
                           (VRecordLit m, VRecordLit m') ->
-                             VRecordLit (Dhall.Map.sort (Dhall.Map.union m' m))
+                             VRecordLit (Dhall.Map.union m' m)
+                          (t, u) | conv env t u -> t
                           (t, u) -> VPrefer t u
     Merge x y ma     -> case (evalE x, evalE y, evalE <$> ma) of
                           (VRecordLit m, VInject _ k mt, _)
@@ -574,7 +586,7 @@ eval !env t =
                         else case evalE t of
                           VRecordLit kvs -> let
                             kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
-                            in VRecordLit (Dhall.Map.sort kvs')
+                            in VRecordLit kvs'
                           t -> VProject t (Left (Dhall.Set.sort ks))
     Project t (Right e) ->
                         case evalE e of
@@ -691,8 +703,8 @@ conv !env t t' =
     (VIntegerToDouble t , VIntegerToDouble t') -> convE t t'
 
     (VDouble       , VDouble)        -> True
-    (VDoubleLit n  , VDoubleLit n')  -> Dhall.Binary.encode (DoubleLit n  :: Expr X Import) ==
-                                        Dhall.Binary.encode (DoubleLit n' :: Expr X Import)
+    (VDoubleLit n  , VDoubleLit n')  -> Dhall.Binary.encode (DoubleLit n  :: Expr Void Import) ==
+                                        Dhall.Binary.encode (DoubleLit n' :: Expr Void Import)
     (VDoubleShow t , VDoubleShow t') -> convE t t'
 
     (VText, VText) -> True
@@ -800,6 +812,7 @@ quote !env !t =
                                        NaturalFoldCl{}           -> quote env (t VPrimVar)
                                        ListFoldCl{}              -> quote env (t VPrimVar)
                                        OptionalFoldCl{}          -> quote env (t VPrimVar)
+                                       NaturalSubtractZero       -> App NaturalSubtract (NaturalLit 0)
 
     VPi a (freshCl -> (x, v, b))  -> Pi x (quoteE a) (quoteBind x (inst b v))
     VHPi (fresh -> (x, v)) a b    -> Pi x (quoteE a) (quoteBind x (b v))

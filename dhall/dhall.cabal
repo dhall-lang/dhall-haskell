@@ -449,7 +449,7 @@ Library
         Diff                        >= 0.2      && < 0.4 ,
         directory                   >= 1.2.2.0  && < 1.4 ,
         dotgen                      >= 0.4.2    && < 0.5 ,
-        either,
+        either                      >= 5        && < 5.1,
         exceptions                  >= 0.8.3    && < 0.11,
         filepath                    >= 1.4      && < 1.5 ,
         free                        >= 4.0      && < 6.0 ,
@@ -547,7 +547,6 @@ Library
         Dhall.Import.Types,
         Dhall.Eval,
         Dhall.Util,
-        Dhall.X
         Paths_dhall
     if flag(with-http)
       Other-Modules:

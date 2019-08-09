@@ -6,13 +6,15 @@ import qualified Language.Haskell.LSP.Types as J
 import qualified Language.Haskell.LSP.Types.Lens as J
 import qualified Language.Haskell.LSP.VFS as LSP
 import qualified Data.Aeson as J
-import qualified Yi.Rope as Rope
+import qualified Data.Rope.UTF16 as Rope
 
 import Dhall.Core (Expr(Note, Embed), pretty, Import(..), ImportHashed(..), ImportType(..), headers)
 import Dhall.Import (localToPath)
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (X)
 
+import Dhall.LSP.Backend.Completion (Completion(..), completionQueryAt,
+  completeEnvironmentImport, completeLocalImport, buildCompletionContext, completeProjections, completeFromContext)
 import Dhall.LSP.Backend.Dhall (FileIdentifier, parse, load, typecheck,
   fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate, parseWithHeader)
 import Dhall.LSP.Backend.Diagnostics (Range(..), Diagnosis(..), explain,
@@ -21,6 +23,7 @@ import Dhall.LSP.Backend.Formatting (formatExprWithHeader)
 import Dhall.LSP.Backend.Freezing (computeSemanticHash, getImportHashPosition,
   stripHash, getAllImportsWithHashPositions)
 import Dhall.LSP.Backend.Linting (Suggestion(..), suggest, lint)
+import Dhall.LSP.Backend.Parsing (binderExprFromText)
 import Dhall.LSP.Backend.Typing (typeAt, annotateLet, exprAt)
 import Dhall.LSP.State
 
@@ -34,13 +37,12 @@ import Control.Monad.Trans.State.Strict (execStateT)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Map.Strict as Map
 import Data.Maybe (maybeToList)
-import Data.Text (Text)
+import Data.Text (Text, isPrefixOf)
 import qualified Data.Text as Text
 import qualified Network.URI as URI
 import qualified Network.URI.Encode as URI
 import Text.Megaparsec (SourcePos(..), unPos)
 import System.FilePath
-
 
 -- Workaround to make our single-threaded LSP fit dhall-lsp's API, which
 -- expects a multi-threaded implementation. Reports errors to the user via the
@@ -97,9 +99,9 @@ lspRequest constructor method params = do
 readUri :: J.Uri -> HandlerM Text
 readUri uri = do
   getVirtualFileFunc <- uses lspFuncs LSP.getVirtualFileFunc
-  mVirtualFile <- liftIO $ getVirtualFileFunc uri
+  mVirtualFile <- liftIO $ getVirtualFileFunc (J.toNormalizedUri uri)
   case mVirtualFile of
-    Just (LSP.VirtualFile _ rope) -> return (Rope.toText rope)
+    Just (LSP.VirtualFile _ rope _) -> return (Rope.toText rope)
     Nothing -> fail $ "Could not find " <> show uri <> " in VFS."
 
 loadFile :: J.Uri -> HandlerM (Expr Src X)
@@ -150,7 +152,7 @@ hoverExplain request = do
             encodedDiag = URI.encode (Text.unpack diagnosis)
             command = "[Explain error](dhall-explain:?"
                         <> Text.pack encodedDiag <> " )"
-            _contents = J.List [J.PlainString command]
+            _contents = J.HoverContents $ J.MarkupContent J.MkMarkdown command
         in Just J.Hover { .. }
       hoverFromDiagnosis _ = Nothing
 
@@ -172,7 +174,7 @@ hoverType request = do
     Left err -> throwE (Error, Text.pack err)
     Right (mSrc, typ) ->
       let _range = fmap (rangeToJSON . rangeFromDhall) mSrc
-          _contents = J.List [J.PlainString (pretty typ)]
+          _contents = J.HoverContents $ J.MarkupContent J.MkPlainText (pretty typ)
           hover = J.Hover{..}
       in lspRespond LSP.RspHover request (Just hover)
 
@@ -429,6 +431,93 @@ executeFreezeImport request = do
 
   lspRequest LSP.ReqApplyWorkspaceEdit J.WorkspaceApplyEdit
     (J.ApplyWorkspaceEditParams edit)
+
+completionHandler :: J.CompletionRequest -> HandlerM ()
+completionHandler request = do
+  let uri = request ^. J.params . J.textDocument . J.uri
+      line = request ^. J.params . J.position . J.line
+      col = request ^. J.params . J.position . J.character
+
+  txt <- readUri uri
+  let (completionLeadup, completionPrefix) = completionQueryAt txt (line, col)
+
+  let computeCompletions
+        -- environment variable
+        | "env:" `isPrefixOf` completionPrefix =
+          liftIO $ completeEnvironmentImport
+
+        -- local import
+        | any (`isPrefixOf` completionPrefix) [ "/", "./", "../", "~/" ] = do
+          let relativeTo | Just path <- J.uriToFilePath uri = path
+                         | otherwise = "."
+          liftIO $ completeLocalImport relativeTo (Text.unpack completionPrefix)
+
+        -- record projection / union constructor
+        | (target, _) <- Text.breakOnEnd "." completionPrefix
+        , not (Text.null target) = do
+          let bindersExpr = binderExprFromText completionLeadup
+
+          fileIdentifier <- fileIdentifierFromUri uri
+          cache <- use importCache
+          loadedBinders <- liftIO $ load fileIdentifier bindersExpr cache
+
+          (cache', bindersExpr') <-
+            case loadedBinders of
+              Right (cache', binders) -> do
+                return (cache', binders)
+              Left _ -> throwE (Log, "Could not complete projection; failed to load binders expression.")
+
+          let completionContext = buildCompletionContext bindersExpr'
+
+          targetExpr <- case parse (Text.dropEnd 1 target) of
+            Right e -> return e
+            Left _ -> throwE (Log, "Could not complete projection; prefix did not parse.")
+
+          loaded' <- liftIO $ load fileIdentifier targetExpr cache'
+          case loaded' of
+            Right (cache'', targetExpr') -> do
+              assign importCache cache''
+              return (completeProjections completionContext targetExpr')
+            Left _ -> return []
+
+        -- complete identifiers in scope
+        | otherwise = do
+          let bindersExpr = binderExprFromText completionLeadup
+
+          fileIdentifier <- fileIdentifierFromUri uri
+          cache <- use importCache  -- todo save cache afterwards
+          loadedBinders <- liftIO $ load fileIdentifier bindersExpr cache
+
+          bindersExpr' <-
+            case loadedBinders of
+              Right (cache', binders) -> do
+                assign importCache cache'
+                return binders
+              Left _ -> throwE (Log, "Could not complete projection; failed to load binders expression.")
+
+          let context = buildCompletionContext bindersExpr'
+          return (completeFromContext context)
+
+  completions <- computeCompletions
+
+  let item (Completion {..}) = J.CompletionItem {..}
+       where
+        _label = completeText
+        _kind = Nothing
+        _detail = fmap pretty completeType
+        _documentation = Nothing
+        _deprecated = Nothing
+        _preselect = Nothing
+        _sortText = Nothing
+        _filterText = Nothing
+        _insertText = Nothing
+        _insertTextFormat = Nothing
+        _textEdit = Nothing
+        _additionalTextEdits = Nothing
+        _commitCharacters = Nothing
+        _command = Nothing
+        _xdata = Nothing
+  lspRespond LSP.RspCompletion request $ J.Completions (J.List (map item completions))
 
 
 -- handler that doesn't do anything. Useful for example to make haskell-lsp shut
