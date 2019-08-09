@@ -3629,7 +3629,7 @@ prettyTypeMessage (IncomparableExpression expr) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \... but you cannot compare expressions, that are not terms, such as types.  For \n\
-        \example, the following assertion is " <> _NOT <> " valid:                       \n\
+        \example, the following equivalence is " <> _NOT <> " valid:                     \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────┐                                              \n\
