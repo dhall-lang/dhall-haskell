@@ -1864,8 +1864,8 @@ inputRecord (RecordInputType inputTypeRecord) = InputType makeRecordLit recordTy
     recordType = Record $ declared <$> inputTypeRecord
     makeRecordLit x = RecordLit $ (($ x) . embed) <$> inputTypeRecord
 
-{-| The 'UnionInputType' monoid allows you to build
-    an 'InputType' injector for a Dhall record.
+{-| 'UnionInputType' allows you to build an 'InputType' injector for a Dhall
+    record.
 
     For example, let's take the following Haskell data type:
 
