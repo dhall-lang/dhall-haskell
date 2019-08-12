@@ -1,7 +1,7 @@
 module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
 
 import Dhall.Context (Context, insert, empty)
-import Dhall.Core (Expr(..), Binding(..), subExpressions, normalize, shift, subst, Var(..))
+import Dhall.Core (Expr(..), Binding(..), subExpressions, normalize, shift, subst, Var(..), pretty)
 import Dhall.TypeCheck (typeWithA, X, TypeError(..))
 import Dhall.Parser (Src(..))
 
