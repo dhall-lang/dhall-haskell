@@ -19,9 +19,19 @@ The "official" releases can be installed as follows:
 
 **vscode-dhall-lsp-server**
 1. You need to have *npm* installed (e.g. using your favourite package manager).
-2. Clone `git@github.com:PanAeon/vscode-dhall-lsp-server.git` into a folder under `~/.vscode-oss/extensions/` (or `~/.vscode/extensions/` if you VSCode rather than VSCodium).
-3. Inside the checked out folder run `npm install` to fetch any dependencies.
-4. Start (restart) VSCode/ium.
+2. Install the *typescript* compiler with `npm install -g typescript`. I recommend running `npm config set prefix '~/.local'` first to have npm install the executable in `~/.local/bin`; this avoids having to use *sudo* and polluting the rest of the system.
+2. Check out a copy of the vscode-dhall-lsp-server repository into the VSCode/ium extensions folder
+   ```
+   git clone git@github.com:PanAeon/vscode-dhall-lsp-server.git ~/.vscode-oss/extensions/vscode-dhall-lsp-server
+   ```
+   (replace `~/.vscode-oss/` with `~/.vscode/` if you use VSCode instead of VSCodium).
+3. Run the remaining commands in the checked-out directory
+   ```
+   cd ~/.vscode-oss/extensions/vscode-dhall-lsp-server
+   ```
+4. Run `npm install` to fetch all library dependencies.
+5. Run `npm run compile` to compile the typescript code to javascript.
+6. Start (restart) VSCode/ium.
 
 **dhall-lsp-server**
 1. You need to have *stack* installed.
@@ -70,6 +80,7 @@ Right-click an import statement and select "Freeze (refreeze) import" to add (or
 **vscode-dhall-lsp-server**
 - Instead of working in `~/vscode-oss/extensions/...` directly, you can open a clone of the git repository in VSCode/ium and use the built-in debugging capabilities for extensions: press F5 (or click the green play button in the debugging tab) to launch a new VSCode/ium window with the modified extension (potentially shadowing the installed version).
 - To package a release:
-  1. Use `npm install -g vsce` to install the *vsce* executable. I recommend running `npm config set prefix '~/.local'` first to have npm install the executable in `~/.local/bin`; this avoids having to use sudo and polluting the rest of the system.
-  2. Run `vsce package` inside the git repo to package the extension, resulting in a file `vscode-dhall-lsp-server-x.x.x.vsix`.
-  3. You can install the packaged extension directly by opening the `.vsix` file from within VSCod/ium.
+  1. Make sure you have *npm* and *tsc* installed.
+  2. Use `npm install -g vsce` to install the *vsce* executable.
+  3. Run `vsce package` inside the git repo to package the extension, resulting in a file `vscode-dhall-lsp-server-x.x.x.vsix`.
+  4. You can install the packaged extension directly by opening the `.vsix` file from within VSCod/ium.
