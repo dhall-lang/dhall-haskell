@@ -56,14 +56,14 @@ Right click and select "Format Document" to run the file through the Dhall forma
 Right-click the bound identifier in a `let` binding and select "Annotate Let binding with its type" to do exactly that.
 
 - **Freeze imports&nbsp;**
-Right-click an import statement and select "Freeze (refreeze) import" to add (or update) a semantic hash annotation to the import. You can also select "Freee (refreeze) all imports" from the *Command Palette* to freeze all imports at once.
+Right-click an import statement and select "Freeze (refreeze) import" to add (or update) a semantic hash annotation to the import. You can also select "Freeze (refreeze) all imports" from the *Command Palette* to freeze all imports at once.
 
   Note that this feature behaves slightly differently from the `dhall freeze` command in that the hash annotations are inserted without re-formatting the rest of the code!
 
 # Developer notes
 
 **dhall-lsp-server**
-- You can also use `stack build dhall-lsp-server` and point `vscode-dhall-lsp-server.executable` in the VSCode/ium settings to the stack build directory, to avoid overriding the installed version of the LSP server.
+- You can also use `stack build dhall-lsp-server` and point `vscode-dhall-lsp-server.executable` in the VSCode/ium settings to the stack build directory to avoid overriding the installed version of the LSP server.
 - You can use standard `Debug.Trace`/`putStrLn` debugging; the output will show up in the "Output" panel in VSCode/ium.
 - To log all LSP communication set `vscode-dhall-lsp-server.trace.server` to `verbose` in VSCode/ium.
 
