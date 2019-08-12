@@ -11,7 +11,8 @@ The "official" releases can be installed as follows:
 
 - **vscode-language-dhall** should be installed directly from VSCode/ium via the extensions marketplace.
 - **vscode-dhall-lsp-server** can also be installed directly from the marketplace.
-- **dhall-lsp-server** can be installed from hackage with `cabal install dhall-lsp-server`.
+- **dhall-lsp-server** can be installed from hackage with `cabal install dhall-lsp-server`. See the
+[`dhall-haskell` `README`](https://github.com/dhall-lang/dhall-haskell/blob/master/README.md) for pre-built binaries, as well as comprehensive installation and development instructions using *cabal*, *stack* or *nix*.
 
 ## Installing the latest development versions
 
@@ -33,10 +34,11 @@ The "official" releases can be installed as follows:
 5. Run `npm run compile` to compile the typescript code to javascript.
 6. Start (restart) VSCode/ium.
 
-**dhall-lsp-server**
-1. You need to have *stack* installed.
-2. Clone `git@github.com:dhall-lang/dhall-haskell.git`.
-3. Inside the checked out repository run `stack install dhall-lsp-server`.
+**dhall-lsp-server&nbsp;**
+For detailed instructions as well as instructions using cabal or nix, see [`dhall-haskell` - `README`](https://github.com/dhall-lang/dhall-haskell/blob/master/README.md). To install dhall-lsp-server using *stack*:
+1. Clone `git@github.com:dhall-lang/dhall-haskell.git`.
+2. Inside the checked out repository run `stack install dhall-lsp-server`.
+
 
 # Usage / Features
 
@@ -72,8 +74,9 @@ Right-click an import statement and select "Freeze (refreeze) import" to add (or
 
 # Developer notes
 
-**dhall-lsp-server**
-- You can also use `stack build dhall-lsp-server` and point `vscode-dhall-lsp-server.executable` in the VSCode/ium settings to the stack build directory to avoid overriding the installed version of the LSP server.
+**dhall-lsp-server&nbsp;**
+See [`dhall-haskell` - `README`](https://github.com/dhall-lang/dhall-haskell/blob/master/README.md) for general development instructions.
+- You can also build using `stack build dhall-lsp-server` and point `vscode-dhall-lsp-server.executable` in the VSCode/ium settings to the stack build directory to avoid overriding the already installed version of the LSP server.
 - You can use standard `Debug.Trace`/`putStrLn` debugging; the output will show up in the "Output" panel in VSCode/ium.
 - To log all LSP communication set `vscode-dhall-lsp-server.trace.server` to `verbose` in VSCode/ium.
 
