@@ -18,7 +18,7 @@ import Dhall.Src (Src(..))
 import Dhall.Parser
 import Dhall.Parser.Token
 import Dhall.Parser.Expression
-import Text.Megaparsec ((<|>), try, skipManyTill, lookAhead, anySingle,
+import Text.Megaparsec (try, skipManyTill, lookAhead, anySingle,
   notFollowedBy, eof, takeRest)
 
 import Control.Applicative (optional, (<|>))
