@@ -340,7 +340,7 @@ executeLintAndFormat request = do
 
 executeAnnotateLet :: J.ExecuteCommandRequest -> HandlerM ()
 executeAnnotateLet request = do
-  args :: J.TextDocumentPositionParams <- getCommandArguments request
+  args <- getCommandArguments request :: HandlerM J.TextDocumentPositionParams
   let uri = args ^. J.textDocument . J.uri
       line = args ^. J.position . J.line
       col = args ^. J.position . J.character
@@ -396,7 +396,7 @@ executeFreezeAllImports request = do
 
 executeFreezeImport :: J.ExecuteCommandRequest -> HandlerM ()
 executeFreezeImport request = do
-  args :: J.TextDocumentPositionParams <- getCommandArguments request
+  args <- getCommandArguments request :: HandlerM J.TextDocumentPositionParams
   let uri = args ^. J.textDocument . J.uri
       line = args ^. J.position . J.line
       col = args ^. J.position . J.character
