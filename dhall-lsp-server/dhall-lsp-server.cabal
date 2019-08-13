@@ -74,7 +74,7 @@ executable dhall-lsp-server
       Paths_dhall_lsp_server
   hs-source-dirs:
       app
-  default-extensions: LambdaCase OverloadedStrings
+  default-extensions: RecordWildCards OverloadedStrings
   ghc-options: -rtsopts
   build-depends:
       base >=4.7 && <5
