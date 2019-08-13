@@ -388,16 +388,18 @@ pathComponent componentType = do
                 FileComponent -> do
                     Text.Megaparsec.takeWhile1P Nothing Dhall.Core.pathCharacter
                 URLComponent -> do
-                    text <- star pchar
-
-                    return (URI.Encode.decodeText text)
+                    star pchar
 
     let quotedPathData = do
             _    <- Text.Parser.Char.char '"'
             text <- Text.Megaparsec.takeWhile1P Nothing quotedPathCharacter
             _    <- Text.Parser.Char.char '"'
 
-            return text
+            case componentType of
+              FileComponent -> do
+                return text
+              URLComponent -> do
+                return (URI.Encode.encodeText text)
 
     quotedPathData <|> pathData
 
