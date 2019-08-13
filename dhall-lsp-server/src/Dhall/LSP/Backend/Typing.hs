@@ -39,12 +39,14 @@ typeAt' pos ctx (Note src (Let (Binding _ _ a :| []) _)) | pos `inside` getLetId
   return (Just $ getLetIdentifier src, typ)
 
 -- "..." in a lambda expression
-typeAt' pos _ctx (Note src (Lam _ _A _)) | pos `inside` getLamIdentifier src =
-  return (Just $ getLamIdentifier src, _A)
+typeAt' pos _ctx (Note src (Lam _ _A _)) | Just src' <- getLamIdentifier src
+                                         , pos `inside` src' =
+  return (Just src', _A)
 
 -- "..." in a forall expression
-typeAt' pos _ctx (Note src (Pi _ _A _)) | pos `inside` getForallIdentifier src =
-  return (Just $ getForallIdentifier src, _A)
+typeAt' pos _ctx (Note src (Pi _ _A _)) | Just src' <- getForallIdentifier src
+                                        , pos `inside` src' =
+  return (Just src', _A)
 
 -- the input only contains singleton lets
 typeAt' pos ctx (Let (Binding x _ a :| []) e@(Note src _)) | pos `inside` src = do
