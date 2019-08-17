@@ -4,6 +4,7 @@
 {-# language NamedFieldPuns    #-}
 {-# language OverloadedStrings #-}
 {-# language RecordWildCards   #-}
+{-# language ScopedTypeVariables   #-}
 
 module Dhall.Repl
     ( -- * Repl
@@ -398,26 +399,91 @@ cmdQuit _ = do
   liftIO (putStrLn "Goodbye.")
   liftIO (throwIO Interrupt)
 
+help
+  :: ( Haskeline.MonadException m, MonadFail m, MonadIO m, MonadState Env m )
+  => HelpOptions m -> [String] -> m ()
+help hs _ = do
+  liftIO (putStrLn "Welcome to the Dhall REPL.")
+  liftIO (putStrLn "Type any expression to normalize it or use one of the following commands:")
+  forM_ hs $ \h -> do
+    let name = helpOptionName h
+        syntax = helpOptionSyntax h
+        doc = helpOptionDoc h
+    liftIO (putStrLn (":" <> name <> " " <> syntax))
+    liftIO (putStrLn ("    " <> doc))
 
 optionsPrefix :: Char
 optionsPrefix = ':'
 
+data HelpOption m = HelpOption
+  { helpOptionName :: String
+  , helpOptionSyntax :: String
+  , helpOptionDoc :: String
+  , helpOptionFunction :: Repline.Cmd m
+  }
+
+type HelpOptions m = [HelpOption m]
+
+helpOptions
+  :: ( Haskeline.MonadException m, MonadFail m, MonadIO m, MonadState Env m )
+  => HelpOptions m
+helpOptions =
+  [ HelpOption
+      "help"
+      ""
+      "Print help text and describe options"
+      (dontCrash . help helpOptions)
+  , HelpOption
+      "type"
+      "EXPRESSION"
+      "Infer the type of an expression"
+      (dontCrash . typeOf)
+  , HelpOption
+      "hash"
+      "EXPRESSION"
+      "Hash the normalized value of an expression"
+      (dontCrash . hashBinding)
+  , HelpOption
+      "let"
+      "IDENTIFIER = EXPRESSION"
+      "Assign an expression to a variable"
+      (dontCrash . addBinding . separateEqual)
+  , HelpOption
+      "clear"
+      ""
+      "Clear all bound variables"
+      (dontCrash . clearBindings)
+  , HelpOption
+      "load"
+      "[FILENAME]"
+      "Load bound variables from a file"
+      (dontCrash . loadBinding)
+  , HelpOption
+      "save"
+      "[FILENAME]"
+      "Save bound variables to a file"
+      (dontCrash . saveBinding . separateEqual)
+  , HelpOption
+      "set"
+      "OPTION"
+      "Set an option. Currently supported: --explain"
+      (dontCrash . setOption)
+  , HelpOption
+      "unset"
+      "OPTION"
+      "Unset an option"
+      (dontCrash . unsetOption)
+  , HelpOption
+      "quit"
+      ""
+      "Exit the REPL"
+      cmdQuit
+  ]
 
 options
   :: ( Haskeline.MonadException m, MonadFail m, MonadIO m, MonadState Env m )
   => Repline.Options m
-options =
-  [ ( "type", dontCrash . typeOf )
-  , ( "hash", dontCrash . hashBinding )
-  , ( "let", dontCrash . addBinding . separateEqual )
-  , ( "clear", dontCrash . clearBindings)
-  , ( "load", dontCrash . loadBinding )
-  , ( "save", dontCrash . saveBinding . separateEqual )
-  , ( "set", dontCrash . setOption)
-  , ( "unset", dontCrash . unsetOption)
-  , ( "quit", cmdQuit )
-  ]
-
+options = (\h -> (helpOptionName h, helpOptionFunction h)) <$> helpOptions
 
 completer
   :: (Monad m, MonadFail m, MonadIO m, MonadState Env m)
@@ -506,8 +572,8 @@ completeFunc reversedPrev word
 
 
 greeter :: MonadIO m => m ()
-greeter =
-  return ()
+greeter = do
+  liftIO (putStrLn "Type :help for more information.")
 
 
 dontCrash :: ( MonadIO m, Haskeline.MonadException m ) => m () -> m ()
