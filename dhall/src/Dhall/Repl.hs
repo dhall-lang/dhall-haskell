@@ -4,7 +4,6 @@
 {-# language NamedFieldPuns    #-}
 {-# language OverloadedStrings #-}
 {-# language RecordWildCards   #-}
-{-# language ScopedTypeVariables   #-}
 
 module Dhall.Repl
     ( -- * Repl
@@ -24,6 +23,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe ( mapMaybe )
 import Data.Semigroup ((<>))
 import Data.Text ( Text )
+import Data.Version (showVersion)
 import Dhall.Context (Context)
 import Dhall.Import (hashExpressionToCode)
 import Dhall.Pretty (CharacterSet(..))
@@ -49,6 +49,7 @@ import qualified Dhall.Import as Dhall
 import qualified Dhall.Map as Map
 import qualified Dhall.Parser as Dhall
 import qualified Dhall.TypeCheck as Dhall
+import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.Console.Haskeline.Completion as Haskeline
 import qualified System.Console.Haskeline.MonadException as Haskeline
@@ -403,7 +404,6 @@ help
   :: ( Haskeline.MonadException m, MonadFail m, MonadIO m, MonadState Env m )
   => HelpOptions m -> [String] -> m ()
 help hs _ = do
-  liftIO (putStrLn "Welcome to the Dhall REPL.")
   liftIO (putStrLn "Type any expression to normalize it or use one of the following commands:")
   forM_ hs $ \h -> do
     let name = helpOptionName h
@@ -460,8 +460,8 @@ helpOptions =
       (dontCrash . loadBinding)
   , HelpOption
       "save"
-      "[FILENAME]"
-      "Save bound variables to a file"
+      "[FILENAME | FILENAME = EXPRESSION]"
+      "Save bound variables or a given expression to a file"
       (dontCrash . saveBinding . separateEqual)
   , HelpOption
       "set"
@@ -572,8 +572,10 @@ completeFunc reversedPrev word
 
 
 greeter :: MonadIO m => m ()
-greeter = do
-  liftIO (putStrLn "Type :help for more information.")
+greeter =
+  let version = showVersion Meta.version
+      message = "Welcome to the Dhall v" <> version <> " REPL! Type :help for more information."
+  in liftIO (putStrLn message)
 
 
 dontCrash :: ( MonadIO m, Haskeline.MonadException m ) => m () -> m ()
