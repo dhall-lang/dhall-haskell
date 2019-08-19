@@ -45,6 +45,7 @@ getTests = do
 
                     -- https://github.com/dhall-lang/dhall-haskell/issues/1185
                     , parseDirectory </> "success/letA.dhall"
+                    , parseDirectory </> "success/unit/LetNestedA.dhall"
                     ]
 
             Monad.guard (path `notElem` skip)
@@ -64,9 +65,25 @@ getTests = do
                       parseDirectory </> "failure/annotation.dhall"
                     , parseDirectory </> "failure/unit/ImportEnvWrongEscape.dhall"
 
-                      -- Similarly, the implementation does not correctly
-                      -- require a space between a function and its argument
-                    , parseDirectory </> "failure/missingSpace.dhall"
+                      -- Other spacing related unexpected successes:
+                    , parseDirectory </> "failure/spacing/AnnotationNoSpace.dhall"
+                    , parseDirectory </> "failure/spacing/ApplicationNoSpace1.dhall"
+                    , parseDirectory </> "failure/spacing/ApplicationNoSpace2.dhall"
+                    , parseDirectory </> "failure/spacing/AssertNoSpace.dhall"
+                    , parseDirectory </> "failure/spacing/ForallNoSpace.dhall"
+                    , parseDirectory </> "failure/spacing/ImportAltNoSpace.dhall"
+                    , parseDirectory </> "failure/spacing/ImportHashedNoSpace.dhall"
+                    , parseDirectory </> "failure/spacing/LambdaNoSpace.dhall"
+                    , parseDirectory </> "failure/spacing/LetAnnotNoSpace.dhall"
+                    , parseDirectory </> "failure/spacing/ListLitEmptyNoSpace.dhall"
+                    , parseDirectory </> "failure/spacing/MergeAnnotationNoSpace3.dhall"
+                    , parseDirectory </> "failure/spacing/MergeNoSpace2.dhall"
+                    , parseDirectory </> "failure/spacing/NaturalPlusNoSpace.dhall"
+                    , parseDirectory </> "failure/spacing/RecordTypeNoSpace.dhall"
+                    , parseDirectory </> "failure/spacing/ToMapAnnotNoSpace.dhall"
+                    , parseDirectory </> "failure/spacing/UnionTypeNoSpace.dhall"
+
+                    , parseDirectory </> "failure/ImportHeadersExteriorHash.dhall"
 
                       -- For parsing performance reasons the implementation
                       -- treats a missing type annotation on an empty list as
