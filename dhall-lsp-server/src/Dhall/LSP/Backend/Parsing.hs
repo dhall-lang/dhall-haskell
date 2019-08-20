@@ -18,7 +18,7 @@ import Dhall.Src (Src(..))
 import Dhall.Parser
 import Dhall.Parser.Token
 import Dhall.Parser.Expression
-import Text.Megaparsec ((<|>), try, skipManyTill, lookAhead, anySingle,
+import Text.Megaparsec (try, skipManyTill, lookAhead, anySingle,
   notFollowedBy, eof, takeRest)
 
 import Control.Applicative (optional, (<|>))
@@ -81,11 +81,9 @@ getLetIdentifier src@(Src left _ text) =
           return (Src begin end tokens)
 
 -- | Cf. `getLetIdentifier`.
-getLamIdentifier :: Src -> Src
-getLamIdentifier src@(Src left _ text) =
-  case Megaparsec.parseMaybe (unParser parseLetIdentifier) text of
-    Just src' -> src'
-    Nothing -> src
+getLamIdentifier :: Src -> Maybe Src
+getLamIdentifier (Src left _ text) =
+  Megaparsec.parseMaybe (unParser parseLetIdentifier) text
   where parseLetIdentifier = do
           setSourcePos left
           _lambda
@@ -97,11 +95,9 @@ getLamIdentifier src@(Src left _ text) =
           return (Src begin end tokens)
 
 -- | Cf. `getLetIdentifier`.
-getForallIdentifier :: Src -> Src
-getForallIdentifier src@(Src left _ text) =
-  case Megaparsec.parseMaybe (unParser parseLetIdentifier) text of
-    Just src' -> src'
-    Nothing -> src
+getForallIdentifier :: Src -> Maybe Src
+getForallIdentifier (Src left _ text) =
+  Megaparsec.parseMaybe (unParser parseLetIdentifier) text
   where parseLetIdentifier = do
           setSourcePos left
           _forall

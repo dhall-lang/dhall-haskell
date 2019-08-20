@@ -30,7 +30,8 @@ getTests = do
     let failureTestFiles = do
             path <- Turtle.lstree (typecheckDirectory </> "failure")
 
-            let skip = []
+            let skip = [ typecheckDirectory </> "failure/unit/MergeEmptyNeedsDirectAnnotation1.dhall"
+                       ]
 
             Monad.guard (path `notElem` skip)
 

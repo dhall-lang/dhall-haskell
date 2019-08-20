@@ -1,7 +1,7 @@
 module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
 
 import Dhall.Context (Context, insert, empty)
-import Dhall.Core (Expr(..), Binding(..), Const(..), subExpressions, normalize, shift, subst, Var(..), pretty)
+import Dhall.Core (Expr(..), Binding(..), subExpressions, normalize, shift, subst, Var(..), pretty)
 import Dhall.TypeCheck (typeWithA, X, TypeError(..))
 import Dhall.Parser (Src(..))
 
@@ -39,25 +39,20 @@ typeAt' pos ctx (Note src (Let (Binding _ _ a :| []) _)) | pos `inside` getLetId
   return (Just $ getLetIdentifier src, typ)
 
 -- "..." in a lambda expression
-typeAt' pos _ctx (Note src (Lam _ _A _)) | pos `inside` getLamIdentifier src =
-  return (Just $ getLamIdentifier src, _A)
+typeAt' pos _ctx (Note src (Lam _ _A _)) | Just src' <- getLamIdentifier src
+                                         , pos `inside` src' =
+  return (Just src', _A)
 
 -- "..." in a forall expression
-typeAt' pos _ctx (Note src (Pi _ _A _)) | pos `inside` getForallIdentifier src =
-  return (Just $ getForallIdentifier src, _A)
+typeAt' pos _ctx (Note src (Pi _ _A _)) | Just src' <- getForallIdentifier src
+                                        , pos `inside` src' =
+  return (Just src', _A)
 
 -- the input only contains singleton lets
 typeAt' pos ctx (Let (Binding x _ a :| []) e@(Note src _)) | pos `inside` src = do
-  _A <- typeWithA absurd ctx a
-  t <- fmap normalize (typeWithA absurd ctx _A)
-  case t of
-    Const Type -> do  -- we don't have types depending on values
-      let ctx' = fmap (shift 1 (V x 0)) (insert x (normalize _A) ctx)
-      (mSrc, _B) <- typeAt' pos ctx' e
-      return (mSrc, shift (-1) (V x 0) _B)
-    _ -> do  -- but we do have types depending on types
-      let a' = shift 1 (V x 0) (normalize a)
-      typeAt' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
+  _ <- typeWithA absurd ctx a
+  let a' = shift 1 (V x 0) (normalize a)
+  typeAt' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
 
 typeAt' pos ctx (Lam x _A b@(Note src _)) | pos `inside` src = do
   let _A' = Dhall.Core.normalize _A
@@ -126,15 +121,9 @@ annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
 
 -- binders, see typeAt'
 annotateLet' pos ctx (Let (Binding x _ a :| []) e@(Note src _)) | pos `inside` src = do
-  _A <- first show $ typeWithA absurd ctx a
-  t <- first show $ fmap normalize (typeWithA absurd ctx _A)
-  case t of
-    Const Type -> do  -- we don't have types depending on values
-      let ctx' = fmap (shift 1 (V x 0)) (insert x (normalize _A) ctx)
-      annotateLet' pos ctx' e
-    _ -> do  -- but we do have types depending on types
-      let a' = shift 1 (V x 0) (normalize a)
-      annotateLet' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
+  _ <- first show $ typeWithA absurd ctx a
+  let a' = shift 1 (V x 0) (normalize a)
+  annotateLet' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
 
 annotateLet' pos ctx (Lam x _A b@(Note src _)) | pos `inside` src = do
   let _A' = Dhall.Core.normalize _A
