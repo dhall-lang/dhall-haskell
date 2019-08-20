@@ -6,7 +6,9 @@ import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
+import Turtle (FilePath, (</>))
 
+import qualified Control.Monad     as Monad
 import qualified Data.Text         as Text
 import qualified Data.Text.IO      as Text.IO
 import qualified Dhall.Core        as Core
@@ -18,9 +20,26 @@ import qualified Test.Tasty        as Tasty
 import qualified Test.Tasty.HUnit  as Tasty.HUnit
 import qualified Turtle
 
+typeInferenceDirectory :: FilePath
+typeInferenceDirectory = "./dhall-lang/tests/type-inference"
+
 getTests :: IO TestTree
 getTests = do
-    successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (Turtle.lstree "./dhall-lang/tests/type-inference/success")
+    let successTestFiles = do
+            path <- Turtle.lstree (typeInferenceDirectory </> "success")
+
+            let skip = [ -- We correctly infer the expected type @NaN ≡ NaN@ here,
+                         -- but the comparison between the inferred and the expected type
+                         -- fails due to `Expr`'s 'Eq' instance, which inherits the
+                         -- @NaN /= NaN@ inequality from 'Double'.
+                         typeInferenceDirectory </> "success/unit/AssertNaNA.dhall"
+                       ]
+
+            Monad.guard (path `notElem` skip)
+
+            return path
+
+    successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest successTestFiles
 
     let testTree = Tasty.testGroup "type-inference tests"
             [ successTests

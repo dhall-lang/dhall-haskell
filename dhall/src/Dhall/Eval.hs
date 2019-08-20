@@ -82,6 +82,7 @@ import Dhall.Set (Set)
 import GHC.Natural (Natural)
 import Unsafe.Coerce (unsafeCoerce)
 
+import qualified Codec.Serialise     as Serialise
 import qualified Data.Char
 import qualified Data.List.NonEmpty
 import qualified Data.Sequence
@@ -274,14 +275,14 @@ vCombine :: Val a -> Val a -> Val a
 vCombine t u = case (t, u) of
   (VRecordLit m, u) | null m    -> u
   (t, VRecordLit m) | null m    -> t
-  (VRecordLit m, VRecordLit m') -> VRecordLit (Dhall.Map.sort (Dhall.Map.unionWith vCombine m m'))
+  (VRecordLit m, VRecordLit m') -> VRecordLit (Dhall.Map.unionWith vCombine m m')
   (t, u)                        -> VCombine t u
 
 vCombineTypes :: Val a -> Val a -> Val a
 vCombineTypes t u = case (t, u) of
   (VRecord m, u) | null m -> u
   (t, VRecord m) | null m -> t
-  (VRecord m, VRecord m') -> VRecord (Dhall.Map.sort (Dhall.Map.unionWith vCombineTypes m m'))
+  (VRecord m, VRecord m') -> VRecord (Dhall.Map.unionWith vCombineTypes m m')
   (t, u)                  -> VCombineTypes t u
 
 vListAppend :: Val a -> Val a -> Val a
@@ -311,15 +312,21 @@ vField t0 k = go t0 where
       | Just v <- Dhall.Map.lookup k m -> v
       | otherwise -> error errorMsg
     VProject t _ -> go t
+    VPrefer (VRecordLit m) r -> case Dhall.Map.lookup k m of
+      Just v -> VField (VPrefer (singletonVRecordLit v) r) k
+      Nothing -> go r
     VPrefer l (VRecordLit m) -> case Dhall.Map.lookup k m of
       Just v -> v
       Nothing -> go l
-    VPrefer (VRecordLit m) r | not (Dhall.Map.member k m) -> go r
+    VCombine (VRecordLit m) r -> case Dhall.Map.lookup k m of
+      Just v -> VField (VCombine (singletonVRecordLit v) r) k
+      Nothing -> go r
     VCombine l (VRecordLit m) -> case Dhall.Map.lookup k m of
-      Just v -> VField (VCombine l (VRecordLit (Dhall.Map.singleton k v))) k
+      Just v -> VField (VCombine l (singletonVRecordLit v)) k
       Nothing -> go l
-    VCombine (VRecordLit m) r | not (Dhall.Map.member k m) -> go r
     t -> VField t k
+
+  singletonVRecordLit v = VRecordLit (Dhall.Map.singleton k v)
 {-# inline vField #-}
 
 eval :: forall a. Eq a => Env a -> Expr Void a -> Val a
@@ -555,7 +562,7 @@ eval !env t =
                           (VRecordLit m, u) | null m -> u
                           (t, VRecordLit m) | null m -> t
                           (VRecordLit m, VRecordLit m') ->
-                             VRecordLit (Dhall.Map.sort (Dhall.Map.union m' m))
+                             VRecordLit (Dhall.Map.union m' m)
                           (t, u) | conv env t u -> t
                           (t, u) -> VPrefer t u
     Merge x y ma     -> case (evalE x, evalE y, evalE <$> ma) of
@@ -580,7 +587,7 @@ eval !env t =
                         else case evalE t of
                           VRecordLit kvs -> let
                             kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
-                            in VRecordLit (Dhall.Map.sort kvs')
+                            in VRecordLit kvs'
                           t -> VProject t (Left (Dhall.Set.sort ks))
     Project t (Right e) ->
                         case evalE e of
@@ -697,8 +704,9 @@ conv !env t t' =
     (VIntegerToDouble t , VIntegerToDouble t') -> convE t t'
 
     (VDouble       , VDouble)        -> True
-    (VDoubleLit n  , VDoubleLit n')  -> Dhall.Binary.encode (DoubleLit n  :: Expr Void Import) ==
-                                        Dhall.Binary.encode (DoubleLit n' :: Expr Void Import)
+    (VDoubleLit n  , VDoubleLit n')  ->
+            Serialise.serialise (Dhall.Binary.encode (DoubleLit n  :: Expr Void Import))
+        ==  Serialise.serialise (Dhall.Binary.encode (DoubleLit n' :: Expr Void Import))
     (VDoubleShow t , VDoubleShow t') -> convE t t'
 
     (VText, VText) -> True
