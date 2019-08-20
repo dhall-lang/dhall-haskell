@@ -17,6 +17,7 @@ module Dhall.Test.Dhall where
 
 import Control.Exception (SomeException, try)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
+import Data.Monoid ((<>))
 import Data.String (fromString)
 import Data.Text (Text)
 import Dhall (Inject, Interpret)
