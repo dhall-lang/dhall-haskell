@@ -541,12 +541,15 @@ skeleton (TextAppend {}) =
     <>  operator "++"
     <>  " "
     <>  ignore
-skeleton (ListLit {}) =
+skeleton (ListLit _ elems)
+    | null elems =
+            listSkeleton
+        <>  " "
+        <>  colon
+        <>  " "
+        <>  ignore
+    | otherwise =
         listSkeleton
-    <>  " "
-    <>  colon
-    <>  " "
-    <>  ignore
 skeleton (ListAppend {}) =
         ignore
     <>  " "
