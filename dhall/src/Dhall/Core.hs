@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UnicodeSyntax      #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -497,9 +498,23 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data, NFData)
+    deriving (Foldable, Generic, Traversable, Show, Data, NFData)
 -- NB: If you add a constructor to Expr, please also update the Arbitrary
 -- instance in Dhall.Test.QuickCheck.
+
+-- | Note that this 'Eq' instance inherits `Double`'s defects, e.g.
+--
+-- >>> nan = 0/0
+-- >>> DoubleLit nan == DoubleLit nan
+-- False
+deriving instance (Eq s, Eq a) => Eq (Expr s a)
+
+-- | Note that this 'Eq' instance inherits `Double`'s defects, e.g.
+--
+-- >>> nan = 0/0
+-- >>> DoubleLit nan <= DoubleLit nan
+-- False
+deriving instance (Ord s, Ord a) => Ord (Expr s a)
 
 instance (Lift s, Lift a, Data s, Data a) => Lift (Expr s a)
 

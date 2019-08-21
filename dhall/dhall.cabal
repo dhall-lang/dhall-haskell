@@ -538,7 +538,8 @@ Library
         Dhall.Pretty,
         Dhall.Repl,
         Dhall.Tutorial,
-        Dhall.TypeCheck
+        Dhall.TypeCheck,
+        Dhall.Util
     if !flag(cross)
         Exposed-Modules:
             Dhall.TH
@@ -547,7 +548,6 @@ Library
         Dhall.Parser.Combinators,
         Dhall.Import.Types,
         Dhall.Eval,
-        Dhall.Util,
         Paths_dhall
     if flag(with-http)
       Other-Modules:

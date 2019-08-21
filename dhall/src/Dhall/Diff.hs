@@ -417,14 +417,6 @@ diffUnion kvsL kvsR = angled (diffKeysWith colon diffVals kvsL kvsR)
   where
     diffVals = diffMaybe (colon <> " ") diffExpression
 
-listSkeleton :: Diff
-listSkeleton =
-        lbracket
-    <>  " "
-    <>  ignore
-    <>  " "
-    <>  rbracket
-
 textSkeleton :: Diff
 textSkeleton =
         "\""
@@ -541,12 +533,20 @@ skeleton (TextAppend {}) =
     <>  operator "++"
     <>  " "
     <>  ignore
-skeleton (ListLit {}) =
-        listSkeleton
-    <>  " "
-    <>  colon
-    <>  " "
-    <>  ignore
+skeleton (ListLit _ elems)
+    | null elems =
+            lbracket
+        <>  rbracket
+        <>  " "
+        <>  colon
+        <>  " "
+        <>  ignore
+    | otherwise =
+            lbracket
+        <>  " "
+        <>  ignore
+        <>  " "
+        <>  rbracket
 skeleton (ListAppend {}) =
         ignore
     <>  " "
