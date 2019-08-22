@@ -108,7 +108,7 @@ import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Map
 import qualified Dhall.Set
-import qualified Network.URI.Encode         as URI.Encode
+import qualified Network.URI                as URI
 import qualified Text.Printf
 
 
@@ -2260,11 +2260,8 @@ prettyPathComponent text
         "/\"" <> Pretty.pretty text <> "\""
 
 prettyURIComponent :: Text -> Doc ann
-prettyURIComponent text
-    | Data.Text.all (\c -> pathCharacter c && URI.Encode.isAllowed c) text =
-        "/" <> Pretty.pretty text
-    | otherwise =
-        "/\"" <> Pretty.pretty text <> "\""
+prettyURIComponent text =
+        Pretty.pretty $ URI.normalizeCase $ URI.normalizeEscape $ "/" <> Data.Text.unpack text
 
 {-| Convenience utility for converting `Either`-based exceptions to `IO`-based
     exceptions

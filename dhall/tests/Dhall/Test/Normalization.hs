@@ -44,9 +44,11 @@ getTests = do
             (Turtle.lstree "./dhall-lang/tests/alpha-normalization/success/")
 
     let unitTestFiles = do
-            path <- Turtle.lstree "./dhall-lang/tests/normalization/success/unit"
+            path <- Turtle.lstree (normalizationDirectory </> "unit/")
 
-            let skip = []
+            let skip = [ normalizationDirectory </> "unit/RecursiveRecordMergeWithinFieldSelection3A.dhall"
+                       , normalizationDirectory </> "unit/RightBiasedMergeWithinFieldSelection3A.dhall"
+                       ]
 
             Monad.guard (path `notElem` skip)
 

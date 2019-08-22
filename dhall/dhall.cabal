@@ -458,6 +458,7 @@ Library
         megaparsec                  >= 6.5.0    && < 7.1 ,
         memory                      >= 0.14     && < 0.15,
         mtl                         >= 2.2.1    && < 2.3 ,
+        network-uri                 >= 2.6      && < 2.7 ,
         optparse-applicative        >= 0.14.0.0 && < 0.16,
         parsers                     >= 0.12.4   && < 0.13,
         prettyprinter               >= 1.2.0.1  && < 1.3 ,
