@@ -25,7 +25,23 @@ typecheckDirectory = "./dhall-lang/tests/typecheck"
 
 getTests :: IO TestTree
 getTests = do
-    successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (Turtle.lstree (typecheckDirectory </> "success"))
+    let successTestFiles = do
+            path <- Turtle.lstree (typecheckDirectory </> "success")
+            let skip = [ typecheckDirectory </> "success/preferMixedRecordsA.dhall"
+                       , typecheckDirectory </> "success/preferMixedRecordsSameFieldA.dhall"
+                       , typecheckDirectory </> "success/preludeA.dhall" -- fixed in dhall-lang/dhall-lang#708
+                       , typecheckDirectory </> "success/RecordTypeMixedKindsA.dhall"
+                       , typecheckDirectory </> "success/simple/combineMixedRecordsA.dhall"
+                       , typecheckDirectory </> "success/simple/RecordMixedKinds2A.dhall"
+                       , typecheckDirectory </> "success/simple/RecordMixedKindsA.dhall"
+                       , typecheckDirectory </> "success/simple/RecursiveRecordMergeMixedKindsA.dhall"
+                       , typecheckDirectory </> "success/simple/RightBiasedRecordMergeMixedKindsA.dhall"
+                       ]
+            Monad.guard (path `notElem` skip)
+
+            return path
+
+    successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest successTestFiles
 
     let failureTestFiles = do
             path <- Turtle.lstree (typecheckDirectory </> "failure")

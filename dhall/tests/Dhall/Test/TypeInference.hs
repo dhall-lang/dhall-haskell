@@ -33,6 +33,9 @@ getTests = do
                          -- fails due to `Expr`'s 'Eq' instance, which inherits the
                          -- @NaN /= NaN@ inequality from 'Double'.
                          typeInferenceDirectory </> "success/unit/AssertNaNA.dhall"
+                       , typeInferenceDirectory </> "success/unit/RecursiveRecordMergeBoolTypeA.dhall"
+                       , typeInferenceDirectory </> "success/simple/RecordTypeMixedKinds2A.dhall"
+                       , typeInferenceDirectory </> "success/simple/RecordTypeMixedKinds3A.dhall"
                        ]
 
             Monad.guard (path `notElem` skip)
