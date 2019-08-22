@@ -1527,7 +1527,7 @@ import Dhall
 -- For example, suppose you save the following two files:
 --
 -- > $ cat ./foo
--- > ./bar sha256:6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b
+-- > ./bar sha256:d60d8415e36e86dae7f42933d3b0c4fe3ca238f057fba206c7e9fbf5d784fe15
 --
 -- > $ cat ./bar
 -- > ./baz
@@ -1550,8 +1550,39 @@ import Dhall
 -- > 
 -- > 1
 --
--- This implies that the hash only changes if the Dhall value changes.  For
--- example, if you add a comment to the @./bar@ file:
+-- Any import protected by a semantic integrity check is automatically cached
+-- locally underneath either @~\/.cache\/dhall\/1220${HASH}@ or
+-- @${XDG_CACHE_HOME}\/dhall/1220${HASH}@ if you define the @XDG_CACHE_HOME@
+-- environment variable.
+--
+-- For example, after you import @./foo@ the contents of `./bar` are locally
+-- cached in a fully-evaluated and binary-encoded form which you can inspect by
+-- running:
+--
+-- > $ dhall decode < ~/.cache/dhall/1220d60d8415e36e86dae7f42933d3b0c4fe3ca238f057fba206c7e9fbf5d784fe15
+-- > 1
+--
+-- Subsequent attempts to resolve the same import will automatically retrieve
+-- the import from the cache.  This matters less for local imports, but comes in
+-- handy for remote imports to avoid redownloading them.
+--
+-- The local cache takes precedence when resolving imports, so changing the
+-- original import afterwards will have no affect until you update the hash.
+-- From Dhall's point of view, the hash is the true address and the file path
+-- is just a suggestion for how to obtain the import if it's not already cached.
+--
+-- You can disable the cache by setting `XDG_CACHE_HOME` to `/var/empty` (an
+-- empty and unwritable directory), like this:
+--
+-- > $ XDG_CACHE_HOME=/var/empty dhall <<< './foo'
+-- > Natural
+-- > 
+-- > 1
+--
+-- We'll use this trick to test changes to the protected import in the following
+-- examples.
+--
+-- Now, supose you add a comment to the @./bar@ file:
 --
 -- > $ cat ./bar
 -- > -- This comment does not change the hash
@@ -1561,7 +1592,7 @@ import Dhall
 -- only depends on the normalized value and does not depend on meaningless
 -- changes to whitespace or comments:
 --
--- > $ dhall <<< './foo'  # This still succeeds
+-- > $ XDG_CACHE_HOME=/var/empty dhall <<< './foo'  # This still succeeds
 -- > Natural
 -- > 
 -- > 1
@@ -1569,12 +1600,10 @@ import Dhall
 -- You can compute the Hash for any import by using the hash subcommand 
 -- of this package.  For example:
 --
--- > dhall hash <<< './bar'
--- > sha256:6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b
+-- > $ dhall hash <<< './bar'
+-- > sha256:d60d8415e36e86dae7f42933d3b0c4fe3ca238f057fba206c7e9fbf5d784fe15
 --
--- Then you can paste that output into your code after the import
---
--- Now suppose that you you change the value of the @./baz@ file:
+-- Now suppose that you actually change the value of the @./baz@ file:
 --
 -- > $ cat ./baz
 -- > 2
@@ -1582,26 +1611,27 @@ import Dhall
 -- ... then the @./foo@ file will fail to import @./bar@, even though the
 -- text of the @./bar@ file technically never changed:
 --
--- > dhall <<< './foo'
+-- > XDG_CACHE_HOME=/var/empty dhall <<< './foo'
 -- > 
 -- > Error: Import integrity check failed
 -- > 
 -- > Expected hash:
 -- > 
--- > ↳ 6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b
+-- > ↳ d60d8415e36e86dae7f42933d3b0c4fe3ca238f057fba206c7e9fbf5d784fe15
 -- > 
 -- > Actual hash:
 -- > 
--- > ↳ d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35
+-- > ↳ 4caf97e8c445d4d4b5c5b992973e098ed4ae88a355915f5a59db640a589bc9cb
 --
 -- This is because the @./bar@ file now represents a new value (@2@ instead of
--- @1@), even though the text of the @./bar@ is still the same.  Since the value
--- changed the hash must change as well.  However, we could change @./baz@ to:
+-- @1@), even though the text of the @./bar@ file is still the same.  Since the
+-- value changed the hash must change as well.  However, we could change @./baz@
+-- to:
 --
 -- > $ cat baz
 -- > if True then 1 else 2
 --
--- ... and the import would succeed again because the final result is still @1@.
+-- ... and the import would now succeed again because the final result is @1@.
 --
 -- The integrity hash ensures that your import's final meaning can never change,
 -- so an attacker can never compromise an imported value protected by a hash
@@ -1629,7 +1659,7 @@ import Dhall
 -- > let replicate =
 -- >       https://raw.githubusercontent.com/dhall-lang/Prelude/c79c2bc3c46f129cc5b6d594ce298a381bcae92c/List/replicate sha256:b0e3ec1797b32c80c0bcb7e8254b08c7e9e35e75e6b410c7ac21477ab90167ad
 -- > in  replicate 5
---
+
 -- $rawText
 --
 -- Sometimes you want to import the contents of a raw text file as a Dhall
