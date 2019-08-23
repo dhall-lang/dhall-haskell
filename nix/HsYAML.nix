@@ -6,8 +6,8 @@ mkDerivation {
   version = "0.2.0.0";
   src = fetchgit {
     url = "https://github.com/vijayphoenix/HsYAML.git";
-    sha256 = "0szh12avk9jr0rlqyxf8idc3n7dll6cppnpa54p4f73w1hbwazw1";
-    rev = "9354f53c69e9178a8e7c5c17b47137e23d4179df";
+    sha256 = "0k1mw6j78d4lhbgqnc6fz0dlly0m6sb72f7z9yh82jw0ml7l9srr";
+    rev = "4485eab8b1c9b6286e19b92159ac6279921bdde1";
     fetchSubmodules = true;
   };
   isLibrary = true;

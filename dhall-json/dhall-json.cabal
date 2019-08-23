@@ -75,7 +75,7 @@ Library
         Build-Depends:
             HsYAML >= 0.2,
             HsYAML-aeson >= 0.2
-        
+
 Executable dhall-to-json
     Hs-Source-Dirs: dhall-to-json
     Main-Is: Main.hs
