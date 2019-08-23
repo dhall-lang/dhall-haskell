@@ -1,1 +1,10 @@
 packages: ./dhall ./dhall-bash ./dhall-json ./dhall-lsp-server ./dhall-nix
+
+source-repository-package
+    type: git
+    location: https://github.com/vijayphoenix/HsYAML.git
+    tag: 9354f53c69e9178a8e7c5c17b47137e23d4179df
+
+source-repository-package
+    type: git
+    location: https://github.com/vijayphoenix/HsYAML-aeson.git

@@ -14,20 +14,24 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Dhall.JSON (Conversion(..), SpecialDoubleMode(..), codeToValue)
 import Options.Applicative (Parser)
+import Data.ByteString.Lazy (toStrict)
 
 import qualified Data.Aeson
 import qualified Data.ByteString
+import qualified Data.ByteString.Lazy
 import qualified Data.Vector
 import qualified Dhall
 import qualified Options.Applicative
+import qualified Data.HashSet as HashSet
 #if defined(ETA_VERSION)
 import Dhall.Yaml.Eta ( jsonToYaml )
 #else
-import qualified Data.Yaml
-# if MIN_VERSION_yaml(0,10,2)
-import qualified Data.Text
-import qualified Text.Libyaml
-# endif
+import qualified Data.YAML.Aeson as YAML
+import qualified Data.YAML as Y
+import qualified Data.YAML.Event as YE
+import qualified Data.YAML.Token as YT
+import qualified Data.Text as Text
+import           Data.Char (isNumber)
 #endif
 
 
@@ -90,32 +94,54 @@ jsonToYaml
 jsonToYaml json documents quoted =
 
   case (documents, json) of
-    (True, Data.Yaml.Array elems)
+    (True, Data.Aeson.Array elems)
       -> Data.ByteString.intercalate "\n---\n"
-         $ fmap (encodeYaml encodeOptions)
+         $ fmap (bsToStrict. (YAML.encodeValue' schemaEncoder YT.UTF8). (:[]))
          $ Data.Vector.toList elems
-    _ -> encodeYaml encodeOptions json
+    _ -> bsToStrict (YAML.encodeValue' schemaEncoder YT.UTF8 [json])
 
   where
-# if !MIN_VERSION_yaml(0,10,2)
-    encodeYaml = Data.Yaml.encode
-# else
-    encodeYaml = Data.Yaml.encodeWith
+    defaultSchemaEncoder = Y.setScalarStyle style Y.defaultSchemaEncoder
 
-    customStyle = \s -> case () of
+    defaultEncodeStr s = case () of
+      ()
+        | "\n" `Text.isInfixOf` s -> Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
+        | isSpecialString s -> Right (YE.untagged, YE.SingleQuoted, s)
+        | otherwise -> Right (YE.untagged, YE.Plain, s)
+
+    style s = case s of
+      Y.SNull         -> Right (YE.untagged, YE.Plain, "null")
+      Y.SBool  bool   -> Right (YE.untagged, YE.Plain, Y.encodeBool bool)
+      Y.SFloat double -> Right (YE.untagged, YE.Plain, Y.encodeDouble double)
+      Y.SInt   int    -> Right (YE.untagged, YE.Plain, Y.encodeInt int)
+      Y.SStr   text   -> defaultEncodeStr text
+      Y.SUnknown t v  -> Right (t, YE.SingleQuoted, v)
+    
+    specialStrings :: HashSet.HashSet Text.Text
+    specialStrings = HashSet.fromList $ Text.words
+            "y Y yes Yes YES n N no No NO true True TRUE false False FALSE on On ON off Off OFF null Null NULL ~ *"
+
+    isSpecialString :: Text.Text -> Bool
+    isSpecialString s = s `HashSet.member` specialStrings || all isNumber (Text.unpack s)
+
+    customStyle (Y.SStr s) = case () of
         ()
-            | "\n" `Data.Text.isInfixOf` s -> ( noTag, literal )
-            | otherwise -> ( noTag, Text.Libyaml.SingleQuoted )
-        where
-            noTag = Text.Libyaml.NoTag
-            literal = Text.Libyaml.Literal
+            | "\n" `Text.isInfixOf` s -> Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
+            | otherwise -> Right (YE.untagged, YE.SingleQuoted, s)
+    customStyle scalar =  (Y.schemaEncoderScalar defaultSchemaEncoder) scalar
+    
+    customSchemaEncoder = Y.setScalarStyle customStyle defaultSchemaEncoder
+    
+    schemaEncoder = if quoted 
+        then customSchemaEncoder 
+        else defaultSchemaEncoder
+#endif
 
-    quotedOptions = Data.Yaml.setStringStyle
-                        customStyle
-                        Data.Yaml.defaultEncodeOptions
 
-    encodeOptions = if quoted
-        then quotedOptions
-        else Data.Yaml.defaultEncodeOptions
-# endif
+{-# INLINE bsToStrict #-}
+bsToStrict :: Data.ByteString.Lazy.ByteString -> ByteString
+#if MIN_VERSION_bytestring(0,10,0)
+bsToStrict = Data.ByteString.Lazy.toStrict
+#else
+bsToStrict = Data.ByteString. Data.ByteString.Lazy.toChunks
 #endif
