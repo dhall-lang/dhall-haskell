@@ -143,5 +143,5 @@ bsToStrict :: Data.ByteString.Lazy.ByteString -> ByteString
 #if MIN_VERSION_bytestring(0,10,0)
 bsToStrict = Data.ByteString.Lazy.toStrict
 #else
-bsToStrict = Data.ByteString. Data.ByteString.Lazy.toChunks
+bsToStrict = Data.ByteString.concat Data.ByteString.Lazy.toChunks
 #endif
