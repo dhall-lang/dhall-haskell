@@ -8,4 +8,4 @@ source-repository-package
 source-repository-package
     type: git
     location: https://github.com/vijayphoenix/HsYAML-aeson.git
-    tag: b4808ee9bd7e73eeafc7f6695e98a8c591d68f11
+    tag: e269cc466b43767a6b972a9ce946419641a80e1d
