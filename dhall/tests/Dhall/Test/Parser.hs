@@ -35,69 +35,12 @@ binaryDecodeDirectory = "./dhall-lang/tests/binary-decode"
 
 getTests :: IO TestTree
 getTests = do
-    let successFiles = do
-            path <- Turtle.lstree (parseDirectory </> "success")
-
-            let skip =
-                    -- This is a bug created by a parsing performance
-                    -- improvement
-                    [ parseDirectory </> "success/unit/MergeParenAnnotationA.dhall"
-
-                    -- https://github.com/dhall-lang/dhall-haskell/issues/1185
-                    , parseDirectory </> "success/letA.dhall"
-                    , parseDirectory </> "success/unit/LetNestedA.dhall"
-                    ]
-
-            Monad.guard (path `notElem` skip)
-
-            return path
+    let successFiles = Turtle.lstree (parseDirectory </> "success")
 
     successTests <- do
         Test.Util.discover (Turtle.chars <* "A.dhall") shouldParse successFiles
 
-    let failureFiles = do
-            path <- Turtle.lstree (parseDirectory </> "failure")
-
-            let skip =
-                    [ -- These two unexpected successes are due to not correctly
-                      -- requiring non-empty whitespace after the `:` in a type
-                      -- annotation
-                      parseDirectory </> "failure/annotation.dhall"
-                    , parseDirectory </> "failure/unit/ImportEnvWrongEscape.dhall"
-
-                      -- Other spacing related unexpected successes:
-                    , parseDirectory </> "failure/spacing/AnnotationNoSpace.dhall"
-                    , parseDirectory </> "failure/spacing/ApplicationNoSpace1.dhall"
-                    , parseDirectory </> "failure/spacing/ApplicationNoSpace2.dhall"
-                    , parseDirectory </> "failure/spacing/AssertNoSpace.dhall"
-                    , parseDirectory </> "failure/spacing/ForallNoSpace.dhall"
-                    , parseDirectory </> "failure/spacing/ImportAltNoSpace.dhall"
-                    , parseDirectory </> "failure/spacing/ImportHashedNoSpace.dhall"
-                    , parseDirectory </> "failure/spacing/LambdaNoSpace.dhall"
-                    , parseDirectory </> "failure/spacing/LetAnnotNoSpace.dhall"
-                    , parseDirectory </> "failure/spacing/ListLitEmptyNoSpace.dhall"
-                    , parseDirectory </> "failure/spacing/MergeAnnotationNoSpace3.dhall"
-                    , parseDirectory </> "failure/spacing/MergeNoSpace2.dhall"
-                    , parseDirectory </> "failure/spacing/NaturalPlusNoSpace.dhall"
-                    , parseDirectory </> "failure/spacing/RecordTypeNoSpace.dhall"
-                    , parseDirectory </> "failure/spacing/ToMapAnnotNoSpace.dhall"
-                    , parseDirectory </> "failure/spacing/UnionTypeNoSpace.dhall"
-
-                    , parseDirectory </> "failure/ImportHeadersExteriorHash.dhall"
-
-                      -- For parsing performance reasons the implementation
-                      -- treats a missing type annotation on an empty list as
-                      -- as a type-checking failure instead of a parse failure,
-                      -- but this might be fixable.
-                    , parseDirectory </> "failure/unit/ListLitEmptyAnnotation.dhall"
-                      -- The same performance improvements also broke the
-                      -- precedence of parsing empty list literals
-                    , parseDirectory </> "failure/unit/ListLitEmptyPrecedence.dhall"
-                    ]
-
-            Monad.guard (path `notElem` skip)
-
-            return path
+    let failureFiles = Turtle.lstree (parseDirectory </> "failure")
 
     failureTests <- do
         Test.Util.discover (Turtle.chars <> ".dhall") shouldNotParse failureFiles
@@ -108,14 +51,7 @@ getTests = do
     binaryDecodeSuccessTests <- do
         Test.Util.discover (Turtle.chars <* "A.dhallb") shouldDecode binaryDecodeSuccessFiles
 
-    let binaryDecodeFailureFiles = do
-            path <- Turtle.lstree (binaryDecodeDirectory </> "failure")
-
-            let skip = []
-
-            Monad.guard (path `notElem` skip)
-
-            return path
+    let binaryDecodeFailureFiles = Turtle.lstree (binaryDecodeDirectory </> "failure")
 
     binaryDecodeFailureTests <- do
         Test.Util.discover (Turtle.chars <* ".dhallb") shouldNotDecode binaryDecodeFailureFiles
@@ -132,9 +68,19 @@ getTests = do
 
 shouldParse :: Text -> TestTree
 shouldParse path = do
+    let skip =
+            -- This is a bug created by a parsing performance
+            -- improvement
+            [ parseDirectory </> "success/unit/MergeParenAnnotation"
+
+            -- https://github.com/dhall-lang/dhall-haskell/issues/1185
+            , parseDirectory </> "success/let"
+            , parseDirectory </> "success/unit/LetNested"
+            ]
+
     let pathString = Text.unpack path
 
-    Tasty.HUnit.testCase pathString $ do
+    Test.Util.testCase path skip $ do
         text <- Text.IO.readFile (pathString <> "A.dhall")
 
         encoded <- ByteString.Lazy.readFile (pathString <> "B.dhallb")
@@ -157,9 +103,47 @@ shouldParse path = do
 
 shouldNotParse :: Text -> TestTree
 shouldNotParse path = do
+    let skip =
+            [ -- These two unexpected successes are due to not correctly
+              -- requiring non-empty whitespace after the `:` in a type
+              -- annotation
+              parseDirectory </> "failure/annotation.dhall"
+            , parseDirectory </> "failure/unit/ImportEnvWrongEscape.dhall"
+
+              -- Other spacing related unexpected successes:
+            , parseDirectory </> "failure/spacing/AnnotationNoSpace.dhall"
+            , parseDirectory </> "failure/spacing/ApplicationNoSpace1.dhall"
+            , parseDirectory </> "failure/spacing/ApplicationNoSpace2.dhall"
+            , parseDirectory </> "failure/spacing/AssertNoSpace.dhall"
+            , parseDirectory </> "failure/spacing/ForallNoSpace.dhall"
+            , parseDirectory </> "failure/spacing/ImportAltNoSpace.dhall"
+            , parseDirectory </> "failure/spacing/ImportHashedNoSpace.dhall"
+            , parseDirectory </> "failure/spacing/LambdaNoSpace.dhall"
+            , parseDirectory </> "failure/spacing/LetAnnotNoSpace.dhall"
+            , parseDirectory </> "failure/spacing/ListLitEmptyNoSpace.dhall"
+            , parseDirectory </> "failure/spacing/MergeAnnotationNoSpace3.dhall"
+            , parseDirectory </> "failure/spacing/MergeNoSpace2.dhall"
+            , parseDirectory </> "failure/spacing/NaturalPlusNoSpace.dhall"
+            , parseDirectory </> "failure/spacing/RecordTypeNoSpace.dhall"
+            , parseDirectory </> "failure/spacing/ToMapAnnotNoSpace.dhall"
+            , parseDirectory </> "failure/spacing/UnionTypeNoSpace.dhall"
+
+            , parseDirectory </> "failure/ImportHeadersExteriorHash.dhall"
+
+              -- For parsing performance reasons the implementation
+              -- treats a missing type annotation on an empty list as
+              -- as a type-checking failure instead of a parse failure,
+              -- but this might be fixable.
+            , parseDirectory </> "failure/unit/ListLitEmptyAnnotation.dhall"
+
+              -- The same performance improvements also broke the
+              -- precedence of parsing empty list literals
+            , parseDirectory </> "failure/unit/ListLitEmptyPrecedence.dhall"
+            ]
+
     let pathString = Text.unpack path
 
-    Tasty.HUnit.testCase pathString (do
+    Test.Util.testCase path skip (do
         bytes <- ByteString.readFile pathString
 
         case Text.Encoding.decodeUtf8' bytes of
@@ -167,13 +151,15 @@ shouldNotParse path = do
             Right text -> do
                 case Parser.exprFromText mempty text of
                     Left  _ -> return ()
-                    Right _ -> fail "Unexpected successful parser" )
+                    Right _ -> Tasty.HUnit.assertFailure "Unexpected successful parse" )
 
 shouldDecode :: Text -> TestTree
 shouldDecode pathText = do
+    let skip = []
+
     let pathString = Text.unpack pathText
 
-    Tasty.HUnit.testCase pathString (do
+    Test.Util.testCase pathText skip (do
         bytes <- ByteString.Lazy.readFile (pathString <> "A.dhallb")
 
         term <- Core.throws (Serialise.deserialiseOrFail bytes)
@@ -194,13 +180,15 @@ shouldDecode pathText = do
 
 shouldNotDecode :: Text -> TestTree
 shouldNotDecode pathText = do
+    let skip = []
+
     let pathString = Text.unpack pathText
 
-    Tasty.HUnit.testCase pathString (do
+    Test.Util.testCase pathText skip (do
         bytes <- ByteString.Lazy.readFile (pathString <> ".dhallb")
 
         term <- Core.throws (Serialise.deserialiseOrFail bytes)
 
         case Binary.decodeExpression term :: Either Binary.DecodingFailure (Expr X Import) of
             Left _ -> return ()
-            Right _ -> fail "Unexpected successful decode" )
+            Right _ -> Tasty.HUnit.assertFailure "Unexpected successful decode" )

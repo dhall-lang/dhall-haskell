@@ -10,7 +10,6 @@ import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
 
 import qualified Control.Exception as Exception
-import qualified Control.Monad     as Monad
 import qualified Data.Text         as Text
 import qualified Dhall.Core        as Core
 import qualified Dhall.Parser      as Parser
@@ -25,33 +24,11 @@ typecheckDirectory = "./dhall-lang/tests/typecheck"
 
 getTests :: IO TestTree
 getTests = do
-    let successTestFiles = do
-            path <- Turtle.lstree (typecheckDirectory </> "success")
-            let skip = [ typecheckDirectory </> "success/preferMixedRecordsA.dhall"
-                       , typecheckDirectory </> "success/preferMixedRecordsSameFieldA.dhall"
-                       , typecheckDirectory </> "success/preludeA.dhall" -- fixed in dhall-lang/dhall-lang#708
-                       , typecheckDirectory </> "success/RecordTypeMixedKindsA.dhall"
-                       , typecheckDirectory </> "success/simple/combineMixedRecordsA.dhall"
-                       , typecheckDirectory </> "success/simple/RecordMixedKinds2A.dhall"
-                       , typecheckDirectory </> "success/simple/RecordMixedKindsA.dhall"
-                       , typecheckDirectory </> "success/simple/RecursiveRecordMergeMixedKindsA.dhall"
-                       , typecheckDirectory </> "success/simple/RightBiasedRecordMergeMixedKindsA.dhall"
-                       ]
-            Monad.guard (path `notElem` skip)
-
-            return path
+    let successTestFiles = Turtle.lstree (typecheckDirectory </> "success")
 
     successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest successTestFiles
 
-    let failureTestFiles = do
-            path <- Turtle.lstree (typecheckDirectory </> "failure")
-
-            let skip = [ typecheckDirectory </> "failure/unit/MergeEmptyNeedsDirectAnnotation1.dhall"
-                       ]
-
-            Monad.guard (path `notElem` skip)
-
-            return path
+    let failureTestFiles = Turtle.lstree (typecheckDirectory </> "failure")
 
     failureTests <- Test.Util.discover (Turtle.chars <> ".dhall") failureTest failureTestFiles
 
@@ -63,26 +40,48 @@ getTests = do
     return testTree
 
 successTest :: Text -> TestTree
-successTest prefix =
-    Tasty.HUnit.testCase (Text.unpack prefix) $ do
+successTest prefix = do
+    let skip = [ typecheckDirectory </> "success/preferMixedRecords"
+               , typecheckDirectory </> "success/preferMixedRecordsSameField"
+               , typecheckDirectory </> "success/prelude" -- fixed in dhall-lang/dhall-lang#708
+               , typecheckDirectory </> "success/RecordTypeMixedKinds"
+               , typecheckDirectory </> "success/simple/combineMixedRecords"
+               , typecheckDirectory </> "success/simple/RecordMixedKinds2"
+               , typecheckDirectory </> "success/simple/RecordMixedKinds"
+               , typecheckDirectory </> "success/simple/RecursiveRecordMergeMixedKinds"
+               , typecheckDirectory </> "success/simple/RightBiasedRecordMergeMixedKinds"
+               ]
+
+    Test.Util.testCase prefix skip $ do
         let actualCode   = Test.Util.toDhallPath (prefix <> "A.dhall")
         let expectedCode = Test.Util.toDhallPath (prefix <> "B.dhall")
 
-        actualExpr <- Core.throws (Parser.exprFromText mempty actualCode)
-
+        actualExpr   <- Core.throws (Parser.exprFromText mempty actualCode  )
         expectedExpr <- Core.throws (Parser.exprFromText mempty expectedCode)
 
         let annotatedExpr = Core.Annot actualExpr expectedExpr
 
-        resolvedExpr <- Test.Util.load annotatedExpr
+        tryResolvedExpr <- Exception.try (Test.Util.load annotatedExpr)
 
+        resolvedExpr <- case tryResolvedExpr of
+            Left  exception    -> Tasty.HUnit.assertFailure (show (exception :: SomeException))
+            Right resolvedExpr -> return resolvedExpr
+
+        case TypeCheck.typeOf resolvedExpr of
+            Left  exception -> Tasty.HUnit.assertFailure (show exception)
+            Right _         -> return ()
+{-
         _ <- Core.throws (TypeCheck.typeOf resolvedExpr)
+-}
 
         return ()
 
 failureTest :: Text -> TestTree
 failureTest path = do
-    Tasty.HUnit.testCase (Text.unpack path) $ do
+    let skip = [ typecheckDirectory </> "failure/unit/MergeEmptyNeedsDirectAnnotation1.dhall"
+               ]
+
+    Test.Util.testCase path skip $ do
         let dhallPath = Test.Util.toDhallPath path
 
         expression <- Core.throws (Parser.exprFromText mempty dhallPath)
@@ -98,5 +97,5 @@ failureTest path = do
         typeChecked <- Exception.handle handler io
 
         if typeChecked
-            then fail (Text.unpack path <> " should not have type-checked")
+            then Tasty.HUnit.assertFailure (Text.unpack path <> " should not have type-checked")
             else return ()
