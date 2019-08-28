@@ -61,28 +61,24 @@ renderPrettyHttpException _ (InvalidUrlException _ r) =
       "\n"
   <>  "\ESC[1;31mError\ESC[0m: Invalid URL\n"
   <>  "\n"
-  <>  "↳ " <> show r <> "\n"
+  <>  "URL: " <> show r <> "\n"
 renderPrettyHttpException url (HttpExceptionRequest _ e) =
   case e of
     ConnectionFailure _ ->
           "\n"
       <>  "\ESC[1;31mError\ESC[0m: Remote host not found\n"
       <>  "\n"
-      <>  "URL:\n"
-      <>  "\n"
-      <>  "↳ " <> url <> "\n"
+      <>  "URL: " <> url <> "\n"
     InvalidDestinationHost host ->
           "\n"
       <>  "\ESC[1;31mError\ESC[0m: Invalid remote host name:\n"
       <>  "\n"
-      <>  "↳ " <> show host <> "\n"
+      <>  "Host: " <> show host <> "\n"
     ResponseTimeout ->
           "\n"
       <>  "\ESC[1;31mError\ESC[0m: The remote host took too long to respond\n"
       <>  "\n"
-      <>  "URL:\n"
-      <>  "\n"
-      <>  "↳ " <> url <> "\n"
+      <>  "URL: " <> url <> "\n"
     StatusCodeException response body -> prefix <> suffix
       where
         prefix
@@ -113,13 +109,9 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
 
         suffix =
                 "\n"
-            <>  "HTTP status code:\n"
+            <>  "HTTP status code: " <> show statusCode <> "\n"
             <>  "\n"
-            <>  "↳ " <> show statusCode <> "\n"
-            <>  "\n"
-            <>  "URL:\n"
-            <>  "\n"
-            <>  "↳ " <> url <> "\n"
+            <>  "URL: " <> url <> "\n"
             <>  message
 
         statusCode =
@@ -170,18 +162,16 @@ renderPrettyHttpException url e = case e of
             "\n"
         <>  "\ESC[1;31mError\ESC[0m: Wrong host:\n"
         <>  "\n"
-        <>  "↳ " <> show e' <> "\n"
+        <>  "Host: " <> show e' <> "\n"
     InvalidDestinationHost host ->
             "\n"
         <>  "\ESC[1;31mError\ESC[0m: Invalid host name:\n"
         <>  "\n"
-        <>  "↳ " <> show host <> "\n"
+        <>  "Host: " <> show host <> "\n"
     ResponseTimeout ->
             "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
         <>  "\n"
-        <>  "URL:\n"
-        <>  "\n"
-        <>  "↳ " <> url <> "\n"
+        <>  "URL: " <> url <> "\n"
     e' ->   "\n"
         <>  show e' <> "\n"
 #endif
