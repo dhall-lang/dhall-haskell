@@ -4,9 +4,13 @@ module Dhall.Test.Diff where
 
 import Data.Monoid ((<>))
 import Data.Text (Text)
+import Data.Text.Prettyprint.Doc (Doc)
+import Dhall.Core (Expr, Import)
+import Dhall.Pretty (Ann)
+import Dhall.Src (Src)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
-import Turtle (FilePath)
+import Turtle (FilePath, (</>))
 
 import qualified Data.Text                             as Text
 import qualified Data.Text.IO                          as Text.IO
@@ -25,14 +29,16 @@ diffDirectory = "./tests/diff"
 
 getTests :: IO TestTree
 getTests = do
-    diffTests <- Test.Util.discover (Turtle.chars <* "A.dhall") diffTest (Turtle.lstree diffDirectory)
+    normalizedDiffTests <- Test.Util.discover (Turtle.chars <* "A.dhall") (diffTest Diff.diffNormalized) (Turtle.lstree (diffDirectory </> "normalized"))
 
-    let testTree = Tasty.testGroup "diff tests" [ diffTests ]
+    nonNormalizedDiffTests <- Test.Util.discover (Turtle.chars <* "A.dhall") (diffTest Diff.diff) (Turtle.lstree (diffDirectory </> "non-normalized"))
+
+    let testTree = Tasty.testGroup "diff tests" [ normalizedDiffTests, nonNormalizedDiffTests ]
 
     return testTree
 
-diffTest :: Text -> TestTree
-diffTest prefix =
+diffTest :: (Expr Src Import -> Expr Src Import -> Doc Ann) -> Text -> TestTree
+diffTest diffFunction prefix =
     Tasty.HUnit.testCase (Text.unpack prefix) $ do
         let leftFile  = Text.unpack (prefix <> "A.dhall")
         let rightFile = Text.unpack (prefix <> "B.dhall")
@@ -48,7 +54,7 @@ diffTest prefix =
         expectedDiffText <- Text.IO.readFile diffFile
 
         let actualDiffDocument =
-                Diff.diffNormalized leftInput rightInput <> "\n"
+                diffFunction leftInput rightInput <> "\n"
 
         let options =
                 Pretty.LayoutOptions
