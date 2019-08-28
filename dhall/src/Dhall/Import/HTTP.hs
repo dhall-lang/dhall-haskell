@@ -109,12 +109,14 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
                 <>  "\ESC[1;31mError\ESC[0m: Upstream timeout\n"
             | otherwise =
                     "\n"
-                <>  "\ESC[1;31mError\ESC[0m: Unexpected HTTP status code:\n"
-                <>  "\n"
-                <>  "↳ " <> show statusCode <> "\n"
+                <>  "\ESC[1;31mError\ESC[0m: HTTP request failure\n"
 
         suffix =
                 "\n"
+            <>  "HTTP status code:\n"
+            <>  "\n"
+            <>  "↳ " <> show statusCode <> "\n"
+            <>  "\n"
             <>  "URL:\n"
             <>  "\n"
             <>  "↳ " <> url <> "\n"
