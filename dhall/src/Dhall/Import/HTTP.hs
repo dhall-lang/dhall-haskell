@@ -94,7 +94,7 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
                 <>  "\ESC[1;31mError\ESC[0m: Access forbidden\n"
             | statusCode == 404 =
                     "\n"
-                <>  "\ESC[1;31mError\ESC[0m: Remote file missing\n"
+                <>  "\ESC[1;31mError\ESC[0m: Remote file not found\n"
             | statusCode == 500 =
                     "\n"
                 <>  "\ESC[1;31mError\ESC[0m: Server-side failure\n"
