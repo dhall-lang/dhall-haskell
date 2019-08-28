@@ -83,27 +83,84 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
       <>  "URL:\n"
       <>  "\n"
       <>  "↳ " <> url <> "\n"
-    StatusCodeException response _
-        | statusCode == 404 ->
-                "\n"
-            <>  "\ESC[1;31mError\ESC[0m: Remote file not found\n"
-            <>  "\n"
-            <>  "URL:\n"
-            <>  "\n"
-            <>  "↳ " <> url <> "\n"
-        | otherwise ->
-                "\n"
-            <>  "\ESC[1;31mError\ESC[0m: Unexpected HTTP status code:\n"
-            <>  "\n"
-            <>  "↳ " <> show statusCode <> "\n"
-            <>  "\n"
-            <>  "URL:\n"
-            <>  "\n"
-            <>  "↳ " <> url <> "\n"
+    StatusCodeException response body -> prefix <> suffix
       where
+        prefix
+            | statusCode == 401 =
+                    "\n"
+                <>  "\ESC[1;31mError\ESC[0m: Access unauthorized\n"
+            | statusCode == 403 =
+                    "\n"
+                <>  "\ESC[1;31mError\ESC[0m: Access forbidden\n"
+            | statusCode == 404 =
+                    "\n"
+                <>  "\ESC[1;31mError\ESC[0m: Remote file missing\n"
+            | statusCode == 500 =
+                    "\n"
+                <>  "\ESC[1;31mError\ESC[0m: Server-side failure\n"
+            | statusCode == 502 =
+                    "\n"
+                <>  "\ESC[1;31mError\ESC[0m: Upstream failure\n"
+            | statusCode == 503 =
+                    "\n"
+                <>  "\ESC[1;31mError\ESC[0m: Server temporarily unavailable\n"
+            | statusCode == 504 =
+                    "\n"
+                <>  "\ESC[1;31mError\ESC[0m: Upstream timeout\n"
+            | otherwise =
+                    "\n"
+                <>  "\ESC[1;31mError\ESC[0m: Unexpected HTTP status code:\n"
+                <>  "\n"
+                <>  "↳ " <> show statusCode <> "\n"
+
+        suffix =
+                "\n"
+            <>  "URL:\n"
+            <>  "\n"
+            <>  "↳ " <> url <> "\n"
+            <>  message
+
         statusCode =
             Network.HTTP.Types.statusCode
                 (HTTP.responseStatus response)
+
+        message =
+            case Data.Text.Encoding.decodeUtf8' body of
+                Left _ ->
+                        "\n"
+                    <>  "Message (non-UTF8 bytes):\n"
+                    <>  "\n"
+                    <>  truncatedBodyString <> "\n"
+                  where
+                    bodyString = show body
+
+                    dots = "…"
+
+                    truncatedLength = 80 - length dots
+
+                    truncatedBodyString
+                        | truncatedLength < length bodyString =
+                            take truncatedLength bodyString <> dots
+                        | otherwise =
+                            bodyString
+                Right "" ->
+                    ""
+                Right bodyText ->
+                        "\n"
+                    <>  "Message:\n"
+                    <>  "\n"
+                    <>  Text.unpack prefixedText
+                  where
+                    prefixedLines =
+                        zipWith combine prefixes (Text.lines bodyText)
+                      where
+                        prefixes =
+                            map (Text.pack . show) [(1 ::Int)..7] ++ [ "…" ]
+
+                        combine n line = n <> "│ " <> line
+
+                    prefixedText = Text.unlines prefixedLines
+
     e' -> "\n" <> show e' <> "\n"
 #else
 renderPrettyHttpException url e = case e of
