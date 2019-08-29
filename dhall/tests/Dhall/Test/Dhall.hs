@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE DeriveTraversable   #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE OverloadedLists     #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -18,8 +19,11 @@ module Dhall.Test.Dhall where
 import Control.Exception (SomeException, try)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Monoid ((<>))
+import Data.Sequence (Seq)
 import Data.String (fromString)
+import Data.Scientific (Scientific)
 import Data.Text (Text)
+import Data.Vector (Vector)
 import Dhall (Inject, Interpret)
 import Dhall.Core (Expr(..))
 import GHC.Generics (Generic)
@@ -28,6 +32,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import qualified Data.Text
+import qualified Data.Text.Lazy
 import qualified Dhall
 import qualified Dhall.Core
 import qualified Dhall.Import
@@ -54,6 +59,8 @@ tests =
      , shouldHaveWorkingGenericAuto
      , shouldHandleUnionsCorrectly
      , shouldTreatAConstructorStoringUnitAsEmptyAlternative
+     , shouldConvertDhallToHaskellCorrectly 
+     , shouldConvertHaskellToDhallCorrectly
      ]
 
 data MyType = MyType { foo :: String , bar :: Natural }
@@ -239,3 +246,64 @@ shouldHandleUnionsCorrectly =
         resolvedExpression <- Dhall.Import.assertNoImports parsedExpression
 
         Dhall.Core.denote resolvedExpression @=? Dhall.embed Dhall.inject value
+
+shouldConvertDhallToHaskellCorrectly :: TestTree
+shouldConvertDhallToHaskellCorrectly =
+    testGroup
+        "Marshall Dhall code to Haskell"
+        [ "True" `correspondsTo` True
+        , "False" `correspondsTo` False
+        , "2" `correspondsTo` (2 :: Natural)
+        , "+2" `correspondsTo` (2 :: Integer)
+        , "2.0" `correspondsTo` (2.0 :: Double)
+        , "2.0" `correspondsTo` (2.0 :: Scientific)
+        , "\"ABC\"" `correspondsTo` ("ABC" :: Data.Text.Text)
+        , "\"ABC\"" `correspondsTo` ("ABC" :: Data.Text.Lazy.Text)
+        , "\"ABC\"" `correspondsTo` ("ABC" :: String)
+        , "Some 2" `correspondsTo` (Just 2 :: Maybe Natural)
+        , "None Natural" `correspondsTo` (Nothing :: Maybe Natural)
+        , "[ 2, 3, 5 ]" `correspondsTo` ([ 2, 3, 5 ] :: Seq Natural)
+        , "[ 2, 3, 5 ]" `correspondsTo` ([ 2, 3, 5 ] :: [Natural])
+        , "[ 2, 3, 5 ]" `correspondsTo` ([ 2, 3, 5 ] :: Vector Natural)
+        , "[] : List Natural" `correspondsTo` ([] :: [Natural])
+        , "{=}" `correspondsTo` ()
+        , "{ _1 = True, _2 = {=} }" `correspondsTo` (True, ())
+        ]
+  where
+    correspondsTo :: (Eq a, Interpret a, Show a) => Text -> a -> TestTree
+    dhallCode `correspondsTo` expectedHaskellValue =
+      testCase "Marshall Dhall code to Haskell" $ do
+          actualHaskellValue <- Dhall.input Dhall.auto dhallCode
+
+          expectedHaskellValue @=? actualHaskellValue
+
+shouldConvertHaskellToDhallCorrectly :: TestTree
+shouldConvertHaskellToDhallCorrectly =
+    testGroup
+        "Marshall Haskell to Dhall code"
+        [ "True" `correspondsTo` True
+        , "False" `correspondsTo` False
+        , "2" `correspondsTo` (2 :: Natural)
+        , "+2" `correspondsTo` (2 :: Integer)
+        , "2.0" `correspondsTo` (2.0 :: Double)
+--      , "2.0" `correspondsTo` (2.0 :: Scientific)
+        , "\"ABC\"" `correspondsTo` ("ABC" :: Data.Text.Text)
+        , "\"ABC\"" `correspondsTo` ("ABC" :: Data.Text.Lazy.Text)
+--      , "\"ABC\"" `correspondsTo` ("ABC" :: String)
+        , "Some 2" `correspondsTo` (Just 2 :: Maybe Natural)
+        , "None Natural" `correspondsTo` (Nothing :: Maybe Natural)
+        , "[ 2, 3, 5 ]" `correspondsTo` ([ 2, 3, 5 ] :: Seq Natural)
+        , "[ 2, 3, 5 ]" `correspondsTo` ([ 2, 3, 5 ] :: [Natural])
+        , "[ 2, 3, 5 ]" `correspondsTo` ([ 2, 3, 5 ] :: Vector Natural)
+        , "[] : List Natural" `correspondsTo` ([] :: [Natural])
+        , "{=}" `correspondsTo` ()
+        , "{ _1 = True, _2 = {=} }" `correspondsTo` (True, ())
+        ]
+  where
+    correspondsTo :: Inject a => Text -> a -> TestTree
+    expectedDhallCode `correspondsTo` haskellValue =
+        testCase "Marshall Haskell to Dhall code" $ do
+            let actualDhallCode =
+                    Dhall.Core.pretty (Dhall.embed Dhall.inject haskellValue)
+
+            expectedDhallCode @=? actualDhallCode

@@ -1426,7 +1426,11 @@ instance Inject a => Inject (Maybe a) where
 instance Inject a => Inject (Seq a) where
     injectWith options = InputType embedOut declaredOut
       where
-        embedOut xs = ListLit (Just declaredIn) (fmap embedIn xs)
+        embedOut xs = ListLit listType (fmap embedIn xs)
+          where
+            listType
+                | null xs   = Just (App List declaredIn)
+                | otherwise = Nothing
 
         declaredOut = App List declaredIn
 
