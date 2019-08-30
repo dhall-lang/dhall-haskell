@@ -8,7 +8,6 @@ import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
 
-import qualified Control.Monad     as Monad
 import qualified Data.Text         as Text
 import qualified Data.Text.IO      as Text.IO
 import qualified Dhall.Core        as Core
@@ -25,22 +24,7 @@ typeInferenceDirectory = "./dhall-lang/tests/type-inference"
 
 getTests :: IO TestTree
 getTests = do
-    let successTestFiles = do
-            path <- Turtle.lstree (typeInferenceDirectory </> "success")
-
-            let skip = [ -- We correctly infer the expected type @NaN ≡ NaN@ here,
-                         -- but the comparison between the inferred and the expected type
-                         -- fails due to `Expr`'s 'Eq' instance, which inherits the
-                         -- @NaN /= NaN@ inequality from 'Double'.
-                         typeInferenceDirectory </> "success/unit/AssertNaNA.dhall"
-                       , typeInferenceDirectory </> "success/unit/RecursiveRecordMergeBoolTypeA.dhall"
-                       , typeInferenceDirectory </> "success/simple/RecordTypeMixedKinds2A.dhall"
-                       , typeInferenceDirectory </> "success/simple/RecordTypeMixedKinds3A.dhall"
-                       ]
-
-            Monad.guard (path `notElem` skip)
-
-            return path
+    let successTestFiles = Turtle.lstree (typeInferenceDirectory </> "success")
 
     successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest successTestFiles
 
@@ -52,12 +36,24 @@ getTests = do
 
 successTest :: Text -> TestTree
 successTest prefix = do
-    Tasty.HUnit.testCase (Text.unpack prefix) $ do
+    let skip = [ -- We correctly infer the expected type @NaN ≡ NaN@ here,
+                 -- but the comparison between the inferred and the expected type
+                 -- fails due to `Expr`'s 'Eq' instance, which inherits the
+                 -- @NaN /= NaN@ inequality from 'Double'.
+                 typeInferenceDirectory </> "success/unit/AssertNaN"
+               , typeInferenceDirectory </> "success/unit/RecursiveRecordMergeBoolType"
+               , typeInferenceDirectory </> "success/simple/RecordTypeMixedKinds2"
+               , typeInferenceDirectory </> "success/simple/RecordTypeMixedKinds3"
+               ]
+
+    Test.Util.testCase prefix skip $ do
         value <- expr "A.dhall"
 
         expectedType <- expr "B.dhall"
 
-        inferredType <- Core.throws (TypeCheck.typeOf value)
+        inferredType <- case TypeCheck.typeOf value of
+            Left  exception    -> Tasty.HUnit.assertFailure (show exception)
+            Right inferredType -> return inferredType
 
         let message = "The inferred type did not match the expected type"
 
