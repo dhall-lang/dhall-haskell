@@ -1350,6 +1350,10 @@ instance Inject Text where
 
         declared = Text
 
+instance {-# OVERLAPS #-} Inject String where
+    injectWith options =
+        contramap Data.Text.pack (injectWith options :: InputType Text)
+
 instance Inject Natural where
     injectWith _ = InputType {..}
       where
@@ -1405,6 +1409,10 @@ instance Inject Double where
         embed = DoubleLit
 
         declared = Double
+
+instance Inject Scientific where
+    injectWith options =
+        contramap Data.Scientific.toRealFloat (injectWith options :: InputType Double)
 
 instance Inject () where
     injectWith _ = InputType {..}
