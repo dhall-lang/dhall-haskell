@@ -16,6 +16,7 @@ module Dhall.Test.Util
     , assertTypeChecks
     , assertDoesntTypeCheck
     , discover
+    , Dhall.Test.Util.testCase
     , toDhallPath
     ) where
 
@@ -34,16 +35,17 @@ import Test.Tasty (TestTree)
 import Turtle (FilePath, Pattern, Shell, fp)
 
 import qualified Control.Exception
-import qualified Control.Foldl     as Foldl
+import qualified Control.Foldl                    as Foldl
 import qualified Data.Functor
-import qualified Data.Text         as Text
+import qualified Data.Text                        as Text
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Test.Tasty        as Tasty
+import qualified Test.Tasty                       as Tasty
+import qualified Test.Tasty.ExpectedFailure       as Tasty.ExpectedFailure
 import qualified Turtle
 
 #ifndef WITH_HTTP
@@ -200,6 +202,13 @@ discover pattern buildTest paths = do
 
     return (Tasty.testGroup "discover" tests)
 
+testCase :: Text -> [ FilePath ] -> Assertion -> TestTree
+testCase prefix skip assertion =
+    if prefix `elem` map (Turtle.format fp) skip
+    then Tasty.ExpectedFailure.expectFail test
+    else test
+  where
+    test = Test.Tasty.HUnit.testCase (Text.unpack prefix) assertion
 
 {-| Path names on Windows are not valid Dhall paths due to using backslashes
     instead of forwardslashes to separate path components.  This utility fixes
