@@ -12,7 +12,6 @@
 module Dhall.Diff (
     -- * Diff
       Diff (..)
-    , diffExpression
     , diffNormalized
     , Dhall.Diff.diff
     ) where
@@ -153,17 +152,15 @@ rparen :: Diff
 rparen = token Internal.rparen
 
 -- | Render the difference between the normal form of two expressions
-diffNormalized :: (Eq a, Pretty a, ToTerm a) => Expr s a -> Expr s a -> Doc Ann
-diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
+diffNormalized :: (Eq a, Pretty a, ToTerm a) => Expr s a -> Expr s a -> Diff
+diffNormalized l0 r0 = Dhall.Diff.diffExpression l1 r1
   where
     l1 = Dhall.Core.alphaNormalize (Dhall.Core.normalize l0)
     r1 = Dhall.Core.alphaNormalize (Dhall.Core.normalize r0)
 
 -- | Render the difference between two expressions
-diff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
-diff l0 r0 = doc
-  where
-    Diff {..} = diffExpression l0 r0
+diff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diff = diffExpression
 
 diffPrimitive :: Eq a => (a -> Diff) -> a -> a -> Diff
 diffPrimitive f l r
@@ -210,7 +207,8 @@ diffInt :: Int -> Int -> Diff
 diffInt = diffPrimitive (token . Internal.prettyInt)
 
 diffVar :: Var -> Var -> Diff
-diffVar (V xL nL) (V xR nR) = format mempty label <> "@" <> natural
+diffVar (V xL nL) (V xR nR) =
+    format mempty label <> if same natural then mempty else "@" <> natural
   where
     label = diffLabel xL xR
 
@@ -680,14 +678,16 @@ diffExpression l@(Pi {}) r@(Pi {}) =
         Data.List.NonEmpty.cons (align doc) (docs cL cR)
       where
         doc | same docA && same docB = ignore
+            | same docA =
+                format mempty docB
             | otherwise =
-                forall
-            <>  lparen
-            <>  format " " docA
-            <>  colon
-            <>  " "
-            <>  format mempty docB
-            <>  rparen
+                    forall
+                <>  lparen
+                <>  format " " docA
+                <>  colon
+                <>  " "
+                <>  format mempty docB
+                <>  rparen
           where
             docA = diffLabel aL aR
 
