@@ -312,15 +312,8 @@ bracketed :: [Diff] -> Diff
 bracketed = enclosed (lbracket <> " ") (comma <> " ") rbracket
 
 diffText :: Text -> Text -> Diff
-diffText l r
-  | null parts         = "\"\""
-  | allDifferent parts = difference textSkeleton textSkeleton
-  | allSame parts      = textSkeleton
-  | otherwise          = "\"" <> foldMap prettyPart parts <> "\""
+diffText l r = "\"" <> foldMap prettyPart parts <> "\""
   where
-    allDifferent = not . any isBoth
-    allSame      = all isBoth
-
     -- TODO: check for color support from the TTY
     colorDiff colorCode chars =
             "\ESC["
@@ -394,12 +387,6 @@ diffList l r = bracketed (foldMap diffPart parts)
         -- Present in both
         Algo.Diff.Both _ _        ->
             pure ignore
-
--- Helper function to check when a diff part is present on both sides
-isBoth :: Algo.Diff.Diff a -> Bool
-isBoth p
-  | Algo.Diff.Both _ _ <- p = True
-  | otherwise               = False
 
 diffRecord
     :: (Eq a, Pretty a)
