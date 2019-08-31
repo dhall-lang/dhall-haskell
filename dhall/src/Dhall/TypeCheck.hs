@@ -840,7 +840,6 @@ data TypeMessage s a
     | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
     | MustCombineARecord Char (Expr s a) (Expr s a)
-    | RecordMismatch Char (Expr s a) (Expr s a) Const Const
     | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
     | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
     | FieldCollision Text
@@ -2267,62 +2266,6 @@ prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
         op   = pretty c
         txt0 = insert expr0
         txt1 = insert expr1
-
-prettyTypeMessage (RecordMismatch c expr0 expr1 const0 const1) = ErrorMessages {..}
-  where
-    short = "Record mismatch"
-
-    long =
-        "Explanation: You can only use the ❰" <> op <> "❱ operator to combine records if they both  \n\
-        \store terms or both store types.                                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────┐                                            \n\
-        \    │ { foo = 1 } " <> op <> " { baz = True } │  Valid: Both records store terms           \n\
-        \    └──────────────────────────────┘                                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────┐                                         \n\
-        \    │ { foo = Bool } " <> op <> " { bar = Text } │  Valid: Both records store types        \n\
-        \    └─────────────────────────────────┘                                         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you cannot combine two records if one of the records stores types and   \n\
-        \the other record stores terms.                                                  \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \      Record of terms                                                           \n\
-        \      ⇩                                                                         \n\
-        \    ┌──────────────────────────────┐                                            \n\
-        \    │ { foo = 1 } " <> op <> " { bar = Text } │  Invalid: Mixing terms and types           \n\
-        \    └──────────────────────────────┘                                            \n\
-        \                               ⇧                                                \n\
-        \                               Record of types                                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You tried to combine the following record:                                      \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... which stores " <> class0 <> ", with the following record:                   \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which stores " <> class1 <> ".                                              \n"
-      where
-        op   = pretty c
-
-        txt0 = insert expr0
-        txt1 = insert expr1
-
-        toClass Type = "terms"
-        toClass Kind = "types"
-        toClass Sort = "kinds"
-
-        class0 = toClass const0
-        class1 = toClass const1
 
 prettyTypeMessage (CombineTypesRequiresRecordType expr0 expr1) =
     ErrorMessages {..}
