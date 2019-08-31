@@ -41,9 +41,6 @@ successTest prefix = do
                  -- fails due to `Expr`'s 'Eq' instance, which inherits the
                  -- @NaN /= NaN@ inequality from 'Double'.
                  typeInferenceDirectory </> "success/unit/AssertNaN"
-               , typeInferenceDirectory </> "success/unit/RecursiveRecordMergeBoolType"
-               , typeInferenceDirectory </> "success/simple/RecordTypeMixedKinds2"
-               , typeInferenceDirectory </> "success/simple/RecordTypeMixedKinds3"
                ]
 
     Test.Util.testCase prefix skip $ do

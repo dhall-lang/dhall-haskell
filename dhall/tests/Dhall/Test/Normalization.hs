@@ -138,9 +138,7 @@ alphaNormalizationTest prefix = do
 -}
 unitTest :: Text -> TestTree
 unitTest prefix = do
-    let skip = [ normalizationDirectory </> "unit/RecursiveRecordMergeWithinFieldSelection3"
-               , normalizationDirectory </> "unit/RightBiasedMergeWithinFieldSelection3"
-               ]
+    let skip = []
 
     let prefixString = Text.unpack prefix
 

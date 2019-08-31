@@ -41,16 +41,7 @@ getTests = do
 
 successTest :: Text -> TestTree
 successTest prefix = do
-    let skip = [ typecheckDirectory </> "success/preferMixedRecords"
-               , typecheckDirectory </> "success/preferMixedRecordsSameField"
-               , typecheckDirectory </> "success/prelude" -- fixed in dhall-lang/dhall-lang#708
-               , typecheckDirectory </> "success/RecordTypeMixedKinds"
-               , typecheckDirectory </> "success/simple/combineMixedRecords"
-               , typecheckDirectory </> "success/simple/RecordMixedKinds2"
-               , typecheckDirectory </> "success/simple/RecordMixedKinds"
-               , typecheckDirectory </> "success/simple/RecursiveRecordMergeMixedKinds"
-               , typecheckDirectory </> "success/simple/RightBiasedRecordMergeMixedKinds"
-               ]
+    let skip = []
 
     Test.Util.testCase prefix skip $ do
         let actualCode   = Test.Util.toDhallPath (prefix <> "A.dhall")

@@ -23,10 +23,12 @@ module Dhall.TypeCheck (
 
 import Data.Void (Void, absurd)
 import Control.Exception (Exception)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Writer.Strict (execWriterT, tell)
 import Data.Functor (void)
 import Data.Monoid (Endo(..), First(..))
 import Data.Sequence (Seq, ViewL(..))
-import Data.Semigroup (Semigroup(..))
+import Data.Semigroup (Max(..), Semigroup(..))
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
@@ -451,47 +453,22 @@ typeWithA tpa = loop
                       (Pi "just" (Pi "_" "a" "optional")
                           (Pi "nothing" "optional" "optional") )
     loop ctx e@(Record    kts   ) = do
-        case Dhall.Map.uncons kts of
-            Nothing             -> return (Const Type)
-            Just (k0, t0, rest) -> do
-                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
-                c <- case s0 of
-                    Const c -> pure c
-                    _ -> Left (TypeError ctx e (InvalidFieldType k0 t0))
-                let process k t = do
-                        s <- fmap Dhall.Core.normalize (loop ctx t)
-                        case s of
-                            Const c' ->
-                                if c == c'
-                                then return ()
-                                else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 c'))
-                            _ -> Left (TypeError ctx e (InvalidFieldType k t))
-                Dhall.Map.unorderedTraverseWithKey_ process rest
-                return (Const c)
+        let process k t = do
+                s <- lift (fmap Dhall.Core.normalize (loop ctx t))
+                case s of
+                    Const c -> tell (Max c)
+                    _ -> lift (Left (TypeError ctx e (InvalidFieldType k t)))
+        Max c <- execWriterT (Dhall.Map.unorderedTraverseWithKey_ process kts)
+        return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
-        case Dhall.Map.uncons kvs of
-            Nothing             -> return (Record mempty)
-            Just (k0, v0, kvs') -> do
-                t0 <- loop ctx v0
-                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
-                c <- case s0 of
-                    Const c -> pure c
-                    _       -> Left (TypeError ctx e (InvalidFieldType k0 v0))
+        let process k v = do
+                t <- loop ctx v
+                s <- fmap Dhall.Core.normalize (loop ctx t)
+                case s of
+                    Const _ -> return t
+                    _ -> Left (TypeError ctx e (InvalidFieldType k t))
 
-                let process k v = do
-                        t <- loop ctx v
-                        s <- fmap Dhall.Core.normalize (loop ctx t)
-                        case s of
-                            Const c'
-                                | c == c'   -> return ()
-                                | otherwise -> Left (TypeError ctx e (FieldMismatch k v c k0 v0 c'))
-                            _ -> Left (TypeError ctx e (InvalidFieldType k t))
-
-                        return t
-
-                kts <- Dhall.Map.unorderedTraverseWithKey process kvs'
-
-                return (Record (Dhall.Map.insert k0 t0 kts))
+        Record <$> Dhall.Map.unorderedTraverseWithKey process kvs
     loop ctx e@(Union     kts   ) = do
         let nonEmpty k mt = First (fmap (\t -> (k, t)) mt)
 
@@ -540,20 +517,6 @@ typeWithA tpa = loop
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
 
-        ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
-        constX <- case ttKvsX of
-            Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
-
-        ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
-        constY <- case ttKvsY of
-            Const constY -> return constY
-            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
-
-        if constX == constY
-            then return ()
-            else Left (TypeError ctx e (RecordMismatch '∧' kvsX kvsY constX constY))
-
         let combineTypes ktsL ktsR = do
                 let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
                     combine k _ _ = Left (TypeError ctx e (FieldCollision k))
@@ -575,15 +538,7 @@ typeWithA tpa = loop
         cR <- case tR of
             Const cR -> return cR
             _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
-        let decide Type Type =
-                return Type
-            decide Kind Kind =
-                return Kind
-            decide Sort Sort =
-                return Sort
-            decide x y =
-                Left (TypeError ctx e (RecordTypeMismatch x y l r))
-        c <- decide cL cR
+        let c = max cL cR
 
         ktsL0 <- case l' of
             Record kts -> return kts
@@ -614,20 +569,6 @@ typeWithA tpa = loop
         ktsY  <- case tKvsY of
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
-
-        ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
-        constX <- case ttKvsX of
-            Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
-
-        ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
-        constY <- case ttKvsY of
-            Const constY -> return constY
-            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
-
-        if constX == constY
-            then return ()
-            else Left (TypeError ctx e (RecordMismatch '⫽' kvsX kvsY constX constY))
 
         return (Record (Dhall.Map.union ktsY ktsX))
     loop ctx e@(Merge kvsX kvsY mT₁) = do
@@ -890,13 +831,10 @@ data TypeMessage s a
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
     | InvalidFieldType Text (Expr s a)
-    | FieldAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
-    | FieldMismatch Text (Expr s a) Const Text (Expr s a) Const
     | InvalidAlternativeType Text (Expr s a)
     | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
     | MustCombineARecord Char (Expr s a) (Expr s a)
-    | RecordMismatch Char (Expr s a) (Expr s a) Const Const
     | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
     | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
     | FieldCollision Text
@@ -2106,122 +2044,6 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
         txt0 = insert k
         txt1 = insert expr0
 
-prettyTypeMessage (FieldAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
-  where
-    short = "Field annotation mismatch"
-
-    long =
-        "Explanation: Every record type annotates each field with a ❰Type❱ or a ❰Kind❱,  \n\
-        \like this:                                                                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────────────────────┐                            \n\
-        \    │ { foo : Natural, bar : Integer, baz : Text } │  Every field is annotated  \n\
-        \    └──────────────────────────────────────────────┘  with a ❰Type❱             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────┐                                              \n\
-        \    │ { foo : Type, bar : Type } │  Every field is annotated                    \n\
-        \    └────────────────────────────┘  with a ❰Kind❱                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, you cannot have a record type with both a ❰Type❱ and ❰Kind❱ annotation:\n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \              This is a ❰Type❱ annotation                                       \n\
-        \              ⇩                                                                 \n\
-        \    ┌───────────────────────────────┐                                           \n\
-        \    │ { foo : Natural, bar : Type } │  Invalid record type                      \n\
-        \    └───────────────────────────────┘                                           \n\
-        \                             ⇧                                                  \n\
-        \                             ... but this is a ❰Kind❱ annotation                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a record type with a field named:                                  \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... annotated with the following expression:                                    \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is a " <> level c1 <> " whereas another field named:                  \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n\
-        \                                                                                \n\
-        \... annotated with the following expression:                                    \n\
-        \                                                                                \n\
-        \" <> txt3 <> "\n\
-        \                                                                                \n\
-        \... is a " <> level c0 <> ", which does not match                               \n"
-      where
-        txt0 = insert k0
-        txt1 = insert expr0
-        txt2 = insert k1
-        txt3 = insert expr1
-
-        level Type = "❰Type❱"
-        level Kind = "❰Kind❱"
-        level Sort = "❰Sort❱"
-
-prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
-  where
-    short = "Field mismatch"
-
-    long =
-        "Explanation: Every record has fields that can be either terms or types, like    \n\
-        \this:                                                                           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────────────┐                                    \n\
-        \    │ { foo = 1, bar = True, baz = \"ABC\" } │  Every field is a term           \n\
-        \    └──────────────────────────────────────┘                                    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────┐                                           \n\
-        \    │ { foo = Natural, bar = Text } │  Every field is a type                    \n\
-        \    └───────────────────────────────┘                                           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, you cannot have a record that stores both terms and types:             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \              This is a term                                                    \n\
-        \              ⇩                                                                 \n\
-        \    ┌─────────────────────────┐                                                 \n\
-        \    │ { foo = 1, bar = Bool } │  Invalid record                                 \n\
-        \    └─────────────────────────┘                                                 \n\
-        \                       ⇧                                                        \n\
-        \                       ... but this is a type                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a record with a field named:                                       \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... whose value was:                                                            \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is a " <> level c1 <> " whereas another field named:                  \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n\
-        \                                                                                \n\
-        \... whose value was:                                                            \n\
-        \                                                                                \n\
-        \" <> txt3 <> "\n\
-        \                                                                                \n\
-        \... is a " <> level c0 <> ", which does not match                               \n"
-      where
-        txt0 = insert k0
-        txt1 = insert expr0
-        txt2 = insert k1
-        txt3 = insert expr1
-
-        level Type = "term"
-        level Kind = "type"
-        level Sort = "kind"
-
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
     short = "Invalid alternative type"
@@ -2439,62 +2261,6 @@ prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
         op   = pretty c
         txt0 = insert expr0
         txt1 = insert expr1
-
-prettyTypeMessage (RecordMismatch c expr0 expr1 const0 const1) = ErrorMessages {..}
-  where
-    short = "Record mismatch"
-
-    long =
-        "Explanation: You can only use the ❰" <> op <> "❱ operator to combine records if they both  \n\
-        \store terms or both store types.                                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────┐                                            \n\
-        \    │ { foo = 1 } " <> op <> " { baz = True } │  Valid: Both records store terms           \n\
-        \    └──────────────────────────────┘                                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────┐                                         \n\
-        \    │ { foo = Bool } " <> op <> " { bar = Text } │  Valid: Both records store types        \n\
-        \    └─────────────────────────────────┘                                         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you cannot combine two records if one of the records stores types and   \n\
-        \the other record stores terms.                                                  \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \      Record of terms                                                           \n\
-        \      ⇩                                                                         \n\
-        \    ┌──────────────────────────────┐                                            \n\
-        \    │ { foo = 1 } " <> op <> " { bar = Text } │  Invalid: Mixing terms and types           \n\
-        \    └──────────────────────────────┘                                            \n\
-        \                               ⇧                                                \n\
-        \                               Record of types                                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You tried to combine the following record:                                      \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... which stores " <> class0 <> ", with the following record:                   \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which stores " <> class1 <> ".                                              \n"
-      where
-        op   = pretty c
-
-        txt0 = insert expr0
-        txt1 = insert expr1
-
-        toClass Type = "terms"
-        toClass Kind = "types"
-        toClass Sort = "kinds"
-
-        class0 = toClass const0
-        class1 = toClass const1
 
 prettyTypeMessage (CombineTypesRequiresRecordType expr0 expr1) =
     ErrorMessages {..}
