@@ -85,9 +85,14 @@ Extra-Source-Files:
     dhall-lang/Prelude/Monoid
     dhall-lang/Prelude/Natural/build
     dhall-lang/Prelude/Natural/enumerate
+    dhall-lang/Prelude/Natural/equal
     dhall-lang/Prelude/Natural/even
     dhall-lang/Prelude/Natural/fold
+    dhall-lang/Prelude/Natural/greaterThan
+    dhall-lang/Prelude/Natural/greaterThanEqual
     dhall-lang/Prelude/Natural/isZero
+    dhall-lang/Prelude/Natural/lessThan
+    dhall-lang/Prelude/Natural/lessThanEqual
     dhall-lang/Prelude/Natural/odd
     dhall-lang/Prelude/Natural/package.dhall
     dhall-lang/Prelude/Natural/product
