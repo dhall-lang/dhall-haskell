@@ -96,7 +96,7 @@ import Data.Fix (Fix(..))
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (absurd)
-import Dhall.Core (Chunks(..), Const(..), Expr(..), Var(..))
+import Dhall.Core (Chunks(..), Const(..), Expr(..), MultiLet(..), Var(..))
 import Dhall.TypeCheck (X)
 import Nix.Atoms (NAtom(..))
 import Nix.Expr
@@ -230,7 +230,8 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- loop a
         b' <- loop b
         return (Fix (NBinary NApp a' b'))
-    loop (Let as b) = do
+    loop (Let x mA a0 b0) = do
+        let MultiLet as b = Dhall.Core.multiLet x mA a0 b0
         as' <- for as $ \a -> do
           val <- loop $ Dhall.Core.value a
           pure $ NamedVar [StaticKey $ Dhall.Core.variable a] val Nix.nullPos

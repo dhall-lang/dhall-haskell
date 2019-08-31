@@ -19,7 +19,6 @@ import Control.Monad.State.Strict ( evalStateT )
 -- For the MonadFail instance for StateT.
 import Control.Monad.Trans.Instances ()
 import Data.List ( isPrefixOf, nub )
-import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe ( mapMaybe )
 import Data.Semigroup ((<>))
 import Data.Text ( Text )
@@ -166,16 +165,12 @@ applyContext
     -> Dhall.Expr Dhall.Src Dhall.X
     -> Dhall.Expr Dhall.Src Dhall.X
 applyContext context expression =
-  case bindings of
-    []     -> expression
-    b : bs -> Dhall.Core.Let (b :| bs) expression
+    Dhall.Core.wrapInLets bindings expression
   where
     definitions = reverse $ Dhall.Context.toList context
 
-    convertBinding (variable, Binding {..}) = Dhall.Core.Binding {..}
-      where
-        annotation = Just bindingType
-        value      = bindingExpr
+    convertBinding (variable, Binding expr type_) =
+        Dhall.Core.Binding variable (Just type_) expr
 
     bindings = fmap convertBinding definitions
 

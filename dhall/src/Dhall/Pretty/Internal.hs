@@ -350,6 +350,19 @@ prettyVar :: Var -> Doc Ann
 prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
 prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyInt n))
 
+{-| Pretty-print an 'Expr' using the given 'CharacterSet'.
+
+'prettyCharacterSet' largely ignores 'Note's. 'Note's do however matter for
+the layout of let-blocks:
+
+>>> let inner = Let "x" Nothing (NaturalLit 1) (Var (V "x" 0)) :: Expr () ()
+>>> prettyCharacterSet ASCII (Let "y" Nothing (NaturalLit 2) inner)
+let y = 2 let x = 1 in x
+>>> prettyCharacterSet ASCII (Let "y" Nothing (NaturalLit 2) (Note () inner))
+let y = 2 in let x = 1 in x
+
+This means the structure of parsed let-blocks is preserved.
+-}
 prettyCharacterSet :: Pretty a => CharacterSet -> Expr s a -> Doc Ann
 prettyCharacterSet characterSet expression =
     Pretty.group (prettyExpression expression)
@@ -420,10 +433,12 @@ prettyCharacterSet characterSet expression =
                 ]
         docsShort (Note  _    c) = docsShort c
         docsShort             c  = [ prettyExpression c ]
-    prettyExpression (Let as b) =
+    prettyExpression (Let x mA a b0) =
         enclose' "" "" space Pretty.hardline
             (fmap duplicate (fmap docA (toList as)) ++ [ docB ])
       where
+        MultiLet as b = multiLet x mA a b0
+
         docA (Binding c Nothing e) =
             Pretty.group (Pretty.flatAlt long short)
           where
