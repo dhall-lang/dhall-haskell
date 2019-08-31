@@ -856,7 +856,6 @@ data TypeMessage s a
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
     | InvalidFieldType Text (Expr s a)
-    | FieldMismatch Text (Expr s a) Const Text (Expr s a) Const
     | InvalidAlternativeType Text (Expr s a)
     | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
@@ -2070,64 +2069,6 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
       where
         txt0 = insert k
         txt1 = insert expr0
-
-prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
-  where
-    short = "Field mismatch"
-
-    long =
-        "Explanation: Every record has fields that can be either terms or types, like    \n\
-        \this:                                                                           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────────────┐                                    \n\
-        \    │ { foo = 1, bar = True, baz = \"ABC\" } │  Every field is a term           \n\
-        \    └──────────────────────────────────────┘                                    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────┐                                           \n\
-        \    │ { foo = Natural, bar = Text } │  Every field is a type                    \n\
-        \    └───────────────────────────────┘                                           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, you cannot have a record that stores both terms and types:             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \              This is a term                                                    \n\
-        \              ⇩                                                                 \n\
-        \    ┌─────────────────────────┐                                                 \n\
-        \    │ { foo = 1, bar = Bool } │  Invalid record                                 \n\
-        \    └─────────────────────────┘                                                 \n\
-        \                       ⇧                                                        \n\
-        \                       ... but this is a type                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a record with a field named:                                       \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... whose value was:                                                            \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is a " <> level c1 <> " whereas another field named:                  \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n\
-        \                                                                                \n\
-        \... whose value was:                                                            \n\
-        \                                                                                \n\
-        \" <> txt3 <> "\n\
-        \                                                                                \n\
-        \... is a " <> level c0 <> ", which does not match                               \n"
-      where
-        txt0 = insert k0
-        txt1 = insert expr0
-        txt2 = insert k1
-        txt3 = insert expr1
-
-        level Type = "term"
-        level Kind = "type"
-        level Sort = "kind"
 
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
