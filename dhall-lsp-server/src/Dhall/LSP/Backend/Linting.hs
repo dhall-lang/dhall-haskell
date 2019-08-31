@@ -29,12 +29,11 @@ diagLetInLet _ = []
 
 -- Given a (noted) let block compute all unused variables in the block.
 unusedBindings :: Eq a => Expr s a -> [Text]
-unusedBindings (Note _ (Let bindings d)) = concatMap
-  (\case
-    Binding var _ _ : [] | not (V var 0 `freeIn` d) -> [var]
-    Binding var _ _ : (b : bs) | not (V var 0 `freeIn` Let (b :| bs) d) -> [var]
-    _ -> [])
-  (toList $ tails bindings)
+unusedBindings (Note _ (Let bindings d)) =
+  let go (Binding var _ _ : []) | not (V var 0 `freeIn` d) = [var]
+      go (Binding var _ _ : (b : bs)) | not (V var 0 `freeIn` Let (b :| bs) d) = [var]
+      go _ = []
+  in concatMap go (toList $ tails bindings)
 unusedBindings _ = []
 
 -- Diagnose unused let bindings.

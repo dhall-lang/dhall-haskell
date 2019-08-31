@@ -187,6 +187,7 @@ import Data.Aeson (Value(..), ToJSON(..))
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Text (Text)
+import Data.Text.Prettyprint.Doc (Pretty)
 import Dhall.Core (Expr)
 import Dhall.TypeCheck (X)
 import Dhall.Map (Map)
@@ -194,20 +195,24 @@ import Dhall.JSON.Util (pattern V)
 import Options.Applicative (Parser)
 import Prelude hiding (getContents)
 
-import qualified Data.Aeson          as Aeson
-import qualified Data.Foldable       as Foldable
-import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Aeson                            as Aeson
+import qualified Data.Foldable                         as Foldable
+import qualified Data.HashMap.Strict                   as HashMap
 import qualified Data.List
 import qualified Data.Map
 import qualified Data.Ord
 import qualified Data.Text
-import qualified Data.Vector         as Vector
-import qualified Dhall.Core          as Core
+import qualified Data.Text.Prettyprint.Doc             as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
+import qualified Data.Vector                           as Vector
+import qualified Dhall.Core                            as Core
 import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Optics
 import qualified Dhall.Parser
+import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
+import qualified Dhall.Util
 import qualified Options.Applicative
 import qualified System.FilePath
 
@@ -221,6 +226,7 @@ data CompileError
     = Unsupported (Expr X X)
     | SpecialDouble Double
     | BareNone
+    | InvalidInlineContents (Expr X X) (Expr X X)
 
 instance Show CompileError where
     show BareNone =
@@ -249,7 +255,7 @@ instance Show CompileError where
 
     show (SpecialDouble n) =
        Data.Text.unpack $
-            _ERROR <> ": " <> special <> " disallowed in JSON                                         \n\
+            _ERROR <> ": " <> special <> " disallowed in JSON                                \n\
             \                                                                                \n\
             \Explanation: The JSON standard does not define a canonical way to encode        \n\
             \❰NaN❱/❰Infinity❱/❰-Infinity❱.  You can fix this error by either:                \n\
@@ -275,12 +281,88 @@ instance Show CompileError where
             \                                                                                \n\
             \The following Dhall expression could not be translated to JSON:                 \n\
             \                                                                                \n\
-            \↳ " <> txt <> "                                                                 "
-      where
-        txt = Core.pretty e
+            \" <> insert e
+
+    show (InvalidInlineContents record alternativeContents) =
+        Data.Text.unpack $
+            _ERROR <> ": Union value is not compatible with ❰Inline❱ nesting.                \n\
+            \                                                                                \n\
+            \Explanation: You can use the ❰Inline❱ nesting to compactly encode a union while \n\
+            \preserving the name of the alternative. However the alternative must either be  \n\
+            \empty or contain a record value.                                                \n\
+            \                                                                                \n\
+            \For example:                                                                    \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \    ┌─────────────────────────────────────────────────┐                         \n\
+            \    │ let Example = < Empty | Record : { x : Bool } > │                         \n\
+            \    │                                                 │                         \n\
+            \    │ let Nesting = < Inline | Nested : Text >        │                         \n\
+            \    │                                                 │                         \n\
+            \    │ in  { field = \"name\"                            │                       \n\
+            \    │     , nesting = Nesting.Inline                  │                         \n\
+            \    │     , contents = Example.Empty                  │ An empty alternative    \n\
+            \    │     }                                           │ is ok.                  \n\
+            \    └─────────────────────────────────────────────────┘                         \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \... is converted to this JSON:                                                  \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \    ┌─────────────────────┐                                                     \n\
+            \    │ { \"name\": \"Empty\" } │                                                 \n\
+            \    └─────────────────────┘                                                     \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \    ┌──────────────────────────────────────────────┐                            \n\
+            \    │ ...                                          │                            \n\
+            \    │                                              │                            \n\
+            \    │ in  { field = \"name\"                         │                          \n\
+            \    │     , nesting = Nesting.Inline               │                            \n\
+            \    │     , contents = Example.Record { x = True } │ An alternative containing  \n\
+            \    │     }                                        │ a record value is ok.      \n\
+            \    └──────────────────────────────────────────────┘                            \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \... is converted to this JSON:                                                  \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \    ┌─────────────────────────────────┐                                         \n\
+            \    │ { \"name\": \"Record\", \"x\": true } │                                   \n\
+            \    └─────────────────────────────────┘                                         \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \This isn't valid:                                                               \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \    ┌──────────────────────────────────────────┐                                \n\
+            \    │ let Example = < Foo : Bool >             │                                \n\
+            \    │                                          │                                \n\
+            \    │ let Nesting = < Inline | Nested : Text > │                                \n\
+            \    │                                          │                                \n\
+            \    │ in  { field = \"name\"                     │                              \n\
+            \    │     , nesting = Nesting.Inline           │                                \n\
+            \    │     , contents = Example.Foo True        │ ❰True❱ is not a record         \n\
+            \    │     }                                    │                                \n\
+            \    └──────────────────────────────────────────┘                                \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \The following Dhall expression could not be translated to JSON:                 \n\
+            \                                                                                \n\
+            \" <> insert record <> "                                                         \n\
+            \                                                                                \n\
+            \... because                                                                     \n\
+            \                                                                                \n\
+            \" <> insert alternativeContents <> "                                            \n\
+            \                                                                                \n\
+            \... is not a record."
 
 _ERROR :: Data.Text.Text
-_ERROR = "\ESC[1;31mError\ESC[0m"
+_ERROR = Dhall.Util._ERROR
+
+insert :: Pretty a => a -> Text
+insert =
+    Pretty.renderStrict . Pretty.layoutPretty Dhall.Pretty.layoutOpts . Dhall.Util.insert
 
 instance Exception CompileError
 
@@ -371,33 +453,18 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                     ,   nesting
                     )
                  ] | isInlineNesting nesting
-                   , Just (alternativeName, Just (Core.RecordLit kvs)) <- getContents contents -> do
-                       let kvs' =
-                               Dhall.Map.insert
-                                   field
-                                   (Core.TextLit
-                                       (Core.Chunks
-                                           []
-                                           alternativeName
-                                       )
-                                   )
-                                   kvs
+                   , Just (alternativeName, mExpr) <- getContents contents -> do
+                       kvs0 <- case mExpr of
+                           Just (Core.RecordLit kvs) -> return kvs
+                           Just alternativeContents ->
+                               Left (InvalidInlineContents e alternativeContents)
+                           Nothing -> return mempty
 
-                       loop (Core.RecordLit kvs')
+                       let name = Core.TextLit (Core.Chunks [] alternativeName)
 
-                   | isInlineNesting nesting
-                   , Just (alternativeName, Nothing) <- getContents contents -> do
-                       let kvs =
-                               Dhall.Map.singleton
-                                   field
-                                   (Core.TextLit
-                                       (Core.Chunks
-                                           []
-                                           alternativeName
-                                       )
-                                   )
+                       let kvs1 = Dhall.Map.insert field name kvs0
 
-                       loop (Core.RecordLit kvs)
+                       loop (Core.RecordLit kvs1)
 
                 _ -> do
                     a' <- traverse loop a

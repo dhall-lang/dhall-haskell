@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UnicodeSyntax      #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -107,7 +108,7 @@ import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Map
 import qualified Dhall.Set
-import qualified Network.URI.Encode         as URI.Encode
+import qualified Network.URI                as URI
 import qualified Text.Printf
 
 
@@ -497,9 +498,23 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Eq, Ord, Foldable, Generic, Traversable, Show, Data, NFData)
+    deriving (Foldable, Generic, Traversable, Show, Data, NFData)
 -- NB: If you add a constructor to Expr, please also update the Arbitrary
 -- instance in Dhall.Test.QuickCheck.
+
+-- | Note that this 'Eq' instance inherits `Double`'s defects, e.g.
+--
+-- >>> nan = 0/0
+-- >>> DoubleLit nan == DoubleLit nan
+-- False
+deriving instance (Eq s, Eq a) => Eq (Expr s a)
+
+-- | Note that this 'Eq' instance inherits `Double`'s defects, e.g.
+--
+-- >>> nan = 0/0
+-- >>> DoubleLit nan <= DoubleLit nan
+-- False
+deriving instance (Ord s, Ord a) => Ord (Expr s a)
 
 instance (Lift s, Lift a, Data s, Data a) => Lift (Expr s a)
 
@@ -2245,11 +2260,8 @@ prettyPathComponent text
         "/\"" <> Pretty.pretty text <> "\""
 
 prettyURIComponent :: Text -> Doc ann
-prettyURIComponent text
-    | Data.Text.all (\c -> pathCharacter c && URI.Encode.isAllowed c) text =
-        "/" <> Pretty.pretty text
-    | otherwise =
-        "/\"" <> Pretty.pretty text <> "\""
+prettyURIComponent text =
+        Pretty.pretty $ URI.normalizeCase $ URI.normalizeEscape $ "/" <> Data.Text.unpack text
 
 {-| Convenience utility for converting `Either`-based exceptions to `IO`-based
     exceptions

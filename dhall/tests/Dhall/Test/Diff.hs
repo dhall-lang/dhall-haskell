@@ -48,7 +48,7 @@ diffTest prefix =
         expectedDiffText <- Text.IO.readFile diffFile
 
         let actualDiffDocument =
-                Diff.diffNormalized leftInput rightInput <> "\n"
+                Diff.doc (Diff.diffNormalized leftInput rightInput) <> "\n"
 
         let options =
                 Pretty.LayoutOptions

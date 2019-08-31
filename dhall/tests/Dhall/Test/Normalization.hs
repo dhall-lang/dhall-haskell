@@ -10,7 +10,6 @@ import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
 
-import qualified Control.Monad    as Monad
 import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO
 import qualified Dhall.Context    as Context
@@ -43,14 +42,7 @@ getTests = do
         Test.Util.discover pattern alphaNormalizationTest
             (Turtle.lstree "./dhall-lang/tests/alpha-normalization/success/")
 
-    let unitTestFiles = do
-            path <- Turtle.lstree "./dhall-lang/tests/normalization/success/unit"
-
-            let skip = []
-
-            Monad.guard (path `notElem` skip)
-
-            return path
+    let unitTestFiles = Turtle.lstree (normalizationDirectory </> "unit/")
 
     unitTests <- Test.Util.discover pattern unitTest unitTestFiles
 
@@ -146,9 +138,11 @@ alphaNormalizationTest prefix = do
 -}
 unitTest :: Text -> TestTree
 unitTest prefix = do
+    let skip = []
+
     let prefixString = Text.unpack prefix
 
-    Tasty.HUnit.testCase prefixString $ do
+    Test.Util.testCase prefix skip $ do
         let actualPath   = prefixString <> "A.dhall"
         let expectedPath = prefixString <> "B.dhall"
 

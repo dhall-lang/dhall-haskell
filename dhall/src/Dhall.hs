@@ -1350,6 +1350,10 @@ instance Inject Text where
 
         declared = Text
 
+instance {-# OVERLAPS #-} Inject String where
+    injectWith options =
+        contramap Data.Text.pack (injectWith options :: InputType Text)
+
 instance Inject Natural where
     injectWith _ = InputType {..}
       where
@@ -1406,6 +1410,10 @@ instance Inject Double where
 
         declared = Double
 
+instance Inject Scientific where
+    injectWith options =
+        contramap Data.Scientific.toRealFloat (injectWith options :: InputType Double)
+
 instance Inject () where
     injectWith _ = InputType {..}
       where
@@ -1426,7 +1434,11 @@ instance Inject a => Inject (Maybe a) where
 instance Inject a => Inject (Seq a) where
     injectWith options = InputType embedOut declaredOut
       where
-        embedOut xs = ListLit (Just declaredIn) (fmap embedIn xs)
+        embedOut xs = ListLit listType (fmap embedIn xs)
+          where
+            listType
+                | null xs   = Just (App List declaredIn)
+                | otherwise = Nothing
 
         declaredOut = App List declaredIn
 

@@ -12,19 +12,19 @@
 module Dhall.Diff (
     -- * Diff
       Diff (..)
-    , diffExpression
     , diffNormalized
-    , Dhall.Diff.diff
+    , diff
     ) where
 
 import Data.Foldable (fold, toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (Any(..))
-import Data.Semigroup
+import Data.Semigroup hiding (diff)
 import Data.Sequence (Seq)
 import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
+import Data.Void (Void)
 import Dhall.Core (Binding(..), Chunks (..), Const(..), Expr(..), Var(..))
 import Dhall.Binary (ToTerm)
 import Dhall.Map (Map)
@@ -153,17 +153,11 @@ rparen :: Diff
 rparen = token Internal.rparen
 
 -- | Render the difference between the normal form of two expressions
-diffNormalized :: (Eq a, Pretty a, ToTerm a) => Expr s a -> Expr s a -> Doc Ann
+diffNormalized :: (Eq a, Pretty a, ToTerm a) => Expr s a -> Expr s a -> Diff
 diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
   where
     l1 = Dhall.Core.alphaNormalize (Dhall.Core.normalize l0)
     r1 = Dhall.Core.alphaNormalize (Dhall.Core.normalize r0)
-
--- | Render the difference between two expressions
-diff :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Doc Ann
-diff l0 r0 = doc
-  where
-    Diff {..} = diffExpression l0 r0
 
 diffPrimitive :: Eq a => (a -> Diff) -> a -> a -> Diff
 diffPrimitive f l r
@@ -210,7 +204,8 @@ diffInt :: Int -> Int -> Diff
 diffInt = diffPrimitive (token . Internal.prettyInt)
 
 diffVar :: Var -> Var -> Diff
-diffVar (V xL nL) (V xR nR) = format mempty label <> "@" <> natural
+diffVar (V xL nL) (V xR nR) =
+    format mempty label <> if same natural then mempty else "@" <> natural
   where
     label = diffLabel xL xR
 
@@ -255,10 +250,10 @@ enclosed' l m docs =
 diffKeyVals
     :: (Eq a, Pretty a)
     => Diff
-    -> Map Text (Expr s a)
-    -> Map Text (Expr s a)
+    -> Map Text (Expr Void a)
+    -> Map Text (Expr Void a)
     -> [Diff]
-diffKeyVals assign = diffKeysWith assign diffExpression
+diffKeyVals assign = diffKeysWith assign diff
 
 diffKeysWith
     :: Diff
@@ -311,15 +306,8 @@ bracketed :: [Diff] -> Diff
 bracketed = enclosed (lbracket <> " ") (comma <> " ") rbracket
 
 diffText :: Text -> Text -> Diff
-diffText l r
-  | null parts         = "\"\""
-  | allDifferent parts = difference textSkeleton textSkeleton
-  | allSame parts      = textSkeleton
-  | otherwise          = "\"" <> foldMap prettyPart parts <> "\""
+diffText l r = "\"" <> foldMap prettyPart parts <> "\""
   where
-    allDifferent = not . any isBoth
-    allSame      = all isBoth
-
     -- TODO: check for color support from the TTY
     colorDiff colorCode chars =
             "\ESC["
@@ -349,7 +337,7 @@ diffText l r
 
 diffChunks
     :: (Eq a, Pretty a)
-    => Chunks s a -> Chunks s a -> Diff
+    => Chunks Void a -> Chunks Void a -> Diff
 diffChunks cL cR
   | null chunks             = "\"\""
   | [c] <- chunks           = c
@@ -365,17 +353,17 @@ diffChunks cL cR
     chunkDiff a b =
       case (a, b) of
         (Left  x, Left y ) -> diffText x y
-        (Right x, Right y) -> diffExpression x y
+        (Right x, Right y) -> diff x y
         _                  -> diffTextSkeleton
 
 diffList
     :: (Eq a, Pretty a)
-    => Seq (Expr s a) -> Seq (Expr s a) -> Diff
+    => Seq (Expr Void a) -> Seq (Expr Void a) -> Diff
 diffList l r = bracketed (foldMap diffPart parts)
   where
     -- Sections of the list that are only in left, only in right, or in both
     parts =
-        Algo.Diff.getGroupedDiffBy ((same .) . diffExpression) (toList l) (toList r)
+        Algo.Diff.getGroupedDiffBy ((same .) . diff) (toList l) (toList r)
 
     -- Render each element of a list using an extra rendering function f
     prettyElems f = map (f . token . Internal.prettyExpr)
@@ -394,36 +382,22 @@ diffList l r = bracketed (foldMap diffPart parts)
         Algo.Diff.Both _ _        ->
             pure ignore
 
--- Helper function to check when a diff part is present on both sides
-isBoth :: Algo.Diff.Diff a -> Bool
-isBoth p
-  | Algo.Diff.Both _ _ <- p = True
-  | otherwise               = False
-
 diffRecord
     :: (Eq a, Pretty a)
-    => Map Text (Expr s a) -> Map Text (Expr s a) -> Diff
+    => Map Text (Expr Void a) -> Map Text (Expr Void a) -> Diff
 diffRecord kvsL kvsR = braced (diffKeyVals colon kvsL kvsR)
 
 diffRecordLit
     :: (Eq a, Pretty a)
-    => Map Text (Expr s a) -> Map Text (Expr s a) -> Diff
+    => Map Text (Expr Void a) -> Map Text (Expr Void a) -> Diff
 diffRecordLit kvsL kvsR = braced (diffKeyVals equals kvsL kvsR)
 
 diffUnion
     :: (Eq a, Pretty a)
-    => Map Text (Maybe (Expr s a)) -> Map Text (Maybe (Expr s a)) -> Diff
+    => Map Text (Maybe (Expr Void a)) -> Map Text (Maybe (Expr Void a)) -> Diff
 diffUnion kvsL kvsR = angled (diffKeysWith colon diffVals kvsL kvsR)
   where
-    diffVals = diffMaybe (colon <> " ") diffExpression
-
-listSkeleton :: Diff
-listSkeleton =
-        lbracket
-    <>  " "
-    <>  ignore
-    <>  " "
-    <>  rbracket
+    diffVals = diffMaybe (colon <> " ") diff
 
 textSkeleton :: Diff
 textSkeleton =
@@ -541,12 +515,20 @@ skeleton (TextAppend {}) =
     <>  operator "++"
     <>  " "
     <>  ignore
-skeleton (ListLit {}) =
-        listSkeleton
-    <>  " "
-    <>  colon
-    <>  " "
-    <>  ignore
+skeleton (ListLit _ elems)
+    | null elems =
+            lbracket
+        <>  rbracket
+        <>  " "
+        <>  colon
+        <>  " "
+        <>  ignore
+    | otherwise =
+            lbracket
+        <>  " "
+        <>  ignore
+        <>  " "
+        <>  rbracket
 skeleton (ListAppend {}) =
         ignore
     <>  " "
@@ -628,8 +610,9 @@ skeleton x = token (Pretty.pretty x)
 mismatch :: Pretty a => Expr s a -> Expr s a -> Diff
 mismatch l r = difference (skeleton l) (skeleton r)
 
-diffExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
-diffExpression l@(Lam {}) r@(Lam {}) =
+-- | Render the difference between two expressions
+diff :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
+diff l@(Lam {}) r@(Lam {}) =
     enclosed' "  " (rarrow <> " ") (docs l r)
   where
     docs (Lam aL bL cL) (Lam aR bR cR) =
@@ -640,16 +623,16 @@ diffExpression l@(Lam {}) r@(Lam {}) =
             <>  format " " (diffLabel aL aR)
             <>  colon
             <>  " "
-            <>  format mempty (diffExpression bL bR)
+            <>  format mempty (diff bL bR)
             <>  rparen
 
     docs aL aR =
-        pure (diffExpression aL aR)
-diffExpression l@(Lam {}) r =
+        pure (diff aL aR)
+diff l@(Lam {}) r =
     mismatch l r
-diffExpression l r@(Lam {}) =
+diff l r@(Lam {}) =
     mismatch l r
-diffExpression l@(BoolIf {}) r@(BoolIf {}) =
+diff l@(BoolIf {}) r@(BoolIf {}) =
     enclosed' "      " (keyword "else" <> "  ") (docs l r)
   where
     docs (BoolIf aL bL cL) (BoolIf aR bR cR) =
@@ -657,17 +640,17 @@ diffExpression l@(BoolIf {}) r@(BoolIf {}) =
       where
         doc =   keyword "if"
             <>  " "
-            <>  format " " (diffExpression aL aR)
+            <>  format " " (diff aL aR)
             <>  keyword "then"
             <>  " "
-            <>  diffExpression bL bR
+            <>  diff bL bR
     docs aL aR =
-        pure (diffExpression aL aR)
-diffExpression l@(BoolIf {}) r =
+        pure (diff aL aR)
+diff l@(BoolIf {}) r =
     mismatch l r
-diffExpression l r@(BoolIf {}) =
+diff l r@(BoolIf {}) =
     mismatch l r
-diffExpression (Let asL bL ) (Let asR bR) =
+diff (Let asL bL ) (Let asR bR) =
     enclosed' "" (keyword "in" <> "  ")
         (Data.List.NonEmpty.zipWith docA asL asR <> pure docB)
   where
@@ -676,45 +659,47 @@ diffExpression (Let asL bL ) (Let asR bR) =
         doc =   keyword "let"
             <>  " "
             <>  format " " (diffLabel cL cR)
-            <>  format " " (diffMaybe (colon <> " ") diffExpression dL dR)
+            <>  format " " (diffMaybe (colon <> " ") diff dL dR)
             <>  equals
             <>  " "
-            <>  diffExpression eL eR
+            <>  diff eL eR
 
-    docB = diffExpression bL bR
-diffExpression l@(Let {}) r =
+    docB = diff bL bR
+diff l@(Let {}) r =
     mismatch l r
-diffExpression l r@(Let {}) =
+diff l r@(Let {}) =
     mismatch l r
-diffExpression l@(Pi {}) r@(Pi {}) =
+diff l@(Pi {}) r@(Pi {}) =
     enclosed' "  " (rarrow <> " ") (docs l r)
   where
     docs (Pi aL bL cL) (Pi aR bR cR) =
         Data.List.NonEmpty.cons (align doc) (docs cL cR)
       where
         doc | same docA && same docB = ignore
+            | same docA =
+                format mempty docB
             | otherwise =
-                forall
-            <>  lparen
-            <>  format " " docA
-            <>  colon
-            <>  " "
-            <>  format mempty docB
-            <>  rparen
+                    forall
+                <>  lparen
+                <>  format " " docA
+                <>  colon
+                <>  " "
+                <>  format mempty docB
+                <>  rparen
           where
             docA = diffLabel aL aR
 
-            docB = diffExpression bL bR
+            docB = diff bL bR
 
-    docs aL aR = pure (diffExpression aL aR)
-diffExpression l@(Pi {}) r =
+    docs aL aR = pure (diff aL aR)
+diff l@(Pi {}) r =
     mismatch l r
-diffExpression l r@(Pi {}) =
+diff l r@(Pi {}) =
     mismatch l r
-diffExpression l r =
+diff l r =
     diffAnnotatedExpression l r
 
-diffAnnotatedExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffAnnotatedExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffAnnotatedExpression (Merge aL bL cL) (Merge aR bR cR) = align doc
   where
     doc =   keyword "merge"
@@ -752,7 +737,7 @@ diffAnnotatedExpression l@(Annot {}) r@(Annot {}) =
       where
         doc = diffOperatorExpression aL aR
     docs aL aR =
-        diffExpression aL aR :| []
+        diff aL aR :| []
 diffAnnotatedExpression l@(Annot {}) r =
     mismatch l r
 diffAnnotatedExpression l r@(Annot {}) =
@@ -760,10 +745,10 @@ diffAnnotatedExpression l r@(Annot {}) =
 diffAnnotatedExpression l r =
     diffOperatorExpression l r
 
-diffOperatorExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffOperatorExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffOperatorExpression = diffOrExpression
 
-diffOrExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffOrExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffOrExpression l@(BoolOr {}) r@(BoolOr {}) =
     enclosed' "    " (operator "||" <> "  ") (docs l r)
   where
@@ -778,7 +763,7 @@ diffOrExpression l r@(BoolOr {}) =
 diffOrExpression l r =
     diffPlusExpression l r
 
-diffPlusExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffPlusExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffPlusExpression l@(NaturalPlus {}) r@(NaturalPlus {}) =
     enclosed' "  " (operator "+" <> " ") (docs l r)
   where
@@ -793,7 +778,7 @@ diffPlusExpression l r@(NaturalPlus {}) =
 diffPlusExpression l r =
     diffTextAppendExpression l r
 
-diffTextAppendExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffTextAppendExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffTextAppendExpression l@(TextAppend {}) r@(TextAppend {}) =
     enclosed' "    " (operator "++" <> "  ") (docs l r)
   where
@@ -808,7 +793,7 @@ diffTextAppendExpression l r@(TextAppend {}) =
 diffTextAppendExpression l r =
     diffListAppendExpression l r
 
-diffListAppendExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffListAppendExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffListAppendExpression l@(ListAppend {}) r@(ListAppend {}) =
     enclosed' "  " (operator "#" <> " ") (docs l r)
   where
@@ -823,7 +808,7 @@ diffListAppendExpression l r@(ListAppend {}) =
 diffListAppendExpression l r =
     diffAndExpression l r
 
-diffAndExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffAndExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffAndExpression l@(BoolAnd {}) r@(BoolAnd {}) =
     enclosed' "    " (operator "&&" <> "  ") (docs l r)
   where
@@ -838,7 +823,7 @@ diffAndExpression l r@(BoolAnd {}) =
 diffAndExpression l r =
     diffCombineExpression l r
 
-diffCombineExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffCombineExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffCombineExpression l@(Combine {}) r@(Combine {}) =
     enclosed' "  " (operator "∧" <> " ") (docs l r)
   where
@@ -853,7 +838,7 @@ diffCombineExpression l r@(Combine {}) =
 diffCombineExpression l r =
     diffPreferExpression l r
 
-diffPreferExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffPreferExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffPreferExpression l@(Prefer {}) r@(Prefer {}) =
     enclosed' "  " (operator "⫽" <> " ") (docs l r)
   where
@@ -868,7 +853,7 @@ diffPreferExpression l r@(Prefer {}) =
 diffPreferExpression l r =
     diffCombineTypesExpression l r
 
-diffCombineTypesExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffCombineTypesExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffCombineTypesExpression l@(CombineTypes {}) r@(CombineTypes {}) =
     enclosed' "  " (operator "*" <> " ") (docs l r)
   where
@@ -883,7 +868,7 @@ diffCombineTypesExpression l r@(CombineTypes {}) =
 diffCombineTypesExpression l r =
     diffTimesExpression l r
 
-diffTimesExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffTimesExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffTimesExpression l@(NaturalTimes {}) r@(NaturalTimes {}) =
     enclosed' "  " (operator "*" <> " ") (docs l r)
   where
@@ -898,7 +883,7 @@ diffTimesExpression l r@(NaturalTimes {}) =
 diffTimesExpression l r =
     diffEqualExpression l r
 
-diffEqualExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffEqualExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffEqualExpression l@(BoolEQ {}) r@(BoolEQ {}) =
     enclosed' "    " (operator "==" <> "  ") (docs l r)
   where
@@ -913,7 +898,7 @@ diffEqualExpression l r@(BoolEQ {}) =
 diffEqualExpression l r =
     diffNotEqualExpression l r
 
-diffNotEqualExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffNotEqualExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffNotEqualExpression l@(BoolNE {}) r@(BoolNE {}) =
     enclosed' "    " (operator "!=" <> "  ") (docs l r)
   where
@@ -928,7 +913,7 @@ diffNotEqualExpression l r@(BoolNE {}) =
 diffNotEqualExpression l r =
     diffApplicationExpression l r
 
-diffApplicationExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffApplicationExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffApplicationExpression l@(App {}) r@(App {}) =
     enclosed' mempty mempty (Data.List.NonEmpty.reverse (docs l r))
   where
@@ -955,7 +940,7 @@ diffApplicationExpression l r@(Some {}) =
 diffApplicationExpression l r =
     diffImportExpression l r
 
-diffImportExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffImportExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffImportExpression (Embed l) (Embed r) =
     diffPretty l r
 diffImportExpression l@(Embed {}) r =
@@ -965,7 +950,7 @@ diffImportExpression l r@(Embed {}) =
 diffImportExpression l r =
     diffSelectorExpression l r
 
-diffSelectorExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffSelectorExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffSelectorExpression l@(Field {}) r@(Field {}) =
     enclosed' "  " (dot <> " ") (Data.List.NonEmpty.reverse (docs l r))
   where
@@ -974,7 +959,7 @@ diffSelectorExpression l@(Field {}) r@(Field {}) =
     docs (Project aL (Left bL)) (Project aR (Left bR)) =
         Data.List.NonEmpty.cons (diffLabels bL bR) (docs aL aR)
     docs (Project aL (Right bL)) (Project aR (Right bR)) =
-        Data.List.NonEmpty.cons (diffExpression bL bR) (docs aL aR)
+        Data.List.NonEmpty.cons (diff bL bR) (docs aL aR)
     docs aL aR =
         pure (diffPrimitiveExpression aL aR)
 diffSelectorExpression l@(Field {}) r =
@@ -989,7 +974,7 @@ diffSelectorExpression l@(Project {}) r@(Project {}) =
     docs (Project aL (Left bL)) (Project aR (Left bR)) =
         Data.List.NonEmpty.cons (diffLabels bL bR) (docs aL aR)
     docs (Project aL (Right bL)) (Project aR (Right bR)) =
-        Data.List.NonEmpty.cons (diffExpression bL bR) (docs aL aR)
+        Data.List.NonEmpty.cons (diff bL bR) (docs aL aR)
     docs aL aR =
         pure (diffPrimitiveExpression aL aR)
 diffSelectorExpression l@(Project {}) r =
@@ -999,7 +984,7 @@ diffSelectorExpression l r@(Project {}) =
 diffSelectorExpression l r =
     diffPrimitiveExpression l r
 
-diffPrimitiveExpression :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
+diffPrimitiveExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffPrimitiveExpression (Var aL) (Var aR) =
     diffVar aL aR
 diffPrimitiveExpression l@(Var {}) r =
@@ -1242,4 +1227,4 @@ diffPrimitiveExpression aL aR =
     then ignore
     else align ("( " <> doc <> hardline <> ")")
   where
-    doc = diffExpression aL aR
+    doc = diff aL aR
