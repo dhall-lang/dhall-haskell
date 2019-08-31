@@ -167,11 +167,11 @@ parseMode =
             (pure Hash)
     <|> subcommand
             "lint"
-            "Improve Dhall code"
+            "Improve Dhall code by using newer language features and removing dead code"
             (Lint <$> optional parseInplace)
     <|> subcommand
             "format"
-            "Formatter for the Dhall language"
+            "Standard code formatter for the Dhall language"
             (Format <$> parseFormatMode)
     <|> subcommand
             "freeze"
