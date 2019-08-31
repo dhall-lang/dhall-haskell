@@ -23,11 +23,13 @@ module Dhall.TypeCheck (
 
 import Data.Void (Void, absurd)
 import Control.Exception (Exception)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Writer.Strict (execWriterT, tell)
 import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (Endo(..), First(..))
 import Data.Sequence (Seq, ViewL(..))
-import Data.Semigroup (Semigroup(..))
+import Data.Semigroup (Max(..), Semigroup(..))
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
@@ -456,47 +458,26 @@ typeWithA tpa = loop
                       (Pi "just" (Pi "_" "a" "optional")
                           (Pi "nothing" "optional" "optional") )
     loop ctx e@(Record    kts   ) = do
-        case Dhall.Map.uncons kts of
-            Nothing             -> return (Const Type)
-            Just (k0, t0, rest) -> do
-                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
-                c <- case s0 of
-                    Const c -> pure c
-                    _ -> Left (TypeError ctx e (InvalidFieldType k0 t0))
-                let process k t = do
-                        s <- fmap Dhall.Core.normalize (loop ctx t)
-                        case s of
-                            Const c' ->
-                                if c == c'
-                                then return ()
-                                else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 c'))
-                            _ -> Left (TypeError ctx e (InvalidFieldType k t))
-                Dhall.Map.unorderedTraverseWithKey_ process rest
-                return (Const c)
+        let process k t = do
+                s <- lift (fmap Dhall.Core.normalize (loop ctx t))
+                case s of
+                    Const c -> tell (Max c)
+                    _ -> lift (Left (TypeError ctx e (InvalidFieldType k t)))
+        Max c <- execWriterT (Dhall.Map.unorderedTraverseWithKey_ process kts)
+        return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
-        case Dhall.Map.uncons kvs of
-            Nothing             -> return (Record mempty)
-            Just (k0, v0, kvs') -> do
-                t0 <- loop ctx v0
-                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
-                c <- case s0 of
-                    Const c -> pure c
-                    _       -> Left (TypeError ctx e (InvalidFieldType k0 v0))
+        let process k v = do
+                t <- loop ctx v
+                s <- fmap Dhall.Core.normalize (loop ctx t)
+                case s of
+                    Const _ -> return t
+                    _ -> Left (TypeError ctx e (InvalidFieldType k t))
 
-                let process k v = do
-                        t <- loop ctx v
-                        s <- fmap Dhall.Core.normalize (loop ctx t)
-                        case s of
-                            Const c'
-                                | c == c'   -> return ()
-                                | otherwise -> Left (TypeError ctx e (FieldMismatch k v c k0 v0 c'))
-                            _ -> Left (TypeError ctx e (InvalidFieldType k t))
+        recordType <- Record <$> Dhall.Map.unorderedTraverseWithKey process kvs
 
-                        return t
+        _ <- loop ctx recordType
 
-                kts <- Dhall.Map.unorderedTraverseWithKey process kvs'
-
-                return (Record (Dhall.Map.insert k0 t0 kts))
+        return recordType
     loop ctx e@(Union     kts   ) = do
         let nonEmpty k mt = First (fmap (\t -> (k, t)) mt)
 
@@ -546,18 +527,14 @@ typeWithA tpa = loop
             _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
 
         ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
-        constX <- case ttKvsX of
+        _      <- case ttKvsX of
             Const constX -> return constX
             _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
 
         ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
-        constY <- case ttKvsY of
+        _      <- case ttKvsY of
             Const constY -> return constY
             _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
-
-        if constX == constY
-            then return ()
-            else Left (TypeError ctx e (RecordMismatch '∧' kvsX kvsY constX constY))
 
         let combineTypes ktsL ktsR = do
                 let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
@@ -580,15 +557,7 @@ typeWithA tpa = loop
         cR <- case tR of
             Const cR -> return cR
             _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
-        let decide Type Type =
-                return Type
-            decide Kind Kind =
-                return Kind
-            decide Sort Sort =
-                return Sort
-            decide x y =
-                Left (TypeError ctx e (RecordTypeMismatch x y l r))
-        c <- decide cL cR
+        let c = max cL cR
 
         ktsL0 <- case l' of
             Record kts -> return kts
@@ -621,18 +590,14 @@ typeWithA tpa = loop
             _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
 
         ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
-        constX <- case ttKvsX of
+        _      <- case ttKvsX of
             Const constX -> return constX
             _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
 
         ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
-        constY <- case ttKvsY of
+        _      <- case ttKvsY of
             Const constY -> return constY
             _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
-
-        if constX == constY
-            then return ()
-            else Left (TypeError ctx e (RecordMismatch '⫽' kvsX kvsY constX constY))
 
         return (Record (Dhall.Map.union ktsY ktsX))
     loop ctx e@(Merge kvsX kvsY mT₁) = do
