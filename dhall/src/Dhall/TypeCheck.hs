@@ -24,7 +24,6 @@ module Dhall.TypeCheck (
 import Data.Void (Void, absurd)
 import Control.Exception (Exception)
 import Data.Functor (void)
-import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (Endo(..), First(..))
 import Data.Sequence (Seq, ViewL(..))
 import Data.Semigroup (Semigroup(..))
@@ -33,7 +32,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Typeable (Typeable)
 import Dhall.Binary (ToTerm(..))
-import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
+import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
 
@@ -150,7 +149,7 @@ typeWithA tpa = loop
                 let nf_A  = Dhall.Core.normalize _A
                 let nf_A' = Dhall.Core.normalize _A'
                 Left (TypeError ctx e (TypeMismatch f nf_A a nf_A'))
-    loop ctx e@(Let (Binding x mA a0 :| ls) b0) = do
+    loop ctx e@(Let x mA a0 b0) = do
         _A1 <- loop ctx a0
         case mA of
             Just _A0 -> do
@@ -165,11 +164,7 @@ typeWithA tpa = loop
         let a1 = Dhall.Core.normalize a0
         let a2 = Dhall.Core.shift 1 (V x 0) a1
 
-        let rest = case ls of
-                []       -> b0
-                l' : ls' -> Let (l' :| ls') b0
-
-        let b1 = Dhall.Core.subst (V x 0) a2 rest
+        let b1 = Dhall.Core.subst (V x 0) a2 b0
         let b2 = Dhall.Core.shift (-1) (V x 0) b1
         loop ctx b2
 

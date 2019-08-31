@@ -152,7 +152,24 @@ parsers embedded = Parsers {..}
 
             b <- expression
 
-            return (Let as b)
+            -- 'Note's in let-in-let:
+            --
+            -- Subsequent @let@s that are not separated by an @in@ only get a
+            -- single surrounding 'Note'. For example:
+            --
+            -- let x = a
+            -- let y = b
+            -- in  let z = c
+            --     in x
+            --
+            -- is parsed as
+            --
+            -- (Note …
+            --   (Let x …
+            --     (Let y …
+            --       (Note …
+            --         (Let z …
+            return (Dhall.Core.wrapInLets as b)
 
         alternative3 = do
             _forall

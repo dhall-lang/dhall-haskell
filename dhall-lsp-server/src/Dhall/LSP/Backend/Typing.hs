@@ -1,11 +1,10 @@
 module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
 
 import Dhall.Context (Context, insert, empty)
-import Dhall.Core (Expr(..), Binding(..), subExpressions, normalize, shift, subst, Var(..), pretty)
+import Dhall.Core (Expr(..), subExpressions, normalize, shift, subst, Var(..), pretty)
 import Dhall.TypeCheck (typeWithA, X, TypeError(..))
 import Dhall.Parser (Src(..))
 
-import Data.List.NonEmpty (NonEmpty (..))
 import Data.Monoid ((<>))
 import Control.Lens (toListOf)
 import Data.Text (Text)
@@ -13,7 +12,7 @@ import Control.Applicative ((<|>))
 import Data.Bifunctor (first)
 import Data.Void (absurd)
 
-import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot, getLetIdentifier,
+import Dhall.LSP.Backend.Parsing (getLetAnnot, getLetIdentifier,
   getLamIdentifier, getForallIdentifier)
 import Dhall.LSP.Backend.Diagnostics (Position, Range(..), rangeFromDhall)
 import Dhall.LSP.Backend.Dhall (WellTyped, fromWellTyped)
@@ -23,10 +22,7 @@ import Dhall.LSP.Backend.Dhall (WellTyped, fromWellTyped)
 --   that subexpression if possible.
 typeAt :: Position -> WellTyped -> Either String (Maybe Src, Expr Src X)
 typeAt pos expr = do
-  expr' <- case splitLets (fromWellTyped expr) of
-             Just e -> return e
-             Nothing -> Left "The impossible happened: failed to split let\
-                              \ blocks when preprocessing for typeAt'."
+  let expr' = fromWellTyped expr
   (mSrc, typ) <- first show $ typeAt' pos empty expr'
   case mSrc of
     Just src -> return (Just src, normalize typ)
@@ -34,7 +30,7 @@ typeAt pos expr = do
 
 typeAt' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Maybe Src, Expr Src X)
 -- the user hovered over the bound name in a let expression
-typeAt' pos ctx (Note src (Let (Binding _ _ a :| []) _)) | pos `inside` getLetIdentifier src = do
+typeAt' pos ctx (Note src (Let _ _ a _)) | pos `inside` getLetIdentifier src = do
   typ <- typeWithA absurd ctx a
   return (Just $ getLetIdentifier src, typ)
 
@@ -49,7 +45,7 @@ typeAt' pos _ctx (Note src (Pi _ _A _)) | Just src' <- getForallIdentifier src
   return (Just src', _A)
 
 -- the input only contains singleton lets
-typeAt' pos ctx (Let (Binding x _ a :| []) e@(Note src _)) | pos `inside` src = do
+typeAt' pos ctx (Let x _ a e@(Note src _)) | pos `inside` src = do
   _ <- typeWithA absurd ctx a
   let a' = shift 1 (V x 0) (normalize a)
   typeAt' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
@@ -78,16 +74,12 @@ typeAt' pos ctx expr = do
 
 -- | Find the smallest Note-wrapped expression at the given position.
 exprAt :: Position -> Expr Src a -> Maybe (Expr Src a)
-exprAt pos e = do e' <- splitLets e
-                  exprAt' pos e'
-
-exprAt' :: Position -> Expr Src a -> Maybe (Expr Src a)
-exprAt' pos e@(Note _ expr) = exprAt pos expr <|> Just e
-exprAt' pos expr =
+exprAt pos e@(Note _ expr) = exprAt pos expr <|> Just e
+exprAt pos expr =
   let subExprs = toListOf subExpressions expr
   in case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
     [] -> Nothing
-    ((src,e) : _) -> exprAt' pos e <|> Just (Note src e)
+    ((src,e) : _) -> exprAt pos e <|> Just (Note src e)
 
 
 -- | Find the smallest Src annotation containing the given position.
@@ -102,15 +94,11 @@ srcAt pos expr = do Note src _ <- exprAt pos expr
 --   something goes wrong returns a textual error message.
 annotateLet :: Position -> WellTyped -> Either String (Src, Text)
 annotateLet pos expr = do
-  expr' <- case splitLets (fromWellTyped expr) of
-             Just e -> return e
-             Nothing -> Left "The impossible happened: failed to split let\
-                              \ blocks when preprocessing for annotateLet'."
-  annotateLet' pos empty expr'
+  annotateLet' pos empty (fromWellTyped expr)
 
 annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Either String (Src, Text)
 -- the input only contains singleton lets
-annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
+annotateLet' pos ctx (Note src e@(Let _ _ a _))
   | not $ any (pos `inside`) [ src' | Note src' _ <- toListOf subExpressions e ]
   = do _A <- first show $ typeWithA absurd ctx a
        srcAnnot <- case getLetAnnot src of
@@ -120,7 +108,7 @@ annotateLet' pos ctx (Note src e@(Let (Binding _ _ a :| []) _))
        return (srcAnnot, ": " <> pretty (normalize _A) <> " ")
 
 -- binders, see typeAt'
-annotateLet' pos ctx (Let (Binding x _ a :| []) e@(Note src _)) | pos `inside` src = do
+annotateLet' pos ctx (Let x _ a e@(Note src _)) | pos `inside` src = do
   _ <- first show $ typeWithA absurd ctx a
   let a' = shift 1 (V x 0) (normalize a)
   annotateLet' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
@@ -145,15 +133,6 @@ annotateLet' pos ctx expr = do
   case [ Note src e | (Note src e) <- subExprs, pos `inside` src ] of
     (e:[]) -> annotateLet' pos ctx e
     _ -> Left "You weren't pointing at a let binder!"
-
-
--- Split all multilets into single lets in an expression
-splitLets :: Expr Src a -> Maybe (Expr Src a)
-splitLets (Note src (Let (b :| (b' : bs)) e)) = do
-  src' <- getLetInner src
-  splitLets (Note src (Let (b :| []) (Note src' (Let (b' :| bs) e))))
-splitLets expr = subExpressions splitLets expr
-
 
 -- Check if range lies completely inside a given subexpression.
 -- This version takes trailing whitespace into account
