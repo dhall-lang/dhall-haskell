@@ -860,7 +860,6 @@ data TypeMessage s a
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
     | InvalidFieldType Text (Expr s a)
-    | FieldAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | FieldMismatch Text (Expr s a) Const Text (Expr s a) Const
     | InvalidAlternativeType Text (Expr s a)
     | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
@@ -2075,64 +2074,6 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
       where
         txt0 = insert k
         txt1 = insert expr0
-
-prettyTypeMessage (FieldAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
-  where
-    short = "Field annotation mismatch"
-
-    long =
-        "Explanation: Every record type annotates each field with a ❰Type❱ or a ❰Kind❱,  \n\
-        \like this:                                                                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────────────────────┐                            \n\
-        \    │ { foo : Natural, bar : Integer, baz : Text } │  Every field is annotated  \n\
-        \    └──────────────────────────────────────────────┘  with a ❰Type❱             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────┐                                              \n\
-        \    │ { foo : Type, bar : Type } │  Every field is annotated                    \n\
-        \    └────────────────────────────┘  with a ❰Kind❱                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, you cannot have a record type with both a ❰Type❱ and ❰Kind❱ annotation:\n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \              This is a ❰Type❱ annotation                                       \n\
-        \              ⇩                                                                 \n\
-        \    ┌───────────────────────────────┐                                           \n\
-        \    │ { foo : Natural, bar : Type } │  Invalid record type                      \n\
-        \    └───────────────────────────────┘                                           \n\
-        \                             ⇧                                                  \n\
-        \                             ... but this is a ❰Kind❱ annotation                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a record type with a field named:                                  \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... annotated with the following expression:                                    \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is a " <> level c1 <> " whereas another field named:                  \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n\
-        \                                                                                \n\
-        \... annotated with the following expression:                                    \n\
-        \                                                                                \n\
-        \" <> txt3 <> "\n\
-        \                                                                                \n\
-        \... is a " <> level c0 <> ", which does not match                               \n"
-      where
-        txt0 = insert k0
-        txt1 = insert expr0
-        txt2 = insert k1
-        txt3 = insert expr1
-
-        level Type = "❰Type❱"
-        level Kind = "❰Kind❱"
-        level Sort = "❰Sort❱"
 
 prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
   where
