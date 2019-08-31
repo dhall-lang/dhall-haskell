@@ -522,16 +522,6 @@ typeWithA tpa = loop
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
 
-        ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
-        _      <- case ttKvsX of
-            Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
-
-        ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
-        _      <- case ttKvsY of
-            Const constY -> return constY
-            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
-
         let combineTypes ktsL ktsR = do
                 let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
                     combine k _ _ = Left (TypeError ctx e (FieldCollision k))
@@ -584,16 +574,6 @@ typeWithA tpa = loop
         ktsY  <- case tKvsY of
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
-
-        ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
-        _      <- case ttKvsX of
-            Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
-
-        ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
-        _      <- case ttKvsY of
-            Const constY -> return constY
-            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
 
         return (Record (Dhall.Map.union ktsY ktsX))
     loop ctx e@(Merge kvsX kvsY mT₁) = do
