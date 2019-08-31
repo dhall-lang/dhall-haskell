@@ -379,7 +379,7 @@ normalizeWithMIsConsistentWithNormalize expression =
 
 isSameAsSelf :: Expr () Import -> Property
 isSameAsSelf expression =
-  hasNoImportAndTypechecks ==> Dhall.Diff.same (Dhall.Diff.diffExpression denoted denoted)
+  hasNoImportAndTypechecks ==> Dhall.Diff.same (Dhall.Diff.diff denoted denoted)
   where denoted = Dhall.Core.denote expression
         hasNoImportAndTypechecks =
           case traverse (\_ -> Left ()) expression of

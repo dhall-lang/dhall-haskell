@@ -21,7 +21,7 @@ module Dhall.Main
     ) where
 
 import Control.Applicative (optional, (<|>))
-import Control.Exception (SomeException)
+import Control.Exception (Handler(..), SomeException)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -34,7 +34,7 @@ import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import Options.Applicative (Parser, ParserInfo)
-import System.Exit (exitFailure)
+import System.Exit (ExitCode, exitFailure)
 import System.IO (Handle)
 import Text.Dot ((.->.))
 
@@ -70,6 +70,7 @@ import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
+import qualified System.Exit                               as Exit
 import qualified System.IO
 import qualified System.FilePath
 import qualified Text.Dot
@@ -303,12 +304,23 @@ command (Options {..}) = do
 
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
 
-    let handle =
-                Control.Exception.handle handler2
-            .   Control.Exception.handle handler1
-            .   Control.Exception.handle handler0
+    let handle io =
+            Control.Exception.catches io
+                [ Handler handleTypeError
+                , Handler handleImported
+                , Handler handleExitCode
+                ]
           where
-            handler0 e = do
+            handleAll e = do
+                let string = show (e :: SomeException)
+
+                if not (null string)
+                    then System.IO.hPutStrLn System.IO.stderr string
+                    else return ()
+
+                System.Exit.exitFailure
+
+            handleTypeError e = Control.Exception.handle handleAll $ do
                 let _ = e :: TypeError Src X
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
@@ -317,7 +329,7 @@ command (Options {..}) = do
                         Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO e
 
-            handler1 (Imported ps e) = do
+            handleImported (Imported ps e) = Control.Exception.handle handleAll $ do
                 let _ = e :: TypeError Src X
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
@@ -326,14 +338,8 @@ command (Options {..}) = do
                         Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO (Imported ps e)
 
-            handler2 e = do
-                let string = show (e :: SomeException)
-
-                if not (null string)
-                    then System.IO.hPutStrLn System.IO.stderr string
-                    else return ()
-
-                System.Exit.exitFailure
+            handleExitCode e = do
+                Control.Exception.throwIO (e :: ExitCode)
 
     let renderDoc :: Handle -> Doc Ann -> IO ()
         renderDoc h doc = do
@@ -470,7 +476,11 @@ command (Options {..}) = do
 
             let diff = Dhall.Diff.diffNormalized expression1 expression2
 
-            renderDoc System.IO.stdout diff
+            renderDoc System.IO.stdout (Dhall.Diff.doc diff)
+
+            if Dhall.Diff.same diff
+                then return ()
+                else Exit.exitFailure
 
         Format {..} -> do
             Dhall.Format.format (Dhall.Format.Format {..})
