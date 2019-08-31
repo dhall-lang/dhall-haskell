@@ -473,11 +473,7 @@ typeWithA tpa = loop
                     Const _ -> return t
                     _ -> Left (TypeError ctx e (InvalidFieldType k t))
 
-        recordType <- Record <$> Dhall.Map.unorderedTraverseWithKey process kvs
-
-        _ <- loop ctx recordType
-
-        return recordType
+        Record <$> Dhall.Map.unorderedTraverseWithKey process kvs
     loop ctx e@(Union     kts   ) = do
         let nonEmpty k mt = First (fmap (\t -> (k, t)) mt)
 
