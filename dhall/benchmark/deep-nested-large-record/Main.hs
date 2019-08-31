@@ -25,7 +25,7 @@ issue412 :: Core.Expr s TypeCheck.X -> Gauge.Benchmarkable
 issue412 prelude = Gauge.whnf TypeCheck.typeOf expr
   where
     expr
-      = Core.Let (pure (Core.Binding "prelude" Nothing prelude))
+      = Core.Let "prelude" Nothing prelude
       $ Core.ListLit Nothing
       $ Seq.replicate 5
       $ Core.Var (Core.V "prelude" 0) `Core.Field` "types" `Core.Field` "Little" `Core.Field` "Foo"
@@ -33,15 +33,12 @@ issue412 prelude = Gauge.whnf TypeCheck.typeOf expr
 unionPerformance :: Core.Expr s TypeCheck.X -> Gauge.Benchmarkable
 unionPerformance prelude = Gauge.whnf TypeCheck.typeOf expr
   where
-    innerBinding =
-        Core.Binding "big" Nothing
-            (prelude `Core.Field` "types" `Core.Field` "Big")
-
-    outerBinding =
-        Core.Binding "x" Nothing
-            (Core.Let (pure innerBinding) (Core.Prefer "big" "big"))
-
-    expr = Core.Let (pure outerBinding) "x"
+    expr =
+        Core.Let "x" Nothing
+            (Core.Let "big" Nothing (prelude `Core.Field` "types" `Core.Field` "Big")
+                (Core.Prefer "big" "big")
+            )
+            "x"
 
 main :: IO ()
 main = do

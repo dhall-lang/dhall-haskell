@@ -8,11 +8,9 @@ module Dhall.Test.QuickCheck where
 
 import Codec.Serialise (DeserialiseFailure(..))
 import Data.Either (isRight)
-import Data.List.NonEmpty (NonEmpty(..))
 import Dhall.Map (Map)
 import Dhall.Core
-    ( Binding(..)
-    , Chunks(..)
+    ( Chunks(..)
     , Const(..)
     , Directory(..)
     , Expr(..)
@@ -136,11 +134,6 @@ instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
         .   shrink
         .   Dhall.Map.toList
 
-instance (Arbitrary s, Arbitrary a) => Arbitrary (Binding s a) where
-    arbitrary = lift3 Binding
-
-    shrink = genericShrink
-
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Chunks s a) where
     arbitrary = do
         n <- Test.QuickCheck.choose (0, 2)
@@ -179,13 +172,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                 , ( 1, Test.QuickCheck.oneof [ lift2 (Lam "_"), lift3 Lam ])
                 , ( 1, Test.QuickCheck.oneof [ lift2 (Pi "_"), lift3 Pi ])
                 , ( 1, lift2 App)
-                , let letExpression = do
-                          n        <- Test.QuickCheck.choose (0, 2)
-                          binding  <- arbitrary
-                          bindings <- Test.QuickCheck.vectorOf n arbitrary
-                          body     <- arbitrary
-                          return (Let (binding :| bindings) body)
-                  in  ( 7, letExpression)
+                , ( 7, Test.QuickCheck.oneof [ lift3 (Let "_"), lift4 Let ])
                 , ( 1, lift2 Annot)
                 , ( 1, lift0 Bool)
                 , ( 7, lift1 BoolLit)

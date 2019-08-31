@@ -4,7 +4,7 @@ module Dhall.Test.Parser where
 
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Dhall.Core (Expr, Import)
+import Dhall.Core (Expr(..), Import, Var(..))
 import Dhall.TypeCheck (X)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
@@ -14,6 +14,7 @@ import qualified Codec.CBOR.Read      as CBOR
 import qualified Codec.CBOR.Term      as CBOR
 import qualified Codec.Serialise      as Serialise
 import qualified Control.Monad        as Monad
+import qualified Data.Bifunctor       as Bifunctor
 import qualified Data.ByteString      as ByteString
 import qualified Data.ByteString.Lazy as ByteString.Lazy
 import qualified Data.Text            as Text
@@ -60,23 +61,52 @@ getTests = do
             Tasty.testGroup "parser tests"
                 [ successTests
                 , failureTests
+                , internalTests
                 , binaryDecodeSuccessTests
                 , binaryDecodeFailureTests
                 ]
 
     return testTree
 
+internalTests :: TestTree
+internalTests =
+    Tasty.testGroup "internal"
+        [ notesInLetInLet ]
+
+notesInLetInLet :: TestTree
+notesInLetInLet = do
+    Tasty.HUnit.testCase "Notes in let-in-let" $ do
+        let code = "let x = 0 let y = 1 in let z = 2 in x"
+
+        expression <- Core.throws (Parser.exprFromText mempty code)
+
+        let simplifyNotes = Bifunctor.first Parser.srcText
+
+        let expected =
+                (Note code
+                  (Let "x" Nothing
+                    (Note "0 "
+                      (NaturalLit 0))
+                    (Let "y" Nothing  -- This 'Let' isn't wrapped in a 'Note'!
+                      (Note "1 "
+                        (NaturalLit 1))
+                      (Note "let z = 2 in x"
+                        (Let "z" Nothing
+                          (Note "2 "
+                            (NaturalLit 2))
+                          (Note "x"
+                            (Var (V "x" 0))))))))
+
+        let msg = "Unexpected parse result"
+
+        Tasty.HUnit.assertEqual msg expected (simplifyNotes expression)
+
 shouldParse :: Text -> TestTree
 shouldParse path = do
     let skip =
             -- This is a bug created by a parsing performance
             -- improvement
-            [ parseDirectory </> "success/unit/MergeParenAnnotation"
-
-            -- https://github.com/dhall-lang/dhall-haskell/issues/1185
-            , parseDirectory </> "success/let"
-            , parseDirectory </> "success/unit/LetNested"
-            ]
+            [ parseDirectory </> "success/unit/MergeParenAnnotation" ]
 
     let pathString = Text.unpack path
 
