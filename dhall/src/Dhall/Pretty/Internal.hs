@@ -438,8 +438,12 @@ prettyCharacterSet characterSet expression =
                 [   keyword "if" <> " " <> prettyExpression a
                 ,   prettyExpression b
                 ]
-        docsLong (Note  _    c) = docsLong c
-        docsLong             c  = [ prettyExpression c ]
+        docsLong (Note _ (BoolIf a b c)) =
+            docsLong (BoolIf a b c)
+        docsLong (Note src c) =
+            [ prettyExpression c <> preserveComment src ]
+        docsLong c =
+            [ prettyExpression c ]
 
         docsShort (BoolIf a b c) =
             docShort ++ docsShort c
@@ -448,8 +452,12 @@ prettyCharacterSet characterSet expression =
                 [   keyword "if" <> " " <> prettyExpression a
                 ,   prettyExpression b
                 ]
-        docsShort (Note  _    c) = docsShort c
-        docsShort             c  = [ prettyExpression c ]
+        docsShort (Note _ (BoolIf a b c)) =
+            docsShort (BoolIf a b c)
+        docsShort (Note src c) =
+            [ prettyExpression c <> preserveComment src ]
+        docsShort c =
+            [ prettyExpression c ]
     prettyExpression (Let x mA a b0) =
         enclose' "" "" space Pretty.hardline
             (fmap duplicate (fmap docA (toList as)) ++ [ docB ])
@@ -519,8 +527,12 @@ prettyCharacterSet characterSet expression =
                 <>  space <> colon <> space
                 <>  prettyExpression b
                 <>  rparen
-        docs (Note _   c) = docs c
-        docs           c  = [ prettyExpression c ]
+        docs (Note _ (Pi a b c)) =
+            docs (Pi a b c)
+        docs (Note src c) =
+            [ prettyExpression c <> preserveComment src ]
+        docs c =
+            [ prettyExpression c ]
     prettyExpression (Assert a) =
         Pretty.group (Pretty.flatAlt long short)
       where
@@ -531,8 +543,8 @@ prettyCharacterSet characterSet expression =
             (  "  " <> keyword "assert"
             <> Pretty.hardline <> colon <> " " <> prettyExpression a
             )
-    prettyExpression (Note _ a) =
-        prettyExpression a
+    prettyExpression (Note src a) =
+        prettyExpression a <> preserveComment src
     prettyExpression a0 =
         prettyAnnotatedExpression a0
 
@@ -611,15 +623,20 @@ prettyCharacterSet characterSet expression =
             (colon <> space)
             (fmap duplicate (docs a0))
       where
-        docs (Annot a b) = prettyOperatorExpression a : docs b
-        docs (Note  _ b) = docs b
-        docs          b  = [ prettyExpression b ]
+        docs (Annot a b) =
+            prettyOperatorExpression a : docs b
+        docs (Note _ (Annot a b)) =
+            docs (Annot a b)
+        docs (Note src b) =
+            [ prettyExpression b <> preserveComment src ]
+        docs b =
+            [ prettyExpression b ]
     prettyAnnotatedExpression (ListLit (Just a) b) =
             list (map prettyExpression (Data.Foldable.toList b))
         <>  " : "
         <>  prettyApplicationExpression a
-    prettyAnnotatedExpression (Note _ a) =
-        prettyAnnotatedExpression a
+    prettyAnnotatedExpression (Note src a) =
+        prettyAnnotatedExpression a <> preserveComment src
     prettyAnnotatedExpression a0 =
         prettyOperatorExpression a0
 
@@ -643,11 +660,16 @@ prettyCharacterSet characterSet expression =
     prettyImportAltExpression a0@(ImportAlt _ _) =
         prettyOperator "?" (docs a0)
       where
-        docs (ImportAlt a b) = prettyOrExpression b : docs a
-        docs (Note      _ b) = docs b
-        docs              b  = [ prettyOrExpression b ]
-    prettyImportAltExpression (Note _ a) =
-        prettyImportAltExpression a
+        docs (ImportAlt a b) =
+            prettyOrExpression b : docs a
+        docs (Note _ (ImportAlt a b)) =
+            docs (ImportAlt a b)
+        docs (Note src  b) =
+            [ prettyOrExpression b <> preserveComment src ]
+        docs b =
+            [ prettyOrExpression b ]
+    prettyImportAltExpression (Note src a) =
+        prettyImportAltExpression a <> preserveComment src
     prettyImportAltExpression a0 =
         prettyOrExpression a0
 
@@ -655,11 +677,16 @@ prettyCharacterSet characterSet expression =
     prettyOrExpression a0@(BoolOr _ _) =
         prettyOperator "||" (docs a0)
       where
-        docs (BoolOr a b) = prettyPlusExpression b : docs a
-        docs (Note   _ b) = docs b
-        docs           b  = [ prettyPlusExpression b ]
-    prettyOrExpression (Note _ a) =
-        prettyOrExpression a
+        docs (BoolOr a b) =
+            prettyPlusExpression b : docs a
+        docs (Note _ (BoolOr a b)) =
+            docs (BoolOr a b)
+        docs (Note src b) =
+            [ prettyPlusExpression b <> preserveComment src ]
+        docs b =
+            [ prettyPlusExpression b ]
+    prettyOrExpression (Note src a) =
+        prettyOrExpression a <> preserveComment src
     prettyOrExpression a0 =
         prettyPlusExpression a0
 
@@ -667,11 +694,16 @@ prettyCharacterSet characterSet expression =
     prettyPlusExpression a0@(NaturalPlus _ _) =
         prettyOperator "+" (docs a0)
       where
-        docs (NaturalPlus a b) = prettyTextAppendExpression b : docs a
-        docs (Note        _ b) = docs b
-        docs                b  = [ prettyTextAppendExpression b ]
-    prettyPlusExpression (Note _ a) =
-        prettyPlusExpression a
+        docs (NaturalPlus a b) =
+            prettyTextAppendExpression b : docs a
+        docs (Note _ (NaturalPlus a b)) =
+            docs (NaturalPlus a b)
+        docs (Note src b) =
+            [ prettyTextAppendExpression b <> preserveComment src ]
+        docs b =
+            [ prettyTextAppendExpression b ]
+    prettyPlusExpression (Note src a) =
+        prettyPlusExpression a <> preserveComment src
     prettyPlusExpression a0 =
         prettyTextAppendExpression a0
 
@@ -679,11 +711,16 @@ prettyCharacterSet characterSet expression =
     prettyTextAppendExpression a0@(TextAppend _ _) =
         prettyOperator "++" (docs a0)
       where
-        docs (TextAppend a b) = prettyListAppendExpression b : docs a
-        docs (Note       _ b) = docs b
-        docs               b  = [ prettyListAppendExpression b ]
-    prettyTextAppendExpression (Note _ a) =
-        prettyTextAppendExpression a
+        docs (TextAppend a b) =
+            prettyListAppendExpression b : docs a
+        docs (Note _ (TextAppend a b)) =
+            docs (TextAppend a b)
+        docs (Note src b) =
+            [ prettyListAppendExpression b <> preserveComment src ]
+        docs b =
+            [ prettyListAppendExpression b ]
+    prettyTextAppendExpression (Note src a) =
+        prettyTextAppendExpression a <> preserveComment src
     prettyTextAppendExpression a0 =
         prettyListAppendExpression a0
 
@@ -691,11 +728,16 @@ prettyCharacterSet characterSet expression =
     prettyListAppendExpression a0@(ListAppend _ _) =
         prettyOperator "#" (docs a0)
       where
-        docs (ListAppend a b) = prettyAndExpression b : docs a
-        docs (Note       _ b) = docs b
-        docs               b  = [ prettyAndExpression b ]
-    prettyListAppendExpression (Note _ a) =
-        prettyListAppendExpression a
+        docs (ListAppend a b) =
+            prettyAndExpression b : docs a
+        docs (Note _ (ListAppend a b)) =
+            docs (ListAppend a b)
+        docs (Note src b) =
+            [ prettyAndExpression b <> preserveComment src ]
+        docs b =
+            [ prettyAndExpression b ]
+    prettyListAppendExpression (Note src a) =
+        prettyListAppendExpression a <> preserveComment src
     prettyListAppendExpression a0 =
         prettyAndExpression a0
 
@@ -703,11 +745,16 @@ prettyCharacterSet characterSet expression =
     prettyAndExpression a0@(BoolAnd _ _) =
         prettyOperator "&&" (docs a0)
       where
-        docs (BoolAnd a b) = prettyCombineExpression b : docs a
-        docs (Note    _ b) = docs b
-        docs            b  = [ prettyCombineExpression b ]
-    prettyAndExpression (Note _ a) =
-        prettyAndExpression a
+        docs (BoolAnd a b) =
+            prettyCombineExpression b : docs a
+        docs (Note _ (BoolAnd a b)) =
+            docs (BoolAnd a b)
+        docs (Note src b) =
+            [ prettyCombineExpression b <> preserveComment src ]
+        docs b =
+            [ prettyCombineExpression b ]
+    prettyAndExpression (Note src a) =
+        prettyAndExpression a <> preserveComment src
     prettyAndExpression a0 =
        prettyCombineExpression a0
 
@@ -715,11 +762,16 @@ prettyCharacterSet characterSet expression =
     prettyCombineExpression a0@(Combine _ _) =
         prettyOperator (combine characterSet) (docs a0)
       where
-        docs (Combine a b) = prettyPreferExpression b : docs a
-        docs (Note    _ b) = docs b
-        docs            b  = [ prettyPreferExpression b ]
-    prettyCombineExpression (Note _ a) =
-        prettyCombineExpression a
+        docs (Combine a b) =
+            prettyPreferExpression b : docs a
+        docs (Note _ (Combine a b)) =
+            docs (Combine a b)
+        docs (Note src b) =
+            [ prettyPreferExpression b <> preserveComment src ]
+        docs b =
+            [ prettyPreferExpression b ]
+    prettyCombineExpression (Note src a) =
+        prettyCombineExpression a <> preserveComment src
     prettyCombineExpression a0 =
         prettyPreferExpression a0
 
@@ -727,11 +779,16 @@ prettyCharacterSet characterSet expression =
     prettyPreferExpression a0@(Prefer _ _) =
         prettyOperator (prefer characterSet) (docs a0)
       where
-        docs (Prefer a b) = prettyCombineTypesExpression b : docs a
-        docs (Note   _ b) = docs b
-        docs           b  = [ prettyCombineTypesExpression b ]
-    prettyPreferExpression (Note _ a) =
-        prettyPreferExpression a
+        docs (Prefer a b) =
+            prettyCombineTypesExpression b : docs a
+        docs (Note _ (Prefer a b)) =
+            docs (Prefer a b)
+        docs (Note src b) =
+            [ prettyCombineTypesExpression b <> preserveComment src ]
+        docs b =
+            [ prettyCombineTypesExpression b ]
+    prettyPreferExpression (Note src a) =
+        prettyPreferExpression a <> preserveComment src
     prettyPreferExpression a0 =
         prettyCombineTypesExpression a0
 
@@ -739,11 +796,16 @@ prettyCharacterSet characterSet expression =
     prettyCombineTypesExpression a0@(CombineTypes _ _) =
         prettyOperator (combineTypes characterSet) (docs a0)
       where
-        docs (CombineTypes a b) = prettyTimesExpression b : docs a
-        docs (Note         _ b) = docs b
-        docs                 b  = [ prettyTimesExpression b ]
-    prettyCombineTypesExpression (Note _ a) =
-        prettyCombineTypesExpression a
+        docs (CombineTypes a b) =
+            prettyTimesExpression b : docs a
+        docs (Note _ (CombineTypes a b)) =
+            docs (CombineTypes a b)
+        docs (Note src b) =
+            [ prettyTimesExpression b <> preserveComment src ]
+        docs b =
+            [ prettyTimesExpression b ]
+    prettyCombineTypesExpression (Note src a) =
+        prettyCombineTypesExpression a <> preserveComment src
     prettyCombineTypesExpression a0 =
         prettyTimesExpression a0
 
@@ -751,11 +813,16 @@ prettyCharacterSet characterSet expression =
     prettyTimesExpression a0@(NaturalTimes _ _) =
         prettyOperator "*" (docs a0)
       where
-        docs (NaturalTimes a b) = prettyEqualExpression b : docs a
-        docs (Note         _ b) = docs b
-        docs                 b  = [ prettyEqualExpression b ]
-    prettyTimesExpression (Note _ a) =
-        prettyTimesExpression a
+        docs (NaturalTimes a b) =
+            prettyEqualExpression b : docs a
+        docs (Note _ (NaturalTimes a b)) =
+            docs (NaturalTimes a b)
+        docs (Note src b) =
+            [ prettyEqualExpression b <> preserveComment src ]
+        docs b =
+            [ prettyEqualExpression b ]
+    prettyTimesExpression (Note src a) =
+        prettyTimesExpression a <> preserveComment src
     prettyTimesExpression a0 =
         prettyEqualExpression a0
 
@@ -763,11 +830,16 @@ prettyCharacterSet characterSet expression =
     prettyEqualExpression a0@(BoolEQ _ _) =
         prettyOperator "==" (docs a0)
       where
-        docs (BoolEQ a b) = prettyNotEqualExpression b : docs a
-        docs (Note   _ b) = docs b
-        docs           b  = [ prettyNotEqualExpression b ]
-    prettyEqualExpression (Note _ a) =
-        prettyEqualExpression a
+        docs (BoolEQ a b) =
+            prettyNotEqualExpression b : docs a
+        docs (Note _ (BoolEQ a b)) =
+            docs (BoolEQ a b)
+        docs (Note src b) =
+            [ prettyNotEqualExpression b <> preserveComment src ]
+        docs b =
+            [ prettyNotEqualExpression b ]
+    prettyEqualExpression (Note src a) =
+        prettyEqualExpression a <> preserveComment src
     prettyEqualExpression a0 =
         prettyNotEqualExpression a0
 
@@ -775,11 +847,16 @@ prettyCharacterSet characterSet expression =
     prettyNotEqualExpression a0@(BoolNE _ _) =
         prettyOperator "!=" (docs a0)
       where
-        docs (BoolNE a b) = prettyEquivalentExpression b : docs a
-        docs (Note   _ b) = docs b
-        docs           b  = [ prettyEquivalentExpression b ]
-    prettyNotEqualExpression (Note _ a) =
-        prettyNotEqualExpression a
+        docs (BoolNE a b) =
+            prettyEquivalentExpression b : docs a
+        docs (Note _ (BoolNE a b)) =
+            docs (BoolNE a b)
+        docs (Note src b) =
+            [ prettyEquivalentExpression b <> preserveComment src ]
+        docs b  =
+            [ prettyEquivalentExpression b ]
+    prettyNotEqualExpression (Note src a) =
+        prettyNotEqualExpression a <> preserveComment src
     prettyNotEqualExpression a0 =
         prettyEquivalentExpression a0
 
@@ -787,33 +864,46 @@ prettyCharacterSet characterSet expression =
     prettyEquivalentExpression a0@(Equivalent _ _) =
         prettyOperator (equivalent characterSet) (docs a0)
       where
-        docs (Equivalent a b) = prettyApplicationExpression b : docs a
-        docs (Note       _ b) = docs b
-        docs               b  = [ prettyApplicationExpression b ]
-    prettyEquivalentExpression (Note _ a) =
-        prettyEquivalentExpression a
+        docs (Equivalent a b) =
+            prettyApplicationExpression b : docs a
+        docs (Note _ (Equivalent a b)) =
+            docs (Equivalent a b)
+        docs (Note src b) =
+            [ prettyApplicationExpression b <> preserveComment src ]
+        docs b =
+            [ prettyApplicationExpression b ]
+    prettyEquivalentExpression (Note src a) =
+        prettyEquivalentExpression a <> preserveComment src
     prettyEquivalentExpression a0 =
         prettyApplicationExpression a0
 
     prettyApplicationExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyApplicationExpression a0 = case a0 of
-        App _ _  -> result
-        Some _   -> result
-        Note _ b -> prettyApplicationExpression b
-        _        -> prettyImportExpression a0
+        App _ _    -> result
+        Some _     -> result
+        Note src b -> prettyApplicationExpression b <> preserveComment src
+        _          -> prettyImportExpression a0
       where
         result = enclose' "" "" " " "" (reverse (docs a0))
 
-        docs (App  a b) = ( prettyImportExpression b, Pretty.indent 2 (prettyImportExpression b) ) : docs a
-        docs (Some   a) = map duplicate [ prettyImportExpression a , builtin "Some" ]
-        docs (Note _ b) = docs b
-        docs         b  = map duplicate [ prettyImportExpression b ]
+        docs (App  a b) =
+            (prettyImportExpression b, Pretty.indent 2 (prettyImportExpression b)) : docs a
+        docs (Some a) =
+            map duplicate [ prettyImportExpression a , builtin "Some" ]
+        docs (Note _ (App a b)) =
+            docs (App a b)
+        docs (Note _ (Some a)) =
+            docs (Some a)
+        docs (Note src b) =
+            map duplicate [ prettyImportExpression b <> preserveComment src ]
+        docs b =
+            map duplicate [ prettyImportExpression b ]
 
     prettyImportExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyImportExpression (Embed a) =
         Pretty.pretty a
-    prettyImportExpression (Note _ a) =
-        prettyImportExpression a
+    prettyImportExpression (Note src a) =
+        prettyImportExpression a <> preserveComment src
     prettyImportExpression a0 =
         prettySelectorExpression a0
 
@@ -828,8 +918,8 @@ prettyCharacterSet characterSet expression =
         <>  lparen
         <>  prettyExpression b
         <>  rparen
-    prettySelectorExpression (Note _ b) =
-        prettySelectorExpression b
+    prettySelectorExpression (Note src b) =
+        prettySelectorExpression b <> preserveComment src
     prettySelectorExpression a0 =
         prettyPrimitiveExpression a0
 
@@ -917,8 +1007,8 @@ prettyCharacterSet characterSet expression =
         prettyUnion a
     prettyPrimitiveExpression (ListLit Nothing b) =
         list (map prettyExpression (Data.Foldable.toList b))
-    prettyPrimitiveExpression (Note _ b) =
-        prettyPrimitiveExpression b
+    prettyPrimitiveExpression (Note src b) =
+        prettyPrimitiveExpression b <> preserveComment src
     prettyPrimitiveExpression a =
         Pretty.group (Pretty.flatAlt long short)
       where
