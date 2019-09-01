@@ -507,7 +507,7 @@ typeWithA tpa = loop
 
                 return (Const c0)
     loop ctx e@(Combine kvsX kvsY) = do
-        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
+        tKvsX <- loop ctx kvsX
         ktsX  <- case tKvsX of
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
@@ -709,7 +709,7 @@ typeWithA tpa = loop
                         Nothing -> Left (TypeError ctx e (MissingConstructor x r))
                   r' -> Left (TypeError ctx e (CantAccess text r' t))
     loop ctx e@(Project r (Left xs)) = do
-        t <- fmap Dhall.Core.normalize (loop ctx r)
+        t <- loop ctx r
 
         case t of
             Record kts -> do
