@@ -6,8 +6,8 @@ module Dhall.LSP.Backend.Linting
 where
 
 import Dhall.Parser (Src)
-import Dhall.Core ( Expr(..), Binding(..), MultiLet(..), Var(..), Import
-                  , subExpressions, freeIn, multiLet, wrapInLets)
+import Dhall.Core ( Expr(..), Binding(..), MultiLet(..), Import
+                  , subExpressions, multiLet, wrapInLets)
 import qualified Dhall.Lint as Dhall
 
 import Dhall.LSP.Backend.Diagnostics
@@ -38,7 +38,7 @@ diagLetInLet _ = Nothing
 -- Given a let-block compute all unused variables in the block.
 unusedBindings :: Eq a => MultiLet s a -> [Text]
 unusedBindings (MultiLet bindings d) =
-  let go (Binding var _ _ : bs) | not (V var 0 `freeIn` wrapInLets bs d) = [var]
+  let go bs@(Binding var _ _ : _) | Just _ <- Dhall.removeUnusedBindings (wrapInLets bs d) = [var]
       go _ = []
   in foldMap go (NonEmpty.tails bindings)
 
