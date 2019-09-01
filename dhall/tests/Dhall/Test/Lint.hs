@@ -25,9 +25,9 @@ lintDirectory = "./tests/lint"
 
 getTests :: IO TestTree
 getTests = do
-    formatTests <- Test.Util.discover (Turtle.chars <* "A.dhall") lintTest (Turtle.lstree lintDirectory)
+    lintTests <- Test.Util.discover (Turtle.chars <* "A.dhall") lintTest (Turtle.lstree lintDirectory)
 
-    let testTree = Tasty.testGroup "format tests" [ formatTests ]
+    let testTree = Tasty.testGroup "lint tests" [ lintTests ]
 
     return testTree
 
