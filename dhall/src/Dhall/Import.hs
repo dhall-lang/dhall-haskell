@@ -139,7 +139,7 @@ import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term(..))
 import Control.Exception (Exception, SomeException, toException)
 import Control.Monad (guard)
-import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
+import Control.Monad.Catch (throwM, MonadCatch(catch), handle, finally)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT)
@@ -789,7 +789,9 @@ getCacheDirectory = alternative₀ <|> alternative₁
             Nothing           -> empty
 
     alternative₁ = do
-        maybeHomeDirectory <- liftIO (System.Environment.lookupEnv "HOME")
+        maybeHomeDirectory <- liftIO $
+           finally (fmap Just Directory.getHomeDirectory)
+                   (return Nothing)
 
         case maybeHomeDirectory of
             Just homeDirectory -> return (homeDirectory </> ".cache")
