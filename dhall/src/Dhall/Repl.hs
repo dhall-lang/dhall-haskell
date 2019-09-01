@@ -26,6 +26,7 @@ import Data.Version (showVersion)
 import Dhall.Context (Context)
 import Dhall.Import (hashExpressionToCode)
 import Dhall.Pretty (CharacterSet(..))
+import Dhall.Src (Src(..))
 import System.Console.Haskeline (Interrupt(..))
 import System.Console.Haskeline.Completion ( Completion, simpleCompletion )
 import System.Directory ( getDirectoryContents )
@@ -588,8 +589,7 @@ writeOutputHandle txt = do
     Nothing     -> pure ()
 
 output
-  :: (Pretty.Pretty a, MonadState Env m, MonadIO m)
-  => Dhall.Expr s a -> m ()
+  :: (Pretty.Pretty a, MonadState Env m, MonadIO m) => Dhall.Expr Src a -> m ()
 output expr = do
   writeOutputHandle "" -- Visual spacing
 
@@ -599,7 +599,7 @@ output expr = do
 
 outputWithoutSpacing
   :: (Pretty.Pretty a, MonadState Env m, MonadIO m)
-  => Dhall.Expr s a -> m ()
+  => Dhall.Expr Src a -> m ()
 outputWithoutSpacing expr = do
   Env { characterSet, outputHandle } <- get
 
