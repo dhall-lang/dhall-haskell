@@ -695,6 +695,15 @@ diff l@(Pi {}) r =
     mismatch l r
 diff l r@(Pi {}) =
     mismatch l r
+diff (Assert aL) (Assert aR) =
+    align
+        (  "  " <> keyword "assert"
+        <> hardline <> colon <> " " <> diff aL aR
+        )
+diff l@(Assert {}) r =
+    mismatch l r
+diff l r@(Assert {}) =
+    mismatch l r
 diff l r =
     diffAnnotatedExpression l r
 
@@ -902,14 +911,30 @@ diffNotEqualExpression l@(BoolNE {}) r@(BoolNE {}) =
     enclosed' "    " (operator "!=" <> "  ") (docs l r)
   where
     docs (BoolNE aL bL) (BoolNE aR bR) =
-        Data.List.NonEmpty.cons (diffApplicationExpression aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffEquivalentExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffApplicationExpression aL aR)
+        pure (diffEquivalentExpression aL aR)
 diffNotEqualExpression l@(BoolNE {}) r =
     mismatch l r
 diffNotEqualExpression l r@(BoolNE {}) =
     mismatch l r
 diffNotEqualExpression l r =
+    diffEquivalentExpression l r
+
+diffEquivalentExpression
+    :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
+diffEquivalentExpression l@(Equivalent {}) r@(Equivalent {}) =
+    enclosed' "  " (operator "≡" <> " ") (docs l r)
+  where
+    docs (Equivalent aL bL) (Equivalent aR bR) =
+        Data.List.NonEmpty.cons (diffApplicationExpression aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffApplicationExpression aL aR)
+diffEquivalentExpression l@(Equivalent {}) r =
+    mismatch l r
+diffEquivalentExpression l r@(Equivalent {}) =
+    mismatch l r
+diffEquivalentExpression l r =
     diffApplicationExpression l r
 
 diffApplicationExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff

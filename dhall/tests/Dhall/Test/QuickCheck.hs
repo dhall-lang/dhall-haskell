@@ -231,6 +231,8 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                 , ( 1, lift2 ToMap)
                 , ( 7, lift2 Field)
                 , ( 7, lift2 Project)
+                , ( 1, lift1 Assert)
+                , ( 1, lift2 Equivalent)
                 , ( 7, lift1 Embed)
                 ]
             )
