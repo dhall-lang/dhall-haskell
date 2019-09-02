@@ -28,7 +28,7 @@ import Dhall.Core
 import Data.Functor.Identity (Identity(..))
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
-import Dhall.TypeCheck (Typer)
+import Dhall.TypeCheck (Typer, TypeError)
 import Numeric.Natural (Natural)
 import Test.QuickCheck
     (Arbitrary(..), Gen, Positive(..), Property, NonNegative(..), genericShrink, (===), (==>))
@@ -373,6 +373,19 @@ isSameAsSelf expression =
             Right importlessExpression -> isRight (Dhall.TypeCheck.typeOf importlessExpression)
             Left _ -> False
 
+inferredTypesAreNormalized :: Expr () Import -> Property
+inferredTypesAreNormalized expression =
+    Test.Tasty.QuickCheck.counterexample report (all Dhall.Core.isNormalized result)
+  where
+    report =  "Got: " ++ show result
+           ++ "\nExpected: " ++ show (fmap Dhall.Core.normalize result
+                                      :: Either (TypeError () Import) (Expr () Import))
+
+    result = Dhall.TypeCheck.typeWithA filterOutEmbeds Dhall.Context.empty expression
+
+    filterOutEmbeds :: Typer a
+    filterOutEmbeds _ = Const Sort -- This could be any ill-typed expression.
+
 tests :: TestTree
 tests =
     testProperties'
@@ -396,6 +409,10 @@ tests =
         , ( "An expression should have no difference with itself"
           , Test.QuickCheck.property isSameAsSelf
           , QuickCheckTests 10000
+          )
+        , ( "Inferred types should be normalized"
+          , Test.QuickCheck.property inferredTypesAreNormalized
+          , QuickCheckTests 100000
           )
         ]
 

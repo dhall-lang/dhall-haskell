@@ -119,7 +119,7 @@ typeWithA tpa = loop
         _ <- loop ctx _A
         let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx) -- TODO: Add test case
         _B <- loop ctx' b
-        let p = Pi x _A _B
+        let p = Pi x (Dhall.Core.normalize _A) _B -- TODO: Add test
         _t <- loop ctx p
         return p
     loop ctx e@(Pi  x _A _B     ) = do
@@ -469,7 +469,7 @@ typeWithA tpa = loop
                     Const _ -> return t
                     _ -> Left (TypeError ctx e (InvalidFieldType k t))
 
-        Record <$> Dhall.Map.unorderedTraverseWithKey process kvs
+        Record <$> Dhall.Map.unorderedTraverseWithKey process (Dhall.Map.sort kvs) -- TODO: Add test
     loop ctx e@(Union     kts   ) = do
         let nonEmpty k mt = First (fmap (\t -> (k, t)) mt)
 
