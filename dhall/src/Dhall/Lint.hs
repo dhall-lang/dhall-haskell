@@ -6,7 +6,7 @@ module Dhall.Lint
     , removeUnusedBindings
     ) where
 
-import Dhall.Core (Expr(..), Import, Var(..), subExpressions)
+import Dhall.Core (Binding(..), Expr(..), Import, Var(..), subExpressions)
 
 import qualified Dhall.Core
 import qualified Dhall.Optics
@@ -25,8 +25,9 @@ lint = Dhall.Optics.rewriteOf subExpressions removeUnusedBindings . removeLetInL
 -- Remove unused Let bindings.
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
 -- Don't remove assertions!
-removeUnusedBindings (Let _ _ e _) | isOrContainsAssert e = Nothing
-removeUnusedBindings (Let a _ _ d)
+removeUnusedBindings (Let (Binding _ _ _ _ _ e) _)
+    | isOrContainsAssert e = Nothing
+removeUnusedBindings (Let (Binding _ a _ _ _ _) d)
     | not (V a 0 `Dhall.Core.freeIn` d) =
         Just (Dhall.Core.shift (-1) (V a 0) d)
 removeUnusedBindings _ = Nothing

@@ -34,7 +34,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Typeable (Typeable)
 import Dhall.Binary (ToTerm(..))
-import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
+import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
 
@@ -151,10 +151,10 @@ typeWithA tpa = loop
                 let nf_A  = Dhall.Core.normalize _A
                 let nf_A' = Dhall.Core.normalize _A'
                 Left (TypeError ctx e (TypeMismatch f nf_A a nf_A'))
-    loop ctx e@(Let x mA a0 b0) = do
+    loop ctx e@(Let (Binding _ x _ mA _ a0) b0) = do
         _A1 <- loop ctx a0
         case mA of
-            Just _A0 -> do
+            Just (_, _A0) -> do
                 _ <- loop ctx _A0
                 let nf_A0 = Dhall.Core.normalize _A0
                 let nf_A1 = Dhall.Core.normalize _A1
