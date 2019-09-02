@@ -143,7 +143,7 @@ typeWithA tpa = loop
         _A' <- loop ctx a
         if Dhall.Core.judgmentallyEqual _A _A'
             then do
-                let a'   = Dhall.Core.shift   1  (V x 0) a
+                let a'   = Dhall.Core.shift   1  (V x 0) (Dhall.Core.normalize a) -- TODO: Add test
                 let _B'  = Dhall.Core.subst (V x 0) a' _B
                 let _B'' = Dhall.Core.shift (-1) (V x 0) _B'
                 return _B''
@@ -179,7 +179,7 @@ typeWithA tpa = loop
         t' <- loop ctx x
         if Dhall.Core.judgmentallyEqual t t'
             then do
-                return t
+                return t' -- TODO: Update standard
             else do
                 let nf_t  = Dhall.Core.normalize t
                 let nf_t' = Dhall.Core.normalize t'
