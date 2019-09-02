@@ -117,9 +117,10 @@ typeWithA tpa = loop
                 return a
     loop ctx   (Lam x _A  b     ) = do
         _ <- loop ctx _A
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx) -- TODO: Add test case
+        let nf_A = Dhall.Core.normalize _A
+        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x nf_A ctx) -- TODO: Add test case
         _B <- loop ctx' b
-        let p = Pi x (Dhall.Core.normalize _A) _B -- TODO: Add test
+        let p = Pi x nf_A _B -- TODO: Add test
         _t <- loop ctx p
         return p
     loop ctx e@(Pi  x _A _B     ) = do
