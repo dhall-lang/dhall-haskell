@@ -137,8 +137,9 @@ instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Binding s a) where
     arbitrary =
-        let f a b   = Binding Nothing "_" Nothing a Nothing b
-            g a b c = Binding Nothing a Nothing b Nothing c
+        let adapt = fmap ((,) Nothing)
+            f a b   = Binding Nothing "_" Nothing (adapt a) Nothing b
+            g a b c = Binding Nothing a   Nothing (adapt b) Nothing c
 
         in  Test.QuickCheck.oneof [ lift2 f, lift3 g ]
 
