@@ -665,6 +665,12 @@ typeWithA tpa = loop
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustMapARecord kvsX tKvsX))
 
+        _TKvsX <- loop ctx tKvsX
+
+        case _TKvsX of
+          Const Type -> return ()
+          kind       -> Left (TypeError ctx e (InvalidToMapRecordKind tKvsX kind))
+
         Data.Foldable.traverse_ (loop ctx) mT₁
 
         let ktX = appEndo (foldMap (Endo . compareFieldTypes) ktsX) Nothing
@@ -841,6 +847,7 @@ data TypeMessage s a
     | MustMergeARecord (Expr s a) (Expr s a)
     | MustMergeUnion (Expr s a) (Expr s a)
     | MustMapARecord (Expr s a) (Expr s a)
+    | InvalidToMapRecordKind (Expr s a) (Expr s a)
     | HeterogenousRecordToMap (Expr s a) (Expr s a) (Expr s a)
     | InvalidToMapType (Expr s a)
     | MapTypeMismatch (Expr s a) (Expr s a)
@@ -2873,6 +2880,32 @@ prettyTypeMessage (MustMapARecord _expr0 _expr1) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \... but the argument to ❰toMap❱ must be a record and not some other type.       \n"
+
+prettyTypeMessage (InvalidToMapRecordKind type_ kind) = ErrorMessages {..}
+  where
+    short = "❰toMap❱ expects a record of kind ❰Type❱"
+
+    long =
+        "Explanation: You can apply ❰toMap❱ to any homogenous record of kind ❰Type❱, like\n\
+        \ this:                                                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ in  toMap record : List { mapKey : Text, mapValue : Natural}        │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but records of kind ❰Kind❱ or ❰Sort❱ cannot be turned into ❰List❱s.         \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You applied ❰toMap❱ to a record of the following type:                          \n\
+        \                                                                                \n\
+        \" <> insert type_ <> "\n\
+        \                                                                                \n\
+        \... which has kind                                                              \n\
+        \                                                                                \n\
+        \" <> insert kind <> "\n"
 
 prettyTypeMessage (HeterogenousRecordToMap _expr0 _expr1 _expr2) = ErrorMessages {..}
   where
