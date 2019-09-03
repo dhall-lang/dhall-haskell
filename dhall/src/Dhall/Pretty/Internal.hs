@@ -134,6 +134,20 @@ isWhitespace c =
         '\r' -> True
         _    -> False
 
+{-| Used to render inline `Src` spans preserved by the syntax tree
+
+
+    >>> let unusedSourcePos = Text.Megaparsec.SourcePos "" (Text.Megaparsec.mkPos 1) (Text.Megaparsec.mkPos 1)
+    >>> let nonEmptySrc = Src unusedSourcePos unusedSourcePos " -- Documentation for x\n"
+    >>> "let" <> srcOr (Just nonEmptySrc) " " <> "x = 1 in x"
+    let -- Documentation for x
+    x = 1 in x
+    >>> let emptySrc = Src unusedSourcePos unusedSourcePos "      "
+    >>> "let" <> srcOr (Just emptySrc) " " <> "x = 1 in x"
+    let x = 1 in x
+    >>> "let" <> srcOr Nothing " " <> "x = 1 in x"
+    let x = 1 in x
+-}
 srcOr :: Maybe Src -> Doc Ann -> Doc Ann
 srcOr (Just (Src {..})) _
     | not (Text.all isWhitespace srcText) =
@@ -383,8 +397,7 @@ the layout of let-blocks:
 >>> let inner = Let (Binding Nothing "x" Nothing Nothing Nothing (NaturalLit 1)) (Var (V "x" 0)) :: Expr Src ()
 >>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing (NaturalLit 2)) inner)
 let y = 2 let x = 1 in x
->>> let sourcePos = Text.Megaparsec.SourcePos "" (Text.Megaparsec.mkPos 1) (Text.Megaparsec.mkPos 1)
->>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing (NaturalLit 2)) (Note (Src sourcePos sourcePos "") inner))
+>>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing (NaturalLit 2)) (Note (Src unusedSourcePos unusedSourcePos "") inner))
 let y = 2 in let x = 1 in x
 
 This means the structure of parsed let-blocks is preserved.
