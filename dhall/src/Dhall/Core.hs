@@ -2294,8 +2294,9 @@ multiLet b0 = \case
 
 'wrapInLets' can be understood as an inverse for 'multiLet':
 
-> let MultiLet as b1 = multiLet x mA a b0
-> wrapInLets as b1 == Let x mA a b0
+> let MultiLet bs e1 = multiLet b e0
+>
+> wrapInLets bs e1 == Let b e0
 -}
 wrapInLets :: Foldable f => f (Binding s a) -> Expr s a -> Expr s a
 wrapInLets bs e = foldr Let e bs
