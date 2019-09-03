@@ -376,8 +376,8 @@ data Expr s a
     | Pi  Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
-    -- | > Let x Nothing  r e                       ~  let x     = r in e
-    --   > Let x (Just t) r e                       ~  let x : t = r in e
+    -- | > Let (Binding _ x _  Nothing  _ r) e      ~  let x     = r in e
+    --   > Let (Binding _ x _ (Just t ) _ r) e      ~  let x : t = r in e
     --
     -- The difference between
     --
