@@ -10,7 +10,7 @@ module Dhall.Parser.Token (
     posixEnvironmentVariable,
     ComponentType(..),
     file_,
-    label_,
+    labelOnly,
     label,
     anyLabel,
     labels,
@@ -26,7 +26,7 @@ module Dhall.Parser.Token (
     _if,
     _then,
     _else,
-    _let_,
+    _letOnly,
     _let,
     _in,
     _as,
@@ -70,7 +70,7 @@ module Dhall.Parser.Token (
     _Kind,
     _Sort,
     _Location,
-    _equal_,
+    _equalOnly,
     _equal,
     _or,
     _plus,
@@ -91,7 +91,7 @@ module Dhall.Parser.Token (
     _comma,
     _openParens,
     _closeParens,
-    _colon_,
+    _colonOnly,
     _colon,
     _at,
     _equivalent,
@@ -327,8 +327,8 @@ labels = do
         noDuplicates (x : xs)
 
 
-label_ :: Parser Text
-label_ = backtickLabel <|> simpleLabel False <?> "label"
+labelOnly :: Parser Text
+labelOnly = backtickLabel <|> simpleLabel False <?> "label"
 
 label :: Parser Text
 label = (do
@@ -578,14 +578,14 @@ unreserved c =
 reserved :: Data.Text.Text -> Parser ()
 reserved x = do _ <- Text.Parser.Char.text x; whitespace
 
-reservedChar_ :: Char -> Parser ()
-reservedChar_ c = do _ <- Text.Parser.Char.char c; return ()
+reservedCharOnly :: Char -> Parser ()
+reservedCharOnly c = do _ <- Text.Parser.Char.char c; return ()
 
 reservedChar :: Char -> Parser ()
 reservedChar c = do _ <- Text.Parser.Char.char c; whitespace
 
-keyword_ :: Data.Text.Text -> Parser ()
-keyword_ x = try (do _ <- Text.Parser.Char.text x; return ())
+keywordOnly :: Data.Text.Text -> Parser ()
+keywordOnly x = try (do _ <- Text.Parser.Char.text x; return ())
 
 keyword :: Data.Text.Text -> Parser ()
 keyword x = try (do _ <- Text.Parser.Char.text x; nonemptyWhitespace)
@@ -599,8 +599,8 @@ _then = keyword "then"
 _else :: Parser ()
 _else = keyword "else"
 
-_let_ :: Parser ()
-_let_ = keyword_ "let"
+_letOnly :: Parser ()
+_letOnly = keywordOnly "let"
 
 _let :: Parser ()
 _let = keyword "let"
@@ -734,8 +734,8 @@ _Sort = reserved "Sort"
 _Location :: Parser ()
 _Location = reserved "Location"
 
-_equal_ :: Parser ()
-_equal_ = reservedChar_ '='
+_equalOnly :: Parser ()
+_equalOnly = reservedCharOnly '='
 
 _equal :: Parser ()
 _equal = reservedChar '='
@@ -797,8 +797,8 @@ _openParens = reservedChar '('
 _closeParens :: Parser ()
 _closeParens = reservedChar ')'
 
-_colon_ :: Parser ()
-_colon_ = reservedChar_ ':'
+_colonOnly :: Parser ()
+_colonOnly = reservedCharOnly ':'
 
 _colon :: Parser ()
 _colon = reservedChar ':'

@@ -140,23 +140,23 @@ parsers embedded = Parsers {..}
 
         alternative2 = do
             let binding = do
-                    _let_
+                    _letOnly
 
                     src0 <- note nonemptyWhitespace
 
-                    c <- label_
+                    c <- labelOnly
 
                     src1 <- note whitespace
 
                     d <- optional (do
-                        _colon_
+                        _colonOnly
 
                         src2 <- note nonemptyWhitespace
 
                         e <- expression
                         return (Just src2, e) )
 
-                    _equal_
+                    _equalOnly
 
                     src3 <- note nonemptyWhitespace
 
