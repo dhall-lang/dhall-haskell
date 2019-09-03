@@ -1,6 +1,13 @@
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeOperators      #-}
+
+#if __GLASGOW_HASKELL__ >= 800
+{-# LANGUAGE OverloadedLabels   #-}
+#endif
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -30,7 +37,7 @@ import Data.Functor.Identity (Identity(..))
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
 import Dhall.TypeCheck (Typer)
-import Numeric.Natural (Natural)
+import Generic.Random (Weights, W, (%), (:+)(..))
 import Test.QuickCheck
     (Arbitrary(..), Gen, Positive(..), Property, NonNegative(..), genericShrink, (===), (==>))
 import Test.QuickCheck.Instances ()
@@ -43,6 +50,7 @@ import qualified Codec.Serialise
 import qualified Data.Coerce
 import qualified Data.List
 import qualified Data.Sequence
+import qualified Data.Text as Text
 import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core
@@ -50,6 +58,7 @@ import qualified Dhall.Diff
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
+import qualified Generic.Random
 import qualified Test.QuickCheck
 import qualified Test.Tasty
 import qualified Test.Tasty.QuickCheck
@@ -162,93 +171,105 @@ instance Arbitrary Directory where
 
     shrink = genericShrink
 
-averageDepth :: Natural
-averageDepth = 3
-
-averageNumberOfSubExpressions :: Double
-averageNumberOfSubExpressions = 1 - 1 / fromIntegral averageDepth
-
-probabilityOfNullaryConstructor :: Double
-probabilityOfNullaryConstructor = 1 / fromIntegral averageDepth
-
-numberOfConstructors :: Natural
-numberOfConstructors = 50
-
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     arbitrary =
         Test.QuickCheck.suchThat
-            (Test.QuickCheck.frequency
-                [ ( 7, lift1 Const)
-                , ( 7, lift1 Var)
-                , ( 1, Test.QuickCheck.oneof [ lift2 (Lam "_"), lift3 Lam ])
-                , ( 1, Test.QuickCheck.oneof [ lift2 (Pi "_"), lift3 Pi ])
-                , ( 1, lift2 App)
-                , ( 7, lift2 Let)
-                , ( 1, lift2 Annot)
-                , ( 1, lift0 Bool)
-                , ( 7, lift1 BoolLit)
-                , ( 1, lift2 BoolAnd)
-                , ( 1, lift2 BoolOr)
-                , ( 1, lift2 BoolEQ)
-                , ( 1, lift2 BoolNE)
-                , ( 1, lift3 BoolIf)
-                , ( 1, lift0 Natural)
-                , ( 7, fmap NaturalLit arbitrary)
-                , ( 1, lift0 NaturalFold)
-                , ( 1, lift0 NaturalBuild)
-                , ( 1, lift0 NaturalIsZero)
-                , ( 1, lift0 NaturalEven)
-                , ( 1, lift0 NaturalOdd)
-                , ( 1, lift0 NaturalToInteger)
-                , ( 1, lift0 NaturalShow)
-                , ( 1, lift2 NaturalPlus)
-                , ( 1, lift2 NaturalTimes)
-                , ( 1, lift0 NaturalSubtract)
-                , ( 1, lift0 Integer)
-                , ( 7, fmap IntegerLit integer)
-                , ( 1, lift0 IntegerShow)
-                , ( 1, lift0 Double)
-                , ( 7, lift1 DoubleLit)
-                , ( 1, lift0 DoubleShow)
-                , ( 1, lift0 Text)
-                , ( 1, lift1 TextLit)
-                , ( 1, lift2 TextAppend)
-                , ( 1, lift0 List)
-                , let listLit = do
-                          n  <- Test.QuickCheck.choose (0, 3)
-                          xs <- Test.QuickCheck.vectorOf n arbitrary
-                          let ys = Data.Sequence.fromList xs
-                          ListLit <$> arbitrary <*> pure ys
-
-                  in  ( 1, listLit)
-                , ( 1, lift2 ListAppend)
-                , ( 1, lift0 ListBuild)
-                , ( 1, lift0 ListFold)
-                , ( 1, lift0 ListLength)
-                , ( 1, lift0 ListHead)
-                , ( 1, lift0 ListLast)
-                , ( 1, lift0 ListIndexed)
-                , ( 1, lift0 ListReverse)
-                , ( 1, lift0 Optional)
-                , ( 1, lift0 OptionalFold)
-                , ( 1, lift0 OptionalBuild)
-                , ( 1, lift1 Record)
-                , ( 7, lift1 RecordLit)
-                , ( 1, lift1 Union)
-                , ( 7, lift2 Combine)
-                , ( 1, lift2 CombineTypes)
-                , ( 7, lift2 Prefer)
-                , ( 1, lift3 Merge)
-                , ( 1, lift2 ToMap)
-                , ( 7, lift2 Field)
-                , ( 7, lift2 Project)
-                , ( 1, lift1 Assert)
-                , ( 1, lift2 Equivalent)
-                , ( 7, lift1 Embed)
-                , ( 7, lift2 ImportAlt)
-                ]
-            )
+            (Generic.Random.genericArbitraryRecG customGens weights)
             standardizedExpression
+      where
+        customGens
+            :: Gen Integer    -- Generates all Integer fields in Expr
+            :+ Gen Text.Text  -- Generates all Text fields in Expr
+            :+ ()
+        customGens =
+               integer
+               -- 'Lam's and 'Pi's are encoded differently when the binding is
+               -- the special string "_", so we generate some of these strings
+               -- to improve test coverage for these code paths.
+            :+ Test.QuickCheck.oneof [pure "_", arbitrary]
+            :+ ()
+
+        -- These weights determine the frequency of constructors in the generated
+        -- Expr.
+        -- They will fail to compile if the constructors don't appear in the order
+        -- in which they are defined in 'Expr'!
+        weights :: Weights (Expr s a)
+-- TODO: Get rid of the CPP once
+-- https://github.com/Lysxia/generic-random/pull/16
+-- has been released.
+#if __GLASGOW_HASKELL__ >= 800
+        weights =
+              (7 :: W "Const")
+            % (7 :: W "Var")
+            % (7 :: W "Lam")
+            % (7 :: W "Pi")
+            % (7 :: W "App")
+            % (7 :: W "Let")
+            % (1 :: W "Annot")
+            % (1 :: W "Bool")
+            % (7 :: W "BoolLit")
+            % (1 :: W "BoolAnd")
+            % (1 :: W "BoolOr")
+            % (1 :: W "BoolEQ")
+            % (1 :: W "BoolNE")
+            % (1 :: W "BoolIf")
+            % (1 :: W "Natural")
+            % (7 :: W "NaturalLit")
+            % (1 :: W "NaturalFold")
+            % (1 :: W "NaturalBuild")
+            % (1 :: W "NaturalIsZero")
+            % (1 :: W "NaturalEven")
+            % (1 :: W "NaturalOdd")
+            % (1 :: W "NaturalToInteger")
+            % (1 :: W "NaturalShow")
+            % (1 :: W "NaturalSubtract")
+            % (1 :: W "NaturalPlus")
+            % (1 :: W "NaturalTimes")
+            % (1 :: W "Integer")
+            % (7 :: W "IntegerLit")
+            % (1 :: W "IntegerShow")
+            % (1 :: W "IntegerToDouble")
+            % (1 :: W "Double")
+            % (7 :: W "DoubleLit")
+            % (1 :: W "DoubleShow")
+            % (1 :: W "Text")
+            % (1 :: W "TextLit")
+            % (1 :: W "TextAppend")
+            % (1 :: W "TextShow")
+            % (1 :: W "List")
+            % (1 :: W "ListLit")
+            % (1 :: W "ListAppend")
+            % (1 :: W "ListBuild")
+            % (1 :: W "ListFold")
+            % (1 :: W "ListLength")
+            % (1 :: W "ListHead")
+            % (1 :: W "ListLast")
+            % (1 :: W "ListIndexed")
+            % (1 :: W "ListReverse")
+            % (1 :: W "Optional")
+            % (7 :: W "Some")
+            % (1 :: W "None")
+            % (1 :: W "OptionalFold")
+            % (1 :: W "OptionalBuild")
+            % (1 :: W "Record")
+            % (7 :: W "RecordLit")
+            % (1 :: W "Union")
+            % (7 :: W "Combine")
+            % (1 :: W "CombineTypes")
+            % (7 :: W "Prefer")
+            % (1 :: W "Merge")
+            % (1 :: W "ToMap")
+            % (7 :: W "Field")
+            % (7 :: W "Project")
+            % (1 :: W "Assert")
+            % (1 :: W "Equivalent")
+            % (0 :: W "Note")
+            % (7 :: W "ImportAlt")
+            % (7 :: W "Embed")
+            % ()
+#else
+        weights = Generic.Random.uniform
+#endif
 
     shrink expression = filter standardizedExpression (genericShrink expression)
 
