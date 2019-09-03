@@ -362,7 +362,20 @@ instance IsString Var where
 instance Pretty Var where
     pretty = Pretty.unAnnotate . prettyVar
 
--- | Syntax tree for expressions
+{-| Syntax tree for expressions
+
+    The @s@ type parameter is used to track the presence or absence of `Src`
+    spans:
+
+    * If @s = `Src`@ then the code may contains `Src` spans (either in a `Noted`
+      constructor or inline within another constructor, like `Let`)
+    * If @s = `Void`@ then the code has no `Src` spans
+
+    The @a@ type parameter is used to track the presence or absence of imports
+
+    * If @a = `Import`@ then the code may contain unresolved `Import`s
+    * If @a = `Void`@ then the code has no `Import`s
+-}
 data Expr s a
     -- | > Const c                                  ~  c
     = Const Const
