@@ -668,8 +668,8 @@ typeWithA tpa = loop
         _TKvsX <- loop ctx tKvsX
 
         case _TKvsX of
-          Const Type -> return ()
-          kind       -> Left (TypeError ctx e (InvalidToMapRecordKind tKvsX kind))
+            Const Type -> return ()
+            kind       -> Left (TypeError ctx e (InvalidToMapRecordKind tKvsX kind))
 
         Data.Foldable.traverse_ (loop ctx) mT₁
 
