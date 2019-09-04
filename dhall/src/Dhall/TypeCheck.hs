@@ -2874,7 +2874,7 @@ prettyTypeMessage (MustMapARecord _expr0 _expr1) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ let record = { one = 1, two = 2 }                                   │     \n\
         \    │ in  toMap record : List { mapKey : Text, mapValue : Natural}        │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
@@ -2891,7 +2891,7 @@ prettyTypeMessage (InvalidToMapRecordKind type_ kind) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ let record = { one = 1, two = 2 }                                   │     \n\
         \    │ in  toMap record : List { mapKey : Text, mapValue : Natural}        │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
@@ -2916,7 +2916,7 @@ prettyTypeMessage (HeterogenousRecordToMap _expr0 _expr1 _expr2) = ErrorMessages
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ let record = { one = 1, two = 2 }                                   │     \n\
         \    │ in  toMap record : List { mapKey : Text, mapValue : Natural}        │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
@@ -2972,7 +2972,7 @@ prettyTypeMessage MissingToMapType =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ let record = { one = 1, two = 2 }                                   │     \n\
         \    │ in  toMap record                                                    │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
