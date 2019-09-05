@@ -457,7 +457,7 @@ prettyCharacterSet characterSet expression =
                     (   (lparen <> space)
                     <>  prettyLabel a
                     <>  Pretty.hardline
-                   <>  (colon <> space)
+                    <>  (colon <> space)
                     <>  prettyExpression b
                     <>  Pretty.hardline
                     <>  rparen
