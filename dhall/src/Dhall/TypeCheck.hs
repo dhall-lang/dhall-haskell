@@ -34,7 +34,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Typeable (Typeable)
 import Dhall.Binary (ToTerm(..))
-import Dhall.Core (Const(..), Chunks(..), Expr(..), Var(..))
+import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Pretty (Ann, layoutOpts)
 
@@ -151,10 +151,10 @@ typeWithA tpa = loop
                 let nf_A  = Dhall.Core.normalize _A
                 let nf_A' = Dhall.Core.normalize _A'
                 Left (TypeError ctx e (TypeMismatch f nf_A a nf_A'))
-    loop ctx e@(Let x mA a0 b0) = do
+    loop ctx e@(Let (Binding _ x _ mA _ a0) b0) = do
         _A1 <- loop ctx a0
         case mA of
-            Just _A0 -> do
+            Just (_, _A0) -> do
                 _ <- loop ctx _A0
                 let nf_A0 = Dhall.Core.normalize _A0
                 let nf_A1 = Dhall.Core.normalize _A1
@@ -665,6 +665,12 @@ typeWithA tpa = loop
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustMapARecord kvsX tKvsX))
 
+        _TKvsX <- loop ctx tKvsX
+
+        case _TKvsX of
+            Const Type -> return ()
+            kind       -> Left (TypeError ctx e (InvalidToMapRecordKind tKvsX kind))
+
         Data.Foldable.traverse_ (loop ctx) mT₁
 
         let ktX = appEndo (foldMap (Endo . compareFieldTypes) ktsX) Nothing
@@ -841,6 +847,7 @@ data TypeMessage s a
     | MustMergeARecord (Expr s a) (Expr s a)
     | MustMergeUnion (Expr s a) (Expr s a)
     | MustMapARecord (Expr s a) (Expr s a)
+    | InvalidToMapRecordKind (Expr s a) (Expr s a)
     | HeterogenousRecordToMap (Expr s a) (Expr s a) (Expr s a)
     | InvalidToMapType (Expr s a)
     | MapTypeMismatch (Expr s a) (Expr s a)
@@ -2867,12 +2874,38 @@ prettyTypeMessage (MustMapARecord _expr0 _expr1) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ let record = { one = 1, two = 2 }                                   │     \n\
         \    │ in  toMap record : List { mapKey : Text, mapValue : Natural}        │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
         \                                                                                \n\
         \... but the argument to ❰toMap❱ must be a record and not some other type.       \n"
+
+prettyTypeMessage (InvalidToMapRecordKind type_ kind) = ErrorMessages {..}
+  where
+    short = "❰toMap❱ expects a record of kind ❰Type❱"
+
+    long =
+        "Explanation: You can apply ❰toMap❱ to any homogenous record of kind ❰Type❱, like\n\
+        \ this:                                                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │ let record = { one = 1, two = 2 }                                   │     \n\
+        \    │ in  toMap record : List { mapKey : Text, mapValue : Natural}        │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but records of kind ❰Kind❱ or ❰Sort❱ cannot be turned into ❰List❱s.         \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You applied ❰toMap❱ to a record of the following type:                          \n\
+        \                                                                                \n\
+        \" <> insert type_ <> "\n\
+        \                                                                                \n\
+        \... which has kind                                                              \n\
+        \                                                                                \n\
+        \" <> insert kind <> "\n"
 
 prettyTypeMessage (HeterogenousRecordToMap _expr0 _expr1 _expr2) = ErrorMessages {..}
   where
@@ -2883,7 +2916,7 @@ prettyTypeMessage (HeterogenousRecordToMap _expr0 _expr1 _expr2) = ErrorMessages
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ let record = { one = 1, two = 2 }                                   │     \n\
         \    │ in  toMap record : List { mapKey : Text, mapValue : Natural}        │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
@@ -2939,7 +2972,7 @@ prettyTypeMessage MissingToMapType =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ let record = { one = 1, two = 2 }                                   │     \n\
         \    │ in  toMap record                                                    │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\

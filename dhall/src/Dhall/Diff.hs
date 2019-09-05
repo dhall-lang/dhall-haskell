@@ -25,7 +25,7 @@ import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Void (Void)
-import Dhall.Core (Chunks (..), Const(..), Expr(..), Var(..))
+import Dhall.Core (Binding(..), Chunks (..), Const(..), Expr(..), Var(..))
 import Dhall.Binary (ToTerm)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
@@ -653,13 +653,16 @@ diff l r@(BoolIf {}) =
 diff l@(Let {}) r@(Let {}) =
     enclosed' "    " (keyword "in" <> "  ") (docs l r)
   where
-    docs (Let aL bL cL dL) (Let aR bR cR dR) =
+    docs (Let (Binding _ aL _ bL _ cL) dL) (Let (Binding _ aR _ bR _ cR) dR) =
         Data.List.NonEmpty.cons (align doc) (docs dL dR)
       where
+        bL' = fmap snd bL
+        bR' = fmap snd bR
+
         doc =   keyword "let"
             <>  " "
             <>  format " " (diffLabel aL aR)
-            <>  format " " (diffMaybe (colon <> " ") diff bL bR)
+            <>  format " " (diffMaybe (colon <> " ") diff bL' bR')
             <>  equals
             <>  " "
             <>  diff cL cR

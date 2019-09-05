@@ -65,7 +65,8 @@ import Data.Text (Text)
 import Data.Void (Void)
 
 import Dhall.Core (
-    Expr(..)
+    Binding(..)
+  , Expr(..)
   , Chunks(..)
   , Const(..)
   , Import
@@ -349,7 +350,8 @@ eval !env t =
     Lam x a t        -> VLam (evalE a) (Cl x env t)
     Pi x a b         -> VPi (evalE a) (Cl x env b)
     App t u          -> vApp (evalE t) (evalE u)
-    Let x _mA a b    -> let !env' = Extend env x (evalE a)
+    Let (Binding _ x _ _mA _ a) b ->
+                        let !env' = Extend env x (evalE a)
                         in eval env' b
     Annot t _        -> evalE t
 
@@ -921,7 +923,10 @@ alphaNormalize = goEnv NEmpty where
       Lam x t u        -> Lam "_" (go t) (goBind x u)
       Pi x a b         -> Pi "_" (go a) (goBind x b)
       App t u          -> App (go t) (go u)
-      Let x mA a b     -> Let "_" (go <$> mA) (go a) (goBind x b)
+      Let (Binding src0 x src1 mA src2 a) b ->
+          Let (Binding src0 "_" src1 (adapt <$> mA) src2 (go a)) (goBind x b)
+        where
+          adapt (src3, _A) = (src3, go _A)
       Annot t u        -> Annot (go t) (go u)
       Bool             -> Bool
       BoolLit b        -> BoolLit b

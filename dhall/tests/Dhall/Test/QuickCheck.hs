@@ -10,7 +10,8 @@ import Codec.Serialise (DeserialiseFailure(..))
 import Data.Either (isRight)
 import Dhall.Map (Map)
 import Dhall.Core
-    ( Chunks(..)
+    ( Binding(..)
+    , Chunks(..)
     , Const(..)
     , Directory(..)
     , Expr(..)
@@ -134,6 +135,16 @@ instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
         .   shrink
         .   Dhall.Map.toList
 
+instance (Arbitrary s, Arbitrary a) => Arbitrary (Binding s a) where
+    arbitrary =
+        let adapt = fmap ((,) Nothing)
+            f a b   = Binding Nothing "_" Nothing (adapt a) Nothing b
+            g a b c = Binding Nothing a   Nothing (adapt b) Nothing c
+
+        in  Test.QuickCheck.oneof [ lift2 f, lift3 g ]
+
+    shrink = genericShrink
+
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Chunks s a) where
     arbitrary = do
         n <- Test.QuickCheck.choose (0, 2)
@@ -172,7 +183,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
                 , ( 1, Test.QuickCheck.oneof [ lift2 (Lam "_"), lift3 Lam ])
                 , ( 1, Test.QuickCheck.oneof [ lift2 (Pi "_"), lift3 Pi ])
                 , ( 1, lift2 App)
-                , ( 7, Test.QuickCheck.oneof [ lift3 (Let "_"), lift4 Let ])
+                , ( 7, lift2 Let)
                 , ( 1, lift2 Annot)
                 , ( 1, lift0 Bool)
                 , ( 7, lift1 BoolLit)
@@ -332,7 +343,7 @@ binaryRoundtrip expression =
                   )
                 )
             )
-    === wrap (Right (Right expression))
+    === wrap (Right (Right (Dhall.Core.denote expression :: Expr () Import)))
   where
     wrap
         :: Either DeserialiseFailure       a
