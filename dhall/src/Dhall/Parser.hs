@@ -26,6 +26,7 @@ import Dhall.Core
 import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
 
+import qualified Data.Char
 import qualified Data.Text
 import qualified Text.Megaparsec
 
@@ -89,7 +90,7 @@ exprAndHeaderFromText
     -> Either ParseError (Text, Expr Src Import)
 exprAndHeaderFromText delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
-    Right (txt, r) -> Right (Data.Text.dropWhileEnd (/= '\n') txt, r)
+    Right (txt, r) -> Right (stripHeader txt, r)
   where
     parser = do
         (bytes, _) <- Text.Megaparsec.match whitespace
@@ -98,3 +99,5 @@ exprAndHeaderFromText delta text = case result of
         return (bytes, r)
 
     result = Text.Megaparsec.parse (unParser parser) delta text
+
+    stripHeader = Data.Text.dropWhile Data.Char.isSpace . Data.Text.dropWhileEnd (/= '\n')
