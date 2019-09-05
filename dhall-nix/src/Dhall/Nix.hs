@@ -230,8 +230,8 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- loop a
         b' <- loop b
         return (Fix (NBinary NApp a' b'))
-    loop (Let x mA a0 b0) = do
-        let MultiLet as b = Dhall.Core.multiLet x mA a0 b0
+    loop (Let a0 b0) = do
+        let MultiLet as b = Dhall.Core.multiLet a0 b0
         as' <- for as $ \a -> do
           val <- loop $ Dhall.Core.value a
           pure $ NamedVar [StaticKey $ Dhall.Core.variable a] val Nix.nullPos

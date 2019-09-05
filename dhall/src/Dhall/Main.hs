@@ -354,7 +354,7 @@ command (Options {..}) = do
             Pretty.renderIO h ansiStream
             Data.Text.IO.hPutStrLn h ""
 
-    let render :: Pretty a => Handle -> Expr s a -> IO ()
+    let render :: Pretty a => Handle -> Expr Src a -> IO ()
         render h expression = do
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 

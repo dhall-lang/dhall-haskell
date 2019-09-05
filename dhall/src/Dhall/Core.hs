@@ -362,7 +362,20 @@ instance IsString Var where
 instance Pretty Var where
     pretty = Pretty.unAnnotate . prettyVar
 
--- | Syntax tree for expressions
+{-| Syntax tree for expressions
+
+    The @s@ type parameter is used to track the presence or absence of `Src`
+    spans:
+
+    * If @s = `Src`@ then the code may contains `Src` spans (either in a `Noted`
+      constructor or inline within another constructor, like `Let`)
+    * If @s = `Void`@ then the code has no `Src` spans
+
+    The @a@ type parameter is used to track the presence or absence of imports
+
+    * If @a = `Import`@ then the code may contain unresolved `Import`s
+    * If @a = `Void`@ then the code has no `Import`s
+-}
 data Expr s a
     -- | > Const c                                  ~  c
     = Const Const
@@ -376,8 +389,8 @@ data Expr s a
     | Pi  Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
-    -- | > Let x Nothing  r e                       ~  let x     = r in e
-    --   > Let x (Just t) r e                       ~  let x : t = r in e
+    -- | > Let (Binding _ x _  Nothing  _ r) e      ~  let x     = r in e
+    --   > Let (Binding _ x _ (Just t ) _ r) e      ~  let x : t = r in e
     --
     -- The difference between
     --
@@ -392,7 +405,7 @@ data Expr s a
     --
     -- See 'MultiLet' for a representation of let-blocks that mirrors the
     -- source code more closely.
-    | Let Text (Maybe (Expr s a)) (Expr s a) (Expr s a)
+    | Let (Binding s a) (Expr s a)
     -- | > Annot x t                                ~  x : t
     | Annot (Expr s a) (Expr s a)
     -- | > Bool                                     ~  Bool
@@ -549,7 +562,7 @@ instance Functor (Expr s) where
   fmap f (Lam v e1 e2) = Lam v (fmap f e1) (fmap f e2)
   fmap f (Pi v e1 e2) = Pi v (fmap f e1) (fmap f e2)
   fmap f (App e1 e2) = App (fmap f e1) (fmap f e2)
-  fmap f (Let v maybeE e1 e2) = Let v (fmap (fmap f) maybeE) (fmap f e1) (fmap f e2)
+  fmap f (Let b e2) = Let (fmap f b) (fmap f e2)
   fmap f (Annot e1 e2) = Annot (fmap f e1) (fmap f e2)
   fmap _ Bool = Bool
   fmap _ (BoolLit b) = BoolLit b
@@ -626,7 +639,12 @@ instance Monad (Expr s) where
     Lam a b c            >>= k = Lam a (b >>= k) (c >>= k)
     Pi  a b c            >>= k = Pi a (b >>= k) (c >>= k)
     App a b              >>= k = App (a >>= k) (b >>= k)
-    Let a b c d          >>= k = Let a (fmap (>>= k) b) (c >>= k) (d >>= k)
+    Let a b              >>= k = Let (adapt0 a) (b >>= k)
+      where
+        adapt0 (Binding src0 c src1 d src2 e) =
+            Binding src0 c src1 (fmap adapt1 d) src2 (e >>= k)
+
+        adapt1 (src3, f) = (src3, f >>= k)
     Annot a b            >>= k = Annot (a >>= k) (b >>= k)
     Bool                 >>= _ = Bool
     BoolLit a            >>= _ = BoolLit a
@@ -695,7 +713,7 @@ instance Bifunctor Expr where
     first k (Lam a b c           ) = Lam a (first k b) (first k c)
     first k (Pi a b c            ) = Pi a (first k b) (first k c)
     first k (App a b             ) = App (first k a) (first k b)
-    first k (Let a b c d         ) = Let a (fmap (first k) b) (first k c) (first k d)
+    first k (Let a b             ) = Let (first k a) (first k b)
     first k (Annot a b           ) = Annot (first k a) (first k b)
     first _  Bool                  = Bool
     first _ (BoolLit a           ) = BoolLit a
@@ -882,14 +900,15 @@ shift d v (App f a) = App f' a'
   where
     f' = shift d v f
     a' = shift d v a
-shift d (V x n) (Let f mt r e) = Let f mt' r' e'
+shift d (V x n) (Let (Binding src0 f src1 mt src2 r) e) =
+    Let (Binding src0 f src1 mt' src2 r') e'
   where
     e' = shift d (V x n') e
       where
         n' = if x == f then n + 1 else n
 
-    mt' = fmap (shift d (V x n)) mt
-    r'  =       shift d (V x n)  r
+    mt' = fmap (fmap (shift d (V x n))) mt
+    r'  =             shift d (V x n)  r
 shift d v (Annot a b) = Annot a' b'
   where
     a' = shift d v a
@@ -1050,14 +1069,15 @@ subst v e (App f a) = App f' a'
     f' = subst v e f
     a' = subst v e a
 subst v e (Var v') = if v == v' then e else Var v'
-subst (V x n) e (Let f mt r b) = Let f mt' r' b'
+subst (V x n) e (Let (Binding src0 f src1 mt src2 r) b) =
+    Let (Binding src0 f src1 mt' src2 r') b'
   where
     b' = subst (V x n') (shift 1 (V f 0) e) b
       where
         n' = if x == f then n + 1 else n
 
-    mt' = fmap (subst (V x n) e) mt
-    r'  =       subst (V x n) e  r
+    mt' = fmap (fmap (subst (V x n) e)) mt
+    r'  =             subst (V x n) e  r
 subst x e (Annot a b) = Annot a' b'
   where
     a' = subst x e a
@@ -1256,7 +1276,12 @@ denote (Var a               ) = Var a
 denote (Lam a b c           ) = Lam a (denote b) (denote c)
 denote (Pi a b c            ) = Pi a (denote b) (denote c)
 denote (App a b             ) = App (denote a) (denote b)
-denote (Let a b c d         ) = Let a (fmap denote b) (denote c) (denote d)
+denote (Let a b             ) = Let (adapt0 a) (denote b)
+  where
+    adapt0 (Binding _ c _ d _ e) =
+        Binding Nothing c Nothing (fmap adapt1 d) Nothing (denote e)
+
+    adapt1 (_, f) = (Nothing, denote f)
 denote (Annot a b           ) = Annot (denote a) (denote b)
 denote  Bool                  = Bool
 denote (BoolLit a           ) = BoolLit a
@@ -1523,7 +1548,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                         case res2 of
                             Nothing -> pure (App f' a')
                             Just app' -> loop app'
-    Let f _ r b -> loop b''
+    Let (Binding _ f _ _ _ r) b -> loop b''
       where
         r'  = shift   1  (V f 0) r
         b'  = subst (V f 0) r' b
@@ -1891,7 +1916,7 @@ isNormalized e0 = loop (denote e0)
           App TextShow (TextLit (Chunks [] _)) ->
               False
           _ -> True
-      Let _ _ _ _ -> False
+      Let _ _ -> False
       Annot _ _ -> False
       Bool -> True
       BoolLit _ -> True
@@ -2131,7 +2156,12 @@ subExpressions _ (Var v) = pure (Var v)
 subExpressions f (Lam a b c) = Lam a <$> f b <*> f c
 subExpressions f (Pi a b c) = Pi a <$> f b <*> f c
 subExpressions f (App a b) = App <$> f a <*> f b
-subExpressions f (Let a b c d) = Let a <$> traverse f b <*> f c <*> f d
+subExpressions f (Let a b) = Let <$> adapt0 a <*> f b
+  where
+    adapt0 (Binding src0 c src1 d src2 e) =
+        Binding <$> pure src0 <*> pure c <*> pure src1 <*> traverse adapt1 d <*> pure src2 <*> f e
+
+    adapt1 (src2, g) = (,) <$> pure src2 <*> f g
 subExpressions f (Annot a b) = Annot <$> f a <*> f b
 subExpressions _ Bool = pure Bool
 subExpressions _ (BoolLit b) = pure (BoolLit b)
@@ -2266,29 +2296,39 @@ This should be fixed by GHC-8.10, so it might be worth revisiting then.
     Given parser output, 'multiLet' consolidates @let@s that formed a
     let-block in the original source.
 -}
-multiLet :: Text -> Maybe (Expr s a) -> Expr s a -> Expr s a -> MultiLet s a
-multiLet x0 mA0 a0 = \case
-    Let x1 mA1 a1 b1 ->
-        let MultiLet bs e = multiLet x1 mA1 a1 b1
-        in MultiLet (Data.List.NonEmpty.cons binding bs) e
-    e -> MultiLet (binding :| []) e
-  where
-    binding = Binding x0 mA0 a0
+multiLet :: Binding s a -> Expr s a -> MultiLet s a
+multiLet b0 = \case
+    Let b1 e1 ->
+        let MultiLet bs e = multiLet b1 e1
+        in  MultiLet (Data.List.NonEmpty.cons b0 bs) e
+    e -> MultiLet (b0 :| []) e
 
 {-| Wrap let-'Binding's around an 'Expr'.
 
 'wrapInLets' can be understood as an inverse for 'multiLet':
 
-> let MultiLet as b1 = multiLet x mA a b0
-> wrapInLets as b1 == Let x mA a b0
+> let MultiLet bs e1 = multiLet b e0
+>
+> wrapInLets bs e1 == Let b e0
 -}
 wrapInLets :: Foldable f => f (Binding s a) -> Expr s a -> Expr s a
-wrapInLets as b = foldr (\(Binding x mA a) e -> Let x mA a e) b as
+wrapInLets bs e = foldr Let e bs
 
 data MultiLet s a = MultiLet (NonEmpty (Binding s a)) (Expr s a)
 
 data Binding s a = Binding
-    { variable   :: Text
-    , annotation :: Maybe (Expr s a)
-    , value      :: Expr s a
-    }
+    { bindingSrc0 :: Maybe s
+    , variable    :: Text
+    , bindingSrc1 :: Maybe s
+    , annotation  :: Maybe (Maybe s, Expr s a)
+    , bindingSrc2 :: Maybe s
+    , value       :: Expr s a
+    } deriving (Data, Eq, Foldable, Functor, Generic, NFData, Ord, Show, Traversable)
+
+instance Bifunctor Binding where
+    first k (Binding src0 a src1 b src2 c) =
+        Binding (fmap k src0) a (fmap k src1) (fmap adapt0 b) (fmap k src2) (first k c)
+      where
+        adapt0 (src3, d) = (fmap k src3, first k d)
+
+    second = fmap
