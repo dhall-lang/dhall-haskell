@@ -139,7 +139,7 @@ import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term(..))
 import Control.Exception (Exception, SomeException, toException)
 import Control.Monad (guard)
-import Control.Monad.Catch (throwM, MonadCatch(catch), handle, finally)
+import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT)
@@ -778,7 +778,7 @@ getCacheFile cacheName hash = do
     return cacheFile
 
 getCacheDirectory :: (Alternative m, MonadIO m) => m FilePath
-getCacheDirectory = alternative₀ <|> alternative₁
+getCacheDirectory = alternative₀ <|> alternative₁ <|> alternative₂
   where
     alternative₀ = do
         maybeXDGCacheHome <- do
@@ -788,14 +788,9 @@ getCacheDirectory = alternative₀ <|> alternative₁
             Just xdgCacheHome -> return xdgCacheHome
             Nothing           -> empty
 
-    alternative₁ = do
-        maybeHomeDirectory <- liftIO $
-           finally (fmap Just Directory.getHomeDirectory)
-                   (return Nothing)
+    alternative₁ = liftIO (fmap (<> ".cache") Directory.getHomeDirectory)
 
-        case maybeHomeDirectory of
-            Just homeDirectory -> return (homeDirectory </> ".cache")
-            Nothing            -> empty
+    alternative₂ = pure ".cache"
 
 -- If the URL contains headers typecheck them and replace them with their normal
 -- forms.
