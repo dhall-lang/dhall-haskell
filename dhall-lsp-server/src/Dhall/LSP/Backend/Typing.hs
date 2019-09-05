@@ -1,7 +1,7 @@
 module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
 
 import Dhall.Context (Context, insert, empty)
-import Dhall.Core (Expr(..), subExpressions, normalize, shift, subst, Var(..), pretty)
+import Dhall.Core (Binding(..), Expr(..), subExpressions, normalize, shift, subst, Var(..), pretty)
 import Dhall.TypeCheck (typeWithA, X, TypeError(..))
 import Dhall.Parser (Src(..))
 
@@ -30,7 +30,7 @@ typeAt pos expr = do
 
 typeAt' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Maybe Src, Expr Src X)
 -- the user hovered over the bound name in a let expression
-typeAt' pos ctx (Note src (Let _ _ a _)) | pos `inside` getLetIdentifier src = do
+typeAt' pos ctx (Note src (Let (Binding { value = a }) _)) | pos `inside` getLetIdentifier src = do
   typ <- typeWithA absurd ctx a
   return (Just $ getLetIdentifier src, typ)
 
@@ -45,7 +45,7 @@ typeAt' pos _ctx (Note src (Pi _ _A _)) | Just src' <- getForallIdentifier src
   return (Just src', _A)
 
 -- the input only contains singleton lets
-typeAt' pos ctx (Let x _ a e@(Note src _)) | pos `inside` src = do
+typeAt' pos ctx (Let (Binding { variable = x, value = a }) e@(Note src _)) | pos `inside` src = do
   _ <- typeWithA absurd ctx a
   let a' = shift 1 (V x 0) (normalize a)
   typeAt' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
@@ -98,7 +98,7 @@ annotateLet pos expr = do
 
 annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Either String (Src, Text)
 -- the input only contains singleton lets
-annotateLet' pos ctx (Note src e@(Let _ _ a _))
+annotateLet' pos ctx (Note src e@(Let (Binding { value = a }) _))
   | not $ any (pos `inside`) [ src' | Note src' _ <- toListOf subExpressions e ]
   = do _A <- first show $ typeWithA absurd ctx a
        srcAnnot <- case getLetAnnot src of
@@ -108,7 +108,7 @@ annotateLet' pos ctx (Note src e@(Let _ _ a _))
        return (srcAnnot, ": " <> pretty (normalize _A) <> " ")
 
 -- binders, see typeAt'
-annotateLet' pos ctx (Let x _ a e@(Note src _)) | pos `inside` src = do
+annotateLet' pos ctx (Let (Binding { variable = x, value = a }) e@(Note src _)) | pos `inside` src = do
   _ <- first show $ typeWithA absurd ctx a
   let a' = shift 1 (V x 0) (normalize a)
   annotateLet' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
