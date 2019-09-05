@@ -460,7 +460,7 @@ command (Options {..}) = do
         Type {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- Dhall.Import.assertNoImports expression
+            resolvedExpression <- Dhall.Import.loadRelativeTo (rootDirectory file) expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
