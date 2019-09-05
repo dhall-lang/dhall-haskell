@@ -92,7 +92,7 @@ freezeRemoteImport directory import_ = do
         Remote {} -> freezeImport directory import_
         _         -> return import_
 
-writeExpr :: Maybe FilePath -> (Text, Expr s Import) -> CharacterSet -> IO ()
+writeExpr :: Maybe FilePath -> (Text, Expr Src Import) -> CharacterSet -> IO ()
 writeExpr inplace (header, expr) characterSet = do
     let doc =  Pretty.pretty header
             <> Dhall.Pretty.prettyCharacterSet characterSet expr

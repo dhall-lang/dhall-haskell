@@ -371,17 +371,17 @@ instance ToTerm a => ToTerm (Expr Void a) where
         t₁ = encode t₀
     encode (Embed x) =
         encode x
-    encode (Let x mA a b) =
+    encode (Let a b) =
         TList ([ TInt 25 ] ++ as₁ ++ [ b₁ ])
       where
-        MultiLet as₀ b₀ = Dhall.Core.multiLet x mA a b
+        MultiLet as₀ b₀ = Dhall.Core.multiLet a b
 
         as₁ = do
-            Binding x₀ mA₀ a₀ <- toList as₀
+            Binding _ x₀ _ mA₀ _ a₀ <- toList as₀
 
             let mA₁ = case mA₀ of
-                    Nothing  -> TNull
-                    Just _A₀ -> encode _A₀
+                    Nothing       -> TNull
+                    Just (_, _A₀) -> encode _A₀
 
             let a₁ = encode a₀
 
@@ -722,7 +722,9 @@ instance FromTerm a => FromTerm (Expr s a) where
         let process (TString x : _A₁ : a₁ : ls₁) = do
                 mA₀ <- case _A₁ of
                     TNull -> return Nothing
-                    _     -> fmap Just (decode _A₁)
+                    _     -> do
+                        _A₀ <- decode _A₁
+                        return (Just (Nothing, _A₀))
 
                 a₀  <- decode a₁
 
@@ -730,7 +732,7 @@ instance FromTerm a => FromTerm (Expr s a) where
                     [ b₁ ] -> decode b₁
                     _      -> process ls₁
 
-                return (Let x mA₀ a₀ b₀)
+                return (Let (Binding Nothing x Nothing mA₀ Nothing a₀) b₀)
             process _ = do
                 empty
 

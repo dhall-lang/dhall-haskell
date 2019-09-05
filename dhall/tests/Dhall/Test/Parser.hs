@@ -4,7 +4,7 @@ module Dhall.Test.Parser where
 
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Dhall.Core (Expr(..), Import, Var(..))
+import Dhall.Core (Binding(..), Expr(..), Import, Var(..))
 import Dhall.TypeCheck (X)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
@@ -84,16 +84,34 @@ notesInLetInLet = do
 
         let expected =
                 (Note code
-                  (Let "x" Nothing
-                    (Note "0 "
-                      (NaturalLit 0))
-                    (Let "y" Nothing  -- This 'Let' isn't wrapped in a 'Note'!
-                      (Note "1 "
-                        (NaturalLit 1))
+                  (Let
+                    (Binding
+                      (Just " ")
+                      "x"
+                      (Just " ")
+                      Nothing
+                      (Just " ")
+                      (Note "0 " (NaturalLit 0)))
+                    -- This 'Let' isn't wrapped in a 'Note'!
+                    (Let
+                      (Binding
+                        (Just " ")
+                        "y"
+                        (Just " ")
+                        Nothing
+                        (Just " ")
+                        (Note "1 " (NaturalLit 1))
+                      )
                       (Note "let z = 2 in x"
-                        (Let "z" Nothing
-                          (Note "2 "
-                            (NaturalLit 2))
+                        (Let
+                          (Binding
+                            (Just " ")
+                            "z"
+                            (Just " ")
+                            Nothing
+                            (Just " ")
+                            (Note "2 " (NaturalLit 2))
+                          )
                           (Note "x"
                             (Var (V "x" 0))))))))
 
@@ -137,8 +155,7 @@ shouldNotParse path = do
             [ -- These two unexpected successes are due to not correctly
               -- requiring non-empty whitespace after the `:` in a type
               -- annotation
-              parseDirectory </> "failure/annotation.dhall"
-            , parseDirectory </> "failure/unit/ImportEnvWrongEscape.dhall"
+              parseDirectory </> "failure/unit/ImportEnvWrongEscape.dhall"
 
               -- Other spacing related unexpected successes:
             , parseDirectory </> "failure/spacing/AnnotationNoSpace.dhall"
@@ -149,7 +166,6 @@ shouldNotParse path = do
             , parseDirectory </> "failure/spacing/ImportAltNoSpace.dhall"
             , parseDirectory </> "failure/spacing/ImportHashedNoSpace.dhall"
             , parseDirectory </> "failure/spacing/LambdaNoSpace.dhall"
-            , parseDirectory </> "failure/spacing/LetAnnotNoSpace.dhall"
             , parseDirectory </> "failure/spacing/ListLitEmptyNoSpace.dhall"
             , parseDirectory </> "failure/spacing/MergeAnnotationNoSpace3.dhall"
             , parseDirectory </> "failure/spacing/MergeNoSpace2.dhall"
