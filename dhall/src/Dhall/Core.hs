@@ -2050,7 +2050,7 @@ isNormalized e0 = loop (denote e0)
       Assert t -> loop t
       Equivalent l r -> loop l && loop r
       Note _ e' -> loop e'
-      ImportAlt l _r -> loop l
+      ImportAlt _ _ -> False
       Embed _ -> True
 
 {-| Detect if the given variable is free within the given expression

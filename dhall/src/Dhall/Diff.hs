@@ -756,17 +756,47 @@ diffAnnotatedExpression l r@(Annot {}) =
 diffAnnotatedExpression l r =
     diffOperatorExpression l r
 
+{- Whitespace in diffs of operator expressions:
+
+All indentation (whether pretty-printing or diffing) is a multiple of two
+spaces, so if the operator is one character long (like ?) then the diff pads
+the left margin to two space:
+
+    ␣␣e₀
+    ?␣e₁
+
+... but if the operator is two characters long (like ||) then the diff pads
+the left margin to four spaces:
+
+     ␣␣␣␣e₀
+     ||␣␣e₁
+-}
 diffOperatorExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
-diffOperatorExpression = diffOrExpression
+diffOperatorExpression = diffImportAltExpression
+
+diffImportAltExpression :: (Pretty a, Eq a) => Expr Void a -> Expr Void a -> Diff
+diffImportAltExpression l@(ImportAlt {}) r@(ImportAlt {}) =
+    enclosed' "  " (operator "?" <> " ") (docs l r)
+  where
+    docs (ImportAlt aL bL) (ImportAlt aR bR) =
+        Data.List.NonEmpty.cons (diffOrExpression aL aR) (docs bL bR)
+    docs aL aR =
+        pure (diffOrExpression aL aR)
+diffImportAltExpression l@(ImportAlt {}) r =
+    mismatch l r
+diffImportAltExpression l r@(ImportAlt {}) =
+    mismatch l r
+diffImportAltExpression l r =
+    diffOrExpression l r
 
 diffOrExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffOrExpression l@(BoolOr {}) r@(BoolOr {}) =
     enclosed' "    " (operator "||" <> "  ") (docs l r)
   where
     docs (BoolOr aL bL) (BoolOr aR bR) =
-        Data.List.NonEmpty.cons (diffTextAppendExpression aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffPlusExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffTextAppendExpression aL aR)
+        pure (diffPlusExpression aL aR)
 diffOrExpression l@(BoolOr {}) r =
     mismatch l r
 diffOrExpression l r@(BoolOr {}) =
@@ -779,9 +809,9 @@ diffPlusExpression l@(NaturalPlus {}) r@(NaturalPlus {}) =
     enclosed' "  " (operator "+" <> " ") (docs l r)
   where
     docs (NaturalPlus aL bL) (NaturalPlus aR bR) =
-        Data.List.NonEmpty.cons (diffListAppendExpression aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffTextAppendExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffListAppendExpression aL aR)
+        pure (diffTextAppendExpression aL aR)
 diffPlusExpression l@(NaturalPlus {}) r =
     mismatch l r
 diffPlusExpression l r@(NaturalPlus {}) =
@@ -794,9 +824,9 @@ diffTextAppendExpression l@(TextAppend {}) r@(TextAppend {}) =
     enclosed' "    " (operator "++" <> "  ") (docs l r)
   where
     docs (TextAppend aL bL) (TextAppend aR bR) =
-        Data.List.NonEmpty.cons (diffPlusExpression aL aR) (docs bL bR)
+        Data.List.NonEmpty.cons (diffListAppendExpression aL aR) (docs bL bR)
     docs aL aR =
-        pure (diffPlusExpression aL aR)
+        pure (diffListAppendExpression aL aR)
 diffTextAppendExpression l@(TextAppend {}) r =
     mismatch l r
 diffTextAppendExpression l r@(TextAppend {}) =
