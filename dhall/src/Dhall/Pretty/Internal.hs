@@ -541,15 +541,15 @@ prettyCharacterSet characterSet expression =
                 <>  Pretty.align
                     (   renderSrc src0 mempty
                     <>  prettyLabel c <> renderSrc src1 Pretty.hardline
-                    <>  colon <> renderSrc src3 space <> prettyExpression d <> renderSrc src2 Pretty.hardline
-                    <>  equals <> space <> prettyExpression e
+                    <>  colon <> renderSrc src3 space <> prettyExpression d <> space <> equals <> renderSrc src2 Pretty.hardline
+                    <>  prettyExpression e
                     )
 
             short = keyword "let" <> renderSrc src0 space
                 <>  prettyLabel c <> renderSrc src1 space
                 <>  colon <> renderSrc src3 space
-                <>  prettyExpression d <> renderSrc src2 space
-                <>  equals <> space <> prettyExpression e
+                <>  prettyExpression d <> space <> equals <> renderSrc src2 space
+                <>  prettyExpression e
 
         docB =
             ( keyword "in" <> " " <> prettyExpression b

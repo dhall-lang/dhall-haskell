@@ -158,7 +158,7 @@ parsers embedded = Parsers {..}
 
                     _equalOnly
 
-                    src3 <- src nonemptyWhitespace
+                    src3 <- src whitespace
 
                     f <- expression
 
