@@ -67,8 +67,8 @@ setOffset o = Text.Megaparsec.updateParserState $ \(Text.Megaparsec.State s p _ 
 #endif
 {-# INLINE setOffset #-}
 
-note :: Parser a -> Parser Src
-note parser = do
+src :: Parser a -> Parser Src
+src parser = do
     before      <- getSourcePos
     (tokens, _) <- Text.Megaparsec.match parser
     after       <- getSourcePos
@@ -140,25 +140,25 @@ parsers embedded = Parsers {..}
 
         alternative2 = do
             let binding = do
-                    _let_
+                    _letOnly
 
-                    src0 <- note nonemptyWhitespace
+                    src0 <- src nonemptyWhitespace
 
-                    c <- label_
+                    c <- labelOnly
 
-                    src1 <- note whitespace
+                    src1 <- src whitespace
 
                     d <- optional (do
-                        _colon_
+                        _colonOnly
 
-                        src2 <- note nonemptyWhitespace
+                        src2 <- src nonemptyWhitespace
 
                         e <- expression
                         return (Just src2, e) )
 
-                    _equal_
+                    _equalOnly
 
-                    src3 <- note nonemptyWhitespace
+                    src3 <- src nonemptyWhitespace
 
                     f <- expression
 

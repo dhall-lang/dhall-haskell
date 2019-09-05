@@ -362,7 +362,20 @@ instance IsString Var where
 instance Pretty Var where
     pretty = Pretty.unAnnotate . prettyVar
 
--- | Syntax tree for expressions
+{-| Syntax tree for expressions
+
+    The @s@ type parameter is used to track the presence or absence of `Src`
+    spans:
+
+    * If @s = `Src`@ then the code may contains `Src` spans (either in a `Noted`
+      constructor or inline within another constructor, like `Let`)
+    * If @s = `Void`@ then the code has no `Src` spans
+
+    The @a@ type parameter is used to track the presence or absence of imports
+
+    * If @a = `Import`@ then the code may contain unresolved `Import`s
+    * If @a = `Void`@ then the code has no `Import`s
+-}
 data Expr s a
     -- | > Const c                                  ~  c
     = Const Const
@@ -376,8 +389,8 @@ data Expr s a
     | Pi  Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
-    -- | > Let x Nothing  r e                       ~  let x     = r in e
-    --   > Let x (Just t) r e                       ~  let x : t = r in e
+    -- | > Let (Binding _ x _  Nothing  _ r) e      ~  let x     = r in e
+    --   > Let (Binding _ x _ (Just t ) _ r) e      ~  let x : t = r in e
     --
     -- The difference between
     --
@@ -2294,8 +2307,9 @@ multiLet b0 = \case
 
 'wrapInLets' can be understood as an inverse for 'multiLet':
 
-> let MultiLet as b1 = multiLet x mA a b0
-> wrapInLets as b1 == Let x mA a b0
+> let MultiLet bs e1 = multiLet b e0
+>
+> wrapInLets bs e1 == Let b e0
 -}
 wrapInLets :: Foldable f => f (Binding s a) -> Expr s a -> Expr s a
 wrapInLets bs e = foldr Let e bs

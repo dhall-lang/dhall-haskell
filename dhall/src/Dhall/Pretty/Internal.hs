@@ -134,14 +134,69 @@ isWhitespace c =
         '\r' -> True
         _    -> False
 
-srcOr :: Maybe Src -> Doc Ann -> Doc Ann
-srcOr (Just (Src {..})) _
+{-| Used to render inline `Src` spans preserved by the syntax tree
+
+    >>> let unusedSourcePos = Text.Megaparsec.SourcePos "" (Text.Megaparsec.mkPos 1) (Text.Megaparsec.mkPos 1)
+    >>> let nonEmptySrc = Src unusedSourcePos unusedSourcePos "-- Documentation for x\n"
+    >>> "let" <> renderSrc (Just nonEmptySrc) " " <> "x = 1 in x"
+    let -- Documentation for x
+        x = 1 in x
+    >>> let emptySrc = Src unusedSourcePos unusedSourcePos "      "
+    >>> "let" <> renderSrc (Just emptySrc) " " <> "x = 1 in x"
+    let x = 1 in x
+    >>> "let" <> renderSrc Nothing " " <> "x = 1 in x"
+    let x = 1 in x
+-}
+renderSrc
+    :: Maybe Src
+    -- ^ Source span to render (if present)
+    -> Doc Ann
+    -- ^ Used as the prefix (when the source span contains a comment) and as a
+    --   fallback (when the source span is absent or comment-free)
+    -> Doc Ann
+renderSrc (Just (Src {..})) prefix
     | not (Text.all isWhitespace srcText) =
-        Pretty.concatWith f (map Pretty.pretty (Text.splitOn "\n" srcText))
+        prefix <> Pretty.align (Pretty.concatWith f newLines <> suffix)
   where
+    horizontalSpace c = c == ' ' || c == '\t'
+
+    strippedText = Text.dropAround horizontalSpace srcText
+
+    suffix =
+        if Text.null strippedText
+        then mempty
+        else if Text.last strippedText == '\n' then mempty else " "
+
+    oldLines = Text.splitOn "\n" strippedText
+
+    spacePrefix = Text.takeWhile horizontalSpace
+
+    commonPrefix a b = case Text.commonPrefixes a b of
+        Nothing        -> ""
+        Just (c, _, _) -> c
+
+    blank = Text.all horizontalSpace
+
+    newLines =
+        case oldLines of
+            [] ->
+               []
+            l0 : [] ->
+                Pretty.pretty l0 : []
+            l0 : l1 : ls ->
+                let sharedPrefix =
+                        foldl' commonPrefix (spacePrefix l1) (map spacePrefix (filter (not . blank) ls))
+
+                    perLine l =
+                        case Text.stripPrefix sharedPrefix l of
+                            Nothing -> Pretty.pretty l
+                            Just l' -> Pretty.pretty l'
+
+                in  Pretty.pretty l0 : map perLine (l1 : ls)
+
     f x y = x <> Pretty.hardline <> y
-srcOr _ doc =
-    doc
+renderSrc _ prefix =
+    prefix
 
 -- Annotation helpers
 keyword, syntax, label, literal, builtin, operator :: Doc Ann -> Doc Ann
@@ -383,8 +438,7 @@ the layout of let-blocks:
 >>> let inner = Let (Binding Nothing "x" Nothing Nothing Nothing (NaturalLit 1)) (Var (V "x" 0)) :: Expr Src ()
 >>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing (NaturalLit 2)) inner)
 let y = 2 let x = 1 in x
->>> let sourcePos = Text.Megaparsec.SourcePos "" (Text.Megaparsec.mkPos 1) (Text.Megaparsec.mkPos 1)
->>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing (NaturalLit 2)) (Note (Src sourcePos sourcePos "") inner))
+>>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing (NaturalLit 2)) (Note (Src unusedSourcePos unusedSourcePos "") inner))
 let y = 2 in let x = 1 in x
 
 This means the structure of parsed let-blocks is preserved.
@@ -403,7 +457,7 @@ prettyCharacterSet characterSet expression =
                     (   (lparen <> space)
                     <>  prettyLabel a
                     <>  Pretty.hardline
-                   <>  (colon <> space)
+                    <>  (colon <> space)
                     <>  prettyExpression b
                     <>  Pretty.hardline
                     <>  rparen
@@ -468,38 +522,34 @@ prettyCharacterSet characterSet expression =
         docA (Binding src0 c src1 Nothing src2 e) =
             Pretty.group (Pretty.flatAlt long short)
           where
-            long =  keyword "let" <> srcOr src0 space
+            long =  keyword "let" <> space
                 <>  Pretty.align
-                    (   prettyLabel c
-                    <>  srcOr src1 space <> equals
-                    <>  srcOr src2 (Pretty.hardline <> "  ")
-                    <>  prettyExpression e
+                    (   renderSrc src0 mempty
+                    <>  prettyLabel c <> renderSrc src1 space
+                    <>  equals <> renderSrc src2 Pretty.hardline
+                    <>  "  " <> prettyExpression e
                     )
 
-            short = keyword "let" <> srcOr src0 space
-                <>  prettyLabel c
-                <>  (srcOr src1 space <> equals <> srcOr src2 space)
+            short = keyword "let" <> renderSrc src0 space
+                <>  prettyLabel c <> renderSrc src1 space
+                <>  equals <> renderSrc src2 space
                 <>  prettyExpression e
         docA (Binding src0 c src1 (Just (src3, d)) src2 e) =
             Pretty.group (Pretty.flatAlt long short)
           where
-            long = keyword "let" <> srcOr src0 space
+            long = keyword "let" <> space
                 <>  Pretty.align
-                    (   prettyLabel c
-                    <>  srcOr src1 Pretty.hardline
-                    <>  colon <> srcOr src3 space
-                    <>  prettyExpression d
-                    <>  srcOr src2 Pretty.hardline
-                    <>  equals <> space
-                    <>  prettyExpression e
+                    (   renderSrc src0 mempty
+                    <>  prettyLabel c <> renderSrc src1 Pretty.hardline
+                    <>  colon <> renderSrc src3 space <> prettyExpression d <> renderSrc src2 Pretty.hardline
+                    <>  equals <> space <> prettyExpression e
                     )
 
-            short = keyword "let" <> srcOr src0 space
-                <>  prettyLabel c
-                <>  srcOr src1 space <> colon <> srcOr src3 space
-                <>  prettyExpression d
-                <>  srcOr src2 space <> equals <> space
-                <>  prettyExpression e
+            short = keyword "let" <> renderSrc src0 space
+                <>  prettyLabel c <> renderSrc src1 space
+                <>  colon <> renderSrc src3 space
+                <>  prettyExpression d <> renderSrc src2 space
+                <>  equals <> space <> prettyExpression e
 
         docB =
             ( keyword "in" <> " " <> prettyExpression b
