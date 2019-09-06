@@ -455,7 +455,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 
           let records = (fmap f . Seq.fromList . HM.toList) keyExprMap
 
-          let typeAnn = if HM.null o then Just mapValue else Nothing
+          let typeAnn = if HM.null o then Just t else Nothing
 
           return (D.ListLit typeAnn records)
         | noKeyValMap
@@ -467,7 +467,7 @@ dhallFromJSON (Conversion {..}) expressionType =
     loop (App D.List t) (A.Array a)
         = let f :: [ExprX] -> ExprX
               f es = D.ListLit
-                       (if null es then Just t else Nothing)
+                       (if null es then Just (App D.List t) else Nothing)
                        (Seq.fromList es)
            in f <$> traverse (loop t) (toList a)
 
@@ -545,7 +545,7 @@ dhallFromJSON (Conversion {..}) expressionType =
                   let elements = Seq.fromList (fmap outer (Vector.toList a))
 
                       elementType
-                          | null elements = Just "JSON"
+                          | null elements = Just (D.App D.List "JSON")
                           | otherwise     = Nothing
 
                   in  D.App (D.Field "json" "array") (D.ListLit elementType elements)
