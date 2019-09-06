@@ -1487,6 +1487,20 @@ normalizeWithM ctx e0 = loop (denote e0)
                                 )
 
                         nil = ListLit (Just (App List _A₀)) empty
+                    App (App ListFold t) (ListLit _ xs) -> do
+                        t' <- loop t
+                        let list = Var (V "list" 0)
+                        let lam term =
+                                Lam "list" (Const Type)
+                                    (Lam "cons" (Pi "_" t' (Pi "_" list list))
+                                        (Lam "nil" list term))
+                        term <- foldrM
+                            (\x acc -> do
+                                x' <- loop x
+                                pure (App (App (Var (V "cons" 0)) x') acc))
+                            (Var (V "nil" 0))
+                            xs
+                        pure (lam term)
                     App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil -> do
                       t' <- loop t
                       if boundedType t' then strict else lazy
@@ -1531,14 +1545,23 @@ normalizeWithM ctx e0 = loop (denote e0)
                             kvs = [ ("index", NaturalLit (fromIntegral n))
                                   , ("value", a_)
                                   ]
-                    App (App ListReverse t) (ListLit _ xs) ->
-                        loop (ListLit m (Data.Sequence.reverse xs))
-                      where
-                        m = if Data.Sequence.null xs then Just (App List t) else Nothing
-                    App (App (App (App (App OptionalFold _) (App None _)) _) _) nothing ->
-                        loop nothing
-                    App (App (App (App (App OptionalFold _) (Some x)) _) just) _ ->
-                        loop (App just x)
+                    App (App ListReverse _) (ListLit t xs) ->
+                        loop (ListLit t (Data.Sequence.reverse xs))
+
+                    App (App OptionalFold t0) x0 -> do
+                        t1 <- loop t0
+                        let optional = Var (V "optional" 0)
+                        let lam term = (Lam "optional"
+                                           (Const Type)
+                                           (Lam "some"
+                                               (Pi "_" t1 optional)
+                                               (Lam "none" optional term)))
+                        x1 <- loop x0
+                        pure $ case x1 of
+                            App None _ -> lam (Var (V "none" 0))
+                            Some x'    -> lam (App (Var (V "some" 0)) x')
+                            _          -> App (App OptionalFold t1) x1
+
                     App TextShow (TextLit (Chunks [] oldText)) ->
                         loop (TextLit (Chunks [] newText))
                       where
@@ -1902,17 +1925,14 @@ isNormalized e0 = loop (denote e0)
           App DoubleShow (DoubleLit _) -> False
           App (App OptionalBuild _) _ -> False
           App (App ListBuild _) _ -> False
-          App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _ ->
-              False
+          App (App ListFold _) (ListLit _ _) -> False
           App (App ListLength _) (ListLit _ _) -> False
           App (App ListHead _) (ListLit _ _) -> False
           App (App ListLast _) (ListLit _ _) -> False
           App (App ListIndexed _) (ListLit _ _) -> False
           App (App ListReverse _) (ListLit _ _) -> False
-          App (App (App (App (App OptionalFold _) (Some _)) _) _) _ ->
-              False
-          App (App (App (App (App OptionalFold _) (App None _)) _) _) _ ->
-              False
+          App (App OptionalFold _) (Some _) -> False
+          App (App OptionalFold _) (App None _) -> False
           App TextShow (TextLit (Chunks [] _)) ->
               False
           _ -> True
