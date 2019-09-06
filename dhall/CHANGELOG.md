@@ -1,3 +1,86 @@
+1.26.0
+
+* [Supports version 10.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v10.0.0)
+* BREAKING CHANGE TO THE LANGUAGE: [Remove old union literal syntax](https://github.com/dhall-lang/dhall-haskell/pull/1176)
+    * Union literals of the form `< x = e | ... >` are no longer valid
+    * For more details, see: [Migration: Deprecation of old union literal syntax](https://github.com/dhall-lang/dhall-lang/wiki/Migration%3A-Deprecation-of-old-union-literal-syntax)
+    * Also see the [changelog for standard version 10.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v10.0.0) for more details
+* BREAKING CHANGE TO THE API: [Change `X` to be a type synonym for `Data.Void`](https://github.com/dhall-lang/dhall-haskell/pull/1172)
+    * This is a breaking change if you were previously pattern matching on the
+      `X` constructor.  You can replace that with the use of `Data.Void.absurd`
+* BREAKING CHANGE TO THE API: [Treat multi-`let`s as syntactic sugar](https://github.com/dhall-lang/dhall-haskell/pull/1242)
+    * This is a breaking change because the `Let` constructor now only stores
+      one `Binding` instead of a `NonEmpty` list of `BInding`s
+* TECHNICALLY BREAKING CHANGE TO THE LANGUAGE: [Dependent types](https://github.com/dhall-lang/dhall-haskell/pull/1164)
+    * You can now write functions from terms to types
+    * There is also now language support for tests of the form
+      `assert : x === y`
+    * This is a technically breaking change because `assert` is now a reserved
+      keyword
+    * See the [changelog for standard version 10.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v10.0.0) for more details
+* TECHNICALLY BREAKING CHANGE TO THE LANGUAGE: [Add `Natural/subtract` built-in](https://github.com/dhall-lang/dhall-haskell/pull/1133)
+    * The language now supports machine subtraction, which can be used to
+      support several other high-performance operations (like `Natural`
+      comparisons)
+    * This is a technically breaking change if you used `Natural/subtract` as an
+      identifier in your code
+    * See the [changelog for standard version 10.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v10.0.0) for more details
+* TECHNICALLY BREAKING CHANGE TO THE LANGUAGE: [More simplifications for field selection](https://github.com/dhall-lang/dhall-haskell/pull/1174)
+    * Now the interpreter will more intelligently simplify certain field
+      projections
+    * For example: `λ(x : { a : Bool, b : Bool }) → (x ⫽ { c = 0 }).{ a, c }.c`
+      will now simplify to `λ(x : { a : Bool, b : Bool }) → 0 `
+    * This is a technically breaking change because you will need to update
+      integrity checks that protect code simplified in this way
+    * See the [changelog for standard version 10.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v10.0.0) for more details
+* TECHNICALLY BREAKING CHANGE TO THE LANGUAGE: [Simplify `⫽` when its arguments are equivalent](https://github.com/dhall-lang/dhall-haskell/pull/1196)
+    * This is a technically breaking change for the same reason: this will
+      perturb semantic integrity checks for affected code
+    * See the [changelog for standard version 10.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v10.0.0) for more details
+* NEW FEATURE: [Restore support for records containing both types and terms](https://github.com/dhall-lang/dhall-haskell/pull/1173)
+    * In other words `{ foo = 1, bar = Bool }` is now valid again
+    * This means that you now can export a single package containing both types
+      and terms
+    * See the [changelog for standard version 10.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v10.0.0) for more details
+* [`dhall format` now preserves `let` comments](https://github.com/dhall-lang/dhall-haskell/pull/1273)
+    * `dhall` format will now preserve comments in the following locations of
+      a `let` binding:
+    * `let {- HERE -} x {- HERE -} : {- HERE -} Bool = {- HERE -} True in x`
+    * This support handles both single-line and multi-line comments and also
+      takes care of correctly indenting/dedenting them
+    * Note that comments before the `let` keyword are still not preserved
+      (unless it is the beginning of the file)
+* [Add API support for marshalling recursive types](https://github.com/dhall-lang/dhall-haskell/pull/1195)
+    * You can now marshal recursive types from Dhall into Haskell using the
+      newly-added utilities
+* [New `:help` command for `dhall repl`](https://github.com/dhall-lang/dhall-haskell/pull/1237)
+* Bug fixes
+    * [Fix `isNormalized` for field selections](https://github.com/dhall-lang/dhall-haskell/pull/1210)
+    * [Simplify `Natural/subtract` when its arguments are equivalent](https://github.com/dhall-lang/dhall-haskell/pull/1220)
+    * [Fix `NaN` to be judgmentally equivalent to itself](https://github.com/dhall-lang/dhall-haskell/pull/1231)
+    * [Fix `Inject` instance for lists](https://github.com/dhall-lang/dhall-haskell/pull/1261)
+    * [Fix typechecking of `toMap`](https://github.com/dhall-lang/dhall-haskell/pull/1279)
+* Performance optimizations
+    * [Optimize a few `Set` instances](https://github.com/dhall-lang/dhall-haskell/pull/1184)
+    * [Remove some redundant sorting during normalization](https://github.com/dhall-lang/dhall-haskell/pull/1228)
+* Improvements to error messages
+    * [Improve error reporting for failed remote imports](https://github.com/dhall-lang/dhall-haskell/pull/1188)
+    * [Improve HTTP errors](https://github.com/dhall-lang/dhall-haskell/pull/1253)
+* Improvements to formatting
+    * [Indent function arguments when formatting](https://github.com/dhall-lang/dhall-haskell/pull/1167)
+    * [Prefer unquoted URLs](https://github.com/dhall-lang/dhall-haskell/pull/1235)
+    * [Strip leading whitespace](https://github.com/dhall-lang/dhall-haskell/pull/1270)
+* Improvements to diffs
+    * [Fix diffs for lists](https://github.com/dhall-lang/dhall-haskell/pull/1213)
+    * [Improve diff for non-empty lists](https://github.com/dhall-lang/dhall-haskell/pull/1244)
+    * [Small fixes to `dhall diff`](https://github.com/dhall-lang/dhall-haskell/pull/1263)
+* Improvements to documentation
+    * [Fix documentation for `UnionInputType`](https://github.com/dhall-lang/dhall-haskell/pull/1230)
+    * [Document support for caching protected imports](https://github.com/dhall-lang/dhall-haskell/pull/1247)
+* Improvements to command-line interface
+    * [Improve description of `dhall lint`](https://github.com/dhall-lang/dhall-haskell/pull/1264)
+    * [Change `dhall type` to resolve imports](https://github.com/dhall-lang/dhall-haskell/pull/1281)
+
 1.25.0
 
 * Supports version 9.0.0 of the standard
