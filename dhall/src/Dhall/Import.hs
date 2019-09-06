@@ -788,7 +788,7 @@ getCacheDirectory = alternative₀ <|> alternative₁ <|> alternative₂
             Just xdgCacheHome -> return xdgCacheHome
             Nothing           -> empty
 
-    alternative₁ = liftIO (fmap (<> ".cache") Directory.getHomeDirectory)
+    alternative₁ = liftIO (fmap (</> ".cache") Directory.getHomeDirectory)
 
     alternative₂ = pure ".cache"
 
