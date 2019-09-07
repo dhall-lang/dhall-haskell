@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE OverloadedStrings  #-}
@@ -25,7 +26,6 @@ module Dhall.Binary
 import Codec.CBOR.Term (Term(..))
 import Control.Applicative (empty, (<|>))
 import Control.Exception (Exception)
-import Data.Void (Void, absurd)
 import Dhall.Core
     ( Binding(..)
     , Chunks(..)
@@ -38,16 +38,16 @@ import Dhall.Core
     , ImportHashed(..)
     , ImportMode(..)
     , ImportType(..)
+    , MultiLet(..)
     , Scheme(..)
     , URL(..)
     , Var(..)
     )
 
 import Data.Foldable (toList)
-import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Prelude hiding (exponent)
+import Data.Void (Void, absurd)
 import GHC.Float (double2Float, float2Double)
 
 import qualified Crypto.Hash
@@ -371,19 +371,21 @@ instance ToTerm a => ToTerm (Expr Void a) where
         t₁ = encode t₀
     encode (Embed x) =
         encode x
-    encode (Let as₀ b₀) =
+    encode (Let a b) =
         TList ([ TInt 25 ] ++ as₁ ++ [ b₁ ])
       where
+        MultiLet as₀ b₀ = Dhall.Core.multiLet a b
+
         as₁ = do
-            Binding x mA₀ a₀ <- toList as₀
+            Binding _ x₀ _ mA₀ _ a₀ <- toList as₀
 
             let mA₁ = case mA₀ of
-                    Nothing  -> TNull
-                    Just _A₀ -> encode _A₀
+                    Nothing       -> TNull
+                    Just (_, _A₀) -> encode _A₀
 
             let a₁ = encode a₀
 
-            [ TString x, mA₁, a₁ ]
+            [ TString x₀, mA₁, a₁ ]
 
         b₁ = encode b₀
     encode (Annot t₀ _T₀) =
@@ -720,21 +722,17 @@ instance FromTerm a => FromTerm (Expr s a) where
         let process (TString x : _A₁ : a₁ : ls₁) = do
                 mA₀ <- case _A₁ of
                     TNull -> return Nothing
-                    _     -> fmap Just (decode _A₁)
+                    _     -> do
+                        _A₀ <- decode _A₁
+                        return (Just (Nothing, _A₀))
 
                 a₀  <- decode a₁
 
-                let binding = Binding x mA₀ a₀
+                b₀ <- case ls₁ of
+                    [ b₁ ] -> decode b₁
+                    _      -> process ls₁
 
-                case ls₁ of
-                    [ b₁ ] -> do
-                        b₀ <- decode b₁
-
-                        return (Let (binding :| []) b₀)
-                    _ -> do
-                        Let (l₀ :| ls₀) b₀ <- process ls₁
-
-                        return (Let (binding :| (l₀ : ls₀)) b₀)
+                return (Let (Binding Nothing x Nothing mA₀ Nothing a₀) b₀)
             process _ = do
                 empty
 

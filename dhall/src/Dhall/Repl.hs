@@ -19,13 +19,13 @@ import Control.Monad.State.Strict ( evalStateT )
 -- For the MonadFail instance for StateT.
 import Control.Monad.Trans.Instances ()
 import Data.List ( isPrefixOf, nub )
-import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe ( mapMaybe )
 import Data.Semigroup ((<>))
 import Data.Text ( Text )
 import Data.Version (showVersion)
 import Dhall.Context (Context)
 import Dhall.Import (hashExpressionToCode)
+import Dhall.Src (Src)
 import Dhall.Pretty (CharacterSet(..))
 import System.Console.Haskeline (Interrupt(..))
 import System.Console.Haskeline.Completion ( Completion, simpleCompletion )
@@ -166,16 +166,12 @@ applyContext
     -> Dhall.Expr Dhall.Src Dhall.X
     -> Dhall.Expr Dhall.Src Dhall.X
 applyContext context expression =
-  case bindings of
-    []     -> expression
-    b : bs -> Dhall.Core.Let (b :| bs) expression
+    Dhall.Core.wrapInLets bindings expression
   where
     definitions = reverse $ Dhall.Context.toList context
 
-    convertBinding (variable, Binding {..}) = Dhall.Core.Binding {..}
-      where
-        annotation = Just bindingType
-        value      = bindingExpr
+    convertBinding (variable, Binding expr type_) =
+        Dhall.Core.Binding Nothing variable Nothing (Just (Nothing, type_)) Nothing expr
 
     bindings = fmap convertBinding definitions
 
@@ -594,7 +590,7 @@ writeOutputHandle txt = do
 
 output
   :: (Pretty.Pretty a, MonadState Env m, MonadIO m)
-  => Dhall.Expr s a -> m ()
+  => Dhall.Expr Src a -> m ()
 output expr = do
   writeOutputHandle "" -- Visual spacing
 
@@ -604,7 +600,7 @@ output expr = do
 
 outputWithoutSpacing
   :: (Pretty.Pretty a, MonadState Env m, MonadIO m)
-  => Dhall.Expr s a -> m ()
+  => Dhall.Expr Src a -> m ()
 outputWithoutSpacing expr = do
   Env { characterSet, outputHandle } <- get
 

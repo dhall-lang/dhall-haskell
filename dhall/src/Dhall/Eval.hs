@@ -58,16 +58,15 @@ module Dhall.Eval (
 import Control.Applicative (Applicative(..), (<$>))
 #endif
 
-import Data.Foldable (foldr', foldl', toList)
-import Data.List.NonEmpty (NonEmpty(..), cons)
+import Data.Foldable (foldr', toList)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Void (Void)
 
 import Dhall.Core (
-    Expr(..)
-  , Binding(..)
+    Binding(..)
+  , Expr(..)
   , Chunks(..)
   , Const(..)
   , Import
@@ -84,7 +83,6 @@ import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Codec.Serialise     as Serialise
 import qualified Data.Char
-import qualified Data.List.NonEmpty
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Dhall.Binary
@@ -352,10 +350,9 @@ eval !env t =
     Lam x a t        -> VLam (evalE a) (Cl x env t)
     Pi x a b         -> VPi (evalE a) (Cl x env b)
     App t u          -> vApp (evalE t) (evalE u)
-    Let (b :| bs) t  -> go env (b:bs) where
-                          go !env []     = eval env t
-                          go  env (b:bs) = go (Extend env (variable b)
-                                                          (eval env (value b))) bs
+    Let (Binding _ x _ _mA _ a) b ->
+                        let !env' = Extend env x (evalE a)
+                        in eval env' b
     Annot t _        -> evalE t
 
     Bool             -> VBool
@@ -926,19 +923,10 @@ alphaNormalize = goEnv NEmpty where
       Lam x t u        -> Lam "_" (go t) (goBind x u)
       Pi x a b         -> Pi "_" (go a) (goBind x b)
       App t u          -> App (go t) (go u)
-
-      Let (b :| bs) u  ->
-        let Binding x a t = b
-
-            nil = (NBind e x, Binding "_" (goEnv e <$> a) (goEnv e t) :| [])
-
-            snoc (e, bs) (Binding x a t) =
-                (NBind e x, cons (Binding "_" (goEnv e <$> a) (goEnv e t)) bs)
-
-            (e', Data.List.NonEmpty.reverse -> bs') = foldl' snoc nil bs
-
-        in Let bs' (goEnv e' u)
-
+      Let (Binding src0 x src1 mA src2 a) b ->
+          Let (Binding src0 "_" src1 (adapt <$> mA) src2 (go a)) (goBind x b)
+        where
+          adapt (src3, _A) = (src3, go _A)
       Annot t u        -> Annot (go t) (go u)
       Bool             -> Bool
       BoolLit b        -> BoolLit b
