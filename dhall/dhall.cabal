@@ -461,7 +461,7 @@ Library
         haskeline                   >= 0.7.2.1  && < 0.8 ,
         lens-family-core            >= 1.0.0    && < 2.1 ,
         megaparsec                  >= 6.5.0    && < 7.1 ,
-        memory                      >= 0.14     && < 0.15,
+        memory                      >= 0.14     && < 0.16,
         mtl                         >= 2.2.1    && < 2.3 ,
         network-uri                 >= 2.6      && < 2.7 ,
         optparse-applicative        >= 0.14.0.0 && < 0.16,
