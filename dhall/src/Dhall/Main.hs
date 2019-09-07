@@ -86,7 +86,7 @@ data Options = Options
 
 -- | The subcommands for the @dhall@ executable
 data Mode
-    = Default { file :: Maybe FilePath, annotate :: Bool, alpha :: Bool }
+    = Default { file :: Maybe FilePath, annotate :: Bool, alpha :: Bool, noCache :: Bool }
     | Version
     | Resolve { file :: Maybe FilePath, resolveMode :: Maybe ResolveMode }
     | Type { file :: Maybe FilePath }
@@ -189,7 +189,7 @@ parseMode =
             "text"
             "Render a Dhall expression that evaluates to a Text literal"
             (Text <$> optional parseFile)
-    <|> (Default <$> optional parseFile <*> parseAnnotate <*> parseAlpha)
+    <|> (Default <$> optional parseFile <*> parseAnnotate <*> parseAlpha <*> parseNoCache)
   where
     argument =
             fmap Data.Text.pack
@@ -213,6 +213,13 @@ parseMode =
         Options.Applicative.switch
             (   Options.Applicative.long "annotate"
             <>  Options.Applicative.help "Add a type annotation to the output"
+            )
+
+    parseNoCache =
+        Options.Applicative.switch
+            (   Options.Applicative.long "no-cache"
+            <>  Options.Applicative.help
+                  "Handle protected imports as if the cache was empty"
             )
 
     parseResolveMode =
@@ -367,7 +374,12 @@ command (Options {..}) = do
         Default {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- Dhall.Import.loadRelativeTo (rootDirectory file) expression
+            let load =
+                    if noCache
+                        then Dhall.Import.loadWithoutCacheRelativeTo
+                        else Dhall.Import.loadRelativeTo
+
+            resolvedExpression <- load (rootDirectory file) expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 

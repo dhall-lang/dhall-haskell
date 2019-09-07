@@ -102,6 +102,7 @@ module Dhall.Import (
     -- * Import
       load
     , loadRelativeTo
+    , loadWithoutCacheRelativeTo
     , loadWith
     , localToPath
     , hashExpression
@@ -494,7 +495,10 @@ loadImportWithSemanticCache
 loadImportWithSemanticCache
   import_@(Chained (Import (ImportHashed (Just semanticHash) _) _)) = do
     Status { .. } <- State.get
-    mCached <- liftIO $ fetchFromSemanticCache semanticHash
+    mCached <-
+        case _semanticCacheMode of
+            UseSemanticCache -> liftIO $ fetchFromSemanticCache semanticHash
+            IgnoreSemanticCache -> pure Nothing
 
     case mCached of
         Just bytesStrict -> do
@@ -985,6 +989,12 @@ load = loadRelativeTo "."
 loadRelativeTo :: FilePath -> Expr Src Import -> IO (Expr Src X)
 loadRelativeTo rootDirectory expression =
     State.evalStateT (loadWith expression) (emptyStatus rootDirectory)
+
+loadWithoutCacheRelativeTo :: FilePath -> Expr Src Import -> IO (Expr Src X)
+loadWithoutCacheRelativeTo rootDirectory expression =
+    State.evalStateT
+      (loadWith expression)
+      (emptyStatus rootDirectory) { _semanticCacheMode = IgnoreSemanticCache }
 
 encodeExpression
     :: forall s
