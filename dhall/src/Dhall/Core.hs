@@ -2178,12 +2178,7 @@ subExpressions _ (Var v) = pure (Var v)
 subExpressions f (Lam a b c) = Lam a <$> f b <*> f c
 subExpressions f (Pi a b c) = Pi a <$> f b <*> f c
 subExpressions f (App a b) = App <$> f a <*> f b
-subExpressions f (Let a b) = Let <$> adapt0 a <*> f b
-  where
-    adapt0 (Binding src0 c src1 d src2 e) =
-        Binding <$> pure src0 <*> pure c <*> pure src1 <*> traverse adapt1 d <*> pure src2 <*> f e
-
-    adapt1 (src2, g) = (,) <$> pure src2 <*> f g
+subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
 subExpressions f (Annot a b) = Annot <$> f a <*> f b
 subExpressions _ Bool = pure Bool
 subExpressions _ (BoolLit b) = pure (BoolLit b)
