@@ -2336,6 +2336,19 @@ wrapInLets bs e = foldr Let e bs
 
 data MultiLet s a = MultiLet (NonEmpty (Binding s a)) (Expr s a)
 
+{- | Record the binding part of a @let@ expression.
+
+For example,
+> let {- A -} x {- B -} : {- C -} Bool = {- D -} True in x
+will be instantiated as follows:
+
+* @bindingSrc0@ corresponds to the @A@ comment.
+* @variable@ is @"x"@
+* @bindingSrc1@ corresponds to the @B@ comment.
+* @annotation@ is 'Just' a pair, corresponding to the @C@ comment and @Bool@.
+* @bindingSrc2@ corresponds to the @D@ comment.
+* @value@ corresponds to @True@.
+-}
 data Binding s a = Binding
     { bindingSrc0 :: Maybe s
     , variable    :: Text
