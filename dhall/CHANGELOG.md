@@ -10,7 +10,7 @@
       `X` constructor.  You can replace that with the use of `Data.Void.absurd`
 * BREAKING CHANGE TO THE API: [Treat multi-`let`s as syntactic sugar](https://github.com/dhall-lang/dhall-haskell/pull/1242)
     * This is a breaking change because the `Let` constructor now only stores
-      one `Binding` instead of a `NonEmpty` list of `BInding`s
+      one `Binding` instead of a `NonEmpty` list of `Binding`s
 * TECHNICALLY BREAKING CHANGE TO THE LANGUAGE: [Dependent types](https://github.com/dhall-lang/dhall-haskell/pull/1164)
     * You can now write functions from terms to types
     * There is also now language support for tests of the form
