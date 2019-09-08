@@ -52,7 +52,7 @@ library
     , haskell-lsp          >= 0.15.0.0 && < 0.16
     , rope-utf16-splay     >= 0.3.1.0  && < 0.4
     , hslogger             >= 1.2.10   && < 1.4
-    , lens                 >= 4.16.1   && < 4.18
+    , lens                 >= 4.16.1   && < 4.19
     , lens-family-core     >= 1.2.3    && < 2.1
     , megaparsec           >= 7.0.2    && < 7.1
     , mtl                  >= 2.2.2    && < 2.3
