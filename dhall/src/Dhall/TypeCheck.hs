@@ -16,6 +16,7 @@ module Dhall.TypeCheck (
     -- * Types
     , Typer
     , X
+    , absurd
     , TypeError(..)
     , DetailedTypeError(..)
     , TypeMessage(..)
