@@ -16,10 +16,10 @@ extra-deps:
   - hnix-store-core-0.1.0.0@sha256:719a261870367b3ce2e2e8d11502e7170faa664109a14486b95b555bc3672807,2541
   - monadlist-0.0.2@sha256:978305e3f03dd5f65c673b551124dac0c39a247c2c14d84739ca9a3405fbb63a,904
   - ref-tf-0.4.0.1@sha256:369e5c6237e4b6fe330fde021b94a9f98971690cbec5b910faa9af3cbcb15610,1133
-  - git: https://github.com/vijayphoenix/HsYAML.git
-    commit: 4485eab8b1c9b6286e19b92159ac6279921bdde1
-  - git: https://github.com/vijayphoenix/HsYAML-aeson.git
-    commit: e269cc466b43767a6b972a9ce946419641a80e1d
+  - git: https://github.com/haskell-hvr/HsYAML.git
+    commit: b6a721514b4c0e562007322f064eedc431f751f9
+  - git: https://github.com/haskell-hvr/HsYAML-aeson.git
+    commit: 9f28206e68f182afd635c71ac628119ea38f63e4
   - ordered-containers-0.2.2@sha256:ebf2be3f592d9cf148ea6b8375f8af97148d44f82d8d04476899285e965afdbf,810
 nix:
   packages:

@@ -5,9 +5,9 @@ mkDerivation {
   pname = "HsYAML";
   version = "0.2.0.0";
   src = fetchgit {
-    url = "https://github.com/vijayphoenix/HsYAML.git";
-    sha256 = "0k1mw6j78d4lhbgqnc6fz0dlly0m6sb72f7z9yh82jw0ml7l9srr";
-    rev = "4485eab8b1c9b6286e19b92159ac6279921bdde1";
+    url = "https://github.com/haskell-hvr/HsYAML.git";
+    sha256 = "1vyi3s105j8vxrqvp7ynxyafvkzaa3j152pch96pns13193laac5";
+    rev = "b6a721514b4c0e562007322f064eedc431f751f9";
     fetchSubmodules = true;
   };
   isLibrary = true;
@@ -20,6 +20,6 @@ mkDerivation {
     text
   ];
   homepage = "https://github.com/hvr/HsYAML";
-  description = "Pure Haskell YAML 1.2 parsing and encoding library";
+  description = "Pure Haskell YAML 1.2 processor";
   license = stdenv.lib.licenses.gpl2;
 }
