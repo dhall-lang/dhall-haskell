@@ -598,7 +598,7 @@ Test-Suite tasty
         directory                                      ,
         filepath                                       ,
         foldl                                    < 1.5 ,
-        generic-random            >= 1.2.0.0  && < 1.3 ,
+        generic-random            >= 1.3.0.0  && < 1.4 ,
         lens-family-core          >= 1.0.0    && < 2.1 ,
         megaparsec                                     ,
         prettyprinter                                  ,
