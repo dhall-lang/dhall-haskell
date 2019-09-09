@@ -1060,7 +1060,7 @@ codeToValue conversion specialDoubleMode mFilePath code = do
             Nothing -> "."
             Just fp -> System.FilePath.takeDirectory fp
 
-    resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory parsedExpression
+    resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory UseSemanticCache parsedExpression
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 

@@ -29,7 +29,7 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
 import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
-import Dhall.Import (Imported(..), Depends(..))
+import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
@@ -86,7 +86,12 @@ data Options = Options
 
 -- | The subcommands for the @dhall@ executable
 data Mode
-    = Default { file :: Maybe FilePath, annotate :: Bool, alpha :: Bool, noCache :: Bool }
+    = Default
+          { file :: Maybe FilePath
+          , annotate :: Bool
+          , alpha :: Bool
+          , semanticCacheMode :: SemanticCacheMode
+          }
     | Version
     | Resolve { file :: Maybe FilePath, resolveMode :: Maybe ResolveMode }
     | Type { file :: Maybe FilePath }
@@ -189,7 +194,7 @@ parseMode =
             "text"
             "Render a Dhall expression that evaluates to a Text literal"
             (Text <$> optional parseFile)
-    <|> (Default <$> optional parseFile <*> parseAnnotate <*> parseAlpha <*> parseNoCache)
+    <|> (Default <$> optional parseFile <*> parseAnnotate <*> parseAlpha <*> parseSemanticCacheMode)
   where
     argument =
             fmap Data.Text.pack
@@ -215,8 +220,10 @@ parseMode =
             <>  Options.Applicative.help "Add a type annotation to the output"
             )
 
-    parseNoCache =
-        Options.Applicative.switch
+    parseSemanticCacheMode =
+        Options.Applicative.flag
+            UseSemanticCache
+            IgnoreSemanticCache
             (   Options.Applicative.long "no-cache"
             <>  Options.Applicative.help
                   "Handle protected imports as if the cache was empty"
@@ -374,12 +381,8 @@ command (Options {..}) = do
         Default {..} -> do
             expression <- getExpression file
 
-            let load =
-                    if noCache
-                        then Dhall.Import.loadWithoutCacheRelativeTo
-                        else Dhall.Import.loadRelativeTo
-
-            resolvedExpression <- load (rootDirectory file) expression
+            resolvedExpression <-
+                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -450,7 +453,9 @@ command (Options {..}) = do
         Resolve { resolveMode = Nothing, ..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- Dhall.Import.loadRelativeTo (rootDirectory file) expression
+            resolvedExpression <-
+                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+
             render System.IO.stdout resolvedExpression
 
         Normalize {..} -> do
@@ -472,7 +477,8 @@ command (Options {..}) = do
         Type {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- Dhall.Import.loadRelativeTo (rootDirectory file) expression
+            resolvedExpression <-
+                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -584,7 +590,8 @@ command (Options {..}) = do
         Text {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- Dhall.Import.loadRelativeTo (rootDirectory file) expression
+            resolvedExpression <-
+                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
 
