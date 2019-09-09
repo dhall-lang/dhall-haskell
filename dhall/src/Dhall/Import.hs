@@ -779,7 +779,7 @@ getCacheFile cacheName hash = do
     return cacheFile
 
 getCacheDirectory :: (Alternative m, MonadIO m) => m FilePath
-getCacheDirectory = alternative₀ <|> alternative₁ <|> alternative₂
+getCacheDirectory = alternative₀ <|> alternative₁
   where
     alternative₀ = do
         maybeXDGCacheHome <- do
@@ -808,7 +808,6 @@ getCacheDirectory = alternative₀ <|> alternative₁ <|> alternative₂
 
         where isWindows = System.Info.os == "mingw32"
 
-    alternative₂ = pure ".cache"
 
 -- If the URL contains headers typecheck them and replace them with their normal
 -- forms.
