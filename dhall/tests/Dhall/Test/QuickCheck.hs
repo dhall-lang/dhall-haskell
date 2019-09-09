@@ -1,13 +1,8 @@
-{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeOperators      #-}
-
-#if __GLASGOW_HASKELL__ >= 800
-{-# LANGUAGE OverloadedLabels   #-}
-#endif
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -194,10 +189,6 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
         -- They will fail to compile if the constructors don't appear in the order
         -- in which they are defined in 'Expr'!
         weights :: Weights (Expr s a)
--- TODO: Get rid of the CPP once
--- https://github.com/Lysxia/generic-random/pull/16
--- has been released.
-#if __GLASGOW_HASKELL__ >= 800
         weights =
               (7 :: W "Const")
             % (7 :: W "Var")
@@ -267,9 +258,6 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (7 :: W "ImportAlt")
             % (7 :: W "Embed")
             % ()
-#else
-        weights = Generic.Random.uniform
-#endif
 
     shrink expression = filter standardizedExpression (genericShrink expression)
 
