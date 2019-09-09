@@ -57,12 +57,14 @@ module Dhall.Core (
     -- * Optics
     , subExpressions
     , chunkExprs
+    , bindingExprs
 
     -- * Let-blocks
     , multiLet
     , wrapInLets
     , MultiLet(..)
     , Binding(..)
+    , makeBinding
 
     -- * Miscellaneous
     , internalError
@@ -1487,6 +1489,20 @@ normalizeWithM ctx e0 = loop (denote e0)
                                 )
 
                         nil = ListLit (Just (App List _A₀)) empty
+                    App (App ListFold t) (ListLit _ xs) -> do
+                        t' <- loop t
+                        let list = Var (V "list" 0)
+                        let lam term =
+                                Lam "list" (Const Type)
+                                    (Lam "cons" (Pi "_" t' (Pi "_" list list))
+                                        (Lam "nil" list term))
+                        term <- foldrM
+                            (\x acc -> do
+                                x' <- loop x
+                                pure (App (App (Var (V "cons" 0)) x') acc))
+                            (Var (V "nil" 0))
+                            xs
+                        pure (lam term)
                     App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil -> do
                       t' <- loop t
                       if boundedType t' then strict else lazy
@@ -1531,14 +1547,23 @@ normalizeWithM ctx e0 = loop (denote e0)
                             kvs = [ ("index", NaturalLit (fromIntegral n))
                                   , ("value", a_)
                                   ]
-                    App (App ListReverse t) (ListLit _ xs) ->
-                        loop (ListLit m (Data.Sequence.reverse xs))
-                      where
-                        m = if Data.Sequence.null xs then Just (App List t) else Nothing
-                    App (App (App (App (App OptionalFold _) (App None _)) _) _) nothing ->
-                        loop nothing
-                    App (App (App (App (App OptionalFold _) (Some x)) _) just) _ ->
-                        loop (App just x)
+                    App (App ListReverse _) (ListLit t xs) ->
+                        loop (ListLit t (Data.Sequence.reverse xs))
+
+                    App (App OptionalFold t0) x0 -> do
+                        t1 <- loop t0
+                        let optional = Var (V "optional" 0)
+                        let lam term = (Lam "optional"
+                                           (Const Type)
+                                           (Lam "some"
+                                               (Pi "_" t1 optional)
+                                               (Lam "none" optional term)))
+                        x1 <- loop x0
+                        pure $ case x1 of
+                            App None _ -> lam (Var (V "none" 0))
+                            Some x'    -> lam (App (Var (V "some" 0)) x')
+                            _          -> App (App OptionalFold t1) x1
+
                     App TextShow (TextLit (Chunks [] oldText)) ->
                         loop (TextLit (Chunks [] newText))
                       where
@@ -1902,17 +1927,14 @@ isNormalized e0 = loop (denote e0)
           App DoubleShow (DoubleLit _) -> False
           App (App OptionalBuild _) _ -> False
           App (App ListBuild _) _ -> False
-          App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _ ->
-              False
+          App (App ListFold _) (ListLit _ _) -> False
           App (App ListLength _) (ListLit _ _) -> False
           App (App ListHead _) (ListLit _ _) -> False
           App (App ListLast _) (ListLit _ _) -> False
           App (App ListIndexed _) (ListLit _ _) -> False
           App (App ListReverse _) (ListLit _ _) -> False
-          App (App (App (App (App OptionalFold _) (Some _)) _) _) _ ->
-              False
-          App (App (App (App (App OptionalFold _) (App None _)) _) _) _ ->
-              False
+          App (App OptionalFold _) (Some _) -> False
+          App (App OptionalFold _) (App None _) -> False
           App TextShow (TextLit (Chunks [] _)) ->
               False
           _ -> True
@@ -2156,12 +2178,7 @@ subExpressions _ (Var v) = pure (Var v)
 subExpressions f (Lam a b c) = Lam a <$> f b <*> f c
 subExpressions f (Pi a b c) = Pi a <$> f b <*> f c
 subExpressions f (App a b) = App <$> f a <*> f b
-subExpressions f (Let a b) = Let <$> adapt0 a <*> f b
-  where
-    adapt0 (Binding src0 c src1 d src2 e) =
-        Binding <$> pure src0 <*> pure c <*> pure src1 <*> traverse adapt1 d <*> pure src2 <*> f e
-
-    adapt1 (src2, g) = (,) <$> pure src2 <*> f g
+subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
 subExpressions f (Annot a b) = Annot <$> f a <*> f b
 subExpressions _ Bool = pure Bool
 subExpressions _ (BoolLit b) = pure (BoolLit b)
@@ -2316,6 +2333,19 @@ wrapInLets bs e = foldr Let e bs
 
 data MultiLet s a = MultiLet (NonEmpty (Binding s a)) (Expr s a)
 
+{- | Record the binding part of a @let@ expression.
+
+For example,
+> let {- A -} x {- B -} : {- C -} Bool = {- D -} True in x
+will be instantiated as follows:
+
+* @bindingSrc0@ corresponds to the @A@ comment.
+* @variable@ is @"x"@
+* @bindingSrc1@ corresponds to the @B@ comment.
+* @annotation@ is 'Just' a pair, corresponding to the @C@ comment and @Bool@.
+* @bindingSrc2@ corresponds to the @D@ comment.
+* @value@ corresponds to @True@.
+-}
 data Binding s a = Binding
     { bindingSrc0 :: Maybe s
     , variable    :: Text
@@ -2332,3 +2362,23 @@ instance Bifunctor Binding where
         adapt0 (src3, d) = (fmap k src3, first k d)
 
     second = fmap
+
+{-| Traverse over the immediate 'Expr' children in a 'Binding'.
+-}
+bindingExprs
+  :: (Applicative f)
+  => (Expr s a -> f (Expr s b))
+  -> Binding s a -> f (Binding s b)
+bindingExprs f (Binding s0 n s1 t s2 v) =
+  Binding
+    <$> pure s0
+    <*> pure n
+    <*> pure s1
+    <*> traverse (traverse f) t
+    <*> pure s2
+    <*> f v
+
+{-| Construct a 'Binding' with no source information and no type annotation.
+-}
+makeBinding :: Text -> Expr s a -> Binding s a
+makeBinding name = Binding Nothing name Nothing Nothing Nothing
