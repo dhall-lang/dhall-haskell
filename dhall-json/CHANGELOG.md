@@ -6,6 +6,7 @@
 * [`Nesting`: Support empty alternatives as contents](https://github.com/dhall-lang/dhall-haskell/pull/1204)
 * [Fix `yaml-to-dhall` support for empty objects](https://github.com/dhall-lang/dhall-haskell/pull/1186)
 * [Throw error when union value is incompatible with inline nesting](https://github.com/dhall-lang/dhall-haskell/pull/1226)
+* [Add `--output` options](https://github.com/dhall-lang/dhall-haskell/pull/1304)
 
 1.4.0
 

@@ -53,7 +53,12 @@
 * [Add API support for marshalling recursive types](https://github.com/dhall-lang/dhall-haskell/pull/1195)
     * You can now marshal recursive types from Dhall into Haskell using the
       newly-added utilities
+    * See also: [#1298](https://github.com/dhall-lang/dhall-haskell/pull/1298)
 * [New `:help` command for `dhall repl`](https://github.com/dhall-lang/dhall-haskell/pull/1237)
+* [New `--no-cache` flag](https://github.com/dhall-lang/dhall-haskell/pull/1290)
+    * You can now disable use of the cache with this flag
+    * This comes in handy if you want to disable α-normalization for imports
+      protected by a semantic integrity check
 * Bug fixes
     * [Fix `isNormalized` for field selections](https://github.com/dhall-lang/dhall-haskell/pull/1210)
     * [Simplify `Natural/subtract` when its arguments are equivalent](https://github.com/dhall-lang/dhall-haskell/pull/1220)
