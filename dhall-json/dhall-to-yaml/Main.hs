@@ -29,6 +29,7 @@ parseOptions =
             <*> parseQuoted
             <*> Dhall.JSON.parseConversion
             <*> optional parseFile
+            <*> optional parseOutput
             )
     <|> parseVersion
   where
@@ -50,6 +51,13 @@ parseOptions =
             Nothing
             (   Options.long "version"
             <>  Options.help "Display version"
+            )
+
+    parseOutput =
+        Options.strOption
+            (   Options.long "output"
+            <>  Options.help "Write YAML to a file instead of standard output"
+            <>  Options.metavar "FILE"
             )
 
 parserInfo :: ParserInfo (Maybe Options)
@@ -76,7 +84,12 @@ main = do
                     Nothing   -> Text.IO.getContents
                     Just path -> Text.IO.readFile path
 
-                Data.ByteString.putStr =<< dhallToYaml options file contents
+                let write =
+                        case output of
+                            Nothing -> Data.ByteString.putStr
+                            Just file_ -> Data.ByteString.writeFile file_
+
+                write =<< dhallToYaml options file contents
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler

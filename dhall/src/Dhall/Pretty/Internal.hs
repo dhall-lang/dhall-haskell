@@ -541,7 +541,7 @@ prettyCharacterSet characterSet expression =
                 <>  Pretty.align
                     (   renderSrc src0 mempty
                     <>  prettyLabel c <> renderSrc src1 Pretty.hardline
-                    <>  colon <> renderSrc src3 space <> prettyExpression d <> space <> equals <> renderSrc src2 Pretty.hardline
+                    <>  colon <> renderSrc src3 space <> prettyExpression d <> Pretty.hardline <> equals <> renderSrc src2 space
                     <>  prettyExpression e
                     )
 

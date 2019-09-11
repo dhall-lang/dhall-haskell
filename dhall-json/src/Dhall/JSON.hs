@@ -189,6 +189,7 @@ import Data.Monoid ((<>), mempty)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Dhall.Core (Binding(..), Expr)
+import Dhall.Import (SemanticCacheMode(..))
 import Dhall.TypeCheck (X)
 import Dhall.Map (Map)
 import Dhall.JSON.Util (pattern V)
@@ -1060,7 +1061,7 @@ codeToValue conversion specialDoubleMode mFilePath code = do
             Nothing -> "."
             Just fp -> System.FilePath.takeDirectory fp
 
-    resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory parsedExpression
+    resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory UseSemanticCache parsedExpression
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
