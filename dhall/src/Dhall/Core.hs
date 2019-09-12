@@ -1817,6 +1817,8 @@ normalizeWithM ctx e0 = loop (denote e0)
         case x' of
             RecordLit kvs ->
                 pure (RecordLit (Dhall.Map.restrictKeys kvs fieldsSet))
+            Project y _ ->
+                loop (Project y (Left fields))
             Prefer l (RecordLit rKvs) -> do
                 let rKs = Dhall.Map.keysSet rKvs
                 let l' = Project l (Left (Dhall.Set.fromSet (Data.Set.difference fieldsSet rKs)))
@@ -2072,6 +2074,7 @@ isNormalized e0 = loop (denote e0)
           case p of
               Left s -> case r of
                   RecordLit _ -> False
+                  Project _ _ -> False
                   Prefer _ (RecordLit _) -> False
                   _ -> not (Dhall.Set.null s) && Dhall.Set.isSorted s
               Right e' -> case e' of

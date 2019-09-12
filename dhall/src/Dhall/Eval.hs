@@ -346,6 +346,7 @@ vProjectByFields env t ks =
     VRecordLit kvs -> let
       kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
       in VRecordLit kvs'
+    VProject t' _ -> vProjectByFields env t' ks
     VPrefer l r@(VRecordLit kvs) -> let
       ksSet = Dhall.Set.toSet ks
       kvs' = Dhall.Map.restrictKeys kvs ksSet
