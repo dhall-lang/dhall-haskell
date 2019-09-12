@@ -84,6 +84,7 @@ import Unsafe.Coerce (unsafeCoerce)
 import qualified Codec.Serialise     as Serialise
 import qualified Data.Char
 import qualified Data.Sequence
+import qualified Data.Set
 import qualified Data.Text
 import qualified Dhall.Binary
 import qualified Dhall.Map
@@ -269,6 +270,16 @@ vApp !t !u = case t of
   t           -> VApp t u
 {-# inline vApp #-}
 
+vPrefer :: Eq a => Env a -> Val a -> Val a -> Val a
+vPrefer env t u = case (t, u) of
+  (VRecordLit m, u) | null m -> u
+  (t, VRecordLit m) | null m -> t
+  (VRecordLit m, VRecordLit m') ->
+     VRecordLit (Dhall.Map.union m' m)
+  (t, u) | conv env t u -> t
+  (t, u) -> VPrefer t u
+{-# inline vPrefer #-}
+
 vCombine :: Val a -> Val a -> Val a
 vCombine t u = case (t, u) of
   (VRecordLit m, u) | null m    -> u
@@ -326,6 +337,21 @@ vField t0 k = go t0 where
 
   singletonVRecordLit v = VRecordLit (Dhall.Map.singleton k v)
 {-# inline vField #-}
+
+vProjectByFields :: Eq a => Env a -> Val a -> Set Text -> Val a
+vProjectByFields env t ks =
+  if null ks then
+    VRecordLit mempty
+  else case t of
+    VRecordLit kvs -> let
+      kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
+      in VRecordLit kvs'
+    VPrefer l r@(VRecordLit kvs) -> let
+      ksSet = Dhall.Set.toSet ks
+      kvs' = Dhall.Map.restrictKeys kvs ksSet
+      ks' = Dhall.Set.fromSet (Data.Set.difference ksSet (Dhall.Map.keysSet kvs'))
+      in vPrefer env (vProjectByFields env l ks') (VRecordLit kvs')
+    t -> VProject t (Left ks)
 
 eval :: forall a. Eq a => Env a -> Expr Void a -> Val a
 eval !env t =
@@ -555,13 +581,7 @@ eval !env t =
     Union kts        -> VUnion (Dhall.Map.sort ((evalE <$>) <$> kts))
     Combine t u      -> vCombine (evalE t) (evalE u)
     CombineTypes t u -> vCombineTypes (evalE t) (evalE u)
-    Prefer t u       -> case (evalE t, evalE u) of
-                          (VRecordLit m, u) | null m -> u
-                          (t, VRecordLit m) | null m -> t
-                          (VRecordLit m, VRecordLit m') ->
-                             VRecordLit (Dhall.Map.union m' m)
-                          (t, u) | conv env t u -> t
-                          (t, u) -> VPrefer t u
+    Prefer t u       -> vPrefer env (evalE t) (evalE u)
     Merge x y ma     -> case (evalE x, evalE y, evalE <$> ma) of
                           (VRecordLit m, VInject _ k mt, _)
                             | Just f  <- Dhall.Map.lookup k m -> maybe f (vApp f) mt
@@ -578,14 +598,7 @@ eval !env t =
                             in VListLit Nothing s
                           (x, ma) -> VToMap x ma
     Field t k        -> vField (evalE t) k
-    Project t (Left ks) ->
-                        if null ks then
-                          VRecordLit mempty
-                        else case evalE t of
-                          VRecordLit kvs -> let
-                            kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
-                            in VRecordLit kvs'
-                          t -> VProject t (Left (Dhall.Set.sort ks))
+    Project t (Left ks) -> vProjectByFields env (evalE t) (Dhall.Set.sort ks)
     Project t (Right e) ->
                         case evalE e of
                           VRecord kts ->
