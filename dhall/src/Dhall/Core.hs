@@ -57,12 +57,14 @@ module Dhall.Core (
     -- * Optics
     , subExpressions
     , chunkExprs
+    , bindingExprs
 
     -- * Let-blocks
     , multiLet
     , wrapInLets
     , MultiLet(..)
     , Binding(..)
+    , makeBinding
 
     -- * Miscellaneous
     , internalError
@@ -2184,12 +2186,7 @@ subExpressions _ (Var v) = pure (Var v)
 subExpressions f (Lam a b c) = Lam a <$> f b <*> f c
 subExpressions f (Pi a b c) = Pi a <$> f b <*> f c
 subExpressions f (App a b) = App <$> f a <*> f b
-subExpressions f (Let a b) = Let <$> adapt0 a <*> f b
-  where
-    adapt0 (Binding src0 c src1 d src2 e) =
-        Binding <$> pure src0 <*> pure c <*> pure src1 <*> traverse adapt1 d <*> pure src2 <*> f e
-
-    adapt1 (src2, g) = (,) <$> pure src2 <*> f g
+subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
 subExpressions f (Annot a b) = Annot <$> f a <*> f b
 subExpressions _ Bool = pure Bool
 subExpressions _ (BoolLit b) = pure (BoolLit b)
@@ -2344,6 +2341,19 @@ wrapInLets bs e = foldr Let e bs
 
 data MultiLet s a = MultiLet (NonEmpty (Binding s a)) (Expr s a)
 
+{- | Record the binding part of a @let@ expression.
+
+For example,
+> let {- A -} x {- B -} : {- C -} Bool = {- D -} True in x
+will be instantiated as follows:
+
+* @bindingSrc0@ corresponds to the @A@ comment.
+* @variable@ is @"x"@
+* @bindingSrc1@ corresponds to the @B@ comment.
+* @annotation@ is 'Just' a pair, corresponding to the @C@ comment and @Bool@.
+* @bindingSrc2@ corresponds to the @D@ comment.
+* @value@ corresponds to @True@.
+-}
 data Binding s a = Binding
     { bindingSrc0 :: Maybe s
     , variable    :: Text
@@ -2360,3 +2370,23 @@ instance Bifunctor Binding where
         adapt0 (src3, d) = (fmap k src3, first k d)
 
     second = fmap
+
+{-| Traverse over the immediate 'Expr' children in a 'Binding'.
+-}
+bindingExprs
+  :: (Applicative f)
+  => (Expr s a -> f (Expr s b))
+  -> Binding s a -> f (Binding s b)
+bindingExprs f (Binding s0 n s1 t s2 v) =
+  Binding
+    <$> pure s0
+    <*> pure n
+    <*> pure s1
+    <*> traverse (traverse f) t
+    <*> pure s2
+    <*> f v
+
+{-| Construct a 'Binding' with no source information and no type annotation.
+-}
+makeBinding :: Text -> Expr s a -> Binding s a
+makeBinding name = Binding Nothing name Nothing Nothing Nothing

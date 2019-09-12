@@ -109,6 +109,7 @@ module Dhall.Import (
     , writeExpressionToSemanticCache
     , assertNoImports
     , Status
+    , SemanticCacheMode(..)
     , Chained
     , chainedImport
     , chainedFromLocalHere
@@ -158,8 +159,7 @@ import Data.Typeable (Typeable)
 import System.FilePath ((</>))
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Core
-    ( Binding(..)
-    , Expr(..)
+    ( Expr(..)
     , Chunks(..)
     , Directory(..)
     , File(..)
@@ -169,6 +169,8 @@ import Dhall.Core
     , ImportMode(..)
     , Import(..)
     , URL(..)
+    , bindingExprs
+    , chunkExprs
     )
 #ifdef MIN_VERSION_http_client
 import Network.HTTP.Client (Manager)
@@ -494,7 +496,10 @@ loadImportWithSemanticCache
 loadImportWithSemanticCache
   import_@(Chained (Import (ImportHashed (Just semanticHash) _) _)) = do
     Status { .. } <- State.get
-    mCached <- liftIO $ fetchFromSemanticCache semanticHash
+    mCached <-
+        case _semanticCacheMode of
+            UseSemanticCache -> liftIO $ fetchFromSemanticCache semanticHash
+            IgnoreSemanticCache -> pure Nothing
 
     case mCached of
         Just bytesStrict -> do
@@ -906,13 +911,7 @@ loadWith expr₀ = case expr₀ of
   Lam a b c            -> Lam <$> pure a <*> loadWith b <*> loadWith c
   Pi a b c             -> Pi <$> pure a <*> loadWith b <*> loadWith c
   App a b              -> App <$> loadWith a <*> loadWith b
-  Let a b              -> Let <$> adapt0 a <*> loadWith b
-    where
-      adapt0 (Binding src0 c src1 d src2 e) =
-          Binding <$> pure src0 <*> pure c <*> pure src1 <*> traverse adapt1 d <*> pure src2 <*> loadWith e
-
-      adapt1 (src3, f) =
-          (,) <$> pure src3 <*> loadWith f
+  Let a b              -> Let <$> bindingExprs loadWith a <*> loadWith b
   Annot a b            -> Annot <$> loadWith a <*> loadWith b
   Bool                 -> pure Bool
   BoolLit a            -> pure (BoolLit a)
@@ -941,7 +940,7 @@ loadWith expr₀ = case expr₀ of
   DoubleLit a          -> pure (DoubleLit a)
   DoubleShow           -> pure DoubleShow
   Text                 -> pure Text
-  TextLit (Chunks a b) -> fmap TextLit (Chunks <$> mapM (mapM loadWith) a <*> pure b)
+  TextLit chunks       -> TextLit <$> chunkExprs loadWith chunks
   TextAppend a b       -> TextAppend <$> loadWith a <*> loadWith b
   TextShow             -> pure TextShow
   List                 -> pure List
@@ -978,13 +977,15 @@ loadWith expr₀ = case expr₀ of
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
-load = loadRelativeTo "."
+load = loadRelativeTo "." UseSemanticCache
 
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
-loadRelativeTo :: FilePath -> Expr Src Import -> IO (Expr Src X)
-loadRelativeTo rootDirectory expression =
-    State.evalStateT (loadWith expression) (emptyStatus rootDirectory)
+loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src X)
+loadRelativeTo rootDirectory semanticCacheMode expression =
+    State.evalStateT
+        (loadWith expression)
+        (emptyStatus rootDirectory) { _semanticCacheMode = semanticCacheMode }
 
 encodeExpression
     :: forall s
