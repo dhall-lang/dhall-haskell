@@ -11,12 +11,18 @@
 * BREAKING CHANGE TO THE API: [Treat multi-`let`s as syntactic sugar](https://github.com/dhall-lang/dhall-haskell/pull/1242)
     * This is a breaking change because the `Let` constructor now only stores
       one `Binding` instead of a `NonEmpty` list of `Binding`s
-* TECHNICALLY BREAKING CHANGE TO THE LANGUAGE: [Dependent types](https://github.com/dhall-lang/dhall-haskell/pull/1164)
+* PERFORMANCE REGRESSION & TECHNICALLY BREAKING CHANGE TO THE LANGUAGE: [Dependent types](https://github.com/dhall-lang/dhall-haskell/pull/1164)
     * You can now write functions from terms to types
     * There is also now language support for tests of the form
       `assert : x === y`
-    * This is a technically breaking change because `assert` is now a reserved
-      keyword
+    * This deteriorates the performance of large multi-`let` expressions
+      (See: [#1306](https://github.com/dhall-lang/dhall-haskell/issues/1306))
+    * Splitting large multi-`let` expressions into smaller files may mitigate
+      the problem as a work-around for now
+    * Follow [#1129](https://github.com/dhall-lang/dhall-haskell/issues/1129)
+      for work to fix this performance regression
+    * This is also a technically breaking change because `assert` is now a
+      reserved keyword
     * See the [changelog for standard version 10.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v10.0.0) for more details
 * TECHNICALLY BREAKING CHANGE TO THE LANGUAGE: [Add `Natural/subtract` built-in](https://github.com/dhall-lang/dhall-haskell/pull/1133)
     * The language now supports machine subtraction, which can be used to
