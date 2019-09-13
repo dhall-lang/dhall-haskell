@@ -50,12 +50,12 @@ import Data.Text (Text)
 import Data.Void (Void, absurd)
 import GHC.Float (double2Float, float2Double)
 
-import qualified Crypto.Hash
 import qualified Control.Monad       as Monad
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.Sequence
 import qualified Dhall.Core
+import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
 
@@ -767,7 +767,7 @@ instance FromTerm Import where
                     "\x12\x20" -> return ()
                     _          -> empty
 
-                digest <- case Crypto.Hash.digestFromByteString suffix of
+                digest <- case Dhall.Crypto.sha256DigestFromByteString suffix of
                     Nothing     -> empty
                     Just digest -> return digest
 
