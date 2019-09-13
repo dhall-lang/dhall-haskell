@@ -236,6 +236,10 @@ rarrow :: CharacterSet -> Doc Ann
 rarrow Unicode = syntax "→"
 rarrow ASCII   = syntax "->"
 
+doubleColon :: CharacterSet -> Doc Ann
+doubleColon Unicode = syntax "∷"
+doubleColon ASCII   = syntax "::"
+
 -- | Pretty-print a list
 list :: [Doc Ann] -> Doc Ann
 list   [] = lbracket <> rbracket
@@ -873,6 +877,16 @@ prettyCharacterSet characterSet expression =
     prettyImportExpression (Note _ a) =
         prettyImportExpression a
     prettyImportExpression a0 =
+        prettyDefaultExpression a0
+
+    prettyDefaultExpression :: Pretty a => Expr Src a -> Doc Ann
+    prettyDefaultExpression (Default a b) =
+            prettySelectorExpression a
+        <>  doubleColon characterSet
+        <>  prettySelectorExpression b
+    prettyDefaultExpression (Note _ a) =
+        prettyDefaultExpression a
+    prettyDefaultExpression a0 =
         prettySelectorExpression a0
 
     prettySelectorExpression :: Pretty a => Expr Src a -> Doc Ann

@@ -770,6 +770,26 @@ typeWithA tpa = loop
                 let text = Dhall.Core.pretty t
 
                 Left (TypeError ctx e (CantProject text r t))
+    loop ctx _e@(Default r t) = do
+        tR <- loop ctx r
+
+        case Dhall.Core.normalize tR of
+            Record ktsR -> do
+                _ <- loop ctx t
+
+                let t' = Dhall.Core.normalize t
+
+                case t' of
+                    Record ktsT ->
+                        if Dhall.Core.judgmentallyEqual (Record (Dhall.Map.restrictKeys ktsR (Dhall.Map.keysSet ktsT))) (Record ktsR)
+                        then return ()
+                        else error "Urk2!"
+                    _ ->
+                        error "Urk3!"
+
+                return t'
+            _ -> do
+                error "Urk!"
     loop ctx e@(Assert t) = do
         _ <- loop ctx t
 

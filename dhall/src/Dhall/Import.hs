@@ -968,6 +968,7 @@ loadWith expr₀ = case expr₀ of
   ToMap a b            -> ToMap <$> loadWith a <*> mapM loadWith b
   Field a b            -> Field <$> loadWith a <*> pure b
   Project a b          -> Project <$> loadWith a <*> mapM loadWith b
+  Default a b          -> Default <$> loadWith a <*> loadWith b
   Assert a             -> Assert <$> loadWith a
   Equivalent a b       -> Equivalent <$> loadWith a <*> loadWith b
   Note a b             -> do

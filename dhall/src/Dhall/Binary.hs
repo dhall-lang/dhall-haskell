@@ -263,6 +263,11 @@ instance ToTerm a => ToTerm (Expr Void a) where
       where
         l₁ = encode l₀
         r₁ = encode r₀
+    encode (Default l₀ r₀) =
+        TList [ TInt 3, TInt 13, l₁, r₁ ]
+      where
+        l₁ = encode l₀
+        r₁ = encode r₀
     encode (ListLit _T₀ xs₀)
         | null xs₀  = TList [ TInt label, _T₁ ]
         | otherwise = TList ([ TInt 4, TNull ] ++ xs₁)
@@ -593,6 +598,7 @@ instance FromTerm a => FromTerm (Expr s a) where
                 10 -> return CombineTypes
                 11 -> return ImportAlt
                 12 -> return Equivalent
+                13 -> return Default
                 _  -> empty
         return (op l₀ r₀)
     decode (TList [ TInt 4, _T₁ ]) = do

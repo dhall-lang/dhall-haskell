@@ -525,6 +525,8 @@ data Expr s a
     -- | > Project e (Left xs)                      ~  e.{ xs }
     -- | > Project e (Right t)                      ~  e.(t)
     | Project (Expr s a) (Either (Set Text) (Expr s a))
+    -- | > Default x y                              ~  x::y
+    | Default (Expr s a) (Expr s a)
     -- | > Assert e                                 ~  assert : e
     | Assert (Expr s a)
     -- | > Equivalent x y                           ~  x ≡ y
@@ -622,6 +624,7 @@ instance Functor (Expr s) where
   fmap f (ToMap e maybeE) = ToMap (fmap f e) (fmap (fmap f) maybeE)
   fmap f (Field e1 v) = Field (fmap f e1) v
   fmap f (Project e1 vs) = Project (fmap f e1) (fmap (fmap f) vs)
+  fmap f (Default l r) = Default (fmap f l) (fmap f r)
   fmap f (Assert t) = Assert (fmap f t)
   fmap f (Equivalent e1 e2) = Equivalent (fmap f e1) (fmap f e2)
   fmap f (Note s e1) = Note s (fmap f e1)
@@ -704,6 +707,7 @@ instance Monad (Expr s) where
     ToMap a b            >>= k = ToMap (a >>= k) (fmap (>>= k) b)
     Field a b            >>= k = Field (a >>= k) b
     Project a b          >>= k = Project (a >>= k) (fmap (>>= k) b)
+    Default a b          >>= k = Default (a >>= k) (b >>= k)
     Assert a             >>= k = Assert (a >>= k)
     Equivalent a b       >>= k = Equivalent (a >>= k) (b >>= k)
     Note a b             >>= k = Note a (b >>= k)
@@ -775,6 +779,7 @@ instance Bifunctor Expr where
     first k (Assert a            ) = Assert (first k a)
     first k (Equivalent a b      ) = Equivalent (first k a) (first k b)
     first k (Project a b         ) = Project (first k a) (fmap (first k) b)
+    first k (Default a b         ) = Default (first k a) (first k b)
     first k (Note a b            ) = Note (k a) (first k b)
     first k (ImportAlt a b       ) = ImportAlt (first k a) (first k b)
     first _ (Embed a             ) = Embed a
@@ -1040,6 +1045,10 @@ shift d v (Project a b) = Project a' b'
   where
     a' =       shift d v  a
     b' = fmap (shift d v) b
+shift d v (Default a b) = Default a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
 shift d v (Note a b) = Note a b'
   where
     b' = shift d v b
@@ -1202,6 +1211,10 @@ subst x e (Project a b) = Project a' b'
   where
     a' =       subst x e  a
     b' = fmap (subst x e) b
+subst x e (Default a b) = Default a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
 subst x e (Assert a) = Assert a'
   where
     a' = subst x e a
@@ -1341,6 +1354,7 @@ denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (ToMap a b           ) = ToMap (denote a) (fmap denote b)
 denote (Field a b           ) = Field (denote a) b
 denote (Project a b         ) = Project (denote a) (fmap denote b)
+denote (Default a b         ) = Default (denote a) (denote b)
 denote (Assert a            ) = Assert (denote a)
 denote (Equivalent a b      ) = Equivalent (denote a) (denote b)
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
@@ -1833,6 +1847,21 @@ normalizeWithM ctx e0 = loop (denote e0)
             _ -> do
                 r' <- loop r
                 pure (Project r' (Right e2))
+    Default r t -> do
+        t' <- loop t
+
+        case t' of
+            Record kts -> do
+                let defaults = (RecordLit . Dhall.Map.fromList) $ do
+                        (k, App Optional u) <- Dhall.Map.toList kts
+
+                        return (k, App None u)
+
+                loop (Prefer defaults r)
+            _ -> do
+                r' <- loop r
+
+                return (Default r' t')
     Assert t -> do
         t' <- loop t
 
@@ -2077,6 +2106,10 @@ isNormalized e0 = loop (denote e0)
               Right e' -> case e' of
                   Record _ -> False
                   _ -> loop e'
+      Default r t -> loop t &&
+          case t of
+              Record _ -> False
+              _        -> loop r
       Assert t -> loop t
       Equivalent l r -> loop l && loop r
       Note _ e' -> loop e'
@@ -2244,6 +2277,7 @@ subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 subExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
 subExpressions f (Field a b) = Field <$> f a <*> pure b
 subExpressions f (Project a b) = Project <$> f a <*> traverse f b
+subExpressions f (Default a b) = Default <$> f a <*> f b
 subExpressions f (Assert a) = Assert <$> f a
 subExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
 subExpressions f (Note a b) = Note a <$> f b

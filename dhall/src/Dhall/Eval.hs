@@ -217,6 +217,7 @@ data Val a
   | VField !(Val a) !Text
   | VInject !(Map Text (Maybe (Val a))) !Text !(Maybe (Val a))
   | VProject !(Val a) !(Either (Set Text) (Val a))
+  | VDefault !(Val a) !(Val a)
   | VAssert !(Val a)
   | VEquivalent !(Val a) !(Val a)
   | VEmbed a
@@ -604,6 +605,17 @@ eval !env t =
                           VRecord kts ->
                             evalE (Project t (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
                           e' -> VProject (evalE t) (Right e')
+    Default r t      ->
+        case evalE t of
+            VRecord kts ->
+                let defaults = (VRecordLit . Dhall.Map.fromList) $ do
+                        (k, VOptional u) <- Dhall.Map.toList kts
+
+                        return (k, VNone u)
+
+                in  vPrefer env defaults (evalE r)
+            t' ->
+                VDefault (evalE r) t'
     Assert t         -> VAssert (evalE t)
     Equivalent t u   -> VEquivalent (evalE t) (evalE u)
     Note _ e         -> evalE e
@@ -753,6 +765,7 @@ conv !env t t' =
     (VField t k              , VField t' k'                ) -> convE t t' && k == k'
     (VProject t (Left ks)    , VProject t' (Left ks')      ) -> convE t t' && ks == ks'
     (VProject t (Right e)    , VProject t' (Right e')      ) -> convE t t' && convE e e'
+    (VDefault r t            , VDefault r' t'              ) -> convE r r' && convE t t'
     (VAssert t               , VAssert t'                  ) -> convE t t'
     (VEquivalent t u         , VEquivalent t' u'           ) -> convE t t' && convE u u'
     (VInject m k mt          , VInject m' k' mt'           ) -> eqMapsBy (eqMaybeBy convE) m m'
@@ -890,6 +903,7 @@ quote !env !t =
     VToMap t ma                   -> ToMap (quoteE t) (quoteE <$> ma)
     VField t k                    -> Field (quoteE t) k
     VProject t p                  -> Project (quoteE t) (fmap quoteE p)
+    VDefault r t                  -> Default (quoteE r) (quoteE t)
     VAssert t                     -> Assert (quoteE t)
     VEquivalent t u               -> Equivalent (quoteE t) (quoteE u)
     VInject m k Nothing           -> Field (Union ((quoteE <$>) <$> m)) k
@@ -996,6 +1010,7 @@ alphaNormalize = goEnv NEmpty where
       ToMap x ma       -> ToMap (go x) (go <$> ma)
       Field t k        -> Field (go t) k
       Project t ks     -> Project (go t) (go <$> ks)
+      Default r t      -> Default (go r) (go t)
       Assert t         -> Assert (go t)
       Equivalent t u   -> Equivalent (go t) (go u)
       Note s e         -> Note s (go e)
