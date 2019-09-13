@@ -7,7 +7,6 @@ module Dhall.Hash
       hash
     ) where
 
-import Dhall.Parser (exprFromText)
 import Dhall.Import (hashExpressionToCode)
 
 import qualified Control.Monad.Trans.State.Strict as State
@@ -15,16 +14,16 @@ import qualified Control.Exception
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.TypeCheck
+import qualified Dhall.Util
 import qualified Data.Text.IO
 
 -- | Implementation of the @dhall hash@ subcommand
-hash :: IO ()
-hash = do
-    inText <- Data.Text.IO.getContents
-
-    parsedExpression <- case exprFromText "(stdin)" inText of
-        Left  exception        -> Control.Exception.throwIO exception
-        Right parsedExpression -> return parsedExpression
+hash
+    :: Bool
+    -- ^ Censor the source code?
+    -> IO ()
+hash censor = do
+    parsedExpression <- Dhall.Util.getExpression censor Nothing
 
     let status = Dhall.Import.emptyStatus "."
 

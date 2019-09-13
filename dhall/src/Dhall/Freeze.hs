@@ -16,10 +16,9 @@ module Dhall.Freeze
 
 import Control.Exception (SomeException)
 import Data.Monoid ((<>))
-import Data.Maybe (fromMaybe)
 import Data.Text
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
-import Dhall.Parser (exprAndHeaderFromText, Src)
+import Dhall.Parser (Src)
 import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
 import Dhall.TypeCheck (X)
 import System.Console.ANSI (hSupportsANSI)
@@ -33,6 +32,7 @@ import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
 import qualified Dhall.TypeCheck
+import qualified Dhall.Util
 import qualified System.FilePath
 import qualified System.IO
 
@@ -139,20 +139,15 @@ freeze
     -> Scope
     -> Intent
     -> CharacterSet
+    -> Bool
+    -- ^ Censor the source code?
     -> IO ()
-freeze inplace scope intent characterSet = do
-    (text, directory) <- case inplace of
-        Nothing -> do
-            text <- Data.Text.IO.getContents
+freeze inplace scope intent characterSet censor = do
+    let directory = case inplace of
+            Nothing   -> "."
+            Just file -> System.FilePath.takeDirectory file
 
-            return (text, ".")
-
-        Just file -> do
-            text <- Data.Text.IO.readFile file
-
-            return (text, System.FilePath.takeDirectory file)
-
-    (header, parsedExpression) <- Dhall.Core.throws (exprAndHeaderFromText srcInfo text)
+    (header, parsedExpression) <- Dhall.Util.getExpressionAndHeader censor inplace
 
     let freezeScope =
             case scope of
@@ -208,5 +203,3 @@ freeze inplace scope intent characterSet = do
     frozenExpression <- rewrite parsedExpression
 
     writeExpr inplace (header, frozenExpression) characterSet
-        where
-            srcInfo = fromMaybe "(stdin)" inplace

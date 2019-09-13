@@ -12,7 +12,6 @@ module Dhall.Format
     ) where
 
 import Control.Exception (Exception)
-import Dhall.Parser (exprAndHeaderFromText)
 import Dhall.Pretty (CharacterSet(..), annToAnsiStyle, layoutOpts)
 
 import Data.Monoid ((<>))
@@ -22,8 +21,8 @@ import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Control.Exception
 import qualified Data.Text.IO
-import qualified Dhall.Core
 import qualified Dhall.Pretty
+import qualified Dhall.Util
 import qualified System.Console.ANSI
 import qualified System.IO
 
@@ -36,6 +35,7 @@ instance Show NotFormatted where
 -- | Arguments to the `format` subcommand
 data Format = Format
     { characterSet :: CharacterSet
+    , censor       :: Bool
     , formatMode   :: FormatMode
     }
 
@@ -62,19 +62,16 @@ format (Format {..}) =
         Modify {..} ->
             case inplace of
                 Just file -> do
-                    text <- Data.Text.IO.readFile file
-
-                    (header, expr) <- Dhall.Core.throws (exprAndHeaderFromText "(stdin)" text)
+                    (header, expr) <- Dhall.Util.getExpressionAndHeader censor (Just file)
 
                     let doc =   Pretty.pretty header
                             <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
                             <>  "\n"
+
                     System.IO.withFile file System.IO.WriteMode (\handle -> do
                         Pretty.Terminal.renderIO handle (Pretty.layoutSmart layoutOpts doc))
                 Nothing -> do
-                    inText <- Data.Text.IO.getContents
-
-                    (header, expr) <- Dhall.Core.throws (exprAndHeaderFromText "(stdin)" inText)
+                    (header, expr) <- Dhall.Util.getExpressionAndHeader censor Nothing
 
                     let doc =   Pretty.pretty header
                             <>  Dhall.Pretty.prettyCharacterSet characterSet expr
@@ -96,7 +93,7 @@ format (Format {..}) =
                 Just file -> Data.Text.IO.readFile file
                 Nothing   -> Data.Text.IO.getContents
 
-            (header, expr) <- Dhall.Core.throws (exprAndHeaderFromText "(stdin)" originalText)
+            (header, expr) <- Dhall.Util.getExpressionAndHeader censor path
 
             let doc =   Pretty.pretty header
                     <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)

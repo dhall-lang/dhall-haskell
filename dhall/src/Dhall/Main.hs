@@ -62,10 +62,10 @@ import qualified Dhall.Hash
 import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
-import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Repl
 import qualified Dhall.TypeCheck
+import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified Paths_dhall as Meta
@@ -78,10 +78,11 @@ import qualified Data.Map
 
 -- | Top-level program options
 data Options = Options
-    { mode            :: Mode
-    , explain         :: Bool
-    , plain           :: Bool
-    , ascii           :: Bool
+    { mode    :: Mode
+    , explain :: Bool
+    , plain   :: Bool
+    , ascii   :: Bool
+    , censor  :: Bool
     }
 
 -- | The subcommands for the @dhall@ executable
@@ -120,6 +121,7 @@ parseOptions =
     <*> switch "explain" "Explain error messages in more detail"
     <*> switch "plain" "Disable syntax highlighting"
     <*> switch "ascii" "Format code using only ASCII syntax"
+    <*> switch "censor" "Hide source code in error messages"
   where
     switch name description =
         Options.Applicative.switch
@@ -285,15 +287,6 @@ parseMode =
         adapt True  path    = Dhall.Format.Check {..}
         adapt False inplace = Dhall.Format.Modify {..}
 
-getExpression :: Maybe FilePath -> IO (Expr Src Import)
-getExpression maybeFile = do
-    inText <- do
-        case maybeFile of
-            Just file -> Data.Text.IO.readFile file
-            Nothing   -> Data.Text.IO.getContents
-
-    Dhall.Core.throws (Dhall.Parser.exprFromText "(stdin)" inText)
-
 -- | `ParserInfo` for the `Options` type
 parserInfoOptions :: ParserInfo Options
 parserInfoOptions =
@@ -317,6 +310,9 @@ command (Options {..}) = do
             Nothing  -> "."
 
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
+
+    let getExpression          = Dhall.Util.getExpression          censor
+    let getExpressionAndHeader = Dhall.Util.getExpressionAndHeader censor
 
     let handle io =
             Control.Exception.catches io
@@ -508,17 +504,15 @@ command (Options {..}) = do
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze inplace scope intent characterSet
+            Dhall.Freeze.freeze inplace scope intent characterSet censor
 
         Hash -> do
-            Dhall.Hash.hash
+            Dhall.Hash.hash censor
 
         Lint {..} -> do
             case inplace of
                 Just file -> do
-                    text <- Data.Text.IO.readFile file
-
-                    (header, expression) <- Dhall.Core.throws (Dhall.Parser.exprAndHeaderFromText file text)
+                    (header, expression) <- getExpressionAndHeader (Just file)
 
                     let lintedExpression = Dhall.Lint.lint expression
 
@@ -529,9 +523,7 @@ command (Options {..}) = do
                         renderDoc h doc )
 
                 Nothing -> do
-                    text <- Data.Text.IO.getContents
-
-                    (header, expression) <- Dhall.Core.throws (Dhall.Parser.exprAndHeaderFromText "(stdin)" text)
+                    (header, expression) <- getExpressionAndHeader Nothing
 
                     let lintedExpression = Dhall.Lint.lint expression
 
