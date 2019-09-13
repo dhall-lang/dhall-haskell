@@ -11,34 +11,27 @@ import Data.ByteString (ByteString)
 import Data.CaseInsensitive (CI)
 import Data.Dynamic (toDyn)
 import Data.Semigroup ((<>))
-import Data.Text (Text)
 
 import Dhall.Core
-    ( Directory(..)
-    , File(..)
-    , Import(..)
+    ( Import(..)
     , ImportHashed(..)
     , ImportType(..)
     , Scheme(..)
     , URL(..)
     )
+import Dhall.URL (renderURL)
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
 import qualified Dhall.Util
-import qualified Network.URI.Encode               as URI.Encode
 
 import Dhall.Import.Types
 
 import qualified Control.Exception
-#ifdef __GHCJS__
-import qualified JavaScript.XHR
-#else
 import qualified Data.List.NonEmpty               as NonEmpty
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Encoding
-#endif
 
 #if MIN_VERSION_http_client(0,5,0)
 import Network.HTTP.Client
@@ -263,35 +256,6 @@ corsCompliant (Remote parentURL) childURL responseHeaders = liftIO $ do
                 Control.Exception.throwIO (NotCORSCompliant {..})
 corsCompliant _ _ _ = return ()
 
-renderComponent :: Text -> Text
-renderComponent component = "/" <> URI.Encode.encodeText component
-
-renderQuery :: Text -> Text
-renderQuery query = "?" <> query
-
-renderURL :: URL -> Text
-renderURL url =
-        schemeText
-    <>  authority
-    <>  pathText
-    <>  queryText
-  where
-    URL {..} = url
-
-    File {..} = path
-
-    Directory {..} = directory
-
-    schemeText = case scheme of
-        HTTP  -> "http://"
-        HTTPS -> "https://"
-
-    pathText =
-            foldMap renderComponent (reverse components)
-        <>  renderComponent file
-
-    queryText = foldMap renderQuery query
-
 type HTTPHeader = Network.HTTP.Types.Header
 
 fetchFromHttpUrl
@@ -299,24 +263,6 @@ fetchFromHttpUrl
     -> URL
     -> Maybe [HTTPHeader]
     -> StateT Status IO Text.Text
-#ifdef __GHCJS__
-fetchFromHttpUrl _ childURL Nothing = do
-    let childURLText = renderURL childURL
-
-    let childURLString = Text.unpack childURLText
-
-    -- No need to add a CORS compliance check when using GHCJS.  The browser
-    -- will already check the CORS compliance of the following XHR
-    (statusCode, body) <- liftIO (JavaScript.XHR.get childURLText)
-
-    case statusCode of
-        200 -> return ()
-        _   -> fail (childURLString <> " returned a non-200 status code: " <> show statusCode)
-
-    return body
-fetchFromHttpUrl _ _ _ = do
-    fail "Dhall does not yet support custom headers when built using GHCJS"
-#else
 fetchFromHttpUrl manager childURL mheaders = do
     let childURLString = Text.unpack (renderURL childURL)
 
@@ -348,4 +294,3 @@ fetchFromHttpUrl manager childURL mheaders = do
     case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
         Left  err  -> liftIO (Control.Exception.throwIO err)
         Right text -> return (Data.Text.Lazy.toStrict text)
-#endif
