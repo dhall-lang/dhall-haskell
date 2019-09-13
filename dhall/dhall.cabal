@@ -531,6 +531,7 @@ Library
         Dhall.Binary,
         Dhall.Context,
         Dhall.Core,
+        Dhall.Crypto,
         Dhall.Diff,
         Dhall.Format,
         Dhall.Freeze,
@@ -554,7 +555,6 @@ Library
         Exposed-Modules:
             Dhall.TH
     Other-Modules:
-        Dhall.Crypto,
         Dhall.Pretty.Internal,
         Dhall.Parser.Combinators,
         Dhall.URL,

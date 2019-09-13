@@ -1,7 +1,11 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Dhall.Crypto where
+module Dhall.Crypto (
+      SHA256Digest(..)
+    , sha256DigestFromByteString
+    , sha256Hash
+    ) where
 
 import Control.DeepSeq (NFData)
 import Crypto.Hash (SHA256)
@@ -11,13 +15,13 @@ import Data.ByteString (ByteString)
 import GHC.Generics (Generic)
 
 import qualified Crypto.Hash
-import qualified Data.ByteString.Char8 as BC8
+import qualified Data.ByteString.Char8 as ByteString.Char8
 
-newtype SHA256Digest = SHA256Digest ByteString
+newtype SHA256Digest = SHA256Digest { unSHA256Digest :: ByteString }
   deriving (Eq, Generic, Ord, NFData, ByteArrayAccess)
 
 instance Show SHA256Digest where
-  show (SHA256Digest bytes) = BC8.unpack $ convertToBase Base16 bytes
+  show (SHA256Digest bytes) = ByteString.Char8.unpack $ convertToBase Base16 bytes
 
 sha256DigestFromByteString :: ByteString -> Maybe SHA256Digest
 sha256DigestFromByteString bytes = SHA256Digest . convert <$> mh

@@ -2,7 +2,11 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE JavaScriptFFI #-}
 
-module Dhall.Crypto where
+module Dhall.Crypto (
+      SHA256Digest(..)
+    , sha256DigestFromByteString
+    , sha256Hash
+    ) where
 
 import Control.DeepSeq (NFData)
 import Data.ByteArray (ByteArrayAccess)
@@ -12,15 +16,15 @@ import GHC.Generics (Generic)
 import JavaScript.TypedArray.ArrayBuffer (ArrayBuffer)
 import System.IO.Unsafe (unsafePerformIO)
 
-import qualified Data.ByteString as ByteString
-import qualified Data.ByteString.Char8 as BC8
-import qualified GHCJS.Buffer as Buffer
+import qualified Data.ByteString        as ByteString
+import qualified Data.ByteString.Char8  as ByteString.Char8
+import qualified GHCJS.Buffer           as Buffer
 
 newtype SHA256Digest = SHA256Digest { unSHA256Digest :: ByteString }
   deriving (Eq, Generic, Ord, NFData, ByteArrayAccess)
 
 instance Show SHA256Digest where
-  show (SHA256Digest bytes) = BC8.unpack $ convertToBase Base16 bytes
+  show (SHA256Digest bytes) = ByteString.Char8.unpack $ convertToBase Base16 bytes
 
 sha256DigestFromByteString :: ByteString -> Maybe SHA256Digest
 sha256DigestFromByteString bytes
