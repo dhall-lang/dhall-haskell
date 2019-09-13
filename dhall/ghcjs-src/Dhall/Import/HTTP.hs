@@ -22,7 +22,7 @@ fetchFromHttpUrl
     -> Maybe [(CI ByteString, ByteString)]
     -> StateT Status IO Text.Text
 fetchFromHttpUrl _ childURL Nothing = do
-    let childURLText = renderURL childURLString
+    let childURLText = renderURL childURL
 
     let childURLString = Text.unpack childURLText
 
