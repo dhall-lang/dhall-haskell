@@ -770,7 +770,7 @@ typeWithA tpa = loop
                 let text = Dhall.Core.pretty t
 
                 Left (TypeError ctx e (CantProject text r t))
-    loop ctx _e@(Default r t) = do
+    loop ctx e@(Default r t) = do
         tR <- loop ctx r
 
         case Dhall.Core.normalize tR of
@@ -780,16 +780,32 @@ typeWithA tpa = loop
                 let t' = Dhall.Core.normalize t
 
                 case t' of
-                    Record ktsT ->
-                        if Dhall.Core.judgmentallyEqual (Record (Dhall.Map.restrictKeys ktsR (Dhall.Map.keysSet ktsT))) (Record ktsR)
-                        then return ()
-                        else error "Urk2!"
+                    Record ktsT -> do
+                        let ktsT' = Dhall.Map.restrictKeys ktsT (Dhall.Map.keysSet ktsR)
+
+                        if Dhall.Core.judgmentallyEqual (Record ktsT') (Record ktsR)
+                            then return ()
+                            else Left (TypeError ctx e (RecordNotASubsetOfDefaults r (Record ktsT') (Record ktsR)))
+
+                        let nonDefaultableField (App Optional _) = False
+                            nonDefaultableField  _               = True
+
+                        let nonDefaultableFields =
+                                Dhall.Map.filter nonDefaultableField ktsT
+
+                        let missingNonDefaultableFields =
+                                Dhall.Map.keysSet (Dhall.Map.difference nonDefaultableFields ktsR)
+
+                        return ()
+                        if not (null missingNonDefaultableFields)
+                            then Left (TypeError ctx e (MissingFields missingNonDefaultableFields))
+                            else return ()
                     _ ->
-                        error "Urk3!"
+                        Left (TypeError ctx e (DefaultsAreNotARecordType t))
 
                 return t'
             _ -> do
-                error "Urk!"
+                Left (TypeError ctx e (MustDefaultARecord r))
     loop ctx e@(Assert t) = do
         _ <- loop ctx t
 
@@ -886,6 +902,10 @@ data TypeMessage s a
     | MissingField Text (Expr s a)
     | MissingConstructor Text (Expr s a)
     | ProjectionTypeMismatch Text (Expr s a) (Expr s a) (Expr s a) (Expr s a)
+    | MustDefaultARecord (Expr s a)
+    | DefaultsAreNotARecordType (Expr s a)
+    | RecordNotASubsetOfDefaults (Expr s a) (Expr s a) (Expr s a)
+    | MissingFields (Set Text)
     | AssertionFailed (Expr s a) (Expr s a)
     | NotAnEquivalence (Expr s a)
     | IncomparableExpression (Expr s a)
@@ -3310,6 +3330,223 @@ prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1 expr2 expr3) = ErrorMess
         txt0 = insert k
         txt1 = insert expr0
         txt2 = insert expr1
+
+prettyTypeMessage (MustDefaultARecord expr0) = ErrorMessages {..}
+  where
+    short = "The ❰r❱ in ❰T::r❱ must be a record"
+
+    long =
+        "Explanation: You can use the ❰::❱ operator to create a record literal from a    \n\
+        \record type by specifying non-default fields:                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ let Example = { name : Text, age : Optional Natural } │ No need to specify\n\
+        \    │                                                       │ ❰age❱, which      \n\
+        \    │ in  Example::{ name = \"John\" }                        │ defaults to ❰None❱\n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... and the right argument to ❰::❱ needs to be a record and not some other type \n\
+        \of value.                                                                       \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ let Example = { name : Text, age : Optional Natural } │                   \n\
+        \    │                                                       │                   \n\
+        \    │ in  Example::\"John\"                                   │                   \n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \                   ⇧                                                            \n\
+        \                   Invalid: This is not a record                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You supplied the following expression as the right-hand side of ❰::❱:           \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... which is not a record.                                                      \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You might have meant to use the type annotation operator (❰:❱) which is only a\n\
+        \  single colon in Dhall:                                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ let Example = { name : Text, age : Optional Natural } │                   \n\
+        \    │                                                       │                   \n\
+        \    │ in  Example :: Type                                   │                   \n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \                  ⇧                                                             \n\
+        \                  This should have been ❰:❱                                     \n\
+        \                                                                                \n"
+      where
+        txt0 = insert expr0
+
+prettyTypeMessage (DefaultsAreNotARecordType expr0) = ErrorMessages {..}
+  where
+    short = "The ❰T❱ in ❰T::r❱ must be a record type"
+
+    long =
+        "Explanation: You can use the ❰::❱ operator to create a record literal from a    \n\
+        \record type by specifying non-default fields:                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ let Example = { name : Text, age : Optional Natural } │ No need to specify\n\
+        \    │                                                       │ ❰age❱, which      \n\
+        \    │ in  Example::{ name = \"John\" }                        │ defaults to ❰None❱\n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... and the left argument to ❰::❱ needs to be a record type and not some other  \n\
+        \type of value.                                                                  \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ let Example = { name : Text, age : Optional Natural } │                   \n\
+        \    │                                                       │                   \n\
+        \    │ in  Text::{ name = \"John\" }                           │                   \n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \          ⇧                                                                     \n\
+        \          Invalid: This is not a record type                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You supplied the following expression as the left-hand side of ❰::❱:            \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... which is not a record type.                                                 \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You might have meant to use the type annotation operator (❰:❱) which is only a\n\
+        \  single colon in Dhall:                                                        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────┐                                                            \n\
+        \    │ True :: Bool │                                                            \n\
+        \    └──────────────┘                                                            \n\
+        \           ⇧                                                                    \n\
+        \           This should have been ❰:❱                                            \n\
+        \                                                                                \n"
+      where
+        txt0 = insert expr0
+
+prettyTypeMessage (RecordNotASubsetOfDefaults expr0 expr1 expr2) = ErrorMessages {..}
+  where
+    short = "Unexpected non-default field\n"
+        <>  "\n"
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr1 expr2)
+
+    long =
+        "Explanation: You can use the ❰::❱ operator to create a record literal from a    \n\
+        \record type by specifying non-default fields:                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ let Example = { name : Text, age : Optional Natural } │ No need to specify\n\
+        \    │                                                       │ ❰age❱, which      \n\
+        \    │ in  Example::{ name = \"John\" }                        │ defaults to ❰None❱\n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... and the types of the non-default fields must match the same fields within   \n\
+        \the default record type.                                                        \n\
+        \                                                                                \n\
+        \For example, the following expressions are " <> _NOT <> " valid:                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ let Example = { name : Text, age : Optional Natural } │                   \n\
+        \    │                                                       │                   \n\
+        \    │ in  Example::{ name = \"John\", alive = True }          │                   \n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \                                      ⇧                                         \n\
+        \                                      Invalid: The ❰Example❱ type has no ❰alive❱\n\
+        \                                               field                            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ let Example = { name : Text, age : Optional Natural } │                   \n\
+        \    │                                                       │                   \n\
+        \    │ in  Example::{ name = True }                          │                   \n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \                     ⇧                                                          \n\
+        \                     Invalid: The ❰name❱ field must have type ❰Text❱            \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You supplied the following non-default fields:                                  \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... which have type:                                                            \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... but that does not match the corresponding fields from the default record    \n\
+        \type:                                                                           \n\
+        \                                                                                \n\
+        \" <> txt2 <> "\n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You might have mistyped a field name:                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ let Example = { name : Text, age : Optional Natural } │                   \n\
+        \    │                                                       │                   \n\
+        \    │ in  Example::{ nam = \"John\"}                          │                   \n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \                     ⇧                                                          \n\
+        \                     Typo                                                       \n\
+        \                                                                                \n"
+      where
+        txt0 = insert expr0
+        txt1 = insert expr1
+        txt2 = insert expr2
+
+prettyTypeMessage (MissingFields fields) = ErrorMessages {..}
+  where
+    short = "Missing fields"
+
+    long =
+        "Explanation: You can use the ❰::❱ operator to create a record literal from a    \n\
+        \record type by specifying non-default fields:                                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ let Example = { name : Text, age : Optional Natural } │ No need to specify\n\
+        \    │                                                       │ ❰age❱, which      \n\
+        \    │ in  Example::{ name = \"John\" }                        │ defaults to ❰None❱\n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... and you must specify the values for all non-❰Optional❱ fields.              \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ let Example = { name : Text, age : Optional Natural } │                   \n\
+        \    │                                                       │                   \n\
+        \    │ in  Example::{ age = Some 42 }                        │                   \n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \                   ⇧                                                            \n\
+        \                   Invalid: The ❰name❱ field must be present since the field has\n\
+        \                            no default value                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Your record is missing the following fields which have no default value:        \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n"
+      where
+        txt0 = insert (Text.intercalate ", " (Data.Set.toList fields))
 
 prettyTypeMessage (AssertionFailed expr0 expr1) = ErrorMessages {..}
   where
