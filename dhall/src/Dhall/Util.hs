@@ -7,6 +7,8 @@ module Dhall.Util
     , snipDoc
     , insert
     , _ERROR
+    , Censor(..)
+    , Input(..)
     , getExpression
     , getExpressionAndHeader
     ) where
@@ -91,34 +93,37 @@ insert expression =
 _ERROR :: IsString string => string
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
-get :: (String -> Text -> Either ParseError a) -> Bool -> Maybe FilePath -> IO a
-get parser censor maybeFile = do
+get :: (String -> Text -> Either ParseError a) -> Censor -> Input -> IO a
+get parser censor input = do
     inText <- do
-        case maybeFile of
-            Just file -> Data.Text.IO.readFile file
-            Nothing   -> Data.Text.IO.getContents
+        case input of
+            File file     -> Data.Text.IO.readFile file
+            StandardInput -> Data.Text.IO.getContents
 
     let name =
-            case maybeFile of
-                Just file -> file
-                Nothing   -> "(stdin)"
+            case input of
+                File file     -> file
+                StandardInput -> "(stdin)"
 
     let result = parser name inText
 
     let censoredResult =
-            if censor then first Dhall.Parser.censor result else result
+            case censor of
+                NoCensor -> result
+                Censor   -> first Dhall.Parser.censor result
 
     Dhall.Core.throws censoredResult
 
+-- | Set to `Censor` if you want to censor error text that might include secrets
+data Censor = NoCensor | Censor
+
+-- | Path to input
+data Input = StandardInput | File FilePath
+
 -- | Convenient utility for retrieving an expression
-getExpression
-    :: Bool
-    -- ^ Censor the source code?
-    -> Maybe FilePath
-    -- ^ Path to input (@stdin@ if `Nothing`)
-    -> IO (Expr Src Import)
+getExpression :: Censor -> Input -> IO (Expr Src Import)
 getExpression = get Dhall.Parser.exprFromText
 
 -- | Convenient utility for retrieving an expression along with its header
-getExpressionAndHeader :: Bool -> Maybe FilePath -> IO (Text, Expr Src Import)
+getExpressionAndHeader :: Censor -> Input -> IO (Text, Expr Src Import)
 getExpressionAndHeader = get Dhall.Parser.exprAndHeaderFromText

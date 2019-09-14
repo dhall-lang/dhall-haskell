@@ -21,6 +21,7 @@ import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
 import Dhall.TypeCheck (X)
+import Dhall.Util (Censor, Input(..))
 import System.Console.ANSI (hSupportsANSI)
 
 import qualified Control.Exception
@@ -92,7 +93,7 @@ freezeRemoteImport directory import_ = do
         Remote {} -> freezeImport directory import_
         _         -> return import_
 
-writeExpr :: Maybe FilePath -> (Text, Expr Src Import) -> CharacterSet -> IO ()
+writeExpr :: Input -> (Text, Expr Src Import) -> CharacterSet -> IO ()
 writeExpr inplace (header, expr) characterSet = do
     let doc =  Pretty.pretty header
             <> Dhall.Pretty.prettyCharacterSet characterSet expr
@@ -100,12 +101,12 @@ writeExpr inplace (header, expr) characterSet = do
     let unAnnotated = Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc)
 
     case inplace of
-        Just f ->
+        File f ->
             System.IO.withFile f System.IO.WriteMode (\handle -> do
                 Pretty.renderIO handle unAnnotated
                 Data.Text.IO.hPutStrLn handle "" )
 
-        Nothing -> do
+        StandardInput -> do
             supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
             if supportsANSI
                then
@@ -133,19 +134,16 @@ data Intent
 
 -- | Implementation of the @dhall freeze@ subcommand
 freeze
-    :: Maybe FilePath
-    -- ^ Modify file in-place if present, otherwise read from @stdin@ and write
-    --   to @stdout@
+    :: Input
     -> Scope
     -> Intent
     -> CharacterSet
-    -> Bool
-    -- ^ Censor the source code?
+    -> Censor
     -> IO ()
 freeze inplace scope intent characterSet censor = do
     let directory = case inplace of
-            Nothing   -> "."
-            Just file -> System.FilePath.takeDirectory file
+            StandardInput -> "."
+            File file     -> System.FilePath.takeDirectory file
 
     (header, parsedExpression) <- Dhall.Util.getExpressionAndHeader censor inplace
 

@@ -8,6 +8,7 @@ module Dhall.Hash
     ) where
 
 import Dhall.Import (hashExpressionToCode)
+import Dhall.Util (Censor, Input(..))
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Control.Exception
@@ -18,12 +19,9 @@ import qualified Dhall.Util
 import qualified Data.Text.IO
 
 -- | Implementation of the @dhall hash@ subcommand
-hash
-    :: Bool
-    -- ^ Censor the source code?
-    -> IO ()
+hash :: Censor -> IO ()
 hash censor = do
-    parsedExpression <- Dhall.Util.getExpression censor Nothing
+    parsedExpression <- Dhall.Util.getExpression censor StandardInput
 
     let status = Dhall.Import.emptyStatus "."
 

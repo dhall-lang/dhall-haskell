@@ -12,9 +12,9 @@ module Dhall.Format
     ) where
 
 import Control.Exception (Exception)
-import Dhall.Pretty (CharacterSet(..), annToAnsiStyle, layoutOpts)
-
 import Data.Monoid ((<>))
+import Dhall.Pretty (CharacterSet(..), annToAnsiStyle, layoutOpts)
+import Dhall.Util (Censor, Input(..))
 
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
@@ -35,7 +35,7 @@ instance Show NotFormatted where
 -- | Arguments to the `format` subcommand
 data Format = Format
     { characterSet :: CharacterSet
-    , censor       :: Bool
+    , censor       :: Censor
     , formatMode   :: FormatMode
     }
 
@@ -43,15 +43,8 @@ data Format = Format
     that the input is already formatted
 -}
 data FormatMode
-    = Modify
-        { inplace :: Maybe FilePath
-          -- ^ Modify file in-place if present, otherwise read from @stdin@ and
-          --   write to @stdout@
-        }
-    | Check
-        { path :: Maybe FilePath
-          -- ^ Read from the given file if present, otherwise read from @stdin@
-        }
+    = Modify { inplace :: Input }
+    | Check  { path :: Input }
 
 -- | Implementation of the @dhall format@ subcommand
 format
@@ -61,8 +54,8 @@ format (Format {..}) =
     case formatMode of
         Modify {..} ->
             case inplace of
-                Just file -> do
-                    (header, expr) <- Dhall.Util.getExpressionAndHeader censor (Just file)
+                File file -> do
+                    (header, expr) <- Dhall.Util.getExpressionAndHeader censor (File file)
 
                     let doc =   Pretty.pretty header
                             <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
@@ -70,8 +63,8 @@ format (Format {..}) =
 
                     System.IO.withFile file System.IO.WriteMode (\handle -> do
                         Pretty.Terminal.renderIO handle (Pretty.layoutSmart layoutOpts doc))
-                Nothing -> do
-                    (header, expr) <- Dhall.Util.getExpressionAndHeader censor Nothing
+                StandardInput -> do
+                    (header, expr) <- Dhall.Util.getExpressionAndHeader censor StandardInput
 
                     let doc =   Pretty.pretty header
                             <>  Dhall.Pretty.prettyCharacterSet characterSet expr
@@ -90,8 +83,8 @@ format (Format {..}) =
                           (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc))
         Check {..} -> do
             originalText <- case path of
-                Just file -> Data.Text.IO.readFile file
-                Nothing   -> Data.Text.IO.getContents
+                File file     -> Data.Text.IO.readFile file
+                StandardInput -> Data.Text.IO.getContents
 
             (header, expr) <- Dhall.Util.getExpressionAndHeader censor path
 

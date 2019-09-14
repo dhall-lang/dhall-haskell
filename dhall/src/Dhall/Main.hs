@@ -33,6 +33,7 @@ import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
+import Dhall.Util (Censor(..), Input(..))
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (ExitCode, exitFailure)
 import System.IO (Handle)
@@ -82,30 +83,30 @@ data Options = Options
     , explain :: Bool
     , plain   :: Bool
     , ascii   :: Bool
-    , censor  :: Bool
+    , censor  :: Censor
     }
 
 -- | The subcommands for the @dhall@ executable
 data Mode
     = Default
-          { file :: Maybe FilePath
+          { file :: Input
           , annotate :: Bool
           , alpha :: Bool
           , semanticCacheMode :: SemanticCacheMode
           }
     | Version
-    | Resolve { file :: Maybe FilePath, resolveMode :: Maybe ResolveMode }
-    | Type { file :: Maybe FilePath }
-    | Normalize { file :: Maybe FilePath, alpha :: Bool }
+    | Resolve { file :: Input, resolveMode :: Maybe ResolveMode }
+    | Type { file :: Input }
+    | Normalize { file :: Input , alpha :: Bool }
     | Repl
     | Format { formatMode :: Dhall.Format.FormatMode }
-    | Freeze { inplace :: Maybe FilePath, all_ :: Bool, cache :: Bool }
+    | Freeze { inplace :: Input, all_ :: Bool, cache :: Bool }
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
-    | Lint { inplace :: Maybe FilePath }
-    | Encode { file :: Maybe FilePath, json :: Bool }
-    | Decode { file :: Maybe FilePath, json :: Bool }
-    | Text { file :: Maybe FilePath }
+    | Lint { inplace :: Input }
+    | Encode { file :: Input, json :: Bool }
+    | Decode { file :: Input, json :: Bool }
+    | Text { file :: Input }
 
 data ResolveMode
     = Dot
@@ -121,13 +122,18 @@ parseOptions =
     <*> switch "explain" "Explain error messages in more detail"
     <*> switch "plain" "Disable syntax highlighting"
     <*> switch "ascii" "Format code using only ASCII syntax"
-    <*> switch "censor" "Hide source code in error messages"
+    <*> parseCensor
   where
     switch name description =
         Options.Applicative.switch
             (   Options.Applicative.long name
             <>  Options.Applicative.help description
             )
+
+    parseCensor = fmap f (switch "censor" "Hide source code in error messages")
+      where
+        f True  = Censor
+        f False = NoCensor
 
 subcommand :: String -> String -> Parser a -> Parser a
 subcommand name description parser =
@@ -151,15 +157,15 @@ parseMode =
     <|> subcommand
             "resolve"
             "Resolve an expression's imports"
-            (Resolve <$> optional parseFile <*> parseResolveMode)
+            (Resolve <$> parseFile <*> parseResolveMode)
     <|> subcommand
             "type"
             "Infer an expression's type"
-            (Type <$> optional parseFile)
+            (Type <$> parseFile)
     <|> subcommand
             "normalize"
             "Normalize an expression"
-            (Normalize <$> optional parseFile <*> parseAlpha)
+            (Normalize <$> parseFile <*> parseAlpha)
     <|> subcommand
             "repl"
             "Interpret expressions in a REPL"
@@ -175,7 +181,7 @@ parseMode =
     <|> subcommand
             "lint"
             "Improve Dhall code by using newer language features and removing dead code"
-            (Lint <$> optional parseInplace)
+            (Lint <$> parseInplace)
     <|> subcommand
             "format"
             "Standard code formatter for the Dhall language"
@@ -183,32 +189,36 @@ parseMode =
     <|> subcommand
             "freeze"
             "Add integrity checks to remote import statements of an expression"
-            (Freeze <$> optional parseInplace <*> parseAllFlag <*> parseCacheFlag)
+            (Freeze <$> parseInplace <*> parseAllFlag <*> parseCacheFlag)
     <|> subcommand
             "encode"
             "Encode a Dhall expression to binary"
-            (Encode <$> optional parseFile <*> parseJSONFlag)
+            (Encode <$> parseFile <*> parseJSONFlag)
     <|> subcommand
             "decode"
             "Decode a Dhall expression from binary"
-            (Decode <$> optional parseFile <*> parseJSONFlag)
+            (Decode <$> parseFile <*> parseJSONFlag)
     <|> subcommand
             "text"
             "Render a Dhall expression that evaluates to a Text literal"
-            (Text <$> optional parseFile)
-    <|> (Default <$> optional parseFile <*> parseAnnotate <*> parseAlpha <*> parseSemanticCacheMode)
+            (Text <$> parseFile)
+    <|> (Default <$> parseFile <*> parseAnnotate <*> parseAlpha <*> parseSemanticCacheMode)
   where
     argument =
             fmap Data.Text.pack
         .   Options.Applicative.strArgument
         .   Options.Applicative.metavar
 
-    parseFile =
-        Options.Applicative.strOption
-            (   Options.Applicative.long "file"
-            <>  Options.Applicative.help "Read expression from a file instead of standard input"
-            <>  Options.Applicative.metavar "FILE"
-            )
+    parseFile = fmap f (optional p)
+      where
+        f  Nothing    = StandardInput
+        f (Just file) = File file
+
+        p = Options.Applicative.strOption
+                (   Options.Applicative.long "file"
+                <>  Options.Applicative.help "Read expression from a file instead of standard input"
+                <>  Options.Applicative.metavar "FILE"
+                )
 
     parseAlpha =
         Options.Applicative.switch
@@ -251,12 +261,16 @@ parseMode =
               )
         <|> pure Nothing
 
-    parseInplace =
-        Options.Applicative.strOption
-        (   Options.Applicative.long "inplace"
-        <>  Options.Applicative.help "Modify the specified file in-place"
-        <>  Options.Applicative.metavar "FILE"
-        )
+    parseInplace = fmap f (optional p)
+      where
+        f  Nothing    = StandardInput
+        f (Just file) = File file
+
+        p = Options.Applicative.strOption
+            (   Options.Applicative.long "inplace"
+            <>  Options.Applicative.help "Modify the specified file in-place"
+            <>  Options.Applicative.metavar "FILE"
+            )
 
     parseJSONFlag =
         Options.Applicative.switch
@@ -282,7 +296,7 @@ parseMode =
         <>  Options.Applicative.help "Only check if the input is formatted"
         )
 
-    parseFormatMode = adapt <$> parseCheck <*> optional parseInplace
+    parseFormatMode = adapt <$> parseCheck <*> parseInplace
       where
         adapt True  path    = Dhall.Format.Check {..}
         adapt False inplace = Dhall.Format.Modify {..}
@@ -306,8 +320,8 @@ command (Options {..}) = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
     let rootDirectory = \case
-            Just f   -> System.FilePath.takeDirectory f
-            Nothing  -> "."
+            File f        -> System.FilePath.takeDirectory f
+            StandardInput -> "."
 
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
 
@@ -510,10 +524,10 @@ command (Options {..}) = do
             Dhall.Hash.hash censor
 
         Lint {..} -> do
-            case inplace of
-                Just file -> do
-                    (header, expression) <- getExpressionAndHeader (Just file)
+            (header, expression) <- getExpressionAndHeader inplace
 
+            case inplace of
+                File file -> do
                     let lintedExpression = Dhall.Lint.lint expression
 
                     let doc =   Pretty.pretty header
@@ -522,9 +536,7 @@ command (Options {..}) = do
                     System.IO.withFile file System.IO.WriteMode (\h -> do
                         renderDoc h doc )
 
-                Nothing -> do
-                    (header, expression) <- getExpressionAndHeader Nothing
-
+                StandardInput -> do
                     let lintedExpression = Dhall.Lint.lint expression
 
                     let doc =   Pretty.pretty header
@@ -555,8 +567,8 @@ command (Options {..}) = do
         Decode {..} -> do
             bytes <- do
                 case file of
-                    Just f  -> Data.ByteString.Lazy.readFile f
-                    Nothing -> Data.ByteString.Lazy.getContents
+                    File f        -> Data.ByteString.Lazy.readFile f
+                    StandardInput -> Data.ByteString.Lazy.getContents
 
             term <- do
                 if json
