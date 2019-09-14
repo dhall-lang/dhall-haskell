@@ -988,18 +988,20 @@ prettyCharacterSet characterSet expression =
 
     prettyKeyValue :: Pretty a => Doc Ann -> (Text, Expr Src a) -> (Doc Ann, Doc Ann)
     prettyKeyValue separator (key, val) =
-        (       prettyAnyLabel key
+        duplicate (Pretty.group (Pretty.flatAlt long short))
+      where
+        short = prettyAnyLabel key
             <>  " "
             <>  separator
             <>  " "
             <>  prettyExpression val
-        ,       prettyAnyLabel key
+
+        long =  prettyAnyLabel key
             <>  " "
             <>  separator
-            <>  long
-        )
-      where
-        long = Pretty.hardline <> "    " <> prettyExpression val
+            <>  Pretty.hardline
+            <>  "    "
+            <>  prettyExpression val
 
     prettyRecord :: Pretty a => Map Text (Expr Src a) -> Doc Ann
     prettyRecord =
