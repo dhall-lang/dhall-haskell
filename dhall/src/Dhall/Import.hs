@@ -144,7 +144,6 @@ import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT)
-import Crypto.Hash (SHA256)
 import Data.ByteString (ByteString)
 import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -185,7 +184,6 @@ import Lens.Family.State.Strict (zoom)
 import qualified Codec.Serialise
 import qualified Control.Monad.Trans.Maybe        as Maybe
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Crypto.Hash
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
@@ -197,6 +195,7 @@ import qualified Data.Text                        as Text
 import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core
+import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
@@ -404,8 +403,8 @@ instance Canonicalize Import where
 
 -- | Exception thrown when an integrity check fails
 data HashMismatch = HashMismatch
-    { expectedHash :: Crypto.Hash.Digest SHA256
-    , actualHash   :: Crypto.Hash.Digest SHA256
+    { expectedHash :: Dhall.Crypto.SHA256Digest
+    , actualHash   :: Dhall.Crypto.SHA256Digest
     } deriving (Typeable)
 
 instance Exception HashMismatch
@@ -503,7 +502,7 @@ loadImportWithSemanticCache
 
     case mCached of
         Just bytesStrict -> do
-            let actualHash = Crypto.Hash.hash bytesStrict
+            let actualHash = Dhall.Crypto.sha256Hash bytesStrict
             if semanticHash == actualHash
                 then return ()
                 else do
@@ -525,7 +524,7 @@ loadImportWithSemanticCache
 
             let variants = map (\version -> encodeExpression version (Dhall.Core.alphaNormalize importSemantics))
                                 [ minBound .. maxBound ]
-            case Data.Foldable.find ((== semanticHash). Crypto.Hash.hash) variants of
+            case Data.Foldable.find ((== semanticHash). Dhall.Crypto.sha256Hash) variants of
                 Just bytes -> liftIO $ writeToSemanticCache semanticHash bytes
                 Nothing -> do
                     let expectedHash = semanticHash
@@ -536,7 +535,7 @@ loadImportWithSemanticCache
             return (ImportSemantics {..})
 
 -- Fetch encoded normal form from "semantic cache"
-fetchFromSemanticCache :: Crypto.Hash.Digest SHA256 -> IO (Maybe Data.ByteString.ByteString)
+fetchFromSemanticCache :: Dhall.Crypto.SHA256Digest -> IO (Maybe Data.ByteString.ByteString)
 fetchFromSemanticCache expectedHash = Maybe.runMaybeT $ do
     cacheFile <- getCacheFile "dhall" expectedHash
     True <- liftIO (Directory.doesFileExist cacheFile)
@@ -548,9 +547,9 @@ writeExpressionToSemanticCache :: Expr Src X -> IO ()
 writeExpressionToSemanticCache expression = writeToSemanticCache hash bytes
   where
     bytes = encodeExpression NoVersion expression
-    hash = Crypto.Hash.hash bytes
+    hash = Dhall.Crypto.sha256Hash bytes
 
-writeToSemanticCache :: Crypto.Hash.Digest SHA256 -> Data.ByteString.ByteString -> IO ()
+writeToSemanticCache :: Dhall.Crypto.SHA256Digest -> Data.ByteString.ByteString -> IO ()
 writeToSemanticCache hash bytes = do
     _ <- Maybe.runMaybeT $ do
         cacheFile <- getCacheFile "dhall" hash
@@ -659,17 +658,17 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
 -- AST (without normalising or type-checking it first). See
 -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for further
 -- discussion.
-computeSemisemanticHash :: Expr Src X -> Crypto.Hash.Digest Crypto.Hash.SHA256
+computeSemisemanticHash :: Expr Src X -> Dhall.Crypto.SHA256Digest
 computeSemisemanticHash resolvedExpr = hashExpression resolvedExpr
 
 -- Fetch encoded normal form from "semi-semantic cache"
-fetchFromSemisemanticCache :: Crypto.Hash.Digest SHA256 -> IO (Maybe Data.ByteString.ByteString)
+fetchFromSemisemanticCache :: Dhall.Crypto.SHA256Digest -> IO (Maybe Data.ByteString.ByteString)
 fetchFromSemisemanticCache semisemanticHash = Maybe.runMaybeT $ do
     cacheFile <- getCacheFile "dhall-haskell" semisemanticHash
     True <- liftIO (Directory.doesFileExist cacheFile)
     liftIO (Data.ByteString.readFile cacheFile)
 
-writeToSemisemanticCache :: Crypto.Hash.Digest SHA256 -> Data.ByteString.ByteString -> IO ()
+writeToSemisemanticCache :: Dhall.Crypto.SHA256Digest -> Data.ByteString.ByteString -> IO ()
 writeToSemisemanticCache semisemanticHash bytes = do
     _ <- Maybe.runMaybeT $ do
         cacheFile <- getCacheFile "dhall-haskell" semisemanticHash
@@ -744,7 +743,7 @@ toHeader _ = do
     empty
 
 getCacheFile
-    :: (Alternative m, MonadIO m) => FilePath -> Crypto.Hash.Digest SHA256 -> m FilePath
+    :: (Alternative m, MonadIO m) => FilePath -> Dhall.Crypto.SHA256Digest -> m FilePath
 getCacheFile cacheName hash = do
     let assertDirectory directory = do
             let private = transform Directory.emptyPermissions
@@ -1014,9 +1013,9 @@ encodeExpression _standardVersion expression = bytesStrict
     bytesStrict = Data.ByteString.Lazy.toStrict bytesLazy
 
 -- | Hash a fully resolved expression
-hashExpression :: Expr s X -> (Crypto.Hash.Digest SHA256)
+hashExpression :: Expr s X -> Dhall.Crypto.SHA256Digest
 hashExpression expression =
-    Crypto.Hash.hash (encodeExpression NoVersion expression)
+    Dhall.Crypto.sha256Hash (encodeExpression NoVersion expression)
 
 {-| Convenience utility to hash a fully resolved expression and return the
     base-16 encoded hash with the @sha256:@ prefix

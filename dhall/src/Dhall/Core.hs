@@ -82,7 +82,6 @@ import Control.Applicative (empty)
 import Control.DeepSeq (NFData)
 import Control.Exception (Exception)
 import Control.Monad.IO.Class (MonadIO(..))
-import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Data (Data)
 import Data.Foldable
@@ -107,7 +106,6 @@ import Prelude hiding (succ)
 
 import qualified Control.Exception
 import qualified Control.Monad
-import qualified Crypto.Hash
 import qualified Data.Char
 import {-# SOURCE #-} qualified Dhall.Eval
 import qualified Data.HashSet
@@ -116,6 +114,7 @@ import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
+import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Network.URI                as URI
@@ -289,7 +288,7 @@ data ImportMode = Code | RawText | Location
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
-    { hash       :: Maybe (Crypto.Hash.Digest SHA256)
+    { hash       :: Maybe Dhall.Crypto.SHA256Digest
     , importType :: ImportType
     } deriving (Eq, Generic, Ord, Show, NFData)
 
