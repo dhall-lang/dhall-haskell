@@ -967,7 +967,7 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- >     \(Expr : Type)
 -- > ->  let ExprF =
 -- >           < LitF :
--- >               { _1 : Natural }
+-- >               Natural
 -- >           | AddF :
 -- >               { _1 : Expr, _2 : Expr }
 -- >           | MulF :
@@ -975,7 +975,7 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- >           >
 -- >     
 -- >     in      \(Fix : ExprF -> Expr)
--- >         ->  let Lit = \(x : Natural) -> Fix (ExprF.LitF { _1 = x })
+-- >         ->  let Lit = \(x : Natural) -> Fix (ExprF.LitF x)
 -- >             
 -- >             let Add =
 -- >                       \(x : Expr)
