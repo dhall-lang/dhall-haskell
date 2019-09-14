@@ -770,7 +770,7 @@ typeWithA tpa = loop
                 let text = Dhall.Core.pretty t
 
                 Left (TypeError ctx e (CantProject text r t))
-    loop ctx e@(Default r t) = do
+    loop ctx e@(Default t r) = do
         tR <- loop ctx r
 
         case Dhall.Core.normalize tR of

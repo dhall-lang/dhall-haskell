@@ -880,7 +880,7 @@ prettyCharacterSet characterSet expression =
         prettyDefaultExpression a0
 
     prettyDefaultExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyDefaultExpression (Default b a) =
+    prettyDefaultExpression (Default a b) =
             prettySelectorExpression a
         <>  doubleColon characterSet
         <>  prettySelectorExpression b

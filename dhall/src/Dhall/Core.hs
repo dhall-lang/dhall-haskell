@@ -1847,7 +1847,7 @@ normalizeWithM ctx e0 = loop (denote e0)
             _ -> do
                 r' <- loop r
                 pure (Project r' (Right e2))
-    Default r t -> do
+    Default t r -> do
         t' <- loop t
 
         case t' of
@@ -1861,7 +1861,7 @@ normalizeWithM ctx e0 = loop (denote e0)
             _ -> do
                 r' <- loop r
 
-                return (Default r' t')
+                return (Default t' r')
     Assert t -> do
         t' <- loop t
 
@@ -2106,7 +2106,7 @@ isNormalized e0 = loop (denote e0)
               Right e' -> case e' of
                   Record _ -> False
                   _ -> loop e'
-      Default r t -> loop t &&
+      Default t r -> loop t &&
           case t of
               Record _ -> False
               _        -> loop r
