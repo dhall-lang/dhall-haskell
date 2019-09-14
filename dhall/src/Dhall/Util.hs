@@ -7,17 +7,28 @@ module Dhall.Util
     , snipDoc
     , insert
     , _ERROR
+    , Censor(..)
+    , Input(..)
+    , getExpression
+    , getExpressionAndHeader
     ) where
 
+import Data.Bifunctor (first)
 import Data.Monoid ((<>))
 import Data.String (IsString)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
+import Dhall.Core (Expr, Import)
+import Dhall.Parser (ParseError)
 import Dhall.Pretty (Ann)
+import Dhall.Src (Src)
 
 import qualified Data.Text
+import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
+import qualified Dhall.Core
+import qualified Dhall.Parser
 import qualified Dhall.Pretty
 
 -- | Utility function to cut out the interior of a large text block
@@ -81,3 +92,38 @@ insert expression =
 -- | Prefix used for error messages
 _ERROR :: IsString string => string
 _ERROR = "\ESC[1;31mError\ESC[0m"
+
+get :: (String -> Text -> Either ParseError a) -> Censor -> Input -> IO a
+get parser censor input = do
+    inText <- do
+        case input of
+            File file     -> Data.Text.IO.readFile file
+            StandardInput -> Data.Text.IO.getContents
+
+    let name =
+            case input of
+                File file     -> file
+                StandardInput -> "(stdin)"
+
+    let result = parser name inText
+
+    let censoredResult =
+            case censor of
+                NoCensor -> result
+                Censor   -> first Dhall.Parser.censor result
+
+    Dhall.Core.throws censoredResult
+
+-- | Set to `Censor` if you want to censor error text that might include secrets
+data Censor = NoCensor | Censor
+
+-- | Path to input
+data Input = StandardInput | File FilePath
+
+-- | Convenient utility for retrieving an expression
+getExpression :: Censor -> Input -> IO (Expr Src Import)
+getExpression = get Dhall.Parser.exprFromText
+
+-- | Convenient utility for retrieving an expression along with its header
+getExpressionAndHeader :: Censor -> Input -> IO (Text, Expr Src Import)
+getExpressionAndHeader = get Dhall.Parser.exprAndHeaderFromText
