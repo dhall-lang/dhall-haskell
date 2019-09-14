@@ -16,12 +16,12 @@ module Dhall.Freeze
 
 import Control.Exception (SomeException)
 import Data.Monoid ((<>))
-import Data.Maybe (fromMaybe)
 import Data.Text
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
-import Dhall.Parser (exprAndHeaderFromText, Src)
+import Dhall.Parser (Src)
 import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
 import Dhall.TypeCheck (X)
+import Dhall.Util (Censor, Input(..))
 import System.Console.ANSI (hSupportsANSI)
 
 import qualified Control.Exception
@@ -33,6 +33,7 @@ import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
 import qualified Dhall.TypeCheck
+import qualified Dhall.Util
 import qualified System.FilePath
 import qualified System.IO
 
@@ -92,7 +93,7 @@ freezeRemoteImport directory import_ = do
         Remote {} -> freezeImport directory import_
         _         -> return import_
 
-writeExpr :: Maybe FilePath -> (Text, Expr Src Import) -> CharacterSet -> IO ()
+writeExpr :: Input -> (Text, Expr Src Import) -> CharacterSet -> IO ()
 writeExpr inplace (header, expr) characterSet = do
     let doc =  Pretty.pretty header
             <> Dhall.Pretty.prettyCharacterSet characterSet expr
@@ -100,12 +101,12 @@ writeExpr inplace (header, expr) characterSet = do
     let unAnnotated = Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc)
 
     case inplace of
-        Just f ->
+        File f ->
             System.IO.withFile f System.IO.WriteMode (\handle -> do
                 Pretty.renderIO handle unAnnotated
                 Data.Text.IO.hPutStrLn handle "" )
 
-        Nothing -> do
+        StandardInput -> do
             supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
             if supportsANSI
                then
@@ -133,26 +134,18 @@ data Intent
 
 -- | Implementation of the @dhall freeze@ subcommand
 freeze
-    :: Maybe FilePath
-    -- ^ Modify file in-place if present, otherwise read from @stdin@ and write
-    --   to @stdout@
+    :: Input
     -> Scope
     -> Intent
     -> CharacterSet
+    -> Censor
     -> IO ()
-freeze inplace scope intent characterSet = do
-    (text, directory) <- case inplace of
-        Nothing -> do
-            text <- Data.Text.IO.getContents
+freeze inplace scope intent characterSet censor = do
+    let directory = case inplace of
+            StandardInput -> "."
+            File file     -> System.FilePath.takeDirectory file
 
-            return (text, ".")
-
-        Just file -> do
-            text <- Data.Text.IO.readFile file
-
-            return (text, System.FilePath.takeDirectory file)
-
-    (header, parsedExpression) <- Dhall.Core.throws (exprAndHeaderFromText srcInfo text)
+    (header, parsedExpression) <- Dhall.Util.getExpressionAndHeader censor inplace
 
     let freezeScope =
             case scope of
@@ -208,5 +201,3 @@ freeze inplace scope intent characterSet = do
     frozenExpression <- rewrite parsedExpression
 
     writeExpr inplace (header, frozenExpression) characterSet
-        where
-            srcInfo = fromMaybe "(stdin)" inplace

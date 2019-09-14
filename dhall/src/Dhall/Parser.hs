@@ -7,6 +7,7 @@ module Dhall.Parser (
     -- * Utilities
       exprFromText
     , exprAndHeaderFromText
+    , censor
 
     -- * Parsers
     , expr, exprA
@@ -25,6 +26,7 @@ import Data.Void (Void)
 import Dhall.Core
 import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
+import Text.Megaparsec (ParseErrorBundle(..), PosState(..))
 
 import qualified Data.Char
 import qualified Data.Text
@@ -52,6 +54,24 @@ data ParseError = ParseError {
 #endif
     , input  :: Text
     }
+
+{-| Replace the source code with spaces when rendering error messages
+
+    This utility is used to implement the @--censor@ flag
+-}
+censor :: ParseError -> ParseError
+censor parseError =
+    parseError
+        { unwrap =
+            (unwrap parseError)
+                { bundlePosState =
+                    (bundlePosState (unwrap parseError))
+                        { pstateInput =
+                            Data.Text.map (\_ -> ' ')
+                                (pstateInput (bundlePosState (unwrap parseError)))
+                        }
+                }
+        }
 
 instance Show ParseError where
     show (ParseError {..}) =
