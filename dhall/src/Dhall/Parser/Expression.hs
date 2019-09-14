@@ -305,7 +305,7 @@ parsers embedded = Parsers {..}
 
         case mb of
             Nothing -> return a
-            Just b  -> return (Default a b) )
+            Just b  -> return (Default b a) )
 
     selectorExpression = noted (do
             a <- primitiveExpression
