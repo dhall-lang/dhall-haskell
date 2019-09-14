@@ -492,7 +492,7 @@ command (Options {..}) = do
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-            render System.IO.stdout (Dhall.Core.normalize inferredType)
+            render System.IO.stdout inferredType
 
         Repl -> do
             Dhall.Repl.repl characterSet explain
