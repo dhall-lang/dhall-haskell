@@ -1,7 +1,7 @@
   λ(a : Type)
 → let ExprF =
         < LitF :
-            { _1 : Natural }
+            Natural
         | AddF :
             { _1 : a, _2 : a }
         | MulF :
@@ -9,7 +9,7 @@
         >
   
   in    λ(a : ExprF → a)
-      → let Lit = λ(x : Natural) → a (ExprF.LitF { _1 = x })
+      → let Lit = λ(x : Natural) → a (ExprF.LitF x)
         
         let Add = λ(x : a@1) → λ(y : a@1) → a (ExprF.AddF { _1 = x, _2 = y })
         

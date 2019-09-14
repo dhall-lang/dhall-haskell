@@ -169,48 +169,48 @@ deriving instance Interpret ()
 shouldHandleUnionsCorrectly :: TestTree
 shouldHandleUnionsCorrectly =
   testGroup "Handle union literals"
-    [ "λ(x : < N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >) → x"
+    [ "λ(x : < N0 : Bool | N1 : Natural | N2 : Text >) → x"
         `shouldPassThrough` [ N0 True, N1 5, N2 "ABC" ]
     , "λ(x : < E0 | E1 | E2 >) → x"
         `shouldPassThrough` [ E0, E1, E2 ]
-    , "λ(x : < M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >) → x"
+    , "λ(x : < M0 : Bool | M1 | M2 >) → x"
         `shouldPassThrough` [ M0 True, M1, M2 () ]
 
-    , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N0 { _1 = True }"
+    , "(< N0 : Bool | N1 : Natural | N2 : Text >).N0 True"
         `shouldMarshalInto` N0 True
-    , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N1 { _1 = 5 }"
+    , "(< N0 : Bool | N1 : Natural | N2 : Text >).N1 5"
         `shouldMarshalInto` N1 5
-    , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N2 { _1 = \"ABC\" }"
+    , "(< N0 : Bool | N1 : Natural | N2 : Text >).N2 \"ABC\""
         `shouldMarshalInto` N2 "ABC"
 
     , "(< E0 | E1 | E2>).E0" `shouldMarshalInto` E0
     , "(< E0 | E1 | E2>).E1" `shouldMarshalInto` E1
     , "(< E0 | E1 | E2>).E2" `shouldMarshalInto` E2
 
-    , "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M0 { _1 = True }"
+    , "(< M0 : Bool | M1 | M2 >).M0 True"
         `shouldMarshalInto` M0 True
-    , "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M1"
+    , "(< M0 : Bool | M1 | M2 >).M1"
         `shouldMarshalInto` M1
-    , "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M2 { _1 = {=} }"
+    , "(< M0 : Bool | M1 | M2 >).M2"
         `shouldMarshalInto` M2 ()
 
     , N0 True
         `shouldInjectInto`
-        "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N0 { _1 = True }"
+        "(< N0 : Bool | N1 : Natural | N2 : Text >).N0 True"
     , N1 5
         `shouldInjectInto`
-        "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N1 { _1 = 5 }"
+        "(< N0 : Bool | N1 : Natural | N2 : Text >).N1 5"
     , N2 "ABC"
         `shouldInjectInto`
-        "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N2 { _1 = \"ABC\" }"
+        "(< N0 : Bool | N1 : Natural | N2 : Text >).N2 \"ABC\""
 
     , E0 `shouldInjectInto` "< E0 | E1 | E2 >.E0"
     , E1 `shouldInjectInto` "< E0 | E1 | E2 >.E1"
     , E2 `shouldInjectInto` "< E0 | E1 | E2 >.E2"
 
-    , M0 True `shouldInjectInto` "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M0 { _1 = True }"
-    , M1 `shouldInjectInto` "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M1"
-    , M2 () `shouldInjectInto` "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M2 { _1 = {=} }"
+    , M0 True `shouldInjectInto` "(< M0 : Bool | M1 | M2 >).M0 True"
+    , M1 `shouldInjectInto` "(< M0 : Bool | M1 | M2 >).M1"
+    , M2 () `shouldInjectInto` "(< M0 : Bool | M1 | M2 >).M2"
     ]
   where
     code `shouldPassThrough` values = testCase "Pass through" $ do
