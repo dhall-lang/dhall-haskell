@@ -363,7 +363,7 @@ keyValMay (A.Object o) = do
      return (k, v)
 keyValMay _ = Nothing
 
-{-| The main conversion function. Traversing/zipping Dhall /type/ and Aeson value trees together to produce a Dhall /term/ tree, given 'Conversion' options:
+{-| The main conversion function. Traversing\/zipping Dhall /type/ and Aeson value trees together to produce a Dhall /term/ tree, given 'Conversion' options:
 
 >>> :set -XOverloadedStrings
 >>> import qualified Dhall.Core as D
