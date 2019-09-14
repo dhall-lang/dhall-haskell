@@ -161,7 +161,7 @@ data NonEmptyUnion = N0 Bool | N1 Natural | N2 Text
 data Enum = E0 | E1 | E2
     deriving (Eq, Generic, Inject, Interpret, Show)
 
-data Mixed = M0 Bool | M1 | M2 ()
+data Mixed = M0 Bool | M1 | M2 () | M3 Bool () | M4 { x :: Double, y :: Double }
     deriving (Eq, Generic, Inject, Interpret, Show)
 
 deriving instance Interpret ()
@@ -173,8 +173,8 @@ shouldHandleUnionsCorrectly =
         `shouldPassThrough` [ N0 True, N1 5, N2 "ABC" ]
     , "λ(x : < E0 | E1 | E2 >) → x"
         `shouldPassThrough` [ E0, E1, E2 ]
-    , "λ(x : < M0 : Bool | M1 | M2 >) → x"
-        `shouldPassThrough` [ M0 True, M1, M2 () ]
+    , "λ(x : < M0 : Bool | M1 | M2 | M3 : { _1 : Bool, _2 : {} } | M4 : { x : Double, y : Double } >) → x"
+        `shouldPassThrough` [ M0 True, M1, M2 (), M3 True (), M4 { x = 1.0, y =  2.0 } ]
 
     , "(< N0 : Bool | N1 : Natural | N2 : Text >).N0 True"
         `shouldMarshalInto` N0 True
@@ -187,12 +187,16 @@ shouldHandleUnionsCorrectly =
     , "(< E0 | E1 | E2>).E1" `shouldMarshalInto` E1
     , "(< E0 | E1 | E2>).E2" `shouldMarshalInto` E2
 
-    , "(< M0 : Bool | M1 | M2 >).M0 True"
+    , "(< M0 : Bool | M1 | M2 | M3 : { _1 : Bool, _2 : {} } | M4 : { x : Double, y : Double } >).M0 True"
         `shouldMarshalInto` M0 True
-    , "(< M0 : Bool | M1 | M2 >).M1"
+    , "(< M0 : Bool | M1 | M2 | M3 : { _1 : Bool, _2 : {} } | M4 : { x : Double, y : Double } >).M1"
         `shouldMarshalInto` M1
-    , "(< M0 : Bool | M1 | M2 >).M2"
+    , "(< M0 : Bool | M1 | M2 | M3 : { _1 : Bool, _2 : {} } | M4 : { x : Double, y : Double } >).M2"
         `shouldMarshalInto` M2 ()
+    , "(< M0 : Bool | M1 | M2 | M3 : { _1 : Bool, _2 : {} } | M4 : { x : Double, y : Double } >).M3 { _1 = True, _2 = {=} }"
+        `shouldMarshalInto` M3 True ()
+    , "(< M0 : Bool | M1 | M2 | M3 : { _1 : Bool, _2 : {} } | M4 : { x : Double, y : Double } >).M4 { x = 1.0, y = 2.0 }"
+        `shouldMarshalInto` M4 { x = 1.0, y = 2.0 }
 
     , N0 True
         `shouldInjectInto`
@@ -208,9 +212,11 @@ shouldHandleUnionsCorrectly =
     , E1 `shouldInjectInto` "< E0 | E1 | E2 >.E1"
     , E2 `shouldInjectInto` "< E0 | E1 | E2 >.E2"
 
-    , M0 True `shouldInjectInto` "(< M0 : Bool | M1 | M2 >).M0 True"
-    , M1 `shouldInjectInto` "(< M0 : Bool | M1 | M2 >).M1"
-    , M2 () `shouldInjectInto` "(< M0 : Bool | M1 | M2 >).M2"
+    , M0 True `shouldInjectInto` "(< M0 : Bool | M1 | M2 | M3 : { _1 : Bool, _2 : {} } | M4 : { x : Double, y : Double } >).M0 True"
+    , M1 `shouldInjectInto` "(< M0 : Bool | M1 | M2 | M3 : { _1 : Bool, _2 : {} } | M4 : { x : Double, y : Double } >).M1"
+    , M2 () `shouldInjectInto` "(< M0 : Bool | M1 | M2 | M3 : { _1 : Bool, _2 : {} } | M4 : { x : Double, y : Double } >).M2"
+    , M3 True () `shouldInjectInto` "(< M0 : Bool | M1 | M2 | M3 : { _1 : Bool, _2 : {} } | M4 : { x : Double, y : Double } >).M3 { _1 = True, _2 = {=} }"
+    , M4 { x = 1.0, y = 2.0 } `shouldInjectInto` "(< M0 : Bool | M1 | M2 | M3 : { _1 : Bool, _2 : {} } | M4 : { x : Double, y : Double } >).M4 { x = 1.0, y = 2.0 }"
     ]
   where
     code `shouldPassThrough` values = testCase "Pass through" $ do
