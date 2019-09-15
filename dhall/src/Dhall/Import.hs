@@ -108,7 +108,7 @@ module Dhall.Import (
     , hashExpressionToCode
     , writeExpressionToSemanticCache
     , assertNoImports
-    , Status
+    , Status(..)
     , SemanticCacheMode(..)
     , Chained
     , chainedImport

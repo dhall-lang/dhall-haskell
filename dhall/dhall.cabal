@@ -76,6 +76,8 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/reverse
     dhall-lang/Prelude/List/shifted
     dhall-lang/Prelude/List/unzip
+    dhall-lang/Prelude/Location/package.dhall
+    dhall-lang/Prelude/Location/Type
     dhall-lang/Prelude/Map/Entry
     dhall-lang/Prelude/Map/keys
     dhall-lang/Prelude/Map/map
@@ -97,6 +99,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Natural/package.dhall
     dhall-lang/Prelude/Natural/product
     dhall-lang/Prelude/Natural/show
+    dhall-lang/Prelude/Natural/subtract
     dhall-lang/Prelude/Natural/sum
     dhall-lang/Prelude/Natural/toDouble
     dhall-lang/Prelude/Natural/toInteger
@@ -119,6 +122,8 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/concatMap
     dhall-lang/Prelude/Text/concatMapSep
     dhall-lang/Prelude/Text/concatSep
+    dhall-lang/Prelude/Text/default
+    dhall-lang/Prelude/Text/defaultMap
     dhall-lang/Prelude/Text/package.dhall
     dhall-lang/Prelude/Text/show
     dhall-lang/Prelude/XML/attribute
@@ -290,128 +295,69 @@ Extra-Source-Files:
     dhall-lang/tests/semantic-hash/success/simple/*.hash
     dhall-lang/tests/semantic-hash/success/simplifications/*.dhall
     dhall-lang/tests/semantic-hash/success/simplifications/*.hash
-    dhall-lang/tests/typecheck/data/*.dhall
-    dhall-lang/tests/typecheck/failure/*.dhall
-    dhall-lang/tests/typecheck/success/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/and/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/and/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/build/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/build/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/even/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/even/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/fold/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/fold/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/not/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/not/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/odd/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/odd/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/or/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/or/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/show/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Bool/show/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Double/show/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Double/show/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Integer/show/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Integer/show/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Integer/toDouble/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Integer/toDouble/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/all/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/all/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/any/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/any/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/build/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/build/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/concat/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/concat/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/concatMap/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/concatMap/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/filter/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/filter/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/fold/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/fold/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/generate/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/generate/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/head/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/head/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/indexed/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/indexed/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/iterate/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/iterate/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/last/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/last/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/length/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/length/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/map/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/map/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/null/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/null/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/replicate/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/replicate/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/reverse/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/reverse/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/shifted/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/shifted/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/unzip/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/List/unzip/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Monoid/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/build/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/build/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/enumerate/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/enumerate/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/even/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/even/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/fold/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/fold/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/isZero/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/isZero/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/odd/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/odd/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/product/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/product/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/show/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/show/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/sum/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/sum/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/toDouble/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/toDouble/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/toInteger/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Natural/toInteger/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/all/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/all/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/any/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/any/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/build/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/build/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/concat/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/concat/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/filter/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/filter/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/fold/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/fold/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/head/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/head/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/last/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/last/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/length/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/length/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/map/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/map/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/null/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/null/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/toList/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/toList/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/unzip/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Optional/unzip/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Text/concat/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Text/concat/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Text/concatMap/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Text/concatMap/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Text/concatMapSep/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Text/concatMapSep/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Text/concatSep/*.dhall
-    dhall-lang/tests/typecheck/success/prelude/Text/concatSep/*.dhall
-    dhall-lang/tests/typecheck/success/simple/access/*.dhall
-    dhall-lang/tests/typecheck/success/simple/*.dhall
+    dhall-lang/tests/type-inference/data/*.dhall
+    dhall-lang/tests/type-inference/failure/*.dhall
+    dhall-lang/tests/type-inference/success/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Bool/and/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Bool/build/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Bool/even/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Bool/fold/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Bool/not/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Bool/odd/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Bool/or/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Bool/show/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Double/show/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Integer/show/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Integer/toDouble/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/all/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/any/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/build/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/concat/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/concatMap/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/filter/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/fold/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/generate/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/head/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/indexed/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/iterate/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/last/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/length/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/map/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/null/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/replicate/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/reverse/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/shifted/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/List/unzip/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Monoid/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Natural/build/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Natural/enumerate/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Natural/even/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Natural/fold/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Natural/isZero/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Natural/odd/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Natural/product/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Natural/show/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Natural/sum/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Natural/toDouble/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Natural/toInteger/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/all/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/any/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/build/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/concat/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/filter/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/fold/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/head/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/last/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/length/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/map/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/null/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/toList/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Optional/unzip/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Text/concat/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Text/concatMap/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Text/concatMapSep/*.dhall
+    dhall-lang/tests/type-inference/success/prelude/Text/concatSep/*.dhall
+    dhall-lang/tests/type-inference/success/simple/access/*.dhall
     dhall-lang/tests/type-inference/success/simple/*.dhall
     dhall-lang/tests/type-inference/success/unit/*.dhall
     tests/format/*.dhall
@@ -592,7 +538,6 @@ Test-Suite tasty
         Dhall.Test.Regression
         Dhall.Test.SemanticHash
         Dhall.Test.Tutorial
-        Dhall.Test.TypeCheck
         Dhall.Test.TypeInference
         Dhall.Test.Util
     Build-Depends:

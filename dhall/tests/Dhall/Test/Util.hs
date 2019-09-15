@@ -7,6 +7,7 @@ module Dhall.Test.Util
     , codeWith
     , equivalent
     , load
+    , loadRelativeTo
     , loadWith
     , normalize'
     , normalizeWith'
@@ -25,7 +26,7 @@ import Data.Bifunctor (first)
 import Data.Text (Text)
 import Dhall.Context (Context)
 import Dhall.Core (Expr, Normalizer, ReifiedNormalizer(..), Import)
-import Dhall.Import (Status)
+import Dhall.Import (Status(..), SemanticCacheMode(..))
 import Data.Monoid((<>))
 import Dhall.Parser (Src)
 import Dhall.TypeCheck (X)
@@ -44,6 +45,7 @@ import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified System.FilePath                  as FilePath
 import qualified Test.Tasty                       as Tasty
 import qualified Test.Tasty.ExpectedFailure       as Tasty.ExpectedFailure
 import qualified Turtle
@@ -80,8 +82,13 @@ codeWith ctx expr = do
     return expr1
 
 load :: Expr Src Import -> IO (Expr Src X)
-load expression =
-    State.evalStateT (loadWith expression) (Dhall.Import.emptyStatus ".")
+load = loadRelativeTo "." UseSemanticCache
+
+loadRelativeTo :: FilePath.FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src X)
+loadRelativeTo rootDirectory semanticCacheMode expression =
+    State.evalStateT
+        (loadWith expression)
+        (Dhall.Import.emptyStatus rootDirectory) { _semanticCacheMode = semanticCacheMode }
 
 #ifdef WITH_HTTP
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src X)
