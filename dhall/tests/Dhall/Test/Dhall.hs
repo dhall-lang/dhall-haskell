@@ -161,7 +161,10 @@ data NonEmptyUnion = N0 Bool | N1 Natural | N2 Text
 data Enum = E0 | E1 | E2
     deriving (Eq, Generic, Inject, Interpret, Show)
 
-data Mixed = M0 Bool | M1 | M2 ()
+data Records = R0 {} | R1 { a :: () } | R2 { x :: Double } | R3 { a :: (), b :: () } | R4 { x :: Double, y :: Double }
+    deriving (Eq, Generic, Inject, Interpret, Show)
+
+data Products = P0 | P1 () | P2 Double | P3 () () | P4 Double Double
     deriving (Eq, Generic, Inject, Interpret, Show)
 
 deriving instance Interpret ()
@@ -169,48 +172,73 @@ deriving instance Interpret ()
 shouldHandleUnionsCorrectly :: TestTree
 shouldHandleUnionsCorrectly =
   testGroup "Handle union literals"
-    [ "λ(x : < N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >) → x"
+    [ "λ(x : < N0 : Bool | N1 : Natural | N2 : Text >) → x"
         `shouldPassThrough` [ N0 True, N1 5, N2 "ABC" ]
     , "λ(x : < E0 | E1 | E2 >) → x"
         `shouldPassThrough` [ E0, E1, E2 ]
-    , "λ(x : < M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >) → x"
-        `shouldPassThrough` [ M0 True, M1, M2 () ]
+    , "λ(x : < R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >) → x"
+        `shouldPassThrough` [ R0 {}, R1 { a = () }, R2 { x = 1.0 }, R3 { a = (), b = () }, R4 { x = 1.0, y = 2.0 } ]
+    , "λ(x : < P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >) → x"
+        `shouldPassThrough` [ P0 , P1 (), P2 1.0, P3 () (), P4 1.0 2.0 ]
 
-    , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N0 { _1 = True }"
+    , "(< N0 : Bool | N1 : Natural | N2 : Text >).N0 True"
         `shouldMarshalInto` N0 True
-    , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N1 { _1 = 5 }"
+    , "(< N0 : Bool | N1 : Natural | N2 : Text >).N1 5"
         `shouldMarshalInto` N1 5
-    , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N2 { _1 = \"ABC\" }"
+    , "(< N0 : Bool | N1 : Natural | N2 : Text >).N2 \"ABC\""
         `shouldMarshalInto` N2 "ABC"
 
     , "(< E0 | E1 | E2>).E0" `shouldMarshalInto` E0
     , "(< E0 | E1 | E2>).E1" `shouldMarshalInto` E1
     , "(< E0 | E1 | E2>).E2" `shouldMarshalInto` E2
 
-    , "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M0 { _1 = True }"
-        `shouldMarshalInto` M0 True
-    , "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M1"
-        `shouldMarshalInto` M1
-    , "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M2 { _1 = {=} }"
-        `shouldMarshalInto` M2 ()
+    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
+        `shouldMarshalInto` R0
+    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1"
+        `shouldMarshalInto` R1 { a = () }
+    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 1.0"
+        `shouldMarshalInto` R2 { x = 1.0 }
+    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
+        `shouldMarshalInto` R3 { a = (), b = () }
+    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
+        `shouldMarshalInto` R4 { x = 1.0, y = 2.0 }
+
+    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
+        `shouldMarshalInto` P0
+    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1"
+        `shouldMarshalInto` P1 ()
+    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 1.0"
+        `shouldMarshalInto` P2 1.0
+    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
+        `shouldMarshalInto` P3 () ()
+    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
+        `shouldMarshalInto` P4 1.0 2.0
 
     , N0 True
         `shouldInjectInto`
-        "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N0 { _1 = True }"
+        "(< N0 : Bool | N1 : Natural | N2 : Text >).N0 True"
     , N1 5
         `shouldInjectInto`
-        "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N1 { _1 = 5 }"
+        "(< N0 : Bool | N1 : Natural | N2 : Text >).N1 5"
     , N2 "ABC"
         `shouldInjectInto`
-        "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N2 { _1 = \"ABC\" }"
+        "(< N0 : Bool | N1 : Natural | N2 : Text >).N2 \"ABC\""
 
     , E0 `shouldInjectInto` "< E0 | E1 | E2 >.E0"
     , E1 `shouldInjectInto` "< E0 | E1 | E2 >.E1"
     , E2 `shouldInjectInto` "< E0 | E1 | E2 >.E2"
 
-    , M0 True `shouldInjectInto` "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M0 { _1 = True }"
-    , M1 `shouldInjectInto` "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M1"
-    , M2 () `shouldInjectInto` "(< M0 : { _1 : Bool } | M1 | M2 : { _1 : {} } >).M2 { _1 = {=} }"
+    , R0 `shouldInjectInto` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
+    , R1 { a = () } `shouldInjectInto` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1"
+    , R2 { x = 1.0 } `shouldInjectInto` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 1.0"
+    , R3 { a = (), b = () } `shouldInjectInto` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
+    , R4 { x = 1.0, y = 2.0 } `shouldInjectInto` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
+
+    , P0 `shouldInjectInto` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
+    , P1 () `shouldInjectInto` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1"
+    , P2 1.0 `shouldInjectInto` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 1.0"
+    , P3 () () `shouldInjectInto` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
+    , P4 1.0 2.0 `shouldInjectInto` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
     ]
   where
     code `shouldPassThrough` values = testCase "Pass through" $ do
