@@ -201,6 +201,7 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 import qualified System.Environment
+import qualified System.Info
 import qualified System.Directory                 as Directory
 import qualified System.FilePath                  as FilePath
 import qualified Text.Megaparsec
@@ -792,12 +793,25 @@ getCacheDirectory = alternative₀ <|> alternative₁
             Just xdgCacheHome -> return xdgCacheHome
             Nothing           -> empty
 
-    alternative₁ = do
-        maybeHomeDirectory <- liftIO (System.Environment.lookupEnv "HOME")
+    alternative₁
+        | isWindows = do
+            maybeLocalAppDirectory <-
+              liftIO (System.Environment.lookupEnv "LOCALAPPDATA")
 
-        case maybeHomeDirectory of
-            Just homeDirectory -> return (homeDirectory </> ".cache")
-            Nothing            -> empty
+            case maybeLocalAppDirectory of
+                Just localAppDirectory -> return localAppDirectory
+                Nothing                -> empty
+
+        | otherwise = do
+            maybeHomeDirectory <-
+              liftIO (System.Environment.lookupEnv "HOME")
+
+            case maybeHomeDirectory of
+                Just homeDirectory -> return (homeDirectory </> ".cache")
+                Nothing            -> empty
+
+        where isWindows = System.Info.os == "mingw32"
+
 
 -- If the URL contains headers typecheck them and replace them with their normal
 -- forms.
