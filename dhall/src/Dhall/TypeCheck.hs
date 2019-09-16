@@ -463,13 +463,13 @@ typeWithA tpa = loop
         return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
         let process k v = do
-                t <- loop ctx v
+                t <- fmap Dhall.Core.normalize (loop ctx v)
                 s <- fmap Dhall.Core.normalize (loop ctx t)
                 case s of
                     Const _ -> return t
                     _ -> Left (TypeError ctx e (InvalidFieldType k t))
 
-        Record <$> Dhall.Map.unorderedTraverseWithKey process kvs
+        Record <$> Dhall.Map.unorderedTraverseWithKey process (Dhall.Map.sort kvs)
     loop ctx e@(Union     kts   ) = do
         let nonEmpty k mt = First (fmap (\t -> (k, t)) mt)
 
