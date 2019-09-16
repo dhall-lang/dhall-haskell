@@ -7,6 +7,7 @@ module Dhall.Parser (
     -- * Utilities
       exprFromText
     , exprAndHeaderFromText
+    , censor
 
     -- * Parsers
     , expr, exprA
@@ -25,7 +26,9 @@ import Data.Void (Void)
 import Dhall.Core
 import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
+import Text.Megaparsec (ParseErrorBundle(..), PosState(..))
 
+import qualified Data.Char
 import qualified Data.Text
 import qualified Text.Megaparsec
 
@@ -51,6 +54,24 @@ data ParseError = ParseError {
 #endif
     , input  :: Text
     }
+
+{-| Replace the source code with spaces when rendering error messages
+
+    This utility is used to implement the @--censor@ flag
+-}
+censor :: ParseError -> ParseError
+censor parseError =
+    parseError
+        { unwrap =
+            (unwrap parseError)
+                { bundlePosState =
+                    (bundlePosState (unwrap parseError))
+                        { pstateInput =
+                            Data.Text.map (\_ -> ' ')
+                                (pstateInput (bundlePosState (unwrap parseError)))
+                        }
+                }
+        }
 
 instance Show ParseError where
     show (ParseError {..}) =
@@ -89,7 +110,7 @@ exprAndHeaderFromText
     -> Either ParseError (Text, Expr Src Import)
 exprAndHeaderFromText delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
-    Right (txt, r) -> Right (Data.Text.dropWhileEnd (/= '\n') txt, r)
+    Right (txt, r) -> Right (stripHeader txt, r)
   where
     parser = do
         (bytes, _) <- Text.Megaparsec.match whitespace
@@ -98,3 +119,5 @@ exprAndHeaderFromText delta text = case result of
         return (bytes, r)
 
     result = Text.Megaparsec.parse (unParser parser) delta text
+
+    stripHeader = Data.Text.dropWhile Data.Char.isSpace . Data.Text.dropWhileEnd (/= '\n')

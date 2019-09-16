@@ -51,9 +51,10 @@ formatTest characterSet prefix =
 
         inputText <- Text.IO.readFile inputFile
 
-        expr <- Core.throws (Parser.exprFromText mempty inputText)
+        (header, expr) <- Core.throws (Parser.exprAndHeaderFromText mempty inputText)
 
-        let doc        = Pretty.prettyCharacterSet characterSet  expr
+        let doc        =   Doc.pretty header
+                       <>  Pretty.prettyCharacterSet characterSet expr
         let docStream  = Doc.layoutSmart Pretty.layoutOpts doc
         let actualText = Doc.Render.Text.renderStrict docStream
 

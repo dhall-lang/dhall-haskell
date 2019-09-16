@@ -57,12 +57,14 @@ module Dhall.Core (
     -- * Optics
     , subExpressions
     , chunkExprs
+    , bindingExprs
 
     -- * Let-blocks
     , multiLet
     , wrapInLets
     , MultiLet(..)
     , Binding(..)
+    , makeBinding
 
     -- * Miscellaneous
     , internalError
@@ -80,7 +82,6 @@ import Control.Applicative (empty)
 import Control.DeepSeq (NFData)
 import Control.Exception (Exception)
 import Control.Monad.IO.Class (MonadIO(..))
-import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Data (Data)
 import Data.Foldable
@@ -105,14 +106,15 @@ import Prelude hiding (succ)
 
 import qualified Control.Exception
 import qualified Control.Monad
-import qualified Crypto.Hash
 import qualified Data.Char
 import {-# SOURCE #-} qualified Dhall.Eval
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Sequence
+import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
+import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Network.URI                as URI
@@ -286,7 +288,7 @@ data ImportMode = Code | RawText | Location
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
-    { hash       :: Maybe (Crypto.Hash.Digest SHA256)
+    { hash       :: Maybe Dhall.Crypto.SHA256Digest
     , importType :: ImportType
     } deriving (Eq, Generic, Ord, Show, NFData)
 
@@ -362,7 +364,20 @@ instance IsString Var where
 instance Pretty Var where
     pretty = Pretty.unAnnotate . prettyVar
 
--- | Syntax tree for expressions
+{-| Syntax tree for expressions
+
+    The @s@ type parameter is used to track the presence or absence of `Src`
+    spans:
+
+    * If @s = `Src`@ then the code may contains `Src` spans (either in a `Noted`
+      constructor or inline within another constructor, like `Let`)
+    * If @s = `Void`@ then the code has no `Src` spans
+
+    The @a@ type parameter is used to track the presence or absence of imports
+
+    * If @a = `Import`@ then the code may contain unresolved `Import`s
+    * If @a = `Void`@ then the code has no `Import`s
+-}
 data Expr s a
     -- | > Const c                                  ~  c
     = Const Const
@@ -376,8 +391,8 @@ data Expr s a
     | Pi  Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
-    -- | > Let x Nothing  r e                       ~  let x     = r in e
-    --   > Let x (Just t) r e                       ~  let x : t = r in e
+    -- | > Let (Binding _ x _  Nothing  _ r) e      ~  let x     = r in e
+    --   > Let (Binding _ x _ (Just t ) _ r) e      ~  let x : t = r in e
     --
     -- The difference between
     --
@@ -392,7 +407,7 @@ data Expr s a
     --
     -- See 'MultiLet' for a representation of let-blocks that mirrors the
     -- source code more closely.
-    | Let Text (Maybe (Expr s a)) (Expr s a) (Expr s a)
+    | Let (Binding s a) (Expr s a)
     -- | > Annot x t                                ~  x : t
     | Annot (Expr s a) (Expr s a)
     -- | > Bool                                     ~  Bool
@@ -549,7 +564,7 @@ instance Functor (Expr s) where
   fmap f (Lam v e1 e2) = Lam v (fmap f e1) (fmap f e2)
   fmap f (Pi v e1 e2) = Pi v (fmap f e1) (fmap f e2)
   fmap f (App e1 e2) = App (fmap f e1) (fmap f e2)
-  fmap f (Let v maybeE e1 e2) = Let v (fmap (fmap f) maybeE) (fmap f e1) (fmap f e2)
+  fmap f (Let b e2) = Let (fmap f b) (fmap f e2)
   fmap f (Annot e1 e2) = Annot (fmap f e1) (fmap f e2)
   fmap _ Bool = Bool
   fmap _ (BoolLit b) = BoolLit b
@@ -626,7 +641,12 @@ instance Monad (Expr s) where
     Lam a b c            >>= k = Lam a (b >>= k) (c >>= k)
     Pi  a b c            >>= k = Pi a (b >>= k) (c >>= k)
     App a b              >>= k = App (a >>= k) (b >>= k)
-    Let a b c d          >>= k = Let a (fmap (>>= k) b) (c >>= k) (d >>= k)
+    Let a b              >>= k = Let (adapt0 a) (b >>= k)
+      where
+        adapt0 (Binding src0 c src1 d src2 e) =
+            Binding src0 c src1 (fmap adapt1 d) src2 (e >>= k)
+
+        adapt1 (src3, f) = (src3, f >>= k)
     Annot a b            >>= k = Annot (a >>= k) (b >>= k)
     Bool                 >>= _ = Bool
     BoolLit a            >>= _ = BoolLit a
@@ -695,7 +715,7 @@ instance Bifunctor Expr where
     first k (Lam a b c           ) = Lam a (first k b) (first k c)
     first k (Pi a b c            ) = Pi a (first k b) (first k c)
     first k (App a b             ) = App (first k a) (first k b)
-    first k (Let a b c d         ) = Let a (fmap (first k) b) (first k c) (first k d)
+    first k (Let a b             ) = Let (first k a) (first k b)
     first k (Annot a b           ) = Annot (first k a) (first k b)
     first _  Bool                  = Bool
     first _ (BoolLit a           ) = BoolLit a
@@ -882,14 +902,15 @@ shift d v (App f a) = App f' a'
   where
     f' = shift d v f
     a' = shift d v a
-shift d (V x n) (Let f mt r e) = Let f mt' r' e'
+shift d (V x n) (Let (Binding src0 f src1 mt src2 r) e) =
+    Let (Binding src0 f src1 mt' src2 r') e'
   where
     e' = shift d (V x n') e
       where
         n' = if x == f then n + 1 else n
 
-    mt' = fmap (shift d (V x n)) mt
-    r'  =       shift d (V x n)  r
+    mt' = fmap (fmap (shift d (V x n))) mt
+    r'  =             shift d (V x n)  r
 shift d v (Annot a b) = Annot a' b'
   where
     a' = shift d v a
@@ -1050,14 +1071,15 @@ subst v e (App f a) = App f' a'
     f' = subst v e f
     a' = subst v e a
 subst v e (Var v') = if v == v' then e else Var v'
-subst (V x n) e (Let f mt r b) = Let f mt' r' b'
+subst (V x n) e (Let (Binding src0 f src1 mt src2 r) b) =
+    Let (Binding src0 f src1 mt' src2 r') b'
   where
     b' = subst (V x n') (shift 1 (V f 0) e) b
       where
         n' = if x == f then n + 1 else n
 
-    mt' = fmap (subst (V x n) e) mt
-    r'  =       subst (V x n) e  r
+    mt' = fmap (fmap (subst (V x n) e)) mt
+    r'  =             subst (V x n) e  r
 subst x e (Annot a b) = Annot a' b'
   where
     a' = subst x e a
@@ -1256,7 +1278,12 @@ denote (Var a               ) = Var a
 denote (Lam a b c           ) = Lam a (denote b) (denote c)
 denote (Pi a b c            ) = Pi a (denote b) (denote c)
 denote (App a b             ) = App (denote a) (denote b)
-denote (Let a b c d         ) = Let a (fmap denote b) (denote c) (denote d)
+denote (Let a b             ) = Let (adapt0 a) (denote b)
+  where
+    adapt0 (Binding _ c _ d _ e) =
+        Binding Nothing c Nothing (fmap adapt1 d) Nothing (denote e)
+
+    adapt1 (_, f) = (Nothing, denote f)
 denote (Annot a b           ) = Annot (denote a) (denote b)
 denote  Bool                  = Bool
 denote (BoolLit a           ) = BoolLit a
@@ -1462,6 +1489,20 @@ normalizeWithM ctx e0 = loop (denote e0)
                                 )
 
                         nil = ListLit (Just (App List _A₀)) empty
+                    App (App ListFold t) (ListLit _ xs) -> do
+                        t' <- loop t
+                        let list = Var (V "list" 0)
+                        let lam term =
+                                Lam "list" (Const Type)
+                                    (Lam "cons" (Pi "_" t' (Pi "_" list list))
+                                        (Lam "nil" list term))
+                        term <- foldrM
+                            (\x acc -> do
+                                x' <- loop x
+                                pure (App (App (Var (V "cons" 0)) x') acc))
+                            (Var (V "nil" 0))
+                            xs
+                        pure (lam term)
                     App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil -> do
                       t' <- loop t
                       if boundedType t' then strict else lazy
@@ -1506,14 +1547,23 @@ normalizeWithM ctx e0 = loop (denote e0)
                             kvs = [ ("index", NaturalLit (fromIntegral n))
                                   , ("value", a_)
                                   ]
-                    App (App ListReverse t) (ListLit _ xs) ->
-                        loop (ListLit m (Data.Sequence.reverse xs))
-                      where
-                        m = if Data.Sequence.null xs then Just (App List t) else Nothing
-                    App (App (App (App (App OptionalFold _) (App None _)) _) _) nothing ->
-                        loop nothing
-                    App (App (App (App (App OptionalFold _) (Some x)) _) just) _ ->
-                        loop (App just x)
+                    App (App ListReverse _) (ListLit t xs) ->
+                        loop (ListLit t (Data.Sequence.reverse xs))
+
+                    App (App OptionalFold t0) x0 -> do
+                        t1 <- loop t0
+                        let optional = Var (V "optional" 0)
+                        let lam term = (Lam "optional"
+                                           (Const Type)
+                                           (Lam "some"
+                                               (Pi "_" t1 optional)
+                                               (Lam "none" optional term)))
+                        x1 <- loop x0
+                        pure $ case x1 of
+                            App None _ -> lam (Var (V "none" 0))
+                            Some x'    -> lam (App (Var (V "some" 0)) x')
+                            _          -> App (App OptionalFold t1) x1
+
                     App TextShow (TextLit (Chunks [] oldText)) ->
                         loop (TextLit (Chunks [] newText))
                       where
@@ -1523,7 +1573,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                         case res2 of
                             Nothing -> pure (App f' a')
                             Just app' -> loop app'
-    Let f _ r b -> loop b''
+    Let (Binding _ f _ _ _ r) b -> loop b''
       where
         r'  = shift   1  (V f 0) r
         b'  = subst (V f 0) r' b
@@ -1760,13 +1810,21 @@ normalizeWithM ctx e0 = loop (denote e0)
                 Just v -> pure (Field (Combine l (singletonRecordLit v)) x)
                 Nothing -> loop (Field l x)
             _ -> pure (Field r' x)
-    Project r (Left xs)-> do
-        r' <- loop r
-        case r' of
+    Project x (Left fields)-> do
+        x' <- loop x
+        let fieldsSet = Dhall.Set.toSet fields
+        case x' of
             RecordLit kvs ->
-                pure (RecordLit (Dhall.Map.restrictKeys kvs (Dhall.Set.toSet xs)))
-            _   | null xs -> pure (RecordLit mempty)
-                | otherwise -> pure (Project r' (Left (Dhall.Set.sort xs)))
+                pure (RecordLit (Dhall.Map.restrictKeys kvs fieldsSet))
+            Project y _ ->
+                loop (Project y (Left fields))
+            Prefer l (RecordLit rKvs) -> do
+                let rKs = Dhall.Map.keysSet rKvs
+                let l' = Project l (Left (Dhall.Set.fromSet (Data.Set.difference fieldsSet rKs)))
+                let r' = RecordLit (Dhall.Map.restrictKeys rKvs fieldsSet)
+                loop (Prefer l' r')
+            _ | null fields -> pure (RecordLit mempty)
+              | otherwise   -> pure (Project x' (Left (Dhall.Set.sort fields)))
     Project r (Right e1) -> do
         e2 <- loop e1
 
@@ -1877,21 +1935,18 @@ isNormalized e0 = loop (denote e0)
           App DoubleShow (DoubleLit _) -> False
           App (App OptionalBuild _) _ -> False
           App (App ListBuild _) _ -> False
-          App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _ ->
-              False
+          App (App ListFold _) (ListLit _ _) -> False
           App (App ListLength _) (ListLit _ _) -> False
           App (App ListHead _) (ListLit _ _) -> False
           App (App ListLast _) (ListLit _ _) -> False
           App (App ListIndexed _) (ListLit _ _) -> False
           App (App ListReverse _) (ListLit _ _) -> False
-          App (App (App (App (App OptionalFold _) (Some _)) _) _) _ ->
-              False
-          App (App (App (App (App OptionalFold _) (App None _)) _) _) _ ->
-              False
+          App (App OptionalFold _) (Some _) -> False
+          App (App OptionalFold _) (App None _) -> False
           App TextShow (TextLit (Chunks [] _)) ->
               False
           _ -> True
-      Let _ _ _ _ -> False
+      Let _ _ -> False
       Annot _ _ -> False
       Bool -> True
       BoolLit _ -> True
@@ -2018,6 +2073,8 @@ isNormalized e0 = loop (denote e0)
           case p of
               Left s -> case r of
                   RecordLit _ -> False
+                  Project _ _ -> False
+                  Prefer _ (RecordLit _) -> False
                   _ -> not (Dhall.Set.null s) && Dhall.Set.isSorted s
               Right e' -> case e' of
                   Record _ -> False
@@ -2025,7 +2082,7 @@ isNormalized e0 = loop (denote e0)
       Assert t -> loop t
       Equivalent l r -> loop l && loop r
       Note _ e' -> loop e'
-      ImportAlt l _r -> loop l
+      ImportAlt _ _ -> False
       Embed _ -> True
 
 {-| Detect if the given variable is free within the given expression
@@ -2131,7 +2188,7 @@ subExpressions _ (Var v) = pure (Var v)
 subExpressions f (Lam a b c) = Lam a <$> f b <*> f c
 subExpressions f (Pi a b c) = Pi a <$> f b <*> f c
 subExpressions f (App a b) = App <$> f a <*> f b
-subExpressions f (Let a b c d) = Let a <$> traverse f b <*> f c <*> f d
+subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
 subExpressions f (Annot a b) = Annot <$> f a <*> f b
 subExpressions _ Bool = pure Bool
 subExpressions _ (BoolLit b) = pure (BoolLit b)
@@ -2266,29 +2323,72 @@ This should be fixed by GHC-8.10, so it might be worth revisiting then.
     Given parser output, 'multiLet' consolidates @let@s that formed a
     let-block in the original source.
 -}
-multiLet :: Text -> Maybe (Expr s a) -> Expr s a -> Expr s a -> MultiLet s a
-multiLet x0 mA0 a0 = \case
-    Let x1 mA1 a1 b1 ->
-        let MultiLet bs e = multiLet x1 mA1 a1 b1
-        in MultiLet (Data.List.NonEmpty.cons binding bs) e
-    e -> MultiLet (binding :| []) e
-  where
-    binding = Binding x0 mA0 a0
+multiLet :: Binding s a -> Expr s a -> MultiLet s a
+multiLet b0 = \case
+    Let b1 e1 ->
+        let MultiLet bs e = multiLet b1 e1
+        in  MultiLet (Data.List.NonEmpty.cons b0 bs) e
+    e -> MultiLet (b0 :| []) e
 
 {-| Wrap let-'Binding's around an 'Expr'.
 
 'wrapInLets' can be understood as an inverse for 'multiLet':
 
-> let MultiLet as b1 = multiLet x mA a b0
-> wrapInLets as b1 == Let x mA a b0
+> let MultiLet bs e1 = multiLet b e0
+>
+> wrapInLets bs e1 == Let b e0
 -}
 wrapInLets :: Foldable f => f (Binding s a) -> Expr s a -> Expr s a
-wrapInLets as b = foldr (\(Binding x mA a) e -> Let x mA a e) b as
+wrapInLets bs e = foldr Let e bs
 
 data MultiLet s a = MultiLet (NonEmpty (Binding s a)) (Expr s a)
 
+{- | Record the binding part of a @let@ expression.
+
+For example,
+> let {- A -} x {- B -} : {- C -} Bool = {- D -} True in x
+will be instantiated as follows:
+
+* @bindingSrc0@ corresponds to the @A@ comment.
+* @variable@ is @"x"@
+* @bindingSrc1@ corresponds to the @B@ comment.
+* @annotation@ is 'Just' a pair, corresponding to the @C@ comment and @Bool@.
+* @bindingSrc2@ corresponds to the @D@ comment.
+* @value@ corresponds to @True@.
+-}
 data Binding s a = Binding
-    { variable   :: Text
-    , annotation :: Maybe (Expr s a)
-    , value      :: Expr s a
-    }
+    { bindingSrc0 :: Maybe s
+    , variable    :: Text
+    , bindingSrc1 :: Maybe s
+    , annotation  :: Maybe (Maybe s, Expr s a)
+    , bindingSrc2 :: Maybe s
+    , value       :: Expr s a
+    } deriving (Data, Eq, Foldable, Functor, Generic, NFData, Ord, Show, Traversable)
+
+instance Bifunctor Binding where
+    first k (Binding src0 a src1 b src2 c) =
+        Binding (fmap k src0) a (fmap k src1) (fmap adapt0 b) (fmap k src2) (first k c)
+      where
+        adapt0 (src3, d) = (fmap k src3, first k d)
+
+    second = fmap
+
+{-| Traverse over the immediate 'Expr' children in a 'Binding'.
+-}
+bindingExprs
+  :: (Applicative f)
+  => (Expr s a -> f (Expr s b))
+  -> Binding s a -> f (Binding s b)
+bindingExprs f (Binding s0 n s1 t s2 v) =
+  Binding
+    <$> pure s0
+    <*> pure n
+    <*> pure s1
+    <*> traverse (traverse f) t
+    <*> pure s2
+    <*> f v
+
+{-| Construct a 'Binding' with no source information and no type annotation.
+-}
+makeBinding :: Text -> Expr s a -> Binding s a
+makeBinding name = Binding Nothing name Nothing Nothing Nothing

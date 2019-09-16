@@ -14,7 +14,6 @@ import Options.Applicative (Parser, ParserInfo)
 import qualified Control.Exception
 import qualified Data.Aeson
 import qualified Data.Aeson.Encode.Pretty
-import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Lazy
 import qualified Data.Text.IO             as Text.IO
 import qualified Dhall
@@ -33,6 +32,7 @@ data Options
         , conversion                :: Conversion
         , approximateSpecialDoubles :: Bool
         , file                      :: Maybe FilePath
+        , output                    :: Maybe FilePath
         }
     | Version
 
@@ -45,6 +45,7 @@ parseOptions =
         <*> Dhall.JSON.parseConversion
         <*> parseApproximateSpecialDoubles
         <*> optional parseFile
+        <*> optional parseOutput
         )
     <|> parseVersion
   where
@@ -94,6 +95,13 @@ parseOptions =
             <>  Options.metavar "FILE"
             )
 
+    parseOutput =
+        Options.strOption
+            (   Options.long "output"
+            <>  Options.help "Write JSON to a file instead of standard output"
+            <>  Options.metavar "FILE"
+            )
+
 parserInfo :: ParserInfo Options
 parserInfo =
     Options.info
@@ -137,7 +145,12 @@ main = do
 
                 json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode file text)
 
-                Data.ByteString.Char8.putStrLn $ Data.ByteString.Lazy.toStrict $ encode json
+                let write =
+                        case output of
+                            Nothing -> Data.ByteString.Lazy.putStr
+                            Just file_ -> Data.ByteString.Lazy.writeFile file_
+
+                write (encode json <> "\n")
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler

@@ -12,7 +12,7 @@ module Dhall.LSP.Backend.Parsing
 where
 
 import Data.Text (Text)
-import Dhall.Core (Expr(..), Import, Var(..))
+import Dhall.Core (Binding(..), Expr(..), Import, Var(..))
 import Dhall.Src (Src(..))
 import Dhall.Parser
 import Dhall.Parser.Token
@@ -220,13 +220,13 @@ binderExprFromText txt =
     letBinder = do
       _let
       name <- label
-      mType <- optional (do _colon; expr)
+      mType <- optional (do _colon; _type <- expr; return (Nothing, _type))
 
       -- if the bound value does not parse, skip and replace with 'hole'
       value <- try (do _equal; expr)
           <|> (do skipManyTill anySingle (lookAhead boundary <|> _in); return holeExpr)
       inner <- parseBinderExpr
-      return (Let name mType value inner)
+      return (Let (Binding Nothing name Nothing mType Nothing value) inner)
 
     forallBinder = do
       _forall

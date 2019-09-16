@@ -20,7 +20,6 @@ import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
-import qualified Crypto.Hash
 import qualified Data.ByteArray.Encoding
 import qualified Data.ByteString
 import qualified Data.Char               as Char
@@ -30,6 +29,7 @@ import qualified Data.List.NonEmpty
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Encoding
+import qualified Dhall.Crypto
 import qualified Text.Megaparsec
 #if !MIN_VERSION_megaparsec(7, 0, 0)
 import qualified Text.Megaparsec.Char    as Text.Megaparsec
@@ -66,6 +66,13 @@ setOffset o = Text.Megaparsec.updateParserState $ \(Text.Megaparsec.State s p _ 
   Text.Megaparsec.State s p o stw
 #endif
 {-# INLINE setOffset #-}
+
+src :: Parser a -> Parser Src
+src parser = do
+    before      <- getSourcePos
+    (tokens, _) <- Text.Megaparsec.match parser
+    after       <- getSourcePos
+    return (Src before after tokens)
 
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
@@ -133,18 +140,29 @@ parsers embedded = Parsers {..}
 
         alternative2 = do
             let binding = do
-                    _let
+                    _letOnly
 
-                    c <- label
+                    src0 <- src nonemptyWhitespace
+
+                    c <- labelOnly
+
+                    src1 <- src whitespace
+
                     d <- optional (do
-                        _colon
-                        expression )
+                        _colonOnly
 
-                    _equal
+                        src2 <- src nonemptyWhitespace
 
-                    e <- expression
+                        e <- expression
+                        return (Just src2, e) )
 
-                    return (Binding c d e)
+                    _equalOnly
+
+                    src3 <- src whitespace
+
+                    f <- expression
+
+                    return (Binding (Just src0) c (Just src1) d (Just src3) f)
 
             as <- Data.List.NonEmpty.some1 binding
 
@@ -750,7 +768,7 @@ importType_ = do
 
     choice [ local, http, env, missing ]
 
-importHash_ :: Parser (Crypto.Hash.Digest Crypto.Hash.SHA256)
+importHash_ :: Parser Dhall.Crypto.SHA256Digest
 importHash_ = do
     _ <- Text.Parser.Char.text "sha256:"
     text <- count 64 (satisfy hexdig <?> "hex digit")
@@ -759,7 +777,7 @@ importHash_ = do
     strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
         Left  string      -> fail string
         Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
-    case Crypto.Hash.digestFromByteString strictBytes of
+    case Dhall.Crypto.sha256DigestFromByteString strictBytes of
       Nothing -> fail "Invalid sha256 hash"
       Just h  -> pure h
 

@@ -65,7 +65,8 @@ import Data.Text (Text)
 import Data.Void (Void)
 
 import Dhall.Core (
-    Expr(..)
+    Binding(..)
+  , Expr(..)
   , Chunks(..)
   , Const(..)
   , Import
@@ -83,6 +84,7 @@ import Unsafe.Coerce (unsafeCoerce)
 import qualified Codec.Serialise     as Serialise
 import qualified Data.Char
 import qualified Data.Sequence
+import qualified Data.Set
 import qualified Data.Text
 import qualified Dhall.Binary
 import qualified Dhall.Map
@@ -268,6 +270,16 @@ vApp !t !u = case t of
   t           -> VApp t u
 {-# inline vApp #-}
 
+vPrefer :: Eq a => Env a -> Val a -> Val a -> Val a
+vPrefer env t u = case (t, u) of
+  (VRecordLit m, u) | null m -> u
+  (t, VRecordLit m) | null m -> t
+  (VRecordLit m, VRecordLit m') ->
+     VRecordLit (Dhall.Map.union m' m)
+  (t, u) | conv env t u -> t
+  (t, u) -> VPrefer t u
+{-# inline vPrefer #-}
+
 vCombine :: Val a -> Val a -> Val a
 vCombine t u = case (t, u) of
   (VRecordLit m, u) | null m    -> u
@@ -326,6 +338,22 @@ vField t0 k = go t0 where
   singletonVRecordLit v = VRecordLit (Dhall.Map.singleton k v)
 {-# inline vField #-}
 
+vProjectByFields :: Eq a => Env a -> Val a -> Set Text -> Val a
+vProjectByFields env t ks =
+  if null ks then
+    VRecordLit mempty
+  else case t of
+    VRecordLit kvs -> let
+      kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
+      in VRecordLit kvs'
+    VProject t' _ -> vProjectByFields env t' ks
+    VPrefer l r@(VRecordLit kvs) -> let
+      ksSet = Dhall.Set.toSet ks
+      kvs' = Dhall.Map.restrictKeys kvs ksSet
+      ks' = Dhall.Set.fromSet (Data.Set.difference ksSet (Dhall.Map.keysSet kvs'))
+      in vPrefer env (vProjectByFields env l ks') (VRecordLit kvs')
+    t -> VProject t (Left ks)
+
 eval :: forall a. Eq a => Env a -> Expr Void a -> Val a
 eval !env t =
   let
@@ -349,7 +377,8 @@ eval !env t =
     Lam x a t        -> VLam (evalE a) (Cl x env t)
     Pi x a b         -> VPi (evalE a) (Cl x env b)
     App t u          -> vApp (evalE t) (evalE u)
-    Let x _mA a b    -> let !env' = Extend env x (evalE a)
+    Let (Binding _ x _ _mA _ a) b ->
+                        let !env' = Extend env x (evalE a)
                         in eval env' b
     Annot t _        -> evalE t
 
@@ -553,13 +582,7 @@ eval !env t =
     Union kts        -> VUnion (Dhall.Map.sort ((evalE <$>) <$> kts))
     Combine t u      -> vCombine (evalE t) (evalE u)
     CombineTypes t u -> vCombineTypes (evalE t) (evalE u)
-    Prefer t u       -> case (evalE t, evalE u) of
-                          (VRecordLit m, u) | null m -> u
-                          (t, VRecordLit m) | null m -> t
-                          (VRecordLit m, VRecordLit m') ->
-                             VRecordLit (Dhall.Map.union m' m)
-                          (t, u) | conv env t u -> t
-                          (t, u) -> VPrefer t u
+    Prefer t u       -> vPrefer env (evalE t) (evalE u)
     Merge x y ma     -> case (evalE x, evalE y, evalE <$> ma) of
                           (VRecordLit m, VInject _ k mt, _)
                             | Just f  <- Dhall.Map.lookup k m -> maybe f (vApp f) mt
@@ -576,14 +599,7 @@ eval !env t =
                             in VListLit Nothing s
                           (x, ma) -> VToMap x ma
     Field t k        -> vField (evalE t) k
-    Project t (Left ks) ->
-                        if null ks then
-                          VRecordLit mempty
-                        else case evalE t of
-                          VRecordLit kvs -> let
-                            kvs' = Dhall.Map.restrictKeys kvs (Dhall.Set.toSet ks)
-                            in VRecordLit kvs'
-                          t -> VProject t (Left (Dhall.Set.sort ks))
+    Project t (Left ks) -> vProjectByFields env (evalE t) (Dhall.Set.sort ks)
     Project t (Right e) ->
                         case evalE e of
                           VRecord kts ->
@@ -921,7 +937,10 @@ alphaNormalize = goEnv NEmpty where
       Lam x t u        -> Lam "_" (go t) (goBind x u)
       Pi x a b         -> Pi "_" (go a) (goBind x b)
       App t u          -> App (go t) (go u)
-      Let x mA a b     -> Let "_" (go <$> mA) (go a) (goBind x b)
+      Let (Binding src0 x src1 mA src2 a) b ->
+          Let (Binding src0 "_" src1 (adapt <$> mA) src2 (go a)) (goBind x b)
+        where
+          adapt (src3, _A) = (src3, go _A)
       Annot t u        -> Annot (go t) (go u)
       Bool             -> Bool
       BoolLit b        -> BoolLit b

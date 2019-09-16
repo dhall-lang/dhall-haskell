@@ -23,6 +23,7 @@ import qualified Data.ByteString.Char8                     as BSL8
 import qualified Data.Text.IO                              as Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
+import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall.Pretty
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative                       as Options
@@ -40,6 +41,7 @@ data CommandOptions
         { schema     :: Text
         , conversion :: Conversion
         , file       :: Maybe FilePath
+        , output     :: Maybe FilePath
         , ascii      :: Bool
         , plain      :: Bool
         }
@@ -61,6 +63,7 @@ parseOptions =
         <$> parseSchema
         <*> parseConversion
         <*> optional parseFile
+        <*> optional parseOutput
         <*> parseASCII
         <*> parsePlain
         )
@@ -84,6 +87,13 @@ parseOptions =
         Options.strOption
             (   Options.long "file"
             <>  Options.help "Read YAML expression from a file instead of standard input"
+            <>  Options.metavar "FILE"
+            )
+
+    parseOutput =
+        Options.strOption
+            (   Options.long "output"
+            <>  Options.help "Write Dhall expression to a file instead of standard output"
             <>  Options.metavar "FILE"
             )
 
@@ -129,17 +139,24 @@ main = do
 
                 let stream = Pretty.layoutSmart Dhall.Pretty.layoutOpts document
 
-                supportsANSI <- ANSI.hSupportsANSI IO.stdout
+                case output of
+                    Nothing -> do
+                        supportsANSI <- ANSI.hSupportsANSI IO.stdout
 
-                let ansiStream =
-                        if supportsANSI && not plain
-                        then fmap Dhall.Pretty.annToAnsiStyle stream
-                        else Pretty.unAnnotateS stream
+                        let ansiStream =
+                                if supportsANSI && not plain
+                                then fmap Dhall.Pretty.annToAnsiStyle stream
+                                else Pretty.unAnnotateS stream
 
-                Pretty.Terminal.renderIO IO.stdout ansiStream
+                        Pretty.Terminal.renderIO IO.stdout ansiStream
 
-                Text.IO.putStrLn ""
+                        Text.IO.putStrLn ""
 
+                    Just file_ ->
+                        IO.withFile file_ IO.WriteMode $ \h -> do
+                            Pretty.Text.renderIO h stream
+
+                            Text.IO.hPutStrLn h ""
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler

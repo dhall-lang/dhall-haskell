@@ -25,6 +25,7 @@ import Data.Text ( Text )
 import Data.Version (showVersion)
 import Dhall.Context (Context)
 import Dhall.Import (hashExpressionToCode)
+import Dhall.Src (Src)
 import Dhall.Pretty (CharacterSet(..))
 import System.Console.Haskeline (Interrupt(..))
 import System.Console.Haskeline.Completion ( Completion, simpleCompletion )
@@ -169,8 +170,8 @@ applyContext context expression =
   where
     definitions = reverse $ Dhall.Context.toList context
 
-    convertBinding (variable, Binding expr type_) =
-        Dhall.Core.Binding variable (Just type_) expr
+    convertBinding (variable, Binding expr _) =
+        Dhall.Core.Binding Nothing variable Nothing Nothing Nothing expr
 
     bindings = fmap convertBinding definitions
 
@@ -589,7 +590,7 @@ writeOutputHandle txt = do
 
 output
   :: (Pretty.Pretty a, MonadState Env m, MonadIO m)
-  => Dhall.Expr s a -> m ()
+  => Dhall.Expr Src a -> m ()
 output expr = do
   writeOutputHandle "" -- Visual spacing
 
@@ -599,7 +600,7 @@ output expr = do
 
 outputWithoutSpacing
   :: (Pretty.Pretty a, MonadState Env m, MonadIO m)
-  => Dhall.Expr s a -> m ()
+  => Dhall.Expr Src a -> m ()
 outputWithoutSpacing expr = do
   Env { characterSet, outputHandle } <- get
 
