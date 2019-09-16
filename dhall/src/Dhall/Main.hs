@@ -21,7 +21,7 @@ module Dhall.Main
     ) where
 
 import Control.Applicative (optional, (<|>))
-import Control.Exception (SomeException)
+import Control.Exception (Handler(..), SomeException)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -29,12 +29,13 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Version (showVersion)
 import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
-import Dhall.Import (Imported(..), Depends(..))
+import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
+import Dhall.Util (Censor(..), Input(..))
 import Options.Applicative (Parser, ParserInfo)
-import System.Exit (exitFailure)
+import System.Exit (ExitCode, exitFailure)
 import System.IO (Handle)
 import Text.Dot ((.->.))
 
@@ -62,14 +63,15 @@ import qualified Dhall.Hash
 import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
-import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Repl
 import qualified Dhall.TypeCheck
+import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
+import qualified System.Exit                               as Exit
 import qualified System.IO
 import qualified System.FilePath
 import qualified Text.Dot
@@ -77,28 +79,34 @@ import qualified Data.Map
 
 -- | Top-level program options
 data Options = Options
-    { mode            :: Mode
-    , explain         :: Bool
-    , plain           :: Bool
-    , ascii           :: Bool
+    { mode    :: Mode
+    , explain :: Bool
+    , plain   :: Bool
+    , ascii   :: Bool
+    , censor  :: Censor
     }
 
 -- | The subcommands for the @dhall@ executable
 data Mode
-    = Default { file :: Maybe FilePath, annotate :: Bool, alpha :: Bool }
+    = Default
+          { file :: Input
+          , annotate :: Bool
+          , alpha :: Bool
+          , semanticCacheMode :: SemanticCacheMode
+          }
     | Version
-    | Resolve { file :: Maybe FilePath, resolveMode :: Maybe ResolveMode }
-    | Type { file :: Maybe FilePath }
-    | Normalize { file :: Maybe FilePath, alpha :: Bool }
+    | Resolve { file :: Input, resolveMode :: Maybe ResolveMode }
+    | Type { file :: Input }
+    | Normalize { file :: Input , alpha :: Bool }
     | Repl
     | Format { formatMode :: Dhall.Format.FormatMode }
-    | Freeze { inplace :: Maybe FilePath, all_ :: Bool, cache :: Bool }
+    | Freeze { inplace :: Input, all_ :: Bool, cache :: Bool }
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
-    | Lint { inplace :: Maybe FilePath }
-    | Encode { file :: Maybe FilePath, json :: Bool }
-    | Decode { file :: Maybe FilePath, json :: Bool }
-    | Text { file :: Maybe FilePath }
+    | Lint { inplace :: Input }
+    | Encode { file :: Input, json :: Bool }
+    | Decode { file :: Input, json :: Bool }
+    | Text { file :: Input }
 
 data ResolveMode
     = Dot
@@ -114,12 +122,18 @@ parseOptions =
     <*> switch "explain" "Explain error messages in more detail"
     <*> switch "plain" "Disable syntax highlighting"
     <*> switch "ascii" "Format code using only ASCII syntax"
+    <*> parseCensor
   where
     switch name description =
         Options.Applicative.switch
             (   Options.Applicative.long name
             <>  Options.Applicative.help description
             )
+
+    parseCensor = fmap f (switch "censor" "Hide source code in error messages")
+      where
+        f True  = Censor
+        f False = NoCensor
 
 subcommand :: String -> String -> Parser a -> Parser a
 subcommand name description parser =
@@ -143,15 +157,15 @@ parseMode =
     <|> subcommand
             "resolve"
             "Resolve an expression's imports"
-            (Resolve <$> optional parseFile <*> parseResolveMode)
+            (Resolve <$> parseFile <*> parseResolveMode)
     <|> subcommand
             "type"
             "Infer an expression's type"
-            (Type <$> optional parseFile)
+            (Type <$> parseFile)
     <|> subcommand
             "normalize"
             "Normalize an expression"
-            (Normalize <$> optional parseFile <*> parseAlpha)
+            (Normalize <$> parseFile <*> parseAlpha)
     <|> subcommand
             "repl"
             "Interpret expressions in a REPL"
@@ -166,41 +180,45 @@ parseMode =
             (pure Hash)
     <|> subcommand
             "lint"
-            "Improve Dhall code"
-            (Lint <$> optional parseInplace)
+            "Improve Dhall code by using newer language features and removing dead code"
+            (Lint <$> parseInplace)
     <|> subcommand
             "format"
-            "Formatter for the Dhall language"
+            "Standard code formatter for the Dhall language"
             (Format <$> parseFormatMode)
     <|> subcommand
             "freeze"
             "Add integrity checks to remote import statements of an expression"
-            (Freeze <$> optional parseInplace <*> parseAllFlag <*> parseCacheFlag)
+            (Freeze <$> parseInplace <*> parseAllFlag <*> parseCacheFlag)
     <|> subcommand
             "encode"
             "Encode a Dhall expression to binary"
-            (Encode <$> optional parseFile <*> parseJSONFlag)
+            (Encode <$> parseFile <*> parseJSONFlag)
     <|> subcommand
             "decode"
             "Decode a Dhall expression from binary"
-            (Decode <$> optional parseFile <*> parseJSONFlag)
+            (Decode <$> parseFile <*> parseJSONFlag)
     <|> subcommand
             "text"
             "Render a Dhall expression that evaluates to a Text literal"
-            (Text <$> optional parseFile)
-    <|> (Default <$> optional parseFile <*> parseAnnotate <*> parseAlpha)
+            (Text <$> parseFile)
+    <|> (Default <$> parseFile <*> parseAnnotate <*> parseAlpha <*> parseSemanticCacheMode)
   where
     argument =
             fmap Data.Text.pack
         .   Options.Applicative.strArgument
         .   Options.Applicative.metavar
 
-    parseFile =
-        Options.Applicative.strOption
-            (   Options.Applicative.long "file"
-            <>  Options.Applicative.help "Read expression from a file instead of standard input"
-            <>  Options.Applicative.metavar "FILE"
-            )
+    parseFile = fmap f (optional p)
+      where
+        f  Nothing    = StandardInput
+        f (Just file) = File file
+
+        p = Options.Applicative.strOption
+                (   Options.Applicative.long "file"
+                <>  Options.Applicative.help "Read expression from a file instead of standard input"
+                <>  Options.Applicative.metavar "FILE"
+                )
 
     parseAlpha =
         Options.Applicative.switch
@@ -212,6 +230,15 @@ parseMode =
         Options.Applicative.switch
             (   Options.Applicative.long "annotate"
             <>  Options.Applicative.help "Add a type annotation to the output"
+            )
+
+    parseSemanticCacheMode =
+        Options.Applicative.flag
+            UseSemanticCache
+            IgnoreSemanticCache
+            (   Options.Applicative.long "no-cache"
+            <>  Options.Applicative.help
+                  "Handle protected imports as if the cache was empty"
             )
 
     parseResolveMode =
@@ -234,12 +261,16 @@ parseMode =
               )
         <|> pure Nothing
 
-    parseInplace =
-        Options.Applicative.strOption
-        (   Options.Applicative.long "inplace"
-        <>  Options.Applicative.help "Modify the specified file in-place"
-        <>  Options.Applicative.metavar "FILE"
-        )
+    parseInplace = fmap f (optional p)
+      where
+        f  Nothing    = StandardInput
+        f (Just file) = File file
+
+        p = Options.Applicative.strOption
+            (   Options.Applicative.long "inplace"
+            <>  Options.Applicative.help "Modify the specified file in-place"
+            <>  Options.Applicative.metavar "FILE"
+            )
 
     parseJSONFlag =
         Options.Applicative.switch
@@ -265,19 +296,10 @@ parseMode =
         <>  Options.Applicative.help "Only check if the input is formatted"
         )
 
-    parseFormatMode = adapt <$> parseCheck <*> optional parseInplace
+    parseFormatMode = adapt <$> parseCheck <*> parseInplace
       where
         adapt True  path    = Dhall.Format.Check {..}
         adapt False inplace = Dhall.Format.Modify {..}
-
-getExpression :: Maybe FilePath -> IO (Expr Src Import)
-getExpression maybeFile = do
-    inText <- do
-        case maybeFile of
-            Just file -> Data.Text.IO.readFile file
-            Nothing   -> Data.Text.IO.getContents
-
-    Dhall.Core.throws (Dhall.Parser.exprFromText "(stdin)" inText)
 
 -- | `ParserInfo` for the `Options` type
 parserInfoOptions :: ParserInfo Options
@@ -298,17 +320,31 @@ command (Options {..}) = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
     let rootDirectory = \case
-            Just f   -> System.FilePath.takeDirectory f
-            Nothing  -> "."
+            File f        -> System.FilePath.takeDirectory f
+            StandardInput -> "."
 
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
 
-    let handle =
-                Control.Exception.handle handler2
-            .   Control.Exception.handle handler1
-            .   Control.Exception.handle handler0
+    let getExpression          = Dhall.Util.getExpression          censor
+    let getExpressionAndHeader = Dhall.Util.getExpressionAndHeader censor
+
+    let handle io =
+            Control.Exception.catches io
+                [ Handler handleTypeError
+                , Handler handleImported
+                , Handler handleExitCode
+                ]
           where
-            handler0 e = do
+            handleAll e = do
+                let string = show (e :: SomeException)
+
+                if not (null string)
+                    then System.IO.hPutStrLn System.IO.stderr string
+                    else return ()
+
+                System.Exit.exitFailure
+
+            handleTypeError e = Control.Exception.handle handleAll $ do
                 let _ = e :: TypeError Src X
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
@@ -317,7 +353,7 @@ command (Options {..}) = do
                         Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO e
 
-            handler1 (Imported ps e) = do
+            handleImported (Imported ps e) = Control.Exception.handle handleAll $ do
                 let _ = e :: TypeError Src X
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
@@ -326,14 +362,8 @@ command (Options {..}) = do
                         Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO (Imported ps e)
 
-            handler2 e = do
-                let string = show (e :: SomeException)
-
-                if not (null string)
-                    then System.IO.hPutStrLn System.IO.stderr string
-                    else return ()
-
-                System.Exit.exitFailure
+            handleExitCode e = do
+                Control.Exception.throwIO (e :: ExitCode)
 
     let renderDoc :: Handle -> Doc Ann -> IO ()
         renderDoc h doc = do
@@ -348,7 +378,7 @@ command (Options {..}) = do
             Pretty.renderIO h ansiStream
             Data.Text.IO.hPutStrLn h ""
 
-    let render :: Pretty a => Handle -> Expr s a -> IO ()
+    let render :: Pretty a => Handle -> Expr Src a -> IO ()
         render h expression = do
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 
@@ -361,7 +391,8 @@ command (Options {..}) = do
         Default {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- Dhall.Import.loadRelativeTo (rootDirectory file) expression
+            resolvedExpression <-
+                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -432,7 +463,9 @@ command (Options {..}) = do
         Resolve { resolveMode = Nothing, ..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- Dhall.Import.loadRelativeTo (rootDirectory file) expression
+            resolvedExpression <-
+                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+
             render System.IO.stdout resolvedExpression
 
         Normalize {..} -> do
@@ -454,11 +487,12 @@ command (Options {..}) = do
         Type {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- Dhall.Import.assertNoImports expression
+            resolvedExpression <-
+                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-            render System.IO.stdout (Dhall.Core.normalize inferredType)
+            render System.IO.stdout inferredType
 
         Repl -> do
             Dhall.Repl.repl characterSet explain
@@ -470,7 +504,11 @@ command (Options {..}) = do
 
             let diff = Dhall.Diff.diffNormalized expression1 expression2
 
-            renderDoc System.IO.stdout diff
+            renderDoc System.IO.stdout (Dhall.Diff.doc diff)
+
+            if Dhall.Diff.same diff
+                then return ()
+                else Exit.exitFailure
 
         Format {..} -> do
             Dhall.Format.format (Dhall.Format.Format {..})
@@ -480,18 +518,16 @@ command (Options {..}) = do
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze inplace scope intent characterSet
+            Dhall.Freeze.freeze inplace scope intent characterSet censor
 
         Hash -> do
-            Dhall.Hash.hash
+            Dhall.Hash.hash censor
 
         Lint {..} -> do
+            (header, expression) <- getExpressionAndHeader inplace
+
             case inplace of
-                Just file -> do
-                    text <- Data.Text.IO.readFile file
-
-                    (header, expression) <- Dhall.Core.throws (Dhall.Parser.exprAndHeaderFromText file text)
-
+                File file -> do
                     let lintedExpression = Dhall.Lint.lint expression
 
                     let doc =   Pretty.pretty header
@@ -500,11 +536,7 @@ command (Options {..}) = do
                     System.IO.withFile file System.IO.WriteMode (\h -> do
                         renderDoc h doc )
 
-                Nothing -> do
-                    text <- Data.Text.IO.getContents
-
-                    (header, expression) <- Dhall.Core.throws (Dhall.Parser.exprAndHeaderFromText "(stdin)" text)
-
+                StandardInput -> do
                     let lintedExpression = Dhall.Lint.lint expression
 
                     let doc =   Pretty.pretty header
@@ -535,8 +567,8 @@ command (Options {..}) = do
         Decode {..} -> do
             bytes <- do
                 case file of
-                    Just f  -> Data.ByteString.Lazy.readFile f
-                    Nothing -> Data.ByteString.Lazy.getContents
+                    File f        -> Data.ByteString.Lazy.readFile f
+                    StandardInput -> Data.ByteString.Lazy.getContents
 
             term <- do
                 if json
@@ -562,7 +594,8 @@ command (Options {..}) = do
         Text {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <- Dhall.Import.loadRelativeTo (rootDirectory file) expression
+            resolvedExpression <-
+                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
 

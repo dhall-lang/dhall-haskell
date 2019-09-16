@@ -9,10 +9,9 @@ import System.Environment (getEnvironment)
 import System.Timeout (timeout)
 
 import Dhall.Context (empty, toList)
-import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Text as Text
 import Dhall.Context (Context, insert)
-import Dhall.Core (Expr(..), Binding(..), Var(..), normalize, shift, subst, pretty, reservedIdentifiers)
+import Dhall.Core (Binding(..), Expr(..), Var(..), normalize, shift, subst, pretty, reservedIdentifiers)
 import Dhall.TypeCheck (X, typeWithA, typeOf)
 import Dhall.Parser (Src, exprFromText)
 import qualified Dhall.Map
@@ -78,7 +77,7 @@ buildCompletionContext = buildCompletionContext' empty empty
 
 buildCompletionContext' :: Context (Expr Src X) -> Context (Expr Src X)
   -> Expr Src X -> CompletionContext
-buildCompletionContext' context values (Let (Binding x mA a :| []) e)
+buildCompletionContext' context values (Let (Binding { variable = x, annotation = mA, value = a }) e)
   -- We prefer the actual value over the annotated type in order to get
   -- 'dependent let' behaviour whenever possible.
   | Right _A <- typeWithA absurd context a =
@@ -93,7 +92,7 @@ buildCompletionContext' context values (Let (Binding x mA a :| []) e)
     in buildCompletionContext' context' values' e'
 
   -- fall back to annotated type if body doesn't type check; bind to `holeExpr`
-  | Just _A <- mA
+  | Just (_, _A) <- mA
   , Right _ <- typeWithA absurd context _A =
     let _A' = normalize _A
 

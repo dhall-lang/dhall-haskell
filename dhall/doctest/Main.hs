@@ -27,6 +27,7 @@ main = do
         Test.DocTest.doctest
             [ "--fast"
             , "-i" <> (prefix </> "src")
+            , "-i" <> (prefix </> "ghc-src")
             , prefix </> "src/Dhall.hs"
             , prefix </> "src/Dhall/Import.hs"
             , prefix </> "src/Dhall/Tutorial.hs"

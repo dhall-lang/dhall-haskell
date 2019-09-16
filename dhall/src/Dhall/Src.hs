@@ -28,9 +28,11 @@ import qualified Text.Megaparsec as Megaparsec
 import qualified Text.Printf     as Printf
 
 -- | Source code extract
-data Src = Src !SourcePos !SourcePos Text
-  -- Text field is intentionally lazy
-  deriving (Data, Eq, Generic, Ord, Show, NFData)
+data Src = Src
+    { srcStart :: !SourcePos
+    , srcEnd   :: !SourcePos
+    , srcText  :: Text -- Text field is intentionally lazy
+    } deriving (Data, Eq, Generic, Ord, Show, NFData)
 
 
 instance Lift Src where

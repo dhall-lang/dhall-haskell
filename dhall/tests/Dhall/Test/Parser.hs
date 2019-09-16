@@ -4,7 +4,7 @@ module Dhall.Test.Parser where
 
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Dhall.Core (Expr, Import)
+import Dhall.Core (Binding(..), Expr(..), Import, Var(..))
 import Dhall.TypeCheck (X)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
@@ -14,6 +14,7 @@ import qualified Codec.CBOR.Read      as CBOR
 import qualified Codec.CBOR.Term      as CBOR
 import qualified Codec.Serialise      as Serialise
 import qualified Control.Monad        as Monad
+import qualified Data.Bifunctor       as Bifunctor
 import qualified Data.ByteString      as ByteString
 import qualified Data.ByteString.Lazy as ByteString.Lazy
 import qualified Data.Text            as Text
@@ -60,23 +61,70 @@ getTests = do
             Tasty.testGroup "parser tests"
                 [ successTests
                 , failureTests
+                , internalTests
                 , binaryDecodeSuccessTests
                 , binaryDecodeFailureTests
                 ]
 
     return testTree
 
+internalTests :: TestTree
+internalTests =
+    Tasty.testGroup "internal"
+        [ notesInLetInLet ]
+
+notesInLetInLet :: TestTree
+notesInLetInLet = do
+    Tasty.HUnit.testCase "Notes in let-in-let" $ do
+        let code = "let x = 0 let y = 1 in let z = 2 in x"
+
+        expression <- Core.throws (Parser.exprFromText mempty code)
+
+        let simplifyNotes = Bifunctor.first Parser.srcText
+
+        let expected =
+                (Note code
+                  (Let
+                    (Binding
+                      (Just " ")
+                      "x"
+                      (Just " ")
+                      Nothing
+                      (Just " ")
+                      (Note "0 " (NaturalLit 0)))
+                    -- This 'Let' isn't wrapped in a 'Note'!
+                    (Let
+                      (Binding
+                        (Just " ")
+                        "y"
+                        (Just " ")
+                        Nothing
+                        (Just " ")
+                        (Note "1 " (NaturalLit 1))
+                      )
+                      (Note "let z = 2 in x"
+                        (Let
+                          (Binding
+                            (Just " ")
+                            "z"
+                            (Just " ")
+                            Nothing
+                            (Just " ")
+                            (Note "2 " (NaturalLit 2))
+                          )
+                          (Note "x"
+                            (Var (V "x" 0))))))))
+
+        let msg = "Unexpected parse result"
+
+        Tasty.HUnit.assertEqual msg expected (simplifyNotes expression)
+
 shouldParse :: Text -> TestTree
 shouldParse path = do
     let skip =
             -- This is a bug created by a parsing performance
             -- improvement
-            [ parseDirectory </> "success/unit/MergeParenAnnotation"
-
-            -- https://github.com/dhall-lang/dhall-haskell/issues/1185
-            , parseDirectory </> "success/let"
-            , parseDirectory </> "success/unit/LetNested"
-            ]
+            [ parseDirectory </> "success/unit/MergeParenAnnotation" ]
 
     let pathString = Text.unpack path
 
@@ -107,8 +155,7 @@ shouldNotParse path = do
             [ -- These two unexpected successes are due to not correctly
               -- requiring non-empty whitespace after the `:` in a type
               -- annotation
-              parseDirectory </> "failure/annotation.dhall"
-            , parseDirectory </> "failure/unit/ImportEnvWrongEscape.dhall"
+              parseDirectory </> "failure/unit/ImportEnvWrongEscape.dhall"
 
               -- Other spacing related unexpected successes:
             , parseDirectory </> "failure/spacing/AnnotationNoSpace.dhall"
@@ -119,7 +166,6 @@ shouldNotParse path = do
             , parseDirectory </> "failure/spacing/ImportAltNoSpace.dhall"
             , parseDirectory </> "failure/spacing/ImportHashedNoSpace.dhall"
             , parseDirectory </> "failure/spacing/LambdaNoSpace.dhall"
-            , parseDirectory </> "failure/spacing/LetAnnotNoSpace.dhall"
             , parseDirectory </> "failure/spacing/ListLitEmptyNoSpace.dhall"
             , parseDirectory </> "failure/spacing/MergeAnnotationNoSpace3.dhall"
             , parseDirectory </> "failure/spacing/MergeNoSpace2.dhall"

@@ -1,5 +1,7 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+
 {-# OPTIONS_GHC -Wall #-}
 
 {-| This module provides internal pretty-printing utilities which are used by
@@ -10,6 +12,7 @@ module Dhall.Pretty.Internal (
       Ann(..)
     , annToAnsiStyle
     , prettyExpr
+    , prettySrcExpr
 
     , CharacterSet(..)
     , prettyCharacterSet
@@ -67,6 +70,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
+import Dhall.Src (Src(..))
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
@@ -108,7 +112,10 @@ data CharacterSet = ASCII | Unicode
 
 -- | Pretty print an expression
 prettyExpr :: Pretty a => Expr s a -> Doc Ann
-prettyExpr = prettyCharacterSet Unicode
+prettyExpr = prettySrcExpr . denote
+
+prettySrcExpr :: Pretty a => Expr Src a -> Doc Ann
+prettySrcExpr = prettyCharacterSet Unicode
 
 {-| Internal utility for pretty-printing, used when generating element lists
     to supply to `enclose` or `enclose'`.  This utility indicates that the
@@ -117,6 +124,79 @@ prettyExpr = prettyCharacterSet Unicode
 -}
 duplicate :: a -> (a, a)
 duplicate x = (x, x)
+
+isWhitespace :: Char -> Bool
+isWhitespace c =
+    case c of
+        ' '  -> True
+        '\n' -> True
+        '\t' -> True
+        '\r' -> True
+        _    -> False
+
+{-| Used to render inline `Src` spans preserved by the syntax tree
+
+    >>> let unusedSourcePos = Text.Megaparsec.SourcePos "" (Text.Megaparsec.mkPos 1) (Text.Megaparsec.mkPos 1)
+    >>> let nonEmptySrc = Src unusedSourcePos unusedSourcePos "-- Documentation for x\n"
+    >>> "let" <> renderSrc (Just nonEmptySrc) " " <> "x = 1 in x"
+    let -- Documentation for x
+        x = 1 in x
+    >>> let emptySrc = Src unusedSourcePos unusedSourcePos "      "
+    >>> "let" <> renderSrc (Just emptySrc) " " <> "x = 1 in x"
+    let x = 1 in x
+    >>> "let" <> renderSrc Nothing " " <> "x = 1 in x"
+    let x = 1 in x
+-}
+renderSrc
+    :: Maybe Src
+    -- ^ Source span to render (if present)
+    -> Doc Ann
+    -- ^ Used as the prefix (when the source span contains a comment) and as a
+    --   fallback (when the source span is absent or comment-free)
+    -> Doc Ann
+renderSrc (Just (Src {..})) prefix
+    | not (Text.all isWhitespace srcText) =
+        prefix <> Pretty.align (Pretty.concatWith f newLines <> suffix)
+  where
+    horizontalSpace c = c == ' ' || c == '\t'
+
+    strippedText = Text.dropAround horizontalSpace srcText
+
+    suffix =
+        if Text.null strippedText
+        then mempty
+        else if Text.last strippedText == '\n' then mempty else " "
+
+    oldLines = Text.splitOn "\n" strippedText
+
+    spacePrefix = Text.takeWhile horizontalSpace
+
+    commonPrefix a b = case Text.commonPrefixes a b of
+        Nothing        -> ""
+        Just (c, _, _) -> c
+
+    blank = Text.all horizontalSpace
+
+    newLines =
+        case oldLines of
+            [] ->
+               []
+            l0 : [] ->
+                Pretty.pretty l0 : []
+            l0 : l1 : ls ->
+                let sharedPrefix =
+                        foldl' commonPrefix (spacePrefix l1) (map spacePrefix (filter (not . blank) ls))
+
+                    perLine l =
+                        case Text.stripPrefix sharedPrefix l of
+                            Nothing -> Pretty.pretty l
+                            Just l' -> Pretty.pretty l'
+
+                in  Pretty.pretty l0 : map perLine (l1 : ls)
+
+    f x y = x <> Pretty.hardline <> y
+renderSrc _ prefix =
+    prefix
 
 -- Annotation helpers
 keyword, syntax, label, literal, builtin, operator :: Doc Ann -> Doc Ann
@@ -350,7 +430,20 @@ prettyVar :: Var -> Doc Ann
 prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
 prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyInt n))
 
-prettyCharacterSet :: Pretty a => CharacterSet -> Expr s a -> Doc Ann
+{-| Pretty-print an 'Expr' using the given 'CharacterSet'.
+
+'prettyCharacterSet' largely ignores 'Note's. 'Note's do however matter for
+the layout of let-blocks:
+
+>>> let inner = Let (Binding Nothing "x" Nothing Nothing Nothing (NaturalLit 1)) (Var (V "x" 0)) :: Expr Src ()
+>>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing (NaturalLit 2)) inner)
+let y = 2 let x = 1 in x
+>>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing (NaturalLit 2)) (Note (Src unusedSourcePos unusedSourcePos "") inner))
+let y = 2 in let x = 1 in x
+
+This means the structure of parsed let-blocks is preserved.
+-}
+prettyCharacterSet :: Pretty a => CharacterSet -> Expr Src a -> Doc Ann
 prettyCharacterSet characterSet expression =
     Pretty.group (prettyExpression expression)
   where
@@ -420,45 +513,42 @@ prettyCharacterSet characterSet expression =
                 ]
         docsShort (Note  _    c) = docsShort c
         docsShort             c  = [ prettyExpression c ]
-    prettyExpression (Let as b) =
+    prettyExpression (Let a0 b0) =
         enclose' "" "" space Pretty.hardline
             (fmap duplicate (fmap docA (toList as)) ++ [ docB ])
       where
-        docA (Binding c Nothing e) =
+        MultiLet as b = multiLet a0 b0
+
+        docA (Binding src0 c src1 Nothing src2 e) =
             Pretty.group (Pretty.flatAlt long short)
           where
             long =  keyword "let" <> space
                 <>  Pretty.align
-                    (   prettyLabel c
-                    <>  space <> equals
-                    <>  Pretty.hardline
-                    <>  "  "
-                    <>  prettyExpression e
+                    (   renderSrc src0 mempty
+                    <>  prettyLabel c <> renderSrc src1 space
+                    <>  equals <> renderSrc src2 Pretty.hardline
+                    <>  "  " <> prettyExpression e
                     )
 
-            short = keyword "let" <> space
-                <>  prettyLabel c
-                <>  (space <> equals <> space)
+            short = keyword "let" <> renderSrc src0 space
+                <>  prettyLabel c <> renderSrc src1 space
+                <>  equals <> renderSrc src2 space
                 <>  prettyExpression e
-        docA (Binding c (Just d) e) =
+        docA (Binding src0 c src1 (Just (src3, d)) src2 e) =
             Pretty.group (Pretty.flatAlt long short)
           where
             long = keyword "let" <> space
                 <>  Pretty.align
-                    (   prettyLabel c
-                    <>  Pretty.hardline
-                    <>  colon <> space
-                    <>  prettyExpression d
-                    <>  Pretty.hardline
-                    <>  equals <> space
+                    (   renderSrc src0 mempty
+                    <>  prettyLabel c <> renderSrc src1 Pretty.hardline
+                    <>  colon <> renderSrc src3 space <> prettyExpression d <> Pretty.hardline <> equals <> renderSrc src2 space
                     <>  prettyExpression e
                     )
 
-            short = keyword "let" <> space
-                <>  prettyLabel c
-                <>  space <> colon <> space
-                <>  prettyExpression d
-                <>  space <> equals <> space
+            short = keyword "let" <> renderSrc src0 space
+                <>  prettyLabel c <> renderSrc src1 space
+                <>  colon <> renderSrc src3 space
+                <>  prettyExpression d <> space <> equals <> renderSrc src2 space
                 <>  prettyExpression e
 
         docB =
@@ -504,7 +594,7 @@ prettyCharacterSet characterSet expression =
     prettyExpression a0 =
         prettyAnnotatedExpression a0
 
-    prettyAnnotatedExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyAnnotatedExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyAnnotatedExpression (Merge a b (Just c)) =
         Pretty.group (Pretty.flatAlt long short)
       where
@@ -591,7 +681,7 @@ prettyCharacterSet characterSet expression =
     prettyAnnotatedExpression a0 =
         prettyOperatorExpression a0
 
-    prettyOperatorExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyOperatorExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyOperatorExpression = prettyImportAltExpression
 
     prettyOperator :: Text -> [Doc Ann] -> Doc Ann
@@ -607,7 +697,7 @@ prettyCharacterSet characterSet expression =
 
         spacer = if Text.length op == 1 then " "  else "  "
 
-    prettyImportAltExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyImportAltExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyImportAltExpression a0@(ImportAlt _ _) =
         prettyOperator "?" (docs a0)
       where
@@ -619,7 +709,7 @@ prettyCharacterSet characterSet expression =
     prettyImportAltExpression a0 =
         prettyOrExpression a0
 
-    prettyOrExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyOrExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyOrExpression a0@(BoolOr _ _) =
         prettyOperator "||" (docs a0)
       where
@@ -631,7 +721,7 @@ prettyCharacterSet characterSet expression =
     prettyOrExpression a0 =
         prettyPlusExpression a0
 
-    prettyPlusExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyPlusExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyPlusExpression a0@(NaturalPlus _ _) =
         prettyOperator "+" (docs a0)
       where
@@ -643,7 +733,7 @@ prettyCharacterSet characterSet expression =
     prettyPlusExpression a0 =
         prettyTextAppendExpression a0
 
-    prettyTextAppendExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyTextAppendExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyTextAppendExpression a0@(TextAppend _ _) =
         prettyOperator "++" (docs a0)
       where
@@ -655,7 +745,7 @@ prettyCharacterSet characterSet expression =
     prettyTextAppendExpression a0 =
         prettyListAppendExpression a0
 
-    prettyListAppendExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyListAppendExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyListAppendExpression a0@(ListAppend _ _) =
         prettyOperator "#" (docs a0)
       where
@@ -667,7 +757,7 @@ prettyCharacterSet characterSet expression =
     prettyListAppendExpression a0 =
         prettyAndExpression a0
 
-    prettyAndExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyAndExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyAndExpression a0@(BoolAnd _ _) =
         prettyOperator "&&" (docs a0)
       where
@@ -679,7 +769,7 @@ prettyCharacterSet characterSet expression =
     prettyAndExpression a0 =
        prettyCombineExpression a0
 
-    prettyCombineExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyCombineExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyCombineExpression a0@(Combine _ _) =
         prettyOperator (combine characterSet) (docs a0)
       where
@@ -691,7 +781,7 @@ prettyCharacterSet characterSet expression =
     prettyCombineExpression a0 =
         prettyPreferExpression a0
 
-    prettyPreferExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyPreferExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyPreferExpression a0@(Prefer _ _) =
         prettyOperator (prefer characterSet) (docs a0)
       where
@@ -703,7 +793,7 @@ prettyCharacterSet characterSet expression =
     prettyPreferExpression a0 =
         prettyCombineTypesExpression a0
 
-    prettyCombineTypesExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyCombineTypesExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyCombineTypesExpression a0@(CombineTypes _ _) =
         prettyOperator (combineTypes characterSet) (docs a0)
       where
@@ -715,7 +805,7 @@ prettyCharacterSet characterSet expression =
     prettyCombineTypesExpression a0 =
         prettyTimesExpression a0
 
-    prettyTimesExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyTimesExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyTimesExpression a0@(NaturalTimes _ _) =
         prettyOperator "*" (docs a0)
       where
@@ -727,7 +817,7 @@ prettyCharacterSet characterSet expression =
     prettyTimesExpression a0 =
         prettyEqualExpression a0
 
-    prettyEqualExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyEqualExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyEqualExpression a0@(BoolEQ _ _) =
         prettyOperator "==" (docs a0)
       where
@@ -739,7 +829,7 @@ prettyCharacterSet characterSet expression =
     prettyEqualExpression a0 =
         prettyNotEqualExpression a0
 
-    prettyNotEqualExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyNotEqualExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyNotEqualExpression a0@(BoolNE _ _) =
         prettyOperator "!=" (docs a0)
       where
@@ -751,7 +841,7 @@ prettyCharacterSet characterSet expression =
     prettyNotEqualExpression a0 =
         prettyEquivalentExpression a0
 
-    prettyEquivalentExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyEquivalentExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyEquivalentExpression a0@(Equivalent _ _) =
         prettyOperator (equivalent characterSet) (docs a0)
       where
@@ -763,7 +853,7 @@ prettyCharacterSet characterSet expression =
     prettyEquivalentExpression a0 =
         prettyApplicationExpression a0
 
-    prettyApplicationExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyApplicationExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyApplicationExpression a0 = case a0 of
         App _ _  -> result
         Some _   -> result
@@ -777,7 +867,7 @@ prettyCharacterSet characterSet expression =
         docs (Note _ b) = docs b
         docs         b  = map duplicate [ prettyImportExpression b ]
 
-    prettyImportExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyImportExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyImportExpression (Embed a) =
         Pretty.pretty a
     prettyImportExpression (Note _ a) =
@@ -785,7 +875,7 @@ prettyCharacterSet characterSet expression =
     prettyImportExpression a0 =
         prettySelectorExpression a0
 
-    prettySelectorExpression :: Pretty a => Expr s a -> Doc Ann
+    prettySelectorExpression :: Pretty a => Expr Src a -> Doc Ann
     prettySelectorExpression (Field a b) =
         prettySelectorExpression a <> dot <> prettyAnyLabel b
     prettySelectorExpression (Project a (Left b)) =
@@ -801,7 +891,7 @@ prettyCharacterSet characterSet expression =
     prettySelectorExpression a0 =
         prettyPrimitiveExpression a0
 
-    prettyPrimitiveExpression :: Pretty a => Expr s a -> Doc Ann
+    prettyPrimitiveExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyPrimitiveExpression (Var a) =
         prettyVar a
     prettyPrimitiveExpression (Const k) =
@@ -896,26 +986,28 @@ prettyCharacterSet characterSet expression =
 
         short = lparen <> prettyExpression a <> rparen
 
-    prettyKeyValue :: Pretty a => Doc Ann -> (Text, Expr s a) -> (Doc Ann, Doc Ann)
+    prettyKeyValue :: Pretty a => Doc Ann -> (Text, Expr Src a) -> (Doc Ann, Doc Ann)
     prettyKeyValue separator (key, val) =
-        (       prettyAnyLabel key
+        duplicate (Pretty.group (Pretty.flatAlt long short))
+      where
+        short = prettyAnyLabel key
             <>  " "
             <>  separator
             <>  " "
             <>  prettyExpression val
-        ,       prettyAnyLabel key
+
+        long =  prettyAnyLabel key
             <>  " "
             <>  separator
-            <>  long
-        )
-      where
-        long = Pretty.hardline <> "    " <> prettyExpression val
+            <>  Pretty.hardline
+            <>  "    "
+            <>  prettyExpression val
 
-    prettyRecord :: Pretty a => Map Text (Expr s a) -> Doc Ann
+    prettyRecord :: Pretty a => Map Text (Expr Src a) -> Doc Ann
     prettyRecord =
         braces . map (prettyKeyValue colon) . Dhall.Map.toList
 
-    prettyRecordLit :: Pretty a => Map Text (Expr s a) -> Doc Ann
+    prettyRecordLit :: Pretty a => Map Text (Expr Src a) -> Doc Ann
     prettyRecordLit a
         | Data.Foldable.null a =
             lbrace <> equals <> rbrace
@@ -925,11 +1017,11 @@ prettyCharacterSet characterSet expression =
     prettyAlternative (key, Just val) = prettyKeyValue colon (key, val)
     prettyAlternative (key, Nothing ) = duplicate (prettyAnyLabel key)
 
-    prettyUnion :: Pretty a => Map Text (Maybe (Expr s a)) -> Doc Ann
+    prettyUnion :: Pretty a => Map Text (Maybe (Expr Src a)) -> Doc Ann
     prettyUnion =
         angles . map prettyAlternative . Dhall.Map.toList
 
-    prettyChunks :: Pretty a => Chunks s a -> Doc Ann
+    prettyChunks :: Pretty a => Chunks Src a -> Doc Ann
     prettyChunks (Chunks a b) =
         if any (\(builder, _) -> hasNewLine builder) a || hasNewLine b
         then Pretty.flatAlt long short

@@ -16,6 +16,7 @@ module Dhall.TypeCheck (
     -- * Types
     , Typer
     , X
+    , absurd
     , TypeError(..)
     , DetailedTypeError(..)
     , TypeMessage(..)
@@ -23,11 +24,12 @@ module Dhall.TypeCheck (
 
 import Data.Void (Void, absurd)
 import Control.Exception (Exception)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Writer.Strict (execWriterT, tell)
 import Data.Functor (void)
-import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid (Endo(..), First(..))
 import Data.Sequence (Seq, ViewL(..))
-import Data.Semigroup (Semigroup(..))
+import Data.Semigroup (Max(..), Semigroup(..))
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
@@ -150,10 +152,10 @@ typeWithA tpa = loop
                 let nf_A  = Dhall.Core.normalize _A
                 let nf_A' = Dhall.Core.normalize _A'
                 Left (TypeError ctx e (TypeMismatch f nf_A a nf_A'))
-    loop ctx e@(Let (Binding x mA a0 :| ls) b0) = do
+    loop ctx e@(Let (Binding _ x _ mA _ a0) b0) = do
         _A1 <- loop ctx a0
         case mA of
-            Just _A0 -> do
+            Just (_, _A0) -> do
                 _ <- loop ctx _A0
                 let nf_A0 = Dhall.Core.normalize _A0
                 let nf_A1 = Dhall.Core.normalize _A1
@@ -165,11 +167,7 @@ typeWithA tpa = loop
         let a1 = Dhall.Core.normalize a0
         let a2 = Dhall.Core.shift 1 (V x 0) a1
 
-        let rest = case ls of
-                []       -> b0
-                l' : ls' -> Let (l' :| ls') b0
-
-        let b1 = Dhall.Core.subst (V x 0) a2 rest
+        let b1 = Dhall.Core.subst (V x 0) a2 b0
         let b2 = Dhall.Core.shift (-1) (V x 0) b1
         loop ctx b2
 
@@ -456,47 +454,22 @@ typeWithA tpa = loop
                       (Pi "just" (Pi "_" "a" "optional")
                           (Pi "nothing" "optional" "optional") )
     loop ctx e@(Record    kts   ) = do
-        case Dhall.Map.uncons kts of
-            Nothing             -> return (Const Type)
-            Just (k0, t0, rest) -> do
-                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
-                c <- case s0 of
-                    Const c -> pure c
-                    _ -> Left (TypeError ctx e (InvalidFieldType k0 t0))
-                let process k t = do
-                        s <- fmap Dhall.Core.normalize (loop ctx t)
-                        case s of
-                            Const c' ->
-                                if c == c'
-                                then return ()
-                                else Left (TypeError ctx e (FieldAnnotationMismatch k t c k0 t0 c'))
-                            _ -> Left (TypeError ctx e (InvalidFieldType k t))
-                Dhall.Map.unorderedTraverseWithKey_ process rest
-                return (Const c)
+        let process k t = do
+                s <- lift (fmap Dhall.Core.normalize (loop ctx t))
+                case s of
+                    Const c -> tell (Max c)
+                    _ -> lift (Left (TypeError ctx e (InvalidFieldType k t)))
+        Max c <- execWriterT (Dhall.Map.unorderedTraverseWithKey_ process kts)
+        return (Const c)
     loop ctx e@(RecordLit kvs   ) = do
-        case Dhall.Map.uncons kvs of
-            Nothing             -> return (Record mempty)
-            Just (k0, v0, kvs') -> do
-                t0 <- loop ctx v0
-                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
-                c <- case s0 of
-                    Const c -> pure c
-                    _       -> Left (TypeError ctx e (InvalidFieldType k0 v0))
+        let process k v = do
+                t <- fmap Dhall.Core.normalize (loop ctx v)
+                s <- fmap Dhall.Core.normalize (loop ctx t)
+                case s of
+                    Const _ -> return t
+                    _ -> Left (TypeError ctx e (InvalidFieldType k t))
 
-                let process k v = do
-                        t <- loop ctx v
-                        s <- fmap Dhall.Core.normalize (loop ctx t)
-                        case s of
-                            Const c'
-                                | c == c'   -> return ()
-                                | otherwise -> Left (TypeError ctx e (FieldMismatch k v c k0 v0 c'))
-                            _ -> Left (TypeError ctx e (InvalidFieldType k t))
-
-                        return t
-
-                kts <- Dhall.Map.unorderedTraverseWithKey process kvs'
-
-                return (Record (Dhall.Map.insert k0 t0 kts))
+        Record <$> Dhall.Map.unorderedTraverseWithKey process (Dhall.Map.sort kvs)
     loop ctx e@(Union     kts   ) = do
         let nonEmpty k mt = First (fmap (\t -> (k, t)) mt)
 
@@ -545,20 +518,6 @@ typeWithA tpa = loop
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
 
-        ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
-        constX <- case ttKvsX of
-            Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
-
-        ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
-        constY <- case ttKvsY of
-            Const constY -> return constY
-            _            -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
-
-        if constX == constY
-            then return ()
-            else Left (TypeError ctx e (RecordMismatch '∧' kvsX kvsY constX constY))
-
         let combineTypes ktsL ktsR = do
                 let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
                     combine k _ _ = Left (TypeError ctx e (FieldCollision k))
@@ -580,15 +539,7 @@ typeWithA tpa = loop
         cR <- case tR of
             Const cR -> return cR
             _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
-        let decide Type Type =
-                return Type
-            decide Kind Kind =
-                return Kind
-            decide Sort Sort =
-                return Sort
-            decide x y =
-                Left (TypeError ctx e (RecordTypeMismatch x y l r))
-        c <- decide cL cR
+        let c = max cL cR
 
         ktsL0 <- case l' of
             Record kts -> return kts
@@ -619,20 +570,6 @@ typeWithA tpa = loop
         ktsY  <- case tKvsY of
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
-
-        ttKvsX <- fmap Dhall.Core.normalize (loop ctx tKvsX)
-        constX <- case ttKvsX of
-            Const constX -> return constX
-            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
-
-        ttKvsY <- fmap Dhall.Core.normalize (loop ctx tKvsY)
-        constY <- case ttKvsY of
-            Const constY -> return constY
-            _            -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
-
-        if constX == constY
-            then return ()
-            else Left (TypeError ctx e (RecordMismatch '⫽' kvsX kvsY constX constY))
 
         return (Record (Dhall.Map.union ktsY ktsX))
     loop ctx e@(Merge kvsX kvsY mT₁) = do
@@ -728,6 +665,12 @@ typeWithA tpa = loop
         ktsX <- case tKvsX of
             Record kts -> return kts
             _          -> Left (TypeError ctx e (MustMapARecord kvsX tKvsX))
+
+        _TKvsX <- loop ctx tKvsX
+
+        case _TKvsX of
+            Const Type -> return ()
+            kind       -> Left (TypeError ctx e (InvalidToMapRecordKind tKvsX kind))
 
         Data.Foldable.traverse_ (loop ctx) mT₁
 
@@ -895,19 +838,17 @@ data TypeMessage s a
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
     | InvalidFieldType Text (Expr s a)
-    | FieldAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
-    | FieldMismatch Text (Expr s a) Const Text (Expr s a) Const
     | InvalidAlternativeType Text (Expr s a)
     | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
     | MustCombineARecord Char (Expr s a) (Expr s a)
-    | RecordMismatch Char (Expr s a) (Expr s a) Const Const
     | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
     | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
     | FieldCollision Text
     | MustMergeARecord (Expr s a) (Expr s a)
     | MustMergeUnion (Expr s a) (Expr s a)
     | MustMapARecord (Expr s a) (Expr s a)
+    | InvalidToMapRecordKind (Expr s a) (Expr s a)
     | HeterogenousRecordToMap (Expr s a) (Expr s a) (Expr s a)
     | InvalidToMapType (Expr s a)
     | MapTypeMismatch (Expr s a) (Expr s a)
@@ -1374,7 +1315,7 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
   where
     short = "Wrong type of function argument\n"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr1 expr3
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr1 expr3)
 
     long =
         "Explanation: Every function declares what type or kind of argument to accept    \n\
@@ -1508,7 +1449,7 @@ prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
   where
     short = "Expression doesn't match annotation\n"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr1 expr2
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr1 expr2)
     long =
         "Explanation: You can annotate an expression with its type or kind using the     \n\
         \❰:❱ symbol, like this:                                                          \n\
@@ -1791,7 +1732,7 @@ prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
   where
     short = "❰if❱ branches must have matching types\n"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr1 expr3
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr1 expr3)
 
     long =
         "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
@@ -1954,7 +1895,7 @@ prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
   where
     short = "List elements should all have the same type\n"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr0 expr2
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr2)
 
     long =
         "Explanation: Every element in a list must have the same type                    \n\
@@ -1992,7 +1933,7 @@ prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
   where
     short = "List element has the wrong type\n"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr0 expr2
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr2)
 
     long =
         "Explanation: Every element in the list must have a type matching the type       \n\
@@ -2110,122 +2051,6 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
       where
         txt0 = insert k
         txt1 = insert expr0
-
-prettyTypeMessage (FieldAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
-  where
-    short = "Field annotation mismatch"
-
-    long =
-        "Explanation: Every record type annotates each field with a ❰Type❱ or a ❰Kind❱,  \n\
-        \like this:                                                                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────────────────────┐                            \n\
-        \    │ { foo : Natural, bar : Integer, baz : Text } │  Every field is annotated  \n\
-        \    └──────────────────────────────────────────────┘  with a ❰Type❱             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────┐                                              \n\
-        \    │ { foo : Type, bar : Type } │  Every field is annotated                    \n\
-        \    └────────────────────────────┘  with a ❰Kind❱                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, you cannot have a record type with both a ❰Type❱ and ❰Kind❱ annotation:\n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \              This is a ❰Type❱ annotation                                       \n\
-        \              ⇩                                                                 \n\
-        \    ┌───────────────────────────────┐                                           \n\
-        \    │ { foo : Natural, bar : Type } │  Invalid record type                      \n\
-        \    └───────────────────────────────┘                                           \n\
-        \                             ⇧                                                  \n\
-        \                             ... but this is a ❰Kind❱ annotation                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a record type with a field named:                                  \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... annotated with the following expression:                                    \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is a " <> level c1 <> " whereas another field named:                  \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n\
-        \                                                                                \n\
-        \... annotated with the following expression:                                    \n\
-        \                                                                                \n\
-        \" <> txt3 <> "\n\
-        \                                                                                \n\
-        \... is a " <> level c0 <> ", which does not match                               \n"
-      where
-        txt0 = insert k0
-        txt1 = insert expr0
-        txt2 = insert k1
-        txt3 = insert expr1
-
-        level Type = "❰Type❱"
-        level Kind = "❰Kind❱"
-        level Sort = "❰Sort❱"
-
-prettyTypeMessage (FieldMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
-  where
-    short = "Field mismatch"
-
-    long =
-        "Explanation: Every record has fields that can be either terms or types, like    \n\
-        \this:                                                                           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────────────┐                                    \n\
-        \    │ { foo = 1, bar = True, baz = \"ABC\" } │  Every field is a term           \n\
-        \    └──────────────────────────────────────┘                                    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────┐                                           \n\
-        \    │ { foo = Natural, bar = Text } │  Every field is a type                    \n\
-        \    └───────────────────────────────┘                                           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, you cannot have a record that stores both terms and types:             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \              This is a term                                                    \n\
-        \              ⇩                                                                 \n\
-        \    ┌─────────────────────────┐                                                 \n\
-        \    │ { foo = 1, bar = Bool } │  Invalid record                                 \n\
-        \    └─────────────────────────┘                                                 \n\
-        \                       ⇧                                                        \n\
-        \                       ... but this is a type                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a record with a field named:                                       \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... whose value was:                                                            \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is a " <> level c1 <> " whereas another field named:                  \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n\
-        \                                                                                \n\
-        \... whose value was:                                                            \n\
-        \                                                                                \n\
-        \" <> txt3 <> "\n\
-        \                                                                                \n\
-        \... is a " <> level c0 <> ", which does not match                               \n"
-      where
-        txt0 = insert k0
-        txt1 = insert expr0
-        txt2 = insert k1
-        txt3 = insert expr1
-
-        level Type = "term"
-        level Kind = "type"
-        level Sort = "kind"
 
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
@@ -2350,7 +2175,7 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
   where
     short = "You can only append ❰List❱s with matching element types\n"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr0 expr1
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr1)
 
     long =
         "Explanation: You can append two ❰List❱s using the ❰#❱ operator, like this:      \n\
@@ -2444,62 +2269,6 @@ prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
         op   = pretty c
         txt0 = insert expr0
         txt1 = insert expr1
-
-prettyTypeMessage (RecordMismatch c expr0 expr1 const0 const1) = ErrorMessages {..}
-  where
-    short = "Record mismatch"
-
-    long =
-        "Explanation: You can only use the ❰" <> op <> "❱ operator to combine records if they both  \n\
-        \store terms or both store types.                                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────┐                                            \n\
-        \    │ { foo = 1 } " <> op <> " { baz = True } │  Valid: Both records store terms           \n\
-        \    └──────────────────────────────┘                                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────┐                                         \n\
-        \    │ { foo = Bool } " <> op <> " { bar = Text } │  Valid: Both records store types        \n\
-        \    └─────────────────────────────────┘                                         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you cannot combine two records if one of the records stores types and   \n\
-        \the other record stores terms.                                                  \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \      Record of terms                                                           \n\
-        \      ⇩                                                                         \n\
-        \    ┌──────────────────────────────┐                                            \n\
-        \    │ { foo = 1 } " <> op <> " { bar = Text } │  Invalid: Mixing terms and types           \n\
-        \    └──────────────────────────────┘                                            \n\
-        \                               ⇧                                                \n\
-        \                               Record of types                                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You tried to combine the following record:                                      \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... which stores " <> class0 <> ", with the following record:                   \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which stores " <> class1 <> ".                                              \n"
-      where
-        op   = pretty c
-
-        txt0 = insert expr0
-        txt1 = insert expr1
-
-        toClass Type = "terms"
-        toClass Kind = "types"
-        toClass Sort = "kinds"
-
-        class0 = toClass const0
-        class1 = toClass const1
 
 prettyTypeMessage (CombineTypesRequiresRecordType expr0 expr1) =
     ErrorMessages {..}
@@ -2878,7 +2647,7 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
   where
     short = "Wrong handler input type\n"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr1 expr2
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr1 expr2)
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -2940,7 +2709,7 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
   where
     short = "Wrong handler output type\n"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr1 expr2
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr1 expr2)
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -3004,7 +2773,7 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
   where
     short = "Handlers should have the same output type\n"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr0 expr1
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr1)
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -3106,12 +2875,38 @@ prettyTypeMessage (MustMapARecord _expr0 _expr1) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ let record = { one = 1, two = 2 }                                   │     \n\
         \    │ in  toMap record : List { mapKey : Text, mapValue : Natural}        │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
         \                                                                                \n\
         \... but the argument to ❰toMap❱ must be a record and not some other type.       \n"
+
+prettyTypeMessage (InvalidToMapRecordKind type_ kind) = ErrorMessages {..}
+  where
+    short = "❰toMap❱ expects a record of kind ❰Type❱"
+
+    long =
+        "Explanation: You can apply ❰toMap❱ to any homogenous record of kind ❰Type❱, like\n\
+        \ this:                                                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
+        \    │ let record = { one = 1, two = 2 }                                   │     \n\
+        \    │ in  toMap record : List { mapKey : Text, mapValue : Natural}        │     \n\
+        \    └─────────────────────────────────────────────────────────────────────┘     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but records of kind ❰Kind❱ or ❰Sort❱ cannot be turned into ❰List❱s.         \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You applied ❰toMap❱ to a record of the following type:                          \n\
+        \                                                                                \n\
+        \" <> insert type_ <> "\n\
+        \                                                                                \n\
+        \... which has kind                                                              \n\
+        \                                                                                \n\
+        \" <> insert kind <> "\n"
 
 prettyTypeMessage (HeterogenousRecordToMap _expr0 _expr1 _expr2) = ErrorMessages {..}
   where
@@ -3122,7 +2917,7 @@ prettyTypeMessage (HeterogenousRecordToMap _expr0 _expr1 _expr2) = ErrorMessages
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ let record = { one = 1, two = 2 }                                   │     \n\
         \    │ in  toMap record : List { mapKey : Text, mapValue : Natural}        │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
@@ -3142,7 +2937,7 @@ prettyTypeMessage (MapTypeMismatch expr0 expr1) = ErrorMessages {..}
   where
     short = "❰toMap❱ result type doesn't match annotation"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr0 expr1
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr1)
 
     long =
         "Explanation: a ❰toMap❱ application has been annotated with a type that doesn't  \n\
@@ -3178,7 +2973,7 @@ prettyTypeMessage MissingToMapType =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────┐     \n\
-        \    │     let record = { one = 1, two = 2 }                               │     \n\
+        \    │ let record = { one = 1, two = 2 }                                   │     \n\
         \    │ in  toMap record                                                    │     \n\
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
@@ -3453,7 +3248,7 @@ prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1 expr2 expr3) = ErrorMess
   where
     short = "Projection type mismatch\n"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr2 expr3
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr2 expr3)
 
     long =
         "Explanation: You can project a subset of fields from a record by specifying the \n\
@@ -3500,7 +3295,7 @@ prettyTypeMessage (AssertionFailed expr0 expr1) = ErrorMessages {..}
   where
     short = "Assertion failed\n"
         <>  "\n"
-        <>  Dhall.Diff.diffNormalized expr0 expr1
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr1)
 
     long =
         "Explanation: You can assert at type-checking time that two terms are equal if   \n\

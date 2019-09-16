@@ -188,7 +188,8 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
-import Dhall.Core (Expr)
+import Dhall.Core (Binding(..), Expr)
+import Dhall.Import (SemanticCacheMode(..))
 import Dhall.TypeCheck (X)
 import Dhall.Map (Map)
 import Dhall.JSON.Util (pattern V)
@@ -649,17 +650,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             a' = loop a
             b' = loop b
 
-        Core.Let as b ->
-            Core.Let as' b'
+        Core.Let (Binding src0 a src1 b src2 c) d ->
+            Core.Let (Binding src0 a src1 b' src2 c') d'
           where
-            f (Core.Binding x y z) = Core.Binding x y' z'
-              where
-                y' = fmap loop y
-                z' =      loop z
-
-            as' = fmap f as
-
-            b' = loop b
+            b' = fmap (fmap loop) b
+            c' =            loop  c
+            d' =            loop  d
 
         Core.Annot a b ->
             Core.Annot a' b'
@@ -1065,7 +1061,7 @@ codeToValue conversion specialDoubleMode mFilePath code = do
             Nothing -> "."
             Just fp -> System.FilePath.takeDirectory fp
 
-    resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory parsedExpression
+    resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory UseSemanticCache parsedExpression
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 

@@ -6,14 +6,16 @@ module Dhall.LSP.Backend.Linting
 where
 
 import Dhall.Parser (Src)
-import Dhall.Core (Expr(..), Binding(..), Var(..), subExpressions, freeIn, Import)
+import Dhall.Core ( Expr(..), Binding(..), MultiLet(..), Import
+                  , subExpressions, multiLet, wrapInLets)
 import qualified Dhall.Lint as Dhall
 
 import Dhall.LSP.Backend.Diagnostics
 
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.Maybe (maybeToList)
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Data.List.NonEmpty (NonEmpty(..), tails, toList)
 import Control.Lens (universeOf)
 
 data Suggestion = Suggestion {
@@ -21,31 +23,35 @@ data Suggestion = Suggestion {
     suggestion :: Text
     }
 
--- Diagnose nested let blocks.
-diagLetInLet :: Expr Src a -> [Suggestion]
-diagLetInLet (Note _ (Let _ (Note src (Let _ _)))) =
-  [Suggestion (rangeFromDhall src) "Superfluous 'in' before nested let binding"]
-diagLetInLet _ = []
+-- Diagnose nested let-blocks.
+--
+-- Pattern matching on a 'Let' wrapped in a 'Note' prevents us from repeating
+-- the search beginning at different @let@s in the same let-block – only
+-- the outermost 'Let' of a let-block is wrapped in a 'Note'.
+diagLetInLet :: Expr Src a -> Maybe Suggestion
+diagLetInLet (Note _ (Let b e)) = case multiLet b e of
+    MultiLet _ (Note src (Let {})) ->
+      Just (Suggestion (rangeFromDhall src) "Superfluous 'in' before nested let binding")
+    _ -> Nothing
+diagLetInLet _ = Nothing
 
--- Given a (noted) let block compute all unused variables in the block.
-unusedBindings :: Eq a => Expr s a -> [Text]
-unusedBindings (Note _ (Let bindings d)) =
-  let go (Binding var _ _ : []) | not (V var 0 `freeIn` d) = [var]
-      go (Binding var _ _ : (b : bs)) | not (V var 0 `freeIn` Let (b :| bs) d) = [var]
+-- Given a let-block compute all unused variables in the block.
+unusedBindings :: Eq a => MultiLet s a -> [Text]
+unusedBindings (MultiLet bindings d) =
+  let go bs@(Binding { variable = var} : _) | Just _ <- Dhall.removeUnusedBindings (wrapInLets bs d) = [var]
       go _ = []
-  in concatMap go (toList $ tails bindings)
-unusedBindings _ = []
+  in foldMap go (NonEmpty.tails bindings)
 
 -- Diagnose unused let bindings.
-diagUnusedBinding :: Eq a => Expr Src a -> [Suggestion]
-diagUnusedBinding e@(Note src (Let _ _)) = map
+diagUnusedBindings :: Eq a => Expr Src a -> [Suggestion]
+diagUnusedBindings (Note src (Let b e)) = map
   (\var ->
     Suggestion (rangeFromDhall src) ("Unused let binding '" <> var <> "'"))
-  (unusedBindings e)
-diagUnusedBinding _ = []
+  (unusedBindings (multiLet b e))
+diagUnusedBindings _ = []
 
 -- | Given an dhall expression suggest all the possible improvements that would
 --   be made by the linter.
 suggest :: Expr Src Import -> [Suggestion]
-suggest expr = concat [ diagLetInLet e ++ diagUnusedBinding e
+suggest expr = concat [ maybeToList (diagLetInLet e) ++ diagUnusedBindings e
                       | e <- universeOf subExpressions expr ]
