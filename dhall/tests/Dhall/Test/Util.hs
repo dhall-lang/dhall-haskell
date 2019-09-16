@@ -29,7 +29,7 @@ import Dhall.Core (Expr, Normalizer, ReifiedNormalizer(..), Import)
 import Dhall.Import (Status(..), SemanticCacheMode(..))
 import Data.Monoid((<>))
 import Dhall.Parser (Src)
-import Dhall.TypeCheck (X)
+import Dhall.TypeCheck (DetailedTypeError(..), X)
 import Prelude hiding (FilePath)
 import Test.Tasty.HUnit
 import Test.Tasty (TestTree)
@@ -74,10 +74,10 @@ codeWith :: Context (Expr Src X) -> Text -> IO (Expr Src X)
 codeWith ctx expr = do
     expr0 <- case Dhall.Parser.exprFromText mempty expr of
         Left parseError -> Control.Exception.throwIO parseError
-        Right expr0     -> return expr0
+        Right expr0     -> return (Dhall.Core.denote expr0)
     expr1 <- load expr0
     case Dhall.TypeCheck.typeWith ctx expr1 of
-        Left typeError -> Control.Exception.throwIO typeError
+        Left typeError -> Control.Exception.throwIO (DetailedTypeError typeError)
         Right _        -> return ()
     return expr1
 

@@ -138,7 +138,7 @@ typeWithA tpa = loop
 
         return (Const (rule kA kB))
     loop ctx e@(App f a         ) = do
-        tf <- fmap Dhall.Core.normalize (loop ctx f) -- checked via customization/doubleReduction
+        tf <- loop ctx f
         (x, _A, _B) <- case tf of
             Pi x _A _B -> return (x, _A, _B)
             _          -> Left (TypeError ctx e (NotAFunction f tf))

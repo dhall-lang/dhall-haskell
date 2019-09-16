@@ -22,9 +22,6 @@ import qualified System.Timeout
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
-import Dhall.Import (Imported, MissingImports(..))
-import Dhall.Parser (Src, SourcedException(..))
-import Dhall.TypeCheck (TypeError, X)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit ((@?=))
 
@@ -93,19 +90,8 @@ issue126 = Test.Tasty.HUnit.testCase "Issue #126" (do
 issue151 :: TestTree
 issue151 = Test.Tasty.HUnit.testCase "Issue #151" (do
     let shouldNotTypeCheck text = do
-            let handler :: SourcedException MissingImports -> IO Bool
-                handler (SourcedException _ (MissingImports [e])) =
-                    case Control.Exception.fromException e :: Maybe (Imported (TypeError Src X)) of
-                        Just _ -> return True
-                        Nothing -> return False
-                handler _ = do
-                    return True
-
-            let typeCheck = do
-                    _ <- Util.code text
-                    return False
-            b <- Control.Exception.handle handler typeCheck
-            Test.Tasty.HUnit.assertBool "The expression should not type-check" b
+            source <- Data.Text.IO.readFile text
+            Util.assertDoesntTypeCheck source
 
     -- These two examples contain the following expression that loops infinitely
     -- if you normalize the expression before type-checking the expression:
