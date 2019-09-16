@@ -662,6 +662,7 @@ typeWithA tpa = loop
         return _T₁
 
     loop ctx e@(ToMap kvsX mT₁) = do
+        -- TODO: Refactor the variable naming – it's way too confusing
         tKvsX <- loop ctx kvsX
 
         ktsX <- case tKvsX of
@@ -690,12 +691,12 @@ typeWithA tpa = loop
             (Nothing, Nothing) -> Left (TypeError ctx e MissingToMapType)
             (Just err@Left{}, _) -> err
             (Just (Right t), Nothing) -> pure (mapType t)
-            (Nothing, Just t@(App List (Record mapItemType)))
+            (Nothing, Just t@(App List (Record mapItemType))) -- TODO: pattern match directly
                | Just fieldType <- Dhall.Map.lookup "mapValue" mapItemType,
                  Dhall.Core.judgmentallyEqual t (mapType fieldType) -> pure t
             (Nothing, Just t) -> Left (TypeError ctx e $ InvalidToMapType t)
             (Just (Right t₁), Just t₂)
-               | Dhall.Core.judgmentallyEqual (mapType t₁) t₂ -> pure t₂
+               | Dhall.Core.judgmentallyEqual (mapType t₁) t₂ -> pure (mapType t₁)
                | otherwise -> Left (TypeError ctx e $ MapTypeMismatch (mapType t₁) t₂)
     loop ctx e@(Field r x       ) = do
         t <- loop ctx r
