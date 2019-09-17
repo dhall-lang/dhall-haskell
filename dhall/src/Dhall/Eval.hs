@@ -342,19 +342,26 @@ vField t0 k = go t0
 
 vProjectByFields :: Eq a => Environment a -> Val a -> Set Text -> Val a
 vProjectByFields env t ks =
-  if null ks then
-    VRecordLit mempty
-  else case t of
-    VRecordLit kvs -> let
-      kvs' = Map.restrictKeys kvs (Dhall.Set.toSet ks)
-      in VRecordLit kvs'
-    VProject t' _ -> vProjectByFields env t' ks
-    VPrefer l (VRecordLit kvs) -> let
-      ksSet = Dhall.Set.toSet ks
-      kvs' = Map.restrictKeys kvs ksSet
-      ks' = Dhall.Set.fromSet (Data.Set.difference ksSet (Map.keysSet kvs'))
-      in vPrefer env (vProjectByFields env l ks') (VRecordLit kvs')
-    t' -> VProject t' (Left ks)
+    if null ks
+        then VRecordLit mempty
+        else case t of
+            VRecordLit kvs ->
+                let kvs' = Map.restrictKeys kvs (Dhall.Set.toSet ks)
+                in  VRecordLit kvs'
+            VProject t' _ ->
+                vProjectByFields env t' ks
+            VPrefer l (VRecordLit kvs) ->
+                let ksSet = Dhall.Set.toSet ks
+
+                    kvs' = Map.restrictKeys kvs ksSet
+
+                    ks' =
+                        Dhall.Set.fromSet
+                            (Data.Set.difference ksSet (Map.keysSet kvs'))
+
+                in  vPrefer env (vProjectByFields env l ks') (VRecordLit kvs')
+            t' ->
+                VProject t' (Left ks)
 
 eval :: forall a. Eq a => Environment a -> Expr Void a -> Val a
 eval !env t0 =
