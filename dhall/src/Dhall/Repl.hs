@@ -155,10 +155,7 @@ typeOf srcs = do
   exprType <-
     typeCheck loaded
 
-  exprType' <-
-    normalize exprType
-
-  output exprType'
+  output exprType
 
 
 applyContext
