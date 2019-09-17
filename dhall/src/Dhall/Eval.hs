@@ -63,7 +63,7 @@ import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Codec.Serialise as Serialise
 import qualified Data.Sequence   as Sequence
-import qualified Data.Set        as Set
+import qualified Data.Set
 import qualified Data.Text       as Text
 import qualified Dhall.Binary    as Binary
 import qualified Dhall.Core      as Core
@@ -356,7 +356,7 @@ vProjectByFields env t ks =
     VPrefer l r@(VRecordLit kvs) -> let
       ksSet = Dhall.Set.toSet ks
       kvs' = Map.restrictKeys kvs ksSet
-      ks' = Dhall.Set.fromSet (Set.difference ksSet (Map.keysSet kvs'))
+      ks' = Dhall.Set.fromSet (Data.Set.difference ksSet (Map.keysSet kvs'))
       in vPrefer env (vProjectByFields env l ks') (VRecordLit kvs')
     t -> VProject t (Left ks)
 
