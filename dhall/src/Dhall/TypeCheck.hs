@@ -145,8 +145,11 @@ typeWithA tpa = loop
         _A' <- loop ctx a
         if Dhall.Core.judgmentallyEqual _A _A'
             then do
-                let a'   = Dhall.Core.shift   1  (V x 0) (Dhall.Core.normalize a) -- TODO: Add test
-                let _B'  = Dhall.Core.subst (V x 0) a' _B
+                let a' = case _A' of
+                        Const _ -> Dhall.Core.normalize a
+                        _       -> a
+                let a''   = Dhall.Core.shift   1  (V x 0) a'
+                let _B'  = Dhall.Core.subst (V x 0) a'' _B
                 let _B'' = Dhall.Core.shift (-1) (V x 0) _B'
                 return _B''
             else do
