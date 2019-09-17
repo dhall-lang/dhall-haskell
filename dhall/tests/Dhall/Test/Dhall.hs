@@ -161,7 +161,12 @@ data NonEmptyUnion = N0 Bool | N1 Natural | N2 Text
 data Enum = E0 | E1 | E2
     deriving (Eq, Generic, Inject, Interpret, Show)
 
-data Records = R0 {} | R1 { a :: () } | R2 { x :: Double } | R3 { a :: (), b :: () } | R4 { x :: Double, y :: Double }
+data Records
+    = R0 {}
+    | R1 { a :: () }
+    | R2 { x :: Double }
+    | R3 { a :: (), b :: () }
+    | R4 { x :: Double, y :: Double }
     deriving (Eq, Generic, Inject, Interpret, Show)
 
 data Products = P0 | P1 () | P2 Double | P3 () () | P4 Double Double
@@ -172,82 +177,156 @@ deriving instance Interpret ()
 shouldHandleUnionsCorrectly :: TestTree
 shouldHandleUnionsCorrectly =
   testGroup "Handle union literals"
-    [ "λ(x : < N0 : Bool | N1 : Natural | N2 : Text >) → x"
+    [ "λ(x : < N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >) → x"
         `shouldPassThrough` [ N0 True, N1 5, N2 "ABC" ]
     , "λ(x : < E0 | E1 | E2 >) → x"
         `shouldPassThrough` [ E0, E1, E2 ]
-    , "λ(x : < R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >) → x"
+    , "λ(x : < R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >) → x"
         `shouldPassThrough` [ R0 {}, R1 { a = () }, R2 { x = 1.0 }, R3 { a = (), b = () }, R4 { x = 1.0, y = 2.0 } ]
-    , "λ(x : < P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >) → x"
+    , "λ(x : < P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >) → x"
         `shouldPassThrough` [ P0 , P1 (), P2 1.0, P3 () (), P4 1.0 2.0 ]
 
-    , "(< N0 : Bool | N1 : Natural | N2 : Text >).N0 True"
+    , "λ(x : < N0 : Bool | N1 : Natural | N2 : Text >) → x"
+        `shouldPassThroughCollapse` [ N0 True, N1 5, N2 "ABC" ]
+    , "λ(x : < R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >) → x"
+        `shouldPassThroughCollapse` [ R0 {}, R1 { a = () }, R2 { x = 1.0 }, R3 { a = (), b = () }, R4 { x = 1.0, y = 2.0 } ]
+    , "λ(x : < P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >) → x"
+        `shouldPassThroughCollapse` [ P0 , P1 (), P2 1.0, P3 () (), P4 1.0 2.0 ]
+
+    , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N0 { _1 = True }"
         `shouldMarshalInto` N0 True
-    , "(< N0 : Bool | N1 : Natural | N2 : Text >).N1 5"
+    , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N1 { _1 = 5 }"
         `shouldMarshalInto` N1 5
-    , "(< N0 : Bool | N1 : Natural | N2 : Text >).N2 \"ABC\""
+    , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N2 { _1 = \"ABC\" }"
+
         `shouldMarshalInto` N2 "ABC"
+
+    , "(< N0 : Bool | N1 : Natural | N2 : Text >).N0 True"
+        `shouldMarshalIntoCollapse` N0 True
+    , "(< N0 : Bool | N1 : Natural | N2 : Text >).N1 5"
+        `shouldMarshalIntoCollapse` N1 5
+    , "(< N0 : Bool | N1 : Natural | N2 : Text >).N2 \"ABC\""
+        `shouldMarshalIntoCollapse` N2 "ABC"
 
     , "(< E0 | E1 | E2>).E0" `shouldMarshalInto` E0
     , "(< E0 | E1 | E2>).E1" `shouldMarshalInto` E1
     , "(< E0 | E1 | E2>).E2" `shouldMarshalInto` E2
 
-    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
+    , "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
         `shouldMarshalInto` R0
-    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1"
+    , "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1 { a = {=} }"
         `shouldMarshalInto` R1 { a = () }
-    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 1.0"
+    , "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 { x = 1.0 }"
         `shouldMarshalInto` R2 { x = 1.0 }
-    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
+    , "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
         `shouldMarshalInto` R3 { a = (), b = () }
-    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
+    , "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
         `shouldMarshalInto` R4 { x = 1.0, y = 2.0 }
 
-    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
+    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
+        `shouldMarshalIntoCollapse` R0
+    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1"
+        `shouldMarshalIntoCollapse` R1 { a = () }
+    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 1.0"
+        `shouldMarshalIntoCollapse` R2 { x = 1.0 }
+    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
+        `shouldMarshalIntoCollapse` R3 { a = (), b = () }
+    , "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
+        `shouldMarshalIntoCollapse` R4 { x = 1.0, y = 2.0 }
+
+    , "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
         `shouldMarshalInto` P0
-    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1"
+    , "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1 { _1 = {=} }"
         `shouldMarshalInto` P1 ()
-    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 1.0"
+    , "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 { _1 = 1.0 }"
         `shouldMarshalInto` P2 1.0
-    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
+    , "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
         `shouldMarshalInto` P3 () ()
-    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
+    , "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
         `shouldMarshalInto` P4 1.0 2.0
+
+    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
+        `shouldMarshalIntoCollapse` P0
+    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1"
+        `shouldMarshalIntoCollapse` P1 ()
+    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 1.0"
+        `shouldMarshalIntoCollapse` P2 1.0
+    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
+        `shouldMarshalIntoCollapse` P3 () ()
+    , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
+        `shouldMarshalIntoCollapse` P4 1.0 2.0
 
     , N0 True
         `shouldInjectInto`
-        "(< N0 : Bool | N1 : Natural | N2 : Text >).N0 True"
+        "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N0 { _1 = True }"
     , N1 5
         `shouldInjectInto`
-        "(< N0 : Bool | N1 : Natural | N2 : Text >).N1 5"
+        "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N1 { _1 = 5 }"
     , N2 "ABC"
         `shouldInjectInto`
+        "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N2 { _1 = \"ABC\" }"
+
+    , N0 True
+        `shouldInjectIntoCollapse`
+        "(< N0 : Bool | N1 : Natural | N2 : Text >).N0 True"
+    , N1 5
+        `shouldInjectIntoCollapse`
+        "(< N0 : Bool | N1 : Natural | N2 : Text >).N1 5"
+    , N2 "ABC"
+        `shouldInjectIntoCollapse`
         "(< N0 : Bool | N1 : Natural | N2 : Text >).N2 \"ABC\""
 
     , E0 `shouldInjectInto` "< E0 | E1 | E2 >.E0"
     , E1 `shouldInjectInto` "< E0 | E1 | E2 >.E1"
     , E2 `shouldInjectInto` "< E0 | E1 | E2 >.E2"
 
-    , R0 `shouldInjectInto` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
-    , R1 { a = () } `shouldInjectInto` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1"
-    , R2 { x = 1.0 } `shouldInjectInto` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 1.0"
-    , R3 { a = (), b = () } `shouldInjectInto` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
-    , R4 { x = 1.0, y = 2.0 } `shouldInjectInto` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
+    , R0 `shouldInjectInto` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
+    , R1 { a = () } `shouldInjectInto` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1 { a = {=} }"
+    , R2 { x = 1.0 } `shouldInjectInto` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 { x = 1.0}"
+    , R3 { a = (), b = () } `shouldInjectInto` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
+    , R4 { x = 1.0, y = 2.0 } `shouldInjectInto` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
 
-    , P0 `shouldInjectInto` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
-    , P1 () `shouldInjectInto` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1"
-    , P2 1.0 `shouldInjectInto` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 1.0"
-    , P3 () () `shouldInjectInto` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
-    , P4 1.0 2.0 `shouldInjectInto` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
+    , R0 `shouldInjectIntoCollapse` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
+    , R1 { a = () } `shouldInjectIntoCollapse` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1"
+    , R2 { x = 1.0 } `shouldInjectIntoCollapse` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 1.0"
+    , R3 { a = (), b = () } `shouldInjectIntoCollapse` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
+    , R4 { x = 1.0, y = 2.0 } `shouldInjectIntoCollapse` "< R0 | R1 | R2 : Double | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
+
+    , P0 `shouldInjectInto` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
+    , P1 () `shouldInjectInto` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1 { _1 = {=} }"
+    , P2 1.0 `shouldInjectInto` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 { _1 = 1.0 }"
+    , P3 () () `shouldInjectInto` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
+    , P4 1.0 2.0 `shouldInjectInto` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
+
+    , P0 `shouldInjectIntoCollapse` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
+    , P1 () `shouldInjectIntoCollapse` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1"
+    , P2 1.0 `shouldInjectIntoCollapse` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 1.0"
+    , P3 () () `shouldInjectIntoCollapse` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
+    , P4 1.0 2.0 `shouldInjectIntoCollapse` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
     ]
   where
+    collapseOptions =
+        Dhall.defaultInterpretOptions
+            { Dhall.collapseSingletonRecords = True }
+
     code `shouldPassThrough` values = testCase "Pass through" $ do
         f <- Dhall.input Dhall.auto code
 
         values @=? map f values
 
+    code `shouldPassThroughCollapse` values = testCase "Pass through" $ do
+        f <- Dhall.input (Dhall.autoWith collapseOptions) code
+
+        values @=? map f values
+
     code `shouldMarshalInto` expectedValue = testCase "Marshal" $ do
         actualValue <- Dhall.input Dhall.auto code
+
+        expectedValue @=? actualValue
+
+    code `shouldMarshalIntoCollapse` expectedValue = testCase "Marshal" $ do
+        actualValue <- Dhall.input (Dhall.autoWith collapseOptions) code
+
         expectedValue @=? actualValue
 
     value `shouldInjectInto` expectedCode = testCase "Inject" $ do
@@ -256,6 +335,13 @@ shouldHandleUnionsCorrectly =
         resolvedExpression <- Dhall.Import.assertNoImports parsedExpression
 
         Dhall.Core.denote resolvedExpression @=? Dhall.embed Dhall.inject value
+
+    value `shouldInjectIntoCollapse` expectedCode = testCase "Inject" $ do
+        parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText "(test)" expectedCode)
+
+        resolvedExpression <- Dhall.Import.assertNoImports parsedExpression
+
+        Dhall.Core.denote resolvedExpression @=? Dhall.embed (Dhall.injectWith collapseOptions) value
 
 shouldConvertDhallToHaskellCorrectly :: TestTree
 shouldConvertDhallToHaskellCorrectly =
