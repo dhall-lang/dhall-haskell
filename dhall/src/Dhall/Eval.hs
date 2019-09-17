@@ -941,8 +941,8 @@ quote !env !t0 =
     case t0 of
         VConst k ->
             Const k
-        VVar x i ->
-            qVar x i
+        VVar !x !i ->
+            Var (V x (fromIntegral (countNames x env - i - 1)))
         VApp t u ->
             quote env t `qApp` u
         VLam a (freshClosure -> (x, v, t)) ->
@@ -1090,10 +1090,6 @@ quote !env !t0 =
     freshClosure :: Closure a -> (Text, Val a, Closure a)
     freshClosure closure@(Closure x _ _) = (x, snd (fresh x), closure)
     {-# INLINE freshClosure #-}
-
-    qVar :: Text -> Int -> Expr Void a
-    qVar !x !i = Var (V x (fromIntegral (countNames x env - i - 1)))
-    {-# INLINE qVar #-}
 
     quoteBind :: Text -> Val a -> Expr Void a
     quoteBind x = quote (Bind env x)
