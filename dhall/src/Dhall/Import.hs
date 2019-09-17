@@ -750,7 +750,7 @@ getCacheFile
 getCacheFile cacheName hash = do
     cacheDirectory <- getOrCreateCacheDirectory cacheName
 
-    let cacheFile = (cacheDirectory </> cacheName) </> ("1220" <> show hash)
+    let cacheFile = cacheDirectory </> ("1220" <> show hash)
 
     return cacheFile
 
