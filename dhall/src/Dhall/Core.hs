@@ -75,10 +75,6 @@ module Dhall.Core (
     , textShow
     ) where
 
-#if MIN_VERSION_base(4,8,0)
-#else
-import Control.Applicative (Applicative(..), (<$>))
-#endif
 import Control.Applicative (empty)
 import Control.DeepSeq (NFData)
 import Control.Exception (Exception)

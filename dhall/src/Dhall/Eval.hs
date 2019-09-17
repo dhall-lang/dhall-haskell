@@ -36,11 +36,6 @@ module Dhall.Eval (
   , alphaNormalize
   ) where
 
-#if MIN_VERSION_base(4,8,0)
-#else
-import Control.Applicative (Applicative(..))
-#endif
-
 import Data.Foldable (foldr', toList)
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
