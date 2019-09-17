@@ -369,22 +369,22 @@ eval !env t0 =
         Var v ->
             vVar env v
         Lam x a t ->
-            VLam (evalE a) (Closure x env t)
+            VLam (eval env a) (Closure x env t)
         Pi x a b ->
-            VPi (evalE a) (Closure x env b)
+            VPi (eval env a) (Closure x env b)
         App t u ->
-            vApp (evalE t) (evalE u)
+            vApp (eval env t) (eval env u)
         Let (Binding _ x _ _mA _ a) b ->
-            let !env' = Extend env x (evalE a)
+            let !env' = Extend env x (eval env a)
             in  eval env' b
         Annot t _ ->
-            evalE t
+            eval env t
         Bool ->
             VBool
         BoolLit b ->
             VBoolLit b
         BoolAnd t u ->
-            case (evalE t, evalE u) of
+            case (eval env t, eval env u) of
                 (VBoolLit True, u')       -> u'
                 (VBoolLit False, _)       -> VBoolLit False
                 (t', VBoolLit True)       -> t'
@@ -392,7 +392,7 @@ eval !env t0 =
                 (t', u') | conv env t' u' -> t'
                 (t', u')                  -> VBoolAnd t' u'
         BoolOr t u ->
-            case (evalE t, evalE u) of
+            case (eval env t, eval env u) of
                 (VBoolLit False, u')      -> u'
                 (VBoolLit True, _)        -> VBoolLit True
                 (t', VBoolLit False)      -> t'
@@ -400,19 +400,19 @@ eval !env t0 =
                 (t', u') | conv env t' u' -> t'
                 (t', u')                  -> VBoolOr t' u'
         BoolEQ t u ->
-            case (evalE t, evalE u) of
+            case (eval env t, eval env u) of
                 (VBoolLit True, u')       -> u'
                 (t', VBoolLit True)       -> t'
                 (t', u') | conv env t' u' -> VBoolLit True
                 (t', u')                  -> VBoolEQ t' u'
         BoolNE t u ->
-            case (evalE t, evalE u) of
+            case (eval env t, eval env u) of
                 (VBoolLit False, u')      -> u'
                 (t', VBoolLit False)      -> t'
                 (t', u') | conv env t' u' -> VBoolLit False
                 (t', u')                  -> VBoolNE t' u'
         BoolIf b t f ->
-            case (evalE b, evalE t, evalE f) of
+            case (eval env b, eval env t, eval env f) of
                 (VBoolLit True,  t', _ )            -> t'
                 (VBoolLit False, _ , f')            -> f'
                 (b', VBoolLit True, VBoolLit False) -> b'
@@ -477,9 +477,9 @@ eval !env t0 =
                     y | conv env x y -> VNaturalLit 0
                     y                -> VNaturalSubtract x y
         NaturalPlus t u ->
-            vNaturalPlus (evalE t) (evalE u)
+            vNaturalPlus (eval env t) (eval env u)
         NaturalTimes t u ->
-            case (evalE t, evalE u) of
+            case (eval env t, eval env u) of
                 (VNaturalLit 1, u'           ) -> u'
                 (t'           , VNaturalLit 1) -> t'
                 (VNaturalLit 0, _            ) -> VNaturalLit 0
@@ -517,7 +517,7 @@ eval !env t0 =
                 VChunks [("", t)] "" -> t
                 vcs                  -> VTextLit vcs
         TextAppend t u ->
-            evalE (TextLit (Chunks [("", t), ("", u)] ""))
+            eval env (TextLit (Chunks [("", t), ("", u)] ""))
         TextShow ->
             VPrim $ \case
                 VTextLit (VChunks [] x) -> VTextLit (VChunks [] (Core.textShow x))
@@ -525,9 +525,9 @@ eval !env t0 =
         List ->
             VPrim VList
         ListLit ma ts ->
-            VListLit (fmap evalE ma) (fmap evalE ts)
+            VListLit (fmap (eval env) ma) (fmap (eval env) ts)
         ListAppend t u ->
-            vListAppend (evalE t) (evalE u)
+            vListAppend (eval env t) (eval env u)
         ListBuild ->
             VPrim $ \a ->
             VPrim $ \case
@@ -613,7 +613,7 @@ eval !env t0 =
         Optional ->
             VPrim VOptional
         Some t ->
-            VSome (evalE t)
+            VSome (eval env t)
         None ->
             VPrim $ \ ~a -> VNone a
         OptionalFold ->
@@ -644,25 +644,25 @@ eval !env t0 =
                     `vApp` VHLam (Typed "a" a) VSome
                     `vApp` VNone a
         Record kts ->
-            VRecord (Map.sort (fmap evalE kts))
+            VRecord (Map.sort (fmap (eval env) kts))
         RecordLit kts ->
-            VRecordLit (Map.sort (fmap evalE kts))
+            VRecordLit (Map.sort (fmap (eval env) kts))
         Union kts ->
-            VUnion (Map.sort (fmap (fmap evalE) kts))
+            VUnion (Map.sort (fmap (fmap (eval env)) kts))
         Combine t u ->
-            vCombine (evalE t) (evalE u)
+            vCombine (eval env t) (eval env u)
         CombineTypes t u ->
-            vCombineTypes (evalE t) (evalE u)
+            vCombineTypes (eval env t) (eval env u)
         Prefer t u ->
-            vPrefer env (evalE t) (evalE u)
+            vPrefer env (eval env t) (eval env u)
         Merge x y ma ->
-            case (evalE x, evalE y, fmap evalE ma) of
+            case (eval env x, eval env y, fmap (eval env) ma) of
                 (VRecordLit m, VInject _ k mt, _)
                     | Just f <- Map.lookup k m -> maybe f (vApp f) mt
                     | otherwise                -> error errorMsg
                 (x', y', ma') -> VMerge x' y' ma'
         ToMap x ma ->
-            case (evalE x, fmap evalE ma) of
+            case (eval env x, fmap (eval env) ma) of
                 (VRecordLit m, ma'@(Just _)) | null m ->
                     VListLit ma' (Sequence.empty)
                 (VRecordLit m, _) ->
@@ -680,35 +680,31 @@ eval !env t0 =
                 (x', ma') ->
                     VToMap x' ma'
         Field t k ->
-            vField (evalE t) k
+            vField (eval env t) k
         Project t (Left ks) ->
-            vProjectByFields env (evalE t) (Dhall.Set.sort ks)
+            vProjectByFields env (eval env t) (Dhall.Set.sort ks)
         Project t (Right e) ->
-            case evalE e of
+            case eval env e of
                 VRecord kts ->
-                    evalE (Project t (Left (Dhall.Set.fromSet (Map.keysSet kts))))
+                    eval env (Project t (Left (Dhall.Set.fromSet (Map.keysSet kts))))
                 e' ->
-                    VProject (evalE t) (Right e')
+                    VProject (eval env t) (Right e')
         Assert t ->
-            VAssert (evalE t)
+            VAssert (eval env t)
         Equivalent t u ->
-            VEquivalent (evalE t) (evalE u)
+            VEquivalent (eval env t) (eval env u)
         Note _ e ->
-            evalE e
+            eval env e
         ImportAlt t _ ->
-            evalE t
+            eval env t
         Embed a ->
             VEmbed a
   where
-    evalE :: Expr Void a -> Val a
-    evalE = eval env
-    {-# INLINE evalE #-}
-
     evalChunks :: Chunks Void a -> VChunks a
     evalChunks (Chunks xys z) = foldr' cons nil xys
       where
         cons (x, t) vcs =
-            case evalE t of
+            case eval env t of
                 VTextLit vcs' -> VChunks [] x <> vcs' <> vcs
                 t'            -> VChunks [(x, t')] mempty <> vcs
 
@@ -763,136 +759,136 @@ conv !env t0 t0' =
         (t, VHLam _ t'  ) ->
             let (x, v) = fresh "x" in convSkip x (vApp t v) (t' v)
         (VApp t u, VApp t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VPi a b, VPi a' (freshClosure -> (x, v, b'))) ->
-            convE a a' && convSkip x (instantiate b v) (instantiate b' v)
+            conv env a a' && convSkip x (instantiate b v) (instantiate b' v)
         (VPi a b, VHPi (fresh -> (x, v)) a' b') ->
-            convE a a' && convSkip x (instantiate b v) (b' v)
+            conv env a a' && convSkip x (instantiate b v) (b' v)
         (VHPi _ a b, VPi a' (freshClosure -> (x, v, b'))) ->
-            convE a a' && convSkip x (b v) (instantiate b' v)
+            conv env a a' && convSkip x (b v) (instantiate b' v)
         (VHPi _ a b, VHPi (fresh -> (x, v)) a' b') ->
-            convE a a' && convSkip x (b v) (b' v)
+            conv env a a' && convSkip x (b v) (b' v)
         (VBool, VBool) ->
             True
         (VBoolLit b, VBoolLit b') ->
             b == b'
         (VBoolAnd t u, VBoolAnd t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VBoolOr t u, VBoolOr t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VBoolEQ t u, VBoolEQ t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VBoolNE t u, VBoolNE t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VBoolIf t u v, VBoolIf t' u' v') ->
-            convE t t' && convE u u' && convE v v'
+            conv env t t' && conv env u u' && conv env v v'
         (VNatural, VNatural) ->
             True
         (VNaturalLit n, VNaturalLit n') ->
             n == n'
         (VNaturalFold t _ u v, VNaturalFold t' _ u' v') ->
-            convE t t' && convE u u' && convE v v'
+            conv env t t' && conv env u u' && conv env v v'
         (VNaturalBuild t, VNaturalBuild t') ->
-            convE t t'
+            conv env t t'
         (VNaturalIsZero t, VNaturalIsZero t') ->
-            convE t t'
+            conv env t t'
         (VNaturalEven t, VNaturalEven t') ->
-            convE t t'
+            conv env t t'
         (VNaturalOdd t, VNaturalOdd t') ->
-            convE t t'
+            conv env t t'
         (VNaturalToInteger t, VNaturalToInteger t') ->
-            convE t t'
+            conv env t t'
         (VNaturalShow t, VNaturalShow t') ->
-            convE t t'
+            conv env t t'
         (VNaturalSubtract x y, VNaturalSubtract x' y') ->
-            convE x x' && convE y y'
+            conv env x x' && conv env y y'
         (VNaturalPlus t u, VNaturalPlus t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VNaturalTimes t u, VNaturalTimes t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VInteger, VInteger) ->
             True
         (VIntegerLit t, VIntegerLit t') ->
             t == t'
         (VIntegerShow t, VIntegerShow t') ->
-            convE t t'
+            conv env t t'
         (VIntegerToDouble t, VIntegerToDouble t') ->
-            convE t t'
+            conv env t t'
         (VDouble, VDouble) ->
             True
         (VDoubleLit n, VDoubleLit n') ->
                 Serialise.serialise (Binary.encode (DoubleLit n  :: Expr Void Import))
             ==  Serialise.serialise (Binary.encode (DoubleLit n' :: Expr Void Import))
         (VDoubleShow t, VDoubleShow t') ->
-            convE t t'
+            conv env t t'
         (VText, VText) ->
             True
         (VTextLit cs, VTextLit cs') ->
             convChunks cs cs'
         (VTextAppend t u, VTextAppend t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VTextShow t, VTextShow t') ->
-            convE t t'
+            conv env t t'
         (VList a, VList a') ->
-            convE a a'
+            conv env a a'
         (VListLit _ xs, VListLit _ xs') ->
-            eqListBy convE (toList xs) (toList xs')
+            eqListBy (conv env) (toList xs) (toList xs')
         (VListAppend t u, VListAppend t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VListBuild _ t, VListBuild _ t') ->
-            convE t t'
+            conv env t t'
         (VListLength a t, VListLength a' t') ->
-            convE a a' && convE t t'
+            conv env a a' && conv env t t'
         (VListHead _ t, VListHead _ t') ->
-            convE t t'
+            conv env t t'
         (VListLast _ t, VListLast _ t') ->
-            convE t t'
+            conv env t t'
         (VListIndexed _ t, VListIndexed _ t') ->
-            convE t t'
+            conv env t t'
         (VListReverse _ t, VListReverse _ t') ->
-            convE t t'
+            conv env t t'
         (VListFold a l _ t u, VListFold a' l' _ t' u') ->
-            convE a a' && convE l l' && convE t t' && convE u u'
+            conv env a a' && conv env l l' && conv env t t' && conv env u u'
         (VOptional a, VOptional a') ->
-            convE a a'
+            conv env a a'
         (VSome t, VSome t') ->
-            convE t t'
+            conv env t t'
         (VNone _, VNone _) ->
             True
         (VOptionalBuild _ t, VOptionalBuild _ t') ->
-            convE t t'
+            conv env t t'
         (VRecord m, VRecord m') ->
-            eqMapsBy convE m m'
+            eqMapsBy (conv env) m m'
         (VRecordLit m, VRecordLit m') ->
-            eqMapsBy convE m m'
+            eqMapsBy (conv env) m m'
         (VUnion m, VUnion m') ->
-            eqMapsBy (eqMaybeBy convE) m m'
+            eqMapsBy (eqMaybeBy (conv env)) m m'
         (VCombine t u, VCombine t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VCombineTypes t u, VCombineTypes t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VPrefer t u, VPrefer t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VMerge t u _, VMerge t' u' _) ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VToMap t _, VToMap t' _) ->
-            convE t t'
+            conv env t t'
         (VField t k, VField t' k') ->
-            convE t t' && k == k'
+            conv env t t' && k == k'
         (VProject t (Left ks), VProject t' (Left ks')) ->
-            convE t t' && ks == ks'
+            conv env t t' && ks == ks'
         (VProject t (Right e), VProject t' (Right e')) ->
-            convE t t' && convE e e'
+            conv env t t' && conv env e e'
         (VAssert t, VAssert t') ->
-            convE t t'
+            conv env t t'
         (VEquivalent t u, VEquivalent t' u') ->
-            convE t t' && convE u u'
+            conv env t t' && conv env u u'
         (VInject m k mt, VInject m' k' mt') ->
-            eqMapsBy (eqMaybeBy convE) m m' && k == k' && eqMaybeBy convE mt mt'
+            eqMapsBy (eqMaybeBy (conv env)) m m' && k == k' && eqMaybeBy (conv env) mt mt'
         (VEmbed a, VEmbed a') ->
             a == a'
         (VOptionalFold a t _ u v, VOptionalFold a' t' _ u' v') ->
-            convE a a' && convE t t' && convE u u' && convE v v'
+            conv env a a' && conv env t t' && conv env u u' && conv env v v'
         (_, _) ->
             False
   where
@@ -908,10 +904,6 @@ conv !env t0 t0' =
     convChunks (VChunks xys z) (VChunks xys' z') =
       eqListBy (\(x, y) (x', y') -> x == x' && conv env y y') xys xys' && z == z'
     {-# INLINE convChunks #-}
-
-    convE :: Val a -> Val a -> Bool
-    convE = conv env
-    {-# INLINE convE #-}
 
     convSkip :: Text -> Val a -> Val a -> Bool
     convSkip x = conv (Skip env x)
@@ -952,12 +944,12 @@ quote !env !t0 =
         VVar x i ->
             qVar x i
         VApp t u ->
-            quoteE t `qApp` u
+            quote env t `qApp` u
         VLam a (freshClosure -> (x, v, t)) ->
-            Lam x (quoteE a) (quoteBind x (instantiate t v))
+            Lam x (quote env a) (quoteBind x (instantiate t v))
         VHLam i t ->
             case i of
-                Typed (fresh -> (x, v)) a -> Lam x (quoteE a) (quoteBind x (t v))
+                Typed (fresh -> (x, v)) a -> Lam x (quote env a) (quoteBind x (t v))
                 Prim                      -> quote env (t VPrimVar)
                 NaturalFoldCl{}           -> quote env (t VPrimVar)
                 ListFoldCl{}              -> quote env (t VPrimVar)
@@ -965,23 +957,23 @@ quote !env !t0 =
                 NaturalSubtractZero       -> App NaturalSubtract (NaturalLit 0)
 
         VPi a (freshClosure -> (x, v, b)) ->
-            Pi x (quoteE a) (quoteBind x (instantiate b v))
+            Pi x (quote env a) (quoteBind x (instantiate b v))
         VHPi (fresh -> (x, v)) a b ->
-            Pi x (quoteE a) (quoteBind x (b v))
+            Pi x (quote env a) (quoteBind x (b v))
         VBool ->
             Bool
         VBoolLit b ->
             BoolLit b
         VBoolAnd t u ->
-            BoolAnd (quoteE t) (quoteE u)
+            BoolAnd (quote env t) (quote env u)
         VBoolOr t u ->
-            BoolOr (quoteE t) (quoteE u)
+            BoolOr (quote env t) (quote env u)
         VBoolEQ t u ->
-            BoolEQ (quoteE t) (quoteE u)
+            BoolEQ (quote env t) (quote env u)
         VBoolNE t u ->
-            BoolNE (quoteE t) (quoteE u)
+            BoolNE (quote env t) (quote env u)
         VBoolIf t u v ->
-            BoolIf (quoteE t) (quoteE u) (quoteE v)
+            BoolIf (quote env t) (quote env u) (quote env v)
         VNatural ->
             Natural
         VNaturalLit n ->
@@ -1001,9 +993,9 @@ quote !env !t0 =
         VNaturalShow t ->
             NaturalShow `qApp` t
         VNaturalPlus t u ->
-            NaturalPlus (quoteE t) (quoteE u)
+            NaturalPlus (quote env t) (quote env u)
         VNaturalTimes t u ->
-            NaturalTimes (quoteE t) (quoteE u)
+            NaturalTimes (quote env t) (quote env u)
         VNaturalSubtract x y ->
             NaturalSubtract `qApp` x `qApp` y
         VInteger ->
@@ -1023,17 +1015,17 @@ quote !env !t0 =
         VText ->
             Text
         VTextLit (VChunks xys z) ->
-            TextLit (Chunks (fmap (fmap quoteE) xys) z)
+            TextLit (Chunks (fmap (fmap (quote env)) xys) z)
         VTextAppend t u ->
-            TextAppend (quoteE t) (quoteE u)
+            TextAppend (quote env t) (quote env u)
         VTextShow t ->
             TextShow `qApp` t
         VList t ->
             List `qApp` t
         VListLit ma ts ->
-            ListLit (fmap quoteE ma) (fmap quoteE ts)
+            ListLit (fmap (quote env) ma) (fmap (quote env) ts)
         VListAppend t u ->
-            ListAppend (quoteE t) (quoteE u)
+            ListAppend (quote env t) (quote env u)
         VListBuild a t ->
             ListBuild `qApp` a `qApp` t
         VListFold a l t u v ->
@@ -1051,7 +1043,7 @@ quote !env !t0 =
         VOptional a ->
             Optional `qApp` a
         VSome t ->
-            Some (quoteE t)
+            Some (quote env t)
         VNone t ->
             None `qApp` t
         VOptionalFold a o t u v ->
@@ -1059,33 +1051,33 @@ quote !env !t0 =
         VOptionalBuild a t ->
             OptionalBuild `qApp` a `qApp` t
         VRecord m ->
-            Record (fmap quoteE m)
+            Record (fmap (quote env) m)
         VRecordLit m ->
-            RecordLit (fmap quoteE m)
+            RecordLit (fmap (quote env) m)
         VUnion m ->
-            Union (fmap (fmap quoteE) m)
+            Union (fmap (fmap (quote env)) m)
         VCombine t u ->
-            Combine (quoteE t) (quoteE u)
+            Combine (quote env t) (quote env u)
         VCombineTypes t u ->
-            CombineTypes (quoteE t) (quoteE u)
+            CombineTypes (quote env t) (quote env u)
         VPrefer t u ->
-            Prefer (quoteE t) (quoteE u)
+            Prefer (quote env t) (quote env u)
         VMerge t u ma ->
-            Merge (quoteE t) (quoteE u) (fmap quoteE ma)
+            Merge (quote env t) (quote env u) (fmap (quote env) ma)
         VToMap t ma ->
-            ToMap (quoteE t) (fmap quoteE ma)
+            ToMap (quote env t) (fmap (quote env) ma)
         VField t k ->
-            Field (quoteE t) k
+            Field (quote env t) k
         VProject t p ->
-            Project (quoteE t) (fmap quoteE p)
+            Project (quote env t) (fmap (quote env) p)
         VAssert t ->
-            Assert (quoteE t)
+            Assert (quote env t)
         VEquivalent t u ->
-            Equivalent (quoteE t) (quoteE u)
+            Equivalent (quote env t) (quote env u)
         VInject m k Nothing ->
-            Field (Union (fmap (fmap quoteE) m)) k
+            Field (Union (fmap (fmap (quote env)) m)) k
         VInject m k (Just t) ->
-            Field (Union (fmap (fmap quoteE) m)) k `qApp` t
+            Field (Union (fmap (fmap (quote env)) m)) k `qApp` t
         VEmbed a ->
             Embed a
         VPrimVar ->
@@ -1103,17 +1095,13 @@ quote !env !t0 =
     qVar !x !i = Var (V x (fromIntegral (countNames x env - i - 1)))
     {-# INLINE qVar #-}
 
-    quoteE :: Val a -> Expr Void a
-    quoteE = quote env
-    {-# INLINE quoteE #-}
-
     quoteBind :: Text -> Val a -> Expr Void a
     quoteBind x = quote (Bind env x)
     {-# INLINE quoteBind #-}
 
     qApp :: Expr Void a -> Val a -> Expr Void a
     qApp t VPrimVar = t
-    qApp t u        = App t (quoteE u)
+    qApp t u        = App t (quote env u)
     {-# INLINE qApp #-}
 
 -- | Normalize an expression in an environment of values. Any variable pointing out of
