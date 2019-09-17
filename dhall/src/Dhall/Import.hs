@@ -107,6 +107,7 @@ module Dhall.Import (
     , hashExpression
     , hashExpressionToCode
     , writeExpressionToSemanticCache
+    , warnAboutMissingCache
     , assertNoImports
     , Status(..)
     , SemanticCacheMode(..)
@@ -202,6 +203,7 @@ import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 import qualified System.Environment
 import qualified System.Info
+import qualified System.IO
 import qualified System.Directory                 as Directory
 import qualified System.FilePath                  as FilePath
 import qualified Text.Megaparsec
@@ -746,6 +748,26 @@ toHeader _ = do
 getCacheFile
     :: (Alternative m, MonadIO m) => FilePath -> Dhall.Crypto.SHA256Digest -> m FilePath
 getCacheFile cacheName hash = do
+    cacheDirectory <- getOrCreateCacheDirectory cacheName
+
+    let cacheFile = (cacheDirectory </> cacheName) </> ("1220" <> show hash)
+
+    return cacheFile
+
+warnAboutMissingCache :: (Alternative m, MonadIO m) => m ()
+warnAboutMissingCache = alternative₀ <|> alternative₁
+  where
+    alternative₀ = getOrCreateCacheDirectory "dhall" >> return ()
+
+    alternative₁ = liftIO (System.IO.hPutStrLn System.IO.stderr warning)
+
+      where warning = "It has not been possible to get a cache directory with read/write permission.\n"
+                   ++ "You can enable cache pointing the $XDG_CACHE_HOME environment variable\n"
+                   ++ "to a directory with the required permission.\n"
+                   ++ "A subdirectory named \"dhall\" will be created inside if it isn't exist.\n"
+
+getOrCreateCacheDirectory :: (Alternative m, MonadIO m) => FilePath -> m FilePath
+getOrCreateCacheDirectory cacheName = do
     let assertDirectory directory = do
             let private = transform Directory.emptyPermissions
                   where
@@ -774,16 +796,16 @@ getCacheFile cacheName hash = do
 
                     liftIO (Directory.setPermissions directory private)
 
-    cacheDirectory <- getCacheDirectory
+    cacheBaseDirectory <- getCacheBaseDirectory
 
-    assertDirectory (cacheDirectory </> cacheName)
+    let directory = cacheBaseDirectory </> cacheName
+    
+    assertDirectory directory
 
-    let cacheFile = (cacheDirectory </> cacheName) </> ("1220" <> show hash)
+    return directory
 
-    return cacheFile
-
-getCacheDirectory :: (Alternative m, MonadIO m) => m FilePath
-getCacheDirectory = alternative₀ <|> alternative₁
+getCacheBaseDirectory :: (Alternative m, MonadIO m) => m FilePath
+getCacheBaseDirectory = alternative₀ <|> alternative₁
   where
     alternative₀ = do
         maybeXDGCacheHome <- do
