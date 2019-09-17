@@ -8,7 +8,7 @@
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE ViewPatterns        #-}
 
-{-# OPTIONS_GHC -O -fno-warn-name-shadowing -fno-warn-unused-matches #-}
+{-# OPTIONS_GHC -O #-}
 
 {-| Eval-apply environment machine with conversion checking and quoting to
     normal forms. Fairly similar to GHCI's STG machine algorithmically, but much
@@ -59,6 +59,7 @@ import Dhall.Core
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import GHC.Natural (Natural)
+import Prelude hiding (succ)
 import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Codec.Serialise as Serialise
@@ -227,7 +228,7 @@ instantiate (Closure x env t) !u = eval (Extend env x u) t
 
 -- Out-of-env variables have negative de Bruijn levels.
 vVar :: Environment a -> Var -> Val a
-vVar env (V x i) = go env i
+vVar env0 (V x i0) = go env0 i0
   where
     go (Extend env x' v) i
         | x == x' =
@@ -245,74 +246,74 @@ vVar env (V x i) = go env i
 vApp :: Eq a => Val a -> Val a -> Val a
 vApp !t !u =
     case t of
-        VLam _ t  -> instantiate t u
-        VHLam _ t -> t u
-        t         -> VApp t u
+        VLam _ t'  -> instantiate t' u
+        VHLam _ t' -> t' u
+        t'        -> VApp t' u
 {-# INLINE vApp #-}
 
 vPrefer :: Eq a => Environment a -> Val a -> Val a -> Val a
 vPrefer env t u =
     case (t, u) of
-        (VRecordLit m, u) | null m ->
-            u
-        (t, VRecordLit m) | null m ->
-            t
+        (VRecordLit m, u') | null m ->
+            u'
+        (t', VRecordLit m) | null m ->
+            t'
         (VRecordLit m, VRecordLit m') ->
             VRecordLit (Map.union m' m)
-        (t, u) | conv env t u ->
-            t
-        (t, u) ->
-            VPrefer t u
+        (t', u') | conv env t' u' ->
+            t'
+        (t', u') ->
+            VPrefer t' u'
 {-# INLINE vPrefer #-}
 
 vCombine :: Val a -> Val a -> Val a
 vCombine t u =
     case (t, u) of
-        (VRecordLit m, u) | null m ->
-            u
-        (t, VRecordLit m) | null m ->
-            t
+        (VRecordLit m, u') | null m ->
+            u'
+        (t', VRecordLit m) | null m ->
+            t'
         (VRecordLit m, VRecordLit m') ->
             VRecordLit (Map.unionWith vCombine m m')
-        (t, u) ->
-            VCombine t u
+        (t', u') ->
+            VCombine t' u'
 
 vCombineTypes :: Val a -> Val a -> Val a
 vCombineTypes t u =
     case (t, u) of
-        (VRecord m, u) | null m ->
-            u
-        (t, VRecord m) | null m ->
-            t
+        (VRecord m, u') | null m ->
+            u'
+        (t', VRecord m) | null m ->
+            t'
         (VRecord m, VRecord m') ->
             VRecord (Map.unionWith vCombineTypes m m')
-        (t, u) ->
-            VCombineTypes t u
+        (t', u') ->
+            VCombineTypes t' u'
 
 vListAppend :: Val a -> Val a -> Val a
 vListAppend t u =
     case (t, u) of
-        (VListLit _ xs, u) | null xs ->
-            u
-        (t, VListLit _ ys) | null ys ->
-            t
-        (VListLit t xs, VListLit _ ys) ->
-            VListLit t (xs <> ys)
-        (t, u) ->
-            VListAppend t u
+        (VListLit _ xs, u') | null xs ->
+            u'
+        (t', VListLit _ ys) | null ys ->
+            t'
+        (VListLit t' xs, VListLit _ ys) ->
+            VListLit t' (xs <> ys)
+        (t', u') ->
+            VListAppend t' u'
 {-# INLINE vListAppend #-}
 
 vNaturalPlus :: Val a -> Val a -> Val a
 vNaturalPlus t u =
     case (t, u) of
-        (VNaturalLit 0, u) ->
-            u
-        (t, VNaturalLit 0) ->
-            t
+        (VNaturalLit 0, u') ->
+            u'
+        (t', VNaturalLit 0) ->
+            t'
         (VNaturalLit m, VNaturalLit n) ->
             VNaturalLit (m + n)
-        (t, u) ->
-            VNaturalPlus t u
+        (t', u') ->
+            VNaturalPlus t' u'
 {-# INLINE vNaturalPlus #-}
 
 vField :: Val a -> Text -> Val a
@@ -353,16 +354,16 @@ vProjectByFields env t ks =
       kvs' = Map.restrictKeys kvs (Dhall.Set.toSet ks)
       in VRecordLit kvs'
     VProject t' _ -> vProjectByFields env t' ks
-    VPrefer l r@(VRecordLit kvs) -> let
+    VPrefer l (VRecordLit kvs) -> let
       ksSet = Dhall.Set.toSet ks
       kvs' = Map.restrictKeys kvs ksSet
       ks' = Dhall.Set.fromSet (Data.Set.difference ksSet (Map.keysSet kvs'))
       in vPrefer env (vProjectByFields env l ks') (VRecordLit kvs')
-    t -> VProject t (Left ks)
+    t' -> VProject t' (Left ks)
 
 eval :: forall a. Eq a => Environment a -> Expr Void a -> Val a
-eval !env t =
-    case t of
+eval !env t0 =
+    case t0 of
         Const k ->
             VConst k
         Var v ->
@@ -384,39 +385,39 @@ eval !env t =
             VBoolLit b
         BoolAnd t u ->
             case (evalE t, evalE u) of
-                (VBoolLit True, u)    -> u
-                (VBoolLit False, u)   -> VBoolLit False
-                (t, VBoolLit True)    -> t
-                (t, VBoolLit False)   -> VBoolLit False
-                (t, u) | conv env t u -> t
-                (t, u)                -> VBoolAnd t u
+                (VBoolLit True, u')       -> u'
+                (VBoolLit False, _)       -> VBoolLit False
+                (t', VBoolLit True)       -> t'
+                (_ , VBoolLit False)      -> VBoolLit False
+                (t', u') | conv env t' u' -> t'
+                (t', u')                  -> VBoolAnd t' u'
         BoolOr t u ->
             case (evalE t, evalE u) of
-                (VBoolLit False, u)   -> u
-                (VBoolLit True, u)    -> VBoolLit True
-                (t, VBoolLit False)   -> t
-                (t, VBoolLit True)    -> VBoolLit True
-                (t, u) | conv env t u -> t
-                (t, u)                -> VBoolOr t u
+                (VBoolLit False, u')      -> u'
+                (VBoolLit True, _)        -> VBoolLit True
+                (t', VBoolLit False)      -> t'
+                (_ , VBoolLit True)       -> VBoolLit True
+                (t', u') | conv env t' u' -> t'
+                (t', u')                  -> VBoolOr t' u'
         BoolEQ t u ->
             case (evalE t, evalE u) of
-                (VBoolLit True, u)    -> u
-                (t, VBoolLit True)    -> t
-                (t, u) | conv env t u -> VBoolLit True
-                (t, u)                -> VBoolEQ t u
+                (VBoolLit True, u')       -> u'
+                (t', VBoolLit True)       -> t'
+                (t', u') | conv env t' u' -> VBoolLit True
+                (t', u')                  -> VBoolEQ t' u'
         BoolNE t u ->
             case (evalE t, evalE u) of
-                (VBoolLit False, u)   -> u
-                (t, VBoolLit False)   -> t
-                (t, u) | conv env t u -> VBoolLit False
-                (t, u)                -> VBoolNE t u
+                (VBoolLit False, u')      -> u'
+                (t', VBoolLit False)      -> t'
+                (t', u') | conv env t' u' -> VBoolLit False
+                (t', u')                  -> VBoolNE t' u'
         BoolIf b t f ->
             case (evalE b, evalE t, evalE f) of
-                (VBoolLit True,  t, f)   -> t
-                (VBoolLit False, t, f)   -> f
-                (b, VBoolLit True, VBoolLit False) -> b
-                (b, t, f) | conv env t f -> t
-                (b, t, f)                -> VBoolIf b t f
+                (VBoolLit True,  t', _ )            -> t'
+                (VBoolLit False, _ , f')            -> f'
+                (b', VBoolLit True, VBoolLit False) -> b'
+                (_, t', f') | conv env t' f'        -> t'
+                (b', t', f')                        -> VBoolIf b' t' f'
         Natural ->
             VNatural
         NaturalLit n ->
@@ -428,7 +429,7 @@ eval !env t =
                     VHLam (Typed "succ" (natural ~> natural)) $ \succ ->
                     VHLam (Typed "zero" natural) $ \zero ->
                     let go !acc 0 = acc
-                        go  acc n = go (vApp succ acc) (n - 1)
+                        go  acc m = go (vApp succ acc) (m - 1)
                     in  go zero (fromIntegral n :: Integer)
                 n ->
                     VHLam (NaturalFoldCl n) $ \natural ->
@@ -479,12 +480,12 @@ eval !env t =
             vNaturalPlus (evalE t) (evalE u)
         NaturalTimes t u ->
             case (evalE t, evalE u) of
-                (VNaturalLit 1, u            ) -> u
-                (t,             VNaturalLit 1) -> t
-                (VNaturalLit 0, u            ) -> VNaturalLit 0
-                (t,             VNaturalLit 0) -> VNaturalLit 0
+                (VNaturalLit 1, u'           ) -> u'
+                (t'           , VNaturalLit 1) -> t'
+                (VNaturalLit 0, _            ) -> VNaturalLit 0
+                (_            , VNaturalLit 0) -> VNaturalLit 0
                 (VNaturalLit m, VNaturalLit n) -> VNaturalLit (m * n)
-                (t,             u            ) -> VNaturalTimes t u
+                (t'           , u'           ) -> VNaturalTimes t' u'
         Integer ->
             VInteger
         IntegerLit n ->
@@ -605,7 +606,7 @@ eval !env t =
             VPrim $ \case
                 VListLit t as | null as ->
                     VListLit t (Sequence.reverse as)
-                VListLit t as ->
+                VListLit _ as ->
                     VListLit Nothing (Sequence.reverse as)
                 t ->
                     VListReverse a t
@@ -620,13 +621,13 @@ eval !env t =
             VPrim $ \case
                 VNone _ ->
                     VHLam (Typed "optional" (VConst Type)) $ \optional ->
-                    VHLam (Typed "some" (a ~> optional)) $ \some ->
+                    VHLam (Typed "some" (a ~> optional)) $ \_some ->
                     VHLam (Typed "none" optional) $ \none ->
                     none
                 VSome t ->
                     VHLam (Typed "optional" (VConst Type)) $ \optional ->
                     VHLam (Typed "some" (a ~> optional)) $ \some ->
-                    VHLam (Typed "none" optional) $ \none ->
+                    VHLam (Typed "none" optional) $ \_none ->
                     some `vApp` t
                 opt ->
                     VHLam (OptionalFoldCl opt) $ \o ->
@@ -659,7 +660,7 @@ eval !env t =
                 (VRecordLit m, VInject _ k mt, _)
                     | Just f <- Map.lookup k m -> maybe f (vApp f) mt
                     | otherwise                -> error errorMsg
-                (x, y, ma) -> VMerge x y ma
+                (x', y', ma') -> VMerge x' y' ma'
         ToMap x ma ->
             case (evalE x, fmap evalE ma) of
                 (VRecordLit m, ma'@(Just _)) | null m ->
@@ -676,8 +677,8 @@ eval !env t =
                         s = (Sequence.fromList . map entry . Map.toList) m
 
                     in  VListLit Nothing s
-                (x, ma) ->
-                    VToMap x ma
+                (x', ma') ->
+                    VToMap x' ma'
         Field t k ->
             vField (evalE t) k
         Project t (Left ks) ->
@@ -709,7 +710,7 @@ eval !env t =
         cons (x, t) vcs =
             case evalE t of
                 VTextLit vcs' -> VChunks [] x <> vcs' <> vcs
-                t             -> VChunks [(x, t)] mempty <> vcs
+                t'            -> VChunks [(x, t')] mempty <> vcs
 
         nil = VChunks [] z
     {-# INLINE evalChunks #-}
@@ -739,8 +740,8 @@ eqMaybeBy f = go
 {-# INLINE eqMaybeBy #-}
 
 conv :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
-conv !env t t' =
-    case (t, t') of
+conv !env t0 t0' =
+    case (t0, t0') of
         (VConst k, VConst k') ->
             k == k'
         (VVar x i, VVar x' i') ->
@@ -838,7 +839,7 @@ conv !env t t' =
             eqListBy convE (toList xs) (toList xs')
         (VListAppend t u, VListAppend t' u') ->
             convE t t' && convE u u'
-        (VListBuild a t, VListBuild a' t') ->
+        (VListBuild _ t, VListBuild _ t') ->
             convE t t'
         (VListLength a t, VListLength a' t') ->
             convE a a' && convE t t'
@@ -944,8 +945,8 @@ countNames x = go 0
 
 -- | Quote a value into beta-normal form.
 quote :: forall a. Eq a => Names -> Val a -> Expr Void a
-quote !env !t =
-    case t of
+quote !env !t0 =
+    case t0 of
         VConst k ->
             Const k
         VVar x i ->
@@ -1157,15 +1158,15 @@ alphaNormalize = goEnv EmptyNames
         go !acc (Bind env x) !i
           | x == topX = if i == 0 then Var (V "_" acc) else go (acc + 1) env (i - 1)
           | otherwise = go (acc + 1) env i
-        go acc EmptyNames i = Var (V topX i)
+        go _ EmptyNames i = Var (V topX i)
 
     goEnv :: Names -> Expr s a -> Expr s a
-    goEnv !e t =
-        case t of
+    goEnv !e0 t0 =
+        case t0 of
             Const k ->
                 Const k
             Var (V x i) ->
-                goVar e x i
+                goVar e0 x i
             Lam x t u ->
                 Lam "_" (go t) (goBind x u)
             Pi x a b ->
@@ -1297,6 +1298,6 @@ alphaNormalize = goEnv EmptyNames
             Embed a ->
                 Embed a
       where
-        go                     = goEnv e
-        goBind x               = goEnv (Bind e x)
+        go                     = goEnv e0
+        goBind x               = goEnv (Bind e0 x)
         goChunks (Chunks ts x) = Chunks (fmap (fmap go) ts) x
