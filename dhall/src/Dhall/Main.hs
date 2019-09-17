@@ -383,6 +383,8 @@ command (Options {..}) = do
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 
             renderDoc h doc
+    
+    Dhall.Import.warnAboutMissingCache
 
     handle $ case mode of
         Version -> do
