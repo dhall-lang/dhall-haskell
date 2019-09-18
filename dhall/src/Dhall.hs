@@ -58,6 +58,7 @@ module Dhall
     , auto
     , genericAuto
     , InterpretOptions(..)
+    , SingletonConstructors(..)
     , defaultInterpretOptions
     , bool
     , natural
@@ -1031,15 +1032,38 @@ data InterpretOptions = InterpretOptions
     , constructorModifier :: Text -> Text
     -- ^ Function used to transform Haskell constructor names into their
     --   corresponding Dhall alternative names
-    , collapseSingletonRecords :: Bool
-    -- ^ Set this to `True` if you want the corresponding Dhall type to collapse
-    --   records with one field by replacing the record with the underlying
-    --   field
+    , singletonConstructors :: SingletonConstructors
+    -- ^ Specify how to handle constructors with only one field.  The default is
+    --   `Wrapped` for backwards compatibility but will eventually be changed to
+    --   `Smart`
     , inputNormalizer     :: Dhall.Core.ReifiedNormalizer X
     -- ^ This is only used by the `Interpret` instance for functions in order
     --   to normalize the function input before marshaling the input into a
     --   Dhall expression
     }
+
+{-| This type specifies how to model a Haskell constructor with 1 field in
+    Dhall
+
+    For example, consider the following Haskell datatype definition:
+
+    > data Example = Foo { x :: Double } | Bar Double
+
+    Depending on which option you pick, the corresponding Dhall type could be:
+
+    > < Foo : Double | Bar : Double >                   -- Bare
+
+    > < Foo : { x : Double } | Bar : { _1 : Double } >  -- Wrapped
+
+    > < Foo : { x : Double } | Bar : Double >           -- Smart
+-}
+data SingletonConstructors
+    = Bare
+    -- ^ Never wrap the field in a record
+    | Wrapped
+    -- ^ Always wrap the field in a record
+    | Smart
+    -- ^ Only fields in a record if they are named and don't begin with @\"_\"@
 
 {-| Default interpret options, which you can tweak or override, like this:
 
@@ -1052,8 +1076,8 @@ defaultInterpretOptions = InterpretOptions
           id
     , constructorModifier =
           id
-    , collapseSingletonRecords =
-          False
+    , singletonConstructors =
+          Wrapped
     , inputNormalizer =
           Dhall.Core.ReifiedNormalizer (const (pure Nothing))
     }
@@ -1360,9 +1384,13 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
         let Type { extract = extract', expected = expected'} = autoWith options
 
         let expected =
-                if collapseSingletonRecords
-                    then expected'
-                    else Record (Dhall.Map.singleton name expected')
+                case singletonConstructors of
+                    Bare ->
+                        expected'
+                    Smart | Data.Text.isPrefixOf "_" name ->
+                        expected'
+                    _ ->
+                        Record (Dhall.Map.singleton name expected')
 
         let extract0 expression = fmap (M1 . K1) (extract' expression)
 
@@ -1381,9 +1409,10 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
 
 
         let extract =
-                if collapseSingletonRecords
-                then extract0
-                else extract1
+                case singletonConstructors of
+                    Bare                                  -> extract0
+                    Smart | Data.Text.isPrefixOf "_" name -> extract0
+                    _                                     -> extract1
 
         return (Type {..})
 
@@ -1600,14 +1629,19 @@ instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
                 RecordLit (Dhall.Map.singleton name (embed' x))
 
         let embed =
-                if collapseSingletonRecords
-                then embed0
-                else embed1
+                case singletonConstructors of
+                    Bare                                  -> embed0
+                    Smart | Data.Text.isPrefixOf "_" name -> embed0
+                    _                                     -> embed1
 
         let declared =
-                if collapseSingletonRecords
-                then declared'
-                else Record (Dhall.Map.singleton name declared')
+                case singletonConstructors of
+                    Bare ->
+                        declared'
+                    Smart | Data.Text.isPrefixOf "_" name ->
+                        declared'
+                    _ ->
+                        Record (Dhall.Map.singleton name declared')
 
         return (InputType {..})
 
