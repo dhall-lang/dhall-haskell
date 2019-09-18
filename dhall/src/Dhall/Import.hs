@@ -773,7 +773,7 @@ warnAboutMissingCache cacheName = alternative₀ <|> alternative₁
     alternative₁ = return (Just warning)
 
       where warning = "It has not been possible to get a cache directory \"" ++ cacheName ++ "\" with read/write permission.\n"
-                   ++ "You can enable cache pointing the $XDG_CACHE_HOME environment variable\n"
+                   ++ "You can provide a cache directory by pointing the $XDG_CACHE_HOME environment variable\n"
                    ++ "to a directory with the required permission.\n"
                    ++ "A subdirectory named \"" ++ cacheName ++ "\" will be created inside if it isn't exist.\n"
 
