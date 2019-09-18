@@ -35,14 +35,14 @@ module Dhall.Core (
     , Expr(..)
 
     -- * Normalization
-    , Dhall.Core.alphaNormalize
-    , normalize
+    , Eval.alphaNormalize
+    , Eval.normalize
     , normalizeWith
     , normalizeWithM
     , Normalizer
     , NormalizerM
     , ReifiedNormalizer (..)
-    , judgmentallyEqual
+    , Eval.judgmentallyEqual
     , subst
     , shift
     , isNormalized
@@ -72,12 +72,9 @@ module Dhall.Core (
     , escapeText
     , pathCharacter
     , throws
+    , textShow
     ) where
 
-#if MIN_VERSION_base(4,8,0)
-#else
-import Control.Applicative (Applicative(..), (<$>))
-#endif
 import Control.Applicative (empty)
 import Control.DeepSeq (NFData)
 import Control.Exception (Exception)
@@ -107,7 +104,7 @@ import Prelude hiding (succ)
 import qualified Control.Exception
 import qualified Control.Monad
 import qualified Data.Char
-import {-# SOURCE #-} qualified Dhall.Eval
+import {-# SOURCE #-} qualified Dhall.Eval  as Eval
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Sequence
@@ -1219,35 +1216,6 @@ subst x e (ImportAlt a b) = ImportAlt a' b'
 -- and `subst` does nothing to a closed expression
 subst _ _ (Embed p) = Embed p
 
-{-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
-    using De Bruijn indices to distinguish them
-
->>> alphaNormalize (Lam "a" (Const Type) (Lam "b" (Const Type) (Lam "x" "a" (Lam "y" "b" "x"))))
-Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
-
-    α-normalization does not affect free variables:
-
->>> alphaNormalize "x"
-Var (V "x" 0)
-
--}
-alphaNormalize :: Expr s a -> Expr s a
-alphaNormalize = Dhall.Eval.alphaNormalize
-
-{-| Reduce an expression to its normal form, performing beta reduction
-
-    `normalize` does not type-check the expression.  You may want to type-check
-    expressions before normalizing them since normalization can convert an
-    ill-typed expression into a well-typed expression.
-
-    `normalize` can also fail with `error` if you normalize an ill-typed
-    expression
--}
-
-normalize :: Eq a => Expr s a -> Expr t a
-normalize = Dhall.Eval.nfEmpty
-
-
 {-| This function is used to determine whether folds like @Natural/fold@ or
     @List/fold@ should be lazy or strict in their accumulator based on the type
     of the accumulator
@@ -1368,7 +1336,7 @@ shallowDenote         e  = e
 -}
 normalizeWith :: Eq a => Maybe (ReifiedNormalizer a) -> Expr s a -> Expr t a
 normalizeWith (Just ctx) t = runIdentity (normalizeWithM (getReifiedNormalizer ctx) t)
-normalizeWith _          t = Dhall.Eval.nfEmpty t
+normalizeWith _          t = Eval.normalize t
 
 {-| This function generalizes `normalizeWith` by allowing the custom normalizer
     to use an arbitrary `Monad`
@@ -1459,7 +1427,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                         | otherwise -> pure (NaturalLit 0)
                     App (App NaturalSubtract (NaturalLit 0)) y -> pure y
                     App (App NaturalSubtract _) (NaturalLit 0) -> pure (NaturalLit 0)
-                    App (App NaturalSubtract x) y | judgmentallyEqual x y -> pure (NaturalLit 0)
+                    App (App NaturalSubtract x) y | Eval.judgmentallyEqual x y -> pure (NaturalLit 0)
                     App IntegerShow (IntegerLit n)
                         | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
                         | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
@@ -1588,8 +1556,8 @@ normalizeWithM ctx e0 = loop (denote e0)
         decide  l              (BoolLit True ) = l
         decide  _              (BoolLit False) = BoolLit False
         decide  l               r
-            | judgmentallyEqual l r = l
-            | otherwise             = BoolAnd l r
+            | Eval.judgmentallyEqual l r = l
+            | otherwise                  = BoolAnd l r
     BoolOr x y -> decide <$> loop x <*> loop y
       where
         decide (BoolLit False)  r              = r
@@ -1597,30 +1565,30 @@ normalizeWithM ctx e0 = loop (denote e0)
         decide  l              (BoolLit False) = l
         decide  _              (BoolLit True ) = BoolLit True
         decide  l               r
-            | judgmentallyEqual l r = l
-            | otherwise             = BoolOr l r
+            | Eval.judgmentallyEqual l r = l
+            | otherwise                  = BoolOr l r
     BoolEQ x y -> decide <$> loop x <*> loop y
       where
         decide (BoolLit True )  r              = r
         decide  l              (BoolLit True ) = l
         decide  l               r
-            | judgmentallyEqual l r = BoolLit True
-            | otherwise             = BoolEQ l r
+            | Eval.judgmentallyEqual l r = BoolLit True
+            | otherwise                  = BoolEQ l r
     BoolNE x y -> decide <$> loop x <*> loop y
       where
         decide (BoolLit False)  r              = r
         decide  l              (BoolLit False) = l
         decide  l               r
-            | judgmentallyEqual l r = BoolLit False
-            | otherwise             = BoolNE l r
+            | Eval.judgmentallyEqual l r = BoolLit False
+            | otherwise                  = BoolNE l r
     BoolIf bool true false -> decide <$> loop bool <*> loop true <*> loop false
       where
         decide (BoolLit True )  l              _              = l
         decide (BoolLit False)  _              r              = r
         decide  b              (BoolLit True) (BoolLit False) = b
         decide  b               l              r
-            | judgmentallyEqual l r = l
-            | otherwise             = BoolIf b l r
+            | Eval.judgmentallyEqual l r = l
+            | otherwise                  = BoolIf b l r
     Natural -> pure Natural
     NaturalLit n -> pure (NaturalLit n)
     NaturalFold -> pure NaturalFold
@@ -1733,7 +1701,7 @@ normalizeWithM ctx e0 = loop (denote e0)
             l
         decide (RecordLit m) (RecordLit n) =
             RecordLit (Dhall.Map.union n m)
-        decide l r | judgmentallyEqual l r =
+        decide l r | Eval.judgmentallyEqual l r =
             l
         decide l r =
             Prefer l r
@@ -1861,15 +1829,6 @@ textShow text = "\"" <> Data.Text.concatMap f text <> "\""
     f c | c <= '\x1F' = Data.Text.pack (Text.Printf.printf "\\u%04x" (Data.Char.ord c))
         | otherwise   = Data.Text.singleton c
 
-{-| Returns `True` if two expressions are α-equivalent and β-equivalent and
-    `False` otherwise
-
-    `judgmentallyEqual` can fail with an `error` if you compare ill-typed
-    expressions
--}
-judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
-judgmentallyEqual = Dhall.Eval.convEmpty
-
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
 --   polymorphic enough to be used.
 type NormalizerM m a = forall s. Expr s a -> m (Maybe (Expr s a))
@@ -1928,7 +1887,7 @@ isNormalized e0 = loop (denote e0)
           App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
           App (App NaturalSubtract (NaturalLit 0)) _ -> False
           App (App NaturalSubtract _) (NaturalLit 0) -> False
-          App (App NaturalSubtract x) y -> not (judgmentallyEqual x y)
+          App (App NaturalSubtract x) y -> not (Eval.judgmentallyEqual x y)
           App NaturalToInteger (NaturalLit _) -> False
           App IntegerShow (IntegerLit _) -> False
           App IntegerToDouble (IntegerLit _) -> False
@@ -1954,28 +1913,28 @@ isNormalized e0 = loop (denote e0)
         where
           decide (BoolLit _)  _          = False
           decide  _          (BoolLit _) = False
-          decide  l           r          = not (judgmentallyEqual l r)
+          decide  l           r          = not (Eval.judgmentallyEqual l r)
       BoolOr x y -> loop x && loop y && decide x y
         where
           decide (BoolLit _)  _          = False
           decide  _          (BoolLit _) = False
-          decide  l           r          = not (judgmentallyEqual l r)
+          decide  l           r          = not (Eval.judgmentallyEqual l r)
       BoolEQ x y -> loop x && loop y && decide x y
         where
           decide (BoolLit True)  _             = False
           decide  _             (BoolLit True) = False
-          decide  l              r             = not (judgmentallyEqual l r)
+          decide  l              r             = not (Eval.judgmentallyEqual l r)
       BoolNE x y -> loop x && loop y && decide x y
         where
           decide (BoolLit False)  _               = False
           decide  _              (BoolLit False ) = False
-          decide  l               r               = not (judgmentallyEqual l r)
+          decide  l               r               = not (Eval.judgmentallyEqual l r)
       BoolIf x y z ->
           loop x && loop y && loop z && decide x y z
         where
           decide (BoolLit _)  _              _              = False
           decide  _          (BoolLit True) (BoolLit False) = False
-          decide  _           l              r              = not (judgmentallyEqual l r)
+          decide  _           l              r              = not (Eval.judgmentallyEqual l r)
       Natural -> True
       NaturalLit _ -> True
       NaturalFold -> True
@@ -2056,7 +2015,7 @@ isNormalized e0 = loop (denote e0)
           decide (RecordLit m) _ | Data.Foldable.null m = False
           decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
-          decide l r = not (judgmentallyEqual l r)
+          decide l r = not (Eval.judgmentallyEqual l r)
       Merge x y t -> loop x && loop y && all loop t
       ToMap x t -> case x of
           RecordLit _ -> False
