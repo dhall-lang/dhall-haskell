@@ -33,7 +33,7 @@ getTests = do
 
     let failureTestFiles = Turtle.lstree (typeInferenceDirectory </> "failure")
 
-    failureTests <- Test.Util.discover (Turtle.chars <* "A.dhall") failureTest failureTestFiles
+    failureTests <- Test.Util.discover (Turtle.chars <* ".dhall") failureTest failureTestFiles
 
     let testTree = Tasty.testGroup "type-inference tests"
             [ successTests
