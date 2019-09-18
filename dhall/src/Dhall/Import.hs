@@ -107,7 +107,7 @@ module Dhall.Import (
     , hashExpression
     , hashExpressionToCode
     , writeExpressionToSemanticCache
-    , warnAboutMissingCache
+    , warnAboutMissingCaches
     , assertNoImports
     , Status(..)
     , SemanticCacheMode(..)
@@ -148,6 +148,7 @@ import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString (ByteString)
 import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Maybe (catMaybes)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Data.Void (absurd)
@@ -754,17 +755,27 @@ getCacheFile cacheName hash = do
 
     return cacheFile
 
-warnAboutMissingCache :: (Alternative m, MonadIO m) => m ()
-warnAboutMissingCache = alternative₀ <|> alternative₁
+warnAboutMissingCaches  :: (Alternative m, MonadIO m) => m ()
+warnAboutMissingCaches = do
+    warnings <- traverse warnAboutMissingCache ["dhall", "dhall-haskell"]
+
+    case catMaybes warnings of
+        warn:_ -> liftIO (System.IO.hPutStrLn System.IO.stderr warn)
+        []     -> return () 
+      
+
+warnAboutMissingCache :: (Alternative m, MonadIO m) => FilePath -> m (Maybe String)
+warnAboutMissingCache cacheName = alternative₀ <|> alternative₁
   where
-    alternative₀ = getOrCreateCacheDirectory "dhall" >> return ()
+    
+    alternative₀ = getOrCreateCacheDirectory cacheName >> return Nothing
 
-    alternative₁ = liftIO (System.IO.hPutStrLn System.IO.stderr warning)
+    alternative₁ = return (Just warning)
 
-      where warning = "It has not been possible to get a cache directory with read/write permission.\n"
+      where warning = "It has not been possible to get a cache directory \"" ++ cacheName ++ "\" with read/write permission.\n"
                    ++ "You can enable cache pointing the $XDG_CACHE_HOME environment variable\n"
                    ++ "to a directory with the required permission.\n"
-                   ++ "A subdirectory named \"dhall\" will be created inside if it isn't exist.\n"
+                   ++ "A subdirectory named \"" ++ cacheName ++ "\" will be created inside if it isn't exist.\n"
 
 getOrCreateCacheDirectory :: (Alternative m, MonadIO m) => FilePath -> m FilePath
 getOrCreateCacheDirectory cacheName = do

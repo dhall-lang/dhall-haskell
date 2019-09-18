@@ -384,7 +384,7 @@ command (Options {..}) = do
 
             renderDoc h doc
     
-    Dhall.Import.warnAboutMissingCache
+    Dhall.Import.warnAboutMissingCaches
 
     handle $ case mode of
         Version -> do
