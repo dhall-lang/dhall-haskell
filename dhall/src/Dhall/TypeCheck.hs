@@ -598,32 +598,33 @@ typeWithA tpa = loop
             else Left (TypeError ctx e (UnusedHandler diffX))
 
         (mKX, _T₁) <- do
-            case mT₁ of
-                Just _T₁ -> do
-                    return (Nothing, _T₁)
+             case Dhall.Map.uncons ktsX of
+                 Just (kX, tX, _) -> do
+                     _T₁ <- do
+                         case Dhall.Map.lookup kX ktsY of
+                             Nothing -> do
+                                 Left (TypeError ctx e (UnusedHandler diffX))
 
-                Nothing -> do
-                    case Dhall.Map.uncons ktsX of
-                        Nothing -> do
-                            Left (TypeError ctx e MissingMergeType)
+                             Just Nothing -> do
+                                 return tX
 
-                        Just (kX, tX, _) -> do
-                            _T₁ <- do
-                                case Dhall.Map.lookup kX ktsY of
-                                    Nothing -> do
-                                        Left (TypeError ctx e (UnusedHandler diffX))
+                             Just (Just _)  ->
+                                 case tX of
+                                     Pi x _A₀ _T₀ -> do
+                                         return (Dhall.Core.shift (-1) (V x 0) _T₀)
+                                     _ -> do
+                                         Left (TypeError ctx e (HandlerNotAFunction kX tX))
 
-                                    Just Nothing -> do
-                                        return tX
+                     return (Just kX, _T₁)
 
-                                    Just (Just _)  ->
-                                        case tX of
-                                            Pi x _A₀ _T₀ -> do
-                                                return (Dhall.Core.shift (-1) (V x 0) _T₀)
-                                            _ -> do
-                                                Left (TypeError ctx e (HandlerNotAFunction kX tX))
+                 Nothing -> do
+                     case mT₁ of
+                         Just _T₁ -> do
+                             return (Nothing, _T₁)
 
-                            return (Just kX, _T₁)
+                         Nothing -> do
+                              Left (TypeError ctx e MissingMergeType)
+
 
         _ <- loop ctx _T₁
 
