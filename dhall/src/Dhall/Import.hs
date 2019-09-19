@@ -70,7 +70,7 @@
     > $ export BAR='"Hi"'
     > $ export BAZ='λ(x : Bool) → x == False'
     > $ dhall <<< "{ foo = env:FOO , bar = env:BAR , baz = env:BAZ }"
-> { bar : Text, baz : ∀(x : Bool) → Bool, foo : Integer }
+    > { bar : Text, baz : ∀(x : Bool) → Bool, foo : Integer }
     >
     > { bar = "Hi", baz = λ(x : Bool) → x == False, foo = 1 }
 
