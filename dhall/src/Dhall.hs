@@ -1063,7 +1063,7 @@ data SingletonConstructors
     | Wrapped
     -- ^ Always wrap the field in a record
     | Smart
-    -- ^ Only fields in a record if they are named and don't begin with @\"_\"@
+    -- ^ Only fields in a record if they are named
 
 {-| Default interpret options, which you can tweak or override, like this:
 
@@ -1387,7 +1387,7 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
                 case singletonConstructors of
                     Bare ->
                         expected'
-                    Smart | Data.Text.isPrefixOf "_" name ->
+                    Smart | selName n == "" ->
                         expected'
                     _ ->
                         Record (Dhall.Map.singleton name expected')
@@ -1410,9 +1410,9 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
 
         let extract =
                 case singletonConstructors of
-                    Bare                                  -> extract0
-                    Smart | Data.Text.isPrefixOf "_" name -> extract0
-                    _                                     -> extract1
+                    Bare                    -> extract0
+                    Smart | selName n == "" -> extract0
+                    _                       -> extract1
 
         return (Type {..})
 
@@ -1630,15 +1630,15 @@ instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
 
         let embed =
                 case singletonConstructors of
-                    Bare                                  -> embed0
-                    Smart | Data.Text.isPrefixOf "_" name -> embed0
-                    _                                     -> embed1
+                    Bare                    -> embed0
+                    Smart | selName n == "" -> embed0
+                    _                       -> embed1
 
         let declared =
                 case singletonConstructors of
                     Bare ->
                         declared'
-                    Smart | Data.Text.isPrefixOf "_" name ->
+                    Smart | selName n == "" ->
                         declared'
                     _ ->
                         Record (Dhall.Map.singleton name declared')
