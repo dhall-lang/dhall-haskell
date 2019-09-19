@@ -70,7 +70,7 @@
     > $ export BAR='"Hi"'
     > $ export BAZ='λ(x : Bool) → x == False'
     > $ dhall <<< "{ foo = env:FOO , bar = env:BAR , baz = env:BAZ }"
-    > { bar : Text, baz : ∀(x : Bool) → Bool, foo : Integer }
+> { bar : Text, baz : ∀(x : Bool) → Bool, foo : Integer }
     >
     > { bar = "Hi", baz = λ(x : Bool) → x == False, foo = 1 }
 
@@ -140,7 +140,7 @@ module Dhall.Import (
 
 import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term(..))
-import Control.Exception (Exception, SomeException, toException)
+import Control.Exception (Exception, SomeException, IOException, toException)
 import Control.Monad (guard)
 import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
 import Control.Monad.IO.Class (MonadIO(..))
@@ -748,7 +748,7 @@ toHeader _ = do
     empty
 
 getCacheFile
-    :: (Alternative m, MonadIO m) => FilePath -> Dhall.Crypto.SHA256Digest -> m FilePath
+    :: (MonadCatch m, Alternative m, MonadIO m) => FilePath -> Dhall.Crypto.SHA256Digest -> m FilePath
 getCacheFile cacheName hash = do
     cacheDirectory <- getOrCreateCacheDirectory cacheName
 
@@ -756,7 +756,7 @@ getCacheFile cacheName hash = do
 
     return cacheFile
 
-warnAboutMissingCaches  :: (Alternative m, MonadIO m) => m ()
+warnAboutMissingCaches  :: (MonadCatch m, Alternative m, MonadIO m) => m ()
 warnAboutMissingCaches = do
     warnings <- traverse warnAboutMissingCache ["dhall", "dhall-haskell"]
 
@@ -765,7 +765,7 @@ warnAboutMissingCaches = do
         []     -> return () 
       
 
-warnAboutMissingCache :: (Alternative m, MonadIO m) => FilePath -> m (Maybe String)
+warnAboutMissingCache :: (MonadCatch m, Alternative m, MonadIO m) => FilePath -> m (Maybe String)
 warnAboutMissingCache cacheName = do
     mbCacheBaseDir <- Maybe.runMaybeT getCacheBaseDirectory
 
@@ -773,7 +773,8 @@ warnAboutMissingCache cacheName = do
         Just cacheBaseDir -> do
             let expectedCacheDir = cacheBaseDir </> cacheName
 
-            mbCacheDir <- Maybe.runMaybeT (getOrCreateCacheDirectory cacheName)
+            mbCacheDir <- 
+                Maybe.runMaybeT (getOrCreateCacheDirectory cacheName)
 
             case mbCacheDir of
                 Just _ -> return Nothing
@@ -788,13 +789,13 @@ warnAboutMissingCache cacheName = do
              ++ "to a directory with read and write permissions.\n"
           
           warningCacheDir cacheDir = 
-                "It has not been possible to get or create the default cache directory: " 
+                "It has not been possible to get or create the default cache directory:\n" 
              ++ "  " ++ cacheDir ++ "\n"
              ++ "Usually it is caused by permissions issues. You should make it readable and writable\n"
              ++ "or provide another cache base directory setting the $XDG_CACHE_HOME environment variable.\n"
 
 
-getOrCreateCacheDirectory :: (Alternative m, MonadIO m) => FilePath -> m FilePath
+getOrCreateCacheDirectory :: (MonadCatch m, Alternative m, MonadIO m) => FilePath -> m FilePath
 getOrCreateCacheDirectory cacheName = do
     let assertDirectory directory = do
             let private = transform Directory.emptyPermissions
@@ -828,7 +829,9 @@ getOrCreateCacheDirectory cacheName = do
 
     let directory = cacheBaseDirectory </> cacheName
     
-    assertDirectory directory
+    let handler (_ :: IOException) = empty
+
+    catch (assertDirectory directory) handler
 
     return directory
 
