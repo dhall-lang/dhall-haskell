@@ -66,7 +66,7 @@ repl characterSet explain =
     io =
       evalStateT
         ( Repline.evalRepl
-            ( pure "⊢ " )
+            ( pure $ turnstile ++ " " )
             ( dontCrash . eval )
             options
             ( Just optionsPrefix )
@@ -75,6 +75,10 @@ repl characterSet explain =
         )
         (emptyEnv { characterSet, explain })
 
+    turnstile =
+      case characterSet of
+        Unicode -> "⊢"
+        ASCII   -> "|-"
 
 data Env = Env
   { envBindings      :: Dhall.Context.Context Binding
