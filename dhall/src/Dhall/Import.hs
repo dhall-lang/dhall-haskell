@@ -765,17 +765,33 @@ warnAboutMissingCaches = do
       
 
 warnAboutMissingCache :: (Alternative m, MonadIO m) => FilePath -> m (Maybe String)
-warnAboutMissingCache cacheName = alternative₀ <|> alternative₁
-  where
-    
-    alternative₀ = getOrCreateCacheDirectory cacheName >> return Nothing
+warnAboutMissingCache cacheName = do
+    mbCacheBaseDir <- Maybe.runMaybeT getCacheBaseDirectory
 
-    alternative₁ = return (Just warning)
+    case mbCacheBaseDir of
+        Just cacheBaseDir -> do
+            let expectedCacheDir = cacheBaseDir </> cacheName
 
-      where warning = "It has not been possible to get a cache directory \"" ++ cacheName ++ "\" with read/write permission.\n"
-                   ++ "You can provide a cache directory by pointing the $XDG_CACHE_HOME environment variable\n"
-                   ++ "to a directory with the required permissions.\n"
-                   ++ "A subdirectory named \"" ++ cacheName ++ "\" will be created inside if it doesn't already exist.\n"
+            mbCacheDir <- Maybe.runMaybeT (getOrCreateCacheDirectory cacheName)
+
+            case mbCacheDir of
+                Just _ -> return Nothing
+                
+                Nothing -> return (Just (warningCacheDir expectedCacheDir))
+
+        Nothing -> return (Just warningEnvVar)
+ 
+    where warningEnvVar = 
+                "It has not been possible to get a cache base directory from environment.\n"
+             ++ "You can provide a cache base directory by pointing the $XDG_CACHE_HOME environment variable\n"
+             ++ "to a directory with read and write permissions.\n"
+          
+          warningCacheDir cacheDir = 
+                "It has not been possible to get or create the default cache directory: " 
+             ++ "  " ++ cacheDir ++ "\n"
+             ++ "Usually it is caused by permissions issues. You should make it readable and writable\n"
+             ++ "or provide another cache base directory setting the $XDG_CACHE_HOME environment variable.\n"
+
 
 getOrCreateCacheDirectory :: (Alternative m, MonadIO m) => FilePath -> m FilePath
 getOrCreateCacheDirectory cacheName = do
