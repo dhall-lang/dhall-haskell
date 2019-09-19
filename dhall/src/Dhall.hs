@@ -58,6 +58,7 @@ module Dhall
     , auto
     , genericAuto
     , InterpretOptions(..)
+    , SingletonConstructors(..)
     , defaultInterpretOptions
     , bool
     , natural
@@ -892,7 +893,7 @@ instance (Inject a, Interpret b) => Interpret (a -> b) where
 
         expectedOut = Pi "_" declared expectedIn
 
-        InputType {..} = inject
+        InputType {..} = injectWith opts
 
         Type extractIn expectedIn = autoWith opts
 
@@ -967,7 +968,7 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- >     \(Expr : Type)
 -- > ->  let ExprF =
 -- >           < LitF :
--- >               Natural
+-- >               { _1 : Natural }
 -- >           | AddF :
 -- >               { _1 : Expr, _2 : Expr }
 -- >           | MulF :
@@ -975,7 +976,7 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- >           >
 -- >     
 -- >     in      \(Fix : ExprF -> Expr)
--- >         ->  let Lit = \(x : Natural) -> Fix (ExprF.LitF x)
+-- >         ->  let Lit = \(x : Natural) -> Fix (ExprF.LitF { _1 = x })
 -- >             
 -- >             let Add =
 -- >                       \(x : Expr)
@@ -1031,11 +1032,38 @@ data InterpretOptions = InterpretOptions
     , constructorModifier :: Text -> Text
     -- ^ Function used to transform Haskell constructor names into their
     --   corresponding Dhall alternative names
+    , singletonConstructors :: SingletonConstructors
+    -- ^ Specify how to handle constructors with only one field.  The default is
+    --   `Wrapped` for backwards compatibility but will eventually be changed to
+    --   `Smart`
     , inputNormalizer     :: Dhall.Core.ReifiedNormalizer X
     -- ^ This is only used by the `Interpret` instance for functions in order
     --   to normalize the function input before marshaling the input into a
     --   Dhall expression
     }
+
+{-| This type specifies how to model a Haskell constructor with 1 field in
+    Dhall
+
+    For example, consider the following Haskell datatype definition:
+
+    > data Example = Foo { x :: Double } | Bar Double
+
+    Depending on which option you pick, the corresponding Dhall type could be:
+
+    > < Foo : Double | Bar : Double >                   -- Bare
+
+    > < Foo : { x : Double } | Bar : { _1 : Double } >  -- Wrapped
+
+    > < Foo : { x : Double } | Bar : Double >           -- Smart
+-}
+data SingletonConstructors
+    = Bare
+    -- ^ Never wrap the field in a record
+    | Wrapped
+    -- ^ Always wrap the field in a record
+    | Smart
+    -- ^ Only fields in a record if they are named
 
 {-| Default interpret options, which you can tweak or override, like this:
 
@@ -1044,9 +1072,14 @@ data InterpretOptions = InterpretOptions
 -}
 defaultInterpretOptions :: InterpretOptions
 defaultInterpretOptions = InterpretOptions
-    { fieldModifier       = id
-    , constructorModifier = id
-    , inputNormalizer     = Dhall.Core.ReifiedNormalizer (const (pure Nothing))
+    { fieldModifier =
+          id
+    , constructorModifier =
+          id
+    , singletonConstructors =
+          Wrapped
+    , inputNormalizer =
+          Dhall.Core.ReifiedNormalizer (const (pure Nothing))
     }
 
 {-| This is the underlying class that powers the `Interpret` class's support
@@ -1341,11 +1374,45 @@ instance (Selector s1, Selector s2, Interpret a1, Interpret a2) => GenericInterp
 
         return (Type {..})
 
-instance Interpret a => GenericInterpret (M1 S s (K1 i a)) where
-    genericAutoWith options = do
-        let Type { extract = extract', ..} = autoWith options
+instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
+    genericAutoWith options@InterpretOptions{..} = do
+        let n :: M1 S s (K1 i a) r
+            n = undefined
 
-        let extract expression = fmap (M1 . K1) (extract' expression)
+        name <- fmap fieldModifier (getSelName n)
+
+        let Type { extract = extract', expected = expected'} = autoWith options
+
+        let expected =
+                case singletonConstructors of
+                    Bare ->
+                        expected'
+                    Smart | selName n == "" ->
+                        expected'
+                    _ ->
+                        Record (Dhall.Map.singleton name expected')
+
+        let extract0 expression = fmap (M1 . K1) (extract' expression)
+
+        let extract1 expression = do
+                let die = typeError expected expression
+
+                case expression of
+                    RecordLit kvs -> do
+                        case Dhall.Map.lookup name kvs of
+                            Just subExpression ->
+                                fmap (M1 . K1) (extract' subExpression)
+                            Nothing ->
+                                die
+                    _ -> do
+                        die
+
+
+        let extract =
+                case singletonConstructors of
+                    Bare                    -> extract0
+                    Smart | selName n == "" -> extract0
+                    _                       -> extract1
 
         return (Type {..})
 
@@ -1546,11 +1613,37 @@ instance GenericInject f => GenericInject (M1 C c f) where
         res <- genericInjectWith options
         pure (contramap unM1 res)
 
-instance Inject a => GenericInject (M1 S s (K1 i a)) where
-    genericInjectWith options = do
-        let res = injectWith options
+instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
+    genericInjectWith options@InterpretOptions{..} = do
+        let InputType { embed = embed', declared = declared' } =
+                injectWith options
 
-        pure (contramap (unK1 . unM1) res)
+        let n :: M1 S s (K1 i a) r
+            n = undefined
+
+        name <- fieldModifier <$> getSelName n
+
+        let embed0 (M1 (K1 x)) = embed' x
+
+        let embed1 (M1 (K1 x)) =
+                RecordLit (Dhall.Map.singleton name (embed' x))
+
+        let embed =
+                case singletonConstructors of
+                    Bare                    -> embed0
+                    Smart | selName n == "" -> embed0
+                    _                       -> embed1
+
+        let declared =
+                case singletonConstructors of
+                    Bare ->
+                        declared'
+                    Smart | selName n == "" ->
+                        declared'
+                    _ ->
+                        Record (Dhall.Map.singleton name declared')
+
+        return (InputType {..})
 
 instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) => GenericInject (M1 C c1 f1 :+: M1 C c2 f2) where
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
