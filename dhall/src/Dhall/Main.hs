@@ -96,7 +96,7 @@ data Mode
           }
     | Version
     | Resolve { file :: Input, resolveMode :: Maybe ResolveMode }
-    | Type { file :: Input }
+    | Type { file :: Input, quiet :: Bool }
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
     | Format { formatMode :: Dhall.Format.FormatMode }
@@ -161,7 +161,7 @@ parseMode =
     <|> subcommand
             "type"
             "Infer an expression's type"
-            (Type <$> parseFile)
+            (Type <$> parseFile <*> parseQuiet)
     <|> subcommand
             "normalize"
             "Normalize an expression"
@@ -260,6 +260,12 @@ parseMode =
                     "List transitive import dependencies"
               )
         <|> pure Nothing
+
+    parseQuiet =
+        Options.Applicative.switch
+            (   Options.Applicative.long "quiet"
+            <>  Options.Applicative.help "Don't print the inferred type"
+            )
 
     parseInplace = fmap f (optional p)
       where
@@ -492,7 +498,9 @@ command (Options {..}) = do
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-            render System.IO.stdout inferredType
+            if quiet
+                then return ()
+                else render System.IO.stdout inferredType
 
         Repl -> do
             Dhall.Repl.repl characterSet explain
