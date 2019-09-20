@@ -171,8 +171,7 @@ import Dhall.Core
     , bindingExprs
     , chunkExprs
     )
-#ifdef MIN_VERSION_http_client
-import Network.HTTP.Client (Manager)
+#ifdef WITH_HTTP
 import Dhall.Import.HTTP hiding (HTTPHeader)
 #endif
 import Dhall.Import.Types
@@ -703,7 +702,7 @@ fetchFresh Missing = throwM (MissingImports [])
 
 
 fetchRemote :: URL -> StateT Status IO Data.Text.Text
-#ifndef MIN_VERSION_http_client
+#ifndef WITH_HTTP
 fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
     let maybeHeaders = fmap toHeaders maybeHeadersExpression
     let urlString = Text.unpack (Dhall.Core.pretty url)
@@ -711,14 +710,13 @@ fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
     throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
 #else
 fetchRemote url = do
-    manager <- liftIO $ newManager
-    zoom remote (State.put (fetchFromHTTP manager))
-    fetchFromHTTP manager url
+    zoom remote (State.put fetchFromHTTP)
+    fetchFromHTTP url
   where
-    fetchFromHTTP :: Manager -> URL -> StateT Status IO Data.Text.Text
-    fetchFromHTTP manager (url'@URL { headers = maybeHeadersExpression }) = do
+    fetchFromHTTP :: URL -> StateT Status IO Data.Text.Text
+    fetchFromHTTP (url'@URL { headers = maybeHeadersExpression }) = do
         let maybeHeaders = fmap toHeaders maybeHeadersExpression
-        fetchFromHttpUrl manager url' maybeHeaders
+        fetchFromHttpUrl url' maybeHeaders
 #endif
 
 -- | Given a well-typed (of type `List { header : Text, value Text }` or
