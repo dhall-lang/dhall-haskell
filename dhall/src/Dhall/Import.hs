@@ -149,7 +149,6 @@ import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString (ByteString)
 import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Maybe (catMaybes)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Data.Void (absurd)
@@ -756,44 +755,28 @@ getCacheFile cacheName hash = do
 
     return cacheFile
 
-warnAboutMissingCaches  :: (MonadCatch m, Alternative m, MonadIO m) => m ()
-warnAboutMissingCaches = do
-    warnings <- traverse warnAboutMissingCache ["dhall", "dhall-haskell"]
+warnAboutMissingCaches :: (MonadCatch m, Alternative m, MonadIO m) => m ()
+warnAboutMissingCaches = warn <|> return ()
+    where warn = Data.Foldable.traverse_ getOrCreateCacheDirectoryOrWarn ["dhall", "dhall-haskell"]
 
-    case catMaybes warnings of
-        warn:_ -> liftIO (System.IO.hPutStrLn System.IO.stderr warn)
-        []     -> return () 
-      
+getOrCreateCacheDirectoryOrWarn :: (MonadCatch m, Alternative m, MonadIO m) => FilePath -> m FilePath
+getOrCreateCacheDirectoryOrWarn cacheName = do
+    cacheBaseDir <- getCacheBaseDirectoryOrWarn
 
-warnAboutMissingCache :: (MonadCatch m, Alternative m, MonadIO m) => FilePath -> m (Maybe String)
-warnAboutMissingCache cacheName = do
-    mbCacheBaseDir <- Maybe.runMaybeT getCacheBaseDirectory
-
-    case mbCacheBaseDir of
-        Just cacheBaseDir -> do
-            let expectedCacheDir = cacheBaseDir </> cacheName
-
-            mbCacheDir <- 
-                Maybe.runMaybeT (getOrCreateCacheDirectory cacheName)
-
-            case mbCacheDir of
-                Just _ -> return Nothing
-                
-                Nothing -> return (Just (warningCacheDir expectedCacheDir))
-
-        Nothing -> return (Just warningEnvVar)
- 
-    where warningEnvVar = 
-                "It has not been possible to get a cache base directory from environment.\n"
-             ++ "You can provide a cache base directory by pointing the $XDG_CACHE_HOME environment variable\n"
-             ++ "to a directory with read and write permissions.\n"
-          
-          warningCacheDir cacheDir = 
-                "It has not been possible to get or create the default cache directory:\n" 
-             ++ "  " ++ cacheDir ++ "\n"
-             ++ "Usually it is caused by permissions issues. You should make it readable and writable\n"
-             ++ "or provide another cache base directory setting the $XDG_CACHE_HOME environment variable.\n"
-
+    let message =
+            "\n" 
+         <> "\ESC[1;33mWarning\ESC[0m: " 
+         <> "It hasn't been possible to get or create the default cache directory:\n" 
+         <> "\n"
+         <> "  " ++ cacheBaseDir </> cacheName ++ "\n"
+         <> "\n"
+         <> "Usually it is caused by permissions issues.\n"
+         <> "You should make it readable and writable or provide another cache base directory " 
+         <> "setting the $XDG_CACHE_HOME environment variable.\n"
+        
+    let warn = liftIO (System.IO.hPutStrLn System.IO.stderr message) >> empty
+    
+    getOrCreateCacheDirectory cacheName <|> warn
 
 getOrCreateCacheDirectory :: (MonadCatch m, Alternative m, MonadIO m) => FilePath -> m FilePath
 getOrCreateCacheDirectory cacheName = do
@@ -835,6 +818,20 @@ getOrCreateCacheDirectory cacheName = do
 
     return directory
 
+getCacheBaseDirectoryOrWarn :: (Alternative m, MonadIO m) => m FilePath
+getCacheBaseDirectoryOrWarn = do
+    let message =
+            "\n" 
+         <> "\ESC[1;33mWarning\ESC[0m: " 
+         <> "It hasn't been possible get a cache base directory from environment.\n"
+         <> "\n"
+         <> "You can provide a cache base directory by pointing the $XDG_CACHE_HOME "
+         <> "environment variable to a directory with read and write permissions.\n"
+
+    let warn = liftIO (System.IO.hPutStrLn System.IO.stderr message) >> empty
+    
+    getCacheBaseDirectory <|> warn
+                
 getCacheBaseDirectory :: (Alternative m, MonadIO m) => m FilePath
 getCacheBaseDirectory = alternative₀ <|> alternative₁
   where
