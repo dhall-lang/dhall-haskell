@@ -429,6 +429,9 @@ Library
       Build-Depends: semigroups == 0.18.*
       Build-Depends: transformers == 0.4.2.*
       Build-Depends: fail == 4.9.*
+    if flag(with-http)
+      CPP-Options:
+        -DWITH_HTTP
     if impl(ghcjs)
       Hs-Source-Dirs: ghcjs-src
       Build-Depends:
