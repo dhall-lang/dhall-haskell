@@ -258,12 +258,10 @@ corsCompliant _ _ _ = return ()
 
 type HTTPHeader = Network.HTTP.Types.Header
 
-fetchFromHttpUrl
-    :: Manager
-    -> URL
-    -> Maybe [HTTPHeader]
-    -> StateT Status IO Text.Text
-fetchFromHttpUrl manager childURL mheaders = do
+fetchFromHttpUrl :: URL -> Maybe [HTTPHeader] -> StateT Status IO Text.Text
+fetchFromHttpUrl childURL mheaders = do
+    manager <- liftIO $ newManager
+
     let childURLString = Text.unpack (renderURL childURL)
 
     request <- liftIO (HTTP.parseUrlThrow childURLString)
