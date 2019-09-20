@@ -73,6 +73,7 @@ module Dhall.Core (
     , pathCharacter
     , throws
     , textShow
+    , censorExpression
     ) where
 
 import Control.Applicative (empty)
@@ -93,11 +94,12 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Traversable
 import Dhall.Map (Map)
 import Dhall.Set (Set)
-import Dhall.Src (Src)
+import Dhall.Src (Src(..))
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import GHC.Generics (Generic)
 import Instances.TH.Lift ()
 import Language.Haskell.TH.Syntax (Lift)
+import Lens.Family (over)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 
@@ -2210,6 +2212,31 @@ subExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 subExpressions _ (Embed a) = pure (Embed a)
+
+{-| Utility used to implement the @--censor@ flag, by:
+
+    * Replacing all `Src` text with spaces
+    * Replacing all `Text` literals inside type errors with spaces
+-}
+censorExpression :: Expr Src a -> Expr Src a
+censorExpression (TextLit chunks) = TextLit (censorChunks chunks)
+censorExpression (Note src     e) = Note (censorSrc src) (censorExpression e)
+censorExpression  e               = over subExpressions censorExpression e
+
+censorChunks :: Chunks Src a -> Chunks Src a
+censorChunks (Chunks xys z) = Chunks xys' z'
+  where
+    z' = censorText z
+
+    xys' = [ (censorText x, censorExpression y) | (x, y) <- xys ]
+
+censorText :: Text -> Text
+censorText = Data.Text.map (\_ -> ' ')
+
+censorSrc :: Src -> Src
+censorSrc (Src { srcText = oldText, .. }) = Src { srcText = newText, .. }
+  where
+    newText = Data.Text.map (\_ -> ' ') oldText
 
 -- | A traversal over the immediate sub-expressions in 'Chunks'.
 chunkExprs

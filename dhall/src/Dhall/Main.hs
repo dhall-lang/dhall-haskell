@@ -32,7 +32,7 @@ import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
-import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
+import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError, X)
 import Dhall.Util (Censor(..), Input(..))
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (ExitCode, exitFailure)
@@ -354,10 +354,16 @@ command (Options {..}) = do
                 let _ = e :: TypeError Src X
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
-                    then Control.Exception.throwIO (DetailedTypeError e)
+                    then
+                        case censor of
+                            Censor   -> Control.Exception.throwIO (CensoredDetailed (DetailedTypeError e))
+                            NoCensor -> Control.Exception.throwIO (DetailedTypeError e)
+
                     else do
                         Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
-                        Control.Exception.throwIO e
+                        case censor of
+                            Censor   -> Control.Exception.throwIO (Censored e)
+                            NoCensor -> Control.Exception.throwIO e
 
             handleImported (Imported ps e) = Control.Exception.handle handleAll $ do
                 let _ = e :: TypeError Src X
