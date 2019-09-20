@@ -69,7 +69,6 @@ import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
-import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.Exit                               as Exit
 import qualified System.IO
