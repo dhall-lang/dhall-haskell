@@ -34,6 +34,15 @@ module Dhall.Eval (
     judgmentallyEqual
   , normalize
   , alphaNormalize
+  , eval
+  , quote
+  , renote
+  , vacuous
+  , envNames
+  , Closure(..)
+  , Names(..)
+  , Environment(..)
+  , Val(..)
   ) where
 
 import Data.Foldable (foldr', toList)
@@ -1105,11 +1114,15 @@ quote !env !t0 =
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
 nf :: Eq a => Environment a -> Expr s a -> Expr t a
-nf !env = coeExprVoid . quote (envNames env) . eval env . Core.denote
-  where
-    coeExprVoid :: Expr Void a -> Expr s a
-    coeExprVoid = unsafeCoerce
-    {-# INLINE coeExprVoid #-}
+nf !env = renote . quote (envNames env) . eval env . Core.denote
+
+renote :: Expr Void a -> Expr s a
+renote = unsafeCoerce
+{-# INLINE renote #-}
+
+vacuous :: Expr s Void -> Expr s a
+vacuous = unsafeCoerce
+{-# INLINE vacuous #-}
 
 {-| Reduce an expression to its normal form, performing beta reduction
 

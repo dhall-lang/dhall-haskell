@@ -1,7 +1,9 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 {-# OPTIONS_GHC -Wall #-}
 
 -- | This module contains the logic for type checking Dhall code
@@ -37,6 +39,7 @@ import Data.Typeable (Typeable)
 import Dhall.Binary (ToTerm(..))
 import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
+import Dhall.Eval (Closure(..), Environment(..), Names(..), Val(..))
 import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Foldable
@@ -49,6 +52,7 @@ import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
+import qualified Dhall.Eval                              as Eval
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Pretty.Internal
@@ -105,37 +109,128 @@ typeWithA
     -> Context (Expr s a)
     -> Expr s a
     -> Either (TypeError s a) (Expr s a)
-typeWithA tpa = loop
+typeWithA tpa context expression =
+    fmap (Eval.renote . Eval.quote EmptyNames) (infer tpa ctx expression)
   where
-    loop _     (Const c         ) = do
-        fmap Const (axiom c)
-    loop ctx e@(Var (V x n)     ) = do
-        case Dhall.Context.lookup x n ctx of
-            Nothing -> Left (TypeError ctx e (UnboundVariable x))
-            Just a  -> do
-                -- Note: no need to typecheck the value we're
-                -- returning; that is done at insertion time.
-                return a
-    loop ctx   (Lam x _A  b     ) = do
-        _ <- loop ctx _A
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
-        _B <- loop ctx' b
-        let p = Pi x _A _B
-        _t <- loop ctx p
-        return p
-    loop ctx e@(Pi  x _A _B     ) = do
-        tA <- fmap Dhall.Core.normalize (loop ctx _A)
-        kA <- case tA of
-            Const k -> return k
-            _       -> Left (TypeError ctx e (InvalidInputType _A))
+    ctx = contextToCtx context
 
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
-        tB <- fmap Dhall.Core.normalize (loop ctx' _B)
-        kB <- case tB of
-            Const k -> return k
-            _       -> Left (TypeError ctx' e (InvalidOutputType _B))
+contextToCtx :: Eq a => Context (Expr s a) -> Ctx a
+contextToCtx context = loop (Dhall.Context.toList context)
+  where
+    loop [] =
+        Ctx Empty TypesEmpty
 
-        return (Const (rule kA kB))
+    loop ((x, t):rest) =
+        Ctx (Skip vs x) (TypesBind ts x (Eval.eval vs (Dhall.Core.denote t)))
+      where
+        Ctx vs ts = loop rest
+
+ctxToContext :: Eq a => Ctx a -> Context (Expr s a)
+ctxToContext (Ctx {..}) = loop types
+  where
+    loop (TypesBind ts x t) = Dhall.Context.insert x t' (loop ts)
+      where
+        ns = typesToNames ts
+
+        t' = Eval.renote (Eval.quote ns t)
+    loop TypesEmpty = Dhall.Context.empty
+
+typesToNames :: Types a -> Names
+typesToNames (TypesBind ts x _) = Bind ns x
+  where
+    ns = typesToNames ts
+typesToNames TypesEmpty = EmptyNames
+
+data Types a = TypesEmpty | TypesBind !(Types a) {-# UNPACK #-} !Text (Val a)
+
+data Ctx a = Ctx { values :: !(Environment a), types :: !(Types a) }
+
+addType :: Text -> Val a -> Ctx a -> Ctx a
+addType x t (Ctx vs ts) = Ctx (Skip vs x) (TypesBind ts x t)
+
+addTypeValue :: Text -> Val a -> Val a -> Ctx a -> Ctx a
+addTypeValue x t v (Ctx vs ts) = Ctx (Extend vs x v) (TypesBind ts x t)
+
+check
+    :: Ctx a
+    -> Expr s a
+    -> Val a
+    -> Either (TypeError s a) ()
+check ctx expression0 type0 =
+    case (expression0, type0) of
+        (Lam x _A b, VAnyPi x' _A' _B')
+  where
+infer
+    :: forall a s
+    .  Eq a
+    => Typer a
+    -> Ctx a
+    -> Expr s a
+    -> Either (TypeError s a) (Val a)
+infer tpa = loop
+  where
+    loop ctx@Ctx{..} expression = case expression of
+        Const c -> do
+            fmap VConst (axiom c)
+
+        Var (V x0 n0) -> do
+            let go TypesEmpty _ =
+                    die (UnboundVariable x0)
+                go (TypesBind ts x t) n
+                    | x == x0   = if n == 0 then return t else go ts (n - 1)
+                    | otherwise = go ts n
+
+            go types n0
+
+        Lam x _A b -> do
+            tA <- loop ctx _A
+
+            case tA of
+                VConst _ -> return ()
+                _        -> die (InvalidInputType _A)
+
+            let _A' = Eval.eval values (Dhall.Core.denote _A)
+
+            let ctx' = addType x _A' ctx
+
+            _B' <- loop ctx' b
+
+            let _B = Eval.quote (Bind (Eval.envNames values) x) _B'
+
+            tB <- loop ctx' (Eval.renote _B)
+
+            case tB of
+                VConst _ -> return ()
+                _        -> die (InvalidOutputType (Eval.renote _B))
+
+            return (VHPi x _A' (\u -> Eval.eval (Extend values x u) _B))
+
+        Pi x _A _B -> do
+            tA <- loop ctx _A
+
+            kA <- case tA of
+                VConst kA -> return kA
+                _         -> die (InvalidInputType _A)
+
+            let _A' = Eval.eval values (Dhall.Core.denote _A)
+
+            let ctx' = addType x _A' ctx
+
+            tB <- loop ctx' _B
+
+            kB <- case tB of
+                VConst kB -> return kB
+                _         -> die (InvalidOutputType _B)
+
+            return (VConst (rule kA kB))
+
+        App f a -> do
+            tf <- loop ctx f
+
+            case tf o
+                VAnyPi x _A _B -> do
+                    loop ctx 
+{-
     loop ctx e@(App f a         ) = do
         tf <- fmap Dhall.Core.normalize (loop ctx f)
         (x, _A, _B) <- case tf of
@@ -812,6 +907,13 @@ typeWithA tpa = loop
     loop ctx   (ImportAlt l _r  ) =
        fmap Dhall.Core.normalize (loop ctx l)
     loop _     (Embed p         ) = Right $ tpa p
+-}
+      where
+        die err = Left (TypeError context expression err)
+          where
+            context = ctxToContext ctx
+
+        names = typesToNames types
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
