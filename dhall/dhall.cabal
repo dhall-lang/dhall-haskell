@@ -500,6 +500,7 @@ Library
         Dhall.Tutorial,
         Dhall.TypeCheck,
         Dhall.Util
+        Dhall.Version
     if !flag(cross)
         Exposed-Modules:
             Dhall.TH
@@ -509,6 +510,8 @@ Library
         Dhall.URL,
         Dhall.Import.Types,
         Dhall.Eval,
+        Paths_dhall
+    Autogen-Modules:
         Paths_dhall
     if flag(with-http)
       Other-Modules:
