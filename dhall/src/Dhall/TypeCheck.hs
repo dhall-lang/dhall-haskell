@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -39,7 +40,8 @@ import Data.Typeable (Typeable)
 import Dhall.Binary (ToTerm(..))
 import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
-import Dhall.Eval (Closure(..), Environment(..), Names(..), Val(..))
+import Dhall.Eval
+    (Closure(..), Environment(..), Names(..), Val(..), pattern VAnyPi)
 import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Foldable
@@ -151,15 +153,61 @@ addType x t (Ctx vs ts) = Ctx (Skip vs x) (TypesBind ts x t)
 addTypeValue :: Text -> Val a -> Val a -> Ctx a -> Ctx a
 addTypeValue x t v (Ctx vs ts) = Ctx (Extend vs x v) (TypesBind ts x t)
 
+fresh :: Ctx a -> Text -> Val a
+fresh Ctx{..} x = VVar x (Eval.countNames x (Eval.envNames values))
+
 check
-    :: Ctx a
+    :: Eq a
+    => Typer a
+    -> Ctx a
     -> Expr s a
     -> Val a
     -> Either (TypeError s a) ()
-check ctx expression0 type0 =
-    case (expression0, type0) of
-        (Lam x _A b, VAnyPi x' _A' _B')
+check typer ctx@Ctx{..} expressionL typeR =
+    case (expressionL, typeR) of
+        (Lam xL _AL bL, VAnyPi xR _AR _BR) -> do
+            tAL <- infer typer ctx _AL
+
+            case tAL of
+                VConst _ -> return ()
+                _        -> die (InvalidInputType _AL)
+
+            let _AL' = Eval.eval values (Dhall.Core.denote _AL)
+
+            if Eval.conv values _AL' _AR
+                then return ()
+                else error "TODO #0"
+
+            let xL' = fresh ctx xL
+
+            let ctx' = addTypeValue xR _AL' xL' ctx
+
+            check typer ctx' bL (_BR xL')
+
+        (RecordLit kvsL, VRecord ktsR) -> do
+            let process kL vL =
+                    case Dhall.Map.lookup kL ktsR of
+                        Just tR -> check typer ctx vL tR
+                        Nothing -> error "TODO #1"
+
+            Dhall.Map.unorderedTraverseWithKey_ process kvsL
+
+{-
+        (Merge handlersL unionL maybeTypeL, _) -> do
+            case maybeTypeL of
+                Nothing -> return ()
+                Just typeL -> do
+                    let typeL' = Eval.eval values typeL
+
+                    if Eval.conv values typeL' typeR
+                        then return ()
+                        else error "TODO #1"
+-}
   where
+    die err = Left (TypeError context expressionL err)
+      where
+        context = ctxToContext ctx
+
 infer
     :: forall a s
     .  Eq a
@@ -167,7 +215,7 @@ infer
     -> Ctx a
     -> Expr s a
     -> Either (TypeError s a) (Val a)
-infer tpa = loop
+infer typer = loop
   where
     loop ctx@Ctx{..} expression = case expression of
         Const c -> do
@@ -227,9 +275,9 @@ infer tpa = loop
         App f a -> do
             tf <- loop ctx f
 
-            case tf o
+            case tf of
                 VAnyPi x _A _B -> do
-                    loop ctx 
+                    error "TODO"
 {-
     loop ctx e@(App f a         ) = do
         tf <- fmap Dhall.Core.normalize (loop ctx f)

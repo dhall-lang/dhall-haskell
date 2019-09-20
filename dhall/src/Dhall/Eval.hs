@@ -39,10 +39,13 @@ module Dhall.Eval (
   , renote
   , vacuous
   , envNames
+  , countNames
+  , conv
   , Closure(..)
   , Names(..)
   , Environment(..)
   , Val(..)
+  , pattern VAnyPi
   ) where
 
 import Data.Foldable (foldr', toList)
@@ -136,6 +139,15 @@ data HLamInfo a
 
 pattern VPrim :: (Val a -> Val a) -> Val a
 pattern VPrim f = VHLam Prim f
+
+pattern VAnyPi :: Eq a => Text -> Val a -> (Val a -> Val a) -> Val a
+pattern VAnyPi x a b <-
+    (   let adapt e = case e of
+                VPi  a b@(Closure x _ _) -> Just (x, a, instantiate b)
+                VHPi x a b               -> Just (x, a, b            )
+                _                        -> Nothing
+         in  adapt -> Just (x, a, b)
+    )
 
 data Val a
     = VConst !Const
