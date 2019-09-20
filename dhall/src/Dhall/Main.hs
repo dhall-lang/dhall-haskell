@@ -92,6 +92,7 @@ data Mode
           , annotate :: Bool
           , alpha :: Bool
           , semanticCacheMode :: SemanticCacheMode
+          , version :: Bool
           }
     | Version
     | Resolve { file :: Input, resolveMode :: Maybe ResolveMode }
@@ -201,7 +202,13 @@ parseMode =
             "text"
             "Render a Dhall expression that evaluates to a Text literal"
             (Text <$> parseFile)
-    <|> (Default <$> parseFile <*> parseAnnotate <*> parseAlpha <*> parseSemanticCacheMode)
+    <|> (   Default
+        <$> parseFile
+        <*> parseAnnotate
+        <*> parseAlpha
+        <*> parseSemanticCacheMode
+        <*> parseVersion
+        )
   where
     argument =
             fmap Data.Text.pack
@@ -238,6 +245,12 @@ parseMode =
             (   Options.Applicative.long "no-cache"
             <>  Options.Applicative.help
                   "Handle protected imports as if the cache was empty"
+            )
+
+    parseVersion =
+        Options.Applicative.switch
+            (   Options.Applicative.long "version"
+            <>  Options.Applicative.help "Display version"
             )
 
     parseResolveMode =
@@ -394,6 +407,12 @@ command (Options {..}) = do
             putStrLn dhallVersionString
 
         Default {..} -> do
+            if version
+                then do
+                    putStrLn dhallVersionString
+                    Exit.exitSuccess
+                else return ()
+
             expression <- getExpression file
 
             resolvedExpression <-
