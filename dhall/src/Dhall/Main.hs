@@ -26,7 +26,6 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Data.Version (showVersion)
 import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..))
@@ -34,6 +33,7 @@ import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import Dhall.Util (Censor(..), Input(..))
+import Dhall.Version (dhallVersionString)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (ExitCode, exitFailure)
 import System.IO (Handle)
@@ -392,7 +392,7 @@ command (Options {..}) = do
 
     handle $ case mode of
         Version -> do
-            putStrLn (showVersion Meta.version)
+            putStrLn dhallVersionString
 
         Default {..} -> do
             expression <- getExpression file

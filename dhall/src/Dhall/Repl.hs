@@ -22,7 +22,6 @@ import Data.List ( isPrefixOf, nub )
 import Data.Maybe ( mapMaybe )
 import Data.Semigroup ((<>))
 import Data.Text ( Text )
-import Data.Version (showVersion)
 import Dhall.Context (Context)
 import Dhall.Import (hashExpressionToCode)
 import Dhall.Src (Src)
@@ -49,7 +48,7 @@ import qualified Dhall.Import as Dhall
 import qualified Dhall.Map as Map
 import qualified Dhall.Parser as Dhall
 import qualified Dhall.TypeCheck as Dhall
-import qualified Paths_dhall as Meta
+import qualified Dhall.Version as Meta
 import qualified System.Console.ANSI
 import qualified System.Console.Haskeline.Completion as Haskeline
 import qualified System.Console.Haskeline.MonadException as Haskeline
@@ -573,7 +572,7 @@ completeFunc reversedPrev word
 
 greeter :: MonadIO m => m ()
 greeter =
-  let version = showVersion Meta.version
+  let version = Meta.dhallVersionString
       message = "Welcome to the Dhall v" <> version <> " REPL! Type :help for more information."
   in liftIO (putStrLn message)
 

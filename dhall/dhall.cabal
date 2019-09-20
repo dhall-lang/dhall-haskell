@@ -497,6 +497,7 @@ Library
         Dhall.Tutorial,
         Dhall.TypeCheck,
         Dhall.Util
+        Dhall.Version
     if !flag(cross)
         Exposed-Modules:
             Dhall.TH
