@@ -29,7 +29,6 @@ import Data.Void (Void, absurd)
 import Control.Exception (Exception)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer.Strict (execWriterT, tell)
-import Data.Functor (void)
 import Data.Monoid (Endo(..), First(..))
 import Data.Sequence (Seq, ViewL(..))
 import Data.Semigroup (Max(..), Semigroup(..))
@@ -41,7 +40,7 @@ import Dhall.Binary (ToTerm(..))
 import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Eval
-    (Closure(..), Environment(..), Names(..), Val(..), pattern VAnyPi, (~>))
+    (Environment(..), Names(..), Val(..), pattern VAnyPi, (~>))
 import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Foldable
@@ -156,7 +155,7 @@ addTypeValue x t v (Ctx vs ts) = Ctx (Extend vs x v) (TypesBind ts x t)
 fresh :: Ctx a -> Text -> Val a
 fresh Ctx{..} x = VVar x (Eval.countNames x (Eval.envNames values))
 
--- TODO: Improve error handling
+{-
 check
     :: (Eq a, Pretty a)
     => Typer a
@@ -259,6 +258,7 @@ check typer ctx@Ctx{..} expressionL typeR =
         context = ctxToContext ctx
 
     names = Eval.envNames values
+-}
 
 infer
     :: forall a s
@@ -335,7 +335,7 @@ infer typer = loop
             tf' <- loop ctx f
 
             case tf' of
-                VAnyPi x _A₀' _B' -> do
+                VAnyPi _x _A₀' _B' -> do
                     _A₁' <- loop ctx a
 
                     if Eval.conv values _A₀' _A₁'
@@ -529,6 +529,9 @@ infer typer = loop
         NaturalIsZero -> do
             return (VNatural ~> VBool)
 
+        NaturalEven -> do
+            return (VNatural ~> VBool)
+
         NaturalOdd -> do
             return (VNatural ~> VBool)
 
@@ -584,6 +587,15 @@ infer typer = loop
             return (VInteger ~> VDouble)
 
         Double -> do
+            return (VConst Type)
+
+        DoubleLit _ -> do
+            return VDouble
+
+        DoubleShow -> do
+            return (VDouble ~> VText)
+
+        Text -> do
             return (VConst Type)
 
         TextLit (Chunks xys _) -> do
@@ -1238,85 +1250,65 @@ infer typer = loop
                     let text = Dhall.Core.pretty s
 
                     die (CantProject text e s)
-{-
-    loop ctx e@(Project r (Right t)) = do
-        _R <- fmap Dhall.Core.normalize (loop ctx r)
 
-        case _R of
-            Record ktsR -> do
-                _ <- loop ctx t
+        Assert _T -> do
+            _ <- loop ctx _T
 
-                case Dhall.Core.normalize t of
-                    Record ktsT -> do
-                        let actualSubset =
-                                Record (Dhall.Map.intersection ktsR ktsT)
+            let _T' = eval values _T
 
-                        let expectedSubset = t
+            case _T' of
+                VEquivalent x' y' -> do
+                    let x'' = quote names x'
+                    let y'' = quote names y'
 
-                        let process k tT = do
-                                case Dhall.Map.lookup k ktsR of
-                                    Nothing -> do
-                                        Left (TypeError ctx e (MissingField k _R))
-                                    Just tR -> do
-                                        if Dhall.Core.judgmentallyEqual tT tR
-                                            then do
-                                                return ()
-                                            else do
-                                                Left (TypeError ctx e (ProjectionTypeMismatch k tT tR expectedSubset actualSubset))
+                    if Eval.conv values x' y'
+                        then return _T'
+                        else die (AssertionFailed x'' y'')
 
-                        Dhall.Map.unorderedTraverseWithKey_ process ktsT
+                _ -> do
+                    die (NotAnEquivalence _T)
 
-                        return (Record ktsT)
-                    _ -> do
-                        Left (TypeError ctx e (CantProjectByExpression t))
+        Equivalent x y -> do
+            _A₀' <- loop ctx x
 
-            _ -> do
-                let text = Dhall.Core.pretty t
+            let _A₀'' = quote names _A₀'
 
-                Left (TypeError ctx e (CantProject text r t))
-    loop ctx e@(Assert t) = do
-        _ <- loop ctx t
+            tA₀' <- loop ctx _A₀''
 
-        let t' = Dhall.Core.normalize t
+            case tA₀' of
+                VConst Type -> return ()
+                _          -> die (IncomparableExpression x)
 
-        case t' of
-            Equivalent x y -> do
-                if Dhall.Core.judgmentallyEqual x y
-                    then return t'
-                    else Left (TypeError ctx e (AssertionFailed x y))
+            _A₁' <- loop ctx y
 
-            _ -> Left (TypeError ctx e (NotAnEquivalence t))
-    loop ctx e@(Equivalent x y) = do
-        _A₀ <- loop ctx x
+            let _A₁'' = quote names _A₁'
 
-        c₀ <- loop ctx _A₀
-        case c₀ of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (IncomparableExpression x))
+            tA₁' <- loop ctx _A₁''
 
-        _A₁ <- loop ctx y
+            case tA₁' of
+                VConst Type -> return ()
+                _           -> die (IncomparableExpression y)
 
-        c₁ <- loop ctx _A₁
-        case c₁ of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (IncomparableExpression y))
+            if Eval.conv values _A₀' _A₁'
+                then return ()
+                else die (EquivalenceTypeMismatch x _A₀'' y _A₁'')
 
-        if Dhall.Core.judgmentallyEqual _A₀ _A₁
-            then return ()
-            else do
-                let nf_A₀ = Dhall.Core.normalize _A₀
-                let nf_A₁ = Dhall.Core.normalize _A₁
-                Left (TypeError ctx e (EquivalenceTypeMismatch x nf_A₀ y nf_A₁))
+            return (VConst Type)
 
-        return (Const Type)
-    loop ctx   (Note s e'       ) = case loop ctx e' of
-        Left (TypeError ctx' (Note s' e'') m) -> Left (TypeError ctx' (Note s' e'') m)
-        Left (TypeError ctx'          e''  m) -> Left (TypeError ctx' (Note s  e'') m)
-        Right r                               -> Right r
-    loop ctx   (ImportAlt l _r  ) =
-       fmap Dhall.Core.normalize (loop ctx l)
-    loop _     (Embed p         ) = Right $ tpa p
--}
+        Note s e ->
+            case loop ctx e of
+                Left (TypeError ctx' (Note s' e') m) ->
+                    Left (TypeError ctx' (Note s' e') m)
+                Left (TypeError ctx'          e'  m) ->
+                    Left (TypeError ctx' (Note s  e') m)
+                Right r ->
+                    Right r
+
+        ImportAlt l _r -> do
+            loop ctx l
+
+        Embed p -> do
+            return (eval values (typer p))
       where
         die err = Left (TypeError context expression err)
           where
@@ -1324,9 +1316,9 @@ infer typer = loop
 
         names = typesToNames types
 
-        eval values expression = Eval.eval values (Dhall.Core.denote expression)
+        eval vs e = Eval.eval vs (Dhall.Core.denote e)
 
-        quote names value = Eval.renote (Eval.quote names value)
+        quote ns value = Eval.renote (Eval.quote ns value)
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
