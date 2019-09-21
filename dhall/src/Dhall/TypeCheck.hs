@@ -158,7 +158,7 @@ fresh Ctx{..} x = VVar x (Eval.countNames x (Eval.envNames values))
 
 -- TODO: Improve error handling
 check
-    :: Eq a
+    :: (Eq a, Pretty a)
     => Typer a
     -> Ctx a
     -> Expr s a
@@ -262,7 +262,7 @@ check typer ctx@Ctx{..} expressionL typeR =
 
 infer
     :: forall a s
-    .  Eq a
+    .  (Eq a, Pretty a)
     => Typer a
     -> Ctx a
     -> Expr s a
@@ -1145,47 +1145,100 @@ infer typer = loop
                         
                        die (MapTypeMismatch (quote names (mapType _T')) _T₁'')
 
+        Field e x -> do
+            _E' <- loop ctx e
+
+            let _E'' = quote names _E'
+
+            case _E' of
+                VRecord xTs' -> do
+                    _ <- loop ctx _E''
+
+                    case Dhall.Map.lookup x xTs' of
+                        Just _T' -> return _T'
+                        Nothing  -> die (MissingField x _E'')
+                _ -> do
+                    let e' = eval values e
+
+                    let e'' = quote names e'
+
+                    case e' of
+                        VUnion xTs' -> do
+                            case Dhall.Map.lookup x xTs' of
+                                Just (Just _T') -> return (VHPi x _T' (\_ -> e'))
+                                Just  Nothing   -> return e'
+                                Nothing         -> die (MissingConstructor x e)
+
+                        _ -> do
+                            let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
+
+                            die (CantAccess text e'' _E'')
+        Project e (Left xs) -> do
+            _E' <- loop ctx e
+
+            let _E'' = quote names _E'
+
+            case _E' of
+                VRecord xTs' -> do
+                    _ <- loop ctx _E''
+
+                    let process x =
+                            case Dhall.Map.lookup x xTs' of
+                                Just _T' -> return (x, _T')
+                                Nothing  -> die (MissingField x _E'')
+
+                    let adapt = VRecord . Dhall.Map.fromList
+
+                    fmap adapt (traverse process (Dhall.Set.toList xs))
+
+                _ -> do
+                    let text =
+                            Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
+
+                    die (CantProject text e _E'')
+
+        Project e (Right s) -> do
+            _E' <- loop ctx e
+
+            let _E'' = quote names _E'
+
+            case _E' of
+                VRecord xEs' -> do
+                    _ <- loop ctx s
+
+                    let s' = eval values s
+
+                    case s' of
+                        VRecord xSs' -> do
+                            let actualSubset =
+                                    quote names (VRecord (Dhall.Map.intersection xEs' xSs'))
+
+                            let expectedSubset = s
+
+                            let process x _S' = do
+                                    let _S'' = quote names _S'
+
+                                    case Dhall.Map.lookup x xEs' of
+                                        Nothing -> do
+                                            die (MissingField x _E'')
+
+                                        Just _E' -> do
+                                            if Eval.conv values _E' _S'
+                                                then return ()
+                                                else die (ProjectionTypeMismatch x _E'' _S'' expectedSubset actualSubset)
+
+                            Dhall.Map.unorderedTraverseWithKey_ process xSs'
+
+                            return s'
+
+                        _ -> do
+                            die (CantProjectByExpression s)
+
+                _ -> do
+                    let text = Dhall.Core.pretty s
+
+                    die (CantProject text e s)
 {-
-    loop ctx e@(Field r x       ) = do
-        t <- fmap Dhall.Core.normalize (loop ctx r)
-
-        let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
-
-        case t of
-            Record kts -> do
-                _ <- loop ctx t
-
-                case Dhall.Map.lookup x kts of
-                    Just t' -> return t'
-                    Nothing -> Left (TypeError ctx e (MissingField x t))
-            _ -> do
-                case Dhall.Core.normalize r of
-                  Union kts ->
-                    case Dhall.Map.lookup x kts of
-                        Just (Just t') -> return (Pi x t' (Union kts))
-                        Just Nothing   -> return (Union kts)
-                        Nothing -> Left (TypeError ctx e (MissingConstructor x r))
-                  r' -> Left (TypeError ctx e (CantAccess text r' t))
-    loop ctx e@(Project r (Left xs)) = do
-        t <- fmap Dhall.Core.normalize (loop ctx r)
-
-        case t of
-            Record kts -> do
-                _ <- loop ctx t
-
-                let process k =
-                        case Dhall.Map.lookup k kts of
-                            Just t' -> return (k, t')
-                            Nothing -> Left (TypeError ctx e (MissingField k t))
-
-                let adapt = Record . Dhall.Map.fromList
-
-                fmap adapt (traverse process (Dhall.Set.toList xs))
-            _ -> do
-                let text =
-                        Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
-
-                Left (TypeError ctx e (CantProject text r t))
     loop ctx e@(Project r (Right t)) = do
         _R <- fmap Dhall.Core.normalize (loop ctx r)
 
