@@ -1076,43 +1076,76 @@ infer typer = loop
             Dhall.Map.unorderedTraverseWithKey_ process yUs'
 
             return _T₁'
+
+        ToMap e mT₁ -> do
+            _E' <- loop ctx e
+
+            let _E'' = quote names _E'
+
+            xTs' <- case _E' of
+                VRecord xTs' -> return xTs'
+                _            -> die (MustMapARecord e _E'')
+
+            tE' <- loop ctx _E''
+
+            let tE'' = quote names tE'
+
+            case tE' of
+                VConst Type -> return ()
+                _           -> die (InvalidToMapRecordKind _E'' tE'')
+
+            Data.Foldable.traverse_ (loop ctx) mT₁
+
+            let compareFieldTypes _T₀' Nothing =
+                    Just (Right _T₀')
+
+                compareFieldTypes _T₀' r@(Just (Right _T₁'))
+                    | Eval.conv values _T₀' _T₁' = r
+                    | otherwise = do
+                        let _T₀'' = quote names _T₀'
+                        let _T₁'' = quote names _T₁'
+
+                        Just (die (HeterogenousRecordToMap _E'' _T₀'' _T₁''))
+
+                compareFieldTypes _T₀' r@(Just (Left _)) =
+                    r
+
+            let r = appEndo (foldMap (Endo . compareFieldTypes) xTs') Nothing
+
+            let mT₁' = fmap (eval values) mT₁
+
+            let mapType _T' =
+                    VList
+                        (VRecord
+                            (Dhall.Map.fromList
+                                [("mapKey", VText), ("mapValue", _T')]
+                            )
+                        )
+
+            case (r, mT₁') of
+                (Nothing, Nothing) -> do
+                    die MissingToMapType
+                (Just err@(Left _), _) -> do
+                    err
+                (Just (Right _T'), Nothing) -> do
+                    pure (mapType _T')
+                (Nothing, Just _T₁'@(VList (VRecord itemTypes)))
+                   | Just _T' <- Dhall.Map.lookup "mapValue" itemTypes
+                   , Eval.conv values (mapType _T') _T₁' -> do
+                       pure _T₁'
+                (Nothing, Just _T₁') -> do
+                    let _T₁'' = quote names _T₁'
+
+                    die (InvalidToMapType _T₁'')
+                (Just (Right _T'), Just _T₁')
+                   | Eval.conv values (mapType _T') _T₁' -> do
+                       pure _T₁'
+                   | otherwise -> do
+                       let _T₁'' = quote names _T₁'
+                        
+                       die (MapTypeMismatch (quote names (mapType _T')) _T₁'')
+
 {-
-    loop ctx e@(ToMap kvsX mT₁) = do
-        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
-
-        ktsX <- case tKvsX of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustMapARecord kvsX tKvsX))
-
-        _TKvsX <- loop ctx tKvsX
-
-        case _TKvsX of
-            Const Type -> return ()
-            kind       -> Left (TypeError ctx e (InvalidToMapRecordKind tKvsX kind))
-
-        Data.Foldable.traverse_ (loop ctx) mT₁
-
-        let ktX = appEndo (foldMap (Endo . compareFieldTypes) ktsX) Nothing
-            mT₂ = fmap Dhall.Core.normalize mT₁
-            mapType fieldType = App List (Record $ Dhall.Map.fromList [("mapKey", Text),
-                                                                       ("mapValue", fieldType)])
-            compareFieldTypes t Nothing = Just (Right t)
-            compareFieldTypes t r@(Just (Right t'))
-               | Dhall.Core.judgmentallyEqual t t' = r
-               | otherwise = Just (Left $ TypeError ctx e (HeterogenousRecordToMap tKvsX t t'))
-            compareFieldTypes _ r@(Just Left{}) = r
-
-        case (ktX, mT₂) of
-            (Nothing, Nothing) -> Left (TypeError ctx e MissingToMapType)
-            (Just err@Left{}, _) -> err
-            (Just (Right t), Nothing) -> pure (mapType t)
-            (Nothing, Just t@(App List (Record mapItemType)))
-               | Just fieldType <- Dhall.Map.lookup "mapValue" mapItemType,
-                 Dhall.Core.judgmentallyEqual t (mapType fieldType) -> pure t
-            (Nothing, Just t) -> Left (TypeError ctx e $ InvalidToMapType t)
-            (Just (Right t₁), Just t₂)
-               | Dhall.Core.judgmentallyEqual (mapType t₁) t₂ -> pure t₂
-               | otherwise -> Left (TypeError ctx e $ MapTypeMismatch (mapType t₁) t₂)
     loop ctx e@(Field r x       ) = do
         t <- fmap Dhall.Core.normalize (loop ctx r)
 
