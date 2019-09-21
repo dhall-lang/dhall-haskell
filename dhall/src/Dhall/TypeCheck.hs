@@ -962,94 +962,121 @@ infer typer = loop
                 _            -> die (MustCombineARecord '⫽' l r)
 
             return (VRecord (Dhall.Map.union xLs' xRs'))
-{-
-    loop ctx e@(Merge kvsX kvsY mT₁) = do
-        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
 
-        ktsX <- case tKvsX of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustMergeARecord kvsX tKvsX))
+        Merge t u mT₁ -> do
+            _T' <- loop ctx t
 
-        tKvsY <- fmap Dhall.Core.normalize (loop ctx kvsY)
+            yTs' <- case _T' of 
+                VRecord yTs' -> do
+                    return yTs'
 
-        ktsY <- case tKvsY of
-            Union kts -> return kts
-            _         -> Left (TypeError ctx e (MustMergeUnion kvsY tKvsY))
+                _ -> do
+                    let _T'' = quote names _T'
 
-        let ksX = Dhall.Map.keysSet ktsX
-        let ksY = Dhall.Map.keysSet ktsY
+                    die (MustMergeARecord t _T'')
 
-        let diffX = Data.Set.difference ksX ksY
-        let diffY = Data.Set.difference ksY ksX
+            _U' <- loop ctx u
 
-        if Data.Set.null diffX
-            then return ()
-            else Left (TypeError ctx e (UnusedHandler diffX))
+            yUs' <- case _U' of
+                VUnion yUs' -> do
+                    return yUs'
 
-        (mKX, _T₁) <- do
-            case mT₁ of
-                Just _T₁ -> do
-                    return (Nothing, _T₁)
+                _ -> do
+                    let _U'' = quote names _U'
 
-                Nothing -> do
-                    case Dhall.Map.uncons ktsX of
-                        Nothing -> do
-                            Left (TypeError ctx e MissingMergeType)
+                    die (MustMergeUnion u _U'')
 
-                        Just (kX, tX, _) -> do
-                            _T₁ <- do
-                                case Dhall.Map.lookup kX ktsY of
-                                    Nothing -> do
-                                        Left (TypeError ctx e (UnusedHandler diffX))
+            let ysT = Dhall.Map.keysSet yTs'
+            let ysU = Dhall.Map.keysSet yUs'
 
-                                    Just Nothing -> do
-                                        return tX
+            let diffT = Data.Set.difference ysT ysU
+            let diffU = Data.Set.difference ysU ysT
 
-                                    Just (Just _)  ->
-                                        case tX of
-                                            Pi x _A₀ _T₀ -> do
-                                                return (Dhall.Core.shift (-1) (V x 0) _T₀)
-                                            _ -> do
-                                                Left (TypeError ctx e (HandlerNotAFunction kX tX))
+            if Data.Set.null diffT
+                then return ()
+                else die (UnusedHandler diffT)
 
-                            return (Just kX, _T₁)
+            (my₀, _T₁') <- do
+                case mT₁ of
+                    Just _T₁ -> do
+                        return (Nothing, eval values _T₁)
 
-        _ <- loop ctx _T₁
-
-        let process kY mTY = do
-                case Dhall.Map.lookup kY ktsX of
                     Nothing -> do
-                        Left (TypeError ctx e (MissingHandler diffY))
+                        case Dhall.Map.uncons yTs' of
+                            Nothing -> do
+                                die MissingMergeType
 
-                    Just tX -> do
-                        _T₃ <- do
-                            case mTY of
-                                Nothing -> do
-                                    return tX
-                                Just _A₁ -> do
-                                    case tX of
-                                        Pi x _A₀ _T₂ -> do
-                                            if Dhall.Core.judgmentallyEqual _A₀ _A₁
-                                                then return ()
-                                                else Left (TypeError ctx e (HandlerInputTypeMismatch kY _A₁ _A₀))
+                            Just (y₀, _T', _) -> do
+                                _T₁' <- do
+                                    case Dhall.Map.lookup y₀ yUs' of
+                                        Nothing -> do
+                                            die (UnusedHandler diffU)
 
-                                            return (Dhall.Core.shift (-1) (V x 0) _T₂)
-                                        _ -> do
-                                            Left (TypeError ctx e (HandlerNotAFunction kY tX))
+                                        Just Nothing -> do
+                                            return _T'
 
-                        if Dhall.Core.judgmentallyEqual _T₁ _T₃
-                            then return ()
-                            else
-                                case mKX of
+                                        Just (Just _) -> do
+                                            case _T' of
+                                                VAnyPi x _A₀' _T₀' -> do
+                                                    return (_T₀' (fresh ctx x))
+
+                                                _ -> do
+                                                    let _T'' = quote names _T'
+
+                                                    die (HandlerNotAFunction y₀ _T'')
+
+                                return (Just y₀, _T₁')
+
+            let _T₁'' = quote names _T₁'
+
+            _ <- loop ctx _T₁''
+
+            let process y mU = do
+                    case Dhall.Map.lookup y yTs' of
+                        Nothing -> do
+                            die (MissingHandler diffU)
+
+                        Just _T' -> do
+                            _T₃' <- do
+                                case mU of
                                     Nothing -> do
-                                        Left (TypeError ctx e (InvalidHandlerOutputType kY _T₁ _T₃))
-                                    Just kX -> do
-                                        Left (TypeError ctx e (HandlerOutputTypeMismatch kX _T₁ kY _T₃))
+                                        return _T'
 
-        Dhall.Map.unorderedTraverseWithKey_ process ktsY
+                                    Just _A₁' -> do
+                                        case _T' of
+                                            VAnyPi x _A₀' _T₂' -> do
+                                                if Eval.conv values _A₀' _A₁'
+                                                    then do
+                                                        return ()
 
-        return _T₁
+                                                    else do
+                                                        let _A₀'' = quote names _A₀'
+                                                        let _A₁'' = quote names _A₁'
 
+                                                        die (HandlerInputTypeMismatch y _A₁'' _A₀'')
+
+                                                return (_T₂' (fresh ctx x))
+
+                                            _ -> do
+                                                let _T'' = quote names _T'
+
+                                                die (HandlerNotAFunction y _T'')
+
+                            if Eval.conv values _T₁' _T₃'
+                                then do
+                                    return ()
+
+                                else do
+                                    let _T₃'' = quote names _T₃'
+
+                                    case my₀ of
+                                        Nothing -> die (InvalidHandlerOutputType y _T₁'' _T₃'')
+                                        Just y₀ -> die (HandlerOutputTypeMismatch y₀ _T₁'' y _T₃'')
+
+            Dhall.Map.unorderedTraverseWithKey_ process yUs'
+
+            return _T₁'
+{-
     loop ctx e@(ToMap kvsX mT₁) = do
         tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
 
