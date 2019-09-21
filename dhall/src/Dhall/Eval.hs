@@ -46,6 +46,7 @@ module Dhall.Eval (
   , Environment(..)
   , Val(..)
   , pattern VAnyPi
+  , (~>)
   ) where
 
 import Data.Foldable (foldr', toList)
@@ -230,6 +231,8 @@ data Val a
 (~>) :: Val a -> Val a -> Val a
 (~>) a b = VHPi "_" a (\_ -> b)
 {-# INLINE (~>) #-}
+
+infixr 5 ~>
 
 countEnvironment :: Text -> Environment a -> Int
 countEnvironment x = go (0 :: Int)

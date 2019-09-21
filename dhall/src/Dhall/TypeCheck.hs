@@ -41,7 +41,7 @@ import Dhall.Binary (ToTerm(..))
 import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Eval
-    (Closure(..), Environment(..), Names(..), Val(..), pattern VAnyPi)
+    (Closure(..), Environment(..), Names(..), Val(..), pattern VAnyPi, (~>))
 import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Foldable
@@ -156,6 +156,7 @@ addTypeValue x t v (Ctx vs ts) = Ctx (Extend vs x v) (TypesBind ts x t)
 fresh :: Ctx a -> Text -> Val a
 fresh Ctx{..} x = VVar x (Eval.countNames x (Eval.envNames values))
 
+-- TODO: Improve error handling
 check
     :: Eq a
     => Typer a
@@ -192,21 +193,72 @@ check typer ctx@Ctx{..} expressionL typeR =
 
             Dhall.Map.unorderedTraverseWithKey_ process kvsL
 
-{-
         (Merge handlersL unionL maybeTypeL, _) -> do
             case maybeTypeL of
                 Nothing -> return ()
                 Just typeL -> do
-                    let typeL' = Eval.eval values typeL
+                    let typeL' = Eval.eval values (Dhall.Core.denote typeL)
 
                     if Eval.conv values typeL' typeR
                         then return ()
                         else error "TODO #1"
--}
+
+            unionType <- infer typer ctx unionL
+
+            handlersType <- case unionType of
+                VUnion kts -> do
+                    let adapt  Nothing  = typeR
+                        adapt (Just t ) = t ~> typeR
+
+                    return (VRecord (fmap adapt kts))
+                _ -> do
+                    let unionType' = Eval.renote (Eval.quote names unionType)
+
+                    die (MustMergeUnion unionL unionType')
+
+            check typer ctx handlersL handlersType
+
+        (Let (Binding {..}) bodyL, _) -> do
+            let value' = Eval.eval values (Dhall.Core.denote value)
+
+            ctx' <- case annotation of
+                Nothing -> do
+                    typeL <- infer typer ctx value
+
+                    return (addTypeValue variable typeL value' ctx)
+                Just (_, typeL) -> do
+                    let typeL' = Eval.eval values (Dhall.Core.denote typeL)
+
+                    check typer ctx value typeL'
+
+                    return (addTypeValue variable typeL' value' ctx)
+
+            check typer ctx' bodyL typeR
+
+        (ListLit maybeTypeL elementsL, VList typeR) -> do
+            case maybeTypeL of
+                Nothing -> do
+                    return ()
+                Just typeL -> do
+                    let typeL' = Eval.eval values (Dhall.Core.denote typeL)
+
+                    if Eval.conv values typeL' typeR
+                        then return ()
+                        else error "TODO #2"
+        (Some elementL, VOptional typeR) -> do
+            check typer ctx elementL typeR
+        _ -> do
+            typeL <- infer typer ctx expressionL
+
+            if Eval.conv values typeL typeR
+                then return ()
+                else error "TODO #3"
   where
     die err = Left (TypeError context expressionL err)
       where
         context = ctxToContext ctx
+
+    names = Eval.envNames values
 
 infer
     :: forall a s
@@ -217,6 +269,13 @@ infer
     -> Either (TypeError s a) (Val a)
 infer typer = loop
   where
+    {- The convention for primes (i.e. `'`s) is:
+
+       * No primes  (`x`  ): An `Expr` that has not been `eval`ed yet
+       * One prime  (`x'` ): A  `Val`
+       * Two primes (`x''`): An `Expr` generated from `quote`ing a `Val`
+    -}
+    loop :: Ctx a -> Expr s a -> Either (TypeError s a) (Val a)
     loop ctx@Ctx{..} expression = case expression of
         Const c -> do
             fmap VConst (axiom c)
@@ -231,348 +290,492 @@ infer typer = loop
             go types n0
 
         Lam x _A b -> do
-            tA <- loop ctx _A
+            tA' <- loop ctx _A
 
-            case tA of
+            case tA' of
                 VConst _ -> return ()
                 _        -> die (InvalidInputType _A)
 
-            let _A' = Eval.eval values (Dhall.Core.denote _A)
+            let _A' = eval values _A
 
             let ctx' = addType x _A' ctx
 
             _B' <- loop ctx' b
 
-            let _B = Eval.quote (Bind (Eval.envNames values) x) _B'
+            let _B'' = quote (Bind (Eval.envNames values) x) _B'
 
-            tB <- loop ctx' (Eval.renote _B)
+            tB' <- loop ctx' (Eval.renote _B'')
 
-            case tB of
+            case tB' of
                 VConst _ -> return ()
-                _        -> die (InvalidOutputType (Eval.renote _B))
+                _        -> die (InvalidOutputType _B'')
 
-            return (VHPi x _A' (\u -> Eval.eval (Extend values x u) _B))
+            return (VHPi x _A' (\u -> Eval.eval (Extend values x u) _B''))
 
         Pi x _A _B -> do
-            tA <- loop ctx _A
+            tA' <- loop ctx _A
 
-            kA <- case tA of
+            kA <- case tA' of
                 VConst kA -> return kA
                 _         -> die (InvalidInputType _A)
 
-            let _A' = Eval.eval values (Dhall.Core.denote _A)
+            let _A' = eval values _A
 
             let ctx' = addType x _A' ctx
 
-            tB <- loop ctx' _B
+            tB' <- loop ctx' _B
 
-            kB <- case tB of
+            kB <- case tB' of
                 VConst kB -> return kB
                 _         -> die (InvalidOutputType _B)
 
             return (VConst (rule kA kB))
 
         App f a -> do
-            tf <- loop ctx f
+            tf' <- loop ctx f
 
-            case tf of
-                VAnyPi x _A _B -> do
-                    error "TODO"
-{-
-    loop ctx e@(App f a         ) = do
-        tf <- fmap Dhall.Core.normalize (loop ctx f)
-        (x, _A, _B) <- case tf of
-            Pi x _A _B -> return (x, _A, _B)
-            _          -> Left (TypeError ctx e (NotAFunction f tf))
-        _A' <- loop ctx a
-        if Dhall.Core.judgmentallyEqual _A _A'
-            then do
-                let a'   = Dhall.Core.shift   1  (V x 0) a
-                let _B'  = Dhall.Core.subst (V x 0) a' _B
-                let _B'' = Dhall.Core.shift (-1) (V x 0) _B'
-                return _B''
-            else do
-                let nf_A  = Dhall.Core.normalize _A
-                let nf_A' = Dhall.Core.normalize _A'
-                Left (TypeError ctx e (TypeMismatch f nf_A a nf_A'))
-    loop ctx e@(Let (Binding _ x _ mA _ a0) b0) = do
-        _A1 <- loop ctx a0
-        case mA of
-            Just (_, _A0) -> do
-                _ <- loop ctx _A0
-                let nf_A0 = Dhall.Core.normalize _A0
-                let nf_A1 = Dhall.Core.normalize _A1
-                if Dhall.Core.judgmentallyEqual _A0 _A1
-                    then return ()
-                    else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
-            Nothing -> return ()
+            case tf' of
+                VAnyPi x _A₀' _B' -> do
+                    _A₁' <- loop ctx a
 
-        let a1 = Dhall.Core.normalize a0
-        let a2 = Dhall.Core.shift 1 (V x 0) a1
+                    if Eval.conv values _A₀' _A₁'
+                        then do
+                            let a' = eval values a
 
-        let b1 = Dhall.Core.subst (V x 0) a2 b0
-        let b2 = Dhall.Core.shift (-1) (V x 0) b1
-        loop ctx b2
+                            return (_B' a')
 
-    loop ctx e@(Annot x t       ) = do
-        case Dhall.Core.denote t of
-            Const _ -> return ()
-            _       -> void (loop ctx t)
+                        else do
+                            let _A₀'' = quote names _A₀'
+                            let _A₁'' = quote names _A₁'
+                            die (TypeMismatch f _A₀'' a _A₁'')
+                _ -> do
+                    die (NotAFunction f (quote names tf'))
 
-        t' <- loop ctx x
-        if Dhall.Core.judgmentallyEqual t t'
-            then do
-                return t
-            else do
-                let nf_t  = Dhall.Core.normalize t
-                let nf_t' = Dhall.Core.normalize t'
-                Left (TypeError ctx e (AnnotMismatch x nf_t nf_t'))
-    loop _      Bool              = do
-        return (Const Type)
-    loop _     (BoolLit _       ) = do
-        return Bool
-    loop ctx e@(BoolAnd l r     ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantAnd l tl))
+        Let (Binding { value = a₀, variable = x, ..}) body -> do
+            let a₀' = eval values a₀
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantAnd r tr))
+            ctxNew <- case annotation of
+                Nothing -> do
+                    _A' <- infer typer ctx a₀
 
-        return Bool
-    loop ctx e@(BoolOr  l r     ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantOr l tl))
+                    return (addTypeValue x _A' a₀' ctx)
+                Just (_, _A₀) -> do
+                    let _A₀' = eval values _A₀
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantOr r tr))
+                    _A₁' <- infer typer ctx a₀
 
-        return Bool
-    loop ctx e@(BoolEQ  l r     ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantEQ l tl))
+                    if Eval.conv values _A₀' _A₁'
+                        then do
+                            return ()
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantEQ r tr))
+                        else do
+                            let _A₀'' = quote names _A₀'
+                            let _A₁'' = quote names _A₁'
+                            die (AnnotMismatch a₀ _A₀'' _A₁'')
 
-        return Bool
-    loop ctx e@(BoolNE  l r     ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantNE l tl))
+                    return (addTypeValue x _A₀' a₀' ctx)
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantNE r tr))
+            infer typer ctxNew body
 
-        return Bool
-    loop ctx e@(BoolIf x y z    ) = do
-        tx <- fmap Dhall.Core.normalize (loop ctx x)
-        case tx of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (InvalidPredicate x tx))
-        ty  <- fmap Dhall.Core.normalize (loop ctx y )
-        tty <- fmap Dhall.Core.normalize (loop ctx ty)
-        case tty of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (IfBranchMustBeTerm True y ty tty))
+        Annot t _T₀ -> do
+            let _T₀' = eval values _T₀
 
-        tz <- fmap Dhall.Core.normalize (loop ctx z)
-        ttz <- fmap Dhall.Core.normalize (loop ctx tz)
-        case ttz of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (IfBranchMustBeTerm False z tz ttz))
+            _T₁' <- infer typer ctx t
 
-        if Dhall.Core.judgmentallyEqual ty tz
-            then return ()
-            else Left (TypeError ctx e (IfBranchMismatch y z ty tz))
-        return ty
-    loop _      Natural           = do
-        return (Const Type)
-    loop _     (NaturalLit _    ) = do
-        return Natural
-    loop _      NaturalFold       = do
-        return
-            (Pi "_" Natural
-                (Pi "natural" (Const Type)
-                    (Pi "succ" (Pi "_" "natural" "natural")
-                        (Pi "zero" "natural" "natural") ) ) )
-    loop _      NaturalBuild      = do
-        return
-            (Pi "_"
-                (Pi "natural" (Const Type)
-                    (Pi "succ" (Pi "_" "natural" "natural")
-                        (Pi "zero" "natural" "natural") ) )
-                Natural )
-    loop _      NaturalIsZero     = do
-        return (Pi "_" Natural Bool)
-    loop _      NaturalEven       = do
-        return (Pi "_" Natural Bool)
-    loop _      NaturalOdd        = do
-        return (Pi "_" Natural Bool)
-    loop _      NaturalToInteger  = do
-        return (Pi "_" Natural Integer)
-    loop _      NaturalShow  = do
-        return (Pi "_" Natural Text)
-    loop _      NaturalSubtract  = do
-        return (Pi "_" Natural (Pi "_" Natural Natural))
-    loop ctx e@(NaturalPlus  l r) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Natural -> return ()
-            _       -> Left (TypeError ctx e (CantAdd l tl))
+            if Eval.conv values _T₀' _T₁'
+                then do
+                    return _T₀'
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Natural -> return ()
-            _       -> Left (TypeError ctx e (CantAdd r tr))
-        return Natural
-    loop ctx e@(NaturalTimes l r) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Natural -> return ()
-            _       -> Left (TypeError ctx e (CantMultiply l tl))
+                else do
+                    let _T₀'' = quote names _T₀'
+                    let _T₁'' = quote names _T₁'
+                    die (AnnotMismatch t _T₀'' _T₁'')
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Natural -> return ()
-            _       -> Left (TypeError ctx e (CantMultiply r tr))
-        return Natural
-    loop _      Integer           = do
-        return (Const Type)
-    loop _     (IntegerLit _    ) = do
-        return Integer
-    loop _      IntegerShow  = do
-        return (Pi "_" Integer Text)
-    loop _      IntegerToDouble = do
-        return (Pi "_" Integer Double)
-    loop _      Double            = do
-        return (Const Type)
-    loop _     (DoubleLit _     ) = do
-        return Double
-    loop _     DoubleShow         = do
-        return (Pi "_" Double Text)
-    loop _      Text              = do
-        return (Const Type)
-    loop ctx e@(TextLit (Chunks xys _)) = do
-        let process (_, y) = do
-                ty <- fmap Dhall.Core.normalize (loop ctx y)
-                case ty of
-                    Text -> return ()
-                    _    -> Left (TypeError ctx e (CantInterpolate y ty))
-        mapM_ process xys
-        return Text
-    loop ctx e@(TextAppend l r  ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Text -> return ()
-            _    -> Left (TypeError ctx e (CantTextAppend l tl))
+        Bool -> do
+            return (VConst Type)
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Text -> return ()
-            _    -> Left (TypeError ctx e (CantTextAppend r tr))
-        return Text
-    loop _      TextShow          = do
-        return (Pi "_" Text Text)
-    loop _      List              = do
-        return (Pi "_" (Const Type) (Const Type))
-    loop ctx e@(ListLit  Nothing  xs) = do
-        case Data.Sequence.viewl xs of
-            x0 :< xs' -> do
-                t <- loop ctx x0
-                s <- fmap Dhall.Core.normalize (loop ctx t)
-                case s of
-                    Const Type -> return ()
-                    _ -> Left (TypeError ctx e (InvalidListType (App List t)))
-                flip traverseWithIndex_ xs' (\i x -> do
-                    t' <- loop ctx x
-                    if Dhall.Core.judgmentallyEqual t t'
+        BoolLit _ -> do
+            return VBool
+
+        BoolAnd l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VBool -> return ()
+                _     -> die (CantAnd l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VBool -> return ()
+                _     -> die (CantAnd r (quote names tr'))
+
+            return VBool
+
+        BoolOr l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VBool -> return ()
+                _     -> die (CantOr l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VBool -> return ()
+                _     -> die (CantOr r (quote names tr'))
+
+            return VBool
+
+        BoolEQ l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VBool -> return ()
+                _     -> die (CantEQ l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VBool -> return ()
+                _     -> die (CantEQ r (quote names tr'))
+
+            return VBool
+
+        BoolNE l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VBool -> return ()
+                _     -> die (CantNE l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VBool -> return ()
+                _     -> die (CantNE r (quote names tr'))
+
+            return VBool
+
+        BoolIf t l r -> do
+            tt' <- loop ctx t
+
+            case tt' of
+                VBool -> return ()
+                _     -> die (InvalidPredicate t (quote names tt'))
+
+            _L' <- loop ctx l
+
+            _R' <- loop ctx r
+
+            tL' <- loop ctx (quote names _L')
+
+            let _L'' = quote names _L'
+
+            case tL' of
+                VConst Type -> do
+                    return ()
+                _  -> do
+                    let tL'' = quote names tL'
+                    die (IfBranchMustBeTerm True l _L'' tL'')
+
+            tR' <- loop ctx (quote names _R')
+
+            let _R'' = quote names _R'
+
+            case tR' of
+                VConst Type -> do
+                    return ()
+                _ -> do
+                    let tR'' = quote names tR'
+                    die (IfBranchMustBeTerm True r _R'' tR'')
+
+            if Eval.conv values _L' _R'
+                then return ()
+                else die (IfBranchMismatch l r _L'' _R'')
+
+            return _L'
+
+        Natural -> do
+            return (VConst Type)
+
+        NaturalLit _ -> do
+            return VNatural
+
+        NaturalFold -> do
+            return
+                (   VNatural
+                ~>  VHPi "natural" (VConst Type) (\natural ->
+                        VHPi "succ" (natural ~> natural) (\_succ ->
+                            VHPi "zero" natural (\_zero ->
+                                natural
+                            )
+                        )
+                    )
+                )
+
+        NaturalBuild -> do
+            return
+                (   VHPi "natural" (VConst Type) (\natural ->
+                        VHPi "succ" (natural ~> natural) (\_succ ->
+                            VHPi "zero" natural (\_zero ->
+                                natural
+                            )
+                        )
+                    )
+                ~>  VNatural
+                )
+
+        NaturalIsZero -> do
+            return (VNatural ~> VBool)
+
+        NaturalOdd -> do
+            return (VNatural ~> VBool)
+
+        NaturalToInteger -> do
+            return (VNatural ~> VInteger)
+
+        NaturalShow -> do
+            return (VNatural ~> VText)
+
+        NaturalSubtract -> do
+            return (VNatural ~> VNatural ~> VNatural)
+
+        NaturalPlus l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VNatural -> return ()
+                _        -> die (CantAdd l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VNatural -> return ()
+                _        -> die (CantAdd r (quote names tr'))
+
+            return VNatural
+
+        NaturalTimes l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VNatural -> return ()
+                _        -> die (CantMultiply l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VNatural -> return ()
+                _        -> die (CantMultiply r (quote names tr'))
+
+            return VNatural
+
+        Integer -> do
+            return (VConst Type)
+
+        IntegerLit _ -> do
+            return VInteger
+
+        IntegerShow -> do
+            return (VInteger ~> VText)
+
+        IntegerToDouble -> do
+            return (VInteger ~> VDouble)
+
+        Double -> do
+            return (VConst Type)
+
+        TextLit (Chunks xys _) -> do
+            let process (_, y) = do
+                    _Y' <- loop ctx y
+
+                    case _Y' of
+                        VText -> return ()
+                        _     -> die (CantInterpolate y (quote names _Y'))
+
+            mapM_ process xys
+
+            return VText
+
+        TextAppend l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VText -> return ()
+                _     -> die (CantTextAppend l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VText -> return ()
+                _     -> die (CantTextAppend r (quote names tr'))
+
+            return VText
+
+        TextShow -> do
+            return (VText ~> VText)
+
+        List -> do
+            return (VConst Type ~> VConst Type)
+
+        ListLit Nothing ts₀ -> do
+            case Data.Sequence.viewl ts₀ of
+                t₀ :< ts₁ -> do
+                    _T₀' <- loop ctx t₀
+
+                    let _T₀'' = quote names _T₀'
+
+                    tT₀' <- loop ctx _T₀''
+
+                    case tT₀' of
+                        VConst Type -> return ()
+                        _           -> die (InvalidListType (App List _T₀''))
+
+                    let process i t₁ = do
+                            _T₁' <- loop ctx t₁
+
+                            if Eval.conv values _T₀' _T₁'
+                                then do
+                                    return ()
+
+                                else do
+                                    let _T₀'' = quote names _T₀'
+                                    let _T₁'' = quote names _T₁'
+                                    die (MismatchedListElements i _T₀'' t₁ _T₁'')
+
+                    traverseWithIndex_ process ts₁
+
+                    return (VList _T₀')
+
+                _ -> do
+                    die MissingListType
+
+        ListLit (Just _T₀) ts -> do
+            _ <- loop ctx _T₀
+
+            let _T₀' = eval values _T₀
+
+            let _T₀'' = quote names _T₀'
+
+            case _T₀' of
+                VList _T₁' -> do
+                    tT₁' <- loop ctx (quote names _T₁')
+
+                    case tT₁' of
+                        VConst Type -> return ()
+                        _           -> die (InvalidListType _T₀'')
+
+                _ -> do
+                    die (InvalidListType _T₀'')
+
+            let process i t = do
+                    _T₁' <- loop ctx t
+
+                    if Eval.conv values _T₀' _T₁'
                         then return ()
                         else do
-                            let nf_t  = Dhall.Core.normalize t
-                            let nf_t' = Dhall.Core.normalize t'
-                            let err   = MismatchedListElements i nf_t x nf_t'
-                            Left (TypeError ctx x err) )
-                return (App List t)
-            _ -> Left (TypeError ctx e MissingListType)
-    loop ctx e@(ListLit (Just t0) xs) = do
-        _ <- loop ctx t0
-        let nf_t0 = Dhall.Core.normalize t0
-        t1 <- case nf_t0 of
-            App List t1 -> do
-                s <- fmap Dhall.Core.normalize (loop ctx t1)
-                case s of
-                    Const Type -> return t1
-                    _ -> Left (TypeError ctx e (InvalidListType nf_t0))
-            _ -> Left (TypeError ctx e (InvalidListType nf_t0))
-        flip traverseWithIndex_ xs (\i x -> do
-            t' <- loop ctx x
-            if Dhall.Core.judgmentallyEqual t1 t'
+                            let _T₁'' = quote names _T₁'
+                            die (InvalidListElement i _T₀'' t _T₁'')
+
+            traverseWithIndex_ process ts
+
+            return _T₀'
+
+        ListAppend x y -> do
+            tx' <- loop ctx x
+
+            _A₀' <- case tx' of
+                VList _A₀' -> return _A₀'
+                _          -> die (CantListAppend x (quote names tx'))
+
+            ty' <- loop ctx y
+
+            _A₁' <- case ty' of
+                VList _A₁' -> return _A₁'
+                _          -> die (CantListAppend y (quote names ty'))
+
+            if Eval.conv values _A₀' _A₁'
                 then return ()
                 else do
-                    let nf_t  = Dhall.Core.normalize t1
-                    let nf_t' = Dhall.Core.normalize t'
-                    Left (TypeError ctx x (InvalidListElement i nf_t x nf_t')) )
-        return (App List t1)
-    loop ctx e@(ListAppend l r  ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        el <- case tl of
-            App List el -> return el
-            _           -> Left (TypeError ctx e (CantListAppend l tl))
+                    let _A₀'' = quote names _A₀'
+                    let _A₁'' = quote names _A₁'
+                    die (ListAppendMismatch _A₀'' _A₁'')
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        er <- case tr of
-            App List er -> return er
-            _           -> Left (TypeError ctx e (CantListAppend r tr))
+            return (VList _A₀')
 
-        if Dhall.Core.judgmentallyEqual el er
-            then return (App List el)
-            else Left (TypeError ctx e (ListAppendMismatch el er))
-    loop _      ListBuild         = do
-        return
-            (Pi "a" (Const Type)
-                (Pi "_"
-                    (Pi "list" (Const Type)
-                        (Pi "cons" (Pi "_" "a" (Pi "_" "list" "list"))
-                            (Pi "nil" "list" "list") ) )
-                    (App List "a") ) )
-    loop _      ListFold          = do
-        return
-            (Pi "a" (Const Type)
-                (Pi "_" (App List "a")
-                    (Pi "list" (Const Type)
-                        (Pi "cons" (Pi "_" "a" (Pi "_" "list" "list"))
-                            (Pi "nil" "list" "list")) ) ) )
-    loop _      ListLength        = do
-        return (Pi "a" (Const Type) (Pi "_" (App List "a") Natural))
-    loop _      ListHead          = do
-        return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Optional "a")))
-    loop _      ListLast          = do
-        return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Optional "a")))
-    loop _      ListIndexed       = do
-        let kts = [("index", Natural), ("value", "a")]
-        return
-            (Pi "a" (Const Type)
-                (Pi "_" (App List "a")
-                    (App List (Record (Dhall.Map.fromList kts))) ) )
-    loop _      ListReverse       = do
-        return (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a")))
-    loop _      Optional          = do
-        return (Pi "_" (Const Type) (Const Type))
+        ListBuild -> do
+            return
+                (   VHPi "a" (VConst Type) (\a ->
+                            VHPi "list" (VConst Type) (\list ->
+                                VHPi "cons" (a ~> list ~> list) (\_cons ->
+                                    (VHPi "nil" list (\_nil -> list))
+                                )
+                            )
+                        ~>  VList a
+                    )
+                )
+
+        ListFold -> do
+            return
+                (   VHPi "a" (VConst Type) (\a ->
+                            VList a
+                        ~>  VHPi "list" (VConst Type) (\list ->
+                                VHPi "cons" (a ~> list ~> list) (\_cons ->
+                                    (VHPi "nil" list (\_nil -> list))
+                                )
+                            )
+                    )
+                )
+
+        ListLength -> do
+            return (VHPi "a" (VConst Type) (\a -> VList a ~> VNatural))
+
+        ListHead -> do
+            return (VHPi "a" (VConst Type) (\a -> VList a ~> VOptional a))
+
+        ListLast -> do
+            return (VHPi "a" (VConst Type) (\a -> VList a ~> VOptional a))
+
+        ListIndexed -> do
+            return
+                (   VHPi "a" (VConst Type) (\a ->
+                            VList a
+                        ~>  VList
+                                (VRecord
+                                    (Dhall.Map.fromList
+                                        [ ("index", VNatural)
+                                        , ("value", a       )
+                                        ]
+                                    )
+                                )
+                    )
+                )
+        ListReverse -> do
+            return (VHPi "a" (VConst Type) (\a -> VList a ~> VList a))
+
+        Optional -> do
+            return (VConst Type ~> VConst Type)
+
+        None -> do
+            return (VHPi "A" (VConst Type) (\_A -> VOptional _A))
+
+        Some a -> do
+            _A' <- loop ctx a
+
+            tA' <- loop ctx (quote names _A')
+
+            case tA' of
+                VConst Type -> return ()
+                _           -> do
+                   let _A'' = quote names _A'
+                   let tA'' = quote names tA'
+
+                   die (InvalidSome a _A'' tA'')
+
+            return (VOptional _A')
+
+{-
     loop _      None              = do
         return (Pi "A" (Const Type) (App Optional "A"))
     loop ctx e@(Some a) = do
@@ -962,6 +1165,10 @@ infer typer = loop
             context = ctxToContext ctx
 
         names = typesToNames types
+
+        eval values expression = Eval.eval values (Dhall.Core.denote expression)
+
+        quote names value = Eval.renote (Eval.quote names value)
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
