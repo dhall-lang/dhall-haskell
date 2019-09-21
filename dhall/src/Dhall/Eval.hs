@@ -34,6 +34,18 @@ module Dhall.Eval (
     judgmentallyEqual
   , normalize
   , alphaNormalize
+  , eval
+  , quote
+  , renote
+  , envNames
+  , countNames
+  , conv
+  , Closure(..)
+  , Names(..)
+  , Environment(..)
+  , Val(..)
+  , pattern VAnyPi
+  , (~>)
   ) where
 
 import Data.Foldable (foldr', toList)
@@ -128,6 +140,15 @@ data HLamInfo a
 pattern VPrim :: (Val a -> Val a) -> Val a
 pattern VPrim f = VHLam Prim f
 
+pattern VAnyPi :: Eq a => Text -> Val a -> (Val a -> Val a) -> Val a
+pattern VAnyPi x a b <-
+    (   let adapt e = case e of
+                VPi  a b@(Closure x _ _) -> Just (x, a, instantiate b)
+                VHPi x a b               -> Just (x, a, b            )
+                _                        -> Nothing
+         in  adapt -> Just (x, a, b)
+    )
+
 data Val a
     = VConst !Const
     | VVar !Text !Int
@@ -209,6 +230,8 @@ data Val a
 (~>) :: Val a -> Val a -> Val a
 (~>) a b = VHPi "_" a (\_ -> b)
 {-# INLINE (~>) #-}
+
+infixr 5 ~>
 
 countEnvironment :: Text -> Environment a -> Int
 countEnvironment x = go (0 :: Int)
@@ -1105,11 +1128,11 @@ quote !env !t0 =
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
 nf :: Eq a => Environment a -> Expr s a -> Expr t a
-nf !env = coeExprVoid . quote (envNames env) . eval env . Core.denote
-  where
-    coeExprVoid :: Expr Void a -> Expr s a
-    coeExprVoid = unsafeCoerce
-    {-# INLINE coeExprVoid #-}
+nf !env = renote . quote (envNames env) . eval env . Core.denote
+
+renote :: Expr Void a -> Expr s a
+renote = unsafeCoerce
+{-# INLINE renote #-}
 
 {-| Reduce an expression to its normal form, performing beta reduction
 

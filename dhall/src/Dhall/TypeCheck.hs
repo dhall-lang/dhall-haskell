@@ -1,7 +1,10 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 {-# OPTIONS_GHC -Wall #-}
 
 -- | This module contains the logic for type checking Dhall code
@@ -26,7 +29,6 @@ import Data.Void (Void, absurd)
 import Control.Exception (Exception)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer.Strict (execWriterT, tell)
-import Data.Functor (void)
 import Data.Monoid (Endo(..), First(..))
 import Data.Sequence (Seq, ViewL(..))
 import Data.Semigroup (Max(..), Semigroup(..))
@@ -37,6 +39,8 @@ import Data.Typeable (Typeable)
 import Dhall.Binary (ToTerm(..))
 import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
+import Dhall.Eval
+    (Environment(..), Names(..), Val(..), pattern VAnyPi, (~>))
 import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Foldable
@@ -49,6 +53,7 @@ import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
+import qualified Dhall.Eval                              as Eval
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Pretty.Internal
@@ -105,713 +110,1119 @@ typeWithA
     -> Context (Expr s a)
     -> Expr s a
     -> Either (TypeError s a) (Expr s a)
-typeWithA tpa = loop
+typeWithA tpa context expression =
+    fmap (Eval.renote . Eval.quote EmptyNames) (infer tpa ctx expression)
   where
-    loop _     (Const c         ) = do
-        fmap Const (axiom c)
-    loop ctx e@(Var (V x n)     ) = do
-        case Dhall.Context.lookup x n ctx of
-            Nothing -> Left (TypeError ctx e (UnboundVariable x))
-            Just a  -> do
-                -- Note: no need to typecheck the value we're
-                -- returning; that is done at insertion time.
-                return a
-    loop ctx   (Lam x _A  b     ) = do
-        _ <- loop ctx _A
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
-        _B <- loop ctx' b
-        let p = Pi x _A _B
-        _t <- loop ctx p
-        return p
-    loop ctx e@(Pi  x _A _B     ) = do
-        tA <- fmap Dhall.Core.normalize (loop ctx _A)
-        kA <- case tA of
-            Const k -> return k
-            _       -> Left (TypeError ctx e (InvalidInputType _A))
+    ctx = contextToCtx context
 
-        let ctx' = fmap (Dhall.Core.shift 1 (V x 0)) (Dhall.Context.insert x (Dhall.Core.normalize _A) ctx)
-        tB <- fmap Dhall.Core.normalize (loop ctx' _B)
-        kB <- case tB of
-            Const k -> return k
-            _       -> Left (TypeError ctx' e (InvalidOutputType _B))
+contextToCtx :: Eq a => Context (Expr s a) -> Ctx a
+contextToCtx context = loop (Dhall.Context.toList context)
+  where
+    loop [] =
+        Ctx Empty TypesEmpty
 
-        return (Const (rule kA kB))
-    loop ctx e@(App f a         ) = do
-        tf <- fmap Dhall.Core.normalize (loop ctx f)
-        (x, _A, _B) <- case tf of
-            Pi x _A _B -> return (x, _A, _B)
-            _          -> Left (TypeError ctx e (NotAFunction f tf))
-        _A' <- loop ctx a
-        if Dhall.Core.judgmentallyEqual _A _A'
-            then do
-                let a'   = Dhall.Core.shift   1  (V x 0) a
-                let _B'  = Dhall.Core.subst (V x 0) a' _B
-                let _B'' = Dhall.Core.shift (-1) (V x 0) _B'
-                return _B''
-            else do
-                let nf_A  = Dhall.Core.normalize _A
-                let nf_A' = Dhall.Core.normalize _A'
-                Left (TypeError ctx e (TypeMismatch f nf_A a nf_A'))
-    loop ctx e@(Let (Binding _ x _ mA _ a0) b0) = do
-        _A1 <- loop ctx a0
-        case mA of
-            Just (_, _A0) -> do
-                _ <- loop ctx _A0
-                let nf_A0 = Dhall.Core.normalize _A0
-                let nf_A1 = Dhall.Core.normalize _A1
-                if Dhall.Core.judgmentallyEqual _A0 _A1
-                    then return ()
-                    else Left (TypeError ctx e (AnnotMismatch a0 nf_A0 nf_A1))
-            Nothing -> return ()
+    loop ((x, t):rest) =
+        Ctx (Skip vs x) (TypesBind ts x (Eval.eval vs (Dhall.Core.denote t)))
+      where
+        Ctx vs ts = loop rest
 
-        let a1 = Dhall.Core.normalize a0
-        let a2 = Dhall.Core.shift 1 (V x 0) a1
+ctxToContext :: Eq a => Ctx a -> Context (Expr s a)
+ctxToContext (Ctx {..}) = loop types
+  where
+    loop (TypesBind ts x t) = Dhall.Context.insert x t' (loop ts)
+      where
+        ns = typesToNames ts
 
-        let b1 = Dhall.Core.subst (V x 0) a2 b0
-        let b2 = Dhall.Core.shift (-1) (V x 0) b1
-        loop ctx b2
+        t' = Eval.renote (Eval.quote ns t)
+    loop TypesEmpty = Dhall.Context.empty
 
-    loop ctx e@(Annot x t       ) = do
-        case Dhall.Core.denote t of
-            Const _ -> return ()
-            _       -> void (loop ctx t)
+typesToNames :: Types a -> Names
+typesToNames (TypesBind ts x _) = Bind ns x
+  where
+    ns = typesToNames ts
+typesToNames TypesEmpty = EmptyNames
 
-        t' <- loop ctx x
-        if Dhall.Core.judgmentallyEqual t t'
-            then do
-                return t
-            else do
-                let nf_t  = Dhall.Core.normalize t
-                let nf_t' = Dhall.Core.normalize t'
-                Left (TypeError ctx e (AnnotMismatch x nf_t nf_t'))
-    loop _      Bool              = do
-        return (Const Type)
-    loop _     (BoolLit _       ) = do
-        return Bool
-    loop ctx e@(BoolAnd l r     ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantAnd l tl))
+data Types a = TypesEmpty | TypesBind !(Types a) {-# UNPACK #-} !Text (Val a)
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantAnd r tr))
+data Ctx a = Ctx { values :: !(Environment a), types :: !(Types a) }
 
-        return Bool
-    loop ctx e@(BoolOr  l r     ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantOr l tl))
+addType :: Text -> Val a -> Ctx a -> Ctx a
+addType x t (Ctx vs ts) = Ctx (Skip vs x) (TypesBind ts x t)
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantOr r tr))
+addTypeValue :: Text -> Val a -> Val a -> Ctx a -> Ctx a
+addTypeValue x t v (Ctx vs ts) = Ctx (Extend vs x v) (TypesBind ts x t)
 
-        return Bool
-    loop ctx e@(BoolEQ  l r     ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantEQ l tl))
+fresh :: Ctx a -> Text -> Val a
+fresh Ctx{..} x = VVar x (Eval.countNames x (Eval.envNames values))
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantEQ r tr))
+infer
+    :: forall a s
+    .  (Eq a, Pretty a)
+    => Typer a
+    -> Ctx a
+    -> Expr s a
+    -> Either (TypeError s a) (Val a)
+infer typer = loop
+  where
+    {- The convention for primes (i.e. `'`s) is:
 
-        return Bool
-    loop ctx e@(BoolNE  l r     ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantNE l tl))
+       * No primes  (`x`  ): An `Expr` that has not been `eval`ed yet
+       * One prime  (`x'` ): A  `Val`
+       * Two primes (`x''`): An `Expr` generated from `quote`ing a `Val`
+    -}
+    loop :: Ctx a -> Expr s a -> Either (TypeError s a) (Val a)
+    loop ctx@Ctx{..} expression = case expression of
+        Const c -> do
+            fmap VConst (axiom c)
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (CantNE r tr))
+        Var (V x0 n0) -> do
+            let go TypesEmpty _ =
+                    die (UnboundVariable x0)
+                go (TypesBind ts x t) n
+                    | x == x0   = if n == 0 then return t else go ts (n - 1)
+                    | otherwise = go ts n
 
-        return Bool
-    loop ctx e@(BoolIf x y z    ) = do
-        tx <- fmap Dhall.Core.normalize (loop ctx x)
-        case tx of
-            Bool -> return ()
-            _    -> Left (TypeError ctx e (InvalidPredicate x tx))
-        ty  <- fmap Dhall.Core.normalize (loop ctx y )
-        tty <- fmap Dhall.Core.normalize (loop ctx ty)
-        case tty of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (IfBranchMustBeTerm True y ty tty))
+            go types n0
 
-        tz <- fmap Dhall.Core.normalize (loop ctx z)
-        ttz <- fmap Dhall.Core.normalize (loop ctx tz)
-        case ttz of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (IfBranchMustBeTerm False z tz ttz))
+        Lam x _A b -> do
+            tA' <- loop ctx _A
 
-        if Dhall.Core.judgmentallyEqual ty tz
-            then return ()
-            else Left (TypeError ctx e (IfBranchMismatch y z ty tz))
-        return ty
-    loop _      Natural           = do
-        return (Const Type)
-    loop _     (NaturalLit _    ) = do
-        return Natural
-    loop _      NaturalFold       = do
-        return
-            (Pi "_" Natural
-                (Pi "natural" (Const Type)
-                    (Pi "succ" (Pi "_" "natural" "natural")
-                        (Pi "zero" "natural" "natural") ) ) )
-    loop _      NaturalBuild      = do
-        return
-            (Pi "_"
-                (Pi "natural" (Const Type)
-                    (Pi "succ" (Pi "_" "natural" "natural")
-                        (Pi "zero" "natural" "natural") ) )
-                Natural )
-    loop _      NaturalIsZero     = do
-        return (Pi "_" Natural Bool)
-    loop _      NaturalEven       = do
-        return (Pi "_" Natural Bool)
-    loop _      NaturalOdd        = do
-        return (Pi "_" Natural Bool)
-    loop _      NaturalToInteger  = do
-        return (Pi "_" Natural Integer)
-    loop _      NaturalShow  = do
-        return (Pi "_" Natural Text)
-    loop _      NaturalSubtract  = do
-        return (Pi "_" Natural (Pi "_" Natural Natural))
-    loop ctx e@(NaturalPlus  l r) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Natural -> return ()
-            _       -> Left (TypeError ctx e (CantAdd l tl))
+            case tA' of
+                VConst _ -> return ()
+                _        -> die (InvalidInputType _A)
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Natural -> return ()
-            _       -> Left (TypeError ctx e (CantAdd r tr))
-        return Natural
-    loop ctx e@(NaturalTimes l r) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Natural -> return ()
-            _       -> Left (TypeError ctx e (CantMultiply l tl))
+            let _A' = eval values _A
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Natural -> return ()
-            _       -> Left (TypeError ctx e (CantMultiply r tr))
-        return Natural
-    loop _      Integer           = do
-        return (Const Type)
-    loop _     (IntegerLit _    ) = do
-        return Integer
-    loop _      IntegerShow  = do
-        return (Pi "_" Integer Text)
-    loop _      IntegerToDouble = do
-        return (Pi "_" Integer Double)
-    loop _      Double            = do
-        return (Const Type)
-    loop _     (DoubleLit _     ) = do
-        return Double
-    loop _     DoubleShow         = do
-        return (Pi "_" Double Text)
-    loop _      Text              = do
-        return (Const Type)
-    loop ctx e@(TextLit (Chunks xys _)) = do
-        let process (_, y) = do
-                ty <- fmap Dhall.Core.normalize (loop ctx y)
-                case ty of
-                    Text -> return ()
-                    _    -> Left (TypeError ctx e (CantInterpolate y ty))
-        mapM_ process xys
-        return Text
-    loop ctx e@(TextAppend l r  ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        case tl of
-            Text -> return ()
-            _    -> Left (TypeError ctx e (CantTextAppend l tl))
+            let ctx' = addType x _A' ctx
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        case tr of
-            Text -> return ()
-            _    -> Left (TypeError ctx e (CantTextAppend r tr))
-        return Text
-    loop _      TextShow          = do
-        return (Pi "_" Text Text)
-    loop _      List              = do
-        return (Pi "_" (Const Type) (Const Type))
-    loop ctx e@(ListLit  Nothing  xs) = do
-        case Data.Sequence.viewl xs of
-            x0 :< xs' -> do
-                t <- loop ctx x0
-                s <- fmap Dhall.Core.normalize (loop ctx t)
-                case s of
-                    Const Type -> return ()
-                    _ -> Left (TypeError ctx e (InvalidListType (App List t)))
-                flip traverseWithIndex_ xs' (\i x -> do
-                    t' <- loop ctx x
-                    if Dhall.Core.judgmentallyEqual t t'
+            _B' <- loop ctx' b
+
+            let _B'' = quote (Bind (Eval.envNames values) x) _B'
+
+            tB' <- loop ctx' (Eval.renote _B'')
+
+            case tB' of
+                VConst _ -> return ()
+                _        -> die (InvalidOutputType _B'')
+
+            return (VHPi x _A' (\u -> Eval.eval (Extend values x u) _B''))
+
+        Pi x _A _B -> do
+            tA' <- loop ctx _A
+
+            kA <- case tA' of
+                VConst kA -> return kA
+                _         -> die (InvalidInputType _A)
+
+            let _A' = eval values _A
+
+            let ctx' = addType x _A' ctx
+
+            tB' <- loop ctx' _B
+
+            kB <- case tB' of
+                VConst kB -> return kB
+                _         -> die (InvalidOutputType _B)
+
+            return (VConst (rule kA kB))
+
+        App f a -> do
+            tf' <- loop ctx f
+
+            case tf' of
+                VAnyPi _x _A₀' _B' -> do
+                    _A₁' <- loop ctx a
+
+                    if Eval.conv values _A₀' _A₁'
+                        then do
+                            let a' = eval values a
+
+                            return (_B' a')
+
+                        else do
+                            let _A₀'' = quote names _A₀'
+                            let _A₁'' = quote names _A₁'
+                            die (TypeMismatch f _A₀'' a _A₁'')
+                _ -> do
+                    die (NotAFunction f (quote names tf'))
+
+        Let (Binding { value = a₀, variable = x, ..}) body -> do
+            let a₀' = eval values a₀
+
+            ctxNew <- case annotation of
+                Nothing -> do
+                    _A' <- loop ctx a₀
+
+                    return (addTypeValue x _A' a₀' ctx)
+                Just (_, _A₀) -> do
+                    _ <- loop ctx _A₀
+
+                    let _A₀' = eval values _A₀
+
+                    _A₁' <- loop ctx a₀
+
+                    if Eval.conv values _A₀' _A₁'
+                        then do
+                            return ()
+
+                        else do
+                            let _A₀'' = quote names _A₀'
+                            let _A₁'' = quote names _A₁'
+                            die (AnnotMismatch a₀ _A₀'' _A₁'')
+
+                    return (addTypeValue x _A₀' a₀' ctx)
+
+            loop ctxNew body
+
+        Annot t _T₀ -> do
+            case Dhall.Core.denote _T₀ of
+                Const _ -> return ()
+                _       -> do
+                    _ <- loop ctx _T₀
+
+                    return ()
+
+            let _T₀' = eval values _T₀
+
+            _T₁' <- loop ctx t
+
+            if Eval.conv values _T₀' _T₁'
+                then do
+                    return _T₀'
+
+                else do
+                    let _T₀'' = quote names _T₀'
+                    let _T₁'' = quote names _T₁'
+                    die (AnnotMismatch t _T₀'' _T₁'')
+
+        Bool -> do
+            return (VConst Type)
+
+        BoolLit _ -> do
+            return VBool
+
+        BoolAnd l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VBool -> return ()
+                _     -> die (CantAnd l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VBool -> return ()
+                _     -> die (CantAnd r (quote names tr'))
+
+            return VBool
+
+        BoolOr l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VBool -> return ()
+                _     -> die (CantOr l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VBool -> return ()
+                _     -> die (CantOr r (quote names tr'))
+
+            return VBool
+
+        BoolEQ l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VBool -> return ()
+                _     -> die (CantEQ l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VBool -> return ()
+                _     -> die (CantEQ r (quote names tr'))
+
+            return VBool
+
+        BoolNE l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VBool -> return ()
+                _     -> die (CantNE l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VBool -> return ()
+                _     -> die (CantNE r (quote names tr'))
+
+            return VBool
+
+        BoolIf t l r -> do
+            tt' <- loop ctx t
+
+            case tt' of
+                VBool -> return ()
+                _     -> die (InvalidPredicate t (quote names tt'))
+
+            _L' <- loop ctx l
+
+            _R' <- loop ctx r
+
+            tL' <- loop ctx (quote names _L')
+
+            let _L'' = quote names _L'
+
+            case tL' of
+                VConst Type -> do
+                    return ()
+                _  -> do
+                    let tL'' = quote names tL'
+                    die (IfBranchMustBeTerm True l _L'' tL'')
+
+            tR' <- loop ctx (quote names _R')
+
+            let _R'' = quote names _R'
+
+            case tR' of
+                VConst Type -> do
+                    return ()
+                _ -> do
+                    let tR'' = quote names tR'
+                    die (IfBranchMustBeTerm True r _R'' tR'')
+
+            if Eval.conv values _L' _R'
+                then return ()
+                else die (IfBranchMismatch l r _L'' _R'')
+
+            return _L'
+
+        Natural -> do
+            return (VConst Type)
+
+        NaturalLit _ -> do
+            return VNatural
+
+        NaturalFold -> do
+            return
+                (   VNatural
+                ~>  VHPi "natural" (VConst Type) (\natural ->
+                        VHPi "succ" (natural ~> natural) (\_succ ->
+                            VHPi "zero" natural (\_zero ->
+                                natural
+                            )
+                        )
+                    )
+                )
+
+        NaturalBuild -> do
+            return
+                (   VHPi "natural" (VConst Type) (\natural ->
+                        VHPi "succ" (natural ~> natural) (\_succ ->
+                            VHPi "zero" natural (\_zero ->
+                                natural
+                            )
+                        )
+                    )
+                ~>  VNatural
+                )
+
+        NaturalIsZero -> do
+            return (VNatural ~> VBool)
+
+        NaturalEven -> do
+            return (VNatural ~> VBool)
+
+        NaturalOdd -> do
+            return (VNatural ~> VBool)
+
+        NaturalToInteger -> do
+            return (VNatural ~> VInteger)
+
+        NaturalShow -> do
+            return (VNatural ~> VText)
+
+        NaturalSubtract -> do
+            return (VNatural ~> VNatural ~> VNatural)
+
+        NaturalPlus l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VNatural -> return ()
+                _        -> die (CantAdd l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VNatural -> return ()
+                _        -> die (CantAdd r (quote names tr'))
+
+            return VNatural
+
+        NaturalTimes l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VNatural -> return ()
+                _        -> die (CantMultiply l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VNatural -> return ()
+                _        -> die (CantMultiply r (quote names tr'))
+
+            return VNatural
+
+        Integer -> do
+            return (VConst Type)
+
+        IntegerLit _ -> do
+            return VInteger
+
+        IntegerShow -> do
+            return (VInteger ~> VText)
+
+        IntegerToDouble -> do
+            return (VInteger ~> VDouble)
+
+        Double -> do
+            return (VConst Type)
+
+        DoubleLit _ -> do
+            return VDouble
+
+        DoubleShow -> do
+            return (VDouble ~> VText)
+
+        Text -> do
+            return (VConst Type)
+
+        TextLit (Chunks xys _) -> do
+            let process (_, y) = do
+                    _Y' <- loop ctx y
+
+                    case _Y' of
+                        VText -> return ()
+                        _     -> die (CantInterpolate y (quote names _Y'))
+
+            mapM_ process xys
+
+            return VText
+
+        TextAppend l r -> do
+            tl' <- loop ctx l
+
+            case tl' of
+                VText -> return ()
+                _     -> die (CantTextAppend l (quote names tl'))
+
+            tr' <- loop ctx r
+
+            case tr' of
+                VText -> return ()
+                _     -> die (CantTextAppend r (quote names tr'))
+
+            return VText
+
+        TextShow -> do
+            return (VText ~> VText)
+
+        List -> do
+            return (VConst Type ~> VConst Type)
+
+        ListLit Nothing ts₀ -> do
+            case Data.Sequence.viewl ts₀ of
+                t₀ :< ts₁ -> do
+                    _T₀' <- loop ctx t₀
+
+                    let _T₀'' = quote names _T₀'
+
+                    tT₀' <- loop ctx _T₀''
+
+                    case tT₀' of
+                        VConst Type -> return ()
+                        _           -> die (InvalidListType (App List _T₀''))
+
+                    let process i t₁ = do
+                            _T₁' <- loop ctx t₁
+
+                            if Eval.conv values _T₀' _T₁'
+                                then do
+                                    return ()
+
+                                else do
+                                    let _T₀'' = quote names _T₀'
+                                    let _T₁'' = quote names _T₁'
+                                    die (MismatchedListElements i _T₀'' t₁ _T₁'')
+
+                    traverseWithIndex_ process ts₁
+
+                    return (VList _T₀')
+
+                _ -> do
+                    die MissingListType
+
+        ListLit (Just _T₀) ts -> do
+            _ <- loop ctx _T₀
+
+            let _T₀' = eval values _T₀
+
+            let _T₀'' = quote names _T₀'
+
+            case _T₀' of
+                VList _T₁' -> do
+                    tT₁' <- loop ctx (quote names _T₁')
+
+                    case tT₁' of
+                        VConst Type -> return ()
+                        _           -> die (InvalidListType _T₀'')
+
+                _ -> do
+                    die (InvalidListType _T₀'')
+
+            let process i t = do
+                    _T₁' <- loop ctx t
+
+                    if Eval.conv values _T₀' _T₁'
                         then return ()
                         else do
-                            let nf_t  = Dhall.Core.normalize t
-                            let nf_t' = Dhall.Core.normalize t'
-                            let err   = MismatchedListElements i nf_t x nf_t'
-                            Left (TypeError ctx x err) )
-                return (App List t)
-            _ -> Left (TypeError ctx e MissingListType)
-    loop ctx e@(ListLit (Just t0) xs) = do
-        _ <- loop ctx t0
-        let nf_t0 = Dhall.Core.normalize t0
-        t1 <- case nf_t0 of
-            App List t1 -> do
-                s <- fmap Dhall.Core.normalize (loop ctx t1)
-                case s of
-                    Const Type -> return t1
-                    _ -> Left (TypeError ctx e (InvalidListType nf_t0))
-            _ -> Left (TypeError ctx e (InvalidListType nf_t0))
-        flip traverseWithIndex_ xs (\i x -> do
-            t' <- loop ctx x
-            if Dhall.Core.judgmentallyEqual t1 t'
+                            let _T₁'' = quote names _T₁'
+                            die (InvalidListElement i _T₀'' t _T₁'')
+
+            traverseWithIndex_ process ts
+
+            return _T₀'
+
+        ListAppend x y -> do
+            tx' <- loop ctx x
+
+            _A₀' <- case tx' of
+                VList _A₀' -> return _A₀'
+                _          -> die (CantListAppend x (quote names tx'))
+
+            ty' <- loop ctx y
+
+            _A₁' <- case ty' of
+                VList _A₁' -> return _A₁'
+                _          -> die (CantListAppend y (quote names ty'))
+
+            if Eval.conv values _A₀' _A₁'
                 then return ()
                 else do
-                    let nf_t  = Dhall.Core.normalize t1
-                    let nf_t' = Dhall.Core.normalize t'
-                    Left (TypeError ctx x (InvalidListElement i nf_t x nf_t')) )
-        return (App List t1)
-    loop ctx e@(ListAppend l r  ) = do
-        tl <- fmap Dhall.Core.normalize (loop ctx l)
-        el <- case tl of
-            App List el -> return el
-            _           -> Left (TypeError ctx e (CantListAppend l tl))
+                    let _A₀'' = quote names _A₀'
+                    let _A₁'' = quote names _A₁'
+                    die (ListAppendMismatch _A₀'' _A₁'')
 
-        tr <- fmap Dhall.Core.normalize (loop ctx r)
-        er <- case tr of
-            App List er -> return er
-            _           -> Left (TypeError ctx e (CantListAppend r tr))
+            return (VList _A₀')
 
-        if Dhall.Core.judgmentallyEqual el er
-            then return (App List el)
-            else Left (TypeError ctx e (ListAppendMismatch el er))
-    loop _      ListBuild         = do
-        return
-            (Pi "a" (Const Type)
-                (Pi "_"
-                    (Pi "list" (Const Type)
-                        (Pi "cons" (Pi "_" "a" (Pi "_" "list" "list"))
-                            (Pi "nil" "list" "list") ) )
-                    (App List "a") ) )
-    loop _      ListFold          = do
-        return
-            (Pi "a" (Const Type)
-                (Pi "_" (App List "a")
-                    (Pi "list" (Const Type)
-                        (Pi "cons" (Pi "_" "a" (Pi "_" "list" "list"))
-                            (Pi "nil" "list" "list")) ) ) )
-    loop _      ListLength        = do
-        return (Pi "a" (Const Type) (Pi "_" (App List "a") Natural))
-    loop _      ListHead          = do
-        return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Optional "a")))
-    loop _      ListLast          = do
-        return (Pi "a" (Const Type) (Pi "_" (App List "a") (App Optional "a")))
-    loop _      ListIndexed       = do
-        let kts = [("index", Natural), ("value", "a")]
-        return
-            (Pi "a" (Const Type)
-                (Pi "_" (App List "a")
-                    (App List (Record (Dhall.Map.fromList kts))) ) )
-    loop _      ListReverse       = do
-        return (Pi "a" (Const Type) (Pi "_" (App List "a") (App List "a")))
-    loop _      Optional          = do
-        return (Pi "_" (Const Type) (Const Type))
-    loop _      None              = do
-        return (Pi "A" (Const Type) (App Optional "A"))
-    loop ctx e@(Some a) = do
-        _A <- loop ctx a
-        s <- fmap Dhall.Core.normalize (loop ctx _A)
-        case s of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (InvalidSome a _A s))
-        return (App Optional _A)
-    loop _      OptionalFold      = do
-        return
-            (Pi "a" (Const Type)
-                (Pi "_" (App Optional "a")
-                    (Pi "optional" (Const Type)
-                        (Pi "just" (Pi "_" "a" "optional")
-                            (Pi "nothing" "optional" "optional") ) ) ) )
-    loop _      OptionalBuild     = do
-        return
-            (Pi "a" (Const Type)
-                (Pi "_" f (App Optional "a") ) )
-        where f = Pi "optional" (Const Type)
-                      (Pi "just" (Pi "_" "a" "optional")
-                          (Pi "nothing" "optional" "optional") )
-    loop ctx e@(Record    kts   ) = do
-        let process k t = do
-                s <- lift (fmap Dhall.Core.normalize (loop ctx t))
-                case s of
-                    Const c -> tell (Max c)
-                    _ -> lift (Left (TypeError ctx e (InvalidFieldType k t)))
-        Max c <- execWriterT (Dhall.Map.unorderedTraverseWithKey_ process kts)
-        return (Const c)
-    loop ctx e@(RecordLit kvs   ) = do
-        let process k v = do
-                t <- fmap Dhall.Core.normalize (loop ctx v)
-                s <- fmap Dhall.Core.normalize (loop ctx t)
-                case s of
-                    Const _ -> return t
-                    _ -> Left (TypeError ctx e (InvalidFieldType k t))
+        ListBuild -> do
+            return
+                (   VHPi "a" (VConst Type) (\a ->
+                            VHPi "list" (VConst Type) (\list ->
+                                VHPi "cons" (a ~> list ~> list) (\_cons ->
+                                    (VHPi "nil" list (\_nil -> list))
+                                )
+                            )
+                        ~>  VList a
+                    )
+                )
 
-        Record <$> Dhall.Map.unorderedTraverseWithKey process (Dhall.Map.sort kvs)
-    loop ctx e@(Union     kts   ) = do
-        let nonEmpty k mt = First (fmap (\t -> (k, t)) mt)
+        ListFold -> do
+            return
+                (   VHPi "a" (VConst Type) (\a ->
+                            VList a
+                        ~>  VHPi "list" (VConst Type) (\list ->
+                                VHPi "cons" (a ~> list ~> list) (\_cons ->
+                                    (VHPi "nil" list (\_nil -> list))
+                                )
+                            )
+                    )
+                )
 
-        case getFirst (Dhall.Map.foldMapWithKey nonEmpty kts) of
-            Nothing -> do
-                return (Const Type)
+        ListLength -> do
+            return (VHPi "a" (VConst Type) (\a -> VList a ~> VNatural))
 
-            Just (k0, t0) -> do
-                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
+        ListHead -> do
+            return (VHPi "a" (VConst Type) (\a -> VList a ~> VOptional a))
 
-                c0 <- case s0 of
-                    Const c0 -> do
-                        return c0
+        ListLast -> do
+            return (VHPi "a" (VConst Type) (\a -> VList a ~> VOptional a))
 
-                    _ -> do
-                        Left (TypeError ctx e (InvalidAlternativeType k0 t0))
+        ListIndexed -> do
+            return
+                (   VHPi "a" (VConst Type) (\a ->
+                            VList a
+                        ~>  VList
+                                (VRecord
+                                    (Dhall.Map.fromList
+                                        [ ("index", VNatural)
+                                        , ("value", a       )
+                                        ]
+                                    )
+                                )
+                    )
+                )
+        ListReverse -> do
+            return (VHPi "a" (VConst Type) (\a -> VList a ~> VList a))
 
-                let process _ Nothing = do
-                        return ()
+        Optional -> do
+            return (VConst Type ~> VConst Type)
 
-                    process k (Just t) = do
-                        s <- fmap Dhall.Core.normalize (loop ctx t)
+        None -> do
+            return (VHPi "A" (VConst Type) (\_A -> VOptional _A))
 
-                        c <- case s of
-                            Const c -> do
-                                return c
+        Some a -> do
+            _A' <- loop ctx a
 
-                            _ -> do
-                                Left (TypeError ctx e (InvalidAlternativeType k t))
+            tA' <- loop ctx (quote names _A')
 
-                        if c0 == c
-                            then return ()
-                            else Left (TypeError ctx e (AlternativeAnnotationMismatch k t c k0 t0 c0))
+            case tA' of
+                VConst Type -> return ()
+                _           -> do
+                   let _A'' = quote names _A'
+                   let tA'' = quote names tA'
 
-                Dhall.Map.unorderedTraverseWithKey_ process (Dhall.Map.delete k0 kts)
+                   die (InvalidSome a _A'' tA'')
 
-                return (Const c0)
-    loop ctx e@(Combine kvsX kvsY) = do
-        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
-        ktsX  <- case tKvsX of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
+            return (VOptional _A')
 
-        tKvsY <- fmap Dhall.Core.normalize (loop ctx kvsY)
-        ktsY  <- case tKvsY of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
+        OptionalFold -> do
+            return
+                (   VHPi "a" (VConst Type) (\a ->
+                            VOptional a
+                        ~>  VHPi "optional" (VConst Type) (\optional ->
+                                VHPi "just" (a ~> optional) (\_just ->
+                                    VHPi "nothing" optional (\_nothing ->
+                                        optional
+                                    )
+                                )
+                            )
+                    )
+                )
 
-        let combineTypes ktsL ktsR = do
-                let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
-                    combine k _ _ = Left (TypeError ctx e (FieldCollision k))
+        OptionalBuild -> do
+            return
+                (   VHPi "a" (VConst Type) (\a ->
+                            VHPi "optional" (VConst Type) (\optional ->
+                                VHPi "just" (a ~> optional) (\_just ->
+                                    VHPi "nothing" optional (\_nothing ->
+                                        optional
+                                    )
+                                )
+                            )
+                        ~>  VOptional a
+                    )
+                )
 
-                let eKts = Dhall.Map.outerJoin Right Right combine
-                                               ktsL ktsR
+        Record xTs -> do
+            let process x _T = do
+                    tT' <- lift (loop ctx _T)
 
-                fmap Record (Dhall.Map.unorderedTraverseWithKey (\_k v -> v) eKts)
+                    case tT' of
+                        VConst c -> tell (Max c)
+                        _        -> lift (die (InvalidFieldType x _T))
 
-        combineTypes ktsX ktsY
-    loop ctx e@(CombineTypes l r) = do
-        tL <- loop ctx l
-        let l' = Dhall.Core.normalize l
-        cL <- case tL of
-            Const cL -> return cL
-            _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType l l'))
-        tR <- loop ctx r
-        let r' = Dhall.Core.normalize r
-        cR <- case tR of
-            Const cR -> return cR
-            _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
-        let c = max cL cR
+            Max c <- execWriterT (Dhall.Map.unorderedTraverseWithKey_ process xTs)
 
-        ktsL0 <- case l' of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (CombineTypesRequiresRecordType l l'))
-        ktsR0 <- case r' of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
+            return (VConst c)
 
-        let combineTypes ktsL ktsR = do
-                let mL = Dhall.Map.toMap ktsL
-                let mR = Dhall.Map.toMap ktsR
+        RecordLit xts -> do
+            let process x t = do
+                    _T' <- loop ctx t
 
-                let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
-                    combine k _ _ = Left (TypeError ctx e (FieldCollision k))
+                    let _T'' = quote names _T'
 
-                Data.Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
+                    tT' <- loop ctx _T''
 
-        combineTypes ktsL0 ktsR0
+                    case tT' of
+                        VConst _ -> return _T'
+                        _        -> die (InvalidFieldType x _T'')
 
-        return (Const c)
-    loop ctx e@(Prefer kvsX kvsY) = do
-        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
-        ktsX  <- case tKvsX of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
+            xTs <- Dhall.Map.unorderedTraverseWithKey process (Dhall.Map.sort xts)
 
-        tKvsY <- fmap Dhall.Core.normalize (loop ctx kvsY)
-        ktsY  <- case tKvsY of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
+            return (VRecord xTs)
 
-        return (Record (Dhall.Map.union ktsY ktsX))
-    loop ctx e@(Merge kvsX kvsY mT₁) = do
-        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
+        Union xTs -> do
+            let nonEmpty x mT = First (fmap (\_T -> (x, _T)) mT)
 
-        ktsX <- case tKvsX of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustMergeARecord kvsX tKvsX))
-
-        tKvsY <- fmap Dhall.Core.normalize (loop ctx kvsY)
-
-        ktsY <- case tKvsY of
-            Union kts -> return kts
-            _         -> Left (TypeError ctx e (MustMergeUnion kvsY tKvsY))
-
-        let ksX = Dhall.Map.keysSet ktsX
-        let ksY = Dhall.Map.keysSet ktsY
-
-        let diffX = Data.Set.difference ksX ksY
-        let diffY = Data.Set.difference ksY ksX
-
-        if Data.Set.null diffX
-            then return ()
-            else Left (TypeError ctx e (UnusedHandler diffX))
-
-        (mKX, _T₁) <- do
-            case mT₁ of
-                Just _T₁ -> do
-                    return (Nothing, _T₁)
-
+            case getFirst (Dhall.Map.foldMapWithKey nonEmpty xTs) of
                 Nothing -> do
-                    case Dhall.Map.uncons ktsX of
-                        Nothing -> do
-                            Left (TypeError ctx e MissingMergeType)
+                    return (VConst Type)
 
-                        Just (kX, tX, _) -> do
-                            _T₁ <- do
-                                case Dhall.Map.lookup kX ktsY of
-                                    Nothing -> do
-                                        Left (TypeError ctx e (UnusedHandler diffX))
+                Just (x₀, _T₀) -> do
+                    tT₀' <- loop ctx _T₀
 
-                                    Just Nothing -> do
-                                        return tX
+                    c₀ <- case tT₀' of
+                        VConst c₀ -> return c₀
+                        _         -> die (InvalidAlternativeType x₀ _T₀)
 
-                                    Just (Just _)  ->
-                                        case tX of
-                                            Pi x _A₀ _T₀ -> do
-                                                return (Dhall.Core.shift (-1) (V x 0) _T₀)
-                                            _ -> do
-                                                Left (TypeError ctx e (HandlerNotAFunction kX tX))
+                    let process _ Nothing = do
+                            return ()
 
-                            return (Just kX, _T₁)
+                        process x₁ (Just _T₁) = do
+                            tT₁' <- loop ctx _T₁
 
-        _ <- loop ctx _T₁
+                            c₁ <- case tT₁' of
+                                VConst c₁ -> return c₁
+                                _         -> die (InvalidAlternativeType x₁ _T₁)
 
-        let process kY mTY = do
-                case Dhall.Map.lookup kY ktsX of
+                            if c₀ == c₁
+                                then return ()
+                                else die (AlternativeAnnotationMismatch x₁ _T₁ c₁ x₀ _T₀ c₀)
+
+                    Dhall.Map.unorderedTraverseWithKey_ process (Dhall.Map.delete x₀ xTs)
+
+                    return (VConst c₀)
+        Combine l r -> do
+            _L' <- loop ctx l
+
+            xLs' <- case _L' of
+                VRecord xLs' -> do
+                    return xLs'
+
+                _ -> do
+                    let _L'' = quote names _L'
+
+                    die (MustCombineARecord '∧' l _L'')
+
+            _R' <- loop ctx r
+
+            xRs' <- case _R' of
+                VRecord xRs' -> do
+                    return xRs'
+
+                _ -> do
+                    let _R'' = quote names _R'
+
+                    die (MustCombineARecord '∧' r _R'')
+
+            let combineTypes xLs₀' xRs₀' = do
+                    let combine _ (VRecord xLs₁') (VRecord xRs₁') =
+                            combineTypes xLs₁' xRs₁'
+
+                        combine x _ _ = do
+                            die (FieldCollision x)
+
+                    let xEs =
+                            Dhall.Map.outerJoin Right Right combine xLs₀' xRs₀'
+
+                    xTs <- Dhall.Map.unorderedTraverseWithKey (\_x _E -> _E) xEs
+
+                    return (VRecord xTs)
+
+            combineTypes xLs' xRs'
+
+        CombineTypes l r -> do
+            _L' <- loop ctx l
+
+            let l' = eval values l
+
+            let l'' = quote names l'
+
+            cL <- case _L' of
+                VConst cL -> return cL
+                _         -> die (CombineTypesRequiresRecordType l l'')
+
+            _R' <- loop ctx r
+
+            let r' = eval values r
+
+            let r'' = quote names r'
+
+            cR <- case _R' of
+                VConst cR -> return cR
+                _         -> die (CombineTypesRequiresRecordType r r'')
+
+            let c = max cL cR
+
+            xLs' <- case l' of
+                VRecord xLs' -> return xLs'
+                _            -> die (CombineTypesRequiresRecordType l l'')
+
+            xRs' <- case r' of
+                VRecord xRs' -> return xRs'
+                _            -> die (CombineTypesRequiresRecordType r r'')
+
+            let combineTypes xLs₀' xRs₀' = do
+                    let combine _ (VRecord xLs₁') (VRecord xRs₁') =
+                            combineTypes xLs₁' xRs₁'
+
+                        combine x _ _ =
+                            die (FieldCollision x)
+
+                    let mL = Dhall.Map.toMap xLs₀'
+                    let mR = Dhall.Map.toMap xRs₀'
+
+                    Data.Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
+
+            combineTypes xLs' xRs'
+
+            return (VConst c)
+
+        Prefer l r -> do
+            _L' <- loop ctx l
+
+            xLs' <- case _L' of
+                VRecord xLs' -> return xLs'
+                _            -> die (MustCombineARecord '⫽' l r)
+
+            _R' <- loop ctx r
+
+            xRs' <- case _R' of
+                VRecord xRs' -> return xRs'
+                _            -> die (MustCombineARecord '⫽' l r)
+
+            return (VRecord (Dhall.Map.union xRs' xLs'))
+
+        Merge t u mT₁ -> do
+            _T' <- loop ctx t
+
+            yTs' <- case _T' of
+                VRecord yTs' -> do
+                    return yTs'
+
+                _ -> do
+                    let _T'' = quote names _T'
+
+                    die (MustMergeARecord t _T'')
+
+            _U' <- loop ctx u
+
+            yUs' <- case _U' of
+                VUnion yUs' -> do
+                    return yUs'
+
+                _ -> do
+                    let _U'' = quote names _U'
+
+                    die (MustMergeUnion u _U'')
+
+            let ysT = Dhall.Map.keysSet yTs'
+            let ysU = Dhall.Map.keysSet yUs'
+
+            let diffT = Data.Set.difference ysT ysU
+            let diffU = Data.Set.difference ysU ysT
+
+            if Data.Set.null diffT
+                then return ()
+                else die (UnusedHandler diffT)
+
+            (my₀, _T₁') <- do
+                case mT₁ of
+                    Just _T₁ -> do
+                        return (Nothing, eval values _T₁)
+
                     Nothing -> do
-                        Left (TypeError ctx e (MissingHandler diffY))
+                        case Dhall.Map.uncons yTs' of
+                            Nothing -> do
+                                die MissingMergeType
 
-                    Just tX -> do
-                        _T₃ <- do
-                            case mTY of
-                                Nothing -> do
-                                    return tX
-                                Just _A₁ -> do
-                                    case tX of
-                                        Pi x _A₀ _T₂ -> do
-                                            if Dhall.Core.judgmentallyEqual _A₀ _A₁
+                            Just (y₀, _T', _) -> do
+                                _T₁' <- do
+                                    case Dhall.Map.lookup y₀ yUs' of
+                                        Nothing -> do
+                                            die (UnusedHandler diffU)
+
+                                        Just Nothing -> do
+                                            return _T'
+
+                                        Just (Just _) -> do
+                                            case _T' of
+                                                VAnyPi x _A₀' _T₀' -> do
+                                                    return (_T₀' (fresh ctx x))
+
+                                                _ -> do
+                                                    let _T'' = quote names _T'
+
+                                                    die (HandlerNotAFunction y₀ _T'')
+
+                                return (Just y₀, _T₁')
+
+            let _T₁'' = quote names _T₁'
+
+            _ <- loop ctx _T₁''
+
+            let process y mU = do
+                    case Dhall.Map.lookup y yTs' of
+                        Nothing -> do
+                            die (MissingHandler diffU)
+
+                        Just _T' -> do
+                            _T₃' <- do
+                                case mU of
+                                    Nothing -> do
+                                        return _T'
+
+                                    Just _A₁' -> do
+                                        case _T' of
+                                            VAnyPi x _A₀' _T₂' -> do
+                                                if Eval.conv values _A₀' _A₁'
+                                                    then do
+                                                        return ()
+
+                                                    else do
+                                                        let _A₀'' = quote names _A₀'
+                                                        let _A₁'' = quote names _A₁'
+
+                                                        die (HandlerInputTypeMismatch y _A₁'' _A₀'')
+
+                                                return (_T₂' (fresh ctx x))
+
+                                            _ -> do
+                                                let _T'' = quote names _T'
+
+                                                die (HandlerNotAFunction y _T'')
+
+                            if Eval.conv values _T₁' _T₃'
+                                then do
+                                    return ()
+
+                                else do
+                                    let _T₃'' = quote names _T₃'
+
+                                    case my₀ of
+                                        Nothing -> die (InvalidHandlerOutputType y _T₁'' _T₃'')
+                                        Just y₀ -> die (HandlerOutputTypeMismatch y₀ _T₁'' y _T₃'')
+
+            Dhall.Map.unorderedTraverseWithKey_ process yUs'
+
+            return _T₁'
+
+        ToMap e mT₁ -> do
+            _E' <- loop ctx e
+
+            let _E'' = quote names _E'
+
+            xTs' <- case _E' of
+                VRecord xTs' -> return xTs'
+                _            -> die (MustMapARecord e _E'')
+
+            tE' <- loop ctx _E''
+
+            let tE'' = quote names tE'
+
+            case tE' of
+                VConst Type -> return ()
+                _           -> die (InvalidToMapRecordKind _E'' tE'')
+
+            Data.Foldable.traverse_ (loop ctx) mT₁
+
+            let compareFieldTypes _T₀' Nothing =
+                    Just (Right _T₀')
+
+                compareFieldTypes _T₀' r@(Just (Right _T₁'))
+                    | Eval.conv values _T₀' _T₁' = r
+                    | otherwise = do
+                        let _T₀'' = quote names _T₀'
+                        let _T₁'' = quote names _T₁'
+
+                        Just (die (HeterogenousRecordToMap _E'' _T₀'' _T₁''))
+
+                compareFieldTypes _T₀' r@(Just (Left _)) =
+                    r
+
+            let r = appEndo (foldMap (Endo . compareFieldTypes) xTs') Nothing
+
+            let mT₁' = fmap (eval values) mT₁
+
+            let mapType _T' =
+                    VList
+                        (VRecord
+                            (Dhall.Map.fromList
+                                [("mapKey", VText), ("mapValue", _T')]
+                            )
+                        )
+
+            case (r, mT₁') of
+                (Nothing, Nothing) -> do
+                    die MissingToMapType
+                (Just err@(Left _), _) -> do
+                    err
+                (Just (Right _T'), Nothing) -> do
+                    pure (mapType _T')
+                (Nothing, Just _T₁'@(VList (VRecord itemTypes)))
+                   | Just _T' <- Dhall.Map.lookup "mapValue" itemTypes
+                   , Eval.conv values (mapType _T') _T₁' -> do
+                       pure _T₁'
+                (Nothing, Just _T₁') -> do
+                    let _T₁'' = quote names _T₁'
+
+                    die (InvalidToMapType _T₁'')
+                (Just (Right _T'), Just _T₁')
+                   | Eval.conv values (mapType _T') _T₁' -> do
+                       pure _T₁'
+                   | otherwise -> do
+                       let _T₁'' = quote names _T₁'
+
+                       die (MapTypeMismatch (quote names (mapType _T')) _T₁'')
+
+        Field e x -> do
+            _E' <- loop ctx e
+
+            let _E'' = quote names _E'
+
+            case _E' of
+                VRecord xTs' -> do
+                    _ <- loop ctx _E''
+
+                    case Dhall.Map.lookup x xTs' of
+                        Just _T' -> return _T'
+                        Nothing  -> die (MissingField x _E'')
+                _ -> do
+                    let e' = eval values e
+
+                    let e'' = quote names e'
+
+                    case e' of
+                        VUnion xTs' -> do
+                            case Dhall.Map.lookup x xTs' of
+                                Just (Just _T') -> return (VHPi x _T' (\_ -> e'))
+                                Just  Nothing   -> return e'
+                                Nothing         -> die (MissingConstructor x e)
+
+                        _ -> do
+                            let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
+
+                            die (CantAccess text e'' _E'')
+        Project e (Left xs) -> do
+            _E' <- loop ctx e
+
+            let _E'' = quote names _E'
+
+            case _E' of
+                VRecord xTs' -> do
+                    _ <- loop ctx _E''
+
+                    let process x =
+                            case Dhall.Map.lookup x xTs' of
+                                Just _T' -> return (x, _T')
+                                Nothing  -> die (MissingField x _E'')
+
+                    let adapt = VRecord . Dhall.Map.fromList
+
+                    fmap adapt (traverse process (Dhall.Set.toList xs))
+
+                _ -> do
+                    let text =
+                            Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
+
+                    die (CantProject text e _E'')
+
+        Project e (Right s) -> do
+            _E' <- loop ctx e
+
+            let _E'' = quote names _E'
+
+            case _E' of
+                VRecord xEs' -> do
+                    _ <- loop ctx s
+
+                    let s' = eval values s
+
+                    case s' of
+                        VRecord xSs' -> do
+                            let actualSubset =
+                                    quote names (VRecord (Dhall.Map.intersection xEs' xSs'))
+
+                            let expectedSubset = s
+
+                            let process x _S' = do
+                                    let _S'' = quote names _S'
+
+                                    case Dhall.Map.lookup x xEs' of
+                                        Nothing -> do
+                                            die (MissingField x _E'')
+
+                                        Just _E' -> do
+                                            if Eval.conv values _E' _S'
                                                 then return ()
-                                                else Left (TypeError ctx e (HandlerInputTypeMismatch kY _A₁ _A₀))
+                                                else die (ProjectionTypeMismatch x _E'' _S'' expectedSubset actualSubset)
 
-                                            return (Dhall.Core.shift (-1) (V x 0) _T₂)
-                                        _ -> do
-                                            Left (TypeError ctx e (HandlerNotAFunction kY tX))
+                            Dhall.Map.unorderedTraverseWithKey_ process xSs'
 
-                        if Dhall.Core.judgmentallyEqual _T₁ _T₃
-                            then return ()
-                            else
-                                case mKX of
-                                    Nothing -> do
-                                        Left (TypeError ctx e (InvalidHandlerOutputType kY _T₁ _T₃))
-                                    Just kX -> do
-                                        Left (TypeError ctx e (HandlerOutputTypeMismatch kX _T₁ kY _T₃))
+                            return s'
 
-        Dhall.Map.unorderedTraverseWithKey_ process ktsY
+                        _ -> do
+                            die (CantProjectByExpression s)
 
-        return _T₁
+                _ -> do
+                    let text = Dhall.Core.pretty s
 
-    loop ctx e@(ToMap kvsX mT₁) = do
-        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
+                    die (CantProject text e s)
 
-        ktsX <- case tKvsX of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustMapARecord kvsX tKvsX))
+        Assert _T -> do
+            _ <- loop ctx _T
 
-        _TKvsX <- loop ctx tKvsX
+            let _T' = eval values _T
 
-        case _TKvsX of
-            Const Type -> return ()
-            kind       -> Left (TypeError ctx e (InvalidToMapRecordKind tKvsX kind))
+            case _T' of
+                VEquivalent x' y' -> do
+                    let x'' = quote names x'
+                    let y'' = quote names y'
 
-        Data.Foldable.traverse_ (loop ctx) mT₁
+                    if Eval.conv values x' y'
+                        then return _T'
+                        else die (AssertionFailed x'' y'')
 
-        let ktX = appEndo (foldMap (Endo . compareFieldTypes) ktsX) Nothing
-            mT₂ = fmap Dhall.Core.normalize mT₁
-            mapType fieldType = App List (Record $ Dhall.Map.fromList [("mapKey", Text),
-                                                                       ("mapValue", fieldType)])
-            compareFieldTypes t Nothing = Just (Right t)
-            compareFieldTypes t r@(Just (Right t'))
-               | Dhall.Core.judgmentallyEqual t t' = r
-               | otherwise = Just (Left $ TypeError ctx e (HeterogenousRecordToMap tKvsX t t'))
-            compareFieldTypes _ r@(Just Left{}) = r
+                _ -> do
+                    die (NotAnEquivalence _T)
 
-        case (ktX, mT₂) of
-            (Nothing, Nothing) -> Left (TypeError ctx e MissingToMapType)
-            (Just err@Left{}, _) -> err
-            (Just (Right t), Nothing) -> pure (mapType t)
-            (Nothing, Just t@(App List (Record mapItemType)))
-               | Just fieldType <- Dhall.Map.lookup "mapValue" mapItemType,
-                 Dhall.Core.judgmentallyEqual t (mapType fieldType) -> pure t
-            (Nothing, Just t) -> Left (TypeError ctx e $ InvalidToMapType t)
-            (Just (Right t₁), Just t₂)
-               | Dhall.Core.judgmentallyEqual (mapType t₁) t₂ -> pure t₂
-               | otherwise -> Left (TypeError ctx e $ MapTypeMismatch (mapType t₁) t₂)
-    loop ctx e@(Field r x       ) = do
-        t <- fmap Dhall.Core.normalize (loop ctx r)
+        Equivalent x y -> do
+            _A₀' <- loop ctx x
 
-        let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
+            let _A₀'' = quote names _A₀'
 
-        case t of
-            Record kts -> do
-                _ <- loop ctx t
+            tA₀' <- loop ctx _A₀''
 
-                case Dhall.Map.lookup x kts of
-                    Just t' -> return t'
-                    Nothing -> Left (TypeError ctx e (MissingField x t))
-            _ -> do
-                case Dhall.Core.normalize r of
-                  Union kts ->
-                    case Dhall.Map.lookup x kts of
-                        Just (Just t') -> return (Pi x t' (Union kts))
-                        Just Nothing   -> return (Union kts)
-                        Nothing -> Left (TypeError ctx e (MissingConstructor x r))
-                  r' -> Left (TypeError ctx e (CantAccess text r' t))
-    loop ctx e@(Project r (Left xs)) = do
-        t <- fmap Dhall.Core.normalize (loop ctx r)
+            case tA₀' of
+                VConst Type -> return ()
+                _          -> die (IncomparableExpression x)
 
-        case t of
-            Record kts -> do
-                _ <- loop ctx t
+            _A₁' <- loop ctx y
 
-                let process k =
-                        case Dhall.Map.lookup k kts of
-                            Just t' -> return (k, t')
-                            Nothing -> Left (TypeError ctx e (MissingField k t))
+            let _A₁'' = quote names _A₁'
 
-                let adapt = Record . Dhall.Map.fromList
+            tA₁' <- loop ctx _A₁''
 
-                fmap adapt (traverse process (Dhall.Set.toList xs))
-            _ -> do
-                let text =
-                        Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
+            case tA₁' of
+                VConst Type -> return ()
+                _           -> die (IncomparableExpression y)
 
-                Left (TypeError ctx e (CantProject text r t))
-    loop ctx e@(Project r (Right t)) = do
-        _R <- fmap Dhall.Core.normalize (loop ctx r)
+            if Eval.conv values _A₀' _A₁'
+                then return ()
+                else die (EquivalenceTypeMismatch x _A₀'' y _A₁'')
 
-        case _R of
-            Record ktsR -> do
-                _ <- loop ctx t
+            return (VConst Type)
 
-                case Dhall.Core.normalize t of
-                    Record ktsT -> do
-                        let actualSubset =
-                                Record (Dhall.Map.intersection ktsR ktsT)
+        Note s e ->
+            case loop ctx e of
+                Left (TypeError ctx' (Note s' e') m) ->
+                    Left (TypeError ctx' (Note s' e') m)
+                Left (TypeError ctx'          e'  m) ->
+                    Left (TypeError ctx' (Note s  e') m)
+                Right r ->
+                    Right r
 
-                        let expectedSubset = t
+        ImportAlt l _r -> do
+            loop ctx l
 
-                        let process k tT = do
-                                case Dhall.Map.lookup k ktsR of
-                                    Nothing -> do
-                                        Left (TypeError ctx e (MissingField k _R))
-                                    Just tR -> do
-                                        if Dhall.Core.judgmentallyEqual tT tR
-                                            then do
-                                                return ()
-                                            else do
-                                                Left (TypeError ctx e (ProjectionTypeMismatch k tT tR expectedSubset actualSubset))
+        Embed p -> do
+            return (eval values (typer p))
+      where
+        die err = Left (TypeError context expression err)
+          where
+            context = ctxToContext ctx
 
-                        Dhall.Map.unorderedTraverseWithKey_ process ktsT
+        names = typesToNames types
 
-                        return (Record ktsT)
-                    _ -> do
-                        Left (TypeError ctx e (CantProjectByExpression t))
+        eval vs e = Eval.eval vs (Dhall.Core.denote e)
 
-            _ -> do
-                let text = Dhall.Core.pretty t
-
-                Left (TypeError ctx e (CantProject text r t))
-    loop ctx e@(Assert t) = do
-        _ <- loop ctx t
-
-        let t' = Dhall.Core.normalize t
-
-        case t' of
-            Equivalent x y -> do
-                if Dhall.Core.judgmentallyEqual x y
-                    then return t'
-                    else Left (TypeError ctx e (AssertionFailed x y))
-
-            _ -> Left (TypeError ctx e (NotAnEquivalence t))
-    loop ctx e@(Equivalent x y) = do
-        _A₀ <- loop ctx x
-
-        c₀ <- loop ctx _A₀
-        case c₀ of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (IncomparableExpression x))
-
-        _A₁ <- loop ctx y
-
-        c₁ <- loop ctx _A₁
-        case c₁ of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (IncomparableExpression y))
-
-        if Dhall.Core.judgmentallyEqual _A₀ _A₁
-            then return ()
-            else do
-                let nf_A₀ = Dhall.Core.normalize _A₀
-                let nf_A₁ = Dhall.Core.normalize _A₁
-                Left (TypeError ctx e (EquivalenceTypeMismatch x nf_A₀ y nf_A₁))
-
-        return (Const Type)
-    loop ctx   (Note s e'       ) = case loop ctx e' of
-        Left (TypeError ctx' (Note s' e'') m) -> Left (TypeError ctx' (Note s' e'') m)
-        Left (TypeError ctx'          e''  m) -> Left (TypeError ctx' (Note s  e'') m)
-        Right r                               -> Right r
-    loop ctx   (ImportAlt l _r  ) =
-       fmap Dhall.Core.normalize (loop ctx l)
-    loop _     (Embed p         ) = Right $ tpa p
+        quote ns value = Eval.renote (Eval.quote ns value)
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
