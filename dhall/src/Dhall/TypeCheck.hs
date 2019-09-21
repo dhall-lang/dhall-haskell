@@ -775,149 +775,194 @@ infer typer = loop
 
             return (VOptional _A')
 
+        OptionalFold -> do
+            return
+                (   VHPi "a" (VConst Type) (\a ->
+                            VOptional a
+                        ~>  VHPi "optional" (VConst Type) (\optional ->
+                                VHPi "just" (a ~> optional) (\_just ->
+                                    VHPi "nothing" optional (\_nothing ->
+                                        optional
+                                    )
+                                )
+                            )
+                    )
+                )
+
+        OptionalBuild -> do
+            return
+                (   VHPi "a" (VConst Type) (\a ->
+                            VHPi "optional" (VConst Type) (\optional ->
+                                VHPi "just" (a ~> optional) (\_just ->
+                                    VHPi "nothing" optional (\_nothing ->
+                                        optional
+                                    )
+                                )
+                            )
+                        ~>  VOptional a
+                    )
+                )
+
+        Record xTs -> do
+            let process x _T = do
+                    tT' <- lift (loop ctx _T)
+
+                    case tT' of
+                        VConst c -> tell (Max c)
+                        _        -> lift (die (InvalidFieldType x _T))
+
+            Max c <- execWriterT (Dhall.Map.unorderedTraverseWithKey_ process xTs)
+
+            return (VConst c)
+
+        RecordLit xts -> do
+            let process x t = do
+                    _T' <- loop ctx t
+
+                    let _T'' = quote names _T'
+
+                    tT' <- loop ctx _T''
+
+                    case tT' of
+                        VConst _ -> return _T'
+                        _        -> die (InvalidFieldType x _T'')
+
+            xTs <- Dhall.Map.unorderedTraverseWithKey process (Dhall.Map.sort xts)
+
+            return (VRecord xTs)
+
+        Union xTs -> do
+            let nonEmpty x mT = First (fmap (\_T -> (x, _T)) mT)
+
+            case getFirst (Dhall.Map.foldMapWithKey nonEmpty xTs) of
+                Nothing -> do
+                    return (VConst Type)
+
+                Just (x₀, _T₀) -> do
+                    tT₀' <- loop ctx _T₀
+
+                    c₀ <- case tT₀' of
+                        VConst c₀ -> return c₀
+                        _         -> die (InvalidAlternativeType x₀ _T₀)
+
+                    let process _ Nothing = do
+                            return ()
+
+                        process x₁ (Just _T₁) = do
+                            tT₁' <- loop ctx _T₁
+
+                            c₁ <- case tT₁' of
+                                VConst c₁ -> return c₁
+                                _         -> die (InvalidAlternativeType x₁ _T₁)
+
+                            if c₀ == c₁
+                                then return ()
+                                else die (AlternativeAnnotationMismatch x₁ _T₁ c₁ x₀ _T₀ c₀)
+
+                    Dhall.Map.unorderedTraverseWithKey_ process (Dhall.Map.delete x₀ xTs)
+
+                    return (VConst c₀)
+        Combine l r -> do
+            _L' <- loop ctx l
+
+            xLs' <- case _L' of
+                VRecord xLs' -> do
+                    return xLs'
+
+                _ -> do
+                    let _L'' = quote names _L'
+
+                    die (MustCombineARecord '∧' l _L'')
+
+            _R' <- loop ctx r
+
+            xRs' <- case _R' of
+                VRecord xRs' -> do
+                    return xRs'
+
+                _ -> do
+                    let _R'' = quote names _R'
+
+                    die (MustCombineARecord '∧' r _R'')
+
+            let combineTypes xLs₀' xRs₀' = do
+                    let combine _ (VRecord xLs₁') (VRecord xRs₁') =
+                            combineTypes xLs₁' xRs₁'
+
+                        combine x _ _ = do
+                            die (FieldCollision x)
+
+                    let xEs =
+                            Dhall.Map.outerJoin Right Right combine xLs₀' xRs₀'
+
+                    xTs <- Dhall.Map.unorderedTraverseWithKey (\_x _E -> _E) xEs
+
+                    return (VRecord xTs)
+
+            combineTypes xLs' xRs'
+
+        CombineTypes l r -> do
+            _L' <- loop ctx l
+
+            let l' = eval values l
+
+            let l'' = quote names l'
+
+            cL <- case _L' of
+                VConst cL -> return cL
+                _         -> die (CombineTypesRequiresRecordType l l'')
+
+            _R' <- loop ctx r
+
+            let r' = eval values r
+
+            let r'' = quote names r'
+
+            cR <- case _R' of
+                VConst cR -> return cR
+                _         -> die (CombineTypesRequiresRecordType r r'')
+
+            let c = max cL cR
+
+            xLs' <- case l' of
+                VRecord xLs' -> return xLs'
+                _            -> die (CombineTypesRequiresRecordType l l'')
+
+            xRs' <- case r' of
+                VRecord xRs' -> return xRs'
+                _            -> die (CombineTypesRequiresRecordType r r'')
+
+            let combineTypes xLs₀' xRs₀' = do
+                    let combine _ (VRecord xLs₁') (VRecord xRs₁') =
+                            combineTypes xLs₁' xRs₁'
+
+                        combine x _ _ =
+                            die (FieldCollision x)
+
+                    let mL = Dhall.Map.toMap xLs₀'
+                    let mR = Dhall.Map.toMap xRs₀'
+
+                    Data.Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
+
+            combineTypes xLs' xRs'
+
+            return (VConst c)
+
+        Prefer l r -> do
+            _L' <- loop ctx l
+
+            xLs' <- case _L' of
+                VRecord xLs' -> return xLs'
+                _            -> die (MustCombineARecord '⫽' l r)
+
+            _R' <- loop ctx r
+
+            xRs' <- case _R' of
+                VRecord xRs' -> return xRs'
+                _            -> die (MustCombineARecord '⫽' l r)
+
+            return (VRecord (Dhall.Map.union xLs' xRs'))
 {-
-    loop _      None              = do
-        return (Pi "A" (Const Type) (App Optional "A"))
-    loop ctx e@(Some a) = do
-        _A <- loop ctx a
-        s <- fmap Dhall.Core.normalize (loop ctx _A)
-        case s of
-            Const Type -> return ()
-            _          -> Left (TypeError ctx e (InvalidSome a _A s))
-        return (App Optional _A)
-    loop _      OptionalFold      = do
-        return
-            (Pi "a" (Const Type)
-                (Pi "_" (App Optional "a")
-                    (Pi "optional" (Const Type)
-                        (Pi "just" (Pi "_" "a" "optional")
-                            (Pi "nothing" "optional" "optional") ) ) ) )
-    loop _      OptionalBuild     = do
-        return
-            (Pi "a" (Const Type)
-                (Pi "_" f (App Optional "a") ) )
-        where f = Pi "optional" (Const Type)
-                      (Pi "just" (Pi "_" "a" "optional")
-                          (Pi "nothing" "optional" "optional") )
-    loop ctx e@(Record    kts   ) = do
-        let process k t = do
-                s <- lift (fmap Dhall.Core.normalize (loop ctx t))
-                case s of
-                    Const c -> tell (Max c)
-                    _ -> lift (Left (TypeError ctx e (InvalidFieldType k t)))
-        Max c <- execWriterT (Dhall.Map.unorderedTraverseWithKey_ process kts)
-        return (Const c)
-    loop ctx e@(RecordLit kvs   ) = do
-        let process k v = do
-                t <- fmap Dhall.Core.normalize (loop ctx v)
-                s <- fmap Dhall.Core.normalize (loop ctx t)
-                case s of
-                    Const _ -> return t
-                    _ -> Left (TypeError ctx e (InvalidFieldType k t))
-
-        Record <$> Dhall.Map.unorderedTraverseWithKey process (Dhall.Map.sort kvs)
-    loop ctx e@(Union     kts   ) = do
-        let nonEmpty k mt = First (fmap (\t -> (k, t)) mt)
-
-        case getFirst (Dhall.Map.foldMapWithKey nonEmpty kts) of
-            Nothing -> do
-                return (Const Type)
-
-            Just (k0, t0) -> do
-                s0 <- fmap Dhall.Core.normalize (loop ctx t0)
-
-                c0 <- case s0 of
-                    Const c0 -> do
-                        return c0
-
-                    _ -> do
-                        Left (TypeError ctx e (InvalidAlternativeType k0 t0))
-
-                let process _ Nothing = do
-                        return ()
-
-                    process k (Just t) = do
-                        s <- fmap Dhall.Core.normalize (loop ctx t)
-
-                        c <- case s of
-                            Const c -> do
-                                return c
-
-                            _ -> do
-                                Left (TypeError ctx e (InvalidAlternativeType k t))
-
-                        if c0 == c
-                            then return ()
-                            else Left (TypeError ctx e (AlternativeAnnotationMismatch k t c k0 t0 c0))
-
-                Dhall.Map.unorderedTraverseWithKey_ process (Dhall.Map.delete k0 kts)
-
-                return (Const c0)
-    loop ctx e@(Combine kvsX kvsY) = do
-        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
-        ktsX  <- case tKvsX of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsX tKvsX))
-
-        tKvsY <- fmap Dhall.Core.normalize (loop ctx kvsY)
-        ktsY  <- case tKvsY of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustCombineARecord '∧' kvsY tKvsY))
-
-        let combineTypes ktsL ktsR = do
-                let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
-                    combine k _ _ = Left (TypeError ctx e (FieldCollision k))
-
-                let eKts = Dhall.Map.outerJoin Right Right combine
-                                               ktsL ktsR
-
-                fmap Record (Dhall.Map.unorderedTraverseWithKey (\_k v -> v) eKts)
-
-        combineTypes ktsX ktsY
-    loop ctx e@(CombineTypes l r) = do
-        tL <- loop ctx l
-        let l' = Dhall.Core.normalize l
-        cL <- case tL of
-            Const cL -> return cL
-            _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType l l'))
-        tR <- loop ctx r
-        let r' = Dhall.Core.normalize r
-        cR <- case tR of
-            Const cR -> return cR
-            _        -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
-        let c = max cL cR
-
-        ktsL0 <- case l' of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (CombineTypesRequiresRecordType l l'))
-        ktsR0 <- case r' of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (CombineTypesRequiresRecordType r r'))
-
-        let combineTypes ktsL ktsR = do
-                let mL = Dhall.Map.toMap ktsL
-                let mR = Dhall.Map.toMap ktsR
-
-                let combine _ (Record ktsL') (Record ktsR') = combineTypes ktsL' ktsR'
-                    combine k _ _ = Left (TypeError ctx e (FieldCollision k))
-
-                Data.Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
-
-        combineTypes ktsL0 ktsR0
-
-        return (Const c)
-    loop ctx e@(Prefer kvsX kvsY) = do
-        tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
-        ktsX  <- case tKvsX of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsX tKvsX))
-
-        tKvsY <- fmap Dhall.Core.normalize (loop ctx kvsY)
-        ktsY  <- case tKvsY of
-            Record kts -> return kts
-            _          -> Left (TypeError ctx e (MustCombineARecord '⫽' kvsY tKvsY))
-
-        return (Record (Dhall.Map.union ktsY ktsX))
     loop ctx e@(Merge kvsX kvsY mT₁) = do
         tKvsX <- fmap Dhall.Core.normalize (loop ctx kvsX)
 
