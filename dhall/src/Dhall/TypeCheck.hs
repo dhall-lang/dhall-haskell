@@ -558,7 +558,15 @@ infer typer = loop
                                 else do
                                     let _T₀'' = quote names _T₀'
                                     let _T₁'' = quote names _T₁'
-                                    die (MismatchedListElements i _T₀'' t₁ _T₁'')
+
+                                    -- Carefully note that we don't use `die`
+                                    -- here so that the source span is narrowed
+                                    -- to just the offending element
+                                    let err = MismatchedListElements i _T₀'' t₁ _T₁''
+
+                                    let context = ctxToContext ctx
+
+                                    Left (TypeError context t₁ err)
 
                     traverseWithIndex_ process ts₁
 
