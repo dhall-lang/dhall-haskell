@@ -975,7 +975,7 @@ quote !env !t0 =
         VConst k ->
             Const k
         VVar !x !i ->
-            Var (V x (fromIntegral (countNames x env - i - 1)))
+            Var (V x (countNames x env - i - 1))
         VApp t u ->
             quote env t `qApp` u
         VLam a (freshClosure -> (x, v, t)) ->
