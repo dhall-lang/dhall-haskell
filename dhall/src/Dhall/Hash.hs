@@ -12,7 +12,6 @@ import Dhall.Util (Censor, Input(..))
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Control.Exception
-import qualified Dhall.Context                    as Context
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.TypeCheck
@@ -28,7 +27,7 @@ hash censor = do
 
     resolvedExpression <- State.evalStateT (Dhall.Import.loadWith parsedExpression) status
 
-    case Dhall.TypeCheck.typeWith Context.empty resolvedExpression of
+    case Dhall.TypeCheck.typeOf resolvedExpression of
         Left  exception -> Control.Exception.throwIO exception
         Right _         -> return ()
 
