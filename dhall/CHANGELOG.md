@@ -29,6 +29,9 @@
       avoid unnecessary vertical sprawl of formatted records
     * Specifically, record fields that fit on one line will now be formatted
       on one line
+* [Add `--quiet` option to `dhall type`](https://github.com/dhall-lang/dhall-haskell/pull/1325)
+    * This lets you use `dhall type` in "check only" mode (e.g. for CI for
+      for development feedback)
 * Improved GHCJS support - ([#1311](https://github.com/dhall-lang/dhall-haskell/pull/1311) / [#1330](https://github.com/dhall-lang/dhall-haskell/pull/1330))
 * [Fix all executables to accept `--version`](https://github.com/dhall-lang/dhall-haskell/pull/1334)
     * Note that the `dhall version` subcommand is still supported, too
