@@ -74,6 +74,7 @@ module Dhall.Core (
     , throws
     , textShow
     , censorExpression
+    , censorText
     ) where
 
 import Control.Applicative (empty)
@@ -2230,6 +2231,7 @@ censorChunks (Chunks xys z) = Chunks xys' z'
 
     xys' = [ (censorText x, censorExpression y) | (x, y) <- xys ]
 
+-- | Utility used to censor `Text` by replacing all characters with a space
 censorText :: Text -> Text
 censorText = Data.Text.map (\_ -> ' ')
 
