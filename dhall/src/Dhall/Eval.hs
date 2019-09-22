@@ -36,7 +36,6 @@ module Dhall.Eval (
   , alphaNormalize
   , eval
   , quote
-  , renote
   , envNames
   , countNames
   , conv
@@ -67,7 +66,6 @@ import Dhall.Map (Map)
 import Dhall.Set (Set)
 import GHC.Natural (Natural)
 import Prelude hiding (succ)
-import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Codec.Serialise as Serialise
 import qualified Data.Sequence   as Sequence
@@ -1124,11 +1122,7 @@ quote !env !t0 =
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
 nf :: Eq a => Environment a -> Expr s a -> Expr t a
-nf !env = renote . quote (envNames env) . eval env . Core.denote
-
-renote :: Expr Void a -> Expr s a
-renote = unsafeCoerce
-{-# INLINE renote #-}
+nf !env = Core.renote . quote (envNames env) . eval env . Core.denote
 
 {-| Reduce an expression to its normal form, performing beta reduction
 

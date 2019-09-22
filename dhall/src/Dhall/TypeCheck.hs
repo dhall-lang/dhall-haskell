@@ -114,7 +114,7 @@ typeWithA
     -> Expr s a
     -> Either (TypeError s a) (Expr s a)
 typeWithA tpa context expression =
-    fmap (Eval.renote . Eval.quote EmptyNames) (infer tpa ctx expression)
+    fmap (Dhall.Core.renote . Eval.quote EmptyNames) (infer tpa ctx expression)
   where
     ctx = contextToCtx context
 
@@ -136,7 +136,7 @@ ctxToContext (Ctx {..}) = loop types
       where
         ns = typesToNames ts
 
-        t' = Eval.renote (Eval.quote ns t)
+        t' = Dhall.Core.renote (Eval.quote ns t)
     loop TypesEmpty = Dhall.Context.empty
 
 typesToNames :: Types a -> Names
@@ -216,7 +216,7 @@ infer typer = loop
 
             let _B'' = quote (Bind (Eval.envNames values) x) _B'
 
-            tB' <- loop ctx' (Eval.renote _B'')
+            tB' <- loop ctx' (Dhall.Core.renote _B'')
 
             case tB' of
                 VConst _ -> return ()
@@ -1247,7 +1247,7 @@ infer typer = loop
 
         eval vs e = Eval.eval vs (Dhall.Core.denote e)
 
-        quote ns value = Eval.renote (Eval.quote ns value)
+        quote ns value = Dhall.Core.renote (Eval.quote ns value)
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
