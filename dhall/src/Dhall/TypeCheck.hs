@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -40,7 +39,7 @@ import Dhall.Binary (ToTerm(..))
 import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
 import Dhall.Eval
-    (Environment(..), Names(..), Val(..), pattern VAnyPi, (~>))
+    (Environment(..), Names(..), Val(..), (~>))
 import Dhall.Pretty (Ann, layoutOpts)
 
 import qualified Data.Foldable
@@ -229,8 +228,8 @@ infer typer = loop
         App f a -> do
             tf' <- loop ctx f
 
-            case tf' of
-                VAnyPi _x _A₀' _B' -> do
+            case Eval.toVHPi tf' of
+                Just (_x, _A₀', _B') -> do
                     _A₁' <- loop ctx a
 
                     if Eval.conv values _A₀' _A₁'
@@ -243,7 +242,7 @@ infer typer = loop
                             let _A₀'' = quote names _A₀'
                             let _A₁'' = quote names _A₁'
                             die (TypeMismatch f _A₀'' a _A₁'')
-                _ -> do
+                Nothing -> do
                     die (NotAFunction f (quote names tf'))
 
         Let (Binding { value = a₀, variable = x, ..}) body -> do
@@ -940,11 +939,11 @@ infer typer = loop
                                             return _T'
 
                                         Just (Just _) -> do
-                                            case _T' of
-                                                VAnyPi x _A₀' _T₀' -> do
+                                            case Eval.toVHPi _T' of
+                                                Just (x, _A₀', _T₀') -> do
                                                     return (_T₀' (fresh ctx x))
 
-                                                _ -> do
+                                                Nothing -> do
                                                     let _T'' = quote names _T'
 
                                                     die (HandlerNotAFunction y₀ _T'')
@@ -967,8 +966,8 @@ infer typer = loop
                                         return _T'
 
                                     Just _A₁' -> do
-                                        case _T' of
-                                            VAnyPi x _A₀' _T₂' -> do
+                                        case Eval.toVHPi _T' of
+                                            Just (x, _A₀', _T₂') -> do
                                                 if Eval.conv values _A₀' _A₁'
                                                     then do
                                                         return ()
@@ -981,7 +980,7 @@ infer typer = loop
 
                                                 return (_T₂' (fresh ctx x))
 
-                                            _ -> do
+                                            Nothing -> do
                                                 let _T'' = quote names _T'
 
                                                 die (HandlerNotAFunction y _T'')

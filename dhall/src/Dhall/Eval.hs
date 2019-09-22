@@ -40,11 +40,11 @@ module Dhall.Eval (
   , envNames
   , countNames
   , conv
+  , toVHPi
   , Closure(..)
   , Names(..)
   , Environment(..)
   , Val(..)
-  , pattern VAnyPi
   , (~>)
   ) where
 
@@ -140,14 +140,10 @@ data HLamInfo a
 pattern VPrim :: (Val a -> Val a) -> Val a
 pattern VPrim f = VHLam Prim f
 
-pattern VAnyPi :: Eq a => Text -> Val a -> (Val a -> Val a) -> Val a
-pattern VAnyPi x a b <-
-    (   let adapt e = case e of
-                VPi  a b@(Closure x _ _) -> Just (x, a, instantiate b)
-                VHPi x a b               -> Just (x, a, b            )
-                _                        -> Nothing
-         in  adapt -> Just (x, a, b)
-    )
+toVHPi :: Eq a => Val a -> Maybe (Text, Val a, Val a -> Val a)
+toVHPi (VPi a b@(Closure x _ _)) = Just (x, a, instantiate b)
+toVHPi (VHPi x a b             ) = Just (x, a, b)
+toVHPi  _                        = Nothing
 
 data Val a
     = VConst !Const
