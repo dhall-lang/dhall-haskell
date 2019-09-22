@@ -158,6 +158,20 @@ addTypeValue x t v (Ctx vs ts) = Ctx (Extend vs x v) (TypesBind ts x t)
 fresh :: Ctx a -> Text -> Val a
 fresh Ctx{..} x = VVar x (Eval.countNames x (Eval.envNames values))
 
+{-| `typeWithA` is implemented internally in terms of `infer` in order to speed
+    up equivalence checking.
+
+    Specifically, we extend the `Context` to become a `Ctx`, which can store 
+    the entire contents of a `let` expression (i.e. the type *and* the value
+    of the bound variable).  By storing this extra information in the `Ctx` we
+    no longer need to substitute `let` expressions at all (which is very
+    expensive!).
+
+    However, this means that we need to use `Dhall.Eval.conv` to perform
+    equivalence checking instead of `Dhall.Core.judgmentallyEqual` since
+    only `judgmentallyEqual` is unable to use the information stored in the
+    extended context for accurate equivalence checking.
+-}
 infer
     :: forall a s
     .  (Eq a, Pretty a)
