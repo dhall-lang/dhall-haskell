@@ -26,7 +26,6 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Data.Version (showVersion)
 import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..))
@@ -34,6 +33,7 @@ import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError, X)
 import Dhall.Util (Censor(..), Input(..))
+import Dhall.Version (dhallVersionString)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (ExitCode, exitFailure)
 import System.IO (Handle)
@@ -69,7 +69,6 @@ import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
-import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.Exit                               as Exit
 import qualified System.IO
@@ -93,6 +92,7 @@ data Mode
           , annotate :: Bool
           , alpha :: Bool
           , semanticCacheMode :: SemanticCacheMode
+          , version :: Bool
           }
     | Version
     | Resolve { file :: Input, resolveMode :: Maybe ResolveMode }
@@ -202,7 +202,13 @@ parseMode =
             "text"
             "Render a Dhall expression that evaluates to a Text literal"
             (Text <$> parseFile)
-    <|> (Default <$> parseFile <*> parseAnnotate <*> parseAlpha <*> parseSemanticCacheMode)
+    <|> (   Default
+        <$> parseFile
+        <*> parseAnnotate
+        <*> parseAlpha
+        <*> parseSemanticCacheMode
+        <*> parseVersion
+        )
   where
     argument =
             fmap Data.Text.pack
@@ -239,6 +245,12 @@ parseMode =
             (   Options.Applicative.long "no-cache"
             <>  Options.Applicative.help
                   "Handle protected imports as if the cache was empty"
+            )
+
+    parseVersion =
+        Options.Applicative.switch
+            (   Options.Applicative.long "version"
+            <>  Options.Applicative.help "Display version"
             )
 
     parseResolveMode =
@@ -398,9 +410,15 @@ command (Options {..}) = do
 
     handle $ case mode of
         Version -> do
-            putStrLn (showVersion Meta.version)
+            putStrLn dhallVersionString
 
         Default {..} -> do
+            if version
+                then do
+                    putStrLn dhallVersionString
+                    Exit.exitSuccess
+                else return ()
+
             expression <- getExpression file
 
             resolvedExpression <-
