@@ -30,6 +30,7 @@ import Text.Megaparsec (ParseErrorBundle(..), PosState(..))
 
 import qualified Data.Char
 import qualified Data.Text
+import qualified Dhall.Core      as Core
 import qualified Text.Megaparsec
 
 import Dhall.Parser.Combinators
@@ -67,7 +68,7 @@ censor parseError =
                 { bundlePosState =
                     (bundlePosState (unwrap parseError))
                         { pstateInput =
-                            Data.Text.map (\_ -> ' ')
+                            Core.censorText
                                 (pstateInput (bundlePosState (unwrap parseError)))
                         }
                 }

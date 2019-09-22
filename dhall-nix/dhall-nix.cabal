@@ -43,6 +43,8 @@ Library
 Executable dhall-to-nix
     Hs-Source-Dirs: exec
     Main-Is: Main.hs
+    Other-Modules:
+        Paths_dhall_nix
     Build-Depends:
         base                                ,
         dhall                               ,

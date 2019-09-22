@@ -14,6 +14,7 @@ module Dhall.TypeCheck (
     , typeOf
     , typeWithA
     , checkContext
+    , messageExpressions
 
     -- * Types
     , Typer
@@ -21,26 +22,29 @@ module Dhall.TypeCheck (
     , absurd
     , TypeError(..)
     , DetailedTypeError(..)
+    , Censored(..)
     , TypeMessage(..)
     ) where
 
-import Data.Void (Void, absurd)
 import Control.Exception (Exception)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer.Strict (execWriterT, tell)
 import Data.Monoid (Endo(..), First(..))
-import Data.Sequence (Seq, ViewL(..))
 import Data.Semigroup (Max(..), Semigroup(..))
+import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Typeable (Typeable)
+import Data.Void (Void, absurd)
 import Dhall.Binary (ToTerm(..))
-import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Context (Context)
+import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Eval
     (Environment(..), Names(..), Val(..), (~>))
 import Dhall.Pretty (Ann, layoutOpts)
+import Dhall.Src (Src)
+import Lens.Family (over)
 
 import qualified Data.Foldable
 import qualified Data.Map
@@ -4177,6 +4181,152 @@ instance (Eq a, Pretty s, Pretty a, ToTerm a) => Pretty (TypeError s a) where
         source = case expr of
             Note s _ -> pretty s
             _        -> mempty
+
+{-| Wrap a type error in this exception type to censor source code and
+    `Text` literals from the error message
+-}
+data Censored
+    = CensoredDetailed (DetailedTypeError Src X)
+    | Censored (TypeError Src X)
+
+instance Show Censored where
+    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
+
+instance Exception Censored
+
+instance Pretty Censored where
+    pretty (CensoredDetailed (DetailedTypeError e)) =
+        pretty (DetailedTypeError (censorTypeError e))
+    pretty (Censored e) = pretty (censorTypeError e)
+
+censorTypeError :: TypeError Src a -> TypeError Src a
+censorTypeError (TypeError c e m) = TypeError c' e' m'
+  where
+    c' = fmap Dhall.Core.censorExpression c
+
+    e' = Dhall.Core.censorExpression e
+
+    m' = over messageExpressions Dhall.Core.censorExpression m
+
+-- | @Traversal@ that traverses every `Expr` in a `TypeMessage`
+messageExpressions
+    :: Applicative f
+    => (Expr s a -> f (Expr t b)) -> TypeMessage s a -> f (TypeMessage t b)
+messageExpressions f m = case m of
+    UnboundVariable a ->
+        UnboundVariable <$> pure a
+    InvalidInputType a ->
+        InvalidInputType <$> f a
+    InvalidOutputType a ->
+        InvalidOutputType <$> f a
+    NotAFunction a b ->
+        NotAFunction <$> f a <*> f b
+    TypeMismatch a b c d ->
+        TypeMismatch <$> f a <*> f b <*> f c <*> f d
+    AnnotMismatch a b c ->
+        AnnotMismatch <$> f a <*> f b <*> f c
+    Untyped ->
+        pure Untyped
+    MissingListType ->
+        pure MissingListType
+    MismatchedListElements a b c d ->
+        MismatchedListElements <$> pure a <*> f b <*> f c <*> f d
+    InvalidListElement a b c d ->
+        InvalidListElement <$> pure a <*> f b <*> f c <*> f d
+    InvalidListType a ->
+        InvalidListType <$> f a
+    InvalidSome a b c ->
+        InvalidSome <$> f a <*> f b <*> f c
+    InvalidPredicate a b ->
+        InvalidPredicate <$> f a <*> f b
+    IfBranchMismatch a b c d ->
+        IfBranchMismatch <$> f a <*> f b <*> f c <*> f d
+    IfBranchMustBeTerm a b c d ->
+        IfBranchMustBeTerm <$> pure a <*> f b <*> f c <*> f d
+    InvalidFieldType a b ->
+        InvalidFieldType <$> pure a <*> f b
+    InvalidAlternativeType a b ->
+        InvalidAlternativeType <$> pure a <*> f b
+    AlternativeAnnotationMismatch a b c d e g ->
+        AlternativeAnnotationMismatch <$> pure a <*> f b <*> pure c <*> pure d <*> f e <*> pure g
+    ListAppendMismatch a b ->
+        ListAppendMismatch <$> f a <*> f b
+    MustCombineARecord a b c ->
+        MustCombineARecord <$> pure a <*> f b <*> f c
+    CombineTypesRequiresRecordType a b ->
+        CombineTypesRequiresRecordType <$> f a <*> f b
+    RecordTypeMismatch a b c d ->
+        RecordTypeMismatch <$> pure a <*> pure b <*> f c <*> f d
+    FieldCollision a ->
+        FieldCollision <$> pure a
+    MustMergeARecord a b ->
+        MustMergeARecord <$> f a <*> f b
+    MustMergeUnion a b ->
+        MustMergeUnion <$> f a <*> f b
+    MustMapARecord a b ->
+        MustMapARecord <$> f a <*> f b
+    InvalidToMapRecordKind a b ->
+        InvalidToMapRecordKind <$> f a <*> f b
+    HeterogenousRecordToMap a b c ->
+        HeterogenousRecordToMap <$> f a <*> f b <*> f c
+    InvalidToMapType a ->
+        InvalidToMapType <$> f a
+    MapTypeMismatch a b ->
+        MapTypeMismatch <$> f a <*> f b
+    MissingToMapType ->
+        pure MissingToMapType
+    UnusedHandler a ->
+        UnusedHandler <$> pure a
+    MissingHandler a ->
+        MissingHandler <$> pure a
+    HandlerInputTypeMismatch a b c ->
+        HandlerInputTypeMismatch <$> pure a <*> f b <*> f c
+    HandlerOutputTypeMismatch a b c d ->
+        HandlerOutputTypeMismatch <$> pure a <*> f b <*> pure c <*> f d
+    InvalidHandlerOutputType a b c ->
+        InvalidHandlerOutputType <$> pure a <*> f b <*> f c
+    MissingMergeType ->
+        pure MissingMergeType
+    HandlerNotAFunction a b ->
+        HandlerNotAFunction <$> pure a <*> f b
+    CantAccess a b c ->
+        CantAccess <$> pure a <*> f b <*> f c
+    CantProject a b c ->
+        CantProject <$> pure a <*> f b <*> f c
+    CantProjectByExpression a ->
+        CantProjectByExpression <$> f a
+    MissingField a b ->
+        MissingField <$> pure a <*> f b
+    MissingConstructor a b ->
+        MissingConstructor <$> pure a <*> f b
+    ProjectionTypeMismatch a b c d e ->
+        ProjectionTypeMismatch <$> pure a <*> f b <*> f c <*> f d <*> f e
+    AssertionFailed a b ->
+        AssertionFailed <$> f a <*> f b
+    NotAnEquivalence a ->
+        NotAnEquivalence <$> f a
+    IncomparableExpression a ->
+        IncomparableExpression <$> f a
+    EquivalenceTypeMismatch a b c d ->
+        EquivalenceTypeMismatch <$> f a <*> f b <*> f c <*> f d
+    CantAnd a b ->
+        CantAnd <$> f a <*> f b
+    CantOr a b ->
+        CantOr <$> f a <*> f b
+    CantEQ a b ->
+        CantEQ <$> f a <*> f b
+    CantNE a b ->
+        CantNE <$> f a <*> f b
+    CantInterpolate a b ->
+        CantInterpolate <$> f a <*> f b
+    CantTextAppend a b ->
+        CantTextAppend <$> f a <*> f b
+    CantListAppend a b ->
+        CantListAppend <$> f a <*> f b
+    CantAdd a b ->
+        CantAdd <$> f a <*> f b
+    CantMultiply a b ->
+        CantMultiply <$> f a <*> f b
 
 {-| Newtype used to wrap error messages so that they render with a more
     detailed explanation of what went wrong
