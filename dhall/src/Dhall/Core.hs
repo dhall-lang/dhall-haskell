@@ -2236,7 +2236,7 @@ censorText = Data.Text.map (\_ -> ' ')
 censorSrc :: Src -> Src
 censorSrc (Src { srcText = oldText, .. }) = Src { srcText = newText, .. }
   where
-    newText = Data.Text.map (\_ -> ' ') oldText
+    newText = censorText oldText
 
 -- | A traversal over the immediate sub-expressions in 'Chunks'.
 chunkExprs
