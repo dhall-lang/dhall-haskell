@@ -48,6 +48,7 @@ module Dhall.Core (
     , isNormalized
     , isNormalizedWith
     , denote
+    , renote
     , shallowDenote
     , freeIn
 
@@ -93,6 +94,7 @@ import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Traversable
+import Data.Void (Void)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
@@ -103,6 +105,7 @@ import Language.Haskell.TH.Syntax (Lift)
 import Lens.Family (over)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
+import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Control.Exception
 import qualified Control.Monad
@@ -1315,6 +1318,11 @@ denote (Assert a            ) = Assert (denote a)
 denote (Equivalent a b      ) = Equivalent (denote a) (denote b)
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
+
+-- | The \"opposite\" of `denote`, like @first absurd@ but faster
+renote :: Expr Void a -> Expr s a
+renote = unsafeCoerce
+{-# INLINE renote #-}
 
 shallowDenote :: Expr s a -> Expr s a
 shallowDenote (Note _ e) = shallowDenote e

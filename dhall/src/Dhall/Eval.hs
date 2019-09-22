@@ -34,6 +34,17 @@ module Dhall.Eval (
     judgmentallyEqual
   , normalize
   , alphaNormalize
+  , eval
+  , quote
+  , envNames
+  , countNames
+  , conv
+  , toVHPi
+  , Closure(..)
+  , Names(..)
+  , Environment(..)
+  , Val(..)
+  , (~>)
   ) where
 
 import Data.Foldable (foldr', toList)
@@ -55,7 +66,6 @@ import Dhall.Map (Map)
 import Dhall.Set (Set)
 import GHC.Natural (Natural)
 import Prelude hiding (succ)
-import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Codec.Serialise as Serialise
 import qualified Data.Sequence   as Sequence
@@ -127,6 +137,11 @@ data HLamInfo a
 
 pattern VPrim :: (Val a -> Val a) -> Val a
 pattern VPrim f = VHLam Prim f
+
+toVHPi :: Eq a => Val a -> Maybe (Text, Val a, Val a -> Val a)
+toVHPi (VPi a b@(Closure x _ _)) = Just (x, a, instantiate b)
+toVHPi (VHPi x a b             ) = Just (x, a, b)
+toVHPi  _                        = Nothing
 
 data Val a
     = VConst !Const
@@ -209,6 +224,8 @@ data Val a
 (~>) :: Val a -> Val a -> Val a
 (~>) a b = VHPi "_" a (\_ -> b)
 {-# INLINE (~>) #-}
+
+infixr 5 ~>
 
 countEnvironment :: Text -> Environment a -> Int
 countEnvironment x = go (0 :: Int)
@@ -1105,11 +1122,7 @@ quote !env !t0 =
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
 nf :: Eq a => Environment a -> Expr s a -> Expr t a
-nf !env = coeExprVoid . quote (envNames env) . eval env . Core.denote
-  where
-    coeExprVoid :: Expr Void a -> Expr s a
-    coeExprVoid = unsafeCoerce
-    {-# INLINE coeExprVoid #-}
+nf !env = Core.renote . quote (envNames env) . eval env . Core.denote
 
 {-| Reduce an expression to its normal form, performing beta reduction
 
