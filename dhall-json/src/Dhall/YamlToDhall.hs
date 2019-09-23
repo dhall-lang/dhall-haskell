@@ -68,7 +68,9 @@ dhallFromYaml Options{..} yaml = do
 
 #if !defined(ETA_VERSION)
 yamlToJson :: ByteString -> Either String Data.Aeson.Value
-yamlToJson = Data.YAML.Aeson.decode1Strict
+yamlToJson s = case Data.YAML.Aeson.decode1Strict s of
+                  Right v -> Right v
+                  Left (pos, err) -> Left (show pos ++ err)
 
 showYaml :: Value -> String
 showYaml value = BS8.unpack (Data.YAML.Aeson.encode1Strict value)

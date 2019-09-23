@@ -73,8 +73,8 @@ Library
         Java-Sources: java/Utils.java
     else
         Build-Depends:
-            HsYAML >= 0.2,
-            HsYAML-aeson >= 0.2
+            HsYAML >= 0.2 && <0.3,
+            HsYAML-aeson >= 0.2 && <0.3
 
 Executable dhall-to-json
     Hs-Source-Dirs: dhall-to-json

@@ -28,6 +28,7 @@ import qualified Data.YAML.Aeson as YAML
 import qualified Data.YAML as Y
 import qualified Data.YAML.Event as YE
 import qualified Data.YAML.Token as YT
+import qualified Data.YAML.Schema as YS
 import qualified Data.Text as Text
 #endif
 
@@ -98,19 +99,19 @@ jsonToYaml json documents quoted =
     _ -> Data.ByteString.Lazy.toStrict (YAML.encodeValue' schemaEncoder YT.UTF8 [json])
 
   where
-    defaultSchemaEncoder = Y.setScalarStyle style Y.defaultSchemaEncoder
+    defaultSchemaEncoder = YS.setScalarStyle style Y.coreSchemaEncoder
 
     defaultEncodeStr s = case () of
       ()
         | "\n" `Text.isInfixOf` s -> Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
-        | Y.isAmbiguous Y.coreSchemaResolver s -> Right (YE.untagged, YE.SingleQuoted, s)
+        | YS.isAmbiguous Y.coreSchemaResolver s -> Right (YE.untagged, YE.SingleQuoted, s)
         | otherwise -> Right (YE.untagged, YE.Plain, s)
 
     style s = case s of
       Y.SNull         -> Right (YE.untagged, YE.Plain, "null")
-      Y.SBool  bool   -> Right (YE.untagged, YE.Plain, Y.encodeBool bool)
-      Y.SFloat double -> Right (YE.untagged, YE.Plain, Y.encodeDouble double)
-      Y.SInt   int    -> Right (YE.untagged, YE.Plain, Y.encodeInt int)
+      Y.SBool  bool   -> Right (YE.untagged, YE.Plain, YS.encodeBool bool)
+      Y.SFloat double -> Right (YE.untagged, YE.Plain, YS.encodeDouble double)
+      Y.SInt   int    -> Right (YE.untagged, YE.Plain, YS.encodeInt int)
       Y.SStr   text   -> defaultEncodeStr text
       Y.SUnknown t v  -> Right (t, YE.SingleQuoted, v)
 
@@ -118,9 +119,9 @@ jsonToYaml json documents quoted =
         ()
             | "\n" `Text.isInfixOf` s -> Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
             | otherwise -> Right (YE.untagged, YE.SingleQuoted, s)
-    customStyle scalar =  (Y.schemaEncoderScalar defaultSchemaEncoder) scalar
+    customStyle scalar =  (YS.schemaEncoderScalar defaultSchemaEncoder) scalar
     
-    customSchemaEncoder = Y.setScalarStyle customStyle defaultSchemaEncoder
+    customSchemaEncoder = YS.setScalarStyle customStyle defaultSchemaEncoder
     
     schemaEncoder = if quoted 
         then customSchemaEncoder 
