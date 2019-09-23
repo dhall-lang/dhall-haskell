@@ -772,13 +772,13 @@ getOrCreateCacheDirectory showWarning cacheName = do
 
     let handler action dir (ioex :: IOException) = do
             let ioExMsg =
-                     "when trying to " <> action <> "\n"
+                     "When trying to " <> action <> ":\n"
                   <> "\n"
-                  <> "  " <> dir <> "\n"
+                  <> "↳ " <> dir <> "\n"
                   <> "\n"
-                  <> "the following IO exception was thrown:\n"
+                  <> "... the following exception was thrown:\n"
                   <> "\n"
-                  <> "  " <> show ioex <> "\n"
+                  <> "↳ " <> show ioex <> "\n"
         
             warn ioExMsg
 
@@ -792,7 +792,7 @@ getOrCreateCacheDirectory showWarning cacheName = do
 
             catch
                 (liftIO (Directory.setPermissions dir private))
-                (handler "set read, write an search permissions on" dir)
+                (handler "correct the permissions for" dir)
 
     let assertPermissions dir = do
             let accessible path =
@@ -809,12 +809,12 @@ getOrCreateCacheDirectory showWarning cacheName = do
                     return ()
                 else do
                     let message =
-                             "the directory:\n"
+                             "The directory:\n"
                           <> "\n"
-                          <> "  " <> dir <> "\n"
+                          <> "↳ " <> dir <> "\n"
                           <> "\n"
-                          <> "has not read, write and search permissions.\n"
-                          <> "Its current permissions are:\n"
+                          <> "... does not give you permission to read, write, or search files.\n\n"
+                          <> "The directory's current permissions are:\n"
                           <> show permissions <> "\n"
 
                     warn message
@@ -844,11 +844,11 @@ getOrCreateCacheDirectory showWarning cacheName = do
                     if existsPath'
                         then do
                             let message =
-                                     "the given path:\n"
+                                     "The given path:\n"
                                   <> "\n"
-                                  <> "  " <> dir <> "\n"
+                                  <> "↳ " <> dir <> "\n"
                                   <> "\n"
-                                  <> "already exists but it is not a directory.\n"
+                                  <> "... already exists but is not a directory.\n"
 
                             warn message
 
@@ -864,11 +864,11 @@ getOrCreateCacheDirectory showWarning cacheName = do
     let directory = cacheBaseDirectory </> cacheName
 
     let message =
-             "It hasn't been possible to get or create the default cache directory:\n"
+             "Could not get or create the default cache directory:\n"
           <> "\n"
-          <> "  " <> directory <> "\n"
+          <> "↳ " <> directory <> "\n"
           <> "\n"
-          <> "You can enable cache creating it if needed and setting read, write and search\n"
+          <> "You can enable caching by creating it if needed and setting read, write and search\n"
           <> "permissions on it or providing another cache base directory by setting\n"
           <> "the $XDG_CACHE_HOME environment variable.\n"
           <> "\n"
@@ -911,7 +911,7 @@ getCacheBaseDirectory showWarning = alternative₀ <|> alternative₁ <|> altern
         let message =
                 "\n"
              <> "\ESC[1;33mWarning\ESC[0m: "
-             <> "It hasn't been possible get a cache base directory from environment.\n"
+             <> "Could not locate a cache base directory from the environment.\n"
              <> "\n"
              <> "You can provide a cache base directory by pointing the $XDG_CACHE_HOME\n"
              <> "environment variable to a directory with read and write permissions.\n"
