@@ -823,8 +823,8 @@ getOrCreateCacheDirectory showWarning cacheName = do
             catch (liftIO (Directory.doesDirectoryExist dir))
                   (handler "check the existence of" dir)
 
-    let existsPath path =
-            catch (liftIO (Directory.doesPathExist path))
+    let existsFile path =
+            catch (liftIO (Directory.doesFileExist path))
                   (handler "check the existence of" path)
 
     let createDirectory dir =
@@ -839,9 +839,9 @@ getOrCreateCacheDirectory showWarning cacheName = do
                     assertPermissions dir
 
                 else do
-                    existsPath' <- existsPath dir
+                    existsFile' <- existsFile dir
 
-                    if existsPath'
+                    if existsFile'
                         then do
                             let message =
                                      "The given path:\n"
