@@ -913,7 +913,7 @@ getCacheBaseDirectory showWarning = alternative₀ <|> alternative₁ <|> altern
              <> "\ESC[1;33mWarning\ESC[0m: "
              <> "It hasn't been possible get a cache base directory from environment.\n"
              <> "\n"
-             <> "You can provide a cache base directory by pointing the $XDG_CACHE_HOME "
+             <> "You can provide a cache base directory by pointing the $XDG_CACHE_HOME\n"
              <> "environment variable to a directory with read and write permissions.\n"
 
         when showWarning (liftIO (System.IO.hPutStrLn System.IO.stderr message))
