@@ -108,7 +108,8 @@ module Dhall.Import (
     , hashExpressionToCode
     , writeExpressionToSemanticCache
     , assertNoImports
-    , Status
+    , Status(..)
+    , SemanticCacheMode(..)
     , Chained
     , chainedImport
     , chainedFromLocalHere
@@ -143,7 +144,6 @@ import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT)
-import Crypto.Hash (SHA256)
 import Data.ByteString (ByteString)
 import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -158,8 +158,7 @@ import Data.Typeable (Typeable)
 import System.FilePath ((</>))
 import Dhall.Binary (StandardVersion(..))
 import Dhall.Core
-    ( Binding(..)
-    , Expr(..)
+    ( Expr(..)
     , Chunks(..)
     , Directory(..)
     , File(..)
@@ -169,9 +168,10 @@ import Dhall.Core
     , ImportMode(..)
     , Import(..)
     , URL(..)
+    , bindingExprs
+    , chunkExprs
     )
-#ifdef MIN_VERSION_http_client
-import Network.HTTP.Client (Manager)
+#ifdef WITH_HTTP
 import Dhall.Import.HTTP hiding (HTTPHeader)
 #endif
 import Dhall.Import.Types
@@ -183,7 +183,6 @@ import Lens.Family.State.Strict (zoom)
 import qualified Codec.Serialise
 import qualified Control.Monad.Trans.Maybe        as Maybe
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Crypto.Hash
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
@@ -195,11 +194,13 @@ import qualified Data.Text                        as Text
 import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core
+import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 import qualified System.Environment
+import qualified System.Info
 import qualified System.Directory                 as Directory
 import qualified System.FilePath                  as FilePath
 import qualified Text.Megaparsec
@@ -402,8 +403,8 @@ instance Canonicalize Import where
 
 -- | Exception thrown when an integrity check fails
 data HashMismatch = HashMismatch
-    { expectedHash :: Crypto.Hash.Digest SHA256
-    , actualHash   :: Crypto.Hash.Digest SHA256
+    { expectedHash :: Dhall.Crypto.SHA256Digest
+    , actualHash   :: Dhall.Crypto.SHA256Digest
     } deriving (Typeable)
 
 instance Exception HashMismatch
@@ -494,11 +495,14 @@ loadImportWithSemanticCache
 loadImportWithSemanticCache
   import_@(Chained (Import (ImportHashed (Just semanticHash) _) _)) = do
     Status { .. } <- State.get
-    mCached <- liftIO $ fetchFromSemanticCache semanticHash
+    mCached <-
+        case _semanticCacheMode of
+            UseSemanticCache -> liftIO $ fetchFromSemanticCache semanticHash
+            IgnoreSemanticCache -> pure Nothing
 
     case mCached of
         Just bytesStrict -> do
-            let actualHash = Crypto.Hash.hash bytesStrict
+            let actualHash = Dhall.Crypto.sha256Hash bytesStrict
             if semanticHash == actualHash
                 then return ()
                 else do
@@ -520,7 +524,7 @@ loadImportWithSemanticCache
 
             let variants = map (\version -> encodeExpression version (Dhall.Core.alphaNormalize importSemantics))
                                 [ minBound .. maxBound ]
-            case Data.Foldable.find ((== semanticHash). Crypto.Hash.hash) variants of
+            case Data.Foldable.find ((== semanticHash). Dhall.Crypto.sha256Hash) variants of
                 Just bytes -> liftIO $ writeToSemanticCache semanticHash bytes
                 Nothing -> do
                     let expectedHash = semanticHash
@@ -531,7 +535,7 @@ loadImportWithSemanticCache
             return (ImportSemantics {..})
 
 -- Fetch encoded normal form from "semantic cache"
-fetchFromSemanticCache :: Crypto.Hash.Digest SHA256 -> IO (Maybe Data.ByteString.ByteString)
+fetchFromSemanticCache :: Dhall.Crypto.SHA256Digest -> IO (Maybe Data.ByteString.ByteString)
 fetchFromSemanticCache expectedHash = Maybe.runMaybeT $ do
     cacheFile <- getCacheFile "dhall" expectedHash
     True <- liftIO (Directory.doesFileExist cacheFile)
@@ -543,9 +547,9 @@ writeExpressionToSemanticCache :: Expr Src X -> IO ()
 writeExpressionToSemanticCache expression = writeToSemanticCache hash bytes
   where
     bytes = encodeExpression NoVersion expression
-    hash = Crypto.Hash.hash bytes
+    hash = Dhall.Crypto.sha256Hash bytes
 
-writeToSemanticCache :: Crypto.Hash.Digest SHA256 -> Data.ByteString.ByteString -> IO ()
+writeToSemanticCache :: Dhall.Crypto.SHA256Digest -> Data.ByteString.ByteString -> IO ()
 writeToSemanticCache hash bytes = do
     _ <- Maybe.runMaybeT $ do
         cacheFile <- getCacheFile "dhall" hash
@@ -654,17 +658,17 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
 -- AST (without normalising or type-checking it first). See
 -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for further
 -- discussion.
-computeSemisemanticHash :: Expr Src X -> Crypto.Hash.Digest Crypto.Hash.SHA256
+computeSemisemanticHash :: Expr Src X -> Dhall.Crypto.SHA256Digest
 computeSemisemanticHash resolvedExpr = hashExpression resolvedExpr
 
 -- Fetch encoded normal form from "semi-semantic cache"
-fetchFromSemisemanticCache :: Crypto.Hash.Digest SHA256 -> IO (Maybe Data.ByteString.ByteString)
+fetchFromSemisemanticCache :: Dhall.Crypto.SHA256Digest -> IO (Maybe Data.ByteString.ByteString)
 fetchFromSemisemanticCache semisemanticHash = Maybe.runMaybeT $ do
     cacheFile <- getCacheFile "dhall-haskell" semisemanticHash
     True <- liftIO (Directory.doesFileExist cacheFile)
     liftIO (Data.ByteString.readFile cacheFile)
 
-writeToSemisemanticCache :: Crypto.Hash.Digest SHA256 -> Data.ByteString.ByteString -> IO ()
+writeToSemisemanticCache :: Dhall.Crypto.SHA256Digest -> Data.ByteString.ByteString -> IO ()
 writeToSemisemanticCache semisemanticHash bytes = do
     _ <- Maybe.runMaybeT $ do
         cacheFile <- getCacheFile "dhall-haskell" semisemanticHash
@@ -698,7 +702,7 @@ fetchFresh Missing = throwM (MissingImports [])
 
 
 fetchRemote :: URL -> StateT Status IO Data.Text.Text
-#ifndef MIN_VERSION_http_client
+#ifndef WITH_HTTP
 fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
     let maybeHeaders = fmap toHeaders maybeHeadersExpression
     let urlString = Text.unpack (Dhall.Core.pretty url)
@@ -706,14 +710,13 @@ fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
     throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
 #else
 fetchRemote url = do
-    manager <- liftIO $ newManager
-    zoom remote (State.put (fetchFromHTTP manager))
-    fetchFromHTTP manager url
+    zoom remote (State.put fetchFromHTTP)
+    fetchFromHTTP url
   where
-    fetchFromHTTP :: Manager -> URL -> StateT Status IO Data.Text.Text
-    fetchFromHTTP manager (url'@URL { headers = maybeHeadersExpression }) = do
+    fetchFromHTTP :: URL -> StateT Status IO Data.Text.Text
+    fetchFromHTTP (url'@URL { headers = maybeHeadersExpression }) = do
         let maybeHeaders = fmap toHeaders maybeHeadersExpression
-        fetchFromHttpUrl manager url' maybeHeaders
+        fetchFromHttpUrl url' maybeHeaders
 #endif
 
 -- | Given a well-typed (of type `List { header : Text, value Text }` or
@@ -739,7 +742,7 @@ toHeader _ = do
     empty
 
 getCacheFile
-    :: (Alternative m, MonadIO m) => FilePath -> Crypto.Hash.Digest SHA256 -> m FilePath
+    :: (Alternative m, MonadIO m) => FilePath -> Dhall.Crypto.SHA256Digest -> m FilePath
 getCacheFile cacheName hash = do
     let assertDirectory directory = do
             let private = transform Directory.emptyPermissions
@@ -788,12 +791,25 @@ getCacheDirectory = alternative₀ <|> alternative₁
             Just xdgCacheHome -> return xdgCacheHome
             Nothing           -> empty
 
-    alternative₁ = do
-        maybeHomeDirectory <- liftIO (System.Environment.lookupEnv "HOME")
+    alternative₁
+        | isWindows = do
+            maybeLocalAppDirectory <-
+              liftIO (System.Environment.lookupEnv "LOCALAPPDATA")
 
-        case maybeHomeDirectory of
-            Just homeDirectory -> return (homeDirectory </> ".cache")
-            Nothing            -> empty
+            case maybeLocalAppDirectory of
+                Just localAppDirectory -> return localAppDirectory
+                Nothing                -> empty
+
+        | otherwise = do
+            maybeHomeDirectory <-
+              liftIO (System.Environment.lookupEnv "HOME")
+
+            case maybeHomeDirectory of
+                Just homeDirectory -> return (homeDirectory </> ".cache")
+                Nothing            -> empty
+
+        where isWindows = System.Info.os == "mingw32"
+
 
 -- If the URL contains headers typecheck them and replace them with their normal
 -- forms.
@@ -906,13 +922,7 @@ loadWith expr₀ = case expr₀ of
   Lam a b c            -> Lam <$> pure a <*> loadWith b <*> loadWith c
   Pi a b c             -> Pi <$> pure a <*> loadWith b <*> loadWith c
   App a b              -> App <$> loadWith a <*> loadWith b
-  Let a b              -> Let <$> adapt0 a <*> loadWith b
-    where
-      adapt0 (Binding src0 c src1 d src2 e) =
-          Binding <$> pure src0 <*> pure c <*> pure src1 <*> traverse adapt1 d <*> pure src2 <*> loadWith e
-
-      adapt1 (src3, f) =
-          (,) <$> pure src3 <*> loadWith f
+  Let a b              -> Let <$> bindingExprs loadWith a <*> loadWith b
   Annot a b            -> Annot <$> loadWith a <*> loadWith b
   Bool                 -> pure Bool
   BoolLit a            -> pure (BoolLit a)
@@ -941,7 +951,7 @@ loadWith expr₀ = case expr₀ of
   DoubleLit a          -> pure (DoubleLit a)
   DoubleShow           -> pure DoubleShow
   Text                 -> pure Text
-  TextLit (Chunks a b) -> fmap TextLit (Chunks <$> mapM (mapM loadWith) a <*> pure b)
+  TextLit chunks       -> TextLit <$> chunkExprs loadWith chunks
   TextAppend a b       -> TextAppend <$> loadWith a <*> loadWith b
   TextShow             -> pure TextShow
   List                 -> pure List
@@ -978,13 +988,15 @@ loadWith expr₀ = case expr₀ of
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src X)
-load = loadRelativeTo "."
+load = loadRelativeTo "." UseSemanticCache
 
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
-loadRelativeTo :: FilePath -> Expr Src Import -> IO (Expr Src X)
-loadRelativeTo rootDirectory expression =
-    State.evalStateT (loadWith expression) (emptyStatus rootDirectory)
+loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src X)
+loadRelativeTo rootDirectory semanticCacheMode expression =
+    State.evalStateT
+        (loadWith expression)
+        (emptyStatus rootDirectory) { _semanticCacheMode = semanticCacheMode }
 
 encodeExpression
     :: forall s
@@ -1013,9 +1025,9 @@ encodeExpression _standardVersion expression = bytesStrict
     bytesStrict = Data.ByteString.Lazy.toStrict bytesLazy
 
 -- | Hash a fully resolved expression
-hashExpression :: Expr s X -> (Crypto.Hash.Digest SHA256)
+hashExpression :: Expr s X -> Dhall.Crypto.SHA256Digest
 hashExpression expression =
-    Crypto.Hash.hash (encodeExpression NoVersion expression)
+    Dhall.Crypto.sha256Hash (encodeExpression NoVersion expression)
 
 {-| Convenience utility to hash a fully resolved expression and return the
     base-16 encoded hash with the @sha256:@ prefix

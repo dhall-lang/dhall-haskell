@@ -35,19 +35,20 @@ module Dhall.Core (
     , Expr(..)
 
     -- * Normalization
-    , Dhall.Core.alphaNormalize
-    , normalize
+    , Eval.alphaNormalize
+    , Eval.normalize
     , normalizeWith
     , normalizeWithM
     , Normalizer
     , NormalizerM
     , ReifiedNormalizer (..)
-    , judgmentallyEqual
+    , Eval.judgmentallyEqual
     , subst
     , shift
     , isNormalized
     , isNormalizedWith
     , denote
+    , renote
     , shallowDenote
     , freeIn
 
@@ -57,12 +58,14 @@ module Dhall.Core (
     -- * Optics
     , subExpressions
     , chunkExprs
+    , bindingExprs
 
     -- * Let-blocks
     , multiLet
     , wrapInLets
     , MultiLet(..)
     , Binding(..)
+    , makeBinding
 
     -- * Miscellaneous
     , internalError
@@ -70,17 +73,15 @@ module Dhall.Core (
     , escapeText
     , pathCharacter
     , throws
+    , textShow
+    , censorExpression
+    , censorText
     ) where
 
-#if MIN_VERSION_base(4,8,0)
-#else
-import Control.Applicative (Applicative(..), (<$>))
-#endif
 import Control.Applicative (empty)
 import Control.DeepSeq (NFData)
 import Control.Exception (Exception)
 import Control.Monad.IO.Class (MonadIO(..))
-import Crypto.Hash (SHA256)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Data (Data)
 import Data.Foldable
@@ -93,26 +94,30 @@ import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Traversable
+import Data.Void (Void)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
-import Dhall.Src (Src)
+import Dhall.Src (Src(..))
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import GHC.Generics (Generic)
 import Instances.TH.Lift ()
 import Language.Haskell.TH.Syntax (Lift)
+import Lens.Family (over)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
+import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Control.Exception
 import qualified Control.Monad
-import qualified Crypto.Hash
 import qualified Data.Char
-import {-# SOURCE #-} qualified Dhall.Eval
+import {-# SOURCE #-} qualified Dhall.Eval  as Eval
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Sequence
+import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
+import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Network.URI                as URI
@@ -286,7 +291,7 @@ data ImportMode = Code | RawText | Location
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
-    { hash       :: Maybe (Crypto.Hash.Digest SHA256)
+    { hash       :: Maybe Dhall.Crypto.SHA256Digest
     , importType :: ImportType
     } deriving (Eq, Generic, Ord, Show, NFData)
 
@@ -1217,35 +1222,6 @@ subst x e (ImportAlt a b) = ImportAlt a' b'
 -- and `subst` does nothing to a closed expression
 subst _ _ (Embed p) = Embed p
 
-{-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
-    using De Bruijn indices to distinguish them
-
->>> alphaNormalize (Lam "a" (Const Type) (Lam "b" (Const Type) (Lam "x" "a" (Lam "y" "b" "x"))))
-Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
-
-    α-normalization does not affect free variables:
-
->>> alphaNormalize "x"
-Var (V "x" 0)
-
--}
-alphaNormalize :: Expr s a -> Expr s a
-alphaNormalize = Dhall.Eval.alphaNormalize
-
-{-| Reduce an expression to its normal form, performing beta reduction
-
-    `normalize` does not type-check the expression.  You may want to type-check
-    expressions before normalizing them since normalization can convert an
-    ill-typed expression into a well-typed expression.
-
-    `normalize` can also fail with `error` if you normalize an ill-typed
-    expression
--}
-
-normalize :: Eq a => Expr s a -> Expr t a
-normalize = Dhall.Eval.nfEmpty
-
-
 {-| This function is used to determine whether folds like @Natural/fold@ or
     @List/fold@ should be lazy or strict in their accumulator based on the type
     of the accumulator
@@ -1343,6 +1319,11 @@ denote (Equivalent a b      ) = Equivalent (denote a) (denote b)
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
+-- | The \"opposite\" of `denote`, like @first absurd@ but faster
+renote :: Expr Void a -> Expr s a
+renote = unsafeCoerce
+{-# INLINE renote #-}
+
 shallowDenote :: Expr s a -> Expr s a
 shallowDenote (Note _ e) = shallowDenote e
 shallowDenote         e  = e
@@ -1366,7 +1347,7 @@ shallowDenote         e  = e
 -}
 normalizeWith :: Eq a => Maybe (ReifiedNormalizer a) -> Expr s a -> Expr t a
 normalizeWith (Just ctx) t = runIdentity (normalizeWithM (getReifiedNormalizer ctx) t)
-normalizeWith _          t = Dhall.Eval.nfEmpty t
+normalizeWith _          t = Eval.normalize t
 
 {-| This function generalizes `normalizeWith` by allowing the custom normalizer
     to use an arbitrary `Monad`
@@ -1457,7 +1438,7 @@ normalizeWithM ctx e0 = loop (denote e0)
                         | otherwise -> pure (NaturalLit 0)
                     App (App NaturalSubtract (NaturalLit 0)) y -> pure y
                     App (App NaturalSubtract _) (NaturalLit 0) -> pure (NaturalLit 0)
-                    App (App NaturalSubtract x) y | judgmentallyEqual x y -> pure (NaturalLit 0)
+                    App (App NaturalSubtract x) y | Eval.judgmentallyEqual x y -> pure (NaturalLit 0)
                     App IntegerShow (IntegerLit n)
                         | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
                         | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
@@ -1586,8 +1567,8 @@ normalizeWithM ctx e0 = loop (denote e0)
         decide  l              (BoolLit True ) = l
         decide  _              (BoolLit False) = BoolLit False
         decide  l               r
-            | judgmentallyEqual l r = l
-            | otherwise             = BoolAnd l r
+            | Eval.judgmentallyEqual l r = l
+            | otherwise                  = BoolAnd l r
     BoolOr x y -> decide <$> loop x <*> loop y
       where
         decide (BoolLit False)  r              = r
@@ -1595,30 +1576,30 @@ normalizeWithM ctx e0 = loop (denote e0)
         decide  l              (BoolLit False) = l
         decide  _              (BoolLit True ) = BoolLit True
         decide  l               r
-            | judgmentallyEqual l r = l
-            | otherwise             = BoolOr l r
+            | Eval.judgmentallyEqual l r = l
+            | otherwise                  = BoolOr l r
     BoolEQ x y -> decide <$> loop x <*> loop y
       where
         decide (BoolLit True )  r              = r
         decide  l              (BoolLit True ) = l
         decide  l               r
-            | judgmentallyEqual l r = BoolLit True
-            | otherwise             = BoolEQ l r
+            | Eval.judgmentallyEqual l r = BoolLit True
+            | otherwise                  = BoolEQ l r
     BoolNE x y -> decide <$> loop x <*> loop y
       where
         decide (BoolLit False)  r              = r
         decide  l              (BoolLit False) = l
         decide  l               r
-            | judgmentallyEqual l r = BoolLit False
-            | otherwise             = BoolNE l r
+            | Eval.judgmentallyEqual l r = BoolLit False
+            | otherwise                  = BoolNE l r
     BoolIf bool true false -> decide <$> loop bool <*> loop true <*> loop false
       where
         decide (BoolLit True )  l              _              = l
         decide (BoolLit False)  _              r              = r
         decide  b              (BoolLit True) (BoolLit False) = b
         decide  b               l              r
-            | judgmentallyEqual l r = l
-            | otherwise             = BoolIf b l r
+            | Eval.judgmentallyEqual l r = l
+            | otherwise                  = BoolIf b l r
     Natural -> pure Natural
     NaturalLit n -> pure (NaturalLit n)
     NaturalFold -> pure NaturalFold
@@ -1731,7 +1712,7 @@ normalizeWithM ctx e0 = loop (denote e0)
             l
         decide (RecordLit m) (RecordLit n) =
             RecordLit (Dhall.Map.union n m)
-        decide l r | judgmentallyEqual l r =
+        decide l r | Eval.judgmentallyEqual l r =
             l
         decide l r =
             Prefer l r
@@ -1808,13 +1789,21 @@ normalizeWithM ctx e0 = loop (denote e0)
                 Just v -> pure (Field (Combine l (singletonRecordLit v)) x)
                 Nothing -> loop (Field l x)
             _ -> pure (Field r' x)
-    Project r (Left xs)-> do
-        r' <- loop r
-        case r' of
+    Project x (Left fields)-> do
+        x' <- loop x
+        let fieldsSet = Dhall.Set.toSet fields
+        case x' of
             RecordLit kvs ->
-                pure (RecordLit (Dhall.Map.restrictKeys kvs (Dhall.Set.toSet xs)))
-            _   | null xs -> pure (RecordLit mempty)
-                | otherwise -> pure (Project r' (Left (Dhall.Set.sort xs)))
+                pure (RecordLit (Dhall.Map.restrictKeys kvs fieldsSet))
+            Project y _ ->
+                loop (Project y (Left fields))
+            Prefer l (RecordLit rKvs) -> do
+                let rKs = Dhall.Map.keysSet rKvs
+                let l' = Project l (Left (Dhall.Set.fromSet (Data.Set.difference fieldsSet rKs)))
+                let r' = RecordLit (Dhall.Map.restrictKeys rKvs fieldsSet)
+                loop (Prefer l' r')
+            _ | null fields -> pure (RecordLit mempty)
+              | otherwise   -> pure (Project x' (Left (Dhall.Set.sort fields)))
     Project r (Right e1) -> do
         e2 <- loop e1
 
@@ -1850,15 +1839,6 @@ textShow text = "\"" <> Data.Text.concatMap f text <> "\""
     f '\f' = "\\f"
     f c | c <= '\x1F' = Data.Text.pack (Text.Printf.printf "\\u%04x" (Data.Char.ord c))
         | otherwise   = Data.Text.singleton c
-
-{-| Returns `True` if two expressions are α-equivalent and β-equivalent and
-    `False` otherwise
-
-    `judgmentallyEqual` can fail with an `error` if you compare ill-typed
-    expressions
--}
-judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
-judgmentallyEqual = Dhall.Eval.convEmpty
 
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
 --   polymorphic enough to be used.
@@ -1918,7 +1898,7 @@ isNormalized e0 = loop (denote e0)
           App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
           App (App NaturalSubtract (NaturalLit 0)) _ -> False
           App (App NaturalSubtract _) (NaturalLit 0) -> False
-          App (App NaturalSubtract x) y -> not (judgmentallyEqual x y)
+          App (App NaturalSubtract x) y -> not (Eval.judgmentallyEqual x y)
           App NaturalToInteger (NaturalLit _) -> False
           App IntegerShow (IntegerLit _) -> False
           App IntegerToDouble (IntegerLit _) -> False
@@ -1944,28 +1924,28 @@ isNormalized e0 = loop (denote e0)
         where
           decide (BoolLit _)  _          = False
           decide  _          (BoolLit _) = False
-          decide  l           r          = not (judgmentallyEqual l r)
+          decide  l           r          = not (Eval.judgmentallyEqual l r)
       BoolOr x y -> loop x && loop y && decide x y
         where
           decide (BoolLit _)  _          = False
           decide  _          (BoolLit _) = False
-          decide  l           r          = not (judgmentallyEqual l r)
+          decide  l           r          = not (Eval.judgmentallyEqual l r)
       BoolEQ x y -> loop x && loop y && decide x y
         where
           decide (BoolLit True)  _             = False
           decide  _             (BoolLit True) = False
-          decide  l              r             = not (judgmentallyEqual l r)
+          decide  l              r             = not (Eval.judgmentallyEqual l r)
       BoolNE x y -> loop x && loop y && decide x y
         where
           decide (BoolLit False)  _               = False
           decide  _              (BoolLit False ) = False
-          decide  l               r               = not (judgmentallyEqual l r)
+          decide  l               r               = not (Eval.judgmentallyEqual l r)
       BoolIf x y z ->
           loop x && loop y && loop z && decide x y z
         where
           decide (BoolLit _)  _              _              = False
           decide  _          (BoolLit True) (BoolLit False) = False
-          decide  _           l              r              = not (judgmentallyEqual l r)
+          decide  _           l              r              = not (Eval.judgmentallyEqual l r)
       Natural -> True
       NaturalLit _ -> True
       NaturalFold -> True
@@ -2046,7 +2026,7 @@ isNormalized e0 = loop (denote e0)
           decide (RecordLit m) _ | Data.Foldable.null m = False
           decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
-          decide l r = not (judgmentallyEqual l r)
+          decide l r = not (Eval.judgmentallyEqual l r)
       Merge x y t -> loop x && loop y && all loop t
       ToMap x t -> case x of
           RecordLit _ -> False
@@ -2063,6 +2043,8 @@ isNormalized e0 = loop (denote e0)
           case p of
               Left s -> case r of
                   RecordLit _ -> False
+                  Project _ _ -> False
+                  Prefer _ (RecordLit _) -> False
                   _ -> not (Dhall.Set.null s) && Dhall.Set.isSorted s
               Right e' -> case e' of
                   Record _ -> False
@@ -2176,12 +2158,7 @@ subExpressions _ (Var v) = pure (Var v)
 subExpressions f (Lam a b c) = Lam a <$> f b <*> f c
 subExpressions f (Pi a b c) = Pi a <$> f b <*> f c
 subExpressions f (App a b) = App <$> f a <*> f b
-subExpressions f (Let a b) = Let <$> adapt0 a <*> f b
-  where
-    adapt0 (Binding src0 c src1 d src2 e) =
-        Binding <$> pure src0 <*> pure c <*> pure src1 <*> traverse adapt1 d <*> pure src2 <*> f e
-
-    adapt1 (src2, g) = (,) <$> pure src2 <*> f g
+subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
 subExpressions f (Annot a b) = Annot <$> f a <*> f b
 subExpressions _ Bool = pure Bool
 subExpressions _ (BoolLit b) = pure (BoolLit b)
@@ -2244,6 +2221,32 @@ subExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 subExpressions _ (Embed a) = pure (Embed a)
+
+{-| Utility used to implement the @--censor@ flag, by:
+
+    * Replacing all `Src` text with spaces
+    * Replacing all `Text` literals inside type errors with spaces
+-}
+censorExpression :: Expr Src a -> Expr Src a
+censorExpression (TextLit chunks) = TextLit (censorChunks chunks)
+censorExpression (Note src     e) = Note (censorSrc src) (censorExpression e)
+censorExpression  e               = over subExpressions censorExpression e
+
+censorChunks :: Chunks Src a -> Chunks Src a
+censorChunks (Chunks xys z) = Chunks xys' z'
+  where
+    z' = censorText z
+
+    xys' = [ (censorText x, censorExpression y) | (x, y) <- xys ]
+
+-- | Utility used to censor `Text` by replacing all characters with a space
+censorText :: Text -> Text
+censorText = Data.Text.map (\_ -> ' ')
+
+censorSrc :: Src -> Src
+censorSrc (Src { srcText = oldText, .. }) = Src { srcText = newText, .. }
+  where
+    newText = censorText oldText
 
 -- | A traversal over the immediate sub-expressions in 'Chunks'.
 chunkExprs
@@ -2336,6 +2339,19 @@ wrapInLets bs e = foldr Let e bs
 
 data MultiLet s a = MultiLet (NonEmpty (Binding s a)) (Expr s a)
 
+{- | Record the binding part of a @let@ expression.
+
+For example,
+> let {- A -} x {- B -} : {- C -} Bool = {- D -} True in x
+will be instantiated as follows:
+
+* @bindingSrc0@ corresponds to the @A@ comment.
+* @variable@ is @"x"@
+* @bindingSrc1@ corresponds to the @B@ comment.
+* @annotation@ is 'Just' a pair, corresponding to the @C@ comment and @Bool@.
+* @bindingSrc2@ corresponds to the @D@ comment.
+* @value@ corresponds to @True@.
+-}
 data Binding s a = Binding
     { bindingSrc0 :: Maybe s
     , variable    :: Text
@@ -2352,3 +2368,23 @@ instance Bifunctor Binding where
         adapt0 (src3, d) = (fmap k src3, first k d)
 
     second = fmap
+
+{-| Traverse over the immediate 'Expr' children in a 'Binding'.
+-}
+bindingExprs
+  :: (Applicative f)
+  => (Expr s a -> f (Expr s b))
+  -> Binding s a -> f (Binding s b)
+bindingExprs f (Binding s0 n s1 t s2 v) =
+  Binding
+    <$> pure s0
+    <*> pure n
+    <*> pure s1
+    <*> traverse (traverse f) t
+    <*> pure s2
+    <*> f v
+
+{-| Construct a 'Binding' with no source information and no type annotation.
+-}
+makeBinding :: Text -> Expr s a -> Binding s a
+makeBinding name = Binding Nothing name Nothing Nothing Nothing

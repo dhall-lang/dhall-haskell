@@ -541,7 +541,7 @@ prettyCharacterSet characterSet expression =
                 <>  Pretty.align
                     (   renderSrc src0 mempty
                     <>  prettyLabel c <> renderSrc src1 Pretty.hardline
-                    <>  colon <> renderSrc src3 space <> prettyExpression d <> space <> equals <> renderSrc src2 Pretty.hardline
+                    <>  colon <> renderSrc src3 space <> prettyExpression d <> Pretty.hardline <> equals <> renderSrc src2 space
                     <>  prettyExpression e
                     )
 
@@ -988,18 +988,20 @@ prettyCharacterSet characterSet expression =
 
     prettyKeyValue :: Pretty a => Doc Ann -> (Text, Expr Src a) -> (Doc Ann, Doc Ann)
     prettyKeyValue separator (key, val) =
-        (       prettyAnyLabel key
+        duplicate (Pretty.group (Pretty.flatAlt long short))
+      where
+        short = prettyAnyLabel key
             <>  " "
             <>  separator
             <>  " "
             <>  prettyExpression val
-        ,       prettyAnyLabel key
+
+        long =  prettyAnyLabel key
             <>  " "
             <>  separator
-            <>  long
-        )
-      where
-        long = Pretty.hardline <> "    " <> prettyExpression val
+            <>  Pretty.hardline
+            <>  "    "
+            <>  prettyExpression val
 
     prettyRecord :: Pretty a => Map Text (Expr Src a) -> Doc Ann
     prettyRecord =

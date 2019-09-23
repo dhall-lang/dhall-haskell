@@ -1,3 +1,14 @@
+1.4.1
+
+* [Enable `--records-strict` by default for `{json-yaml}-to-dhall`](https://github.com/dhall-lang/dhall-haskell/pull/1181)
+* [Fix `--file` flag for `dhall-to-{json,yaml}`](https://github.com/dhall-lang/dhall-haskell/pull/1191)
+* [Fix `--version` flag for `{yaml,json}-to-dhall`](https://github.com/dhall-lang/dhall-haskell/pull/1199)
+* [`Nesting`: Support empty alternatives as contents](https://github.com/dhall-lang/dhall-haskell/pull/1204)
+* [Fix `yaml-to-dhall` support for empty objects](https://github.com/dhall-lang/dhall-haskell/pull/1186)
+* [Throw error when union value is incompatible with inline nesting](https://github.com/dhall-lang/dhall-haskell/pull/1226)
+* [Add `--output` options](https://github.com/dhall-lang/dhall-haskell/pull/1304)
+* [Minor bug fixes for `yaml-to-dhall` error messages](https://github.com/dhall-lang/dhall-haskell/pull/1305)
+
 1.4.0
 
 * BREAKING CHANGE: Split `Dhall.YAML` into `Dhall.YAML` + `Dhall.YAMLToDhall`

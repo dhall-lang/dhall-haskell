@@ -1,17 +1,20 @@
-let ExprF = ./exprf.dhall
-let Expr  = ./expr.dhall
-
--- This code is deliberately convoluted to test shadowing, normalization, etc.
-let h = 8
-
-let result
-  = λ(a : Type)
-  → λ(h : ExprF a → a)
-  → let f = h
-    let g = a
-    let a = 1
-    let h = 1
-    let E = Expr g f
-    in E.Lit (h + a)
-
-in result
+  λ(Expr : Type)
+→ let ExprF =
+        < LitF :
+            { _1 : Natural }
+        | AddF :
+            { _1 : Expr, _2 : Expr }
+        | MulF :
+            { _1 : Expr, _2 : Expr }
+        >
+  
+  in    λ(Fix : ExprF → Expr)
+      → let Lit = λ(x : Natural) → Fix (ExprF.LitF { _1 = x })
+        
+        let Add =
+              λ(x : Expr) → λ(y : Expr) → Fix (ExprF.AddF { _1 = x, _2 = y })
+        
+        let Mul =
+              λ(x : Expr) → λ(y : Expr) → Fix (ExprF.MulF { _1 = x, _2 = y })
+        
+        in  Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))

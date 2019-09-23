@@ -236,7 +236,6 @@ import qualified Options.Applicative as O
 import           Options.Applicative (Parser)
 
 import           Dhall.JSON.Util (pattern V)
-import qualified Dhall
 import qualified Dhall.Core as D
 import           Dhall.Core (Expr(App), Chunks(..))
 import qualified Dhall.Import
@@ -364,7 +363,7 @@ keyValMay (A.Object o) = do
      return (k, v)
 keyValMay _ = Nothing
 
-{-| The main conversion function. Traversing/zipping Dhall /type/ and Aeson value trees together to produce a Dhall /term/ tree, given 'Conversion' options:
+{-| The main conversion function. Traversing\/zipping Dhall /type/ and Aeson value trees together to produce a Dhall /term/ tree, given 'Conversion' options:
 
 >>> :set -XOverloadedStrings
 >>> import qualified Dhall.Core as D
@@ -480,9 +479,9 @@ dhallFromJSON (Conversion {..}) expressionType =
 
     -- number ~> Natural
     loop D.Natural (A.Number x)
-        | Right n <- floatingOrInteger x :: Either Double Dhall.Natural
+        | Right n <- floatingOrInteger x :: Either Double Integer
         , n >= 0
-        = Right (D.NaturalLit n)
+        = Right (D.NaturalLit (fromInteger n))
         | otherwise
         = Left (Mismatch D.Natural (A.Number x))
 
@@ -645,7 +644,7 @@ showCompileError format showValue = let prefix = red "\nError: "
         where sep = red "\n--------\n" :: Text
 
     Mismatch e v -> prefix
-      <> "Dhall type expression and json value do not match:"
+      <> "Dhall type expression and " <> format <> " value do not match:"
       <> "\n\nExpected Dhall type:\n" <> showExpr e
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"

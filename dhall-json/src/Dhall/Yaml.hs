@@ -40,6 +40,7 @@ data Options = Options
     , quoted     :: Bool
     , conversion :: Conversion
     , file       :: Maybe FilePath
+    , output     :: Maybe FilePath
     }
 
 defaultOptions :: Options
@@ -50,6 +51,7 @@ defaultOptions =
           , quoted = False
           , conversion = NoConversion
           , file = Nothing
+          , output = Nothing
           }
 
 parseDocuments :: Parser Bool

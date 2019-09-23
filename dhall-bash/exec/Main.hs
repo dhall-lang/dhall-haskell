@@ -15,6 +15,7 @@ import System.Exit (ExitCode(..))
 import qualified Control.Exception
 import qualified Data.ByteString
 import qualified Data.Text.IO
+import qualified Data.Version
 import qualified Dhall
 import qualified Dhall.Bash
 import qualified Dhall.Import
@@ -22,6 +23,7 @@ import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified GHC.IO.Encoding
 import qualified Options.Generic
+import qualified Paths_dhall_bash
 import qualified System.Exit
 import qualified System.IO
 
@@ -30,12 +32,20 @@ data Options = Options
         <?> "Explain error messages in detail"
     , declare :: Maybe ByteString
         <?> "Declare the given variable as a statement instead of an expression"
+    , version :: Bool
+        <?> "Display version"
     } deriving (Generic, ParseRecord)
 
 main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
     Options {..} <- Options.Generic.getRecord "Compile Dhall to Bash"
+
+    if unHelpful version
+        then do
+            putStrLn (Data.Version.showVersion Paths_dhall_bash.version)
+            System.Exit.exitSuccess
+        else return ()
 
     (if unHelpful explain then Dhall.detailed else id) (handle (do
         inText <- Data.Text.IO.getContents

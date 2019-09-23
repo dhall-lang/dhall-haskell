@@ -20,7 +20,6 @@ import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
-import qualified Crypto.Hash
 import qualified Data.ByteArray.Encoding
 import qualified Data.ByteString
 import qualified Data.Char               as Char
@@ -30,6 +29,7 @@ import qualified Data.List.NonEmpty
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Encoding
+import qualified Dhall.Crypto
 import qualified Text.Megaparsec
 #if !MIN_VERSION_megaparsec(7, 0, 0)
 import qualified Text.Megaparsec.Char    as Text.Megaparsec
@@ -768,7 +768,7 @@ importType_ = do
 
     choice [ local, http, env, missing ]
 
-importHash_ :: Parser (Crypto.Hash.Digest Crypto.Hash.SHA256)
+importHash_ :: Parser Dhall.Crypto.SHA256Digest
 importHash_ = do
     _ <- Text.Parser.Char.text "sha256:"
     text <- count 64 (satisfy hexdig <?> "hex digit")
@@ -777,7 +777,7 @@ importHash_ = do
     strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
         Left  string      -> fail string
         Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
-    case Crypto.Hash.digestFromByteString strictBytes of
+    case Dhall.Crypto.sha256DigestFromByteString strictBytes of
       Nothing -> fail "Invalid sha256 hash"
       Just h  -> pure h
 

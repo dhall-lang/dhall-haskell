@@ -52,6 +52,8 @@ data ImportSemantics = ImportSemantics
 -- | `parent` imports (i.e. depends on) `child`
 data Depends = Depends { parent :: Chained, child :: Chained }
 
+data SemanticCacheMode = IgnoreSemanticCache | UseSemanticCache
+
 -- | State threaded throughout the import process
 data Status = Status
     { _stack :: NonEmpty Chained
@@ -72,6 +74,8 @@ data Status = Status
     , _normalizer :: Maybe (ReifiedNormalizer X)
 
     , _startingContext :: Context (Expr Src X)
+
+    , _semanticCacheMode :: SemanticCacheMode
     }
 
 -- | Initial `Status`, parameterised over the remote resolver, importing
@@ -85,11 +89,11 @@ emptyStatusWith _remote rootDirectory = Status {..}
 
     _cache = Map.empty
 
-    _manager = Nothing
-
     _normalizer = Nothing
 
     _startingContext = Dhall.Context.empty
+
+    _semanticCacheMode = UseSemanticCache
 
     prefix = if isRelative rootDirectory
       then Here

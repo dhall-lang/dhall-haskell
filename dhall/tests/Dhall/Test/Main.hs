@@ -14,7 +14,6 @@ import qualified Dhall.Test.Parser
 import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
 import qualified Dhall.Test.Tutorial
-import qualified Dhall.Test.TypeCheck
 import qualified Dhall.Test.TypeInference
 import qualified GHC.IO.Encoding
 import qualified System.Directory
@@ -29,8 +28,6 @@ getAllTests = do
     parsingTests <- Dhall.Test.Parser.getTests
 
     formattingTests <- Dhall.Test.Format.getTests
-
-    typecheckingTests <- Dhall.Test.TypeCheck.getTests
 
     typeinferenceTests <- Dhall.Test.TypeInference.getTests
 
@@ -47,7 +44,6 @@ getAllTests = do
                 [ normalizationTests
                 , parsingTests
                 , importingTests
-                , typecheckingTests
                 , typeinferenceTests
                 , formattingTests
                 , lintTests

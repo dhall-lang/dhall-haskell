@@ -15,7 +15,7 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE TupleSections              #-}
-
+{-# LANGUAGE UndecidableInstances       #-}
 
 {-| Please read the "Dhall.Tutorial" module, which contains a tutorial explaining
     how to use the language, the compiler, and this library
@@ -56,10 +56,9 @@ module Dhall
     , toMonadic
     , fromMonadic
     , auto
-    , InterpretFix
-    , autoWithFix
     , genericAuto
     , InterpretOptions(..)
+    , SingletonConstructors(..)
     , defaultInterpretOptions
     , bool
     , natural
@@ -110,14 +109,13 @@ module Dhall
 
 import Control.Applicative (empty, liftA2, Alternative)
 import Control.Exception (Exception)
-import Control.Monad.Trans.Free (FreeF (..))
 import Control.Monad.Trans.State.Strict
-import Control.Monad (guard, (<=<))
+import Control.Monad (guard)
 import Data.Coerce (coerce)
 import Data.Either.Validation (Validation(..), ealt, eitherToValidation, validationToEither)
+import Data.Fix (Fix(..))
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
-import Data.Functor.Foldable (Base, Corecursive, elgot)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
@@ -128,7 +126,7 @@ import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Data.Word (Word8, Word16, Word32, Word64)
-import Dhall.Core (Expr(..), Chunks(..), Var(..))
+import Dhall.Core (Expr(..), Chunks(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
@@ -143,7 +141,6 @@ import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
-import qualified Data.Functor.Foldable
 import qualified Data.Functor.Product
 import qualified Data.Maybe
 import qualified Data.List.NonEmpty
@@ -896,7 +893,7 @@ instance (Inject a, Interpret b) => Interpret (a -> b) where
 
         expectedOut = Pi "_" declared expectedIn
 
-        InputType {..} = inject
+        InputType {..} = injectWith opts
 
         Type extractIn expectedIn = autoWith opts
 
@@ -909,120 +906,113 @@ instance (Interpret a, Interpret b) => Interpret (a, b)
 auto :: Interpret a => Type a
 auto = autoWith defaultInterpretOptions
 
-newtype DhallFix f t = DhallFix { unDhallFix :: t }
-newtype FixVar = FixVar { unFixVar :: Expr Src X }
-
--- This is a helper instance used for implementation of Interpret for DhallFix
-instance Interpret FixVar where
-    autoWith _ = Type {..}
-        where
-        extract (App (Var (V "_" 0)) e0) = pure (FixVar e0)
-        extract e                        = typeError expected e
-
-        expected = "t"
-
-type InterpretFix f t =
-   ( Traversable f
-   , Corecursive t
-   , Interpret (f FixVar)
-   , Base t ~ f
-   )
-
-instance InterpretFix f t => Interpret (DhallFix f t) where
-    autoWith opts = Type
-        { extract = extr . Dhall.Core.alphaNormalize, expected = expe }
-        where
-        extr (Lam _ _ (Lam _ _ e)) = DhallFix <$> buildF e
-        extr e                     = typeError expe e
-
-        -- buildF = elgot f g <=< extract (auto @FixVar)
-        viaMonadic a b = fromMonadic . (toMonadic . a <=< toMonadic . b)
-        buildF = elgot f g `viaMonadic` extract (auto :: Type FixVar)
-
-        g = repack . extract xF_t . unFixVar
-        repack (Failure e) = Left (Failure e)
-        repack (Success s) = Right (Free s)
-        f (Free s) = Data.Functor.Foldable.embed <$> sequenceA s
-        f (Pure x) = typeError expe x
-
-        expe = Pi "t" (Dhall.Core.Const Dhall.Core.Type) -- = ∀(t : Type)
-             $ Pi "_" (Pi "_" (expected xF_t) "t")       -- → ∀(F t → t)
-             $ "t"                                       -- → t
-
-        xF_t = autoWith opts :: Type (f FixVar)
-
-{-| `autoWithFix` allows you to implement `Interpret` instance for a recursive
-    data type. For example, given a Haskell expression:
-
-  > data Expr
-  >    = Lit Natural
-  >    | Add Expr Expr
-  >    | Mul Expr Expr
-  >    deriving (Generic, Show)
-  >
-  > makeBaseFunctor ''Expr
-  > deriving instance Generic (ExprF a)
-  > instance Interpret a => Interpret (ExprF a)
-  > instance Interpret Expr where autoWith = autoWithFix
-
-    And a dhall file:
-
-  > -- expr.dhall
-  > λ(t : Type) →
-  > let ExprF =
-  >   < LitF : { _1 : Natural }
-  >   | AddF : { _1 : t, _2 : t }
-  >   | MulF : { _1 : t, _2 : t }
-  >   >
-  >
-  > in  λ(Fix : ExprF → t) →
-  >     let Lit = λ(x : Natural)      → Fix (ExprF.LitF { _1 = x })
-  >     let Add = λ(a : t) → λ(b : t) → Fix (ExprF.AddF { _1 = a, _2 = b })
-  >     let Mul = λ(a : t) → λ(b : t) → Fix (ExprF.MulF { _1 = a, _2 = b })
-  >     in  Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))
-
-    We're now able to interpret it:
-
-  > > input @Expr auto "./expr.dhall"
-  > Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))
-
-    Alternatively, we could factor out some helper expressions:
-
-  > let ExprF =
-  >   λ(t : Type) →
-  >   < LitF : { _1 : Natural }
-  >   | AddF : { _1 : t, _2 : t }
-  >   | MulF : { _1 : t, _2 : t }
-  >   >
-  >
-  > let Expr
-  >   = λ(t : Type)
-  >   → λ(Fix : ExprF t → t)
-  >   → let E = ExprF t in
-  >     { Lit = λ(x : Natural)      → Fix (E.LitF { _1 = x })
-  >     , Add = λ(a : t) → λ(b : t) → Fix (E.AddF { _1 = a, _2 = b })
-  >     , Mul = λ(a : t) → λ(b : t) → Fix (E.MulF { _1 = a, _2 = b })
-  >     }
-
-    And then the use location becomes:
-
-  >   λ(t : Type)
-  > → λ(Fix : ExprF t → t)
-  > → let E = Expr t Fix in
-  >   E.Add
-  >     (E.Mul (E.Lit 3) (E.Lit 7))
-  >     (E.Add (E.Lit 1) (E.Lit 2))
-  >
-
-    In general your dhall expression needs to be of type:
-
-  > ∀(t : Type) → ∀(F t → t) → t
-
-    Where F is an F-Algebra generating your data type.
-
+{-| This type is exactly the same as `Data.Fix.Fix` except with a different
+    `Interpret` instance.  This intermediate type simplies the implementation
+    of the inner loop for the `Interpret` instance for `Fix`
 -}
-autoWithFix :: forall f t. InterpretFix f t => InterpretOptions -> Type t
-autoWithFix opts = unDhallFix <$> (autoWith opts :: Type (DhallFix f t))
+newtype Result f = Result { _unResult :: f (Result f) }
+
+resultToFix :: Functor f => Result f -> Fix f
+resultToFix (Result x) = Fix (fmap resultToFix x)
+
+instance Interpret (f (Result f)) => Interpret (Result f) where
+    autoWith options = Type { expected = expected_, extract = extract_ }
+      where
+        expected_ = "result"
+
+        extract_ (App _ expression) = do
+            fmap Result (extract (autoWith options) expression)
+        extract_ expression = do
+            typeError expression expected_
+
+-- | You can use this instance to marshal recursive types from Dhall to Haskell.
+--
+-- Here is an example use of this instance:
+--
+-- > {-# LANGUAGE DeriveAnyClass     #-}
+-- > {-# LANGUAGE DeriveFoldable     #-}
+-- > {-# LANGUAGE DeriveFunctor      #-}
+-- > {-# LANGUAGE DeriveTraversable  #-}
+-- > {-# LANGUAGE DeriveGeneric      #-}
+-- > {-# LANGUAGE KindSignatures     #-}
+-- > {-# LANGUAGE QuasiQuotes        #-}
+-- > {-# LANGUAGE StandaloneDeriving #-}
+-- > {-# LANGUAGE TypeFamilies       #-}
+-- > {-# LANGUAGE TemplateHaskell    #-}
+-- > 
+-- > import Data.Fix (Fix(..))
+-- > import Data.Text (Text)
+-- > import Dhall (Interpret)
+-- > import GHC.Generics (Generic)
+-- > import Numeric.Natural (Natural)
+-- > 
+-- > import qualified Data.Fix                 as Fix
+-- > import qualified Data.Functor.Foldable    as Foldable
+-- > import qualified Data.Functor.Foldable.TH as TH
+-- > import qualified Dhall
+-- > import qualified NeatInterpolation
+-- > 
+-- > data Expr
+-- >     = Lit Natural
+-- >     | Add Expr Expr
+-- >     | Mul Expr Expr
+-- >     deriving (Show)
+-- > 
+-- > TH.makeBaseFunctor ''Expr
+-- > 
+-- > deriving instance Generic (ExprF a)
+-- > deriving instance Interpret a => Interpret (ExprF a)
+-- > 
+-- > example :: Text
+-- > example = [NeatInterpolation.text|
+-- >     \(Expr : Type)
+-- > ->  let ExprF =
+-- >           < LitF :
+-- >               { _1 : Natural }
+-- >           | AddF :
+-- >               { _1 : Expr, _2 : Expr }
+-- >           | MulF :
+-- >               { _1 : Expr, _2 : Expr }
+-- >           >
+-- >     
+-- >     in      \(Fix : ExprF -> Expr)
+-- >         ->  let Lit = \(x : Natural) -> Fix (ExprF.LitF { _1 = x })
+-- >             
+-- >             let Add =
+-- >                       \(x : Expr)
+-- >                   ->  \(y : Expr)
+-- >                   ->  Fix (ExprF.AddF { _1 = x, _2 = y })
+-- >             
+-- >             let Mul =
+-- >                       \(x : Expr)
+-- >                   ->  \(y : Expr)
+-- >                   ->  Fix (ExprF.MulF { _1 = x, _2 = y })
+-- >             
+-- >             in  Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))
+-- > |]
+-- > 
+-- > convert :: Fix ExprF -> Expr
+-- > convert = Fix.cata Foldable.embed
+-- > 
+-- > main :: IO ()
+-- > main = do
+-- >     x <- Dhall.input Dhall.auto example :: IO (Fix ExprF)
+-- > 
+-- >     print (convert x :: Expr)
+instance (Functor f, Interpret (f (Result f))) => Interpret (Fix f) where
+    autoWith options = Type { expected = expected_, extract = extract_ }
+      where
+        expected_ =
+            Pi "result" (Const Dhall.Core.Type)
+                (Pi "Make" (Pi "_" (expected (autoWith options :: Type (f (Result f)))) "result")
+                    "result"
+                )
+
+        extract_ expression0 = go0 (Dhall.Core.alphaNormalize expression0)
+          where
+            go0 (Lam _ _ (Lam _ _  expression1)) =
+                fmap resultToFix (extract (autoWith options) expression1)
+            go0 _ = typeError expected_ expression0
 
 {-| `genericAuto` is the default implementation for `auto` if you derive
     `Interpret`.  The difference is that you can use `genericAuto` without
@@ -1042,11 +1032,38 @@ data InterpretOptions = InterpretOptions
     , constructorModifier :: Text -> Text
     -- ^ Function used to transform Haskell constructor names into their
     --   corresponding Dhall alternative names
+    , singletonConstructors :: SingletonConstructors
+    -- ^ Specify how to handle constructors with only one field.  The default is
+    --   `Wrapped` for backwards compatibility but will eventually be changed to
+    --   `Smart`
     , inputNormalizer     :: Dhall.Core.ReifiedNormalizer X
     -- ^ This is only used by the `Interpret` instance for functions in order
     --   to normalize the function input before marshaling the input into a
     --   Dhall expression
     }
+
+{-| This type specifies how to model a Haskell constructor with 1 field in
+    Dhall
+
+    For example, consider the following Haskell datatype definition:
+
+    > data Example = Foo { x :: Double } | Bar Double
+
+    Depending on which option you pick, the corresponding Dhall type could be:
+
+    > < Foo : Double | Bar : Double >                   -- Bare
+
+    > < Foo : { x : Double } | Bar : { _1 : Double } >  -- Wrapped
+
+    > < Foo : { x : Double } | Bar : Double >           -- Smart
+-}
+data SingletonConstructors
+    = Bare
+    -- ^ Never wrap the field in a record
+    | Wrapped
+    -- ^ Always wrap the field in a record
+    | Smart
+    -- ^ Only fields in a record if they are named
 
 {-| Default interpret options, which you can tweak or override, like this:
 
@@ -1055,9 +1072,14 @@ data InterpretOptions = InterpretOptions
 -}
 defaultInterpretOptions :: InterpretOptions
 defaultInterpretOptions = InterpretOptions
-    { fieldModifier       = id
-    , constructorModifier = id
-    , inputNormalizer     = Dhall.Core.ReifiedNormalizer (const (pure Nothing))
+    { fieldModifier =
+          id
+    , constructorModifier =
+          id
+    , singletonConstructors =
+          Wrapped
+    , inputNormalizer =
+          Dhall.Core.ReifiedNormalizer (const (pure Nothing))
     }
 
 {-| This is the underlying class that powers the `Interpret` class's support
@@ -1233,46 +1255,166 @@ instance GenericInterpret U1 where
 
         expected = Record (Dhall.Map.fromList [])
 
-instance (GenericInterpret f, GenericInterpret g) => GenericInterpret (f :*: g) where
-    genericAutoWith options = do
-        Type extractL expectedL <- genericAutoWith options
-        Type extractR expectedR <- genericAutoWith options
-        let ktsL = unsafeExpectRecord "genericAutoWith (:*:)"expectedL
-        let ktsR = unsafeExpectRecord "genericAutoWith (:*:)"expectedR
-        pure
-            (Type
-                { extract = liftA2 (liftA2 (:*:)) extractL extractR
-                , expected = Record (Dhall.Map.union ktsL ktsR)
-                }
-            )
-
-getSelName :: Selector s => M1 i s f a -> State Int String
+getSelName :: Selector s => M1 i s f a -> State Int Text
 getSelName n = case selName n of
     "" -> do i <- get
              put (i + 1)
-             pure ("_" ++ show i)
-    nn -> pure nn
+             pure (Data.Text.pack ("_" ++ show i))
+    nn -> pure (Data.Text.pack nn)
+
+instance (GenericInterpret (f :*: g), GenericInterpret (h :*: i)) => GenericInterpret ((f :*: g) :*: (h :*: i)) where
+    genericAutoWith options = do
+        Type extractL expectedL <- genericAutoWith options
+        Type extractR expectedR <- genericAutoWith options
+
+        let ktsL = unsafeExpectRecord "genericAutoWith (:*:)" expectedL
+        let ktsR = unsafeExpectRecord "genericAutoWith (:*:)" expectedR
+
+        let expected = Record (Dhall.Map.union ktsL ktsR)
+
+        let extract expression =
+                liftA2 (:*:) (extractL expression) (extractR expression)
+
+        return (Type {..})
+
+instance (GenericInterpret (f :*: g), Selector s, Interpret a) => GenericInterpret ((f :*: g) :*: M1 S s (K1 i a)) where
+    genericAutoWith options@InterpretOptions{..} = do
+        let nR :: M1 S s (K1 i a) r
+            nR = undefined
+
+        nameR <- fmap fieldModifier (getSelName nR)
+
+        Type extractL expectedL <- genericAutoWith options
+
+        let Type extractR expectedR = autoWith options
+
+        let ktsL = unsafeExpectRecord "genericAutoWith (:*:)" expectedL
+
+        let expected = Record (Dhall.Map.insert nameR expectedR ktsL)
+
+        let extract expression = do
+                let die = typeError expected expression
+
+                case expression of
+                    RecordLit kvs ->
+                        case Dhall.Map.lookup nameR kvs of
+                            Just expressionR ->
+                                liftA2 (:*:)
+                                    (extractL expression)
+                                    (fmap (M1 . K1) (extractR expressionR))
+                            _ -> die
+                    _ -> die
+
+        return (Type {..})
+
+instance (Selector s, Interpret a, GenericInterpret (f :*: g)) => GenericInterpret (M1 S s (K1 i a) :*: (f :*: g)) where
+    genericAutoWith options@InterpretOptions{..} = do
+        let nL :: M1 S s (K1 i a) r
+            nL = undefined
+
+        nameL <- fmap fieldModifier (getSelName nL)
+
+        let Type extractL expectedL = autoWith options
+
+        Type extractR expectedR <- genericAutoWith options
+
+        let ktsR = unsafeExpectRecord "genericAutoWith (:*:)" expectedR
+
+        let expected = Record (Dhall.Map.insert nameL expectedL ktsR)
+
+        let extract expression = do
+                let die = typeError expected expression
+
+                case expression of
+                    RecordLit kvs ->
+                        case Dhall.Map.lookup nameL kvs of
+                            Just expressionL ->
+                                liftA2 (:*:)
+                                    (fmap (M1 . K1) (extractL expressionL))
+                                    (extractR expression)
+                            _ -> die
+                    _ -> die
+
+        return (Type {..})
+
+instance (Selector s1, Selector s2, Interpret a1, Interpret a2) => GenericInterpret (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
+    genericAutoWith options@InterpretOptions{..} = do
+        let nL :: M1 S s1 (K1 i1 a1) r
+            nL = undefined
+
+        let nR :: M1 S s2 (K1 i2 a2) r
+            nR = undefined
+
+        nameL <- fmap fieldModifier (getSelName nL)
+        nameR <- fmap fieldModifier (getSelName nR)
+
+        let Type extractL expectedL = autoWith options
+        let Type extractR expectedR = autoWith options
+
+        let expected =
+                Record
+                    (Dhall.Map.fromList
+                        [ (nameL, expectedL)
+                        , (nameR, expectedR)
+                        ]
+                    )
+
+        let extract expression = do
+                let die = typeError expected expression
+
+                case expression of
+                    RecordLit kvs -> do
+                        case liftA2 (,) (Dhall.Map.lookup nameL kvs) (Dhall.Map.lookup nameR kvs) of
+                            Just (expressionL, expressionR) ->
+                                liftA2 (:*:)
+                                    (fmap (M1 . K1) (extractL expressionL))
+                                    (fmap (M1 . K1) (extractR expressionR))
+                            Nothing -> die
+                    _ -> die
+
+        return (Type {..})
 
 instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
-    genericAutoWith opts@(InterpretOptions {..}) = do
-        name <- getSelName n
-        let expected =
-                Record (Dhall.Map.fromList [(key, expected')])
-              where
-                key = fieldModifier (Data.Text.pack name)
-        let extract expr@(RecordLit m) =
-                    let name' = fieldModifier (Data.Text.pack name)
-                        extract'' e = fmap (M1 . K1) (extract' e)
-                        lookupRes = Dhall.Map.lookup name' m
-                        typeError' = typeError expected expr
-                    in Data.Maybe.maybe typeError' extract'' lookupRes
-            extract expr            = typeError expected expr
-        pure (Type {..})
-      where
-        n :: M1 i s f a
-        n = undefined
+    genericAutoWith options@InterpretOptions{..} = do
+        let n :: M1 S s (K1 i a) r
+            n = undefined
 
-        Type extract' expected' = autoWith opts
+        name <- fmap fieldModifier (getSelName n)
+
+        let Type { extract = extract', expected = expected'} = autoWith options
+
+        let expected =
+                case singletonConstructors of
+                    Bare ->
+                        expected'
+                    Smart | selName n == "" ->
+                        expected'
+                    _ ->
+                        Record (Dhall.Map.singleton name expected')
+
+        let extract0 expression = fmap (M1 . K1) (extract' expression)
+
+        let extract1 expression = do
+                let die = typeError expected expression
+
+                case expression of
+                    RecordLit kvs -> do
+                        case Dhall.Map.lookup name kvs of
+                            Just subExpression ->
+                                fmap (M1 . K1) (extract' subExpression)
+                            Nothing ->
+                                die
+                    _ -> do
+                        die
+
+
+        let extract =
+                case singletonConstructors of
+                    Bare                    -> extract0
+                    Smart | selName n == "" -> extract0
+                    _                       -> extract1
+
+        return (Type {..})
 
 {-| An @(InputType a)@ represents a way to marshal a value of type @\'a\'@ from
     Haskell into Dhall
@@ -1471,6 +1613,38 @@ instance GenericInject f => GenericInject (M1 C c f) where
         res <- genericInjectWith options
         pure (contramap unM1 res)
 
+instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
+    genericInjectWith options@InterpretOptions{..} = do
+        let InputType { embed = embed', declared = declared' } =
+                injectWith options
+
+        let n :: M1 S s (K1 i a) r
+            n = undefined
+
+        name <- fieldModifier <$> getSelName n
+
+        let embed0 (M1 (K1 x)) = embed' x
+
+        let embed1 (M1 (K1 x)) =
+                RecordLit (Dhall.Map.singleton name (embed' x))
+
+        let embed =
+                case singletonConstructors of
+                    Bare                    -> embed0
+                    Smart | selName n == "" -> embed0
+                    _                       -> embed1
+
+        let declared =
+                case singletonConstructors of
+                    Bare ->
+                        declared'
+                    Smart | selName n == "" ->
+                        declared'
+                    _ ->
+                        Record (Dhall.Map.singleton name declared')
+
+        return (InputType {..})
+
 instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) => GenericInject (M1 C c1 f1 :+: M1 C c2 f2) where
     genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
@@ -1588,26 +1762,100 @@ instance (GenericInject (f :+: g), GenericInject (h :+: i)) => GenericInject ((f
         ktsL = unsafeExpectUnion "genericInjectWith (:+:)" declaredL
         ktsR = unsafeExpectUnion "genericInjectWith (:+:)" declaredR
 
-instance (GenericInject f, GenericInject g) => GenericInject (f :*: g) where
+instance (GenericInject (f :*: g), GenericInject (h :*: i)) => GenericInject ((f :*: g) :*: (h :*: i)) where
     genericInjectWith options = do
-        InputType embedInL declaredInL <- genericInjectWith options
-        InputType embedInR declaredInR <- genericInjectWith options
+        InputType embedL declaredL <- genericInjectWith options
+        InputType embedR declaredR <- genericInjectWith options
 
         let embed (l :*: r) =
                 RecordLit (Dhall.Map.union mapL mapR)
               where
                 mapL =
-                    unsafeExpectRecordLit "genericInjectWith (:*:)" (embedInL l)
+                    unsafeExpectRecordLit "genericInjectWith (:*:)" (embedL l)
 
                 mapR =
-                    unsafeExpectRecordLit "genericInjectWith (:*:)" (embedInR r)
+                    unsafeExpectRecordLit "genericInjectWith (:*:)" (embedR r)
 
         let declared = Record (Dhall.Map.union mapL mapR)
               where
-                mapL = unsafeExpectRecord "genericInjectWith (:*:)" declaredInL
-                mapR = unsafeExpectRecord "genericInjectWith (:*:)" declaredInR
+                mapL = unsafeExpectRecord "genericInjectWith (:*:)" declaredL
+                mapR = unsafeExpectRecord "genericInjectWith (:*:)" declaredR
 
         pure (InputType {..})
+
+instance (GenericInject (f :*: g), Selector s, Inject a) => GenericInject ((f :*: g) :*: M1 S s (K1 i a)) where
+    genericInjectWith options@InterpretOptions{..} = do
+        let nR :: M1 S s (K1 i a) r
+            nR = undefined
+
+        nameR <- fmap fieldModifier (getSelName nR)
+
+        InputType embedL declaredL <- genericInjectWith options
+
+        let InputType embedR declaredR = injectWith options
+
+        let embed (l :*: M1 (K1 r)) =
+                RecordLit (Dhall.Map.insert nameR (embedR r) mapL)
+              where
+                mapL =
+                    unsafeExpectRecordLit "genericInjectWith (:*:)" (embedL l)
+
+        let declared = Record (Dhall.Map.insert nameR declaredR mapL)
+              where
+                mapL = unsafeExpectRecord "genericInjectWith (:*:)" declaredL
+
+        return (InputType {..})
+
+instance (Selector s, Inject a, GenericInject (f :*: g)) => GenericInject (M1 S s (K1 i a) :*: (f :*: g)) where
+    genericInjectWith options@InterpretOptions{..} = do
+        let nL :: M1 S s (K1 i a) r
+            nL = undefined
+
+        nameL <- fmap fieldModifier (getSelName nL)
+
+        let InputType embedL declaredL = injectWith options
+
+        InputType embedR declaredR <- genericInjectWith options
+
+        let embed (M1 (K1 l) :*: r) =
+                RecordLit (Dhall.Map.insert nameL (embedL l) mapR)
+              where
+                mapR =
+                    unsafeExpectRecordLit "genericInjectWith (:*:)" (embedR r)
+
+        let declared = Record (Dhall.Map.insert nameL declaredL mapR)
+              where
+                mapR = unsafeExpectRecord "genericInjectWith (:*:)" declaredR
+
+        return (InputType {..})
+
+instance (Selector s1, Selector s2, Inject a1, Inject a2) => GenericInject (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
+    genericInjectWith options@InterpretOptions{..} = do
+        let nL :: M1 S s1 (K1 i1 a1) r
+            nL = undefined
+
+        let nR :: M1 S s2 (K1 i2 a2) r
+            nR = undefined
+
+        nameL <- fmap fieldModifier (getSelName nL)
+        nameR <- fmap fieldModifier (getSelName nR)
+
+        let InputType embedL declaredL = injectWith options
+        let InputType embedR declaredR = injectWith options
+
+        let embed (M1 (K1 l) :*: M1 (K1 r)) =
+                RecordLit
+                    (Dhall.Map.fromList
+                        [ (nameL, embedL l), (nameR, embedR r) ]
+                    )
+
+        let declared =
+                Record
+                    (Dhall.Map.fromList
+                        [ (nameL, declaredL), (nameR, declaredR) ]
+                    )
+
+        return (InputType {..})
 
 instance GenericInject U1 where
     genericInjectWith _ = pure (InputType {..})
@@ -1615,20 +1863,6 @@ instance GenericInject U1 where
         embed _ = RecordLit mempty
 
         declared = Record mempty
-
-instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
-    genericInjectWith opts@(InterpretOptions {..}) = do
-        name <- fieldModifier . Data.Text.pack <$> getSelName n
-        let embed (M1 (K1 x)) =
-                RecordLit (Dhall.Map.singleton name (embedIn x))
-        let declared =
-                Record (Dhall.Map.singleton name declaredIn)
-        pure (InputType {..})
-      where
-        n :: M1 i s f a
-        n = undefined
-
-        InputType embedIn declaredIn = injectWith opts
 
 {-| The 'RecordType' applicative functor allows you to build a 'Type' parser
     from a Dhall record.
