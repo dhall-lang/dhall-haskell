@@ -868,9 +868,9 @@ getOrCreateCacheDirectory showWarning cacheName = do
           <> "\n"
           <> "↳ " <> directory <> "\n"
           <> "\n"
-          <> "You can enable caching by creating it if needed and setting read, write and search\n"
-          <> "permissions on it or providing another cache base directory by setting\n"
-          <> "the $XDG_CACHE_HOME environment variable.\n"
+          <> "You can enable caching by creating it if needed and setting read,\n"
+          <> "write and search permissions on it or providing another cache base\n"
+          <> "directory by setting the $XDG_CACHE_HOME environment variable.\n"
           <> "\n"
 
     assertDirectory directory <|> warn message
