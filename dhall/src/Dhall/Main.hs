@@ -26,14 +26,14 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Data.Version (showVersion)
 import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
-import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
+import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError, X)
 import Dhall.Util (Censor(..), Input(..))
+import Dhall.Version (dhallVersionString)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (ExitCode, exitFailure)
 import System.IO (Handle)
@@ -69,7 +69,6 @@ import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
-import qualified Paths_dhall as Meta
 import qualified System.Console.ANSI
 import qualified System.Exit                               as Exit
 import qualified System.IO
@@ -93,10 +92,11 @@ data Mode
           , annotate :: Bool
           , alpha :: Bool
           , semanticCacheMode :: SemanticCacheMode
+          , version :: Bool
           }
     | Version
     | Resolve { file :: Input, resolveMode :: Maybe ResolveMode }
-    | Type { file :: Input }
+    | Type { file :: Input, quiet :: Bool }
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
     | Format { formatMode :: Dhall.Format.FormatMode }
@@ -161,7 +161,7 @@ parseMode =
     <|> subcommand
             "type"
             "Infer an expression's type"
-            (Type <$> parseFile)
+            (Type <$> parseFile <*> parseQuiet)
     <|> subcommand
             "normalize"
             "Normalize an expression"
@@ -202,7 +202,13 @@ parseMode =
             "text"
             "Render a Dhall expression that evaluates to a Text literal"
             (Text <$> parseFile)
-    <|> (Default <$> parseFile <*> parseAnnotate <*> parseAlpha <*> parseSemanticCacheMode)
+    <|> (   Default
+        <$> parseFile
+        <*> parseAnnotate
+        <*> parseAlpha
+        <*> parseSemanticCacheMode
+        <*> parseVersion
+        )
   where
     argument =
             fmap Data.Text.pack
@@ -241,6 +247,12 @@ parseMode =
                   "Handle protected imports as if the cache was empty"
             )
 
+    parseVersion =
+        Options.Applicative.switch
+            (   Options.Applicative.long "version"
+            <>  Options.Applicative.help "Display version"
+            )
+
     parseResolveMode =
           Options.Applicative.flag' (Just Dot)
               (   Options.Applicative.long "dot"
@@ -260,6 +272,12 @@ parseMode =
                     "List transitive import dependencies"
               )
         <|> pure Nothing
+
+    parseQuiet =
+        Options.Applicative.switch
+            (   Options.Applicative.long "quiet"
+            <>  Options.Applicative.help "Don't print the inferred type"
+            )
 
     parseInplace = fmap f (optional p)
       where
@@ -348,10 +366,16 @@ command (Options {..}) = do
                 let _ = e :: TypeError Src X
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
-                    then Control.Exception.throwIO (DetailedTypeError e)
+                    then
+                        case censor of
+                            Censor   -> Control.Exception.throwIO (CensoredDetailed (DetailedTypeError e))
+                            NoCensor -> Control.Exception.throwIO (DetailedTypeError e)
+
                     else do
                         Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
-                        Control.Exception.throwIO e
+                        case censor of
+                            Censor   -> Control.Exception.throwIO (Censored e)
+                            NoCensor -> Control.Exception.throwIO e
 
             handleImported (Imported ps e) = Control.Exception.handle handleAll $ do
                 let _ = e :: TypeError Src X
@@ -388,9 +412,15 @@ command (Options {..}) = do
 
     handle $ case mode of
         Version -> do
-            putStrLn (showVersion Meta.version)
+            putStrLn dhallVersionString
 
         Default {..} -> do
+            if version
+                then do
+                    putStrLn dhallVersionString
+                    Exit.exitSuccess
+                else return ()
+
             expression <- getExpression file
 
             resolvedExpression <-
@@ -494,7 +524,9 @@ command (Options {..}) = do
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-            render System.IO.stdout inferredType
+            if quiet
+                then return ()
+                else render System.IO.stdout inferredType
 
         Repl -> do
             Dhall.Repl.repl characterSet explain

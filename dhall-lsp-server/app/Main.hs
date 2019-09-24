@@ -20,6 +20,7 @@ import qualified Paths_dhall_lsp_server
 data Options = Options {
     command :: Mode
   , logFile :: Maybe FilePath
+  , version :: Bool
 }
 
 -- | The mode in which to run @dhall-lsp-server@
@@ -27,11 +28,16 @@ data Mode = Version | LSPServer
 
 parseOptions :: Parser Options
 parseOptions =
-  Options <$> parseMode <*> Options.Applicative.optional parseLogFile
+  Options <$> parseMode <*> Options.Applicative.optional parseLogFile <*> parseVersion
   where
     parseLogFile = Options.Applicative.strOption
       (Options.Applicative.long "log" <> Options.Applicative.help
         "If present writes debug output to the specified file"
+      )
+
+    parseVersion = Options.Applicative.switch
+      (  Options.Applicative.long "version"
+      <> Options.Applicative.help "Display version"
       )
 
 
@@ -57,9 +63,14 @@ parserInfoOptions = Options.Applicative.info
   )
 
 runCommand :: Options -> IO ()
-runCommand Options {..} = case command of
-  Version -> putStrLn (Data.Version.showVersion Paths_dhall_lsp_server.version)
-  LSPServer -> Dhall.LSP.Server.run logFile
+runCommand Options {..} = do
+  if version
+    then printVersion
+    else case command of
+      Version -> printVersion
+      LSPServer -> Dhall.LSP.Server.run logFile
+  where
+    printVersion = putStrLn (Data.Version.showVersion Paths_dhall_lsp_server.version)
 
 -- | Entry point for the @dhall-lsp-server@ executable
 main :: IO ()

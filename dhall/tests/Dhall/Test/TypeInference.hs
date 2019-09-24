@@ -2,7 +2,7 @@
 
 module Dhall.Test.TypeInference where
 
-import Control.Exception (SomeException)
+import Control.Exception (SomeException(..))
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
 import Prelude hiding (FilePath)
@@ -33,7 +33,7 @@ getTests = do
 
     let failureTestFiles = Turtle.lstree (typeInferenceDirectory </> "failure")
 
-    failureTests <- Test.Util.discover (Turtle.chars <* "A.dhall") failureTest failureTestFiles
+    failureTests <- Test.Util.discover (Turtle.chars <* ".dhall") failureTest failureTestFiles
 
     let testTree = Tasty.testGroup "type-inference tests"
             [ successTests
@@ -84,25 +84,36 @@ successTest prefix = do
         Tasty.HUnit.assertEqual message resolvedExpectedType inferredType
 
 failureTest :: Text -> TestTree
-failureTest path = do
-    let skip = [ typeInferenceDirectory </> "failure/unit/MergeEmptyNeedsDirectAnnotation1.dhall"
+failureTest prefix = do
+    let skip = [ typeInferenceDirectory </> "failure/unit/MergeEmptyNeedsDirectAnnotation1"
+
+               -- Duplicate fields are incorrectly caught during parsing:
+               -- https://github.com/dhall-lang/dhall-haskell/issues/772
+               , typeInferenceDirectory </> "failure/unit/RecordLitDuplicateFields"
+               , typeInferenceDirectory </> "failure/unit/RecordTypeDuplicateFields"
+               , typeInferenceDirectory </> "failure/unit/UnionTypeDuplicateVariants1"
+               , typeInferenceDirectory </> "failure/unit/UnionTypeDuplicateVariants2"
                ]
 
-    Test.Util.testCase path skip $ do
-        let dhallPath = Test.Util.toDhallPath path
+    Test.Util.testCase prefix skip $ do
+        let prefixFP = Text.unpack prefix
 
-        expression <- Core.throws (Parser.exprFromText mempty dhallPath)
+        code <- Text.IO.readFile (prefixFP <> ".dhall")
 
-        let io :: IO Bool
-            io = do
-                _ <- Test.Util.load expression
-                return True
+        expression <- case Parser.exprFromText mempty code of
+            Left _ -> Tasty.HUnit.assertFailure (prefixFP <> " should have parsed")
+            Right e -> return e
 
-        let handler :: SomeException -> IO Bool
-            handler _ = return False
+        tryResolvedExpr <-
+            Exception.try
+               (Test.Util.loadRelativeTo
+                   (FilePath.takeDirectory prefixFP)
+                   Import.IgnoreSemanticCache
+                   expression)
 
-        typeChecked <- Exception.handle handler io
+        case tryResolvedExpr of
+            Left (SomeException _) -> return ()
 
-        if typeChecked
-            then Tasty.HUnit.assertFailure (Text.unpack path <> " should not have type-checked")
-            else return ()
+            Right resolved -> case TypeCheck.typeOf resolved of
+                Left  _ -> return ()
+                Right _ -> Tasty.HUnit.assertFailure (prefixFP <> " should not have type-checked")

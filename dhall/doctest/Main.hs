@@ -25,7 +25,8 @@ main = do
         writeFile "file1" "./file2"
 
         Test.DocTest.doctest
-            [ "--fast"
+            [ "-DWITH_HTTP"
+            , "--fast"
             , "-i" <> (prefix </> "src")
             , "-i" <> (prefix </> "ghc-src")
             , prefix </> "src/Dhall.hs"

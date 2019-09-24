@@ -48,6 +48,7 @@ module Dhall.Core (
     , isNormalized
     , isNormalizedWith
     , denote
+    , renote
     , shallowDenote
     , freeIn
 
@@ -73,6 +74,8 @@ module Dhall.Core (
     , pathCharacter
     , throws
     , textShow
+    , censorExpression
+    , censorText
     ) where
 
 import Control.Applicative (empty)
@@ -91,15 +94,18 @@ import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Traversable
+import Data.Void (Void)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
-import Dhall.Src (Src)
+import Dhall.Src (Src(..))
 import {-# SOURCE #-} Dhall.Pretty.Internal
 import GHC.Generics (Generic)
 import Instances.TH.Lift ()
 import Language.Haskell.TH.Syntax (Lift)
+import Lens.Family (over)
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
+import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Control.Exception
 import qualified Control.Monad
@@ -1313,6 +1319,11 @@ denote (Equivalent a b      ) = Equivalent (denote a) (denote b)
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
+-- | The \"opposite\" of `denote`, like @first absurd@ but faster
+renote :: Expr Void a -> Expr s a
+renote = unsafeCoerce
+{-# INLINE renote #-}
+
 shallowDenote :: Expr s a -> Expr s a
 shallowDenote (Note _ e) = shallowDenote e
 shallowDenote         e  = e
@@ -2210,6 +2221,32 @@ subExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 subExpressions _ (Embed a) = pure (Embed a)
+
+{-| Utility used to implement the @--censor@ flag, by:
+
+    * Replacing all `Src` text with spaces
+    * Replacing all `Text` literals inside type errors with spaces
+-}
+censorExpression :: Expr Src a -> Expr Src a
+censorExpression (TextLit chunks) = TextLit (censorChunks chunks)
+censorExpression (Note src     e) = Note (censorSrc src) (censorExpression e)
+censorExpression  e               = over subExpressions censorExpression e
+
+censorChunks :: Chunks Src a -> Chunks Src a
+censorChunks (Chunks xys z) = Chunks xys' z'
+  where
+    z' = censorText z
+
+    xys' = [ (censorText x, censorExpression y) | (x, y) <- xys ]
+
+-- | Utility used to censor `Text` by replacing all characters with a space
+censorText :: Text -> Text
+censorText = Data.Text.map (\_ -> ' ')
+
+censorSrc :: Src -> Src
+censorSrc (Src { srcText = oldText, .. }) = Src { srcText = newText, .. }
+  where
+    newText = censorText oldText
 
 -- | A traversal over the immediate sub-expressions in 'Chunks'.
 chunkExprs
