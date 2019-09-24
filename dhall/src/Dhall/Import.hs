@@ -107,6 +107,7 @@ module Dhall.Import (
     , hashExpression
     , hashExpressionToCode
     , writeExpressionToSemanticCache
+    , warnAboutMissingCaches
     , assertNoImports
     , Status(..)
     , SemanticCacheMode(..)
@@ -138,8 +139,8 @@ module Dhall.Import (
 
 import Control.Applicative (Alternative(..))
 import Codec.CBOR.Term (Term(..))
-import Control.Exception (Exception, SomeException, toException)
-import Control.Monad (guard)
+import Control.Exception (Exception, SomeException, IOException, toException)
+import Control.Monad (when)
 import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Class (lift)
@@ -201,6 +202,7 @@ import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 import qualified System.Environment
 import qualified System.Info
+import qualified System.IO
 import qualified System.Directory                 as Directory
 import qualified System.FilePath                  as FilePath
 import qualified Text.Megaparsec
@@ -742,46 +744,139 @@ toHeader _ = do
     empty
 
 getCacheFile
-    :: (Alternative m, MonadIO m) => FilePath -> Dhall.Crypto.SHA256Digest -> m FilePath
+    :: (MonadCatch m, Alternative m, MonadIO m) => FilePath -> Dhall.Crypto.SHA256Digest -> m FilePath
 getCacheFile cacheName hash = do
-    let assertDirectory directory = do
-            let private = transform Directory.emptyPermissions
-                  where
-                    transform =
-                            Directory.setOwnerReadable   True
-                        .   Directory.setOwnerWritable   True
-                        .   Directory.setOwnerSearchable True
+    cacheDirectory <- getOrCreateCacheDirectory False cacheName
 
-            let accessible path =
-                       Directory.readable   path
-                    && Directory.writable   path
-                    && Directory.searchable path
-
-            directoryExists <- liftIO (Directory.doesDirectoryExist directory)
-
-            if directoryExists
-                then do
-                    permissions <- liftIO (Directory.getPermissions directory)
-
-                    guard (accessible permissions)
-
-                else do
-                    assertDirectory (FilePath.takeDirectory directory)
-
-                    liftIO (Directory.createDirectory directory)
-
-                    liftIO (Directory.setPermissions directory private)
-
-    cacheDirectory <- getCacheDirectory
-
-    assertDirectory (cacheDirectory </> cacheName)
-
-    let cacheFile = (cacheDirectory </> cacheName) </> ("1220" <> show hash)
+    let cacheFile = cacheDirectory </> ("1220" <> show hash)
 
     return cacheFile
 
-getCacheDirectory :: (Alternative m, MonadIO m) => m FilePath
-getCacheDirectory = alternative₀ <|> alternative₁
+warnAboutMissingCaches :: (MonadCatch m, Alternative m, MonadIO m) => m ()
+warnAboutMissingCaches = warn <|> return ()
+    where warn = Data.Foldable.traverse_ (getOrCreateCacheDirectory True) ["dhall", "dhall-haskell"]
+
+getOrCreateCacheDirectory :: (MonadCatch m, Alternative m, MonadIO m) => Bool -> FilePath -> m FilePath
+getOrCreateCacheDirectory showWarning cacheName = do
+    let warn message = do
+            let warning =
+                     "\n"
+                  <> "\ESC[1;33mWarning\ESC[0m: "
+                  <> message
+
+            when showWarning (liftIO (System.IO.hPutStrLn System.IO.stderr warning))
+
+            empty
+
+    let handler action dir (ioex :: IOException) = do
+            let ioExMsg =
+                     "When trying to " <> action <> ":\n"
+                  <> "\n"
+                  <> "↳ " <> dir <> "\n"
+                  <> "\n"
+                  <> "... the following exception was thrown:\n"
+                  <> "\n"
+                  <> "↳ " <> show ioex <> "\n"
+        
+            warn ioExMsg
+
+    let setPermissions dir = do
+            let private = transform Directory.emptyPermissions
+                    where
+                        transform =
+                            Directory.setOwnerReadable   True
+                          . Directory.setOwnerWritable   True
+                          . Directory.setOwnerSearchable True
+
+            catch
+                (liftIO (Directory.setPermissions dir private))
+                (handler "correct the permissions for" dir)
+
+    let assertPermissions dir = do
+            let accessible path =
+                    Directory.readable   path
+                 && Directory.writable   path
+                 && Directory.searchable path
+
+            permissions <-
+                catch (liftIO (Directory.getPermissions dir))
+                      (handler "get permissions of" dir)
+
+            if accessible permissions
+                then
+                    return ()
+                else do
+                    let message =
+                             "The directory:\n"
+                          <> "\n"
+                          <> "↳ " <> dir <> "\n"
+                          <> "\n"
+                          <> "... does not give you permission to read, write, or search files.\n\n"
+                          <> "The directory's current permissions are:\n"
+                          <> show permissions <> "\n"
+
+                    warn message
+
+    let existsDirectory dir =
+            catch (liftIO (Directory.doesDirectoryExist dir))
+                  (handler "check the existence of" dir)
+
+    let existsFile path =
+            catch (liftIO (Directory.doesFileExist path))
+                  (handler "check the existence of" path)
+
+    let createDirectory dir =
+            catch (liftIO (Directory.createDirectory dir))
+                  (handler "create" dir)
+
+    let assertDirectory dir = do
+            existsDir <- existsDirectory dir
+
+            if existsDir
+                then do
+                    assertPermissions dir
+
+                else do
+                    existsFile' <- existsFile dir
+
+                    if existsFile'
+                        then do
+                            let message =
+                                     "The given path:\n"
+                                  <> "\n"
+                                  <> "↳ " <> dir <> "\n"
+                                  <> "\n"
+                                  <> "... already exists but is not a directory.\n"
+
+                            warn message
+
+                        else do
+                            assertDirectory (FilePath.takeDirectory dir)
+
+                            createDirectory dir
+
+                            setPermissions dir
+    
+    cacheBaseDirectory <- getCacheBaseDirectory showWarning
+
+    let directory = cacheBaseDirectory </> cacheName
+
+    let message =
+             "Could not get or create the default cache directory:\n"
+          <> "\n"
+          <> "↳ " <> directory <> "\n"
+          <> "\n"
+          <> "You can enable caching by creating it if needed and setting read,\n"
+          <> "write and search permissions on it or providing another cache base\n"
+          <> "directory by setting the $XDG_CACHE_HOME environment variable.\n"
+          <> "\n"
+
+    assertDirectory directory <|> warn message
+
+    return directory
+
+getCacheBaseDirectory :: (Alternative m, MonadIO m) => Bool -> m FilePath
+getCacheBaseDirectory showWarning = alternative₀ <|> alternative₁ <|> alternative₂
   where
     alternative₀ = do
         maybeXDGCacheHome <- do
@@ -810,6 +905,18 @@ getCacheDirectory = alternative₀ <|> alternative₁
 
         where isWindows = System.Info.os == "mingw32"
 
+    alternative₂ = do
+        let message =
+                "\n"
+             <> "\ESC[1;33mWarning\ESC[0m: "
+             <> "Could not locate a cache base directory from the environment.\n"
+             <> "\n"
+             <> "You can provide a cache base directory by pointing the $XDG_CACHE_HOME\n"
+             <> "environment variable to a directory with read and write permissions.\n"
+
+        when showWarning (liftIO (System.IO.hPutStrLn System.IO.stderr message))
+
+        empty
 
 -- If the URL contains headers typecheck them and replace them with their normal
 -- forms.

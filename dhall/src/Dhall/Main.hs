@@ -407,6 +407,8 @@ command (Options {..}) = do
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 
             renderDoc h doc
+    
+    Dhall.Import.warnAboutMissingCaches
 
     handle $ case mode of
         Version -> do
