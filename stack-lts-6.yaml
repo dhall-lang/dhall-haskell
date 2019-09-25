@@ -34,6 +34,7 @@ extra-deps:
 - generic-random-1.3.0.0
 - hashable-1.2.7.0
 - haskeline-0.7.4.2
+- ieee754-0.8.0@sha256:ecabc40b844b76e95ca844cba42a9c335516b82971047e90f0e8cf95763d436a,1103
 - integer-logarithms-1.0.3
 - megaparsec-7.0.3
 - memory-0.14.14
@@ -58,6 +59,7 @@ extra-deps:
 - semigroups-0.18.5
 - serialise-0.2.1.0
 - shell-escape-0.2.0
+- special-values-0.1.0.0@sha256:c3cf13fdaa32105416f2f145f334cdb1995d789695c231f37682d9a20a754134,1344
 - splitmix-0.0.2
 - system-fileio-0.3.16.4
 - tagged-0.8.6

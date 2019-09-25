@@ -62,7 +62,7 @@ import Dhall.Core
   , Expr(..)
   , Chunks(..)
   , Const(..)
-  , Import
+  , DhallDouble(..)
   , Var(..)
   )
 
@@ -71,11 +71,9 @@ import Dhall.Set (Set)
 import GHC.Natural (Natural)
 import Prelude hiding (succ)
 
-import qualified Codec.Serialise as Serialise
 import qualified Data.Sequence   as Sequence
 import qualified Data.Set
 import qualified Data.Text       as Text
-import qualified Dhall.Binary    as Binary
 import qualified Dhall.Core      as Core
 import qualified Dhall.Map       as Map
 import qualified Dhall.Set
@@ -195,7 +193,7 @@ data Val a
     | VIntegerToDouble !(Val a)
 
     | VDouble
-    | VDoubleLit !Double
+    | VDoubleLit !DhallDouble
     | VDoubleShow !(Val a)
 
     | VText
@@ -533,7 +531,7 @@ eval !env t0 =
                 n -> VIntegerShow n
         IntegerToDouble ->
             VPrim $ \case
-                VIntegerLit n -> VDoubleLit (read (show n))
+                VIntegerLit n -> VDoubleLit (DhallDouble (read (show n)))
                 -- `(read . show)` is used instead of `fromInteger`
                 -- because `read` uses the correct rounding rule.
                 -- See https://gitlab.haskell.org/ghc/ghc/issues/17231.
@@ -544,8 +542,8 @@ eval !env t0 =
             VDoubleLit n
         DoubleShow ->
             VPrim $ \case
-                VDoubleLit n -> VTextLit (VChunks [] (Text.pack (show n)))
-                n            -> VDoubleShow n
+                VDoubleLit (DhallDouble n) -> VTextLit (VChunks [] (Text.pack (show n)))
+                n                          -> VDoubleShow n
         Text ->
             VText
         TextLit cs ->
@@ -853,8 +851,7 @@ conv !env t0 t0' =
         (VDouble, VDouble) ->
             True
         (VDoubleLit n, VDoubleLit n') ->
-                Serialise.serialise (Binary.encode (DoubleLit n  :: Expr Void Import))
-            ==  Serialise.serialise (Binary.encode (DoubleLit n' :: Expr Void Import))
+            n == n'
         (VDoubleShow t, VDoubleShow t') ->
             conv env t t'
         (VText, VText) ->

@@ -31,6 +31,7 @@ import Dhall.Core
     , Chunks(..)
     , Const(..)
     , Directory(..)
+    , DhallDouble(..)
     , Expr(..)
     , File(..)
     , FilePrefix(..)
@@ -343,18 +344,8 @@ instance ToTerm a => ToTerm (Expr Void a) where
         TList [ TInt 15, TInteger (fromIntegral n) ]
     encode (IntegerLit n) =
         TList [ TInt 16, TInteger n ]
-    encode (DoubleLit n64)
-        -- cborg always encodes NaN as "7e00"
-        | isNaN n64 = THalf n32
-        | useHalf   = THalf n32
-        | useFloat  = TFloat n32
-        | otherwise = TDouble n64
-      where
-        n32      = double2Float n64
-        useFloat = n64 == float2Double n32
-        -- the other three cases for Half-floats are 0.0 and the infinities
-        useHalf  = or $ fmap (n64 ==) [0.0, infinity, -infinity]
-        infinity = 1/0 :: Double
+    encode (DoubleLit d) =
+        encode d
     encode (TextLit (Chunks xys₀ z₀)) =
         TList ([ TInt 18 ] ++ xys₁ ++ [ z₁ ])
       where
@@ -471,6 +462,20 @@ instance ToTerm Import where
 
 instance ToTerm Void where
     encode = absurd
+
+instance ToTerm DhallDouble where
+    encode (DhallDouble n64)
+        -- cborg always encodes NaN as "7e00"
+        | isNaN n64 = THalf n32
+        | useHalf   = THalf n32
+        | useFloat  = TFloat n32
+        | otherwise = TDouble n64
+      where
+        n32      = double2Float n64
+        useFloat = n64 == float2Double n32
+        -- the other three cases for Half-floats are 0.0 and the infinities
+        useHalf  = or $ fmap (n64 ==) [0.0, infinity, -infinity]
+        infinity = 1/0 :: Double
 
 -- | Types that can be decoded from a CBOR `Term`
 class FromTerm a where
@@ -693,11 +698,11 @@ instance FromTerm a => FromTerm (Expr s a) where
     decode (TList [ TInt 16, TInteger n ]) = do
         return (IntegerLit n)
     decode (THalf n) = do
-        return (DoubleLit (float2Double n))
+        return (DoubleLit (DhallDouble (float2Double n)))
     decode (TFloat n) = do
-        return (DoubleLit (float2Double n))
+        return (DoubleLit (DhallDouble (float2Double n)))
     decode (TDouble n) = do
-        return (DoubleLit n)
+        return (DoubleLit (DhallDouble n))
     decode (TList (TInt 18 : xs)) = do
         let process (TString x : y₁ : zs) = do
                 y₀ <- decode y₁

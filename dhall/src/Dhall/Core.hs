@@ -30,6 +30,7 @@ module Dhall.Core (
     , ImportType(..)
     , URL(..)
     , Scheme(..)
+    , DhallDouble(..)
     , Var(..)
     , Chunks(..)
     , Expr(..)
@@ -83,6 +84,7 @@ import Control.DeepSeq (NFData)
 import Control.Exception (Exception)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Bifunctor (Bifunctor(..))
+import Data.Bits (xor)
 import Data.Data (Data)
 import Data.Foldable
 import Data.Functor.Identity (Identity(..))
@@ -110,17 +112,17 @@ import Unsafe.Coerce (unsafeCoerce)
 import qualified Control.Exception
 import qualified Control.Monad
 import qualified Data.Char
-import {-# SOURCE #-} qualified Dhall.Eval  as Eval
+import {-# SOURCE #-} qualified Dhall.Eval    as Eval
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc  as Pretty
+import qualified Data.Text.Prettyprint.Doc    as Pretty
 import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
-import qualified Network.URI                as URI
+import qualified Network.URI                  as URI
 import qualified Text.Printf
 
 
@@ -324,6 +326,38 @@ instance Pretty Import where
             Location -> " as Location"
             Code     -> ""
 
+-- | This wrapper around 'Prelude.Double' exists for its 'Eq' instance which is
+-- defined via the binary encoding of Dhall @Double@s.
+newtype DhallDouble = DhallDouble { getDhallDouble :: Double }
+    deriving (Show, Data, NFData, Generic)
+
+-- | This instance satisfies all the customary 'Eq' laws except substitutivity.
+--
+-- In particular:
+--
+-- >>> nan = DhallDouble (0/0)
+-- >>> nan == nan
+-- True
+--
+-- This instance is also consistent with with the binary encoding of Dhall @Double@s:
+--
+-- >>> toBytes n = Codec.Serialise.serialise (Dhall.Binary.encode (n :: DhallDouble))
+--
+-- prop> \a b -> (a == b) == (toBytes a == toBytes b)
+instance Eq DhallDouble where
+    DhallDouble a == DhallDouble b
+        | isNaN a && isNaN b                      = True
+        | isNegativeZero a `xor` isNegativeZero b = False
+        | otherwise                               = a == b
+
+-- | This instance relies on the 'Eq' instance for 'DhallDouble' but cannot
+-- satisfy the customary 'Ord' laws when @NaN@ is involved.
+instance Ord DhallDouble where
+    compare a@(DhallDouble a') b@(DhallDouble b') =
+        if a == b
+            then EQ
+            else compare a' b'
+
 {-| Label for a bound variable
 
     The `Text` field is the variable's name (i.e. \"@x@\").
@@ -462,7 +496,7 @@ data Expr s a
     -- | > Double                                   ~  Double
     | Double
     -- | > DoubleLit n                              ~  n
-    | DoubleLit Double
+    | DoubleLit DhallDouble
     -- | > DoubleShow                               ~  Double/show
     | DoubleShow
     -- | > Text                                     ~  Text
@@ -541,18 +575,17 @@ data Expr s a
 -- NB: If you add a constructor to Expr, please also update the Arbitrary
 -- instance in Dhall.Test.QuickCheck.
 
--- | Note that this 'Eq' instance inherits `Double`'s defects, e.g.
+-- | This instance encodes what the Dhall standard calls an \"exact match\"
+-- between two expressions.
 --
--- >>> nan = 0/0
+-- Note that
+--
+-- >>> nan = DhallDouble (0/0)
 -- >>> DoubleLit nan == DoubleLit nan
--- False
+-- True
 deriving instance (Eq s, Eq a) => Eq (Expr s a)
 
--- | Note that this 'Eq' instance inherits `Double`'s defects, e.g.
---
--- >>> nan = 0/0
--- >>> DoubleLit nan <= DoubleLit nan
--- False
+-- | Note that this 'Ord' instance inherits `DhallDouble`'s defects.
 deriving instance (Ord s, Ord a) => Ord (Expr s a)
 
 instance (Lift s, Lift a, Data s, Data a) => Lift (Expr s a)
@@ -1445,8 +1478,8 @@ normalizeWithM ctx e0 = loop (denote e0)
                     -- `(read . show)` is used instead of `fromInteger` because `read` uses
                     -- the correct rounding rule.
                     -- See https://gitlab.haskell.org/ghc/ghc/issues/17231.
-                    App IntegerToDouble (IntegerLit n) -> pure (DoubleLit ((read . show) n))
-                    App DoubleShow (DoubleLit n) ->
+                    App IntegerToDouble (IntegerLit n) -> pure (DoubleLit ((DhallDouble . read . show) n))
+                    App DoubleShow (DoubleLit (DhallDouble n)) ->
                         pure (TextLit (Chunks [] (Data.Text.pack (show n))))
                     App (App OptionalBuild _A₀) g ->
                         loop (App (App (App g optional) just) nothing)
@@ -2390,3 +2423,14 @@ bindingExprs f (Binding s0 n s1 t s2 v) =
 -}
 makeBinding :: Text -> Expr s a -> Binding s a
 makeBinding name = Binding Nothing name Nothing Nothing Nothing
+
+{- $setup
+>>> import qualified Codec.Serialise
+>>> import qualified Dhall.Binary
+>>> import Data.SpecialValues
+>>> import Test.QuickCheck (Arbitrary(..), oneof, elements)
+>>> :{
+  instance Arbitrary DhallDouble where
+    arbitrary = fmap DhallDouble (oneof [ arbitrary, elements specialValues ])
+:}
+-}

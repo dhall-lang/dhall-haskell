@@ -338,7 +338,7 @@ parsers embedded = Parsers {..}
                 b <- if isInfinite a
                        then setOffset n *> fail "double out of bounds"
                        else return a
-                return (DoubleLit b)
+                return (DoubleLit (DhallDouble b))
 
             alternative01 = do
                 a <- try naturalLiteral
@@ -373,7 +373,7 @@ parsers embedded = Parsers {..}
 
             alternative09 = do
                 a <- try doubleInfinity
-                return (DoubleLit a)
+                return (DoubleLit (DhallDouble a))
 
             builtin = do
                 let predicate c =
@@ -388,7 +388,7 @@ parsers embedded = Parsers {..}
                         ||  c == 'F'
                         ||  c == 'K'
 
-                let nan = (0.0/0.0)
+                let nan = DhallDouble (0.0/0.0)
 
                 c <- Text.Megaparsec.lookAhead (Text.Megaparsec.satisfy predicate)
 

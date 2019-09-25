@@ -96,7 +96,7 @@ import Data.Fix (Fix(..))
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (absurd)
-import Dhall.Core (Chunks(..), Const(..), Expr(..), MultiLet(..), Var(..))
+import Dhall.Core (Chunks(..), Const(..), DhallDouble(..), Expr(..), MultiLet(..), Var(..))
 import Dhall.TypeCheck (X)
 import Nix.Atoms (NAtom(..))
 import Nix.Expr
@@ -331,7 +331,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop IntegerToDouble = do
         return (Fix (NAbs "x" "x"))
     loop Double = return (Fix (NSet []))
-    loop (DoubleLit n) = return (Fix (NConstant (NFloat (realToFrac n))))
+    loop (DoubleLit (DhallDouble n)) = return (Fix (NConstant (NFloat (realToFrac n))))
     loop DoubleShow = do
         return "toString"
     loop Text = return (Fix (NSet []))
