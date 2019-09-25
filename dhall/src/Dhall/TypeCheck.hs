@@ -1130,7 +1130,7 @@ infer typer = loop
 
                     let adapt = VRecord . Dhall.Map.fromList
 
-                    fmap adapt (traverse process (Dhall.Set.toList xs))
+                    fmap adapt (traverse process (Dhall.Set.toList (Dhall.Set.sort xs)))
 
                 _ -> do
                     let text =
