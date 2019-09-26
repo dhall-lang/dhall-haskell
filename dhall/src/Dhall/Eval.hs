@@ -1,12 +1,16 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE CPP                 #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving  #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -O #-}
 
@@ -81,6 +85,8 @@ data Environment a
     | Skip   !(Environment a) {-# UNPACK #-} !Text
     | Extend !(Environment a) {-# UNPACK #-} !Text (Val a)
 
+deriving instance (Show a, Show (Val a -> Val a)) => Show (Environment a)
+
 errorMsg :: String
 errorMsg = unlines
   [ _ERROR <> ": Compiler bug                                                        "
@@ -98,7 +104,12 @@ errorMsg = unlines
 
 
 data Closure a = Closure !Text !(Environment a) !(Expr Void a)
+
+deriving instance (Show a, Show (Val a -> Val a)) => Show (Closure a)
+
 data VChunks a = VChunks ![(Text, Val a)] !Text
+
+deriving instance (Show a, Show (Val a -> Val a)) => Show (VChunks a)
 
 instance Semigroup (VChunks a) where
   VChunks xys z <> VChunks [] z' = VChunks xys (z <> z')
@@ -134,6 +145,8 @@ data HLamInfo a
   -- ^ The original function was a @Natural/subtract 0@.  We need to preserve
   --   this information in case the @Natural/subtract@ ends up not being fully
   --   saturated, in which case we need to recover the unsaturated built-in
+
+deriving instance (Show a, Show (Val a -> Val a)) => Show (HLamInfo a)
 
 pattern VPrim :: (Val a -> Val a) -> Val a
 pattern VPrim f = VHLam Prim f
@@ -220,6 +233,9 @@ data Val a
     | VAssert !(Val a)
     | VEquivalent !(Val a) !(Val a)
     | VEmbed a
+
+-- | For use with "Text.Show.Functions".
+deriving instance (Show a, Show (Val a -> Val a)) => Show (Val a)
 
 (~>) :: Val a -> Val a -> Val a
 (~>) a b = VHPi "_" a (\_ -> b)
