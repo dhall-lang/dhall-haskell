@@ -1442,7 +1442,9 @@ normalizeWithM ctx e0 = loop (denote e0)
                     App IntegerShow (IntegerLit n)
                         | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
                         | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
-                    -- `(read . show)` is used instead of `fromInteger` because `read` uses the correct rounding rule
+                    -- `(read . show)` is used instead of `fromInteger` because `read` uses
+                    -- the correct rounding rule.
+                    -- See https://gitlab.haskell.org/ghc/ghc/issues/17231.
                     App IntegerToDouble (IntegerLit n) -> pure (DoubleLit ((read . show) n))
                     App DoubleShow (DoubleLit n) ->
                         pure (TextLit (Chunks [] (Data.Text.pack (show n))))
