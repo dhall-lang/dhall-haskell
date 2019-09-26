@@ -519,7 +519,8 @@ eval !env t0 =
             VPrim $ \case
                 VIntegerLit n -> VDoubleLit (read (show n))
                 -- `(read . show)` is used instead of `fromInteger`
-                -- because `read` uses the correct rounding rule
+                -- because `read` uses the correct rounding rule.
+                -- See https://gitlab.haskell.org/ghc/ghc/issues/17231.
                 n             -> VIntegerToDouble n
         Double ->
             VDouble
