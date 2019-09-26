@@ -1,3 +1,46 @@
+1.26.1
+
+* TECHNICALLY BREAKING CHANGES: [Simplify `⫽` within projection](https://github.com/dhall-lang/dhall-haskell/pull/1283) / [Simplify nested record projections](https://github.com/dhall-lang/dhall-haskell/pull/1307)
+    * These are technically breaking changes because you will need to update
+      integrity checks that protect code simplified in this way
+    * We're not bumping the major version since the likelihood that you're
+      affected is quite low
+* BUG FIX: [Fix performance regression](https://github.com/dhall-lang/dhall-haskell/pull/1335)
+    * This change fixes the performance regression introduced in the previous
+      release (version 1.26.0)
+* BUG FIX: [Prevent REPL from inserting inferred `Sort`s into context](https://github.com/dhall-lang/dhall-haskell/pull/1318)
+    * This protects the REPL from getting hosed if you define an expression
+      using `:let` that has an inferred type of `Sort`
+* NEW FEATURE: Improved `Inject`/`Interpret` support for 1-field constructors - ([#1315](https://github.com/dhall-lang/dhall-haskell/pull/1315) / [#1321](https://github.com/dhall-lang/dhall-haskell/pull/1321))
+    * This adds a new `singletonConstructors` field to `InterpretOptions` that
+      lets you control what Dhall type 1-field Haskell constructors correspond
+      to
+    * The default (`Wrapped`) is backwards compatible with the old behavior
+    * The `Smart` option is probably what you want: it will strip the
+      Haskell constructor from the Dhall type if the constructor has one
+      anonymous field
+    * The `Bare` option always strips 1-field Haskell constructors from the
+      Dhall type
+* NEW FEATURE: `--censor` flag that disables source code display ([#1312](https://github.com/dhall-lang/dhall-haskell/pull/1312) / [#1329](https://github.com/dhall-lang/dhall-haskell/pull/1329))
+    * Use this flag when you don't want sensitive `Text` literals showing up in
+      parsing or type-checking error messages
+* [Format record fields more compactly if they fit on 1 line](https://github.com/dhall-lang/dhall-haskell/pull/1314)
+    * The formatter will now format record fields on a field-by-field basis to
+      avoid unnecessary vertical sprawl of formatted records
+    * Specifically, record fields that fit on one line will now be formatted
+      on one line
+* [Add `--quiet` option to `dhall type`](https://github.com/dhall-lang/dhall-haskell/pull/1325)
+    * This lets you use `dhall type` in "check only" mode (e.g. for CI for
+      for development feedback)
+* Improved GHCJS support - ([#1311](https://github.com/dhall-lang/dhall-haskell/pull/1311) / [#1330](https://github.com/dhall-lang/dhall-haskell/pull/1330))
+* [Fix all executables to accept `--version`](https://github.com/dhall-lang/dhall-haskell/pull/1334)
+    * Note that the `dhall version` subcommand is still supported, too
+* [New `Dhall.Version` module](https://github.com/dhall-lang/dhall-haskell/pull/1332)
+* [Don't normalize inferred types](https://github.com/dhall-lang/dhall-haskell/pull/1317)
+    * This fixes `dhall type` to more accurately follow the standard
+* [Initial changes for GHC 8.8 support](https://github.com/dhall-lang/dhall-haskell/pull/1324)
+* [Fix Haddock formatting for `dhallFromJSON`](https://github.com/dhall-lang/dhall-haskell/pull/1316)
+
 1.26.0
 
 * [Supports version 10.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v10.0.0)
