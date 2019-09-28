@@ -5,7 +5,6 @@
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -1849,8 +1848,8 @@ step = \case
       where
         xs' = asum (Data.Sequence.mapWithIndex stepIx xs)
         stepIx ix x = fmap (\x' -> Data.Sequence.update ix x' xs) (step x)
-    ListLit (Just t) [] ->
-        ListLit <$> fmap Just (step t) <*> pure []
+    ListLit (Just t) Data.Sequence.Empty ->
+        ListLit <$> fmap Just (step t) <*> pure Data.Sequence.Empty
     ListLit (Just _) xs ->
         pure (ListLit Nothing xs)
     _ -> empty
