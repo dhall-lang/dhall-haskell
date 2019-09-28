@@ -20,7 +20,7 @@ import qualified Lens.Family
     Currently this:
 
     * removes unused @let@ bindings with 'removeUnusedBindings'.
-    * fixes @let a = x == y@ to be @let a = assert : x == y@
+    * fixes @let a = x ≡ y@ to be @let a = assert : x ≡ y@
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeLetInLet'
 -}
 lint :: Expr s Import -> Expr t Import
