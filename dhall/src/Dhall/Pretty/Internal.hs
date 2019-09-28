@@ -963,7 +963,7 @@ prettyCharacterSet characterSet expression =
         | otherwise = prettyNumber a
     prettyPrimitiveExpression (NaturalLit a) =
         prettyNatural a
-    prettyPrimitiveExpression (DoubleLit a) =
+    prettyPrimitiveExpression (DoubleLit (DhallDouble a)) =
         prettyDouble a
     prettyPrimitiveExpression (TextLit a) =
         prettyChunks a

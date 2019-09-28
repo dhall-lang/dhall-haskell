@@ -237,7 +237,7 @@ import           Options.Applicative (Parser)
 
 import           Dhall.JSON.Util (pattern V)
 import qualified Dhall.Core as D
-import           Dhall.Core (Expr(App), Chunks(..))
+import           Dhall.Core (Expr(App), Chunks(..), DhallDouble(..))
 import qualified Dhall.Import
 import qualified Dhall.Map as Map
 import qualified Dhall.Parser
@@ -487,7 +487,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 
     -- number ~> Double
     loop D.Double (A.Number x)
-        = Right (D.DoubleLit $ toRealFloat x)
+        = Right (D.DoubleLit $ DhallDouble $ toRealFloat x)
 
     -- string ~> Text
     loop D.Text (A.String t)
@@ -551,7 +551,7 @@ dhallFromJSON (Conversion {..}) expressionType =
               outer (A.String s) =
                   D.App (D.Field "json" "string") (D.TextLit (D.Chunks [] s))
               outer (A.Number n) =
-                  D.App (D.Field "json" "number") (D.DoubleLit (toRealFloat n))
+                  D.App (D.Field "json" "number") (D.DoubleLit (DhallDouble (toRealFloat n)))
               outer (A.Bool b) =
                   D.App (D.Field "json" "bool") (D.BoolLit b)
               outer A.Null =

@@ -188,7 +188,7 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
-import Dhall.Core (Binding(..), Expr)
+import Dhall.Core (Binding(..), DhallDouble(..), Expr)
 import Dhall.Import (SemanticCacheMode(..))
 import Dhall.TypeCheck (X)
 import Dhall.Map (Map)
@@ -386,7 +386,7 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
         Core.BoolLit a -> return (toJSON a)
         Core.NaturalLit a -> return (toJSON a)
         Core.IntegerLit a -> return (toJSON a)
-        Core.DoubleLit a -> return (toJSON a)
+        Core.DoubleLit (DhallDouble a) -> return (toJSON a)
         Core.TextLit (Core.Chunks [] a) -> do
             return (toJSON a)
         Core.ListLit _ a -> do
@@ -503,7 +503,7 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                         ys <- traverse inner (Foldable.toList xs)
 
                         return (Aeson.Object (HashMap.fromList ys))
-                    outer (Core.App (Core.Field (V 0) "number") (Core.DoubleLit n)) = do
+                    outer (Core.App (Core.Field (V 0) "number") (Core.DoubleLit (DhallDouble n))) = do
                         return (Aeson.toJSON n)
                     outer (Core.App (Core.Field (V 0) "string") (Core.TextLit (Core.Chunks [] text))) = do
                         return (toJSON text)
@@ -1015,7 +1015,7 @@ handleSpecialDoubles specialDoubleMode =
             ForbidWithinJSON      -> forbidWithinJSON
             ApproximateWithinJSON -> approximateWithinJSON
 
-    useYAMLEncoding (Core.DoubleLit n)
+    useYAMLEncoding (Core.DoubleLit (DhallDouble n))
         | isInfinite n && 0 < n =
             return (Just (Core.TextLit (Core.Chunks [] "inf")))
         | isInfinite n && n < 0 =
@@ -1025,17 +1025,17 @@ handleSpecialDoubles specialDoubleMode =
     useYAMLEncoding _ =
         return Nothing
 
-    forbidWithinJSON (Core.DoubleLit n)
+    forbidWithinJSON (Core.DoubleLit (DhallDouble n))
         | isInfinite n || isNaN n =
             Left (SpecialDouble n)
     forbidWithinJSON _ =
         return Nothing
 
-    approximateWithinJSON (Core.DoubleLit n)
+    approximateWithinJSON (Core.DoubleLit (DhallDouble n))
         | isInfinite n && n > 0 =
-            return (Just (Core.DoubleLit ( 1.7976931348623157e308 :: Double)))
+            return (Just (Core.DoubleLit (DhallDouble 1.7976931348623157e308)))
         | isInfinite n && n < 0 =
-            return (Just (Core.DoubleLit (-1.7976931348623157e308 :: Double)))
+            return (Just (Core.DoubleLit (DhallDouble (-1.7976931348623157e308))))
         -- Do nothing for @NaN@, which already encodes to @null@
     approximateWithinJSON _ =
         return Nothing

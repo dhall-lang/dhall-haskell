@@ -126,7 +126,7 @@ import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Data.Word (Word8, Word16, Word32, Word64)
-import Dhall.Core (Expr(..), Chunks(..))
+import Dhall.Core (Expr(..), Chunks(..), DhallDouble(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
@@ -716,8 +716,8 @@ scientific = fmap Data.Scientific.fromFloatDigits double
 double :: Type Double
 double = Type {..}
   where
-    extract (DoubleLit n) = pure n
-    extract  expr            = typeError Double expr
+    extract (DoubleLit (DhallDouble n)) = pure n
+    extract  expr                       = typeError Double expr
 
     expected = Double
 
@@ -1548,7 +1548,7 @@ instance Inject Word64 where
 instance Inject Double where
     injectWith _ = InputType {..}
       where
-        embed = DoubleLit
+        embed = DoubleLit . DhallDouble
 
         declared = Double
 
