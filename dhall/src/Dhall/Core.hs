@@ -5,10 +5,12 @@
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TupleSections      #-}
 {-# LANGUAGE UnicodeSyntax      #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -39,6 +41,9 @@ module Dhall.Core (
     , Eval.normalize
     , normalizeWith
     , normalizeWithM
+    , step
+    , steps
+    , trace
     , Normalizer
     , NormalizerM
     , ReifiedNormalizer (..)
@@ -78,7 +83,7 @@ module Dhall.Core (
     , censorText
     ) where
 
-import Control.Applicative (empty)
+import Control.Applicative (Alternative(..))
 import Control.DeepSeq (NFData)
 import Control.Exception (Exception)
 import Control.Monad.IO.Class (MonadIO(..))
@@ -1827,6 +1832,97 @@ normalizeWithM ctx e0 = loop (denote e0)
     Note _ e' -> loop e'
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
+
+step :: Expr s a -> Maybe (Expr s a)
+step = \case
+    NaturalPlus x y ->
+            (NaturalPlus <$> step x <*> pure y)
+        <|> (NaturalPlus <$> pure x <*> step y)
+        <|> decide x y
+      where
+        decide (NaturalLit 0)  r             = pure r
+        decide  l             (NaturalLit 0) = pure l
+        decide (NaturalLit m) (NaturalLit n) = pure (NaturalLit (m + n))
+        decide  _              _             = empty
+    ListLit Nothing xs ->
+        ListLit Nothing <$> xs'
+      where
+        xs' = asum (Data.Sequence.mapWithIndex stepIx xs)
+        stepIx ix x = fmap (\x' -> Data.Sequence.update ix x' xs) (step x)
+    ListLit (Just t) [] ->
+        ListLit <$> fmap Just (step t) <*> pure []
+    ListLit (Just _) xs ->
+        pure (ListLit Nothing xs)
+    _ -> empty
+
+steps :: Expr s a -> [Expr s a]
+steps e = case step e of
+    Nothing -> []
+    Just e' -> e' : steps e'
+
+trace :: Eq a => Expr s a -> [Expr s a]
+trace = \case
+    NaturalLit _ -> empty
+    NaturalPlus x y ->
+             (NaturalPlus <$> xs <*> pure y)
+         <|> (NaturalPlus <$> pure x' <*> ys)
+         <|> decide x' y'
+      where
+        y' = lastDef y ys
+        ys = trace y
+        x' = lastDef x xs
+        xs = trace x
+
+        decide (NaturalLit 0)  r             = pure r
+        decide  l             (NaturalLit 0) = pure l
+        decide (NaturalLit m) (NaturalLit n) = pure (NaturalLit (m + n))
+        decide  _              _             = empty
+    Note _ e -> trace e
+    _ -> empty
+  where
+    lastDef x [] = x
+    lastDef _ xs = last xs
+
+{-
+traceTree :: Eq a => Expr s a -> SimplificationTree (Expr s a)
+traceTree = \case
+    NaturalLit _ -> EmptyTree
+    NaturalPlus x y ->
+             (NaturalPlus <$> xs <*> pure y)
+         <|> (NaturalPlus <$> pure x' <*> ys)
+         <|> decide x' y'
+      where
+        y' = lastDef y ys
+        ys = traceTree y
+        x' = lastDef x xs
+        xs = traceTree x
+
+        decide (NaturalLit 0)  r             = pure r
+        decide  l             (NaturalLit 0) = pure l
+        decide (NaturalLit m) (NaturalLit n) = pure (NaturalLit (m + n))
+        decide  _              _             = empty
+    Note _ e -> traceTree e
+    _ -> empty
+  where
+    lastDef x [] = x
+    lastDef _ xs = last xs
+-}
+
+data SimplificationTree a
+    = InContext (a -> a) (SimplificationTree a)
+    | Exprs [a]
+    | Trees [SimplificationTree a]
+    | EmptyTree
+
+flatten :: SimplificationTree a -> [a]
+flatten = map (uncurry ($)) . stepsInContext
+
+stepsInContext :: SimplificationTree a -> [(a -> a, a)]
+stepsInContext = \case
+    Exprs es -> map (id,) es
+    Trees ts -> concatMap stepsInContext ts
+    InContext f t -> map (first (f .)) (stepsInContext t)
+    EmptyTree -> []
 
 textShow :: Text -> Text
 textShow text = "\"" <> Data.Text.concatMap f text <> "\""
