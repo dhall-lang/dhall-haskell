@@ -40,6 +40,7 @@ tests =
         , issue253
         , issue1131a
         , issue1131b
+        , issue1341
         , parsing0
         , typeChecking0
         , typeChecking1
@@ -170,6 +171,13 @@ issue1131a = Test.Tasty.HUnit.testCase "Issue #1131 a"
 issue1131b :: TestTree
 issue1131b = Test.Tasty.HUnit.testCase "Issue #1131 b"
     (Util.assertDoesntTypeCheck "toMap {=} : List {mapKey : Text, mapValue : 0}")
+
+issue1341 :: TestTree
+issue1341 = Test.Tasty.HUnit.testCase "Issue #1341" (do
+    let nan    = Dhall.Core.DoubleLit (Dhall.Core.DhallDouble (0/0)) :: Dhall.Core.Expr () ()
+    let actual = Dhall.Core.V "x" 0 `Dhall.Core.freeIn` nan
+    let msg    = "NaN shouldn't contain any free variables"
+    Test.Tasty.HUnit.assertEqual msg False actual)
 
 parsing0 :: TestTree
 parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (do

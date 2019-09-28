@@ -16,6 +16,7 @@ import Dhall.Core
     , Chunks(..)
     , Const(..)
     , Directory(..)
+    , DhallDouble(..)
     , Expr(..)
     , File(..)
     , FilePrefix(..)
@@ -45,6 +46,7 @@ import qualified Codec.Serialise
 import qualified Data.Coerce
 import qualified Data.List
 import qualified Data.Sequence
+import qualified Data.SpecialValues
 import qualified Data.Text as Text
 import qualified Dhall.Binary
 import qualified Dhall.Context
@@ -158,6 +160,13 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Chunks s a) where
 
 instance Arbitrary Const where
     arbitrary = Test.QuickCheck.oneof [ pure Type, pure Kind, pure Sort ]
+
+    shrink = genericShrink
+
+instance Arbitrary DhallDouble where
+    arbitrary = fmap DhallDouble (Test.QuickCheck.oneof [ arbitrary, special ])
+      where
+        special = Test.QuickCheck.elements Data.SpecialValues.specialValues
 
     shrink = genericShrink
 

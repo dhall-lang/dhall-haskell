@@ -8,4 +8,6 @@ data Expr s a
 
 data Import
 
+data DhallDouble
+
 denote :: Expr s a -> Expr t a

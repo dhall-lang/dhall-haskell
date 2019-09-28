@@ -44,12 +44,7 @@ getTests = do
 
 successTest :: Text -> TestTree
 successTest prefix = do
-    let skip = [ -- We correctly infer the expected type @NaN ≡ NaN@ here,
-                 -- but the comparison between the inferred and the expected type
-                 -- fails due to `Expr`'s 'Eq' instance, which inherits the
-                 -- @NaN /= NaN@ inequality from 'Double'.
-                 typeInferenceDirectory </> "success/unit/AssertNaN"
-               ]
+    let skip = []
 
     Test.Util.testCase prefix skip $ do
         let prefixFP = Text.unpack prefix

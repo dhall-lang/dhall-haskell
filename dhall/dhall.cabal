@@ -566,6 +566,7 @@ Test-Suite tasty
         scientific                                     ,
         semigroups                                     ,
         serialise                                      ,
+        special-values                           < 0.2 ,
         spoon                                    < 0.4 ,
         tasty                     >= 0.11.2   && < 1.3 ,
         tasty-expected-failure                   < 0.12,
