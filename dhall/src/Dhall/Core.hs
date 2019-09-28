@@ -1859,9 +1859,8 @@ steps e = case step e of
     Nothing -> []
     Just e' -> e' : steps e'
 
-trace :: Eq a => Expr s a -> [Expr s a]
+trace :: Expr s a -> [Expr s a]
 trace = \case
-    NaturalLit _ -> empty
     NaturalPlus x y ->
              (NaturalPlus <$> xs <*> pure y)
          <|> (NaturalPlus <$> pure x' <*> ys)
@@ -1876,8 +1875,7 @@ trace = \case
         decide  l             (NaturalLit 0) = pure l
         decide (NaturalLit m) (NaturalLit n) = pure (NaturalLit (m + n))
         decide  _              _             = empty
-    Note _ e -> trace e
-    _ -> empty
+    _ -> empty -- TODO
   where
     lastDef x [] = x
     lastDef _ xs = last xs
