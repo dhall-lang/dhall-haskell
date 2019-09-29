@@ -1907,6 +1907,17 @@ traceTree = \case
         decide  l             (NaturalLit 0) = One l
         decide (NaturalLit m) (NaturalLit n) = One (NaturalLit (m + n))
         decide  _              _             = Nil
+    ListLit Nothing xs -> -- FIXME: The context needs to be updated with the normalized elements
+        Data.Sequence.foldMapWithIndex (\ix x -> InContext (ctx ix) (traceTree x)) xs
+      where
+        ctx ix x' = ListLit Nothing (Data.Sequence.update ix x' xs)
+    ListLit (Just t) Data.Sequence.Empty ->
+        InContext ctx (traceTree t)
+      where ctx t' = ListLit (Just t') Data.Sequence.Empty
+    ListLit (Just _) xs ->
+        Bin (One noAnnot) (traceTree noAnnot)
+      where
+        noAnnot = ListLit Nothing xs
     Note _ e -> traceTree e
     _ -> Nil
   where
@@ -1920,7 +1931,7 @@ lastST = \case
     Bin x y -> lastST y <|> lastST x
 
 data SimplificationTree ctx a
-    = InContext ctx (SimplificationTree ctx a)
+    = InContext ctx (SimplificationTree ctx a) -- TODO: Also include initial value
     | Bin (SimplificationTree ctx a) (SimplificationTree ctx a)
     | Nil
     | One a
@@ -1948,6 +1959,8 @@ pruneST = \case
 data Focus = Focus
     deriving Show
 
+-- Alternatively, we could use Focus for the @s@ parameter, i.e.
+-- mark the subexpression in focus with (Note Focus).
 type FocusTree s a = SimplificationTree (Expr s Focus) (Expr s a)
 
 toFocusTree :: SimplificationTree (Expr s Focus -> Expr s Focus) (Expr s a) -> FocusTree s a
