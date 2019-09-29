@@ -53,6 +53,7 @@ import qualified Data.Set
 import qualified Data.Text                               as Text
 import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
+import qualified Data.Traversable
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
@@ -61,6 +62,7 @@ import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Util
+import qualified Lens.Family
 
 type X = Void
 
@@ -305,7 +307,7 @@ infer typer = loop
 
             if Eval.conv values _T₀' _T₁'
                 then do
-                    return _T₀'
+                    return _T₁'
 
                 else do
                     let _T₀'' = quote names _T₀'
@@ -937,86 +939,100 @@ infer typer = loop
                 then return ()
                 else die (UnusedHandler diffT)
 
-            (my₀, _T₁') <- do
-                case mT₁ of
-                    Just _T₁ -> do
-                        return (Nothing, eval values _T₁)
+            if Data.Set.null diffU
+                then return ()
+                else die (MissingHandler diffU)
 
-                    Nothing -> do
-                        case Dhall.Map.uncons yTs' of
-                            Nothing -> do
-                                die MissingMergeType
+            let match _y _T₀' Nothing =
+                    return _T₀'
 
-                            Just (y₀, _T', _) -> do
-                                _T₁' <- do
-                                    case Dhall.Map.lookup y₀ yUs' of
-                                        Nothing -> do
-                                            die (UnusedHandler diffU)
-
-                                        Just Nothing -> do
-                                            return _T'
-
-                                        Just (Just _) -> do
-                                            case Eval.toVHPi _T' of
-                                                Just (x, _A₀', _T₀') -> do
-                                                    return (_T₀' (fresh ctx x))
-
-                                                Nothing -> do
-                                                    let _T'' = quote names _T'
-
-                                                    die (HandlerNotAFunction y₀ _T'')
-
-                                return (Just y₀, _T₁')
-
-            let _T₁'' = quote names _T₁'
-
-            _ <- loop ctx _T₁''
-
-            let process y mU = do
-                    case Dhall.Map.lookup y yTs' of
-                        Nothing -> do
-                            die (MissingHandler diffU)
-
-                        Just _T' -> do
-                            _T₃' <- do
-                                case mU of
-                                    Nothing -> do
-                                        return _T'
-
-                                    Just _A₁' -> do
-                                        case Eval.toVHPi _T' of
-                                            Just (x, _A₀', _T₂') -> do
-                                                if Eval.conv values _A₀' _A₁'
-                                                    then do
-                                                        return ()
-
-                                                    else do
-                                                        let _A₀'' = quote names _A₀'
-                                                        let _A₁'' = quote names _A₁'
-
-                                                        die (HandlerInputTypeMismatch y _A₁'' _A₀'')
-
-                                                return (_T₂' (fresh ctx x))
-
-                                            Nothing -> do
-                                                let _T'' = quote names _T'
-
-                                                die (HandlerNotAFunction y _T'')
-
-                            if Eval.conv values _T₁' _T₃'
+                match y handler' (Just _A₁') =
+                    case Eval.toVHPi handler' of
+                        Just (x, _A₀', _T₀') -> do
+                            if Eval.conv values _A₀' _A₁'
                                 then do
-                                    return ()
+                                    let _T₁' = _T₀' (fresh ctx x)
+
+                                    let _T₁'' = quote names _T₁'
+
+                                    -- x appearing in _T₁'' would indicate a disallowed
+                                    -- handler type (see
+                                    -- https://github.com/dhall-lang/dhall-lang/issues/749).
+                                    --
+                                    -- If x appears in _T₁'', quote will have given it index
+                                    -- -1. Any well-typed variable has a non-negative index,
+                                    -- so we can simply look for negative indices to detect x.
+                                    let containsBadVar (Var (V _ n)) =
+                                            n < 0
+
+                                        containsBadVar e =
+                                            Lens.Family.anyOf
+                                                Dhall.Core.subExpressions
+                                                containsBadVar
+                                                e
+
+                                    if containsBadVar _T₁''
+                                        then do
+                                            let handler'' = quote names handler'
+
+                                            let outputType = Dhall.Core.shift 1 (V x (-1)) _T₁''
+
+                                            die (DisallowedHandlerType y handler'' outputType x)
+
+                                        else return _T₁'
 
                                 else do
-                                    let _T₃'' = quote names _T₃'
+                                    let _A₀'' = quote names _A₀'
+                                    let _A₁'' = quote names _A₁'
 
-                                    case my₀ of
-                                        Nothing -> die (InvalidHandlerOutputType y _T₁'' _T₃'')
-                                        Just y₀ -> die (HandlerOutputTypeMismatch y₀ _T₁'' y _T₃'')
+                                    die (HandlerInputTypeMismatch y _A₁'' _A₀'')
 
-            Dhall.Map.unorderedTraverseWithKey_ process yUs'
+                        Nothing -> do
+                            let handler'' = quote names handler'
 
-            return _T₁'
+                            die (HandlerNotAFunction y handler'')
+
+            matched <-
+                sequence
+                    (Data.Map.intersectionWithKey match (Dhall.Map.toMap yTs') (Dhall.Map.toMap yUs'))
+
+            let checkMatched :: Data.Map.Map Text (Val a) -> Either (TypeError s a) (Maybe (Val a))
+                checkMatched = fmap (fmap snd) . Data.Foldable.foldlM go Nothing . Data.Map.toList
+                  where
+                    go Nothing (y₁, _T₁') =
+                        return (Just (y₁, _T₁'))
+
+                    go yT₀'@(Just (y₀, _T₀')) (y₁, _T₁') =
+                        if Eval.conv values _T₀' _T₁'
+                            then return yT₀'
+
+                            else do
+                                let _T₀'' = quote names _T₀'
+                                let _T₁'' = quote names _T₁'
+                                die (HandlerOutputTypeMismatch y₀ _T₀'' y₁ _T₁'')
+
+            mT₀' <- checkMatched matched
+
+            mT₁' <- Data.Traversable.for mT₁ $ \_T₁ -> do
+                _ <- loop ctx _T₁
+
+                return (eval values _T₁)
+
+            case (mT₀', mT₁') of
+                (Nothing, Nothing) ->
+                    die MissingMergeType
+                (Nothing, Just _T₁') ->
+                    return _T₁'
+                (Just _T₀', Nothing) ->
+                    return _T₀'
+                (Just _T₀', Just _T₁') -> do
+                    if Eval.conv values _T₀' _T₁'
+                        then return _T₀'
+
+                        else do
+                            let _T₀'' = quote names _T₀'
+                            let _T₁'' = quote names _T₁'
+                            die (AnnotMismatch (Merge t u Nothing) _T₁'' _T₀'')
 
         ToMap e mT₁ -> do
             _E' <- loop ctx e
@@ -1080,7 +1096,7 @@ infer typer = loop
                     die (InvalidToMapType _T₁'')
                 (Just (Right _T'), Just _T₁')
                    | Eval.conv values (mapType _T') _T₁' -> do
-                       pure _T₁'
+                       pure (mapType _T')
                    | otherwise -> do
                        let _T₁'' = quote names _T₁'
 
@@ -1292,6 +1308,7 @@ data TypeMessage s a
     | UnusedHandler (Set Text)
     | MissingHandler (Set Text)
     | HandlerInputTypeMismatch Text (Expr s a) (Expr s a)
+    | DisallowedHandlerType Text (Expr s a) (Expr s a) Text
     | HandlerOutputTypeMismatch Text (Expr s a) Text (Expr s a)
     | InvalidHandlerOutputType Text (Expr s a) (Expr s a)
     | MissingMergeType
@@ -3140,6 +3157,52 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
         txt1 = insert expr1
         txt2 = insert expr2
 
+prettyTypeMessage (DisallowedHandlerType label handlerType handlerOutputType variable) =
+    ErrorMessages {..}
+  where
+    short = "Disallowed handler type"
+
+    long =
+        "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
+        \handler per alternative, like this:                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────┐         \n\
+        \    │ let union    = < Left : Natural | Right : Bool >.Left 2         │         \n\
+        \    │ let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │         \n\
+        \    │ in  merge handlers union : Bool                                 │         \n\
+        \    └─────────────────────────────────────────────────────────────────┘         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the output type of a handler may not depend on the input value.         \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \      Invalid: The output type is ❰Optional A❱, which references the input      \n\
+        \      value ❰A❱.                                                                \n\
+        \                  ⇩                                                             \n\
+        \    ┌──────────────────────────────────────────┐                                \n\
+        \    │ merge { x = None } (< x : Type >.x Bool) │                                \n\
+        \    └──────────────────────────────────────────┘                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \Your handler for the following alternative:                                     \n\
+        \                                                                                \n\
+        \" <> insert label <> "\n\
+        \                                                                                \n\
+        \... has type:                                                                   \n\
+        \                                                                                \n\
+        \" <> insert handlerType <> "\n\
+        \                                                                                \n\
+        \... where the output type:                                                      \n\
+        \                                                                                \n\
+        \" <> insert handlerOutputType <> "\n\
+        \                                                                                \n\
+        \... references the handler's input value:                                       \n\
+        \                                                                                \n\
+        \" <> insert variable <> "\n"
+
 prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
     ErrorMessages {..}
   where
@@ -4295,6 +4358,8 @@ messageExpressions f m = case m of
         MissingHandler <$> pure a
     HandlerInputTypeMismatch a b c ->
         HandlerInputTypeMismatch <$> pure a <*> f b <*> f c
+    DisallowedHandlerType a b c d ->
+        DisallowedHandlerType <$> pure a <*> f b <*> f c <*> pure d
     HandlerOutputTypeMismatch a b c d ->
         HandlerOutputTypeMismatch <$> pure a <*> f b <*> pure c <*> f d
     InvalidHandlerOutputType a b c ->
