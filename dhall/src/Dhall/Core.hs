@@ -47,8 +47,9 @@ module Dhall.Core (
     , SimplificationTree(..)
     , flatten
     , pruneST
-    , FocusTree(..)
+    , FocusTree
     , toFocusTree
+    , focusTrace
 
     , Normalizer
     , NormalizerM
@@ -1888,7 +1889,7 @@ trace = \case
     lastDef x [] = x
     lastDef _ xs = last xs
 
-traceTree :: Expr s a -> SimplificationTree (Expr s a)
+traceTree :: Expr s a -> SimplificationTree (Expr s a -> Expr s a) (Expr s a)
 traceTree = \case
     NaturalPlus x y ->
             InContext ctxX xs
@@ -1911,33 +1912,34 @@ traceTree = \case
   where
     lastDef x t = Data.Maybe.fromMaybe x (lastST t)
 
-lastST :: SimplificationTree a -> Maybe a
+lastST :: SimplificationTree (a -> a) a -> Maybe a
 lastST = \case
     InContext f t -> f <$> lastST t
     One a -> Just a
     Nil -> Nothing
     Bin x y -> lastST y <|> lastST x
 
-data SimplificationTree a
-    = InContext (a -> a) (SimplificationTree a)
-    | Bin (SimplificationTree a) (SimplificationTree a)
+data SimplificationTree ctx a
+    = InContext ctx (SimplificationTree ctx a)
+    | Bin (SimplificationTree ctx a) (SimplificationTree ctx a)
     | Nil
     | One a
+    deriving Show
 
-instance Semigroup (SimplificationTree a) where
+instance Semigroup (SimplificationTree ctx a) where
     (<>) = Bin
 
-instance Monoid (SimplificationTree a) where
+instance Monoid (SimplificationTree ctx a) where
     mempty = Nil
     mappend = (<>)
 
-pruneST :: SimplificationTree a -> SimplificationTree a
+pruneST :: SimplificationTree ctx a -> SimplificationTree ctx a
 pruneST = \case
     Nil -> Nil
     One a -> One a
-    InContext f t -> case pruneST t of
+    InContext ctx t -> case pruneST t of
         Nil -> Nil
-        t' -> InContext f t'
+        t' -> InContext ctx t'
     Bin x y -> case (pruneST x, pruneST y) of
         (Nil, t) -> t
         (t, Nil) -> t
@@ -1946,19 +1948,17 @@ pruneST = \case
 data Focus = Focus
     deriving Show
 
-data FocusTree s
-    = FInContext (Expr s ()) (FocusTree s)
-    | FBin (FocusTree s) (FocusTree s)
-    | FNil
-    | FOne (Expr s ())
-    deriving Show
+type FocusTree s a = SimplificationTree (Expr s Focus) (Expr s a)
 
-toFocusTree :: SimplificationTree (Expr s ()) -> FocusTree s
+toFocusTree :: SimplificationTree (Expr s Focus -> Expr s Focus) (Expr s a) -> FocusTree s a
 toFocusTree = \case
-    InContext f t -> FInContext (f (Embed ())) (toFocusTree t)
-    Bin x y -> FBin (toFocusTree x) (toFocusTree y)
-    Nil -> FNil
-    One a -> FOne a
+    InContext f t -> InContext (f (Embed Focus)) (toFocusTree t)
+    Bin x y -> Bin (toFocusTree x) (toFocusTree y)
+    Nil -> Nil
+    One a -> One a
+
+focusTrace :: Expr s0 a -> FocusTree s1 Focus
+focusTrace = toFocusTree  . unsafeCoerce . pruneST . traceTree . denote
 
 {-
 flattenFT :: FocusTree s -> [(Expr s (), Expr s ()]
@@ -1966,10 +1966,10 @@ flattenFT = \case
     FInContext c t -> 
 -}
 
-flatten :: SimplificationTree a -> [a]
+flatten :: SimplificationTree (a -> a) a -> [a]
 flatten = map (uncurry ($)) . stepsInContext
 
-stepsInContext :: SimplificationTree a -> [(a -> a, a)]
+stepsInContext :: SimplificationTree (a -> a) a -> [(a -> a, a)]
 stepsInContext = \case
     InContext f t -> map (first (f .)) (stepsInContext t)
     One a -> [(id, a)]
