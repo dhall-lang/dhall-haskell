@@ -43,6 +43,13 @@ module Dhall.Core (
     , step
     , steps
     , trace
+    , traceTree
+    , SimplificationTree(..)
+    , flatten
+    , pruneST
+    , FocusTree(..)
+    , toFocusTree
+
     , Normalizer
     , NormalizerM
     , ReifiedNormalizer (..)
@@ -117,6 +124,7 @@ import qualified Data.Char
 import {-# SOURCE #-} qualified Dhall.Eval  as Eval
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
+import qualified Data.Maybe
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
@@ -1880,46 +1888,93 @@ trace = \case
     lastDef x [] = x
     lastDef _ xs = last xs
 
-{-
-traceTree :: Eq a => Expr s a -> SimplificationTree (Expr s a)
+traceTree :: Expr s a -> SimplificationTree (Expr s a)
 traceTree = \case
-    NaturalLit _ -> EmptyTree
     NaturalPlus x y ->
-             (NaturalPlus <$> xs <*> pure y)
-         <|> (NaturalPlus <$> pure x' <*> ys)
-         <|> decide x' y'
+            InContext ctxX xs
+         <> InContext ctxY ys
+         <> decide x' y'
       where
+        ctxX = \x_ -> NaturalPlus x_ y
+        ctxY = NaturalPlus x'
         y' = lastDef y ys
         ys = traceTree y
         x' = lastDef x xs
         xs = traceTree x
 
-        decide (NaturalLit 0)  r             = pure r
-        decide  l             (NaturalLit 0) = pure l
-        decide (NaturalLit m) (NaturalLit n) = pure (NaturalLit (m + n))
-        decide  _              _             = empty
+        decide (NaturalLit 0)  r             = One r
+        decide  l             (NaturalLit 0) = One l
+        decide (NaturalLit m) (NaturalLit n) = One (NaturalLit (m + n))
+        decide  _              _             = Nil
     Note _ e -> traceTree e
-    _ -> empty
+    _ -> Nil
   where
-    lastDef x [] = x
-    lastDef _ xs = last xs
--}
+    lastDef x t = Data.Maybe.fromMaybe x (lastST t)
+
+lastST :: SimplificationTree a -> Maybe a
+lastST = \case
+    InContext f t -> f <$> lastST t
+    One a -> Just a
+    Nil -> Nothing
+    Bin x y -> lastST y <|> lastST x
 
 data SimplificationTree a
     = InContext (a -> a) (SimplificationTree a)
-    | Exprs [a]
-    | Trees [SimplificationTree a]
-    | EmptyTree
+    | Bin (SimplificationTree a) (SimplificationTree a)
+    | Nil
+    | One a
+
+instance Semigroup (SimplificationTree a) where
+    (<>) = Bin
+
+instance Monoid (SimplificationTree a) where
+    mempty = Nil
+    mappend = (<>)
+
+pruneST :: SimplificationTree a -> SimplificationTree a
+pruneST = \case
+    Nil -> Nil
+    One a -> One a
+    InContext f t -> case pruneST t of
+        Nil -> Nil
+        t' -> InContext f t'
+    Bin x y -> case (pruneST x, pruneST y) of
+        (Nil, t) -> t
+        (t, Nil) -> t
+        (x', y') -> Bin x' y'
+
+data Focus = Focus
+    deriving Show
+
+data FocusTree s
+    = FInContext (Expr s ()) (FocusTree s)
+    | FBin (FocusTree s) (FocusTree s)
+    | FNil
+    | FOne (Expr s ())
+    deriving Show
+
+toFocusTree :: SimplificationTree (Expr s ()) -> FocusTree s
+toFocusTree = \case
+    InContext f t -> FInContext (f (Embed ())) (toFocusTree t)
+    Bin x y -> FBin (toFocusTree x) (toFocusTree y)
+    Nil -> FNil
+    One a -> FOne a
+
+{-
+flattenFT :: FocusTree s -> [(Expr s (), Expr s ()]
+flattenFT = \case
+    FInContext c t -> 
+-}
 
 flatten :: SimplificationTree a -> [a]
 flatten = map (uncurry ($)) . stepsInContext
 
 stepsInContext :: SimplificationTree a -> [(a -> a, a)]
 stepsInContext = \case
-    Exprs es -> map (id,) es
-    Trees ts -> concatMap stepsInContext ts
     InContext f t -> map (first (f .)) (stepsInContext t)
-    EmptyTree -> []
+    One a -> [(id, a)]
+    Bin x y -> stepsInContext x <> stepsInContext y
+    Nil -> []
 
 textShow :: Text -> Text
 textShow text = "\"" <> Data.Text.concatMap f text <> "\""
