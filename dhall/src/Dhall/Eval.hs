@@ -639,7 +639,7 @@ eval !env t0 =
             VPrim $ \ ~a ->
             VPrim $ \case
                 VListLit t as | null as ->
-                    VListLit t (Sequence.reverse as)
+                    VListLit t as
                 VListLit _ as ->
                     VListLit Nothing (Sequence.reverse as)
                 t ->
