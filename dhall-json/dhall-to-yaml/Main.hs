@@ -5,7 +5,7 @@ module Main where
 import Control.Applicative (optional, (<|>))
 import Control.Exception (SomeException)
 import Data.Monoid ((<>))
-import Dhall.JSON (parseNullPreservation, parseEmptyOmission, parseConversion)
+import Dhall.JSON (parsePreservationAndOmission, parseConversion)
 import Dhall.Yaml (Options(..), dhallToYaml, parseDocuments, parseQuoted)
 import Options.Applicative (Parser, ParserInfo)
 
@@ -24,10 +24,7 @@ parseOptions =
             Just
         <$> (   Options
             <$> parseExplain
-            <*> (    Dhall.JSON.parseNullPreservation
-                <|>  Dhall.JSON.parseEmptyOmission
-                <|>  pure id
-                )
+            <*> Dhall.JSON.parsePreservationAndOmission
             <*> parseDocuments
             <*> parseQuoted
             <*> Dhall.JSON.parseConversion

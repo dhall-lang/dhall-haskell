@@ -197,8 +197,7 @@ module Dhall.JSON (
     , omitNull
     , omitEmpty
     , parseOmission
-    , parseEmptyOmission
-    , parseNullPreservation
+    , parsePreservationAndOmission
     , Conversion(..)
     , convertToHomogeneousMaps
     , parseConversion
@@ -625,17 +624,12 @@ parseOmission =
             (   Options.Applicative.long "omitNull"
             <>  Options.Applicative.help "Omit record fields that are null"
             )
-    <|> parseEmptyOmission
-    <|> pure id
-
--- | Parser for command-line options related to omitting empty fields
-parseEmptyOmission :: Parser (Value -> Value)
-parseEmptyOmission =
-        Options.Applicative.flag'
+    <|> Options.Applicative.flag'
             omitEmpty
             (   Options.Applicative.long "omitEmpty"
             <>  Options.Applicative.help "Omit record fields that are null or empty records"
             )
+    <|> pure id
 
 -- | Parser for command-line options related to preserving null fields.
 parseNullPreservation :: Parser (Value -> Value)
@@ -646,6 +640,10 @@ parseNullPreservation =
             (   Options.Applicative.long "preserveNull"
             <>  Options.Applicative.help "Preserve record fields that are null"
             )
+
+-- | Combines parsers for command-line options related to preserving & omitting null fields.
+parsePreservationAndOmission :: Parser (Value -> Value)
+parsePreservationAndOmission = parseNullPreservation <|> parseOmission <|> pure id
 
 {-| Specify whether or not to convert association lists of type
     @List { mapKey: Text, mapValue : v }@ to records
