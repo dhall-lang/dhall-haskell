@@ -65,7 +65,7 @@
     Dhall @Optional@ values translate to @null@ if absent and the unwrapped
     value otherwise:
 
-> $ dhall-to-json --preserveNull <<< 'None Natural'
+> $ dhall-to-json <<< 'None Natural'
 > null
 > $ dhall-to-json <<< 'Some 1'
 > 1
@@ -175,7 +175,10 @@
 >       }
 >     ]
 
-> $ dhall-to-json <<< './example.dhall'
+    By default, the fields that are evaluated to @Null@ will be removed,
+    but here we're preserving them with the @--preserveNull@ flag.
+
+> $ dhall-to-json --preserveNull <<< './example.dhall'
 > {
 >   "bar": [
 >     1,
