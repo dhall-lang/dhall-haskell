@@ -759,18 +759,16 @@ infer typer = loop
             return (VConst c)
 
         RecordLit xts -> do
-            let process x t = do
+            let process t = do
                     _T' <- loop ctx t
 
                     let _T'' = quote names _T'
 
-                    tT' <- loop ctx _T''
+                    _ <- loop ctx _T''
 
-                    case tT' of
-                        VConst _ -> return _T'
-                        _        -> die (InvalidFieldType x _T'')
+                    return _T'
 
-            xTs <- Dhall.Map.unorderedTraverseWithKey process (Dhall.Map.sort xts)
+            xTs <- traverse process (Dhall.Map.sort xts)
 
             return (VRecord xTs)
 
