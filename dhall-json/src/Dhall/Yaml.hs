@@ -24,7 +24,7 @@ import qualified Options.Applicative
 #if defined(ETA_VERSION)
 import Dhall.Yaml.Eta ( jsonToYaml )
 #else
-import qualified Data.YAML.Aeson as YAML
+import qualified Data.YAML.Aeson
 import qualified Data.YAML as Y
 import qualified Data.YAML.Event as YE
 import qualified Data.YAML.Token as YT
@@ -96,9 +96,9 @@ jsonToYaml json documents quoted =
   case (documents, json) of
     (True, Data.Aeson.Array elems)
       -> Data.ByteString.intercalate "\n---\n"
-         $ fmap (Data.ByteString.Lazy.toStrict. (YAML.encodeValue' schemaEncoder YT.UTF8). (:[]))
+         $ fmap (Data.ByteString.Lazy.toStrict. (Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8). (:[]))
          $ Data.Vector.toList elems
-    _ -> Data.ByteString.Lazy.toStrict (YAML.encodeValue' schemaEncoder YT.UTF8 [json])
+    _ -> Data.ByteString.Lazy.toStrict (Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8 [json])
 
   where
     defaultSchemaEncoder = YS.setScalarStyle style Y.coreSchemaEncoder
