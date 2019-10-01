@@ -797,19 +797,6 @@ import_ = (do
       _as
       (_Text >> pure RawText) <|> (_Location >> pure Location)
 
--- | Similar to `Dhall.Core.renderChunks` except that this doesn't bother to
--- render interpolated expressions to avoid a `Buildable a` constraint.  The
--- interpolated contents are not necessary for computing how much to dedent a
--- multi-line string
---
--- This also doesn't include the surrounding quotes since they would interfere
--- with the whitespace detection
-renderChunks :: Chunks s a -> Text
-renderChunks (Chunks a b) = foldMap renderChunk a <> b
-  where
-    renderChunk :: (Text, Expr s a) -> Text
-    renderChunk (c, _) = c <> "${x}"
-
 splitOn :: Text -> Text -> NonEmpty Text
 splitOn needle haystack =
     case Data.Text.splitOn needle haystack of
