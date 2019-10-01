@@ -16,6 +16,7 @@ import Dhall.Core
     , Chunks(..)
     , Const(..)
     , Directory(..)
+    , DhallDouble(..)
     , Expr(..)
     , File(..)
     , FilePrefix(..)
@@ -31,7 +32,7 @@ import Dhall.Core
 import Data.Functor.Identity (Identity(..))
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
-import Dhall.TypeCheck (Typer)
+import Dhall.TypeCheck (Typer, TypeError)
 import Generic.Random (Weights, W, (%), (:+)(..))
 import Test.QuickCheck
     (Arbitrary(..), Gen, Positive(..), Property, NonNegative(..), genericShrink, (===), (==>))
@@ -45,6 +46,7 @@ import qualified Codec.Serialise
 import qualified Data.Coerce
 import qualified Data.List
 import qualified Data.Sequence
+import qualified Data.SpecialValues
 import qualified Data.Text as Text
 import qualified Dhall.Binary
 import qualified Dhall.Context
@@ -158,6 +160,13 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Chunks s a) where
 
 instance Arbitrary Const where
     arbitrary = Test.QuickCheck.oneof [ pure Type, pure Kind, pure Sort ]
+
+    shrink = genericShrink
+
+instance Arbitrary DhallDouble where
+    arbitrary = fmap DhallDouble (Test.QuickCheck.oneof [ arbitrary, special ])
+      where
+        special = Test.QuickCheck.elements Data.SpecialValues.specialValues
 
     shrink = genericShrink
 
@@ -396,6 +405,33 @@ isSameAsSelf expression =
             Right importlessExpression -> isRight (Dhall.TypeCheck.typeOf importlessExpression)
             Left _ -> False
 
+inferredTypesAreNormalized :: Expr () Import -> Property
+inferredTypesAreNormalized expression =
+    Test.Tasty.QuickCheck.counterexample report (all Dhall.Core.isNormalized result)
+  where
+    report =  "Got: " ++ show result
+           ++ "\nExpected: " ++ show (fmap Dhall.Core.normalize result
+                                      :: Either (TypeError () Import) (Expr () Import))
+
+    result = Dhall.TypeCheck.typeWithA filterOutEmbeds Dhall.Context.empty expression
+
+    filterOutEmbeds :: Typer a
+    filterOutEmbeds _ = Const Sort -- This could be any ill-typed expression.
+
+normalizingAnExpressionDoesntChangeItsInferredType :: Expr () Import -> Property
+normalizingAnExpressionDoesntChangeItsInferredType expression =
+    case (eT0, eT1) of
+        (Right t0, Right t1) -> t0 === t1
+        _ -> Test.QuickCheck.discard
+  where
+    eT0 = typeCheck expression
+    eT1 = typeCheck (Dhall.Core.normalize expression)
+
+    typeCheck = Dhall.TypeCheck.typeWithA filterOutEmbeds Dhall.Context.empty
+
+    filterOutEmbeds :: Typer a
+    filterOutEmbeds _ = Const Sort -- This could be any ill-typed expression.
+
 tests :: TestTree
 tests =
     testProperties'
@@ -418,6 +454,14 @@ tests =
           )
         , ( "An expression should have no difference with itself"
           , Test.QuickCheck.property isSameAsSelf
+          , QuickCheckTests 10000
+          )
+        , ( "Inferred types should be normalized"
+          , Test.QuickCheck.property inferredTypesAreNormalized
+          , QuickCheckTests 10000
+          )
+        , ( "Normalizing an expression doesn't change its inferred type"
+          , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
           , QuickCheckTests 10000
           )
         ]

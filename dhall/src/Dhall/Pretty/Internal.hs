@@ -616,22 +616,6 @@ prettyCharacterSet characterSet expression =
             <>  prettyImportExpression b
             <>  space <> colon <> space
             <>  prettyApplicationExpression c
-    prettyAnnotatedExpression (Merge a b Nothing) =
-        Pretty.group (Pretty.flatAlt long short)
-      where
-        long =
-            Pretty.align
-                (   keyword "merge"
-                <>  Pretty.hardline
-                <>  Pretty.indent 2 (prettyImportExpression a)
-                <>  Pretty.hardline
-                <>  Pretty.indent 2 (prettyImportExpression b)
-                )
-
-        short = keyword "merge" <> space
-            <>  prettyImportExpression a
-            <>  " "
-            <>  prettyImportExpression b
     prettyAnnotatedExpression (ToMap a (Just b)) =
         Pretty.group (Pretty.flatAlt long short)
       where
@@ -649,18 +633,6 @@ prettyCharacterSet characterSet expression =
             <>  prettyImportExpression a
             <>  space <> colon <> space
             <>  prettyApplicationExpression b
-    prettyAnnotatedExpression (ToMap a Nothing) =
-        Pretty.group (Pretty.flatAlt long short)
-      where
-        long =
-            Pretty.align
-                (   keyword "toMap"
-                <>  Pretty.hardline
-                <>  Pretty.indent 2 (prettyImportExpression a)
-                )
-
-        short = keyword "toMap" <> space
-            <>  prettyImportExpression a
     prettyAnnotatedExpression a0@(Annot _ _) =
         enclose'
             ""
@@ -855,8 +827,10 @@ prettyCharacterSet characterSet expression =
 
     prettyApplicationExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyApplicationExpression a0 = case a0 of
-        App _ _  -> result
-        Some _   -> result
+        App   {} -> result
+        Some  {} -> result
+        ToMap {} -> result
+        Merge {} -> result
         Note _ b -> prettyApplicationExpression b
         _        -> prettyImportExpression a0
       where
@@ -864,6 +838,8 @@ prettyCharacterSet characterSet expression =
 
         docs (App  a b) = ( prettyImportExpression b, Pretty.indent 2 (prettyImportExpression b) ) : docs a
         docs (Some   a) = map duplicate [ prettyImportExpression a , builtin "Some" ]
+        docs (ToMap a Nothing) = map duplicate [ prettyImportExpression a, keyword "toMap" ]
+        docs (Merge a b Nothing) = map duplicate [ prettyImportExpression b, prettyImportExpression a, keyword "merge" ]
         docs (Note _ b) = docs b
         docs         b  = map duplicate [ prettyImportExpression b ]
 
@@ -963,7 +939,7 @@ prettyCharacterSet characterSet expression =
         | otherwise = prettyNumber a
     prettyPrimitiveExpression (NaturalLit a) =
         prettyNatural a
-    prettyPrimitiveExpression (DoubleLit a) =
+    prettyPrimitiveExpression (DoubleLit (DhallDouble a)) =
         prettyDouble a
     prettyPrimitiveExpression (TextLit a) =
         prettyChunks a

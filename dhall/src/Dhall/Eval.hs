@@ -1,12 +1,16 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE CPP                 #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving  #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -O #-}
 
@@ -58,7 +62,7 @@ import Dhall.Core
   , Expr(..)
   , Chunks(..)
   , Const(..)
-  , Import
+  , DhallDouble(..)
   , Var(..)
   )
 
@@ -67,11 +71,9 @@ import Dhall.Set (Set)
 import GHC.Natural (Natural)
 import Prelude hiding (succ)
 
-import qualified Codec.Serialise as Serialise
 import qualified Data.Sequence   as Sequence
 import qualified Data.Set
 import qualified Data.Text       as Text
-import qualified Dhall.Binary    as Binary
 import qualified Dhall.Core      as Core
 import qualified Dhall.Map       as Map
 import qualified Dhall.Set
@@ -80,6 +82,8 @@ data Environment a
     = Empty
     | Skip   !(Environment a) {-# UNPACK #-} !Text
     | Extend !(Environment a) {-# UNPACK #-} !Text (Val a)
+
+deriving instance (Show a, Show (Val a -> Val a)) => Show (Environment a)
 
 errorMsg :: String
 errorMsg = unlines
@@ -98,7 +102,12 @@ errorMsg = unlines
 
 
 data Closure a = Closure !Text !(Environment a) !(Expr Void a)
+
+deriving instance (Show a, Show (Val a -> Val a)) => Show (Closure a)
+
 data VChunks a = VChunks ![(Text, Val a)] !Text
+
+deriving instance (Show a, Show (Val a -> Val a)) => Show (VChunks a)
 
 instance Semigroup (VChunks a) where
   VChunks xys z <> VChunks [] z' = VChunks xys (z <> z')
@@ -134,6 +143,8 @@ data HLamInfo a
   -- ^ The original function was a @Natural/subtract 0@.  We need to preserve
   --   this information in case the @Natural/subtract@ ends up not being fully
   --   saturated, in which case we need to recover the unsaturated built-in
+
+deriving instance (Show a, Show (Val a -> Val a)) => Show (HLamInfo a)
 
 pattern VPrim :: (Val a -> Val a) -> Val a
 pattern VPrim f = VHLam Prim f
@@ -182,7 +193,7 @@ data Val a
     | VIntegerToDouble !(Val a)
 
     | VDouble
-    | VDoubleLit !Double
+    | VDoubleLit !DhallDouble
     | VDoubleShow !(Val a)
 
     | VText
@@ -220,6 +231,9 @@ data Val a
     | VAssert !(Val a)
     | VEquivalent !(Val a) !(Val a)
     | VEmbed a
+
+-- | For use with "Text.Show.Functions".
+deriving instance (Show a, Show (Val a -> Val a)) => Show (Val a)
 
 (~>) :: Val a -> Val a -> Val a
 (~>) a b = VHPi "_" a (\_ -> b)
@@ -517,9 +531,10 @@ eval !env t0 =
                 n -> VIntegerShow n
         IntegerToDouble ->
             VPrim $ \case
-                VIntegerLit n -> VDoubleLit (read (show n))
+                VIntegerLit n -> VDoubleLit (DhallDouble (read (show n)))
                 -- `(read . show)` is used instead of `fromInteger`
-                -- because `read` uses the correct rounding rule
+                -- because `read` uses the correct rounding rule.
+                -- See https://gitlab.haskell.org/ghc/ghc/issues/17231.
                 n             -> VIntegerToDouble n
         Double ->
             VDouble
@@ -527,8 +542,8 @@ eval !env t0 =
             VDoubleLit n
         DoubleShow ->
             VPrim $ \case
-                VDoubleLit n -> VTextLit (VChunks [] (Text.pack (show n)))
-                n            -> VDoubleShow n
+                VDoubleLit (DhallDouble n) -> VTextLit (VChunks [] (Text.pack (show n)))
+                n                          -> VDoubleShow n
         Text ->
             VText
         TextLit cs ->
@@ -836,8 +851,7 @@ conv !env t0 t0' =
         (VDouble, VDouble) ->
             True
         (VDoubleLit n, VDoubleLit n') ->
-                Serialise.serialise (Binary.encode (DoubleLit n  :: Expr Void Import))
-            ==  Serialise.serialise (Binary.encode (DoubleLit n' :: Expr Void Import))
+            n == n'
         (VDoubleShow t, VDoubleShow t') ->
             conv env t t'
         (VText, VText) ->
@@ -961,7 +975,7 @@ quote !env !t0 =
         VConst k ->
             Const k
         VVar !x !i ->
-            Var (V x (fromIntegral (countNames x env - i - 1)))
+            Var (V x (countNames x env - i - 1))
         VApp t u ->
             quote env t `qApp` u
         VLam a (freshClosure -> (x, v, t)) ->

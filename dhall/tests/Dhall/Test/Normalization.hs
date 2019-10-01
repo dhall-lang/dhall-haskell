@@ -86,7 +86,7 @@ nestedReduction :: TestTree
 nestedReduction = Tasty.HUnit.testCase "doubleReduction" $ do
     minType        <- Context.insert "min"        <$> Test.Util.code "Natural → Natural → Natural"
     fiveorlessType <- Context.insert "fiveorless" <$> Test.Util.code "Natural → Natural"
-    wurbleType     <- Context.insert "wurble"     <$> Test.Util.code "Natural → Integer"
+    wurbleType     <- Context.insert "wurble"     <$> Test.Util.code "Natural → Natural"
 
     let tyCtx = minType . fiveorlessType . wurbleType $ Context.empty
 

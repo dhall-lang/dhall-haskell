@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 -- | This module contains the implementation of the @dhall lint@ command
 
 module Dhall.Lint
@@ -6,6 +8,7 @@ module Dhall.Lint
     , removeUnusedBindings
     ) where
 
+import Control.Applicative ((<|>))
 import Dhall.Core (Binding(..), Expr(..), Import, Var(..), subExpressions)
 
 import qualified Dhall.Core
@@ -17,10 +20,15 @@ import qualified Lens.Family
     Currently this:
 
     * removes unused @let@ bindings with 'removeUnusedBindings'.
+    * fixes @let a = x ≡ y@ to be @let a = assert : x ≡ y@
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeLetInLet'
 -}
 lint :: Expr s Import -> Expr t Import
-lint = Dhall.Optics.rewriteOf subExpressions removeUnusedBindings . removeLetInLet
+lint =
+      Dhall.Optics.rewriteOf
+        subExpressions
+        (\e -> fixAsserts e <|> removeUnusedBindings e)
+    . removeLetInLet
 
 -- Remove unused Let bindings.
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
@@ -31,6 +39,13 @@ removeUnusedBindings (Let (Binding _ a _ _ _ _) d)
     | not (V a 0 `Dhall.Core.freeIn` d) =
         Just (Dhall.Core.shift (-1) (V a 0) d)
 removeUnusedBindings _ = Nothing
+
+-- Fix `Let` bindings  that the user probably meant to be `assert`s
+fixAsserts :: Expr s a -> Maybe (Expr s a)
+fixAsserts (Let (Binding { value = Equivalent x y, ..}) body) =
+    Just (Let (Binding { value = Assert (Equivalent x y), .. }) body)
+fixAsserts _ =
+    Nothing
 
 isOrContainsAssert :: Expr s a -> Bool
 isOrContainsAssert (Assert _) = True

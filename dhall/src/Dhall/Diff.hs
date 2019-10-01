@@ -25,7 +25,7 @@ import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Void (Void)
-import Dhall.Core (Binding(..), Chunks (..), Const(..), Expr(..), Var(..))
+import Dhall.Core (Binding(..), Chunks (..), Const(..), DhallDouble(..), Expr(..), Var(..))
 import Dhall.Binary (ToTerm)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
@@ -185,8 +185,8 @@ diffLabels ksL ksR =
 diffNatural :: Natural -> Natural -> Diff
 diffNatural = diffPrimitive (token . Internal.prettyNatural)
 
-diffDouble :: Double -> Double -> Diff
-diffDouble = diffPrimitive (token . Internal.prettyDouble)
+diffDouble :: DhallDouble -> DhallDouble -> Diff
+diffDouble = diffPrimitive (token . Internal.prettyDouble . getDhallDouble)
 
 diffConst :: Const -> Const -> Diff
 diffConst = diffPrimitive (token . Internal.prettyConst)
