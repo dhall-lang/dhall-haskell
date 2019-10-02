@@ -73,7 +73,7 @@ parseOptions =
                 )
 
         defaultBehavior =
-            pure False
+            pure True
 
     parseVersion =
         Options.flag'
