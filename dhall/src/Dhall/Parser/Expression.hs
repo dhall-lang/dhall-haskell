@@ -293,7 +293,19 @@ parsers embedded = Parsers {..}
                 a <- embedded
                 return (Embed a)
 
-            alternative1 = selectorExpression
+            alternative1 = defaultExpression
+
+    defaultExpression = noted (do
+        a <- selectorExpression
+
+        mb <- optional (do
+            _doubleColon
+
+            selectorExpression )
+
+        case mb of
+            Nothing -> return a
+            Just b  -> return (Override a b) )
 
     selectorExpression = noted (do
             a <- primitiveExpression

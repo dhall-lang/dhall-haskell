@@ -583,6 +583,10 @@ skeleton (Prefer {}) =
     <>  operator "⫽"
     <>  " "
     <>  ignore
+skeleton (Override {}) =
+        ignore
+    <>  operator "⸬"
+    <>  ignore
 skeleton (Merge {}) =
         keyword "merge"
     <>  " "
@@ -1005,6 +1009,20 @@ diffImportExpression l@(Embed {}) r =
 diffImportExpression l r@(Embed {}) =
     mismatch l r
 diffImportExpression l r =
+    diffOverrideExpression l r
+
+diffOverrideExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
+diffOverrideExpression (Override aL bL) (Override aR bR) =
+       diffSelectorExpression aL aR <> "⸬" <> diffSelectorExpression bL bR
+{-
+       " " <> diffSelectorExpression aL aR
+    <> hardline <> "⸬" <> diffSelectorExpression bL bR
+-}
+diffOverrideExpression l@(Override {}) r =
+    mismatch l r
+diffOverrideExpression l r@(Override {}) =
+    mismatch l r
+diffOverrideExpression l r =
     diffSelectorExpression l r
 
 diffSelectorExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff

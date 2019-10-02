@@ -904,6 +904,9 @@ infer typer = loop
 
             return (VRecord (Dhall.Map.union xRs' xLs'))
 
+        Override l r -> do
+            loop ctx (Annot (Prefer (Field l "default") r) (Field l "Type"))
+
         Merge t u mT₁ -> do
             _T' <- loop ctx t
 

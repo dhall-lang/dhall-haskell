@@ -103,6 +103,7 @@ module Dhall.Parser.Token (
     _lambda,
     _forall,
     _arrow,
+    _doubleColon,
     ) where
 
 import           Dhall.Parser.Combinators
@@ -849,4 +850,9 @@ _forall = do
 _arrow :: Parser ()
 _arrow = do
     void (Text.Parser.Char.char '→' <?> "\"→\"") <|> void (Text.Parser.Char.text "->")
+    whitespace
+
+_doubleColon :: Parser ()
+_doubleColon = do
+    void (Text.Parser.Char.char '∷' <?> "\"∷\"") <|> void (Text.Parser.Char.text "::")
     whitespace
