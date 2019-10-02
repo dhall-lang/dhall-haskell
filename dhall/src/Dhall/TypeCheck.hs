@@ -1107,8 +1107,6 @@ infer typer = loop
 
             case _E' of
                 VRecord xTs' -> do
-                    _ <- loop ctx _E''
-
                     case Dhall.Map.lookup x xTs' of
                         Just _T' -> return _T'
                         Nothing  -> die (MissingField x _E'')
@@ -1135,8 +1133,6 @@ infer typer = loop
 
             case _E' of
                 VRecord xTs' -> do
-                    _ <- loop ctx _E''
-
                     let process x =
                             case Dhall.Map.lookup x xTs' of
                                 Just _T' -> return (x, _T')
