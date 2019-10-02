@@ -175,7 +175,7 @@
 >       }
 >     ]
 
-    By default, the fields that are evaluated to @Null@ will be removed,
+    By default, the fields that are evaluated to @null@ will be removed,
     but here we're preserving them with the @--preserveNull@ flag.
 
 > $ dhall-to-json --preserveNull <<< './example.dhall'
