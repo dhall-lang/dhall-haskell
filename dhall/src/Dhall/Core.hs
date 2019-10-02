@@ -509,8 +509,20 @@ data Expr s a
     | TextShow
     -- | > List                                     ~  List
     | List
-    -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : t
+    -- | > ListLit (Just t ) []                     ~  [] : t
     --   > ListLit  Nothing  [x, y, z]              ~  [x, y, z]
+    --
+    --   Invariant: A non-empty list literal is always represented as
+    --   @ListLit Nothing xs@.
+    --
+    --   When an annotated, non-empty list literal is parsed, it is represented
+    --   as
+    --
+    --   > Annot (ListLit Nothing [x, y, z]) t      ~ [x, y, z] : t
+
+    -- Eventually we should have separate constructors for empty and non-empty
+    -- list literals. For now it's easier to check the invariant in @infer@.
+    -- See https://github.com/dhall-lang/dhall-haskell/issues/1359#issuecomment-537087234.
     | ListLit (Maybe (Expr s a)) (Seq (Expr s a))
     -- | > ListAppend x y                           ~  x # y
     | ListAppend (Expr s a) (Expr s a)
@@ -1685,7 +1697,7 @@ normalizeWithM ctx e0 = loop (denote e0)
     TextShow -> pure TextShow
     List -> pure List
     ListLit t es
-        | Data.Sequence.null es -> ListLit <$> t' <*> es'
+        | Data.Sequence.null es -> ListLit <$> t' <*> pure Data.Sequence.empty
         | otherwise             -> ListLit Nothing <$> es'
       where
         t'  = traverse loop t
