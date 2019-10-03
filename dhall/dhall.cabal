@@ -295,7 +295,6 @@ Extra-Source-Files:
     dhall-lang/tests/semantic-hash/success/simple/*.hash
     dhall-lang/tests/semantic-hash/success/simplifications/*.dhall
     dhall-lang/tests/semantic-hash/success/simplifications/*.hash
-    dhall-lang/tests/type-inference/data/*.dhall
     dhall-lang/tests/type-inference/failure/*.dhall
     dhall-lang/tests/type-inference/success/*.dhall
     dhall-lang/tests/type-inference/success/prelude/Bool/and/*.dhall

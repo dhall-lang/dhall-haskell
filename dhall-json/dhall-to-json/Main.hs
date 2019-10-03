@@ -62,7 +62,7 @@ parseOptions =
             Options.flag'
                 True
                 (   Options.long "pretty"
-                <>  Options.help "Pretty print generated JSON"
+                <>  Options.help "Deprecated, will be removed soon. Pretty print generated JSON"
                 )
 
         compactFlag =
@@ -73,7 +73,7 @@ parseOptions =
                 )
 
         defaultBehavior =
-            pure False
+            pure True
 
     parseVersion =
         Options.flag'

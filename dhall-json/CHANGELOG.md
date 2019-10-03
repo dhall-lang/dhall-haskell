@@ -1,3 +1,7 @@
+Next version
+
+* [BREAKING CHANGE: Enable `--pretty` by default for `dhall-to-json`](https://github.com/dhall-lang/dhall-haskell/issues/716)
+
 1.4.1
 
 * [Enable `--records-strict` by default for `{json-yaml}-to-dhall`](https://github.com/dhall-lang/dhall-haskell/pull/1181)
