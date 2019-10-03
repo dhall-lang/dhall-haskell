@@ -853,17 +853,6 @@ instance Monoid (Chunks s a) where
 instance IsString (Chunks s a) where
     fromString str = Chunks [] (fromString str)
 
-{-  There is a one-to-one correspondence between the builders in this section
-    and the sub-parsers in "Dhall.Parser".  Each builder is named after the
-    corresponding parser and the relationship between builders exactly matches
-    the relationship between parsers.  This leads to the nice emergent property
-    of automatically getting all the parentheses and precedences right.
-
-    This approach has one major disadvantage: you can get an infinite loop if
-    you add a new constructor to the syntax tree without adding a matching
-    case the corresponding builder.
--}
-
 -- | Generates a syntactically valid Dhall program
 instance Pretty a => Pretty (Expr s a) where
     pretty = Pretty.unAnnotate . prettyExpr
