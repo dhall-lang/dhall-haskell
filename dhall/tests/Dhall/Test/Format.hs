@@ -61,6 +61,10 @@ formatTest characterSet prefix =
         expectedText <- Text.IO.readFile outputFile
 
         let message =
-                "The formatted expression did not match the expected output"
+                   "The formatted expression did not match the expected output\n"
+                <> "Expected:\n\n" <> Text.unpack expectedText <> "\n\n"
+                <> "Actual:\n\n" <> Text.unpack actualText <> "\n\n"
+                <> "Expected (show): " <> show expectedText <> "\n"
+                <> "Actual   (show): " <> show actualText <> "\n"
 
-        Tasty.HUnit.assertEqual message expectedText actualText
+        Tasty.HUnit.assertBool message (actualText == expectedText)
