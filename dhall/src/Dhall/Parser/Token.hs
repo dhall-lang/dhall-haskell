@@ -853,6 +853,4 @@ _arrow = do
     whitespace
 
 _doubleColon :: Parser ()
-_doubleColon = do
-    void (Text.Parser.Char.char '∷' <?> "\"∷\"") <|> void (Text.Parser.Char.text "::")
-    whitespace
+_doubleColon = reserved "::"
