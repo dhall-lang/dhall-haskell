@@ -56,7 +56,11 @@
     Dhall @List@s translate to JSON lists:
 
 > $ dhall-to-json <<< '[1, 2, 3] : List Natural'
-> [1,2,3]
+> [
+>   1,
+>   2,
+>   3
+> ]
 
     Dhall @Optional@ values translate to @null@ if absent and the unwrapped
     value otherwise:
@@ -69,7 +73,10 @@
     Dhall records translate to JSON records:
 
 > $ dhall-to-json <<< '{ foo = 1, bar = True }'
-> {"foo":1,"bar":true}
+> {
+>   "bar": true,
+>   "foo": 1
+> }
 
     Dhall unions translate to the wrapped value:
 
@@ -85,7 +92,22 @@
 >     , MyType.Person { age = 35, name = "Alice" }
 >     ]
 > $ dhall-to-json <<< "./config"
-> [{"age":47,"name":"John"},{"location":"North Pole"},{"location":"Sahara Desert"},{"age":35,"name":"Alice"}]
+> [
+>   {
+>     "age": 47,
+>     "name": "John"
+>   },
+>   {
+>     "location": "North Pole"
+>   },
+>   {
+>     "location": "Sahara Desert"
+>   },
+>   {
+>     "age": 35,
+>     "name": "Alice"
+>   }
+> ]
 
     You can preserve the name of the alternative if you wrap the value in a
     record with three fields:
@@ -154,7 +176,13 @@
 >     ]
 
 > $ dhall-to-json <<< './example.dhall'
-> {"foo":null,"bar":[1,true]}
+> {
+>   "bar": [
+>     1,
+>     true
+>   ],
+>   "foo": null
+> }
 
     Also, all Dhall expressions are normalized before translation to JSON:
 
