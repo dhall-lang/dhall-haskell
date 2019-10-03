@@ -430,6 +430,17 @@ prettyVar :: Var -> Doc Ann
 prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
 prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyInt n))
 
+{-  There is a close correspondence between the pretty-printers in 'prettyCharacterSet'
+    and the sub-parsers in 'Dhall.Parser.Expression.parsers'.  Most pretty-printers are
+    named after the corresponding parser and the relationship between pretty-printers
+    exactly matches the relationship between parsers.  This leads to the nice emergent
+    property of automatically getting all the parentheses and precedences right.
+
+    This approach has one major disadvantage: you can get an infinite loop if
+    you add a new constructor to the syntax tree without adding a matching
+    case the corresponding builder.
+-}
+
 {-| Pretty-print an 'Expr' using the given 'CharacterSet'.
 
 'prettyCharacterSet' largely ignores 'Note's. 'Note's do however matter for
