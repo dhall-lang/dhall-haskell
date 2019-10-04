@@ -72,6 +72,7 @@ module Dhall
     , list
     , vector
     , unit
+    , void
     , string
     , pair
     , record
@@ -125,6 +126,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
+import Data.Void (Void)
 import Data.Word (Word8, Word16, Word32, Word64)
 import Dhall.Core (Expr(..), Chunks(..), DhallDouble(..))
 import Dhall.Import (Imported(..))
@@ -152,6 +154,7 @@ import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
 import qualified Data.Vector
+import qualified Data.Void
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
@@ -799,6 +802,13 @@ unit = Type extractOut expectedOut
 
     expectedOut = Record mempty
 
+{-| Decode 'Void' from an empty union.
+
+Since @<>@ is uninhabited, @'input' 'void'@ will always fail.
+-}
+void :: Type Void
+void = union mempty
+
 {-| Decode a `String`
 
 >>> input string "\"ABC\""
@@ -844,6 +854,9 @@ class Interpret a where
     default autoWith
         :: (Generic a, GenericInterpret (Rep a)) => InterpretOptions -> Type a
     autoWith options = fmap GHC.Generics.to (evalState (genericAutoWith options) 1)
+
+instance Interpret Void where
+    autoWith _ = void
 
 instance Interpret Bool where
     autoWith _ = bool
@@ -1469,6 +1482,13 @@ genericInject
   :: (Generic a, GenericInject (Rep a)) => InputType a
 genericInject
     = contramap GHC.Generics.from (evalState (genericInjectWith defaultInterpretOptions) 1)
+
+instance Inject Void where
+    injectWith _ = InputType {..}
+      where
+        embed = Data.Void.absurd
+
+        declared = Union mempty
 
 instance Inject Bool where
     injectWith _ = InputType {..}
