@@ -41,7 +41,7 @@ parseOptions =
         (   Options
         <$> parseExplain
         <*> parsePretty
-        <*> Dhall.JSON.parseOmission
+        <*> Dhall.JSON.parsePreservationAndOmission
         <*> Dhall.JSON.parseConversion
         <*> parseApproximateSpecialDoubles
         <*> optional parseFile

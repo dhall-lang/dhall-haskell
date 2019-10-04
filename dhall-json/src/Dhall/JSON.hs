@@ -175,7 +175,10 @@
 >       }
 >     ]
 
-> $ dhall-to-json <<< './example.dhall'
+    By default, the fields that are evaluated to @null@ will be removed,
+    but here we're preserving them with the @--preserveNull@ flag.
+
+> $ dhall-to-json --preserveNull <<< './example.dhall'
 > {
 >   "bar": [
 >     1,
@@ -197,6 +200,7 @@ module Dhall.JSON (
     , omitNull
     , omitEmpty
     , parseOmission
+    , parsePreservationAndOmission
     , Conversion(..)
     , convertToHomogeneousMaps
     , parseConversion
@@ -629,6 +633,20 @@ parseOmission =
             <>  Options.Applicative.help "Omit record fields that are null or empty records"
             )
     <|> pure id
+
+-- | Parser for command-line options related to preserving null fields.
+parseNullPreservation :: Parser (Value -> Value)
+parseNullPreservation =
+        Options.Applicative.flag
+            omitNull
+            id
+            (   Options.Applicative.long "preserveNull"
+            <>  Options.Applicative.help "Preserve record fields that are null"
+            )
+
+-- | Combines parsers for command-line options related to preserving & omitting null fields.
+parsePreservationAndOmission :: Parser (Value -> Value)
+parsePreservationAndOmission = parseNullPreservation <|> parseOmission <|> pure id
 
 {-| Specify whether or not to convert association lists of type
     @List { mapKey: Text, mapValue : v }@ to records
