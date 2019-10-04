@@ -117,7 +117,7 @@
     * @field@: the name of the field that will store the name of the
       alternative
 
-    * @nesting@: A value of type @\< Inline : {} | Nested : Text \>@.
+    * @nesting@: A value of type @\< Inline | Nested : Text \>@.
 
     If @nesting@ is set to @Inline@ and the union literal stored in @contents@
     contains a record then the name of the alternative is stored inline within
@@ -144,7 +144,7 @@
 
 > let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
 > 
-> let Nesting = < Inline : {} | Nested : Text >
+> let Nesting = < Inline | Nested : Text >
 > 
 > in  { field    = "name"
 >     , nesting  = Nesting.Nested "value"
