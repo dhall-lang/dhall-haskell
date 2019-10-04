@@ -481,6 +481,7 @@ Library
         Dhall.Core,
         Dhall.Crypto,
         Dhall.Diff,
+        Dhall.ETags,
         Dhall.Format,
         Dhall.Freeze,
         Dhall.Hash,
@@ -534,6 +535,7 @@ Test-Suite tasty
     Other-Modules:
         Dhall.Test.Dhall
         Dhall.Test.Diff
+        Dhall.Test.ETags
         Dhall.Test.Format
         Dhall.Test.Import
         Dhall.Test.Lint

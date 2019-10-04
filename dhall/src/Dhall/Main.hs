@@ -32,7 +32,7 @@ import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError, X)
-import Dhall.Util (Censor(..), Input(..))
+import Dhall.Util (Censor(..), Input(..), Output(..))
 import Dhall.Version (dhallVersionString)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (ExitCode, exitFailure)
@@ -63,6 +63,7 @@ import qualified Dhall.Hash
 import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
+import qualified Dhall.ETags
 import qualified Dhall.Pretty
 import qualified Dhall.Repl
 import qualified Dhall.TypeCheck
@@ -104,6 +105,7 @@ data Mode
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Input }
+    | ETags { path :: Input, output :: Output, suffixes :: [Text], followSymlinks :: Bool }
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool }
     | Text { file :: Input }
@@ -182,6 +184,10 @@ parseMode =
             "lint"
             "Improve Dhall code by using newer language features and removing dead code"
             (Lint <$> parseInplace)
+    <|> subcommand
+            "tags"
+            "Generate etags file"
+            (ETags <$> parsePath <*> parseOutput <*> parseSuffixes <*> parseFollowSymlinks)
     <|> subcommand
             "format"
             "Standard code formatter for the Dhall language"
@@ -289,6 +295,45 @@ parseMode =
             <>  Options.Applicative.help "Modify the specified file in-place"
             <>  Options.Applicative.metavar "FILE"
             )
+
+    parsePath = fmap f (optional p)
+      where
+        f  Nothing    = StandardInput
+        f (Just path) = File path
+
+        p = Options.Applicative.strOption
+            (   Options.Applicative.long "path"
+            <>  Options.Applicative.help "Index all files in path recursively"
+            <>  Options.Applicative.metavar "PATH"
+            )
+
+    parseOutput = fmap f (optional p)
+      where
+        f  Nothing    = StandardOutput
+        f (Just file) = FileO file
+
+        p = Options.Applicative.strOption
+            (   Options.Applicative.long "output"
+            <>  Options.Applicative.help "Output into file. STDOUT by default"
+            <>  Options.Applicative.metavar "OUTPUT"
+            )
+
+    parseSuffixes = fmap f (optional p)
+      where
+        f  Nothing    = [".dhall"]
+        f (Just line) = Data.Text.splitOn " " line
+
+        p = Options.Applicative.strOption
+            (   Options.Applicative.long "suffixes"
+            <>  Options.Applicative.help "Index only files with suffixes. \"\" to index all files."
+            <>  Options.Applicative.metavar "SUFFIXES"
+            )
+
+    parseFollowSymlinks =
+        Options.Applicative.switch
+        (   Options.Applicative.long "follow-symlinks"
+        <>  Options.Applicative.help "Follow symlinks when recursing directories"
+        )
 
     parseJSONFlag =
         Options.Applicative.switch
@@ -646,6 +691,16 @@ command (Options {..}) = do
                         invalidTypeExpression = normalizedExpression
 
                     Control.Exception.throwIO (Dhall.InvalidType {..})
+
+        ETags {..} -> do
+            tags <- Dhall.ETags.generate path suffixes followSymlinks
+
+            case output of
+                FileO file ->
+                    System.IO.withFile file System.IO.WriteMode (`Data.Text.IO.hPutStr` tags)
+
+                StandardOutput -> Data.Text.IO.putStrLn tags
+            
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()
