@@ -547,21 +547,14 @@ prettyCharacterSet characterSet expression =
                 <>  equals <> renderSrc src2 space
                 <>  prettyExpression e
         docA (Binding src0 c src1 (Just (src3, d)) src2 e) =
-            Pretty.group (Pretty.flatAlt long short)
-          where
-            long = keyword "let" <> space
-                <>  Pretty.align
-                    (   renderSrc src0 mempty
-                    <>  prettyLabel c <> renderSrc src1 Pretty.hardline
-                    <>  colon <> renderSrc src3 space <> prettyExpression d <> Pretty.hardline <> equals <> renderSrc src2 space
-                    <>  prettyExpression e
-                    )
-
-            short = keyword "let" <> renderSrc src0 space
-                <>  prettyLabel c <> renderSrc src1 space
-                <>  colon <> renderSrc src3 space
-                <>  prettyExpression d <> space <> equals <> renderSrc src2 space
+                keyword "let" <> space
+            <>  Pretty.align
+                (   renderSrc src0 mempty
+                <>  prettyLabel c <> renderSrc src1 Pretty.hardline
+                <>  colon <> renderSrc src3 space <> prettyExpression d <> Pretty.hardline
+                <>  equals <> renderSrc src2 space
                 <>  prettyExpression e
+                )
 
         docB =
             ( keyword "in" <> " " <> prettyExpression b
@@ -838,19 +831,22 @@ prettyCharacterSet characterSet expression =
         prettyApplicationExpression a0
 
     prettyApplicationExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyApplicationExpression = \case
-        App a b           -> f (prettyApplicationExpression a) [b]
-        Some a            -> f (builtin "Some") [a]
-        ToMap a Nothing   -> f (keyword "toMap") [a]
-        Merge a b Nothing -> f (keyword "merge") [a, b]
-        Note _ b          -> prettyApplicationExpression b
-        e                 -> prettyImportExpression e
+    prettyApplicationExpression = go []
       where
-        f a bs =
+        go args = \case
+            App a b           -> go (b : args) a
+            Some a            -> app (builtin "Some") (a : args)
+            Merge a b Nothing -> app (keyword "merge") (a : b : args)
+            ToMap a Nothing   -> app (keyword "toMap") (a : args)
+            Note _ b          -> go args b
+            e | null args     -> prettyImportExpression e -- just a performance optimization
+              | otherwise     -> app (prettyImportExpression e) args
+
+        app f args =
             enclose'
                 "" "" " " ""
-                ( duplicate a
-                : map (fmap (Pretty.indent 2) . duplicate . prettyImportExpression) bs
+                ( duplicate f
+                : map (fmap (Pretty.indent 2) . duplicate . prettyImportExpression) args
                 )
 
     prettyImportExpression :: Pretty a => Expr Src a -> Doc Ann
