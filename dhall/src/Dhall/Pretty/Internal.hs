@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP               #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -837,22 +838,20 @@ prettyCharacterSet characterSet expression =
         prettyApplicationExpression a0
 
     prettyApplicationExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyApplicationExpression a0 = case a0 of
-        App   {} -> result
-        Some  {} -> result
-        ToMap {} -> result
-        Merge {} -> result
-        Note _ b -> prettyApplicationExpression b
-        _        -> prettyImportExpression a0
+    prettyApplicationExpression = \case
+        App a b           -> f (prettyApplicationExpression a) [b]
+        Some a            -> f (builtin "Some") [a]
+        ToMap a Nothing   -> f (keyword "toMap") [a]
+        Merge a b Nothing -> f (keyword "merge") [a, b]
+        Note _ b          -> prettyApplicationExpression b
+        e                 -> prettyImportExpression e
       where
-        result = enclose' "" "" " " "" (reverse (docs a0))
-
-        docs (App  a b) = ( prettyImportExpression b, Pretty.indent 2 (prettyImportExpression b) ) : docs a
-        docs (Some   a) = map duplicate [ prettyImportExpression a , builtin "Some" ]
-        docs (ToMap a Nothing) = map duplicate [ prettyImportExpression a, keyword "toMap" ]
-        docs (Merge a b Nothing) = map duplicate [ prettyImportExpression b, prettyImportExpression a, keyword "merge" ]
-        docs (Note _ b) = docs b
-        docs         b  = map duplicate [ prettyImportExpression b ]
+        f a bs =
+            enclose'
+                "" "" " " ""
+                ( duplicate a
+                : map (fmap (Pretty.indent 2) . duplicate . prettyImportExpression) bs
+                )
 
     prettyImportExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyImportExpression (Embed a) =
