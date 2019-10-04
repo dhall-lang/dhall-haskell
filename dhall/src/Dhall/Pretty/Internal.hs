@@ -547,21 +547,14 @@ prettyCharacterSet characterSet expression =
                 <>  equals <> renderSrc src2 space
                 <>  prettyExpression e
         docA (Binding src0 c src1 (Just (src3, d)) src2 e) =
-            Pretty.group (Pretty.flatAlt long short)
-          where
-            long = keyword "let" <> space
-                <>  Pretty.align
-                    (   renderSrc src0 mempty
-                    <>  prettyLabel c <> renderSrc src1 Pretty.hardline
-                    <>  colon <> renderSrc src3 space <> prettyExpression d <> Pretty.hardline <> equals <> renderSrc src2 space
-                    <>  prettyExpression e
-                    )
-
-            short = keyword "let" <> renderSrc src0 space
-                <>  prettyLabel c <> renderSrc src1 space
-                <>  colon <> renderSrc src3 space
-                <>  prettyExpression d <> space <> equals <> renderSrc src2 space
+                keyword "let" <> space
+            <>  Pretty.align
+                (   renderSrc src0 mempty
+                <>  prettyLabel c <> renderSrc src1 Pretty.hardline
+                <>  colon <> renderSrc src3 space <> prettyExpression d <> Pretty.hardline
+                <>  equals <> renderSrc src2 space
                 <>  prettyExpression e
+                )
 
         docB =
             ( keyword "in" <> " " <> prettyExpression b
