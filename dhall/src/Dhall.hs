@@ -858,6 +858,9 @@ class Interpret a where
 instance Interpret Void where
     autoWith _ = void
 
+instance Interpret () where
+    autoWith _ = unit
+
 instance Interpret Bool where
     autoWith _ = bool
 
