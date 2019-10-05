@@ -2,8 +2,8 @@
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiWayIf                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -12,9 +12,9 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeOperators              #-}
-{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
 {-| Please read the "Dhall.Tutorial" module, which contains a tutorial explaining
@@ -108,15 +108,15 @@ module Dhall
     , Generic
     ) where
 
-import Control.Applicative (empty, liftA2, Alternative)
+import Control.Applicative (Alternative, empty, liftA2)
 import Control.Exception (Exception)
-import Control.Monad.Trans.State.Strict
 import Control.Monad (guard)
+import Control.Monad.Trans.State.Strict
 import Data.Coerce (coerce)
-import Data.Either.Validation (Validation(..), ealt, eitherToValidation, validationToEither)
-import Data.Fix (Fix(..))
-import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
-import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
+import Data.Either.Validation (Validation (..), ealt, eitherToValidation, validationToEither)
+import Data.Fix (Fix (..))
+import Data.Functor.Contravariant (Contravariant (..), Op (..), (>$<))
+import Data.Functor.Contravariant.Divisible (Divisible (..), divided)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
@@ -127,11 +127,11 @@ import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Data.Void (Void)
-import Data.Word (Word8, Word16, Word32, Word64)
-import Dhall.Core (Expr(..), Chunks(..), DhallDouble(..))
-import Dhall.Import (Imported(..))
-import Dhall.Parser (Src(..))
-import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
+import Data.Word (Word16, Word32, Word64, Word8)
+import Dhall.Core (Chunks (..), DhallDouble (..), Expr (..))
+import Dhall.Import (Imported (..))
+import Dhall.Parser (Src (..))
+import Dhall.TypeCheck (DetailedTypeError (..), TypeError, X)
 import GHC.Generics
 import Lens.Family (LensLike', set, view)
 import Numeric.Natural (Natural)
@@ -144,10 +144,10 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
-import qualified Data.Maybe
 import qualified Data.List.NonEmpty
-import qualified Data.Semigroup
+import qualified Data.Maybe
 import qualified Data.Scientific
+import qualified Data.Semigroup
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
@@ -262,8 +262,8 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (InvalidType s a) 
 
 -- | @since 1.16
 data InputSettings = InputSettings
-  { _rootDirectory :: FilePath
-  , _sourceName :: FilePath
+  { _rootDirectory    :: FilePath
+  , _sourceName       :: FilePath
   , _evaluateSettings :: EvaluateSettings
   }
 
@@ -420,7 +420,7 @@ inputWithSettings settings (Type {..}) txt = do
     let normExpr = Dhall.Core.normalizeWith (view normalizer settings) expr'
 
     case extract normExpr  of
-        Success x  -> return x
+        Success x -> return x
         Failure e -> Control.Exception.throwIO e
 
 {-| Type-check and evaluate a Dhall program that is read from the
@@ -686,7 +686,7 @@ natural :: Type Natural
 natural = Type {..}
   where
     extract (NaturalLit n) = pure n
-    extract  expr             = typeError Natural expr
+    extract  expr          = typeError Natural expr
 
     expected = Natural
 
@@ -733,7 +733,7 @@ lazyText :: Type Data.Text.Lazy.Text
 lazyText = Type {..}
   where
     extract (TextLit (Chunks [] t)) = pure (Data.Text.Lazy.fromStrict t)
-    extract  expr = typeError Text expr
+    extract  expr                   = typeError Text expr
 
     expected = Text
 
@@ -952,30 +952,30 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- > {-# LANGUAGE StandaloneDeriving #-}
 -- > {-# LANGUAGE TypeFamilies       #-}
 -- > {-# LANGUAGE TemplateHaskell    #-}
--- > 
+-- >
 -- > import Data.Fix (Fix(..))
 -- > import Data.Text (Text)
 -- > import Dhall (Interpret)
 -- > import GHC.Generics (Generic)
 -- > import Numeric.Natural (Natural)
--- > 
+-- >
 -- > import qualified Data.Fix                 as Fix
 -- > import qualified Data.Functor.Foldable    as Foldable
 -- > import qualified Data.Functor.Foldable.TH as TH
 -- > import qualified Dhall
 -- > import qualified NeatInterpolation
--- > 
+-- >
 -- > data Expr
 -- >     = Lit Natural
 -- >     | Add Expr Expr
 -- >     | Mul Expr Expr
 -- >     deriving (Show)
--- > 
+-- >
 -- > TH.makeBaseFunctor ''Expr
--- > 
+-- >
 -- > deriving instance Generic (ExprF a)
 -- > deriving instance Interpret a => Interpret (ExprF a)
--- > 
+-- >
 -- > example :: Text
 -- > example = [NeatInterpolation.text|
 -- >     \(Expr : Type)
@@ -987,30 +987,30 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- >           | MulF :
 -- >               { _1 : Expr, _2 : Expr }
 -- >           >
--- >     
+-- >
 -- >     in      \(Fix : ExprF -> Expr)
 -- >         ->  let Lit = \(x : Natural) -> Fix (ExprF.LitF { _1 = x })
--- >             
+-- >
 -- >             let Add =
 -- >                       \(x : Expr)
 -- >                   ->  \(y : Expr)
 -- >                   ->  Fix (ExprF.AddF { _1 = x, _2 = y })
--- >             
+-- >
 -- >             let Mul =
 -- >                       \(x : Expr)
 -- >                   ->  \(y : Expr)
 -- >                   ->  Fix (ExprF.MulF { _1 = x, _2 = y })
--- >             
+-- >
 -- >             in  Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))
 -- > |]
--- > 
+-- >
 -- > convert :: Fix ExprF -> Expr
 -- > convert = Fix.cata Foldable.embed
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >     x <- Dhall.input Dhall.auto example :: IO (Fix ExprF)
--- > 
+-- >
 -- >     print (convert x :: Expr)
 instance (Functor f, Interpret (f (Result f))) => Interpret (Fix f) where
     autoWith options = Type { expected = expected_, extract = extract_ }
@@ -1039,17 +1039,17 @@ genericAuto = fmap to (evalState (genericAutoWith defaultInterpretOptions) 1)
     `Interpret`
 -}
 data InterpretOptions = InterpretOptions
-    { fieldModifier       :: Text -> Text
+    { fieldModifier         :: Text -> Text
     -- ^ Function used to transform Haskell field names into their corresponding
     --   Dhall field names
-    , constructorModifier :: Text -> Text
+    , constructorModifier   :: Text -> Text
     -- ^ Function used to transform Haskell constructor names into their
     --   corresponding Dhall alternative names
     , singletonConstructors :: SingletonConstructors
     -- ^ Specify how to handle constructors with only one field.  The default is
     --   `Wrapped` for backwards compatibility but will eventually be changed to
     --   `Smart`
-    , inputNormalizer     :: Dhall.Core.ReifiedNormalizer X
+    , inputNormalizer       :: Dhall.Core.ReifiedNormalizer X
     -- ^ This is only used by the `Interpret` instance for functions in order
     --   to normalize the function input before marshaling the input into a
     --   Dhall expression
@@ -1540,30 +1540,30 @@ instance Inject Int where
 instance Inject Word8 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
 
 instance Inject Word16 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
 
 instance Inject Word32 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
 
 instance Inject Word64 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
 
 instance Inject Double where
     injectWith _ = InputType {..}
@@ -1958,7 +1958,7 @@ field key valueType@(Type extract expected) =
   let
     extractBody expr@(RecordLit fields) = case Dhall.Map.lookup key fields of
       Just v -> extract v
-      _ -> typeError expected expr
+      _      -> typeError expected expr
     extractBody expr = typeError expected expr
   in
     RecordType
