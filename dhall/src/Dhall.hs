@@ -1537,6 +1537,13 @@ instance Inject Int where
 
         declared = Integer
 
+instance Inject Word where
+    injectWith _ = InputType {..}
+      where
+        embed = NaturalLit . fromIntegral
+
+        declared = Natural
+
 instance Inject Word8 where
     injectWith _ = InputType {..}
       where
