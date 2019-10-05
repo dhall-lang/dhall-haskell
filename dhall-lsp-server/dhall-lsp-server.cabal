@@ -102,3 +102,17 @@ Test-Suite doctest
     --  See: https://ghc.haskell.org/trac/ghc/ticket/10970
     if impl(ghc < 8.0)
       Buildable: False
+
+Test-Suite tests
+    Type: exitcode-stdio-1.0
+    Hs-Source-Dirs: tests
+    Main-Is: Main.hs
+    GHC-Options: -Wall
+    Build-Depends:
+        base                                   ,
+        haskell-lsp-types >= 0.15.0  && < 0.16 ,
+        lsp-test          >= 0.6     && < 0.7  ,
+        tasty             >= 0.11.2  && < 1.3  ,
+        tasty-hspec       >= 1.1     && < 1.2  ,
+        text              >= 0.11    && < 1.3
+    Default-Language: Haskell2010
