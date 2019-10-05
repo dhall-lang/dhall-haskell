@@ -71,7 +71,10 @@ module Dhall
     , sequence
     , list
     , vector
+    , Dhall.map
+    , pairFromMapEntry
     , unit
+    , void
     , string
     , pair
     , record
@@ -117,6 +120,7 @@ import Data.Fix (Fix(..))
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Semigroup (Semigroup)
@@ -125,6 +129,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
+import Data.Void (Void)
 import Data.Word (Word8, Word16, Word32, Word64)
 import Dhall.Core (Expr(..), Chunks(..), DhallDouble(..))
 import Dhall.Import (Imported(..))
@@ -142,6 +147,7 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
+import qualified Data.Map
 import qualified Data.Maybe
 import qualified Data.List.NonEmpty
 import qualified Data.Semigroup
@@ -152,6 +158,7 @@ import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
 import qualified Data.Vector
+import qualified Data.Void
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
@@ -785,6 +792,39 @@ list = fmap Data.Foldable.toList . sequence
 vector :: Type a -> Type (Vector a)
 vector = fmap Data.Vector.fromList . list
 
+{-| Decode a `Map` from a @toMap@ expression or generally a @Prelude.Map.Type@
+
+>>> input (Dhall.map strictText bool) "toMap { a = True, b = False }"
+fromList [("a",True),("b",False)]
+>>> input (Dhall.map strictText bool) "[ { mapKey = \"foo\", mapValue = True } ]"
+fromList [("foo",True)]
+
+If there are duplicate @mapKey@s, later @mapValue@s take precedence:
+
+>>> let expr = "[ { mapKey = 1, mapValue = True }, { mapKey = 1, mapValue = False } ]"
+>>> input (Dhall.map natural bool) expr
+fromList [(1,False)]
+
+-}
+map :: Ord k => Type k -> Type v -> Type (Map k v)
+map k v = fmap Data.Map.fromList (list (pairFromMapEntry k v))
+
+{-| Decode a tuple from a @Prelude.Map.Entry@ record
+
+>>> input (pairFromMapEntry strictText natural) "{ mapKey = \"foo\", mapValue = 3 }"
+("foo",3)
+-}
+pairFromMapEntry :: Type k -> Type v -> Type (k, v)
+pairFromMapEntry k v = Type extractOut expectedOut
+  where
+    extractOut (RecordLit kvs)
+        | Just key <- Dhall.Map.lookup "mapKey" kvs
+        , Just value <- Dhall.Map.lookup "mapValue" kvs
+            = liftA2 (,) (extract k key) (extract v value)
+    extractOut expr = typeError expectedOut expr
+
+    expectedOut = Record (Dhall.Map.fromList [("mapKey", expected k), ("mapValue", expected v)])
+
 {-| Decode @()@ from an empty record.
 
 >>> input unit "{=}"  -- GHC doesn't print the result if it is ()
@@ -798,6 +838,13 @@ unit = Type extractOut expectedOut
     extractOut expr = typeError (Record mempty) expr
 
     expectedOut = Record mempty
+
+{-| Decode 'Void' from an empty union.
+
+Since @<>@ is uninhabited, @'input' 'void'@ will always fail.
+-}
+void :: Type Void
+void = union mempty
 
 {-| Decode a `String`
 
@@ -834,6 +881,8 @@ pair l r = Type extractOut expectedOut
 
 >>> input auto "[1, 2, 3]" :: IO (Vector Natural)
 [1,2,3]
+>>> input auto "toMap { a = False, b = True }" :: IO (Map Text Bool)
+fromList [("a",False),("b",True)]
 
     This class auto-generates a default implementation for records that
     implement `Generic`.  This does not auto-generate an instance for recursive
@@ -844,6 +893,9 @@ class Interpret a where
     default autoWith
         :: (Generic a, GenericInterpret (Rep a)) => InterpretOptions -> Type a
     autoWith options = fmap GHC.Generics.to (evalState (genericAutoWith options) 1)
+
+instance Interpret Void where
+    autoWith _ = void
 
 instance Interpret Bool where
     autoWith _ = bool
@@ -880,6 +932,9 @@ instance Interpret a => Interpret [a] where
 
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
+
+instance (Ord k, Interpret k, Interpret v) => Interpret (Map k v) where
+    autoWith opts = Dhall.map (autoWith opts) (autoWith opts)
 
 instance (Inject a, Interpret b) => Interpret (a -> b) where
     autoWith opts = Type extractOut expectedOut
@@ -1469,6 +1524,13 @@ genericInject
   :: (Generic a, GenericInject (Rep a)) => InputType a
 genericInject
     = contramap GHC.Generics.from (evalState (genericInjectWith defaultInterpretOptions) 1)
+
+instance Inject Void where
+    injectWith _ = InputType {..}
+      where
+        embed = Data.Void.absurd
+
+        declared = Union mempty
 
 instance Inject Bool where
     injectWith _ = InputType {..}

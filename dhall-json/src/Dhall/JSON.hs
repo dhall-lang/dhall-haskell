@@ -56,7 +56,11 @@
     Dhall @List@s translate to JSON lists:
 
 > $ dhall-to-json <<< '[1, 2, 3] : List Natural'
-> [1,2,3]
+> [
+>   1,
+>   2,
+>   3
+> ]
 
     Dhall @Optional@ values translate to @null@ if absent and the unwrapped
     value otherwise:
@@ -69,7 +73,10 @@
     Dhall records translate to JSON records:
 
 > $ dhall-to-json <<< '{ foo = 1, bar = True }'
-> {"foo":1,"bar":true}
+> {
+>   "bar": true,
+>   "foo": 1
+> }
 
     Dhall unions translate to the wrapped value:
 
@@ -85,7 +92,22 @@
 >     , MyType.Person { age = 35, name = "Alice" }
 >     ]
 > $ dhall-to-json <<< "./config"
-> [{"age":47,"name":"John"},{"location":"North Pole"},{"location":"Sahara Desert"},{"age":35,"name":"Alice"}]
+> [
+>   {
+>     "age": 47,
+>     "name": "John"
+>   },
+>   {
+>     "location": "North Pole"
+>   },
+>   {
+>     "location": "Sahara Desert"
+>   },
+>   {
+>     "age": 35,
+>     "name": "Alice"
+>   }
+> ]
 
     You can preserve the name of the alternative if you wrap the value in a
     record with three fields:
@@ -95,7 +117,7 @@
     * @field@: the name of the field that will store the name of the
       alternative
 
-    * @nesting@: A value of type @\< Inline : {} | Nested : Text \>@.
+    * @nesting@: A value of type @\< Inline | Nested : Text \>@.
 
     If @nesting@ is set to @Inline@ and the union literal stored in @contents@
     contains a record then the name of the alternative is stored inline within
@@ -122,7 +144,7 @@
 
 > let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
 > 
-> let Nesting = < Inline : {} | Nested : Text >
+> let Nesting = < Inline | Nested : Text >
 > 
 > in  { field    = "name"
 >     , nesting  = Nesting.Nested "value"
@@ -153,8 +175,17 @@
 >       }
 >     ]
 
-> $ dhall-to-json <<< './example.dhall'
-> {"foo":null,"bar":[1,true]}
+    By default, the fields that are evaluated to @null@ will be removed,
+    but here we're preserving them with the @--preserveNull@ flag.
+
+> $ dhall-to-json --preserveNull <<< './example.dhall'
+> {
+>   "bar": [
+>     1,
+>     true
+>   ],
+>   "foo": null
+> }
 
     Also, all Dhall expressions are normalized before translation to JSON:
 
@@ -169,6 +200,7 @@ module Dhall.JSON (
     , omitNull
     , omitEmpty
     , parseOmission
+    , parsePreservationAndOmission
     , Conversion(..)
     , convertToHomogeneousMaps
     , parseConversion
@@ -601,6 +633,20 @@ parseOmission =
             <>  Options.Applicative.help "Omit record fields that are null or empty records"
             )
     <|> pure id
+
+-- | Parser for command-line options related to preserving null fields.
+parseNullPreservation :: Parser (Value -> Value)
+parseNullPreservation =
+        Options.Applicative.flag
+            omitNull
+            id
+            (   Options.Applicative.long "preserveNull"
+            <>  Options.Applicative.help "Preserve record fields that are null"
+            )
+
+-- | Combines parsers for command-line options related to preserving & omitting null fields.
+parsePreservationAndOmission :: Parser (Value -> Value)
+parsePreservationAndOmission = parseNullPreservation <|> parseOmission <|> pure id
 
 {-| Specify whether or not to convert association lists of type
     @List { mapKey: Text, mapValue : v }@ to records
