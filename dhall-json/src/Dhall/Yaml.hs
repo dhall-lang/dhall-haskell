@@ -14,6 +14,7 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Dhall.JSON (Conversion(..), SpecialDoubleMode(..), codeToValue)
 import Options.Applicative (Parser)
+import Data.ByteString.Lazy (toStrict)
 
 import qualified Data.Aeson
 import qualified Data.ByteString
@@ -23,11 +24,12 @@ import qualified Options.Applicative
 #if defined(ETA_VERSION)
 import Dhall.Yaml.Eta ( jsonToYaml )
 #else
-import qualified Data.Yaml
-# if MIN_VERSION_yaml(0,10,2)
-import qualified Data.Text
-import qualified Text.Libyaml
-# endif
+import qualified Data.YAML.Aeson
+import qualified Data.YAML as Y
+import qualified Data.YAML.Event as YE
+import qualified Data.YAML.Token as YT
+import qualified Data.YAML.Schema as YS
+import qualified Data.Text as Text
 #endif
 
 
@@ -92,32 +94,38 @@ jsonToYaml
 jsonToYaml json documents quoted =
 
   case (documents, json) of
-    (True, Data.Yaml.Array elems)
+    (True, Data.Aeson.Array elems)
       -> Data.ByteString.intercalate "\n---\n"
-         $ fmap (encodeYaml encodeOptions)
+         $ fmap (Data.ByteString.Lazy.toStrict. (Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8). (:[]))
          $ Data.Vector.toList elems
-    _ -> encodeYaml encodeOptions json
+    _ -> Data.ByteString.Lazy.toStrict (Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8 [json])
 
   where
-# if !MIN_VERSION_yaml(0,10,2)
-    encodeYaml = Data.Yaml.encode
-# else
-    encodeYaml = Data.Yaml.encodeWith
+    defaultSchemaEncoder = YS.setScalarStyle style Y.coreSchemaEncoder
 
-    customStyle = \s -> case () of
+    defaultEncodeStr s = case () of
+      ()
+        | "\n" `Text.isInfixOf` s -> Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
+        | YS.isAmbiguous Y.coreSchemaResolver s -> Right (YE.untagged, YE.SingleQuoted, s)
+        | otherwise -> Right (YE.untagged, YE.Plain, s)
+
+    style s = case s of
+      Y.SNull         -> Right (YE.untagged, YE.Plain, "null")
+      Y.SBool  bool   -> Right (YE.untagged, YE.Plain, YS.encodeBool bool)
+      Y.SFloat double -> Right (YE.untagged, YE.Plain, YS.encodeDouble double)
+      Y.SInt   int    -> Right (YE.untagged, YE.Plain, YS.encodeInt int)
+      Y.SStr   text   -> defaultEncodeStr text
+      Y.SUnknown t v  -> Right (t, YE.SingleQuoted, v)
+
+    customStyle (Y.SStr s) = case () of
         ()
-            | "\n" `Data.Text.isInfixOf` s -> ( noTag, literal )
-            | otherwise -> ( noTag, Text.Libyaml.SingleQuoted )
-        where
-            noTag = Text.Libyaml.NoTag
-            literal = Text.Libyaml.Literal
-
-    quotedOptions = Data.Yaml.setStringStyle
-                        customStyle
-                        Data.Yaml.defaultEncodeOptions
-
-    encodeOptions = if quoted
-        then quotedOptions
-        else Data.Yaml.defaultEncodeOptions
-# endif
+            | "\n" `Text.isInfixOf` s -> Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
+            | otherwise -> Right (YE.untagged, YE.SingleQuoted, s)
+    customStyle scalar =  (YS.schemaEncoderScalar defaultSchemaEncoder) scalar
+    
+    customSchemaEncoder = YS.setScalarStyle customStyle defaultSchemaEncoder
+    
+    schemaEncoder = if quoted 
+        then customSchemaEncoder 
+        else defaultSchemaEncoder
 #endif
