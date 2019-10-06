@@ -186,7 +186,7 @@ parseMode =
             (Lint <$> parseInplace)
     <|> subcommand
             "tags"
-            "Generate etags file"
+            "Generate ETags file"
             (ETags <$> parsePath <*> parseOutput <*> parseSuffixes <*> parseFollowSymlinks)
     <|> subcommand
             "format"
