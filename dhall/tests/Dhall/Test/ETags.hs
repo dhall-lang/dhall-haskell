@@ -2,19 +2,16 @@
 
 module Dhall.Test.ETags where
 
-import Data.Monoid (mempty, (<>))
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Dhall.Util (Input(..))
-import Dhall.TypeCheck (X)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath)
 
 import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO
-import qualified Dhall.Core       as Core
 import qualified Dhall.ETags      as ETags
-import qualified Dhall.Parser     as Parser
 import qualified Dhall.Test.Util  as Test.Util
 import qualified Test.Tasty       as Tasty
 import qualified Test.Tasty.HUnit as Tasty.HUnit
@@ -25,9 +22,9 @@ etagsDirectory = "./tests/etags"
 
 getTests :: IO TestTree
 getTests = do
-    lintTests <- Test.Util.discover (Turtle.chars <* "A.dhall") etagsTest (Turtle.lstree etagsDirectory)
+    etagsTests <- Test.Util.discover (Turtle.chars <* "A.dhall") etagsTest (Turtle.lstree etagsDirectory)
 
-    let testTree = Tasty.testGroup "etags tests" [ lintTests ]
+    let testTree = Tasty.testGroup "etags tests" [ etagsTests ]
 
     return testTree
 

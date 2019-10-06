@@ -20,22 +20,39 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.Map as M
 import Data.List (isSuffixOf)
-import System.Directory (doesDirectoryExist, getDirectoryContents,
+import System.Directory ( doesDirectoryExist
 #if MIN_VERSION_directory(1,3,0)
-                         pathIsSymbolicLink)
+                        , pathIsSymbolicLink
 #else
-                         isSymbolicLink)
+                        , isSymbolicLink
 #endif
+                        , getDirectoryContents
+                        )
 import System.FilePath ((</>), takeFileName)
 import Text.Megaparsec (sourceLine, sourceColumn, unPos)
 
-data FilePos = FP Int Int deriving (Eq, Ord)
+data FilePos = FP
+    { fpLine :: Int
+    , fpOffset :: Int
+    } deriving (Eq, Ord)
+
 newtype Tags = Tags (M.Map FilePath (M.Map FilePos Tag))
+
 instance Semigroup Tags where
     (Tags ts1) <> (Tags ts2) = Tags (M.unionWith M.union ts1 ts2)
-data Tag = Tag Text Text
+
+data Tag = Tag
+    { tagDefinitioni :: Text
+    , tagName :: Text
+    }
 
 {-| Generate ETags for Dhall expressions
+
+    Arguments:
+
+    * Path to directory or filename that should be indexed
+    * List of suffixes for dhall files [".dhall"] by default
+    * Flag if generate should follow symlinks
 -}
 generate :: Input -> [Text] -> Bool -> IO Text
 generate StandardInput _ _ = showTags . tags "" <$> TIO.getContents
@@ -47,11 +64,16 @@ generate (File p) sxs followSyms = do
                                                           (TIO.readFile f)
                                    return (ts <> t)) (Tags M.empty) files
 
+{-| Find tags in Text (second argument) and generates list of them
+    To make tags for filenames working in both, emacs and vi, add two initial tags.
+    First for `filename` for vi and second with `/filename` for emacs.
+    Other tags are working for both.
+-}
 tags :: FilePath -> Text -> Tags
 tags f t = Tags (M.singleton f
                  (M.union initialMap (parse t)))
-    where initialMap = M.fromList [ (FP 1 0, Tag "" (T.pack . takeFileName $ f)) -- vi
-                                  , (FP 1 1, Tag "" ("/" <> (T.pack . takeFileName) f)) -- emacs
+    where initialMap = M.fromList [ (FP 1 0, Tag "" (T.pack . takeFileName $ f))
+                                  , (FP 1 1, Tag "" ("/" <> (T.pack . takeFileName) f))
                                   ]
 
 parse :: Text -> M.Map FilePos Tag
@@ -69,18 +91,13 @@ parse t = M.fromAscList . map (\(FP ln c, Tag _ term) ->
 
 parseExpr :: Expr Src a -> FilePos -> M.Map FilePos Tag -> M.Map FilePos Tag
 parseExpr (Let b e) lpos  mts = parseExpr e lpos (parseBinding b mts)
--- | > Annot x t                                ~  x : t
 parseExpr (Annot e1 e2) lpos mts = parseExpr e1 lpos (parseExpr e2 lpos mts)
--- | > Record       [(k1, t1), (k2, t2)]        ~  { k1 : t1, k2 : t1 }
 parseExpr (Record mr) lpos mts = foldr (\k mts' ->
     M.insert lpos (Tag "" k) mts') mts . DM.keys $  mr
--- | > RecordLit    [(k1, v1), (k2, v2)]        ~  { k1 = v1, k2 = v2 }
 parseExpr (RecordLit mr) lpos mts = foldr (\k mts' ->
     M.insert lpos (Tag "" k) mts') mts . DM.keys $ mr
--- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
 parseExpr (Union mmr) lpos mts = foldr (\k mts' ->
     M.insert lpos (Tag "" k) mts') mts . DM.keys $ mmr
--- | > Note s x                                 ~  e
 parseExpr (Note s e) _ mts = parseExpr e (srcToFilePos s) mts
 parseExpr _ _ mts = mts
 
@@ -114,7 +131,7 @@ showInt :: Int -> Text
 showInt = T.pack . show
 
 {-| from https://github.com/MarcWeber/hasktags/blob/master/src/Hasktags.hs
- -| suffixes: [".dhall"], use "" to match all files
+    suffixes: [".dhall"], use "" to match all files
 -}
 dirToFiles :: Bool -> [String] -> FilePath -> IO [ FilePath ]
 dirToFiles _ _ "STDIN" = lines <$> getContents

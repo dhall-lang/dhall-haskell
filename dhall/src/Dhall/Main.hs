@@ -309,12 +309,12 @@ parseMode =
 
     parseOutput = fmap f (optional p)
       where
-        f  Nothing    = StandardOutput
+        f  Nothing    = FileO "tags"
         f (Just file) = FileO file
 
         p = Options.Applicative.strOption
             (   Options.Applicative.long "output"
-            <>  Options.Applicative.help "Output into file. STDOUT by default"
+            <>  Options.Applicative.help "Output into file. File tags by default"
             <>  Options.Applicative.metavar "OUTPUT"
             )
 
