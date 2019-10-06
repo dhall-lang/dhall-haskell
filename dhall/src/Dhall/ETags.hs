@@ -37,7 +37,6 @@ import qualified Data.Map      as M
 import qualified Data.Text     as T
 import qualified Data.Text.IO  as TIO
 
-
 #if !(MIN_VERSION_base(4,10,0))
 fromRight :: b -> Either a b -> b
 fromRight _ (Right b) = b
