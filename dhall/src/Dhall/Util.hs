@@ -98,12 +98,12 @@ get :: (String -> Text -> Either ParseError a) -> Censor -> Input -> IO a
 get parser censor input = do
     inText <- do
         case input of
-            File file     -> Data.Text.IO.readFile file
+            InputFile file     -> Data.Text.IO.readFile file
             StandardInput -> Data.Text.IO.getContents
 
     let name =
             case input of
-                File file     -> file
+                InputFile file     -> file
                 StandardInput -> "(stdin)"
 
     let result = parser name inText
@@ -119,10 +119,10 @@ get parser censor input = do
 data Censor = NoCensor | Censor
 
 -- | Path to input
-data Input = StandardInput | File FilePath
+data Input = StandardInput | InputFile FilePath
 
 -- | Path to output
-data Output = StandardOutput | FileO FilePath
+data Output = StandardOutput | OutputFile FilePath
 
 -- | Convenient utility for retrieving an expression
 getExpression :: Censor -> Input -> IO (Expr Src Import)

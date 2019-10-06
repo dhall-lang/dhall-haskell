@@ -37,7 +37,7 @@ etagsTest prefix =
         let inputFile  = Text.unpack (prefix <> "A.dhall")
         let outputFile = Text.unpack (prefix <> "B.tags")
 
-        actualTags <- fixSlash <$> ETags.generate (File inputFile) [""] False
+        actualTags <- fixSlash <$> ETags.generate (InputFile inputFile) [""] False
 
         expectedTags <- fixSlash <$> Text.IO.readFile outputFile
 

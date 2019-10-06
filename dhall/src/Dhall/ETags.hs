@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 
 -- | This module contains the implementation of the @dhall tags@ command
 
@@ -8,15 +9,17 @@ module Dhall.ETags
       generate
     ) where
 
-import Control.Monad
-import Control.Exception
+import Control.Exception (handle, SomeException(..))
+import Data.Either (fromRight)
 import Data.List (isSuffixOf)
+import Data.Maybe (fromMaybe)
 import Data.Semigroup (Semigroup(..))
+import Dhall.Map (foldMapWithKey)
 import Data.Text (Text)
 import Dhall.Util (Input(..))
 import Dhall.Core (Expr(..), Binding(..))
-import Dhall.Src (Src(..))
-import Dhall.Parser
+import Dhall.Src (Src(srcStart))
+import Dhall.Parser (exprFromText)
 import System.Directory ( doesDirectoryExist
 #if MIN_VERSION_directory(1,3,0)
                         , pathIsSymbolicLink
@@ -31,101 +34,121 @@ import Text.Megaparsec (sourceLine, sourceColumn, unPos)
 import qualified Data.Map      as M
 import qualified Data.Text     as T
 import qualified Data.Text.IO  as TIO
-import qualified Dhall.Map     as DM (keys)
 
-data FilePos = FP
+{-| 
+    Documentation for ETags format is not very informative and not very correct.
+    You can find version of documentation here:
+    https://en.wikipedia.org/wiki/Ctags#Etags_2
+    and you can also check source code here:
+    http://cvs.savannah.gnu.org/viewvc/vtags/vtags/vtags.el?view=markup
+-}
+
+data PosInFile = FP
     { fpLine :: Int
+      -- ^ line number, starting from 1, whe to find tag
     , fpOffset :: Int
+      -- ^ byte offset form start of file. Not sure if any editor use it
     } deriving (Eq, Ord)
 
-newtype Tags = Tags (M.Map FilePath (M.Map FilePos Tag))
+newtype Tags = Tags (M.Map FilePath (M.Map PosInFile Tag))
 
 instance Semigroup Tags where
-    (Tags ts1) <> (Tags ts2) = Tags (M.unionWith M.union ts1 ts2)
+    (Tags ts1) <> (Tags ts2) = Tags (M.unionWith (<>) ts1 ts2)
+
+instance Monoid Tags where
+    mempty = Tags M.empty
 
 data Tag = Tag
     { tagDefinition :: Text
+      -- ^ In vtags source code this field has name pattern and EMacs use it as regex pattern
+      --   to locate line with tag. It's looking for ^<tag definition>.
+      --   Looks like vi is not using it.
     , tagName :: Text
+      -- ^ text, that editor compare with selected text. So it's really name of entity
     }
 
 {-| Generate ETags for Dhall expressions
-
-    Arguments:
-
-    * Path to directory or filename that should be indexed
-    * List of suffixes for dhall files [".dhall"] by default
-    * Flag if generate should follow symlinks
 -}
-generate :: Input -> [Text] -> Bool -> IO Text
-generate StandardInput _ _ = showTags . tags "" <$> TIO.getContents
-generate (File p) sxs followSyms = do
-    isD <- doesDirectoryExist p
-    files <- dirToFiles followSyms (map T.unpack (if isD then sxs else [""])) p
-    showTags <$> foldM (\ts f -> do
-                                   t <- tags f <$> handle (\(SomeException _) -> return "")
-                                                          (TIO.readFile f)
-                                   return (ts <> t)) (Tags M.empty) files
+generate
+    :: Input
+    -- ^ Path to directory or filename that should be indexed
+    -> [Text]
+    -- ^ List of suffixes for dhall files [".dhall"] by default
+    -> Bool
+    -- ^ Flag if generate should follow symlinks
+    -> IO Text
+    -- ^ Content for tags file
+generate inp sxs followSyms = do
+    isD <- case inp of
+               StandardInput -> return False
+               InputFile p -> doesDirectoryExist p
+    files <- inputToFiles followSyms (map T.unpack (if isD then sxs else [""])) inp
+    tags <- foldMap (\f -> handle (\(SomeException _) -> return mempty)
+                                  (fileTags f <$> TIO.readFile f)) files
+    return (showTags tags)
 
 {-| Find tags in Text (second argument) and generates list of them
     To make tags for filenames working in both, emacs and vi, add two initial tags.
     First for `filename` for vi and second with `/filename` for emacs.
     Other tags are working for both.
 -}
-tags :: FilePath -> Text -> Tags
-tags f t = Tags (M.singleton f
-                 (M.union initialMap (parse t)))
-    where initialMap = M.fromList [ (FP 1 0, Tag "" (T.pack . takeFileName $ f))
-                                  , (FP 1 1, Tag "" ("/" <> (T.pack . takeFileName) f))
-                                  ]
+fileTags :: FilePath -> Text -> Tags
+fileTags f t = Tags (M.singleton f
+                    (initialMap <> getTagsFromText t))
+    where initialViTag = (FP 1 0, Tag "" (T.pack . takeFileName $ f))
+          initialEmacsTag = (FP 1 1, Tag "" ("/" <> (T.pack . takeFileName) f))
+          initialMap = M.fromList [initialViTag, initialEmacsTag]
 
-parse :: Text -> M.Map FilePos Tag
-parse t = M.fromAscList . map (\(FP ln c, Tag _ term) ->
-              let (lsl, l) = mls M.! ln in
-              (FP ln (lsl + c), Tag (T.take c l) term)) . M.assocs $
-          parseExpr e (FP 0 0) M.empty
-    where e = case exprFromText "" t of
-                  Left _ -> None
-                  Right r -> r
-          mls = M.fromList . fst . foldl (\(ls, lsl) (n, l) ->
-                                             let lsl' = lsl + 1 + T.length l in
-                                             ((n, (lsl, l)):ls, lsl'))
-                                        ([], 0) . zip [1..] $ T.lines t
+getTagsFromText :: Text -> M.Map PosInFile Tag
+getTagsFromText t = fromRight M.empty $
+                              fixPosAndDefinition t . getTagsFromExpr <$> exprFromText "" t
 
-parseExpr :: Expr Src a -> FilePos -> M.Map FilePos Tag -> M.Map FilePos Tag
-parseExpr (Let b e) lpos  mts = parseExpr e lpos (parseBinding b mts)
-parseExpr (Annot e1 e2) lpos mts = parseExpr e1 lpos (parseExpr e2 lpos mts)
-parseExpr (Record mr) lpos mts = foldr (\k mts' ->
-    M.insert lpos (Tag "" k) mts') mts . DM.keys $  mr
-parseExpr (RecordLit mr) lpos mts = foldr (\k mts' ->
-    M.insert lpos (Tag "" k) mts') mts . DM.keys $ mr
-parseExpr (Union mmr) lpos mts = foldr (\k mts' ->
-    M.insert lpos (Tag "" k) mts') mts . DM.keys $ mmr
-parseExpr (Note s e) _ mts = parseExpr e (srcToFilePos s) mts
-parseExpr _ _ mts = mts
+-- after getTagsFromExpr line and column in line are in PosInFile for each tag
+-- and tag definition is empty.
+-- Emacs use tag definition to check if tag is on line. It compares line from start
+-- with tag definition and in case they are the same, relocate user.
+-- fixPosAndDefinition change position to line and byte offset and add tag definition.
+fixPosAndDefinition :: Text -> M.Map PosInFile Tag -> M.Map PosInFile Tag
+fixPosAndDefinition t = M.foldMapWithKey (\(FP ln c) (Tag _ term) ->
+             let (lsl, l) = fromMaybe (0, "") (mls M.!? ln) in
+             M.singleton (FP ln (lsl + c)) (Tag (T.take c l) term))
+    where mls :: M.Map Int (Int, Text) 
+          -- mls is map that for each line has length of file before this map and line content.
+          mls = M.fromList . fst .
+                foldl (\(ls, lsl) (n, l) ->
+                           let lsl' = lsl + 1 + T.length l in
+                           ((n, (lsl, l)):ls, lsl')) ([], 0) . zip [1..] $ T.lines t
 
-parseBinding :: Binding Src a -> M.Map FilePos Tag -> M.Map FilePos Tag
-parseBinding b = M.insert (maybeSrcToFilePos . bindingSrc0 $ b)
-                          (Tag "" var)
-    where var = variable b
+getTagsFromExpr :: Expr Src a -> M.Map PosInFile Tag
+getTagsFromExpr = go (FP 0 0) M.empty
+    where go lpos mts = \case
+              (Let b e) -> go lpos (mts <> parseBinding b) e
+              (Annot e1 e2) -> go lpos (go lpos mts e1) e2
+              (Record mr) -> mts <> tagsFromDhallMap lpos mr
+              (RecordLit mr) -> mts <> tagsFromDhallMap lpos mr
+              (Union mmr) -> mts <> tagsFromDhallMap lpos mmr
+              (Note s e) -> go (srcToPosInFile s) mts e
+              _ -> mts
+          tagsFromDhallMap lpos = foldMapWithKey (\k _ -> M.singleton lpos (Tag "" k))
 
-maybeSrcToFilePos :: Maybe Src -> FilePos
-maybeSrcToFilePos Nothing = FP 0 0
-maybeSrcToFilePos (Just s) = srcToFilePos s
+parseBinding :: Binding Src a -> M.Map PosInFile Tag
+parseBinding b = M.singleton (maybe (FP 0 0) srcToPosInFile (bindingSrc0 b))
+                             (Tag "" (variable b))
 
-srcToFilePos :: Src -> FilePos
-srcToFilePos s = FP line column
+srcToPosInFile :: Src -> PosInFile
+srcToPosInFile s = FP line column
     where ssp = srcStart s
           line = unPos . sourceLine $ ssp
           column = unPos . sourceColumn $ ssp
 
 showTags :: Tags -> Text
-showTags (Tags ts) = T.concat . M.elems . M.mapWithKey showFileTags $ ts
+showTags (Tags ts) = T.concat . map (uncurry showFileTags) . M.toList $ ts
 
-showFileTags :: FilePath -> M.Map FilePos Tag -> T.Text
+showFileTags :: FilePath -> M.Map PosInFile Tag -> T.Text
 showFileTags f ts = "\x0c\n" <> T.pack f <> "," <> (showInt . T.length) cs <> "\n" <> cs
-    where cs = T.concat . M.elems . M.mapWithKey showPosTag $ ts
+    where cs = T.concat . map (uncurry showPosTag) . M.toList $ ts
 
-showPosTag :: FilePos -> Tag -> Text
+showPosTag :: PosInFile -> Tag -> Text
 showPosTag fp tag = def <>"\x7f" <> name <> "\x01" <> showInt line <>
                     "," <> showInt offset <> "\n"
     where line = fpLine fp
@@ -136,26 +159,38 @@ showPosTag fp tag = def <>"\x7f" <> name <> "\x01" <> showInt line <>
 showInt :: Int -> Text
 showInt = T.pack . show
 
-{-| from https://github.com/MarcWeber/hasktags/blob/master/src/Hasktags.hs
-    suffixes: [".dhall"], use "" to match all files
+{-| Generate list of files for given Input
 -}
-dirToFiles :: Bool -> [String] -> FilePath -> IO [ FilePath ]
-dirToFiles _ _ "STDIN" = lines <$> getContents
-dirToFiles followSyms suffixes p = do
-  isD <- doesDirectoryExist p
+inputToFiles
+    :: Bool
+    -- ^ In case true, function will get files from  symbolic links
+    -> [String]
+    -- ^ List of suffixes. In case it contains empty string (""), all files will be returned.
+    --   This parameter works only in case input is path to directory.
+    -> Input
+    -- ^ Where to look fo files. Can be directory name (`.` for example),
+    --   file name or StandardInput. In case of StandardInput will wait for file names from
+    --   STDIN, This way someone can combine tools in bash to send, for example, output from
+    --   find to input of dhall tags.
+    -> IO [ FilePath ]
+    --   List of files.
+inputToFiles _ _ StandardInput = lines <$> getContents
+inputToFiles followSyms suffixes (InputFile path) = go path
+    where go p = do
+                   isD <- doesDirectoryExist p
 #if MIN_VERSION_directory(1,3,0)
-  isSymLink <- pathIsSymbolicLink p
+                   isSymLink <- pathIsSymbolicLink p
 #elif MIN_VERSION_directory(1,2,6)
-  isSymLink <- isSymbolicLink pa
+                   isSymLink <- isSymbolicLink pa
 #else
-  let isSymLink = False
+                   let isSymLink = False
 #endif
-  if isD
-    then if isSymLink && not followSyms
-        then return []
-        else do
-          -- filter . .. and hidden files .*
-          contents <- filter ((/=) '.' . head) `fmap` getDirectoryContents p
-          concat `fmap` mapM (dirToFiles followSyms suffixes . (</>) p) contents
-    else return [p | matchingSuffix ]
-  where matchingSuffix = any (`isSuffixOf` p) suffixes
+                   if isD
+                     then if isSymLink && not followSyms
+                            then return []
+                            else do
+                                   -- filter . .. and hidden files .*
+                                   contents <- filter ((/=) '.' . head) <$> getDirectoryContents p
+                                   concat <$> mapM (go . (</>) p) contents
+                     else return [p | matchingSuffix ]
+               where matchingSuffix = any (`isSuffixOf` p) suffixes

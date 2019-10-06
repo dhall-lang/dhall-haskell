@@ -224,7 +224,7 @@ parseMode =
     parseFile = fmap f (optional p)
       where
         f  Nothing    = StandardInput
-        f (Just file) = File file
+        f (Just file) = InputFile file
 
         p = Options.Applicative.strOption
                 (   Options.Applicative.long "file"
@@ -288,7 +288,7 @@ parseMode =
     parseInplace = fmap f (optional p)
       where
         f  Nothing    = StandardInput
-        f (Just file) = File file
+        f (Just file) = InputFile file
 
         p = Options.Applicative.strOption
             (   Options.Applicative.long "inplace"
@@ -299,18 +299,18 @@ parseMode =
     parsePath = fmap f (optional p)
       where
         f  Nothing    = StandardInput
-        f (Just path) = File path
+        f (Just path) = InputFile path
 
         p = Options.Applicative.strOption
             (   Options.Applicative.long "path"
-            <>  Options.Applicative.help "Index all files in path recursively"
+            <>  Options.Applicative.help "Index all files in path recursively. Will get list of files from STDIN if ommited."
             <>  Options.Applicative.metavar "PATH"
             )
 
     parseOutput = fmap f (optional p)
       where
-        f  Nothing    = FileO "tags"
-        f (Just file) = FileO file
+        f  Nothing    = OutputFile "tags"
+        f (Just file) = OutputFile file
 
         p = Options.Applicative.strOption
             (   Options.Applicative.long "output"
@@ -383,7 +383,7 @@ command (Options {..}) = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
     let rootDirectory = \case
-            File f        -> System.FilePath.takeDirectory f
+            InputFile f        -> System.FilePath.takeDirectory f
             StandardInput -> "."
 
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
@@ -606,7 +606,7 @@ command (Options {..}) = do
             (header, expression) <- getExpressionAndHeader inplace
 
             case inplace of
-                File file -> do
+                InputFile file -> do
                     let lintedExpression = Dhall.Lint.lint expression
 
                     let doc =   Pretty.pretty header
@@ -646,7 +646,7 @@ command (Options {..}) = do
         Decode {..} -> do
             bytes <- do
                 case file of
-                    File f        -> Data.ByteString.Lazy.readFile f
+                    InputFile f        -> Data.ByteString.Lazy.readFile f
                     StandardInput -> Data.ByteString.Lazy.getContents
 
             term <- do
@@ -696,7 +696,7 @@ command (Options {..}) = do
             tags <- Dhall.ETags.generate path suffixes followSymlinks
 
             case output of
-                FileO file ->
+                OutputFile file ->
                     System.IO.withFile file System.IO.WriteMode (`Data.Text.IO.hPutStr` tags)
 
                 StandardOutput -> Data.Text.IO.putStrLn tags
