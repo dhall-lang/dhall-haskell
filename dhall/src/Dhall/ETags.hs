@@ -23,7 +23,7 @@ import Data.List (isSuffixOf)
 import System.Directory ( doesDirectoryExist
 #if MIN_VERSION_directory(1,3,0)
                         , pathIsSymbolicLink
-#else
+#elif MIN_VERSION_directory(1,2,6)
                         , isSymbolicLink
 #endif
                         , getDirectoryContents
@@ -143,8 +143,10 @@ dirToFiles followSyms suffixes p = do
   isD <- doesDirectoryExist p
 #if MIN_VERSION_directory(1,3,0)
   isSymLink <- pathIsSymbolicLink p
+#elif MIN_VERSION_directory(1,2,6)
+  isSymLink <- isSymbolicLink pa
 #else
-  isSymLink <- isSymbolicLink p
+  let isSymLink = False
 #endif
   if isD
     then if isSymLink && not followSyms

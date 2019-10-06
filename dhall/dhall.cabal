@@ -363,6 +363,8 @@ Extra-Source-Files:
     tests/lint/success/*.dhall
     tests/diff/*.dhall
     tests/diff/*.txt
+    tests/etags/*.dhall
+    tests/etags/*.tags
     tests/recursive/*.dhall
     tests/regression/*.dhall
     tests/tutorial/*.dhall
