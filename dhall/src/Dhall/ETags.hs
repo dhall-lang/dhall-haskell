@@ -28,10 +28,10 @@ import System.Directory ( doesDirectoryExist
 import System.FilePath ((</>), takeFileName)
 import Text.Megaparsec (sourceLine, sourceColumn, unPos)
 
-import qualified Data.Map as M
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
-import qualified Dhall.Map as DM (keys)
+import qualified Data.Map      as M
+import qualified Data.Text     as T
+import qualified Data.Text.IO  as TIO
+import qualified Dhall.Map     as DM (keys)
 
 data FilePos = FP
     { fpLine :: Int
