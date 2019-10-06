@@ -9,6 +9,10 @@ module Dhall.ETags
     ) where
 
 import Dhall.Util (Input(..))
+import Dhall.Core (Expr(..), Binding(..))
+import Dhall.Src (Src(..))
+import qualified Dhall.Map as DM (keys)
+import Dhall.Parser
 import Data.Text (Text)
 import Control.Monad
 import Control.Exception
@@ -23,9 +27,10 @@ import System.Directory (doesDirectoryExist, getDirectoryContents,
                          isSymbolicLink)
 #endif
 import System.FilePath ((</>), takeFileName)
+import Text.Megaparsec (sourceLine, sourceColumn, unPos)
 
-data Pos = Pos Int Int deriving (Eq, Ord)
-newtype Tags = Tags (M.Map FilePath (M.Map Pos Tag))
+data FilePos = FP Int Int deriving (Eq, Ord)
+newtype Tags = Tags (M.Map FilePath (M.Map FilePos Tag))
 instance Semigroup Tags where
     (Tags ts1) <> (Tags ts2) = Tags (M.unionWith M.union ts1 ts2)
 data Tag = Tag Text Text
@@ -44,20 +49,65 @@ generate (File p) sxs followSyms = do
 
 tags :: FilePath -> Text -> Tags
 tags f t = Tags (M.singleton f
-                 (M.insert (Pos 0 1) (Tag (T.pack f) ((T.pack . takeFileName) f)) (parse t)))
+                 (M.union initialMap (parse t)))
+    where initialMap = M.fromList [ (FP 1 0, Tag "" (T.pack . takeFileName $ f)) -- vi
+                                  , (FP 1 1, Tag "" ("/" <> (T.pack . takeFileName) f)) -- emacs
+                                  ]
 
-parse :: Text -> M.Map Pos Tag
-parse t = M.empty
+parse :: Text -> M.Map FilePos Tag
+parse t = M.fromAscList . map (\(FP ln c, Tag _ term) ->
+              let (lsl, l) = mls M.! ln in
+              (FP ln (lsl + c), Tag (T.take c l) term)) . M.assocs $
+          parseExpr e (FP 0 0) M.empty
+    where e = case exprFromText "" t of
+                  Left _ -> None
+                  Right r -> r
+          mls = M.fromList . fst . foldl (\(ls, lsl) (n, l) ->
+                                             let lsl' = lsl + 1 + T.length l in
+                                             ((n, (lsl, l)):ls, lsl'))
+                                        ([], 0) . zip [1..] $ T.lines t
+
+parseExpr :: Expr Src a -> FilePos -> M.Map FilePos Tag -> M.Map FilePos Tag
+parseExpr (Let b e) lpos  mts = parseExpr e lpos (parseBinding b mts)
+-- | > Annot x t                                ~  x : t
+parseExpr (Annot e1 e2) lpos mts = parseExpr e1 lpos (parseExpr e2 lpos mts)
+-- | > Record       [(k1, t1), (k2, t2)]        ~  { k1 : t1, k2 : t1 }
+parseExpr (Record mr) lpos mts = foldr (\k mts' ->
+    M.insert lpos (Tag "" k) mts') mts . DM.keys $  mr
+-- | > RecordLit    [(k1, v1), (k2, v2)]        ~  { k1 = v1, k2 = v2 }
+parseExpr (RecordLit mr) lpos mts = foldr (\k mts' ->
+    M.insert lpos (Tag "" k) mts') mts . DM.keys $ mr
+-- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
+parseExpr (Union mmr) lpos mts = foldr (\k mts' ->
+    M.insert lpos (Tag "" k) mts') mts . DM.keys $ mmr
+-- | > Note s x                                 ~  e
+parseExpr (Note s e) _ mts = parseExpr e (srcToFilePos s) mts
+parseExpr _ _ mts = mts
+
+parseBinding :: Binding Src a -> M.Map FilePos Tag -> M.Map FilePos Tag
+parseBinding b = M.insert (maybeSrcToFilePos . bindingSrc0 $ b)
+                          (Tag "" var)
+    where var = variable b
+
+maybeSrcToFilePos :: Maybe Src -> FilePos
+maybeSrcToFilePos Nothing = FP 0 0
+maybeSrcToFilePos (Just s) = srcToFilePos s
+
+srcToFilePos :: Src -> FilePos
+srcToFilePos s = FP line column
+    where ssp = srcStart s
+          line = unPos . sourceLine $ ssp
+          column = unPos . sourceColumn $ ssp
 
 showTags :: Tags -> Text
 showTags (Tags ts) = T.concat . M.elems . M.mapWithKey showFileTags $ ts
 
-showFileTags :: FilePath -> M.Map Pos Tag -> T.Text
+showFileTags :: FilePath -> M.Map FilePos Tag -> T.Text
 showFileTags f ts = "\x0c\n" <> T.pack f <> "," <> (showInt . T.length) cs <> "\n" <> cs
-    where cs = T.intercalate "\n" . M.elems . M.mapWithKey showPosTag $ ts
+    where cs = T.concat . M.elems . M.mapWithKey showPosTag $ ts
 
-showPosTag :: Pos -> Tag -> Text
-showPosTag (Pos line shift) (Tag def term) = def <>"\x7f" <> term <> "\x01" <> showInt line <>
+showPosTag :: FilePos -> Tag -> Text
+showPosTag (FP line shift) (Tag def term) = def <>"\x7f" <> term <> "\x01" <> showInt line <>
                                              "," <> showInt shift <> "\n"
 
 showInt :: Int -> Text
