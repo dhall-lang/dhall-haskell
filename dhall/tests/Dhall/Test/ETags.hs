@@ -4,7 +4,7 @@ module Dhall.Test.ETags where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
-import Dhall.Core (Expr, Import)
+import Dhall.Util (Input(..))
 import Dhall.TypeCheck (X)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
@@ -37,9 +37,9 @@ etagsTest prefix =
         let inputFile  = Text.unpack (prefix <> "A.dhall")
         let outputFile = Text.unpack (prefix <> "B.tags")
 
-        actualTags <- generate (File inputFile) [""] False
+        actualTags <- ETags.generate (File inputFile) [""] False
 
-        expectedTags <- Text.IO.readFile inputFile
+        expectedTags <- Text.IO.readFile outputFile
 
         let message = "The actual tags did not match the expected tags"
 

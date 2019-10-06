@@ -1,5 +1,5 @@
 
-./dhall/tests/etags/assertA.dhall,166
+./tests/etags/assertA.dhall,166
 assertA.dhall1,0
 /assertA.dhall1,1
 let simpleAssert1,4

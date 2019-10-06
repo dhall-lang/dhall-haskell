@@ -52,7 +52,7 @@ getAllTests = do
                 , lintTests
                 , diffTests
                 , semanticHashTests
-                , etagsTest
+                , etagsTests
                 , Dhall.Test.Regression.tests
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests
