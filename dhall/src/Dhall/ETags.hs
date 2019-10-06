@@ -42,7 +42,7 @@ instance Semigroup Tags where
     (Tags ts1) <> (Tags ts2) = Tags (M.unionWith M.union ts1 ts2)
 
 data Tag = Tag
-    { tagDefinitioni :: Text
+    { tagDefinition :: Text
     , tagName :: Text
     }
 
@@ -124,8 +124,12 @@ showFileTags f ts = "\x0c\n" <> T.pack f <> "," <> (showInt . T.length) cs <> "\
     where cs = T.concat . M.elems . M.mapWithKey showPosTag $ ts
 
 showPosTag :: FilePos -> Tag -> Text
-showPosTag (FP line shift) (Tag def term) = def <>"\x7f" <> term <> "\x01" <> showInt line <>
-                                             "," <> showInt shift <> "\n"
+showPosTag fp tag = def <>"\x7f" <> name <> "\x01" <> showInt line <>
+                    "," <> showInt offset <> "\n"
+    where line = fpLine fp
+          offset = fpOffset fp
+          def = tagDefinition tag
+          name = tagName tag
 
 showInt :: Int -> Text
 showInt = T.pack . show
