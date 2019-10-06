@@ -931,7 +931,7 @@ instance Interpret a => Interpret (Seq a) where
     autoWith opts = sequence (autoWith opts)
 
 instance Interpret a => Interpret [a] where
-    autoWith = fmap (fmap Data.Vector.toList) autoWith
+    autoWith opts = list (autoWith opts)
 
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
@@ -997,30 +997,30 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- > {-# LANGUAGE StandaloneDeriving #-}
 -- > {-# LANGUAGE TypeFamilies       #-}
 -- > {-# LANGUAGE TemplateHaskell    #-}
--- > 
+-- >
 -- > import Data.Fix (Fix(..))
 -- > import Data.Text (Text)
 -- > import Dhall (Interpret)
 -- > import GHC.Generics (Generic)
 -- > import Numeric.Natural (Natural)
--- > 
+-- >
 -- > import qualified Data.Fix                 as Fix
 -- > import qualified Data.Functor.Foldable    as Foldable
 -- > import qualified Data.Functor.Foldable.TH as TH
 -- > import qualified Dhall
 -- > import qualified NeatInterpolation
--- > 
+-- >
 -- > data Expr
 -- >     = Lit Natural
 -- >     | Add Expr Expr
 -- >     | Mul Expr Expr
 -- >     deriving (Show)
--- > 
+-- >
 -- > TH.makeBaseFunctor ''Expr
--- > 
+-- >
 -- > deriving instance Generic (ExprF a)
 -- > deriving instance Interpret a => Interpret (ExprF a)
--- > 
+-- >
 -- > example :: Text
 -- > example = [NeatInterpolation.text|
 -- >     \(Expr : Type)
@@ -1032,30 +1032,30 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- >           | MulF :
 -- >               { _1 : Expr, _2 : Expr }
 -- >           >
--- >     
+-- >
 -- >     in      \(Fix : ExprF -> Expr)
 -- >         ->  let Lit = \(x : Natural) -> Fix (ExprF.LitF { _1 = x })
--- >             
+-- >
 -- >             let Add =
 -- >                       \(x : Expr)
 -- >                   ->  \(y : Expr)
 -- >                   ->  Fix (ExprF.AddF { _1 = x, _2 = y })
--- >             
+-- >
 -- >             let Mul =
 -- >                       \(x : Expr)
 -- >                   ->  \(y : Expr)
 -- >                   ->  Fix (ExprF.MulF { _1 = x, _2 = y })
--- >             
+-- >
 -- >             in  Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))
 -- > |]
--- > 
+-- >
 -- > convert :: Fix ExprF -> Expr
 -- > convert = Fix.cata Foldable.embed
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >     x <- Dhall.input Dhall.auto example :: IO (Fix ExprF)
--- > 
+-- >
 -- >     print (convert x :: Expr)
 instance (Functor f, Interpret (f (Result f))) => Interpret (Fix f) where
     autoWith options = Type { expected = expected_, extract = extract_ }
