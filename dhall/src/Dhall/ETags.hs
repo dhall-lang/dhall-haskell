@@ -8,18 +8,15 @@ module Dhall.ETags
       generate
     ) where
 
+import Control.Monad
+import Control.Exception
+import Data.List (isSuffixOf)
+import Data.Semigroup (Semigroup(..))
+import Data.Text (Text)
 import Dhall.Util (Input(..))
 import Dhall.Core (Expr(..), Binding(..))
 import Dhall.Src (Src(..))
-import qualified Dhall.Map as DM (keys)
 import Dhall.Parser
-import Data.Text (Text)
-import Control.Monad
-import Control.Exception
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
-import qualified Data.Map as M
-import Data.List (isSuffixOf)
 import System.Directory ( doesDirectoryExist
 #if MIN_VERSION_directory(1,3,0)
                         , pathIsSymbolicLink
@@ -30,6 +27,11 @@ import System.Directory ( doesDirectoryExist
                         )
 import System.FilePath ((</>), takeFileName)
 import Text.Megaparsec (sourceLine, sourceColumn, unPos)
+
+import qualified Data.Map as M
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+import qualified Dhall.Map as DM (keys)
 
 data FilePos = FP
     { fpLine :: Int
