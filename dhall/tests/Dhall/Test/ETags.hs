@@ -28,15 +28,18 @@ getTests = do
 
     return testTree
 
+fixSlash :: Text -> Text
+fixSlash = Text.map (\c -> if c == '\\' then '/' else c)
+
 etagsTest :: Text -> TestTree
 etagsTest prefix =
     Tasty.HUnit.testCase (Text.unpack prefix) $ do
         let inputFile  = Text.unpack (prefix <> "A.dhall")
         let outputFile = Text.unpack (prefix <> "B.tags")
 
-        actualTags <- ETags.generate (File inputFile) [""] False
+        actualTags <- fixSlash <$> ETags.generate (File inputFile) [""] False
 
-        expectedTags <- Text.IO.readFile outputFile
+        expectedTags <- fixSlash <$> Text.IO.readFile outputFile
 
         let message = "The actual tags did not match the expected tags"
 
