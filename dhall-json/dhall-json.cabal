@@ -35,10 +35,6 @@ Source-Repository head
     Type: git
     Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-json
 
-Flag yaml-pre-0_11
-  Default: False
-  Manual: False
-
 Library
     Hs-Source-Dirs: src
     Build-Depends:
@@ -76,13 +72,9 @@ Library
         Other-Modules: Dhall.Yaml.Eta
         Java-Sources: java/Utils.java
     else
-      if flag(yaml-pre-0_11)
         Build-Depends:
-            yaml >= 0.5.0 && < 0.11
-      else
-        Build-Depends:
-            libyaml >= 0.1.1.0 && < 0.2 ,
-            yaml    >= 0.11.0  && < 0.12
+            HsYAML >= 0.2 && <0.3,
+            HsYAML-aeson >= 0.2 && <0.3
 
 Executable dhall-to-json
     Hs-Source-Dirs: dhall-to-json
