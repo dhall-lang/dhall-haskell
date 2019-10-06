@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PackageImports #-}
 
 module Dhall.Crypto (
       SHA256Digest(..)
@@ -8,13 +9,13 @@ module Dhall.Crypto (
     ) where
 
 import Control.DeepSeq (NFData)
-import Crypto.Hash (SHA256)
+import "cryptonite" Crypto.Hash (SHA256)
 import Data.ByteArray (ByteArrayAccess, convert)
 import Data.ByteArray.Encoding (Base(Base16), convertToBase)
 import Data.ByteString (ByteString)
 import GHC.Generics (Generic)
 
-import qualified Crypto.Hash
+import qualified "cryptonite" Crypto.Hash
 import qualified Data.ByteString.Char8 as ByteString.Char8
 
 newtype SHA256Digest = SHA256Digest { unSHA256Digest :: ByteString }

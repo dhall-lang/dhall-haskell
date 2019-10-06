@@ -1582,6 +1582,20 @@ instance Inject Int where
 
         declared = Integer
 
+{-| Injecting `Word` types gives `Natural`
+>>> import Data.Word
+>>> embed inject (12 :: Word)
+NaturalLit 12
+>>> embed inject (12 :: Word8)
+NaturalLit 12
+>>> embed inject (12 :: Word16)
+NaturalLit 12
+>>> embed inject (12 :: Word32)
+NaturalLit 12
+>>> embed inject (12 :: Word64)
+NaturalLit 12
+-}
+
 instance Inject Word where
     injectWith _ = InputType {..}
       where
