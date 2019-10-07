@@ -188,7 +188,7 @@ parseMode =
     <|> subcommand
             "tags"
             "Generate ETags file"
-            (ETags <$> parseInput <*> parseOutput <*> parseSuffixes <*> parseFollowSymlinks)
+            (ETags <$> parseInput <*> parseTagsOutput <*> parseSuffixes <*> parseFollowSymlinks)
     <|> subcommand
             "format"
             "Standard code formatter for the Dhall language"
@@ -320,14 +320,14 @@ parseMode =
             <>  Options.Applicative.metavar "INPUT"
             )
 
-    parseOutput = fmap f (optional p)
+    parseTagsOutput = fmap f (optional p)
       where
         f  Nothing    = OutputFile "tags"
         f (Just file) = OutputFile file
 
         p = Options.Applicative.strOption
             (   Options.Applicative.long "output"
-            <>  Options.Applicative.help "Output into file. File tags by default"
+            <>  Options.Applicative.help "Write ETags file into file. Default output is file tags"
             <>  Options.Applicative.metavar "OUTPUT"
             )
 

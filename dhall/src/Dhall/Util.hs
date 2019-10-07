@@ -124,9 +124,6 @@ data Input = StandardInput | InputFile FilePath
 -- | Path to output
 data Output = StandardOutput | OutputFile FilePath
 
--- | Path to output
-data Output = StandardOutput | OutputFile FilePath
-
 -- | Convenient utility for retrieving an expression
 getExpression :: Censor -> Input -> IO (Expr Src Import)
 getExpression = get Dhall.Parser.exprFromText
