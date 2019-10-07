@@ -180,6 +180,7 @@ shouldNotParse path = do
               -- treats a missing type annotation on an empty list as
               -- as a type-checking failure instead of a parse failure,
               -- but this might be fixable.
+            , parseDirectory </> "failure/unit/ListLitEmptyMissingAnnotation.dhall"
             , parseDirectory </> "failure/unit/ListLitEmptyAnnotation.dhall"
 
               -- The same performance improvements also broke the

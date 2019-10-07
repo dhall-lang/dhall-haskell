@@ -88,6 +88,7 @@ failureTest prefix = do
                , typeInferenceDirectory </> "failure/unit/RecordTypeDuplicateFields"
                , typeInferenceDirectory </> "failure/unit/UnionTypeDuplicateVariants1"
                , typeInferenceDirectory </> "failure/unit/UnionTypeDuplicateVariants2"
+               , typeInferenceDirectory </> "failure/unit/RecordProjectionDuplicateFields"
                ]
 
     Test.Util.testCase prefix skip $ do
