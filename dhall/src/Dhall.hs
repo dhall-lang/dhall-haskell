@@ -1581,33 +1581,74 @@ instance Inject Int where
 
         declared = Integer
 
+{- $setup
+>>> import Data.Word (Word8, Word16, Word32, Word64)
+-}
+
+{-|
+
+>>> embed inject (12 :: Word)
+NaturalLit 12
+-}
+
+instance Inject Word where
+    injectWith _ = InputType {..}
+      where
+        embed = NaturalLit . fromIntegral
+
+        declared = Natural
+
+{-|
+
+>>> embed inject (12 :: Word8)
+NaturalLit 12
+-}
+
 instance Inject Word8 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
+
+{-|
+
+>>> embed inject (12 :: Word16)
+NaturalLit 12
+-}
 
 instance Inject Word16 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
+
+{-|
+
+>>> embed inject (12 :: Word32)
+NaturalLit 12
+-}
 
 instance Inject Word32 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
+
+{-| 
+
+>>> embed inject (12 :: Word64)
+NaturalLit 12
+-}
 
 instance Inject Word64 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
 
 instance Inject Double where
     injectWith _ = InputType {..}
