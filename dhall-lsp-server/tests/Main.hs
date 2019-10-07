@@ -2,6 +2,7 @@
 
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T
+import qualified GHC.IO.Encoding
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
   ( CompletionItem (..),
@@ -132,6 +133,7 @@ diagnosticsSpec fixtureDir = do
 
 main :: IO ()
 main = do
+  GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
   diagnostics <- testSpec "Diagnostics" (diagnosticsSpec (baseDir "diagnostics"))
   linting <- testSpec "Linting" (lintingSpec (baseDir "linting"))
   completion <- testSpec "Completion" (codeCompletionSpec (baseDir "completion"))
