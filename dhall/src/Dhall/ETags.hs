@@ -9,6 +9,9 @@ module Dhall.ETags
       generate
     ) where
 
+#if !(MIN_VERSION_base(4,9,0))
+import Control.Applicative (liftA2)
+#endif
 import Control.Exception (handle, SomeException(..))
 #if MIN_VERSION_base(4,10,0)
 import Data.Either (fromRight)
