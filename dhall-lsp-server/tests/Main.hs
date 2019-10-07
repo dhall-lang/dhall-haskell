@@ -62,7 +62,7 @@ codeCompletionSpec fixtureDir =
       $ runSession "dhall-lsp-server" fullCaps fixtureDir
       $ do
         docId <- openDoc "CustomFunctions.dhall" "dhall"
-        cs <- getCompletions docId (Position {_line = 8, _character = 7})
+        cs <- getCompletions docId (Position {_line = 6, _character = 7})
         liftIO $ do
           let firstItem = head cs
           _label firstItem `shouldBe` "makeUser"
@@ -71,7 +71,7 @@ codeCompletionSpec fixtureDir =
       $ runSession "dhall-lsp-server" fullCaps fixtureDir
       $ do
         docId <- openDoc "Bindings.dhall" "dhall"
-        cs <- getCompletions docId (Position {_line = 0, _character = 64})
+        cs <- getCompletions docId (Position {_line = 0, _character = 59})
         liftIO $ do
           let firstItem = head cs
           _label firstItem `shouldBe` "bob"
@@ -80,7 +80,7 @@ codeCompletionSpec fixtureDir =
       $ runSession "dhall-lsp-server" fullCaps fixtureDir
       $ do
         docId <- openDoc "ImportedFunctions.dhall" "dhall"
-        cs <- getCompletions docId (Position {_line = 0, _character = 34})
+        cs <- getCompletions docId (Position {_line = 0, _character = 33})
         liftIO $ do
           let firstItem = head cs
           _label firstItem `shouldBe` "makeUser"
