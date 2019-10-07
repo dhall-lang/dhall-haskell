@@ -796,7 +796,7 @@ list = fmap Data.Foldable.toList . sequence
 vector :: Type a -> Type (Vector a)
 vector = fmap Data.Vector.fromList . list
 
-{-| Decode a `Set`
+{-| Decode a `Set` from a `List`
 
 >>> input (set natural) "[1, 2, 3]"
 fromList [1,2,3]
