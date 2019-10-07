@@ -98,13 +98,13 @@ get :: (String -> Text -> Either ParseError a) -> Censor -> Input -> IO a
 get parser censor input = do
     inText <- do
         case input of
-            InputFile file     -> Data.Text.IO.readFile file
-            StandardInput -> Data.Text.IO.getContents
+            InputFile file -> Data.Text.IO.readFile file
+            StandardInput  -> Data.Text.IO.getContents
 
     let name =
             case input of
-                InputFile file     -> file
-                StandardInput -> "(stdin)"
+                InputFile file -> file
+                StandardInput  -> "(stdin)"
 
     let result = parser name inText
 

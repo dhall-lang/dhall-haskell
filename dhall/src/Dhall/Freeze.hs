@@ -142,8 +142,8 @@ freeze
     -> IO ()
 freeze inplace scope intent characterSet censor = do
     let directory = case inplace of
-            StandardInput -> "."
-            InputFile file     -> System.FilePath.takeDirectory file
+            StandardInput  -> "."
+            InputFile file -> System.FilePath.takeDirectory file
 
     (header, parsedExpression) <- Dhall.Util.getExpressionAndHeader censor inplace
 

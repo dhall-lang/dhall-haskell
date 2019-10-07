@@ -83,8 +83,8 @@ format (Format {..}) =
                           (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc))
         Check {..} -> do
             originalText <- case path of
-                InputFile file     -> Data.Text.IO.readFile file
-                StandardInput -> Data.Text.IO.getContents
+                InputFile file -> Data.Text.IO.readFile file
+                StandardInput  -> Data.Text.IO.getContents
 
             (header, expr) <- Dhall.Util.getExpressionAndHeader censor path
 

@@ -57,4 +57,4 @@ etagsDirTest =
         Tasty.HUnit.assertEqual message expectedTags actualTags
 
 readExpected :: String -> IO Text
-readExpected = Test.Util.toDhallPath <$> Text.IO.readFile
+readExpected file = Test.Util.toDhallPath <$> Text.IO.readFile file

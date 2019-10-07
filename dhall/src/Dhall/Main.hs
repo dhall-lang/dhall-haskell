@@ -105,7 +105,7 @@ data Mode
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Input }
-    | ETags { path :: Input, output :: Output, suffixes :: [Text], followSymlinks :: Bool }
+    | ETags { input :: Input, output :: Output, suffixes :: [Text], followSymlinks :: Bool }
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool }
     | Text { file :: Input }
@@ -187,7 +187,7 @@ parseMode =
     <|> subcommand
             "tags"
             "Generate ETags file"
-            (ETags <$> parsePath <*> parseOutput <*> parseSuffixes <*> parseFollowSymlinks)
+            (ETags <$> parseInput <*> parseOutput <*> parseSuffixes <*> parseFollowSymlinks)
     <|> subcommand
             "format"
             "Standard code formatter for the Dhall language"
@@ -296,7 +296,7 @@ parseMode =
             <>  Options.Applicative.metavar "FILE"
             )
 
-    parsePath = fmap f (optional p)
+    parseInput = fmap f (optional p)
       where
         f  Nothing    = StandardInput
         f (Just path) = InputFile path
@@ -304,7 +304,7 @@ parseMode =
         p = Options.Applicative.strOption
             (   Options.Applicative.long "path"
             <>  Options.Applicative.help "Index all files in path recursively. Will get list of files from STDIN if ommited."
-            <>  Options.Applicative.metavar "PATH"
+            <>  Options.Applicative.metavar "INPUT"
             )
 
     parseOutput = fmap f (optional p)
@@ -383,7 +383,7 @@ command (Options {..}) = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
     let rootDirectory = \case
-            InputFile f        -> System.FilePath.takeDirectory f
+            InputFile f   -> System.FilePath.takeDirectory f
             StandardInput -> "."
 
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
@@ -646,7 +646,7 @@ command (Options {..}) = do
         Decode {..} -> do
             bytes <- do
                 case file of
-                    InputFile f        -> Data.ByteString.Lazy.readFile f
+                    InputFile f   -> Data.ByteString.Lazy.readFile f
                     StandardInput -> Data.ByteString.Lazy.getContents
 
             term <- do
@@ -693,7 +693,7 @@ command (Options {..}) = do
                     Control.Exception.throwIO (Dhall.InvalidType {..})
 
         ETags {..} -> do
-            tags <- Dhall.ETags.generate path suffixes followSymlinks
+            tags <- Dhall.ETags.generate input suffixes followSymlinks
 
             case output of
                 OutputFile file ->
