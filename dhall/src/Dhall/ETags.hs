@@ -147,7 +147,13 @@ fixPosAndDefinition t = foldMap (\(FP ln c, term) ->
               It's better to have term in term pattern, so this function finds and updates
               PosInFile and generate pattern.
           -} 
-          infoForText :: Text -> Int -> Maybe (Int, Int, Text)
+          infoForText
+              :: Text
+              -- ^ term to find
+              -> Int
+              -- ^ line where to start
+              -> Maybe (Int, Int, Text)
+              -- ^ (Line number, byte offset, pattern to find term in file)
           infoForText _ 0 = Nothing
           infoForText term ln
               | T.null part2 = infoForText term (ln - 1)
