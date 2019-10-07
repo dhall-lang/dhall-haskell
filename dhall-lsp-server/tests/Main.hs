@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Control.Monad.IO.Class (liftIO)
+import Data.Maybe (fromJust)
 import qualified Data.Text as T
 import qualified GHC.IO.Encoding
 import Language.Haskell.LSP.Test
@@ -8,6 +9,9 @@ import Language.Haskell.LSP.Types
   ( CompletionItem (..),
     Diagnostic (..),
     DiagnosticSeverity (..),
+    Hover (..),
+    HoverContents (..),
+    MarkupContent (..),
     Position (..),
   )
 import Test.Tasty
@@ -15,6 +19,27 @@ import Test.Tasty.Hspec
 
 baseDir :: FilePath -> FilePath
 baseDir d = "tests/fixtures/" <> d
+
+hoveringSpec :: FilePath -> Spec
+hoveringSpec dir =
+  describe "Dhall.Hover" $ do
+    it "reports types on hover"
+      $ runSession "dhall-lsp-server" fullCaps dir
+      $ do
+        docId <- openDoc "Types.dhall" "dhall"
+        let typePos = Position 0 5
+            functionPos = Position 2 7
+            extractContents = _contents . fromJust
+            getValue = T.unpack . _value
+        typeHover <- getHover docId typePos
+        funcHover <- getHover docId functionPos
+        liftIO $ do
+          case (extractContents typeHover, extractContents funcHover) of
+            (HoverContents typeContent, HoverContents functionContent) -> do
+              getValue typeContent `shouldBe` "Type"
+              getValue functionContent `shouldBe` "{ home : Text, name : Text }"
+            _ -> error "test failed"
+          pure ()
 
 lintingSpec :: FilePath -> Spec
 lintingSpec fixtureDir =
@@ -137,10 +162,12 @@ main = do
   diagnostics <- testSpec "Diagnostics" (diagnosticsSpec (baseDir "diagnostics"))
   linting <- testSpec "Linting" (lintingSpec (baseDir "linting"))
   completion <- testSpec "Completion" (codeCompletionSpec (baseDir "completion"))
+  hovering <- testSpec "Hovering" (hoveringSpec (baseDir "hovering"))
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
           linting,
-          completion
+          completion,
+          hovering
         ]
     )
