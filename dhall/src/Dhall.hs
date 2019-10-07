@@ -806,7 +806,7 @@ Duplicate elements are ignored.
 set :: (Ord a) => Type a -> Type (Data.Set.Set a)
 set = fmap Data.Set.fromList . list
 
-{-| Decode a `HashSet`
+{-| Decode a `HashSet` from a `List`
 
 >>> input (hashSet natural) "[1, 2, 3]"
 fromList [1,2,3]
