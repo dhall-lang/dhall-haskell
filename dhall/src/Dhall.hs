@@ -71,6 +71,8 @@ module Dhall
     , sequence
     , list
     , vector
+    , set
+    , hashSet
     , Dhall.map
     , pairFromMapEntry
     , unit
@@ -119,6 +121,7 @@ import Data.Either.Validation (Validation(..), ealt, eitherToValidation, validat
 import Data.Fix (Fix(..))
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
+import Data.Hashable (Hashable)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map (Map)
 import Data.Monoid ((<>))
@@ -136,7 +139,7 @@ import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import GHC.Generics
-import Lens.Family (LensLike', set, view)
+import Lens.Family (LensLike', view)
 import Numeric.Natural (Natural)
 import Prelude hiding (maybe, sequence)
 import System.FilePath (takeDirectory)
@@ -154,6 +157,7 @@ import qualified Data.Semigroup
 import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
+import qualified Data.HashSet
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
@@ -167,6 +171,7 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
+import qualified Lens.Family
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -405,8 +410,8 @@ inputWithSettings settings (Type {..}) txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               set Dhall.Import.normalizer      _normalizer
-            .  set Dhall.Import.startingContext _startingContext
+               Lens.Family.set Dhall.Import.normalizer      _normalizer
+            .  Lens.Family.set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatus _rootDirectory)
 
@@ -499,8 +504,8 @@ inputExprWithSettings settings txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               set Dhall.Import.normalizer      _normalizer
-            .  set Dhall.Import.startingContext _startingContext
+               Lens.Family.set Dhall.Import.normalizer      _normalizer
+            .  Lens.Family.set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatus _rootDirectory)
 
@@ -791,6 +796,26 @@ list = fmap Data.Foldable.toList . sequence
 vector :: Type a -> Type (Vector a)
 vector = fmap Data.Vector.fromList . list
 
+{-| Decode a `Set`
+
+>>> input (set natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+Duplicate elements are ignored.
+-}
+set :: (Ord a) => Type a -> Type (Data.Set.Set a)
+set = fmap Data.Set.fromList . list
+
+{-| Decode a `HashSet`
+
+>>> input (hashSet natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+Duplicate elements are ignored.
+-}
+hashSet :: (Hashable a, Ord a) => Type a -> Type (Data.HashSet.HashSet a)
+hashSet = fmap Data.HashSet.fromList . list
+
 {-| Decode a `Map` from a @toMap@ expression or generally a @Prelude.Map.Type@
 
 >>> input (Dhall.map strictText bool) "toMap { a = True, b = False }"
@@ -934,6 +959,12 @@ instance Interpret a => Interpret [a] where
 
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
+
+instance (Interpret a, Ord a) => Interpret (Data.Set.Set a) where
+    autoWith opts = set (autoWith opts)
+
+instance (Interpret a, Hashable a, Ord a) => Interpret (Data.HashSet.HashSet a) where
+    autoWith opts = hashSet (autoWith opts)
 
 instance (Ord k, Interpret k, Interpret v) => Interpret (Map k v) where
     autoWith opts = Dhall.map (autoWith opts) (autoWith opts)
@@ -1658,6 +1689,9 @@ instance Inject a => Inject (Vector a) where
 
 instance Inject a => Inject (Data.Set.Set a) where
     injectWith = fmap (contramap Data.Set.toList) injectWith
+
+instance Inject a => Inject (Data.HashSet.HashSet a) where
+    injectWith = fmap (contramap Data.HashSet.toList) injectWith
 
 instance (Inject a, Inject b) => Inject (a, b)
 
