@@ -90,6 +90,7 @@ data Options = Options
 data Mode
     = Default
           { file :: Input
+          , output :: Output
           , annotate :: Bool
           , alpha :: Bool
           , semanticCacheMode :: SemanticCacheMode
@@ -210,6 +211,7 @@ parseMode =
             (Text <$> parseFile)
     <|> (   Default
         <$> parseFile
+        <*> parseOutput
         <*> parseAnnotate
         <*> parseAlpha
         <*> parseSemanticCacheMode
@@ -229,6 +231,17 @@ parseMode =
         p = Options.Applicative.strOption
                 (   Options.Applicative.long "file"
                 <>  Options.Applicative.help "Read expression from a file instead of standard input"
+                <>  Options.Applicative.metavar "FILE"
+                )
+
+    parseOutput = fmap f (optional p)
+      where
+        f Nothing = StandardOutput
+        f (Just file) = OutputFile file
+
+        p = Options.Applicative.strOption
+                (   Options.Applicative.long "output"
+                <>  Options.Applicative.help "Write result to a file instead of standard output"
                 <>  Options.Applicative.metavar "FILE"
                 )
 
@@ -452,7 +465,7 @@ command (Options {..}) = do
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 
             renderDoc h doc
-    
+
     Dhall.Import.warnAboutMissingCaches
 
     handle $ case mode of
@@ -485,7 +498,10 @@ command (Options {..}) = do
                         then Annot alphaNormalizedExpression inferredType
                         else alphaNormalizedExpression
 
-            render System.IO.stdout annotatedExpression
+            case output of
+                StandardOutput -> render System.IO.stdout annotatedExpression
+                OutputFile file_ ->
+                    System.IO.withFile file_ System.IO.WriteMode $ \h -> render h annotatedExpression
 
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file

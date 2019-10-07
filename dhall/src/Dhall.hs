@@ -734,12 +734,7 @@ double = Type {..}
 "Test"
 -}
 lazyText :: Type Data.Text.Lazy.Text
-lazyText = Type {..}
-  where
-    extract (TextLit (Chunks [] t)) = pure (Data.Text.Lazy.fromStrict t)
-    extract  expr = typeError Text expr
-
-    expected = Text
+lazyText = fmap Data.Text.Lazy.fromStrict strictText
 
 {-| Decode strict `Text`
 
@@ -747,8 +742,12 @@ lazyText = Type {..}
 "Test"
 -}
 strictText :: Type Text
-strictText = fmap Data.Text.Lazy.toStrict lazyText
+strictText = Type {..}
+  where
+    extract (TextLit (Chunks [] t)) = pure t
+    extract  expr = typeError Text expr
 
+    expected = Text
 {-| Decode a `Maybe`
 
 >>> input (maybe natural) "Some 1"
@@ -897,6 +896,9 @@ class Interpret a where
 instance Interpret Void where
     autoWith _ = void
 
+instance Interpret () where
+    autoWith _ = unit
+
 instance Interpret Bool where
     autoWith _ = bool
 
@@ -928,7 +930,7 @@ instance Interpret a => Interpret (Seq a) where
     autoWith opts = sequence (autoWith opts)
 
 instance Interpret a => Interpret [a] where
-    autoWith = fmap (fmap Data.Vector.toList) autoWith
+    autoWith opts = list (autoWith opts)
 
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
@@ -994,30 +996,30 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- > {-# LANGUAGE StandaloneDeriving #-}
 -- > {-# LANGUAGE TypeFamilies       #-}
 -- > {-# LANGUAGE TemplateHaskell    #-}
--- > 
+-- >
 -- > import Data.Fix (Fix(..))
 -- > import Data.Text (Text)
 -- > import Dhall (Interpret)
 -- > import GHC.Generics (Generic)
 -- > import Numeric.Natural (Natural)
--- > 
+-- >
 -- > import qualified Data.Fix                 as Fix
 -- > import qualified Data.Functor.Foldable    as Foldable
 -- > import qualified Data.Functor.Foldable.TH as TH
 -- > import qualified Dhall
 -- > import qualified NeatInterpolation
--- > 
+-- >
 -- > data Expr
 -- >     = Lit Natural
 -- >     | Add Expr Expr
 -- >     | Mul Expr Expr
 -- >     deriving (Show)
--- > 
+-- >
 -- > TH.makeBaseFunctor ''Expr
--- > 
+-- >
 -- > deriving instance Generic (ExprF a)
 -- > deriving instance Interpret a => Interpret (ExprF a)
--- > 
+-- >
 -- > example :: Text
 -- > example = [NeatInterpolation.text|
 -- >     \(Expr : Type)
@@ -1029,30 +1031,30 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- >           | MulF :
 -- >               { _1 : Expr, _2 : Expr }
 -- >           >
--- >     
+-- >
 -- >     in      \(Fix : ExprF -> Expr)
 -- >         ->  let Lit = \(x : Natural) -> Fix (ExprF.LitF { _1 = x })
--- >             
+-- >
 -- >             let Add =
 -- >                       \(x : Expr)
 -- >                   ->  \(y : Expr)
 -- >                   ->  Fix (ExprF.AddF { _1 = x, _2 = y })
--- >             
+-- >
 -- >             let Mul =
 -- >                       \(x : Expr)
 -- >                   ->  \(y : Expr)
 -- >                   ->  Fix (ExprF.MulF { _1 = x, _2 = y })
--- >             
+-- >
 -- >             in  Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))
 -- > |]
--- > 
+-- >
 -- > convert :: Fix ExprF -> Expr
 -- > convert = Fix.cata Foldable.embed
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >     x <- Dhall.input Dhall.auto example :: IO (Fix ExprF)
--- > 
+-- >
 -- >     print (convert x :: Expr)
 instance (Functor f, Interpret (f (Result f))) => Interpret (Fix f) where
     autoWith options = Type { expected = expected_, extract = extract_ }
@@ -1579,33 +1581,74 @@ instance Inject Int where
 
         declared = Integer
 
+{- $setup
+>>> import Data.Word (Word8, Word16, Word32, Word64)
+-}
+
+{-|
+
+>>> embed inject (12 :: Word)
+NaturalLit 12
+-}
+
+instance Inject Word where
+    injectWith _ = InputType {..}
+      where
+        embed = NaturalLit . fromIntegral
+
+        declared = Natural
+
+{-|
+
+>>> embed inject (12 :: Word8)
+NaturalLit 12
+-}
+
 instance Inject Word8 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
+
+{-|
+
+>>> embed inject (12 :: Word16)
+NaturalLit 12
+-}
 
 instance Inject Word16 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
+
+{-|
+
+>>> embed inject (12 :: Word32)
+NaturalLit 12
+-}
 
 instance Inject Word32 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
+
+{-| 
+
+>>> embed inject (12 :: Word64)
+NaturalLit 12
+-}
 
 instance Inject Word64 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
 
 instance Inject Double where
     injectWith _ = InputType {..}
