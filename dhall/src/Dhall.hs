@@ -734,12 +734,7 @@ double = Type {..}
 "Test"
 -}
 lazyText :: Type Data.Text.Lazy.Text
-lazyText = Type {..}
-  where
-    extract (TextLit (Chunks [] t)) = pure (Data.Text.Lazy.fromStrict t)
-    extract  expr = typeError Text expr
-
-    expected = Text
+lazyText = fmap Data.Text.Lazy.fromStrict strictText
 
 {-| Decode strict `Text`
 
@@ -747,8 +742,12 @@ lazyText = Type {..}
 "Test"
 -}
 strictText :: Type Text
-strictText = fmap Data.Text.Lazy.toStrict lazyText
+strictText = Type {..}
+  where
+    extract (TextLit (Chunks [] t)) = pure t
+    extract  expr = typeError Text expr
 
+    expected = Text
 {-| Decode a `Maybe`
 
 >>> input (maybe natural) "Some 1"
