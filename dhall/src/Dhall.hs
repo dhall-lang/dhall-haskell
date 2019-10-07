@@ -1583,16 +1583,7 @@ instance Inject Int where
         declared = Integer
 
 {-| Injecting `Word` types gives `Natural`
->>> import Data.Word
 >>> embed inject (12 :: Word)
-NaturalLit 12
->>> embed inject (12 :: Word8)
-NaturalLit 12
->>> embed inject (12 :: Word16)
-NaturalLit 12
->>> embed inject (12 :: Word32)
-NaturalLit 12
->>> embed inject (12 :: Word64)
 NaturalLit 12
 -}
 
@@ -1603,12 +1594,24 @@ instance Inject Word where
 
         declared = Natural
 
+{-| Injecting `Word8` types gives `Natural`
+>>> import Data.Word (Word8)
+>>> embed inject (12 :: Word8)
+NaturalLit 12
+-}
+
 instance Inject Word8 where
     injectWith _ = InputType {..}
       where
         embed = NaturalLit . fromIntegral
 
         declared = Natural
+
+{-| Injecting `Word16` types gives `Natural`
+>>> import Data.Word (Word16)
+>>> embed inject (12 :: Word16)
+NaturalLit 12
+-}
 
 instance Inject Word16 where
     injectWith _ = InputType {..}
@@ -1617,12 +1620,24 @@ instance Inject Word16 where
 
         declared = Natural
 
+{-| Injecting `Word32` types gives `Natural`
+>>> import Data.Word (Word32)
+>>> embed inject (12 :: Word32)
+NaturalLit 12
+-}
+
 instance Inject Word32 where
     injectWith _ = InputType {..}
       where
         embed = NaturalLit . fromIntegral
 
         declared = Natural
+
+{-| Injecting `Word64` types gives `Natural`
+>>> import Data.Word (Word64)
+>>> embed inject (12 :: Word64)
+NaturalLit 12
+-}
 
 instance Inject Word64 where
     injectWith _ = InputType {..}
