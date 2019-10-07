@@ -1,0 +1,10 @@
+
+./tests/etags/recordlit.dhall,223
+recordlit.dhall1,0
+/recordlit.dhall1,1
+{ home home8,143
+, privateKey privateKey9,171
+, publicKey publicKey10,215
+, name name11,263
+, name = { firstName firstName11,272
+         , secondName secondName12,302
