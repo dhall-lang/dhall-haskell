@@ -9,18 +9,14 @@ module Dhall.ETags
       generate
     ) where
 
-#if !(MIN_VERSION_base(4,9,0))
-import Control.Applicative (liftA2)
-#endif
 import Control.Exception (handle, SomeException(..))
-#if MIN_VERSION_base(4,10,0)
-import Data.Either (fromRight)
-#endif
+import Control.Monad (foldM)
 import Data.List (isSuffixOf)
 import Data.Maybe (fromMaybe)
 import Data.Semigroup (Semigroup(..))
 import Dhall.Map (foldMapWithKey)
 import Data.Text (Text)
+import Data.Text.Encoding (encodeUtf8)
 import Dhall.Util (Input(..))
 import Dhall.Core (Expr(..), Binding(..))
 import Dhall.Src (Src(srcStart))
@@ -36,21 +32,10 @@ import System.Directory ( doesDirectoryExist
 import System.FilePath ((</>), takeFileName)
 import Text.Megaparsec (sourceLine, sourceColumn, unPos)
 
+import qualified Data.ByteString as BS (length)
 import qualified Data.Map      as M
 import qualified Data.Text     as T
 import qualified Data.Text.IO  as TIO
-
-#if !(MIN_VERSION_base(4,9,0))
-instance Monoid a => Monoid (IO a) where
-    mempty = pure mempty
-    mappend = liftA2 mappend
-#endif
-
-#if !(MIN_VERSION_base(4,10,0))
-fromRight :: b -> Either a b -> b
-fromRight _ (Right b) = b
-fromRight b _         = b
-#endif
 
 {-| 
     Documentation for ETags format is not very informative and not very correct.
@@ -67,21 +52,22 @@ data PosInFile = FP
       -- ^ byte offset form start of file. Not sure if any editor use it
     } deriving (Eq, Ord)
 
-newtype Tags = Tags (M.Map FilePath (M.Map PosInFile Tag))
+newtype Tags = Tags (M.Map FilePath [(PosInFile, Tag)])
 
 instance Semigroup Tags where
     (Tags ts1) <> (Tags ts2) = Tags (M.unionWith (<>) ts1 ts2)
 
 instance Monoid Tags where
     mempty = Tags M.empty
-#if !(MIN_VERSION_base(4,11,0))
     mappend = (<>)
-#endif
 
+{-| For example, for line: `let foo = "foo"` tag is:
+    `Tag "let " "foo"`
+-}
 data Tag = Tag
-    { tagDefinition :: Text
+    { tagPattern :: Text
       -- ^ In vtags source code this field has name pattern and EMacs use it as regex pattern
-      --   to locate line with tag. It's looking for ^<tag definition>.
+      --   to locate line with tag. It's looking for ^<tag pattern>.
       --   Looks like vi is not using it.
     , tagName :: Text
       -- ^ text, that editor compare with selected text. So it's really name of entity
@@ -103,8 +89,8 @@ generate inp sxs followSyms = do
                StandardInput -> return False
                InputFile p -> doesDirectoryExist p
     files <- inputToFiles followSyms (map T.unpack (if isD then sxs else [""])) inp
-    tags <- foldMap (\f -> handle (\(SomeException _) -> return mempty)
-                                  (fileTags f <$> TIO.readFile f)) files
+    tags <- foldM (\ts f -> handle (\(SomeException _) -> return ts)
+                                  ((<>) ts . fileTags f <$> TIO.readFile f)) mempty files
     return (showTags tags)
 
 {-| Find tags in Text (second argument) and generates list of them
@@ -117,43 +103,84 @@ fileTags f t = Tags (M.singleton f
                     (initialMap <> getTagsFromText t))
     where initialViTag = (FP 1 0, Tag "" (T.pack . takeFileName $ f))
           initialEmacsTag = (FP 1 1, Tag "" ("/" <> (T.pack . takeFileName) f))
-          initialMap = M.fromList [initialViTag, initialEmacsTag]
+          initialMap = [initialViTag, initialEmacsTag]
 
-getTagsFromText :: Text -> M.Map PosInFile Tag
-getTagsFromText t = fromRight M.empty $
-                              fixPosAndDefinition t . getTagsFromExpr <$> exprFromText "" t
+getTagsFromText :: Text -> [(PosInFile, Tag)]
+getTagsFromText t = case eitherTags of
+    Right x -> x
+    _ -> mempty
+    where eitherTags = fixPosAndDefinition t . getTagsFromExpr <$> exprFromText "" t
 
--- after getTagsFromExpr line and column in line are in PosInFile for each tag
--- and tag definition is empty.
--- Emacs use tag definition to check if tag is on line. It compares line from start
--- with tag definition and in case they are the same, relocate user.
--- fixPosAndDefinition change position to line and byte offset and add tag definition.
-fixPosAndDefinition :: Text -> M.Map PosInFile Tag -> M.Map PosInFile Tag
-fixPosAndDefinition t = M.foldMapWithKey (\(FP ln c) (Tag _ term) ->
-             let (lsl, l) = fromMaybe (0, "") (ln `M.lookup` mls) in
-             M.singleton (FP ln (lsl + c)) (Tag (T.take c l) term))
+-- after getTagsFromExpr line and column in line are in PosInFile for each tag.
+-- And tagPattern is not added.
+-- Emacs use tag pattern to check if tag is on line. It compares line from start
+-- with tag pattern and in case they are the same, relocate user.
+-- fixPosAndDefinition change position to line and byte offset and add tag pattern.
+-- For example, for:
+-- ----------------
+-- let foo = "bar"
+-- let baz = "qux"
+-- ----------------
+-- Input for this function is:
+-- [(FP 0 4, "foo"), (FP 1 4, "baz")]
+-- And it will be transformed into:
+-- [(FP 0 4, Tag "let foo " "foo"), (FP 1 20, Tag "let baz " "baz")]
+-- where 20 is byte offset from file start.
+fixPosAndDefinition :: Text -> [(PosInFile, Text)] -> [(PosInFile, Tag)]
+fixPosAndDefinition t = foldMap (\(FP ln c, term) ->
+             let (ln', offset, tPattern) = fromMaybe (fallbackInfoForText ln c)
+                                                     (infoForText term ln)
+             in [(FP ln' offset, Tag tPattern term)])
     where mls :: M.Map Int (Int, Text) 
-          -- mls is map that for each line has length of file before this map and line content.
+          -- ^ mls is map that for each line has length of file before this map and line content.
+          --   In example above, first line is 15 bytes long and '\n', mls contain:
+          --   (1, (16, "let foo = "bar"")
+          --   That allow us to get byte offset easier.
           mls = M.fromList . fst .
                 foldl (\(ls, lsl) (n, l) ->
-                           let lsl' = lsl + 1 + T.length l in
+                           let lsl' = lsl + 1 + lengthInBytes l in
                            ((n, (lsl, l)):ls, lsl')) ([], 0) . zip [1..] $ T.lines t
+          lineFromMap ln = fromMaybe (0, "") (ln `M.lookup` mls)
+          lengthInBytes = BS.length . encodeUtf8
+          {-| get information about term from map of lines
+              In most cases, PosInFile after getTagsFromExpr point to byte before term.
+              It's better to have term in term pattern, so this function finds and updates
+              PosInFile and generate pattern.
+          -} 
+          infoForText :: Text -> Int -> Maybe (Int, Int, Text)
+          infoForText _ 0 = Nothing
+          infoForText term ln
+              | T.null part2 = infoForText term (ln - 1)
+              | otherwise = Just (ln, lsl + 1 + lengthInBytes part1, part1 <> termAndNext)
+              where (lsl, l) = lineFromMap ln
+                    (part1, part2) = T.breakOn term l
+                    termAndNext = T.take (T.length term + 1) part2
+          fallbackInfoForText ln c = (ln, lsl + 1 + lengthInBytes pat, pat)
+              where (lsl, l) = lineFromMap ln
+                    pat = T.take c l
 
-getTagsFromExpr :: Expr Src a -> M.Map PosInFile Tag
-getTagsFromExpr = go (FP 0 0) M.empty
+getTagsFromExpr :: Expr Src a -> [(PosInFile, Text)]
+getTagsFromExpr = go (FP 0 0) []
     where go lpos mts = \case
-              (Let b e) -> go lpos (mts <> parseBinding b) e
+              (Let b e) -> go lpos (mts <> parseBinding lpos b) e
               (Annot e1 e2) -> go lpos (go lpos mts e1) e2
               (Record mr) -> mts <> tagsFromDhallMap lpos mr
               (RecordLit mr) -> mts <> tagsFromDhallMap lpos mr
-              (Union mmr) -> mts <> tagsFromDhallMap lpos mmr
+              (Union mmr) -> mts <> tagsFromDhallMapMaybe lpos mmr
               (Note s e) -> go (srcToPosInFile s) mts e
               _ -> mts
-          tagsFromDhallMap lpos = foldMapWithKey (\k _ -> M.singleton lpos (Tag "" k))
-
-parseBinding :: Binding Src a -> M.Map PosInFile Tag
-parseBinding b = M.singleton (maybe (FP 0 0) srcToPosInFile (bindingSrc0 b))
-                             (Tag "" (variable b))
+          tagsFromDhallMap lpos = foldMapWithKey (tagsFromDhallMapElement lpos)
+          tagsFromDhallMapMaybe lpos = foldMapWithKey (\k -> \case
+              Just e -> tagsFromDhallMapElement lpos k e
+              _ -> [(lpos, k)])
+          tagsFromDhallMapElement lpos k e = go pos [(pos, k)] e
+              where pos = firstPosFromExpr lpos e
+          parseBinding :: PosInFile -> Binding Src a -> [(PosInFile, Text)]
+          parseBinding lpos b = go p2 [(p0, variable b)] (value b)
+              where p0 = posFromBinding (bindingSrc0 b) lpos
+                    p1 = posFromBinding (bindingSrc1 b) p0
+                    p2 = posFromBinding (bindingSrc2 b) p1
+          posFromBinding src startPos = maybe startPos srcToPosInFile src
 
 srcToPosInFile :: Src -> PosInFile
 srcToPosInFile s = FP line column
@@ -161,19 +188,24 @@ srcToPosInFile s = FP line column
           line = unPos . sourceLine $ ssp
           column = unPos . sourceColumn $ ssp
 
+firstPosFromExpr :: PosInFile -> Expr Src a -> PosInFile
+firstPosFromExpr lpos = \case
+    (Note s _) -> srcToPosInFile s
+    _ -> lpos
+
 showTags :: Tags -> Text
 showTags (Tags ts) = T.concat . map (uncurry showFileTags) . M.toList $ ts
 
-showFileTags :: FilePath -> M.Map PosInFile Tag -> T.Text
+showFileTags :: FilePath -> [(PosInFile, Tag)] -> T.Text
 showFileTags f ts = "\x0c\n" <> T.pack f <> "," <> (showInt . T.length) cs <> "\n" <> cs
-    where cs = T.concat . map (uncurry showPosTag) . M.toList $ ts
+    where cs = T.concat . map (uncurry showPosTag) $ ts
 
 showPosTag :: PosInFile -> Tag -> Text
 showPosTag fp tag = def <>"\x7f" <> name <> "\x01" <> showInt line <>
                     "," <> showInt offset <> "\n"
     where line = fpLine fp
           offset = fpOffset fp
-          def = tagDefinition tag
+          def = tagPattern tag
           name = tagName tag
 
 showInt :: Int -> Text
@@ -198,15 +230,9 @@ inputToFiles _ _ StandardInput = lines <$> getContents
 inputToFiles followSyms suffixes (InputFile path) = go path
     where go p = do
                    isD <- doesDirectoryExist p
-#if MIN_VERSION_directory(1,3,0)
-                   isSymLink <- pathIsSymbolicLink p
-#elif MIN_VERSION_directory(1,2,6)
-                   isSymLink <- isSymbolicLink pa
-#else
-                   let isSymLink = False
-#endif
+                   isSL <- isSymLink
                    if isD
-                     then if isSymLink && not followSyms
+                     then if isSL && not followSyms
                             then return []
                             else do
                                    -- filter . .. and hidden files .*
@@ -214,3 +240,11 @@ inputToFiles followSyms suffixes (InputFile path) = go path
                                    concat <$> mapM (go . (</>) p) contents
                      else return [p | matchingSuffix ]
                where matchingSuffix = any (`isSuffixOf` p) suffixes
+                     isSymLink = 
+#if MIN_VERSION_directory(1,3,0)
+                                 pathIsSymbolicLink p
+#elif MIN_VERSION_directory(1,2,6)
+                                 isSymbolicLink pa
+#else
+                                 return False
+#endif

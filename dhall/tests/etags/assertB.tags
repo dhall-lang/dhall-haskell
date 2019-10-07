@@ -1,9 +1,0 @@
-
-./tests/etags/assertA.dhall,166
-assertA.dhall1,0
-/assertA.dhall1,1
-let simpleAssert1,4
-let assertIn1Lam3,43
-let assertIn2Lams5,114
-let assertInLetInLam10,242
-let unusedNonAssert12,315

@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Dhall.Util (Input(..))
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
-import Turtle (FilePath)
+import Turtle (FilePath, format, fp)
 
 import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO
@@ -22,26 +22,39 @@ etagsDirectory = "./tests/etags"
 
 getTests :: IO TestTree
 getTests = do
-    etagsTests <- Test.Util.discover (Turtle.chars <* "A.dhall") etagsTest (Turtle.lstree etagsDirectory)
+    etagsTests <- Test.Util.discover (Turtle.chars <* ".dhall") etagsTest (Turtle.lstree etagsDirectory)
 
-    let testTree = Tasty.testGroup "etags tests" [ etagsTests ]
+    let testTree = Tasty.testGroup "etags tests" [ etagsTests, etagsDirTest ]
 
     return testTree
-
-fixSlash :: Text -> Text
-fixSlash = Text.map (\c -> if c == '\\' then '/' else c)
 
 etagsTest :: Text -> TestTree
 etagsTest prefix =
     Tasty.HUnit.testCase (Text.unpack prefix) $ do
-        let inputFile  = Text.unpack (prefix <> "A.dhall")
-        let outputFile = Text.unpack (prefix <> "B.tags")
+        let inputFile  = Text.unpack (prefix <> ".dhall")
+        let outputFile = Text.unpack (prefix <> ".tags")
 
-        actualTags <- fixSlash <$> ETags.generate (InputFile inputFile) [""] False
+        actualTags <- Test.Util.toDhallPath <$> ETags.generate (InputFile inputFile) [""] False
 
-        expectedTags <- fixSlash <$> Text.IO.readFile outputFile
+        expectedTags <- readExpected outputFile
 
         let message = "The actual tags did not match the expected tags"
 
         Tasty.HUnit.assertEqual message expectedTags actualTags
 
+etagsDirTest :: TestTree
+etagsDirTest =
+    Tasty.HUnit.testCase "all" $ do
+        let outputFile = Text.unpack . format fp $ etagsDirectory Turtle.</> "all.tags"
+
+        actualTags <-  Test.Util.toDhallPath <$> ETags.generate (InputFile (Text.unpack . format fp $ etagsDirectory))
+                                                     [".dhall"] False
+
+        expectedTags <- readExpected outputFile
+
+        let message = "The actual tags did not match the expected tags for directory test"
+
+        Tasty.HUnit.assertEqual message expectedTags actualTags
+
+readExpected :: String -> IO Text
+readExpected = Test.Util.toDhallPath <$> Text.IO.readFile
