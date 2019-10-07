@@ -74,6 +74,9 @@ instance Semigroup Tags where
 
 instance Monoid Tags where
     mempty = Tags M.empty
+#if !(MIN_VERSION_base(4,11,0))
+    mappend = (<>)
+#endif
 
 data Tag = Tag
     { tagDefinition :: Text
