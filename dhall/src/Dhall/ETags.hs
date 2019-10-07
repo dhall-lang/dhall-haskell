@@ -118,7 +118,7 @@ getTagsFromText t = fromRight M.empty $
 -- fixPosAndDefinition change position to line and byte offset and add tag definition.
 fixPosAndDefinition :: Text -> M.Map PosInFile Tag -> M.Map PosInFile Tag
 fixPosAndDefinition t = M.foldMapWithKey (\(FP ln c) (Tag _ term) ->
-             let (lsl, l) = fromMaybe (0, "") (mls M.!? ln) in
+             let (lsl, l) = fromMaybe (0, "") (ln `M.lookup` mls) in
              M.singleton (FP ln (lsl + c)) (Tag (T.take c l) term))
     where mls :: M.Map Int (Int, Text) 
           -- mls is map that for each line has length of file before this map and line content.
