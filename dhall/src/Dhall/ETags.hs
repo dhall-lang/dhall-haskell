@@ -10,7 +10,6 @@ module Dhall.ETags
     ) where
 
 import Control.Exception (handle, SomeException(..))
-import Control.Monad (foldM)
 import Data.List (isSuffixOf)
 import Data.Maybe (fromMaybe)
 import Data.Semigroup (Semigroup(..))
@@ -21,14 +20,6 @@ import Dhall.Util (Input(..))
 import Dhall.Core (Expr(..), Binding(..))
 import Dhall.Src (Src(srcStart))
 import Dhall.Parser (exprFromText)
-import System.Directory ( doesDirectoryExist
-#if MIN_VERSION_directory(1,3,0)
-                        , pathIsSymbolicLink
-#elif MIN_VERSION_directory(1,2,6)
-                        , isSymbolicLink
-#endif
-                        , getDirectoryContents
-                        )
 import System.FilePath ((</>), takeFileName)
 import Text.Megaparsec (sourceLine, sourceColumn, unPos)
 
@@ -36,20 +27,21 @@ import qualified Data.ByteString as BS (length)
 import qualified Data.Map      as M
 import qualified Data.Text     as T
 import qualified Data.Text.IO  as TIO
+import qualified System.Directory as SD
 
 {-| 
     Documentation for ETags format is not very informative and not very correct.
-    You can find version of documentation here:
+    You can find some documentation here:
     https://en.wikipedia.org/wiki/Ctags#Etags_2
-    and you can also check source code here:
+    and you can also check the source code here:
     http://cvs.savannah.gnu.org/viewvc/vtags/vtags/vtags.el?view=markup
 -}
 
 data PosInFile = FP
     { fpLine :: Int
-      -- ^ line number, starting from 1, whe to find tag
+      -- ^ line number, starting from 1, where to find the tag
     , fpOffset :: Int
-      -- ^ byte offset form start of file. Not sure if any editor use it
+      -- ^ byte offset from start of file. Not sure if any editor uses it
     } deriving (Eq, Ord)
 
 newtype Tags = Tags (M.Map FilePath [(PosInFile, Tag)])
@@ -61,13 +53,13 @@ instance Monoid Tags where
     mempty = Tags M.empty
     mappend = (<>)
 
-{-| For example, for line: `let foo = "foo"` tag is:
-    `Tag "let " "foo"`
+{-| For example, for the line: @let foo = \"foo\"@ the tag is:
+    > Tag "let " "foo"
 -}
 data Tag = Tag
     { tagPattern :: Text
-      -- ^ In vtags source code this field has name pattern and EMacs use it as regex pattern
-      --   to locate line with tag. It's looking for ^<tag pattern>.
+      -- ^ In vtags source code this field is named \"pattern\" and EMacs used it as
+      --   a regex pattern to locate line with tag. It's looking for ^<tag pattern>.
       --   Looks like vi is not using it.
     , tagName :: Text
       -- ^ text, that editor compare with selected text. So it's really name of entity
@@ -77,25 +69,26 @@ data Tag = Tag
 -}
 generate
     :: Input
-    -- ^ Path to directory or filename that should be indexed
-    -> [Text]
-    -- ^ List of suffixes for dhall files [".dhall"] by default
+    -- ^ Where to look for files. This can be a directory name (@.@ for example),
+    --   a file name or StandardInput. If `StandardInput`, then this will wait for
+    --   file names from @STDIN@.
+    --   This way someone can combine tools in @bash@ to send, for example, output from
+    --   @find@ to the input of @dhall tags@.
+    -> Maybe [Text]
+    -- ^ List of suffixes for dhall files ([".dhall"] by default)
     -> Bool
     -- ^ Flag if generate should follow symlinks
     -> IO Text
     -- ^ Content for tags file
 generate inp sxs followSyms = do
-    isD <- case inp of
-               StandardInput -> return False
-               InputFile p -> doesDirectoryExist p
-    files <- inputToFiles followSyms (map T.unpack (if isD then sxs else [""])) inp
-    tags <- foldM (\ts f -> handle (\(SomeException _) -> return ts)
-                                  ((<>) ts . fileTags f <$> TIO.readFile f)) mempty files
-    return (showTags tags)
+    files <- inputToFiles followSyms (map T.unpack <$> sxs) inp
+    tags <- traverse (\f -> handle (\(SomeException _) -> return mempty)
+                                   (fileTags f <$> TIO.readFile f)) files
+    return (showTags . mconcat $ tags)
 
-{-| Find tags in Text (second argument) and generates list of them
-    To make tags for filenames working in both, emacs and vi, add two initial tags.
-    First for `filename` for vi and second with `/filename` for emacs.
+{-| Find tags in Text (second argument) and generates a list of them
+    To make tags for filenames that works in both emacs and vi, add two initial tags.
+    First for @filename@ for vi and second with @/filename@ for emacs.
     Other tags are working for both.
 -}
 fileTags :: FilePath -> Text -> Tags
@@ -106,41 +99,41 @@ fileTags f t = Tags (M.singleton f
           initialMap = [initialViTag, initialEmacsTag]
 
 getTagsFromText :: Text -> [(PosInFile, Tag)]
-getTagsFromText t = case eitherTags of
-    Right x -> x
+getTagsFromText t = case exprFromText "" t of
+    Right expr -> fixPosAndDefinition t (getTagsFromExpr expr)
     _ -> mempty
-    where eitherTags = fixPosAndDefinition t . getTagsFromExpr <$> exprFromText "" t
 
--- after getTagsFromExpr line and column in line are in PosInFile for each tag.
--- And tagPattern is not added.
--- Emacs use tag pattern to check if tag is on line. It compares line from start
--- with tag pattern and in case they are the same, relocate user.
--- fixPosAndDefinition change position to line and byte offset and add tag pattern.
--- For example, for:
--- ----------------
--- let foo = "bar"
--- let baz = "qux"
--- ----------------
--- Input for this function is:
--- [(FP 0 4, "foo"), (FP 1 4, "baz")]
--- And it will be transformed into:
--- [(FP 0 4, Tag "let foo " "foo"), (FP 1 20, Tag "let baz " "baz")]
--- where 20 is byte offset from file start.
+{-| Used to update tag position and to build tag from term.
+    After getTagsFromExpr line and column in line are in PosInFile for each tag.
+    And tagPattern is not added.
+    Emacs use tag pattern to check if tag is on line. It compares line from start
+    with tag pattern and in case they are the same, relocate user.
+    fixPosAndDefinition change position to line and byte offset and add tag pattern.
+    For example, for Dhall string:
+    >>> let dhallSource = "let foo = \"bar\"\nlet baz = \"qux\""
+    Input for this function is:
+    >>> foundTerms = [(FP 0 4, "foo"), (FP 1 4, "baz")]
+    And:
+    >>> fixPosAndDefinition dhallSource foundTerms
+    [(FP 0 4, Tag "let foo " "foo"), (FP 1 20, Tag "let baz " "baz")]
+    where 20 is byte offset from file start.
+-}
 fixPosAndDefinition :: Text -> [(PosInFile, Text)] -> [(PosInFile, Tag)]
 fixPosAndDefinition t = foldMap (\(FP ln c, term) ->
              let (ln', offset, tPattern) = fromMaybe (fallbackInfoForText ln c)
                                                      (infoForText term ln)
              in [(FP ln' offset, Tag tPattern term)])
-    where mls :: M.Map Int (Int, Text) 
+    where mls :: M.Map Int (Text, Int) 
           -- ^ mls is map that for each line has length of file before this map and line content.
           --   In example above, first line is 15 bytes long and '\n', mls contain:
           --   (1, (16, "let foo = "bar"")
           --   That allow us to get byte offset easier.
-          mls = M.fromList . fst .
-                foldl (\(ls, lsl) (n, l) ->
-                           let lsl' = lsl + 1 + lengthInBytes l in
-                           ((n, (lsl, l)):ls, lsl')) ([], 0) . zip [1..] $ T.lines t
-          lineFromMap ln = fromMaybe (0, "") (ln `M.lookup` mls)
+          mls = M.fromList . fst . foldl processLine ([], 0) . zip [1..] $ T.lines t
+          processLine :: ([(Int, (Text, Int))], Int) -> (Int, Text) -> ([(Int, (Text, Int))], Int)
+          processLine (numberedLinesWithSizes, bytesBeforeLine) (n, line) =
+              ((n, (line, bytesBeforeLine)): numberedLinesWithSizes, bytesBeforeNextLine)
+              where bytesBeforeNextLine = bytesBeforeLine + lengthInBytes line + 1
+          lineFromMap ln = fromMaybe ("", 0) (ln `M.lookup` mls)
           lengthInBytes = BS.length . encodeUtf8
           {-| get information about term from map of lines
               In most cases, PosInFile after getTagsFromExpr point to byte before term.
@@ -158,11 +151,11 @@ fixPosAndDefinition t = foldMap (\(FP ln c, term) ->
           infoForText term ln
               | T.null part2 = infoForText term (ln - 1)
               | otherwise = Just (ln, lsl + 1 + lengthInBytes part1, part1 <> termAndNext)
-              where (lsl, l) = lineFromMap ln
+              where (l, lsl) = lineFromMap ln
                     (part1, part2) = T.breakOn term l
                     termAndNext = T.take (T.length term + 1) part2
           fallbackInfoForText ln c = (ln, lsl + 1 + lengthInBytes pat, pat)
-              where (lsl, l) = lineFromMap ln
+              where (l, lsl) = lineFromMap ln
                     pat = T.take c l
 
 getTagsFromExpr :: Expr Src a -> [(PosInFile, Text)]
@@ -175,12 +168,16 @@ getTagsFromExpr = go (FP 0 0) []
               (Union mmr) -> mts <> tagsFromDhallMapMaybe lpos mmr
               (Note s e) -> go (srcToPosInFile s) mts e
               _ -> mts
+
           tagsFromDhallMap lpos = foldMapWithKey (tagsFromDhallMapElement lpos)
+
           tagsFromDhallMapMaybe lpos = foldMapWithKey (\k -> \case
               Just e -> tagsFromDhallMapElement lpos k e
               _ -> [(lpos, k)])
+
           tagsFromDhallMapElement lpos k e = go pos [(pos, k)] e
               where pos = firstPosFromExpr lpos e
+
           parseBinding :: PosInFile -> Binding Src a -> [(PosInFile, Text)]
           parseBinding lpos b = go p2 [(p0, variable b)] (value b)
               where p0 = posFromBinding (bindingSrc0 b) lpos
@@ -217,40 +214,37 @@ showPosTag fp tag = def <>"\x7f" <> name <> "\x01" <> showInt line <>
 showInt :: Int -> Text
 showInt = T.pack . show
 
-{-| Generate list of files for given Input
+{-| Generate list of files for a given `Input`
 -}
 inputToFiles
     :: Bool
-    -- ^ In case true, function will get files from  symbolic links
-    -> [String]
-    -- ^ List of suffixes. In case it contains empty string (""), all files will be returned.
-    --   This parameter works only in case input is path to directory.
+    -- ^ If `True`, this function will follow  symbolic links
+    -> Maybe [String]
+    -- ^ List of suffixes. If `Nothing`, all files will be returned.
+    --   This parameter only works when the `Input` is an `InputFile` and point to a directory.
     -> Input
-    -- ^ Where to look fo files. Can be directory name (`.` for example),
-    --   file name or StandardInput. In case of StandardInput will wait for file names from
-    --   STDIN, This way someone can combine tools in bash to send, for example, output from
-    --   find to input of dhall tags.
     -> IO [ FilePath ]
     --   List of files.
 inputToFiles _ _ StandardInput = lines <$> getContents
 inputToFiles followSyms suffixes (InputFile path) = go path
     where go p = do
-                   isD <- doesDirectoryExist p
+                   isD <- SD.doesDirectoryExist p
                    isSL <- isSymLink
                    if isD
                      then if isSL && not followSyms
                             then return []
                             else do
                                    -- filter . .. and hidden files .*
-                                   contents <- filter ((/=) '.' . head) <$> getDirectoryContents p
+                                   contents <- fmap (filter ((/=) '.' . head))
+                                                    (SD.getDirectoryContents p)
                                    concat <$> mapM (go . (</>) p) contents
-                     else return [p | matchingSuffix ]
-               where matchingSuffix = any (`isSuffixOf` p) suffixes
+                     else return [p | matchingSuffix || p == path]
+               where matchingSuffix = maybe True (any (`isSuffixOf` p)) suffixes
                      isSymLink = 
 #if MIN_VERSION_directory(1,3,0)
-                                 pathIsSymbolicLink p
+                                 SD.pathIsSymbolicLink p
 #elif MIN_VERSION_directory(1,2,6)
-                                 isSymbolicLink pa
+                                 SD.isSymbolicLink pa
 #else
                                  return False
 #endif

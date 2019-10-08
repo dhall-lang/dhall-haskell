@@ -106,7 +106,11 @@ data Mode
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Input }
-    | ETags { input :: Input, output :: Output, suffixes :: [Text], followSymlinks :: Bool }
+    | ETags { input :: Input
+            , output :: Output
+            , suffixes :: Maybe [Text]
+            , followSymlinks :: Bool
+            }
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool }
     | Text { file :: Input }
@@ -328,13 +332,14 @@ parseMode =
         p = Options.Applicative.strOption
             (   Options.Applicative.long "output"
             <>  Options.Applicative.help "Write ETags file into file. Default output is file tags"
-            <>  Options.Applicative.metavar "OUTPUT"
+            <>  Options.Applicative.metavar "FILENAME"
             )
 
     parseSuffixes = fmap f (optional p)
       where
-        f  Nothing    = [".dhall"]
-        f (Just line) = Data.Text.splitOn " " line
+        f  Nothing    = Just [".dhall"]
+        f (Just "")   = Nothing
+        f (Just line) = Just (Data.Text.splitOn " " line)
 
         p = Options.Applicative.strOption
             (   Options.Applicative.long "suffixes"

@@ -34,7 +34,7 @@ etagsTest prefix =
         let inputFile  = Text.unpack (prefix <> ".dhall")
         let outputFile = Text.unpack (prefix <> ".tags")
 
-        actualTags <- Test.Util.toDhallPath <$> ETags.generate (InputFile inputFile) [""] False
+        actualTags <- fixPathSeparators <$> ETags.generate (InputFile inputFile) Nothing False
 
         expectedTags <- readExpected outputFile
 
@@ -47,8 +47,11 @@ etagsDirTest =
     Tasty.HUnit.testCase "all" $ do
         let outputFile = Text.unpack . format fp $ etagsDirectory Turtle.</> "all.tags"
 
-        actualTags <-  Test.Util.toDhallPath <$> ETags.generate (InputFile (Text.unpack . format fp $ etagsDirectory))
-                                                     [".dhall"] False
+        actualTags <- fmap fixPathSeparators
+                      (ETags.generate
+                          (InputFile (Text.unpack . format fp $ etagsDirectory))
+                          (Just [".dhall"])
+                          False)
 
         expectedTags <- readExpected outputFile
 
@@ -57,4 +60,7 @@ etagsDirTest =
         Tasty.HUnit.assertEqual message expectedTags actualTags
 
 readExpected :: String -> IO Text
-readExpected file = Test.Util.toDhallPath <$> Text.IO.readFile file
+readExpected file = fixPathSeparators <$> Text.IO.readFile file
+
+fixPathSeparators :: Text -> Text
+fixPathSeparators = Text.replace "\\" "/"
