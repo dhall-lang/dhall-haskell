@@ -72,6 +72,7 @@ module Dhall
     , list
     , vector
     , set
+    , distinctList
     , hashSet
     , Dhall.map
     , pairFromMapEntry
@@ -815,6 +816,38 @@ Duplicate elements are ignored.
 -}
 hashSet :: (Hashable a, Ord a) => Type a -> Type (Data.HashSet.HashSet a)
 hashSet = fmap Data.HashSet.fromList . list
+
+{-| Decode a `Set` from a `List` with distinct elements
+
+>>> input (distinctList natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+An error is thrown if the list contains duplicates.
+
+> >>> input (distinctList natural) "[1, 1, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> Non-distinct elements in fromList [NaturalLit 1,NaturalLit 1,NaturalLit 3]
+>
+-}
+distinctList :: (Ord a) => Type a -> Type (Data.Set.Set a)
+distinctList (Type extractIn expectedIn) = Type extractOut expectedOut
+  where
+    extractOut (ListLit _ es)
+      | length es == length (seqToSet es) = seqToSet <$> traverse extractIn es
+      | otherwise = extractError err
+      where
+        seqToSet :: (Ord a, Foldable t) => t a -> Data.Set.Set a
+        seqToSet = Data.Set.fromList . Data.Foldable.toList
+
+        err = "Non-distinct elements in " <> Data.Text.pack (show es)
+    extractOut expr = typeError expectedOut expr
+
+    expectedOut = App List expectedIn
+
 
 {-| Decode a `Map` from a @toMap@ expression or generally a @Prelude.Map.Type@
 
