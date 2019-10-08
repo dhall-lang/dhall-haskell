@@ -1,23 +1,25 @@
-{ src ? { rev = ""; }, ... }:
+let pinned = import ./nix/pinnedNixpkgs.nix;
+
+in { src ? { rev = ""; }
+, nixpkgs ? pinned.nixpkgs
+, nixpkgsStaticLinux ? pinned.nixpkgsStaticLinux
+}:
 
 let
-  shared_7_10_3 =
-    import ./nix/shared.nix { compiler = "ghc7103"; };
+  callShared = args:
+    import ./nix/shared.nix ({ inherit nixpkgs nixpkgsStaticLinux; } // args);
 
-  shared_8_6_1 =
-    import ./nix/shared.nix { compiler = "ghc861"; };
+  shared_7_10_3 = callShared { compiler = "ghc7103"; };
 
-  shared_ghcjs =
-    import ./nix/shared.nix { compiler = "ghcjs"; };
+  shared_8_6_1 = callShared { compiler = "ghc861"; };
 
-  shared =
-    import ./nix/shared.nix { };
+  shared_ghcjs = callShared { compiler = "ghcjs"; };
 
-  shared_linux =
-    import ./nix/shared.nix { system = "x86_64-linux"; };
+  shared = callShared { };
 
-  coverage =
-    import ./nix/shared.nix { coverage = true; };
+  shared_linux = callShared { system = "x86_64-linux"; };
+
+  coverage = callShared { coverage = true; };
 
 in
   { dhall = shared.aggregate
