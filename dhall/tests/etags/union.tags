@@ -1,6 +1,6 @@
 
 ./tests/etags/union.dhall,394
-union.dhall1,0
+union.dhall1,1
 /union.dhall1,1
 let Element Element1,5
 let Element = < Left Left1,17

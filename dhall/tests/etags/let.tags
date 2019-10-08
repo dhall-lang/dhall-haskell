@@ -1,6 +1,6 @@
 
 ./tests/etags/let.dhall,66
-let.dhall1,0
+let.dhall1,1
 /let.dhall1,1
 let foo foo1,5
 let bar bar3,22

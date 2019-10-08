@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Dhall.Util (Input(..))
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
-import Turtle (FilePath, format, fp)
+import Turtle (FilePath)
 
 import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO
@@ -45,11 +45,11 @@ etagsTest prefix =
 etagsDirTest :: TestTree
 etagsDirTest =
     Tasty.HUnit.testCase "all" $ do
-        let outputFile = Text.unpack . format fp $ etagsDirectory Turtle.</> "all.tags"
+        let outputFile = Text.unpack . Turtle.format Turtle.fp $ etagsDirectory Turtle.</> "all.tags"
 
         actualTags <- fmap fixPathSeparators
                       (ETags.generate
-                          (InputFile (Text.unpack . format fp $ etagsDirectory))
+                          (InputFile (Text.unpack . Turtle.format Turtle.fp $ etagsDirectory))
                           (Just [".dhall"])
                           False)
 
