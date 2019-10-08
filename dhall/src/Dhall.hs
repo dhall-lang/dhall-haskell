@@ -72,7 +72,7 @@ module Dhall
     , list
     , vector
     , set
-    , distinctList
+    , setFromDistinctList
     , hashSet
     , Dhall.map
     , pairFromMapEntry
@@ -153,6 +153,7 @@ import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
 import qualified Data.Map
 import qualified Data.Maybe
+import qualified Data.List
 import qualified Data.List.NonEmpty
 import qualified Data.Semigroup
 import qualified Data.Scientific
@@ -819,35 +820,54 @@ hashSet = fmap Data.HashSet.fromList . list
 
 {-| Decode a `Set` from a `List` with distinct elements
 
->>> input (distinctList natural) "[1, 2, 3]"
+>>> input (setFromDistinctList natural) "[1, 2, 3]"
 fromList [1,2,3]
 
 An error is thrown if the list contains duplicates.
 
-> >>> input (distinctList natural) "[1, 1, 3]"
+> >>> input (setFromDistinctList natural) "[1, 1, 3]"
 > *** Exception: Error: Failed extraction
 >
 > The expression type-checked successfully but the transformation to the target
 > type failed with the following error:
 >
-> Non-distinct elements in fromList [NaturalLit 1,NaturalLit 1,NaturalLit 3]
+> One duplicate element in the list: 1
 >
--}
-distinctList :: (Ord a) => Type a -> Type (Data.Set.Set a)
-distinctList (Type extractIn expectedIn) = Type extractOut expectedOut
-  where
-    extractOut (ListLit _ es)
-      | length es == length (seqToSet es) = seqToSet <$> traverse extractIn es
-      | otherwise = extractError err
-      where
-        seqToSet :: (Ord a, Foldable t) => t a -> Data.Set.Set a
-        seqToSet = Data.Set.fromList . Data.Foldable.toList
 
-        err = "Non-distinct elements in " <> Data.Text.pack (show es)
+> >>> input (setFromDistinctList natural) "[1, 1, 3, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> 2 duplicates were found in the list, including 1
+>
+
+-}
+setFromDistinctList :: (Ord a, Show a) => Type a -> Type (Data.Set.Set a)
+setFromDistinctList (Type extractIn expectedIn) = Type extractOut expectedOut
+  where
+    extractOut (ListLit _ es) = case traverse extractIn es of
+        Success esSeq
+            | sameSize               -> Success esSet
+            | length duplicates == 1 -> extractError err1
+            | otherwise              -> extractError errN
+          where
+            esList = Data.Foldable.toList esSeq
+            esSet = Data.Set.fromList esList
+            sameSize = Data.Set.size esSet == Data.Sequence.length esSeq
+            duplicates = esList Data.List.\\ Data.Foldable.toList esSet
+            err1 = "One duplicate element in the list: "
+                   <> (Data.Text.pack $ show $ head duplicates)
+            errN = Data.Text.pack $ unwords
+                     [ show $ length duplicates
+                     , "duplicates were found in the list, including"
+                     , show $ head duplicates
+                     ]
+        Failure f -> Failure f
     extractOut expr = typeError expectedOut expr
 
     expectedOut = App List expectedIn
-
 
 {-| Decode a `Map` from a @toMap@ expression or generally a @Prelude.Map.Type@
 
