@@ -13,18 +13,10 @@ build-type:     Simple
 extra-source-files:
     README.md
     ChangeLog.md
-    tests/fixtures/completion/Bindings.dhall
-    tests/fixtures/completion/CustomFunctions.dhall
-    tests/fixtures/completion/CustomTypes.dhall
-    tests/fixtures/completion/ImportedFunctions.dhall
-    tests/fixtures/completion/Library.dhall
-    tests/fixtures/diagnostics/InvalidImport.dhall
-    tests/fixtures/diagnostics/InvalidSyntax.dhall
-    tests/fixtures/diagnostics/MissingImport.dhall
-    tests/fixtures/diagnostics/UnboundVar.dhall
-    tests/fixtures/diagnostics/WrongType.dhall
-    tests/fixtures/linting/SuperfluousIn.dhall
-    tests/fixtures/linting/UnusedBindings.dhall
+    tests/fixtures/completion/*.dhall
+    tests/fixtures/diagnostics/*.dhall
+    tests/fixtures/linting/*.dhall
+    tests/fixtures/hovering/*.dhall
 
 source-repository head
   type: git
