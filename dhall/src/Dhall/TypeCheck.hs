@@ -3382,9 +3382,9 @@ prettyTypeMessage (MustMapARecord _expr0 _expr1) = ErrorMessages {..}
         \  using ❰toMap❱:                                                                \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌──────────┐                                                                \n\
-        \    │ toMap {} │                                                                \n\
-        \    └──────────┘                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ toMap {} : List { mapKey : Text, mapValue : Natural } │                   \n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
         \            ⇧                                                                   \n\
         \            This should be ❰{=}❱ instead                                        \n"
 
