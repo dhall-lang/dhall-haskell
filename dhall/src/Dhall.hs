@@ -1595,7 +1595,7 @@ class Inject a where
 
 {-| Use the default options for injecting a value
 
-> inject = inject defaultInterpretOptions
+> inject = injectWith defaultInterpretOptions
 -}
 inject :: Inject a => InputType a
 inject = injectWith defaultInterpretOptions
@@ -1740,9 +1740,24 @@ instance Inject a => Inject [a] where
 instance Inject a => Inject (Vector a) where
     injectWith = fmap (contramap Data.Vector.toList) injectWith
 
-instance Inject a => Inject (Data.Set.Set a) where
-    injectWith = fmap (contramap Data.Set.toList) injectWith
+{-| Note that the ouput list will be sorted
 
+>>> let x = Data.Set.fromList ["mom", "hi" :: Text]
+>>> prettyExpr $ embed inject x
+[ "hi", "mom" ]
+
+-}
+
+instance Inject a => Inject (Data.Set.Set a) where
+    injectWith = fmap (contramap Data.Set.toAscList) injectWith
+
+{-| Note that the ouput list may not be sorted
+
+>>> let x = Data.HashSet.fromList ["hi", "mom" :: Text]
+>>> prettyExpr $ embed inject x
+[ "mom", "hi" ]
+
+-}
 instance Inject a => Inject (Data.HashSet.HashSet a) where
     injectWith = fmap (contramap Data.HashSet.toList) injectWith
 
