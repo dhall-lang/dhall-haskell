@@ -176,8 +176,8 @@ fixPosAndDefinition t = foldMap (\(LC ln c, term) ->
               -- ^ line where to start
               -> Maybe (Int, Int, Text)
               -- ^ (Line number, byte offset, pattern to find term in file)
-          infoForText _ 0 = Nothing
           infoForText term ln
+              | ln <= 0 = Nothing
               | T.null part2 = infoForText term (ln - 1)
               | otherwise = Just (ln, lsl + 1 + lengthInBytes part1, part1 <> termAndNext)
               where (l, lsl) = lineFromMap ln
