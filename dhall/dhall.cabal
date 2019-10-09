@@ -61,6 +61,8 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/build
     dhall-lang/Prelude/List/concat
     dhall-lang/Prelude/List/concatMap
+    dhall-lang/Prelude/List/default
+    dhall-lang/Prelude/List/empty
     dhall-lang/Prelude/List/filter
     dhall-lang/Prelude/List/fold
     dhall-lang/Prelude/List/generate
@@ -78,6 +80,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/unzip
     dhall-lang/Prelude/Location/package.dhall
     dhall-lang/Prelude/Location/Type
+    dhall-lang/Prelude/Map/empty
     dhall-lang/Prelude/Map/Entry
     dhall-lang/Prelude/Map/keys
     dhall-lang/Prelude/Map/map
@@ -107,6 +110,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Optional/any
     dhall-lang/Prelude/Optional/build
     dhall-lang/Prelude/Optional/concat
+    dhall-lang/Prelude/Optional/default
     dhall-lang/Prelude/Optional/filter
     dhall-lang/Prelude/Optional/fold
     dhall-lang/Prelude/Optional/head
