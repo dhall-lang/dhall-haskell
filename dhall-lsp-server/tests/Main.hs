@@ -22,24 +22,24 @@ baseDir d = "tests/fixtures/" <> d
 
 hoveringSpec :: FilePath -> Spec
 hoveringSpec dir =
-  describe "Dhall.Hover" $ do
-    it "reports types on hover"
-      $ runSession "dhall-lsp-server" fullCaps dir
-      $ do
-        docId <- openDoc "Types.dhall" "dhall"
-        let typePos = Position 0 5
-            functionPos = Position 2 7
-            extractContents = _contents . fromJust
-            getValue = T.unpack . _value
-        typeHover <- getHover docId typePos
-        funcHover <- getHover docId functionPos
-        liftIO $ do
-          case (extractContents typeHover, extractContents funcHover) of
-            (HoverContents typeContent, HoverContents functionContent) -> do
-              getValue typeContent `shouldBe` "Type"
-              getValue functionContent `shouldBe` "{ home : Text, name : Text }"
-            _ -> error "test failed"
-          pure ()
+  describe "Dhall.Hover"
+    $ it "reports types on hover"
+    $ runSession "dhall-lsp-server" fullCaps dir
+    $ do
+      docId <- openDoc "Types.dhall" "dhall"
+      let typePos = Position 0 5
+          functionPos = Position 2 7
+          extractContents = _contents . fromJust
+          getValue = T.unpack . _value
+      typeHover <- getHover docId typePos
+      funcHover <- getHover docId functionPos
+      liftIO $ do
+        case (extractContents typeHover, extractContents funcHover) of
+          (HoverContents typeContent, HoverContents functionContent) -> do
+            getValue typeContent `shouldBe` "Type"
+            getValue functionContent `shouldBe` "{ home : Text, name : Text }"
+          _ -> error "test failed"
+        pure ()
 
 lintingSpec :: FilePath -> Spec
 lintingSpec fixtureDir =
