@@ -71,9 +71,10 @@ module Dhall
     , sequence
     , list
     , vector
-    , set
     , setFromDistinctList
-    , hashSet
+    , setIgnoringDuplicates
+    , hashSetFromDistinctList
+    , hashSetIgnoringDuplicates
     , Dhall.map
     , pairFromMapEntry
     , unit
@@ -178,6 +179,7 @@ import qualified Lens.Family
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> :set -XRecordWildCards
+-- >>> import Dhall.Pretty.Internal (prettyExpr)
 
 type Extractor s a = Validation (ExtractErrors s a)
 type MonadicExtractor s a = Either (ExtractErrors s a)
@@ -800,23 +802,33 @@ vector = fmap Data.Vector.fromList . list
 
 {-| Decode a `Set` from a `List`
 
->>> input (set natural) "[1, 2, 3]"
+>>> input (setIgnoringDuplicates natural) "[1, 2, 3]"
 fromList [1,2,3]
 
 Duplicate elements are ignored.
+
+>>> input (setIgnoringDuplicates natural) "[1, 1, 3]"
+fromList [1,3]
+
 -}
-set :: (Ord a) => Type a -> Type (Data.Set.Set a)
-set = fmap Data.Set.fromList . list
+setIgnoringDuplicates :: (Ord a) => Type a -> Type (Data.Set.Set a)
+setIgnoringDuplicates = fmap Data.Set.fromList . list
 
 {-| Decode a `HashSet` from a `List`
 
->>> input (hashSet natural) "[1, 2, 3]"
+>>> input (hashSetIgnoringDuplicates natural) "[1, 2, 3]"
 fromList [1,2,3]
 
 Duplicate elements are ignored.
+
+>>> input (hashSetIgnoringDuplicates natural) "[1, 1, 3]"
+fromList [1,3]
+
 -}
-hashSet :: (Hashable a, Ord a) => Type a -> Type (Data.HashSet.HashSet a)
-hashSet = fmap Data.HashSet.fromList . list
+hashSetIgnoringDuplicates :: (Hashable a, Ord a)
+                          => Type a
+                          -> Type (Data.HashSet.HashSet a)
+hashSetIgnoringDuplicates = fmap Data.HashSet.fromList . list
 
 {-| Decode a `Set` from a `List` with distinct elements
 
@@ -845,18 +857,57 @@ An error is thrown if the list contains duplicates.
 
 -}
 setFromDistinctList :: (Ord a, Show a) => Type a -> Type (Data.Set.Set a)
-setFromDistinctList (Type extractIn expectedIn) = Type extractOut expectedOut
+setFromDistinctList = setHelper Data.Set.size Data.Set.fromList
+
+{-| Decode a `HashSet` from a `List` with distinct elements
+
+>>> input (hashSetFromDistinctList natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+An error is thrown if the list contains duplicates.
+
+> >>> input (hashSetFromDistinctList natural) "[1, 1, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> One duplicate element in the list: 1
+>
+
+> >>> input (hashSetFromDistinctList natural) "[1, 1, 3, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> 2 duplicates were found in the list, including 1
+>
+
+-}
+hashSetFromDistinctList :: (Hashable a, Ord a, Show a)
+                        => Type a
+                        -> Type (Data.HashSet.HashSet a)
+hashSetFromDistinctList = setHelper Data.HashSet.size Data.HashSet.fromList
+
+
+setHelper :: (Eq a, Foldable t, Show a)
+          => (t a -> Int)
+          -> ([a] -> t a)
+          -> Type a
+          -> Type (t a)
+setHelper size toSet (Type extractIn expectedIn) = Type extractOut expectedOut
   where
     extractOut (ListLit _ es) = case traverse extractIn es of
-        Success esSeq
-            | sameSize               -> Success esSet
+        Success vSeq
+            | sameSize               -> Success vSet
             | length duplicates == 1 -> extractError err1
             | otherwise              -> extractError errN
           where
-            esList = Data.Foldable.toList esSeq
-            esSet = Data.Set.fromList esList
-            sameSize = Data.Set.size esSet == Data.Sequence.length esSeq
-            duplicates = esList Data.List.\\ Data.Foldable.toList esSet
+            vList = Data.Foldable.toList vSeq
+            vSet = toSet vList
+            sameSize = size vSet == Data.Sequence.length vSeq
+            duplicates = vList Data.List.\\ Data.Foldable.toList vSet
             err1 = "One duplicate element in the list: "
                    <> (Data.Text.pack $ show $ head duplicates)
             errN = Data.Text.pack $ unwords
@@ -1013,11 +1064,11 @@ instance Interpret a => Interpret [a] where
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
 
-instance (Interpret a, Ord a) => Interpret (Data.Set.Set a) where
-    autoWith opts = set (autoWith opts)
+instance (Interpret a, Ord a, Show a) => Interpret (Data.Set.Set a) where
+    autoWith opts = setFromDistinctList (autoWith opts)
 
-instance (Interpret a, Hashable a, Ord a) => Interpret (Data.HashSet.HashSet a) where
-    autoWith opts = hashSet (autoWith opts)
+instance (Interpret a, Hashable a, Ord a, Show a) => Interpret (Data.HashSet.HashSet a) where
+    autoWith opts = hashSetFromDistinctList (autoWith opts)
 
 instance (Ord k, Interpret k, Interpret v) => Interpret (Map k v) where
     autoWith opts = Dhall.map (autoWith opts) (autoWith opts)
