@@ -63,4 +63,8 @@ readExpected :: String -> IO Text
 readExpected file = fixPathSeparators <$> Text.IO.readFile file
 
 fixPathSeparators :: Text -> Text
-fixPathSeparators = Text.replace "\\" "/"
+fixPathSeparators t = Text.intercalate "\n" (map fix prevLineLine)
+    where ls = Text.lines t
+          prevLineLine = zip ("":ls) ls
+          fix ("\x0c", l) = Text.replace "\\" "/" l
+          fix (     _, l) = l

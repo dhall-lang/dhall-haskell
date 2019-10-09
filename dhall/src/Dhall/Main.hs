@@ -321,7 +321,7 @@ parseMode =
         p = Options.Applicative.strOption
             (   Options.Applicative.long "path"
             <>  Options.Applicative.help "Index all files in path recursively. Will get list of files from STDIN if ommited."
-            <>  Options.Applicative.metavar "INPUT"
+            <>  Options.Applicative.metavar "PATH"
             )
 
     parseTagsOutput = fmap f (optional p)
