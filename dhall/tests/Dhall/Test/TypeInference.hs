@@ -85,6 +85,7 @@ failureTest prefix = do
                -- Duplicate fields are incorrectly caught during parsing:
                -- https://github.com/dhall-lang/dhall-haskell/issues/772
                , typeInferenceDirectory </> "failure/unit/RecordLitDuplicateFields"
+               , typeInferenceDirectory </> "failure/unit/RecordProjectionDuplicateFields"
                , typeInferenceDirectory </> "failure/unit/RecordTypeDuplicateFields"
                , typeInferenceDirectory </> "failure/unit/UnionTypeDuplicateVariants1"
                , typeInferenceDirectory </> "failure/unit/UnionTypeDuplicateVariants2"
@@ -100,16 +101,8 @@ failureTest prefix = do
             Left _ -> Tasty.HUnit.assertFailure (prefixFP <> " should have parsed")
             Right e -> return e
 
-        tryResolvedExpr <-
-            Exception.try
-               (Test.Util.loadRelativeTo
-                   (FilePath.takeDirectory prefixFP)
-                   Import.IgnoreSemanticCache
-                   expression)
+        resolved <- Import.assertNoImports expression
 
-        case tryResolvedExpr of
-            Left (SomeException _) -> return ()
-
-            Right resolved -> case TypeCheck.typeOf resolved of
-                Left  _ -> return ()
-                Right _ -> Tasty.HUnit.assertFailure (prefixFP <> " should not have type-checked")
+        case TypeCheck.typeOf resolved of
+            Left  _ -> return ()
+            Right _ -> Tasty.HUnit.assertFailure (prefixFP <> " should not have type-checked")

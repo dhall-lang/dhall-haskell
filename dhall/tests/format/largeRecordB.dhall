@@ -34,15 +34,15 @@ in    defaults.Config
       , dark_room = Some False
       , disclose =
           Some
-          (   defaults.Disclose
-            ⫽ { inventory = Some { prompt = True, default = True }
-              , attributes = Some { prompt = True, default = False }
-              , monsters_killed = Some { prompt = False, default = True }
-              , monsters_genocided = Some { prompt = False, default = False }
-              , conduct = Some { prompt = False, default = False }
-              , dungeon_overview = Some { prompt = False, default = False }
-              }
-          )
+            (   defaults.Disclose
+              ⫽ { inventory = Some { prompt = True, default = True }
+                , attributes = Some { prompt = True, default = False }
+                , monsters_killed = Some { prompt = False, default = True }
+                , monsters_genocided = Some { prompt = False, default = False }
+                , conduct = Some { prompt = False, default = False }
+                , dungeon_overview = Some { prompt = False, default = False }
+                }
+            )
       , dogname = Some "Cujo"
       , extmenu = Some False
       , fixinv = Some True

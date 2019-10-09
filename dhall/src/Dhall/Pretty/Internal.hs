@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP               #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -430,6 +431,17 @@ prettyVar :: Var -> Doc Ann
 prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
 prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyInt n))
 
+{-  There is a close correspondence between the pretty-printers in 'prettyCharacterSet'
+    and the sub-parsers in 'Dhall.Parser.Expression.parsers'.  Most pretty-printers are
+    named after the corresponding parser and the relationship between pretty-printers
+    exactly matches the relationship between parsers.  This leads to the nice emergent
+    property of automatically getting all the parentheses and precedences right.
+
+    This approach has one major disadvantage: you can get an infinite loop if
+    you add a new constructor to the syntax tree without adding a matching
+    case the corresponding builder.
+-}
+
 {-| Pretty-print an 'Expr' using the given 'CharacterSet'.
 
 'prettyCharacterSet' largely ignores 'Note's. 'Note's do however matter for
@@ -535,21 +547,14 @@ prettyCharacterSet characterSet expression =
                 <>  equals <> renderSrc src2 space
                 <>  prettyExpression e
         docA (Binding src0 c src1 (Just (src3, d)) src2 e) =
-            Pretty.group (Pretty.flatAlt long short)
-          where
-            long = keyword "let" <> space
-                <>  Pretty.align
-                    (   renderSrc src0 mempty
-                    <>  prettyLabel c <> renderSrc src1 Pretty.hardline
-                    <>  colon <> renderSrc src3 space <> prettyExpression d <> Pretty.hardline <> equals <> renderSrc src2 space
-                    <>  prettyExpression e
-                    )
-
-            short = keyword "let" <> renderSrc src0 space
-                <>  prettyLabel c <> renderSrc src1 space
-                <>  colon <> renderSrc src3 space
-                <>  prettyExpression d <> space <> equals <> renderSrc src2 space
+                keyword "let" <> space
+            <>  Pretty.align
+                (   renderSrc src0 mempty
+                <>  prettyLabel c <> renderSrc src1 Pretty.hardline
+                <>  colon <> renderSrc src3 space <> prettyExpression d <> Pretty.hardline
+                <>  equals <> renderSrc src2 space
                 <>  prettyExpression e
+                )
 
         docB =
             ( keyword "in" <> " " <> prettyExpression b
@@ -616,22 +621,6 @@ prettyCharacterSet characterSet expression =
             <>  prettyImportExpression b
             <>  space <> colon <> space
             <>  prettyApplicationExpression c
-    prettyAnnotatedExpression (Merge a b Nothing) =
-        Pretty.group (Pretty.flatAlt long short)
-      where
-        long =
-            Pretty.align
-                (   keyword "merge"
-                <>  Pretty.hardline
-                <>  Pretty.indent 2 (prettyImportExpression a)
-                <>  Pretty.hardline
-                <>  Pretty.indent 2 (prettyImportExpression b)
-                )
-
-        short = keyword "merge" <> space
-            <>  prettyImportExpression a
-            <>  " "
-            <>  prettyImportExpression b
     prettyAnnotatedExpression (ToMap a (Just b)) =
         Pretty.group (Pretty.flatAlt long short)
       where
@@ -649,18 +638,6 @@ prettyCharacterSet characterSet expression =
             <>  prettyImportExpression a
             <>  space <> colon <> space
             <>  prettyApplicationExpression b
-    prettyAnnotatedExpression (ToMap a Nothing) =
-        Pretty.group (Pretty.flatAlt long short)
-      where
-        long =
-            Pretty.align
-                (   keyword "toMap"
-                <>  Pretty.hardline
-                <>  Pretty.indent 2 (prettyImportExpression a)
-                )
-
-        short = keyword "toMap" <> space
-            <>  prettyImportExpression a
     prettyAnnotatedExpression a0@(Annot _ _) =
         enclose'
             ""
@@ -854,18 +831,23 @@ prettyCharacterSet characterSet expression =
         prettyApplicationExpression a0
 
     prettyApplicationExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyApplicationExpression a0 = case a0 of
-        App _ _  -> result
-        Some _   -> result
-        Note _ b -> prettyApplicationExpression b
-        _        -> prettyImportExpression a0
+    prettyApplicationExpression = go []
       where
-        result = enclose' "" "" " " "" (reverse (docs a0))
+        go args = \case
+            App a b           -> go (b : args) a
+            Some a            -> app (builtin "Some") (a : args)
+            Merge a b Nothing -> app (keyword "merge") (a : b : args)
+            ToMap a Nothing   -> app (keyword "toMap") (a : args)
+            Note _ b          -> go args b
+            e | null args     -> prettyImportExpression e -- just a performance optimization
+              | otherwise     -> app (prettyImportExpression e) args
 
-        docs (App  a b) = ( prettyImportExpression b, Pretty.indent 2 (prettyImportExpression b) ) : docs a
-        docs (Some   a) = map duplicate [ prettyImportExpression a , builtin "Some" ]
-        docs (Note _ b) = docs b
-        docs         b  = map duplicate [ prettyImportExpression b ]
+        app f args =
+            enclose'
+                "" "" " " ""
+                ( duplicate f
+                : map (fmap (Pretty.indent 2) . duplicate . prettyImportExpression) args
+                )
 
     prettyImportExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyImportExpression (Embed a) =

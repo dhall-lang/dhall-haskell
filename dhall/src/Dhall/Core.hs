@@ -509,8 +509,20 @@ data Expr s a
     | TextShow
     -- | > List                                     ~  List
     | List
-    -- | > ListLit (Just t ) [x, y, z]              ~  [x, y, z] : t
+    -- | > ListLit (Just t ) []                     ~  [] : t
     --   > ListLit  Nothing  [x, y, z]              ~  [x, y, z]
+    --
+    --   Invariant: A non-empty list literal is always represented as
+    --   @ListLit Nothing xs@.
+    --
+    --   When an annotated, non-empty list literal is parsed, it is represented
+    --   as
+    --
+    --   > Annot (ListLit Nothing [x, y, z]) t      ~ [x, y, z] : t
+
+    -- Eventually we should have separate constructors for empty and non-empty
+    -- list literals. For now it's easier to check the invariant in @infer@.
+    -- See https://github.com/dhall-lang/dhall-haskell/issues/1359#issuecomment-537087234.
     | ListLit (Maybe (Expr s a)) (Seq (Expr s a))
     -- | > ListAppend x y                           ~  x # y
     | ListAppend (Expr s a) (Expr s a)
@@ -840,17 +852,6 @@ instance Monoid (Chunks s a) where
 
 instance IsString (Chunks s a) where
     fromString str = Chunks [] (fromString str)
-
-{-  There is a one-to-one correspondence between the builders in this section
-    and the sub-parsers in "Dhall.Parser".  Each builder is named after the
-    corresponding parser and the relationship between builders exactly matches
-    the relationship between parsers.  This leads to the nice emergent property
-    of automatically getting all the parentheses and precedences right.
-
-    This approach has one major disadvantage: you can get an infinite loop if
-    you add a new constructor to the syntax tree without adding a matching
-    case the corresponding builder.
--}
 
 -- | Generates a syntactically valid Dhall program
 instance Pretty a => Pretty (Expr s a) where
@@ -1685,7 +1686,7 @@ normalizeWithM ctx e0 = loop (denote e0)
     TextShow -> pure TextShow
     List -> pure List
     ListLit t es
-        | Data.Sequence.null es -> ListLit <$> t' <*> es'
+        | Data.Sequence.null es -> ListLit <$> t' <*> pure Data.Sequence.empty
         | otherwise             -> ListLit Nothing <$> es'
       where
         t'  = traverse loop t
