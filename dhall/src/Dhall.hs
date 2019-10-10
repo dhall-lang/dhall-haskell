@@ -901,16 +901,16 @@ setHelper size toSet (Type extractIn expectedIn) = Type extractOut expectedOut
     extractOut (ListLit _ es) = case traverse extractIn es of
         Success vSeq
             | sameSize               -> Success vSet
-            | length duplicates == 1 -> extractError err1
-            | otherwise              -> extractError errN
+            | otherwise              -> extractError err
           where
             vList = Data.Foldable.toList vSeq
             vSet = toSet vList
             sameSize = size vSet == Data.Sequence.length vSeq
             duplicates = vList Data.List.\\ Data.Foldable.toList vSet
-            err1 = "One duplicate element in the list: "
-                   <> (Data.Text.pack $ show $ head duplicates)
-            errN = Data.Text.pack $ unwords
+            err | length duplicates == 1 =
+                     "One duplicate element in the list: "
+                     <> (Data.Text.pack $ show $ head duplicates)
+                | otherwise              = Data.Text.pack $ unwords
                      [ show $ length duplicates
                      , "duplicates were found in the list, including"
                      , show $ head duplicates
