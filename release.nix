@@ -28,7 +28,7 @@ in
           # of the compiler
           shared_7_10_3.dhall
           shared_7_10_3.dhall-bash
-          shared_7_10_3.dhall-json
+          # shared_7_10_3.dhall-json
           # `base-noprelude` depends on a specific version of `base`
           # shared_7_10_3.dhall-lsp-server
           # `hnix` depends on `lens-family-th`, which doesn't support GHC 7.10.3

@@ -9,6 +9,7 @@ module Dhall.Util
     , _ERROR
     , Censor(..)
     , Input(..)
+    , Output(..)
     , getExpression
     , getExpressionAndHeader
     ) where
@@ -119,6 +120,9 @@ data Censor = NoCensor | Censor
 
 -- | Path to input
 data Input = StandardInput | File FilePath
+
+-- | Path to output
+data Output = StandardOutput | OutputFile FilePath
 
 -- | Convenient utility for retrieving an expression
 getExpression :: Censor -> Input -> IO (Expr Src Import)

@@ -172,8 +172,6 @@ data Records
 data Products = P0 | P1 () | P2 Double | P3 () () | P4 Double Double
     deriving (Eq, Generic, Inject, Interpret, Show)
 
-deriving instance Interpret ()
-
 shouldHandleUnionsCorrectly :: TestTree
 shouldHandleUnionsCorrectly =
   testGroup "Handle union literals"

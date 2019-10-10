@@ -595,35 +595,20 @@ infer typer = loop
                     die MissingListType
 
         ListLit (Just _T₀) ts -> do
-            _ <- loop ctx _T₀
+            if Data.Sequence.null ts
+                then do
+                    _ <- loop ctx _T₀
 
-            let _T₀' = eval values _T₀
+                    let _T₀' = eval values _T₀
 
-            let _T₀'' = quote names _T₀'
+                    let _T₀'' = quote names _T₀'
 
-            case _T₀' of
-                VList _T₁' -> do
-                    tT₁' <- loop ctx (quote names _T₁')
+                    case _T₀' of
+                        VList _ -> return _T₀'
+                        _       -> die (InvalidListType _T₀'')
 
-                    case tT₁' of
-                        VConst Type -> return ()
-                        _           -> die (InvalidListType _T₀'')
-
-                _ -> do
-                    die (InvalidListType _T₀'')
-
-            let process i t = do
-                    _T₁' <- loop ctx t
-
-                    if Eval.conv values _T₀' _T₁'
-                        then return ()
-                        else do
-                            let _T₁'' = quote names _T₁'
-                            die (InvalidListElement i _T₀'' t _T₁'')
-
-            traverseWithIndex_ process ts
-
-            return _T₀'
+                -- See https://github.com/dhall-lang/dhall-haskell/issues/1359.
+                else die ListLitInvariant
 
         ListAppend x y -> do
             tx' <- loop ctx x
@@ -1279,6 +1264,7 @@ data TypeMessage s a
     | MismatchedListElements Int (Expr s a) (Expr s a) (Expr s a)
     | InvalidListElement Int (Expr s a) (Expr s a) (Expr s a)
     | InvalidListType (Expr s a)
+    | ListLitInvariant
     | InvalidSome (Expr s a) (Expr s a) (Expr s a)
     | InvalidPredicate (Expr s a) (Expr s a)
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
@@ -2250,6 +2236,21 @@ prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
         txt1 = insert expr1
         txt2 = insert expr2
         txt3 = insert expr3
+
+prettyTypeMessage (ListLitInvariant) = ErrorMessages {..}
+  where
+    short = "Internal error: A non-empty list literal violated an internal invariant"
+
+    long =
+        "Explanation: Internal error: A non-empty list literal violated an internal      \n\
+        \invariant.                                                                      \n\
+        \                                                                                \n\
+        \A non-empty list literal must always be represented as                          \n\
+        \                                                                                \n\
+        \    ListLit Nothing [x, y, ...]                                                 \n\
+        \                                                                                \n\
+        \Please file a bug report at https://github.com/dhall-lang/dhall-haskell/issues, \n\
+        \ideally including the offending source code.                                    \n"
 
 prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
   where
@@ -3373,7 +3374,19 @@ prettyTypeMessage (MustMapARecord _expr0 _expr1) = ErrorMessages {..}
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... but the argument to ❰toMap❱ must be a record and not some other type.       \n"
+        \... but the argument to ❰toMap❱ must be a record and not some other type.       \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You accidentally provide an empty record type instead of an empty record when \n\
+        \  using ❰toMap❱:                                                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ toMap {} : List { mapKey : Text, mapValue : Natural } │                   \n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \            ⇧                                                                   \n\
+        \            This should be ❰{=}❱ instead                                        \n"
 
 prettyTypeMessage (InvalidToMapRecordKind type_ kind) = ErrorMessages {..}
   where
@@ -4306,6 +4319,8 @@ messageExpressions f m = case m of
         InvalidListElement <$> pure a <*> f b <*> f c <*> f d
     InvalidListType a ->
         InvalidListType <$> f a
+    ListLitInvariant ->
+        pure ListLitInvariant
     InvalidSome a b c ->
         InvalidSome <$> f a <*> f b <*> f c
     InvalidPredicate a b ->
