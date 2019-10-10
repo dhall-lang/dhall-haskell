@@ -80,7 +80,6 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/unzip
     dhall-lang/Prelude/Location/package.dhall
     dhall-lang/Prelude/Location/Type
-    dhall-lang/Prelude/Map/empty
     dhall-lang/Prelude/Map/Entry
     dhall-lang/Prelude/Map/empty
     dhall-lang/Prelude/Map/keys
