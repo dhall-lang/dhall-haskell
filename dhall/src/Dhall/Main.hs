@@ -320,7 +320,7 @@ parseMode =
 
         p = Options.Applicative.strOption
             (   Options.Applicative.long "path"
-            <>  Options.Applicative.help "Index all files in path recursively. Will get list of files from STDIN if ommited."
+            <>  Options.Applicative.help "Index all files in path recursively. Will get list of files from STDIN if omitted."
             <>  Options.Applicative.metavar "PATH"
             )
 
@@ -331,7 +331,7 @@ parseMode =
 
         p = Options.Applicative.strOption
             (   Options.Applicative.long "output"
-            <>  Options.Applicative.help "Write ETags file into file. Default output is file tags"
+            <>  Options.Applicative.help "The name of the file that the tags are written to. Defaults to \"tags\""
             <>  Options.Applicative.metavar "FILENAME"
             )
 

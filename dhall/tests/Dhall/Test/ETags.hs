@@ -36,7 +36,7 @@ etagsTest prefix =
 
         actualTags <- fixPathSeparators <$> ETags.generate (InputFile inputFile) Nothing False
 
-        expectedTags <- readExpected outputFile
+        expectedTags <- Text.IO.readFile outputFile
 
         let message = "The actual tags did not match the expected tags"
 
@@ -53,18 +53,11 @@ etagsDirTest =
                           (Just [".dhall"])
                           False)
 
-        expectedTags <- readExpected outputFile
+        expectedTags <- Text.IO.readFile outputFile
 
         let message = "The actual tags did not match the expected tags for directory test"
 
         Tasty.HUnit.assertEqual message expectedTags actualTags
 
-readExpected :: String -> IO Text
-readExpected file = fixPathSeparators <$> Text.IO.readFile file
-
 fixPathSeparators :: Text -> Text
-fixPathSeparators t = Text.intercalate "\n" (map fix prevLineLine)
-    where ls = Text.lines t
-          prevLineLine = zip ("":ls) ls
-          fix ("\x0c", l) = Text.replace "\\" "/" l
-          fix (     _, l) = l
+fixPathSeparators = Text.replace "\\" "/"

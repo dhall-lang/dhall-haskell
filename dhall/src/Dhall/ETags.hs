@@ -86,7 +86,7 @@ generate
     --   This way someone can combine tools in @bash@ to send, for example, output from
     --   @find@ to the input of @dhall tags@.
     -> Maybe [Text]
-    -- ^ List of suffixes for dhall files or Nothing to check all files ([".dhall"] by default)
+    -- ^ List of suffixes for dhall files or Nothing to check all files
     -> Bool
     -- ^ Flag if `generate` should follow symlinks
     -> IO Text
