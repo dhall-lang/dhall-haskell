@@ -54,7 +54,8 @@ for:
     - chcp 65001 && stack test dhall
     - stack test dhall-json
     - stack test dhall-bash
-    # - stack test dhall-lsp-server # Disabled while the tests are broken.
+    # - stack test dhall-lsp-server:doctest # Disabled while the tests are broken.
+    - stack test dhall-lsp-server:tests
     - stack bench dhall --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
     
 -
