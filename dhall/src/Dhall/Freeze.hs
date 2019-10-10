@@ -101,7 +101,7 @@ writeExpr inplace (header, expr) characterSet = do
     let unAnnotated = Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc)
 
     case inplace of
-        File f ->
+        InputFile f ->
             System.IO.withFile f System.IO.WriteMode (\handle -> do
                 Pretty.renderIO handle unAnnotated
                 Data.Text.IO.hPutStrLn handle "" )
@@ -142,8 +142,8 @@ freeze
     -> IO ()
 freeze inplace scope intent characterSet censor = do
     let directory = case inplace of
-            StandardInput -> "."
-            File file     -> System.FilePath.takeDirectory file
+            StandardInput  -> "."
+            InputFile file -> System.FilePath.takeDirectory file
 
     (header, parsedExpression) <- Dhall.Util.getExpressionAndHeader censor inplace
 
