@@ -367,6 +367,8 @@ Extra-Source-Files:
     tests/lint/success/*.dhall
     tests/diff/*.dhall
     tests/diff/*.txt
+    tests/etags/*.dhall
+    tests/etags/*.tags
     tests/recursive/*.dhall
     tests/regression/*.dhall
     tests/tutorial/*.dhall
@@ -485,6 +487,7 @@ Library
         Dhall.Core,
         Dhall.Crypto,
         Dhall.Diff,
+        Dhall.ETags,
         Dhall.Format,
         Dhall.Freeze,
         Dhall.Hash,
@@ -538,6 +541,7 @@ Test-Suite tasty
     Other-Modules:
         Dhall.Test.Dhall
         Dhall.Test.Diff
+        Dhall.Test.ETags
         Dhall.Test.Format
         Dhall.Test.Import
         Dhall.Test.Lint
