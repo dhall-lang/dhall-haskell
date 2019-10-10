@@ -1804,7 +1804,6 @@ instance Inject a => Inject (Vector a) where
 [ "hi", "mom" ]
 
 -}
-
 instance Inject a => Inject (Data.Set.Set a) where
     injectWith = fmap (contramap Data.Set.toAscList) injectWith
 
