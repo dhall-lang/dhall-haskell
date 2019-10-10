@@ -1,0 +1,13 @@
+
+./tests/etags/record.dhall,335
+record.dhall1,1
+/record.dhall1,1
+let Config Config6,81
+      { home home8,161
+      , privateKey privateKey9,181
+      , publicKey publicKey10,207
+      , name name11,232
+      , name : { firstName firstName11,241
+               , secondName secondName12,275
+let makeUser makeUser16,323
+let configs configs30,804
