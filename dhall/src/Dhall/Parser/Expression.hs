@@ -352,8 +352,13 @@ parsers embedded = Parsers {..}
 
             alternative04 = (do
                 _openBrace
+
+                _ <- optional _comma
+
                 a <- recordTypeOrLiteral
+
                 _closeBrace
+
                 return a ) <?> "record type or literal"
 
             alternative05 = unionType
@@ -673,6 +678,8 @@ parsers embedded = Parsers {..}
     unionType = (do
             _openAngle
 
+            _ <- optional _bar
+
             let unionTypeEntry = do
                     a <- anyLabel
                     b <- optional (do _colon; expression)
@@ -688,7 +695,11 @@ parsers embedded = Parsers {..}
 
     listLiteral = (do
             _openBracket
+
+            _ <- optional _comma
+
             a <- Text.Megaparsec.sepBy expression _comma
+
             _closeBracket
             return (ListLit Nothing (Data.Sequence.fromList a)) ) <?> "list literal"
 
