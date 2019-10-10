@@ -1,3 +1,7 @@
+Next release
+
+* Add `dhall tags` command that build tags file in [ETags](https://en.wikipedia.org/wiki/Ctags#Etags_2) format. Allow to index file or directory.
+
 1.26.1
 
 * TECHNICALLY BREAKING CHANGES: [Simplify `⫽` within projection](https://github.com/dhall-lang/dhall-haskell/pull/1283) / [Simplify nested record projections](https://github.com/dhall-lang/dhall-haskell/pull/1307)
