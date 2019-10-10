@@ -1637,7 +1637,7 @@ instance Inject Word32 where
 
         declared = Natural
 
-{-| 
+{-|
 
 >>> embed inject (12 :: Word64)
 NaturalLit 12
@@ -1701,6 +1701,17 @@ instance Inject a => Inject (Data.Set.Set a) where
     injectWith = fmap (contramap Data.Set.toList) injectWith
 
 instance (Inject a, Inject b) => Inject (a, b)
+
+data InjectRecord k v =
+    InjectRecord { mapKey :: k, mapValue :: v } deriving Generic
+
+instance (Inject k, Inject v) => Inject (InjectRecord k v)
+
+instance (Inject k, Inject v) => Inject (Map k v) where
+    injectWith =
+        let mapToInjectRecords = fmap (uncurry InjectRecord) . Data.Map.toList
+        in fmap (contramap mapToInjectRecords) injectWith
+
 
 {-| This is the underlying class that powers the `Interpret` class's support
     for automatically deriving a generic implementation
