@@ -1064,9 +1064,15 @@ instance Interpret a => Interpret [a] where
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
 
+{-| Note that this instance will throw errors in the presence of duplicates in
+    the list. To ignore duplicates, use `setIgnoringDuplicates`.
+-}
 instance (Interpret a, Ord a, Show a) => Interpret (Data.Set.Set a) where
     autoWith opts = setFromDistinctList (autoWith opts)
 
+{-| Note that this instance will throw errors in the presence of duplicates in
+    the list. To ignore duplicates, use `hashSetIgnoringDuplicates`.
+-}
 instance (Interpret a, Hashable a, Ord a, Show a) => Interpret (Data.HashSet.HashSet a) where
     autoWith opts = hashSetFromDistinctList (autoWith opts)
 
