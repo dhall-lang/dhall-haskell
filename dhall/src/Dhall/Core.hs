@@ -562,8 +562,8 @@ data Expr s a
     | CombineTypes (Expr s a) (Expr s a)
     -- | > Prefer x y                               ~  x ⫽ y
     | Prefer (Expr s a) (Expr s a)
-    -- | > Override x y                             ~  x::y
-    | Override (Expr s a) (Expr s a)
+    -- | > RecordCompletion x y                     ~  x::y
+    | RecordCompletion (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
     --   > Merge x y  Nothing                       ~  merge x y
     | Merge (Expr s a) (Expr s a) (Maybe (Expr s a))
@@ -667,7 +667,7 @@ instance Functor (Expr s) where
   fmap f (Combine e1 e2) = Combine (fmap f e1) (fmap f e2)
   fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
   fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
-  fmap f (Override e1 e2) = Override (fmap f e1) (fmap f e2)
+  fmap f (RecordCompletion e1 e2) = RecordCompletion (fmap f e1) (fmap f e2)
   fmap f (Merge e1 e2 maybeE) = Merge (fmap f e1) (fmap f e2) (fmap (fmap f) maybeE)
   fmap f (ToMap e maybeE) = ToMap (fmap f e) (fmap (fmap f) maybeE)
   fmap f (Field e1 v) = Field (fmap f e1) v
@@ -750,7 +750,7 @@ instance Monad (Expr s) where
     Combine a b          >>= k = Combine (a >>= k) (b >>= k)
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
     Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
-    Override a b         >>= k = Override (a >>= k) (b >>= k)
+    RecordCompletion a b >>= k = RecordCompletion (a >>= k) (b >>= k)
     Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
     ToMap a b            >>= k = ToMap (a >>= k) (fmap (>>= k) b)
     Field a b            >>= k = Field (a >>= k) b
@@ -820,7 +820,7 @@ instance Bifunctor Expr where
     first k (Combine a b         ) = Combine (first k a) (first k b)
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
     first k (Prefer a b          ) = Prefer (first k a) (first k b)
-    first k (Override a b        ) = Override (first k a) (first k b)
+    first k (RecordCompletion a b) = RecordCompletion (first k a) (first k b)
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
     first k (ToMap a b           ) = ToMap (first k a) (fmap (first k) b)
     first k (Field a b           ) = Field (first k a) b
@@ -1069,7 +1069,7 @@ shift d v (Prefer a b) = Prefer a' b'
   where
     a' = shift d v a
     b' = shift d v b
-shift d v (Override a b) = Override a' b'
+shift d v (RecordCompletion a b) = RecordCompletion a' b'
   where
     a' = shift d v a
     b' = shift d v b
@@ -1242,7 +1242,7 @@ subst x e (Prefer a b) = Prefer a' b'
   where
     a' = subst x e a
     b' = subst x e b
-subst x e (Override a b) = Override a' b'
+subst x e (RecordCompletion a b) = RecordCompletion a' b'
   where
     a' = subst x e a
     b' = subst x e b
@@ -1368,7 +1368,7 @@ denote (Union a             ) = Union (fmap (fmap denote) a)
 denote (Combine a b         ) = Combine (denote a) (denote b)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
 denote (Prefer a b          ) = Prefer (denote a) (denote b)
-denote (Override a b        ) = Override (denote a) (denote b)
+denote (RecordCompletion a b) = RecordCompletion (denote a) (denote b)
 denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (ToMap a b           ) = ToMap (denote a) (fmap denote b)
 denote (Field a b           ) = Field (denote a) b
@@ -1777,7 +1777,7 @@ normalizeWithM ctx e0 = loop (denote e0)
             l
         decide l r =
             Prefer l r
-    Override x y -> do
+    RecordCompletion x y -> do
         loop (Annot (Prefer (Field x "default") y) (Field x "Type"))
     Merge x y t      -> do
         x' <- loop x
@@ -2090,7 +2090,7 @@ isNormalized e0 = loop (denote e0)
           decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
           decide l r = not (Eval.judgmentallyEqual l r)
-      Override _ _ -> False
+      RecordCompletion _ _ -> False
       Merge x y t -> loop x && loop y && all loop t
       ToMap x t -> case x of
           RecordLit _ -> False
@@ -2276,7 +2276,7 @@ subExpressions f (Union a) = Union <$> traverse (traverse f) a
 subExpressions f (Combine a b) = Combine <$> f a <*> f b
 subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
 subExpressions f (Prefer a b) = Prefer <$> f a <*> f b
-subExpressions f (Override a b) = Override <$> f a <*> f b
+subExpressions f (RecordCompletion a b) = RecordCompletion <$> f a <*> f b
 subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 subExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
 subExpressions f (Field a b) = Field <$> f a <*> pure b

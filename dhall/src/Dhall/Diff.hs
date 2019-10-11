@@ -583,7 +583,7 @@ skeleton (Prefer {}) =
     <>  operator "⫽"
     <>  " "
     <>  ignore
-skeleton (Override {}) =
+skeleton (RecordCompletion {}) =
         ignore
     <>  operator "⸬"
     <>  ignore
@@ -1009,20 +1009,20 @@ diffImportExpression l@(Embed {}) r =
 diffImportExpression l r@(Embed {}) =
     mismatch l r
 diffImportExpression l r =
-    diffOverrideExpression l r
+    diffRecordCompletionExpression l r
 
-diffOverrideExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
-diffOverrideExpression (Override aL bL) (Override aR bR) =
+diffRecordCompletionExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
+diffRecordCompletionExpression (RecordCompletion aL bL) (RecordCompletion aR bR) =
        diffSelectorExpression aL aR <> "⸬" <> diffSelectorExpression bL bR
 {-
        " " <> diffSelectorExpression aL aR
     <> hardline <> "⸬" <> diffSelectorExpression bL bR
 -}
-diffOverrideExpression l@(Override {}) r =
+diffRecordCompletionExpression l@(RecordCompletion {}) r =
     mismatch l r
-diffOverrideExpression l r@(Override {}) =
+diffRecordCompletionExpression l r@(RecordCompletion {}) =
     mismatch l r
-diffOverrideExpression l r =
+diffRecordCompletionExpression l r =
     diffSelectorExpression l r
 
 diffSelectorExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff

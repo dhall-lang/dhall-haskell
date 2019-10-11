@@ -305,7 +305,7 @@ parsers embedded = Parsers {..}
 
         case mb of
             Nothing -> return a
-            Just b  -> return (Override a b) )
+            Just b  -> return (RecordCompletion a b) )
 
     selectorExpression = noted (do
             a <- primitiveExpression

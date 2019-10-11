@@ -852,16 +852,16 @@ prettyCharacterSet characterSet expression =
     prettyImportExpression (Note _ a) =
         prettyImportExpression a
     prettyImportExpression a0 =
-        prettyOverrideExpression a0
+        prettyRecordCompletionExpression a0
 
-    prettyOverrideExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyOverrideExpression (Override a b) =
+    prettyRecordCompletionExpression :: Pretty a => Expr Src a -> Doc Ann
+    prettyRecordCompletionExpression (RecordCompletion a b) =
             prettySelectorExpression a
         <>  doubleColon
         <>  prettySelectorExpression b
-    prettyOverrideExpression (Note _ a) =
-        prettyOverrideExpression a
-    prettyOverrideExpression a0 =
+    prettyRecordCompletionExpression (Note _ a) =
+        prettyRecordCompletionExpression a
+    prettyRecordCompletionExpression a0 =
         prettySelectorExpression a0
 
     prettySelectorExpression :: Pretty a => Expr Src a -> Doc Ann

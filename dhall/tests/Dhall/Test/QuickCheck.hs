@@ -260,7 +260,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (7 :: W "Combine")
             % (1 :: W "CombineTypes")
             % (7 :: W "Prefer")
-            % (7 :: W "Override")
+            % (7 :: W "RecordCompletion")
             % (1 :: W "Merge")
             % (1 :: W "ToMap")
             % (7 :: W "Field")
