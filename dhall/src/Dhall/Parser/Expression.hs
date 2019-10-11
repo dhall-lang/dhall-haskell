@@ -293,9 +293,9 @@ parsers embedded = Parsers {..}
                 a <- embedded
                 return (Embed a)
 
-            alternative1 = defaultExpression
+            alternative1 = completionExpression
 
-    defaultExpression = noted (do
+    completionExpression = noted (do
         a <- selectorExpression
 
         mb <- optional (do
