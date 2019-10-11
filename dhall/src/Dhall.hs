@@ -1700,7 +1700,7 @@ instance Inject a => Inject (Data.Set.Set a) where
 
 instance (Inject a, Inject b) => Inject (a, b)
 
-{-|
+{-| Inject a `Data.Map` to a @Prelude.Map.Type@
 
 >>> prettyExpr $ embed inject (Data.Map.fromList [(1 :: Integer, True )])
 [ { mapKey = +1, mapValue = True } ]
@@ -1708,40 +1708,25 @@ instance (Inject a, Inject b) => Inject (a, b)
 >>> prettyExpr $ embed inject (Data.Map.fromList [] :: Data.Map.Map Integer Bool)
 [] : List { mapKey : Integer, mapValue : Bool }
 
-In case of duplicate keys, the last input is kept.
-
->>> prettyExpr $ embed inject (Data.Map.fromList [(1 :: Integer, True ), (1, False)])
-[ { mapKey = +1, mapValue = False } ]
-
 -}
 instance (Inject k, Inject v) => Inject (Data.Map.Map k v) where
     injectWith options = InputType embedOut declaredOut
       where
-        embedOut xs = ListLit listType $ fmap recordPair $
-                          Data.Sequence.fromList $ Data.Map.toList xs
+        embedOut m = ListLit listType $ mapEntries m
           where
             listType
-                | Data.Map.null xs = Just declaredOut
-                | otherwise        = Nothing
+                | Data.Map.null m = Just declaredOut
+                | otherwise       = Nothing
 
         declaredOut = App List $ Record $ Dhall.Map.fromList
-                          [ ("mapKey", declaredK), ("mapValue", declaredV)]
+                          [("mapKey", declaredK), ("mapValue", declaredV)]
 
+        mapEntries = fmap recordPair . Data.Sequence.fromList . Data.Map.toList
         recordPair (k, v) = RecordLit $ Dhall.Map.fromList
                                 [("mapKey", embedK k), ("mapValue", embedV v)]
 
         InputType embedK declaredK = injectWith options
         InputType embedV declaredV = injectWith options
-
-
--- ghci> embed inject (Data.Map.fromList [(1 :: Integer, True )])
--- ListLit Nothing (fromList [RecordLit (fromList [("mapKey",IntegerLit 1),("mapValue",BoolLit True)])])
---
--- ghci> embed inject (Data.Map.fromList [] :: Data.Map.Map Integer Bool)
--- ListLit (Just (App List (Record (fromList [("mapKey",Integer),("mapValue",Bool)])))) (fromList [])
-
-
-
 
 {-| This is the underlying class that powers the `Interpret` class's support
     for automatically deriving a generic implementation
