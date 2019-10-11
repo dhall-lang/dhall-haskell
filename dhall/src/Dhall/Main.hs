@@ -32,7 +32,7 @@ import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError, X)
-import Dhall.Util (Censor(..), Input(..))
+import Dhall.Util (Censor(..), Input(..), Output(..))
 import Dhall.Version (dhallVersionString)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (ExitCode, exitFailure)
@@ -63,6 +63,7 @@ import qualified Dhall.Hash
 import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
+import qualified Dhall.ETags
 import qualified Dhall.Pretty
 import qualified Dhall.Repl
 import qualified Dhall.TypeCheck
@@ -89,6 +90,7 @@ data Options = Options
 data Mode
     = Default
           { file :: Input
+          , output :: Output
           , annotate :: Bool
           , alpha :: Bool
           , semanticCacheMode :: SemanticCacheMode
@@ -104,6 +106,11 @@ data Mode
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Input }
+    | ETags { input :: Input
+            , output :: Output
+            , suffixes :: Maybe [Text]
+            , followSymlinks :: Bool
+            }
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool }
     | Text { file :: Input }
@@ -183,6 +190,10 @@ parseMode =
             "Improve Dhall code by using newer language features and removing dead code"
             (Lint <$> parseInplace)
     <|> subcommand
+            "tags"
+            "Generate ETags file"
+            (ETags <$> parseInput <*> parseTagsOutput <*> parseSuffixes <*> parseFollowSymlinks)
+    <|> subcommand
             "format"
             "Standard code formatter for the Dhall language"
             (Format <$> parseFormatMode)
@@ -204,6 +215,7 @@ parseMode =
             (Text <$> parseFile)
     <|> (   Default
         <$> parseFile
+        <*> parseOutput
         <*> parseAnnotate
         <*> parseAlpha
         <*> parseSemanticCacheMode
@@ -218,11 +230,22 @@ parseMode =
     parseFile = fmap f (optional p)
       where
         f  Nothing    = StandardInput
-        f (Just file) = File file
+        f (Just file) = InputFile file
 
         p = Options.Applicative.strOption
                 (   Options.Applicative.long "file"
                 <>  Options.Applicative.help "Read expression from a file instead of standard input"
+                <>  Options.Applicative.metavar "FILE"
+                )
+
+    parseOutput = fmap f (optional p)
+      where
+        f Nothing = StandardOutput
+        f (Just file) = OutputFile file
+
+        p = Options.Applicative.strOption
+                (   Options.Applicative.long "output"
+                <>  Options.Applicative.help "Write result to a file instead of standard output"
                 <>  Options.Applicative.metavar "FILE"
                 )
 
@@ -282,13 +305,53 @@ parseMode =
     parseInplace = fmap f (optional p)
       where
         f  Nothing    = StandardInput
-        f (Just file) = File file
+        f (Just file) = InputFile file
 
         p = Options.Applicative.strOption
             (   Options.Applicative.long "inplace"
             <>  Options.Applicative.help "Modify the specified file in-place"
             <>  Options.Applicative.metavar "FILE"
             )
+
+    parseInput = fmap f (optional p)
+      where
+        f  Nothing    = StandardInput
+        f (Just path) = InputFile path
+
+        p = Options.Applicative.strOption
+            (   Options.Applicative.long "path"
+            <>  Options.Applicative.help "Index all files in path recursively. Will get list of files from STDIN if omitted."
+            <>  Options.Applicative.metavar "PATH"
+            )
+
+    parseTagsOutput = fmap f (optional p)
+      where
+        f  Nothing    = OutputFile "tags"
+        f (Just file) = OutputFile file
+
+        p = Options.Applicative.strOption
+            (   Options.Applicative.long "output"
+            <>  Options.Applicative.help "The name of the file that the tags are written to. Defaults to \"tags\""
+            <>  Options.Applicative.metavar "FILENAME"
+            )
+
+    parseSuffixes = fmap f (optional p)
+      where
+        f  Nothing    = Just [".dhall"]
+        f (Just "")   = Nothing
+        f (Just line) = Just (Data.Text.splitOn " " line)
+
+        p = Options.Applicative.strOption
+            (   Options.Applicative.long "suffixes"
+            <>  Options.Applicative.help "Index only files with suffixes. \"\" to index all files."
+            <>  Options.Applicative.metavar "SUFFIXES"
+            )
+
+    parseFollowSymlinks =
+        Options.Applicative.switch
+        (   Options.Applicative.long "follow-symlinks"
+        <>  Options.Applicative.help "Follow symlinks when recursing directories"
+        )
 
     parseJSONFlag =
         Options.Applicative.switch
@@ -338,7 +401,7 @@ command (Options {..}) = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
     let rootDirectory = \case
-            File f        -> System.FilePath.takeDirectory f
+            InputFile f   -> System.FilePath.takeDirectory f
             StandardInput -> "."
 
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
@@ -407,7 +470,7 @@ command (Options {..}) = do
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 
             renderDoc h doc
-    
+
     Dhall.Import.warnAboutMissingCaches
 
     handle $ case mode of
@@ -440,7 +503,10 @@ command (Options {..}) = do
                         then Annot alphaNormalizedExpression inferredType
                         else alphaNormalizedExpression
 
-            render System.IO.stdout annotatedExpression
+            case output of
+                StandardOutput -> render System.IO.stdout annotatedExpression
+                OutputFile file_ ->
+                    System.IO.withFile file_ System.IO.WriteMode $ \h -> render h annotatedExpression
 
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
@@ -561,7 +627,7 @@ command (Options {..}) = do
             (header, expression) <- getExpressionAndHeader inplace
 
             case inplace of
-                File file -> do
+                InputFile file -> do
                     let lintedExpression = Dhall.Lint.lint expression
 
                     let doc =   Pretty.pretty header
@@ -601,7 +667,7 @@ command (Options {..}) = do
         Decode {..} -> do
             bytes <- do
                 case file of
-                    File f        -> Data.ByteString.Lazy.readFile f
+                    InputFile f   -> Data.ByteString.Lazy.readFile f
                     StandardInput -> Data.ByteString.Lazy.getContents
 
             term <- do
@@ -646,6 +712,16 @@ command (Options {..}) = do
                         invalidTypeExpression = normalizedExpression
 
                     Control.Exception.throwIO (Dhall.InvalidType {..})
+
+        ETags {..} -> do
+            tags <- Dhall.ETags.generate input suffixes followSymlinks
+
+            case output of
+                OutputFile file ->
+                    System.IO.withFile file System.IO.WriteMode (`Data.Text.IO.hPutStr` tags)
+
+                StandardOutput -> Data.Text.IO.putStrLn tags
+            
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()

@@ -470,16 +470,15 @@ instance ToTerm Void where
 
 instance ToTerm DhallDouble where
     encode (DhallDouble n64)
-        -- cborg always encodes NaN as "7e00"
-        | isNaN n64 = THalf n32
+        -- cborg always encodes NaN as a half-precision float of value "7e00"
         | useHalf   = THalf n32
         | useFloat  = TFloat n32
         | otherwise = TDouble n64
       where
         n32      = double2Float n64
         useFloat = n64 == float2Double n32
-        -- the other three cases for Half-floats are 0.0 and the infinities
-        useHalf  = or $ fmap (n64 ==) [0.0, infinity, -infinity]
+        -- the other four cases for Half-floats are -0.0, 0.0 and the infinities
+        useHalf  = n64 == 0.0 || n64 == infinity || n64 == -infinity
         infinity = 1/0 :: Double
 
 -- | Types that can be decoded from a CBOR `Term`

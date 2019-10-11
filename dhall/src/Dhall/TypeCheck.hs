@@ -3377,7 +3377,19 @@ prettyTypeMessage (MustMapARecord _expr0 _expr1) = ErrorMessages {..}
         \    └─────────────────────────────────────────────────────────────────────┘     \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... but the argument to ❰toMap❱ must be a record and not some other type.       \n"
+        \... but the argument to ❰toMap❱ must be a record and not some other type.       \n\
+        \                                                                                \n\
+        \Some common reasons why you might get this error:                               \n\
+        \                                                                                \n\
+        \● You accidentally provide an empty record type instead of an empty record when \n\
+        \  using ❰toMap❱:                                                                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────────────────┐                   \n\
+        \    │ toMap {} : List { mapKey : Text, mapValue : Natural } │                   \n\
+        \    └───────────────────────────────────────────────────────┘                   \n\
+        \            ⇧                                                                   \n\
+        \            This should be ❰{=}❱ instead                                        \n"
 
 prettyTypeMessage (InvalidToMapRecordKind type_ kind) = ErrorMessages {..}
   where

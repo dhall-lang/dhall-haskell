@@ -1,0 +1,61 @@
+
+./tests/etags/let.dhall,66
+let.dhall1,1
+/let.dhall1,1
+let foo foo1,5
+let bar bar3,22
+
+./tests/etags/nonunicode.dhall,63
+nonunicode.dhall1,1
+/nonunicode.dhall1,1
+let foo foo2,12
+
+./tests/etags/record.dhall,335
+record.dhall1,1
+/record.dhall1,1
+let Config Config6,81
+      { home home8,161
+      , privateKey privateKey9,181
+      , publicKey publicKey10,207
+      , name name11,232
+      , name : { firstName firstName11,241
+               , secondName secondName12,275
+let makeUser makeUser16,323
+let configs configs30,804
+
+./tests/etags/recordlit.dhall,223
+recordlit.dhall1,1
+/recordlit.dhall1,1
+{ home home8,143
+, privateKey privateKey9,171
+, publicKey publicKey10,215
+, name name11,263
+, name = { firstName firstName11,272
+         , secondName secondName12,302
+
+./tests/etags/simple.dhall,254
+simple.dhall1,1
+/simple.dhall1,1
+let generate generate6,100
+let makeUser makeUser17,409
+let buildUser buildUser26,680
+let Config Config32,880
+      { home home33,897
+      , privateKey privateKey34,917
+      , publicKey publicKey35,943
+
+./tests/etags/unicode.dhall,57
+unicode.dhall1,1
+/unicode.dhall1,1
+let foo foo2,15
+
+./tests/etags/union.dhall,394
+union.dhall1,1
+/union.dhall1,1
+let Element Element1,5
+let Element = < Left Left1,17
+let Element = < Left : Natural | Right Right1,34
+let Element = < Left : Natural | Right : Bool | Middle Middle1,49
+let Element = < Left : Natural | Right : Bool | Middle : < Top Top1,60
+let Element = < Left : Natural | Right : Bool | Middle : < Top : Text | Bottom Bottom1,73
+let foo foo3,95

@@ -71,7 +71,14 @@ module Dhall
     , sequence
     , list
     , vector
+    , setFromDistinctList
+    , setIgnoringDuplicates
+    , hashSetFromDistinctList
+    , hashSetIgnoringDuplicates
+    , Dhall.map
+    , pairFromMapEntry
     , unit
+    , void
     , string
     , pair
     , record
@@ -116,7 +123,9 @@ import Data.Either.Validation (Validation(..), ealt, eitherToValidation, validat
 import Data.Fix (Fix(..))
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
+import Data.Hashable (Hashable)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Semigroup (Semigroup)
@@ -125,13 +134,14 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
+import Data.Void (Void)
 import Data.Word (Word8, Word16, Word32, Word64)
 import Dhall.Core (Expr(..), Chunks(..), DhallDouble(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import GHC.Generics
-import Lens.Family (LensLike', set, view)
+import Lens.Family (LensLike', view)
 import Numeric.Natural (Natural)
 import Prelude hiding (maybe, sequence)
 import System.FilePath (takeDirectory)
@@ -142,16 +152,20 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
+import qualified Data.Map
 import qualified Data.Maybe
+import qualified Data.List
 import qualified Data.List.NonEmpty
 import qualified Data.Semigroup
 import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
+import qualified Data.HashSet
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
 import qualified Data.Vector
+import qualified Data.Void
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
@@ -160,10 +174,12 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
+import qualified Lens.Family
 
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> :set -XRecordWildCards
+-- >>> import Dhall.Pretty.Internal (prettyExpr)
 
 type Extractor s a = Validation (ExtractErrors s a)
 type MonadicExtractor s a = Either (ExtractErrors s a)
@@ -398,8 +414,8 @@ inputWithSettings settings (Type {..}) txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               set Dhall.Import.normalizer      _normalizer
-            .  set Dhall.Import.startingContext _startingContext
+               Lens.Family.set Dhall.Import.normalizer      _normalizer
+            .  Lens.Family.set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatus _rootDirectory)
 
@@ -492,8 +508,8 @@ inputExprWithSettings settings txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               set Dhall.Import.normalizer      _normalizer
-            .  set Dhall.Import.startingContext _startingContext
+               Lens.Family.set Dhall.Import.normalizer      _normalizer
+            .  Lens.Family.set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatus _rootDirectory)
 
@@ -727,12 +743,7 @@ double = Type {..}
 "Test"
 -}
 lazyText :: Type Data.Text.Lazy.Text
-lazyText = Type {..}
-  where
-    extract (TextLit (Chunks [] t)) = pure (Data.Text.Lazy.fromStrict t)
-    extract  expr = typeError Text expr
-
-    expected = Text
+lazyText = fmap Data.Text.Lazy.fromStrict strictText
 
 {-| Decode strict `Text`
 
@@ -740,8 +751,12 @@ lazyText = Type {..}
 "Test"
 -}
 strictText :: Type Text
-strictText = fmap Data.Text.Lazy.toStrict lazyText
+strictText = Type {..}
+  where
+    extract (TextLit (Chunks [] t)) = pure t
+    extract  expr = typeError Text expr
 
+    expected = Text
 {-| Decode a `Maybe`
 
 >>> input (maybe natural) "Some 1"
@@ -785,6 +800,159 @@ list = fmap Data.Foldable.toList . sequence
 vector :: Type a -> Type (Vector a)
 vector = fmap Data.Vector.fromList . list
 
+{-| Decode a `Set` from a `List`
+
+>>> input (setIgnoringDuplicates natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+Duplicate elements are ignored.
+
+>>> input (setIgnoringDuplicates natural) "[1, 1, 3]"
+fromList [1,3]
+
+-}
+setIgnoringDuplicates :: (Ord a) => Type a -> Type (Data.Set.Set a)
+setIgnoringDuplicates = fmap Data.Set.fromList . list
+
+{-| Decode a `HashSet` from a `List`
+
+>>> input (hashSetIgnoringDuplicates natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+Duplicate elements are ignored.
+
+>>> input (hashSetIgnoringDuplicates natural) "[1, 1, 3]"
+fromList [1,3]
+
+-}
+hashSetIgnoringDuplicates :: (Hashable a, Ord a)
+                          => Type a
+                          -> Type (Data.HashSet.HashSet a)
+hashSetIgnoringDuplicates = fmap Data.HashSet.fromList . list
+
+{-| Decode a `Set` from a `List` with distinct elements
+
+>>> input (setFromDistinctList natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+An error is thrown if the list contains duplicates.
+
+> >>> input (setFromDistinctList natural) "[1, 1, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> One duplicate element in the list: 1
+>
+
+> >>> input (setFromDistinctList natural) "[1, 1, 3, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> 2 duplicates were found in the list, including 1
+>
+
+-}
+setFromDistinctList :: (Ord a, Show a) => Type a -> Type (Data.Set.Set a)
+setFromDistinctList = setHelper Data.Set.size Data.Set.fromList
+
+{-| Decode a `HashSet` from a `List` with distinct elements
+
+>>> input (hashSetFromDistinctList natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+An error is thrown if the list contains duplicates.
+
+> >>> input (hashSetFromDistinctList natural) "[1, 1, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> One duplicate element in the list: 1
+>
+
+> >>> input (hashSetFromDistinctList natural) "[1, 1, 3, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> 2 duplicates were found in the list, including 1
+>
+
+-}
+hashSetFromDistinctList :: (Hashable a, Ord a, Show a)
+                        => Type a
+                        -> Type (Data.HashSet.HashSet a)
+hashSetFromDistinctList = setHelper Data.HashSet.size Data.HashSet.fromList
+
+
+setHelper :: (Eq a, Foldable t, Show a)
+          => (t a -> Int)
+          -> ([a] -> t a)
+          -> Type a
+          -> Type (t a)
+setHelper size toSet (Type extractIn expectedIn) = Type extractOut expectedOut
+  where
+    extractOut (ListLit _ es) = case traverse extractIn es of
+        Success vSeq
+            | sameSize               -> Success vSet
+            | otherwise              -> extractError err
+          where
+            vList = Data.Foldable.toList vSeq
+            vSet = toSet vList
+            sameSize = size vSet == Data.Sequence.length vSeq
+            duplicates = vList Data.List.\\ Data.Foldable.toList vSet
+            err | length duplicates == 1 =
+                     "One duplicate element in the list: "
+                     <> (Data.Text.pack $ show $ head duplicates)
+                | otherwise              = Data.Text.pack $ unwords
+                     [ show $ length duplicates
+                     , "duplicates were found in the list, including"
+                     , show $ head duplicates
+                     ]
+        Failure f -> Failure f
+    extractOut expr = typeError expectedOut expr
+
+    expectedOut = App List expectedIn
+
+{-| Decode a `Map` from a @toMap@ expression or generally a @Prelude.Map.Type@
+
+>>> input (Dhall.map strictText bool) "toMap { a = True, b = False }"
+fromList [("a",True),("b",False)]
+>>> input (Dhall.map strictText bool) "[ { mapKey = \"foo\", mapValue = True } ]"
+fromList [("foo",True)]
+
+If there are duplicate @mapKey@s, later @mapValue@s take precedence:
+
+>>> let expr = "[ { mapKey = 1, mapValue = True }, { mapKey = 1, mapValue = False } ]"
+>>> input (Dhall.map natural bool) expr
+fromList [(1,False)]
+
+-}
+map :: Ord k => Type k -> Type v -> Type (Map k v)
+map k v = fmap Data.Map.fromList (list (pairFromMapEntry k v))
+
+{-| Decode a tuple from a @Prelude.Map.Entry@ record
+
+>>> input (pairFromMapEntry strictText natural) "{ mapKey = \"foo\", mapValue = 3 }"
+("foo",3)
+-}
+pairFromMapEntry :: Type k -> Type v -> Type (k, v)
+pairFromMapEntry k v = Type extractOut expectedOut
+  where
+    extractOut (RecordLit kvs)
+        | Just key <- Dhall.Map.lookup "mapKey" kvs
+        , Just value <- Dhall.Map.lookup "mapValue" kvs
+            = liftA2 (,) (extract k key) (extract v value)
+    extractOut expr = typeError expectedOut expr
+
+    expectedOut = Record (Dhall.Map.fromList [("mapKey", expected k), ("mapValue", expected v)])
+
 {-| Decode @()@ from an empty record.
 
 >>> input unit "{=}"  -- GHC doesn't print the result if it is ()
@@ -798,6 +966,13 @@ unit = Type extractOut expectedOut
     extractOut expr = typeError (Record mempty) expr
 
     expectedOut = Record mempty
+
+{-| Decode 'Void' from an empty union.
+
+Since @<>@ is uninhabited, @'input' 'void'@ will always fail.
+-}
+void :: Type Void
+void = union mempty
 
 {-| Decode a `String`
 
@@ -834,6 +1009,8 @@ pair l r = Type extractOut expectedOut
 
 >>> input auto "[1, 2, 3]" :: IO (Vector Natural)
 [1,2,3]
+>>> input auto "toMap { a = False, b = True }" :: IO (Map Text Bool)
+fromList [("a",False),("b",True)]
 
     This class auto-generates a default implementation for records that
     implement `Generic`.  This does not auto-generate an instance for recursive
@@ -844,6 +1021,12 @@ class Interpret a where
     default autoWith
         :: (Generic a, GenericInterpret (Rep a)) => InterpretOptions -> Type a
     autoWith options = fmap GHC.Generics.to (evalState (genericAutoWith options) 1)
+
+instance Interpret Void where
+    autoWith _ = void
+
+instance Interpret () where
+    autoWith _ = unit
 
 instance Interpret Bool where
     autoWith _ = bool
@@ -876,10 +1059,25 @@ instance Interpret a => Interpret (Seq a) where
     autoWith opts = sequence (autoWith opts)
 
 instance Interpret a => Interpret [a] where
-    autoWith = fmap (fmap Data.Vector.toList) autoWith
+    autoWith opts = list (autoWith opts)
 
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
+
+{-| Note that this instance will throw errors in the presence of duplicates in
+    the list. To ignore duplicates, use `setIgnoringDuplicates`.
+-}
+instance (Interpret a, Ord a, Show a) => Interpret (Data.Set.Set a) where
+    autoWith opts = setFromDistinctList (autoWith opts)
+
+{-| Note that this instance will throw errors in the presence of duplicates in
+    the list. To ignore duplicates, use `hashSetIgnoringDuplicates`.
+-}
+instance (Interpret a, Hashable a, Ord a, Show a) => Interpret (Data.HashSet.HashSet a) where
+    autoWith opts = hashSetFromDistinctList (autoWith opts)
+
+instance (Ord k, Interpret k, Interpret v) => Interpret (Map k v) where
+    autoWith opts = Dhall.map (autoWith opts) (autoWith opts)
 
 instance (Inject a, Interpret b) => Interpret (a -> b) where
     autoWith opts = Type extractOut expectedOut
@@ -939,30 +1137,30 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- > {-# LANGUAGE StandaloneDeriving #-}
 -- > {-# LANGUAGE TypeFamilies       #-}
 -- > {-# LANGUAGE TemplateHaskell    #-}
--- > 
+-- >
 -- > import Data.Fix (Fix(..))
 -- > import Data.Text (Text)
 -- > import Dhall (Interpret)
 -- > import GHC.Generics (Generic)
 -- > import Numeric.Natural (Natural)
--- > 
+-- >
 -- > import qualified Data.Fix                 as Fix
 -- > import qualified Data.Functor.Foldable    as Foldable
 -- > import qualified Data.Functor.Foldable.TH as TH
 -- > import qualified Dhall
 -- > import qualified NeatInterpolation
--- > 
+-- >
 -- > data Expr
 -- >     = Lit Natural
 -- >     | Add Expr Expr
 -- >     | Mul Expr Expr
 -- >     deriving (Show)
--- > 
+-- >
 -- > TH.makeBaseFunctor ''Expr
--- > 
+-- >
 -- > deriving instance Generic (ExprF a)
 -- > deriving instance Interpret a => Interpret (ExprF a)
--- > 
+-- >
 -- > example :: Text
 -- > example = [NeatInterpolation.text|
 -- >     \(Expr : Type)
@@ -974,30 +1172,30 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- >           | MulF :
 -- >               { _1 : Expr, _2 : Expr }
 -- >           >
--- >     
+-- >
 -- >     in      \(Fix : ExprF -> Expr)
 -- >         ->  let Lit = \(x : Natural) -> Fix (ExprF.LitF { _1 = x })
--- >             
+-- >
 -- >             let Add =
 -- >                       \(x : Expr)
 -- >                   ->  \(y : Expr)
 -- >                   ->  Fix (ExprF.AddF { _1 = x, _2 = y })
--- >             
+-- >
 -- >             let Mul =
 -- >                       \(x : Expr)
 -- >                   ->  \(y : Expr)
 -- >                   ->  Fix (ExprF.MulF { _1 = x, _2 = y })
--- >             
+-- >
 -- >             in  Add (Mul (Lit 3) (Lit 7)) (Add (Lit 1) (Lit 2))
 -- > |]
--- > 
+-- >
 -- > convert :: Fix ExprF -> Expr
 -- > convert = Fix.cata Foldable.embed
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >     x <- Dhall.input Dhall.auto example :: IO (Fix ExprF)
--- > 
+-- >
 -- >     print (convert x :: Expr)
 instance (Functor f, Interpret (f (Result f))) => Interpret (Fix f) where
     autoWith options = Type { expected = expected_, extract = extract_ }
@@ -1454,7 +1652,7 @@ class Inject a where
 
 {-| Use the default options for injecting a value
 
-> inject = inject defaultInterpretOptions
+> inject = injectWith defaultInterpretOptions
 -}
 inject :: Inject a => InputType a
 inject = injectWith defaultInterpretOptions
@@ -1469,6 +1667,13 @@ genericInject
   :: (Generic a, GenericInject (Rep a)) => InputType a
 genericInject
     = contramap GHC.Generics.from (evalState (genericInjectWith defaultInterpretOptions) 1)
+
+instance Inject Void where
+    injectWith _ = InputType {..}
+      where
+        embed = Data.Void.absurd
+
+        declared = Union mempty
 
 instance Inject Bool where
     injectWith _ = InputType {..}
@@ -1517,33 +1722,74 @@ instance Inject Int where
 
         declared = Integer
 
+{- $setup
+>>> import Data.Word (Word8, Word16, Word32, Word64)
+-}
+
+{-|
+
+>>> embed inject (12 :: Word)
+NaturalLit 12
+-}
+
+instance Inject Word where
+    injectWith _ = InputType {..}
+      where
+        embed = NaturalLit . fromIntegral
+
+        declared = Natural
+
+{-|
+
+>>> embed inject (12 :: Word8)
+NaturalLit 12
+-}
+
 instance Inject Word8 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
+
+{-|
+
+>>> embed inject (12 :: Word16)
+NaturalLit 12
+-}
 
 instance Inject Word16 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
+
+{-|
+
+>>> embed inject (12 :: Word32)
+NaturalLit 12
+-}
 
 instance Inject Word32 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
+
+{-| 
+
+>>> embed inject (12 :: Word64)
+NaturalLit 12
+-}
 
 instance Inject Word64 where
     injectWith _ = InputType {..}
       where
-        embed = IntegerLit . toInteger
+        embed = NaturalLit . fromIntegral
 
-        declared = Integer
+        declared = Natural
 
 instance Inject Double where
     injectWith _ = InputType {..}
@@ -1592,8 +1838,25 @@ instance Inject a => Inject [a] where
 instance Inject a => Inject (Vector a) where
     injectWith = fmap (contramap Data.Vector.toList) injectWith
 
+{-| Note that the ouput list will be sorted
+
+>>> let x = Data.Set.fromList ["mom", "hi" :: Text]
+>>> prettyExpr $ embed inject x
+[ "hi", "mom" ]
+
+-}
 instance Inject a => Inject (Data.Set.Set a) where
-    injectWith = fmap (contramap Data.Set.toList) injectWith
+    injectWith = fmap (contramap Data.Set.toAscList) injectWith
+
+{-| Note that the ouput list may not be sorted
+
+>>> let x = Data.HashSet.fromList ["hi", "mom" :: Text]
+>>> prettyExpr $ embed inject x
+[ "mom", "hi" ]
+
+-}
+instance Inject a => Inject (Data.HashSet.HashSet a) where
+    injectWith = fmap (contramap Data.HashSet.toList) injectWith
 
 instance (Inject a, Inject b) => Inject (a, b)
 
