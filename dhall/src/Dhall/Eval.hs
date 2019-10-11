@@ -689,6 +689,8 @@ eval !env t0 =
             vCombineTypes (eval env t) (eval env u)
         Prefer t u ->
             vPrefer env (eval env t) (eval env u)
+        RecordCompletion t u ->
+            eval env (Annot (Prefer (Field t "default") u) (Field t "Type"))
         Merge x y ma ->
             case (eval env x, eval env y, fmap (eval env) ma) of
                 (VRecordLit m, VInject _ k mt, _)
@@ -1292,6 +1294,8 @@ alphaNormalize = goEnv EmptyNames
                 CombineTypes (go t) (go u)
             Prefer t u ->
                 Prefer (go t) (go u)
+            RecordCompletion t u ->
+                RecordCompletion (go t) (go u)
             Merge x y ma ->
                 Merge (go x) (go y) (fmap go ma)
             ToMap x ma ->
