@@ -279,6 +279,30 @@ braces docs =
         rbrace
         docs
 
+hangingBraces :: [(Doc Ann, Doc Ann)] -> Doc Ann
+hangingBraces [] =
+    lbrace <> rbrace
+hangingBraces docs =
+    Pretty.group
+        (Pretty.flatAlt
+            (  lbrace
+            <> Pretty.hardline
+            <> mconcat (zipWith combineLong (repeat separator) docsLong)
+            <> rbrace
+            )
+            (mconcat (zipWith (<>) (beginShort : repeat separator) docsShort) <> space <> rbrace)
+        )
+  where
+    separator = comma <> space
+
+    docsShort = fmap fst docs
+
+    docsLong = fmap snd docs
+
+    beginShort = lbrace <> space
+
+    combineLong x y = x <> y <> Pretty.hardline
+
 -- | Pretty-print anonymous functions and function types
 arrows :: CharacterSet -> [(Doc Ann, Doc Ann)] -> Doc Ann
 arrows ASCII =
@@ -862,9 +886,17 @@ prettyCharacterSet characterSet expression =
 
     prettyRecordCompletionExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyRecordCompletionExpression (RecordCompletion a b) =
-            prettySelectorExpression a
-        <>  doubleColon
-        <>  prettySelectorExpression b
+        case shallowDenote b of
+            RecordLit kvs ->
+                Pretty.align
+                    (   prettySelectorExpression a
+                    <>  doubleColon
+                    <>  prettyRecordCompletionLit kvs
+                    )
+            _ ->    prettySelectorExpression a
+                <>  doubleColon
+                <>  prettySelectorExpression b
+
     prettyRecordCompletionExpression (Note _ a) =
         prettyRecordCompletionExpression a
     prettyRecordCompletionExpression a0 =
@@ -1006,8 +1038,16 @@ prettyCharacterSet characterSet expression =
     prettyRecordLit a
         | Data.Foldable.null a =
             lbrace <> equals <> rbrace
-        | otherwise
-            = braces (map (prettyKeyValue equals) (Dhall.Map.toList a))
+        | otherwise =
+            braces (map (prettyKeyValue equals) (Dhall.Map.toList a))
+
+    prettyRecordCompletionLit
+        :: Pretty a => Map Text (Expr Src a) -> Doc Ann
+    prettyRecordCompletionLit a
+        | Data.Foldable.null a =
+            lbrace <> equals <> rbrace
+        | otherwise =
+            hangingBraces (map (prettyKeyValue equals) (Dhall.Map.toList a))
 
     prettyAlternative (key, Just val) = prettyKeyValue colon (key, val)
     prettyAlternative (key, Nothing ) = duplicate (prettyAnyLabel key)
