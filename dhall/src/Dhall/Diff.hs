@@ -585,7 +585,7 @@ skeleton (Prefer {}) =
     <>  ignore
 skeleton (RecordCompletion {}) =
         ignore
-    <>  operator "⸬"
+    <>  operator "::"
     <>  ignore
 skeleton (Merge {}) =
         keyword "merge"
@@ -1013,10 +1013,10 @@ diffImportExpression l r =
 
 diffRecordCompletionExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffRecordCompletionExpression (RecordCompletion aL bL) (RecordCompletion aR bR) =
-       diffSelectorExpression aL aR <> "⸬" <> diffSelectorExpression bL bR
+       diffSelectorExpression aL aR <> "::" <> diffSelectorExpression bL bR
 {-
        " " <> diffSelectorExpression aL aR
-    <> hardline <> "⸬" <> diffSelectorExpression bL bR
+    <> hardline <> "::" <> diffSelectorExpression bL bR
 -}
 diffRecordCompletionExpression l@(RecordCompletion {}) r =
     mismatch l r
