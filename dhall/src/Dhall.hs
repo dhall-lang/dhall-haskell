@@ -1869,18 +1869,18 @@ instance (Inject a, Inject b) => Inject (a, b)
 instance (Inject k, Inject v) => Inject (Data.Map.Map k v) where
     injectWith options = InputType embedOut declaredOut
       where
-        embedOut m = ListLit listType $ mapEntries m
+        embedOut m = ListLit listType (mapEntries m)
           where
             listType
                 | Data.Map.null m = Just declaredOut
                 | otherwise       = Nothing
 
-        declaredOut = App List $ Record $ Dhall.Map.fromList
+        declaredOut = App List . Record $ Dhall.Map.fromList
                           [("mapKey", declaredK), ("mapValue", declaredV)]
 
-        mapEntries = fmap recordPair . Data.Sequence.fromList . Data.Map.toList
-        recordPair (k, v) = RecordLit $ Dhall.Map.fromList
-                                [("mapKey", embedK k), ("mapValue", embedV v)]
+        mapEntries = Data.Sequence.fromList . fmap recordPair . Data.Map.toList
+        recordPair (k, v) = RecordLit (Dhall.Map.fromList
+                                [("mapKey", embedK k), ("mapValue", embedV v)])
 
         InputType embedK declaredK = injectWith options
         InputType embedV declaredV = injectWith options
