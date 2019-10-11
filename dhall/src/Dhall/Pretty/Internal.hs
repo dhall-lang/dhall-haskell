@@ -139,26 +139,28 @@ isWhitespace c =
 
     >>> let unusedSourcePos = Text.Megaparsec.SourcePos "" (Text.Megaparsec.mkPos 1) (Text.Megaparsec.mkPos 1)
     >>> let nonEmptySrc = Src unusedSourcePos unusedSourcePos "-- Documentation for x\n"
-    >>> "let" <> " " <> renderSrc (Just nonEmptySrc) <> "x = 1 in x"
+    >>> "let" <> " " <> renderSrc (Just nonEmptySrc) id <> "x = 1 in x"
     let -- Documentation for x
         x = 1 in x
     >>> let emptySrc = Src unusedSourcePos unusedSourcePos "      "
-    >>> "let" <> " " <> renderSrc (Just emptySrc) <> "x = 1 in x"
+    >>> "let" <> " " <> renderSrc (Just emptySrc) id <> "x = 1 in x"
     let x = 1 in x
-    >>> "let" <> " " <> renderSrc Nothing <> "x = 1 in x"
+    >>> "let" <> " " <> renderSrc Nothing id <> "x = 1 in x"
     let x = 1 in x
 -}
 renderSrc
     :: Maybe Src
     -- ^ Source span to render (if present)
+    -> (Text -> Text)
+    -- ^ Used to preprocess the comment string (e.g. to strip whitespace)
     -> Doc Ann
-renderSrc (Just (Src {..}))
+renderSrc (Just (Src {..})) strip
     | not (Text.all isWhitespace srcText) =
         Pretty.align (Pretty.concatWith f newLines <> suffix)
   where
     horizontalSpace c = c == ' ' || c == '\t'
 
-    strippedText = Text.dropAround horizontalSpace srcText
+    strippedText = strip srcText
 
     suffix =
         if Text.null strippedText
@@ -193,7 +195,7 @@ renderSrc (Just (Src {..}))
                 in  Pretty.pretty l0 : map perLine (l1 : ls)
 
     f x y = x <> Pretty.hardline <> y
-renderSrc _ =
+renderSrc _ _ =
     mempty
 
 -- Annotation helpers
@@ -528,28 +530,38 @@ prettyCharacterSet characterSet expression =
       where
         MultiLet as b = multiLet a0 b0
 
+        stripSpaces = Text.dropAround (\c -> c == ' ' || c == '\t')
+
+        -- Strip a single newline character. Needed to ensure idempotency in
+        -- cases where we add hard line breaks.
+        stripNewline t =
+            case Text.uncons t' of
+                Just ('\n', t'') -> stripSpaces t''
+                _ -> t'
+          where t' = stripSpaces t
+
         docA (Binding src0 c src1 Nothing src2 e) =
             Pretty.group (Pretty.flatAlt long short)
           where
             long =  keyword "let" <> space
                 <>  Pretty.align
-                    (   renderSrc src0
-                    <>  prettyLabel c <> space <> renderSrc src1
-                    <>  equals <> Pretty.hardline <> renderSrc src2
+                    (   renderSrc src0 stripSpaces
+                    <>  prettyLabel c <> space <> renderSrc src1 stripSpaces
+                    <>  equals <> Pretty.hardline <> renderSrc src2 stripNewline
                     <>  "  " <> prettyExpression e
                     )
 
-            short = keyword "let" <> space <> renderSrc src0
-                <>  prettyLabel c <> space <> renderSrc src1
-                <>  equals <> space <> renderSrc src2
+            short = keyword "let" <> space <> renderSrc src0 stripSpaces
+                <>  prettyLabel c <> space <> renderSrc src1 stripSpaces
+                <>  equals <> space <> renderSrc src2 stripSpaces
                 <>  prettyExpression e
         docA (Binding src0 c src1 (Just (src3, d)) src2 e) =
                 keyword "let" <> space
             <>  Pretty.align
-                (   renderSrc src0
-                <>  prettyLabel c <> Pretty.hardline <> renderSrc src1
-                <>  colon <> space <> renderSrc src3 <> prettyExpression d <> Pretty.hardline
-                <>  equals <> space <> renderSrc src2
+                (   renderSrc src0 stripSpaces
+                <>  prettyLabel c <> Pretty.hardline <> renderSrc src1 stripNewline
+                <>  colon <> space <> renderSrc src3 stripSpaces <> prettyExpression d <> Pretty.hardline
+                <>  equals <> space <> renderSrc src2 stripSpaces
                 <>  prettyExpression e
                 )
 
