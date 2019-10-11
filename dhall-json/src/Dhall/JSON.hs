@@ -957,6 +957,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             a' = loop a
             b' = loop b
 
+        Core.RecordCompletion a b ->
+            Core.RecordCompletion a' b'
+          where
+            a' = loop a
+            b' = loop b
+
         Core.Merge a b c ->
             Core.Merge a' b' c'
           where

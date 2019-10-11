@@ -83,6 +83,8 @@ Extra-Source-Files:
     dhall-lang/Prelude/Map/Entry
     dhall-lang/Prelude/Map/empty
     dhall-lang/Prelude/Map/keys
+    dhall-lang/Prelude/Map/keyText
+    dhall-lang/Prelude/Map/keyValue
     dhall-lang/Prelude/Map/map
     dhall-lang/Prelude/Map/package.dhall
     dhall-lang/Prelude/Map/Type
@@ -367,6 +369,8 @@ Extra-Source-Files:
     tests/lint/success/*.dhall
     tests/diff/*.dhall
     tests/diff/*.txt
+    tests/etags/*.dhall
+    tests/etags/*.tags
     tests/recursive/*.dhall
     tests/regression/*.dhall
     tests/tutorial/*.dhall
@@ -407,6 +411,7 @@ Library
         exceptions                  >= 0.8.3    && < 0.11,
         filepath                    >= 1.4      && < 1.5 ,
         haskeline                   >= 0.7.2.1  && < 0.8 ,
+        hashable                    >= 1.2      && < 1.3 ,
         lens-family-core            >= 1.0.0    && < 2.1 ,
         megaparsec                  >= 6.5.0    && < 7.1 ,
         memory                      >= 0.14     && < 0.16,
@@ -485,6 +490,7 @@ Library
         Dhall.Core,
         Dhall.Crypto,
         Dhall.Diff,
+        Dhall.ETags,
         Dhall.Format,
         Dhall.Freeze,
         Dhall.Hash,
@@ -538,6 +544,7 @@ Test-Suite tasty
     Other-Modules:
         Dhall.Test.Dhall
         Dhall.Test.Diff
+        Dhall.Test.ETags
         Dhall.Test.Format
         Dhall.Test.Import
         Dhall.Test.Lint
