@@ -882,24 +882,24 @@ prettyCharacterSet characterSet expression =
     prettyImportExpression (Note _ a) =
         prettyImportExpression a
     prettyImportExpression a0 =
-        prettyRecordCompletionExpression a0
+        prettyCompletionExpression a0
 
-    prettyRecordCompletionExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyRecordCompletionExpression (RecordCompletion a b) =
+    prettyCompletionExpression :: Pretty a => Expr Src a -> Doc Ann
+    prettyCompletionExpression (RecordCompletion a b) =
         case shallowDenote b of
             RecordLit kvs ->
                 Pretty.align
                     (   prettySelectorExpression a
                     <>  doubleColon
-                    <>  prettyRecordCompletionLit kvs
+                    <>  prettyCompletionLit kvs
                     )
             _ ->    prettySelectorExpression a
                 <>  doubleColon
                 <>  prettySelectorExpression b
 
-    prettyRecordCompletionExpression (Note _ a) =
-        prettyRecordCompletionExpression a
-    prettyRecordCompletionExpression a0 =
+    prettyCompletionExpression (Note _ a) =
+        prettyCompletionExpression a
+    prettyCompletionExpression a0 =
         prettySelectorExpression a0
 
     prettySelectorExpression :: Pretty a => Expr Src a -> Doc Ann
@@ -1041,9 +1041,9 @@ prettyCharacterSet characterSet expression =
         | otherwise =
             braces (map (prettyKeyValue equals) (Dhall.Map.toList a))
 
-    prettyRecordCompletionLit
+    prettyCompletionLit
         :: Pretty a => Map Text (Expr Src a) -> Doc Ann
-    prettyRecordCompletionLit a
+    prettyCompletionLit a
         | Data.Foldable.null a =
             lbrace <> equals <> rbrace
         | otherwise =
