@@ -255,6 +255,7 @@ parseConversion = Conversion <$> parseStrict
                              <*> parseKVArr
                              <*> parseKVMap
                              <*> parseUnion
+                             <*> parseOmissibleLists
   where
     parseStrict =
             O.flag' True
@@ -275,6 +276,10 @@ parseConversion = Conversion <$> parseStrict
                 (  O.long "no-keyval-maps"
                 <> O.help "Disable conversion of homogeneous map objects to association lists"
                 )
+    parseOmissibleLists = O.switch
+                          ( O.long "omissible-lists"
+                          <> O.help "Tolerate missing list values, they are assumed empty"
+                          )
 
 -- | Parser for command options related to treating union types
 parseUnion :: Parser UnionConv
@@ -303,21 +308,23 @@ parseUnion =
 
 -- | JSON-to-dhall translation options
 data Conversion = Conversion
-    { strictRecs  :: Bool
-    , noKeyValArr :: Bool
-    , noKeyValMap :: Bool
-    , unions      :: UnionConv
+    { strictRecs     :: Bool
+    , noKeyValArr    :: Bool
+    , noKeyValMap    :: Bool
+    , unions         :: UnionConv
+    , omissibleLists :: Bool
     } deriving Show
 
 data UnionConv = UFirst | UNone | UStrict deriving (Show, Read, Eq)
 
 -- | Default conversion options
 defaultConversion :: Conversion
-defaultConversion =  Conversion
-    { strictRecs  = False
-    , noKeyValArr = False
-    , noKeyValMap = False
-    , unions      = UFirst
+defaultConversion = Conversion
+    { strictRecs     = False
+    , noKeyValArr    = False
+    , noKeyValMap    = False
+    , unions         = UFirst
+    , omissibleLists = False
     }
 
 -- | The 'Expr' type concretization used throughout this module
@@ -416,6 +423,9 @@ dhallFromJSON (Conversion {..}) expressionType =
                     = loop t value
                     | App D.Optional t' <- t
                     = Right (App D.None t')
+                    | App D.List _ <- t
+                    , omissibleLists
+                    = Right (D.ListLit (Just t) [])
                     | otherwise
                     = Left (MissingKey k t v)
            in D.RecordLit <$> Map.traverseWithKey f r
@@ -469,6 +479,12 @@ dhallFromJSON (Conversion {..}) expressionType =
                        (if null es then Just (App D.List t) else Nothing)
                        (Seq.fromList es)
            in f <$> traverse (loop t) (toList a)
+
+    -- null ~> List
+    loop t@(App D.List _) (A.Null)
+        = if omissibleLists
+          then Right (D.ListLit (Just t) [])
+          else Left (Mismatch t A.Null)
 
     -- number ~> Integer
     loop D.Integer (A.Number x)

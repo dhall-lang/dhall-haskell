@@ -44,6 +44,7 @@ testTree =
         , testJSONToDhall "./tasty/data/emptyList"
         , testJSONToDhall "./tasty/data/emptyObjectStrongType"
         , testJSONToDhall "./tasty/data/emptyListStrongType"
+        , testCustomConversionJSONToDhall omissibleLists "./tasty/data/missingList"
         , Test.Tasty.testGroup "Nesting"
             [ testDhallToJSON "./tasty/data/nesting0"
             , testDhallToJSON "./tasty/data/nesting1"
@@ -57,6 +58,7 @@ testTree =
             , testDhallToJSON "./tasty/data/unionKeys"
             ]
         ]
+    where omissibleLists = JSONToDhall.defaultConversion{JSONToDhall.omissibleLists = True}
 
 testDhallToJSON :: String -> TestTree
 testDhallToJSON prefix = Test.Tasty.HUnit.testCase prefix $ do
@@ -92,8 +94,9 @@ testDhallToJSON prefix = Test.Tasty.HUnit.testCase prefix $ do
 
     Test.Tasty.HUnit.assertEqual message expectedValue actualValue
 
-testJSONToDhall :: String -> TestTree
-testJSONToDhall prefix = Test.Tasty.HUnit.testCase prefix $ do
+testCustomConversionJSONToDhall :: JSONToDhall.Conversion -> String -> TestTree
+testCustomConversionJSONToDhall conv prefix =
+  Test.Tasty.HUnit.testCase prefix $ do
     let inputFile = prefix <> ".json"
     let schemaFile = prefix <> "Schema.dhall"
     let outputFile = prefix <> ".dhall"
@@ -114,7 +117,7 @@ testJSONToDhall prefix = Test.Tasty.HUnit.testCase prefix $ do
     _ <- Core.throws (Dhall.TypeCheck.typeOf schema)
 
     actualExpression <- do
-        Core.throws (JSONToDhall.dhallFromJSON JSONToDhall.defaultConversion schema value)
+        Core.throws (JSONToDhall.dhallFromJSON conv schema value)
 
     outputText <- Data.Text.IO.readFile outputFile
 
@@ -131,6 +134,9 @@ testJSONToDhall prefix = Test.Tasty.HUnit.testCase prefix $ do
             "Conversion to Dhall did not generate the expected output"
 
     Test.Tasty.HUnit.assertEqual message expectedExpression actualExpression
+
+testJSONToDhall :: String -> TestTree
+testJSONToDhall = testCustomConversionJSONToDhall JSONToDhall.defaultConversion
 
 testDhallToYaml :: Dhall.Yaml.Options -> String -> TestTree
 testDhallToYaml options prefix = Test.Tasty.HUnit.testCase prefix $ do
