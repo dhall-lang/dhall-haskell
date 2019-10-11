@@ -71,6 +71,10 @@ module Dhall
     , sequence
     , list
     , vector
+    , setFromDistinctList
+    , setIgnoringDuplicates
+    , hashSetFromDistinctList
+    , hashSetIgnoringDuplicates
     , Dhall.map
     , pairFromMapEntry
     , unit
@@ -119,6 +123,7 @@ import Data.Either.Validation (Validation(..), ealt, eitherToValidation, validat
 import Data.Fix (Fix(..))
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
+import Data.Hashable (Hashable)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map (Map)
 import Data.Monoid ((<>))
@@ -136,7 +141,7 @@ import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
 import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
 import GHC.Generics
-import Lens.Family (LensLike', set, view)
+import Lens.Family (LensLike', view)
 import Numeric.Natural (Natural)
 import Prelude hiding (maybe, sequence)
 import System.FilePath (takeDirectory)
@@ -149,11 +154,13 @@ import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
 import qualified Data.Map
 import qualified Data.Maybe
+import qualified Data.List
 import qualified Data.List.NonEmpty
 import qualified Data.Semigroup
 import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
+import qualified Data.HashSet
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
@@ -167,6 +174,7 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
+import qualified Lens.Family
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -407,8 +415,8 @@ inputWithSettings settings (Type {..}) txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               set Dhall.Import.normalizer      _normalizer
-            .  set Dhall.Import.startingContext _startingContext
+               Lens.Family.set Dhall.Import.normalizer      _normalizer
+            .  Lens.Family.set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatus _rootDirectory)
 
@@ -501,8 +509,8 @@ inputExprWithSettings settings txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               set Dhall.Import.normalizer      _normalizer
-            .  set Dhall.Import.startingContext _startingContext
+               Lens.Family.set Dhall.Import.normalizer      _normalizer
+            .  Lens.Family.set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatus _rootDirectory)
 
@@ -793,6 +801,126 @@ list = fmap Data.Foldable.toList . sequence
 vector :: Type a -> Type (Vector a)
 vector = fmap Data.Vector.fromList . list
 
+{-| Decode a `Set` from a `List`
+
+>>> input (setIgnoringDuplicates natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+Duplicate elements are ignored.
+
+>>> input (setIgnoringDuplicates natural) "[1, 1, 3]"
+fromList [1,3]
+
+-}
+setIgnoringDuplicates :: (Ord a) => Type a -> Type (Data.Set.Set a)
+setIgnoringDuplicates = fmap Data.Set.fromList . list
+
+{-| Decode a `HashSet` from a `List`
+
+>>> input (hashSetIgnoringDuplicates natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+Duplicate elements are ignored.
+
+>>> input (hashSetIgnoringDuplicates natural) "[1, 1, 3]"
+fromList [1,3]
+
+-}
+hashSetIgnoringDuplicates :: (Hashable a, Ord a)
+                          => Type a
+                          -> Type (Data.HashSet.HashSet a)
+hashSetIgnoringDuplicates = fmap Data.HashSet.fromList . list
+
+{-| Decode a `Set` from a `List` with distinct elements
+
+>>> input (setFromDistinctList natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+An error is thrown if the list contains duplicates.
+
+> >>> input (setFromDistinctList natural) "[1, 1, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> One duplicate element in the list: 1
+>
+
+> >>> input (setFromDistinctList natural) "[1, 1, 3, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> 2 duplicates were found in the list, including 1
+>
+
+-}
+setFromDistinctList :: (Ord a, Show a) => Type a -> Type (Data.Set.Set a)
+setFromDistinctList = setHelper Data.Set.size Data.Set.fromList
+
+{-| Decode a `HashSet` from a `List` with distinct elements
+
+>>> input (hashSetFromDistinctList natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+An error is thrown if the list contains duplicates.
+
+> >>> input (hashSetFromDistinctList natural) "[1, 1, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> One duplicate element in the list: 1
+>
+
+> >>> input (hashSetFromDistinctList natural) "[1, 1, 3, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> 2 duplicates were found in the list, including 1
+>
+
+-}
+hashSetFromDistinctList :: (Hashable a, Ord a, Show a)
+                        => Type a
+                        -> Type (Data.HashSet.HashSet a)
+hashSetFromDistinctList = setHelper Data.HashSet.size Data.HashSet.fromList
+
+
+setHelper :: (Eq a, Foldable t, Show a)
+          => (t a -> Int)
+          -> ([a] -> t a)
+          -> Type a
+          -> Type (t a)
+setHelper size toSet (Type extractIn expectedIn) = Type extractOut expectedOut
+  where
+    extractOut (ListLit _ es) = case traverse extractIn es of
+        Success vSeq
+            | sameSize               -> Success vSet
+            | otherwise              -> extractError err
+          where
+            vList = Data.Foldable.toList vSeq
+            vSet = toSet vList
+            sameSize = size vSet == Data.Sequence.length vSeq
+            duplicates = vList Data.List.\\ Data.Foldable.toList vSet
+            err | length duplicates == 1 =
+                     "One duplicate element in the list: "
+                     <> (Data.Text.pack $ show $ head duplicates)
+                | otherwise              = Data.Text.pack $ unwords
+                     [ show $ length duplicates
+                     , "duplicates were found in the list, including"
+                     , show $ head duplicates
+                     ]
+        Failure f -> Failure f
+    extractOut expr = typeError expectedOut expr
+
+    expectedOut = App List expectedIn
+
 {-| Decode a `Map` from a @toMap@ expression or generally a @Prelude.Map.Type@
 
 >>> input (Dhall.map strictText bool) "toMap { a = True, b = False }"
@@ -936,6 +1064,18 @@ instance Interpret a => Interpret [a] where
 
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
+
+{-| Note that this instance will throw errors in the presence of duplicates in
+    the list. To ignore duplicates, use `setIgnoringDuplicates`.
+-}
+instance (Interpret a, Ord a, Show a) => Interpret (Data.Set.Set a) where
+    autoWith opts = setFromDistinctList (autoWith opts)
+
+{-| Note that this instance will throw errors in the presence of duplicates in
+    the list. To ignore duplicates, use `hashSetIgnoringDuplicates`.
+-}
+instance (Interpret a, Hashable a, Ord a, Show a) => Interpret (Data.HashSet.HashSet a) where
+    autoWith opts = hashSetFromDistinctList (autoWith opts)
 
 instance (Ord k, Interpret k, Interpret v) => Interpret (Map k v) where
     autoWith opts = Dhall.map (autoWith opts) (autoWith opts)
@@ -1513,7 +1653,7 @@ class Inject a where
 
 {-| Use the default options for injecting a value
 
-> inject = inject defaultInterpretOptions
+> inject = injectWith defaultInterpretOptions
 -}
 inject :: Inject a => InputType a
 inject = injectWith defaultInterpretOptions
@@ -1695,8 +1835,25 @@ instance Inject a => Inject [a] where
 instance Inject a => Inject (Vector a) where
     injectWith = fmap (contramap Data.Vector.toList) injectWith
 
+{-| Note that the ouput list will be sorted
+
+>>> let x = Data.Set.fromList ["mom", "hi" :: Text]
+>>> prettyExpr $ embed inject x
+[ "hi", "mom" ]
+
+-}
 instance Inject a => Inject (Data.Set.Set a) where
-    injectWith = fmap (contramap Data.Set.toList) injectWith
+    injectWith = fmap (contramap Data.Set.toAscList) injectWith
+
+{-| Note that the ouput list may not be sorted
+
+>>> let x = Data.HashSet.fromList ["hi", "mom" :: Text]
+>>> prettyExpr $ embed inject x
+[ "mom", "hi" ]
+
+-}
+instance Inject a => Inject (Data.HashSet.HashSet a) where
+    injectWith = fmap (contramap Data.HashSet.toList) injectWith
 
 instance (Inject a, Inject b) => Inject (a, b)
 
