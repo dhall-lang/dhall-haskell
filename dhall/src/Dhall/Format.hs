@@ -54,8 +54,8 @@ format (Format {..}) =
     case formatMode of
         Modify {..} ->
             case inplace of
-                File file -> do
-                    (header, expr) <- Dhall.Util.getExpressionAndHeader censor (File file)
+                InputFile file -> do
+                    (header, expr) <- Dhall.Util.getExpressionAndHeader censor (InputFile file)
 
                     let doc =   Pretty.pretty header
                             <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
@@ -83,8 +83,8 @@ format (Format {..}) =
                           (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc))
         Check {..} -> do
             originalText <- case path of
-                File file     -> Data.Text.IO.readFile file
-                StandardInput -> Data.Text.IO.getContents
+                InputFile file -> Data.Text.IO.readFile file
+                StandardInput  -> Data.Text.IO.getContents
 
             (header, expr) <- Dhall.Util.getExpressionAndHeader censor path
 

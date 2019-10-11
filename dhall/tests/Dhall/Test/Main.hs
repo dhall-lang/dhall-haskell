@@ -5,6 +5,7 @@ import Test.Tasty      (TestTree)
 
 import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.Diff
+import qualified Dhall.Test.ETags
 import qualified Dhall.Test.Format
 import qualified Dhall.Test.SemanticHash
 import qualified Dhall.Test.Import
@@ -35,6 +36,8 @@ getAllTests = do
 
     lintTests <- Dhall.Test.Lint.getTests
 
+    etagsTests <- Dhall.Test.ETags.getTests
+
     diffTests <- Dhall.Test.Diff.getTests
 
     semanticHashTests <- Dhall.Test.SemanticHash.getTests
@@ -49,6 +52,7 @@ getAllTests = do
                 , lintTests
                 , diffTests
                 , semanticHashTests
+                , etagsTests
                 , Dhall.Test.Regression.tests
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests
