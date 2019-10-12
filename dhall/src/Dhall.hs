@@ -1875,8 +1875,8 @@ instance (Inject k, Inject v) => Inject (Data.Map.Map k v) where
                 | Data.Map.null m = Just declaredOut
                 | otherwise       = Nothing
 
-        declaredOut = App List . Record $ Dhall.Map.fromList
-                          [("mapKey", declaredK), ("mapValue", declaredV)]
+        declaredOut = App List (Record (Dhall.Map.fromList
+                          [("mapKey", declaredK), ("mapValue", declaredV)]))
 
         mapEntries = Data.Sequence.fromList . fmap recordPair . Data.Map.toList
         recordPair (k, v) = RecordLit (Dhall.Map.fromList

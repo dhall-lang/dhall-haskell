@@ -583,6 +583,7 @@ Test-Suite tasty
         text                      >= 0.11.1.0 && < 1.3 ,
         transformers                                   ,
         turtle                                   < 1.6 ,
+        unordered-containers      >= 0.1.3.0  && < 0.3 ,
         vector                    >= 0.11.0.0 && < 0.13
     if flag(with-http)
       CPP-Options:

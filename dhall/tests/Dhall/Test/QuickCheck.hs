@@ -10,6 +10,7 @@ module Dhall.Test.QuickCheck where
 
 import Codec.Serialise (DeserialiseFailure(..))
 import Data.Either (isRight)
+import Dhall (Inject(..), Interpret(..), auto, input, inject, embed, Vector)
 import Dhall.Map (Map)
 import Dhall.Core
     ( Binding(..)
@@ -32,6 +33,7 @@ import Dhall.Core
 import Data.Functor.Identity (Identity(..))
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
+import Dhall.Pretty (prettyExpr)
 import Dhall.TypeCheck (Typer, TypeError)
 import Generic.Random (Weights, W, (%), (:+)(..))
 import Test.QuickCheck
@@ -40,6 +42,7 @@ import Test.QuickCheck.Instances ()
 import Test.Tasty (TestTree)
 import Test.Tasty.QuickCheck (QuickCheckTests(..))
 import Text.Megaparsec (SourcePos(..), Pos)
+import Test.QuickCheck.Monadic (monadicIO, assert, run)
 
 import qualified Control.Spoon
 import qualified Codec.Serialise
@@ -47,7 +50,10 @@ import qualified Data.Coerce
 import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.SpecialValues
+import qualified Data.HashSet
+import qualified Data.Set
 import qualified Data.Text as Text
+import qualified Data.Map
 import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core
@@ -56,6 +62,7 @@ import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Generic.Random
+import qualified GHC.Natural as GHCNat
 import qualified Test.QuickCheck
 import qualified Test.Tasty
 import qualified Test.Tasty.QuickCheck
@@ -432,6 +439,12 @@ normalizingAnExpressionDoesntChangeItsInferredType expression =
     filterOutEmbeds :: Typer a
     filterOutEmbeds _ = Const Sort -- This could be any ill-typed expression.
 
+injectThenInterpretIsIdentity :: (Inject a, Interpret a, Eq a) => a -> Property
+injectThenInterpretIsIdentity a = monadicIO $ do
+    a' <- run $ input auto . Text.pack . show . prettyExpr . embed inject $ a
+    assert (a == a')
+
+
 tests :: TestTree
 tests =
     testProperties'
@@ -464,7 +477,41 @@ tests =
           , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
           , QuickCheckTests 10000
           )
+        , ( "Injecting then Interpreting is identity for [Natural]"
+          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: [GHCNat.Natural] -> Property)
+          , QuickCheckTests 100
+          )
+        , ( "Injecting then Interpreting is identity for (Bool, Double)"
+          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: (Bool, Double) -> Property)
+          , QuickCheckTests 100
+          )
+        , ( "Injecting then Interpreting is identity for Seq ()"
+          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: Data.Sequence.Seq () -> Property)
+          , QuickCheckTests 100
+          )
+        , ( "Injecting then Interpreting is identity for Maybe Integer"
+          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: Maybe Integer -> Property)
+          , QuickCheckTests 100
+          )
+        , ( "Injecting then Interpreting is identity for Set Natural"
+          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: Data.Set.Set GHCNat.Natural -> Property)
+          , QuickCheckTests 100
+          )
+        , ( "Injecting then Interpreting is identity for HashSet Double"
+          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: Data.HashSet.HashSet Double -> Property)
+          , QuickCheckTests 100
+          )
+        , ( "Injecting then Interpreting is identity for Vector Double"
+          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: Vector Double -> Property)
+          , QuickCheckTests 100
+          )
+        , ( "Injecting then Interpreting is identity for Map Double Integer"
+          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: Data.Map.Map Double Integer -> Property)
+          , QuickCheckTests 100
+          )
         ]
+
+
 
 testProperties' :: String -> [(String, Property, QuickCheckTests)] -> TestTree
 testProperties' name = Test.Tasty.testGroup name . map f
