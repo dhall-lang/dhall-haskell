@@ -38,7 +38,7 @@ Source-Repository head
 Flag gpl
   Description: Use GPL-licensed components like HsYAML, and enable yaml-to-dhall binary
   Default: False
-  Manual: False
+  Manual: True
 
 Library
     Hs-Source-Dirs: src
