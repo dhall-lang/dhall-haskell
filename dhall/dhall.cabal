@@ -589,6 +589,8 @@ Test-Suite tasty
       CPP-Options:
         -DWITH_HTTP
     Default-Language: Haskell2010
+    Other-Extensions:
+        TypeApplications
 
 Test-Suite doctest
     Type: exitcode-stdio-1.0
