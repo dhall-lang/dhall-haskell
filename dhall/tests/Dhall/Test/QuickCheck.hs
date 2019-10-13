@@ -5,7 +5,6 @@
 {-# LANGUAGE TypeOperators       #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -491,14 +490,14 @@ tests =
           , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
           , QuickCheckTests 10000
           )
-        , injectThenInterpretIsIdentity @([GHCNat.Natural]) Proxy
-        , injectThenInterpretIsIdentity @(Bool, Double) Proxy
-        , injectThenInterpretIsIdentity @(Data.Sequence.Seq ()) Proxy
-        , injectThenInterpretIsIdentity @(Maybe Integer) Proxy
-        , injectThenInterpretIsIdentity @(Data.Set.Set GHCNat.Natural) Proxy
-        , injectThenInterpretIsIdentity @(Data.HashSet.HashSet Double) Proxy
-        , injectThenInterpretIsIdentity @(Vector Double) Proxy
-        , injectThenInterpretIsIdentity @(Data.Map.Map Double Bool) Proxy
+        , injectThenInterpretIsIdentity (Proxy :: Proxy [GHCNat.Natural])
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Bool, Double))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Sequence.Seq ()))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Maybe Integer))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Set.Set GHCNat.Natural))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.HashSet.HashSet Double))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Vector Double))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Map.Map Double Bool))
         ]
 
 
