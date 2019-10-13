@@ -21,6 +21,7 @@ extra-deps:
   - HsYAML-aeson-0.2.0.0@sha256:04796abfc01cffded83f37a10e6edba4f0c0a15d45bef44fc5bb4313d9c87757,1791
   - ordered-containers-0.2.2@sha256:ebf2be3f592d9cf148ea6b8375f8af97148d44f82d8d04476899285e965afdbf,810
   - lsp-test-0.6.1.0@sha256:df0fc403c03b6d036be13de3ff23d9951ae2506080135cd6862eded2c969a6da,3483
+  - aeson-yaml-1.0.0.0@sha256:b5b7d1a4b36f162da1d0e66f8bc2a71e553c8cfeb1ddd99b69442275f8a171ff,2072
 nix:
   packages:
     - ncurses
