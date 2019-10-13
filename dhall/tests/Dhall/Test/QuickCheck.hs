@@ -1,8 +1,11 @@
-{-# LANGUAGE DataKinds          #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TypeOperators      #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE StandaloneDeriving  #-}
+{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -31,6 +34,8 @@ import Dhall.Core
     )
 
 import Data.Functor.Identity (Identity(..))
+import Data.Typeable (Typeable, typeRep)
+import Data.Proxy (Proxy(..))
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
 import Dhall.Pretty (prettyExpr)
@@ -439,10 +444,19 @@ normalizingAnExpressionDoesntChangeItsInferredType expression =
     filterOutEmbeds :: Typer a
     filterOutEmbeds _ = Const Sort -- This could be any ill-typed expression.
 
-injectThenInterpretIsIdentity :: (Inject a, Interpret a, Eq a) => a -> Property
-injectThenInterpretIsIdentity a = monadicIO $ do
-    a' <- run $ input auto . Text.pack . show . prettyExpr . embed inject $ a
-    assert (a == a')
+injectThenInterpretIsIdentity
+    :: forall a. (Inject a, Interpret a, Eq a, Typeable a, Arbitrary a, Show a)
+    => Proxy a
+    -> (String, Property, QuickCheckTests)
+injectThenInterpretIsIdentity p =
+    ( "Injecting then Interpreting is identity for " <> show (typeRep p)
+    , Test.QuickCheck.property (prop :: a -> Property)
+    , QuickCheckTests 1000
+    )
+  where
+    prop a = monadicIO $ do
+        a' <- run . input auto . Text.pack . show . prettyExpr . embed inject $ a
+        assert (a == a')
 
 
 tests :: TestTree
@@ -477,38 +491,14 @@ tests =
           , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
           , QuickCheckTests 10000
           )
-        , ( "Injecting then Interpreting is identity for [Natural]"
-          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: [GHCNat.Natural] -> Property)
-          , QuickCheckTests 100
-          )
-        , ( "Injecting then Interpreting is identity for (Bool, Double)"
-          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: (Bool, Double) -> Property)
-          , QuickCheckTests 100
-          )
-        , ( "Injecting then Interpreting is identity for Seq ()"
-          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: Data.Sequence.Seq () -> Property)
-          , QuickCheckTests 100
-          )
-        , ( "Injecting then Interpreting is identity for Maybe Integer"
-          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: Maybe Integer -> Property)
-          , QuickCheckTests 100
-          )
-        , ( "Injecting then Interpreting is identity for Set Natural"
-          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: Data.Set.Set GHCNat.Natural -> Property)
-          , QuickCheckTests 100
-          )
-        , ( "Injecting then Interpreting is identity for HashSet Double"
-          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: Data.HashSet.HashSet Double -> Property)
-          , QuickCheckTests 100
-          )
-        , ( "Injecting then Interpreting is identity for Vector Double"
-          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: Vector Double -> Property)
-          , QuickCheckTests 100
-          )
-        , ( "Injecting then Interpreting is identity for Map Double Integer"
-          , Test.QuickCheck.property (injectThenInterpretIsIdentity :: Data.Map.Map Double Integer -> Property)
-          , QuickCheckTests 100
-          )
+        , injectThenInterpretIsIdentity @([GHCNat.Natural]) Proxy
+        , injectThenInterpretIsIdentity @(Bool, Double) Proxy
+        , injectThenInterpretIsIdentity @(Data.Sequence.Seq ()) Proxy
+        , injectThenInterpretIsIdentity @(Maybe Integer) Proxy
+        , injectThenInterpretIsIdentity @(Data.Set.Set GHCNat.Natural) Proxy
+        , injectThenInterpretIsIdentity @(Data.HashSet.HashSet Double) Proxy
+        , injectThenInterpretIsIdentity @(Vector Double) Proxy
+        , injectThenInterpretIsIdentity @(Data.Map.Map Double Bool) Proxy
         ]
 
 

@@ -1859,11 +1859,11 @@ instance (Inject a, Inject b) => Inject (a, b)
 
 {-| Inject a `Data.Map` to a @Prelude.Map.Type@
 
->>> prettyExpr $ embed inject (Data.Map.fromList [(1 :: Integer, True )])
-[ { mapKey = +1, mapValue = True } ]
+>>> prettyExpr $ embed inject (Data.Map.fromList [(1 :: Natural, True)])
+[ { mapKey = 1, mapValue = True } ]
 
->>> prettyExpr $ embed inject (Data.Map.fromList [] :: Data.Map.Map Integer Bool)
-[] : List { mapKey : Integer, mapValue : Bool }
+>>> prettyExpr $ embed inject (Data.Map.fromList [] :: Data.Map.Map Natural Bool)
+[] : List { mapKey : Natural, mapValue : Bool }
 
 -}
 instance (Inject k, Inject v) => Inject (Data.Map.Map k v) where
