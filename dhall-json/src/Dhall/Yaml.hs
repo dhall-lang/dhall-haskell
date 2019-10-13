@@ -25,7 +25,7 @@ import qualified Options.Applicative
 #if defined(ETA_VERSION)
 import Dhall.Yaml.Eta (jsonToYaml)
 #else
-#if defined(MIN_VERSION_HsYAML)
+#if defined(GPL)
 import qualified Data.YAML.Aeson
 import qualified Data.YAML as Y
 import qualified Data.YAML.Event as YE
@@ -97,7 +97,7 @@ jsonToYaml
     -> Bool
     -> ByteString
 jsonToYaml json documents quoted =
-#if defined(MIN_VERSION_HsYAML)
+#if defined(GPL)
   case (documents, json) of
     (True, Data.Aeson.Array elems)
       -> Data.ByteString.intercalate "\n---\n"

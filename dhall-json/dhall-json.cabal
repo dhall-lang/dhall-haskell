@@ -80,6 +80,7 @@ Library
       Java-Sources: java/Utils.java
     else
       if flag(gpl)
+        CPP-Options: -DGPL
         Build-Depends:
             HsYAML       >= 0.2 && < 0.3,
             HsYAML-aeson >= 0.2 && < 0.3
