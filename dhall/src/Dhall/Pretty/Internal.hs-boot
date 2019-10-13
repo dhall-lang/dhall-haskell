@@ -13,6 +13,6 @@ prettyConst :: Const -> Doc Ann
 
 prettyExpr :: Pretty a => Expr s a -> Doc Ann
 
-pretty :: Pretty a => a -> Text
+pretty_ :: Pretty a => a -> Text
 
-escapeText :: Text -> Text
+escapeText_ :: Text -> Text

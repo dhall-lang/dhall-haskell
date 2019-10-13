@@ -150,7 +150,7 @@ import Data.CaseInsensitive (CI)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
-import Data.Void (absurd)
+import Data.Void (Void, absurd)
 #if MIN_VERSION_base(4,8,0)
 #else
 import Data.Traversable (traverse)
@@ -178,7 +178,6 @@ import Dhall.Import.HTTP hiding (HTTPHeader)
 import Dhall.Import.Types
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
-import Dhall.TypeCheck (X)
 import Lens.Family.State.Strict (zoom)
 
 import qualified Codec.Serialise
@@ -462,7 +461,7 @@ chainedChangeMode :: ImportMode -> Chained -> Chained
 chainedChangeMode mode (Chained (Import importHashed _)) =
     Chained (Import importHashed mode)
 
--- Chain imports, also typecheck and normalize headers if applicable.
+-- | Chain imports, also typecheck and normalize headers if applicable.
 chainImport :: Chained -> Import -> StateT Status IO Chained
 chainImport (Chained parent) child@(Import importHashed@(ImportHashed _ (Remote url)) _) = do
     url' <- normalizeHeaders url
@@ -545,7 +544,7 @@ fetchFromSemanticCache expectedHash = Maybe.runMaybeT $ do
 
 -- | Ensure that the given expression is present in the semantic cache. The
 --   given expression should be alpha-beta-normal.
-writeExpressionToSemanticCache :: Expr Src X -> IO ()
+writeExpressionToSemanticCache :: Expr Src Void -> IO ()
 writeExpressionToSemanticCache expression = writeToSemanticCache hash bytes
   where
     bytes = encodeExpression NoVersion expression
@@ -572,7 +571,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             absolutePath <- Directory.makeAbsolute path
             return absolutePath
         Remote url -> do
-            let urlText = Dhall.Pretty.Internal.pretty (url { headers = Nothing })
+            let urlText = Dhall.Core.pretty (url { headers = Nothing })
             return (Text.unpack urlText)
         Env env -> return $ Text.unpack env
         Missing -> throwM (MissingImports [])
@@ -646,13 +645,13 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
             Missing -> Field locationType "Missing"
             local@(Local _ _) ->
                 App (Field locationType "Local")
-                  (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty local)))
+                  (TextLit (Chunks [] (Dhall.Core.pretty local)))
             remote_@(Remote _) ->
                 App (Field locationType "Remote")
-                  (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty remote_)))
+                  (TextLit (Chunks [] (Dhall.Core.pretty remote_)))
             Env env ->
                 App (Field locationType "Environment")
-                  (TextLit (Chunks [] (Dhall.Pretty.Internal.pretty env)))
+                  (TextLit (Chunks [] (Dhall.Core.pretty env)))
 
     return (ImportSemantics {..})
 
@@ -660,7 +659,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
 -- AST (without normalising or type-checking it first). See
 -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for further
 -- discussion.
-computeSemisemanticHash :: Expr Src X -> Dhall.Crypto.SHA256Digest
+computeSemisemanticHash :: Expr Src Void -> Dhall.Crypto.SHA256Digest
 computeSemisemanticHash resolvedExpr = hashExpression resolvedExpr
 
 -- Fetch encoded normal form from "semi-semantic cache"
@@ -752,6 +751,7 @@ getCacheFile cacheName hash = do
 
     return cacheFile
 
+-- | Warn if no cache directory is available
 warnAboutMissingCaches :: (MonadCatch m, Alternative m, MonadIO m) => m ()
 warnAboutMissingCaches = warn <|> return ()
     where warn = Data.Foldable.traverse_ (getOrCreateCacheDirectory True) ["dhall", "dhall-haskell"]
@@ -926,7 +926,7 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
     loadedExpr <- loadWith headersExpression
 
     let go key₀ key₁ = do
-            let expected :: Expr Src X
+            let expected :: Expr Src Void
                 expected =
                     App List
                         ( Record
@@ -976,7 +976,7 @@ emptyStatus = emptyStatusWith fetchRemote
     You can configure the desired behavior through the initial `Status` that you
     supply
 -}
-loadWith :: Expr Src Import -> StateT Status IO (Expr Src X)
+loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith expr₀ = case expr₀ of
   Embed import₀ -> do
     Status {..} <- State.get
@@ -1094,12 +1094,12 @@ loadWith expr₀ = case expr₀ of
       (Note <$> pure a <*> loadWith b) `catch` handler
 
 -- | Resolve all imports within an expression
-load :: Expr Src Import -> IO (Expr Src X)
+load :: Expr Src Import -> IO (Expr Src Void)
 load = loadRelativeTo "." UseSemanticCache
 
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
-loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src X)
+loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
 loadRelativeTo rootDirectory semanticCacheMode expression =
     State.evalStateT
         (loadWith expression)
@@ -1109,7 +1109,7 @@ encodeExpression
     :: forall s
     .  StandardVersion
     -- ^ `NoVersion` means to encode without the version tag
-    -> Expr s X
+    -> Expr s Void
     -> Data.ByteString.ByteString
 encodeExpression _standardVersion expression = bytesStrict
   where
@@ -1132,7 +1132,7 @@ encodeExpression _standardVersion expression = bytesStrict
     bytesStrict = Data.ByteString.Lazy.toStrict bytesLazy
 
 -- | Hash a fully resolved expression
-hashExpression :: Expr s X -> Dhall.Crypto.SHA256Digest
+hashExpression :: Expr s Void -> Dhall.Crypto.SHA256Digest
 hashExpression expression =
     Dhall.Crypto.sha256Hash (encodeExpression NoVersion expression)
 
@@ -1142,7 +1142,7 @@ hashExpression expression =
     In other words, the output of this function can be pasted into Dhall
     source code to add an integrity check to an import
 -}
-hashExpressionToCode :: Expr s X -> Text
+hashExpressionToCode :: Expr s Void -> Text
 hashExpressionToCode expr =
     "sha256:" <> Text.pack (show (hashExpression expr))
 
@@ -1153,6 +1153,6 @@ instance Show ImportResolutionDisabled where
     show _ = "\nImport resolution is disabled"
 
 -- | Assert than an expression is import-free
-assertNoImports :: MonadIO io => Expr Src Import -> io (Expr Src X)
+assertNoImports :: MonadIO io => Expr Src Import -> io (Expr Src Void)
 assertNoImports expression =
     Dhall.Core.throws (traverse (\_ -> Left ImportResolutionDisabled) expression)

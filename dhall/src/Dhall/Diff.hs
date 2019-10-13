@@ -42,6 +42,9 @@ import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Pretty.Internal      as Internal
 
+{-| This type is a `Doc` enriched with a `same` flag to efficiently track if
+    any difference was detected
+-}
 data Diff =
     Diff
         { same :: Bool

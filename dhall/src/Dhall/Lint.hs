@@ -30,7 +30,7 @@ lint =
         (\e -> fixAsserts e <|> removeUnusedBindings e)
     . removeLetInLet
 
--- Remove unused Let bindings.
+-- | Remove unused `Let` bindings.
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
 -- Don't remove assertions!
 removeUnusedBindings (Let (Binding _ _ _ _ _ e) _)

@@ -60,7 +60,11 @@ import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
 
--- | Supported version strings
+{-| Supported version strings
+
+    This exists primarily for backwards compatibility for expressions encoded
+    before Dhall removed version tags from the binary encoding
+-}
 data StandardVersion
     = NoVersion
     -- ^ No version string
@@ -76,6 +80,7 @@ data StandardVersion
     -- ^ Version "1.0.0"
     deriving (Enum, Bounded)
 
+-- | Render a `StandardVersion` as `Text`
 renderStandardVersion :: StandardVersion -> Text
 renderStandardVersion NoVersion = "none"
 renderStandardVersion V_1_0_0   = "1.0.0"
@@ -936,6 +941,9 @@ decodeExpression term =
 
         decode taggedTerm
 
+{-| This indicates that a given CBOR expression did not correspond to a valid
+    Dhall expression
+-}
 data DecodingFailure = CBORIsNotDhall Term
     deriving (Eq)
 

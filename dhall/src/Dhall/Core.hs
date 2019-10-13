@@ -36,14 +36,14 @@ module Dhall.Core (
     , Expr(..)
 
     -- * Normalization
-    , Eval.alphaNormalize
-    , Eval.normalize
+    , alphaNormalize
+    , normalize
     , normalizeWith
     , normalizeWithM
     , Normalizer
     , NormalizerM
     , ReifiedNormalizer (..)
-    , Eval.judgmentallyEqual
+    , judgmentallyEqual
     , subst
     , shift
     , isNormalized
@@ -204,8 +204,10 @@ instance Pretty FilePrefix where
     pretty Parent   = ".."
     pretty Home     = "~"
 
+-- | The URI scheme
 data Scheme = HTTP | HTTPS deriving (Eq, Generic, Ord, Show, NFData)
 
+-- | This type stores all of the components of a remote import
 data URL = URL
     { scheme    :: Scheme
     , authority :: Text
@@ -857,6 +859,16 @@ instance IsString (Chunks s a) where
 instance Pretty a => Pretty (Expr s a) where
     pretty = Pretty.unAnnotate . prettyExpr
 
+{-| Returns `True` if two expressions are α-equivalent and β-equivalent and
+    `False` otherwise
+
+    `judgmentallyEqual` can fail with an `error` if you compare ill-typed
+    expressions
+-}
+judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
+judgmentallyEqual = Eval.judgmentallyEqual
+{-# INLINE judgmentallyEqual #-}
+
 {-| `shift` is used by both normalization and type-checking to avoid variable
     capture by shifting variable indices
 
@@ -1358,9 +1370,43 @@ renote :: Expr Void a -> Expr s a
 renote = unsafeCoerce
 {-# INLINE renote #-}
 
+{-| Remove any outermost `Note` constructors
+
+    This is typically used when you want to get the outermost non-`Note`
+    constructor without removing internal `Note` constructors
+-}
 shallowDenote :: Expr s a -> Expr s a
 shallowDenote (Note _ e) = shallowDenote e
 shallowDenote         e  = e
+
+{-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
+    using De Bruijn indices to distinguish them
+
+>>> alphaNormalize (Lam "a" (Const Type) (Lam "b" (Const Type) (Lam "x" "a" (Lam "y" "b" "x"))))
+Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
+
+    α-normalization does not affect free variables:
+
+>>> alphaNormalize "x"
+Var (V "x" 0)
+
+-}
+alphaNormalize :: Expr s a -> Expr s a
+alphaNormalize = Eval.alphaNormalize
+{-# INLINE alphaNormalize #-}
+
+{-| Reduce an expression to its normal form, performing beta reduction
+
+    `normalize` does not type-check the expression.  You may want to type-check
+    expressions before normalizing them since normalization can convert an
+    ill-typed expression into a well-typed expression.
+
+    `normalize` can also fail with `error` if you normalize an ill-typed
+    expression
+-}
+normalize :: Eq a => Expr s a -> Expr t a
+normalize = Eval.normalize
+{-# INLINE normalize #-}
 
 {-| Reduce an expression to its normal form, performing beta reduction and applying
     any custom definitions.
@@ -1862,6 +1908,7 @@ normalizeWithM ctx e0 = loop (denote e0)
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
 
+-- | Utility that powers the @Text/show@ built-in
 textShow :: Text -> Text
 textShow text = "\"" <> Data.Text.concatMap f text <> "\""
   where
@@ -1880,6 +1927,7 @@ textShow text = "\"" <> Data.Text.concatMap f text <> "\""
 --   polymorphic enough to be used.
 type NormalizerM m a = forall s. Expr s a -> m (Maybe (Expr s a))
 
+-- | An variation on `NormalizerM` for pure normalizers
 type Normalizer a = NormalizerM Identity a
 
 -- | A reified 'Normalizer', which can be stored in structures without
@@ -2110,6 +2158,11 @@ variable@(V var i) `freeIn` expression =
 
     strippedExpression = denote' expression
 
+-- | Pretty-print a value
+pretty :: Pretty a => a -> Text
+pretty = pretty_
+{-# INLINE pretty #-}
+
 _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
@@ -2186,6 +2239,13 @@ reservedIdentifiers =
         , "Infinity"
         ]
 
+{-| Escape a `Text` literal using Dhall's escaping rules
+
+    Note that the result does not include surrounding quotes
+-}
+escapeText :: Text -> Text
+escapeText = escapeText_
+{-# INLINE escapeText #-}
 
 -- | A traversal over the immediate sub-expressions of an expression.
 subExpressions :: Applicative f => (Expr s a -> f (Expr s a)) -> Expr s a -> f (Expr s a)
@@ -2373,6 +2433,9 @@ multiLet b0 = \case
 wrapInLets :: Foldable f => f (Binding s a) -> Expr s a -> Expr s a
 wrapInLets bs e = foldr Let e bs
 
+{-| This type represents 1 or more nested `Let` bindings that have been
+    coalesced together for ease of manipulation
+-}
 data MultiLet s a = MultiLet (NonEmpty (Binding s a)) (Expr s a)
 
 {- | Record the binding part of a @let@ expression.
