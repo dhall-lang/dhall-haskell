@@ -117,7 +117,7 @@ importExpression embedded = importExpression_
     Parsers {..} = parsers embedded
 
 {-| For efficiency (and simplicity) we only expose two parsers from the
-    result of the @parser@ function, since these are the only parsers needed
+    result of the `parsers` function, since these are the only parsers needed
     outside of this module
 -}
 data Parsers a = Parsers
