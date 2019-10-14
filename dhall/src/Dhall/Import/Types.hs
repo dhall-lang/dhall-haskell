@@ -56,7 +56,7 @@ data ImportSemantics = ImportSemantics
 -- | `parent` imports (i.e. depends on) `child`
 data Depends = Depends { parent :: Chained, child :: Chained }
 
-{-| This enables or disables the semantic cache for imports protecteed by
+{-| This enables or disables the semantic cache for imports protected by
     integrity checks
 -}
 data SemanticCacheMode = IgnoreSemanticCache | UseSemanticCache
