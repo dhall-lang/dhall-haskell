@@ -17,10 +17,10 @@ module Dhall.Freeze
 import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Data.Text
+import Data.Void (Void)
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
-import Dhall.TypeCheck (X)
 import Dhall.Util (Censor, Input(..))
 import System.Console.ANSI (hSupportsANSI)
 
@@ -58,7 +58,7 @@ freezeImport directory import_ = do
             State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
 
     -- Try again without the semantic integrity check if decoding fails
-    let handler :: SomeException -> IO (Expr Src X)
+    let handler :: SomeException -> IO (Expr Src Void)
         handler _ = do
             State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 

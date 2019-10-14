@@ -22,6 +22,7 @@ import Data.List ( isPrefixOf, nub )
 import Data.Maybe ( mapMaybe )
 import Data.Semigroup ((<>))
 import Data.Text ( Text )
+import Data.Void (Void)
 import Dhall.Context (Context)
 import Dhall.Import (hashExpressionToCode)
 import Dhall.Src (Src)
@@ -100,8 +101,8 @@ emptyEnv =
 
 
 data Binding = Binding
-  { bindingExpr :: Dhall.Expr Dhall.Src Dhall.X
-  , bindingType :: Dhall.Expr Dhall.Src Dhall.X
+  { bindingExpr :: Dhall.Expr Dhall.Src Void
+  , bindingType :: Dhall.Expr Dhall.Src Void
   }
 
 
@@ -116,7 +117,7 @@ envToContext Env{ envBindings, envIt } =
 
 
 parseAndLoad
-  :: MonadIO m => String -> m ( Dhall.Expr Dhall.Src Dhall.X )
+  :: MonadIO m => String -> m ( Dhall.Expr Dhall.Src Void) 
 parseAndLoad src = do
   parsed <-
     case Dhall.exprFromText "(stdin)" ( Text.pack src ) of
@@ -163,8 +164,8 @@ typeOf srcs = do
 
 applyContext
     :: Context Binding
-    -> Dhall.Expr Dhall.Src Dhall.X
-    -> Dhall.Expr Dhall.Src Dhall.X
+    -> Dhall.Expr Dhall.Src Void
+    -> Dhall.Expr Dhall.Src Void
 applyContext context expression =
     Dhall.Core.wrapInLets bindings expression
   where
@@ -177,7 +178,7 @@ applyContext context expression =
 
 normalize
   :: MonadState Env m
-  => Dhall.Expr Dhall.Src Dhall.X -> m ( Dhall.Expr t Dhall.X )
+  => Dhall.Expr Dhall.Src Void -> m ( Dhall.Expr t Void )
 normalize e = do
   env <- get
 
@@ -186,7 +187,7 @@ normalize e = do
 
 typeCheck
   :: ( MonadIO m, MonadState Env m )
-  => Dhall.Expr Dhall.Src Dhall.X -> m ( Dhall.Expr Dhall.Src Dhall.X )
+  => Dhall.Expr Dhall.Src Void -> m ( Dhall.Expr Dhall.Src Void )
 typeCheck expression = do
   env <- get
 
@@ -543,7 +544,7 @@ completeFunc reversedPrev word
     listCompletion = map simpleCompletion . filter (word `isPrefixOf`)
 
     algebraicComplete
-        :: [Text.Text] -> Dhall.Expr Dhall.Src Dhall.X -> [Text.Text]
+        :: [Text.Text] -> Dhall.Expr Dhall.Src Void -> [Text.Text]
     algebraicComplete subFields expr =
       let keys = fmap ("." <>) . Map.keys
 

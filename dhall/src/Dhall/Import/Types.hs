@@ -11,6 +11,7 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import Data.Semigroup ((<>))
 import Data.Text.Prettyprint.Doc (Pretty(..))
+import Data.Void (Void)
 import Dhall.Context (Context)
 import Dhall.Core
   ( Directory (..)
@@ -25,7 +26,6 @@ import Dhall.Core
   , URL
   )
 import Dhall.Parser (Src)
-import Dhall.TypeCheck (X)
 import Lens.Family (LensLike')
 import System.FilePath (isRelative, splitDirectories)
 
@@ -38,20 +38,27 @@ import qualified Data.Text
 --   those are well-typed (either of type `List { header : Text, value Text}` or
 --   `List { mapKey : Text, mapValue Text})` and in normal form. These
 --   invariants are preserved by the API exposed by @Dhall.Import@.
-newtype Chained = Chained { chainedImport :: Import }
+newtype Chained = Chained
+    { chainedImport :: Import
+      -- ^ The underlying import
+    }
   deriving (Eq, Ord)
 
 instance Pretty Chained where
     pretty (Chained import_) = pretty import_
 
+-- | An import that has been fully interpeted
 data ImportSemantics = ImportSemantics
-    { importSemantics :: Expr Src X
+    { importSemantics :: Expr Src Void
     -- ^ The fully resolved import, typechecked and beta-normal.
     }
 
 -- | `parent` imports (i.e. depends on) `child`
 data Depends = Depends { parent :: Chained, child :: Chained }
 
+{-| This enables or disables the semantic cache for imports protected by
+    integrity checks
+-}
 data SemanticCacheMode = IgnoreSemanticCache | UseSemanticCache
 
 -- | State threaded throughout the import process
@@ -71,9 +78,9 @@ data Status = Status
     , _remote :: URL -> StateT Status IO Data.Text.Text
     -- ^ The remote resolver, fetches the content at the given URL.
 
-    , _normalizer :: Maybe (ReifiedNormalizer X)
+    , _normalizer :: Maybe (ReifiedNormalizer Void)
 
-    , _startingContext :: Context (Expr Src X)
+    , _startingContext :: Context (Expr Src Void)
 
     , _semanticCacheMode :: SemanticCacheMode
     }
@@ -112,22 +119,29 @@ emptyStatusWith _remote rootDirectory = Status {..}
       , importMode = Code
       }
 
+-- | Lens from a `Status` to its `_stack` field
 stack :: Functor f => LensLike' f Status (NonEmpty Chained)
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
 
+-- | Lens from a `Status` to its `_graph` field
 graph :: Functor f => LensLike' f Status [Depends]
 graph k s = fmap (\x -> s { _graph = x }) (k (_graph s))
 
+-- | Lens from a `Status` to its `_cache` field
 cache :: Functor f => LensLike' f Status (Map Chained ImportSemantics)
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
-remote :: Functor f => LensLike' f Status (URL -> StateT Status IO Data.Text.Text)
+-- | Lens from a `Status` to its `_remote` field
+remote
+    :: Functor f => LensLike' f Status (URL -> StateT Status IO Data.Text.Text)
 remote k s = fmap (\x -> s { _remote = x }) (k (_remote s))
 
-normalizer :: Functor f => LensLike' f Status (Maybe (ReifiedNormalizer X))
+-- | Lens from a `Status` to its `_normalizer` field
+normalizer :: Functor f => LensLike' f Status (Maybe (ReifiedNormalizer Void))
 normalizer k s = fmap (\x -> s {_normalizer = x}) (k (_normalizer s))
 
-startingContext :: Functor f => LensLike' f Status (Context (Expr Src X))
+-- | Lens from a `Status` to its `_startingContext` field
+startingContext :: Functor f => LensLike' f Status (Context (Expr Src Void))
 startingContext k s =
     fmap (\x -> s { _startingContext = x }) (k (_startingContext s))
 

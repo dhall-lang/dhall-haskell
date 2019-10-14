@@ -4,8 +4,8 @@ module Dhall.Test.Lint where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
+import Data.Void (Void)
 import Dhall.Core (Expr, Import)
-import Dhall.TypeCheck (X)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath)
@@ -41,14 +41,14 @@ lintTest prefix =
 
         parsedInput <- Core.throws (Parser.exprFromText mempty inputText)
 
-        let actualExpression :: Expr X Import
+        let actualExpression :: Expr Void Import
             actualExpression = Core.denote (Lint.lint parsedInput)
 
         outputText <- Text.IO.readFile outputFile
 
         parsedOutput <- Core.throws (Parser.exprFromText mempty outputText)
 
-        let expectedExpression :: Expr X Import
+        let expectedExpression :: Expr Void Import
             expectedExpression = Core.denote parsedOutput
 
         let message = "The linted expression did not match the expected output"

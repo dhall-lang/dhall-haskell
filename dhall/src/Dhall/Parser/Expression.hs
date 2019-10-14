@@ -39,6 +39,7 @@ import qualified Text.Parser.Char
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
 
+-- | Get the current source position
 getSourcePos :: Text.Megaparsec.MonadParsec e s m =>
                 m Text.Megaparsec.SourcePos
 getSourcePos =
@@ -49,6 +50,7 @@ getSourcePos =
 #endif
 {-# INLINE getSourcePos #-}
 
+-- | Get the current source offset (in tokens)
 getOffset :: Text.Megaparsec.MonadParsec e s m => m Int
 #if MIN_VERSION_megaparsec(7, 0, 0)
 getOffset = Text.Megaparsec.stateOffset <$> Text.Megaparsec.getParserState
@@ -57,6 +59,7 @@ getOffset = Text.Megaparsec.stateTokensProcessed <$> Text.Megaparsec.getParserSt
 #endif
 {-# INLINE getOffset #-}
 
+-- | Set the current source offset
 setOffset :: Text.Megaparsec.MonadParsec e s m => Int -> m ()
 #if MIN_VERSION_megaparsec(7, 0, 0)
 setOffset o = Text.Megaparsec.updateParserState $ \(Text.Megaparsec.State s _ pst) ->
@@ -67,6 +70,9 @@ setOffset o = Text.Megaparsec.updateParserState $ \(Text.Megaparsec.State s p _ 
 #endif
 {-# INLINE setOffset #-}
 
+{-| Wrap a `Parser` to still match the same text but return only the `Src`
+    span
+-}
 src :: Parser a -> Parser Src
 src parser = do
     before      <- getSourcePos
@@ -74,6 +80,9 @@ src parser = do
     after       <- getSourcePos
     return (Src before after tokens)
 
+{-| Wrap a `Parser` to still match the same text, but to wrap the resulting
+    `Expr` in a `Note` constructor containing the `Src` span
+-}
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
     before      <- getSourcePos
@@ -84,21 +93,39 @@ noted parser = do
         Note src₁ _ | laxSrcEq src₀ src₁ -> return e
         _                                -> return (Note src₀ e)
 
+{-| Parse a complete expression (with leading and trailing whitespace)
+
+    This corresponds to the @complete-expression@ rule from the official
+    grammar
+-}
 completeExpression :: Parser a -> Parser (Expr Src a)
 completeExpression embedded = completeExpression_
   where
     Parsers {..} = parsers embedded
 
+{-| Parse an \"import expression\"
+
+    This is not the same thing as @`fmap` `Embed`@.  This parses any
+    expression of the same or higher precedence as an import expression (such
+    as a selector expression).  For example, this parses @(1)@
+
+    This corresponds to the @import-expression@ rule from the official grammar
+-}
 importExpression :: Parser a -> Parser (Expr Src a)
 importExpression embedded = importExpression_
   where
     Parsers {..} = parsers embedded
 
+{-| For efficiency (and simplicity) we only expose two parsers from the
+    result of the `parsers` function, since these are the only parsers needed
+    outside of this module
+-}
 data Parsers a = Parsers
     { completeExpression_ :: Parser (Expr Src a)
     , importExpression_   :: Parser (Expr Src a)
     }
 
+-- | Given a parser for imports, 
 parsers :: Parser a -> Parsers a
 parsers embedded = Parsers {..}
   where
@@ -715,6 +742,10 @@ parsers embedded = Parsers {..}
             _closeBracket
             return (ListLit Nothing (Data.Sequence.fromList a)) ) <?> "list literal"
 
+{-| Parse an environment variable import
+
+    This corresponds to the @env@ rule from the official grammar
+-}
 env :: Parser ImportType
 env = do
     _ <- Text.Parser.Char.text "env:"
@@ -730,8 +761,9 @@ env = do
         _ <- Text.Parser.Char.char '"'
         return a
 
-localRaw :: Parser ImportType
-localRaw =
+-- | Parse a local import without trailing whitespace
+localOnly :: Parser ImportType
+localOnly =
     choice
         [ parentPath
         , herePath
@@ -762,12 +794,20 @@ localRaw =
 
         return (Local Absolute file)
 
+{-| Parse a local import
+
+    This corresponds to the @local@ rule from the official grammar
+-}
 local :: Parser ImportType
 local = do
-    a <- localRaw
+    a <- localOnly
     whitespace
     return a
 
+{-| Parse an HTTP(S) import
+
+    This corresponds to the @http@ rule from the official grammar
+-}
 http :: Parser ImportType
 http = do
     url <- httpRaw
@@ -777,11 +817,19 @@ http = do
         importExpression import_ )
     return (Remote (url { headers }))
 
+{-| Parse a `Missing` import
+
+    This corresponds to the @missing@ rule from the official grammar
+-}
 missing :: Parser ImportType
 missing = do
   _missing
   return Missing
 
+{-| Parse an `ImportType`
+
+    This corresponds to the @import-type@ rule from the official grammar
+-}
 importType_ :: Parser ImportType
 importType_ = do
     let predicate c =
@@ -791,6 +839,10 @@ importType_ = do
 
     choice [ local, http, env, missing ]
 
+{-| Parse a `Dhall.Crypto.SHA256Digest`
+
+    This corresponds to the @hash@ rule from the official grammar
+-}
 importHash_ :: Parser Dhall.Crypto.SHA256Digest
 importHash_ = do
     _ <- Text.Parser.Char.text "sha256:"
@@ -804,12 +856,20 @@ importHash_ = do
       Nothing -> fail "Invalid sha256 hash"
       Just h  -> pure h
 
+{-| Parse an `ImportHashed`
+
+    This corresponds to the @import-hashed@ rule from the official grammar
+-}
 importHashed_ :: Parser ImportHashed
 importHashed_ = do
     importType <- importType_
     hash       <- optional importHash_
     return (ImportHashed {..})
 
+{-| Parse an `Import`
+
+    This corresponds to the @import@ rule from the official grammar
+-}
 import_ :: Parser Import
 import_ = (do
     importHashed <- importHashed_
@@ -820,12 +880,14 @@ import_ = (do
       _as
       (_Text >> pure RawText) <|> (_Location >> pure Location)
 
+-- | Same as @Data.Text.splitOn@, except always returning a `NonEmpty` result
 splitOn :: Text -> Text -> NonEmpty Text
 splitOn needle haystack =
     case Data.Text.splitOn needle haystack of
         []     -> "" :| []
         t : ts -> t  :| ts
 
+-- | Split `Chunks` by lines
 linesLiteral :: Chunks s a -> NonEmpty (Chunks s a)
 linesLiteral (Chunks [] suffix) =
     fmap (Chunks []) (splitOn "\n" suffix)
@@ -842,15 +904,18 @@ linesLiteral (Chunks ((prefix, interpolation) : pairs₀) suffix₀) =
 
     Chunks pairs₁ suffix₁ :| chunks = linesLiteral (Chunks pairs₀ suffix₀)
 
+-- | Flatten several `Chunks` back into a single `Chunks` by inserting newlines
 unlinesLiteral :: NonEmpty (Chunks s a) -> Chunks s a
 unlinesLiteral chunks =
     Data.Foldable.fold (Data.List.NonEmpty.intersperse "\n" chunks)
 
+-- | Returns `True` if the `Chunks` represents a blank line
 emptyLine :: Chunks s a -> Bool
 emptyLine (Chunks [] ""  ) = True
 emptyLine (Chunks [] "\r") = True  -- So that `\r\n` is treated as a blank line
 emptyLine  _               = False
 
+-- | Return the leading whitespace for a `Chunks` literal
 leadingSpaces :: Chunks s a -> Text
 leadingSpaces chunks = Data.Text.takeWhile isSpace firstText
   where
@@ -861,12 +926,16 @@ leadingSpaces chunks = Data.Text.takeWhile isSpace firstText
             Chunks                []  suffix -> suffix
             Chunks ((prefix, _) : _ ) _      -> prefix
 
+-- | Drop the first @n@ characters for a `Chunks` literal
 dropLiteral :: Int -> Chunks s a -> Chunks s a
 dropLiteral n (Chunks [] suffix) =
     Chunks [] (Data.Text.drop n suffix)
 dropLiteral n (Chunks ((prefix, interpolation) : rest) suffix) =
     Chunks ((Data.Text.drop n prefix, interpolation) : rest) suffix
 
+{-| Convert a single-quoted `Chunks` literal to the equivalent double-quoted
+    `Chunks` literal
+-}
 toDoubleQuoted :: Chunks Src a -> Chunks Src a
 toDoubleQuoted literal =
     unlinesLiteral (fmap (dropLiteral indent) literals)

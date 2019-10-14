@@ -4,8 +4,8 @@ module Dhall.Test.Normalization where
 
 import Data.Monoid ((<>))
 import Data.Text (Text)
+import Data.Void (Void)
 import Dhall.Core (Expr(..), Var(..), throws)
-import Dhall.TypeCheck (X)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
@@ -126,7 +126,7 @@ alphaNormalizationTest prefix = do
 
         expectedResolved <- Import.assertNoImports expectedExpr
 
-        let expectedNormalized = Core.denote expectedResolved :: Expr X X
+        let expectedNormalized = Core.denote expectedResolved :: Expr Void Void
 
         let message =
                 "The normalized expression did not match the expected output"
@@ -155,7 +155,7 @@ unitTest prefix = do
 
         let actualNormalized =
                 Core.alphaNormalize
-                    (Core.normalize actualResolved :: Expr X X)
+                    (Core.normalize actualResolved :: Expr Void Void)
 
         expectedExpr <- throws (Parser.exprFromText mempty expectedCode)
 
@@ -183,7 +183,7 @@ betaNormalizationTest prefix =
 
         let actualNormalized =
                 Core.alphaNormalize
-                    (Core.normalize actualResolved :: Expr X X)
+                    (Core.normalize actualResolved :: Expr Void Void)
 
         expectedExpr <- throws (Parser.exprFromText mempty expectedCode)
 
