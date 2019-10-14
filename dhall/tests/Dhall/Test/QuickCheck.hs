@@ -65,7 +65,7 @@ import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Generic.Random
-import qualified GHC.Natural as GHCNat
+import qualified Numeric.Natural as Nat
 import qualified Test.QuickCheck
 import qualified Test.Tasty
 import qualified Test.Tasty.QuickCheck
@@ -489,12 +489,13 @@ tests =
           , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
           , QuickCheckTests 10000
           )
-        , injectThenInterpretIsIdentity (Proxy :: Proxy [GHCNat.Natural])
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Text.Text))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy [Nat.Natural])
         , injectThenInterpretIsIdentity (Proxy :: Proxy (Bool, Double))
         , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Sequence.Seq ()))
         , injectThenInterpretIsIdentity (Proxy :: Proxy (Maybe Integer))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Set.Set GHCNat.Natural))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.HashSet.HashSet Double))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Set.Set Nat.Natural))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.HashSet.HashSet Text.Text))
         , injectThenInterpretIsIdentity (Proxy :: Proxy (Vector Double))
         , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Map.Map Double Bool))
         ]
