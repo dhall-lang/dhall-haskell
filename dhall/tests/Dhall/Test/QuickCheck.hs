@@ -12,7 +12,8 @@ module Dhall.Test.QuickCheck where
 
 import Codec.Serialise (DeserialiseFailure(..))
 import Data.Either (isRight)
-import Dhall (Inject(..), Interpret(..), auto, input, inject, embed, Vector)
+import Data.Either.Validation (Validation(..))
+import Dhall (Inject(..), Interpret(..), auto, extract, inject, embed, Vector)
 import Dhall.Map (Map)
 import Dhall.Core
     ( Binding(..)
@@ -37,7 +38,6 @@ import Data.Typeable (Typeable, typeRep)
 import Data.Proxy (Proxy(..))
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
-import Dhall.Pretty (prettyExpr)
 import Dhall.TypeCheck (Typer, TypeError)
 import Generic.Random (Weights, W, (%), (:+)(..))
 import Test.QuickCheck
@@ -46,7 +46,6 @@ import Test.QuickCheck.Instances ()
 import Test.Tasty (TestTree)
 import Test.Tasty.QuickCheck (QuickCheckTests(..))
 import Text.Megaparsec (SourcePos(..), Pos)
-import Test.QuickCheck.Monadic (monadicIO, assert, run)
 
 import qualified Control.Spoon
 import qualified Codec.Serialise
@@ -448,14 +447,14 @@ injectThenInterpretIsIdentity
     => Proxy a
     -> (String, Property, QuickCheckTests)
 injectThenInterpretIsIdentity p =
-    ( "Injecting then Interpreting is identity for " <> show (typeRep p)
-    , Test.QuickCheck.property (prop :: a -> Property)
+    ( "Injecting then Interpreting is identity for " ++ show (typeRep p)
+    , Test.QuickCheck.property (prop :: a -> Bool)
     , QuickCheckTests 1000
     )
   where
-    prop a = monadicIO $ do
-        a' <- run . input auto . Text.pack . show . prettyExpr . embed inject $ a
-        assert (a == a')
+    prop a = case extract auto (embed inject a) of
+        Success a' -> a == a'
+        Failure _  -> False
 
 
 tests :: TestTree
