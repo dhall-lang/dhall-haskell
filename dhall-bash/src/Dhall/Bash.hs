@@ -105,9 +105,8 @@ import Data.Bifunctor (first)
 import Data.ByteString
 import Data.Monoid ((<>))
 import Data.Typeable (Typeable)
-import Data.Void (absurd)
+import Data.Void (Void, absurd)
 import Dhall.Core (Expr(..), Chunks(..))
-import Dhall.TypeCheck
 
 import qualified Data.Foldable
 import qualified Data.Text
@@ -127,8 +126,8 @@ _ERROR = "\ESC[1;31mError\ESC[0m"
     Bash this just returns the expression that failed
 -}
 data StatementError
-    = UnsupportedStatement (Expr X X)
-    | UnsupportedSubexpression (Expr X X)
+    = UnsupportedStatement (Expr Void Void)
+    | UnsupportedSubexpression (Expr Void Void)
     deriving (Typeable)
 
 instance Show StatementError where
@@ -170,7 +169,7 @@ instance Exception StatementError
     Because the majority of Dhall language features do not easily translate to
     Bash this just returns the expression that failed
 -}
-data ExpressionError = UnsupportedExpression (Expr X X) deriving (Typeable)
+data ExpressionError = UnsupportedExpression (Expr Void Void) deriving (Typeable)
 
 instance Show ExpressionError where
     show (UnsupportedExpression e) =
@@ -216,7 +215,7 @@ instance Exception ExpressionError
     * records
  -}
 dhallToStatement
-    :: Expr s X
+    :: Expr s Void
     -- ^ Dhall expression to compile
     -> ByteString
     -- ^ Variable to @declare@ or @unset@
@@ -345,7 +344,7 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
     * @Text@s
  -}
 dhallToExpression
-    :: Expr s X
+    :: Expr s Void
     -- ^ Dhall expression to compile
     -> Either ExpressionError ByteString
     -- ^ Bash expression or compile failure
