@@ -232,6 +232,7 @@ import qualified Data.String
 import qualified Data.Text as Text
 import           Data.Text (Text)
 import qualified Data.Vector as Vector
+import           Data.Void (Void)
 import qualified Options.Applicative as O
 import           Options.Applicative (Parser)
 
@@ -243,7 +244,6 @@ import qualified Dhall.Map as Map
 import qualified Dhall.Parser
 import           Dhall.Parser (Src)
 import qualified Dhall.TypeCheck as D
-import           Dhall.TypeCheck (X)
 
 -- ---------------
 -- Command options
@@ -321,7 +321,7 @@ defaultConversion =  Conversion
     }
 
 -- | The 'Expr' type concretization used throughout this module
-type ExprX = Expr Src X
+type ExprX = Expr Src Void
 
 -- | Parse schema code to a valid Dhall expression and check that its type is actually Type
 resolveSchemaExpr :: Text  -- ^ type code (schema)
@@ -597,7 +597,7 @@ showJSON value = BSL8.unpack (encodePretty value)
 
 data CompileError
   -- Dhall shema
-  = TypeError (D.TypeError Src X)
+  = TypeError (D.TypeError Src Void)
   | BadDhallType
       ExprX -- Expression type
       ExprX -- Whole expression

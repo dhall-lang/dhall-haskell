@@ -220,9 +220,9 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
+import Data.Void (Void)
 import Dhall.Core (Binding(..), DhallDouble(..), Expr)
 import Dhall.Import (SemanticCacheMode(..))
-import Dhall.TypeCheck (X)
 import Dhall.Map (Map)
 import Dhall.JSON.Util (pattern V)
 import Options.Applicative (Parser)
@@ -256,10 +256,10 @@ import qualified System.FilePath
     this just returns the expression that failed
 -}
 data CompileError
-    = Unsupported (Expr X X)
+    = Unsupported (Expr Void Void)
     | SpecialDouble Double
     | BareNone
-    | InvalidInlineContents (Expr X X) (Expr X X)
+    | InvalidInlineContents (Expr Void Void) (Expr Void Void)
 
 instance Show CompileError where
     show BareNone =
@@ -410,7 +410,7 @@ Right (Object (fromList [("foo",Number 1.0),("bar",String "ABC")]))
 Right "{\"foo\":1,\"bar\":\"ABC\"}"
 -}
 dhallToJSON
-    :: Expr s X
+    :: Expr s Void
     -> Either CompileError Value
 dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
   where
@@ -544,7 +544,7 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                 outer value
         _ -> Left (Unsupported e)
 
-getContents :: Expr s X -> Maybe (Text, Maybe (Expr s X))
+getContents :: Expr s Void -> Maybe (Text, Maybe (Expr s Void))
 getContents (Core.App
                 (Core.Field
                     _
@@ -555,7 +555,7 @@ getContents (Core.App
 getContents (Core.Field _ alternativeName) = Just (alternativeName, Nothing)
 getContents _ = Nothing
 
-isInlineNesting :: Expr s X -> Bool
+isInlineNesting :: Expr s Void -> Bool
 isInlineNesting (Core.App
                     (Core.Field
                         (Core.Union
@@ -665,7 +665,7 @@ data Conversion
 
     > { k0 = v0, k1 = v1 }
 -}
-convertToHomogeneousMaps :: Conversion -> Expr s X -> Expr s X
+convertToHomogeneousMaps :: Conversion -> Expr s Void -> Expr s Void
 convertToHomogeneousMaps NoConversion e0 = e0
 convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
   where
@@ -836,7 +836,7 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
           where
             elements = Foldable.toList b
 
-            toKeyValue :: Expr s X -> Maybe (Text, Expr s X)
+            toKeyValue :: Expr s Void -> Maybe (Text, Expr s Void)
             toKeyValue (Core.RecordLit m) = do
                 guard (Foldable.length m == 2)
 
@@ -1051,7 +1051,7 @@ data SpecialDoubleMode
     handling them as specified according to the `SpecialDoubleMode`
 -}
 handleSpecialDoubles
-    :: SpecialDoubleMode -> Expr s X -> Either CompileError (Expr s X)
+    :: SpecialDoubleMode -> Expr s Void -> Either CompileError (Expr s Void)
 handleSpecialDoubles specialDoubleMode =
     Dhall.Optics.rewriteMOf Core.subExpressions rewrite
   where
