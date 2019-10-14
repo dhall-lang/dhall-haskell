@@ -137,7 +137,7 @@ getImportLink src@(Src left _ text) =
     setSourcePos left
     begin <- getSourcePos
     (tokens, _) <-
-      Megaparsec.match $ (localRaw *> return ()) <|> (httpRaw *> return ())
+      Megaparsec.match $ (localOnly *> return ()) <|> (httpRaw *> return ())
     end <- getSourcePos
     _ <- Megaparsec.takeRest
     return (Src begin end tokens)

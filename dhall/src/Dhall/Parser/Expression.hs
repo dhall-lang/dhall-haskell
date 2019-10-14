@@ -750,8 +750,8 @@ env = do
         return a
 
 -- | Parse a local import without trailing whitespace
-localRaw :: Parser ImportType
-localRaw =
+localOnly :: Parser ImportType
+localOnly =
     choice
         [ parentPath
         , herePath
@@ -788,7 +788,7 @@ localRaw =
 -}
 local :: Parser ImportType
 local = do
-    a <- localRaw
+    a <- localOnly
     whitespace
     return a
 
