@@ -514,6 +514,8 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- loop a
         b' <- loop b
         return (Fix (NBinary NUpdate a' b'))
+    loop (RecordCompletion a b) = do
+        loop (Annot (Prefer (Field a "default") b) (Field a "Type"))
     loop (Field (Union kts) k) =
         case Dhall.Map.lookup k kts of
             -- If the selected alternative has an associated payload, then we

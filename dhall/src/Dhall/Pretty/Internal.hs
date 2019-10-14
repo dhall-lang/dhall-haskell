@@ -238,6 +238,9 @@ rarrow :: CharacterSet -> Doc Ann
 rarrow Unicode = syntax "→"
 rarrow ASCII   = syntax "->"
 
+doubleColon :: Doc Ann
+doubleColon = syntax "::"
+
 -- | Pretty-print a list
 list :: [Doc Ann] -> Doc Ann
 list   [] = lbracket <> rbracket
@@ -276,6 +279,30 @@ braces docs =
         (space <> rbrace)
         rbrace
         docs
+
+hangingBraces :: [(Doc Ann, Doc Ann)] -> Doc Ann
+hangingBraces [] =
+    lbrace <> rbrace
+hangingBraces docs =
+    Pretty.group
+        (Pretty.flatAlt
+            (  lbrace
+            <> Pretty.hardline
+            <> mconcat (zipWith combineLong (repeat separator) docsLong)
+            <> rbrace
+            )
+            (mconcat (zipWith (<>) (beginShort : repeat separator) docsShort) <> space <> rbrace)
+        )
+  where
+    separator = comma <> space
+
+    docsShort = fmap fst docs
+
+    docsLong = fmap snd docs
+
+    beginShort = lbrace <> space
+
+    combineLong x y = x <> y <> Pretty.hardline
 
 -- | Pretty-print anonymous functions and function types
 arrows :: CharacterSet -> [(Doc Ann, Doc Ann)] -> Doc Ann
@@ -856,6 +883,24 @@ prettyCharacterSet characterSet expression =
     prettyImportExpression (Note _ a) =
         prettyImportExpression a
     prettyImportExpression a0 =
+        prettyCompletionExpression a0
+
+    prettyCompletionExpression :: Pretty a => Expr Src a -> Doc Ann
+    prettyCompletionExpression (RecordCompletion a b) =
+        case shallowDenote b of
+            RecordLit kvs ->
+                Pretty.align
+                    (   prettySelectorExpression a
+                    <>  doubleColon
+                    <>  prettyCompletionLit kvs
+                    )
+            _ ->    prettySelectorExpression a
+                <>  doubleColon
+                <>  prettySelectorExpression b
+
+    prettyCompletionExpression (Note _ a) =
+        prettyCompletionExpression a
+    prettyCompletionExpression a0 =
         prettySelectorExpression a0
 
     prettySelectorExpression :: Pretty a => Expr Src a -> Doc Ann
@@ -994,8 +1039,16 @@ prettyCharacterSet characterSet expression =
     prettyRecordLit a
         | Data.Foldable.null a =
             lbrace <> equals <> rbrace
-        | otherwise
-            = braces (map (prettyKeyValue equals) (Dhall.Map.toList a))
+        | otherwise =
+            braces (map (prettyKeyValue equals) (Dhall.Map.toList a))
+
+    prettyCompletionLit
+        :: Pretty a => Map Text (Expr Src a) -> Doc Ann
+    prettyCompletionLit a
+        | Data.Foldable.null a =
+            lbrace <> equals <> rbrace
+        | otherwise =
+            hangingBraces (map (prettyKeyValue equals) (Dhall.Map.toList a))
 
     prettyAlternative (key, Just val) = prettyKeyValue colon (key, val)
     prettyAlternative (key, Nothing ) = duplicate (prettyAnyLabel key)
