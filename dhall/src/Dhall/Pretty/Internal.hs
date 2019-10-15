@@ -140,29 +140,28 @@ isWhitespace c =
 
     >>> let unusedSourcePos = Text.Megaparsec.SourcePos "" (Text.Megaparsec.mkPos 1) (Text.Megaparsec.mkPos 1)
     >>> let nonEmptySrc = Src unusedSourcePos unusedSourcePos "-- Documentation for x\n"
-    >>> "let" <> renderSrc (Just nonEmptySrc) " " <> "x = 1 in x"
+    >>> "let" <> " " <> renderSrc id (Just nonEmptySrc) <> "x = 1 in x"
     let -- Documentation for x
         x = 1 in x
     >>> let emptySrc = Src unusedSourcePos unusedSourcePos "      "
-    >>> "let" <> renderSrc (Just emptySrc) " " <> "x = 1 in x"
+    >>> "let" <> " " <> renderSrc id (Just emptySrc) <> "x = 1 in x"
     let x = 1 in x
-    >>> "let" <> renderSrc Nothing " " <> "x = 1 in x"
+    >>> "let" <> " " <> renderSrc id Nothing <> "x = 1 in x"
     let x = 1 in x
 -}
 renderSrc
-    :: Maybe Src
+    :: (Text -> Text)
+    -- ^ Used to preprocess the comment string (e.g. to strip whitespace)
+    -> Maybe Src
     -- ^ Source span to render (if present)
     -> Doc Ann
-    -- ^ Used as the prefix (when the source span contains a comment) and as a
-    --   fallback (when the source span is absent or comment-free)
-    -> Doc Ann
-renderSrc (Just (Src {..})) prefix
+renderSrc strip (Just (Src {..}))
     | not (Text.all isWhitespace srcText) =
-        prefix <> Pretty.align (Pretty.concatWith f newLines <> suffix)
+        Pretty.align (Pretty.concatWith f newLines <> suffix)
   where
     horizontalSpace c = c == ' ' || c == '\t'
 
-    strippedText = Text.dropAround horizontalSpace srcText
+    strippedText = strip srcText
 
     suffix =
         if Text.null strippedText
@@ -197,8 +196,8 @@ renderSrc (Just (Src {..})) prefix
                 in  Pretty.pretty l0 : map perLine (l1 : ls)
 
     f x y = x <> Pretty.hardline <> y
-renderSrc _ prefix =
-    prefix
+renderSrc _ _ =
+    mempty
 
 -- Annotation helpers
 keyword, syntax, label, literal, builtin, operator :: Doc Ann -> Doc Ann
@@ -559,28 +558,38 @@ prettyCharacterSet characterSet expression =
       where
         MultiLet as b = multiLet a0 b0
 
+        stripSpaces = Text.dropAround (\c -> c == ' ' || c == '\t')
+
+        -- Strip a single newline character. Needed to ensure idempotency in
+        -- cases where we add hard line breaks.
+        stripNewline t =
+            case Text.uncons t' of
+                Just ('\n', t'') -> stripSpaces t''
+                _ -> t'
+          where t' = stripSpaces t
+
         docA (Binding src0 c src1 Nothing src2 e) =
             Pretty.group (Pretty.flatAlt long short)
           where
             long =  keyword "let" <> space
                 <>  Pretty.align
-                    (   renderSrc src0 mempty
-                    <>  prettyLabel c <> renderSrc src1 space
-                    <>  equals <> renderSrc src2 Pretty.hardline
+                    (   renderSrc stripSpaces src0
+                    <>  prettyLabel c <> space <> renderSrc stripSpaces src1
+                    <>  equals <> Pretty.hardline <> renderSrc stripNewline src2
                     <>  "  " <> prettyExpression e
                     )
 
-            short = keyword "let" <> renderSrc src0 space
-                <>  prettyLabel c <> renderSrc src1 space
-                <>  equals <> renderSrc src2 space
+            short = keyword "let" <> space <> renderSrc stripSpaces src0
+                <>  prettyLabel c <> space <> renderSrc stripSpaces src1
+                <>  equals <> space <> renderSrc stripSpaces src2
                 <>  prettyExpression e
         docA (Binding src0 c src1 (Just (src3, d)) src2 e) =
                 keyword "let" <> space
             <>  Pretty.align
-                (   renderSrc src0 mempty
-                <>  prettyLabel c <> renderSrc src1 Pretty.hardline
-                <>  colon <> renderSrc src3 space <> prettyExpression d <> Pretty.hardline
-                <>  equals <> renderSrc src2 space
+                (   renderSrc stripSpaces src0
+                <>  prettyLabel c <> Pretty.hardline <> renderSrc stripNewline src1
+                <>  colon <> space <> renderSrc stripSpaces src3 <> prettyExpression d <> Pretty.hardline
+                <>  equals <> space <> renderSrc stripSpaces src2
                 <>  prettyExpression e
                 )
 
