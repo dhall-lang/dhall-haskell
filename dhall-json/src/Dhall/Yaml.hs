@@ -21,9 +21,6 @@ import qualified Data.ByteString
 import qualified Data.Vector
 import qualified Dhall
 import qualified Options.Applicative
-#if defined(ETA_VERSION)
-import Dhall.Yaml.Eta (jsonToYaml)
-#else
 #if defined(GPL)
 import qualified Data.YAML.Aeson
 import qualified Data.YAML as Y
@@ -35,8 +32,6 @@ import qualified Data.Text as Text
 import qualified Data.Aeson.Yaml
 import qualified Data.ByteString.Lazy
 #endif
-#endif
-
 
 data Options = Options
     { explain    :: Bool
@@ -89,7 +84,6 @@ dhallToYaml Options{..} mFilePath code = do
 
   return $ jsonToYaml json documents quoted
 
-#if !defined(ETA_VERSION)
 -- | Transform json representation into yaml
 jsonToYaml
     :: Data.Aeson.Value
@@ -144,5 +138,4 @@ jsonToYaml json documents quoted =
             then Data.Aeson.Yaml.encodeQuoted
             else Data.Aeson.Yaml.encode
          ) json
-#endif
 #endif
