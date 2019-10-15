@@ -95,9 +95,8 @@ import Data.Foldable (toList)
 import Data.Fix (Fix(..))
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
-import Data.Void (absurd)
+import Data.Void (Void, absurd)
 import Dhall.Core (Chunks(..), Const(..), DhallDouble(..), Expr(..), MultiLet(..), Var(..))
-import Dhall.TypeCheck (X)
 import Nix.Atoms (NAtom(..))
 import Nix.Expr
     ( Antiquoted(..)
@@ -206,7 +205,7 @@ Right x: y: x + y
     Precondition: You must first type-check the Dhall expression before passing
     the expression to `dhallToNix`
 -}
-dhallToNix :: Expr s X -> Either CompileError (Fix NExprF)
+dhallToNix :: Expr s Void -> Either CompileError (Fix NExprF)
 dhallToNix e = loop (Dhall.Core.normalize e)
   where
     loop (Const _) = return (Fix (NSet []))
@@ -515,6 +514,8 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- loop a
         b' <- loop b
         return (Fix (NBinary NUpdate a' b'))
+    loop (RecordCompletion a b) = do
+        loop (Annot (Prefer (Field a "default") b) (Field a "Type"))
     loop (Field (Union kts) k) =
         case Dhall.Map.lookup k kts of
             -- If the selected alternative has an associated payload, then we

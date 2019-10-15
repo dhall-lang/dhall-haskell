@@ -139,7 +139,7 @@ import Data.Word (Word8, Word16, Word32, Word64)
 import Dhall.Core (Expr(..), Chunks(..), DhallDouble(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
-import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
+import Dhall.TypeCheck (DetailedTypeError(..), TypeError)
 import GHC.Generics
 import Lens.Family (LensLike', view)
 import Numeric.Natural (Natural)
@@ -181,13 +181,24 @@ import qualified Lens.Family
 -- >>> :set -XRecordWildCards
 -- >>> import Dhall.Pretty.Internal (prettyExpr)
 
+{-| Useful synonym for the `Validation` type used when marshalling Dhall
+    expressions
+-}
 type Extractor s a = Validation (ExtractErrors s a)
+
+{-| Useful synonym for the equivalent `Either` type used when marshalling Dhall
+    code
+-}
 type MonadicExtractor s a = Either (ExtractErrors s a)
 
-
+{-| Generate a type error during extraction by specifying the expected type
+    and the actual type
+-}
 typeError :: Expr s a -> Expr s a -> Extractor s a b
-typeError expected actual = Failure . ExtractErrors . pure . TypeMismatch $ InvalidType expected actual
+typeError expected actual =
+    Failure . ExtractErrors . pure . TypeMismatch $ InvalidType expected actual
 
+-- | Turn a `Text` message into an extraction failure
 extractError :: Text -> Extractor s a b
 extractError = Failure . ExtractErrors . pure . ExtractError
 
@@ -201,6 +212,9 @@ toMonadic = validationToEither
 fromMonadic :: MonadicExtractor s a b -> Extractor s a b
 fromMonadic = eitherToValidation
 
+{-| One or more errors returned from extracting a Dhall expression to a
+    Haskell expression
+-}
 newtype ExtractErrors s a = ExtractErrors
    { getErrors :: NonEmpty (ExtractError s a)
    } deriving Semigroup
@@ -314,8 +328,8 @@ sourceName k s =
 
 -- | @since 1.16
 data EvaluateSettings = EvaluateSettings
-  { _startingContext :: Dhall.Context.Context (Expr Src X)
-  , _normalizer      :: Maybe (Dhall.Core.ReifiedNormalizer X)
+  { _startingContext :: Dhall.Context.Context (Expr Src Void)
+  , _normalizer      :: Maybe (Dhall.Core.ReifiedNormalizer Void)
   }
 
 -- | Default evaluation settings: no extra entries in the initial
@@ -333,11 +347,11 @@ defaultEvaluateSettings = EvaluateSettings
 -- @since 1.16
 startingContext
   :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Dhall.Context.Context (Expr Src X))
+  => LensLike' f s (Dhall.Context.Context (Expr Src Void))
 startingContext = evaluateSettings . l
   where
     l :: (Functor f)
-      => LensLike' f EvaluateSettings (Dhall.Context.Context (Expr Src X))
+      => LensLike' f EvaluateSettings (Dhall.Context.Context (Expr Src Void))
     l k s = fmap (\x -> s { _startingContext = x}) (k (_startingContext s))
 
 -- | Access the custom normalizer.
@@ -345,11 +359,11 @@ startingContext = evaluateSettings . l
 -- @since 1.16
 normalizer
   :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Maybe (Dhall.Core.ReifiedNormalizer X))
+  => LensLike' f s (Maybe (Dhall.Core.ReifiedNormalizer Void))
 normalizer = evaluateSettings . l
   where
     l :: (Functor f)
-      => LensLike' f EvaluateSettings (Maybe (Dhall.Core.ReifiedNormalizer X))
+      => LensLike' f EvaluateSettings (Maybe (Dhall.Core.ReifiedNormalizer Void))
     l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
 
 -- | @since 1.16
@@ -483,7 +497,7 @@ inputFileWithSettings settings ty path = do
 inputExpr
     :: Text
     -- ^ The Dhall program
-    -> IO (Expr Src X)
+    -> IO (Expr Src Void)
     -- ^ The fully normalized AST
 inputExpr =
   inputExprWithSettings defaultInputSettings
@@ -498,7 +512,7 @@ inputExprWithSettings
     :: InputSettings
     -> Text
     -- ^ The Dhall program
-    -> IO (Expr Src X)
+    -> IO (Expr Src Void)
     -- ^ The fully normalized AST
 inputExprWithSettings settings txt = do
     expr  <- Dhall.Core.throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
@@ -528,7 +542,7 @@ rawInput
     :: Alternative f
     => Type a
     -- ^ The type of value to decode from Dhall to Haskell
-    -> Expr s X
+    -> Expr s Void
     -- ^ a closed form Dhall program, which evaluates to the expected type
     -> f a
     -- ^ The decoded value in Haskell
@@ -645,11 +659,11 @@ detailed :: IO a -> IO a
 detailed =
     Control.Exception.handle handler1 . Control.Exception.handle handler0
   where
-    handler0 :: Imported (TypeError Src X) -> IO a
+    handler0 :: Imported (TypeError Src Void) -> IO a
     handler0 (Imported ps e) =
         Control.Exception.throwIO (Imported ps (DetailedTypeError e))
 
-    handler1 :: TypeError Src X -> IO a
+    handler1 :: TypeError Src Void -> IO a
     handler1 e = Control.Exception.throwIO (DetailedTypeError e)
 
 {-| A @(Type a)@ represents a way to marshal a value of type @\'a\'@ from Dhall
@@ -670,9 +684,9 @@ detailed =
 > input :: Type a -> Text -> IO a
 -}
 data Type a = Type
-    { extract  :: Expr Src X -> Extractor Src X a
+    { extract  :: Expr Src Void -> Extractor Src Void a
     -- ^ Extracts Haskell value from the Dhall expression
-    , expected :: Expr Src X
+    , expected :: Expr Src Void
     -- ^ Dhall type of the Haskell value
     }
     deriving (Functor)
@@ -1234,7 +1248,7 @@ data InterpretOptions = InterpretOptions
     -- ^ Specify how to handle constructors with only one field.  The default is
     --   `Wrapped` for backwards compatibility but will eventually be changed to
     --   `Smart`
-    , inputNormalizer     :: Dhall.Core.ReifiedNormalizer X
+    , inputNormalizer     :: Dhall.Core.ReifiedNormalizer Void
     -- ^ This is only used by the `Interpret` instance for functions in order
     --   to normalize the function input before marshaling the input into a
     --   Dhall expression
@@ -1299,14 +1313,15 @@ instance GenericInterpret V1 where
         expected = Union mempty
 
 unsafeExpectUnion
-    :: Text -> Expr Src X -> Dhall.Map.Map Text (Maybe (Expr Src X))
+    :: Text -> Expr Src Void -> Dhall.Map.Map Text (Maybe (Expr Src Void))
 unsafeExpectUnion _ (Union kts) =
     kts
 unsafeExpectUnion name expression =
     Dhall.Core.internalError
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
-unsafeExpectRecord :: Text -> Expr Src X -> Dhall.Map.Map Text (Expr Src X)
+unsafeExpectRecord
+    :: Text -> Expr Src Void -> Dhall.Map.Map Text (Expr Src Void)
 unsafeExpectRecord _ (Record kts) =
     kts
 unsafeExpectRecord name expression =
@@ -1315,8 +1330,8 @@ unsafeExpectRecord name expression =
 
 unsafeExpectUnionLit
     :: Text
-    -> Expr Src X
-    -> (Text, Maybe (Expr Src X))
+    -> Expr Src Void
+    -> (Text, Maybe (Expr Src Void))
 unsafeExpectUnionLit _ (Field (Union _) k) =
     (k, Nothing)
 unsafeExpectUnionLit _ (App (Field (Union _) k) v) =
@@ -1325,7 +1340,8 @@ unsafeExpectUnionLit name expression =
     Dhall.Core.internalError
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
-unsafeExpectRecordLit :: Text -> Expr Src X -> Dhall.Map.Map Text (Expr Src X)
+unsafeExpectRecordLit
+    :: Text -> Expr Src Void -> Dhall.Map.Map Text (Expr Src Void)
 unsafeExpectRecordLit _ (RecordLit kvs) =
     kvs
 unsafeExpectRecordLit name expression =
@@ -1618,9 +1634,9 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
     Haskell into Dhall
 -}
 data InputType a = InputType
-    { embed    :: a -> Expr Src X
+    { embed    :: a -> Expr Src Void
     -- ^ Embeds a Haskell value as a Dhall expression
-    , declared :: Expr Src X
+    , declared :: Expr Src Void
     -- ^ Dhall type of the Haskell value
     }
 
@@ -1637,8 +1653,8 @@ instance Contravariant InputType where
     class) into Haskell functions.  This works by:
 
     * Marshaling the input to the Haskell function into a Dhall expression (i.e.
-      @x :: Expr Src X@)
-    * Applying the Dhall function (i.e. @f :: Expr Src X@) to the Dhall input
+      @x :: Expr Src Void@)
+    * Applying the Dhall function (i.e. @f :: Expr Src Void@) to the Dhall input
       (i.e. @App f x@)
     * Normalizing the syntax tree (i.e. @normalize (App f x)@)
     * Marshaling the resulting Dhall expression back into a Haskell value
@@ -2172,12 +2188,12 @@ newtype RecordType a =
         ( Control.Applicative.Const
             ( Dhall.Map.Map
                 Text
-                ( Expr Src X )
+                ( Expr Src Void )
             )
         )
         ( Data.Functor.Compose.Compose
-            ( (->) ( Expr Src X ) )
-            (Extractor Src X)
+            ( (->) ( Expr Src Void ) )
+            (Extractor Src Void)
         )
         a
     )
@@ -2347,6 +2363,7 @@ injectProject =
 
 infixr 5 >*<
 
+-- | Intermediate type used for building an `Inject` instance for a record
 newtype RecordInputType a
   = RecordInputType (Dhall.Map.Map Text (InputType a))
 
@@ -2361,12 +2378,19 @@ instance Divisible RecordInputType where
       ((contramap $ snd . f) <$> cInputTypeRecord)
   conquer = RecordInputType mempty
 
+{-| Specify how to encode one field of a record by supplying an explicit
+    `InputType` for that field
+-}
 inputFieldWith :: Text -> InputType a -> RecordInputType a
 inputFieldWith name inputType = RecordInputType $ Dhall.Map.singleton name inputType
 
+{-| Specify how to encode one field of a record using the default `Inject`
+    instance for that type
+-}
 inputField :: Inject a => Text -> RecordInputType a
 inputField name = inputFieldWith name inject
 
+-- | Convert a `RecordInputType` into the equivalent `InputType`
 inputRecord :: RecordInputType a -> InputType a
 inputRecord (RecordInputType inputTypeRecord) = InputType makeRecordLit recordType
   where
@@ -2431,10 +2455,10 @@ newtype UnionInputType a =
         ( Control.Applicative.Const
             ( Dhall.Map.Map
                 Text
-                ( Expr Src X )
+                ( Expr Src Void )
             )
         )
-        ( Op (Text, Expr Src X) )
+        ( Op (Text, Expr Src Void) )
         a
     )
   deriving (Contravariant)
@@ -2456,6 +2480,7 @@ UnionInputType (Data.Functor.Product.Pair (Control.Applicative.Const mx) (Op fx)
 
 infixr 5 >|<
 
+-- | Convert a `UnionInputType` into the equivalent `InputType`
 inputUnion :: UnionInputType a -> InputType a
 inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Op embedF ) ) ) =
     InputType
@@ -2470,6 +2495,9 @@ inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Co
   where
     fields' = fmap notEmptyRecord fields
 
+{-| Specify how to encode an alternative by providing an explicit `InputType`
+    for that alternative
+-}
 inputConstructorWith
     :: Text
     -> InputType a
@@ -2485,6 +2513,9 @@ inputConstructorWith name inputType = UnionInputType $
       ( Op ( (name,) . embed inputType )
       )
 
+{-| Specify how to encode an alternative by using the default `Inject` instance
+    for that type
+-}
 inputConstructor
     :: Inject a
     => Text

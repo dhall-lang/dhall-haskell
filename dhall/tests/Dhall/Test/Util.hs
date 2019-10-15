@@ -24,12 +24,12 @@ module Dhall.Test.Util
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Bifunctor (first)
 import Data.Text (Text)
+import Data.Void (Void)
 import Dhall.Context (Context)
 import Dhall.Core (Expr, Normalizer, ReifiedNormalizer(..), Import)
 import Dhall.Import (Status(..), SemanticCacheMode(..))
 import Data.Monoid((<>))
 import Dhall.Parser (Src)
-import Dhall.TypeCheck (X)
 import Prelude hiding (FilePath)
 import Test.Tasty.HUnit
 import Test.Tasty (TestTree)
@@ -60,17 +60,17 @@ import qualified Data.Text.Encoding
 import qualified Data.Text.IO
 #endif
 
-normalize' :: Expr Src X -> Text
+normalize' :: Expr Src Void -> Text
 normalize' = Dhall.Core.pretty . Dhall.Core.normalize
 
-normalizeWith' :: Normalizer X -> Expr Src X -> Text
+normalizeWith' :: Normalizer Void -> Expr Src Void -> Text
 normalizeWith' ctx t =
   Dhall.Core.pretty (Dhall.Core.normalizeWith (Just (ReifiedNormalizer ctx)) t)
 
-code :: Text -> IO (Expr Src X)
+code :: Text -> IO (Expr Src Void)
 code = codeWith Dhall.Context.empty
 
-codeWith :: Context (Expr Src X) -> Text -> IO (Expr Src X)
+codeWith :: Context (Expr Src Void) -> Text -> IO (Expr Src Void)
 codeWith ctx expr = do
     expr0 <- case Dhall.Parser.exprFromText mempty expr of
         Left parseError -> Control.Exception.throwIO parseError
@@ -81,21 +81,21 @@ codeWith ctx expr = do
         Right _        -> return ()
     return expr1
 
-load :: Expr Src Import -> IO (Expr Src X)
+load :: Expr Src Import -> IO (Expr Src Void)
 load = loadRelativeTo "." UseSemanticCache
 
-loadRelativeTo :: FilePath.FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src X)
+loadRelativeTo :: FilePath.FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
 loadRelativeTo rootDirectory semanticCacheMode expression =
     State.evalStateT
         (loadWith expression)
         (Dhall.Import.emptyStatus rootDirectory) { _semanticCacheMode = semanticCacheMode }
 
 #ifdef WITH_HTTP
-loadWith :: Expr Src Import -> StateT Status IO (Expr Src X)
+loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith = Dhall.Import.loadWith
 
 #else
-loadWith :: Expr Src Import -> StateT Status IO (Expr Src X)
+loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith expr = do
     let mockRemote' url = do
             liftIO . putStrLn $ "\nTesting without real HTTP support --"
@@ -155,23 +155,23 @@ mockRemote url = do
 
 equivalent :: Text -> Text -> IO ()
 equivalent text0 text1 = do
-    expr0 <- fmap Dhall.Core.normalize (code text0) :: IO (Expr X X)
-    expr1 <- fmap Dhall.Core.normalize (code text1) :: IO (Expr X X)
+    expr0 <- fmap Dhall.Core.normalize (code text0) :: IO (Expr Void Void)
+    expr1 <- fmap Dhall.Core.normalize (code text1) :: IO (Expr Void Void)
     assertEqual "Expressions are not equivalent" expr0 expr1
 
-assertNormalizesTo :: Expr Src X -> Text -> IO ()
+assertNormalizesTo :: Expr Src Void -> Text -> IO ()
 assertNormalizesTo e expected = do
   assertBool msg (not $ Dhall.Core.isNormalized e)
   normalize' e @?= expected
   where msg = "Given expression is already in normal form"
 
-assertNormalizesToWith :: Normalizer X -> Expr Src X -> Text -> IO ()
+assertNormalizesToWith :: Normalizer Void -> Expr Src Void -> Text -> IO ()
 assertNormalizesToWith ctx e expected = do
   assertBool msg (not $ Dhall.Core.isNormalizedWith ctx (first (const ()) e))
   normalizeWith' ctx e @?= expected
   where msg = "Given expression is already in normal form"
 
-assertNormalized :: Expr Src X -> IO ()
+assertNormalized :: Expr Src Void -> IO ()
 assertNormalized e = do
   assertBool msg1 (Dhall.Core.isNormalized e)
   assertEqual msg2 (normalize' e) (Dhall.Core.pretty e)

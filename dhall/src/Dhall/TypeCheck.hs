@@ -64,7 +64,14 @@ import qualified Dhall.Pretty.Internal
 import qualified Dhall.Util
 import qualified Lens.Family
 
+{-| A type synonym for `Void`
+
+    This is provided for backwards compatibility, since Dhall used to use its
+    own `X` type instead of @"Data.Void".`Void`@.  You should use `Void` instead
+    of `X` now
+-}
 type X = Void
+{-# DEPRECATED X "Use Data.Void.Void instead" #-}
 
 traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
 traverseWithIndex_ k xs =
@@ -888,6 +895,9 @@ infer typer = loop
                 _            -> die (MustCombineARecord '⫽' l r)
 
             return (VRecord (Dhall.Map.union xRs' xLs'))
+
+        RecordCompletion l r -> do
+            loop ctx (Annot (Prefer (Field l "default") r) (Field l "Type"))
 
         Merge t u mT₁ -> do
             _T' <- loop ctx t
