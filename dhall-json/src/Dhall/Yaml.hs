@@ -136,7 +136,13 @@ jsonToYaml json documents quoted =
 #else
   Data.ByteString.Lazy.toStrict $ case (documents, json) of
     (True, Data.Aeson.Array elems)
-      -> Data.Aeson.Yaml.encodeDocuments (Data.Vector.toList elems)
-    _ -> Data.Aeson.Yaml.encode json
+      -> (if quoted
+            then Data.Aeson.Yaml.encodeQuotedDocuments
+            else Data.Aeson.Yaml.encodeDocuments
+         ) (Data.Vector.toList elems)
+    _ -> (if quoted
+            then Data.Aeson.Yaml.encodeQuoted
+            else Data.Aeson.Yaml.encode
+         ) json
 #endif
 #endif
