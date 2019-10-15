@@ -195,10 +195,10 @@ let
                         (pkgsNew.sdist ../dhall-bash)
                         { };
 
-                    dhall-json =
+                    dhall-nix =
                       haskellPackagesNew.callCabal2nix
-                        "dhall-json"
-                        (pkgsNew.sdist ../dhall-json)
+                        "dhall-nix"
+                        (pkgsNew.sdist ../dhall-nix)
                         { };
 
                     dhall-lsp-server =
@@ -207,11 +207,39 @@ let
                         (pkgsNew.sdist ../dhall-lsp-server)
                         { };
 
-                    dhall-nix =
-                      haskellPackagesNew.callCabal2nix
-                        "dhall-nix"
-                        (pkgsNew.sdist ../dhall-nix)
-                        { };
+                    dhall-json =
+                      # Replace this with
+                      # `haskellPackagesNew.callCabal2nixWithOptions` once we
+                      # upgrade to a newer version of Nixpkgs
+                      let
+                        src = pkgsNew.sdist ../dhall-json;
+
+                        filter = path: type:
+                          pkgsNew.lib.hasSuffix "dhall-json.cabal" path;
+
+                        expr =
+                          haskellPackagesNew.haskellSrc2nix {
+                            name = "dhall-json";
+
+                            src =
+                              if pkgsNew.lib.canCleanSource src
+                              then pkgsNew.lib.cleanSourceWith { inherit src filter; }
+                              else src;
+
+                            extraCabal2nixOptions = "-fgpl";
+                          };
+
+                        drv = haskellPackagesNew.callPackage expr {};
+
+                      in
+                        pkgsNew.haskell.lib.overrideCabal drv (old: {
+                          inherit src;
+
+                          preConfigure = ''
+                            # Generated from ${expr}
+                            ${old.preConfigure or ""}
+                          '';
+                        });
 
                     dhall-try =
                       pkgsNew.haskell.lib.overrideCabal

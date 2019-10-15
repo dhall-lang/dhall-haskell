@@ -22,14 +22,19 @@ import qualified Data.Vector
 import qualified Dhall
 import qualified Options.Applicative
 #if defined(ETA_VERSION)
-import Dhall.Yaml.Eta ( jsonToYaml )
+import Dhall.Yaml.Eta (jsonToYaml)
 #else
+#if defined(GPL)
 import qualified Data.YAML.Aeson
 import qualified Data.YAML as Y
 import qualified Data.YAML.Event as YE
 import qualified Data.YAML.Token as YT
 import qualified Data.YAML.Schema as YS
 import qualified Data.Text as Text
+#else
+import qualified Data.Aeson.Yaml
+import qualified Data.ByteString.Lazy
+#endif
 #endif
 
 
@@ -92,7 +97,7 @@ jsonToYaml
     -> Bool
     -> ByteString
 jsonToYaml json documents quoted =
-
+#if defined(GPL)
   case (documents, json) of
     (True, Data.Aeson.Array elems)
       -> Data.ByteString.intercalate "\n---\n"
@@ -128,4 +133,16 @@ jsonToYaml json documents quoted =
     schemaEncoder = if quoted 
         then customSchemaEncoder 
         else defaultSchemaEncoder
+#else
+  Data.ByteString.Lazy.toStrict $ case (documents, json) of
+    (True, Data.Aeson.Array elems)
+      -> (if quoted
+            then Data.Aeson.Yaml.encodeQuotedDocuments
+            else Data.Aeson.Yaml.encodeDocuments
+         ) (Data.Vector.toList elems)
+    _ -> (if quoted
+            then Data.Aeson.Yaml.encodeQuoted
+            else Data.Aeson.Yaml.encode
+         ) json
+#endif
 #endif
