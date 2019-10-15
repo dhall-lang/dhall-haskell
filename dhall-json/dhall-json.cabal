@@ -24,12 +24,10 @@ Description:
 Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
-    java/*.java
     tasty/data/*.dhall
     tasty/data/*.json
     tasty/data/*.txt
     tasty/data/*.yaml
-
 
 Source-Repository head
     Type: git
@@ -66,27 +64,15 @@ Library
           Dhall.YamlToDhall
     Other-Modules:
         Dhall.JSON.Util
-
-        
     GHC-Options: -Wall
-    if impl(eta)
+    if flag(gpl)
+      CPP-Options: -DGPL
       Build-Depends:
-          utf8-string >= 1.0 && <= 1.1
-      Maven-Depends:
-          com.fasterxml.jackson.core:jackson-core:2.9.6,
-          com.fasterxml.jackson.core:jackson-databind:2.9.6,
-          com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.6
-      Other-Modules: Dhall.Yaml.Eta
-      Java-Sources: java/Utils.java
+          HsYAML       >= 0.2 && < 0.3,
+          HsYAML-aeson >= 0.2 && < 0.3
     else
-      if flag(gpl)
-        CPP-Options: -DGPL
-        Build-Depends:
-            HsYAML       >= 0.2 && < 0.3,
-            HsYAML-aeson >= 0.2 && < 0.3
-      else
-        Build-Depends:
-            aeson-yaml >= 1.0.1 && < 1.1
+      Build-Depends:
+          aeson-yaml >= 1.0.1 && < 1.1
 
 Executable dhall-to-json
     Hs-Source-Dirs: dhall-to-json
