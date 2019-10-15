@@ -72,7 +72,7 @@ Library
           HsYAML-aeson >= 0.2 && < 0.3
     else
       Build-Depends:
-          aeson-yaml >= 1.0.1 && < 1.1
+          aeson-yaml >= 1.0.2 && < 1.1
 
 Executable dhall-to-json
     Hs-Source-Dirs: dhall-to-json
