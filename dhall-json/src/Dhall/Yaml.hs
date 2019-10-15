@@ -18,7 +18,6 @@ import Data.ByteString.Lazy (toStrict)
 
 import qualified Data.Aeson
 import qualified Data.ByteString
-import qualified Data.ByteString.Lazy
 import qualified Data.Vector
 import qualified Dhall
 import qualified Options.Applicative
@@ -34,6 +33,7 @@ import qualified Data.YAML.Schema as YS
 import qualified Data.Text as Text
 #else
 import qualified Data.Aeson.Yaml
+import qualified Data.ByteString.Lazy
 #endif
 #endif
 
