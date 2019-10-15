@@ -134,7 +134,7 @@ let
                     drv.overrideAttrs
                     (old: {
                         postHaddock = (old.postHaddock or "") + ''
-                          ((./Setup haddock 2>&1 | grep --quiet 'Missing documentation for:') && (echo "Error: Incomplete haddocks"; exit 1)) || :
+                          ! (./Setup haddock 2>&1 | grep --quiet 'Missing documentation for:') || (echo "Error: Incomplete haddocks"; exit 1)
                         '';
                       }
                     );
