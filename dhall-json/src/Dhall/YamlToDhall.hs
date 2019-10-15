@@ -22,9 +22,9 @@ import Dhall.JSONToDhall
 
 import Control.Exception (Exception, throwIO)
 import Data.Text (Text)
+import Data.Void (Void)
 import Dhall.Core (Expr)
 import Dhall.Src (Src)
-import Dhall.TypeCheck(X)
 
 #if defined(ETA_VERSION)
 import Dhall.Yaml.Eta ( yamlToJson, showYaml )
@@ -54,7 +54,7 @@ instance Exception YAMLCompileError
 
 
 -- | Transform yaml representation into dhall
-dhallFromYaml :: Options -> ByteString -> IO (Expr Src X)
+dhallFromYaml :: Options -> ByteString -> IO (Expr Src Void)
 dhallFromYaml Options{..} yaml = do
 
   value <- either (throwIO . userError) pure (yamlToJson yaml)

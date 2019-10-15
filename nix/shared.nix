@@ -130,6 +130,15 @@ let
                   then drv
                   else pkgsNew.haskell.lib.failOnAllWarnings drv;
 
+                failOnMissingHaddocks = drv:
+                    drv.overrideAttrs
+                    (old: {
+                        postHaddock = (old.postHaddock or "") + ''
+                          ((./Setup haddock 2>&1 | grep --quiet 'Missing documentation for:') && (echo "Error: Incomplete haddocks"; exit 1)) || :
+                        '';
+                      }
+                    );
+
                 doCheckExtension =
                   mass pkgsNew.haskell.lib.doCheck
                     (   [ "dhall-bash"
@@ -152,6 +161,11 @@ let
                     "dhall-bash"
                     "dhall-json"
                     "dhall-nix"
+                  ];
+
+                failOnMissingHaddocksExtension =
+                  mass failOnMissingHaddocks [
+                    "dhall"
                   ];
 
                 extension =
@@ -251,6 +265,7 @@ let
                     doCheckExtension
                     doBenchmarkExtension
                     failOnAllWarningsExtension
+                    failOnMissingHaddocksExtension
                   ];
           }
         );

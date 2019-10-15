@@ -2,7 +2,7 @@ module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
 
 import Dhall.Context (Context, insert, empty)
 import Dhall.Core (Binding(..), Expr(..), subExpressions, normalize, shift, subst, Var(..), pretty)
-import Dhall.TypeCheck (typeWithA, X, TypeError(..))
+import Dhall.TypeCheck (typeWithA, TypeError(..))
 import Dhall.Parser (Src(..))
 
 import Data.Monoid ((<>))
@@ -10,7 +10,7 @@ import Control.Lens (toListOf)
 import Data.Text (Text)
 import Control.Applicative ((<|>))
 import Data.Bifunctor (first)
-import Data.Void (absurd)
+import Data.Void (absurd, Void)
 
 import Dhall.LSP.Backend.Parsing (getLetAnnot, getLetIdentifier,
   getLamIdentifier, getForallIdentifier)
@@ -20,7 +20,7 @@ import Dhall.LSP.Backend.Dhall (WellTyped, fromWellTyped)
 -- | Find the type of the subexpression at the given position. Assumes that the
 --   input expression is well-typed. Also returns the Src descriptor containing
 --   that subexpression if possible.
-typeAt :: Position -> WellTyped -> Either String (Maybe Src, Expr Src X)
+typeAt :: Position -> WellTyped -> Either String (Maybe Src, Expr Src Void)
 typeAt pos expr = do
   let expr' = fromWellTyped expr
   (mSrc, typ) <- first show $ typeAt' pos empty expr'
@@ -28,7 +28,7 @@ typeAt pos expr = do
     Just src -> return (Just src, normalize typ)
     Nothing -> return (srcAt pos expr', normalize typ)
 
-typeAt' :: Position -> Context (Expr Src X) -> Expr Src X -> Either (TypeError Src X) (Maybe Src, Expr Src X)
+typeAt' :: Position -> Context (Expr Src Void) -> Expr Src Void -> Either (TypeError Src Void) (Maybe Src, Expr Src Void)
 -- the user hovered over the bound name in a let expression
 typeAt' pos ctx (Note src (Let (Binding { value = a }) _)) | pos `inside` getLetIdentifier src = do
   typ <- typeWithA absurd ctx a
@@ -96,7 +96,7 @@ annotateLet :: Position -> WellTyped -> Either String (Src, Text)
 annotateLet pos expr = do
   annotateLet' pos empty (fromWellTyped expr)
 
-annotateLet' :: Position -> Context (Expr Src X) -> Expr Src X -> Either String (Src, Text)
+annotateLet' :: Position -> Context (Expr Src Void) -> Expr Src Void -> Either String (Src, Text)
 -- the input only contains singleton lets
 annotateLet' pos ctx (Note src e@(Let (Binding { value = a }) _))
   | not $ any (pos `inside`) [ src' | Note src' _ <- toListOf subExpressions e ]

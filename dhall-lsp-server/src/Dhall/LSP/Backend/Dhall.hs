@@ -19,7 +19,6 @@ module Dhall.LSP.Backend.Dhall (
  ) where
 
 import Dhall.Parser (Src)
-import Dhall.TypeCheck (X)
 import Dhall.Core (Expr)
 
 import qualified Dhall.Core as Dhall
@@ -36,6 +35,7 @@ import qualified Data.Text as Text
 
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text)
+import Data.Void (Void)
 import System.FilePath (splitDirectories, takeFileName, takeDirectory)
 import Lens.Family (view, set)
 import Control.Exception (SomeException, catch)
@@ -65,10 +65,10 @@ fileIdentifierFromURI uri
 fileIdentifierFromURI _ = Nothing
 
 -- | A well-typed expression.
-newtype WellTyped = WellTyped {fromWellTyped :: Expr Src X}
+newtype WellTyped = WellTyped {fromWellTyped :: Expr Src Void}
 
 -- | A fully normalised expression.
-newtype Normal = Normal {fromNormal :: Expr Src X}
+newtype Normal = Normal {fromNormal :: Expr Src Void}
 
 -- An import graph, represented by list of import dependencies.
 type ImportGraph = [Dhall.Depends]
@@ -119,7 +119,7 @@ invalidate (FileIdentifier chained) (Cache dependencies cache) =
 --   normalisation.
 data DhallError = ErrorInternal SomeException
                 | ErrorImportSourced (Dhall.SourcedException Dhall.MissingImports)
-                | ErrorTypecheck (Dhall.TypeError Src X)
+                | ErrorTypecheck (Dhall.TypeError Src Void)
                 | ErrorParse Dhall.ParseError
 
 -- | Parse a Dhall expression.
@@ -133,7 +133,7 @@ parseWithHeader = first ErrorParse . Dhall.exprAndHeaderFromText ""
 
 -- | Resolve all imports in an expression.
 load :: FileIdentifier -> Expr Src Dhall.Import -> Cache ->
-  IO (Either DhallError (Cache, Expr Src X))
+  IO (Either DhallError (Cache, Expr Src Void))
 load (FileIdentifier chained) expr (Cache graph cache) = do
   let emptyStatus = Dhall.emptyStatus ""
       status = -- reuse cache and import graph
@@ -151,7 +151,7 @@ load (FileIdentifier chained) expr (Cache graph cache) = do
 
 -- | Typecheck a fully resolved expression. Returns a certification that the
 --   input was well-typed along with its (well-typed) type.
-typecheck :: Expr Src X -> Either DhallError (WellTyped, WellTyped)
+typecheck :: Expr Src Void -> Either DhallError (WellTyped, WellTyped)
 typecheck expr = case Dhall.typeOf expr of
   Left err -> Left $ ErrorTypecheck err
   Right typ -> Right (WellTyped expr, WellTyped typ)

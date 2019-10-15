@@ -19,8 +19,8 @@ module Dhall.Pretty.Internal (
     , prettyCharacterSet
 
     , prettyVar
-    , pretty
-    , escapeText
+    , pretty_
+    , escapeText_
 
     , prettyConst
     , prettyLabel
@@ -109,6 +109,7 @@ annToAnsiStyle Literal  = Terminal.colorDull Terminal.Magenta
 annToAnsiStyle Builtin  = Terminal.underlined
 annToAnsiStyle Operator = Terminal.bold <> Terminal.colorDull Terminal.Green
 
+-- | This type determines whether to render code as `ASCII` or `Unicode`
 data CharacterSet = ASCII | Unicode
 
 -- | Pretty print an expression
@@ -1095,11 +1096,11 @@ prettyCharacterSet characterSet expression =
             <>  prettyExpression d
             <>  syntax rbrace
 
-        prettyText t = literal (Pretty.pretty (escapeText t))
+        prettyText t = literal (Pretty.pretty (escapeText_ t))
 
 -- | Pretty-print a value
-pretty :: Pretty a => a -> Text
-pretty = Pretty.renderStrict . Pretty.layoutPretty options . Pretty.pretty
+pretty_ :: Pretty a => a -> Text
+pretty_ = Pretty.renderStrict . Pretty.layoutPretty options . Pretty.pretty
   where
    options = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
 
@@ -1118,8 +1119,8 @@ escapeSingleQuotedText inputBuilder = outputBuilder
 
     Note that the result does not include surrounding quotes
 -}
-escapeText :: Text -> Text
-escapeText text = Text.concatMap adapt text
+escapeText_ :: Text -> Text
+escapeText_ text = Text.concatMap adapt text
   where
     adapt c
         | '\x20' <= c && c <= '\x21'     = Text.singleton c

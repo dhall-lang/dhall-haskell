@@ -38,6 +38,7 @@ import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token.Style
 
+-- | An exception annotated with a `Src` span
 data SourcedException e = SourcedException Src e
 
 instance Exception e => Exception (SourcedException e)
