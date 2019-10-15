@@ -4,8 +4,8 @@ module Dhall.Test.Parser where
 
 import Data.Monoid ((<>))
 import Data.Text (Text)
+import Data.Void (Void)
 import Dhall.Core (Binding(..), Expr(..), Import, Var(..))
-import Dhall.TypeCheck (X)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
@@ -217,7 +217,7 @@ shouldDecode pathText = do
 
         parsedExpression <- Core.throws (Parser.exprFromText mempty text)
 
-        let strippedExpression :: Expr X Import
+        let strippedExpression :: Expr Void Import
             strippedExpression = Core.denote parsedExpression
 
         let message =
@@ -236,6 +236,6 @@ shouldNotDecode pathText = do
 
         term <- Core.throws (Serialise.deserialiseOrFail bytes)
 
-        case Binary.decodeExpression term :: Either Binary.DecodingFailure (Expr X Import) of
+        case Binary.decodeExpression term :: Either Binary.DecodingFailure (Expr Void Import) of
             Left _ -> return ()
             Right _ -> Tasty.HUnit.assertFailure "Unexpected successful decode" )

@@ -26,12 +26,13 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
+import Data.Void (Void)
 import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
-import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError, X)
+import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError)
 import Dhall.Util (Censor(..), Input(..), Output(..))
 import Dhall.Version (dhallVersionString)
 import Options.Applicative (Parser, ParserInfo)
@@ -426,7 +427,7 @@ command (Options {..}) = do
                 System.Exit.exitFailure
 
             handleTypeError e = Control.Exception.handle handleAll $ do
-                let _ = e :: TypeError Src X
+                let _ = e :: TypeError Src Void
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
                     then
@@ -441,7 +442,7 @@ command (Options {..}) = do
                             NoCensor -> Control.Exception.throwIO e
 
             handleImported (Imported ps e) = Control.Exception.handle handleAll $ do
-                let _ = e :: TypeError Src X
+                let _ = e :: TypeError Src Void
                 System.IO.hPutStrLn System.IO.stderr ""
                 if explain
                     then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
@@ -705,10 +706,10 @@ command (Options {..}) = do
                 Dhall.Core.TextLit (Dhall.Core.Chunks [] text) -> do
                     Data.Text.IO.putStr text
                 _ -> do
-                    let invalidTypeExpected :: Expr X X
+                    let invalidTypeExpected :: Expr Void Void
                         invalidTypeExpected = Dhall.Core.Text
 
-                    let invalidTypeExpression :: Expr X X
+                    let invalidTypeExpression :: Expr Void Void
                         invalidTypeExpression = normalizedExpression
 
                     Control.Exception.throwIO (Dhall.InvalidType {..})

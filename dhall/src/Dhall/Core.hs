@@ -36,14 +36,14 @@ module Dhall.Core (
     , Expr(..)
 
     -- * Normalization
-    , Eval.alphaNormalize
-    , Eval.normalize
+    , alphaNormalize
+    , normalize
     , normalizeWith
     , normalizeWithM
     , Normalizer
     , NormalizerM
     , ReifiedNormalizer (..)
-    , Eval.judgmentallyEqual
+    , judgmentallyEqual
     , subst
     , shift
     , isNormalized
@@ -204,8 +204,10 @@ instance Pretty FilePrefix where
     pretty Parent   = ".."
     pretty Home     = "~"
 
+-- | The URI scheme
 data Scheme = HTTP | HTTPS deriving (Eq, Generic, Ord, Show, NFData)
 
+-- | This type stores all of the components of a remote import
 data URL = URL
     { scheme    :: Scheme
     , authority :: Text
@@ -562,6 +564,8 @@ data Expr s a
     | CombineTypes (Expr s a) (Expr s a)
     -- | > Prefer x y                               ~  x ⫽ y
     | Prefer (Expr s a) (Expr s a)
+    -- | > RecordCompletion x y                     ~  x::y
+    | RecordCompletion (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
     --   > Merge x y  Nothing                       ~  merge x y
     | Merge (Expr s a) (Expr s a) (Maybe (Expr s a))
@@ -665,6 +669,7 @@ instance Functor (Expr s) where
   fmap f (Combine e1 e2) = Combine (fmap f e1) (fmap f e2)
   fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
   fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
+  fmap f (RecordCompletion e1 e2) = RecordCompletion (fmap f e1) (fmap f e2)
   fmap f (Merge e1 e2 maybeE) = Merge (fmap f e1) (fmap f e2) (fmap (fmap f) maybeE)
   fmap f (ToMap e maybeE) = ToMap (fmap f e) (fmap (fmap f) maybeE)
   fmap f (Field e1 v) = Field (fmap f e1) v
@@ -747,6 +752,7 @@ instance Monad (Expr s) where
     Combine a b          >>= k = Combine (a >>= k) (b >>= k)
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
     Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
+    RecordCompletion a b >>= k = RecordCompletion (a >>= k) (b >>= k)
     Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
     ToMap a b            >>= k = ToMap (a >>= k) (fmap (>>= k) b)
     Field a b            >>= k = Field (a >>= k) b
@@ -816,6 +822,7 @@ instance Bifunctor Expr where
     first k (Combine a b         ) = Combine (first k a) (first k b)
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
     first k (Prefer a b          ) = Prefer (first k a) (first k b)
+    first k (RecordCompletion a b) = RecordCompletion (first k a) (first k b)
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
     first k (ToMap a b           ) = ToMap (first k a) (fmap (first k) b)
     first k (Field a b           ) = Field (first k a) b
@@ -856,6 +863,16 @@ instance IsString (Chunks s a) where
 -- | Generates a syntactically valid Dhall program
 instance Pretty a => Pretty (Expr s a) where
     pretty = Pretty.unAnnotate . prettyExpr
+
+{-| Returns `True` if two expressions are α-equivalent and β-equivalent and
+    `False` otherwise
+
+    `judgmentallyEqual` can fail with an `error` if you compare ill-typed
+    expressions
+-}
+judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
+judgmentallyEqual = Eval.judgmentallyEqual
+{-# INLINE judgmentallyEqual #-}
 
 {-| `shift` is used by both normalization and type-checking to avoid variable
     capture by shifting variable indices
@@ -1053,6 +1070,10 @@ shift d v (Prefer a b) = Prefer a' b'
   where
     a' = shift d v a
     b' = shift d v b
+shift d v (RecordCompletion a b) = RecordCompletion a' b'
+  where
+    a' = shift d v a
+    b' = shift d v b
 shift d v (Merge a b c) = Merge a' b' c'
   where
     a' =       shift d v  a
@@ -1222,6 +1243,10 @@ subst x e (Prefer a b) = Prefer a' b'
   where
     a' = subst x e a
     b' = subst x e b
+subst x e (RecordCompletion a b) = RecordCompletion a' b'
+  where
+    a' = subst x e a
+    b' = subst x e b
 subst x e (Merge a b c) = Merge a' b' c'
   where
     a' =       subst x e  a
@@ -1344,6 +1369,7 @@ denote (Union a             ) = Union (fmap (fmap denote) a)
 denote (Combine a b         ) = Combine (denote a) (denote b)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
 denote (Prefer a b          ) = Prefer (denote a) (denote b)
+denote (RecordCompletion a b) = RecordCompletion (denote a) (denote b)
 denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (ToMap a b           ) = ToMap (denote a) (fmap denote b)
 denote (Field a b           ) = Field (denote a) b
@@ -1358,9 +1384,43 @@ renote :: Expr Void a -> Expr s a
 renote = unsafeCoerce
 {-# INLINE renote #-}
 
+{-| Remove any outermost `Note` constructors
+
+    This is typically used when you want to get the outermost non-`Note`
+    constructor without removing internal `Note` constructors
+-}
 shallowDenote :: Expr s a -> Expr s a
 shallowDenote (Note _ e) = shallowDenote e
 shallowDenote         e  = e
+
+{-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
+    using De Bruijn indices to distinguish them
+
+>>> alphaNormalize (Lam "a" (Const Type) (Lam "b" (Const Type) (Lam "x" "a" (Lam "y" "b" "x"))))
+Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
+
+    α-normalization does not affect free variables:
+
+>>> alphaNormalize "x"
+Var (V "x" 0)
+
+-}
+alphaNormalize :: Expr s a -> Expr s a
+alphaNormalize = Eval.alphaNormalize
+{-# INLINE alphaNormalize #-}
+
+{-| Reduce an expression to its normal form, performing beta reduction
+
+    `normalize` does not type-check the expression.  You may want to type-check
+    expressions before normalizing them since normalization can convert an
+    ill-typed expression into a well-typed expression.
+
+    `normalize` can also fail with `error` if you normalize an ill-typed
+    expression
+-}
+normalize :: Eq a => Expr s a -> Expr t a
+normalize = Eval.normalize
+{-# INLINE normalize #-}
 
 {-| Reduce an expression to its normal form, performing beta reduction and applying
     any custom definitions.
@@ -1752,6 +1812,8 @@ normalizeWithM ctx e0 = loop (denote e0)
             l
         decide l r =
             Prefer l r
+    RecordCompletion x y -> do
+        loop (Annot (Prefer (Field x "default") y) (Field x "Type"))
     Merge x y t      -> do
         x' <- loop x
         y' <- loop y
@@ -1862,6 +1924,7 @@ normalizeWithM ctx e0 = loop (denote e0)
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
 
+-- | Utility that powers the @Text/show@ built-in
 textShow :: Text -> Text
 textShow text = "\"" <> Data.Text.concatMap f text <> "\""
   where
@@ -1880,6 +1943,7 @@ textShow text = "\"" <> Data.Text.concatMap f text <> "\""
 --   polymorphic enough to be used.
 type NormalizerM m a = forall s. Expr s a -> m (Maybe (Expr s a))
 
+-- | An variation on `NormalizerM` for pure normalizers
 type Normalizer a = NormalizerM Identity a
 
 -- | A reified 'Normalizer', which can be stored in structures without
@@ -2063,6 +2127,7 @@ isNormalized e0 = loop (denote e0)
           decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
           decide l r = not (Eval.judgmentallyEqual l r)
+      RecordCompletion _ _ -> False
       Merge x y t -> loop x && loop y && all loop t
       ToMap x t -> case x of
           RecordLit _ -> False
@@ -2109,6 +2174,11 @@ variable@(V var i) `freeIn` expression =
     denote' = denote
 
     strippedExpression = denote' expression
+
+-- | Pretty-print a value
+pretty :: Pretty a => a -> Text
+pretty = pretty_
+{-# INLINE pretty #-}
 
 _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
@@ -2186,6 +2256,13 @@ reservedIdentifiers =
         , "Infinity"
         ]
 
+{-| Escape a `Text` literal using Dhall's escaping rules
+
+    Note that the result does not include surrounding quotes
+-}
+escapeText :: Text -> Text
+escapeText = escapeText_
+{-# INLINE escapeText #-}
 
 -- | A traversal over the immediate sub-expressions of an expression.
 subExpressions :: Applicative f => (Expr s a -> f (Expr s a)) -> Expr s a -> f (Expr s a)
@@ -2248,6 +2325,7 @@ subExpressions f (Union a) = Union <$> traverse (traverse f) a
 subExpressions f (Combine a b) = Combine <$> f a <*> f b
 subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
 subExpressions f (Prefer a b) = Prefer <$> f a <*> f b
+subExpressions f (RecordCompletion a b) = RecordCompletion <$> f a <*> f b
 subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 subExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
 subExpressions f (Field a b) = Field <$> f a <*> pure b
@@ -2373,6 +2451,9 @@ multiLet b0 = \case
 wrapInLets :: Foldable f => f (Binding s a) -> Expr s a -> Expr s a
 wrapInLets bs e = foldr Let e bs
 
+{-| This type represents 1 or more nested `Let` bindings that have been
+    coalesced together for ease of manipulation
+-}
 data MultiLet s a = MultiLet (NonEmpty (Binding s a)) (Expr s a)
 
 {- | Record the binding part of a @let@ expression.

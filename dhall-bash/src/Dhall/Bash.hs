@@ -105,9 +105,8 @@ import Data.Bifunctor (first)
 import Data.ByteString
 import Data.Monoid ((<>))
 import Data.Typeable (Typeable)
-import Data.Void (absurd)
+import Data.Void (Void, absurd)
 import Dhall.Core (Expr(..), Chunks(..))
-import Dhall.TypeCheck
 
 import qualified Data.Foldable
 import qualified Data.Text
@@ -127,8 +126,8 @@ _ERROR = "\ESC[1;31mError\ESC[0m"
     Bash this just returns the expression that failed
 -}
 data StatementError
-    = UnsupportedStatement (Expr X X)
-    | UnsupportedSubexpression (Expr X X)
+    = UnsupportedStatement (Expr Void Void)
+    | UnsupportedSubexpression (Expr Void Void)
     deriving (Typeable)
 
 instance Show StatementError where
@@ -170,7 +169,7 @@ instance Exception StatementError
     Because the majority of Dhall language features do not easily translate to
     Bash this just returns the expression that failed
 -}
-data ExpressionError = UnsupportedExpression (Expr X X) deriving (Typeable)
+data ExpressionError = UnsupportedExpression (Expr Void Void) deriving (Typeable)
 
 instance Show ExpressionError where
     show (UnsupportedExpression e) =
@@ -216,7 +215,7 @@ instance Exception ExpressionError
     * records
  -}
 dhallToStatement
-    :: Expr s X
+    :: Expr s Void
     -- ^ Dhall expression to compile
     -> ByteString
     -- ^ Variable to @declare@ or @unset@
@@ -276,64 +275,65 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
 
     -- Use an exhaustive pattern match here so that we don't forget to handle
     -- new constructors added to the API
-    go e@(Const         {}) = Left (UnsupportedStatement e)
-    go e@(Var           {}) = Left (UnsupportedStatement e)
-    go e@(Lam           {}) = Left (UnsupportedStatement e)
-    go e@(Pi            {}) = Left (UnsupportedStatement e)
-    go e@(App           {}) = Left (UnsupportedStatement e)
-    go e@(Let           {}) = Left (UnsupportedStatement e)
-    go e@(Annot         {}) = Left (UnsupportedStatement e)
-    go e@(Bool          {}) = Left (UnsupportedStatement e)
-    go e@(BoolAnd       {}) = Left (UnsupportedStatement e)
-    go e@(BoolOr        {}) = Left (UnsupportedStatement e)
-    go e@(BoolEQ        {}) = Left (UnsupportedStatement e)
-    go e@(BoolNE        {}) = Left (UnsupportedStatement e)
-    go e@(BoolIf        {}) = Left (UnsupportedStatement e)
-    go e@(Natural         ) = Left (UnsupportedStatement e)
-    go e@(NaturalFold     ) = Left (UnsupportedStatement e)
-    go e@(NaturalBuild    ) = Left (UnsupportedStatement e)
-    go e@(NaturalIsZero   ) = Left (UnsupportedStatement e)
-    go e@(NaturalEven     ) = Left (UnsupportedStatement e)
-    go e@(NaturalOdd      ) = Left (UnsupportedStatement e)
-    go e@(NaturalToInteger) = Left (UnsupportedStatement e)
-    go e@(NaturalShow     ) = Left (UnsupportedStatement e)
-    go e@(NaturalSubtract ) = Left (UnsupportedStatement e)
-    go e@(NaturalPlus   {}) = Left (UnsupportedStatement e)
-    go e@(NaturalTimes  {}) = Left (UnsupportedStatement e)
-    go e@(Integer         ) = Left (UnsupportedStatement e)
-    go e@(IntegerShow     ) = Left (UnsupportedStatement e)
-    go e@(IntegerToDouble ) = Left (UnsupportedStatement e)
-    go e@(Double          ) = Left (UnsupportedStatement e)
-    go e@(DoubleLit     {}) = Left (UnsupportedStatement e)
-    go e@(DoubleShow      ) = Left (UnsupportedStatement e)
-    go e@(Text            ) = Left (UnsupportedStatement e)
-    go e@(TextAppend    {}) = Left (UnsupportedStatement e)
-    go e@(TextShow      {}) = Left (UnsupportedStatement e)
-    go e@(List            ) = Left (UnsupportedStatement e)
-    go e@(ListAppend    {}) = Left (UnsupportedStatement e)
-    go e@(ListBuild       ) = Left (UnsupportedStatement e)
-    go e@(ListFold        ) = Left (UnsupportedStatement e)
-    go e@(ListLength      ) = Left (UnsupportedStatement e)
-    go e@(ListHead        ) = Left (UnsupportedStatement e)
-    go e@(ListLast        ) = Left (UnsupportedStatement e)
-    go e@(ListIndexed     ) = Left (UnsupportedStatement e)
-    go e@(ListReverse     ) = Left (UnsupportedStatement e)
-    go e@(Optional        ) = Left (UnsupportedStatement e)
-    go e@(None            ) = Left (UnsupportedStatement e)
-    go e@(OptionalFold    ) = Left (UnsupportedStatement e)
-    go e@(OptionalBuild   ) = Left (UnsupportedStatement e)
-    go e@(Record        {}) = Left (UnsupportedStatement e)
-    go e@(Union         {}) = Left (UnsupportedStatement e)
-    go e@(Combine       {}) = Left (UnsupportedStatement e)
-    go e@(CombineTypes  {}) = Left (UnsupportedStatement e)
-    go e@(Prefer        {}) = Left (UnsupportedStatement e)
-    go e@(Merge         {}) = Left (UnsupportedStatement e)
-    go e@(ToMap         {}) = Left (UnsupportedStatement e)
-    go e@(Field         {}) = Left (UnsupportedStatement e)
-    go e@(Project       {}) = Left (UnsupportedStatement e)
-    go e@(Assert        {}) = Left (UnsupportedStatement e)
-    go e@(Equivalent    {}) = Left (UnsupportedStatement e)
-    go e@(ImportAlt     {}) = Left (UnsupportedStatement e)
+    go e@(Const            {}) = Left (UnsupportedStatement e)
+    go e@(Var              {}) = Left (UnsupportedStatement e)
+    go e@(Lam              {}) = Left (UnsupportedStatement e)
+    go e@(Pi               {}) = Left (UnsupportedStatement e)
+    go e@(App              {}) = Left (UnsupportedStatement e)
+    go e@(Let              {}) = Left (UnsupportedStatement e)
+    go e@(Annot            {}) = Left (UnsupportedStatement e)
+    go e@(Bool             {}) = Left (UnsupportedStatement e)
+    go e@(BoolAnd          {}) = Left (UnsupportedStatement e)
+    go e@(BoolOr           {}) = Left (UnsupportedStatement e)
+    go e@(BoolEQ           {}) = Left (UnsupportedStatement e)
+    go e@(BoolNE           {}) = Left (UnsupportedStatement e)
+    go e@(BoolIf           {}) = Left (UnsupportedStatement e)
+    go e@(Natural            ) = Left (UnsupportedStatement e)
+    go e@(NaturalFold        ) = Left (UnsupportedStatement e)
+    go e@(NaturalBuild       ) = Left (UnsupportedStatement e)
+    go e@(NaturalIsZero      ) = Left (UnsupportedStatement e)
+    go e@(NaturalEven        ) = Left (UnsupportedStatement e)
+    go e@(NaturalOdd         ) = Left (UnsupportedStatement e)
+    go e@(NaturalToInteger   ) = Left (UnsupportedStatement e)
+    go e@(NaturalShow        ) = Left (UnsupportedStatement e)
+    go e@(NaturalSubtract    ) = Left (UnsupportedStatement e)
+    go e@(NaturalPlus      {}) = Left (UnsupportedStatement e)
+    go e@(NaturalTimes     {}) = Left (UnsupportedStatement e)
+    go e@(Integer            ) = Left (UnsupportedStatement e)
+    go e@(IntegerShow        ) = Left (UnsupportedStatement e)
+    go e@(IntegerToDouble    ) = Left (UnsupportedStatement e)
+    go e@(Double             ) = Left (UnsupportedStatement e)
+    go e@(DoubleLit        {}) = Left (UnsupportedStatement e)
+    go e@(DoubleShow         ) = Left (UnsupportedStatement e)
+    go e@(Text               ) = Left (UnsupportedStatement e)
+    go e@(TextAppend       {}) = Left (UnsupportedStatement e)
+    go e@(TextShow         {}) = Left (UnsupportedStatement e)
+    go e@(List               ) = Left (UnsupportedStatement e)
+    go e@(ListAppend       {}) = Left (UnsupportedStatement e)
+    go e@(ListBuild          ) = Left (UnsupportedStatement e)
+    go e@(ListFold           ) = Left (UnsupportedStatement e)
+    go e@(ListLength         ) = Left (UnsupportedStatement e)
+    go e@(ListHead           ) = Left (UnsupportedStatement e)
+    go e@(ListLast           ) = Left (UnsupportedStatement e)
+    go e@(ListIndexed        ) = Left (UnsupportedStatement e)
+    go e@(ListReverse        ) = Left (UnsupportedStatement e)
+    go e@(Optional           ) = Left (UnsupportedStatement e)
+    go e@(None               ) = Left (UnsupportedStatement e)
+    go e@(OptionalFold       ) = Left (UnsupportedStatement e)
+    go e@(OptionalBuild      ) = Left (UnsupportedStatement e)
+    go e@(Record           {}) = Left (UnsupportedStatement e)
+    go e@(Union            {}) = Left (UnsupportedStatement e)
+    go e@(Combine          {}) = Left (UnsupportedStatement e)
+    go e@(CombineTypes     {}) = Left (UnsupportedStatement e)
+    go e@(Prefer           {}) = Left (UnsupportedStatement e)
+    go e@(RecordCompletion {}) = Left (UnsupportedStatement e)
+    go e@(Merge            {}) = Left (UnsupportedStatement e)
+    go e@(ToMap            {}) = Left (UnsupportedStatement e)
+    go e@(Field            {}) = Left (UnsupportedStatement e)
+    go e@(Project          {}) = Left (UnsupportedStatement e)
+    go e@(Assert           {}) = Left (UnsupportedStatement e)
+    go e@(Equivalent       {}) = Left (UnsupportedStatement e)
+    go e@(ImportAlt        {}) = Left (UnsupportedStatement e)
 
 {-| Compile a Dhall expression to a Bash expression
 
@@ -345,7 +345,7 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
     * @Text@s
  -}
 dhallToExpression
-    :: Expr s X
+    :: Expr s Void
     -- ^ Dhall expression to compile
     -> Either ExpressionError ByteString
     -- ^ Bash expression or compile failure

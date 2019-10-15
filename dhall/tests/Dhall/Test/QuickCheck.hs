@@ -188,7 +188,10 @@ instance Arbitrary Directory where
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     arbitrary =
         Test.QuickCheck.suchThat
-            (Generic.Random.genericArbitraryRecG customGens weights)
+            (Generic.Random.withBaseCase
+                (Generic.Random.genericArbitraryRecG customGens weights)
+                (Var <$> arbitrary)
+                )
             standardizedExpression
       where
         customGens
@@ -267,6 +270,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (7 :: W "Combine")
             % (1 :: W "CombineTypes")
             % (7 :: W "Prefer")
+            % (7 :: W "RecordCompletion")
             % (1 :: W "Merge")
             % (1 :: W "ToMap")
             % (7 :: W "Field")

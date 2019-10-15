@@ -22,9 +22,10 @@ import qualified System.Timeout
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
+import Data.Void (Void)
 import Dhall.Import (Imported, MissingImports(..))
 import Dhall.Parser (Src, SourcedException(..))
-import Dhall.TypeCheck (TypeError, X)
+import Dhall.TypeCheck (TypeError)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit ((@?=))
 
@@ -96,7 +97,7 @@ issue151 = Test.Tasty.HUnit.testCase "Issue #151" (do
     let shouldNotTypeCheck text = do
             let handler :: SourcedException MissingImports -> IO Bool
                 handler (SourcedException _ (MissingImports [e])) =
-                    case Control.Exception.fromException e :: Maybe (Imported (TypeError Src X)) of
+                    case Control.Exception.fromException e :: Maybe (Imported (TypeError Src Void)) of
                         Just _ -> return True
                         Nothing -> return False
                 handler _ = do

@@ -83,6 +83,8 @@ Extra-Source-Files:
     dhall-lang/Prelude/Map/Entry
     dhall-lang/Prelude/Map/empty
     dhall-lang/Prelude/Map/keys
+    dhall-lang/Prelude/Map/keyText
+    dhall-lang/Prelude/Map/keyValue
     dhall-lang/Prelude/Map/map
     dhall-lang/Prelude/Map/package.dhall
     dhall-lang/Prelude/Map/Type
