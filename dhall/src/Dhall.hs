@@ -179,6 +179,7 @@ import qualified Lens.Family
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> :set -XRecordWildCards
+-- >>> import Data.Word (Word8, Word16, Word32, Word64)
 -- >>> import Dhall.Pretty.Internal (prettyExpr)
 
 {-| Useful synonym for the `Validation` type used when marshalling Dhall
@@ -1738,10 +1739,6 @@ instance Inject Int where
 
         declared = Integer
 
-{- $setup
->>> import Data.Word (Word8, Word16, Word32, Word64)
--}
-
 {-|
 
 >>> embed inject (12 :: Word)
@@ -1794,7 +1791,7 @@ instance Inject Word32 where
 
         declared = Natural
 
-{-| 
+{-|
 
 >>> embed inject (12 :: Word64)
 NaturalLit 12
@@ -1875,6 +1872,34 @@ instance Inject a => Inject (Data.HashSet.HashSet a) where
     injectWith = fmap (contramap Data.HashSet.toList) injectWith
 
 instance (Inject a, Inject b) => Inject (a, b)
+
+{-| Inject a `Data.Map` to a @Prelude.Map.Type@
+
+>>> prettyExpr $ embed inject (Data.Map.fromList [(1 :: Natural, True)])
+[ { mapKey = 1, mapValue = True } ]
+
+>>> prettyExpr $ embed inject (Data.Map.fromList [] :: Data.Map.Map Natural Bool)
+[] : List { mapKey : Natural, mapValue : Bool }
+
+-}
+instance (Inject k, Inject v) => Inject (Data.Map.Map k v) where
+    injectWith options = InputType embedOut declaredOut
+      where
+        embedOut m = ListLit listType (mapEntries m)
+          where
+            listType
+                | Data.Map.null m = Just declaredOut
+                | otherwise       = Nothing
+
+        declaredOut = App List (Record (Dhall.Map.fromList
+                          [("mapKey", declaredK), ("mapValue", declaredV)]))
+
+        mapEntries = Data.Sequence.fromList . fmap recordPair . Data.Map.toList
+        recordPair (k, v) = RecordLit (Dhall.Map.fromList
+                                [("mapKey", embedK k), ("mapValue", embedV v)])
+
+        InputType embedK declaredK = injectWith options
+        InputType embedV declaredV = injectWith options
 
 {-| This is the underlying class that powers the `Interpret` class's support
     for automatically deriving a generic implementation
