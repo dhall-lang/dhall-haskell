@@ -62,7 +62,7 @@ format (Format {..}) =
                             <>  "\n"
 
                     System.IO.withFile file System.IO.WriteMode (\handle -> do
-                        Pretty.Terminal.renderIO handle (Pretty.layoutSmart layoutOpts doc))
+                        Pretty.Terminal.renderIO handle (Pretty.removeTrailingWhitespace (Pretty.layoutSmart layoutOpts doc)))
                 StandardInput -> do
                     (header, expr) <- Dhall.Util.getExpressionAndHeader censor StandardInput
 
@@ -76,11 +76,11 @@ format (Format {..}) =
                       then
                         Pretty.Terminal.renderIO
                           System.IO.stdout
-                          (fmap annToAnsiStyle (Pretty.layoutSmart layoutOpts doc))
+                          (fmap annToAnsiStyle (Pretty.removeTrailingWhitespace (Pretty.layoutSmart layoutOpts doc)))
                       else
                         Pretty.Terminal.renderIO
                           System.IO.stdout
-                          (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc))
+                          (Pretty.removeTrailingWhitespace (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc)))
         Check {..} -> do
             originalText <- case path of
                 InputFile file -> Data.Text.IO.readFile file
@@ -93,7 +93,7 @@ format (Format {..}) =
                     <>  "\n"
 
             let formattedText =
-                    Pretty.Text.renderStrict (Pretty.layoutSmart layoutOpts doc)
+                    Pretty.Text.renderStrict (Pretty.removeTrailingWhitespace (Pretty.layoutSmart layoutOpts doc))
 
             if originalText == formattedText
                 then return ()
