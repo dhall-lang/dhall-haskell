@@ -2,4 +2,5 @@
 , text = ./yaml.txt as Text
 , int_value = 1
 , bool_value = True
+, yes = "y"
 }

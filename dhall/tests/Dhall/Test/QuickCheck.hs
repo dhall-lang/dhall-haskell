@@ -1,8 +1,10 @@
-{-# LANGUAGE DataKinds          #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TypeOperators      #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE StandaloneDeriving  #-}
+{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -10,6 +12,8 @@ module Dhall.Test.QuickCheck where
 
 import Codec.Serialise (DeserialiseFailure(..))
 import Data.Either (isRight)
+import Data.Either.Validation (Validation(..))
+import Dhall (Inject(..), Interpret(..), auto, extract, inject, embed, Vector)
 import Dhall.Map (Map)
 import Dhall.Core
     ( Binding(..)
@@ -30,6 +34,8 @@ import Dhall.Core
     )
 
 import Data.Functor.Identity (Identity(..))
+import Data.Typeable (Typeable, typeRep)
+import Data.Proxy (Proxy(..))
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
 import Dhall.TypeCheck (Typer, TypeError)
@@ -47,7 +53,10 @@ import qualified Data.Coerce
 import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.SpecialValues
+import qualified Data.HashSet
+import qualified Data.Set
 import qualified Data.Text as Text
+import qualified Data.Map
 import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core
@@ -56,6 +65,7 @@ import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Generic.Random
+import qualified Numeric.Natural as Nat
 import qualified Test.QuickCheck
 import qualified Test.Tasty
 import qualified Test.Tasty.QuickCheck
@@ -436,6 +446,21 @@ normalizingAnExpressionDoesntChangeItsInferredType expression =
     filterOutEmbeds :: Typer a
     filterOutEmbeds _ = Const Sort -- This could be any ill-typed expression.
 
+injectThenInterpretIsIdentity
+    :: forall a. (Inject a, Interpret a, Eq a, Typeable a, Arbitrary a, Show a)
+    => Proxy a
+    -> (String, Property, QuickCheckTests)
+injectThenInterpretIsIdentity p =
+    ( "Injecting then Interpreting is identity for " ++ show (typeRep p)
+    , Test.QuickCheck.property (prop :: a -> Bool)
+    , QuickCheckTests 1000
+    )
+  where
+    prop a = case extract auto (embed inject a) of
+        Success a' -> a == a'
+        Failure _  -> False
+
+
 tests :: TestTree
 tests =
     testProperties'
@@ -468,7 +493,18 @@ tests =
           , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
           , QuickCheckTests 10000
           )
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Text.Text))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy [Nat.Natural])
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Bool, Double))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Sequence.Seq ()))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Maybe Integer))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Set.Set Nat.Natural))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.HashSet.HashSet Text.Text))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Vector Double))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Map.Map Double Bool))
         ]
+
+
 
 testProperties' :: String -> [(String, Property, QuickCheckTests)] -> TestTree
 testProperties' name = Test.Tasty.testGroup name . map f
