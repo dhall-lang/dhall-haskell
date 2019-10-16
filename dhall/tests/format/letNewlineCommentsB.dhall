@@ -5,5 +5,5 @@ in  let {- aaaaaaaaaaaaaaaaaaa
         : {- bbbbbbbbbbbbbbbbbbbbb
           -} Natural
         = {- ddddddddddddddddd -} 2
-    
+
     in  x
