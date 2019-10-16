@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 module Dhall.Test.Format where
 
@@ -6,6 +7,8 @@ import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
 import Dhall.Pretty (CharacterSet(..))
 import Test.Tasty (TestTree)
+import Test.Tasty.QuickCheck ((===))
+import Dhall.Test.QuickCheck () -- For Arbitrary (Expr s a)
 
 import qualified Control.Monad                         as Monad
 import qualified Data.Text                             as Text
@@ -18,6 +21,7 @@ import qualified Dhall.Pretty                          as Pretty
 import qualified Dhall.Test.Util                       as Test.Util
 import qualified Test.Tasty                            as Tasty
 import qualified Test.Tasty.HUnit                      as Tasty.HUnit
+import qualified Test.Tasty.QuickCheck                 as Tasty.QuickCheck
 import qualified Turtle
 
 getTests :: IO TestTree
@@ -39,9 +43,21 @@ getTests = do
             Tasty.testGroup "format tests"
                 [ unicodeTests
                 , asciiTests
+                , idempotentTests Unicode
+                , idempotentTests ASCII
                 ]
 
     return testTree
+
+format :: CharacterSet -> Text -> Core.Expr Parser.Src Core.Import -> Text
+format characterSet header expr =
+    let doc =  Doc.pretty header
+            <> Pretty.prettyCharacterSet characterSet expr
+            <> "\n"
+
+        docStream = Doc.layoutSmart Pretty.layoutOpts doc
+    in
+        Doc.Render.Text.renderStrict docStream
 
 formatTest :: CharacterSet -> Text -> TestTree
 formatTest characterSet prefix =
@@ -53,12 +69,7 @@ formatTest characterSet prefix =
 
         (header, expr) <- Core.throws (Parser.exprAndHeaderFromText mempty inputText)
 
-        let doc        =   Doc.pretty header
-                       <>  Pretty.prettyCharacterSet characterSet expr
-                       <>  "\n"
-        let docStream  = Doc.layoutSmart Pretty.layoutOpts doc
-        let actualText = Doc.Render.Text.renderStrict docStream
-
+        let actualText = format characterSet header expr
         expectedText <- Text.IO.readFile outputFile
 
         let message =
@@ -69,3 +80,17 @@ formatTest characterSet prefix =
                 <> "Actual   (show): " <> show actualText <> "\n"
 
         Tasty.HUnit.assertBool message (actualText == expectedText)
+
+idempotentTests :: CharacterSet -> TestTree
+idempotentTests characterSet =
+    Tasty.QuickCheck.testProperty
+        ("Formatting should be idempotent with " <> showCharacterSet characterSet)
+        $ \(formatted -> once) ->
+            case Parser.exprAndHeaderFromText mempty once of
+                Right (formatted -> twice) -> once === twice
+                Left _ -> Tasty.QuickCheck.property Tasty.QuickCheck.Discard
+    where
+    showCharacterSet Unicode = "\"Unicode\""
+    showCharacterSet ASCII   = "\"ASCII\""
+
+    formatted = uncurry (format characterSet)
