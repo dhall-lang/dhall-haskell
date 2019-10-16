@@ -76,6 +76,7 @@ module Dhall
     , hashSetFromDistinctList
     , hashSetIgnoringDuplicates
     , Dhall.map
+    , hashMap
     , pairFromMapEntry
     , unit
     , void
@@ -125,6 +126,7 @@ import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
 import Data.Hashable (Hashable)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.HashMap.Strict (HashMap)
 import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
@@ -152,6 +154,7 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Map
 import qualified Data.Maybe
 import qualified Data.List
@@ -952,6 +955,23 @@ fromList [(1,False)]
 map :: Ord k => Type k -> Type v -> Type (Map k v)
 map k v = fmap Data.Map.fromList (list (pairFromMapEntry k v))
 
+{-| Decode a `HashMap` from a @toMap@ expression or generally a @Prelude.Map.Type@
+
+>>> input (Dhall.hashMap strictText bool) "toMap { a = True, b = False }"
+fromList [("a",True),("b",False)]
+>>> input (Dhall.hashMap strictText bool) "[ { mapKey = \"foo\", mapValue = True } ]"
+fromList [("foo",True)]
+
+If there are duplicate @mapKey@s, later @mapValue@s take precedence:
+
+>>> let expr = "[ { mapKey = 1, mapValue = True }, { mapKey = 1, mapValue = False } ]"
+>>> input (Dhall.hashMap natural bool) expr
+fromList [(1,False)]
+
+-}
+hashMap :: (Eq k, Hashable k) => Type k -> Type v -> Type (HashMap k v)
+hashMap k v = fmap HashMap.fromList (list (pairFromMapEntry k v))
+
 {-| Decode a tuple from a @Prelude.Map.Entry@ record
 
 >>> input (pairFromMapEntry strictText natural) "{ mapKey = \"foo\", mapValue = 3 }"
@@ -1093,6 +1113,9 @@ instance (Interpret a, Hashable a, Ord a, Show a) => Interpret (Data.HashSet.Has
 
 instance (Ord k, Interpret k, Interpret v) => Interpret (Map k v) where
     autoWith opts = Dhall.map (autoWith opts) (autoWith opts)
+
+instance (Eq k, Hashable k, Interpret k, Interpret v) => Interpret (HashMap k v) where
+    autoWith opts = Dhall.hashMap (autoWith opts) (autoWith opts)
 
 instance (Inject a, Interpret b) => Interpret (a -> b) where
     autoWith opts = Type extractOut expectedOut
@@ -1895,6 +1918,34 @@ instance (Inject k, Inject v) => Inject (Data.Map.Map k v) where
                           [("mapKey", declaredK), ("mapValue", declaredV)]))
 
         mapEntries = Data.Sequence.fromList . fmap recordPair . Data.Map.toList
+        recordPair (k, v) = RecordLit (Dhall.Map.fromList
+                                [("mapKey", embedK k), ("mapValue", embedV v)])
+
+        InputType embedK declaredK = injectWith options
+        InputType embedV declaredV = injectWith options
+
+{-| Inject a `Data.HashMap` to a @Prelude.Map.Type@
+
+>>> prettyExpr $ embed inject (HashMap.fromList [(1 :: Natural, True)])
+[ { mapKey = 1, mapValue = True } ]
+
+>>> prettyExpr $ embed inject (HashMap.fromList [] :: HashMap Natural Bool)
+[] : List { mapKey : Natural, mapValue : Bool }
+
+-}
+instance (Inject k, Inject v) => Inject (HashMap k v) where
+    injectWith options = InputType embedOut declaredOut
+      where
+        embedOut m = ListLit listType (mapEntries m)
+          where
+            listType
+                | HashMap.null m = Just declaredOut
+                | otherwise       = Nothing
+
+        declaredOut = App List (Record (Dhall.Map.fromList
+                          [("mapKey", declaredK), ("mapValue", declaredV)]))
+
+        mapEntries = Data.Sequence.fromList . fmap recordPair . HashMap.toList
         recordPair (k, v) = RecordLit (Dhall.Map.fromList
                                 [("mapKey", embedK k), ("mapValue", embedV v)])
 
