@@ -1,1 +1,7 @@
-packages: ./dhall ./dhall-bash ./dhall-json ./dhall-lsp-server ./dhall-nix
+packages: ./dhall ./dhall-bash ./dhall-json
+
+source-repository-package
+    type: git
+    location: https://github.com/sjakobi/prettyprinter
+    tag: 642baee
+    subdir: prettyprinter
