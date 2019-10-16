@@ -1,5 +1,5 @@
 let
-  defaultCompiler = "ghc7103";
+  defaultCompiler = "ghc843";
 
 in
 
