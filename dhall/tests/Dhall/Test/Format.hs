@@ -55,6 +55,7 @@ formatTest characterSet prefix =
 
         let doc        =   Doc.pretty header
                        <>  Pretty.prettyCharacterSet characterSet expr
+                       <>  "\n"
         let docStream  = Doc.layoutSmart Pretty.layoutOpts doc
         let actualText = Doc.Render.Text.renderStrict docStream
 
