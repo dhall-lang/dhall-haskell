@@ -1,4 +1,12 @@
-{ compiler ? "ghc843", coverage ? false, system ? builtins.currentSystem }:
+let
+  defaultCompiler = "ghc7103";
+
+in
+
+{ compiler ? defaultCompiler
+, coverage ? false
+, system ? builtins.currentSystem
+}:
 
 let
   allDhallPackages = [
@@ -131,13 +139,17 @@ let
                   else pkgsNew.haskell.lib.failOnAllWarnings drv;
 
                 failOnMissingHaddocks = drv:
+                  if compiler == defaultCompiler
+                  then
                     drv.overrideAttrs
                     (old: {
                         postHaddock = (old.postHaddock or "") + ''
                           ! (./Setup haddock 2>&1 | grep --quiet 'Missing documentation for:') || (echo "Error: Incomplete haddocks"; exit 1)
                         '';
                       }
-                    );
+                    )
+                  else
+                    drv;
 
                 doCheckExtension =
                   mass pkgsNew.haskell.lib.doCheck
