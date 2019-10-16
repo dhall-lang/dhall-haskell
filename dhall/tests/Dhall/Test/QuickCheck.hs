@@ -57,6 +57,7 @@ import qualified Data.HashSet
 import qualified Data.Set
 import qualified Data.Text as Text
 import qualified Data.Map
+import qualified Data.HashMap.Strict as HashMap
 import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core
@@ -502,6 +503,7 @@ tests =
         , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.HashSet.HashSet Text.Text))
         , injectThenInterpretIsIdentity (Proxy :: Proxy (Vector Double))
         , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Map.Map Double Bool))
+        , injectThenInterpretIsIdentity (Proxy :: Proxy (HashMap.HashMap Double Bool))
         ]
 
 
