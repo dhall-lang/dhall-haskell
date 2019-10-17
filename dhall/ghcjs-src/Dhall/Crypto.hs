@@ -2,6 +2,10 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE JavaScriptFFI #-}
 
+{-| This module provides implementations of cryptographic utilities that only
+    work for GHCJS
+-}
+
 module Dhall.Crypto (
       SHA256Digest(..)
     , sha256DigestFromByteString
