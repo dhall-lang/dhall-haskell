@@ -1,6 +1,13 @@
 Next version
 
 * [BREAKING CHANGE: Enable `--pretty` by default for `dhall-to-json`](https://github.com/dhall-lang/dhall-haskell/issues/716)
+* [BREAKING CHANGE: Enable `--omitNull` by default for `dhall-to-{json,yaml}`](https://github.com/dhall-lang/dhall-haskell/pull/1365)
+    * To recover the old behavior use the `--preserveNull` flag
+* Migrate to the `HsYAML` package [#1248](https://github.com/dhall-lang/dhall-haskell/pull/1248) / [#1417](https://github.com/dhall-lang/dhall-haskell/pull/1417) / [#1420](https://github.com/dhall-lang/dhall-haskell/pull/1420)
+* [New `--omissible-lists` flag for `{json,yaml}-to-dhall`](https://github.com/dhall-lang/dhall-haskell/pull/1414)
+    * This flag is sort of the inverse of the `--omitEmpty` flag, meaning that
+      missing YAML/JSON lists can be translated to present (but empty) Dhall
+      lists
 
 1.4.1
 

@@ -1,6 +1,40 @@
-Next release
+1.27.0
 
-* Add `dhall tags` command that build tags file in [ETags](https://en.wikipedia.org/wiki/Ctags#Etags_2) format. Allow to index file or directory.
+* [Supports version 11.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v11.0.0)
+* BREAKING CHANGE: Fix `Eq` instance for `Expr`s with special `Double`s
+    * This fixes the `Eq` instance for `Expr`s to match the standard regarding
+      `Double` comparisons
+    * Specifically: `NaN == NaN` and `-0.0 /= 0.0`
+    * This is a breaking change because the `DoubleLit` constructor of `Expr`
+      now stores a `DhallDouble` instead of a `Double`
+* [Add support for leading separators](https://github.com/dhall-lang/dhall-haskell/pull/1355)
+    * See the [changelog for standard version 11.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v11.0.0) for more details
+* [Add record completion operator](https://github.com/dhall-lang/dhall-haskell/pull/1375)
+    * See the [changelog for standard version 11.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v11.0.0) for more details
+* [Add `dhall tags` subcommand](https://github.com/dhall-lang/dhall-haskell/pull/1398)
+    * This generates an ETags file from an input file or directory
+* [Add `dhall lint` support for fixing malformed assertions](https://github.com/dhall-lang/dhall-haskell/pull/1353)
+    * `dhall lint` now fixes `let example = foo === bar` to be
+       `let example = assert : foo === bar`
+* Normalize inferred types [#1337](https://github.com/dhall-lang/dhall-haskell/pull/1337)
+* New `Interpret`/`Inject` instances for:
+    * [`Void`](https://github.com/dhall-lang/dhall-haskell/pull/1382)
+    * `Map` [#1391](https://github.com/dhall-lang/dhall-haskell/pull/1391) / [#1412](https://github.com/dhall-lang/dhall-haskell/pull/1412)
+    * [`HashMap`](https://github.com/dhall-lang/dhall-haskell/pull/1426)
+    * [`Set` and `HashSet`](https://github.com/dhall-lang/dhall-haskell/pull/1405)
+    * [`()`](https://github.com/dhall-lang/dhall-haskell/pull/1388)
+* [Add `--output` option to `dhall`](https://github.com/dhall-lang/dhall-haskell/pull/1399)
+* Performance improvements
+    * [#1362](https://github.com/dhall-lang/dhall-haskell/pull/1362)
+    * [#1366](https://github.com/dhall-lang/dhall-haskell/pull/1366)
+    * [#1368](https://github.com/dhall-lang/dhall-haskell/pull/1368)
+    * [#1397](https://github.com/dhall-lang/dhall-haskell/pull/1397)
+    * [#1401](https://github.com/dhall-lang/dhall-haskell/pull/1401)
+* Fixes and improvements to code formatting
+    * [#1360](https://github.com/dhall-lang/dhall-haskell/pull/1360)
+    * [#1372](https://github.com/dhall-lang/dhall-haskell/pull/1372)
+    * [#1380](https://github.com/dhall-lang/dhall-haskell/pull/1380)
+    * [#1415](https://github.com/dhall-lang/dhall-haskell/pull/1415)
 
 1.26.1
 
