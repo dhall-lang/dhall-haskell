@@ -2,6 +2,6 @@ packages: ./dhall ./dhall-bash ./dhall-json
 
 source-repository-package
     type: git
-    location: https://github.com/sjakobi/prettyprinter
-    tag: 642baee
+    location: https://github.com/quchen/prettyprinter
+    tag: 0fd83e7f8ff50bc1e22f665bb71819b3e1a1c3af
     subdir: prettyprinter
