@@ -64,7 +64,7 @@ import qualified Dhall.Hash
 import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
-import qualified Dhall.ETags
+import qualified Dhall.Tags
 import qualified Dhall.Pretty
 import qualified Dhall.Repl
 import qualified Dhall.TypeCheck
@@ -107,11 +107,12 @@ data Mode
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Input }
-    | ETags { input :: Input
-            , output :: Output
-            , suffixes :: Maybe [Text]
-            , followSymlinks :: Bool
-            }
+    | Tags
+          { input :: Input
+          , output :: Output
+          , suffixes :: Maybe [Text]
+          , followSymlinks :: Bool
+          }
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool }
     | Text { file :: Input }
@@ -192,8 +193,8 @@ parseMode =
             (Lint <$> parseInplace)
     <|> subcommand
             "tags"
-            "Generate ETags file"
-            (ETags <$> parseInput <*> parseTagsOutput <*> parseSuffixes <*> parseFollowSymlinks)
+            "Generate etags file"
+            (Tags <$> parseInput <*> parseTagsOutput <*> parseSuffixes <*> parseFollowSymlinks)
     <|> subcommand
             "format"
             "Standard code formatter for the Dhall language"
@@ -714,8 +715,8 @@ command (Options {..}) = do
 
                     Control.Exception.throwIO (Dhall.InvalidType {..})
 
-        ETags {..} -> do
-            tags <- Dhall.ETags.generate input suffixes followSymlinks
+        Tags {..} -> do
+            tags <- Dhall.Tags.generate input suffixes followSymlinks
 
             case output of
                 OutputFile file ->
