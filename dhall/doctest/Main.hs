@@ -27,8 +27,18 @@ main = do
         Test.DocTest.doctest
             [ "-DWITH_HTTP"
             , "--fast"
-            , "-i" <> (prefix </> "ghc-src")
-            , "-i" <> (prefix </> "src")
             , prefix </> "ghc-src"
-            , prefix </> "src"
+
+            -- Unfortunately we cannot target the entire @src@ directory.
+            -- The reason is that src/Dhall/Version.hs depends on
+            -- the generated Paths_dhall module which is "out-of-scope"
+            -- when running the testsuite with cabal v1-test.
+            -- Instead, we target a selection of modules whose combined module
+            -- dependency tree covers all modules that contain doctests.
+
+            -- , prefix </> "src"
+            , "-i" <> (prefix </> "src")
+            , prefix </> "src/Dhall.hs"
+            , prefix </> "src/Dhall/ETags.hs"
+            , prefix </> "src/Dhall/Tutorial.hs"
             ]
