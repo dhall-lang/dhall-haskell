@@ -1,5 +1,6 @@
 module Main where
 
+import Data.Monoid ((<>))
 import System.FilePath ((</>))
 
 import qualified GHC.IO.Encoding
@@ -26,6 +27,8 @@ main = do
         Test.DocTest.doctest
             [ "-DWITH_HTTP"
             , "--fast"
+            , "-i" <> (prefix </> "ghc-src")
+            , "-i" <> (prefix </> "src")
             , prefix </> "ghc-src"
             , prefix </> "src"
             ]
