@@ -22,6 +22,7 @@ module Dhall.Main
 
 import Control.Applicative (optional, (<|>))
 import Control.Exception (Handler(..), SomeException)
+import Control.Monad (when)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -86,6 +87,10 @@ data Options = Options
     , ascii   :: Bool
     , censor  :: Censor
     }
+
+ignoreSemanticCache :: Mode -> Bool
+ignoreSemanticCache Default {..} = semanticCacheMode == IgnoreSemanticCache
+ignoreSemanticCache _            = False
 
 -- | The subcommands for the @dhall@ executable
 data Mode
@@ -472,7 +477,7 @@ command (Options {..}) = do
 
             renderDoc h doc
 
-    Dhall.Import.warnAboutMissingCaches
+    when (not $ ignoreSemanticCache mode) Dhall.Import.warnAboutMissingCaches
 
     handle $ case mode of
         Version -> do
