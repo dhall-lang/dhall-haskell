@@ -13,7 +13,7 @@ module Dhall.Test.QuickCheck where
 import Codec.Serialise (DeserialiseFailure(..))
 import Data.Either (isRight)
 import Data.Either.Validation (Validation(..))
-import Dhall (Inject(..), FromDhall(..), auto, extract, inject, embed, Vector)
+import Dhall (ToDhall(..), FromDhall(..), auto, extract, inject, embed, Vector)
 import Dhall.Map (Map)
 import Dhall.Core
     ( Binding(..)
@@ -448,7 +448,7 @@ normalizingAnExpressionDoesntChangeItsInferredType expression =
     filterOutEmbeds _ = Const Sort -- This could be any ill-typed expression.
 
 embedThenExtractIsIdentity
-    :: forall a. (Inject a, FromDhall a, Eq a, Typeable a, Arbitrary a, Show a)
+    :: forall a. (ToDhall a, FromDhall a, Eq a, Typeable a, Arbitrary a, Show a)
     => Proxy a
     -> (String, Property, QuickCheckTests)
 embedThenExtractIsIdentity p =

@@ -679,7 +679,7 @@ import Dhall
 -- The reason this works is that there is an `FromDhall` instance for simple
 -- functions:
 --
--- > instance (Inject a, FromDhall b) => FromDhall (a -> b)
+-- > instance (ToDhall a, FromDhall b) => FromDhall (a -> b)
 --
 -- Thanks to currying, this instance works for functions of multiple simple
 -- arguments:
@@ -692,7 +692,7 @@ import Dhall
 -- or higher-order function).  You will need to apply those functions to their
 -- arguments within Dhall before converting their result to a Haskell value.
 --
--- Just like `FromDhall`, you can derive `Inject` for user-defined data types:
+-- Just like `FromDhall`, you can derive `ToDhall` for user-defined data types:
 --
 -- > {-# LANGUAGE DeriveAnyClass    #-}
 -- > {-# LANGUAGE DeriveGeneric     #-}
@@ -703,7 +703,7 @@ import Dhall
 -- > import Dhall
 -- > 
 -- > data Example0 = Example0 { foo :: Bool, bar :: Bool }
--- >     deriving (Generic, Inject)
+-- >     deriving (Generic, ToDhall)
 -- > 
 -- > main = do
 -- >     f <- input auto "λ(r : { foo : Bool, bar : Bool }) → r.foo && r.bar"

@@ -22,7 +22,7 @@ import Data.Sequence (Seq)
 import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Vector (Vector)
-import Dhall (Inject, FromDhall)
+import Dhall (ToDhall, FromDhall)
 import Dhall.Core (Expr(..))
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
@@ -156,10 +156,10 @@ shouldHaveWorkingGenericAuto = testGroup "genericAuto"
   ]
 
 data NonEmptyUnion = N0 Bool | N1 Natural | N2 Text
-    deriving (Eq, Generic, Inject, FromDhall, Show)
+    deriving (Eq, Generic, ToDhall, FromDhall, Show)
 
 data Enum = E0 | E1 | E2
-    deriving (Eq, Generic, Inject, FromDhall, Show)
+    deriving (Eq, Generic, ToDhall, FromDhall, Show)
 
 data Records
     = R0 {}
@@ -167,10 +167,10 @@ data Records
     | R2 { x :: Double }
     | R3 { a :: (), b :: () }
     | R4 { x :: Double, y :: Double }
-    deriving (Eq, Generic, Inject, FromDhall, Show)
+    deriving (Eq, Generic, ToDhall, FromDhall, Show)
 
 data Products = P0 | P1 () | P2 Double | P3 () () | P4 Double Double
-    deriving (Eq, Generic, Inject, FromDhall, Show)
+    deriving (Eq, Generic, ToDhall, FromDhall, Show)
 
 shouldHandleUnionsCorrectly :: TestTree
 shouldHandleUnionsCorrectly =
@@ -327,14 +327,14 @@ shouldHandleUnionsCorrectly =
 
         expectedValue @=? actualValue
 
-    value `shouldInjectInto` expectedCode = testCase "Inject" $ do
+    value `shouldInjectInto` expectedCode = testCase "ToDhall" $ do
         parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText "(test)" expectedCode)
 
         resolvedExpression <- Dhall.Import.assertNoImports parsedExpression
 
         Dhall.Core.denote resolvedExpression @=? Dhall.embed Dhall.inject value
 
-    value `shouldInjectIntoSmart` expectedCode = testCase "Inject" $ do
+    value `shouldInjectIntoSmart` expectedCode = testCase "ToDhall" $ do
         parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText "(test)" expectedCode)
 
         resolvedExpression <- Dhall.Import.assertNoImports parsedExpression
@@ -394,7 +394,7 @@ shouldConvertHaskellToDhallCorrectly =
         , "{ _1 = True, _2 = {=} }" `correspondsTo` (True, ())
         ]
   where
-    correspondsTo :: Inject a => Text -> a -> TestTree
+    correspondsTo :: ToDhall a => Text -> a -> TestTree
     expectedDhallCode `correspondsTo` haskellValue =
         testCase "Marshall Haskell to Dhall code" $ do
             let actualDhallCode =
