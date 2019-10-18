@@ -447,12 +447,12 @@ normalizingAnExpressionDoesntChangeItsInferredType expression =
     filterOutEmbeds :: Typer a
     filterOutEmbeds _ = Const Sort -- This could be any ill-typed expression.
 
-injectThenInterpretIsIdentity
+embedThenExtractIsIdentity
     :: forall a. (Inject a, FromDhall a, Eq a, Typeable a, Arbitrary a, Show a)
     => Proxy a
     -> (String, Property, QuickCheckTests)
-injectThenInterpretIsIdentity p =
-    ( "Injecting then Interpreting is identity for " ++ show (typeRep p)
+embedThenExtractIsIdentity p =
+    ( "Embedding then extracting is identity for " ++ show (typeRep p)
     , Test.QuickCheck.property (prop :: a -> Bool)
     , QuickCheckTests 1000
     )
@@ -494,16 +494,16 @@ tests =
           , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
           , QuickCheckTests 10000
           )
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Text.Text))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy [Nat.Natural])
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Bool, Double))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Sequence.Seq ()))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Maybe Integer))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Set.Set Nat.Natural))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.HashSet.HashSet Text.Text))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Vector Double))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Map.Map Double Bool))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (HashMap.HashMap Double Bool))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Text.Text))
+        , embedThenExtractIsIdentity (Proxy :: Proxy [Nat.Natural])
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Bool, Double))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Data.Sequence.Seq ()))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Maybe Integer))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Data.Set.Set Nat.Natural))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Data.HashSet.HashSet Text.Text))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Vector Double))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Data.Map.Map Double Bool))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (HashMap.HashMap Double Bool))
         ]
 
 
