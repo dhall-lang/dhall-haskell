@@ -47,6 +47,7 @@ module Dhall
     , UnionType(..)
     , InputType(..)
     , FromDhall(..)
+    , Interpret
     , InvalidType(..)
     , ExtractErrors(..)
     , Extractor
@@ -90,6 +91,7 @@ module Dhall
     , GenericToDhall(..)
 
     , ToDhall(..)
+    , Inject
     , inject
     , genericToDhall
     , RecordInputType(..)
@@ -1057,6 +1059,12 @@ class FromDhall a where
         :: (Generic a, GenericFromDhall (Rep a)) => InterpretOptions -> Type a
     autoWith options = fmap GHC.Generics.to (evalState (genericAutoWith options) 1)
 
+{-| A compatibility alias for `FromDhall`
+
+This will eventually be removed.
+-}
+type Interpret = FromDhall
+
 instance FromDhall Void where
     autoWith _ = void
 
@@ -1689,6 +1697,12 @@ class ToDhall a where
         :: (Generic a, GenericToDhall (Rep a)) => InterpretOptions -> InputType a
     injectWith options
         = contramap GHC.Generics.from (evalState (genericToDhallWith options) 1)
+
+{-| A compatibility alias for `ToDhall`
+
+This will eventually be removed.
+-}
+type Inject = ToDhall
 
 {-| Use the default options for injecting a value
 
