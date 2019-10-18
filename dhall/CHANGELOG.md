@@ -78,6 +78,10 @@
     * This fixes `dhall type` to more accurately follow the standard
 * [Initial changes for GHC 8.8 support](https://github.com/dhall-lang/dhall-haskell/pull/1324)
 * [Fix Haddock formatting for `dhallFromJSON`](https://github.com/dhall-lang/dhall-haskell/pull/1316)
+* [Improved Windows caching support](https://github.com/dhall-lang/dhall-haskell/pull/1272)
+    * `dhall` will now prefer the `%LOCALAPPDATA%` directory for caching if it is
+      available
+* [Warn about missing cache directories](https://github.com/dhall-lang/dhall-haskell/pull/1320)
 
 1.26.0
 
