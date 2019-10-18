@@ -3510,9 +3510,9 @@ prettyTypeMessage (CantAccess lazyText0 expr0 expr1) = ErrorMessages {..}
         "Explanation: You can only access fields on records or unions, like this:        \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌───────────────────────────────────┐                                       \n\
+        \    ┌─────────────────────────────────┐                                         \n\
         \    │ { foo = True, bar = \"ABC\" }.foo │  This is valid ...                    \n\
-        \    └───────────────────────────────────┘                                       \n\
+        \    └─────────────────────────────────┘                                         \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────────┐                               \n\
