@@ -210,8 +210,8 @@ discover pattern buildTest paths = do
     return (Tasty.testGroup "discover" tests)
 
 testCase :: Text -> [ FilePath ] -> Assertion -> TestTree
-testCase prefix skip assertion =
-    if prefix `elem` map (Turtle.format fp) skip
+testCase prefix expectedFailures assertion =
+    if prefix `elem` map (Turtle.format fp) expectedFailures
     then Tasty.ExpectedFailure.expectFail test
     else test
   where
