@@ -15,6 +15,7 @@ import Data.Monoid ((<>))
 import qualified Data.Version
 import qualified Dhall.LSP.Server
 import qualified Paths_dhall_lsp_server
+import qualified GHC.IO.Encoding
 
 -- | Top-level program options
 data Options = Options {
@@ -74,5 +75,9 @@ runCommand Options {..} = do
 
 -- | Entry point for the @dhall-lsp-server@ executable
 main :: IO ()
-main = do options <- Options.Applicative.execParser parserInfoOptions
-          runCommand options
+main = do
+    GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
+
+    options <- Options.Applicative.execParser parserInfoOptions
+
+    runCommand options

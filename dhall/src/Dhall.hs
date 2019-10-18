@@ -71,7 +71,12 @@ module Dhall
     , sequence
     , list
     , vector
+    , setFromDistinctList
+    , setIgnoringDuplicates
+    , hashSetFromDistinctList
+    , hashSetIgnoringDuplicates
     , Dhall.map
+    , hashMap
     , pairFromMapEntry
     , unit
     , void
@@ -119,7 +124,9 @@ import Data.Either.Validation (Validation(..), ealt, eitherToValidation, validat
 import Data.Fix (Fix(..))
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
+import Data.Hashable (Hashable)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.HashMap.Strict (HashMap)
 import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
@@ -134,9 +141,9 @@ import Data.Word (Word8, Word16, Word32, Word64)
 import Dhall.Core (Expr(..), Chunks(..), DhallDouble(..))
 import Dhall.Import (Imported(..))
 import Dhall.Parser (Src(..))
-import Dhall.TypeCheck (DetailedTypeError(..), TypeError, X)
+import Dhall.TypeCheck (DetailedTypeError(..), TypeError)
 import GHC.Generics
-import Lens.Family (LensLike', set, view)
+import Lens.Family (LensLike', view)
 import Numeric.Natural (Natural)
 import Prelude hiding (maybe, sequence)
 import System.FilePath (takeDirectory)
@@ -147,13 +154,16 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Map
 import qualified Data.Maybe
+import qualified Data.List
 import qualified Data.List.NonEmpty
 import qualified Data.Semigroup
 import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
+import qualified Data.HashSet
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
@@ -167,18 +177,32 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
+import qualified Lens.Family
 
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> :set -XRecordWildCards
+-- >>> import Data.Word (Word8, Word16, Word32, Word64)
+-- >>> import Dhall.Pretty.Internal (prettyExpr)
 
+{-| Useful synonym for the `Validation` type used when marshalling Dhall
+    expressions
+-}
 type Extractor s a = Validation (ExtractErrors s a)
+
+{-| Useful synonym for the equivalent `Either` type used when marshalling Dhall
+    code
+-}
 type MonadicExtractor s a = Either (ExtractErrors s a)
 
-
+{-| Generate a type error during extraction by specifying the expected type
+    and the actual type
+-}
 typeError :: Expr s a -> Expr s a -> Extractor s a b
-typeError expected actual = Failure . ExtractErrors . pure . TypeMismatch $ InvalidType expected actual
+typeError expected actual =
+    Failure . ExtractErrors . pure . TypeMismatch $ InvalidType expected actual
 
+-- | Turn a `Text` message into an extraction failure
 extractError :: Text -> Extractor s a b
 extractError = Failure . ExtractErrors . pure . ExtractError
 
@@ -192,6 +216,9 @@ toMonadic = validationToEither
 fromMonadic :: MonadicExtractor s a b -> Extractor s a b
 fromMonadic = eitherToValidation
 
+{-| One or more errors returned from extracting a Dhall expression to a
+    Haskell expression
+-}
 newtype ExtractErrors s a = ExtractErrors
    { getErrors :: NonEmpty (ExtractError s a)
    } deriving Semigroup
@@ -305,8 +332,8 @@ sourceName k s =
 
 -- | @since 1.16
 data EvaluateSettings = EvaluateSettings
-  { _startingContext :: Dhall.Context.Context (Expr Src X)
-  , _normalizer      :: Maybe (Dhall.Core.ReifiedNormalizer X)
+  { _startingContext :: Dhall.Context.Context (Expr Src Void)
+  , _normalizer      :: Maybe (Dhall.Core.ReifiedNormalizer Void)
   }
 
 -- | Default evaluation settings: no extra entries in the initial
@@ -324,11 +351,11 @@ defaultEvaluateSettings = EvaluateSettings
 -- @since 1.16
 startingContext
   :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Dhall.Context.Context (Expr Src X))
+  => LensLike' f s (Dhall.Context.Context (Expr Src Void))
 startingContext = evaluateSettings . l
   where
     l :: (Functor f)
-      => LensLike' f EvaluateSettings (Dhall.Context.Context (Expr Src X))
+      => LensLike' f EvaluateSettings (Dhall.Context.Context (Expr Src Void))
     l k s = fmap (\x -> s { _startingContext = x}) (k (_startingContext s))
 
 -- | Access the custom normalizer.
@@ -336,11 +363,11 @@ startingContext = evaluateSettings . l
 -- @since 1.16
 normalizer
   :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Maybe (Dhall.Core.ReifiedNormalizer X))
+  => LensLike' f s (Maybe (Dhall.Core.ReifiedNormalizer Void))
 normalizer = evaluateSettings . l
   where
     l :: (Functor f)
-      => LensLike' f EvaluateSettings (Maybe (Dhall.Core.ReifiedNormalizer X))
+      => LensLike' f EvaluateSettings (Maybe (Dhall.Core.ReifiedNormalizer Void))
     l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
 
 -- | @since 1.16
@@ -405,8 +432,8 @@ inputWithSettings settings (Type {..}) txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               set Dhall.Import.normalizer      _normalizer
-            .  set Dhall.Import.startingContext _startingContext
+               Lens.Family.set Dhall.Import.normalizer      _normalizer
+            .  Lens.Family.set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatus _rootDirectory)
 
@@ -474,7 +501,7 @@ inputFileWithSettings settings ty path = do
 inputExpr
     :: Text
     -- ^ The Dhall program
-    -> IO (Expr Src X)
+    -> IO (Expr Src Void)
     -- ^ The fully normalized AST
 inputExpr =
   inputExprWithSettings defaultInputSettings
@@ -489,7 +516,7 @@ inputExprWithSettings
     :: InputSettings
     -> Text
     -- ^ The Dhall program
-    -> IO (Expr Src X)
+    -> IO (Expr Src Void)
     -- ^ The fully normalized AST
 inputExprWithSettings settings txt = do
     expr  <- Dhall.Core.throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
@@ -499,8 +526,8 @@ inputExprWithSettings settings txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               set Dhall.Import.normalizer      _normalizer
-            .  set Dhall.Import.startingContext _startingContext
+               Lens.Family.set Dhall.Import.normalizer      _normalizer
+            .  Lens.Family.set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatus _rootDirectory)
 
@@ -519,7 +546,7 @@ rawInput
     :: Alternative f
     => Type a
     -- ^ The type of value to decode from Dhall to Haskell
-    -> Expr s X
+    -> Expr s Void
     -- ^ a closed form Dhall program, which evaluates to the expected type
     -> f a
     -- ^ The decoded value in Haskell
@@ -636,11 +663,11 @@ detailed :: IO a -> IO a
 detailed =
     Control.Exception.handle handler1 . Control.Exception.handle handler0
   where
-    handler0 :: Imported (TypeError Src X) -> IO a
+    handler0 :: Imported (TypeError Src Void) -> IO a
     handler0 (Imported ps e) =
         Control.Exception.throwIO (Imported ps (DetailedTypeError e))
 
-    handler1 :: TypeError Src X -> IO a
+    handler1 :: TypeError Src Void -> IO a
     handler1 e = Control.Exception.throwIO (DetailedTypeError e)
 
 {-| A @(Type a)@ represents a way to marshal a value of type @\'a\'@ from Dhall
@@ -661,9 +688,9 @@ detailed =
 > input :: Type a -> Text -> IO a
 -}
 data Type a = Type
-    { extract  :: Expr Src X -> Extractor Src X a
+    { extract  :: Expr Src Void -> Extractor Src Void a
     -- ^ Extracts Haskell value from the Dhall expression
-    , expected :: Expr Src X
+    , expected :: Expr Src Void
     -- ^ Dhall type of the Haskell value
     }
     deriving (Functor)
@@ -791,6 +818,126 @@ list = fmap Data.Foldable.toList . sequence
 vector :: Type a -> Type (Vector a)
 vector = fmap Data.Vector.fromList . list
 
+{-| Decode a `Set` from a `List`
+
+>>> input (setIgnoringDuplicates natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+Duplicate elements are ignored.
+
+>>> input (setIgnoringDuplicates natural) "[1, 1, 3]"
+fromList [1,3]
+
+-}
+setIgnoringDuplicates :: (Ord a) => Type a -> Type (Data.Set.Set a)
+setIgnoringDuplicates = fmap Data.Set.fromList . list
+
+{-| Decode a `HashSet` from a `List`
+
+>>> input (hashSetIgnoringDuplicates natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+Duplicate elements are ignored.
+
+>>> input (hashSetIgnoringDuplicates natural) "[1, 1, 3]"
+fromList [1,3]
+
+-}
+hashSetIgnoringDuplicates :: (Hashable a, Ord a)
+                          => Type a
+                          -> Type (Data.HashSet.HashSet a)
+hashSetIgnoringDuplicates = fmap Data.HashSet.fromList . list
+
+{-| Decode a `Set` from a `List` with distinct elements
+
+>>> input (setFromDistinctList natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+An error is thrown if the list contains duplicates.
+
+> >>> input (setFromDistinctList natural) "[1, 1, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> One duplicate element in the list: 1
+>
+
+> >>> input (setFromDistinctList natural) "[1, 1, 3, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> 2 duplicates were found in the list, including 1
+>
+
+-}
+setFromDistinctList :: (Ord a, Show a) => Type a -> Type (Data.Set.Set a)
+setFromDistinctList = setHelper Data.Set.size Data.Set.fromList
+
+{-| Decode a `HashSet` from a `List` with distinct elements
+
+>>> input (hashSetFromDistinctList natural) "[1, 2, 3]"
+fromList [1,2,3]
+
+An error is thrown if the list contains duplicates.
+
+> >>> input (hashSetFromDistinctList natural) "[1, 1, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> One duplicate element in the list: 1
+>
+
+> >>> input (hashSetFromDistinctList natural) "[1, 1, 3, 3]"
+> *** Exception: Error: Failed extraction
+>
+> The expression type-checked successfully but the transformation to the target
+> type failed with the following error:
+>
+> 2 duplicates were found in the list, including 1
+>
+
+-}
+hashSetFromDistinctList :: (Hashable a, Ord a, Show a)
+                        => Type a
+                        -> Type (Data.HashSet.HashSet a)
+hashSetFromDistinctList = setHelper Data.HashSet.size Data.HashSet.fromList
+
+
+setHelper :: (Eq a, Foldable t, Show a)
+          => (t a -> Int)
+          -> ([a] -> t a)
+          -> Type a
+          -> Type (t a)
+setHelper size toSet (Type extractIn expectedIn) = Type extractOut expectedOut
+  where
+    extractOut (ListLit _ es) = case traverse extractIn es of
+        Success vSeq
+            | sameSize               -> Success vSet
+            | otherwise              -> extractError err
+          where
+            vList = Data.Foldable.toList vSeq
+            vSet = toSet vList
+            sameSize = size vSet == Data.Sequence.length vSeq
+            duplicates = vList Data.List.\\ Data.Foldable.toList vSet
+            err | length duplicates == 1 =
+                     "One duplicate element in the list: "
+                     <> (Data.Text.pack $ show $ head duplicates)
+                | otherwise              = Data.Text.pack $ unwords
+                     [ show $ length duplicates
+                     , "duplicates were found in the list, including"
+                     , show $ head duplicates
+                     ]
+        Failure f -> Failure f
+    extractOut expr = typeError expectedOut expr
+
+    expectedOut = App List expectedIn
+
 {-| Decode a `Map` from a @toMap@ expression or generally a @Prelude.Map.Type@
 
 >>> input (Dhall.map strictText bool) "toMap { a = True, b = False }"
@@ -807,6 +954,23 @@ fromList [(1,False)]
 -}
 map :: Ord k => Type k -> Type v -> Type (Map k v)
 map k v = fmap Data.Map.fromList (list (pairFromMapEntry k v))
+
+{-| Decode a `HashMap` from a @toMap@ expression or generally a @Prelude.Map.Type@
+
+>>> input (Dhall.hashMap strictText bool) "toMap { a = True, b = False }"
+fromList [("a",True),("b",False)]
+>>> input (Dhall.hashMap strictText bool) "[ { mapKey = \"foo\", mapValue = True } ]"
+fromList [("foo",True)]
+
+If there are duplicate @mapKey@s, later @mapValue@s take precedence:
+
+>>> let expr = "[ { mapKey = 1, mapValue = True }, { mapKey = 1, mapValue = False } ]"
+>>> input (Dhall.hashMap natural bool) expr
+fromList [(1,False)]
+
+-}
+hashMap :: (Eq k, Hashable k) => Type k -> Type v -> Type (HashMap k v)
+hashMap k v = fmap HashMap.fromList (list (pairFromMapEntry k v))
 
 {-| Decode a tuple from a @Prelude.Map.Entry@ record
 
@@ -935,8 +1099,23 @@ instance Interpret a => Interpret [a] where
 instance Interpret a => Interpret (Vector a) where
     autoWith opts = vector (autoWith opts)
 
+{-| Note that this instance will throw errors in the presence of duplicates in
+    the list. To ignore duplicates, use `setIgnoringDuplicates`.
+-}
+instance (Interpret a, Ord a, Show a) => Interpret (Data.Set.Set a) where
+    autoWith opts = setFromDistinctList (autoWith opts)
+
+{-| Note that this instance will throw errors in the presence of duplicates in
+    the list. To ignore duplicates, use `hashSetIgnoringDuplicates`.
+-}
+instance (Interpret a, Hashable a, Ord a, Show a) => Interpret (Data.HashSet.HashSet a) where
+    autoWith opts = hashSetFromDistinctList (autoWith opts)
+
 instance (Ord k, Interpret k, Interpret v) => Interpret (Map k v) where
     autoWith opts = Dhall.map (autoWith opts) (autoWith opts)
+
+instance (Eq k, Hashable k, Interpret k, Interpret v) => Interpret (HashMap k v) where
+    autoWith opts = Dhall.hashMap (autoWith opts) (autoWith opts)
 
 instance (Inject a, Interpret b) => Interpret (a -> b) where
     autoWith opts = Type extractOut expectedOut
@@ -1093,7 +1272,7 @@ data InterpretOptions = InterpretOptions
     -- ^ Specify how to handle constructors with only one field.  The default is
     --   `Wrapped` for backwards compatibility but will eventually be changed to
     --   `Smart`
-    , inputNormalizer     :: Dhall.Core.ReifiedNormalizer X
+    , inputNormalizer     :: Dhall.Core.ReifiedNormalizer Void
     -- ^ This is only used by the `Interpret` instance for functions in order
     --   to normalize the function input before marshaling the input into a
     --   Dhall expression
@@ -1158,14 +1337,15 @@ instance GenericInterpret V1 where
         expected = Union mempty
 
 unsafeExpectUnion
-    :: Text -> Expr Src X -> Dhall.Map.Map Text (Maybe (Expr Src X))
+    :: Text -> Expr Src Void -> Dhall.Map.Map Text (Maybe (Expr Src Void))
 unsafeExpectUnion _ (Union kts) =
     kts
 unsafeExpectUnion name expression =
     Dhall.Core.internalError
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
-unsafeExpectRecord :: Text -> Expr Src X -> Dhall.Map.Map Text (Expr Src X)
+unsafeExpectRecord
+    :: Text -> Expr Src Void -> Dhall.Map.Map Text (Expr Src Void)
 unsafeExpectRecord _ (Record kts) =
     kts
 unsafeExpectRecord name expression =
@@ -1174,8 +1354,8 @@ unsafeExpectRecord name expression =
 
 unsafeExpectUnionLit
     :: Text
-    -> Expr Src X
-    -> (Text, Maybe (Expr Src X))
+    -> Expr Src Void
+    -> (Text, Maybe (Expr Src Void))
 unsafeExpectUnionLit _ (Field (Union _) k) =
     (k, Nothing)
 unsafeExpectUnionLit _ (App (Field (Union _) k) v) =
@@ -1184,7 +1364,8 @@ unsafeExpectUnionLit name expression =
     Dhall.Core.internalError
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
-unsafeExpectRecordLit :: Text -> Expr Src X -> Dhall.Map.Map Text (Expr Src X)
+unsafeExpectRecordLit
+    :: Text -> Expr Src Void -> Dhall.Map.Map Text (Expr Src Void)
 unsafeExpectRecordLit _ (RecordLit kvs) =
     kvs
 unsafeExpectRecordLit name expression =
@@ -1477,9 +1658,9 @@ instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
     Haskell into Dhall
 -}
 data InputType a = InputType
-    { embed    :: a -> Expr Src X
+    { embed    :: a -> Expr Src Void
     -- ^ Embeds a Haskell value as a Dhall expression
-    , declared :: Expr Src X
+    , declared :: Expr Src Void
     -- ^ Dhall type of the Haskell value
     }
 
@@ -1496,8 +1677,8 @@ instance Contravariant InputType where
     class) into Haskell functions.  This works by:
 
     * Marshaling the input to the Haskell function into a Dhall expression (i.e.
-      @x :: Expr Src X@)
-    * Applying the Dhall function (i.e. @f :: Expr Src X@) to the Dhall input
+      @x :: Expr Src Void@)
+    * Applying the Dhall function (i.e. @f :: Expr Src Void@) to the Dhall input
       (i.e. @App f x@)
     * Normalizing the syntax tree (i.e. @normalize (App f x)@)
     * Marshaling the resulting Dhall expression back into a Haskell value
@@ -1511,7 +1692,7 @@ class Inject a where
 
 {-| Use the default options for injecting a value
 
-> inject = inject defaultInterpretOptions
+> inject = injectWith defaultInterpretOptions
 -}
 inject :: Inject a => InputType a
 inject = injectWith defaultInterpretOptions
@@ -1581,10 +1762,6 @@ instance Inject Int where
 
         declared = Integer
 
-{- $setup
->>> import Data.Word (Word8, Word16, Word32, Word64)
--}
-
 {-|
 
 >>> embed inject (12 :: Word)
@@ -1637,7 +1814,7 @@ instance Inject Word32 where
 
         declared = Natural
 
-{-| 
+{-|
 
 >>> embed inject (12 :: Word64)
 NaturalLit 12
@@ -1697,10 +1874,83 @@ instance Inject a => Inject [a] where
 instance Inject a => Inject (Vector a) where
     injectWith = fmap (contramap Data.Vector.toList) injectWith
 
+{-| Note that the ouput list will be sorted
+
+>>> let x = Data.Set.fromList ["mom", "hi" :: Text]
+>>> prettyExpr $ embed inject x
+[ "hi", "mom" ]
+
+-}
 instance Inject a => Inject (Data.Set.Set a) where
-    injectWith = fmap (contramap Data.Set.toList) injectWith
+    injectWith = fmap (contramap Data.Set.toAscList) injectWith
+
+{-| Note that the ouput list may not be sorted
+
+>>> let x = Data.HashSet.fromList ["hi", "mom" :: Text]
+>>> prettyExpr $ embed inject x
+[ "mom", "hi" ]
+
+-}
+instance Inject a => Inject (Data.HashSet.HashSet a) where
+    injectWith = fmap (contramap Data.HashSet.toList) injectWith
 
 instance (Inject a, Inject b) => Inject (a, b)
+
+{-| Inject a `Data.Map` to a @Prelude.Map.Type@
+
+>>> prettyExpr $ embed inject (Data.Map.fromList [(1 :: Natural, True)])
+[ { mapKey = 1, mapValue = True } ]
+
+>>> prettyExpr $ embed inject (Data.Map.fromList [] :: Data.Map.Map Natural Bool)
+[] : List { mapKey : Natural, mapValue : Bool }
+
+-}
+instance (Inject k, Inject v) => Inject (Data.Map.Map k v) where
+    injectWith options = InputType embedOut declaredOut
+      where
+        embedOut m = ListLit listType (mapEntries m)
+          where
+            listType
+                | Data.Map.null m = Just declaredOut
+                | otherwise       = Nothing
+
+        declaredOut = App List (Record (Dhall.Map.fromList
+                          [("mapKey", declaredK), ("mapValue", declaredV)]))
+
+        mapEntries = Data.Sequence.fromList . fmap recordPair . Data.Map.toList
+        recordPair (k, v) = RecordLit (Dhall.Map.fromList
+                                [("mapKey", embedK k), ("mapValue", embedV v)])
+
+        InputType embedK declaredK = injectWith options
+        InputType embedV declaredV = injectWith options
+
+{-| Inject a `Data.HashMap` to a @Prelude.Map.Type@
+
+>>> prettyExpr $ embed inject (HashMap.fromList [(1 :: Natural, True)])
+[ { mapKey = 1, mapValue = True } ]
+
+>>> prettyExpr $ embed inject (HashMap.fromList [] :: HashMap Natural Bool)
+[] : List { mapKey : Natural, mapValue : Bool }
+
+-}
+instance (Inject k, Inject v) => Inject (HashMap k v) where
+    injectWith options = InputType embedOut declaredOut
+      where
+        embedOut m = ListLit listType (mapEntries m)
+          where
+            listType
+                | HashMap.null m = Just declaredOut
+                | otherwise       = Nothing
+
+        declaredOut = App List (Record (Dhall.Map.fromList
+                          [("mapKey", declaredK), ("mapValue", declaredV)]))
+
+        mapEntries = Data.Sequence.fromList . fmap recordPair . HashMap.toList
+        recordPair (k, v) = RecordLit (Dhall.Map.fromList
+                                [("mapKey", embedK k), ("mapValue", embedV v)])
+
+        InputType embedK declaredK = injectWith options
+        InputType embedV declaredV = injectWith options
 
 {-| This is the underlying class that powers the `Interpret` class's support
     for automatically deriving a generic implementation
@@ -2014,12 +2264,12 @@ newtype RecordType a =
         ( Control.Applicative.Const
             ( Dhall.Map.Map
                 Text
-                ( Expr Src X )
+                ( Expr Src Void )
             )
         )
         ( Data.Functor.Compose.Compose
-            ( (->) ( Expr Src X ) )
-            (Extractor Src X)
+            ( (->) ( Expr Src Void ) )
+            (Extractor Src Void)
         )
         a
     )
@@ -2189,6 +2439,7 @@ injectProject =
 
 infixr 5 >*<
 
+-- | Intermediate type used for building an `Inject` instance for a record
 newtype RecordInputType a
   = RecordInputType (Dhall.Map.Map Text (InputType a))
 
@@ -2203,12 +2454,19 @@ instance Divisible RecordInputType where
       ((contramap $ snd . f) <$> cInputTypeRecord)
   conquer = RecordInputType mempty
 
+{-| Specify how to encode one field of a record by supplying an explicit
+    `InputType` for that field
+-}
 inputFieldWith :: Text -> InputType a -> RecordInputType a
 inputFieldWith name inputType = RecordInputType $ Dhall.Map.singleton name inputType
 
+{-| Specify how to encode one field of a record using the default `Inject`
+    instance for that type
+-}
 inputField :: Inject a => Text -> RecordInputType a
 inputField name = inputFieldWith name inject
 
+-- | Convert a `RecordInputType` into the equivalent `InputType`
 inputRecord :: RecordInputType a -> InputType a
 inputRecord (RecordInputType inputTypeRecord) = InputType makeRecordLit recordType
   where
@@ -2273,10 +2531,10 @@ newtype UnionInputType a =
         ( Control.Applicative.Const
             ( Dhall.Map.Map
                 Text
-                ( Expr Src X )
+                ( Expr Src Void )
             )
         )
-        ( Op (Text, Expr Src X) )
+        ( Op (Text, Expr Src Void) )
         a
     )
   deriving (Contravariant)
@@ -2298,6 +2556,7 @@ UnionInputType (Data.Functor.Product.Pair (Control.Applicative.Const mx) (Op fx)
 
 infixr 5 >|<
 
+-- | Convert a `UnionInputType` into the equivalent `InputType`
 inputUnion :: UnionInputType a -> InputType a
 inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Op embedF ) ) ) =
     InputType
@@ -2312,6 +2571,9 @@ inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Co
   where
     fields' = fmap notEmptyRecord fields
 
+{-| Specify how to encode an alternative by providing an explicit `InputType`
+    for that alternative
+-}
 inputConstructorWith
     :: Text
     -> InputType a
@@ -2327,6 +2589,9 @@ inputConstructorWith name inputType = UnionInputType $
       ( Op ( (name,) . embed inputType )
       )
 
+{-| Specify how to encode an alternative by using the default `Inject` instance
+    for that type
+-}
 inputConstructor
     :: Inject a
     => Text

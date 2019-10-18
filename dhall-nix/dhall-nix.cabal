@@ -37,10 +37,12 @@ Library
     Exposed-Modules:
         Dhall.Nix
     GHC-Options: -Wall
-    if os(windows)
+    if os(windows) || impl(eta)
         Buildable: False
         
 Executable dhall-to-nix
+    if os(windows) || impl(eta)
+        Buildable: False
     Hs-Source-Dirs: exec
     Main-Is: Main.hs
     Other-Modules:

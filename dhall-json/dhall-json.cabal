@@ -24,16 +24,19 @@ Description:
 Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
-    java/*.java
     tasty/data/*.dhall
     tasty/data/*.json
     tasty/data/*.txt
     tasty/data/*.yaml
 
-
 Source-Repository head
     Type: git
     Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-json
+
+Flag gpl
+  Description: Use GPL-licensed components like HsYAML, and enable yaml-to-dhall binary
+  Default: False
+  Manual: True
 
 Library
     Hs-Source-Dirs: src
@@ -56,37 +59,32 @@ Library
         Dhall.JSON
         Dhall.JSONToDhall
         Dhall.Yaml
-        Dhall.YamlToDhall
+    if flag(gpl)
+      Exposed-Modules:
+          Dhall.YamlToDhall
     Other-Modules:
         Dhall.JSON.Util
-
-        
     GHC-Options: -Wall
-    if impl(eta)
-        Build-Depends:
-            utf8-string >= 1.0 && <= 1.1
-        Maven-Depends:
-          com.fasterxml.jackson.core:jackson-core:2.9.6,
-          com.fasterxml.jackson.core:jackson-databind:2.9.6,
-          com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.6
-        Other-Modules: Dhall.Yaml.Eta
-        Java-Sources: java/Utils.java
+    if flag(gpl)
+      CPP-Options: -DGPL
+      Build-Depends:
+          HsYAML       >= 0.2 && < 0.3,
+          HsYAML-aeson >= 0.2 && < 0.3
     else
-        Build-Depends:
-            HsYAML >= 0.2 && <0.3,
-            HsYAML-aeson >= 0.2 && <0.3
+      Build-Depends:
+          aeson-yaml >= 1.0.2 && < 1.1
 
 Executable dhall-to-json
     Hs-Source-Dirs: dhall-to-json
     Main-Is: Main.hs
     Build-Depends:
-        base                       ,
-        aeson                      ,
+        base                                   ,
+        aeson                                  ,
         aeson-pretty         >= 0.8.5 && < 0.9 ,
-        bytestring           < 0.11,
-        dhall                      ,
-        dhall-json                 ,
-        optparse-applicative       ,
+        bytestring                       < 0.11,
+        dhall                                  ,
+        dhall-json                             ,
+        optparse-applicative                   ,
         text
     Other-Modules:
         Paths_dhall_json
@@ -129,6 +127,8 @@ Executable json-to-dhall
     GHC-Options: -Wall
 
 Executable yaml-to-dhall
+    if !flag(gpl)
+      Buildable: False
     Hs-Source-Dirs: yaml-to-dhall
     Main-Is: Main.hs
     Build-Depends:

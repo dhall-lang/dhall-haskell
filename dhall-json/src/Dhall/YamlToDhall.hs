@@ -8,8 +8,14 @@ module Dhall.YamlToDhall
   , dhallFromYaml
   ) where
 
+import Control.Exception (Exception, throwIO)
+import Data.Aeson (Value)
 import Data.ByteString (ByteString)
-
+import qualified Data.ByteString.Char8 as BS8
+import Data.Text (Text)
+import Data.Void (Void)
+import qualified Data.YAML.Aeson
+import Dhall.Core (Expr)
 import Dhall.JSONToDhall
   ( CompileError(..)
   , Conversion(..)
@@ -19,20 +25,7 @@ import Dhall.JSONToDhall
   , showCompileError
   , typeCheckSchemaExpr
   )
-
-import Control.Exception (Exception, throwIO)
-import Data.Text (Text)
-import Dhall.Core (Expr)
 import Dhall.Src (Src)
-import Dhall.TypeCheck(X)
-
-#if defined(ETA_VERSION)
-import Dhall.Yaml.Eta ( yamlToJson, showYaml )
-#else
-import Data.Aeson (Value)
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.YAML.Aeson
-#endif
 
 -- | Options to parametrize conversion
 data Options = Options
@@ -54,7 +47,7 @@ instance Exception YAMLCompileError
 
 
 -- | Transform yaml representation into dhall
-dhallFromYaml :: Options -> ByteString -> IO (Expr Src X)
+dhallFromYaml :: Options -> ByteString -> IO (Expr Src Void)
 dhallFromYaml Options{..} yaml = do
 
   value <- either (throwIO . userError) pure (yamlToJson yaml)
@@ -66,7 +59,6 @@ dhallFromYaml Options{..} yaml = do
   either (throwIO . YAMLCompileError) pure dhall
 
 
-#if !defined(ETA_VERSION)
 yamlToJson :: ByteString -> Either String Data.Aeson.Value
 yamlToJson s = case Data.YAML.Aeson.decode1Strict s of
                   Right v -> Right v
@@ -74,5 +66,3 @@ yamlToJson s = case Data.YAML.Aeson.decode1Strict s of
 
 showYaml :: Value -> String
 showYaml value = BS8.unpack (Data.YAML.Aeson.encode1Strict value)
-#endif
-

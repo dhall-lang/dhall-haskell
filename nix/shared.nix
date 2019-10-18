@@ -1,9 +1,16 @@
-let pinned = import ./pinnedNixpkgs.nix; in
+let
+  pinned = import ./pinnedNixpkgs.nix;
+  
+  defaultCompiler = "ghc843";
+
+in
 
 { nixpkgs ? pinned.nixpkgs
 , nixpkgsStaticLinux ? pinned.nixpkgsStaticLinux
-, compiler ? "ghc843", coverage ? false
-, system ? builtins.currentSystem }:
+, compiler ? defaultCompiler
+, coverage ? false
+, system ? builtins.currentSystem
+}:
 
 let
   allDhallPackages = [
@@ -133,6 +140,19 @@ let
                   then drv
                   else pkgsNew.haskell.lib.failOnAllWarnings drv;
 
+                failOnMissingHaddocks = drv:
+                  if compiler == defaultCompiler
+                  then
+                    drv.overrideAttrs
+                    (old: {
+                        postHaddock = (old.postHaddock or "") + ''
+                          ! (./Setup haddock 2>&1 | grep --quiet 'Missing documentation for:') || (echo "Error: Incomplete haddocks"; exit 1)
+                        '';
+                      }
+                    )
+                  else
+                    drv;
+
                 doCheckExtension =
                   mass pkgsNew.haskell.lib.doCheck
                     (   [ "dhall-bash"
@@ -155,6 +175,11 @@ let
                     "dhall-bash"
                     "dhall-json"
                     "dhall-nix"
+                  ];
+
+                failOnMissingHaddocksExtension =
+                  mass failOnMissingHaddocks [
+                    "dhall"
                   ];
 
                 extension =
@@ -184,10 +209,10 @@ let
                         (pkgsNew.sdist ../dhall-bash)
                         { };
 
-                    dhall-json =
+                    dhall-nix =
                       haskellPackagesNew.callCabal2nix
-                        "dhall-json"
-                        (pkgsNew.sdist ../dhall-json)
+                        "dhall-nix"
+                        (pkgsNew.sdist ../dhall-nix)
                         { };
 
                     dhall-lsp-server =
@@ -196,11 +221,39 @@ let
                         (pkgsNew.sdist ../dhall-lsp-server)
                         { };
 
-                    dhall-nix =
-                      haskellPackagesNew.callCabal2nix
-                        "dhall-nix"
-                        (pkgsNew.sdist ../dhall-nix)
-                        { };
+                    dhall-json =
+                      # Replace this with
+                      # `haskellPackagesNew.callCabal2nixWithOptions` once we
+                      # upgrade to a newer version of Nixpkgs
+                      let
+                        src = pkgsNew.sdist ../dhall-json;
+
+                        filter = path: type:
+                          pkgsNew.lib.hasSuffix "dhall-json.cabal" path;
+
+                        expr =
+                          haskellPackagesNew.haskellSrc2nix {
+                            name = "dhall-json";
+
+                            src =
+                              if pkgsNew.lib.canCleanSource src
+                              then pkgsNew.lib.cleanSourceWith { inherit src filter; }
+                              else src;
+
+                            extraCabal2nixOptions = "-fgpl";
+                          };
+
+                        drv = haskellPackagesNew.callPackage expr {};
+
+                      in
+                        pkgsNew.haskell.lib.overrideCabal drv (old: {
+                          inherit src;
+
+                          preConfigure = ''
+                            # Generated from ${expr}
+                            ${old.preConfigure or ""}
+                          '';
+                        });
 
                     dhall-try =
                       pkgsNew.haskell.lib.overrideCabal
@@ -226,6 +279,7 @@ let
                     doCheckExtension
                     doBenchmarkExtension
                     failOnAllWarningsExtension
+                    failOnMissingHaddocksExtension
                   ];
           }
         );

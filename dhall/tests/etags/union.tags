@@ -1,0 +1,11 @@
+
+./tests/etags/union.dhall,394
+union.dhall1,1
+/union.dhall1,1
+let Element Element1,5
+let Element = < Left Left1,17
+let Element = < Left : Natural | Right Right1,34
+let Element = < Left : Natural | Right : Bool | Middle Middle1,49
+let Element = < Left : Natural | Right : Bool | Middle : < Top Top1,60
+let Element = < Left : Natural | Right : Bool | Middle : < Top : Text | Bottom Bottom1,73
+let foo foo3,95

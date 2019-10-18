@@ -689,6 +689,8 @@ eval !env t0 =
             vCombineTypes (eval env t) (eval env u)
         Prefer t u ->
             vPrefer env (eval env t) (eval env u)
+        RecordCompletion t u ->
+            eval env (Annot (Prefer (Field t "default") u) (Field t "Type"))
         Merge x y ma ->
             case (eval env x, eval env y, fmap (eval env) ma) of
                 (VRecordLit m, VInject _ k mt, _)
@@ -942,12 +944,6 @@ conv !env t0 t0' =
     convSkip x = conv (Skip env x)
     {-# INLINE convSkip #-}
 
-{-| Returns `True` if two expressions are α-equivalent and β-equivalent and
-    `False` otherwise
-
-    `judgmentallyEqual` can fail with an `error` if you compare ill-typed
-    expressions
--}
 judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
 judgmentallyEqual (Core.denote -> t) (Core.denote -> u) =
     conv Empty (eval Empty t) (eval Empty u)
@@ -1138,30 +1134,9 @@ quote !env !t0 =
 nf :: Eq a => Environment a -> Expr s a -> Expr t a
 nf !env = Core.renote . quote (envNames env) . eval env . Core.denote
 
-{-| Reduce an expression to its normal form, performing beta reduction
-
-    `normalize` does not type-check the expression.  You may want to type-check
-    expressions before normalizing them since normalization can convert an
-    ill-typed expression into a well-typed expression.
-
-    `normalize` can also fail with `error` if you normalize an ill-typed
-    expression
--}
 normalize :: Eq a => Expr s a -> Expr t a
 normalize = nf Empty
 
-{-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
-    using De Bruijn indices to distinguish them
-
->>> alphaNormalize (Lam "a" (Const Type) (Lam "b" (Const Type) (Lam "x" "a" (Lam "y" "b" "x"))))
-Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
-
-    α-normalization does not affect free variables:
-
->>> alphaNormalize "x"
-Var (V "x" 0)
-
--}
 alphaNormalize :: Expr s a -> Expr s a
 alphaNormalize = goEnv EmptyNames
   where
@@ -1292,6 +1267,8 @@ alphaNormalize = goEnv EmptyNames
                 CombineTypes (go t) (go u)
             Prefer t u ->
                 Prefer (go t) (go u)
+            RecordCompletion t u ->
+                RecordCompletion (go t) (go u)
             Merge x y ma ->
                 Merge (go x) (go y) (fmap go ma)
             ToMap x ma ->

@@ -8,10 +8,10 @@ import qualified Language.Haskell.LSP.VFS as LSP
 import qualified Data.Aeson as J
 import qualified Data.Rope.UTF16 as Rope
 
+import Data.Void (Void)
 import Dhall.Core (Expr(Note, Embed), pretty, Import(..), ImportHashed(..), ImportType(..), headers)
 import Dhall.Import (localToPath)
 import Dhall.Parser (Src(..))
-import Dhall.TypeCheck (X)
 
 import Dhall.LSP.Backend.Completion (Completion(..), completionQueryAt,
   completeEnvironmentImport, completeLocalImport, buildCompletionContext, completeProjections, completeFromContext)
@@ -104,7 +104,7 @@ readUri uri = do
     Just (LSP.VirtualFile _ rope _) -> return (Rope.toText rope)
     Nothing -> fail $ "Could not find " <> show uri <> " in VFS."
 
-loadFile :: J.Uri -> HandlerM (Expr Src X)
+loadFile :: J.Uri -> HandlerM (Expr Src Void)
 loadFile uri = do
   txt <- readUri uri
   fileIdentifier <- fileIdentifierFromUri uri

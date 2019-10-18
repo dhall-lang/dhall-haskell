@@ -17,10 +17,10 @@ module Dhall.Freeze
 import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Data.Text
+import Data.Void (Void)
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
-import Dhall.TypeCheck (X)
 import Dhall.Util (Censor, Input(..))
 import System.Console.ANSI (hSupportsANSI)
 
@@ -58,7 +58,7 @@ freezeImport directory import_ = do
             State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
 
     -- Try again without the semantic integrity check if decoding fails
-    let handler :: SomeException -> IO (Expr Src X)
+    let handler :: SomeException -> IO (Expr Src Void)
         handler _ = do
             State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 
@@ -101,7 +101,7 @@ writeExpr inplace (header, expr) characterSet = do
     let unAnnotated = Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc)
 
     case inplace of
-        File f ->
+        InputFile f ->
             System.IO.withFile f System.IO.WriteMode (\handle -> do
                 Pretty.renderIO handle unAnnotated
                 Data.Text.IO.hPutStrLn handle "" )
@@ -142,8 +142,8 @@ freeze
     -> IO ()
 freeze inplace scope intent characterSet censor = do
     let directory = case inplace of
-            StandardInput -> "."
-            File file     -> System.FilePath.takeDirectory file
+            StandardInput  -> "."
+            InputFile file -> System.FilePath.takeDirectory file
 
     (header, parsedExpression) <- Dhall.Util.getExpressionAndHeader censor inplace
 
