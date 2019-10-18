@@ -1,9 +1,13 @@
 let
+  pinned = import ./pinnedNixpkgs.nix;
+  
   defaultCompiler = "ghc843";
 
 in
 
-{ compiler ? defaultCompiler
+{ nixpkgs ? pinned.nixpkgs
+, nixpkgsStaticLinux ? pinned.nixpkgsStaticLinux
+, compiler ? defaultCompiler
 , coverage ? false
 , system ? builtins.currentSystem
 }:
@@ -16,8 +20,6 @@ let
     "dhall-lsp-server"
     "dhall-nix"
   ];
-
-  fetchNixpkgs = import ./fetchNixpkgs.nix;
 
   mass = function: names: haskellPackagesNew: haskellPackagesOld:
     let
@@ -493,16 +495,6 @@ let
     };
   };
 
-
-
-  nixpkgs = fetchNixpkgs {
-    rev = "1d4de0d552ae9aa66a5b8dee5fb0650a4372d148";
-
-    sha256 = "09qx58dp1kbj7cpzp8ahbqfbbab1frb12sh1qng87rybcaz0dz01";
-
-    outputSha256 = "0xpqc1fhkvvv5dv1zmas2j1q27mi7j7dgyjcdh82mlgl1q63i660";
-  };
-
   pkgs = import nixpkgs {
     inherit system;
 
@@ -598,16 +590,6 @@ let
         );
       };
     };
-  };
-
-  nixpkgsStaticLinux = fetchNixpkgs {
-    owner = "nh2";
-
-    rev = "925aac04f4ca58aceb83beef18cb7dae0715421b";
-
-    sha256 = "0zkvqzzyf5c742zcl1sqc8009dr6fr1fblz53v8gfl63hzqwj0x4";
-
-    outputSha256 = "1zr8lscjl2a5cz61f0ibyx55a94v8yyp6sjzjl2gkqjrjbg99abx";
   };
 
   pkgsStaticLinux = import nixpkgsStaticLinux {
