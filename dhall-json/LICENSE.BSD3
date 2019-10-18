@@ -1,3 +1,6 @@
+The following license applies to this package when built without the
+`-fgpl` Cabal configure flag
+
 Copyright (c) 2018 Gabriel Gonzalez
 All rights reserved.
 

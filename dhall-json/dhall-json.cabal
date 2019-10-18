@@ -4,7 +4,7 @@ Cabal-Version: >=1.8.0.2
 Build-Type: Simple
 Tested-With: GHC == 7.10.3, GHC == 8.4.3, GHC == 8.6.1
 License: BSD3
-License-File: LICENSE
+License-Files: LICENSE.BSD3, LICENSE.GPLv3
 Copyright: 2017 Gabriel Gonzalez
 Author: Gabriel Gonzalez
 Maintainer: Gabriel439@gmail.com
