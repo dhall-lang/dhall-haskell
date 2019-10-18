@@ -51,7 +51,7 @@ tests =
         ]
 
 data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
-    deriving (Show, Dhall.Generic, Dhall.Interpret, Dhall.Inject)
+    deriving (Show, Dhall.Generic, Dhall.FromDhall, Dhall.Inject)
 
 unnamedFields :: TestTree
 unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do

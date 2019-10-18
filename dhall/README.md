@@ -49,7 +49,7 @@ import Dhall
 data Example = Example { foo :: Integer, bar :: Vector Double }
     deriving (Generic, Show)
 
-instance Interpret Example
+instance FromDhall Example
 
 main :: IO ()
 main = do

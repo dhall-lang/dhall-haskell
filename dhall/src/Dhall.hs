@@ -46,7 +46,7 @@ module Dhall
     , RecordType(..)
     , UnionType(..)
     , InputType(..)
-    , Interpret(..)
+    , FromDhall(..)
     , InvalidType(..)
     , ExtractErrors(..)
     , Extractor
@@ -86,7 +86,7 @@ module Dhall
     , field
     , union
     , constructor
-    , GenericInterpret(..)
+    , GenericFromDhall(..)
     , GenericInject(..)
 
     , Inject(..)
@@ -1039,7 +1039,7 @@ pair l r = Type extractOut expectedOut
                 ]
             )
 
-{-| Any value that implements `Interpret` can be automatically decoded based on
+{-| Any value that implements `FromDhall` can be automatically decoded based on
     the inferred return type of `input`
 
 >>> input auto "[1, 2, 3]" :: IO (Vector Natural)
@@ -1051,73 +1051,73 @@ fromList [("a",False),("b",True)]
     implement `Generic`.  This does not auto-generate an instance for recursive
     types.
 -}
-class Interpret a where
+class FromDhall a where
     autoWith:: InterpretOptions -> Type a
     default autoWith
-        :: (Generic a, GenericInterpret (Rep a)) => InterpretOptions -> Type a
+        :: (Generic a, GenericFromDhall (Rep a)) => InterpretOptions -> Type a
     autoWith options = fmap GHC.Generics.to (evalState (genericAutoWith options) 1)
 
-instance Interpret Void where
+instance FromDhall Void where
     autoWith _ = void
 
-instance Interpret () where
+instance FromDhall () where
     autoWith _ = unit
 
-instance Interpret Bool where
+instance FromDhall Bool where
     autoWith _ = bool
 
-instance Interpret Natural where
+instance FromDhall Natural where
     autoWith _ = natural
 
-instance Interpret Integer where
+instance FromDhall Integer where
     autoWith _ = integer
 
-instance Interpret Scientific where
+instance FromDhall Scientific where
     autoWith _ = scientific
 
-instance Interpret Double where
+instance FromDhall Double where
     autoWith _ = double
 
-instance {-# OVERLAPS #-} Interpret [Char] where
+instance {-# OVERLAPS #-} FromDhall [Char] where
     autoWith _ = string
 
-instance Interpret Data.Text.Lazy.Text where
+instance FromDhall Data.Text.Lazy.Text where
     autoWith _ = lazyText
 
-instance Interpret Text where
+instance FromDhall Text where
     autoWith _ = strictText
 
-instance Interpret a => Interpret (Maybe a) where
+instance FromDhall a => FromDhall (Maybe a) where
     autoWith opts = maybe (autoWith opts)
 
-instance Interpret a => Interpret (Seq a) where
+instance FromDhall a => FromDhall (Seq a) where
     autoWith opts = sequence (autoWith opts)
 
-instance Interpret a => Interpret [a] where
+instance FromDhall a => FromDhall [a] where
     autoWith opts = list (autoWith opts)
 
-instance Interpret a => Interpret (Vector a) where
+instance FromDhall a => FromDhall (Vector a) where
     autoWith opts = vector (autoWith opts)
 
 {-| Note that this instance will throw errors in the presence of duplicates in
     the list. To ignore duplicates, use `setIgnoringDuplicates`.
 -}
-instance (Interpret a, Ord a, Show a) => Interpret (Data.Set.Set a) where
+instance (FromDhall a, Ord a, Show a) => FromDhall (Data.Set.Set a) where
     autoWith opts = setFromDistinctList (autoWith opts)
 
 {-| Note that this instance will throw errors in the presence of duplicates in
     the list. To ignore duplicates, use `hashSetIgnoringDuplicates`.
 -}
-instance (Interpret a, Hashable a, Ord a, Show a) => Interpret (Data.HashSet.HashSet a) where
+instance (FromDhall a, Hashable a, Ord a, Show a) => FromDhall (Data.HashSet.HashSet a) where
     autoWith opts = hashSetFromDistinctList (autoWith opts)
 
-instance (Ord k, Interpret k, Interpret v) => Interpret (Map k v) where
+instance (Ord k, FromDhall k, FromDhall v) => FromDhall (Map k v) where
     autoWith opts = Dhall.map (autoWith opts) (autoWith opts)
 
-instance (Eq k, Hashable k, Interpret k, Interpret v) => Interpret (HashMap k v) where
+instance (Eq k, Hashable k, FromDhall k, FromDhall v) => FromDhall (HashMap k v) where
     autoWith opts = Dhall.hashMap (autoWith opts) (autoWith opts)
 
-instance (Inject a, Interpret b) => Interpret (a -> b) where
+instance (Inject a, FromDhall b) => FromDhall (a -> b) where
     autoWith opts = Type extractOut expectedOut
       where
         normalizer_ = Just (inputNormalizer opts)
@@ -1125,7 +1125,7 @@ instance (Inject a, Interpret b) => Interpret (a -> b) where
         -- ToDo
         extractOut e = pure (\i -> case extractIn (Dhall.Core.normalizeWith normalizer_ (App e (embed i))) of
             Success o  -> o
-            Failure _e -> error "Interpret: You cannot decode a function if it does not have the correct type" )
+            Failure _e -> error "FromDhall: You cannot decode a function if it does not have the correct type" )
 
         expectedOut = Pi "_" declared expectedIn
 
@@ -1133,25 +1133,25 @@ instance (Inject a, Interpret b) => Interpret (a -> b) where
 
         Type extractIn expectedIn = autoWith opts
 
-instance (Interpret a, Interpret b) => Interpret (a, b)
+instance (FromDhall a, FromDhall b) => FromDhall (a, b)
 
 {-| Use the default options for interpreting a configuration file
 
 > auto = autoWith defaultInterpretOptions
 -}
-auto :: Interpret a => Type a
+auto :: FromDhall a => Type a
 auto = autoWith defaultInterpretOptions
 
 {-| This type is exactly the same as `Data.Fix.Fix` except with a different
-    `Interpret` instance.  This intermediate type simplies the implementation
-    of the inner loop for the `Interpret` instance for `Fix`
+    `FromDhall` instance.  This intermediate type simplies the implementation
+    of the inner loop for the `FromDhall` instance for `Fix`
 -}
 newtype Result f = Result { _unResult :: f (Result f) }
 
 resultToFix :: Functor f => Result f -> Fix f
 resultToFix (Result x) = Fix (fmap resultToFix x)
 
-instance Interpret (f (Result f)) => Interpret (Result f) where
+instance FromDhall (f (Result f)) => FromDhall (Result f) where
     autoWith options = Type { expected = expected_, extract = extract_ }
       where
         expected_ = "result"
@@ -1178,7 +1178,7 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- >
 -- > import Data.Fix (Fix(..))
 -- > import Data.Text (Text)
--- > import Dhall (Interpret)
+-- > import Dhall (FromDhall)
 -- > import GHC.Generics (Generic)
 -- > import Numeric.Natural (Natural)
 -- >
@@ -1197,7 +1197,7 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- > TH.makeBaseFunctor ''Expr
 -- >
 -- > deriving instance Generic (ExprF a)
--- > deriving instance Interpret a => Interpret (ExprF a)
+-- > deriving instance FromDhall a => FromDhall (ExprF a)
 -- >
 -- > example :: Text
 -- > example = [NeatInterpolation.text|
@@ -1235,7 +1235,7 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- >     x <- Dhall.input Dhall.auto example :: IO (Fix ExprF)
 -- >
 -- >     print (convert x :: Expr)
-instance (Functor f, Interpret (f (Result f))) => Interpret (Fix f) where
+instance (Functor f, FromDhall (f (Result f))) => FromDhall (Fix f) where
     autoWith options = Type { expected = expected_, extract = extract_ }
       where
         expected_ =
@@ -1251,15 +1251,15 @@ instance (Functor f, Interpret (f (Result f))) => Interpret (Fix f) where
             go0 _ = typeError expected_ expression0
 
 {-| `genericAuto` is the default implementation for `auto` if you derive
-    `Interpret`.  The difference is that you can use `genericAuto` without
-    having to explicitly provide an `Interpret` instance for a type as long as
+    `FromDhall`.  The difference is that you can use `genericAuto` without
+    having to explicitly provide a `FromDhall` instance for a type as long as
     the type derives `Generic`
 -}
-genericAuto :: (Generic a, GenericInterpret (Rep a)) => Type a
+genericAuto :: (Generic a, GenericFromDhall (Rep a)) => Type a
 genericAuto = fmap to (evalState (genericAutoWith defaultInterpretOptions) 1)
 
 {-| Use these options to tweak how Dhall derives a generic implementation of
-    `Interpret`
+    `FromDhall`
 -}
 data InterpretOptions = InterpretOptions
     { fieldModifier       :: Text -> Text
@@ -1273,7 +1273,7 @@ data InterpretOptions = InterpretOptions
     --   `Wrapped` for backwards compatibility but will eventually be changed to
     --   `Smart`
     , inputNormalizer     :: Dhall.Core.ReifiedNormalizer Void
-    -- ^ This is only used by the `Interpret` instance for functions in order
+    -- ^ This is only used by the `FromDhall` instance for functions in order
     --   to normalize the function input before marshaling the input into a
     --   Dhall expression
     }
@@ -1318,18 +1318,18 @@ defaultInterpretOptions = InterpretOptions
           Dhall.Core.ReifiedNormalizer (const (pure Nothing))
     }
 
-{-| This is the underlying class that powers the `Interpret` class's support
+{-| This is the underlying class that powers the `FromDhall` class's support
     for automatically deriving a generic implementation
 -}
-class GenericInterpret f where
+class GenericFromDhall f where
     genericAutoWith :: InterpretOptions -> State Int (Type (f a))
 
-instance GenericInterpret f => GenericInterpret (M1 D d f) where
+instance GenericFromDhall f => GenericFromDhall (M1 D d f) where
     genericAutoWith options = do
         res <- genericAutoWith options
         pure (fmap M1 res)
 
-instance GenericInterpret V1 where
+instance GenericFromDhall V1 where
     genericAutoWith _ = pure Type {..}
       where
         extract expr = typeError expected expr
@@ -1390,7 +1390,7 @@ extractUnionConstructor (Field (Union kts) fld) =
 extractUnionConstructor _ =
   empty
 
-instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret f2) => GenericInterpret (M1 C c1 f1 :+: M1 C c2 f2) where
+instance (Constructor c1, Constructor c2, GenericFromDhall f1, GenericFromDhall f2) => GenericFromDhall (M1 C c1 f1 :+: M1 C c2 f2) where
     genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
       where
         nL :: M1 i c1 f1 a
@@ -1422,7 +1422,7 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
         Type extractL expectedL = evalState (genericAutoWith options) 1
         Type extractR expectedR = evalState (genericAutoWith options) 1
 
-instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => GenericInterpret ((f :+: g) :+: M1 C c h) where
+instance (Constructor c, GenericFromDhall (f :+: g), GenericFromDhall h) => GenericFromDhall ((f :+: g) :+: M1 C c h) where
     genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
       where
         n :: M1 i c h a
@@ -1445,7 +1445,7 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
 
         ktsL = unsafeExpectUnion "genericAutoWith (:+:)" expectedL
 
-instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => GenericInterpret (M1 C c f :+: (g :+: h)) where
+instance (Constructor c, GenericFromDhall f, GenericFromDhall (g :+: h)) => GenericFromDhall (M1 C c f :+: (g :+: h)) where
     genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
       where
         n :: M1 i c f a
@@ -1468,7 +1468,7 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
 
         ktsR = unsafeExpectUnion "genericAutoWith (:+:)" expectedR
 
-instance (GenericInterpret (f :+: g), GenericInterpret (h :+: i)) => GenericInterpret ((f :+: g) :+: (h :+: i)) where
+instance (GenericFromDhall (f :+: g), GenericFromDhall (h :+: i)) => GenericFromDhall ((f :+: g) :+: (h :+: i)) where
     genericAutoWith options = pure (Type {..})
       where
         extract e = fmap L1 (extractL e) `ealt` fmap R1 (extractR e)
@@ -1481,12 +1481,12 @@ instance (GenericInterpret (f :+: g), GenericInterpret (h :+: i)) => GenericInte
         ktsL = unsafeExpectUnion "genericAutoWith (:+:)" expectedL
         ktsR = unsafeExpectUnion "genericAutoWith (:+:)" expectedR
 
-instance GenericInterpret f => GenericInterpret (M1 C c f) where
+instance GenericFromDhall f => GenericFromDhall (M1 C c f) where
     genericAutoWith options = do
         res <- genericAutoWith options
         pure (fmap M1 res)
 
-instance GenericInterpret U1 where
+instance GenericFromDhall U1 where
     genericAutoWith _ = pure (Type {..})
       where
         extract _ = pure U1
@@ -1500,7 +1500,7 @@ getSelName n = case selName n of
              pure (Data.Text.pack ("_" ++ show i))
     nn -> pure (Data.Text.pack nn)
 
-instance (GenericInterpret (f :*: g), GenericInterpret (h :*: i)) => GenericInterpret ((f :*: g) :*: (h :*: i)) where
+instance (GenericFromDhall (f :*: g), GenericFromDhall (h :*: i)) => GenericFromDhall ((f :*: g) :*: (h :*: i)) where
     genericAutoWith options = do
         Type extractL expectedL <- genericAutoWith options
         Type extractR expectedR <- genericAutoWith options
@@ -1515,7 +1515,7 @@ instance (GenericInterpret (f :*: g), GenericInterpret (h :*: i)) => GenericInte
 
         return (Type {..})
 
-instance (GenericInterpret (f :*: g), Selector s, Interpret a) => GenericInterpret ((f :*: g) :*: M1 S s (K1 i a)) where
+instance (GenericFromDhall (f :*: g), Selector s, FromDhall a) => GenericFromDhall ((f :*: g) :*: M1 S s (K1 i a)) where
     genericAutoWith options@InterpretOptions{..} = do
         let nR :: M1 S s (K1 i a) r
             nR = undefined
@@ -1545,7 +1545,7 @@ instance (GenericInterpret (f :*: g), Selector s, Interpret a) => GenericInterpr
 
         return (Type {..})
 
-instance (Selector s, Interpret a, GenericInterpret (f :*: g)) => GenericInterpret (M1 S s (K1 i a) :*: (f :*: g)) where
+instance (Selector s, FromDhall a, GenericFromDhall (f :*: g)) => GenericFromDhall (M1 S s (K1 i a) :*: (f :*: g)) where
     genericAutoWith options@InterpretOptions{..} = do
         let nL :: M1 S s (K1 i a) r
             nL = undefined
@@ -1575,7 +1575,7 @@ instance (Selector s, Interpret a, GenericInterpret (f :*: g)) => GenericInterpr
 
         return (Type {..})
 
-instance (Selector s1, Selector s2, Interpret a1, Interpret a2) => GenericInterpret (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
+instance (Selector s1, Selector s2, FromDhall a1, FromDhall a2) => GenericFromDhall (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
     genericAutoWith options@InterpretOptions{..} = do
         let nL :: M1 S s1 (K1 i1 a1) r
             nL = undefined
@@ -1612,7 +1612,7 @@ instance (Selector s1, Selector s2, Interpret a1, Interpret a2) => GenericInterp
 
         return (Type {..})
 
-instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
+instance (Selector s, FromDhall a) => GenericFromDhall (M1 S s (K1 i a)) where
     genericAutoWith options@InterpretOptions{..} = do
         let n :: M1 S s (K1 i a) r
             n = undefined
@@ -1669,9 +1669,9 @@ instance Contravariant InputType where
       where
         embed' x = embed (f x)
 
-{-| This class is used by `Interpret` instance for functions:
+{-| This class is used by `FromDhall` instance for functions:
 
-> instance (Inject a, Interpret b) => Interpret (a -> b)
+> instance (Inject a, FromDhall b) => FromDhall (a -> b)
 
     You can convert Dhall functions with "simple" inputs (i.e. instances of this
     class) into Haskell functions.  This works by:
@@ -1952,7 +1952,7 @@ instance (Inject k, Inject v) => Inject (HashMap k v) where
         InputType embedK declaredK = injectWith options
         InputType embedV declaredV = injectWith options
 
-{-| This is the underlying class that powers the `Interpret` class's support
+{-| This is the underlying class that powers the `FromDhall` class's support
     for automatically deriving a generic implementation
 -}
 class GenericInject f where

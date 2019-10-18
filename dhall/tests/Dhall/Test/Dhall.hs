@@ -22,7 +22,7 @@ import Data.Sequence (Seq)
 import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Vector (Vector)
-import Dhall (Inject, Interpret)
+import Dhall (Inject, FromDhall)
 import Dhall.Core (Expr(..))
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
@@ -40,14 +40,14 @@ data ExprF expr
    = LitF Natural
    | AddF expr expr
    | MulF expr expr
-   deriving (Eq, Functor, Generic, Interpret, Show)
+   deriving (Eq, Functor, Generic, FromDhall, Show)
 
 tests :: TestTree
 tests =
     testGroup "Input"
      [ shouldShowDetailedTypeError
      , shouldHandleUnionLiteral
-     , shouldHaveWorkingRecursiveInterpret
+     , shouldHaveWorkingRecursiveFromDhall
      , shouldHaveWorkingGenericAuto
      , shouldHandleUnionsCorrectly
      , shouldTreatAConstructorStoringUnitAsEmptyAlternative
@@ -116,8 +116,8 @@ shouldTreatAConstructorStoringUnitAsEmptyAlternative = testCase "Handle unit con
 
     Dhall.embed exampleInputType () @=? Field (Union (Dhall.Map.singleton "A" Nothing)) "A"
 
-shouldHaveWorkingRecursiveInterpret :: TestTree
-shouldHaveWorkingRecursiveInterpret = testGroup "recursive Interpret instance"
+shouldHaveWorkingRecursiveFromDhall :: TestTree
+shouldHaveWorkingRecursiveFromDhall = testGroup "recursive FromDhall instance"
     [ testCase "works for a recursive expression" $ do
         actual <- Dhall.input Dhall.auto "./tests/recursive/expr0.dhall"
 
@@ -156,10 +156,10 @@ shouldHaveWorkingGenericAuto = testGroup "genericAuto"
   ]
 
 data NonEmptyUnion = N0 Bool | N1 Natural | N2 Text
-    deriving (Eq, Generic, Inject, Interpret, Show)
+    deriving (Eq, Generic, Inject, FromDhall, Show)
 
 data Enum = E0 | E1 | E2
-    deriving (Eq, Generic, Inject, Interpret, Show)
+    deriving (Eq, Generic, Inject, FromDhall, Show)
 
 data Records
     = R0 {}
@@ -167,10 +167,10 @@ data Records
     | R2 { x :: Double }
     | R3 { a :: (), b :: () }
     | R4 { x :: Double, y :: Double }
-    deriving (Eq, Generic, Inject, Interpret, Show)
+    deriving (Eq, Generic, Inject, FromDhall, Show)
 
 data Products = P0 | P1 () | P2 Double | P3 () () | P4 Double Double
-    deriving (Eq, Generic, Inject, Interpret, Show)
+    deriving (Eq, Generic, Inject, FromDhall, Show)
 
 shouldHandleUnionsCorrectly :: TestTree
 shouldHandleUnionsCorrectly =
@@ -364,7 +364,7 @@ shouldConvertDhallToHaskellCorrectly =
         , "{ _1 = True, _2 = {=} }" `correspondsTo` (True, ())
         ]
   where
-    correspondsTo :: (Eq a, Interpret a, Show a) => Text -> a -> TestTree
+    correspondsTo :: (Eq a, FromDhall a, Show a) => Text -> a -> TestTree
     dhallCode `correspondsTo` expectedHaskellValue =
       testCase "Marshall Dhall code to Haskell" $ do
           actualHaskellValue <- Dhall.input Dhall.auto dhallCode
