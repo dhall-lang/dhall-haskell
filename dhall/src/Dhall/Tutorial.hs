@@ -685,7 +685,7 @@ import Dhall
 -- @∀@/@forall@ to give names to non-@Type@ arguments (such as the first
 -- argument to @makeBools@).
 --
--- The annotated expression is our program's normal form:
+-- This expression is our program's normal form:
 --
 -- > λ(n : Bool) → [ n, False, True, n ]
 --
