@@ -1,5 +1,5 @@
 
-./tests/etags/union.dhall,394
+./tests/tags/union.dhall,394
 union.dhall1,1
 /union.dhall1,1
 let Element Element1,5

@@ -22,6 +22,7 @@ module Dhall.Main
 
 import Control.Applicative (optional, (<|>))
 import Control.Exception (Handler(..), SomeException)
+import Control.Monad (when)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -29,7 +30,7 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Void (Void)
 import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
-import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..))
+import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..), _semanticCacheMode)
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError)
@@ -64,7 +65,7 @@ import qualified Dhall.Hash
 import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
-import qualified Dhall.ETags
+import qualified Dhall.Tags
 import qualified Dhall.Pretty
 import qualified Dhall.Repl
 import qualified Dhall.TypeCheck
@@ -87,6 +88,11 @@ data Options = Options
     , censor  :: Censor
     }
 
+ignoreSemanticCache :: Mode -> Bool
+ignoreSemanticCache Default {..} = semanticCacheMode == IgnoreSemanticCache
+ignoreSemanticCache Resolve {..} = semanticCacheMode == IgnoreSemanticCache
+ignoreSemanticCache _            = False
+
 -- | The subcommands for the @dhall@ executable
 data Mode
     = Default
@@ -98,7 +104,11 @@ data Mode
           , version :: Bool
           }
     | Version
-    | Resolve { file :: Input, resolveMode :: Maybe ResolveMode }
+    | Resolve
+          { file :: Input
+          , resolveMode :: Maybe ResolveMode
+          , semanticCacheMode :: SemanticCacheMode
+          }
     | Type { file :: Input, quiet :: Bool }
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
@@ -107,11 +117,12 @@ data Mode
     | Hash
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Input }
-    | ETags { input :: Input
-            , output :: Output
-            , suffixes :: Maybe [Text]
-            , followSymlinks :: Bool
-            }
+    | Tags
+          { input :: Input
+          , output :: Output
+          , suffixes :: Maybe [Text]
+          , followSymlinks :: Bool
+          }
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool }
     | Text { file :: Input }
@@ -165,7 +176,7 @@ parseMode =
     <|> subcommand
             "resolve"
             "Resolve an expression's imports"
-            (Resolve <$> parseFile <*> parseResolveMode)
+            (Resolve <$> parseFile <*> parseResolveMode <*> parseSemanticCacheMode)
     <|> subcommand
             "type"
             "Infer an expression's type"
@@ -192,8 +203,8 @@ parseMode =
             (Lint <$> parseInplace)
     <|> subcommand
             "tags"
-            "Generate ETags file"
-            (ETags <$> parseInput <*> parseTagsOutput <*> parseSuffixes <*> parseFollowSymlinks)
+            "Generate etags file"
+            (Tags <$> parseInput <*> parseTagsOutput <*> parseSuffixes <*> parseFollowSymlinks)
     <|> subcommand
             "format"
             "Standard code formatter for the Dhall language"
@@ -472,7 +483,7 @@ command (Options {..}) = do
 
             renderDoc h doc
 
-    Dhall.Import.warnAboutMissingCaches
+    when (not $ ignoreSemanticCache mode) Dhall.Import.warnAboutMissingCaches
 
     handle $ case mode of
         Version -> do
@@ -513,7 +524,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             (Dhall.Import.Types.Status { _graph, _stack }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file)
+                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
 
             let (rootImport :| _) = _stack
                 imports = rootImport : map parent _graph ++ map child _graph
@@ -549,7 +560,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             (Dhall.Import.Types.Status { _cache }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file)
+                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
 
             mapM_ print
                  .   fmap (   Pretty.pretty
@@ -563,7 +574,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
 
             render System.IO.stdout resolvedExpression
 
@@ -714,8 +725,8 @@ command (Options {..}) = do
 
                     Control.Exception.throwIO (Dhall.InvalidType {..})
 
-        ETags {..} -> do
-            tags <- Dhall.ETags.generate input suffixes followSymlinks
+        Tags {..} -> do
+            tags <- Dhall.Tags.generate input suffixes followSymlinks
 
             case output of
                 OutputFile file ->

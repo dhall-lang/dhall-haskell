@@ -59,7 +59,7 @@ data Depends = Depends { parent :: Chained, child :: Chained }
 {-| This enables or disables the semantic cache for imports protected by
     integrity checks
 -}
-data SemanticCacheMode = IgnoreSemanticCache | UseSemanticCache
+data SemanticCacheMode = IgnoreSemanticCache | UseSemanticCache deriving (Eq)
 
 -- | State threaded throughout the import process
 data Status = Status
