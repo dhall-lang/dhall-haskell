@@ -1,6 +1,6 @@
 Next release
 
-* Add `dhall tags` command that build tags file in [ETags](https://en.wikipedia.org/wiki/Ctags#Etags_2) format. Allow to index file or directory.
+* Add `dhall tags` command that build tags file in [etags](https://en.wikipedia.org/wiki/Ctags#Etags_2) format. Allow to index file or directory.
 
 1.26.1
 

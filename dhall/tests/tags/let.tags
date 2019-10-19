@@ -1,5 +1,5 @@
 
-./tests/etags/let.dhall,66
+./tests/tags/let.dhall,66
 let.dhall1,1
 /let.dhall1,1
 let foo foo1,5
