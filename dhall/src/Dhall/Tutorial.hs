@@ -562,9 +562,9 @@ import Dhall
 -- > { x = 1, y = True }
 --
 -- This is our first example of using the @dhall@ command-line tool with no
--- arguments, which by default evaluates the provided expression.  By default
--- this reads the expression on standard input and outputs the evaluated result
--- on standard output.
+-- subcommand (like @type@), which evaluates the provided expression.  By
+-- default, this reads the expression on standard input and outputs the
+-- evaluated result on standard output.
 --
 -- __Exercise__: Save the above @./nested.dhall@ file and then try to access the
 -- value of the @baz@ field.  Test that this works by interpreting your code
