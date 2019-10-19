@@ -1797,7 +1797,7 @@ import Dhall
 -- You can find an up-to-date list of available built-in functions and operators
 -- here:
 --
--- <https://github.com/dhall-lang/dhall-lang/wiki/Built-in-types%2C-functions%2C-and-operators Built-in-types functions and operators>
+-- <https://github.com/dhall-lang/dhall-lang/wiki/Built-in-types%2C-functions%2C-and-operators Built-in types, functions, and operators>
 
 -- $caveats
 --
@@ -2167,7 +2167,7 @@ import Dhall
 -- above issue tracker.
 --
 -- If you would like to contribute to the Dhall project you can try to port
--- Dhall to other languages besides Haskell so that Dhall configuration files
+-- Dhall to languages that do not yet have Dhall integrations so that Dhall configuration files
 -- can be read into those languages, too.
 
 -- $faq
