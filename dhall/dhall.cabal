@@ -517,6 +517,7 @@ Library
         Dhall.Pretty.Internal,
         Dhall.Parser.Combinators,
         Dhall.URL,
+        Dhall.Import.Status,
         Dhall.Import.Types,
         Dhall.Eval,
         Paths_dhall

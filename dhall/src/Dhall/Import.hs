@@ -175,6 +175,7 @@ import Dhall.Core
 #ifdef WITH_HTTP
 import Dhall.Import.HTTP hiding (HTTPHeader)
 #endif
+import Dhall.Import.Status
 import Dhall.Import.Types
 
 import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))

@@ -63,7 +63,7 @@ import qualified Dhall.Format
 import qualified Dhall.Freeze
 import qualified Dhall.Hash
 import qualified Dhall.Import
-import qualified Dhall.Import.Types
+import qualified Dhall.Import.Status
 import qualified Dhall.Lint
 import qualified Dhall.Tags
 import qualified Dhall.Pretty
@@ -523,7 +523,7 @@ command (Options {..}) = do
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _graph, _stack }) <-
+            (Dhall.Import.Status.Status { _graph, _stack }) <-
                 State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
 
             let (rootImport :| _) = _stack
@@ -559,7 +559,7 @@ command (Options {..}) = do
         Resolve { resolveMode = Just ListTransitiveDependencies, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _cache }) <-
+            (Dhall.Import.Status.Status { _cache }) <-
                 State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
 
             mapM_ print

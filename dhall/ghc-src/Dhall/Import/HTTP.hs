@@ -26,6 +26,7 @@ import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
 import qualified Dhall.Util
 
+import Dhall.Import.Status
 import Dhall.Import.Types
 
 import qualified Control.Exception
