@@ -121,14 +121,14 @@ notesInLetInLet = do
 
 shouldParse :: Text -> TestTree
 shouldParse path = do
-    let skip =
+    let expectedFailures =
             -- This is a bug created by a parsing performance
             -- improvement
             [ parseDirectory </> "success/unit/MergeParenAnnotation" ]
 
     let pathString = Text.unpack path
 
-    Test.Util.testCase path skip $ do
+    Test.Util.testCase path expectedFailures $ do
         text <- Text.IO.readFile (pathString <> "A.dhall")
 
         encoded <- ByteString.Lazy.readFile (pathString <> "B.dhallb")
@@ -151,7 +151,7 @@ shouldParse path = do
 
 shouldNotParse :: Text -> TestTree
 shouldNotParse path = do
-    let skip =
+    let expectedFailures =
             [ -- These two unexpected successes are due to not correctly
               -- requiring non-empty whitespace after the `:` in a type
               -- annotation
@@ -190,7 +190,7 @@ shouldNotParse path = do
 
     let pathString = Text.unpack path
 
-    Test.Util.testCase path skip (do
+    Test.Util.testCase path expectedFailures (do
         bytes <- ByteString.readFile pathString
 
         case Text.Encoding.decodeUtf8' bytes of
@@ -202,11 +202,11 @@ shouldNotParse path = do
 
 shouldDecode :: Text -> TestTree
 shouldDecode pathText = do
-    let skip = []
+    let expectedFailures = []
 
     let pathString = Text.unpack pathText
 
-    Test.Util.testCase pathText skip (do
+    Test.Util.testCase pathText expectedFailures (do
         bytes <- ByteString.Lazy.readFile (pathString <> "A.dhallb")
 
         term <- Core.throws (Serialise.deserialiseOrFail bytes)
@@ -227,11 +227,11 @@ shouldDecode pathText = do
 
 shouldNotDecode :: Text -> TestTree
 shouldNotDecode pathText = do
-    let skip = []
+    let expectedFailures = []
 
     let pathString = Text.unpack pathText
 
-    Test.Util.testCase pathText skip (do
+    Test.Util.testCase pathText expectedFailures (do
         bytes <- ByteString.Lazy.readFile (pathString <> ".dhallb")
 
         term <- Core.throws (Serialise.deserialiseOrFail bytes)

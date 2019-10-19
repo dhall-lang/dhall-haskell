@@ -1,5 +1,5 @@
 
-./tests/etags/unicode.dhall,57
+./tests/tags/unicode.dhall,57
 unicode.dhall1,1
 /unicode.dhall1,1
 let foo foo2,15

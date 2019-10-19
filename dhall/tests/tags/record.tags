@@ -1,5 +1,5 @@
 
-./tests/etags/record.dhall,335
+./tests/tags/record.dhall,335
 record.dhall1,1
 /record.dhall1,1
 let Config Config6,81

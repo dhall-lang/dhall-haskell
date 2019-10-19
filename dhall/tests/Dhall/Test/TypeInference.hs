@@ -44,9 +44,9 @@ getTests = do
 
 successTest :: Text -> TestTree
 successTest prefix = do
-    let skip = []
+    let expectedFailures = []
 
-    Test.Util.testCase prefix skip $ do
+    Test.Util.testCase prefix expectedFailures $ do
         let prefixFP = Text.unpack prefix
 
         actualCode <- Text.IO.readFile (prefixFP <> "A.dhall")
@@ -80,7 +80,7 @@ successTest prefix = do
 
 failureTest :: Text -> TestTree
 failureTest prefix = do
-    let skip = [ typeInferenceDirectory </> "failure/unit/MergeEmptyNeedsDirectAnnotation1"
+    let expectedFailures = [ typeInferenceDirectory </> "failure/unit/MergeEmptyNeedsDirectAnnotation1"
 
                -- Duplicate fields are incorrectly caught during parsing:
                -- https://github.com/dhall-lang/dhall-haskell/issues/772
@@ -91,7 +91,7 @@ failureTest prefix = do
                , typeInferenceDirectory </> "failure/unit/UnionTypeDuplicateVariants2"
                ]
 
-    Test.Util.testCase prefix skip $ do
+    Test.Util.testCase prefix expectedFailures $ do
         let prefixFP = Text.unpack prefix
 
         code <- Text.IO.readFile (prefixFP <> ".dhall")
