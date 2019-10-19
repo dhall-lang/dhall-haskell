@@ -22,7 +22,7 @@ import Data.Sequence (Seq)
 import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Vector (Vector)
-import Dhall (Inject, Interpret)
+import Dhall (ToDhall, FromDhall)
 import Dhall.Core (Expr(..))
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
@@ -40,14 +40,14 @@ data ExprF expr
    = LitF Natural
    | AddF expr expr
    | MulF expr expr
-   deriving (Eq, Functor, Generic, Interpret, Show)
+   deriving (Eq, Functor, Generic, FromDhall, Show)
 
 tests :: TestTree
 tests =
     testGroup "Input"
      [ shouldShowDetailedTypeError
      , shouldHandleUnionLiteral
-     , shouldHaveWorkingRecursiveInterpret
+     , shouldHaveWorkingRecursiveFromDhall
      , shouldHaveWorkingGenericAuto
      , shouldHandleUnionsCorrectly
      , shouldTreatAConstructorStoringUnitAsEmptyAlternative
@@ -116,8 +116,8 @@ shouldTreatAConstructorStoringUnitAsEmptyAlternative = testCase "Handle unit con
 
     Dhall.embed exampleInputType () @=? Field (Union (Dhall.Map.singleton "A" Nothing)) "A"
 
-shouldHaveWorkingRecursiveInterpret :: TestTree
-shouldHaveWorkingRecursiveInterpret = testGroup "recursive Interpret instance"
+shouldHaveWorkingRecursiveFromDhall :: TestTree
+shouldHaveWorkingRecursiveFromDhall = testGroup "recursive FromDhall instance"
     [ testCase "works for a recursive expression" $ do
         actual <- Dhall.input Dhall.auto "./tests/recursive/expr0.dhall"
 
@@ -156,10 +156,10 @@ shouldHaveWorkingGenericAuto = testGroup "genericAuto"
   ]
 
 data NonEmptyUnion = N0 Bool | N1 Natural | N2 Text
-    deriving (Eq, Generic, Inject, Interpret, Show)
+    deriving (Eq, Generic, ToDhall, FromDhall, Show)
 
 data Enum = E0 | E1 | E2
-    deriving (Eq, Generic, Inject, Interpret, Show)
+    deriving (Eq, Generic, ToDhall, FromDhall, Show)
 
 data Records
     = R0 {}
@@ -167,10 +167,10 @@ data Records
     | R2 { x :: Double }
     | R3 { a :: (), b :: () }
     | R4 { x :: Double, y :: Double }
-    deriving (Eq, Generic, Inject, Interpret, Show)
+    deriving (Eq, Generic, ToDhall, FromDhall, Show)
 
 data Products = P0 | P1 () | P2 Double | P3 () () | P4 Double Double
-    deriving (Eq, Generic, Inject, Interpret, Show)
+    deriving (Eq, Generic, ToDhall, FromDhall, Show)
 
 shouldHandleUnionsCorrectly :: TestTree
 shouldHandleUnionsCorrectly =
@@ -255,52 +255,52 @@ shouldHandleUnionsCorrectly =
         `shouldMarshalIntoSmart` P4 1.0 2.0
 
     , N0 True
-        `shouldInjectInto`
+        `shouldEmbedAs`
         "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N0 { _1 = True }"
     , N1 5
-        `shouldInjectInto`
+        `shouldEmbedAs`
         "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N1 { _1 = 5 }"
     , N2 "ABC"
-        `shouldInjectInto`
+        `shouldEmbedAs`
         "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N2 { _1 = \"ABC\" }"
 
     , N0 True
-        `shouldInjectIntoSmart`
+        `shouldEmbedAsSmart`
         "(< N0 : Bool | N1 : Natural | N2 : Text >).N0 True"
     , N1 5
-        `shouldInjectIntoSmart`
+        `shouldEmbedAsSmart`
         "(< N0 : Bool | N1 : Natural | N2 : Text >).N1 5"
     , N2 "ABC"
-        `shouldInjectIntoSmart`
+        `shouldEmbedAsSmart`
         "(< N0 : Bool | N1 : Natural | N2 : Text >).N2 \"ABC\""
 
-    , E0 `shouldInjectInto` "< E0 | E1 | E2 >.E0"
-    , E1 `shouldInjectInto` "< E0 | E1 | E2 >.E1"
-    , E2 `shouldInjectInto` "< E0 | E1 | E2 >.E2"
+    , E0 `shouldEmbedAs` "< E0 | E1 | E2 >.E0"
+    , E1 `shouldEmbedAs` "< E0 | E1 | E2 >.E1"
+    , E2 `shouldEmbedAs` "< E0 | E1 | E2 >.E2"
 
-    , R0 `shouldInjectInto` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
-    , R1 { a = () } `shouldInjectInto` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1 { a = {=} }"
-    , R2 { x = 1.0 } `shouldInjectInto` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 { x = 1.0}"
-    , R3 { a = (), b = () } `shouldInjectInto` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
-    , R4 { x = 1.0, y = 2.0 } `shouldInjectInto` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
+    , R0 `shouldEmbedAs` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
+    , R1 { a = () } `shouldEmbedAs` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1 { a = {=} }"
+    , R2 { x = 1.0 } `shouldEmbedAs` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 { x = 1.0}"
+    , R3 { a = (), b = () } `shouldEmbedAs` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
+    , R4 { x = 1.0, y = 2.0 } `shouldEmbedAs` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
 
-    , R0 `shouldInjectIntoSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
-    , R1 { a = () } `shouldInjectIntoSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1 { a = {=} }"
-    , R2 { x = 1.0 } `shouldInjectIntoSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 { x = 1.0}"
-    , R3 { a = (), b = () } `shouldInjectIntoSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
-    , R4 { x = 1.0, y = 2.0 } `shouldInjectIntoSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
+    , R0 `shouldEmbedAsSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
+    , R1 { a = () } `shouldEmbedAsSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1 { a = {=} }"
+    , R2 { x = 1.0 } `shouldEmbedAsSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 { x = 1.0}"
+    , R3 { a = (), b = () } `shouldEmbedAsSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
+    , R4 { x = 1.0, y = 2.0 } `shouldEmbedAsSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
 
-    , P0 `shouldInjectInto` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
-    , P1 () `shouldInjectInto` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1 { _1 = {=} }"
-    , P2 1.0 `shouldInjectInto` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 { _1 = 1.0 }"
-    , P3 () () `shouldInjectInto` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
-    , P4 1.0 2.0 `shouldInjectInto` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
+    , P0 `shouldEmbedAs` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
+    , P1 () `shouldEmbedAs` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1 { _1 = {=} }"
+    , P2 1.0 `shouldEmbedAs` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 { _1 = 1.0 }"
+    , P3 () () `shouldEmbedAs` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
+    , P4 1.0 2.0 `shouldEmbedAs` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
 
-    , P0 `shouldInjectIntoSmart` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
-    , P1 () `shouldInjectIntoSmart` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1"
-    , P2 1.0 `shouldInjectIntoSmart` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 1.0"
-    , P3 () () `shouldInjectIntoSmart` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
-    , P4 1.0 2.0 `shouldInjectIntoSmart` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
+    , P0 `shouldEmbedAsSmart` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
+    , P1 () `shouldEmbedAsSmart` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1"
+    , P2 1.0 `shouldEmbedAsSmart` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 1.0"
+    , P3 () () `shouldEmbedAsSmart` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
+    , P4 1.0 2.0 `shouldEmbedAsSmart` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
     ]
   where
     smartOptions =
@@ -327,14 +327,14 @@ shouldHandleUnionsCorrectly =
 
         expectedValue @=? actualValue
 
-    value `shouldInjectInto` expectedCode = testCase "Inject" $ do
+    value `shouldEmbedAs` expectedCode = testCase "ToDhall" $ do
         parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText "(test)" expectedCode)
 
         resolvedExpression <- Dhall.Import.assertNoImports parsedExpression
 
         Dhall.Core.denote resolvedExpression @=? Dhall.embed Dhall.inject value
 
-    value `shouldInjectIntoSmart` expectedCode = testCase "Inject" $ do
+    value `shouldEmbedAsSmart` expectedCode = testCase "ToDhall" $ do
         parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText "(test)" expectedCode)
 
         resolvedExpression <- Dhall.Import.assertNoImports parsedExpression
@@ -364,7 +364,7 @@ shouldConvertDhallToHaskellCorrectly =
         , "{ _1 = True, _2 = {=} }" `correspondsTo` (True, ())
         ]
   where
-    correspondsTo :: (Eq a, Interpret a, Show a) => Text -> a -> TestTree
+    correspondsTo :: (Eq a, FromDhall a, Show a) => Text -> a -> TestTree
     dhallCode `correspondsTo` expectedHaskellValue =
       testCase "Marshall Dhall code to Haskell" $ do
           actualHaskellValue <- Dhall.input Dhall.auto dhallCode
@@ -394,7 +394,7 @@ shouldConvertHaskellToDhallCorrectly =
         , "{ _1 = True, _2 = {=} }" `correspondsTo` (True, ())
         ]
   where
-    correspondsTo :: Inject a => Text -> a -> TestTree
+    correspondsTo :: ToDhall a => Text -> a -> TestTree
     expectedDhallCode `correspondsTo` haskellValue =
         testCase "Marshall Haskell to Dhall code" $ do
             let actualDhallCode =
