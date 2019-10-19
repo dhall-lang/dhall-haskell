@@ -38,6 +38,6 @@ main = do
 
             -- , prefix </> "src"
             , "-i" <> (prefix </> "src")
-            , prefix </> "src/Dhall/ETags.hs"
+            , prefix </> "src/Dhall/Tags.hs"
             , prefix </> "src/Dhall/Tutorial.hs"
             ]

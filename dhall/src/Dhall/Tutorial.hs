@@ -202,7 +202,7 @@ import Dhall
 -- > data Example = Example { foo :: Natural, bar :: Vector Double }
 -- >     deriving (Generic, Show)
 -- > 
--- > instance Interpret Example
+-- > instance FromDhall Example
 -- > 
 -- > main :: IO ()
 -- > main = do
@@ -244,19 +244,19 @@ import Dhall
 -- ... or we can use `auto` to let the compiler infer what type to decode from
 -- the expected return type:
 --
--- > auto :: Interpret a => Type a
+-- > auto :: FromDhall a => Type a
 -- >
--- > input auto :: Interpret a => Text -> IO a
+-- > input auto :: FromDhall a => Text -> IO a
 --
 -- >>> input auto "True" :: IO Bool
 -- True
 --
 -- You can see what types `auto` supports \"out-of-the-box\" by browsing the
--- instances for the `Interpret` class.  For example, the following instance
+-- instances for the `FromDhall` class.  For example, the following instance
 -- says that we can directly decode any Dhall expression that evaluates to a
 -- @Bool@ into a Haskell `Bool`:
 --
--- > instance Interpret Bool
+-- > instance FromDhall Bool
 --
 -- ... which is why we could directly decode the string @\"True\"@ into the
 -- value `True`.
@@ -264,7 +264,7 @@ import Dhall
 -- There is also another instance that says that if we can decode a value of
 -- type @a@, then we can also decode a @List@ of values as a `Vector` of @a@s:
 --
--- > instance Interpret a => Interpret (Vector a)
+-- > instance FromDhall a => FromDhall (Vector a)
 --
 -- Therefore, since we can decode a @Bool@, we must also be able to decode a
 -- @List@ of @Bool@s, like this:
@@ -288,7 +288,7 @@ import Dhall
 -- > data Person = Person { age :: Natural, name :: Text }
 -- >     deriving (Generic, Show)
 -- > 
--- > instance Interpret Person
+-- > instance FromDhall Person
 -- > 
 -- > main :: IO ()
 -- > main = do
@@ -302,7 +302,7 @@ import Dhall
 -- > import Data.Functor.Identity
 -- > import Dhall
 -- > 
--- > instance Interpret a => Interpret (Identity a)
+-- > instance FromDhall a => FromDhall (Identity a)
 -- > 
 -- > main :: IO ()
 -- > main = do
@@ -676,10 +676,10 @@ import Dhall
 -- >>> makeBools True
 -- [True,False,True,True]
 --
--- The reason this works is that there is an `Interpret` instance for simple
+-- The reason this works is that there is an `FromDhall` instance for simple
 -- functions:
 --
--- > instance (Inject a, Interpret b) => Interpret (a -> b)
+-- > instance (ToDhall a, FromDhall b) => FromDhall (a -> b)
 --
 -- Thanks to currying, this instance works for functions of multiple simple
 -- arguments:
@@ -692,7 +692,7 @@ import Dhall
 -- or higher-order function).  You will need to apply those functions to their
 -- arguments within Dhall before converting their result to a Haskell value.
 --
--- Just like `Interpret`, you can derive `Inject` for user-defined data types:
+-- Just like `FromDhall`, you can derive `ToDhall` for user-defined data types:
 --
 -- > {-# LANGUAGE DeriveAnyClass    #-}
 -- > {-# LANGUAGE DeriveGeneric     #-}
@@ -703,7 +703,7 @@ import Dhall
 -- > import Dhall
 -- > 
 -- > data Example0 = Example0 { foo :: Bool, bar :: Bool }
--- >     deriving (Generic, Inject)
+-- >     deriving (Generic, ToDhall)
 -- > 
 -- > main = do
 -- >     f <- input auto "λ(r : { foo : Bool, bar : Bool }) → r.foo && r.bar"

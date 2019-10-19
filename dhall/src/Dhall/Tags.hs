@@ -4,9 +4,8 @@
 
 -- | This module contains the implementation of the @dhall tags@ command
 
-module Dhall.ETags
-    ( -- * ETags
-      generate
+module Dhall.Tags
+    ( generate
     ) where
 
 import Control.Exception (handle, SomeException(..))
@@ -30,7 +29,7 @@ import qualified Data.Text.IO  as TIO
 import qualified System.Directory as SD
 
 {- 
-    Documentation for ETags format is not very informative and not very correct.
+    Documentation for the etags format is not very informative and not very correct.
     You can find some documentation here:
     https://en.wikipedia.org/wiki/Ctags#Etags_2
     and you can also check the source code here:
@@ -76,7 +75,7 @@ type LineNumber = Int
 
 type ByteOffset = Int
 
-{-| Generate ETags for Dhall expressions
+{-| Generate etags for Dhall expressions
 -}
 generate
     :: Input

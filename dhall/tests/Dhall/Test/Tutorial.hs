@@ -12,7 +12,7 @@ import qualified Test.Tasty.HUnit
 
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Dhall (Inject)
+import Dhall (ToDhall)
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Test.Tasty (TestTree)
@@ -69,7 +69,7 @@ _Functions_1 = Test.Tasty.HUnit.testCase "Example #1" (do
     makeBools True False @?= False )
 
 data Example0 = Example0 { foo :: Bool, bar :: Bool }
-    deriving (Generic, Inject)
+    deriving (Generic, ToDhall)
 
 _Functions_2 :: TestTree
 _Functions_2 = Test.Tasty.HUnit.testCase "Example #2" (do
