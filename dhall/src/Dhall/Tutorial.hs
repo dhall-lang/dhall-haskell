@@ -396,8 +396,8 @@ import Dhall
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
 --
--- Note that imports sometimes must be terminated by whitespace or you will get
--- either an import error or a parse error, like this:
+-- Note that imports should be terminated by whitespace or parentheses otherwise
+-- you will get either an import error or a parse error, like this:
 --
 -- >>> writeFile "baz" "2.0"
 -- >>> input auto "./baz: Double" :: IO Double
