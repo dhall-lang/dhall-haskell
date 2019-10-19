@@ -49,6 +49,7 @@ module Dhall.Eval (
   , Environment(..)
   , Val(..)
   , (~>)
+  , textShow
   ) where
 
 import Data.Foldable (foldr', toList)
@@ -57,7 +58,7 @@ import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Void (Void)
 
-import Dhall.Core
+import Dhall.Syntax
   ( Binding(..)
   , Expr(..)
   , Chunks(..)
@@ -71,12 +72,14 @@ import Dhall.Set (Set)
 import GHC.Natural (Natural)
 import Prelude hiding (succ)
 
+import qualified Data.Char
 import qualified Data.Sequence   as Sequence
 import qualified Data.Set
 import qualified Data.Text       as Text
-import qualified Dhall.Core      as Core
+import qualified Dhall.Syntax    as Syntax
 import qualified Dhall.Map       as Map
 import qualified Dhall.Set
+import qualified Text.Printf
 
 data Environment a
     = Empty
@@ -554,7 +557,7 @@ eval !env t0 =
             eval env (TextLit (Chunks [("", t), ("", u)] ""))
         TextShow ->
             VPrim $ \case
-                VTextLit (VChunks [] x) -> VTextLit (VChunks [] (Core.textShow x))
+                VTextLit (VChunks [] x) -> VTextLit (VChunks [] (textShow x))
                 t                       -> VTextShow t
         List ->
             VPrim VList
@@ -771,6 +774,21 @@ eqMaybeBy f = go
     go _        _        = False
 {-# INLINE eqMaybeBy #-}
 
+-- | Utility that powers the @Text/show@ built-in
+textShow :: Text -> Text
+textShow text = "\"" <> Text.concatMap f text <> "\""
+  where
+    f '"'  = "\\\""
+    f '$'  = "\\u0024"
+    f '\\' = "\\\\"
+    f '\b' = "\\b"
+    f '\n' = "\\n"
+    f '\r' = "\\r"
+    f '\t' = "\\t"
+    f '\f' = "\\f"
+    f c | c <= '\x1F' = Text.pack (Text.Printf.printf "\\u%04x" (Data.Char.ord c))
+        | otherwise   = Text.singleton c
+
 conv :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
 conv !env t0 t0' =
     case (t0, t0') of
@@ -945,7 +963,7 @@ conv !env t0 t0' =
     {-# INLINE convSkip #-}
 
 judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
-judgmentallyEqual (Core.denote -> t) (Core.denote -> u) =
+judgmentallyEqual (Syntax.denote -> t) (Syntax.denote -> u) =
     conv Empty (eval Empty t) (eval Empty u)
 
 data Names
@@ -1132,7 +1150,7 @@ quote !env !t0 =
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
 nf :: Eq a => Environment a -> Expr s a -> Expr t a
-nf !env = Core.renote . quote (envNames env) . eval env . Core.denote
+nf !env = Syntax.renote . quote (envNames env) . eval env . Syntax.denote
 
 normalize :: Eq a => Expr s a -> Expr t a
 normalize = nf Empty

@@ -91,6 +91,7 @@ data Options = Options
 ignoreSemanticCache :: Mode -> Bool
 ignoreSemanticCache Default {..} = semanticCacheMode == IgnoreSemanticCache
 ignoreSemanticCache Resolve {..} = semanticCacheMode == IgnoreSemanticCache
+ignoreSemanticCache Type {..}    = semanticCacheMode == IgnoreSemanticCache
 ignoreSemanticCache _            = False
 
 -- | The subcommands for the @dhall@ executable
@@ -109,7 +110,11 @@ data Mode
           , resolveMode :: Maybe ResolveMode
           , semanticCacheMode :: SemanticCacheMode
           }
-    | Type { file :: Input, quiet :: Bool }
+    | Type
+          { file :: Input
+          , quiet :: Bool
+          , semanticCacheMode :: SemanticCacheMode
+          }
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
     | Format { formatMode :: Dhall.Format.FormatMode }
@@ -180,7 +185,7 @@ parseMode =
     <|> subcommand
             "type"
             "Infer an expression's type"
-            (Type <$> parseFile <*> parseQuiet)
+            (Type <$> parseFile <*> parseQuiet <*> parseSemanticCacheMode)
     <|> subcommand
             "normalize"
             "Normalize an expression"
@@ -598,7 +603,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 

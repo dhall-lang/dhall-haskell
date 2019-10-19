@@ -518,6 +518,7 @@ Library
         Dhall.Parser.Combinators,
         Dhall.URL,
         Dhall.Import.Types,
+        Dhall.Syntax,
         Dhall.Eval,
         Paths_dhall
     Autogen-Modules:
