@@ -61,7 +61,6 @@ import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Format
 import qualified Dhall.Freeze
-import qualified Dhall.Hash
 import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
@@ -119,7 +118,7 @@ data Mode
     | Repl
     | Format { formatMode :: Dhall.Format.FormatMode }
     | Freeze { inplace :: Input, all_ :: Bool, cache :: Bool }
-    | Hash
+    | Hash { file :: Input }
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Input }
     | Tags
@@ -201,7 +200,7 @@ parseMode =
     <|> subcommand
             "hash"
             "Compute semantic hashes for Dhall expressions"
-            (pure Hash)
+            (Hash <$> parseFile)
     <|> subcommand
             "lint"
             "Improve Dhall code by using newer language features and removing dead code"
@@ -637,8 +636,18 @@ command (Options {..}) = do
 
             Dhall.Freeze.freeze inplace scope intent characterSet censor
 
-        Hash -> do
-            Dhall.Hash.hash censor
+        Hash {..} -> do
+            expression <- getExpression file
+
+            resolvedExpression <-
+                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+
+            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+
+            let normalizedExpression =
+                    Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)
+
+            Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
         Lint {..} -> do
             (header, expression) <- getExpressionAndHeader inplace
