@@ -1,16 +1,16 @@
 
-./tests/etags/let.dhall,66
+./tests/tags/let.dhall,66
 let.dhall1,1
 /let.dhall1,1
 let foo foo1,5
 let bar bar3,22
 
-./tests/etags/nonunicode.dhall,63
+./tests/tags/nonunicode.dhall,63
 nonunicode.dhall1,1
 /nonunicode.dhall1,1
 let foo foo2,12
 
-./tests/etags/record.dhall,335
+./tests/tags/record.dhall,335
 record.dhall1,1
 /record.dhall1,1
 let Config Config6,81
@@ -23,7 +23,7 @@ let Config Config6,81
 let makeUser makeUser16,323
 let configs configs30,804
 
-./tests/etags/recordlit.dhall,223
+./tests/tags/recordlit.dhall,223
 recordlit.dhall1,1
 /recordlit.dhall1,1
 { home home8,143
@@ -33,7 +33,7 @@ let configs configs30,804
 , name = { firstName firstName11,272
          , secondName secondName12,302
 
-./tests/etags/simple.dhall,254
+./tests/tags/simple.dhall,254
 simple.dhall1,1
 /simple.dhall1,1
 let generate generate6,100
@@ -44,12 +44,12 @@ let Config Config32,880
       , privateKey privateKey34,917
       , publicKey publicKey35,943
 
-./tests/etags/unicode.dhall,57
+./tests/tags/unicode.dhall,57
 unicode.dhall1,1
 /unicode.dhall1,1
 let foo foo2,15
 
-./tests/etags/union.dhall,394
+./tests/tags/union.dhall,394
 union.dhall1,1
 /union.dhall1,1
 let Element Element1,5

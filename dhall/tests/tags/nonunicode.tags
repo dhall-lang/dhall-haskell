@@ -1,5 +1,5 @@
 
-./tests/etags/nonunicode.dhall,63
+./tests/tags/nonunicode.dhall,63
 nonunicode.dhall1,1
 /nonunicode.dhall1,1
 let foo foo2,12

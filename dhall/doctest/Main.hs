@@ -32,5 +32,5 @@ main = do
             , prefix </> "src/Dhall.hs"
             , prefix </> "src/Dhall/Import.hs"
             , prefix </> "src/Dhall/Tutorial.hs"
-            , prefix </> "src/Dhall/ETags.hs"
+            , prefix </> "src/Dhall/Tags.hs"
             ]
