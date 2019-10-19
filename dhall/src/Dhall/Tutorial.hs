@@ -672,7 +672,7 @@ import Dhall
 --
 -- You can import this function into Haskell, too:
 --
--- >>> makeBools <- input auto "./makeBools" :: IO (Bool -> Vector Bool)
+-- >>> makeBools <- input auto "./makeBools.dhall" :: IO (Bool -> Vector Bool)
 -- >>> makeBools True
 -- [True,False,True,True]
 --
@@ -770,7 +770,7 @@ import Dhall
 -- like this:
 --
 -- > $ dhall
--- > ./makeBools True
+-- > ./makeBools.dhall True
 -- > <Ctrl-D>
 -- > List Bool
 -- > 
@@ -810,7 +810,7 @@ import Dhall
 -- Now that we've verified that our function type checks and works, we can use
 -- the same function within Haskell:
 --
--- >>> input auto "./makeBools True" :: IO (Vector Bool)
+-- >>> input auto "./makeBools.dhall True" :: IO (Vector Bool)
 -- [True,False,True,True]
 --
 -- __Exercise__: Create a file named @getFoo@ that is a function of the following
