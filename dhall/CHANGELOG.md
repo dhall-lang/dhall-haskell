@@ -1,6 +1,14 @@
 1.27.0
 
 * [Supports version 11.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v11.0.0)
+* BREAKING CHANGE: Rename `Inject`/`Interpret` to `ToDhall`/`FromDhall`
+    * This change `ConstraintKinds` to minimize disruption by keeping around
+      `Inject`/`Interpret` as synonyms for `ToDhall`/`FromDhall`
+    * In other words, constraints and derived instances using `Inject` or
+      `Interpret` will still work
+    * However, manual instances using `Inject` or `Interpret` won't work
+      unless you rename them to `ToDhall`/`FromDhall` or enable the
+      `TypeSynonymInstances` extension
 * BREAKING CHANGE: Fix `Eq` instance for `Expr`s with special `Double`s
     * This fixes the `Eq` instance for `Expr`s to match the standard regarding
       `Double` comparisons
@@ -17,7 +25,7 @@
     * `dhall lint` now fixes `let example = foo === bar` to be
        `let example = assert : foo === bar`
 * Normalize inferred types [#1337](https://github.com/dhall-lang/dhall-haskell/pull/1337)
-* New `Interpret`/`Inject` instances for:
+* New `FromDhall`/`ToDhall` (previously `Interpret`/`Inject`) instances for:
     * [`Void`](https://github.com/dhall-lang/dhall-haskell/pull/1382)
     * `Map` [#1391](https://github.com/dhall-lang/dhall-haskell/pull/1391) / [#1412](https://github.com/dhall-lang/dhall-haskell/pull/1412)
     * [`HashMap`](https://github.com/dhall-lang/dhall-haskell/pull/1426)
@@ -146,7 +154,7 @@
       newly-added utilities
     * See also: [#1298](https://github.com/dhall-lang/dhall-haskell/pull/1298)
 * [New `:help` command for `dhall repl`](https://github.com/dhall-lang/dhall-haskell/pull/1237)
-* [New `--no-cache` flag](https://github.com/dhall-lang/dhall-haskell/pull/1290)
+* New `--no-cache` flag [#1290](https://github.com/dhall-lang/dhall-haskell/pull/1290) / [#1434](https://github.com/dhall-lang/dhall-haskell/pull/1434) / [#1436](https://github.com/dhall-lang/dhall-haskell/pull/1436)
     * You can now disable use of the cache with this flag
     * This comes in handy if you want to disable α-normalization for imports
       protected by a semantic integrity check
