@@ -524,6 +524,13 @@ import Dhall
 -- type.  By default the tool reads the expression on standard input and outputs
 -- the type to standard output.
 --
+-- Note that @<<<@ is a feature specific to the Bash shell to feed a string to
+-- a command's standard input.  If you are using another shell, then you can
+-- instead do this:
+--
+-- > $ echo '{=}' | dhall type
+-- > {}
+--
 -- __Exercise__: Use the @dhall type@ command to infer the type of this record:
 --
 -- > -- ./nested.dhall
