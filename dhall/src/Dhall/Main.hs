@@ -30,7 +30,7 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Void (Void)
 import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
-import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..))
+import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..), _semanticCacheMode)
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError)
@@ -90,6 +90,7 @@ data Options = Options
 
 ignoreSemanticCache :: Mode -> Bool
 ignoreSemanticCache Default {..} = semanticCacheMode == IgnoreSemanticCache
+ignoreSemanticCache Resolve {..} = semanticCacheMode == IgnoreSemanticCache
 ignoreSemanticCache _            = False
 
 -- | The subcommands for the @dhall@ executable
@@ -103,7 +104,11 @@ data Mode
           , version :: Bool
           }
     | Version
-    | Resolve { file :: Input, resolveMode :: Maybe ResolveMode }
+    | Resolve
+          { file :: Input
+          , resolveMode :: Maybe ResolveMode
+          , semanticCacheMode :: SemanticCacheMode
+          }
     | Type { file :: Input, quiet :: Bool }
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
@@ -171,7 +176,7 @@ parseMode =
     <|> subcommand
             "resolve"
             "Resolve an expression's imports"
-            (Resolve <$> parseFile <*> parseResolveMode)
+            (Resolve <$> parseFile <*> parseResolveMode <*> parseSemanticCacheMode)
     <|> subcommand
             "type"
             "Infer an expression's type"
@@ -519,7 +524,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             (Dhall.Import.Types.Status { _graph, _stack }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file)
+                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
 
             let (rootImport :| _) = _stack
                 imports = rootImport : map parent _graph ++ map child _graph
@@ -555,7 +560,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             (Dhall.Import.Types.Status { _cache }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file)
+                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
 
             mapM_ print
                  .   fmap (   Pretty.pretty
@@ -569,7 +574,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
 
             render System.IO.stdout resolvedExpression
 
