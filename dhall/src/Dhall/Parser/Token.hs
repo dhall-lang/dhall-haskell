@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
+
 -- | Parse Dhall tokens. Even though we don't have a tokenizer per-se this
 ---  module is useful for keeping some small parsing utilities.
 module Dhall.Parser.Token (
@@ -9,6 +10,8 @@ module Dhall.Parser.Token (
     bashEnvironmentVariable,
     posixEnvironmentVariable,
     ComponentType(..),
+    text,
+    char,
     file_,
     labelOnly,
     label,
@@ -176,8 +179,8 @@ hexdig c =
 
 signPrefix :: Num a => Parser (a -> a)
 signPrefix = (do
-    let positive = fmap (\_ -> id    ) (Text.Parser.Char.char '+')
-    let negative = fmap (\_ -> negate) (Text.Parser.Char.char '-')
+    let positive = fmap (\_ -> id    ) (char '+')
+    let negative = fmap (\_ -> negate) (char '-')
     positive <|> negative ) <?> "sign"
 
 {-| Parse a `Double` literal
@@ -188,7 +191,7 @@ doubleLiteral :: Parser Double
 doubleLiteral = (do
     sign <- signPrefix <|> pure id
     a <- Text.Parser.Token.double
-    return (sign a) ) <?> "double literal"
+    return (sign a) ) <?> "literal"
 
 {-| Parse a signed @Infinity@
 
@@ -197,10 +200,10 @@ doubleLiteral = (do
 -}
 doubleInfinity :: Parser Double
 doubleInfinity = (do
-    let negative = fmap (\_ -> negate) (Text.Parser.Char.char '-')
+    let negative = fmap (\_ -> negate) (char '-')
     sign <- negative <|> pure id
-    a <- Text.Parser.Char.text "Infinity" >> whitespace >> return (1.0/0.0)
-    return (sign a) ) <?> "double infinity"
+    a <- text "Infinity" >> whitespace >> return (1.0/0.0)
+    return (sign a) ) <?> "literal"
 
 {-| Parse an `Integer` literal
 
@@ -211,7 +214,7 @@ integerLiteral = (do
     sign <- signPrefix
     a <- Text.Megaparsec.Char.Lexer.decimal
     whitespace
-    return (sign a) ) <?> "integer literal"
+    return (sign a) ) <?> "literal"
 
 {-| Parse a `Natural` literal 
 
@@ -221,7 +224,7 @@ naturalLiteral :: Parser Natural
 naturalLiteral = (do
     a <- Text.Megaparsec.Char.Lexer.decimal
     whitespace
-    return a ) <?> "natural literal"
+    return a ) <?> "literal"
 
 {-| Parse an identifier (i.e. a variable or built-in)
 
@@ -234,7 +237,7 @@ identifier = do
     x <- label
 
     let indexed = do
-            _ <- Text.Parser.Char.char '@'
+            _ <- char '@' <?> "@"
             n <- Text.Megaparsec.Char.Lexer.decimal
             whitespace
             return n
@@ -246,7 +249,7 @@ whitespaceChunk :: Parser ()
 whitespaceChunk =
     choice
         [ void (Dhall.Parser.Combinators.takeWhile1 predicate)
-        , void (Text.Parser.Char.text "\r\n")
+        , void (Text.Parser.Char.text "\r\n" <?> "newline")
         , lineComment
         , blockComment
         ] <?> "whitespace"
@@ -277,7 +280,7 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
 
 lineComment :: Parser ()
 lineComment = do
-    _ <- Text.Parser.Char.text "--"
+    _ <- text "--"
 
     let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
 
@@ -288,12 +291,13 @@ lineComment = do
     return ()
   where
     endOfLine =
-            void (Text.Parser.Char.char '\n'  )
+        (   void (Text.Parser.Char.char '\n'  )
         <|> void (Text.Parser.Char.text "\r\n")
+        ) <?> "newline"
 
 blockComment :: Parser ()
 blockComment = do
-    _ <- Text.Parser.Char.text "{-"
+    _ <- text "{-"
     blockCommentContinue
 
 blockCommentChunk :: Parser ()
@@ -316,12 +320,12 @@ blockCommentChunk =
       where
         predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
 
-    endOfLine = void (Text.Parser.Char.text "\r\n")
+    endOfLine = void (Text.Parser.Char.text "\r\n" <?> "newline")
 
 blockCommentContinue :: Parser ()
 blockCommentContinue = endOfComment <|> continue
   where
-    endOfComment = void (Text.Parser.Char.text "-}")
+    endOfComment = void (text "-}")
 
     continue = do
         blockCommentChunk
@@ -331,9 +335,9 @@ simpleLabel :: Bool -> Parser Text
 simpleLabel allowReserved = try (do
     c    <- Text.Parser.Char.satisfy headCharacter
     rest <- Dhall.Parser.Combinators.takeWhile tailCharacter
-    let text = Data.Text.cons c rest
-    Control.Monad.guard (allowReserved || not (Data.HashSet.member text reservedIdentifiers))
-    return text )
+    let t = Data.Text.cons c rest
+    Control.Monad.guard (allowReserved || not (Data.HashSet.member t reservedIdentifiers))
+    return t )
   where
     headCharacter c = alpha c || c == '_'
 
@@ -341,9 +345,9 @@ simpleLabel allowReserved = try (do
 
 backtickLabel :: Parser Text
 backtickLabel = do
-    _ <- Text.Parser.Char.char '`'
+    _ <- char '`'
     t <- takeWhile1 predicate
-    _ <- Text.Parser.Char.char '`'
+    _ <- char '`'
     return t
   where
     predicate c =
@@ -422,7 +426,7 @@ posixEnvironmentVariableCharacter =
     escapeCharacter <|> satisfy predicate1
   where
     escapeCharacter = do
-        _ <- Text.Parser.Char.char '\\'
+        _ <- char '\\'
 
         c <- Text.Parser.Char.satisfy (`elem` ("\"\\abfnrtv" :: String))
 
@@ -468,15 +472,15 @@ pathComponent componentType = do
                     star pchar
 
     let quotedPathData = do
-            _    <- Text.Parser.Char.char '"'
-            text <- Text.Megaparsec.takeWhile1P Nothing quotedPathCharacter
-            _    <- Text.Parser.Char.char '"'
+            _ <- char '"'
+            t <- Text.Megaparsec.takeWhile1P Nothing quotedPathCharacter
+            _ <- char '"'
 
             case componentType of
               FileComponent -> do
-                return text
+                return t
               URLComponent -> do
-                return (URI.Encode.encodeText text)
+                return (URI.Encode.encodeText t)
 
     quotedPathData <|> pathData
 
@@ -649,20 +653,46 @@ unreserved :: Char -> Bool
 unreserved c =
     alphaNum c || c == '-' || c == '.' || c == '_' || c == '~'
 
+{-| A variation on `Text.Parser.Char.text` that doesn't quote the expected
+    in error messages
+-}
+text :: Data.Text.Text -> Parser Text
+text t = Text.Parser.Char.text t <?> Data.Text.unpack t
+{-# INLINE text #-}
+
+{-| A variation on `Text.Parser.Char.char` that doesn't quote the expected
+    token in error messages
+-}
+char :: Char -> Parser Char
+char c = Text.Parser.Char.char c <?> [ c ]
+{-# INLINE char #-}
+
 reserved :: Data.Text.Text -> Parser ()
-reserved x = do _ <- Text.Parser.Char.text x; whitespace
+reserved x = do _ <- text x; whitespace
 
 reservedCharOnly :: Char -> Parser ()
-reservedCharOnly c = do _ <- Text.Parser.Char.char c; return ()
+reservedCharOnly c = do _ <- char c; return ()
 
 reservedChar :: Char -> Parser ()
-reservedChar c = do _ <- Text.Parser.Char.char c; whitespace
+reservedChar c = do _ <- char c; whitespace
+
+builtin :: Data.Text.Text -> Parser ()
+builtin x = reserved x <?> "built-in"
+{-# INLINE builtin #-}
+
+operator :: Data.Text.Text -> Parser ()
+operator x = reserved x <?> "operator"
+{-# INLINE operator #-}
+
+operatorChar :: Char -> Parser ()
+operatorChar x = reservedCharOnly x <?> "operator"
+{-# INLINE operatorChar #-}
 
 keywordOnly :: Data.Text.Text -> Parser ()
-keywordOnly x = try (do _ <- Text.Parser.Char.text x; return ())
+keywordOnly x = try (do _ <- text x; return ()) <?> "keyword"
 
 keyword :: Data.Text.Text -> Parser ()
-keyword x = try (do _ <- Text.Parser.Char.text x; nonemptyWhitespace)
+keyword x = try (do _ <- text x; nonemptyWhitespace) <?> "keyword"
 
 {-| Parse the @if@ keyword
 
@@ -750,252 +780,252 @@ _Some = keyword "Some"
     This corresponds to the @None@ rule from the official grammar
 -}
 _None :: Parser ()
-_None = reserved "None"
+_None = builtin "None"
 
 {-| Parse the @Natural/fold@ built-in
 
     This corresponds to the @Natural-fold@ rule from the official grammar
 -}
 _NaturalFold :: Parser ()
-_NaturalFold = reserved "Natural/fold"
+_NaturalFold = builtin "Natural/fold"
 
 {-| Parse the @Natural/build@ built-in
 
     This corresponds to the @Natural-build@ rule from the official grammar
 -}
 _NaturalBuild :: Parser ()
-_NaturalBuild = reserved "Natural/build"
+_NaturalBuild = builtin "Natural/build"
 
 {-| Parse the @Natural/isZero@ built-in
 
     This corresponds to the @Natural-isZero@ rule from the official grammar
 -}
 _NaturalIsZero :: Parser ()
-_NaturalIsZero = reserved "Natural/isZero"
+_NaturalIsZero = builtin "Natural/isZero"
 
 {-| Parse the @Natural/even@ built-in
 
     This corresponds to the @Natural-even@ rule from the official grammar
 -}
 _NaturalEven :: Parser ()
-_NaturalEven = reserved "Natural/even"
+_NaturalEven = builtin "Natural/even"
 
 {-| Parse the @Natural/odd@ built-in
 
     This corresponds to the @Natural-odd@ rule from the official grammar
 -}
 _NaturalOdd :: Parser ()
-_NaturalOdd = reserved "Natural/odd"
+_NaturalOdd = builtin "Natural/odd"
 
 {-| Parse the @Natural/toInteger@ built-in
 
     This corresponds to the @Natural-toInteger@ rule from the official grammar
 -}
 _NaturalToInteger :: Parser ()
-_NaturalToInteger = reserved "Natural/toInteger"
+_NaturalToInteger = builtin "Natural/toInteger"
 
 {-| Parse the @Natural/show@ built-in
 
     This corresponds to the @Natural-show@ rule from the official grammar
 -}
 _NaturalShow :: Parser ()
-_NaturalShow = reserved "Natural/show"
+_NaturalShow = builtin "Natural/show"
 
 {-| Parse the @Natural/subtract@ built-in
 
     This corresponds to the @Natural-subtract@ rule from the official grammar
 -}
 _NaturalSubtract :: Parser ()
-_NaturalSubtract = reserved "Natural/subtract"
+_NaturalSubtract = builtin "Natural/subtract"
 
 {-| Parse the @Integer/show@ built-in
 
     This corresponds to the @Integer-show@ rule from the official grammar
 -}
 _IntegerShow :: Parser ()
-_IntegerShow = reserved "Integer/show"
+_IntegerShow = builtin "Integer/show"
 
 {-| Parse the @Integer/toDouble@ built-in
 
     This corresponds to the @Integer-toDouble@ rule from the official grammar
 -}
 _IntegerToDouble :: Parser ()
-_IntegerToDouble = reserved "Integer/toDouble"
+_IntegerToDouble = builtin "Integer/toDouble"
 
 {-| Parse the @Double/show@ built-in
 
     This corresponds to the @Double-show@ rule from the official grammar
 -}
 _DoubleShow :: Parser ()
-_DoubleShow = reserved "Double/show"
+_DoubleShow = builtin "Double/show"
 
 {-| Parse the @List/build@ built-in
 
     This corresponds to the @List-build@ rule from the official grammar
 -}
 _ListBuild :: Parser ()
-_ListBuild = reserved "List/build"
+_ListBuild = builtin "List/build"
 
 {-| Parse the @List/fold@ built-in
 
     This corresponds to the @List-fold@ rule from the official grammar
 -}
 _ListFold :: Parser ()
-_ListFold = reserved "List/fold"
+_ListFold = builtin "List/fold"
 
 {-| Parse the @List/length@ built-in
 
     This corresponds to the @List-length@ rule from the official grammar
 -}
 _ListLength :: Parser ()
-_ListLength = reserved "List/length"
+_ListLength = builtin "List/length"
 
 {-| Parse the @List/head@ built-in
 
     This corresponds to the @List-head@ rule from the official grammar
 -}
 _ListHead :: Parser ()
-_ListHead = reserved "List/head"
+_ListHead = builtin "List/head"
 
 {-| Parse the @List/last@ built-in
 
     This corresponds to the @List-last@ rule from the official grammar
 -}
 _ListLast :: Parser ()
-_ListLast = reserved "List/last"
+_ListLast = builtin "List/last"
 
 {-| Parse the @List/indexed@ built-in
 
     This corresponds to the @List-indexed@ rule from the official grammar
 -}
 _ListIndexed :: Parser ()
-_ListIndexed = reserved "List/indexed"
+_ListIndexed = builtin "List/indexed"
 
 {-| Parse the @List/reverse@ built-in
 
     This corresponds to the @List-reverse@ rule from the official grammar
 -}
 _ListReverse :: Parser ()
-_ListReverse = reserved "List/reverse"
+_ListReverse = builtin "List/reverse"
 
 {-| Parse the @Optional/fold@ built-in
 
     This corresponds to the @Optional-fold@ rule from the official grammar
 -}
 _OptionalFold :: Parser ()
-_OptionalFold = reserved "Optional/fold"
+_OptionalFold = builtin "Optional/fold"
 
 {-| Parse the @Optional/build@ built-in
 
     This corresponds to the @Optional-build@ rule from the official grammar
 -}
 _OptionalBuild :: Parser ()
-_OptionalBuild = reserved "Optional/build"
+_OptionalBuild = builtin "Optional/build"
 
 {-| Parse the @Bool@ built-in
 
     This corresponds to the @Bool@ rule from the official grammar
 -}
 _Bool :: Parser ()
-_Bool = reserved "Bool"
+_Bool = builtin "Bool"
 
 {-| Parse the @Optional@ built-in
 
     This corresponds to the @Optional@ rule from the official grammar
 -}
 _Optional :: Parser ()
-_Optional = reserved "Optional"
+_Optional = builtin "Optional"
 
 {-| Parse the @Natural@ built-in
 
     This corresponds to the @Natural@ rule from the official grammar
 -}
 _Natural :: Parser ()
-_Natural = reserved "Natural"
+_Natural = builtin "Natural"
 
 {-| Parse the @Integer@ built-in
 
     This corresponds to the @Integer@ rule from the official grammar
 -}
 _Integer :: Parser ()
-_Integer = reserved "Integer"
+_Integer = builtin "Integer"
 
 {-| Parse the @Double@ built-in
 
     This corresponds to the @Double@ rule from the official grammar
 -}
 _Double :: Parser ()
-_Double = reserved "Double"
+_Double = builtin "Double"
 
 {-| Parse the @Text@ built-in
 
     This corresponds to the @Text@ rule from the official grammar
 -}
 _Text :: Parser ()
-_Text = reserved "Text"
+_Text = builtin "Text"
 
 {-| Parse the @Text/show@ built-in
 
     This corresponds to the @Text-show@ rule from the official grammar
 -}
 _TextShow :: Parser ()
-_TextShow = reserved "Text/show"
+_TextShow = builtin "Text/show"
 
 {-| Parse the @List@ built-in
 
     This corresponds to the @List@ rule from the official grammar
 -}
 _List :: Parser ()
-_List = reserved "List"
+_List = builtin "List"
 
 {-| Parse the @True@ built-in
 
     This corresponds to the @True@ rule from the official grammar
 -}
 _True :: Parser ()
-_True = reserved "True"
+_True = builtin "True"
 
 {-| Parse the @False@ built-in
 
     This corresponds to the @False@ rule from the official grammar
 -}
 _False :: Parser ()
-_False = reserved "False"
+_False = builtin "False"
 
 {-| Parse a @NaN@ literal
 
     This corresponds to the @NaN@ rule from the official grammar
 -}
 _NaN :: Parser ()
-_NaN = reserved "NaN"
+_NaN = builtin "NaN"
 
 {-| Parse the @Type@ built-in
 
     This corresponds to the @Type@ rule from the official grammar
 -}
 _Type :: Parser ()
-_Type = reserved "Type"
+_Type = builtin "Type"
 
 {-| Parse the @Kind@ built-in
 
     This corresponds to the @Kind@ rule from the official grammar
 -}
 _Kind :: Parser ()
-_Kind = reserved "Kind"
+_Kind = builtin "Kind"
 
 {-| Parse the @Sort@ built-in
 
     This corresponds to the @Sort@ rule from the official grammar
 -}
 _Sort :: Parser ()
-_Sort = reserved "Sort"
+_Sort = builtin "Sort"
 
 {-| Parse the @Location@ keyword
 
     This corresponds to the @Location@ rule from the official grammar
 -}
 _Location :: Parser ()
-_Location = reserved "Location"
+_Location = keyword "Location"
 
 -- | Parse the @=@ symbol without trailing whitespace
 _equalOnly :: Parser ()
@@ -1007,39 +1037,39 @@ _equal = reservedChar '='
 
 -- | Parse the @||@ symbol
 _or :: Parser ()
-_or = reserved "||"
+_or = operator "||"
 
 -- | Parse the @+@ symbol
 _plus :: Parser ()
-_plus = reservedChar '+'
+_plus = operatorChar '+'
 
 -- | Parse the @++@ symbol
 _textAppend :: Parser ()
-_textAppend = reserved "++"
+_textAppend = operator "++"
 
 -- | Parse the @#@ symbol
 _listAppend :: Parser ()
-_listAppend = reservedChar '#'
+_listAppend = operatorChar '#'
 
 -- | Parse the @&&@ symbol
 _and :: Parser ()
-_and = reserved "&&"
+_and = operator "&&"
 
 -- | Parse the @*@ symbol
 _times :: Parser ()
-_times = reservedChar '*'
+_times = operatorChar '*'
 
 -- | Parse the @==@ symbol
 _doubleEqual :: Parser ()
-_doubleEqual = reserved "=="
+_doubleEqual = operator "=="
 
 -- | Parse the @!=@ symbol
 _notEqual :: Parser ()
-_notEqual = reserved "!="
+_notEqual = operator "!="
 
 -- | Parse the @.@ symbol
 _dot :: Parser ()
-_dot = reservedChar '.'
+_dot = operatorChar '.'
 
 -- | Parse the @{@ symbol
 _openBrace :: Parser ()
@@ -1071,7 +1101,7 @@ _bar = reservedChar '|'
 
 -- | Parse the @,@ symbol
 _comma :: Parser ()
-_comma = reservedChar ','
+_comma = reservedChar ',' <?> "\',\'"
 
 -- | Parse the @(@ symbol
 _openParens :: Parser ()
@@ -1095,9 +1125,9 @@ _at = reservedChar '@'
 
 -- | Parse the equivalence symbol (@===@ or @≡@)
 _equivalent :: Parser ()
-_equivalent = do
-    void (Text.Parser.Char.char '≡' <?> "\"≡\"") <|> void (Text.Parser.Char.text "===")
-    whitespace
+_equivalent = (do
+    void (char '≡' <?> "\"≡\"") <|> void (text "===")
+    whitespace ) <?> "operator"
 
 -- | Parse the @missing@ keyword
 _missing :: Parser ()
@@ -1105,31 +1135,31 @@ _missing = keyword "missing"
 
 -- | Parse the @?@ symbol
 _importAlt :: Parser ()
-_importAlt = reservedChar '?'
+_importAlt = operatorChar '?'
 
 -- | Parse the record combine operator (@/\\@ or @∧@)
 _combine :: Parser ()
-_combine = do
-    void (Text.Parser.Char.char '∧' <?> "\"∧\"") <|> void (Text.Parser.Char.text "/\\")
-    whitespace
+_combine = (do
+    void (char '∧' <?> "\"∧\"") <|> void (text "/\\")
+    whitespace ) <?> "operator"
 
 -- | Parse the record type combine operator (@//\\\\@ or @⩓@)
 _combineTypes :: Parser ()
-_combineTypes = do
-    void (Text.Parser.Char.char '⩓' <?> "\"⩓\"") <|> void (Text.Parser.Char.text "//\\\\")
-    whitespace
+_combineTypes = (do
+    void (char '⩓' <?> "\"⩓\"") <|> void (text "//\\\\")
+    whitespace ) <?> "operator"
 
 -- | Parse the record \"prefer\" operator (@//@ or @⫽@)
 _prefer :: Parser ()
-_prefer = do
-    void (Text.Parser.Char.char '⫽' <?> "\"⫽\"") <|> void (Text.Parser.Char.text "//")
-    whitespace
+_prefer = (do
+    void (char '⫽' <?> "\"⫽\"") <|> void (text "//")
+    whitespace ) <?> "operator"
 
 -- | Parse a lambda (@\\@ or @λ@)
 _lambda :: Parser ()
-_lambda = do
+_lambda = (do
     _ <- Text.Parser.Char.satisfy predicate
-    whitespace
+    whitespace ) <?> "\\"
   where
     predicate 'λ'  = True
     predicate '\\' = True
@@ -1137,16 +1167,16 @@ _lambda = do
 
 -- | Parse a forall (@forall@ or @∀@)
 _forall :: Parser ()
-_forall = do
-    void (Text.Parser.Char.char '∀' <?> "\"∀\"") <|> void (Text.Parser.Char.text "forall")
-    whitespace
+_forall = (do
+    void (char '∀' <?> "\"∀\"") <|> void (text "forall")
+    whitespace ) <?> "forall"
 
 -- | Parse a right arrow (@->@ or @→@)
 _arrow :: Parser ()
-_arrow = do
-    void (Text.Parser.Char.char '→' <?> "\"→\"") <|> void (Text.Parser.Char.text "->")
-    whitespace
+_arrow = (do
+    void (char '→' <?> "\"→\"") <|> void (text "->")
+    whitespace ) <?> "->"
 
 -- | Parse a double colon (@::@)
 _doubleColon :: Parser ()
-_doubleColon = reserved "::"
+_doubleColon = operator "::"
