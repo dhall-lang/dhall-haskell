@@ -493,7 +493,6 @@ Library
         Dhall.Tags,
         Dhall.Format,
         Dhall.Freeze,
-        Dhall.Hash,
         Dhall.Import,
         Dhall.Lint,
         Dhall.Main,
