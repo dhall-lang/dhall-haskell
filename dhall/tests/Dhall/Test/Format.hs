@@ -8,7 +8,7 @@ import Data.Text (Text)
 import Dhall.Parser (Header(..))
 import Dhall.Pretty (CharacterSet(..))
 import Test.Tasty (TestTree)
-import Test.Tasty.QuickCheck ((===), property)
+import Test.Tasty.QuickCheck ((===))
 import Dhall.Test.QuickCheck () -- For Arbitrary instances
 
 import qualified Control.Monad                         as Monad
@@ -82,9 +82,11 @@ formatTest characterSet prefix =
         Tasty.HUnit.assertBool message (actualText == expectedText)
 
 idempotenceTest :: TestTree
-idempotenceTest = Tasty.QuickCheck.testProperty
-    "Formatting should be idempotent"
-    $ \characterSet (format characterSet -> once) ->
-        case Parser.exprAndHeaderFromText mempty once of
-            Right (format characterSet -> twice) -> once === twice
-            Left _ -> property Tasty.QuickCheck.Discard
+idempotenceTest =
+    Tasty.adjustOption (const $ Tasty.QuickCheck.QuickCheckMaxRatio 10000) $
+    Tasty.QuickCheck.testProperty
+        "Formatting should be idempotent"
+        $ \characterSet (format characterSet -> once) ->
+            case Parser.exprAndHeaderFromText mempty once of
+                Right (format characterSet -> twice) -> once === twice
+                Left _ -> Tasty.QuickCheck.discard
