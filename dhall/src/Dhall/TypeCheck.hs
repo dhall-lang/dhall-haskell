@@ -588,7 +588,7 @@ infer typer = loop
                                     -- Carefully note that we don't use `die`
                                     -- here so that the source span is narrowed
                                     -- to just the offending element
-                                    let err = MismatchedListElements i _T₀'' t₁ _T₁''
+                                    let err = MismatchedListElements (i+1) _T₀'' t₁ _T₁''
 
                                     let context = ctxToContext ctx
 
