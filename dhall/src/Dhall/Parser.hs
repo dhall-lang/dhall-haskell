@@ -8,6 +8,7 @@ module Dhall.Parser (
       exprFromText
     , exprAndHeaderFromText
     , censor
+    , createHeader
 
     -- * Parsers
     , expr, exprA
@@ -95,10 +96,14 @@ exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
 
 -- | A header corresponds to the leading comment at the top of a Dhall file.
 --
--- It can use any combination of single line comments and/or multiline comments
--- and must terminate in a newline.
--- The header keeps the raw text unchanged (includes comment characters)
+-- The header includes comment characters but is stripped of leading spaces and
+-- trailing newlines
 newtype Header = Header Text deriving Show
+
+-- Create a header with stripped of leading spaces and trailing newlines
+createHeader :: Text -> Header
+createHeader =
+    Header . Data.Text.dropWhile Data.Char.isSpace . Data.Text.dropWhileEnd (/= '\n')
 
 {-| Like `exprFromText` but also returns the leading comments and whitespace
     (i.e. header) up to the last newline before the code begins
@@ -119,7 +124,7 @@ exprAndHeaderFromText
     -> Either ParseError (Header, Expr Src Import)
 exprAndHeaderFromText delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
-    Right (txt, r) -> Right (Header $ stripHeader txt, r)
+    Right (txt, r) -> Right (createHeader txt, r)
   where
     parser = do
         (bytes, _) <- Text.Megaparsec.match whitespace
@@ -128,5 +133,3 @@ exprAndHeaderFromText delta text = case result of
         return (bytes, r)
 
     result = Text.Megaparsec.parse (unParser parser) delta text
-
-    stripHeader = Data.Text.dropWhile Data.Char.isSpace . Data.Text.dropWhileEnd (/= '\n')

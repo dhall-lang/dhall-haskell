@@ -37,7 +37,7 @@ import Data.Functor.Identity (Identity(..))
 import Data.Typeable (Typeable, typeRep)
 import Data.Proxy (Proxy(..))
 import Dhall.Set (Set)
-import Dhall.Parser (Header(..))
+import Dhall.Parser (Header, createHeader)
 import Dhall.Pretty (CharacterSet(..))
 import Dhall.Src (Src(..))
 import Dhall.TypeCheck (Typer, TypeError)
@@ -164,7 +164,7 @@ instance Arbitrary Header where
         , newlines
         ]
 
-      pure . Header $ Text.unlines comments
+      pure . createHeader $ Text.unlines comments
 
     shrink = const [] -- TODO improve
 
