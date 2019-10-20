@@ -37,11 +37,14 @@ import Data.Functor.Identity (Identity(..))
 import Data.Typeable (Typeable, typeRep)
 import Data.Proxy (Proxy(..))
 import Dhall.Set (Set)
+import Dhall.Parser (Header(..))
+import Dhall.Pretty (CharacterSet(..))
 import Dhall.Src (Src(..))
 import Dhall.TypeCheck (Typer, TypeError)
 import Generic.Random (Weights, W, (%), (:+)(..))
 import Test.QuickCheck
-    (Arbitrary(..), Gen, Positive(..), Property, NonNegative(..), genericShrink, (===), (==>))
+    ( Arbitrary(..), Gen, Positive(..), Property, NonNegative(..)
+    , genericShrink, suchThat, (===), (==>))
 import Test.QuickCheck.Instances ()
 import Test.Tasty (TestTree)
 import Test.Tasty.QuickCheck (QuickCheckTests(..))
@@ -139,6 +142,31 @@ integer =
         , (1, fmap (\x -> x + (2 ^ (64 :: Int))) arbitrary)
         , (1, fmap (\x -> x - (2 ^ (64 :: Int))) arbitrary)
         ]
+
+instance Arbitrary CharacterSet where
+    arbitrary = Test.QuickCheck.elements [ ASCII, Unicode ]
+
+instance Arbitrary Header where
+    arbitrary = do
+      let multiline = do
+            txt <- arbitrary `suchThat` (not . Text.isInfixOf "-}")
+            pure $ "{-" <> txt <> "-}"
+
+          singleline = do
+            txt <- arbitrary `suchThat` (not . Text.isInfixOf "\n")
+            pure $ "--" <> txt
+
+          newlines = Text.concat <$> Test.QuickCheck.listOf (pure "\n")
+
+      comments <- Test.QuickCheck.listOf $ Test.QuickCheck.oneof
+        [ multiline
+        , singleline
+        , newlines
+        ]
+
+      pure . Header $ Text.unlines comments
+
+    shrink = const [] -- TODO improve
 
 instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
     arbitrary = do

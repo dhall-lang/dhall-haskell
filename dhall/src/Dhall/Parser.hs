@@ -98,7 +98,7 @@ exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
 -- It can use any combination of single line comments and/or multiline comments
 -- and must terminate in a newline.
 -- The header keeps the raw text unchanged (includes comment characters)
-newtype Header = Header Text
+newtype Header = Header Text deriving Show
 
 {-| Like `exprFromText` but also returns the leading comments and whitespace
     (i.e. header) up to the last newline before the code begins
