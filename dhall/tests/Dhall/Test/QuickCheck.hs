@@ -13,6 +13,7 @@ module Dhall.Test.QuickCheck where
 import Codec.Serialise (DeserialiseFailure(..))
 import Data.Either (isRight)
 import Data.Either.Validation (Validation(..))
+import Data.Monoid ((<>))
 import Dhall (ToDhall(..), FromDhall(..), auto, extract, inject, embed, Vector)
 import Dhall.Map (Map)
 import Dhall.Core
