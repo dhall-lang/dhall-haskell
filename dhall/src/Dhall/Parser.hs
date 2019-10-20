@@ -100,7 +100,7 @@ exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
 -- trailing newlines
 newtype Header = Header Text deriving Show
 
--- Create a header with stripped of leading spaces and trailing newlines
+-- | Create a header with stripped leading spaces and trailing newlines
 createHeader :: Text -> Header
 createHeader =
     Header . Data.Text.dropWhile Data.Char.isSpace . Data.Text.dropWhileEnd (/= '\n')
