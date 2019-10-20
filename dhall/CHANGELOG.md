@@ -15,6 +15,9 @@
     * Specifically: `NaN == NaN` and `-0.0 /= 0.0`
     * This is a breaking change because the `DoubleLit` constructor of `Expr`
       now stores a `DhallDouble` instead of a `Double`
+* BREAKING CHANGE: [Add `--file` option for `dhall hash`](https://github.com/dhall-lang/dhall-haskell/pull/1445)
+    * This is a breaking change because it also removes the `Dhall.Hash` module,
+      which wasn't really carrying its own weight
 * [Add support for leading separators](https://github.com/dhall-lang/dhall-haskell/pull/1355)
     * See the [changelog for standard version 11.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v11.0.0) for more details
 * [Add record completion operator](https://github.com/dhall-lang/dhall-haskell/pull/1375)
@@ -32,6 +35,9 @@
     * [`Set` and `HashSet`](https://github.com/dhall-lang/dhall-haskell/pull/1405)
     * [`()`](https://github.com/dhall-lang/dhall-haskell/pull/1388)
 * [Add `--output` option to `dhall`](https://github.com/dhall-lang/dhall-haskell/pull/1399)
+* [Move syntax things from `Dhall.Core` to a new `Dhall.Syntax` module](https://github.com/dhall-lang/dhall-haskell/pull/1440)
+    * This is not a breaking change.  `Dhall.Core` still re-exports the same
+      API as before
 * Performance improvements
     * [#1362](https://github.com/dhall-lang/dhall-haskell/pull/1362)
     * [#1366](https://github.com/dhall-lang/dhall-haskell/pull/1366)
