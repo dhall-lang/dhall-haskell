@@ -22,6 +22,9 @@ extra-deps:
   - ordered-containers-0.2.2@sha256:ebf2be3f592d9cf148ea6b8375f8af97148d44f82d8d04476899285e965afdbf,810
   - lsp-test-0.6.1.0@sha256:df0fc403c03b6d036be13de3ff23d9951ae2506080135cd6862eded2c969a6da,3483
   - aeson-yaml-1.0.2.0@sha256:c578472845478a35756131f4f4a6a929a9021aa2e494e6efe610c033e09868d0,1975
+flags:
+  dhall-json:
+    gpl: true
 nix:
   packages:
     - ncurses
