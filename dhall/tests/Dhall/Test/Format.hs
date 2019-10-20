@@ -5,10 +5,11 @@ module Dhall.Test.Format where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
+import Dhall.Parser (Header(..))
 import Dhall.Pretty (CharacterSet(..))
 import Test.Tasty (TestTree)
-import Test.Tasty.QuickCheck ((===))
-import Dhall.Test.QuickCheck () -- For Arbitrary (Expr s a)
+import Test.Tasty.QuickCheck ((===), property)
+import Dhall.Test.QuickCheck () -- For Arbitrary instances
 
 import qualified Control.Monad                         as Monad
 import qualified Data.Text                             as Text
@@ -43,14 +44,13 @@ getTests = do
             Tasty.testGroup "format tests"
                 [ unicodeTests
                 , asciiTests
-                , idempotentTests Unicode
-                , idempotentTests ASCII
+                , idempotenceTest
                 ]
 
     return testTree
 
-format :: CharacterSet -> Text -> Core.Expr Parser.Src Core.Import -> Text
-format characterSet header expr =
+format :: CharacterSet -> (Header, Core.Expr Parser.Src Core.Import) -> Text
+format characterSet (Header header, expr) =
     let doc =  Doc.pretty header
             <> Pretty.prettyCharacterSet characterSet expr
             <> "\n"
@@ -67,9 +67,9 @@ formatTest characterSet prefix =
 
         inputText <- Text.IO.readFile inputFile
 
-        (header, expr) <- Core.throws (Parser.exprAndHeaderFromText mempty inputText)
+        headerAndExpr <- Core.throws (Parser.exprAndHeaderFromText mempty inputText)
 
-        let actualText = format characterSet header expr
+        let actualText = format characterSet headerAndExpr
         expectedText <- Text.IO.readFile outputFile
 
         let message =
@@ -81,16 +81,10 @@ formatTest characterSet prefix =
 
         Tasty.HUnit.assertBool message (actualText == expectedText)
 
-idempotentTests :: CharacterSet -> TestTree
-idempotentTests characterSet =
-    Tasty.QuickCheck.testProperty
-        ("Formatting should be idempotent with " <> showCharacterSet characterSet)
-        $ \(formatted -> once) ->
-            case Parser.exprAndHeaderFromText mempty once of
-                Right (formatted -> twice) -> once === twice
-                Left _ -> Tasty.QuickCheck.property Tasty.QuickCheck.Discard
-    where
-    showCharacterSet Unicode = "\"Unicode\""
-    showCharacterSet ASCII   = "\"ASCII\""
-
-    formatted = uncurry (format characterSet)
+idempotenceTest :: TestTree
+idempotenceTest = Tasty.QuickCheck.testProperty
+    "Formatting should be idempotent"
+    $ \characterSet (format characterSet -> once) ->
+        case Parser.exprAndHeaderFromText mempty once of
+            Right (format characterSet -> twice) -> once === twice
+            Left _ -> property Tasty.QuickCheck.Discard
