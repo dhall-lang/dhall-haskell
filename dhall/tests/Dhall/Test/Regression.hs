@@ -147,7 +147,9 @@ issue216 = Test.Tasty.HUnit.testCase "Issue #216" (do
     source <- Data.Text.IO.readFile "./tests/regression/issue216b.dhall"
     e <- Util.code source
     let doc       = Data.Text.Prettyprint.Doc.pretty e
-    let docStream = Data.Text.Prettyprint.Doc.layoutSmart Dhall.Pretty.layoutOpts doc
+    let docStream =
+            Data.Text.Prettyprint.Doc.removeTrailingWhitespace
+                (Data.Text.Prettyprint.Doc.layoutSmart Dhall.Pretty.layoutOpts doc)
     let text0 = Data.Text.Prettyprint.Doc.Render.Text.renderLazy docStream
 
     text1 <- Data.Text.Lazy.IO.readFile "./tests/regression/issue216b.dhall"

@@ -470,7 +470,7 @@ command (Options {..}) = do
 
     let renderDoc :: Handle -> Doc Ann -> IO ()
         renderDoc h doc = do
-            let stream = Pretty.layoutSmart layoutOpts doc
+            let stream = Pretty.removeTrailingWhitespace (Pretty.layoutSmart layoutOpts doc)
 
             supportsANSI <- System.Console.ANSI.hSupportsANSI h
             let ansiStream =

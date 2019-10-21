@@ -91,6 +91,7 @@ main = do
 
     let prettyExpression =
               Pretty.renderStrict
+            . Pretty.removeTrailingWhitespace
             . Pretty.layoutSmart Dhall.Pretty.layoutOpts
             . Dhall.Pretty.prettyExpr
 

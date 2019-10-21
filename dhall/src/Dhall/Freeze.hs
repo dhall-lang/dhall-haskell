@@ -97,8 +97,11 @@ writeExpr :: Input -> (Text, Expr Src Import) -> CharacterSet -> IO ()
 writeExpr inplace (header, expr) characterSet = do
     let doc =  Pretty.pretty header
             <> Dhall.Pretty.prettyCharacterSet characterSet expr
+            <> "\n"
 
-    let unAnnotated = Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc)
+    let stream = Pretty.removeTrailingWhitespace (Pretty.layoutSmart layoutOpts doc)
+
+    let unAnnotated = Pretty.unAnnotateS stream
 
     case inplace of
         InputFile f ->
@@ -110,7 +113,7 @@ writeExpr inplace (header, expr) characterSet = do
             supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
             if supportsANSI
                then
-                 Pretty.renderIO System.IO.stdout (annToAnsiStyle <$> Pretty.layoutSmart layoutOpts doc)
+                 Pretty.renderIO System.IO.stdout (annToAnsiStyle <$> stream)
                else
                  Pretty.renderIO System.IO.stdout unAnnotated
 

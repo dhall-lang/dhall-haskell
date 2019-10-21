@@ -17,7 +17,7 @@ formatExpr expr = formatExprWithHeader expr ""
 --   (usually consisting of comments and whitespace).
 formatExprWithHeader :: Pretty.Pretty b => Expr Src b -> Text -> Text
 formatExprWithHeader expr header = Pretty.renderStrict
-  (Pretty.layoutSmart layoutOpts doc)
+  (Pretty.removeTrailingWhitespace (Pretty.layoutSmart layoutOpts doc))
   where
     doc =
       Pretty.pretty header

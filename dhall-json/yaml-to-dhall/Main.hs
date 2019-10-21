@@ -137,7 +137,9 @@ main = do
 
                 let document = Dhall.Pretty.prettyCharacterSet characterSet result
 
-                let stream = Pretty.layoutSmart Dhall.Pretty.layoutOpts document
+                let stream =
+                        Pretty.removeTrailingWhitespace
+                            (Pretty.layoutSmart Dhall.Pretty.layoutOpts document)
 
                 case output of
                     Nothing -> do
