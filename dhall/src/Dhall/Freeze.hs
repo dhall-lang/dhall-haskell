@@ -20,7 +20,7 @@ import Data.Text
 import Data.Void (Void)
 import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Parser (Src)
-import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
+import Dhall.Pretty (CharacterSet)
 import Dhall.Util (Censor, Input(..))
 import System.Console.ANSI (hSupportsANSI)
 
@@ -32,6 +32,7 @@ import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
+import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified System.FilePath
@@ -99,7 +100,7 @@ writeExpr inplace (header, expr) characterSet = do
             <> Dhall.Pretty.prettyCharacterSet characterSet expr
             <> "\n"
 
-    let stream = Pretty.removeTrailingWhitespace (Pretty.layoutSmart layoutOpts doc)
+    let stream = Dhall.Pretty.layout doc
 
     let unAnnotated = Pretty.unAnnotateS stream
 
@@ -113,7 +114,7 @@ writeExpr inplace (header, expr) characterSet = do
             supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
             if supportsANSI
                then
-                 Pretty.renderIO System.IO.stdout (annToAnsiStyle <$> stream)
+                 Pretty.renderIO System.IO.stdout (Dhall.Pretty.annToAnsiStyle <$> stream)
                else
                  Pretty.renderIO System.IO.stdout unAnnotated
 

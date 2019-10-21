@@ -56,7 +56,7 @@ formatTest characterSet prefix =
         let doc        =   Doc.pretty header
                        <>  Pretty.prettyCharacterSet characterSet expr
                        <>  "\n"
-        let docStream  = Doc.removeTrailingWhitespace (Doc.layoutSmart Pretty.layoutOpts doc)
+        let docStream  = Pretty.layout doc
         let actualText = Doc.Render.Text.renderStrict docStream
 
         expectedText <- Text.IO.readFile outputFile

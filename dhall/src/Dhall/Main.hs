@@ -32,7 +32,7 @@ import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..), _semanticCacheMode)
 import Dhall.Parser (Src)
-import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
+import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle)
 import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError)
 import Dhall.Util (Censor(..), Input(..), Output(..))
 import Dhall.Version (dhallVersionString)
@@ -470,7 +470,7 @@ command (Options {..}) = do
 
     let renderDoc :: Handle -> Doc Ann -> IO ()
         renderDoc h doc = do
-            let stream = Pretty.removeTrailingWhitespace (Pretty.layoutSmart layoutOpts doc)
+            let stream = Dhall.Pretty.layout doc
 
             supportsANSI <- System.Console.ANSI.hSupportsANSI h
             let ansiStream =
