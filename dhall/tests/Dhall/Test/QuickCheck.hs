@@ -13,7 +13,7 @@ module Dhall.Test.QuickCheck where
 import Codec.Serialise (DeserialiseFailure(..))
 import Data.Either (isRight)
 import Data.Either.Validation (Validation(..))
-import Dhall (Inject(..), Interpret(..), auto, extract, inject, embed, Vector)
+import Dhall (ToDhall(..), FromDhall(..), auto, extract, inject, embed, Vector)
 import Dhall.Map (Map)
 import Dhall.Core
     ( Binding(..)
@@ -57,6 +57,7 @@ import qualified Data.HashSet
 import qualified Data.Set
 import qualified Data.Text as Text
 import qualified Data.Map
+import qualified Data.HashMap.Strict as HashMap
 import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core
@@ -446,12 +447,12 @@ normalizingAnExpressionDoesntChangeItsInferredType expression =
     filterOutEmbeds :: Typer a
     filterOutEmbeds _ = Const Sort -- This could be any ill-typed expression.
 
-injectThenInterpretIsIdentity
-    :: forall a. (Inject a, Interpret a, Eq a, Typeable a, Arbitrary a, Show a)
+embedThenExtractIsIdentity
+    :: forall a. (ToDhall a, FromDhall a, Eq a, Typeable a, Arbitrary a, Show a)
     => Proxy a
     -> (String, Property, QuickCheckTests)
-injectThenInterpretIsIdentity p =
-    ( "Injecting then Interpreting is identity for " ++ show (typeRep p)
+embedThenExtractIsIdentity p =
+    ( "Embedding then extracting is identity for " ++ show (typeRep p)
     , Test.QuickCheck.property (prop :: a -> Bool)
     , QuickCheckTests 1000
     )
@@ -493,15 +494,16 @@ tests =
           , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
           , QuickCheckTests 10000
           )
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Text.Text))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy [Nat.Natural])
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Bool, Double))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Sequence.Seq ()))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Maybe Integer))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Set.Set Nat.Natural))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.HashSet.HashSet Text.Text))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Vector Double))
-        , injectThenInterpretIsIdentity (Proxy :: Proxy (Data.Map.Map Double Bool))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Text.Text))
+        , embedThenExtractIsIdentity (Proxy :: Proxy [Nat.Natural])
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Bool, Double))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Data.Sequence.Seq ()))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Maybe Integer))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Data.Set.Set Nat.Natural))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Data.HashSet.HashSet Text.Text))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Vector Double))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Data.Map.Map Double Bool))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (HashMap.HashMap Double Bool))
         ]
 
 

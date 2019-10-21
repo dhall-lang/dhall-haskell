@@ -1,6 +1,54 @@
-Next release
+1.27.0
 
-* Add `dhall tags` command that build tags file in [ETags](https://en.wikipedia.org/wiki/Ctags#Etags_2) format. Allow to index file or directory.
+* [Supports version 11.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v11.0.0)
+* BREAKING CHANGE: Rename `Inject`/`Interpret` to `ToDhall`/`FromDhall`
+    * This change `ConstraintKinds` to minimize disruption by keeping around
+      `Inject`/`Interpret` as synonyms for `ToDhall`/`FromDhall`
+    * In other words, constraints and derived instances using `Inject` or
+      `Interpret` will still work
+    * However, manual instances using `Inject` or `Interpret` won't work
+      unless you rename them to `ToDhall`/`FromDhall` or enable the
+      `TypeSynonymInstances` extension
+* BREAKING CHANGE: Fix `Eq` instance for `Expr`s with special `Double`s
+    * This fixes the `Eq` instance for `Expr`s to match the standard regarding
+      `Double` comparisons
+    * Specifically: `NaN == NaN` and `-0.0 /= 0.0`
+    * This is a breaking change because the `DoubleLit` constructor of `Expr`
+      now stores a `DhallDouble` instead of a `Double`
+* BREAKING CHANGE: [Add `--file` option for `dhall hash`](https://github.com/dhall-lang/dhall-haskell/pull/1445)
+    * This is a breaking change because it also removes the `Dhall.Hash` module,
+      which wasn't really carrying its own weight
+* [Add support for leading separators](https://github.com/dhall-lang/dhall-haskell/pull/1355)
+    * See the [changelog for standard version 11.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v11.0.0) for more details
+* [Add record completion operator](https://github.com/dhall-lang/dhall-haskell/pull/1375)
+    * See the [changelog for standard version 11.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v11.0.0) for more details
+* [Add `dhall tags` subcommand](https://github.com/dhall-lang/dhall-haskell/pull/1398)
+    * This generates an ETags file from an input file or directory
+* [Add `dhall lint` support for fixing malformed assertions](https://github.com/dhall-lang/dhall-haskell/pull/1353)
+    * `dhall lint` now fixes `let example = foo === bar` to be
+       `let example = assert : foo === bar`
+* Normalize inferred types [#1337](https://github.com/dhall-lang/dhall-haskell/pull/1337)
+* New `FromDhall`/`ToDhall` (previously `Interpret`/`Inject`) instances for:
+    * [`Void`](https://github.com/dhall-lang/dhall-haskell/pull/1382)
+    * `Map` [#1391](https://github.com/dhall-lang/dhall-haskell/pull/1391) / [#1412](https://github.com/dhall-lang/dhall-haskell/pull/1412)
+    * [`HashMap`](https://github.com/dhall-lang/dhall-haskell/pull/1426)
+    * [`Set` and `HashSet`](https://github.com/dhall-lang/dhall-haskell/pull/1405)
+    * [`()`](https://github.com/dhall-lang/dhall-haskell/pull/1388)
+* [Add `--output` option to `dhall`](https://github.com/dhall-lang/dhall-haskell/pull/1399)
+* [Move syntax things from `Dhall.Core` to a new `Dhall.Syntax` module](https://github.com/dhall-lang/dhall-haskell/pull/1440)
+    * This is not a breaking change.  `Dhall.Core` still re-exports the same
+      API as before
+* Performance improvements
+    * [#1362](https://github.com/dhall-lang/dhall-haskell/pull/1362)
+    * [#1366](https://github.com/dhall-lang/dhall-haskell/pull/1366)
+    * [#1368](https://github.com/dhall-lang/dhall-haskell/pull/1368)
+    * [#1397](https://github.com/dhall-lang/dhall-haskell/pull/1397)
+    * [#1401](https://github.com/dhall-lang/dhall-haskell/pull/1401)
+* Fixes and improvements to code formatting
+    * [#1360](https://github.com/dhall-lang/dhall-haskell/pull/1360)
+    * [#1372](https://github.com/dhall-lang/dhall-haskell/pull/1372)
+    * [#1380](https://github.com/dhall-lang/dhall-haskell/pull/1380)
+    * [#1415](https://github.com/dhall-lang/dhall-haskell/pull/1415)
 
 1.26.1
 
@@ -44,6 +92,10 @@ Next release
     * This fixes `dhall type` to more accurately follow the standard
 * [Initial changes for GHC 8.8 support](https://github.com/dhall-lang/dhall-haskell/pull/1324)
 * [Fix Haddock formatting for `dhallFromJSON`](https://github.com/dhall-lang/dhall-haskell/pull/1316)
+* [Improved Windows caching support](https://github.com/dhall-lang/dhall-haskell/pull/1272)
+    * `dhall` will now prefer the `%LOCALAPPDATA%` directory for caching if it is
+      available
+* [Warn about missing cache directories](https://github.com/dhall-lang/dhall-haskell/pull/1320)
 
 1.26.0
 
@@ -108,7 +160,7 @@ Next release
       newly-added utilities
     * See also: [#1298](https://github.com/dhall-lang/dhall-haskell/pull/1298)
 * [New `:help` command for `dhall repl`](https://github.com/dhall-lang/dhall-haskell/pull/1237)
-* [New `--no-cache` flag](https://github.com/dhall-lang/dhall-haskell/pull/1290)
+* New `--no-cache` flag [#1290](https://github.com/dhall-lang/dhall-haskell/pull/1290) / [#1434](https://github.com/dhall-lang/dhall-haskell/pull/1434) / [#1436](https://github.com/dhall-lang/dhall-haskell/pull/1436)
     * You can now disable use of the cache with this flag
     * This comes in handy if you want to disable α-normalization for imports
       protected by a semantic integrity check

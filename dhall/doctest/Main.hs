@@ -17,7 +17,7 @@ main = do
     prefix <- System.Directory.makeAbsolute pwd
 
     Test.Mockery.Directory.inTempDirectory $ do
-        writeFile "makeBools" "λ(n : Bool) → [ n && True, n && False, n || True, n || False ]"
+        writeFile "makeBools.dhall" "λ(n : Bool) → [ n && True, n && False, n || True, n || False ]"
         writeFile "bool1" "True"
         writeFile "bool2" "False"
         writeFile "both" "./bool1 && ./bool2"
@@ -32,5 +32,5 @@ main = do
             , prefix </> "src/Dhall.hs"
             , prefix </> "src/Dhall/Import.hs"
             , prefix </> "src/Dhall/Tutorial.hs"
-            , prefix </> "src/Dhall/ETags.hs"
+            , prefix </> "src/Dhall/Tags.hs"
             ]

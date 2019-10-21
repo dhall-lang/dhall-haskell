@@ -1147,5 +1147,6 @@ _arrow = do
     void (Text.Parser.Char.char '→' <?> "\"→\"") <|> void (Text.Parser.Char.text "->")
     whitespace
 
+-- | Parse a double colon (@::@)
 _doubleColon :: Parser ()
 _doubleColon = reserved "::"

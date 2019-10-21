@@ -51,7 +51,7 @@ tests =
         ]
 
 data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
-    deriving (Show, Dhall.Generic, Dhall.Interpret, Dhall.Inject)
+    deriving (Show, Dhall.Generic, Dhall.FromDhall, Dhall.ToDhall)
 
 unnamedFields :: TestTree
 unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
@@ -70,7 +70,7 @@ unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
         )
 
     let inj = Dhall.inject :: Dhall.InputType Foo
-    Test.Tasty.HUnit.assertEqual "Good Inject" (Dhall.declared inj) (Dhall.expected ty)
+    Test.Tasty.HUnit.assertEqual "Good ToDhall" (Dhall.declared inj) (Dhall.expected ty)
 
     let tu_ty = Dhall.auto :: Dhall.Type (Integer, Bool)
     Test.Tasty.HUnit.assertEqual "Auto Tuple" (Dhall.expected tu_ty) (Dhall.Core.Record (

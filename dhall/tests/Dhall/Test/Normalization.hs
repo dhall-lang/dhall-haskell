@@ -138,11 +138,11 @@ alphaNormalizationTest prefix = do
 -}
 unitTest :: Text -> TestTree
 unitTest prefix = do
-    let skip = []
+    let expectedFailures = []
 
     let prefixString = Text.unpack prefix
 
-    Test.Util.testCase prefix skip $ do
+    Test.Util.testCase prefix expectedFailures $ do
         let actualPath   = prefixString <> "A.dhall"
         let expectedPath = prefixString <> "B.dhall"
 

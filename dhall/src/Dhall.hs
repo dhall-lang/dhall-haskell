@@ -46,7 +46,8 @@ module Dhall
     , RecordType(..)
     , UnionType(..)
     , InputType(..)
-    , Interpret(..)
+    , FromDhall(..)
+    , Interpret
     , InvalidType(..)
     , ExtractErrors(..)
     , Extractor
@@ -76,6 +77,7 @@ module Dhall
     , hashSetFromDistinctList
     , hashSetIgnoringDuplicates
     , Dhall.map
+    , hashMap
     , pairFromMapEntry
     , unit
     , void
@@ -85,12 +87,13 @@ module Dhall
     , field
     , union
     , constructor
-    , GenericInterpret(..)
-    , GenericInject(..)
+    , GenericFromDhall(..)
+    , GenericToDhall(..)
 
-    , Inject(..)
+    , ToDhall(..)
+    , Inject
     , inject
-    , genericInject
+    , genericToDhall
     , RecordInputType(..)
     , inputFieldWith
     , inputField
@@ -125,6 +128,7 @@ import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
 import Data.Hashable (Hashable)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.HashMap.Strict (HashMap)
 import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
@@ -152,6 +156,7 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Map
 import qualified Data.Maybe
 import qualified Data.List
@@ -952,6 +957,23 @@ fromList [(1,False)]
 map :: Ord k => Type k -> Type v -> Type (Map k v)
 map k v = fmap Data.Map.fromList (list (pairFromMapEntry k v))
 
+{-| Decode a `HashMap` from a @toMap@ expression or generally a @Prelude.Map.Type@
+
+>>> input (Dhall.hashMap strictText bool) "toMap { a = True, b = False }"
+fromList [("a",True),("b",False)]
+>>> input (Dhall.hashMap strictText bool) "[ { mapKey = \"foo\", mapValue = True } ]"
+fromList [("foo",True)]
+
+If there are duplicate @mapKey@s, later @mapValue@s take precedence:
+
+>>> let expr = "[ { mapKey = 1, mapValue = True }, { mapKey = 1, mapValue = False } ]"
+>>> input (Dhall.hashMap natural bool) expr
+fromList [(1,False)]
+
+-}
+hashMap :: (Eq k, Hashable k) => Type k -> Type v -> Type (HashMap k v)
+hashMap k v = fmap HashMap.fromList (list (pairFromMapEntry k v))
+
 {-| Decode a tuple from a @Prelude.Map.Entry@ record
 
 >>> input (pairFromMapEntry strictText natural) "{ mapKey = \"foo\", mapValue = 3 }"
@@ -1019,7 +1041,7 @@ pair l r = Type extractOut expectedOut
                 ]
             )
 
-{-| Any value that implements `Interpret` can be automatically decoded based on
+{-| Any value that implements `FromDhall` can be automatically decoded based on
     the inferred return type of `input`
 
 >>> input auto "[1, 2, 3]" :: IO (Vector Natural)
@@ -1031,70 +1053,79 @@ fromList [("a",False),("b",True)]
     implement `Generic`.  This does not auto-generate an instance for recursive
     types.
 -}
-class Interpret a where
+class FromDhall a where
     autoWith:: InterpretOptions -> Type a
     default autoWith
-        :: (Generic a, GenericInterpret (Rep a)) => InterpretOptions -> Type a
+        :: (Generic a, GenericFromDhall (Rep a)) => InterpretOptions -> Type a
     autoWith options = fmap GHC.Generics.to (evalState (genericAutoWith options) 1)
 
-instance Interpret Void where
+{-| A compatibility alias for `FromDhall`
+
+This will eventually be removed.
+-}
+type Interpret = FromDhall
+
+instance FromDhall Void where
     autoWith _ = void
 
-instance Interpret () where
+instance FromDhall () where
     autoWith _ = unit
 
-instance Interpret Bool where
+instance FromDhall Bool where
     autoWith _ = bool
 
-instance Interpret Natural where
+instance FromDhall Natural where
     autoWith _ = natural
 
-instance Interpret Integer where
+instance FromDhall Integer where
     autoWith _ = integer
 
-instance Interpret Scientific where
+instance FromDhall Scientific where
     autoWith _ = scientific
 
-instance Interpret Double where
+instance FromDhall Double where
     autoWith _ = double
 
-instance {-# OVERLAPS #-} Interpret [Char] where
+instance {-# OVERLAPS #-} FromDhall [Char] where
     autoWith _ = string
 
-instance Interpret Data.Text.Lazy.Text where
+instance FromDhall Data.Text.Lazy.Text where
     autoWith _ = lazyText
 
-instance Interpret Text where
+instance FromDhall Text where
     autoWith _ = strictText
 
-instance Interpret a => Interpret (Maybe a) where
+instance FromDhall a => FromDhall (Maybe a) where
     autoWith opts = maybe (autoWith opts)
 
-instance Interpret a => Interpret (Seq a) where
+instance FromDhall a => FromDhall (Seq a) where
     autoWith opts = sequence (autoWith opts)
 
-instance Interpret a => Interpret [a] where
+instance FromDhall a => FromDhall [a] where
     autoWith opts = list (autoWith opts)
 
-instance Interpret a => Interpret (Vector a) where
+instance FromDhall a => FromDhall (Vector a) where
     autoWith opts = vector (autoWith opts)
 
 {-| Note that this instance will throw errors in the presence of duplicates in
     the list. To ignore duplicates, use `setIgnoringDuplicates`.
 -}
-instance (Interpret a, Ord a, Show a) => Interpret (Data.Set.Set a) where
+instance (FromDhall a, Ord a, Show a) => FromDhall (Data.Set.Set a) where
     autoWith opts = setFromDistinctList (autoWith opts)
 
 {-| Note that this instance will throw errors in the presence of duplicates in
     the list. To ignore duplicates, use `hashSetIgnoringDuplicates`.
 -}
-instance (Interpret a, Hashable a, Ord a, Show a) => Interpret (Data.HashSet.HashSet a) where
+instance (FromDhall a, Hashable a, Ord a, Show a) => FromDhall (Data.HashSet.HashSet a) where
     autoWith opts = hashSetFromDistinctList (autoWith opts)
 
-instance (Ord k, Interpret k, Interpret v) => Interpret (Map k v) where
+instance (Ord k, FromDhall k, FromDhall v) => FromDhall (Map k v) where
     autoWith opts = Dhall.map (autoWith opts) (autoWith opts)
 
-instance (Inject a, Interpret b) => Interpret (a -> b) where
+instance (Eq k, Hashable k, FromDhall k, FromDhall v) => FromDhall (HashMap k v) where
+    autoWith opts = Dhall.hashMap (autoWith opts) (autoWith opts)
+
+instance (ToDhall a, FromDhall b) => FromDhall (a -> b) where
     autoWith opts = Type extractOut expectedOut
       where
         normalizer_ = Just (inputNormalizer opts)
@@ -1102,7 +1133,7 @@ instance (Inject a, Interpret b) => Interpret (a -> b) where
         -- ToDo
         extractOut e = pure (\i -> case extractIn (Dhall.Core.normalizeWith normalizer_ (App e (embed i))) of
             Success o  -> o
-            Failure _e -> error "Interpret: You cannot decode a function if it does not have the correct type" )
+            Failure _e -> error "FromDhall: You cannot decode a function if it does not have the correct type" )
 
         expectedOut = Pi "_" declared expectedIn
 
@@ -1110,25 +1141,25 @@ instance (Inject a, Interpret b) => Interpret (a -> b) where
 
         Type extractIn expectedIn = autoWith opts
 
-instance (Interpret a, Interpret b) => Interpret (a, b)
+instance (FromDhall a, FromDhall b) => FromDhall (a, b)
 
 {-| Use the default options for interpreting a configuration file
 
 > auto = autoWith defaultInterpretOptions
 -}
-auto :: Interpret a => Type a
+auto :: FromDhall a => Type a
 auto = autoWith defaultInterpretOptions
 
 {-| This type is exactly the same as `Data.Fix.Fix` except with a different
-    `Interpret` instance.  This intermediate type simplies the implementation
-    of the inner loop for the `Interpret` instance for `Fix`
+    `FromDhall` instance.  This intermediate type simplies the implementation
+    of the inner loop for the `FromDhall` instance for `Fix`
 -}
 newtype Result f = Result { _unResult :: f (Result f) }
 
 resultToFix :: Functor f => Result f -> Fix f
 resultToFix (Result x) = Fix (fmap resultToFix x)
 
-instance Interpret (f (Result f)) => Interpret (Result f) where
+instance FromDhall (f (Result f)) => FromDhall (Result f) where
     autoWith options = Type { expected = expected_, extract = extract_ }
       where
         expected_ = "result"
@@ -1155,7 +1186,7 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- >
 -- > import Data.Fix (Fix(..))
 -- > import Data.Text (Text)
--- > import Dhall (Interpret)
+-- > import Dhall (FromDhall)
 -- > import GHC.Generics (Generic)
 -- > import Numeric.Natural (Natural)
 -- >
@@ -1174,7 +1205,7 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- > TH.makeBaseFunctor ''Expr
 -- >
 -- > deriving instance Generic (ExprF a)
--- > deriving instance Interpret a => Interpret (ExprF a)
+-- > deriving instance FromDhall a => FromDhall (ExprF a)
 -- >
 -- > example :: Text
 -- > example = [NeatInterpolation.text|
@@ -1212,7 +1243,7 @@ instance Interpret (f (Result f)) => Interpret (Result f) where
 -- >     x <- Dhall.input Dhall.auto example :: IO (Fix ExprF)
 -- >
 -- >     print (convert x :: Expr)
-instance (Functor f, Interpret (f (Result f))) => Interpret (Fix f) where
+instance (Functor f, FromDhall (f (Result f))) => FromDhall (Fix f) where
     autoWith options = Type { expected = expected_, extract = extract_ }
       where
         expected_ =
@@ -1228,15 +1259,15 @@ instance (Functor f, Interpret (f (Result f))) => Interpret (Fix f) where
             go0 _ = typeError expected_ expression0
 
 {-| `genericAuto` is the default implementation for `auto` if you derive
-    `Interpret`.  The difference is that you can use `genericAuto` without
-    having to explicitly provide an `Interpret` instance for a type as long as
+    `FromDhall`.  The difference is that you can use `genericAuto` without
+    having to explicitly provide a `FromDhall` instance for a type as long as
     the type derives `Generic`
 -}
-genericAuto :: (Generic a, GenericInterpret (Rep a)) => Type a
+genericAuto :: (Generic a, GenericFromDhall (Rep a)) => Type a
 genericAuto = fmap to (evalState (genericAutoWith defaultInterpretOptions) 1)
 
 {-| Use these options to tweak how Dhall derives a generic implementation of
-    `Interpret`
+    `FromDhall`
 -}
 data InterpretOptions = InterpretOptions
     { fieldModifier       :: Text -> Text
@@ -1250,7 +1281,7 @@ data InterpretOptions = InterpretOptions
     --   `Wrapped` for backwards compatibility but will eventually be changed to
     --   `Smart`
     , inputNormalizer     :: Dhall.Core.ReifiedNormalizer Void
-    -- ^ This is only used by the `Interpret` instance for functions in order
+    -- ^ This is only used by the `FromDhall` instance for functions in order
     --   to normalize the function input before marshaling the input into a
     --   Dhall expression
     }
@@ -1295,18 +1326,18 @@ defaultInterpretOptions = InterpretOptions
           Dhall.Core.ReifiedNormalizer (const (pure Nothing))
     }
 
-{-| This is the underlying class that powers the `Interpret` class's support
+{-| This is the underlying class that powers the `FromDhall` class's support
     for automatically deriving a generic implementation
 -}
-class GenericInterpret f where
+class GenericFromDhall f where
     genericAutoWith :: InterpretOptions -> State Int (Type (f a))
 
-instance GenericInterpret f => GenericInterpret (M1 D d f) where
+instance GenericFromDhall f => GenericFromDhall (M1 D d f) where
     genericAutoWith options = do
         res <- genericAutoWith options
         pure (fmap M1 res)
 
-instance GenericInterpret V1 where
+instance GenericFromDhall V1 where
     genericAutoWith _ = pure Type {..}
       where
         extract expr = typeError expected expr
@@ -1367,7 +1398,7 @@ extractUnionConstructor (Field (Union kts) fld) =
 extractUnionConstructor _ =
   empty
 
-instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret f2) => GenericInterpret (M1 C c1 f1 :+: M1 C c2 f2) where
+instance (Constructor c1, Constructor c2, GenericFromDhall f1, GenericFromDhall f2) => GenericFromDhall (M1 C c1 f1 :+: M1 C c2 f2) where
     genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
       where
         nL :: M1 i c1 f1 a
@@ -1399,7 +1430,7 @@ instance (Constructor c1, Constructor c2, GenericInterpret f1, GenericInterpret 
         Type extractL expectedL = evalState (genericAutoWith options) 1
         Type extractR expectedR = evalState (genericAutoWith options) 1
 
-instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => GenericInterpret ((f :+: g) :+: M1 C c h) where
+instance (Constructor c, GenericFromDhall (f :+: g), GenericFromDhall h) => GenericFromDhall ((f :+: g) :+: M1 C c h) where
     genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
       where
         n :: M1 i c h a
@@ -1422,7 +1453,7 @@ instance (Constructor c, GenericInterpret (f :+: g), GenericInterpret h) => Gene
 
         ktsL = unsafeExpectUnion "genericAutoWith (:+:)" expectedL
 
-instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => GenericInterpret (M1 C c f :+: (g :+: h)) where
+instance (Constructor c, GenericFromDhall f, GenericFromDhall (g :+: h)) => GenericFromDhall (M1 C c f :+: (g :+: h)) where
     genericAutoWith options@(InterpretOptions {..}) = pure (Type {..})
       where
         n :: M1 i c f a
@@ -1445,7 +1476,7 @@ instance (Constructor c, GenericInterpret f, GenericInterpret (g :+: h)) => Gene
 
         ktsR = unsafeExpectUnion "genericAutoWith (:+:)" expectedR
 
-instance (GenericInterpret (f :+: g), GenericInterpret (h :+: i)) => GenericInterpret ((f :+: g) :+: (h :+: i)) where
+instance (GenericFromDhall (f :+: g), GenericFromDhall (h :+: i)) => GenericFromDhall ((f :+: g) :+: (h :+: i)) where
     genericAutoWith options = pure (Type {..})
       where
         extract e = fmap L1 (extractL e) `ealt` fmap R1 (extractR e)
@@ -1458,12 +1489,12 @@ instance (GenericInterpret (f :+: g), GenericInterpret (h :+: i)) => GenericInte
         ktsL = unsafeExpectUnion "genericAutoWith (:+:)" expectedL
         ktsR = unsafeExpectUnion "genericAutoWith (:+:)" expectedR
 
-instance GenericInterpret f => GenericInterpret (M1 C c f) where
+instance GenericFromDhall f => GenericFromDhall (M1 C c f) where
     genericAutoWith options = do
         res <- genericAutoWith options
         pure (fmap M1 res)
 
-instance GenericInterpret U1 where
+instance GenericFromDhall U1 where
     genericAutoWith _ = pure (Type {..})
       where
         extract _ = pure U1
@@ -1477,7 +1508,7 @@ getSelName n = case selName n of
              pure (Data.Text.pack ("_" ++ show i))
     nn -> pure (Data.Text.pack nn)
 
-instance (GenericInterpret (f :*: g), GenericInterpret (h :*: i)) => GenericInterpret ((f :*: g) :*: (h :*: i)) where
+instance (GenericFromDhall (f :*: g), GenericFromDhall (h :*: i)) => GenericFromDhall ((f :*: g) :*: (h :*: i)) where
     genericAutoWith options = do
         Type extractL expectedL <- genericAutoWith options
         Type extractR expectedR <- genericAutoWith options
@@ -1492,7 +1523,7 @@ instance (GenericInterpret (f :*: g), GenericInterpret (h :*: i)) => GenericInte
 
         return (Type {..})
 
-instance (GenericInterpret (f :*: g), Selector s, Interpret a) => GenericInterpret ((f :*: g) :*: M1 S s (K1 i a)) where
+instance (GenericFromDhall (f :*: g), Selector s, FromDhall a) => GenericFromDhall ((f :*: g) :*: M1 S s (K1 i a)) where
     genericAutoWith options@InterpretOptions{..} = do
         let nR :: M1 S s (K1 i a) r
             nR = undefined
@@ -1522,7 +1553,7 @@ instance (GenericInterpret (f :*: g), Selector s, Interpret a) => GenericInterpr
 
         return (Type {..})
 
-instance (Selector s, Interpret a, GenericInterpret (f :*: g)) => GenericInterpret (M1 S s (K1 i a) :*: (f :*: g)) where
+instance (Selector s, FromDhall a, GenericFromDhall (f :*: g)) => GenericFromDhall (M1 S s (K1 i a) :*: (f :*: g)) where
     genericAutoWith options@InterpretOptions{..} = do
         let nL :: M1 S s (K1 i a) r
             nL = undefined
@@ -1552,7 +1583,7 @@ instance (Selector s, Interpret a, GenericInterpret (f :*: g)) => GenericInterpr
 
         return (Type {..})
 
-instance (Selector s1, Selector s2, Interpret a1, Interpret a2) => GenericInterpret (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
+instance (Selector s1, Selector s2, FromDhall a1, FromDhall a2) => GenericFromDhall (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
     genericAutoWith options@InterpretOptions{..} = do
         let nL :: M1 S s1 (K1 i1 a1) r
             nL = undefined
@@ -1589,7 +1620,7 @@ instance (Selector s1, Selector s2, Interpret a1, Interpret a2) => GenericInterp
 
         return (Type {..})
 
-instance (Selector s, Interpret a) => GenericInterpret (M1 S s (K1 i a)) where
+instance (Selector s, FromDhall a) => GenericFromDhall (M1 S s (K1 i a)) where
     genericAutoWith options@InterpretOptions{..} = do
         let n :: M1 S s (K1 i a) r
             n = undefined
@@ -1646,9 +1677,9 @@ instance Contravariant InputType where
       where
         embed' x = embed (f x)
 
-{-| This class is used by `Interpret` instance for functions:
+{-| This class is used by `FromDhall` instance for functions:
 
-> instance (Inject a, Interpret b) => Interpret (a -> b)
+> instance (ToDhall a, FromDhall b) => FromDhall (a -> b)
 
     You can convert Dhall functions with "simple" inputs (i.e. instances of this
     class) into Haskell functions.  This works by:
@@ -1660,46 +1691,52 @@ instance Contravariant InputType where
     * Normalizing the syntax tree (i.e. @normalize (App f x)@)
     * Marshaling the resulting Dhall expression back into a Haskell value
 -}
-class Inject a where
+class ToDhall a where
     injectWith :: InterpretOptions -> InputType a
     default injectWith
-        :: (Generic a, GenericInject (Rep a)) => InterpretOptions -> InputType a
+        :: (Generic a, GenericToDhall (Rep a)) => InterpretOptions -> InputType a
     injectWith options
-        = contramap GHC.Generics.from (evalState (genericInjectWith options) 1)
+        = contramap GHC.Generics.from (evalState (genericToDhallWith options) 1)
+
+{-| A compatibility alias for `ToDhall`
+
+This will eventually be removed.
+-}
+type Inject = ToDhall
 
 {-| Use the default options for injecting a value
 
 > inject = injectWith defaultInterpretOptions
 -}
-inject :: Inject a => InputType a
+inject :: ToDhall a => InputType a
 inject = injectWith defaultInterpretOptions
 
 {-| Use the default options for injecting a value, whose structure is
 determined generically.
 
-This can be used when you want to use 'Inject' on types that you don't
+This can be used when you want to use 'ToDhall' on types that you don't
 want to define orphan instances for.
 -}
-genericInject
-  :: (Generic a, GenericInject (Rep a)) => InputType a
-genericInject
-    = contramap GHC.Generics.from (evalState (genericInjectWith defaultInterpretOptions) 1)
+genericToDhall
+  :: (Generic a, GenericToDhall (Rep a)) => InputType a
+genericToDhall
+    = contramap GHC.Generics.from (evalState (genericToDhallWith defaultInterpretOptions) 1)
 
-instance Inject Void where
+instance ToDhall Void where
     injectWith _ = InputType {..}
       where
         embed = Data.Void.absurd
 
         declared = Union mempty
 
-instance Inject Bool where
+instance ToDhall Bool where
     injectWith _ = InputType {..}
       where
         embed = BoolLit
 
         declared = Bool
 
-instance Inject Data.Text.Lazy.Text where
+instance ToDhall Data.Text.Lazy.Text where
     injectWith _ = InputType {..}
       where
         embed text =
@@ -1707,32 +1744,32 @@ instance Inject Data.Text.Lazy.Text where
 
         declared = Text
 
-instance Inject Text where
+instance ToDhall Text where
     injectWith _ = InputType {..}
       where
         embed text = TextLit (Chunks [] text)
 
         declared = Text
 
-instance {-# OVERLAPS #-} Inject String where
+instance {-# OVERLAPS #-} ToDhall String where
     injectWith options =
         contramap Data.Text.pack (injectWith options :: InputType Text)
 
-instance Inject Natural where
+instance ToDhall Natural where
     injectWith _ = InputType {..}
       where
         embed = NaturalLit
 
         declared = Natural
 
-instance Inject Integer where
+instance ToDhall Integer where
     injectWith _ = InputType {..}
       where
         embed = IntegerLit
 
         declared = Integer
 
-instance Inject Int where
+instance ToDhall Int where
     injectWith _ = InputType {..}
       where
         embed = IntegerLit . toInteger
@@ -1745,7 +1782,7 @@ instance Inject Int where
 NaturalLit 12
 -}
 
-instance Inject Word where
+instance ToDhall Word where
     injectWith _ = InputType {..}
       where
         embed = NaturalLit . fromIntegral
@@ -1758,7 +1795,7 @@ instance Inject Word where
 NaturalLit 12
 -}
 
-instance Inject Word8 where
+instance ToDhall Word8 where
     injectWith _ = InputType {..}
       where
         embed = NaturalLit . fromIntegral
@@ -1771,7 +1808,7 @@ instance Inject Word8 where
 NaturalLit 12
 -}
 
-instance Inject Word16 where
+instance ToDhall Word16 where
     injectWith _ = InputType {..}
       where
         embed = NaturalLit . fromIntegral
@@ -1784,7 +1821,7 @@ instance Inject Word16 where
 NaturalLit 12
 -}
 
-instance Inject Word32 where
+instance ToDhall Word32 where
     injectWith _ = InputType {..}
       where
         embed = NaturalLit . fromIntegral
@@ -1797,32 +1834,32 @@ instance Inject Word32 where
 NaturalLit 12
 -}
 
-instance Inject Word64 where
+instance ToDhall Word64 where
     injectWith _ = InputType {..}
       where
         embed = NaturalLit . fromIntegral
 
         declared = Natural
 
-instance Inject Double where
+instance ToDhall Double where
     injectWith _ = InputType {..}
       where
         embed = DoubleLit . DhallDouble
 
         declared = Double
 
-instance Inject Scientific where
+instance ToDhall Scientific where
     injectWith options =
         contramap Data.Scientific.toRealFloat (injectWith options :: InputType Double)
 
-instance Inject () where
+instance ToDhall () where
     injectWith _ = InputType {..}
       where
         embed = const (RecordLit mempty)
 
         declared = Record mempty
 
-instance Inject a => Inject (Maybe a) where
+instance ToDhall a => ToDhall (Maybe a) where
     injectWith options = InputType embedOut declaredOut
       where
         embedOut (Just x ) = Some (embedIn x)
@@ -1832,7 +1869,7 @@ instance Inject a => Inject (Maybe a) where
 
         declaredOut = App Optional declaredIn
 
-instance Inject a => Inject (Seq a) where
+instance ToDhall a => ToDhall (Seq a) where
     injectWith options = InputType embedOut declaredOut
       where
         embedOut xs = ListLit listType (fmap embedIn xs)
@@ -1845,10 +1882,10 @@ instance Inject a => Inject (Seq a) where
 
         InputType embedIn declaredIn = injectWith options
 
-instance Inject a => Inject [a] where
+instance ToDhall a => ToDhall [a] where
     injectWith = fmap (contramap Data.Sequence.fromList) injectWith
 
-instance Inject a => Inject (Vector a) where
+instance ToDhall a => ToDhall (Vector a) where
     injectWith = fmap (contramap Data.Vector.toList) injectWith
 
 {-| Note that the ouput list will be sorted
@@ -1858,7 +1895,7 @@ instance Inject a => Inject (Vector a) where
 [ "hi", "mom" ]
 
 -}
-instance Inject a => Inject (Data.Set.Set a) where
+instance ToDhall a => ToDhall (Data.Set.Set a) where
     injectWith = fmap (contramap Data.Set.toAscList) injectWith
 
 {-| Note that the ouput list may not be sorted
@@ -1868,12 +1905,12 @@ instance Inject a => Inject (Data.Set.Set a) where
 [ "mom", "hi" ]
 
 -}
-instance Inject a => Inject (Data.HashSet.HashSet a) where
+instance ToDhall a => ToDhall (Data.HashSet.HashSet a) where
     injectWith = fmap (contramap Data.HashSet.toList) injectWith
 
-instance (Inject a, Inject b) => Inject (a, b)
+instance (ToDhall a, ToDhall b) => ToDhall (a, b)
 
-{-| Inject a `Data.Map` to a @Prelude.Map.Type@
+{-| Embed a `Data.Map` as a @Prelude.Map.Type@
 
 >>> prettyExpr $ embed inject (Data.Map.fromList [(1 :: Natural, True)])
 [ { mapKey = 1, mapValue = True } ]
@@ -1882,7 +1919,7 @@ instance (Inject a, Inject b) => Inject (a, b)
 [] : List { mapKey : Natural, mapValue : Bool }
 
 -}
-instance (Inject k, Inject v) => Inject (Data.Map.Map k v) where
+instance (ToDhall k, ToDhall v) => ToDhall (Data.Map.Map k v) where
     injectWith options = InputType embedOut declaredOut
       where
         embedOut m = ListLit listType (mapEntries m)
@@ -1901,24 +1938,52 @@ instance (Inject k, Inject v) => Inject (Data.Map.Map k v) where
         InputType embedK declaredK = injectWith options
         InputType embedV declaredV = injectWith options
 
-{-| This is the underlying class that powers the `Interpret` class's support
+{-| Embed a `Data.HashMap` as a @Prelude.Map.Type@
+
+>>> prettyExpr $ embed inject (HashMap.fromList [(1 :: Natural, True)])
+[ { mapKey = 1, mapValue = True } ]
+
+>>> prettyExpr $ embed inject (HashMap.fromList [] :: HashMap Natural Bool)
+[] : List { mapKey : Natural, mapValue : Bool }
+
+-}
+instance (ToDhall k, ToDhall v) => ToDhall (HashMap k v) where
+    injectWith options = InputType embedOut declaredOut
+      where
+        embedOut m = ListLit listType (mapEntries m)
+          where
+            listType
+                | HashMap.null m = Just declaredOut
+                | otherwise       = Nothing
+
+        declaredOut = App List (Record (Dhall.Map.fromList
+                          [("mapKey", declaredK), ("mapValue", declaredV)]))
+
+        mapEntries = Data.Sequence.fromList . fmap recordPair . HashMap.toList
+        recordPair (k, v) = RecordLit (Dhall.Map.fromList
+                                [("mapKey", embedK k), ("mapValue", embedV v)])
+
+        InputType embedK declaredK = injectWith options
+        InputType embedV declaredV = injectWith options
+
+{-| This is the underlying class that powers the `FromDhall` class's support
     for automatically deriving a generic implementation
 -}
-class GenericInject f where
-    genericInjectWith :: InterpretOptions -> State Int (InputType (f a))
+class GenericToDhall f where
+    genericToDhallWith :: InterpretOptions -> State Int (InputType (f a))
 
-instance GenericInject f => GenericInject (M1 D d f) where
-    genericInjectWith options = do
-        res <- genericInjectWith options
+instance GenericToDhall f => GenericToDhall (M1 D d f) where
+    genericToDhallWith options = do
+        res <- genericToDhallWith options
         pure (contramap unM1 res)
 
-instance GenericInject f => GenericInject (M1 C c f) where
-    genericInjectWith options = do
-        res <- genericInjectWith options
+instance GenericToDhall f => GenericToDhall (M1 C c f) where
+    genericToDhallWith options = do
+        res <- genericToDhallWith options
         pure (contramap unM1 res)
 
-instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
-    genericInjectWith options@InterpretOptions{..} = do
+instance (Selector s, ToDhall a) => GenericToDhall (M1 S s (K1 i a)) where
+    genericToDhallWith options@InterpretOptions{..} = do
         let InputType { embed = embed', declared = declared' } =
                 injectWith options
 
@@ -1949,8 +2014,8 @@ instance (Selector s, Inject a) => GenericInject (M1 S s (K1 i a)) where
 
         return (InputType {..})
 
-instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) => GenericInject (M1 C c1 f1 :+: M1 C c2 f2) where
-    genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
+instance (Constructor c1, Constructor c2, GenericToDhall f1, GenericToDhall f2) => GenericToDhall (M1 C c1 f1 :+: M1 C c2 f2) where
+    genericToDhallWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 (M1 l)) =
             case notEmptyRecordLit (embedL l) of
@@ -1983,11 +2048,11 @@ instance (Constructor c1, Constructor c2, GenericInject f1, GenericInject f2) =>
         keyL = constructorModifier (Data.Text.pack (conName nL))
         keyR = constructorModifier (Data.Text.pack (conName nR))
 
-        InputType embedL declaredL = evalState (genericInjectWith options) 1
-        InputType embedR declaredR = evalState (genericInjectWith options) 1
+        InputType embedL declaredL = evalState (genericToDhallWith options) 1
+        InputType embedR declaredR = evalState (genericToDhallWith options) 1
 
-instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInject ((f :+: g) :+: M1 C c h) where
-    genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
+instance (Constructor c, GenericToDhall (f :+: g), GenericToDhall h) => GenericToDhall ((f :+: g) :+: M1 C c h) where
+    genericToDhallWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 l) =
             case maybeValL of
@@ -1995,7 +2060,7 @@ instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInj
                 Just valL -> App (Field declared keyL) valL
           where
             (keyL, maybeValL) =
-              unsafeExpectUnionLit "genericInjectWith (:+:)" (embedL l)
+              unsafeExpectUnionLit "genericToDhallWith (:+:)" (embedL l)
         embed (R1 (M1 r)) =
             case notEmptyRecordLit (embedR r) of
                 Nothing   -> Field declared keyR
@@ -2008,13 +2073,13 @@ instance (Constructor c, GenericInject (f :+: g), GenericInject h) => GenericInj
 
         declared = Union (Dhall.Map.insert keyR (notEmptyRecord declaredR) ktsL)
 
-        InputType embedL declaredL = evalState (genericInjectWith options) 1
-        InputType embedR declaredR = evalState (genericInjectWith options) 1
+        InputType embedL declaredL = evalState (genericToDhallWith options) 1
+        InputType embedR declaredR = evalState (genericToDhallWith options) 1
 
-        ktsL = unsafeExpectUnion "genericInjectWith (:+:)" declaredL
+        ktsL = unsafeExpectUnion "genericToDhallWith (:+:)" declaredL
 
-instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInject (M1 C c f :+: (g :+: h)) where
-    genericInjectWith options@(InterpretOptions {..}) = pure (InputType {..})
+instance (Constructor c, GenericToDhall f, GenericToDhall (g :+: h)) => GenericToDhall (M1 C c f :+: (g :+: h)) where
+    genericToDhallWith options@(InterpretOptions {..}) = pure (InputType {..})
       where
         embed (L1 (M1 l)) =
             case notEmptyRecordLit (embedL l) of
@@ -2026,7 +2091,7 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
                 Just valR -> App (Field declared keyR) valR
           where
             (keyR, maybeValR) =
-                unsafeExpectUnionLit "genericInjectWith (:+:)" (embedR r)
+                unsafeExpectUnionLit "genericToDhallWith (:+:)" (embedR r)
 
         nL :: M1 i c f a
         nL = undefined
@@ -2035,13 +2100,13 @@ instance (Constructor c, GenericInject f, GenericInject (g :+: h)) => GenericInj
 
         declared = Union (Dhall.Map.insert keyL (notEmptyRecord declaredL) ktsR)
 
-        InputType embedL declaredL = evalState (genericInjectWith options) 1
-        InputType embedR declaredR = evalState (genericInjectWith options) 1
+        InputType embedL declaredL = evalState (genericToDhallWith options) 1
+        InputType embedR declaredR = evalState (genericToDhallWith options) 1
 
-        ktsR = unsafeExpectUnion "genericInjectWith (:+:)" declaredR
+        ktsR = unsafeExpectUnion "genericToDhallWith (:+:)" declaredR
 
-instance (GenericInject (f :+: g), GenericInject (h :+: i)) => GenericInject ((f :+: g) :+: (h :+: i)) where
-    genericInjectWith options = pure (InputType {..})
+instance (GenericToDhall (f :+: g), GenericToDhall (h :+: i)) => GenericToDhall ((f :+: g) :+: (h :+: i)) where
+    genericToDhallWith options = pure (InputType {..})
       where
         embed (L1 l) =
             case maybeValL of
@@ -2049,52 +2114,52 @@ instance (GenericInject (f :+: g), GenericInject (h :+: i)) => GenericInject ((f
                 Just valL -> App (Field declared keyL) valL
           where
             (keyL, maybeValL) =
-                unsafeExpectUnionLit "genericInjectWith (:+:)" (embedL l)
+                unsafeExpectUnionLit "genericToDhallWith (:+:)" (embedL l)
         embed (R1 r) =
             case maybeValR of
                 Nothing   -> Field declared keyR
                 Just valR -> App (Field declared keyR) valR
           where
             (keyR, maybeValR) =
-                unsafeExpectUnionLit "genericInjectWith (:+:)" (embedR r)
+                unsafeExpectUnionLit "genericToDhallWith (:+:)" (embedR r)
 
         declared = Union (Dhall.Map.union ktsL ktsR)
 
-        InputType embedL declaredL = evalState (genericInjectWith options) 1
-        InputType embedR declaredR = evalState (genericInjectWith options) 1
+        InputType embedL declaredL = evalState (genericToDhallWith options) 1
+        InputType embedR declaredR = evalState (genericToDhallWith options) 1
 
-        ktsL = unsafeExpectUnion "genericInjectWith (:+:)" declaredL
-        ktsR = unsafeExpectUnion "genericInjectWith (:+:)" declaredR
+        ktsL = unsafeExpectUnion "genericToDhallWith (:+:)" declaredL
+        ktsR = unsafeExpectUnion "genericToDhallWith (:+:)" declaredR
 
-instance (GenericInject (f :*: g), GenericInject (h :*: i)) => GenericInject ((f :*: g) :*: (h :*: i)) where
-    genericInjectWith options = do
-        InputType embedL declaredL <- genericInjectWith options
-        InputType embedR declaredR <- genericInjectWith options
+instance (GenericToDhall (f :*: g), GenericToDhall (h :*: i)) => GenericToDhall ((f :*: g) :*: (h :*: i)) where
+    genericToDhallWith options = do
+        InputType embedL declaredL <- genericToDhallWith options
+        InputType embedR declaredR <- genericToDhallWith options
 
         let embed (l :*: r) =
                 RecordLit (Dhall.Map.union mapL mapR)
               where
                 mapL =
-                    unsafeExpectRecordLit "genericInjectWith (:*:)" (embedL l)
+                    unsafeExpectRecordLit "genericToDhallWith (:*:)" (embedL l)
 
                 mapR =
-                    unsafeExpectRecordLit "genericInjectWith (:*:)" (embedR r)
+                    unsafeExpectRecordLit "genericToDhallWith (:*:)" (embedR r)
 
         let declared = Record (Dhall.Map.union mapL mapR)
               where
-                mapL = unsafeExpectRecord "genericInjectWith (:*:)" declaredL
-                mapR = unsafeExpectRecord "genericInjectWith (:*:)" declaredR
+                mapL = unsafeExpectRecord "genericToDhallWith (:*:)" declaredL
+                mapR = unsafeExpectRecord "genericToDhallWith (:*:)" declaredR
 
         pure (InputType {..})
 
-instance (GenericInject (f :*: g), Selector s, Inject a) => GenericInject ((f :*: g) :*: M1 S s (K1 i a)) where
-    genericInjectWith options@InterpretOptions{..} = do
+instance (GenericToDhall (f :*: g), Selector s, ToDhall a) => GenericToDhall ((f :*: g) :*: M1 S s (K1 i a)) where
+    genericToDhallWith options@InterpretOptions{..} = do
         let nR :: M1 S s (K1 i a) r
             nR = undefined
 
         nameR <- fmap fieldModifier (getSelName nR)
 
-        InputType embedL declaredL <- genericInjectWith options
+        InputType embedL declaredL <- genericToDhallWith options
 
         let InputType embedR declaredR = injectWith options
 
@@ -2102,16 +2167,16 @@ instance (GenericInject (f :*: g), Selector s, Inject a) => GenericInject ((f :*
                 RecordLit (Dhall.Map.insert nameR (embedR r) mapL)
               where
                 mapL =
-                    unsafeExpectRecordLit "genericInjectWith (:*:)" (embedL l)
+                    unsafeExpectRecordLit "genericToDhallWith (:*:)" (embedL l)
 
         let declared = Record (Dhall.Map.insert nameR declaredR mapL)
               where
-                mapL = unsafeExpectRecord "genericInjectWith (:*:)" declaredL
+                mapL = unsafeExpectRecord "genericToDhallWith (:*:)" declaredL
 
         return (InputType {..})
 
-instance (Selector s, Inject a, GenericInject (f :*: g)) => GenericInject (M1 S s (K1 i a) :*: (f :*: g)) where
-    genericInjectWith options@InterpretOptions{..} = do
+instance (Selector s, ToDhall a, GenericToDhall (f :*: g)) => GenericToDhall (M1 S s (K1 i a) :*: (f :*: g)) where
+    genericToDhallWith options@InterpretOptions{..} = do
         let nL :: M1 S s (K1 i a) r
             nL = undefined
 
@@ -2119,22 +2184,22 @@ instance (Selector s, Inject a, GenericInject (f :*: g)) => GenericInject (M1 S 
 
         let InputType embedL declaredL = injectWith options
 
-        InputType embedR declaredR <- genericInjectWith options
+        InputType embedR declaredR <- genericToDhallWith options
 
         let embed (M1 (K1 l) :*: r) =
                 RecordLit (Dhall.Map.insert nameL (embedL l) mapR)
               where
                 mapR =
-                    unsafeExpectRecordLit "genericInjectWith (:*:)" (embedR r)
+                    unsafeExpectRecordLit "genericToDhallWith (:*:)" (embedR r)
 
         let declared = Record (Dhall.Map.insert nameL declaredL mapR)
               where
-                mapR = unsafeExpectRecord "genericInjectWith (:*:)" declaredR
+                mapR = unsafeExpectRecord "genericToDhallWith (:*:)" declaredR
 
         return (InputType {..})
 
-instance (Selector s1, Selector s2, Inject a1, Inject a2) => GenericInject (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
-    genericInjectWith options@InterpretOptions{..} = do
+instance (Selector s1, Selector s2, ToDhall a1, ToDhall a2) => GenericToDhall (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
+    genericToDhallWith options@InterpretOptions{..} = do
         let nL :: M1 S s1 (K1 i1 a1) r
             nL = undefined
 
@@ -2161,8 +2226,8 @@ instance (Selector s1, Selector s2, Inject a1, Inject a2) => GenericInject (M1 S
 
         return (InputType {..})
 
-instance GenericInject U1 where
-    genericInjectWith _ = pure (InputType {..})
+instance GenericToDhall U1 where
+    genericToDhallWith _ = pure (InputType {..})
       where
         embed _ = RecordLit mempty
 
@@ -2366,7 +2431,7 @@ injectProject =
     adapt (Project{..}) = (projectName, (projectDescription, projectStars))
 :}
 
-    Or, since we are simply using the `Inject` instance to inject each field, we could write
+    Or, since we are simply using the `ToDhall` instance to inject each field, we could write
 
 >>> :{
 injectProject :: InputType Project
@@ -2388,7 +2453,7 @@ injectProject =
 
 infixr 5 >*<
 
--- | Intermediate type used for building an `Inject` instance for a record
+-- | Intermediate type used for building a `ToDhall` instance for a record
 newtype RecordInputType a
   = RecordInputType (Dhall.Map.Map Text (InputType a))
 
@@ -2409,10 +2474,10 @@ instance Divisible RecordInputType where
 inputFieldWith :: Text -> InputType a -> RecordInputType a
 inputFieldWith name inputType = RecordInputType $ Dhall.Map.singleton name inputType
 
-{-| Specify how to encode one field of a record using the default `Inject`
+{-| Specify how to encode one field of a record using the default `ToDhall`
     instance for that type
 -}
-inputField :: Inject a => Text -> RecordInputType a
+inputField :: ToDhall a => Text -> RecordInputType a
 inputField name = inputFieldWith name inject
 
 -- | Convert a `RecordInputType` into the equivalent `InputType`
@@ -2458,7 +2523,7 @@ injectStatus = adapt >$< inputUnion
     adapt (Errored e) = Right (Right e)
 :}
 
-    Or, since we are simply using the `Inject` instance to inject each branch, we could write
+    Or, since we are simply using the `ToDhall` instance to inject each branch, we could write
 
 >>> :{
 injectStatus :: InputType Status
@@ -2538,11 +2603,11 @@ inputConstructorWith name inputType = UnionInputType $
       ( Op ( (name,) . embed inputType )
       )
 
-{-| Specify how to encode an alternative by using the default `Inject` instance
+{-| Specify how to encode an alternative by using the default `ToDhall` instance
     for that type
 -}
 inputConstructor
-    :: Inject a
+    :: ToDhall a
     => Text
     -> UnionInputType a
 inputConstructor name = inputConstructorWith name inject
