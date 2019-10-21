@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ViewPatterns      #-}
 
 module Dhall.Test.Format where
 
@@ -8,8 +7,6 @@ import Data.Text (Text)
 import Dhall.Parser (Header(..))
 import Dhall.Pretty (CharacterSet(..))
 import Test.Tasty (TestTree)
-import Test.Tasty.QuickCheck ((===))
-import Dhall.Test.QuickCheck () -- For Arbitrary instances
 
 import qualified Control.Monad                         as Monad
 import qualified Data.Text                             as Text
@@ -22,7 +19,6 @@ import qualified Dhall.Pretty                          as Pretty
 import qualified Dhall.Test.Util                       as Test.Util
 import qualified Test.Tasty                            as Tasty
 import qualified Test.Tasty.HUnit                      as Tasty.HUnit
-import qualified Test.Tasty.QuickCheck                 as Tasty.QuickCheck
 import qualified Turtle
 
 getTests :: IO TestTree
@@ -44,7 +40,6 @@ getTests = do
             Tasty.testGroup "format tests"
                 [ unicodeTests
                 , asciiTests
-                , idempotenceTest
                 ]
 
     return testTree
@@ -80,13 +75,3 @@ formatTest characterSet prefix =
                 <> "Actual   (show): " <> show actualText <> "\n"
 
         Tasty.HUnit.assertBool message (actualText == expectedText)
-
-idempotenceTest :: TestTree
-idempotenceTest =
-    Tasty.adjustOption (const $ Tasty.QuickCheck.QuickCheckMaxRatio 10000) $
-    Tasty.QuickCheck.testProperty
-        "Formatting should be idempotent"
-        $ \characterSet (format characterSet -> once) ->
-            case Parser.exprAndHeaderFromText mempty once of
-                Right (format characterSet -> twice) -> once === twice
-                Left _ -> Tasty.QuickCheck.discard

@@ -1,10 +1,10 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE StandaloneDeriving  #-}
-{-# LANGUAGE TypeOperators       #-}
 {-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -41,6 +41,7 @@ import Dhall.Set (Set)
 import Dhall.Parser (Header, createHeader)
 import Dhall.Pretty (CharacterSet(..))
 import Dhall.Src (Src(..))
+import Dhall.Test.Format (format)
 import Dhall.TypeCheck (Typer, TypeError)
 import Generic.Random (Weights, W, (%), (:+)(..))
 import Test.QuickCheck
@@ -67,6 +68,7 @@ import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Map
+import qualified Dhall.Parser as Parser
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Generic.Random
@@ -490,6 +492,13 @@ embedThenExtractIsIdentity p =
         Success a' -> a == a'
         Failure _  -> False
 
+idempotenceTest :: Property
+idempotenceTest =
+    Test.QuickCheck.property $
+        \characterSet (format characterSet -> once) ->
+            case Parser.exprAndHeaderFromText mempty once of
+                Right (format characterSet -> twice) -> once === twice
+                Left _ -> Test.QuickCheck.discard
 
 tests :: TestTree
 tests =
@@ -533,6 +542,10 @@ tests =
         , embedThenExtractIsIdentity (Proxy :: Proxy (Vector Double))
         , embedThenExtractIsIdentity (Proxy :: Proxy (Data.Map.Map Double Bool))
         , embedThenExtractIsIdentity (Proxy :: Proxy (HashMap.HashMap Double Bool))
+        , ( "Formatting should be idempotent"
+          , idempotenceTest
+          , QuickCheckTests 10000
+          )
         ]
 
 
