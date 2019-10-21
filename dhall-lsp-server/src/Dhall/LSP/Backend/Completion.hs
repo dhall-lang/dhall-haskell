@@ -1,7 +1,7 @@
 module Dhall.LSP.Backend.Completion where
 
 import Data.Text (Text)
-import Data.Void (absurd)
+import Data.Void (Void, absurd)
 import Dhall.LSP.Backend.Diagnostics (Position, positionToOffset)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (takeDirectory, (</>))
@@ -12,7 +12,7 @@ import Dhall.Context (empty, toList)
 import qualified Data.Text as Text
 import Dhall.Context (Context, insert)
 import Dhall.Core (Binding(..), Expr(..), Var(..), normalize, shift, subst, pretty, reservedIdentifiers)
-import Dhall.TypeCheck (X, typeWithA, typeOf)
+import Dhall.TypeCheck (typeWithA, typeOf)
 import Dhall.Parser (Src, exprFromText)
 import qualified Dhall.Map
 import qualified Data.HashSet as HashSet
@@ -37,7 +37,7 @@ completionQueryAt text pos = (completionLeadup, completionPrefix)
 data Completion =
   Completion {
     completeText :: Text,
-    completeType :: Maybe (Expr Src X) }
+    completeType :: Maybe (Expr Src Void) }
 
 -- | Complete file names.
 completeLocalImport :: FilePath -> FilePath -> IO [Completion]
@@ -66,17 +66,17 @@ completeEnvironmentImport = do
 -- around.
 data CompletionContext =
   CompletionContext {
-    context :: Context (Expr Src X),
+    context :: Context (Expr Src Void),
     -- values to be substituted for 'dependent let' behaviour
-    values :: Context (Expr Src X) }
+    values :: Context (Expr Src Void) }
 
 -- | Given a 'binders expression' (with arbitrarily many 'holes') construct the
 -- corresponding completion context.
-buildCompletionContext :: Expr Src X -> CompletionContext
+buildCompletionContext :: Expr Src Void -> CompletionContext
 buildCompletionContext = buildCompletionContext' empty empty
 
-buildCompletionContext' :: Context (Expr Src X) -> Context (Expr Src X)
-  -> Expr Src X -> CompletionContext
+buildCompletionContext' :: Context (Expr Src Void) -> Context (Expr Src Void)
+  -> Expr Src Void -> CompletionContext
 buildCompletionContext' context values (Let (Binding { variable = x, annotation = mA, value = a }) e)
   -- We prefer the actual value over the annotated type in order to get
   -- 'dependent let' behaviour whenever possible.
@@ -131,7 +131,7 @@ buildCompletionContext' context values _ = CompletionContext context values
 
 -- Helper. Given `Dhall.Context.toList ctx` construct the corresponding variable
 -- names.
-contextToVariables :: [(Text, Expr Src X)] -> [Var]
+contextToVariables :: [(Text, Expr Src Void)] -> [Var]
 contextToVariables  [] = []
 contextToVariables ((name, _) : rest) =
   V name 0 : map (inc name) (contextToVariables rest)
@@ -153,7 +153,7 @@ completeFromContext (CompletionContext context _) =
      ++ reserved
 
 -- | Complete union constructors and record projections.
-completeProjections :: CompletionContext -> Expr Src X -> [Completion]
+completeProjections :: CompletionContext -> Expr Src Void -> [Completion]
 completeProjections (CompletionContext context values) expr =
   -- substitute 'dependent lets', necessary for completion of unions
   let values' = toList values
