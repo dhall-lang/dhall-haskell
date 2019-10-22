@@ -14,21 +14,23 @@ module Dhall.Util
     , getExpressionAndHeader
     ) where
 
+import Control.Exception (Exception(..))
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.Bifunctor (first)
 import Data.Monoid ((<>))
 import Data.String (IsString)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Dhall.Core (Expr, Import)
+import Dhall.Syntax (Expr, Import)
 import Dhall.Parser (ParseError)
 import Dhall.Pretty (Ann)
 import Dhall.Src (Src)
 
+import qualified Control.Exception
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
-import qualified Dhall.Core
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 
@@ -113,7 +115,14 @@ get parser censor input = do
                 NoCensor -> result
                 Censor   -> first Dhall.Parser.censor result
 
-    Dhall.Core.throws censoredResult
+    throws censoredResult
+
+{-| Convenience utility for converting `Either`-based exceptions to `IO`-based
+    exceptions
+-}
+throws :: (Exception e, MonadIO io) => Either e a -> io a
+throws (Left  e) = liftIO (Control.Exception.throwIO e)
+throws (Right r) = return r
 
 -- | Set to `Censor` if you want to censor error text that might include secrets
 data Censor = NoCensor | Censor

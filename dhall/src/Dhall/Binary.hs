@@ -26,7 +26,7 @@ module Dhall.Binary
 import Codec.CBOR.Term (Term(..))
 import Control.Applicative (empty, (<|>))
 import Control.Exception (Exception)
-import Dhall.Core
+import Dhall.Syntax
     ( Binding(..)
     , Chunks(..)
     , Const(..)
@@ -55,7 +55,7 @@ import qualified Control.Monad       as Monad
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.Sequence
-import qualified Dhall.Core
+import qualified Dhall.Syntax
 import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
@@ -375,7 +375,7 @@ instance ToTerm a => ToTerm (Expr Void a) where
     encode (Let a b) =
         TList ([ TInt 25 ] ++ as₁ ++ [ b₁ ])
       where
-        MultiLet as₀ b₀ = Dhall.Core.multiLet a b
+        MultiLet as₀ b₀ = Dhall.Syntax.multiLet a b
 
         as₁ = do
             Binding _ x₀ _ mA₀ _ a₀ <- toList as₀
@@ -922,7 +922,7 @@ strip55799Tag term =
 -- This 'Dhall.Core.denote's the expression before encoding it. To encode an
 -- already denoted expression, it is more efficient to directly use 'encode'.
 encodeExpression :: Expr s Import -> Term
-encodeExpression e = encode (Dhall.Core.denote e :: Expr Void Import)
+encodeExpression e = encode (Dhall.Syntax.denote e :: Expr Void Import)
 
 -- | Decode a Dhall expression from a CBOR `Term`
 decodeExpression :: FromTerm a => Term -> Either DecodingFailure (Expr s a)
