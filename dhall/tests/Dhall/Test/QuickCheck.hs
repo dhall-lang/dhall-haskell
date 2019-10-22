@@ -545,13 +545,13 @@ tests =
         , ( "Formatting should be idempotent"
           , idempotenceTest
           , Test.Tasty.adjustOption (const $ QuickCheckTests 1) -- TODO Increase this!
-          . adjustQuickCheckMaxSize 10000 -- This test discards many cases
+          . adjustQuickCheckMaxRatio 10000 -- This test discards many cases
           )
         ]
 
-adjustQuickCheckMaxSize :: Int -> TestTree -> TestTree
-adjustQuickCheckMaxSize maxSize =
-    Test.Tasty.adjustOption (max $ Test.Tasty.QuickCheck.QuickCheckMaxSize maxSize)
+adjustQuickCheckMaxRatio :: Int -> TestTree -> TestTree
+adjustQuickCheckMaxRatio maxSize =
+    Test.Tasty.adjustOption (max $ Test.Tasty.QuickCheck.QuickCheckMaxRatio maxSize)
 
 adjustQuickCheckTests :: Int -> TestTree -> TestTree
 adjustQuickCheckTests nTests =
