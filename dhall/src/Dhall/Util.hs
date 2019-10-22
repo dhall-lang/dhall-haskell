@@ -12,6 +12,7 @@ module Dhall.Util
     , Output(..)
     , getExpression
     , getExpressionAndHeader
+    , Header(..)
     ) where
 
 import Control.Exception (Exception(..))
@@ -21,9 +22,9 @@ import Data.Monoid ((<>))
 import Data.String (IsString)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Dhall.Syntax (Expr, Import)
-import Dhall.Parser (ParseError)
+import Dhall.Parser (ParseError, Header(..))
 import Dhall.Pretty (Ann)
+import Dhall.Syntax (Expr, Import)
 import Dhall.Src (Src)
 
 import qualified Control.Exception
@@ -138,5 +139,5 @@ getExpression :: Censor -> Input -> IO (Expr Src Import)
 getExpression = get Dhall.Parser.exprFromText
 
 -- | Convenient utility for retrieving an expression along with its header
-getExpressionAndHeader :: Censor -> Input -> IO (Text, Expr Src Import)
+getExpressionAndHeader :: Censor -> Input -> IO (Header, Expr Src Import)
 getExpressionAndHeader = get Dhall.Parser.exprAndHeaderFromText

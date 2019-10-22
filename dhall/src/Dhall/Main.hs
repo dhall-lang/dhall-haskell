@@ -34,7 +34,7 @@ import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..), _semantic
 import Dhall.Parser (Src)
 import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
 import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError)
-import Dhall.Util (Censor(..), Input(..), Output(..))
+import Dhall.Util (Censor(..), Header (..), Input(..), Output(..))
 import Dhall.Version (dhallVersionString)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (ExitCode, exitFailure)
@@ -650,7 +650,7 @@ command (Options {..}) = do
             Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
         Lint {..} -> do
-            (header, expression) <- getExpressionAndHeader inplace
+            (Header header, expression) <- getExpressionAndHeader inplace
 
             case inplace of
                 InputFile file -> do

@@ -109,7 +109,7 @@ annToAnsiStyle Builtin  = Terminal.underlined
 annToAnsiStyle Operator = Terminal.bold <> Terminal.colorDull Terminal.Green
 
 -- | This type determines whether to render code as `ASCII` or `Unicode`
-data CharacterSet = ASCII | Unicode
+data CharacterSet = ASCII | Unicode deriving Show
 
 -- | Pretty print an expression
 prettyExpr :: Pretty a => Expr s a -> Doc Ann

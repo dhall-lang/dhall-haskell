@@ -1,10 +1,10 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE StandaloneDeriving  #-}
-{-# LANGUAGE TypeOperators       #-}
 {-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -13,6 +13,7 @@ module Dhall.Test.QuickCheck where
 import Codec.Serialise (DeserialiseFailure(..))
 import Data.Either (isRight)
 import Data.Either.Validation (Validation(..))
+import Data.Monoid ((<>))
 import Dhall (ToDhall(..), FromDhall(..), auto, extract, inject, embed, Vector)
 import Dhall.Map (Map)
 import Dhall.Core
@@ -37,11 +38,15 @@ import Data.Functor.Identity (Identity(..))
 import Data.Typeable (Typeable, typeRep)
 import Data.Proxy (Proxy(..))
 import Dhall.Set (Set)
+import Dhall.Parser (Header, createHeader)
+import Dhall.Pretty (CharacterSet(..))
 import Dhall.Src (Src(..))
+import Dhall.Test.Format (format)
 import Dhall.TypeCheck (Typer, TypeError)
 import Generic.Random (Weights, W, (%), (:+)(..))
 import Test.QuickCheck
-    (Arbitrary(..), Gen, Positive(..), Property, NonNegative(..), genericShrink, (===), (==>))
+    ( Arbitrary(..), Gen, Positive(..), Property, NonNegative(..)
+    , genericShrink, suchThat, (===), (==>))
 import Test.QuickCheck.Instances ()
 import Test.Tasty (TestTree)
 import Test.Tasty.QuickCheck (QuickCheckTests(..))
@@ -63,6 +68,7 @@ import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Map
+import qualified Dhall.Parser as Parser
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Generic.Random
@@ -139,6 +145,31 @@ integer =
         , (1, fmap (\x -> x + (2 ^ (64 :: Int))) arbitrary)
         , (1, fmap (\x -> x - (2 ^ (64 :: Int))) arbitrary)
         ]
+
+instance Arbitrary CharacterSet where
+    arbitrary = Test.QuickCheck.elements [ ASCII, Unicode ]
+
+instance Arbitrary Header where
+    arbitrary = do
+      let multiline = do
+            txt <- arbitrary `suchThat` (not . Text.isInfixOf "-}")
+            pure $ "{-" <> txt <> "-}"
+
+          singleline = do
+            txt <- arbitrary `suchThat` (not . Text.isInfixOf "\n")
+            pure $ "--" <> txt
+
+          newlines = Text.concat <$> Test.QuickCheck.listOf (pure "\n")
+
+      comments <- Test.QuickCheck.listOf $ Test.QuickCheck.oneof
+        [ multiline
+        , singleline
+        , newlines
+        ]
+
+      pure . createHeader $ Text.unlines comments
+
+    shrink = const [] -- TODO improve
 
 instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
     arbitrary = do
@@ -450,17 +481,24 @@ normalizingAnExpressionDoesntChangeItsInferredType expression =
 embedThenExtractIsIdentity
     :: forall a. (ToDhall a, FromDhall a, Eq a, Typeable a, Arbitrary a, Show a)
     => Proxy a
-    -> (String, Property, QuickCheckTests)
+    -> (String, Property, TestTree -> TestTree)
 embedThenExtractIsIdentity p =
     ( "Embedding then extracting is identity for " ++ show (typeRep p)
     , Test.QuickCheck.property (prop :: a -> Bool)
-    , QuickCheckTests 1000
+    , adjustQuickCheckTests 1000
     )
   where
     prop a = case extract auto (embed inject a) of
         Success a' -> a == a'
         Failure _  -> False
 
+idempotenceTest :: Property
+idempotenceTest =
+    Test.QuickCheck.property $
+        \characterSet (format characterSet -> once) ->
+            case Parser.exprAndHeaderFromText mempty once of
+                Right (format characterSet -> twice) -> once === twice
+                Left _ -> Test.QuickCheck.discard
 
 tests :: TestTree
 tests =
@@ -468,31 +506,31 @@ tests =
         "QuickCheck"
         [ ( "Binary serialization should round-trip"
           , Test.QuickCheck.property binaryRoundtrip
-          , QuickCheckTests 100
+          , adjustQuickCheckTests 100
           )
         , ( "everything well-typed should normalize"
           , Test.QuickCheck.property everythingWellTypedNormalizes
-          , QuickCheckTests 100000
+          , adjustQuickCheckTests 100000
           )
         , ( "isNormalized should be consistent with normalize"
           , Test.QuickCheck.property isNormalizedIsConsistentWithNormalize
-          , QuickCheckTests 10000
+          , adjustQuickCheckTests 10000
           )
         , ( "normalizeWithM should be consistent with normalize"
           , Test.QuickCheck.property normalizeWithMIsConsistentWithNormalize
-          , QuickCheckTests 10000
+          , adjustQuickCheckTests 10000
           )
         , ( "An expression should have no difference with itself"
           , Test.QuickCheck.property isSameAsSelf
-          , QuickCheckTests 10000
+          , adjustQuickCheckTests 10000
           )
         , ( "Inferred types should be normalized"
           , Test.QuickCheck.property inferredTypesAreNormalized
-          , QuickCheckTests 10000
+          , adjustQuickCheckTests 10000
           )
         , ( "Normalizing an expression doesn't change its inferred type"
           , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
-          , QuickCheckTests 10000
+          , adjustQuickCheckTests 10000
           )
         , embedThenExtractIsIdentity (Proxy :: Proxy (Text.Text))
         , embedThenExtractIsIdentity (Proxy :: Proxy [Nat.Natural])
@@ -504,13 +542,24 @@ tests =
         , embedThenExtractIsIdentity (Proxy :: Proxy (Vector Double))
         , embedThenExtractIsIdentity (Proxy :: Proxy (Data.Map.Map Double Bool))
         , embedThenExtractIsIdentity (Proxy :: Proxy (HashMap.HashMap Double Bool))
+        , ( "Formatting should be idempotent"
+          , idempotenceTest
+          , Test.Tasty.adjustOption (const $ QuickCheckTests 1) -- TODO Increase this!
+          . adjustQuickCheckMaxRatio 10000 -- This test discards many cases
+          )
         ]
 
+adjustQuickCheckMaxRatio :: Int -> TestTree -> TestTree
+adjustQuickCheckMaxRatio maxSize =
+    Test.Tasty.adjustOption (max $ Test.Tasty.QuickCheck.QuickCheckMaxRatio maxSize)
 
-
-testProperties' :: String -> [(String, Property, QuickCheckTests)] -> TestTree
-testProperties' name = Test.Tasty.testGroup name . map f
-  where
+adjustQuickCheckTests :: Int -> TestTree -> TestTree
+adjustQuickCheckTests nTests =
     -- Using adjustOption instead of withMaxSuccess allows us to override the number of tests
     -- with the --quickcheck-tests CLI option.
-    f (n, p, nTests) = Test.Tasty.adjustOption (max nTests) (Test.Tasty.QuickCheck.testProperty n p)
+    Test.Tasty.adjustOption (max $ QuickCheckTests nTests)
+
+testProperties' :: String -> [(String, Property, TestTree -> TestTree)] -> TestTree
+testProperties' name = Test.Tasty.testGroup name . map f
+  where
+    f (n, p, adjust) = adjust (Test.Tasty.QuickCheck.testProperty n p)
