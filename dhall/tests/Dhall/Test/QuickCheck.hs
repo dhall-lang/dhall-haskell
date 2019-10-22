@@ -481,11 +481,11 @@ normalizingAnExpressionDoesntChangeItsInferredType expression =
 embedThenExtractIsIdentity
     :: forall a. (ToDhall a, FromDhall a, Eq a, Typeable a, Arbitrary a, Show a)
     => Proxy a
-    -> (String, Property, QuickCheckTests)
+    -> (String, Property, TestTree -> TestTree)
 embedThenExtractIsIdentity p =
     ( "Embedding then extracting is identity for " ++ show (typeRep p)
     , Test.QuickCheck.property (prop :: a -> Bool)
-    , QuickCheckTests 1000
+    , adjustQuickCheckTests 1000
     )
   where
     prop a = case extract auto (embed inject a) of
@@ -506,31 +506,31 @@ tests =
         "QuickCheck"
         [ ( "Binary serialization should round-trip"
           , Test.QuickCheck.property binaryRoundtrip
-          , QuickCheckTests 100
+          , adjustQuickCheckTests 100
           )
         , ( "everything well-typed should normalize"
           , Test.QuickCheck.property everythingWellTypedNormalizes
-          , QuickCheckTests 100000
+          , adjustQuickCheckTests 100000
           )
         , ( "isNormalized should be consistent with normalize"
           , Test.QuickCheck.property isNormalizedIsConsistentWithNormalize
-          , QuickCheckTests 10000
+          , adjustQuickCheckTests 10000
           )
         , ( "normalizeWithM should be consistent with normalize"
           , Test.QuickCheck.property normalizeWithMIsConsistentWithNormalize
-          , QuickCheckTests 10000
+          , adjustQuickCheckTests 10000
           )
         , ( "An expression should have no difference with itself"
           , Test.QuickCheck.property isSameAsSelf
-          , QuickCheckTests 10000
+          , adjustQuickCheckTests 10000
           )
         , ( "Inferred types should be normalized"
           , Test.QuickCheck.property inferredTypesAreNormalized
-          , QuickCheckTests 10000
+          , adjustQuickCheckTests 10000
           )
         , ( "Normalizing an expression doesn't change its inferred type"
           , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
-          , QuickCheckTests 10000
+          , adjustQuickCheckTests 10000
           )
         , embedThenExtractIsIdentity (Proxy :: Proxy (Text.Text))
         , embedThenExtractIsIdentity (Proxy :: Proxy [Nat.Natural])
@@ -544,15 +544,22 @@ tests =
         , embedThenExtractIsIdentity (Proxy :: Proxy (HashMap.HashMap Double Bool))
         , ( "Formatting should be idempotent"
           , idempotenceTest
-          , QuickCheckTests 10000
+          , Test.Tasty.adjustOption (const $ QuickCheckTests 1) -- TODO Increase this!
+          . adjustQuickCheckMaxSize 10000 -- This test discards many cases
           )
         ]
 
+adjustQuickCheckMaxSize :: Int -> TestTree -> TestTree
+adjustQuickCheckMaxSize maxSize =
+    Test.Tasty.adjustOption (max $ Test.Tasty.QuickCheck.QuickCheckMaxSize maxSize)
 
-
-testProperties' :: String -> [(String, Property, QuickCheckTests)] -> TestTree
-testProperties' name = Test.Tasty.testGroup name . map f
-  where
+adjustQuickCheckTests :: Int -> TestTree -> TestTree
+adjustQuickCheckTests nTests =
     -- Using adjustOption instead of withMaxSuccess allows us to override the number of tests
     -- with the --quickcheck-tests CLI option.
-    f (n, p, nTests) = Test.Tasty.adjustOption (max nTests) (Test.Tasty.QuickCheck.testProperty n p)
+    Test.Tasty.adjustOption (max $ QuickCheckTests nTests)
+
+testProperties' :: String -> [(String, Property, TestTree -> TestTree)] -> TestTree
+testProperties' name = Test.Tasty.testGroup name . map f
+  where
+    f (n, p, adjust) = adjust (Test.Tasty.QuickCheck.testProperty n p)
