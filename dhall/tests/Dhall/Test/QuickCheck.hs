@@ -492,13 +492,12 @@ embedThenExtractIsIdentity p =
         Success a' -> a == a'
         Failure _  -> False
 
-idempotenceTest :: Property
-idempotenceTest =
-    Test.QuickCheck.property $
-        \characterSet (format characterSet -> once) ->
-            case Parser.exprAndHeaderFromText mempty once of
-                Right (format characterSet -> twice) -> once === twice
-                Left _ -> Test.QuickCheck.discard
+idempotenceTest :: CharacterSet -> Header -> Expr Src Import -> Property
+idempotenceTest characterSet header expr =
+    let once = format characterSet (header, expr)
+    in case Parser.exprAndHeaderFromText mempty once of
+        Right (format characterSet -> twice) -> once === twice
+        Left _ -> Test.QuickCheck.discard
 
 tests :: TestTree
 tests =
@@ -543,7 +542,7 @@ tests =
         , embedThenExtractIsIdentity (Proxy :: Proxy (Data.Map.Map Double Bool))
         , embedThenExtractIsIdentity (Proxy :: Proxy (HashMap.HashMap Double Bool))
         , ( "Formatting should be idempotent"
-          , idempotenceTest
+          , Test.QuickCheck.property idempotenceTest
 
             -- FIXME: While this test is flaky, we set the number of test cases
             -- to 0 by subtracting the default number of tests (100).
