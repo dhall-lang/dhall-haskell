@@ -12,6 +12,7 @@ module Dhall.Util
     , Output(..)
     , getExpression
     , getExpressionAndHeader
+    , getExpressionAndHeaderFromStdinText
     , Header(..)
     ) where
 
@@ -95,17 +96,19 @@ insert expression =
 _ERROR :: IsString string => string
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
-get :: (String -> Text -> Either ParseError a) -> Censor -> Input -> IO a
+get :: (String -> Text -> Either ParseError a) -> Censor -> InputOrTextFromStdin -> IO a
 get parser censor input = do
     inText <- do
         case input of
-            InputFile file -> Data.Text.IO.readFile file
-            StandardInput  -> Data.Text.IO.getContents
+            PathTo (InputFile file) -> Data.Text.IO.readFile file
+            PathTo StandardInput    -> Data.Text.IO.getContents
+            StdinText text          -> pure text
 
     let name =
             case input of
-                InputFile file -> file
-                StandardInput  -> "(stdin)"
+                PathTo (InputFile file) -> file
+                PathTo StandardInput    -> "(stdin)"
+                StdinText _             -> "(stdin)"
 
     let result = parser name inText
 
@@ -122,13 +125,21 @@ data Censor = NoCensor | Censor
 -- | Path to input
 data Input = StandardInput | InputFile FilePath
 
+-- | Path to input or raw input text, necessary since we can't read STDIN twice
+data InputOrTextFromStdin = PathTo Input | StdinText Text
+
 -- | Path to output
 data Output = StandardOutput | OutputFile FilePath
 
 -- | Convenient utility for retrieving an expression
 getExpression :: Censor -> Input -> IO (Expr Src Import)
-getExpression = get Dhall.Parser.exprFromText
+getExpression censor = get Dhall.Parser.exprFromText censor . PathTo
 
 -- | Convenient utility for retrieving an expression along with its header
 getExpressionAndHeader :: Censor -> Input -> IO (Header, Expr Src Import)
-getExpressionAndHeader = get Dhall.Parser.exprAndHeaderFromText
+getExpressionAndHeader censor = get Dhall.Parser.exprAndHeaderFromText censor . PathTo
+
+-- | Convenient utility for retrieving an expression along with its header from
+-- | text already read from STDIN (so it's not re-read)
+getExpressionAndHeaderFromStdinText :: Censor -> Text -> IO (Header, Expr Src Import)
+getExpressionAndHeaderFromStdinText censor = get Dhall.Parser.exprAndHeaderFromText censor . StdinText
