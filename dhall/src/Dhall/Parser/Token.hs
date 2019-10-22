@@ -1101,7 +1101,9 @@ _equivalent = do
 
 -- | Parse the @missing@ keyword
 _missing :: Parser ()
-_missing = keyword "missing"
+_missing = do
+    _ <- Text.Parser.Char.text "missing"
+    whitespace
 
 -- | Parse the @?@ symbol
 _importAlt :: Parser ()

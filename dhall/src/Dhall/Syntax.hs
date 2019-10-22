@@ -1148,6 +1148,8 @@ reservedIdentifiers =
         , "else"
         , "as"
         , "using"
+        , "missing"
+        , "assert"
         , "Natural"
         , "Natural/fold"
         , "Natural/build"
