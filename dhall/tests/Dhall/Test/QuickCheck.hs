@@ -38,7 +38,7 @@ import Data.Functor.Identity (Identity(..))
 import Data.Typeable (Typeable, typeRep)
 import Data.Proxy (Proxy(..))
 import Dhall.Set (Set)
-import Dhall.Parser (Header, createHeader)
+import Dhall.Parser (Header(..), createHeader)
 import Dhall.Pretty (CharacterSet(..))
 import Dhall.Src (Src(..))
 import Dhall.Test.Format (format)
@@ -180,7 +180,7 @@ instance Arbitrary Header where
 
       pure . createHeader $ Text.unlines comments
 
-    shrink = const [] -- TODO improve
+    shrink (Header txt) = createHeader . Text.pack <$> shrink (Text.unpack txt)
 
 instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
     arbitrary = do
