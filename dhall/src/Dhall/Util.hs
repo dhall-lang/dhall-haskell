@@ -100,14 +100,14 @@ get :: (String -> Text -> Either ParseError a) -> Censor -> InputOrTextFromStdin
 get parser censor input = do
     inText <- do
         case input of
-            PathTo (InputFile file) -> Data.Text.IO.readFile file
-            PathTo StandardInput    -> Data.Text.IO.getContents
+            Input_ (InputFile file) -> Data.Text.IO.readFile file
+            Input_ StandardInput    -> Data.Text.IO.getContents
             StdinText text          -> pure text
 
     let name =
             case input of
-                PathTo (InputFile file) -> file
-                PathTo StandardInput    -> "(stdin)"
+                Input_ (InputFile file) -> file
+                Input_ StandardInput    -> "(stdin)"
                 StdinText _             -> "(stdin)"
 
     let result = parser name inText
@@ -126,18 +126,18 @@ data Censor = NoCensor | Censor
 data Input = StandardInput | InputFile FilePath
 
 -- | Path to input or raw input text, necessary since we can't read STDIN twice
-data InputOrTextFromStdin = PathTo Input | StdinText Text
+data InputOrTextFromStdin = Input_ Input | StdinText Text
 
 -- | Path to output
 data Output = StandardOutput | OutputFile FilePath
 
 -- | Convenient utility for retrieving an expression
 getExpression :: Censor -> Input -> IO (Expr Src Import)
-getExpression censor = get Dhall.Parser.exprFromText censor . PathTo
+getExpression censor = get Dhall.Parser.exprFromText censor . Input_
 
 -- | Convenient utility for retrieving an expression along with its header
 getExpressionAndHeader :: Censor -> Input -> IO (Header, Expr Src Import)
-getExpressionAndHeader censor = get Dhall.Parser.exprAndHeaderFromText censor . PathTo
+getExpressionAndHeader censor = get Dhall.Parser.exprAndHeaderFromText censor . Input_
 
 -- | Convenient utility for retrieving an expression along with its header from
 -- | text already read from STDIN (so it's not re-read)
