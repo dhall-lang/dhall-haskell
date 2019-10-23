@@ -88,8 +88,9 @@ format (Format {..}) =
                 InputFile file -> Data.Text.IO.readFile file
                 StandardInput  -> Data.Text.IO.getContents
 
-            (Dhall.Util.Header header, expr) <-
-                Dhall.Util.getExpressionAndHeader censor path
+            (Dhall.Util.Header header, expr) <- case path of
+                InputFile _ -> Dhall.Util.getExpressionAndHeader censor path
+                StandardInput  -> Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
 
             let doc =   Pretty.pretty header
                     <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
