@@ -257,9 +257,10 @@ parsers embedded = Parsers {..}
 
             alternative4A <|> alternative4B <|> pure a
 
-    operatorExpression = precedence0Expression
+    operatorExpression =
+        foldr makeOperatorExpression applicationExpression operatorParsers
 
-    makeOperatorExpression subExpression operatorParser =
+    makeOperatorExpression operatorParser subExpression =
             noted (do
                 a <- subExpression
                 b <- Text.Megaparsec.many $ do
@@ -269,43 +270,22 @@ parsers embedded = Parsers {..}
                     return (\l -> l `op` r)
                 return (foldl (\x f -> f x) a b) )
 
-    precedence0Operator =
-                ImportAlt   <$ _importAlt
-
-    precedence1Operator =
-                BoolOr      <$ _or
-            <|> TextAppend  <$ _textAppend
-            <|> NaturalPlus <$ _plus
-            <|> ListAppend  <$ _listAppend
-
-    precedence2Operator =
-                BoolAnd     <$ _and
-            <|> Combine     <$ _combine
-
-    precedence3Operator =
-                CombineTypes <$ _combineTypes
-            <|> Prefer       <$ _prefer
-            <|> NaturalTimes <$ _times
-            <|> BoolEQ       <$ _doubleEqual
-
-    precedence4Operator
-            =   BoolNE     <$ _notEqual
-            <|> Equivalent <$ _equivalent
-
-    precedence0Expression =
-            makeOperatorExpression precedence1Expression precedence0Operator
-
-    precedence1Expression =
-            makeOperatorExpression precedence2Expression precedence1Operator
-
-    precedence2Expression =
-            makeOperatorExpression precedence3Expression precedence2Operator
-
-    precedence3Expression =
-            makeOperatorExpression precedence4Expression precedence3Operator
-
-    precedence4Expression =
-            makeOperatorExpression applicationExpression precedence4Operator
+    operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
+    operatorParsers =
+        [ ImportAlt    <$ _importAlt
+        , BoolOr       <$ _or
+        , NaturalPlus  <$ _plus
+        , TextAppend   <$ _textAppend
+        , ListAppend   <$ _listAppend
+        , BoolAnd      <$ _and
+        , Combine      <$ _combine
+        , Prefer       <$ _prefer
+        , CombineTypes <$ _combineTypes
+        , NaturalTimes <$ _times
+        , BoolEQ       <$ _doubleEqual
+        , BoolNE       <$ _notEqual
+        , Equivalent   <$ _equivalent
+        ]
 
     applicationExpression = do
             f <-    (do _Some; return Some)
