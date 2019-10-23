@@ -329,15 +329,17 @@ blockCommentContinue = endOfComment <|> continue
 
 simpleLabel :: Bool -> Parser Text
 simpleLabel allowReserved = try (do
-    c    <- Text.Parser.Char.satisfy headCharacter
-    rest <- Dhall.Parser.Combinators.takeWhile tailCharacter
+    c    <- Text.Parser.Char.satisfy simpleLabelFirstChar
+    rest <- Dhall.Parser.Combinators.takeWhile simpleLabelNextChar
     let text = Data.Text.cons c rest
     Control.Monad.guard (allowReserved || not (Data.HashSet.member text reservedIdentifiers))
     return text )
-  where
-    headCharacter c = alpha c || c == '_'
 
-    tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
+simpleLabelFirstChar ::Char -> Bool
+simpleLabelFirstChar c = alpha c || c == '_'
+
+simpleLabelNextChar :: Char -> Bool
+simpleLabelNextChar c = alphaNum c || c == '_' || c == '-' || c == '/'
 
 backtickLabel :: Parser Text
 backtickLabel = do
@@ -1103,6 +1105,7 @@ _equivalent = do
 _missing :: Parser ()
 _missing = do
     _ <- Text.Parser.Char.text "missing"
+    _ <- Text.Megaparsec.notFollowedBy (Text.Megaparsec.satisfy simpleLabelFirstChar)
     whitespace
 
 -- | Parse the @?@ symbol
