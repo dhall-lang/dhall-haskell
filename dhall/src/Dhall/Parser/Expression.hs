@@ -14,7 +14,7 @@ import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
-import Dhall.Core
+import Dhall.Syntax
 import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
@@ -214,7 +214,7 @@ parsers embedded = Parsers {..}
             --     (Let y …
             --       (Note …
             --         (Let z …
-            return (Dhall.Core.wrapInLets as b)
+            return (Dhall.Syntax.wrapInLets as b)
 
         alternative3 = do
             _forall

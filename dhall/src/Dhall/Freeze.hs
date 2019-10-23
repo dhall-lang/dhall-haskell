@@ -18,7 +18,7 @@ import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Data.Text
 import Data.Void (Void)
-import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
+import Dhall.Syntax (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
 import Dhall.Util (Censor, Input(..))

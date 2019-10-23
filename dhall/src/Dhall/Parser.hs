@@ -25,7 +25,7 @@ import Control.Exception (Exception)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Data.Void (Void)
-import Dhall.Core
+import Dhall.Syntax
 import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
 import Text.Megaparsec (ParseErrorBundle(..), PosState(..))
