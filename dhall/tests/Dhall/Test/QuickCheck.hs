@@ -151,21 +151,32 @@ instance Arbitrary CharacterSet where
 
 instance Arbitrary Header where
     arbitrary = do
-      let multiline = do
-            txt <- arbitrary `suchThat` (not . Text.isInfixOf "-}")
-            pure $ "{-" <> txt <> "-}"
+      let commentChar =
+              Test.QuickCheck.frequency
+                  [ (20, Test.QuickCheck.elements [' ' .. '\DEL'])
+                  , ( 1, arbitrary)
+                  ]
+
+          commentText = Text.pack <$> Test.QuickCheck.listOf commentChar
+
+          multiline = do
+              txt <- commentText
+              pure $ "{-" <> txt <> "-}"
 
           singleline = do
-            txt <- arbitrary `suchThat` (not . Text.isInfixOf "\n")
-            pure $ "--" <> txt
+              txt <- commentText `suchThat` (not . Text.isInfixOf "\n")
+              endOfLine <- Test.QuickCheck.elements ["\n", "\r\n"]
+              pure $ "--" <> txt <> endOfLine
 
           newlines = Text.concat <$> Test.QuickCheck.listOf (pure "\n")
 
-      comments <- Test.QuickCheck.listOf $ Test.QuickCheck.oneof
-        [ multiline
-        , singleline
-        , newlines
-        ]
+      comments <- do
+          n <- Test.QuickCheck.choose (0, 2)
+          Test.QuickCheck.vectorOf n $ Test.QuickCheck.oneof
+              [ multiline
+              , singleline
+              , newlines
+              ]
 
       pure . createHeader $ Text.unlines comments
 
@@ -549,7 +560,6 @@ tests =
             -- To run the test manually, use e.g.
             --    --quickcheck-tests 1000
           , Test.Tasty.adjustOption (subtract (QuickCheckTests 100))
-          . adjustQuickCheckMaxRatio 10000 -- This test discards many cases
           )
         ]
 
