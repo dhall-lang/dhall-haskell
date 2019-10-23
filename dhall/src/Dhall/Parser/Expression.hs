@@ -271,22 +271,24 @@ parsers embedded = Parsers {..}
 
     precedence0Operator =
                 ImportAlt   <$ _importAlt
-            <|> BoolOr      <$ _or
+
+    precedence1Operator =
+                BoolOr      <$ _or
             <|> TextAppend  <$ _textAppend
             <|> NaturalPlus <$ _plus
             <|> ListAppend  <$ _listAppend
 
-    precedence1Operator =
+    precedence2Operator =
                 BoolAnd     <$ _and
             <|> Combine     <$ _combine
 
-    precedence2Operator =
+    precedence3Operator =
                 CombineTypes <$ _combineTypes
             <|> Prefer       <$ _prefer
             <|> NaturalTimes <$ _times
             <|> BoolEQ       <$ _doubleEqual
 
-    precedence3Operator
+    precedence4Operator
             =   BoolNE     <$ _notEqual
             <|> Equivalent <$ _equivalent
 
@@ -300,7 +302,10 @@ parsers embedded = Parsers {..}
             makeOperatorExpression precedence3Expression precedence2Operator
 
     precedence3Expression =
-            makeOperatorExpression applicationExpression precedence3Operator
+            makeOperatorExpression precedence4Expression precedence3Operator
+
+    precedence4Expression =
+            makeOperatorExpression applicationExpression precedence4Operator
 
     applicationExpression = do
             f <-    (do _Some; return Some)
