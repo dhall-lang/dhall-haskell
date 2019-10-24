@@ -14,13 +14,11 @@ module Dhall.Freeze
     , Intent(..)
     ) where
 
-import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Data.Text
-import Data.Void (Void)
-import Dhall.Syntax (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
+import Dhall.Syntax (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Util (Censor, Input(..))
 import System.Console.ANSI (hSupportsANSI)
 
@@ -54,15 +52,7 @@ freezeImport directory import_ = do
 
     let status = Dhall.Import.emptyStatus directory
 
-    let download =
-            State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
-
-    -- Try again without the semantic integrity check if decoding fails
-    let handler :: SomeException -> IO (Expr Src Void)
-        handler _ = do
-            State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
-
-    expression <- Control.Exception.handle handler download
+    expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 
     case Dhall.TypeCheck.typeOf expression of
         Left  exception -> Control.Exception.throwIO exception
