@@ -16,9 +16,9 @@ module Dhall.Freeze
 
 import Data.Monoid ((<>))
 import Data.Text
-import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Parser (Src)
 import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
+import Dhall.Syntax (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Util (Censor, Input(..))
 import System.Console.ANSI (hSupportsANSI)
 
@@ -135,7 +135,8 @@ freeze inplace scope intent characterSet censor = do
             StandardInput  -> "."
             InputFile file -> System.FilePath.takeDirectory file
 
-    (header, parsedExpression) <- Dhall.Util.getExpressionAndHeader censor inplace
+    (Dhall.Util.Header header, parsedExpression) <-
+        Dhall.Util.getExpressionAndHeader censor inplace
 
     let freezeScope =
             case scope of

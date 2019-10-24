@@ -39,7 +39,7 @@ import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import Dhall.Binary (ToTerm(..))
 import Dhall.Context (Context)
-import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
+import Dhall.Syntax (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Eval
     (Environment(..), Names(..), Val(..), (~>))
 import Dhall.Pretty (Ann, layoutOpts)

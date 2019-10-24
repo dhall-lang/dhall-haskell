@@ -4,6 +4,7 @@ module Dhall.Test.Format where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
+import Dhall.Parser (Header(..))
 import Dhall.Pretty (CharacterSet(..))
 import Test.Tasty (TestTree)
 
@@ -43,6 +44,16 @@ getTests = do
 
     return testTree
 
+format :: CharacterSet -> (Header, Core.Expr Parser.Src Core.Import) -> Text
+format characterSet (Header header, expr) =
+    let doc =  Doc.pretty header
+            <> Pretty.prettyCharacterSet characterSet expr
+            <> "\n"
+
+        docStream = Doc.layoutSmart Pretty.layoutOpts doc
+    in
+        Doc.Render.Text.renderStrict docStream
+
 formatTest :: CharacterSet -> Text -> TestTree
 formatTest characterSet prefix =
     Tasty.HUnit.testCase (Text.unpack prefix) $ do
@@ -51,14 +62,9 @@ formatTest characterSet prefix =
 
         inputText <- Text.IO.readFile inputFile
 
-        (header, expr) <- Core.throws (Parser.exprAndHeaderFromText mempty inputText)
+        headerAndExpr <- Core.throws (Parser.exprAndHeaderFromText mempty inputText)
 
-        let doc        =   Doc.pretty header
-                       <>  Pretty.prettyCharacterSet characterSet expr
-                       <>  "\n"
-        let docStream  = Doc.layoutSmart Pretty.layoutOpts doc
-        let actualText = Doc.Render.Text.renderStrict docStream
-
+        let actualText = format characterSet headerAndExpr
         expectedText <- Text.IO.readFile outputFile
 
         let message =

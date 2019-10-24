@@ -158,7 +158,7 @@ import Data.Traversable (traverse)
 import Data.Typeable (Typeable)
 import System.FilePath ((</>))
 import Dhall.Binary (StandardVersion(..))
-import Dhall.Core
+import Dhall.Syntax
     ( Expr(..)
     , Chunks(..)
     , Directory(..)
