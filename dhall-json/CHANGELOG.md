@@ -1,5 +1,10 @@
 Next version
 
+* [BREAKING CHANGE: Rename some options of `dhall-to-{json,yaml}` to more consistent ones](https://github.com/dhall-lang/dhall-haskell/issues/1430):
+    * rename `--omitNull` to `--omit-null`
+    * rename `--omit-empty` to `--omit-empty`
+    * rename `--preserveNull` to `--preserve-null`
+    * rename `--noMaps` to `--no-maps`
 * [BREAKING CHANGE: Enable `--pretty` by default for `dhall-to-json`](https://github.com/dhall-lang/dhall-haskell/issues/716)
 * [BREAKING CHANGE: Enable `--omitNull` by default for `dhall-to-{json,yaml}`](https://github.com/dhall-lang/dhall-haskell/pull/1365)
     * To recover the old behavior use the `--preserveNull` flag
