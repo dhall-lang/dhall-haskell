@@ -37,6 +37,9 @@ testTree =
             Dhall.Yaml.defaultOptions
             "./tasty/data/normal"
         , testDhallToYaml
+            Dhall.Yaml.defaultOptions
+            "./tasty/data/special"
+        , testDhallToYaml
             (Dhall.Yaml.defaultOptions { Dhall.Yaml.quoted = True })
             "./tasty/data/quoted"
         , testJSONToDhall "./tasty/data/emptyAlternative"
