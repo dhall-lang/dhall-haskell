@@ -99,21 +99,13 @@ jsonToYaml json documents quoted =
          $ Data.Vector.toList elems
     _ -> Data.ByteString.Lazy.toStrict (Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8 [json])
   where
-    unquotedStyle (Y.SStr s)
+    style (Y.SStr s)
         | "\n" `Text.isInfixOf` s =
             Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
-    unquotedStyle s =
-        YS.schemaEncoderScalar Y.coreSchemaEncoder s
-
-    quotedStyle (Y.SStr s)
-        | "\n" `Text.isInfixOf` s =
-            Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
-        | otherwise =
+        | quoted =
             Right (YE.untagged, YE.SingleQuoted, s)
-    quotedStyle s =
+    style s =
         YS.schemaEncoderScalar Y.coreSchemaEncoder s
-    
-    style = if quoted then quotedStyle else unquotedStyle
 
     schemaEncoder = YS.setScalarStyle style Y.coreSchemaEncoder
 #else
