@@ -98,35 +98,24 @@ jsonToYaml json documents quoted =
          $ fmap (Data.ByteString.Lazy.toStrict. (Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8). (:[]))
          $ Data.Vector.toList elems
     _ -> Data.ByteString.Lazy.toStrict (Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8 [json])
-
   where
-    defaultSchemaEncoder = YS.setScalarStyle style Y.coreSchemaEncoder
+    unquotedStyle (Y.SStr s)
+        | "\n" `Text.isInfixOf` s =
+            Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
+    unquotedStyle s =
+        YS.schemaEncoderScalar Y.coreSchemaEncoder s
 
-    defaultEncodeStr s = case () of
-      ()
-        | "\n" `Text.isInfixOf` s -> Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
-        | YS.isAmbiguous Y.coreSchemaResolver s -> Right (YE.untagged, YE.SingleQuoted, s)
-        | otherwise -> Right (YE.untagged, YE.Plain, s)
-
-    style s = case s of
-      Y.SNull         -> Right (YE.untagged, YE.Plain, "null")
-      Y.SBool  bool   -> Right (YE.untagged, YE.Plain, YS.encodeBool bool)
-      Y.SFloat double -> Right (YE.untagged, YE.Plain, YS.encodeDouble double)
-      Y.SInt   int    -> Right (YE.untagged, YE.Plain, YS.encodeInt int)
-      Y.SStr   text   -> defaultEncodeStr text
-      Y.SUnknown t v  -> Right (t, YE.SingleQuoted, v)
-
-    customStyle (Y.SStr s) = case () of
-        ()
-            | "\n" `Text.isInfixOf` s -> Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
-            | otherwise -> Right (YE.untagged, YE.SingleQuoted, s)
-    customStyle scalar =  (YS.schemaEncoderScalar defaultSchemaEncoder) scalar
+    quotedStyle (Y.SStr s)
+        | "\n" `Text.isInfixOf` s =
+            Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
+        | otherwise =
+            Right (YE.untagged, YE.SingleQuoted, s)
+    quotedStyle s =
+        YS.schemaEncoderScalar Y.coreSchemaEncoder s
     
-    customSchemaEncoder = YS.setScalarStyle customStyle defaultSchemaEncoder
-    
-    schemaEncoder = if quoted 
-        then customSchemaEncoder 
-        else defaultSchemaEncoder
+    style = if quoted then quotedStyle else unquotedStyle
+
+    schemaEncoder = YS.setScalarStyle style Y.coreSchemaEncoder
 #else
   Data.ByteString.Lazy.toStrict $ case (documents, json) of
     (True, Data.Aeson.Array elems)
