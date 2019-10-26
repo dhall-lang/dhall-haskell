@@ -101,6 +101,12 @@ let
 
       twitter = pkgsNew.callPackage ./twitterLogo.nix { };
 
+      xml =
+        pkgsNew.fetchurl {
+          url    = "https://www.svgrepo.com/download/106090/xml.svg";
+          sha256 = "0ncjr3sxn40ml5gxwv1iq5vd0zx0qgyy9rzqxi6j80b8wcy45czy";
+        };
+
       yaml =
         pkgsNew.fetchurl {
           url    = "https://raw.githubusercontent.com/yaml/yaml-spec/a6f764e13de58d5f753877f588a01b35dc9a5168/logo.png";
