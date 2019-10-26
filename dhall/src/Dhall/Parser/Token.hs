@@ -685,7 +685,7 @@ operator x = reserved x <?> "operator"
 {-# INLINE operator #-}
 
 operatorChar :: Char -> Parser ()
-operatorChar x = reservedCharOnly x <?> "operator"
+operatorChar x = reservedChar x <?> "operator"
 {-# INLINE operatorChar #-}
 
 keywordOnly :: Data.Text.Text -> Parser ()
@@ -1025,7 +1025,7 @@ _Sort = builtin "Sort"
     This corresponds to the @Location@ rule from the official grammar
 -}
 _Location :: Parser ()
-_Location = keyword "Location"
+_Location = builtin "Location"
 
 -- | Parse the @=@ symbol without trailing whitespace
 _equalOnly :: Parser ()
