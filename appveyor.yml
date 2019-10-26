@@ -22,7 +22,7 @@ install:
   # http://help.appveyor.com/discussions/problems/6312-curl-command-not-found
   - set PATH=C:\Program Files\Git\mingw64\bin;%PATH%
 
-  - curl -sS -ostack.zip -L --insecure "https://github.com/commercialhaskell/stack/releases/download/v%STACK_VERSION%/stack-%STACK_VERSION%-windows-x86_64.zip"
+  - curl --silent --show-error --output stack.zip --location --insecure "https://github.com/commercialhaskell/stack/releases/download/v%STACK_VERSION%/stack-%STACK_VERSION%-windows-x86_64.zip"
   - 7z x stack.zip "%APPVEYOR_BUILD_FOLDER%\stack.exe"
   - cd %APPVEYOR_BUILD_FOLDER%
   - stack setup > nul
