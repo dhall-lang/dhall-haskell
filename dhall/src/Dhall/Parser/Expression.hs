@@ -14,7 +14,7 @@ import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
-import Dhall.Core
+import Dhall.Syntax
 import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
@@ -213,7 +213,7 @@ parsers embedded = Parsers {..}
             --     (Let y …
             --       (Note …
             --         (Let z …
-            return (Dhall.Core.wrapInLets as b)
+            return (Dhall.Syntax.wrapInLets as b)
 
         alternative3 = do
             _forall
@@ -256,9 +256,10 @@ parsers embedded = Parsers {..}
 
             alternative4A <|> alternative4B <|> pure a
 
-    operatorExpression = precedence0Expression
+    operatorExpression =
+        foldr makeOperatorExpression applicationExpression operatorParsers
 
-    makeOperatorExpression subExpression operatorParser =
+    makeOperatorExpression operatorParser subExpression =
             noted (do
                 a <- subExpression
                 b <- Text.Megaparsec.many $ do
@@ -268,38 +269,22 @@ parsers embedded = Parsers {..}
                     return (\l -> l `op` r)
                 return (foldl (\x f -> f x) a b) )
 
-    precedence0Operator =
-                ImportAlt   <$ _importAlt
-            <|> BoolOr      <$ _or
-            <|> TextAppend  <$ _textAppend
-            <|> NaturalPlus <$ _plus
-            <|> ListAppend  <$ _listAppend
-
-    precedence1Operator =
-                BoolAnd     <$ _and
-            <|> Combine     <$ _combine
-
-    precedence2Operator =
-                CombineTypes <$ _combineTypes
-            <|> Prefer       <$ _prefer
-            <|> NaturalTimes <$ _times
-            <|> BoolEQ       <$ _doubleEqual
-
-    precedence3Operator
-            =   BoolNE     <$ _notEqual
-            <|> Equivalent <$ _equivalent
-
-    precedence0Expression =
-            makeOperatorExpression precedence1Expression precedence0Operator
-
-    precedence1Expression =
-            makeOperatorExpression precedence2Expression precedence1Operator
-
-    precedence2Expression =
-            makeOperatorExpression precedence3Expression precedence2Operator
-
-    precedence3Expression =
-            makeOperatorExpression applicationExpression precedence3Operator
+    operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
+    operatorParsers =
+        [ ImportAlt    <$ _importAlt
+        , BoolOr       <$ _or
+        , NaturalPlus  <$ _plus
+        , TextAppend   <$ _textAppend
+        , ListAppend   <$ _listAppend
+        , BoolAnd      <$ _and
+        , Combine      <$ _combine
+        , Prefer       <$ _prefer
+        , CombineTypes <$ _combineTypes
+        , NaturalTimes <$ _times
+        , BoolEQ       <$ _doubleEqual
+        , BoolNE       <$ _notEqual
+        , Equivalent   <$ _equivalent
+        ]
 
     applicationExpression = do
             f <-    (do _Some; return Some)

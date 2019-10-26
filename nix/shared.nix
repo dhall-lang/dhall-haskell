@@ -174,6 +174,7 @@ let
                     "dhall"
                     "dhall-bash"
                     "dhall-json"
+                    "dhall-lsp-server"
                     "dhall-nix"
                   ];
 

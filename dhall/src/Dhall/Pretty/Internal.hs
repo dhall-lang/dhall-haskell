@@ -59,8 +59,6 @@ module Dhall.Pretty.Internal (
     , rparen
     ) where
 
-import Dhall.Core
-
 #if MIN_VERSION_base(4,8,0)
 #else
 import Control.Applicative (Applicative(..), (<$>))
@@ -72,6 +70,7 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
+import Dhall.Syntax
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
@@ -110,7 +109,7 @@ annToAnsiStyle Builtin  = Terminal.underlined
 annToAnsiStyle Operator = Terminal.bold <> Terminal.colorDull Terminal.Green
 
 -- | This type determines whether to render code as `ASCII` or `Unicode`
-data CharacterSet = ASCII | Unicode
+data CharacterSet = ASCII | Unicode deriving Show
 
 -- | Pretty print an expression
 prettyExpr :: Pretty a => Expr s a -> Doc Ann

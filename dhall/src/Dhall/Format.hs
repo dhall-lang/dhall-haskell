@@ -55,7 +55,8 @@ format (Format {..}) =
         Modify {..} ->
             case inplace of
                 InputFile file -> do
-                    (header, expr) <- Dhall.Util.getExpressionAndHeader censor (InputFile file)
+                    (Dhall.Util.Header header, expr) <-
+                        Dhall.Util.getExpressionAndHeader censor (InputFile file)
 
                     let doc =   Pretty.pretty header
                             <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)
@@ -64,7 +65,8 @@ format (Format {..}) =
                     System.IO.withFile file System.IO.WriteMode (\handle -> do
                         Pretty.Terminal.renderIO handle (Pretty.layoutSmart layoutOpts doc))
                 StandardInput -> do
-                    (header, expr) <- Dhall.Util.getExpressionAndHeader censor StandardInput
+                    (Dhall.Util.Header header, expr) <-
+                        Dhall.Util.getExpressionAndHeader censor StandardInput
 
                     let doc =   Pretty.pretty header
                             <>  Dhall.Pretty.prettyCharacterSet characterSet expr
@@ -86,7 +88,9 @@ format (Format {..}) =
                 InputFile file -> Data.Text.IO.readFile file
                 StandardInput  -> Data.Text.IO.getContents
 
-            (header, expr) <- Dhall.Util.getExpressionAndHeader censor path
+            (Dhall.Util.Header header, expr) <- case path of
+                InputFile _ -> Dhall.Util.getExpressionAndHeader censor path
+                StandardInput  -> Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
 
             let doc =   Pretty.pretty header
                     <>  Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet characterSet expr)

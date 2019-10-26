@@ -25,7 +25,7 @@ import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Void (Void)
-import Dhall.Core (Binding(..), Chunks (..), Const(..), DhallDouble(..), Expr(..), Var(..))
+import Dhall.Syntax (Binding(..), Chunks (..), Const(..), DhallDouble(..), Expr(..), Var(..))
 import Dhall.Binary (ToTerm)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
@@ -37,7 +37,7 @@ import qualified Data.List.NonEmpty
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
-import qualified Dhall.Core
+import qualified Dhall.Normalize
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Pretty.Internal      as Internal
@@ -159,8 +159,8 @@ rparen = token Internal.rparen
 diffNormalized :: (Eq a, Pretty a, ToTerm a) => Expr s a -> Expr s a -> Diff
 diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
   where
-    l1 = Dhall.Core.alphaNormalize (Dhall.Core.normalize l0)
-    r1 = Dhall.Core.alphaNormalize (Dhall.Core.normalize r0)
+    l1 = Dhall.Normalize.alphaNormalize (Dhall.Normalize.normalize l0)
+    r1 = Dhall.Normalize.alphaNormalize (Dhall.Normalize.normalize r0)
 
 diffPrimitive :: Eq a => (a -> Diff) -> a -> a -> Diff
 diffPrimitive f l r
