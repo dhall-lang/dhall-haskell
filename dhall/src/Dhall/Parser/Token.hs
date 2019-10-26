@@ -112,7 +112,7 @@ import Control.Applicative (Alternative(..), optional)
 import Data.Functor (void)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
-import Dhall.Core
+import Dhall.Syntax
 import Dhall.Set (Set)
 import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
@@ -463,7 +463,7 @@ pathComponent componentType = do
     let pathData =
             case componentType of
                 FileComponent -> do
-                    Text.Megaparsec.takeWhile1P Nothing Dhall.Core.pathCharacter
+                    Text.Megaparsec.takeWhile1P Nothing Dhall.Syntax.pathCharacter
                 URLComponent -> do
                     star pchar
 

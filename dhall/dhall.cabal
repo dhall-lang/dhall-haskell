@@ -484,41 +484,42 @@ Library
             TemplateHaskell
 
     Exposed-Modules:
-        Dhall,
-        Dhall.Binary,
-        Dhall.Context,
-        Dhall.Core,
-        Dhall.Crypto,
-        Dhall.Diff,
-        Dhall.Tags,
-        Dhall.Format,
-        Dhall.Freeze,
-        Dhall.Import,
-        Dhall.Lint,
-        Dhall.Main,
-        Dhall.Map,
-        Dhall.Optics,
-        Dhall.Set,
-        Dhall.Src,
-        Dhall.Parser,
-        Dhall.Parser.Expression,
-        Dhall.Parser.Token,
-        Dhall.Pretty,
-        Dhall.Repl,
-        Dhall.Tutorial,
-        Dhall.TypeCheck,
+        Dhall
+        Dhall.Binary
+        Dhall.Context
+        Dhall.Core
+        Dhall.Crypto
+        Dhall.Diff
+        Dhall.Format
+        Dhall.Freeze
+        Dhall.Import
+        Dhall.Lint
+        Dhall.Main
+        Dhall.Map
+        Dhall.Optics
+        Dhall.Parser
+        Dhall.Parser.Expression
+        Dhall.Parser.Token
+        Dhall.Pretty
+        Dhall.Repl
+        Dhall.Set
+        Dhall.Src
+        Dhall.Tags
+        Dhall.Tutorial
+        Dhall.TypeCheck
         Dhall.Util
         Dhall.Version
     if !flag(cross)
         Exposed-Modules:
             Dhall.TH
     Other-Modules:
-        Dhall.Pretty.Internal,
-        Dhall.Parser.Combinators,
-        Dhall.URL,
-        Dhall.Import.Types,
-        Dhall.Syntax,
-        Dhall.Eval,
+        Dhall.Eval
+        Dhall.Import.Types
+        Dhall.Normalize
+        Dhall.Parser.Combinators
+        Dhall.Pretty.Internal
+        Dhall.Syntax
+        Dhall.URL
         Paths_dhall
     Autogen-Modules:
         Paths_dhall

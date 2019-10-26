@@ -39,7 +39,7 @@ import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import Dhall.Binary (ToTerm(..))
 import Dhall.Context (Context)
-import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
+import Dhall.Syntax (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Eval
     (Environment(..), Names(..), Val(..), (~>))
 import Dhall.Pretty (Ann, layoutOpts)
@@ -588,7 +588,7 @@ infer typer = loop
                                     -- Carefully note that we don't use `die`
                                     -- here so that the source span is narrowed
                                     -- to just the offending element
-                                    let err = MismatchedListElements i _T₀'' t₁ _T₁''
+                                    let err = MismatchedListElements (i+1) _T₀'' t₁ _T₁''
 
                                     let context = ctxToContext ctx
 
