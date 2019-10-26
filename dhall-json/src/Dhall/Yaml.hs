@@ -7,7 +7,9 @@ module Dhall.Yaml
   , parseDocuments
   , parseQuoted
   , defaultOptions
-  , dhallToYaml ) where
+  , dhallToYaml
+  , jsonToYaml
+  ) where
 
 import Data.ByteString (ByteString)
 import Data.Monoid ((<>))

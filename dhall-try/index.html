@@ -314,20 +314,6 @@
       document.getElementById(tabId).classList.toggle("active");
     }
 
-    /* The Haskell yaml package doesn't support GHCJS, so we simulate the
-       dhall-to-yaml conversion in the browser in two steps:
-
-       * Convert Dhall to JSON using the `dhall-to-json` Haskell package
-         compiled with GHCJS
-       * Convert JSON to YAML using the `jsyaml` JavaScript package (this
-         function)
-    */
-    function jsonToYaml(json) {
-      let obj =JSON.parse(json);
-      let str = jsyaml.safeDump(obj);
-      return str;
-    }
-
     let example0 = `{- This is an example Dhall configuration file
 
    Can you spot the mistake?
