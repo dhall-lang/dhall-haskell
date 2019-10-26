@@ -17,8 +17,6 @@ environment:
     - STACK_YAML: stack.yaml
     - STACK_YAML: stack-lts-6.yaml
 
-clone_folder: "c:\\dhall-haskell"
-
 install:
   # http://help.appveyor.com/discussions/problems/6312-curl-command-not-found
   - set PATH=C:\Program Files\Git\mingw64\bin;%PATH%
