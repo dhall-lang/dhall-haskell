@@ -2417,7 +2417,7 @@ data Project = Project
 
     Our injector has type 'Encoder' @Project@, but we can't build that out of any
     smaller injectors, as 'Encoder's cannot be combined (they are only 'Contravariant's).
-    However, we can use an 'InputRecordType' to build an 'Encoder' for @Project@:
+    However, we can use an 'RecordEncoder' to build an 'Encoder' for @Project@:
 
 >>> :{
 injectProject :: Encoder Project
