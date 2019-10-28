@@ -2392,7 +2392,7 @@ constructor key valueType = UnionType
     ( Data.Functor.Compose.Compose (Dhall.Map.singleton key valueType) )
 
 {-| The 'RecordEncoder' divisible (contravariant) functor allows you to build
-    an 'Encoder' injector for a Dhall record.
+    an 'Encoder' for a Dhall record.
 
     For example, let's take the following Haskell data type:
 
@@ -2415,8 +2415,8 @@ data Project = Project
 >     289
 > }
 
-    Our injector has type 'Encoder' @Project@, but we can't build that out of any
-    smaller injectors, as 'Encoder's cannot be combined (they are only 'Contravariant's).
+    Our encoder has type 'Encoder' @Project@, but we can't build that out of any
+    smaller encoders, as 'Encoder's cannot be combined (they are only 'Contravariant's).
     However, we can use an 'RecordEncoder' to build an 'Encoder' for @Project@:
 
 >>> :{
@@ -2487,8 +2487,7 @@ encodeRecord (RecordEncoder encodeTypeRecord) = Encoder makeRecordLit recordType
     recordType = Record $ declared <$> encodeTypeRecord
     makeRecordLit x = RecordLit $ (($ x) . embed) <$> encodeTypeRecord
 
-{-| 'UnionEncoder' allows you to build an 'Encoder' injector for a Dhall
-    record.
+{-| 'UnionEncoder' allows you to build an 'Encoder' for a Dhall record.
 
     For example, let's take the following Haskell data type:
 
@@ -2506,8 +2505,8 @@ data Status = Queued Natural
 > | Errored : Text
 > >.Result "Finish successfully"
 
-    Our injector has type 'Encoder' @Status@, but we can't build that out of any
-    smaller injectors, as 'Encoder's cannot be combined.
+    Our encoder has type 'Encoder' @Status@, but we can't build that out of any
+    smaller encoders, as 'Encoder's cannot be combined.
     However, we can use an 'UnionEncoder' to build an 'Encoder' for @Status@:
 
 >>> :{
