@@ -4,6 +4,8 @@ branches:
   only:
   - master
   - /\d*\.\d*\.\d*/
+  # For testing:
+  - /.*appveyor-build-branch.*/
 
 environment:
   STACK_ROOT: C:\sr
