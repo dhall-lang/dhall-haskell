@@ -95,13 +95,13 @@ module Dhall
     , inject
     , genericToDhall
     , RecordEncoder(..)
-    , inputFieldWith
-    , inputField
-    , inputRecord
+    , encodeFieldWith
+    , encodeField
+    , encodeRecord
     , UnionEncoder(..)
-    , inputConstructorWith
-    , inputConstructor
-    , inputUnion
+    , encodeConstructorWith
+    , encodeConstructor
+    , encodeUnion
     , (>|<)
 
     -- * Miscellaneous
@@ -2422,10 +2422,10 @@ data Project = Project
 >>> :{
 injectProject :: Encoder Project
 injectProject =
-  inputRecord
-    ( adapt >$< inputFieldWith "name" inject
-            >*< inputFieldWith "description" inject
-            >*< inputFieldWith "stars" inject
+  encodeRecord
+    ( adapt >$< encodeFieldWith "name" inject
+            >*< encodeFieldWith "description" inject
+            >*< encodeFieldWith "stars" inject
     )
   where
     adapt (Project{..}) = (projectName, (projectDescription, projectStars))
@@ -2436,10 +2436,10 @@ injectProject =
 >>> :{
 injectProject :: Encoder Project
 injectProject =
-  inputRecord
-    ( adapt >$< inputField "name"
-            >*< inputField "description"
-            >*< inputField "stars"
+  encodeRecord
+    ( adapt >$< encodeField "name"
+            >*< encodeField "description"
+            >*< encodeField "stars"
     )
   where
     adapt (Project{..}) = (projectName, (projectDescription, projectStars))
@@ -2458,7 +2458,7 @@ newtype RecordEncoder a
   = RecordEncoder (Dhall.Map.Map Text (Encoder a))
 
 instance Contravariant RecordEncoder where
-  contramap f (RecordEncoder inputTypeRecord) = RecordEncoder $ contramap f <$> inputTypeRecord
+  contramap f (RecordEncoder encodeTypeRecord) = RecordEncoder $ contramap f <$> encodeTypeRecord
 
 instance Divisible RecordEncoder where
   divide f (RecordEncoder bEncoderRecord) (RecordEncoder cEncoderRecord) =
@@ -2471,21 +2471,21 @@ instance Divisible RecordEncoder where
 {-| Specify how to encode one field of a record by supplying an explicit
     `Encoder` for that field
 -}
-inputFieldWith :: Text -> Encoder a -> RecordEncoder a
-inputFieldWith name inputType = RecordEncoder $ Dhall.Map.singleton name inputType
+encodeFieldWith :: Text -> Encoder a -> RecordEncoder a
+encodeFieldWith name encodeType = RecordEncoder $ Dhall.Map.singleton name encodeType
 
 {-| Specify how to encode one field of a record using the default `ToDhall`
     instance for that type
 -}
-inputField :: ToDhall a => Text -> RecordEncoder a
-inputField name = inputFieldWith name inject
+encodeField :: ToDhall a => Text -> RecordEncoder a
+encodeField name = encodeFieldWith name inject
 
 -- | Convert a `RecordEncoder` into the equivalent `Encoder`
-inputRecord :: RecordEncoder a -> Encoder a
-inputRecord (RecordEncoder inputTypeRecord) = Encoder makeRecordLit recordType
+encodeRecord :: RecordEncoder a -> Encoder a
+encodeRecord (RecordEncoder encodeTypeRecord) = Encoder makeRecordLit recordType
   where
-    recordType = Record $ declared <$> inputTypeRecord
-    makeRecordLit x = RecordLit $ (($ x) . embed) <$> inputTypeRecord
+    recordType = Record $ declared <$> encodeTypeRecord
+    makeRecordLit x = RecordLit $ (($ x) . embed) <$> encodeTypeRecord
 
 {-| 'UnionEncoder' allows you to build an 'Encoder' injector for a Dhall
     record.
@@ -2512,10 +2512,10 @@ data Status = Queued Natural
 
 >>> :{
 injectStatus :: Encoder Status
-injectStatus = adapt >$< inputUnion
-  (   inputConstructorWith "Queued"  inject
-  >|< inputConstructorWith "Result"  inject
-  >|< inputConstructorWith "Errored" inject
+injectStatus = adapt >$< encodeUnion
+  (   encodeConstructorWith "Queued"  inject
+  >|< encodeConstructorWith "Result"  inject
+  >|< encodeConstructorWith "Errored" inject
   )
   where
     adapt (Queued  n) = Left n
@@ -2527,10 +2527,10 @@ injectStatus = adapt >$< inputUnion
 
 >>> :{
 injectStatus :: Encoder Status
-injectStatus = adapt >$< inputUnion
-  (   inputConstructor "Queued"
-  >|< inputConstructor "Result"
-  >|< inputConstructor "Errored"
+injectStatus = adapt >$< encodeUnion
+  (   encodeConstructor "Queued"
+  >|< encodeConstructor "Result"
+  >|< encodeConstructor "Errored"
   )
   where
     adapt (Queued  n) = Left n
@@ -2571,8 +2571,8 @@ UnionEncoder (Data.Functor.Product.Pair (Control.Applicative.Const mx) (Op fx))
 infixr 5 >|<
 
 -- | Convert a `UnionEncoder` into the equivalent `Encoder`
-inputUnion :: UnionEncoder a -> Encoder a
-inputUnion ( UnionEncoder ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Op embedF ) ) ) =
+encodeUnion :: UnionEncoder a -> Encoder a
+encodeUnion ( UnionEncoder ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Op embedF ) ) ) =
     Encoder
       { embed = \x ->
           let (name, y) = embedF x
@@ -2588,26 +2588,26 @@ inputUnion ( UnionEncoder ( Data.Functor.Product.Pair ( Control.Applicative.Cons
 {-| Specify how to encode an alternative by providing an explicit `Encoder`
     for that alternative
 -}
-inputConstructorWith
+encodeConstructorWith
     :: Text
     -> Encoder a
     -> UnionEncoder a
-inputConstructorWith name inputType = UnionEncoder $
+encodeConstructorWith name encodeType = UnionEncoder $
     Data.Functor.Product.Pair
       ( Control.Applicative.Const
           ( Dhall.Map.singleton
               name
-              ( declared inputType )
+              ( declared encodeType )
           )
       )
-      ( Op ( (name,) . embed inputType )
+      ( Op ( (name,) . embed encodeType )
       )
 
 {-| Specify how to encode an alternative by using the default `ToDhall` instance
     for that type
 -}
-inputConstructor
+encodeConstructor
     :: ToDhall a
     => Text
     -> UnionEncoder a
-inputConstructor name = inputConstructorWith name inject
+encodeConstructor name = encodeConstructorWith name inject
